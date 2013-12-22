@@ -1,15 +1,15 @@
-Using yum-ostree
+Using rpm-ostree
 ================
 
 This tool takes a set of packages, and commits them to an OSTree
 repository.  At the moment, it is intended for use on build servers.
 For example, this invocation:
 
-	# yum-ostree --repo=repo --enablerepo=fedora --os=fedora --os-version=20 create my-server-packages @minimal kernel ostree fedora-release lvm2 e2fsprogs btrfs-progs passwd httpd
+	# rpm-ostree --repo=repo --enablerepo=fedora --os=fedora --os-version=20 create my-server-packages @standard kernel ostree fedora-release lvm2 e2fsprogs btrfs-progs httpd
 
 Will create a ref named "fedora/20/my-server-packages", containing a
 complete bootable root filesystem of those packages.  As you can see
-from the example above, the package set is quite minimal, we're just
+from the example above, the package set is fairly minimal, we're just
 adding on "httpd".
 
 Now, if you export the repo via any plain HTTP server, clients using
