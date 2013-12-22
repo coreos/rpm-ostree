@@ -26,6 +26,6 @@ __builtin__.__dict__['PKGLIBDIR'] = "@pkglibdir@"
 path = os.path.join('@pkglibdir@', 'rpm-ostree')
 sys.path.insert(0, path)
 
-import rpmrpmrpmostree
+import rpmostree
 
 sys.exit(rpmostree.main())

@@ -17,7 +17,7 @@
 
 bin_SCRIPTS += rpm-ostree
 
-rpm-ostree: fedora/rpm-ostree.in Makefile
+rpm-ostree: src/rpm-ostree.in Makefile
 	$(AM_V_GEN) sed -e s,@PYTHON\@,$(PYTHON), -e s,@pkglibdir\@,$(pkglibdir), $< > $@.tmp && mv $@.tmp $@
 	@chmod a+x $@
 

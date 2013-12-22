@@ -217,11 +217,10 @@ def _create_rootfs_from_yumroot_content(targetroot, yumroot):
     ensuredir(target_tmpfilesd)
     shutil.copy(os.path.join(PKGLIBDIR, 'tmpfiles-gnome-ostree.conf'), target_tmpfilesd)
 
-def yuminstall(yumroot, packages):
+def runyum(argv, yumroot):
     yumargs = ['yum', '-y', '--releasever=%s' % (opts.os_version, ), '--nogpg', '--setopt=keepcache=1', '--installroot=' + yumroot, '--disablerepo=*']
     yumargs.extend(map(lambda x: '--enablerepo=' + x, opts.enablerepo))
-    yumargs.append('install')
-    yumargs.extend(packages)
+    yumargs.extend(argv)
     print "Running: %s" % (subprocess.list2cmdline(yumargs), )
     yum_env = dict(os.environ)
     yum_env['KERNEL_INSTALL_NOOP'] = 'yes'
@@ -229,6 +228,14 @@ def yuminstall(yumroot, packages):
     rcode = proc.wait()
     if rcode != 0:
         raise ValueError("Yum exited with code %d" % (rcode, ))
+
+def yuminstall(yumroot, packages):
+    argv = list(['install'])
+    argv.extend(packages)
+    runyum(argv, yumroot)
+
+def yumgroupinstall(yumroot, group):
+    runyum(['group', 'install', group], yumroot)
 
 def main():
     parser = optparse.OptionParser('%prog ACTION PACKAGE1 [PACKAGE2...]')
@@ -337,7 +344,14 @@ def main():
         open(os.path.join(yumroot, 'usr/lib', n), 'w').close()
     replace_nsswitch(os.path.join(yumroot, 'etc'))
 
-    yuminstall(yumroot, packages)
+    plain_packages = []
+    for package in packages:
+        if package[0] == '@':
+            yumgroupinstall(package)
+        else:
+            plain_packages.append(package)
+
+    yuminstall(yumroot, plain_packages)
 
     if opts.breakpoint == 'post-yum-phase2':
         return
