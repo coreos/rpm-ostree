@@ -215,7 +215,7 @@ def _create_rootfs_from_yumroot_content(targetroot, yumroot):
 
     target_tmpfilesd = os.path.join(targetroot, 'usr/lib/tmpfiles.d')
     ensuredir(target_tmpfilesd)
-    shutil.copy(os.path.join(PKGLIBDIR, 'tmpfiles-gnome-ostree.conf'), target_tmpfilesd)
+    shutil.copy(os.path.join(PKGLIBDIR, 'tmpfiles-ostree-integration.conf'), target_tmpfilesd)
 
 def runyum(argv, yumroot):
     yumargs = ['yum', '-y', '--releasever=%s' % (opts.os_version, ), '--nogpg', '--setopt=keepcache=1', '--installroot=' + yumroot, '--disablerepo=*']
