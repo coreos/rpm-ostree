@@ -347,7 +347,7 @@ def main():
     plain_packages = []
     for package in packages:
         if package[0] == '@':
-            yumgroupinstall(package)
+            yumgroupinstall(yumroot, package)
         else:
             plain_packages.append(package)
 
