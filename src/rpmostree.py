@@ -33,6 +33,11 @@ os_release_data = {}
 opts = None
 args = None
 
+def log(msg):
+    sys.stdout.write(msg)
+    sys.stdout.write('\n')
+    sys.stdout.flush()
+
 def ensuredir(path):
     if not os.path.isdir(path):
         os.makedirs(path)
@@ -116,7 +121,7 @@ def do_kernel_prep(yumroot, logs_lookaside):
             # If somehow the %post generated an initramfs, blow it
             # away - we take over that role.
             initramfs_path = os.path.join(bootdir, name)
-            print "Removing RPM-generated " + initramfs_path
+            log("Removing RPM-generated " + initramfs_path)
             rmrf(initramfs_path)
 
     if kernel_path is None:
@@ -124,14 +129,14 @@ def do_kernel_prep(yumroot, logs_lookaside):
 
     kname = os.path.basename(kernel_path)
     kver = kname[kname.find('-') + 1:]
-    print "Kernel version is " + kver
+    log("Kernel version is " + kver)
            
     # OSTree will take care of this
     loaderdir = os.path.join(bootdir, 'loader')
     rmrf(loaderdir)
 
     args = ['chroot', yumroot, 'depmod', kver]
-    print "Running: %s" % (subprocess.list2cmdline(args), )
+    log("Running: %s" % (subprocess.list2cmdline(args), ))
     subprocess.check_call(args)
 
     # Copy of code from gnome-continuous; yes, we hardcode
@@ -139,7 +144,7 @@ def do_kernel_prep(yumroot, logs_lookaside):
     # initramfs images with dracut/systemd at the moment
     # effectively requires this.
     # http://lists.freedesktop.org/archives/systemd-devel/2013-July/011770.html
-    print "Hardcoding machine-id"
+    log("Hardcoding machine-id")
     f = open(os.path.join(yumroot, 'etc', 'machine-id'), 'w')
     f.write('45bb3b96146aa94f299b9eb43646eb35\n')
     f.close()
@@ -147,7 +152,7 @@ def do_kernel_prep(yumroot, logs_lookaside):
     args = ['chroot', yumroot,
             'dracut', '-v', '--tmpdir=/tmp',
             '-f', '/tmp/initramfs.img', kver];
-    print "Running: %s" % (subprocess.list2cmdline(args), )
+    log("Running: %s" % (subprocess.list2cmdline(args), ))
     subprocess.check_call(args)
     
     initramfs_path = os.path.join(yumroot, 'tmp', 'initramfs.img')
@@ -221,9 +226,9 @@ def runyum(argv, yumroot, stdin_str=None):
     yumargs = list(['yum', '-y', '--releasever=%s' % (opts.os_version, ), '--nogpg', '--setopt=keepcache=1', '--installroot=' + yumroot, '--disablerepo=*'])
     yumargs.extend(map(lambda x: '--enablerepo=' + x, opts.enablerepo))
     yumargs.extend(argv)
-    print "Running: %s" % (subprocess.list2cmdline(yumargs), )
+    log("Running: %s" % (subprocess.list2cmdline(yumargs), ))
     if stdin_str:
-        print "%s" % (stdin_str, )
+        log("%s" % (stdin_str, ))
     yum_env = dict(os.environ)
     yum_env['KERNEL_INSTALL_NOOP'] = 'yes'
     reposdir_path = os.path.join(yumroot, 'etc', 'yum.repos.d')
@@ -307,7 +312,7 @@ def main():
     if opts.os_version is None:
         opts.os_version = os_release_data['VERSION_ID']
 
-    print "Targeting os=%s version=%s" % (opts.os, opts.os_version)
+    log("Targeting os=%s version=%s" % (opts.os, opts.os_version))
 
     action = args[0]
     if action == 'create':
@@ -342,15 +347,15 @@ def main():
     if action == 'create':
         yumroot_varcache = os.path.join(yumroot, 'var/cache')
         if os.path.isdir(yumcache_lookaside):
-            print "Reusing cache: " + yumroot_varcache
+            log("Reusing cache: " + yumroot_varcache)
             ensuredir(yumroot_varcache)
             subprocess.check_call(['cp', '-a', yumcache_lookaside, yumcachedir])
         else:
-            print "No cache found at: " + yumroot_varcache
+            log("No cache found at: " + yumroot_varcache)
     else:
-        print "Cloning active root"
+        log("Cloning active root")
         _clone_current_root_to_yumroot(yumroot)
-        print "...done"
+        log("...done")
         time.sleep(3)
 
     # Ensure we have enough to modify NSS
@@ -377,7 +382,7 @@ def main():
 
     # Attempt to cache stuff between runs
     rmrf(yumcache_lookaside)
-    print "Saving yum cache " + yumcache_lookaside
+    log("Saving yum cache " + yumcache_lookaside)
     os.rename(yumcachedir, yumcache_lookaside)
 
     yumroot_rpmlibdir = os.path.join(yumroot, 'var/lib/rpm')
@@ -397,7 +402,7 @@ def main():
     # we're committing into the repo, rather than having to label the
     # physical FS.
     # For now, no xattrs (and hence no SELinux =( )
-    print "Committing " + targetroot + "..."
+    log("Committing " + targetroot + "...")
     repo.prepare_transaction(None)
     mtree = OSTree.MutableTree.new()
     modifier = OSTree.RepoCommitModifier.new(OSTree.RepoCommitModifierFlags.SKIP_XATTRS, None, None)
@@ -411,7 +416,7 @@ def main():
     repo.transaction_set_ref(None, ref, commit)
     repo.commit_transaction(None)
 
-    print "%s => %s" % (ref, commit)
+    log("%s => %s" % (ref, commit))
 
     rmrf(yumroot)
     rmrf(targetroot)
