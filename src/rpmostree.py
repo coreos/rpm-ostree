@@ -268,6 +268,10 @@ def main():
                       action='store',
                       default=None,
                       help="Stop at given phase")
+    parser.add_option('', "--gpg-sign",
+                      action='store',
+                      default=None,
+                      help="Sign commits using given GPG key ID")
     parser.add_option('', "--os",
                       action='store', dest='os',
                       default=None,
@@ -402,6 +406,8 @@ def main():
     [success, parent] = repo.resolve_rev(ref, True)
     [success, tree] = repo.write_mtree(mtree, None)
     [success, commit] = repo.write_commit(parent, '', commit_message, None, tree, None)
+    if opts.gpg_sign is not None:
+        repo.sign_commit(commit, opts.gpg_sign, None, None)
     repo.transaction_set_ref(None, ref, commit)
     repo.commit_transaction(None)
 
