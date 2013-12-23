@@ -217,11 +217,13 @@ def _create_rootfs_from_yumroot_content(targetroot, yumroot):
     ensuredir(target_tmpfilesd)
     shutil.copy(os.path.join(PKGLIBDIR, 'tmpfiles-ostree-integration.conf'), target_tmpfilesd)
 
-def runyum(argv, yumroot):
+def runyum(argv, yumroot, stdin_str=None):
     yumargs = list(['yum', '-y', '--releasever=%s' % (opts.os_version, ), '--nogpg', '--setopt=keepcache=1', '--installroot=' + yumroot, '--disablerepo=*'])
     yumargs.extend(map(lambda x: '--enablerepo=' + x, opts.enablerepo))
     yumargs.extend(argv)
     print "Running: %s" % (subprocess.list2cmdline(yumargs), )
+    if stdin_str:
+        print "%s" % (stdin_str, )
     yum_env = dict(os.environ)
     yum_env['KERNEL_INSTALL_NOOP'] = 'yes'
     reposdir_path = os.path.join(yumroot, 'etc', 'yum.repos.d')
@@ -231,20 +233,26 @@ def runyum(argv, yumroot):
     if os.path.isdir(reposdir_path):
         tmp_reposdir_path = os.path.join(yumroot, 'etc', 'yum.repos.d.tmp')
         os.rename(reposdir_path, tmp_reposdir_path)
-    proc = subprocess.Popen(yumargs, env=yum_env)
-    rcode = proc.wait()
+    stdin_arg=None
+    if stdin_str is not None:
+        stdin_arg = subprocess.PIPE
+    proc = subprocess.Popen(yumargs, env=yum_env, stdin=stdin_arg)
+    proc.communicate(input=stdin_str)
     if tmp_reposdir_path is not None:
         os.rename(tmp_reposdir_path, reposdir_path)
-    if rcode != 0:
-        raise ValueError("Yum exited with code %d" % (rcode, ))
+    if proc.returncode != 0:
+        raise ValueError("Yum exited with code %d" % (proc.returncode, ))
 
 def yuminstall(yumroot, packages):
-    argv = list(['install'])
-    argv.extend(packages)
-    runyum(argv, yumroot)
-
-def yumgroupinstall(yumroot, group):
-    runyum(['group', 'install', group], yumroot)
+    cmds = ['makecache fast']
+    for package in packages:
+        if package.startswith('@'):
+            cmds.append('group install ' + package)
+        else:
+            cmds.append('install ' + package)
+    cmds.append('run')
+    stdin = '\n'.join(cmds) + '\n'
+    runyum(['shell'], yumroot, stdin_str=stdin)
 
 def main():
     parser = optparse.OptionParser('%prog ACTION PACKAGE1 [PACKAGE2...]')
@@ -353,14 +361,7 @@ def main():
         open(os.path.join(yumroot, 'usr/lib', n), 'w').close()
     replace_nsswitch(os.path.join(yumroot, 'etc'))
 
-    plain_packages = []
-    for package in packages:
-        if package.startswith('@'):
-            yumgroupinstall(yumroot, package)
-        else:
-            plain_packages.append(package)
-
-    yuminstall(yumroot, plain_packages)
+    yuminstall(yumroot, packages)
 
     if opts.breakpoint == 'post-yum-phase2':
         return
