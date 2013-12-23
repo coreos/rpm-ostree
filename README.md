@@ -67,6 +67,8 @@ kernel arguments from `/boot/grub2/grub.cfg` and add them to
 `/boot/loader/entries/ostree-fedora-0.conf`, on the `options`
 line. This step may be automated further in the future.
 
+IMPORTANT NOTE: You must use selinux=0 for now.
+
 Booting the system
 ------------------
 
