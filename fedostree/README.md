@@ -22,7 +22,7 @@ the server.  You only need to do this once.
 
 	ostree remote add fedostree http://http://209.132.184.226/repo
 
-Now, since we did not GPG sign our repo above, we need to disable GPG
+Now, the repository is not GPG signed (yet), so we need to disable GPG
 verification.  Add `gpg-verify=false` in the `[remote]` section.
 
 	nano /ostree/repo/config
@@ -40,7 +40,7 @@ configuration:
 We need to do some initial setup before we actually boot the system.
 Copy in the storage configuration:
 
-	cp /etc/fstab /ostree/deploy/fedostree/current
+	cp /etc/fstab /ostree/deploy/fedostree/current/etc
 
 And set a root password:
 
