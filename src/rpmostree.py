@@ -154,7 +154,7 @@ def do_kernel_prep(yumroot, logs_lookaside):
     if not os.path.exists(initramfs_path):
         raise ValueError("Failed to find " + initramfs_path)
 
-    os.rename(initramfs_path, os.path.join(bootdir, 'initramfs-yumostree.img'))
+    os.rename(initramfs_path, os.path.join(bootdir, 'initramfs-' + kver + '.img'))
     varlog_dracut_path = os.path.join(yumroot, 'var', 'log', 'dracut.log')
     if os.path.exists(varlog_dracut_path):
         os.rename(varlog_dracut_path, os.path.join(logs_lookaside, 'dracut.log'))
