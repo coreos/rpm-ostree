@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+set -e
+set -x
+
+docommit() {
+    name=$1
+    shift
+    echo "Starting rpm-ostree run at" $(date)
+    rpm-ostree --repo=repo --enablerepo=fedora --enablerepo=updates --enablerepo=walters-nss-altfiles create "${name}" kernel ostree fedora-release lvm2 btrfs-progs e2fsprogs "$@"
+    echo "Completed rpm-ostree run at" $(date)
+}
+
+docommit minimal @core
+docommit standard @core @standard
+docommit standard-docker-io @core @standard docker-io
+docommit standard-freeipa-server @core @standard @freeipa-server
+docommit standard-jbossas @core @standard @jbossas
+docommit gnome-desktop-core @gnome-desktop
+docommit gnome-desktop-environment @firefox @gnome-desktop @gnome-games @epiphany @libreoffice

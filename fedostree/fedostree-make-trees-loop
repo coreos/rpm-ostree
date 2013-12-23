@@ -1,0 +1,9 @@
+#!/bin/sh
+while true; do
+   path=logs/$(date +%Y/%m/%d/%H)
+   mkdir -p ${path}
+   echo "Starting run, logging to ${path}"
+   ./fedostree-make-trees > ${path}/log.txt 2>&1
+   echo "Complete, sleep 1h"
+   sleep 1h
+done
