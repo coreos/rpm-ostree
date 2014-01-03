@@ -22,54 +22,50 @@ substitutions= \
 	-e s,@pkgdatadir\@,$(pkgdatadir), \
 	$(NULL)
 
-rpm-ostree-autobuilder: src/rpm-ostree-autobuilder.in Makefile
+rpm-ostree-autobuilder: src/autobuilder/rpm-ostree-autobuilder.in Makefile
 	sed $(substitutions) $< > $@.tmp && mv $@.tmp $@
-EXTRA_DIST += src/rpm-ostree-autobuilder.in
+EXTRA_DIST += src/autobuilder/rpm-ostree-autobuilder.in
 
 bin_SCRIPTS += rpm-ostree-autobuilder \
 	$(NULL)
 
 jsautobuilderdir=$(pkgdatadir)/js
 jsautobuilder_DATA= \
-	src/js/argparse.js \
-	src/js/asyncutil.js \
-	src/js/buildutil.js \
-	src/js/builtin.js \
-	src/js/fileutil.js \
-	src/js/task.js \
-	src/js/jsonutil.js \
-	src/js/jsutil.js \
-	src/js/main.js \
-	src/js/libqa.js \
-	src/js/guestfish.js \
-	src/js/params.js \
-	src/js/procutil.js \
-	src/js/snapshot.js \
-	src/js/streamutil.js \
-	src/js/vcs.js \
-	src/js/versioneddir.js \
+	src/autobuilder/js/argparse.js \
+	src/autobuilder/js/asyncutil.js \
+	src/autobuilder/js/buildutil.js \
+	src/autobuilder/js/builtin.js \
+	src/autobuilder/js/fileutil.js \
+	src/autobuilder/js/task.js \
+	src/autobuilder/js/jsonutil.js \
+	src/autobuilder/js/jsutil.js \
+	src/autobuilder/js/main.js \
+	src/autobuilder/js/libqa.js \
+	src/autobuilder/js/guestfish.js \
+	src/autobuilder/js/params.js \
+	src/autobuilder/js/procutil.js \
+	src/autobuilder/js/snapshot.js \
+	src/autobuilder/js/streamutil.js \
+	src/autobuilder/js/vcs.js \
+	src/autobuilder/js/versioneddir.js \
 	$(NULL)
 
 jsautobuiltinsdir=$(jsautobuilderdir)/builtins
 jsautobuiltins_DATA= \
-	src/js/builtins/autobuilder.js \
-	src/js/builtins/checkout.js \
-	src/js/builtins/git_mirror.js \
-	src/js/builtins/make.js \
-	src/js/builtins/qa_make_disk.js \
-	src/js/builtins/run_task.js \
-	src/js/builtins/shell.js \
+	src/autobuilder/js/builtins/autobuilder.js \
+	src/autobuilder/js/builtins/git_mirror.js \
+	src/autobuilder/js/builtins/make.js \
+	src/autobuilder/js/builtins/qa_make_disk.js \
+	src/autobuilder/js/builtins/run_task.js \
+	src/autobuilder/js/builtins/shell.js \
 	$(NULL)
 
 jsautotasksdir=$(jsautobuilderdir)/tasks
 jsautotasks_DATA= \
-	src/js/tasks/task-build.js \
-	src/js/tasks/task-bdiff.js \
-	src/js/tasks/task-builddisks.js \
-	src/js/tasks/task-smoketest.js \
-	src/js/tasks/task-integrationtest.js \
-	src/js/tasks/task-memusage.js \
-	src/js/tasks/task-applicationstest.js \
-	src/js/tasks/task-zdisks.js \
-	src/js/tasks/testbase.js \
+	src/autobuilder/js/tasks/task-build.js \
+	src/autobuilder/js/tasks/task-bdiff.js \
+	src/autobuilder/js/tasks/task-builddisks.js \
+	src/autobuilder/js/tasks/task-smoketest.js \
+	src/autobuilder/js/tasks/task-zdisks.js \
+	src/autobuilder/js/tasks/testbase.js \
 	$(NULL)

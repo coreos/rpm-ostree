@@ -42,3 +42,5 @@ typelibdir = $(pkglibdir)/girepository-1.0
 
 gir_DATA = $(INTROSPECTION_GIRS)
 typelib_DATA = $(gir_DATA:.gir=.typelib)
+
+include Makefile-autobuilder.am
