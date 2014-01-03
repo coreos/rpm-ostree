@@ -1,0 +1,3 @@
+[submodule "libgsystem"]
+	path = libgsystem
+	url = git://git.gnome.org/libgsystem

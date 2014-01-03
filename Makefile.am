@@ -15,45 +15,30 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
-AM_CPPFLAGS = -DDATADIR='"$(datadir)"' \
+include Makefile-decls.am
+
+ACLOCAL_AMFLAGS += -I m4 ${ACLOCAL_FLAGS}
+AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
 	-DLIBEXECDIR='"$(libexecdir)"' \
 	-DLOCALEDIR=\"$(datadir)/locale\" \
-	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_34 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_34
-AM_CFLAGS = $(WARN_CFLAGS)
-DISTCHECK_CONFIGURE_FLAGS = --enable-gtk-doc --disable-maintainer-mode
-
-# Subdirectories
-SUBDIRS = .
-
-#if ENABLE_GTK_DOC
-#SUBDIRS += doc
-#endif
-
-# Common variables
-NULL = 
-INSTALL_DATA_HOOKS =
-BUILT_SOURCES =
-MANPAGES =
-CLEANFILES =
-EXTRA_DIST =
-bin_PROGRAMS =
-sbin_PROGRAMS =
-bin_SCRIPTS =
-lib_LTLIBRARIES =
-libexec_PROGRAMS =
-noinst_LTLIBRARIES =
-noinst_PROGRAMS =
-privlibdir = $(pkglibdir)
-privlib_LTLIBRARIES =
-pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA =
-INTROSPECTION_GIRS = 
-girdir = $(datadir)/gir-1.0
-gir_DATA =
-typelibdir = $(libdir)/girepository-1.0
-typelib_DATA =
+	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_36 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_36
+AM_CFLAGS += $(WARN_CFLAGS)
 
 EXTRA_DIST += autogen.sh COPYING
 
+libgsystem_srcpath := libgsystem
+libgsystem_cflags = $(PKGDEP_GIO_UNIX_CFLAGS) -I$(srcdir)/libgsystem
+libgsystem_libs = $(PKGDEP_GIO_UNIX_LIBS)
+include libgsystem/Makefile-libgsystem.am
+privlib_LTLIBRARIES += libgsystem.la
+
+include $(INTROSPECTION_MAKEFILE)
+
 include Makefile-rpm-ostree.am
+include Makefile-gsystem-introspection.am
+
+girdir = $(pkgdatadir)/gir-1.0
+typelibdir = $(pkglibdir)/girepository-1.0
+
+gir_DATA = $(INTROSPECTION_GIRS)
+typelib_DATA = $(gir_DATA:.gir=.typelib)
