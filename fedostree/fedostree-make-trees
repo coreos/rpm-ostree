@@ -11,11 +11,13 @@ if test -f ./fedostree.conf; then
     . ./fedostree.conf
 fi
 
+LOGDIR=${LOGDIR:-./}
+
 docommit() {
     name=$1
     shift
     echo "Starting rpm-ostree run at" $(date)
-    rpm-ostree --repo=repo ${ENABLED_REPOS:-${DEFAULT_ENABLED_REPOS}} ${OS_ARGS:-${DEFAULT_OS_ARGS}} create "${name}" ${PACKAGES:-${DEFAULT_PACKAGES}} "$@" > log-${name}.txt 2>&1
+    rpm-ostree --repo=repo ${ENABLED_REPOS:-${DEFAULT_ENABLED_REPOS}} ${OS_ARGS:-${DEFAULT_OS_ARGS}} create "${name}" ${PACKAGES:-${DEFAULT_PACKAGES}} "$@" > ${LOGDIR}/log-${name}.txt 2>&1
     echo "Completed rpm-ostree run at" $(date)
 }
 
