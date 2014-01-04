@@ -20,7 +20,7 @@ create `/ostree` for you, as well as `/ostree/deploy/fedostree`.
 This step tells OSTree how to find the repository you built on
 the server.  You only need to do this once.
 
-	ostree remote add fedostree http://http://209.132.184.226/repo
+	ostree remote add fedostree http://209.132.184.226/repo
 
 Now, the repository is not GPG signed (yet), so we need to disable GPG
 verification.  Add `gpg-verify=false` in the `[remote]` section.
