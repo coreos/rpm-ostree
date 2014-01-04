@@ -1,0 +1,699 @@
+From 6d6d3e815e6a47c2c26d056b5336bb7a1a630492 Mon Sep 17 00:00:00 2001
+From: Colin Walters <walters@verbum.org>
+Date: Tue, 17 Dec 2013 18:48:48 -0500
+Subject: [PATCH] Use /usr/lib/passwd for system users (if it exists)
+
+See https://sourceware.org/bugzilla/show_bug.cgi?id=16142
+---
+ lib/defines.h           |  8 +++++
+ lib/groupio.c           | 81 ++++++++++++++++++++++++++++++++++++++++++++++---
+ lib/groupio.h           |  7 +++++
+ lib/pwio.c              | 81 ++++++++++++++++++++++++++++++++++++++++++++++---
+ lib/pwio.h              |  7 +++++
+ libmisc/cleanup_group.c |  2 +-
+ src/groupadd.c          | 24 +++++++--------
+ src/newusers.c          | 18 +++++------
+ src/useradd.c           | 66 ++++++++++++++++++++--------------------
+ 9 files changed, 229 insertions(+), 65 deletions(-)
+
+diff --git a/lib/defines.h b/lib/defines.h
+index c5d84a8..27ad429 100644
+--- a/lib/defines.h
++++ b/lib/defines.h
+@@ -302,10 +302,18 @@ char *strchr (), *strrchr (), *strtok ();
+ #define PASSWD_FILE "/etc/passwd"
+ #endif
+ 
++#ifndef USRLIB_PASSWD_FILE
++#define USRLIB_PASSWD_FILE "/usr/lib/passwd"
++#endif
++
+ #ifndef GROUP_FILE
+ #define GROUP_FILE "/etc/group"
+ #endif
+ 
++#ifndef USRLIB_GROUP_FILE
++#define USRLIB_GROUP_FILE "/usr/lib/group"
++#endif
++
+ #ifndef SHADOW_FILE
+ #define SHADOW_FILE "/etc/shadow"
+ #endif
+diff --git a/lib/groupio.c b/lib/groupio.c
+index e0bb030..26f4da7 100644
+--- a/lib/groupio.c
++++ b/lib/groupio.c
+@@ -139,6 +139,42 @@ static /*@owned@*/struct commonio_db group_db = {
+ 	false			/* readonly */
+ };
+ 
++static struct commonio_db usrlib_group_db = {
++	USRLIB_GROUP_FILE,	/* filename */
++	&group_ops,		/* ops */
++	NULL,			/* fp */
++#ifdef WITH_SELINUX
++	NULL,			/* scontext */
++#endif
++	NULL,			/* head */
++	NULL,			/* tail */
++	NULL,			/* cursor */
++	false,			/* changed */
++	false,			/* isopen */
++	false,			/* locked */
++	false			/* readonly */
++};
++
++static struct commonio_db *
++get_db (int usrlib)
++{
++	static int checked_usrlib;
++	static int have_usrlib;
++
++	if (!usrlib)
++		return &group_db;
++
++	if (!checked_usrlib) {
++		struct stat stbuf;
++		checked_usrlib = 1;
++		have_usrlib = lstat (usrlib_group_db.filename, &stbuf) == 0;
++	}
++
++	if (have_usrlib)
++		return &usrlib_group_db;
++	return &group_db;
++}
++
+ int gr_setdbname (const char *filename)
+ {
+ 	return commonio_setname (&group_db, filename);
+@@ -149,14 +185,29 @@ int gr_setdbname (const char *filename)
+ 	return group_db.filename;
+ }
+ 
++/*@observer@*/const char *gr_dbname_extended (int usrlib)
++{
++	return get_db (usrlib)->filename;
++}
++
+ int gr_lock (void)
+ {
+-	return commonio_lock (&group_db);
++	return gr_lock_extended (0);
++}
++
++int gr_lock_extended (int usrlib)
++{
++	return commonio_lock (get_db (usrlib));
+ }
+ 
+ int gr_open (int mode)
+ {
+-	return commonio_open (&group_db, mode);
++	return gr_open_extended (0, mode);
++}
++
++int gr_open_extended (int usrlib, int mode)
++{
++	return commonio_open (get_db (usrlib), mode);
+ }
+ 
+ /*@observer@*/ /*@null@*/const struct group *gr_locate (const char *name)
+@@ -178,7 +229,12 @@ int gr_open (int mode)
+ 
+ int gr_update (const struct group *gr)
+ {
+-	return commonio_update (&group_db, (const void *) gr);
++	return gr_update_extended (0, gr);
++}
++
++int gr_update_extended (int usrlib, const struct group *gr)
++{
++	return commonio_update (get_db (usrlib), (const void *) gr);
+ }
+ 
+ int gr_remove (const char *name)
+@@ -186,6 +242,11 @@ int gr_remove (const char *name)
+ 	return commonio_remove (&group_db, name);
+ }
+ 
++int gr_remove_extended (int usrlib, const char *name)
++{
++	return commonio_remove (get_db (usrlib), name);
++}
++
+ int gr_rewind (void)
+ {
+ 	return commonio_rewind (&group_db);
+@@ -198,12 +259,22 @@ int gr_rewind (void)
+ 
+ int gr_close (void)
+ {
+-	return commonio_close (&group_db);
++	return gr_close_extended (0);
++}
++
++int gr_close_extended (int usrlib)
++{
++	return commonio_close (get_db (usrlib));
+ }
+ 
+ int gr_unlock (void)
+ {
+-	return commonio_unlock (&group_db);
++	return gr_unlock_extended (0);
++}
++
++int gr_unlock_extended (int usrlib)
++{
++	return commonio_unlock (get_db (usrlib));
+ }
+ 
+ void __gr_set_changed (void)
+diff --git a/lib/groupio.h b/lib/groupio.h
+index 6440523..01f66d5 100644
+--- a/lib/groupio.h
++++ b/lib/groupio.h
+@@ -39,17 +39,24 @@
+ #include <grp.h>
+ 
+ extern int gr_close (void);
++extern int gr_close_extended (int usrlib);
+ extern /*@observer@*/ /*@null@*/const struct group *gr_locate (const char *name);
+ extern /*@observer@*/ /*@null@*/const struct group *gr_locate_gid (gid_t gid);
+ extern int gr_lock (void);
++extern int gr_lock_extended (int usrlib);
+ extern int gr_setdbname (const char *filename);
+ extern /*@observer@*/const char *gr_dbname (void);
++extern /*@observer@*/const char *gr_dbname_extended (int rflg);
+ extern /*@observer@*/ /*@null@*/const struct group *gr_next (void);
+ extern int gr_open (int mode);
++extern int gr_open_extended (int usrlib, int mode);
+ extern int gr_remove (const char *name);
++extern int gr_remove_extended (int usrlib, const char *name);
+ extern int gr_rewind (void);
+ extern int gr_unlock (void);
++extern int gr_unlock_extended (int usrlib);
+ extern int gr_update (const struct group *gr);
++extern int gr_update_extended (int usrlib, const struct group *gr);
+ extern int gr_sort (void);
+ 
+ #endif
+diff --git a/lib/pwio.c b/lib/pwio.c
+index d63d15d..47431dd 100644
+--- a/lib/pwio.c
++++ b/lib/pwio.c
+@@ -114,6 +114,42 @@ static struct commonio_db passwd_db = {
+ 	false			/* readonly */
+ };
+ 
++static struct commonio_db usrlib_passwd_db = {
++	USRLIB_PASSWD_FILE,	/* filename */
++	&passwd_ops,		/* ops */
++	NULL,			/* fp */
++#ifdef WITH_SELINUX
++	NULL,			/* scontext */
++#endif
++	NULL,			/* head */
++	NULL,			/* tail */
++	NULL,			/* cursor */
++	false,			/* changed */
++	false,                  /* isopen */
++	false,			/* locked */
++	false			/* readonly */
++};
++
++static struct commonio_db *
++get_db (int usrlib)
++{
++	static int checked_usrlib;
++	static int have_usrlib;
++
++	if (!usrlib)
++		return &passwd_db;
++
++	if (!checked_usrlib) {
++		struct stat stbuf;
++		checked_usrlib = 1;
++		have_usrlib = lstat (usrlib_passwd_db.filename, &stbuf) == 0;
++	}
++
++	if (have_usrlib)
++		return &usrlib_passwd_db;
++	return &passwd_db;
++}
++
+ int pw_setdbname (const char *filename)
+ {
+ 	return commonio_setname (&passwd_db, filename);
+@@ -124,9 +160,19 @@ int pw_setdbname (const char *filename)
+ 	return passwd_db.filename;
+ }
+ 
++/*@observer@*/const char *pw_dbname_extended (int usrlib)
++{
++	return get_db (usrlib)->filename;
++}
++
+ int pw_lock (void)
+ {
+-	return commonio_lock (&passwd_db);
++	return pw_lock_extended (0);
++}
++
++int pw_lock_extended (int usrlib)
++{
++	return commonio_lock (get_db (usrlib));
+ }
+ 
+ int pw_open (int mode)
+@@ -134,6 +180,11 @@ int pw_open (int mode)
+ 	return commonio_open (&passwd_db, mode);
+ }
+ 
++int pw_open_extended (int usrlib, int mode)
++{
++	return commonio_open (get_db (usrlib), mode);
++}
++
+ /*@observer@*/ /*@null@*/const struct passwd *pw_locate (const char *name)
+ {
+ 	return commonio_locate (&passwd_db, name);
+@@ -153,12 +204,22 @@ int pw_open (int mode)
+ 
+ int pw_update (const struct passwd *pw)
+ {
+-	return commonio_update (&passwd_db, (const void *) pw);
++	return pw_update_extended (0, pw);
++}
++
++int pw_update_extended (int usrlib, const struct passwd *pw)
++{
++	return commonio_update (get_db (usrlib), (const void *) pw);
+ }
+ 
+ int pw_remove (const char *name)
+ {
+-	return commonio_remove (&passwd_db, name);
++	return pw_remove_extended (0, name);
++}
++
++int pw_remove_extended (int usrlib, const char *name)
++{
++	return commonio_remove (get_db (usrlib), name);
+ }
+ 
+ int pw_rewind (void)
+@@ -173,12 +234,22 @@ int pw_rewind (void)
+ 
+ int pw_close (void)
+ {
+-	return commonio_close (&passwd_db);
++	return pw_close_extended (0);
++}
++
++int pw_close_extended (int usrlib)
++{
++	return commonio_close (get_db (usrlib));
+ }
+ 
+ int pw_unlock (void)
+ {
+-	return commonio_unlock (&passwd_db);
++	return pw_unlock_extended (0);
++}
++
++int pw_unlock_extended (int usrlib)
++{
++	return commonio_unlock (get_db (usrlib));
+ }
+ 
+ /*@null@*/struct commonio_entry *__pw_get_head (void)
+diff --git a/lib/pwio.h b/lib/pwio.h
+index 0ee961d..ca73361 100644
+--- a/lib/pwio.h
++++ b/lib/pwio.h
+@@ -39,17 +39,24 @@
+ #include <pwd.h>
+ 
+ extern int pw_close (void);
++extern int pw_close_extended (int usrlib);
+ extern /*@observer@*/ /*@null@*/const struct passwd *pw_locate (const char *name);
+ extern /*@observer@*/ /*@null@*/const struct passwd *pw_locate_uid (uid_t uid);
+ extern int pw_lock (void);
++extern int pw_lock_extended (int usrlib);
+ extern int pw_setdbname (const char *filename);
+ extern /*@observer@*/const char *pw_dbname (void);
++extern /*@observer@*/const char *pw_dbname_extended (int rflg);
+ extern /*@observer@*/ /*@null@*/const struct passwd *pw_next (void);
+ extern int pw_open (int mode);
++extern int pw_open_extended (int usrlib, int mode);
+ extern int pw_remove (const char *name);
++extern int pw_remove_extended (int usrlib, const char *name);
+ extern int pw_rewind (void);
+ extern int pw_unlock (void);
++extern int pw_unlock_extended (int usrlib);
+ extern int pw_update (const struct passwd *pw);
++extern int pw_update_extended (int usrlib, const struct passwd *pw);
+ extern int pw_sort (void);
+ 
+ #endif
+diff --git a/libmisc/cleanup_group.c b/libmisc/cleanup_group.c
+index d07adc7..cbfc2c6 100644
+--- a/libmisc/cleanup_group.c
++++ b/libmisc/cleanup_group.c
+@@ -202,7 +202,7 @@ void cleanup_report_del_group_gshadow (void *group_name)
+  */
+ void cleanup_unlock_group (unused void *arg)
+ {
+-	if (gr_unlock () == 0) {
++	if (gr_unlock_extended ((intptr_t)arg) == 0) {
+ 		fprintf (stderr,
+ 		         _("%s: failed to unlock %s\n"),
+ 		         Prog, gr_dbname ());
+diff --git a/src/groupadd.c b/src/groupadd.c
+index 84ff55e..f6079aa 100644
+--- a/src/groupadd.c
++++ b/src/groupadd.c
+@@ -206,10 +206,10 @@ static void grp_update (void)
+ 	/*
+ 	 * Write out the new group file entry.
+ 	 */
+-	if (gr_update (&grp) == 0) {
++	if (gr_update_extended (rflg, &grp) == 0) {
+ 		fprintf (stderr,
+ 		         _("%s: failed to prepare the new %s entry '%s'\n"),
+-		         Prog, gr_dbname (), grp.gr_name);
++		         Prog, gr_dbname_extended (rflg), grp.gr_name);
+ 		exit (E_GRP_UPDATE);
+ 	}
+ #ifdef	SHADOWGRP
+@@ -256,10 +256,10 @@ static void check_new_name (void)
+ static void close_files (void)
+ {
+ 	/* First, write the changes in the regular group database */
+-	if (gr_close () == 0) {
++	if (gr_close_extended (rflg) == 0) {
+ 		fprintf (stderr,
+ 		         _("%s: failure while writing changes to %s\n"),
+-		         Prog, gr_dbname ());
++		         Prog, gr_dbname_extended (rflg));
+ 		exit (E_GRP_UPDATE);
+ 	}
+ #ifdef WITH_AUDIT
+@@ -269,10 +269,10 @@ static void close_files (void)
+ 	              SHADOW_AUDIT_SUCCESS);
+ #endif
+ 	SYSLOG ((LOG_INFO, "group added to %s: name=%s, GID=%u",
+-	         gr_dbname (), group_name, (unsigned int) group_id));
++	         gr_dbname_extended (rflg), group_name, (unsigned int) group_id));
+ 	del_cleanup (cleanup_report_add_group_group);
+ 
+-	cleanup_unlock_group (NULL);
++	cleanup_unlock_group ((void*)rflg);
+ 	del_cleanup (cleanup_unlock_group);
+ 
+ 	/* Now, write the changes in the shadow database */
+@@ -319,13 +319,13 @@ static void close_files (void)
+ static void open_files (void)
+ {
+ 	/* First, lock the databases */
+-	if (gr_lock () == 0) {
++	if (gr_lock_extended (rflg) == 0) {
+ 		fprintf (stderr,
+ 		         _("%s: cannot lock %s; try again later.\n"),
+-		         Prog, gr_dbname ());
++		         Prog, gr_dbname_extended (rflg));
+ 		exit (E_GRP_UPDATE);
+ 	}
+-	add_cleanup (cleanup_unlock_group, NULL);
++	add_cleanup (cleanup_unlock_group, (void*)rflg);
+ 
+ #ifdef	SHADOWGRP
+ 	if (is_shadow_grp) {
+@@ -346,9 +346,9 @@ static void open_files (void)
+ 	add_cleanup (cleanup_report_add_group, group_name);
+ 
+ 	/* And now open the databases */
+-	if (gr_open (O_RDWR) == 0) {
+-		fprintf (stderr, _("%s: cannot open %s\n"), Prog, gr_dbname ());
+-		SYSLOG ((LOG_WARN, "cannot open %s", gr_dbname ()));
++	if (gr_open_extended (rflg, O_RDWR) == 0) {
++		fprintf (stderr, _("%s: cannot open %s\n"), Prog, gr_dbname_extended (rflg));
++		SYSLOG ((LOG_WARN, "cannot open %s", gr_dbname_extended (rflg)));
+ 		exit (E_GRP_UPDATE);
+ 	}
+ 
+diff --git a/src/newusers.c b/src/newusers.c
+index ac6f538..136926b 100644
+--- a/src/newusers.c
++++ b/src/newusers.c
+@@ -380,7 +380,7 @@ static int add_user (const char *name, uid_t uid, gid_t gid)
+ 	pwent.pw_dir = "";	/* XXX warning: const */
+ 	pwent.pw_shell = "";	/* XXX warning: const */
+ 
+-	return (pw_update (&pwent) == 0) ? -1 : 0;
++	return (pw_update_extended (rflg, &pwent) == 0) ? -1 : 0;
+ }
+ 
+ #ifndef USE_PAM
+@@ -714,7 +714,7 @@ static void open_files (void)
+ 	 * modified, or new entries added. The password file is the key - if
+ 	 * it gets locked, assume the others can be locked right away.
+ 	 */
+-	if (pw_lock () == 0) {
++	if (pw_lock_extended (rflg) == 0) {
+ 		fprintf (stderr,
+ 		         _("%s: cannot lock %s; try again later.\n"),
+ 		         Prog, pw_dbname ());
+@@ -730,7 +730,7 @@ static void open_files (void)
+ 		}
+ 		spw_locked = true;
+ 	}
+-	if (gr_lock () == 0) {
++	if (gr_lock_extended (rflg) == 0) {
+ 		fprintf (stderr,
+ 		         _("%s: cannot lock %s; try again later.\n"),
+ 		         Prog, gr_dbname ());
+@@ -749,7 +749,7 @@ static void open_files (void)
+ 	}
+ #endif
+ 
+-	if (pw_open (O_RDWR) == 0) {
++	if (pw_open_extended (rflg, O_RDWR) == 0) {
+ 		fprintf (stderr, _("%s: cannot open %s\n"), Prog, pw_dbname ());
+ 		fail_exit (EXIT_FAILURE);
+ 	}
+@@ -757,7 +757,7 @@ static void open_files (void)
+ 		fprintf (stderr, _("%s: cannot open %s\n"), Prog, spw_dbname ());
+ 		fail_exit (EXIT_FAILURE);
+ 	}
+-	if (gr_open (O_RDWR) == 0) {
++	if (gr_open_extended (rflg, O_RDWR) == 0) {
+ 		fprintf (stderr, _("%s: cannot open %s\n"), Prog, gr_dbname ());
+ 		fail_exit (EXIT_FAILURE);
+ 	}
+@@ -774,12 +774,12 @@ static void open_files (void)
+  */
+ static void close_files (void)
+ {
+-	if (pw_close () == 0) {
++	if (pw_close_extended (rflg) == 0) {
+ 		fprintf (stderr, _("%s: failure while writing changes to %s\n"), Prog, pw_dbname ());
+ 		SYSLOG ((LOG_ERR, "failure while writing changes to %s", pw_dbname ()));
+ 		fail_exit (EXIT_FAILURE);
+ 	}
+-	if (pw_unlock () == 0) {
++	if (pw_unlock_extended (rflg) == 0) {
+ 		fprintf (stderr, _("%s: failed to unlock %s\n"), Prog, pw_dbname ());
+ 		SYSLOG ((LOG_ERR, "failed to unlock %s", pw_dbname ()));
+ 		/* continue */
+@@ -804,14 +804,14 @@ static void close_files (void)
+ 		spw_locked = false;
+ 	}
+ 
+-	if (gr_close () == 0) {
++	if (gr_close_extended (rflg) == 0) {
+ 		fprintf (stderr,
+ 		         _("%s: failure while writing changes to %s\n"),
+ 		         Prog, gr_dbname ());
+ 		SYSLOG ((LOG_ERR, "failure while writing changes to %s", gr_dbname ()));
+ 		fail_exit (EXIT_FAILURE);
+ 	}
+-	if (gr_unlock () == 0) {
++	if (gr_unlock_extended (rflg) == 0) {
+ 		fprintf (stderr,
+ 		         _("%s: failed to unlock %s\n"),
+ 		         Prog, gr_dbname ());
+diff --git a/src/useradd.c b/src/useradd.c
+index b686f14..8db3650 100644
+--- a/src/useradd.c
++++ b/src/useradd.c
+@@ -228,9 +228,9 @@ static void fail_exit (int code)
+ 		}
+ 	}
+ 	if (pw_locked) {
+-		if (pw_unlock () == 0) {
+-			fprintf (stderr, _("%s: failed to unlock %s\n"), Prog, pw_dbname ());
+-			SYSLOG ((LOG_ERR, "failed to unlock %s", pw_dbname ()));
++		if (pw_unlock_extended (rflg) == 0) {
++			fprintf (stderr, _("%s: failed to unlock %s\n"), Prog, pw_dbname_extended (rflg));
++			SYSLOG ((LOG_ERR, "failed to unlock %s", pw_dbname_extended (rflg)));
+ #ifdef WITH_AUDIT
+ 			audit_logger (AUDIT_ADD_USER, Prog,
+ 			              "unlocking passwd file",
+@@ -241,9 +241,9 @@ static void fail_exit (int code)
+ 		}
+ 	}
+ 	if (gr_locked) {
+-		if (gr_unlock () == 0) {
+-			fprintf (stderr, _("%s: failed to unlock %s\n"), Prog, gr_dbname ());
+-			SYSLOG ((LOG_ERR, "failed to unlock %s", gr_dbname ()));
++		if (gr_unlock_extended (rflg) == 0) {
++			fprintf (stderr, _("%s: failed to unlock %s\n"), Prog, gr_dbname_extended (rflg));
++			SYSLOG ((LOG_ERR, "failed to unlock %s", gr_dbname_extended (rflg)));
+ #ifdef WITH_AUDIT
+ 			audit_logger (AUDIT_ADD_USER, Prog,
+ 			              "unlocking group file",
+@@ -847,7 +847,7 @@ static void grp_update (void)
+ 			fprintf (stderr,
+ 			         _("%s: Out of memory. Cannot update %s.\n"),
+ 			         Prog, gr_dbname ());
+-			SYSLOG ((LOG_ERR, "failed to prepare the new %s entry '%s'", gr_dbname (), user_name));
++			SYSLOG ((LOG_ERR, "failed to prepare the new %s entry '%s'", gr_dbname_extended (rflg), user_name));
+ #ifdef WITH_AUDIT
+ 			audit_logger (AUDIT_ADD_USER, Prog,
+ 			              "adding user to group",
+@@ -862,11 +862,11 @@ static void grp_update (void)
+ 		 * update the group entry to reflect the change.
+ 		 */
+ 		ngrp->gr_mem = add_list (ngrp->gr_mem, user_name);
+-		if (gr_update (ngrp) == 0) {
++		if (gr_update_extended (rflg, ngrp) == 0) {
+ 			fprintf (stderr,
+ 			         _("%s: failed to prepare the new %s entry '%s'\n"),
+-			         Prog, gr_dbname (), ngrp->gr_name);
+-			SYSLOG ((LOG_ERR, "failed to prepare the new %s entry '%s'", gr_dbname (), user_name));
++			         Prog, gr_dbname_extended (rflg), ngrp->gr_name);
++			SYSLOG ((LOG_ERR, "failed to prepare the new %s entry '%s'", gr_dbname_extended (rflg), user_name));
+ #ifdef WITH_AUDIT
+ 			audit_logger (AUDIT_ADD_USER, Prog,
+ 			              "adding user to group",
+@@ -1351,9 +1351,9 @@ static void process_flags (int argc, char **argv)
+  */
+ static void close_files (void)
+ {
+-	if (pw_close () == 0) {
+-		fprintf (stderr, _("%s: failure while writing changes to %s\n"), Prog, pw_dbname ());
+-		SYSLOG ((LOG_ERR, "failure while writing changes to %s", pw_dbname ()));
++	if (pw_close_extended (rflg) == 0) {
++		fprintf (stderr, _("%s: failure while writing changes to %s\n"), Prog, pw_dbname_extended (rflg));
++		SYSLOG ((LOG_ERR, "failure while writing changes to %s", pw_dbname_extended (rflg)));
+ 		fail_exit (E_PW_UPDATE);
+ 	}
+ 	if (is_shadow_pwd && (spw_close () == 0)) {
+@@ -1365,8 +1365,8 @@ static void close_files (void)
+ 	if (do_grp_update) {
+ 		if (gr_close () == 0) {
+ 			fprintf (stderr,
+-			         _("%s: failure while writing changes to %s\n"), Prog, gr_dbname ());
+-			SYSLOG ((LOG_ERR, "failure while writing changes to %s", gr_dbname ()));
++			         _("%s: failure while writing changes to %s\n"), Prog, gr_dbname_extended (rflg));
++			SYSLOG ((LOG_ERR, "failure while writing changes to %s", gr_dbname_extended (rflg)));
+ 			fail_exit (E_GRP_UPDATE);
+ 		}
+ #ifdef	SHADOWGRP
+@@ -1393,9 +1393,9 @@ static void close_files (void)
+ 		}
+ 		spw_locked = false;
+ 	}
+-	if (pw_unlock () == 0) {
+-		fprintf (stderr, _("%s: failed to unlock %s\n"), Prog, pw_dbname ());
+-		SYSLOG ((LOG_ERR, "failed to unlock %s", pw_dbname ()));
++	if (pw_unlock_extended (rflg) == 0) {
++		fprintf (stderr, _("%s: failed to unlock %s\n"), Prog, pw_dbname_extended (rflg));
++		SYSLOG ((LOG_ERR, "failed to unlock %s", pw_dbname_extended (rflg)));
+ #ifdef WITH_AUDIT
+ 		audit_logger (AUDIT_ADD_USER, Prog,
+ 		              "unlocking passwd file",
+@@ -1405,9 +1405,9 @@ static void close_files (void)
+ 		/* continue */
+ 	}
+ 	pw_locked = false;
+-	if (gr_unlock () == 0) {
+-		fprintf (stderr, _("%s: failed to unlock %s\n"), Prog, gr_dbname ());
+-		SYSLOG ((LOG_ERR, "failed to unlock %s", gr_dbname ()));
++	if (gr_unlock_extended (rflg) == 0) {
++		fprintf (stderr, _("%s: failed to unlock %s\n"), Prog, gr_dbname_extended (rflg));
++		SYSLOG ((LOG_ERR, "failed to unlock %s", gr_dbname_extended (rflg)));
+ #ifdef WITH_AUDIT
+ 		audit_logger (AUDIT_ADD_USER, Prog,
+ 		              "unlocking group file",
+@@ -1442,15 +1442,15 @@ static void close_files (void)
+  */
+ static void open_files (void)
+ {
+-	if (pw_lock () == 0) {
++	if (pw_lock_extended (rflg) == 0) {
+ 		fprintf (stderr,
+ 		         _("%s: cannot lock %s; try again later.\n"),
+-		         Prog, pw_dbname ());
++		         Prog, pw_dbname_extended (rflg));
+ 		exit (E_PW_UPDATE);
+ 	}
+ 	pw_locked = true;
+-	if (pw_open (O_RDWR) == 0) {
+-		fprintf (stderr, _("%s: cannot open %s\n"), Prog, pw_dbname ());
++	if (pw_open_extended (rflg, O_RDWR) == 0) {
++		fprintf (stderr, _("%s: cannot open %s\n"), Prog, pw_dbname_extended (rflg));
+ 		fail_exit (E_PW_UPDATE);
+ 	}
+ 
+@@ -1459,15 +1459,15 @@ static void open_files (void)
+ 	/*
+ 	 * Lock and open the group file.
+ 	 */
+-	if (gr_lock () == 0) {
++	if (gr_lock_extended (rflg) == 0) {
+ 		fprintf (stderr,
+ 		         _("%s: cannot lock %s; try again later.\n"),
+-		         Prog, gr_dbname ());
++		         Prog, gr_dbname_extended (rflg));
+ 		fail_exit (E_GRP_UPDATE);
+ 	}
+ 	gr_locked = true;
+-	if (gr_open (O_RDWR) == 0) {
+-		fprintf (stderr, _("%s: cannot open %s\n"), Prog, gr_dbname ());
++	if (gr_open_extended (rflg, O_RDWR) == 0) {
++		fprintf (stderr, _("%s: cannot open %s\n"), Prog, gr_dbname_extended (rflg));
+ 		fail_exit (E_GRP_UPDATE);
+ 	}
+ #ifdef  SHADOWGRP
+@@ -1578,10 +1578,10 @@ static void grp_add (void)
+ 	/*
+ 	 * Write out the new group file entry.
+ 	 */
+-	if (gr_update (&grp) == 0) {
++	if (gr_update_extended (rflg, &grp) == 0) {
+ 		fprintf (stderr,
+ 		         _("%s: failed to prepare the new %s entry '%s'\n"),
+-		         Prog, gr_dbname (), grp.gr_name);
++		         Prog, gr_dbname_extended (rflg), grp.gr_name);
+ #ifdef WITH_AUDIT
+ 		audit_logger (AUDIT_ADD_GROUP, Prog,
+ 		              "adding group",
+@@ -1711,10 +1711,10 @@ static void usr_update (void)
+ 	/*
+ 	 * Put the new (struct passwd) in the table.
+ 	 */
+-	if (pw_update (&pwent) == 0) {
++	if (pw_update_extended (rflg, &pwent) == 0) {
+ 		fprintf (stderr,
+ 		         _("%s: failed to prepare the new %s entry '%s'\n"),
+-		         Prog, pw_dbname (), pwent.pw_name);
++		         Prog, pw_dbname_extended (rflg), pwent.pw_name);
+ 		fail_exit (E_PW_UPDATE);
+ 	}
+ 
+-- 
+1.8.3.1
+
