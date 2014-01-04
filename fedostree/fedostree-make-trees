@@ -3,11 +3,19 @@
 set -e
 set -x
 
+DEFAULT_ENABLED_REPOS="--enablerepo=fedora --enablerepo=updates --enablerepo=walters-nss-altfiles"
+DEFAULT_OS_ARGS="--os=fedora --os-version=20"
+DEFAULT_PACKAGES="kernel ostree fedora-release lvm2 btrfs-progs e2fsprogs"
+
+if test -f ./fedostree.conf; then
+    . ./fedostree.conf
+fi
+
 docommit() {
     name=$1
     shift
     echo "Starting rpm-ostree run at" $(date)
-    rpm-ostree --repo=repo --enablerepo=fedora --enablerepo=updates --enablerepo=walters-nss-altfiles create "${name}" kernel ostree fedora-release lvm2 btrfs-progs e2fsprogs "$@"
+    rpm-ostree --repo=repo ${ENABLED_REPOS:-${DEFAULT_ENABLED_REPOS}} ${OS_ARGS:-${DEFAULT_OS_ARGS}} create "${name}" ${PACKAGES:-${DEFAULT_PACKAGES}} "$@" > log-${name}.txt 2>&1
     echo "Completed rpm-ostree run at" $(date)
 }
 
