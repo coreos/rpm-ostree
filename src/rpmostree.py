@@ -359,17 +359,17 @@ def main():
         time.sleep(3)
 
     # Ensure we have enough to modify NSS
-    yuminstall(yumroot, ['filesystem', 'glibc', 'nss-altfiles'])
+    yuminstall(yumroot, ['filesystem', 'glibc', 'nss-altfiles', 'shadow-utils'])
 
-    if opts.breakpoint == 'post-yum-phase1':
-        return
-    
     # Prepare NSS configuration; this needs to be done
     # before any invocations of "useradd" in %post
     for n in ['passwd', 'group']:
         open(os.path.join(yumroot, 'usr/lib', n), 'w').close()
     replace_nsswitch(os.path.join(yumroot, 'etc'))
 
+    if opts.breakpoint == 'post-yum-phase1':
+        return
+    
     yuminstall(yumroot, packages)
 
     if opts.breakpoint == 'post-yum-phase2':
