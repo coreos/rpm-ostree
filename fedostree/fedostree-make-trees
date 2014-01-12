@@ -3,8 +3,7 @@
 set -e
 set -x
 
-DEFAULT_ENABLED_REPOS="--enablerepo=fedora --enablerepo=updates --enablerepo=walters-nss-altfiles"
-DEFAULT_OS_ARGS="--os=fedora --os-version=20"
+OS_NAME=fedostree
 DEFAULT_PACKAGES="kernel ostree fedora-release lvm2 btrfs-progs e2fsprogs"
 
 if test -f ./fedostree.conf; then
@@ -16,15 +15,24 @@ LOGDIR=${LOGDIR:-./}
 docommit() {
     name=$1
     shift
+    ref="${OS_NAME}/${release}/${name}-${arch}"
+    ref_unix=$(echo ${ref} | sed -e s,/,-,g)
     echo "Starting rpm-ostree run at" $(date)
-    rpm-ostree --repo=repo ${ENABLED_REPOS:-${DEFAULT_ENABLED_REPOS}} ${OS_ARGS:-${DEFAULT_OS_ARGS}} create "${name}" ${PACKAGES:-${DEFAULT_PACKAGES}} "$@" > ${LOGDIR}/log-${name}.txt 2>&1
+    fedora_repos="--enablerepo=fedora-${release}"
+    if ! test ${release} = rawhide; then
+	fedora_repos="$fedora_repos --enablerepo=fedora-${release}-updates"
+    fi
+    setarch ${arch} rpm-ostree --repo=repo --enablerepo=walters-nss-altfiles ${fedora_repos} --os=fedora --os-version=${release} create ${ref} ${PACKAGES:-${DEFAULT_PACKAGES}} "$@" > ${LOGDIR}/log-${ref_unix}.txt 2>&1
     echo "Completed rpm-ostree run at" $(date)
 }
 
-docommit minimal @core
-docommit standard @core @standard
-docommit standard-docker-io @core @standard docker-io
-docommit standard-freeipa-server @core @standard @freeipa-server
-docommit standard-jbossas @core @standard @jbossas
-docommit gnome-desktop-core @gnome-desktop
-docommit gnome-desktop-environment @firefox @gnome-desktop @gnome-games @epiphany @libreoffice
+for release in 20 rawhide; do
+    for arch in x86_64; do
+	docommit minimal @core
+	docommit standard-docker-io @core @standard docker-io
+	docommit standard-freeipa-server @core @standard @freeipa-server
+	docommit standard-jbossas @core @standard @jbossas
+	docommit gnome-desktop-core @gnome-desktop
+	docommit gnome-desktop-environment @firefox @gnome-desktop @gnome-games @epiphany @libreoffice
+    done
+done
