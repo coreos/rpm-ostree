@@ -277,6 +277,10 @@ def main():
                       action='store',
                       default=None,
                       help="Sign commits using given GPG key ID")
+    parser.add_option('', "--name",
+                      action='store',
+                      default=None,
+                      help="Use NAME as ref name")
     parser.add_option('', "--os",
                       action='store', dest='os',
                       default=None,
@@ -298,8 +302,9 @@ def main():
     global args
     (opts, args) = parser.parse_args(sys.argv[1:])
 
-    if (opts.os is None or
-        opts.os_version is None):
+    if (opts.deploy and
+        (opts.os is None or
+        opts.os_version is None)):
         f = open('/etc/os-release')
         for line in f.readlines():
             if line == '': continue
@@ -307,17 +312,16 @@ def main():
             os_release_data[k.strip()] = v.strip()
         f.close()
 
-    if opts.os is None:
-        opts.os = os_release_data['ID']
-    if opts.os_version is None:
-        opts.os_version = os_release_data['VERSION_ID']
+        if opts.os is None:
+            opts.os = os_release_data['ID']
+        if opts.os_version is None:
+            opts.os_version = os_release_data['VERSION_ID']
 
     log("Targeting os=%s version=%s" % (opts.os, opts.os_version))
 
     action = args[0]
     if action == 'create':
-        branchname = args[1]
-        ref = '%s/%s/%s' % (opts.os, opts.os_version, branchname)
+        ref = args[1]
         packages = args[2:]
         commit_message = 'Commit of %d packages' % (len(packages), )
     else:
