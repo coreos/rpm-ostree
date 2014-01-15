@@ -1,0 +1,31 @@
+git_version_rpm = $$(git describe --always --tags | sed -e 's,-,\.,g' -e 's,^v,,')
+
+srcdir=$(shell pwd)
+PACKAGE=$(shell basename $(srcdir))
+
+dist-snapshot:
+	set -x; \
+	echo "PACKAGE=$(PACKAGE)"; \
+	GITVERSION=$(git_version_rpm); export GITVERSION; \
+	TARFILE_TMP=$(PACKAGE)-$${GITVERSION}.tar.tmp; \
+	echo "Archiving $(PACKAGE) at $${REV}"; \
+	(cd $(srcdir); git archive --format=tar --prefix=$(PACKAGE)-$${GITVERSION}/ $${GITVERSION}) > $${TARFILE_TMP}; \
+	(cd $$(git rev-parse --show-toplevel); git submodule status) | while read line; do \
+	  rev=$$(echo $$line | cut -f 1 -d ' '); path=$$(echo $$line | cut -f 2 -d ' '); \
+	  echo "Archiving $${path} at $${rev}"; \
+	  (cd $(srcdir)/$$path; git archive --format=tar --prefix=$(PACKAGE)-$${GITVERSION}/$$path/ $${rev}) > submodule.tar; \
+	  tar -A -f $${TARFILE_TMP} submodule.tar; \
+	  rm submodule.tar; \
+	done; \
+	mv $(PACKAGE)-$${GITVERSION}.tar{.tmp,}; \
+	rm -f $(PACKAGE)-$${GITVERSION}.tar.xz; \
+	xz $(PACKAGE)-$${GITVERSION}.tar 
+
+srpm: dist-snapshot
+	GITVERSION=$(git_version_rpm); export GITVERSION; \
+	sed -e "s,^Version:.*,Version: $$GITVERSION," $(srcdir)/packaging/$(PACKAGE).spec.in > $(PACKAGE).spec
+	$(srcdir)/packaging/rpmbuild-cwd -bs $(PACKAGE).spec
+
+rpm: srpm
+	$(srcdir)/packaging/rpmbuild-cwd --rebuild $(PACKAGE)-$(git_version_rpm)*.src.rpm
+
