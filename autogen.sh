@@ -16,7 +16,7 @@ fi
 mkdir -p m4
 
 # Fetch submodules if needed
-if test ! -f src/libgsystem/README;
+if test ! -f libgsystem/README;
 then
   echo "+ Setting up submodules"
   git submodule init
