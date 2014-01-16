@@ -18,6 +18,8 @@
 const GLib = imports.gi.GLib;
 const Gio = imports.gi.Gio;
 
+const GSystem = imports.gi.GSystem;
+
 const Params = imports.params;
 
 function walkDirInternal(dir, matchParams, callback, cancellable, queryStr, depth, sortByName) {
@@ -86,4 +88,11 @@ function walkDir(dir, matchParams, callback, cancellable) {
 	queryStr += ',standard::fast-content-type';
     let depth = matchParams.depth;
     walkDirInternal(dir, matchParams, callback, cancellable, queryStr, depth, matchParams.sortByName);
+}
+
+function openReplace(path, cancellable) {
+    GSystem.shutil_rm_rf(path, cancellable);
+    return path.replace(null, false,
+			Gio.FileCreateFlags.REPLACE_DESTINATION,
+			cancellable);
 }

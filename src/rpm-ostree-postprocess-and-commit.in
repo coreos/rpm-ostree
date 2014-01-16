@@ -1,3 +1,5 @@
+#!@PYTHON@
+#
 # Copyright (C) 2013 Colin Walters <walters@verbum.org>
 #
 # This library is free software; you can redistribute it and/or
@@ -15,21 +17,15 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-bin_SCRIPTS += rpm-ostree rpm-ostree-postprocess-and-commit
+import os
+import sys
+import __builtin__
 
-rpm-ostree: src/rpm-ostree.in Makefile
-	$(AM_V_GEN) sed -e s,@PYTHON\@,$(PYTHON), -e s,@pkglibdir\@,$(pkglibdir), $< > $@.tmp && mv $@.tmp $@
-	@chmod a+x $@
+__builtin__.__dict__['PKGLIBDIR'] = "@pkglibdir@"
 
-rpm-ostree-postprocess-and-commit: src/rpm-ostree-postprocess-and-commit.in Makefile
-	$(AM_V_GEN) sed -e s,@PYTHON\@,$(PYTHON), -e s,@pkglibdir\@,$(pkglibdir), $< > $@.tmp && mv $@.tmp $@
-	@chmod a+x $@
+path = os.path.join('@pkglibdir@', 'rpm-ostree')
+sys.path.insert(0, path)
 
-pyrpmostreedir = $(pkglibdir)/rpm-ostree
-pyrpmostree_DATA = \
-	src/rpmostree.py \
-	src/rpmostreepost.py \
-	$(NULL)
+import rpmostreepost
 
-privdatadir=$(pkglibdir)
-privdata_DATA = src/tmpfiles-ostree-integration.conf
+sys.exit(rpmostreepost.main())

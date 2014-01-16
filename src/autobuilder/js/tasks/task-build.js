@@ -44,17 +44,17 @@ const TaskBuild = new Lang.Class({
 
     DefaultParameters: {forceComponents: []},
 
-    _composeProduct: function(productName, treeName, treeData, release, architecture, cancellable) {
+    _composeProduct: function(ref, productName, treeName, treeData, release, architecture, cancellable) {
 	let repos = ['fedora-' + release,
 		     'walters-nss-altfiles'];
 	if (release != 'rawhide')
 	    repos.push('fedora-' + release + '-updates');
 
-	let ref = [this._productData['osname'], release, architecture, productName].join('/');
 	let packages = treeData['packages'];
 	let baseRequired = this._productData['base_required_packages'];
-	print("packages=" + JSON.stringify(packages) + " baseRequired=" + JSON.stringify(baseRequired));
 	packages.push.apply(packages, baseRequired);
+
+	print("Starting build of " + ref);
 
 	let argv = ['rpm-ostree',
 		    '--repo=' + this.workdir.get_child('repo').get_path()];
@@ -62,10 +62,22 @@ const TaskBuild = new Lang.Class({
 	argv.push.apply(argv, ['--os=fedora', '--os-version=' + release,
 			       'create', ref]);
 	argv.push.apply(argv, packages);
-	let productNameUnix = productName.replace(/\//g, '_');
+	let productNameUnix = ref.replace(/\//g, '_');
 	let buildOutputPath = Gio.File.new_for_path('log-' + productNameUnix + '.txt');
-	ProcUtil.runSync(argv, cancellable, { logInitiation: true,
-					      cwd: this.workdir });
+	
+	let procContext = new GSystem.SubprocessContext({ argv: argv });
+	GSystem.shutil_rm_rf(buildOutputPath, cancellable);
+	procContext.set_stdout_file_path(buildOutputPath.get_path());
+	procContext.set_stderr_disposition(GSystem.SubprocessStreamDisposition.STDERR_MERGE);
+	let proc = new GSystem.Subprocess({ context: procContext });
+	proc.init(cancellable);
+	try {
+	    proc.wait_sync_check(cancellable);
+	} catch (e) {
+	    print("Build of " + productName + " failed");
+	    return false;
+	}
+	return true;
     },
 
     execute: function(cancellable) {
@@ -76,16 +88,26 @@ const TaskBuild = new Lang.Class({
 	let releases = productData['releases'];
 	let architectures = productData['architectures'];
 	let products = productData['products'];
+	let successful = [];
+	let failed = [];
 	for (let i = 0; i < releases.length; i++) {
 	    for (let j = 0; j < architectures.length; j++) {
 		for (let productName in products) {
 		    for (let treeName in products[productName]) {
-			this._composeProduct(productName, treeName, products[productName][treeName],
-					     releases[i], architectures[j],
-					     cancellable);
+			let release = releases[i];
+			let architecture = architectures[j];
+			let ref = [this._productData['osname'], release, architecture, productName, treeName].join('/');
+			if (this._composeProduct(ref, productName, treeName, products[productName][treeName],
+						 release, architecture,
+						 cancellable))
+			    successful.push(ref);
+			else
+			    failed.push(ref);
 		    }
 		}
 	    }
 	}
+	print("Successful: " + successful.join(' '));
+	print("Failed: " + failed.join(' '));
     }
 });

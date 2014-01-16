@@ -27,7 +27,6 @@ import subprocess
 
 from gi.repository import GLib
 from gi.repository import Gio
-from gi.repository import OSTree
 
 os_release_data = {}
 opts = None
@@ -59,36 +58,6 @@ def _find_current_origin_refspec():
                 if line.startswith('refspec='):
                     return line[len('refspec='):]
     return None
-
-def _initfs(targetroot):
-    os.makedirs(targetroot)
-    for d in ['dev', 'proc', 'run', 'sys', 'var']:
-        os.mkdir(os.path.join(targetroot, d))
-
-    # Special ostree mount
-    os.mkdir(os.path.join(targetroot, 'sysroot'))
-
-    # Some FHS targets; these all live in /var
-    for (target, name) in [('var/opt', 'opt'),
-                           ('var/srv', 'srv'),
-                           ('var/mnt', 'mnt'),
-                           ('var/roothome', 'root'),
-                           ('var/home', 'home'),
-                           ('run/media', 'media'),
-                           ('sysroot/ostree', 'ostree'),
-                           ('sysroot/tmp', 'tmp')]:
-        os.symlink(target, os.path.join(targetroot, name))
-
-
-def _clone_current_root_to_yumroot(yumroot):
-    _initfs(yumroot)
-    for d in ['boot', 'usr', 'etc', 'var/lib/rpm', 'var/cache/yum']:
-        destdir = os.path.join(yumroot, d)
-        rmrf(destdir)
-        ensuredir(os.path.dirname(destdir))
-        subprocess.check_call(['cp', '--reflink=auto', '-a',
-                               '/' + d,
-                               destdir])
 
 def replace_nsswitch(target_usretc):
     nsswitch_conf = os.path.join(target_usretc, 'nsswitch.conf')
@@ -164,64 +133,6 @@ def do_kernel_prep(yumroot, logs_lookaside):
     if os.path.exists(varlog_dracut_path):
         os.rename(varlog_dracut_path, os.path.join(logs_lookaside, 'dracut.log'))
     
-def _create_rootfs_from_yumroot_content(targetroot, yumroot):
-    """Prepare a root filesystem, taking mainly the contents of /usr from yumroot"""
-
-    _initfs(targetroot)
-
-    # We take /usr from the yum content
-    os.rename(os.path.join(yumroot, 'usr'), os.path.join(targetroot, 'usr'))
-    # Plus the RPM database goes in usr/share/rpm
-    legacyrpm_path = os.path.join(yumroot, 'var/lib/rpm')
-    newrpm_path = os.path.join(targetroot, 'usr/share/rpm')
-    if not os.path.isdir(newrpm_path):
-        os.rename(legacyrpm_path, newrpm_path)
-
-    # Except /usr/local -> ../var/usrlocal
-    target_usrlocal = os.path.join(targetroot, 'usr/local')
-    if not os.path.islink(target_usrlocal):
-        rmrf(target_usrlocal)
-        os.symlink('../var/usrlocal', target_usrlocal)
-    target_usretc = os.path.join(targetroot, 'usr/etc')
-    rmrf(target_usretc)
-    os.rename(os.path.join(yumroot, 'etc'), target_usretc)
-
-    # Move boot, but rename the kernel/initramfs to have a checksum
-    targetboot = os.path.join(targetroot, 'boot')
-    os.rename(os.path.join(yumroot, 'boot'), targetboot)
-    kernel = None
-    initramfs = None
-    for name in os.listdir(targetboot):
-        if name.startswith('vmlinuz-'):
-            kernel = os.path.join(targetboot, name)
-        elif name.startswith('initramfs-'):
-            initramfs = os.path.join(targetboot, name)
-
-    assert (kernel is not None and initramfs is not None)
-    
-    checksum = GLib.Checksum.new(GLib.ChecksumType.SHA256)
-    f = open(kernel)
-    feed_checksum(checksum, f)
-    f.close()
-    f = open(initramfs)
-    feed_checksum(checksum, f)
-    f.close()
-
-    bootcsum = checksum.get_string()
-    
-    os.rename(kernel, kernel + '-' + bootcsum)
-    os.rename(initramfs, initramfs + '-' + bootcsum)
-
-    # Also carry along toplevel compat links
-    for name in ['lib', 'lib64', 'bin', 'sbin']:
-        src = os.path.join(yumroot, name)
-        if os.path.islink(src):
-            os.rename(src, os.path.join(targetroot, name))
-
-    target_tmpfilesd = os.path.join(targetroot, 'usr/lib/tmpfiles.d')
-    ensuredir(target_tmpfilesd)
-    shutil.copy(os.path.join(PKGLIBDIR, 'tmpfiles-ostree-integration.conf'), target_tmpfilesd)
-
 def runyum(argv, yumroot, stdin_str=None):
     yumargs = list(['yum', '-y', '--releasever=%s' % (opts.os_version, ), '--nogpg', '--setopt=keepcache=1', '--installroot=' + yumroot, '--disablerepo=*'])
     yumargs.extend(map(lambda x: '--enablerepo=' + x, opts.enablerepo))
@@ -273,10 +184,6 @@ def main():
                       action='store',
                       default=None,
                       help="Stop at given phase")
-    parser.add_option('', "--gpg-sign",
-                      action='store',
-                      default=None,
-                      help="Sign commits using given GPG key ID")
     parser.add_option('', "--name",
                       action='store',
                       default=None,
@@ -328,13 +235,6 @@ def main():
         print >>sys.stderr, "Unknown action %s" % (action, )
         sys.exit(1)
 
-    if opts.repo_path is not None:
-        repo = OSTree.Repo.new(Gio.File.new_for_path(opts.repo_path))
-    else:
-        repo = OSTree.Repo.new_default()
-
-    repo.open(None)
-
     cachedir = '/var/cache/rpm-ostree/work'
     ensuredir(cachedir)
 
@@ -348,19 +248,13 @@ def main():
     ensuredir(logs_lookaside)
 
     shutil.rmtree(yumroot, ignore_errors=True)
-    if action == 'create':
-        yumroot_varcache = os.path.join(yumroot, 'var/cache')
-        if os.path.isdir(yumcache_lookaside):
-            log("Reusing cache: " + yumroot_varcache)
-            ensuredir(yumroot_varcache)
-            subprocess.check_call(['cp', '-a', yumcache_lookaside, yumcachedir])
-        else:
-            log("No cache found at: " + yumroot_varcache)
+    yumroot_varcache = os.path.join(yumroot, 'var/cache')
+    if os.path.isdir(yumcache_lookaside):
+        log("Reusing cache: " + yumroot_varcache)
+        ensuredir(yumroot_varcache)
+        subprocess.check_call(['cp', '-a', yumcache_lookaside, yumcachedir])
     else:
-        log("Cloning active root")
-        _clone_current_root_to_yumroot(yumroot)
-        log("...done")
-        time.sleep(3)
+        log("No cache found at: " + yumroot_varcache)
 
     # Ensure we have enough to modify NSS
     yuminstall(yumroot, ['filesystem', 'glibc', 'nss-altfiles', 'shadow-utils'])
@@ -394,36 +288,12 @@ def main():
     manifest = subprocess.check_call(['rpm', '-qa', '--dbpath=' + yumroot_rpmlibdir],
                                      stdout=open(rpmtextlist, 'w'))
 
-    rmrf(targetroot)
-    _create_rootfs_from_yumroot_content(targetroot, yumroot)
+    argv = ['rpm-ostree-postprocess-and-commit',
+            '--repo=' + opts.repo_path,
+            '-m', commit_message,
+            yumroot,
+            ref]
+    log("Running: %s" % (subprocess.list2cmdline(argv), ))
+    subprocess.check_call(argv)
 
-    yumroot_varlog = os.path.join(yumroot, 'var/log')
-    for name in os.listdir(yumroot_varlog):
-        shutil.move(os.path.join(yumroot_varlog, name), logs_lookaside)
-
-    # To make SELinux work, we need to do the labeling right before this.
-    # This really needs some sort of API, so we can apply the xattrs as
-    # we're committing into the repo, rather than having to label the
-    # physical FS.
-    # For now, no xattrs (and hence no SELinux =( )
-    log("Committing " + targetroot + "...")
-    repo.prepare_transaction(None)
-    mtree = OSTree.MutableTree.new()
-    modifier = OSTree.RepoCommitModifier.new(OSTree.RepoCommitModifierFlags.SKIP_XATTRS, None, None)
-    repo.write_directory_to_mtree(Gio.File.new_for_path(targetroot),
-                                  mtree, modifier, None)
-    [success, parent] = repo.resolve_rev(ref, True)
-    [success, tree] = repo.write_mtree(mtree, None)
-    [success, commit] = repo.write_commit(parent, '', commit_message, None, tree, None)
-    if opts.gpg_sign is not None:
-        repo.sign_commit(commit, opts.gpg_sign, None, None)
-    repo.transaction_set_ref(None, ref, commit)
-    repo.commit_transaction(None)
-
-    log("%s => %s" % (ref, commit))
-
-    rmrf(yumroot)
-    rmrf(targetroot)
-
-    if opts.deploy:
-        subprocess.check_call(['ostree', 'admin', 'deploy', '--os=' + opts.os, ref])
+    log("Complete")
