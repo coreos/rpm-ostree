@@ -52,7 +52,9 @@ const TaskBuild = new Lang.Class({
 
 	let ref = [this._productData['osname'], release, architecture, productName].join('/');
 	let packages = treeData['packages'];
-	packages.push.apply(packages, treeData['base_required_packages']);
+	let baseRequired = this._productData['base_required_packages'];
+	print("packages=" + JSON.stringify(packages) + " baseRequired=" + JSON.stringify(baseRequired));
+	packages.push.apply(packages, baseRequired);
 
 	let argv = ['rpm-ostree',
 		    '--repo=' + this.workdir.get_child('repo').get_path()];
