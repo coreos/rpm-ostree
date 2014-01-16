@@ -125,7 +125,7 @@ def do_kernel_prep(yumroot, logs_lookaside):
             rmrf(initramfs_path)
 
     if kernel_path is None:
-        raise ValueError("Failed to find vmlinuz- in " + yum_boot)
+        raise ValueError("Failed to find vmlinuz- in " + bootdir)
 
     kname = os.path.basename(kernel_path)
     kver = kname[kname.find('-') + 1:]
