@@ -32,3 +32,6 @@ srpm: dist-snapshot
 rpm: srpm
 	$(srcdir)/packaging/rpmbuild-cwd --rebuild $(PKG_VER)*.src.rpm
 
+buildinstall: rpm
+	sudo yum localinstall $(PKG_VER)*.src.rpm
+
