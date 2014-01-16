@@ -7,6 +7,8 @@
 
     "releases": ["20", "rawhide"],
 
+    "add-repos": ["walters-rpm-ostree"],
+
     "base_required_packages": ["kernel", "ostree", "fedora-release", "lvm2",
 			       "btrfs-progs", "e2fsprogs", "xfsprogs"],
 

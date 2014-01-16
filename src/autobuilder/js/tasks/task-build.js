@@ -45,10 +45,13 @@ const TaskBuild = new Lang.Class({
     DefaultParameters: {forceComponents: []},
 
     _composeProduct: function(ref, productName, treeName, treeData, release, architecture, cancellable) {
-	let repos = ['fedora-' + release,
-		     'walters-nss-altfiles'];
+	let repos = ['fedora-' + release];
 	if (release != 'rawhide')
 	    repos.push('fedora-' + release + '-updates');
+
+	let addRepos = this._productData['add-repos'];
+	if (addRepos)
+	    repos.push.apply(repos, addRepos);
 
 	let packages = treeData['packages'];
 	let baseRequired = this._productData['base_required_packages'];
