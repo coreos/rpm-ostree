@@ -44,21 +44,24 @@ const TaskBuild = new Lang.Class({
 
     DefaultParameters: {forceComponents: []},
 
-    _composeProduct: function(productName, treeName, treeData, release, architecture) {
+    _composeProduct: function(productName, treeName, treeData, release, architecture, cancellable) {
 	let repos = ['fedora-' + release,
 		     'walters-nss-altfiles'];
 	if (release != 'rawhide')
 	    repos.push('fedora-' + release + '-updates');
 
-	let ref = [this._productData['osname'], release, architecture, name].join('/');
+	let ref = [this._productData['osname'], release, architecture, productName].join('/');
 	let packages = treeData['packages'];
+	packages.push.apply(packages, treeData['base_required_packages']);
 
 	let argv = ['rpm-ostree',
 		    '--repo=' + this.workdir.get_child('repo').get_path()];
-	argv += repos.map(function (a) { return '--enablerepo=' + a });
-	argv += ['--os=fedora', '--os-version=' + release,
-		 'create', ref];
-	argv += packages;
+	argv.push.apply(argv, repos.map(function (a) { return '--enablerepo=' + a; }));
+	argv.push.apply(argv, ['--os=fedora', '--os-version=' + release,
+			       'create', ref]);
+	argv.push.apply(argv, packages);
+	let productNameUnix = productName.replace(/\//g, '_');
+	let buildOutputPath = Gio.File.new_for_path('log-' + productNameUnix + '.txt');
 	ProcUtil.runSync(argv, cancellable, { logInitiation: true,
 					      cwd: this.workdir });
     },
@@ -75,7 +78,9 @@ const TaskBuild = new Lang.Class({
 	    for (let j = 0; j < architectures.length; j++) {
 		for (let productName in products) {
 		    for (let treeName in products[productName]) {
-			this._composeProduct(productName, treeName, products[productName][treeName], releases[i], architectures[j]);
+			this._composeProduct(productName, treeName, products[productName][treeName],
+					     releases[i], architectures[j],
+					     cancellable);
 		    }
 		}
 	    }

@@ -400,7 +400,7 @@ const TaskRunner = new Lang.Class({
         this.taskCwd = this.buildPath.get_child(this.name);
         GSystem.file_ensure_directory(this.taskCwd, false, cancellable);
 
-	let baseArgv = ['ostbuild', 'run-task', this.name, JSON.stringify(this.taskData.parameters)];
+	let baseArgv = ['rpm-ostree-autobuilder', 'run-task', this.name, JSON.stringify(this.taskData.parameters)];
 	let context = new GSystem.SubprocessContext({ argv: baseArgv });
 	context.set_cwd(this.taskCwd.get_path());
 	let childEnv = GLib.get_environ();

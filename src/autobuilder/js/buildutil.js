@@ -23,7 +23,7 @@ const GSystem = imports.gi.GSystem;
 
 const BUILD_ENV = {
     'HOME' : '/', 
-    'HOSTNAME' : 'ostbuild',
+    'HOSTNAME' : 'rpm-ostree-autobuilder',
     'LANG': 'C',
     'PATH' : '/usr/bin:/bin:/usr/sbin:/sbin',
     'SHELL' : '/bin/bash',
@@ -110,13 +110,13 @@ function atomicSymlinkSwap(linkPath, newTarget, cancellable) {
 }
 
 function checkIsWorkDirectory(dir) {
-    let manifest = dir.get_child('manifest.json');
+    let manifest = dir.get_child('products.json');
     if (!manifest.query_exists(null)) {
-	throw new Error("No manifest.json found in " + dir.get_path());
+	throw new Error("No products.json found in " + dir.get_path());
     }
     let dotGit = dir.get_child('.git');
     if (dotGit.query_exists(null)) {
-	throw new Error(".git found in " + dir.get_path() + "; are you in a gnome-ostree checkout?");
+	throw new Error(".git found in " + dir.get_path() + "; are you in a rpm-ostree checkout?");
     }
 }
 

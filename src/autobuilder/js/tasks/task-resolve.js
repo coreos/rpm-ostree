@@ -67,7 +67,7 @@ const TaskResolve = new Lang.Class({
             componentsToFetch.push.apply(matches);
         }
 
-        let gitMirrorArgs = ['ostbuild', 'git-mirror', '--timeout-sec=' + this.parameters.timeoutSec,
+        let gitMirrorArgs = ['rpm-ostree-autobuilder', 'git-mirror', '--timeout-sec=' + this.parameters.timeoutSec,
 			     '--workdir=' + this.workdir.get_path(),
 			     '--manifest=' + manifestPath.get_path()];
         if (this.parameters.fetchAll || componentsToFetch.length > 0) {
