@@ -27,6 +27,8 @@ rpm-ostree-autobuilder: src/autobuilder/rpm-ostree-autobuilder.in Makefile
 EXTRA_DIST += src/autobuilder/rpm-ostree-autobuilder.in
 
 bin_SCRIPTS += rpm-ostree-autobuilder \
+	fedostree/fedostree-make-trees \
+	fedostree/fedostree-make-trees-loop \
 	$(NULL)
 
 jsautobuilderdir=$(pkgdatadir)/js
