@@ -21,7 +21,7 @@
 	"server":
 	{
 	    "docker-io": { "packages": ["@core", "@standard", "docker-io"] },
-	    "freeipa-server": { "packages": ["@core", "@standard", "docker-io"] },
+	    "freeipa": { "packages": ["@core", "@standard", "docker-io"] },
 	    "jbossas": { "packages": ["@core", "@standard", "@jbossas"] },
 	    "virthost": { "packages": ["@core", "@standard",
 				       "libvirt-daemon-kvm",
