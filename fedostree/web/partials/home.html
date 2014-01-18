@@ -3,10 +3,101 @@
   <p>An instance
     of <a href="https://github.com/cgwalters/rpm-ostree">rpm-ostree</a>
     for Fedora.  This project takes multiple RPM package sets from
-    Fedora, assembles them on the build server side, and stores
-    these trees in an OSTree repository.  Client systems can them
-    atomically upgrade and switch between these trees.
+    Fedora, assembles them on the build server side, and stores these
+    trees in
+    an <a href="http://live.gnome.org/Projects/OSTree">OSTree</a>
+    repository.  Client systems can them atomically upgrade and switch
+    between these trees.
   </p>
-  <h3>Installation</h3>
+  <h3>Trying it out</h3>
   <p>See <a href="#installation">installation</a>.</p>
+  <h3>Background</h3>
+  <p>Fedora today is an extremely flexible system.  One can find
+    Fedora builds running on everything from hobbyist ARM devices,
+    to workstations, to testing servers.
+  </p>
+  <p>This flexibility derives primarily from the fact that from a
+    technological point of view, Fedora is a collection of packages.
+    While pre-assembled "deliverables" such as the Live CDs are
+    distributed by the project, they are only a transitory state.  As
+    soon as they are installed, upgrading involves having a package
+    manager the dynamically reassemble the system from newer parts in
+    the Fedora package collection.
+  </p>
+  <p>Furthermore, nearly every aspect of the Fedora infrastructure
+    (and documentation) is structured in terms of packages, from
+    user-facing tools such as Bugzilla and Bodhi, to developer tools
+    such as Koji.  The announced security updates are based on package
+    names.
+  </p>
+  <p>One cannot file a bug against the "default offering" as a whole -
+     a package must be chosen.</p>
+  <p>In contrast for example, ChromeOS is delivered and updated as an
+    atomic unit.  It's far less flexible, but fulfills a targeted role
+    clearly well.</p>
+  <h3>How OSTree allows a middle ground</h3>
+  <p>Fundamentally, package systems are partial filesystem trees -
+    they are assembled by a package manager into a complete bootable
+    tree.  It's important to emphasize that it is only
+    these <emphasis>complete</emphasis> trees that users run. </p>
+  <p>OSTree allows an OS distributor to
+    ship <emphasis>multiple</emphasis> complete bootable filesystem
+    trees, and furthermore, client machines can atomically switch between
+    these on the client side.</p>
+  <p>This allows a middle ground between the two extremes of a
+    combinatorial explosion of packages, and a singular OS.</p>
+  <p>For example, these are some of the trees the current prototype generates:
+    <ul>
+      <li><tt>fedostree/20/x86_64/base/minimal</tt> - Just <tt>@core</tt>.</li>
+      <li><tt>fedostree/20/x86_64/server/docker-io</tt> - This tree contains <tt>@standard</tt> plus <tt>docker-io</tt>.</li>
+      <li><tt>fedostree/20/x86_64/server/freeipa-server</tt> - This tree contains <tt>@standard</tt> plus FreeIPA.</li>
+      <li><tt>fedostree/20/x86_64/workstation/gnome-core</tt> - The GNOME workstation with no applications.</li>
+      <li><tt>fedostree/20/x86_64/workstation/gnome-default</tt> - The above, with default applications.</li>
+      <li><tt>fedostree/20/x86_64/workstation/gnome-development-and-virt</tt>
+      - The above, with development tools, and virtualization client
+      and server side.</li>
+    </ul>
+  </p>
+  <h3>Initial goals</h3>
+  <p>The first goal of this project is to be an <i>additional</i>
+    deployment option built in the Fedora infrastructure.  In this
+    phase, developers and testers can use OSTree to replicate and
+    atomically transition between the pre-assembled trees produced by
+    this build server.
+  </p>
+  <p>In this phase, no common mechanism for additional software
+    installation is provided. That said, individual trees can do so;
+    for example <tt>server/docker-io</tt> tree can use Docker to
+    install and run server container applications independent of
+    OSTree.
+  </p>
+  <p>This phase does include basic integration testing on the build
+    server side, which will be a major benefit to the Fedora project
+    and its downstreams.</p>
+  <h3>Development area: OSTree Layering</h3>
+  <p>This phase would be allowing "layering" of trees.  For example,
+     if one installs the <tt>base/minimal</tt> tree, one could imagine
+     taking the <tt>strace</tt> package, and computing a new
+     filesystem tree which is the union of the two.</p>
+  <p>While plain standalone ELF executables would work with no
+     modification, a generalization of this kind of dynamic layering
+     implies a higher level above OSTree that is aware of things
+     like <tt>ldconfig</tt> and <tt>gtk-update-icon-cache</tt> and how
+     to trigger them when layers are combined.</p>
+  <p>Conceptually, this is a step back towards combinatorics.  For example,
+     if libvirt is a layer that could be applied on top of the base server
+     layer as well as the workstation layer, then there would need to be
+     some notion of dependencies.
+  </p>
+  <h3>Development area: Local package assembly</h3>
+  <p>There is absolutely no reason one could not just use the package
+     manager on the client side to download and assemble packages -
+     but rather than operating live on your current root, OSTree
+     allows setting up the chosen tree for the next boot
+     atomically.</p>
+  <p>The problem is making this sort of thing efficient and scalable;
+     it would require careful integration of the local OSTree repository
+     and the package manager caching to operate at a speed comparable to
+     traditional package management.
+  </p>
 </article>

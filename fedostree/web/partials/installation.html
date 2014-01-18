@@ -25,12 +25,12 @@
   <p>At this point, we have only initialized configuration.  Let's start
     by downloading the "minimal" install (just @core):</p>
 <pre>
-	ostree pull fedostree fedostree/20/minimal-x86_64
+	ostree pull fedostree fedostree/20/x86_64/base/minimal
 </pre>
   <p>This step extracts the root filesystem, and updates the bootloader
     configuration:</p>
 <pre>
-	ostree admin deploy --os=fedostree fedostree/20/minimal-x86_64
+	ostree admin deploy --os=fedostree fedostree/20/x86_64/base/minimal
 </pre>
   <p>We need to do some initial setup before we actually boot the system.
     Copy in the storage configuration:</p>
@@ -74,15 +74,15 @@
     different complete bootable filesystem trees.  Let's now try the
     <tt>standard-docker-io</tt> tree:</p>
 <pre>
-	ostree pull fedostree fedostree/20/standard-docker-io-x86_64
+	ostree pull fedostree fedostree/20/x86_64/server/docker-io
 </pre>
-  <p>If you look at the <a href="https://github.com/cgwalters/rpm-ostree/blob/master/fedostree/fedostree-make-trees">fedostree-make-trees</a> script
+  <p>If you look at the <a href="https://github.com/cgwalters/rpm-ostree/blob/master/fedostree/products.json">products.json</a> script
     you can see this tree contains <tt>@core</tt>, <tt>@standard</tt>, and finally
     <tt>docker-io</tt>.
   </p>
   <p>Like above, let's now deploy it:</p>
   <pre>
-	ostree admin deploy --os=fedostree fedostree/20/standard-docker-io-x86_64
+	ostree admin deploy --os=fedostree fedostree/20/x86_64/server/docker-io
 	systemctl reboot
   </pre>
 
