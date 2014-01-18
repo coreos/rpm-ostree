@@ -172,10 +172,10 @@ def yuminstall(yumroot, packages):
 
 def main():
     parser = optparse.OptionParser('%prog ACTION PACKAGE1 [PACKAGE2...]')
-    parser.add_option('', "--repo",
-                      action='store', dest='repo_path',
-                      default=None,
-                      help="Path to OSTree repository (default=/ostree)")
+    parser.add_option('', "--workdir",
+                      action='store', dest='workdir',
+                      default=os.getcwd(),
+                      help="Path to working directory (default: cwd)")
     parser.add_option('', "--deploy",
                       action='store_true',
                       default=False,
@@ -209,6 +209,8 @@ def main():
     global args
     (opts, args) = parser.parse_args(sys.argv[1:])
 
+    os.chdir(opts.workdir)
+
     if (opts.deploy and
         (opts.os is None or
         opts.os_version is None)):
@@ -235,7 +237,7 @@ def main():
         print >>sys.stderr, "Unknown action %s" % (action, )
         sys.exit(1)
 
-    cachedir = '/var/cache/rpm-ostree/work'
+    cachedir = os.path.join(opts.workdir, 'cache')
     ensuredir(cachedir)
 
     yumroot = os.path.join(cachedir, 'yum')
@@ -289,7 +291,7 @@ def main():
                                      stdout=open(rpmtextlist, 'w'))
 
     argv = ['rpm-ostree-postprocess-and-commit',
-            '--repo=' + opts.repo_path,
+            '--repo=' + os.path.join(opts.workdir, 'repo'),
             '-m', commit_message,
             yumroot,
             ref]

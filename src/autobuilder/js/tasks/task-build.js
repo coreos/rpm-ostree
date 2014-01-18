@@ -60,7 +60,7 @@ const TaskBuild = new Lang.Class({
 	print("Starting build of " + ref);
 
 	let argv = ['rpm-ostree',
-		    '--repo=' + this.workdir.get_child('repo').get_path()];
+		    '--workdir=' + this.workdir.get_path()];
 	argv.push.apply(argv, repos.map(function (a) { return '--enablerepo=' + a; }));
 	argv.push.apply(argv, ['--os=fedora', '--os-version=' + release,
 			       'create', ref]);
