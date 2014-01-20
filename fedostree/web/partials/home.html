@@ -191,6 +191,19 @@
     local builds from git, automating bisection across source code is
     entirely possible as well.
   </p>
+  <h3>OSTree example: Server side fast CI/CD</h3>
+  <p>
+    OSTree <b>mandates</b> that operating system updates work entirely
+    offline.  Work that has been prototyped already in
+    the <a href="https://wiki.gnome.org/Projects/GnomeContinuous">gnome-continuous</a>
+    codebase then takes updated content from an OSTree repository, and
+    incrementally updates a cached VM disk image from the host side.
+    This could allow <i>booting</i> updated systemd RPMs within
+    minutes after Koji builds.  This is fundamentally different from
+    RPM <tt>%check</tt> as we are booting the tree as it will be
+    shipped to the user - whereas RPM checks may run in e.g. a RHEL6
+    kernel.
+  </p>
   <h3>OSTree example: Parallel installing Red Hat Enterprise Linux and Fedora</h3>
   <p>
     Many contributors to Fedora are also Red Hat engineers working on
