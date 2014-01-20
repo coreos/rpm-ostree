@@ -113,5 +113,11 @@
 	ostree admin deploy --os=fedostree fedostree/20/x86_64/server/docker-io
 	systemctl reboot
   </pre>
-
+  <p>After you reboot, note two things.  First, you'll have <i>two</i>
+    OSTree boot entries.  That's because our previous <tt>minimal</tt>
+    tree is still there.  Choose the first OSTree boot entry.  When you
+    boot into this tree, note that you'll have
+    a <tt>/usr/bin/docker</tt> binary.  We have successfully atomically
+    transitioned to a new filesystem tree.
+  </p>
 </article>
