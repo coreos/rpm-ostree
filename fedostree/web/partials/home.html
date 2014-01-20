@@ -220,6 +220,15 @@
     /home.  In this model, the only major risk is the newer kernel
     containing filesystem corrupting bugs.
   </p>
+  <h3>OSTree example: "Recovery partition"</h3>
+  <p>
+    You can keep your OS installed in /, manage it with a traditional
+    package manager, but have a small (e.g. base/minimal) tree
+    installed via OSTree to use as a "recovery partition" when
+    something goes wrong.  Except unlike traditional recovery
+    partitions, you can easily delete it if you want space, upgrade it
+    offline, etc.
+  </p>
   <h3>OSTree example: Reliable safe upgrades of a server cluster</h3>
   <p>
     OSTree allows taking a "cloud" like approach to a cluster of
