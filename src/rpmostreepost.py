@@ -274,4 +274,7 @@ def main():
 
     log("%s => %s" % (refname, commit))
 
-    rmrf(rootfs_path)
+    if 'RPM_OSTREE_PRESERVE_ROOTFS' not in os.environ:
+        rmrf(rootfs_path)
+    else:
+        log("Preserved " + rootfs_path)
