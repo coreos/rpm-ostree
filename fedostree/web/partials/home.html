@@ -119,6 +119,14 @@
   <p>Anaconda should have an OSTree backend in addition to RPM.  A basic UI
      that provides a listview of shipped trees and allows picking them would
      be quite sufficient initially.</p>
+  <h5>Dracut</h5>
+  <p>OSTree, when replicating content from a build server, effectively reverts
+    the <a href="https://fedoraproject.org/wiki/Features/DracutHostOnly">Dracut
+    host-only mode</a>.  Furthermore, at the moment we hardcode
+    /etc/machine-id, which is a definite bug that needs to be fixed.
+    Possibly systemd should support reading the machine ID from the
+    kernel commandline, as it's the only host-writable area available
+    in early boot.</p>
   <h3>Development area: OSTree Layering</h3>
   <p>
     This phase would be allowing "layering" of trees.  For example,
@@ -171,5 +179,38 @@
     Starting from an <emphasis>safe</emphasis> basis, it should be
     possible to engineer userspace so that many classes of upgrades
     can be applied both live and safely, without race conditions.
+  </p>
+  <h3>OSTree example: Bisecting Mesa</h3>
+  <p>
+    OSTree allows not just dual booting - one can just as easily have
+    50 or more trees locally.  Suppose that you're tracking Fedora
+    rawhide, and an upgrade breaks Mesa+GNOME (or sound, or something
+    else).  You can not only easily revert to a last known good tree,
+    you can use OSTree to download intermediate builds from the build
+    server and <i>bisect</i> across them.  Given the ability to do
+    local builds from git, automating bisection across source code is
+    entirely possible as well.
+  </p>
+  <h3>OSTree example: Parallel installing Red Hat Enterprise Linux and Fedora</h3>
+  <p>
+    Many contributors to Fedora are also Red Hat engineers working on
+    Red Hat Enterprise Linux.  An example way to use OSTree is to have
+    EL7 installed in the physical /, and install Fedora in
+    /ostree/deploy/fedora.  One can choose whether or not to share
+    /home.
+  </p>
+  <h3>OSTree example: Trying rawhide safely</h3>
+  <p>
+    This is an obvious use case - you can run a stable release, and
+    periodically try the development release on bare metal with a
+    great deal of safety, particularly if you choose not to share
+    /home.  In this model, the only major risk is the newer kernel
+    containing filesystem corrupting bugs.
+  </p>
+  <h3>OSTree example: Reliable safe upgrades of a server cluster</h3>
+  <p>
+    OSTree allows taking a "cloud" like approach to a cluster of
+    traditional servers.  Every upgrade is atomic and (relatively)
+    efficient, and can be served by any plain HTTP server.
   </p>
 </article>
