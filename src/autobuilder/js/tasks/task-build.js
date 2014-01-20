@@ -42,7 +42,7 @@ const TaskBuild = new Lang.Class({
         TaskName: "build",
     },
 
-    DefaultParameters: {forceComponents: []},
+    DefaultParameters: {onlyTreesMatching: null},
 
     _composeProduct: function(ref, productName, treeName, treeData, release, architecture, cancellable) {
 	let repos = ['fedora-' + release];
@@ -100,6 +100,11 @@ const TaskBuild = new Lang.Class({
 			let release = releases[i];
 			let architecture = architectures[j];
 			let ref = [this._productData['osname'], release, architecture, productName, treeName].join('/');
+			if (this.parameters.onlyTreesMatching &&
+			    ref.indexOf(this.parameters.onlyTreesMatching) == -1) {
+			    log("Skipping " + ref + " which does not match " + this.parameters.onlyTreesMatching);
+			    continue;
+			}
 			if (this._composeProduct(ref, productName, treeName, products[productName][treeName],
 						 release, architecture,
 						 cancellable))
