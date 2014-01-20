@@ -6,6 +6,13 @@
      is the fact that at the moment the binaries are not GPG signed
      nor is TLS not provided on the current server.
    </p>
+  <h3>Installation instructions (install preconfigured VM)</h3>
+  <p>If you just want to experiment with complete safety, a prebuilt
+     VM image is provided <a href="http://rpm-ostree.cloud.fedoraproject.org/images/">here</a>.
+     It's called <tt>fedostree-f20-demo.img.xz</tt>.  To install, you must
+     first uncompress it with <tt>xz -d fedostree-f20-demo.img.xz</tt>.  Then
+     using e.g. <tt>virt-manager</tt>, choose "Import existing disk image".
+  </p>
   <h3>Installation instructions (inside an existing OS)</h3>
   <p>First, install the ostree package, of course; make sure you have
     ostree 2013.7 or newer.</p>
