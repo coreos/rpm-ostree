@@ -110,7 +110,7 @@
   </p>
   <p>Like above, let's now deploy it:</p>
   <pre>
-	ostree admin deploy --os=fedostree fedostree/20/x86_64/server/docker-io
+	ostree admin deploy --os=fedostree fedostree:fedostree/20/x86_64/server/docker-io
 	systemctl reboot
   </pre>
   <p>After you reboot, note two things.  First, you'll have <i>two</i>
@@ -119,5 +119,13 @@
     boot into this tree, note that you'll have
     a <tt>/usr/bin/docker</tt> binary.  We have successfully atomically
     transitioned to a new filesystem tree.
+  </p>
+  <p>Why the triple specification of "fedostree"?  First, OSTree
+    allows arbitrarily named "OS"es which have independent /var.  You
+    could have two deployments of the same tree, say
+    "feostree-testing" and "fedostree".  Second, "fedostree" is the
+    name of the remote.  Third, a naming convention for refs includes
+    an OS name prefix at the front, here "fedostree".  Some or all of
+    these may be different.
   </p>
 </article>
