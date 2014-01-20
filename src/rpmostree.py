@@ -170,6 +170,11 @@ def yuminstall(yumroot, packages):
     stdin = '\n'.join(cmds) + '\n'
     runyum(['shell'], yumroot, stdin_str=stdin)
 
+def proc_wait_check(proc):
+    retcode = proc.wait()
+    if retcode:
+        raise subprocess.CalledProcessError(retcode, str(proc))
+
 def main():
     parser = optparse.OptionParser('%prog ACTION PACKAGE1 [PACKAGE2...]')
     parser.add_option('', "--workdir",
@@ -272,13 +277,7 @@ def main():
     
     yuminstall(yumroot, packages)
 
-    if opts.breakpoint == 'post-yum-phase2':
-        return
-
-    do_kernel_prep(yumroot, logs_lookaside)
-
-    if opts.breakpoint == 'post-yum':
-        return
+    ref_unix = ref.replace('/', '_')
 
     # Attempt to cache stuff between runs
     rmrf(yumcache_lookaside)
@@ -286,9 +285,39 @@ def main():
     os.rename(yumcachedir, yumcache_lookaside)
 
     yumroot_rpmlibdir = os.path.join(yumroot, 'var/lib/rpm')
-    rpmtextlist = os.path.join(cachedir, 'rpm-manifest.txt')
-    manifest = subprocess.check_call(['rpm', '-qa', '--dbpath=' + yumroot_rpmlibdir],
-                                     stdout=open(rpmtextlist, 'w'))
+    rpmtextlist = os.path.join(cachedir, 'packageset-' + ref_unix + '.txt')
+    rpmtextlist_new = rpmtextlist + '.new'
+    rpmqa_proc = subprocess.Popen(['rpm', '-qa', '--dbpath=' + yumroot_rpmlibdir],
+                                  stdout=subprocess.PIPE)
+    sort_proc = subprocess.Popen(['sort'], stdin=rpmqa_proc.stdout,
+                                 stdout=open(rpmtextlist_new, 'w'))
+    proc_wait_check(rpmqa_proc)
+    proc_wait_check(sort_proc)
+
+    differs = True
+    if os.path.exists(rpmtextlist):
+        log("Comparing diff of previous tree")
+        rcode = subprocess.call(['diff', '-u', rpmtextlist, rpmtextlist_new])
+        if rcode == 0:
+            differs = False
+        elif rcode == 1:
+            differs = True
+        else:
+            raise subprocess.CalledProcessError(rcode, "diff")
+
+    if not differs:
+        log("No changes in package set")
+        return
+
+    os.rename(rpmtextlist_new, rpmtextlist)
+
+    if opts.breakpoint == 'post-yum-phase2':
+        return
+
+    do_kernel_prep(yumroot, logs_lookaside)
+
+    if opts.breakpoint == 'post-yum':
+        return
 
     argv = ['rpm-ostree-postprocess-and-commit',
             '--repo=' + os.path.join(opts.workdir, 'repo'),
