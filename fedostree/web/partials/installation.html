@@ -13,16 +13,31 @@
      first uncompress it with <tt>xz -d fedostree-f20-demo.img.xz</tt>.  Then
      using e.g. <tt>virt-manager</tt>, choose "Import existing disk image".
   </p>
+  <p>IMPORTANT: This system contains <b>both</b> a traditional Fedora
+    install and an OSTree root.  To try out fedostree, you must (at
+    present) run through the <tt>bls_import</tt> step at the GRUB
+    commandline <emphasis>every</emphasis> time you boot to reveal the
+    additional OSTree-generated boot entries.  Otherwise, you will be
+    booting the (quite ordinary) Fedora install.
+  </p>
+  <p>Skip to <b>Booting the system</b> below.</p>
   <h3>Installation instructions (inside an existing OS)</h3>
-  <p>First, install the ostree package, of course; make sure you have
-    ostree 2013.7 or newer.</p>
+  <p>First, you should understand what you'll be doing here.  OSTree
+     allows dynamically parallel installing operating systems;
+     (almost) all of its data goes in the new toplevel
+     directory <tt>/ostree</tt>.  At the end you will have a dual
+     boot.
+  </p>
+  <p>Install the ostree package, and make sure you have ostree 2013.7
+    or newer.</p>
   <pre>
 	yum install ostree
   </pre>
   <p>
-    Now, this bit of one time initialization will both
+    This bit of one time initialization will both
     create <tt>/ostree</tt> for you, as well
-    as <tt>/ostree/deploy/fedostree</tt>.
+    as <tt>/ostree/deploy/fedostree</tt>.  Only a few directories are
+    created, we haven't really affected the system much yet.
   </p>
   <pre>
 	ostree admin os-init fedostree
@@ -32,8 +47,9 @@
 <pre>
 	ostree remote add --set=gpg-verify=false fedostree http://rpm-ostree.cloud.fedoraproject.org/repo
 </pre>
-  <p>At this point, we have only initialized configuration.  Let's start
-    by downloading the "minimal" install (just @core):</p>
+  <p>We still have only initialized configuration.  This next step
+    will just download (but not install) a "minimal" system (just
+    @core):</p>
 <pre>
 	ostree pull fedostree fedostree/20/x86_64/base/minimal
 </pre>
@@ -59,26 +75,28 @@
   <p>
     IMPORTANT NOTE: You must use <tt>selinux=0</tt> for now.
   </p>
-  <h3>Booting the system</h3>
-  <p>Remember, at this point there is no impact on your installed system
-    except for additional disk space in the `/boot/loader` and `/ostree`
-    directories.</p>
-  <p>Reboot, and get a GRUB prompt.  At the prompt, press `c`.  Now, enter:</p>
+  <h3 id="booting">Booting the system</h3>
+  <p>Your system now contains <b>both</b> a traditional Fedora install
+    and an OSTree root.  There is no impact on your installed system
+    except for additional disk space in the <tt>/boot/loader</tt> and <tt>/ostree</tt>
+    directories.
+  </p>
+  <p>At the GRUB prompt, instead of choosing one of the two listed
+     entries, press <tt>c</tt> to get a command line.  Now, enter:</p>
 <pre>
 	insmod blscfg
 	bls_import
 </pre>
-  <p>Then press `Esc`.  You should have an additional boot menu entry,
-    named `ostree:fedora:0`.  Nagivate to it and press `Enter`.</p>
+  <p>Then press <tt>Esc</tt>.  You should have an additional boot menu entry,
+    named <tt>ostree:fedora:0</tt>.  Nagivate to it and press <tt>Enter</tt>.</p>
 
   <h3>Inside the system</h3>
   <p>To upgrade, run as root</p>
 <pre>
 	ostree admin upgrade
 </pre>
-  <p>Note that in our demo so far, we did not install `yum` (or even
-    `rpm`).  Getting these to work fully is the next phase of the
-    `yum-ostree` development.</p>
+  <p>Although <tt>yum</tt> is installed, it will operate in read-only mode.  Do
+     not attempt to use it at the moment.  See </p>
 
   <p>But with OSTree, it's possible to atomically transition between
     different complete bootable filesystem trees.  Let's now try the
