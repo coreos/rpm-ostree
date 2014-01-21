@@ -31,9 +31,9 @@
 	},
 	"workstation":
 	{
-	    "gnome/core": { "packages":  ["@gnome-desktop"] },
-	    "gnome/basic": { "packages": ["@gnome-desktop", "@firefox", "@gnome-games", "@libreoffice"] },
-	    "gnome/development+virt": { "packages": ["@gnome-desktop", "@firefox", "@gnome-games", "@libreoffice", "@virtualization", "@development-tools"] }
+	    "gnome/core": { "packages":  ["@standard", "@gnome-desktop"] },
+	    "gnome/basic": { "packages": ["@standard", "@gnome-desktop", "@firefox", "@gnome-games", "@libreoffice"] },
+	    "gnome/development-virt": { "packages": ["@standard", "@gnome-desktop", "@firefox", "@gnome-games", "@libreoffice", "@virtualization", "@development-tools"] }
 	}
     }
 }
