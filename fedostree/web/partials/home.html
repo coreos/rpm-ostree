@@ -24,36 +24,37 @@
   </p>
   <p>
     For example, as soon as they are installed, upgrading involves
-    having a package manager that dynamically reassemble the system
+    having a package manager that dynamically reassembles the system
     from newer parts in the Fedora package collection.  One cannot
     file a bug against the "default offering" as a whole - a package
     must be chosen.
   </p>
   <p>
-    Furthermore, nearly every aspect of the Fedora infrastructure
-    (and documentation) is structured in terms of packages, from
+    Nearly every aspect of the Fedora infrastructure (and
+    documentation) is structured in terms of packages, from
     user-facing tools such as Bugzilla and Bodhi, to developer tools
     such as Koji.  The announced security updates are based on package
     names.
   </p>
   <p>
     In contrast for example, ChromeOS is delivered and updated as an
-    pre-assembled atomic unit.  ChromeOS is (compared to Fedora)
-    completely inflexible, but fulfills a targeted role clearly
-    well.
+    pre-assembled atomic unit, targeted at specific hardware.
+    ChromeOS is (compared to Fedora) completely inflexible, but
+    fulfills a targeted role clearly well.
   </p>
   <h3>How OSTree allows a middle ground</h3>
   <p>
-    Fundamentally, packages are partial filesystem trees with
-    metadata - they are assembled by a package manager into a complete
-    bootable tree.  It's important to emphasize that it is only
-    these <emphasis>complete</emphasis> trees that users run.
+    Fundamentally, packages are partial filesystem trees with metadata
+    - they are traditionally assembled by a package manager on every
+    client machine into a complete bootable tree.  It's important to
+    emphasize that it is only these <emphasis>complete</emphasis>
+    trees that users run.
   </p>
   <p>
     OSTree allows an OS distributor to
-    ship <emphasis>multiple</emphasis> complete bootable filesystem
-    trees, and furthermore, client machines can atomically switch
-    between them, or even track multiple trees independently.
+    ship <emphasis>multiple</emphasis> pre-built complete bootable
+    filesystem trees, and furthermore, client machines can atomically
+    switch between them, or even track multiple trees independently.
   </p>
   <p>
     This allows a middle ground between the two extremes of a
