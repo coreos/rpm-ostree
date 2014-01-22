@@ -44,6 +44,10 @@ const TaskBuild = new Lang.Class({
 
     DefaultParameters: {onlyTreesMatching: null},
 
+    BuildState: { 'failed': 'failed',
+		  'successful': 'successful',
+		  'unchanged': 'unchanged' },
+
     _composeProduct: function(ref, productName, treeName, treeData, release, architecture, cancellable) {
 	let repos = ['fedora-' + release];
 	if (release != 'rawhide')
@@ -57,7 +61,11 @@ const TaskBuild = new Lang.Class({
 	let baseRequired = this._productData['base_required_packages'];
 	packages.push.apply(packages, baseRequired);
 
-	print("Starting build of " + ref);
+	let [,origRevision] = this.ostreeRepo.resolve_rev(ref, true);
+	if (origRevision == null)
+	    print("Starting new build of " + ref);
+	else
+	    print("Starting build of " + ref + " previous: " + origRevision);
 
 	let argv = ['rpm-ostree',
 		    '--workdir=' + this.workdir.get_path()];
@@ -78,9 +86,12 @@ const TaskBuild = new Lang.Class({
 	    proc.wait_sync_check(cancellable);
 	} catch (e) {
 	    print("Build of " + productName + " failed");
-	    return false;
+	    return this.BuildState.failed;
 	}
-	return true;
+	let [,newRevision] = this.ostreeRepo.resolve_rev(ref, false);
+	if (origRevision == newRevision)
+	    return this.BuildState.unchanged;
+	return this.BuildState.successful;
     },
 
     execute: function(cancellable) {
@@ -93,6 +104,7 @@ const TaskBuild = new Lang.Class({
 	let products = productData['products'];
 	let successful = [];
 	let failed = [];
+	let unchanged = [];
 	for (let i = 0; i < releases.length; i++) {
 	    for (let j = 0; j < architectures.length; j++) {
 		for (let productName in products) {
@@ -105,17 +117,36 @@ const TaskBuild = new Lang.Class({
 			    log("Skipping " + ref + " which does not match " + this.parameters.onlyTreesMatching);
 			    continue;
 			}
-			if (this._composeProduct(ref, productName, treeName, products[productName][treeName],
-						 release, architecture,
-						 cancellable))
-			    successful.push(ref);
-			else
-			    failed.push(ref);
+			let result = this._composeProduct(ref, productName, treeName, products[productName][treeName],
+							  release, architecture,
+							  cancellable);
+			switch (result) {
+			    case this.BuildState.successful: {
+				successful.push(ref);
+			    }
+			    break;
+			    case this.BuildState.failed: {
+				failed.push(ref);
+			    }
+			    break;
+			    case this.BuildState.unchanged: {
+				unchanged.push(ref);
+			    }
+			    break;
+			    default:
+			    throw new Error("Invalid result from composeProduct: " + result);
+			}
 		    }
 		}
 	    }
 	}
+	let productsBuilt = { successful: successful,
+			      failed: failed,
+			      unchanged: unchanged };
+	let productsBuiltPath = this.builddir.get_child('products-built.json');
+	JsonUtil.writeJsonFileAtomic(productsBuiltPath, productsBuilt, cancellable);
 	print("Successful: " + successful.join(' '));
 	print("Failed: " + failed.join(' '));
+	print("Unchanged: " + unchanged.join(' '));
     }
 });

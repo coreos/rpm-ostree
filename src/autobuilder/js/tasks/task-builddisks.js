@@ -44,107 +44,46 @@ const TaskBuildDisks = new Lang.Class({
         TaskAfter: ['build'],
     },
 
-    _imageSubdir: 'images',
     _inheritPreviousDisk: true,
-    _onlyTreeSuffixes: ['-runtime', '-devel-debug'],
+
+    _buildDiskForProduct: function(ref, cancellable) {
+        let osname = this._products['osname'];
+        let originRepoUrl = this._products['repo'];
+
+        let [,revision] = this.ostreeRepo.resolve_rev(ref, false);
+	      let refUnix = ref.replace(/\//g, '-');
+	      let diskName = refUnix + '-' + this._buildName + '.qcow2';
+        let diskPath = this._imageCacheDir.get_child(diskName);
+        if (!diskPath.query_exists(null))
+            LibQA.createDisk(diskPath, cancellable);
+        let mntdir = Gio.File.new_for_path('mnt');
+        GSystem.file_ensure_directory(mntdir, true, cancellable);
+        let gfmnt = new GuestFish.GuestMount(diskPath, { partitionOpts: LibQA.DEFAULT_GF_PARTITION_OPTS,
+                                                         readWrite: true });
+        gfmnt.mount(mntdir, cancellable);
+        try {
+            LibQA.pullDeploy(mntdir, this.repo, osname, ref, revision, originRepoUrl,
+                             cancellable);
+        } finally {
+            gfmnt.umount(cancellable);
+        }
+
+        print("Successfully updated " + diskPath.get_path() + " to " + revision);
+
+        this._postDiskCreation(refUnix, diskPath, cancellable);
+    },
 
     execute: function(cancellable) {
-        let isLocal = this._buildName == 'local';
-	      let baseImageDir = this.workdir.resolve_relative_path(this._imageSubdir);
-        GSystem.file_ensure_directory(baseImageDir, true, cancellable);
+        this._imageCacheDir = this.cachedir.get_child('images');
+        GSystem.file_ensure_directory(this._imageCacheDir, true, cancellable);
 
-	      let currentImageLink = baseImageDir.get_child('current');
-
-        let targetImageDir = baseImageDir.get_child(this._buildName);
-        if (!isLocal && targetImageDir.query_exists(null)) {
-            print("Already created " + targetImageDir.get_path());
-            return;
+        this._products = JsonUtil.loadJson(this.workdir.get_child('products.json'), cancellable);
+        let productsBuilt = JsonUtil.loadJson(this.builddir.get_child('products-built.json'), cancellable);
+        let productsBuiltSuccessful = productsBuilt['successful'];
+        print("Preparing to update disks for " + JSON.stringify(productsBuiltSuccessful));
+        for (let i = 0; i < productsBuiltSuccessful.length; i++) {
+            this._buildDiskForProduct(productsBuiltSuccessful[i], cancellable);
         }
-
-        print("Creating image for buildName=" + this._buildName);
-
-        let buildDataPath = this.builddir.get_child('build.json');
-        let buildData = JsonUtil.loadJson(buildDataPath, cancellable);
-
-        let workImageDir = Gio.File.new_for_path('images');
-        GSystem.file_ensure_directory(workImageDir, true, cancellable);
-
-        let destPath = workImageDir.get_child('build-' + this._buildName + '.json');
-        GSystem.shutil_rm_rf(destPath, cancellable);
-        GSystem.file_linkcopy(buildDataPath, destPath, Gio.FileCopyFlags.ALL_METADATA, cancellable);
-
-        let targets = buildData['targets'];
-
-        let osname = buildData['snapshot']['osname'];
-        let originRepoUrl = buildData['snapshot']['repo'];
-
-        for (let targetName in targets) {
-            let matched = false;
-            for (let i = 0; i < this._onlyTreeSuffixes.length; i++) {
-                if (JSUtil.stringEndswith(targetName, this._onlyTreeSuffixes[i])) {
-                    matched = true;
-                    break;
-                }
-            }
-            if (!matched)
-                continue;
-            let targetRevision = buildData['targets'][targetName];
-	          let squashedName = osname + '-' + targetName.substr(targetName.lastIndexOf('/') + 1);
-	          let diskName = squashedName + '.qcow2';
-            let diskPath = workImageDir.get_child(diskName);
-            let prevPath = currentImageLink.get_child(diskName);
-            let prevExists = prevPath.query_exists(null);
-            GSystem.shutil_rm_rf(diskPath, cancellable);
-            let doCloneDisk = this._inheritPreviousDisk && prevExists;
-            if (doCloneDisk) {
-                LibQA.copyDisk(prevPath, diskPath, cancellable);
-            } else {
-                LibQA.createDisk(diskPath, cancellable);
-            }
-            let mntdir = Gio.File.new_for_path('mnt-' + squashedName);
-            GSystem.file_ensure_directory(mntdir, true, cancellable);
-            let gfmnt = new GuestFish.GuestMount(diskPath, { partitionOpts: LibQA.DEFAULT_GF_PARTITION_OPTS,
-                                                             readWrite: true });
-            gfmnt.mount(mntdir, cancellable);
-            try {
-                LibQA.pullDeploy(mntdir, this.repo, osname, targetName, targetRevision, originRepoUrl,
-                                 cancellable);
-            } finally {
-                gfmnt.umount(cancellable);
-            }
-            // Assume previous disks have successfully installed a bootloader
-            if (!doCloneDisk) {
-                LibQA.bootloaderInstall(diskPath, Gio.File.new_for_path('.'), osname, cancellable);
-                print("Bootloader installation complete");
-            }
-
-            this._postDiskCreation(squashedName, diskPath, cancellable);
-            print("post-disk creation complete");
-	      }
-
-        if (isLocal) {
-            let localImageDir = baseImageDir.get_child('local');
-            GSystem.shutil_rm_rf(localImageDir, cancellable);
-            GSystem.file_rename(workImageDir, localImageDir, cancellable);
-            return;
-        }
-
-        GSystem.file_rename(workImageDir, targetImageDir, cancellable);
-
-        let currentInfo = null;
-        let oldCurrent = null;
-        try {
-            currentInfo = currentImageLink.query_info('standard::symlink-target', Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, cancellable);
-        } catch (e) {
-            if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND))
-                throw e;
-        }
-        if (currentInfo) {
-            oldCurrent = currentImageLink.get_parent().resolve_relative_path(currentInfo.get_symlink_target());
-        } 
-        BuildUtil.atomicSymlinkSwap(baseImageDir.get_child('current'), targetImageDir, cancellable);
-        if (!isLocal && oldCurrent)
-            GSystem.shutil_rm_rf(oldCurrent, cancellable);
     },
 
     _postDiskCreation: function(squashedName, diskPath, cancellable) {

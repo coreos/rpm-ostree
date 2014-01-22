@@ -25,6 +25,10 @@ const Params = imports.params;
 const ProcUtil = imports.procutil;
 const GuestFish = imports.guestfish;
 
+const BOOT_UUID = "fdcaea3b-2775-45ef-b441-b46a4a18e8c4";
+const ROOT_UUID = "d230f7f0-99d3-4244-8bd9-665428054831";
+const SWAP_UUID = "61f066e3-ac18-464e-bcc7-e7c3a623cec1";
+
 const DEFAULT_GF_PARTITION_OPTS = ['-m', '/dev/sda3', '-m', '/dev/sda1:/boot'];
 
 function linuxGetMemTotalMb() {
@@ -114,10 +118,29 @@ blockdev-getss /dev/sda\n';
     let bootsizeSectors = bootsizeMb * 1024 / diskSectorsize * 1024;
     let swapsizeSectors = swapsizeMb * 1024 / diskSectorsize * 1024;
     let rootsizeSectors = diskBytesize / diskSectorsize - bootsizeSectors - swapsizeSectors - 64;
+    print(Format.vprintf("boot: %s swap: %s root: %s", [bootsizeSectors, swapsizeSectors, rootsizeSectors]));
     let bootOffset = 64;
     let swapOffset = bootOffset + bootsizeSectors;
     let rootOffset = swapOffset + swapsizeSectors;
     let endOffset = rootOffset + rootsizeSectors;
+
+    let syslinuxPaths = ['/usr/share/syslinux/mbr.bin', '/usr/lib/syslinux/mbr.bin'].map(function (a) { return Gio.File.new_for_path(a); });
+    let syslinuxPath = null;
+    for (let i = 0; i < syslinuxPaths.length; i++) {
+	let path = syslinuxPaths[i];
+	if (path.query_exists(null)) {
+	    syslinuxPath = path;
+	    break;
+	}
+    }
+    if (syslinuxPath == null)
+	throw new Error("Couldn't find syslinux mbr.bin in any of " + JSON.stringify(syslinuxPaths));
+
+    let [,syslinuxData,] = syslinuxPath.load_contents(cancellable);
+    let syslinuxQuotedData = "";
+    for (let i = 0; i < syslinuxData.length; i++) {
+	syslinuxQuotedData += ("\\x" + Format.vprintf("%02x", [syslinuxData[i]]));
+    }
 
     let partconfig = Format.vprintf('launch\n\
 part-add /dev/sda p %s %s\n\
@@ -125,15 +148,16 @@ part-add /dev/sda p %s %s\n\
 part-add /dev/sda p %s %s\n\
 part-set-bootable /dev/sda 1 true\n\
 mkfs ext4 /dev/sda1\n\
-set-e2label /dev/sda1 gnostree-boot\n\
-mkswap-L gnostree-swap /dev/sda2\n\
+set-e2uuid /dev/sda1 ' + BOOT_UUID + '\n\
+mkswap-U ' + SWAP_UUID + ' /dev/sda2\n\
 mkfs ext4 /dev/sda3\n\
-set-e2label /dev/sda3 gnostree-root\n\
+set-uuid /dev/sda3 ' + ROOT_UUID + '\n\
 mount /dev/sda3 /\n\
 mkdir /boot\n\
-', [bootOffset, swapOffset - 1,
-    swapOffset, rootOffset - 1,
-    rootOffset, endOffset - 1]);
+extlinux /boot\n',
+    [bootOffset, swapOffset - 1,
+     swapOffset, rootOffset - 1,
+     rootOffset, endOffset - 1]);
     print("partition config: ", partconfig);
     gf.run(partconfig, cancellable);
 }
@@ -362,46 +386,3 @@ LABEL=gnostree-swap swap swap defaults 0 0\n';
     let fstabPath = ostreeOsdir.resolve_relative_path('current/etc/fstab');
     fstabPath.replace_contents(defaultFstab, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, cancellable);
 };
-
-function bootloaderInstall(diskpath, workdir, osname, cancellable) {
-    let qemuArgs = getDefaultQemuOptions();
-
-    let tmpKernelPath = workdir.get_child('kernel.img');
-    let tmpInitrdPath = workdir.get_child('initrd.img');
-
-    let [gfmnt, mntdir] = newReadWriteMount(diskpath, cancellable);
-    let ostreeArg;
-    try {
-	let [kernelPath, initrdPath] = _findCurrentKernel(mntdir, osname, cancellable)
-	ostreeArg = _findCurrentOstreeBootArg(mntdir, cancellable);
-
-	// Copy
-	kernelPath.copy(tmpKernelPath, 0, cancellable, null, null);
-	initrdPath.copy(tmpInitrdPath, 0, cancellable, null, null);
-    } finally {
-        gfmnt.umount(cancellable);
-    }
-
-    let consoleOutput = workdir.get_child('bootloader-console.out');
-    
-    let kernelArgv = ['console=ttyS0', 'panic=1', 'root=LABEL=gnostree-root', 'rw', ostreeArg,
-		      'systemd.journald.forward_to_console=true',
-		      'systemd.unit=gnome-ostree-install-bootloader.target'];
-
-    qemuArgs.push.apply(qemuArgs, ['-drive', 'file=' + diskpath.get_path() + ',if=virtio',
-                                   '-vnc', 'none',
-				   '-no-reboot',
-                                   '-serial', 'file:' + consoleOutput.get_path(),
-                                   '-chardev', 'socket,id=charmonitor,path=qemu.monitor,server,nowait',
-                                   '-mon', 'chardev=charmonitor,id=monitor,mode=control',
-				   '-kernel', tmpKernelPath.get_path(),
-				   '-initrd', tmpInitrdPath.get_path(),
-				   '-append', kernelArgv.join(' ')
-				  ]);
-
-    ProcUtil.runSync(qemuArgs, cancellable, { cwd: workdir.get_path(),
-					      logInitiation: true });
-
-    tmpKernelPath.delete(cancellable);
-    tmpInitrdPath.delete(cancellable);
-}

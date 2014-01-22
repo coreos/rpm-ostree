@@ -27,17 +27,16 @@ const TaskZDisks = new Lang.Class({
 
     TaskDef: {
         TaskName: "zdisks",
-        TaskAfter: ['smoketest'],
+        TaskAfter: ['build'],
         TaskScheduleMinSecs: 3*60*60,  // Only do this every 3 hours
     },
 
-    _imageSubdir: 'images/z',
+    _imageSubdir: 'images',
     _inheritPreviousDisk: false,
-    _onlyTreeSuffixes: ['-runtime', '-devel-debug'],
 
-    _postDiskCreation: function(squashedName, diskPath, cancellable) {
+    _postDiskCreation: function(unixName, diskPath, cancellable) {
         let parent = diskPath.get_parent();
-        let outPath = parent.get_child(squashedName + '-' + this._buildName + '.qcow2.gz');
+        let outPath = parent.get_child(diskPath.get_name() + '.gz');
         let outStream = outPath.create(Gio.FileCreateFlags.REPLACE_DESTINATION, cancellable);
         let compressor = Gio.ZlibCompressor.new(Gio.ZlibCompressorFormat.GZIP, 7);
         let outConverter = Gio.ConverterOutputStream.new(outStream, compressor);

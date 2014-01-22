@@ -578,43 +578,20 @@ const TestBase = new Lang.Class({
     },
 
     execute: function(cancellable) {
-	      let imageDir = this.workdir.get_child('images');
-	      let currentImages = imageDir.get_child('current');
-
-        let e = currentImages.enumerate_children('standard::*', Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS,
-                                                 cancellable);
+	      let imageCacheDir = this.cachedir.get_child('images');
         let info;
         let buildJson;
         let disksToTest = [];
 
         while ((info = e.next_file(cancellable)) != null) {
             let name = info.get_name();
-            if (name.indexOf('build-') == 0 && JSUtil.stringEndswith(name, '.json')) {
-                buildJson = e.get_child(info);
-                continue;
-            }
             if (!JSUtil.stringEndswith(name, '.qcow2'))
                 continue;
-            let matches = false;
-            for (let i = 0; i < this.TestTrees.length; i++) {
-                let tree = this.TestTrees[i];
-                if (JSUtil.stringEndswith(name, tree + '.qcow2')) {
-                    matches = true;
-                    break;
-                }
-            }
-            if (!matches) {
-                print("Skipping disk " + name + " not in " + JSON.stringify(this.TestTrees));
-                continue;
-            }
             disksToTest.push(name);
         }
         e.close(null);
         if (disksToTest.length == 0)
-            throw new Error("Didn't find any matching .qcow2 disks in " + currentImages.get_path());
-        this._buildData = null;
-        if (buildJson != null)
-            this._buildData = JSONUtil.loadJson(buildJson, cancellable);
+            throw new Error("Didn't find any matching .qcow2 disks in " + imageCacheDir.get_path());
         for (let i = 0; i < disksToTest.length; i++) {
             let name = disksToTest[i];
             let workdirName = 'work-' + name.replace(/\.qcow2$/, '');
@@ -624,7 +601,7 @@ const TestBase = new Lang.Class({
                                        this.BaseRequiredMessageIDs.concat(this.RequiredMessageIDs),
                                        this.BaseFailedMessageIDs.concat(this.FailedMessageIDs),
                                        this.StatusMessageID);
-            test.execute(subworkdir, this._buildData, this.repo, currentImages.get_child(name), cancellable);
+            test.execute(subworkdir, this.repo, currentImages.get_child(name), cancellable);
         }
 
         let buildData = this._buildData;

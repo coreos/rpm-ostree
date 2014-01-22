@@ -26,6 +26,7 @@ const GSystem = imports.gi.GSystem;
 const Builtin = imports.builtin;
 const ArgParse = imports.argparse;
 const ProcUtil = imports.procutil;
+const LibQA = imports.libqa;
 const GuestFish = imports.guestfish;
 
 const QaMakeDisk = new Lang.Class({

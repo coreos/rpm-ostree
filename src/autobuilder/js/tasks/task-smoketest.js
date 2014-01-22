@@ -41,11 +41,10 @@ const TaskSmoketest = new Lang.Class({
         TaskAfter: ['builddisks'],
     },
 
-    RequiredMessageIDs: ["0ce153587afa4095832d233c17a88001" // gnome-session startup ok
+    RequiredMessageIDs: ["39f53479d3a045ac8e11786248231fbf" // multi-user.target
                         ],
 
     FailedMessageIDs: ["fc2e22bc6ee647b6b90729ab34a250b1", // coredump
-                       "10dd2dc188b54a5e98970f56499d1f73" // gnome-session required component failed
                       ],
 
     CompletedTag: 'smoketested'
