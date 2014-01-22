@@ -56,9 +56,9 @@ const Autobuilder = new Lang.Class({
 	this._taskmaster.connect('task-executing', Lang.bind(this, this._onTaskExecuting));
 	this._taskmaster.connect('task-complete', Lang.bind(this, this._onTaskCompleted));
 
-	// Build every 3 hours
+	// Build every hour
 	this._buildTimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT,
-						      60 * 60 * 3,
+						      60 * 60,
 						      Lang.bind(this, this._triggerBuild));
 	this._triggerBuild();
 
@@ -134,11 +134,13 @@ const Autobuilder = new Lang.Class({
 	let cancellable = null;
 	
 	if (this._taskmaster.isTaskQueued('build'))
-	    return;
+	    return true;
 
 	let buildPath = this._buildsDir.allocateNewVersion(cancellable);
 	this._taskmaster.pushTask(buildPath, 'build', { });
 
 	this._updateStatus();
+
+	return true;
     }
 });
