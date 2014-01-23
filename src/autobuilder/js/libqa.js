@@ -19,6 +19,7 @@ const GLib = imports.gi.GLib;
 const Gio = imports.gi.Gio;
 const Lang = imports.lang;
 const OSTree = imports.gi.OSTree;
+const Guestfs = imports.gi.Guestfs;
 
 const GSystem = imports.gi.GSystem;
 const Params = imports.params;
@@ -104,16 +105,13 @@ function createDisk(diskpath, cancellable) {
     let guestfishProcess;
     
     ProcUtil.runSync(['qemu-img', 'create', '-f', 'qcow2', diskpath.get_path(), '' + sizeMb + 'M'], cancellable);
-    let makeDiskCmd = 'launch\n\
-part-init /dev/sda mbr\n\
-blockdev-getsize64 /dev/sda\n\
-blockdev-getss /dev/sda\n';
-    let gf = new GuestFish.GuestFish(diskpath, {partitionOpts: [], readWrite: true});
-    let lines = gf.run(makeDiskCmd, cancellable);
-    if (lines.length != 2)
-        throw new Error("guestfish returned unexpected output lines (" + lines.length + ", expected 2");
-    let diskBytesize = parseInt(lines[0]);
-    let diskSectorsize = parseInt(lines[1]);
+    let gfHandle = Guestfs.Session.new();
+    gfHandle.add_drive(diskpath.get_path(), null);
+    gfHandle.launch();
+    gfHandle.part_init("/dev/sda", "mbr");
+    gfHandle.part_init("/dev/sda", "mbr");
+    let diskBytesize = gfHandle.blockdev_getsize64("/dev/sda");
+    let diskSectorsize = gfHandle.blockdev_getss("/dev/sda");
     print(Format.vprintf("bytesize: %s sectorsize: %s", [diskBytesize, diskSectorsize]));
     let bootsizeSectors = bootsizeMb * 1024 / diskSectorsize * 1024;
     let swapsizeSectors = swapsizeMb * 1024 / diskSectorsize * 1024;
@@ -137,29 +135,21 @@ blockdev-getss /dev/sda\n';
 	throw new Error("Couldn't find syslinux mbr.bin in any of " + JSON.stringify(syslinuxPaths));
 
     let [,syslinuxData,] = syslinuxPath.load_contents(cancellable);
-    let syslinuxQuotedData = "";
-    for (let i = 0; i < syslinuxData.length; i++) {
-	syslinuxQuotedData += ("\\x" + Format.vprintf("%02x", [syslinuxData[i]]));
-    }
 
-    let partconfig = Format.vprintf('launch\n\
-part-add /dev/sda p %s %s\n\
-part-add /dev/sda p %s %s\n\
-part-add /dev/sda p %s %s\n\
-part-set-bootable /dev/sda 1 true\n\
-mkfs ext4 /dev/sda1\n\
-set-e2uuid /dev/sda1 ' + BOOT_UUID + '\n\
-mkswap-U ' + SWAP_UUID + ' /dev/sda2\n\
-mkfs ext4 /dev/sda3\n\
-set-uuid /dev/sda3 ' + ROOT_UUID + '\n\
-mount /dev/sda3 /\n\
-mkdir /boot\n\
-extlinux /boot\n',
-    [bootOffset, swapOffset - 1,
-     swapOffset, rootOffset - 1,
-     rootOffset, endOffset - 1]);
-    print("partition config: ", partconfig);
-    gf.run(partconfig, cancellable);
+    gfHandle.part_add("/dev/sda", "p", bootOffset, swapOffset - 1);
+    gfHandle.part_add("/dev/sda", "p", swapOffset, rootOffset - 1);
+    gfHandle.part_add("/dev/sda", "p", rootOffset, endOffset - 1);
+    gfHandle.part_set_bootable("/dev/sda", 1, true);
+    gfHandle.mkfs("ext4", "/dev/sda1", null);
+    gfHandle.set_e2uuid("/dev/sda1", BOOT_UUID);
+    gfHandle.mkswap_U(SWAP_UUID, "/dev/sda2");
+    gfHandle.mkfs("ext4", "/dev/sda3", null);
+    gfHandle.set_e2uuid("/dev/sda3", ROOT_UUID);
+    gfHandle.mount("/dev/sda3", "/");
+    gfHandle.mkdir_mode("/boot", 493);
+    gfHandle.extlinux("/boot");
+    gfHandle.pwrite_device("/dev/sda", syslinuxData, 0);
+    gfHandle.shutdown();
 }
 
 function createDiskSnapshot(diskpath, newdiskpath, cancellable) {
