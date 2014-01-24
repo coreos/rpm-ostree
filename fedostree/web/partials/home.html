@@ -158,9 +158,17 @@
   </p>
   <p>
     The problem is making this sort of thing efficient and scalable;
-    it would require careful integration of the local OSTree repository
-    and the package manager caching to operate at a speed comparable to
-    traditional package management.
+    it would require careful integration of the local OSTree
+    repository and the package manager caching to operate at a speed
+    comparable to traditional package management.</p>
+  <p>There are two primary issues.  First, OSTree mandates that the
+    running tree be immutable, and requires construction of a new
+    tree.  This is just a deep mismatch with how package managers are
+    built.  Second, current package managers are totally unaware of
+    the existence of the OSTree repository at /ostree/repo which holds
+    binaries.  A naive implementation would just redownload the packages,
+    which would be quite slow.
+  </p>
   </p>
   <h3>Development area: Live updates</h3>
   <p>
