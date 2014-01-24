@@ -21,10 +21,10 @@
 	},
 	"server":
 	{
-	    "docker-io": { "packages": ["@core", "@standard", "docker-io"] },
-	    "freeipa": { "packages": ["@core", "@standard", "docker-io"] },
-	    "jbossas": { "packages": ["@core", "@standard", "@jbossas"] },
-	    "virthost": { "packages": ["@core", "@standard",
+	    "docker-io": { "packages": ["@core", "@standard", "NetworkManager-config-server", "docker-io"] },
+	    "freeipa": { "packages": ["@core", "@standard", "NetworkManager-config-server", "freeipa-server"] },
+	    "jbossas": { "packages": ["@core", "@standard", "NetworkManager-config-server", "@jbossas"] },
+	    "virthost": { "packages": ["@core", "@standard", "NetworkManager-config-server",
 				       "libvirt-daemon-kvm",
 				       "libvirt-daemon-config-network",
 				       "qemu-kvm",
