@@ -70,8 +70,7 @@ const TaskBuild = new Lang.Class({
 	let argv = ['rpm-ostree',
 		    '--workdir=' + this.workdir.get_path()];
 	argv.push.apply(argv, repos.map(function (a) { return '--enablerepo=' + a; }));
-	argv.push.apply(argv, ['--os=fedora', '--os-version=' + release,
-			       'create', ref]);
+	argv.push.apply(argv, ['create', ref]);
 	argv.push.apply(argv, packages);
 	let productNameUnix = ref.replace(/\//g, '_');
 	let buildOutputPath = Gio.File.new_for_path('log-' + productNameUnix + '.txt');

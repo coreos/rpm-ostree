@@ -15,21 +15,17 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-bin_SCRIPTS += rpm-ostree rpm-ostree-postprocess-and-commit
+privlib_SCRIPTS = src/rpmqa-sorted
 
-rpm-ostree: src/rpm-ostree.in Makefile
-	$(AM_V_GEN) sed -e s,@PYTHON\@,$(PYTHON), -e s,@pkglibdir\@,$(pkglibdir), $< > $@.tmp && mv $@.tmp $@
-	@chmod a+x $@
+bin_PROGRAMS += rpm-ostree rpm-ostree-postprocess-and-commit
 
-rpm-ostree-postprocess-and-commit: src/rpm-ostree-postprocess-and-commit.in Makefile
-	$(AM_V_GEN) sed -e s,@PYTHON\@,$(PYTHON), -e s,@pkglibdir\@,$(pkglibdir), $< > $@.tmp && mv $@.tmp $@
-	@chmod a+x $@
+rpm_ostree_SOURCES = src/rpm-ostree.c
+rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libgsystem -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_OSTREE_CFLAGS)
+rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_OSTREE_LIBS) libgsystem.la
 
-pyrpmostreedir = $(pkglibdir)/rpm-ostree
-pyrpmostree_DATA = \
-	src/rpmostree.py \
-	src/rpmostreepost.py \
-	$(NULL)
+rpm_ostree_postprocess_and_commit_SOURCES = src/rpm-ostree-postprocess-and-commit.c
+rpm_ostree_postprocess_and_commit_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libgsystem -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_OSTREE_CFLAGS)
+rpm_ostree_postprocess_and_commit_LDADD = $(AM_LDFLAGS) $(PKGDEP_OSTREE_LIBS) libgsystem.la
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/tmpfiles-ostree-integration.conf

@@ -16,8 +16,6 @@ BuildRequires: pkgconfig(ostree-1)
 BuildRequires: /usr/bin/g-ir-scanner
 
 Requires: /usr/bin/gjs
-Requires: /usr/bin/python
-Requires: pygobject3
 
 %description
 This tool takes a set of packages, and commits them to an OSTree
