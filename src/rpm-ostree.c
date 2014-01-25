@@ -378,7 +378,6 @@ main (int     argc,
     char *rpmqa_argv[] = { PKGLIBDIR "/rpmqa-sorted", NULL };
     gs_unref_object GSSubprocessContext *rpmqa_proc_ctx = NULL;
     gs_unref_object GSSubprocess *rpmqa_proc = NULL;
-    gboolean differs = TRUE;
       
     rpmqa_proc_ctx = gs_subprocess_context_new (rpmqa_argv);
     gs_subprocess_context_set_stdout_file_path (rpmqa_proc_ctx, gs_file_get_path_cached (rpmtextlist_path_new));
@@ -391,6 +390,7 @@ main (int     argc,
       {
         GError *temp_error = NULL;
         gs_unref_object GSSubprocess *diff_proc = NULL;
+        gboolean differs = FALSE;
 
         g_print ("Comparing diff of previous tree\n");
         diff_proc =
@@ -425,8 +425,15 @@ main (int     argc,
         if (!differs)
           {
             g_print ("No changes in package set\n");
+            if (!gs_file_unlink (rpmtextlist_path_new, cancellable, error))
+              goto out;
             goto out;
           }
+      }
+    else
+      {
+        g_print ("No previous diff file found at '%s'\n",
+                 gs_file_get_path_cached (rpmtextlist_path));
       }
 
     if (!gs_file_rename (rpmtextlist_path_new, rpmtextlist_path,
