@@ -1,0 +1,2 @@
+#!/bin/bash
+exec journalctl -o json -b -f --no-tail > /dev/virtio-ports/org.gnome.journaljson

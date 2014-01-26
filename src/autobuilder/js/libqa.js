@@ -221,8 +221,8 @@ function injectExportJournal(currentDir, currentEtcDir, cancellable) {
     let binDir = currentDir.resolve_relative_path('usr/bin');
     let multiuserWantsDir = getMultiuserWantsDir(currentEtcDir);
     let datadir = getDatadir();
-    let exportScript = datadir.resolve_relative_path('tests/gnome-ostree-export-journal-to-serialdev');
-    let exportScriptService = datadir.resolve_relative_path('tests/gnome-ostree-export-journal-to-serialdev.service');
+    let exportScript = datadir.resolve_relative_path('rpm-ostree-export-journal-to-serialdev');
+    let exportScriptService = datadir.resolve_relative_path('rpm-ostree-export-journal-to-serialdev.service');
     let exportBin = binDir.get_child(exportScript.get_basename());
     exportScript.copy(exportBin, Gio.FileCopyFlags.OVERWRITE, cancellable, null, null);
     GSystem.file_chmod(exportBin, 493, cancellable);

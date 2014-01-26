@@ -38,7 +38,7 @@ const TaskSmoketest = new Lang.Class({
 
     TaskDef: {
         TaskName: "smoketest",
-        TaskAfter: ['builddisks'],
+        TaskAfter: ['ensure-disk-caches'],
     },
 
     RequiredMessageIDs: ["39f53479d3a045ac8e11786248231fbf" // multi-user.target

@@ -30,7 +30,7 @@ const Params = imports.params;
 const Task = imports.task;
 const LibQA = imports.libqa;
 const JSUtil = imports.jsutil;
-const JSONUtil = imports.jsonutil;
+const JsonUtil = imports.jsonutil;
 
 const TIMEOUT_SECONDS = 10 * 60;
 
@@ -391,9 +391,8 @@ const TestOneDisk = new Lang.Class({
         return false;
     },
 
-    execute: function(subworkdir, buildData, repo, diskPath, cancellable) {
+    execute: function(subworkdir, osname, repo, diskPath, cancellable) {
         print("Testing disk " + diskPath.get_path());
-        this._buildData = buildData;
         this._repo = repo;
         this._subworkdir = subworkdir;
         this._loop = GLib.MainLoop.new(null, true);
@@ -427,8 +426,6 @@ const TestOneDisk = new Lang.Class({
         }
         this._cancellable = cancellable;
 
-        let osname = this._buildData['snapshot']['osname'];
-
         // HACK
         if (diskPath.get_basename().indexOf('x86_64') >= 0)
             this._diskArch = 'x86_64';
@@ -437,19 +434,13 @@ const TestOneDisk = new Lang.Class({
 
         let qemuArgs = LibQA.getDefaultQemuOptions({ parallel: true });
     
-        let diskClone = subworkdir.get_child('testoverlay-' + diskPath.get_basename());
-        GSystem.shutil_rm_rf(diskClone, cancellable);
-
-        LibQA.createDiskSnapshot(diskPath, diskClone, cancellable);
-        let [gfmnt, mntdir] = LibQA.newReadWriteMount(diskClone, cancellable);
+        let [gfmnt, mntdir] = LibQA.newReadWriteMount(diskPath, cancellable);
         try {
             LibQA.modifyBootloaderAppendKernelArgs(mntdir, ["console=ttyS0"], cancellable);
 
             let [currentDir, currentEtcDir] = LibQA.getDeployDirs(mntdir, osname);
             
             LibQA.injectExportJournal(currentDir, currentEtcDir, cancellable);
-            LibQA.injectTestUserCreation(currentDir, currentEtcDir, 'testuser', {}, cancellable);
-            LibQA.enableAutologin(currentDir, currentEtcDir, 'testuser', cancellable);
 
             this._parentTask._prepareDisk(mntdir, this._diskArch, cancellable);
         } finally {
@@ -466,7 +457,7 @@ const TestOneDisk = new Lang.Class({
         this._commandSocketPath = subworkdir.get_child('command.sock');
 
         let commandSocketRelpath = subworkdir.get_relative_path(this._commandSocketPath);
-        qemuArgs.push.apply(qemuArgs, ['-drive', 'file=' + diskClone.get_path() + ',if=virtio',
+        qemuArgs.push.apply(qemuArgs, ['-drive', 'file=' + diskPath.get_path() + ',if=virtio',
                                        '-vnc', 'none',
                                        '-serial', 'file:' + consoleOutput.get_path(),
                                        '-chardev', 'socket,id=charmonitor,path=qemu.monitor,server,nowait',
@@ -513,14 +504,12 @@ const TestOneDisk = new Lang.Class({
 
         GLib.source_remove(timeoutId);
         
-        let [gfmnt, mntdir] = LibQA.newReadWriteMount(diskClone, cancellable);
+        let [gfmnt, mntdir] = LibQA.newReadWriteMount(diskPath, cancellable);
         try {
             this._parentTask._postQemu(mntdir, cancellable);
         } finally {
             gfmnt.umount(cancellable);
         }
-
-        //GSystem.shutil_rm_rf(diskClone, cancellable);
 
         if (this._failed) {
             throw new Error(this._failedMessage);
@@ -542,8 +531,7 @@ const TestBase = new Lang.Class({
     TestTrees: ['-runtime'],
     CompleteIdleWaitSeconds: 10,
 
-    BaseRequiredMessageIDs: ["39f53479d3a045ac8e11786248231fbf", // graphical.target 
-                             "f77379a8490b408bbe5f6940505a777b",  // systemd-journald
+    BaseRequiredMessageIDs: ["f77379a8490b408bbe5f6940505a777b",  // systemd-journald
                             ],
 
     BaseFailedMessageIDs: [],
@@ -578,10 +566,9 @@ const TestBase = new Lang.Class({
     },
 
     _fileLinkHere: function(diskPath, cancellable) {
-        let dest = this.builddir.get_child(diskPath.get_name());
+        let dest = Gio.File.new_for_path(diskPath.get_basename());
         try {
-            GSystem.file_linkcopy(exactDiskPath, dest, 0,
-                                  cancellable, error);
+            GSystem.file_linkcopy(diskPath, dest, 0, cancellable);
             return dest;
         } catch (e) {
             if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND))
@@ -601,7 +588,7 @@ const TestBase = new Lang.Class({
         GSystem.file_ensure_directory(diskDir, true, cancellable);
 	      let exactDiskName = revision + '.qcow2';
         let exactDiskPath = diskDir.get_child(exactDiskName);
-        let cwdDiskLink = this._fileLinkHere(exactDiskPath);
+        let cwdDiskLink = this._fileLinkHere(exactDiskPath, cancellable);
         if (cwdDiskLink) {
             print("Acquired link to exact disk " + cwdDiskLink.get_path());
             LibQA.createDiskSnapshot(cwdDiskLink, snapshotPath, cancellable);
@@ -615,7 +602,7 @@ const TestBase = new Lang.Class({
                 let name = info.get_name();
                 if (!JSUtil.stringEndsWith(name, '.qcow2'))
                     continue;
-                cwdDiskLink = this._fileLinkHere(e.get_child(info));
+                cwdDiskLink = this._fileLinkHere(e.get_child(info), cancellable);
                 if (cwdDiskLink)
                     break;
             }
@@ -651,5 +638,18 @@ const TestBase = new Lang.Class({
         GSystem.file_ensure_directory(this._imageCacheDir, true, cancellable);
         this._products = JsonUtil.loadJson(this.workdir.get_child('products.json'), cancellable);
         this._productsBuilt = JsonUtil.loadJson(this.builddir.get_child('products-built.json'), cancellable);
+        let productTrees = this._productsBuilt['trees'];
+        for (let ref in productTrees) {
+            let snapshotDisk = this.getDiskSnapshotForRevision(ref, productTrees[ref], cancellable);
+	          let refUnix = ref.replace(/\//g, '-');
+            let refWorkdir = Gio.File.new_for_path('work-' + refUnix);
+            GSystem.file_ensure_directory(refWorkdir, true, cancellable);
+            let test = new TestOneDisk(this,
+                                       this.BaseRequiredMessageIDs.concat(this.RequiredMessageIDs),
+                                       this.BaseFailedMessageIDs.concat(this.FailedMessageIDs),
+                                       this.StatusMessageID);
+            test.execute(refWorkdir, this._products['osname'], this.repo,
+                         snapshotDisk, cancellable);
+        }
     }
 });

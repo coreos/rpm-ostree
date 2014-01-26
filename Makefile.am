@@ -17,6 +17,8 @@
 
 include Makefile-decls.am
 
+privdatadir=$(pkglibdir)
+
 ACLOCAL_AMFLAGS += -I m4 ${ACLOCAL_FLAGS}
 AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
 	-DLIBEXECDIR='"$(libexecdir)"' \

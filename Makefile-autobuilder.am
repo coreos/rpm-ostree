@@ -69,3 +69,8 @@ jsautotasks_DATA= \
 	src/autobuilder/js/tasks/task-zdisks.js \
 	src/autobuilder/js/tasks/testbase.js \
 	$(NULL)
+
+testdatadir=$(pkgdatadir)
+testdata_DATA = src/autobuilder/rpm-ostree-export-journal-to-serialdev \
+	src/autobuilder/rpm-ostree-export-journal-to-serialdev.service \
+	$(NULL)

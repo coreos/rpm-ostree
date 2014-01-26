@@ -60,7 +60,7 @@ const TaskZDisks = new Lang.Class({
         } finally {
             gfmnt.umount(cancellable);
         }
-        let imageExportName = diskPathTmp.get_name() + '.xz';
+        let imageExportName = diskPathTmp.get_basename() + '.xz';
         let diskPathXz = diskPathTmp.get_parent().get_child(imageExportName);
         ProcUtil.runSync(['xz', diskPathTmp.get_path() ], { cwd: diskPathTmp.get_parent(),
                                                             logInitiation: true });
@@ -89,7 +89,7 @@ const TaskZDisks = new Lang.Class({
 	      this._imageExportDir = this.workdir.get_child('images');
         this._products = JsonUtil.loadJson(this.workdir.get_child('products.json'), cancellable);
         this._productsBuilt = JsonUtil.loadJson(this.builddir.get_child('products-built.json'), cancellable);
-        let productTrees = productsBuilt['trees'];
+        let productTrees = this._productsBuilt['trees'];
         for (let ref in productTrees) {
             this._exportDiskForProduct(ref, productTrees[ref], cancellable);
         }
