@@ -31,6 +31,7 @@ const Task = imports.task;
 const LibQA = imports.libqa;
 const JSUtil = imports.jsutil;
 const JsonUtil = imports.jsonutil;
+const GuestFish = imports.guestfish;
 
 const TIMEOUT_SECONDS = 10 * 60;
 
@@ -601,14 +602,14 @@ const TestBase = new Lang.Class({
             let info;
             while ((info = e.next_file(cancellable)) != null) {
                 let name = info.get_name();
-                if (!JSUtil.stringEndsWith(name, '.qcow2'))
+                if (!JSUtil.stringEndswith(name, '.qcow2'))
                     continue;
                 cwdDiskLink = this._fileLinkHere(e.get_child(info), cancellable);
                 if (cwdDiskLink)
                     break;
             }
         } finally {
-            if (e) e.close();
+            if (e) e.close(null);
         }
         if (!cwdDiskLink) {
             throw new Error("Unable to find cached disk in " + diskDir.get_path());
