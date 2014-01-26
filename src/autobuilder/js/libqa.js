@@ -46,8 +46,8 @@ function linuxGetMemTotalMb() {
 
 function getQemuPath() {
     let fallbackPaths = ['/usr/libexec/qemu-kvm']
-    let qemuPathString = GLib.find_program_in_path('qemu-kvm');
-    qemuPathString = GLib.find_program_in_path('qemu-kvm');
+    let qemuPathString;
+    qemuPathString = GLib.find_program_in_path('qemu-system-x86_64');
     if (!qemuPathString)
 	qemuPathString = GLib.find_program_in_path('kvm');
     if (qemuPathString == null) {
@@ -59,7 +59,7 @@ function getQemuPath() {
         }
     }
     if (qemuPathString == null) {
-        throw new Error("Unable to find qemu-kvm");
+        throw new Error("Unable to find qemu-kvm or qemu-system-x86_64");
     }
     return qemuPathString;
 }
