@@ -367,14 +367,42 @@ function pullDeploy(mntdir, srcrepo, osname, target, revision, originRepoUrl, ca
     let tmpOrigin = Gio.File.new_for_path('origin.tmp');
     tmpOrigin.replace_contents(originData, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, cancellable);
 
-    let rootArg = 'root=LABEL=gnostree-root';
+    let rootArg = 'root=UUID=' + ROOT_UUID;
     ProcUtil.runSync(adminCmd.concat(['deploy', '--karg=' + rootArg, '--karg=quiet', '--karg=splash',
 				      '--os=' + osname, '--origin-file=' + tmpOrigin.get_path(), revOrTarget]), cancellable,
                      {logInitiation: true, env: adminEnv});
 
-    let defaultFstab = 'LABEL=gnostree-root / ext4 defaults 1 1\n\
-LABEL=gnostree-boot /boot ext4 defaults 1 2\n\
-LABEL=gnostree-swap swap swap defaults 0 0\n';
+    let defaultFstab = 'UUID=' + ROOT_UUID + ' / ext4 defaults 1 1\n\
+UUID=' + BOOT_UUID + ' /boot ext4 defaults 1 2\n\
+UUID=' + SWAP_UUID + ' swap swap defaults 0 0\n';
     let fstabPath = ostreeOsdir.resolve_relative_path('current/etc/fstab');
     fstabPath.replace_contents(defaultFstab, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, cancellable);
 };
+
+function requestSnapshotForTree(task, resultdir, refname, revision) {
+    let imageCacheDir = task.cachedir.get_child('images');
+    let osname = task._products['osname'];
+    let originRepoUrl = this._products['repo'];
+
+    let refUnix = ref.replace(/\//g, '-');
+    let diskDir = this._imageCacheDir.get_child(refUnix);
+    GSystem.file_ensure_directory(diskDir, true, cancellable);
+    let diskName = revision + '.qcow2';
+    let diskPath = diskDir.get_child(diskName);
+    let diskPathTmp = diskDir.get_child(diskName);
+    if (!diskPath.query_exists(null))
+        LibQA.createDisk(diskPath, cancellable);
+    let mntdir = Gio.File.new_for_path('mnt');
+    GSystem.file_ensure_directory(mntdir, true, cancellable);
+    let gfmnt = new GuestFish.GuestMount(diskPath, { partitionOpts: LibQA.DEFAULT_GF_PARTITION_OPTS,
+                                                     readWrite: true });
+    gfmnt.mount(mntdir, cancellable);
+    try {
+        LibQA.pullDeploy(mntdir, this.repo, osname, ref, revision, originRepoUrl,
+                         cancellable);
+    } finally {
+        gfmnt.umount(cancellable);
+    }
+
+    print("Successfully updated " + diskDir.get_path() + " to " + revision);
+} 

@@ -577,47 +577,79 @@ const TestBase = new Lang.Class({
     _screenshotTaken: function(path) {
     },
 
-    execute: function(cancellable) {
-	      let imageCacheDir = this.cachedir.get_child('images');
-        let info;
-        let buildJson;
-        let disksToTest = [];
-
-        while ((info = e.next_file(cancellable)) != null) {
-            let name = info.get_name();
-            if (!JSUtil.stringEndswith(name, '.qcow2'))
-                continue;
-            disksToTest.push(name);
+    _fileLinkHere: function(diskPath, cancellable) {
+        let dest = this.builddir.get_child(diskPath.get_name());
+        try {
+            GSystem.file_linkcopy(exactDiskPath, dest, 0,
+                                  cancellable, error);
+            return dest;
+        } catch (e) {
+            if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND))
+                throw e;
         }
-        e.close(null);
-        if (disksToTest.length == 0)
-            throw new Error("Didn't find any matching .qcow2 disks in " + imageCacheDir.get_path());
-        for (let i = 0; i < disksToTest.length; i++) {
-            let name = disksToTest[i];
-            let workdirName = 'work-' + name.replace(/\.qcow2$/, '');
-            let subworkdir = Gio.File.new_for_path(workdirName);
-            GSystem.file_ensure_directory(subworkdir, true, cancellable);
-            let test = new TestOneDisk(this,
-                                       this.BaseRequiredMessageIDs.concat(this.RequiredMessageIDs),
-                                       this.BaseFailedMessageIDs.concat(this.FailedMessageIDs),
-                                       this.StatusMessageID);
-            test.execute(subworkdir, this.repo, currentImages.get_child(name), cancellable);
-        }
+        return null;
+    },
 
-        let buildData = this._buildData;
-        if (buildJson != null && this.CompletedTag !== null) {
-            let snapshot = buildData['snapshot'];
-            this.ostreeRepo.prepare_transaction(cancellable);
-            for (let targetName in buildData['targets']) {
-                let targetRev = buildData['targets'][targetName];
-                let lastSlash = targetName.lastIndexOf('/');
-                let testedRefName = snapshot['osname'] + '/' + this.CompletedTag + targetName.substr(lastSlash);
-                this.ostreeRepo.transaction_set_ref(null, testedRefName, targetRev);
-                print(Format.vprintf("Wrote ref: %s => %s", [testedRefName, targetRev]));
+    getDiskSnapshotForRevision: function(ref, revision, cancellable) {
+        let osname = this._products['osname'];
+        let originRepoUrl = this._products['repo'];
+
+        let snapshotPath = this.builddir.get_child('overlay-' + revision + '.qcow2');
+
+	      let refUnix = ref.replace(/\//g, '-');
+        let diskDir = this._imageCacheDir.get_child(refUnix);
+        GSystem.file_ensure_directory(diskDir, true, cancellable);
+	      let exactDiskName = revision + '.qcow2';
+        let exactDiskPath = diskDir.get_child(exactDiskName);
+        let cwdDiskLink = this._fileLinkHere(exactDiskPath);
+        if (cwdDiskLink) {
+            print("Acquired link to exact disk " + cwdDiskLink.get_path());
+            LibQA.createDiskSnapshot(cwdDiskLink, snapshotPath, cancellable);
+            return snapshotPath;
+        }
+        let e = null;
+        try {
+            e = diskDir.enumerate_children('standard::name', 0, cancellable);
+            let info;
+            while ((info = e.next_file(cancellable)) != null) {
+                let name = info.get_name();
+                if (!JSUtil.stringEndsWith(name, '.qcow2'))
+                    continue;
+                cwdDiskLink = this._fileLinkHere(e.get_child(info));
+                if (cwdDiskLink)
+                    break;
             }
-            this.ostreeRepo.commit_transaction(cancellable);
-        } else {
-            print("No build json found, not tagging");
+        } finally {
+            if (e) e.close();
         }
+        if (!cwdDiskLink) {
+            throw new Error("Unable to find cached disk in " + diskDir.get_path());
+        }
+        print("Acquired link to disk " + cwdDiskLink.get_path());
+        print("Creating snapshot " + snapshotPath.get_path() + " for update");
+        LibQA.createDiskSnapshot(cwdDiskLink, snapshotPath, cancellable);
+
+        let mntdir = Gio.File.new_for_path('mnt');
+        GSystem.file_ensure_directory(mntdir, true, cancellable);
+        let gfmnt = new GuestFish.GuestMount(snapshotPath, { partitionOpts: LibQA.DEFAULT_GF_PARTITION_OPTS,
+                                                             readWrite: true });
+        gfmnt.mount(mntdir, cancellable);
+        try {
+            LibQA.pullDeploy(mntdir, this.repo, osname, ref, revision, originRepoUrl,
+                             cancellable);
+        } finally {
+            gfmnt.umount(cancellable);
+        }
+
+        print("Successfully updated " + snapshotPath.get_path() + " to " + revision);
+
+        return snapshotPath;
+    },
+
+    execute: function(cancellable) {
+	      this._imageCacheDir = this.cachedir.get_child('images');
+        GSystem.file_ensure_directory(this._imageCacheDir, true, cancellable);
+        this._products = JsonUtil.loadJson(this.workdir.get_child('products.json'), cancellable);
+        this._productsBuilt = JsonUtil.loadJson(this.builddir.get_child('products-built.json'), cancellable);
     }
 });

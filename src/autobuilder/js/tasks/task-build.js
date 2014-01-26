@@ -85,12 +85,12 @@ const TaskBuild = new Lang.Class({
 	    proc.wait_sync_check(cancellable);
 	} catch (e) {
 	    print("Build of " + productName + " failed");
-	    return this.BuildState.failed;
+	    return [this.BuildState.failed, origRevision];
 	}
 	let [,newRevision] = this.ostreeRepo.resolve_rev(ref, false);
 	if (origRevision == newRevision)
-	    return this.BuildState.unchanged;
-	return this.BuildState.successful;
+	    return [this.BuildState.unchanged, newRevision];
+	return [this.BuildState.successful, newRevision];
     },
 
     execute: function(cancellable) {
@@ -104,6 +104,7 @@ const TaskBuild = new Lang.Class({
 	let successful = [];
 	let failed = [];
 	let unchanged = [];
+	let productTrees = {};
 	for (let i = 0; i < releases.length; i++) {
 	    for (let j = 0; j < architectures.length; j++) {
 		for (let productName in products) {
@@ -116,9 +117,11 @@ const TaskBuild = new Lang.Class({
 			    log("Skipping " + ref + " which does not match " + this.parameters.onlyTreesMatching);
 			    continue;
 			}
-			let result = this._composeProduct(ref, productName, treeName, products[productName][treeName],
-							  release, architecture,
-							  cancellable);
+			let [result, revision] =
+			    this._composeProduct(ref, productName, treeName, products[productName][treeName],
+						 release, architecture,
+						 cancellable);
+			productTrees[ref] = revision;
 			switch (result) {
 			    case this.BuildState.successful: {
 				successful.push(ref);
@@ -141,7 +144,8 @@ const TaskBuild = new Lang.Class({
 	}
 	let productsBuilt = { successful: successful,
 			      failed: failed,
-			      unchanged: unchanged };
+			      unchanged: unchanged,
+			      trees: productTrees };
 	let productsBuiltPath = this.builddir.get_child('products-built.json');
 	JsonUtil.writeJsonFileAtomic(productsBuiltPath, productsBuilt, cancellable);
 	print("Successful: " + successful.join(' '));

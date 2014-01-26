@@ -19,6 +19,7 @@
 const GLib = imports.gi.GLib;
 const Gio = imports.gi.Gio;
 const Lang = imports.lang;
+const Format = imports.format;
 
 const GSystem = imports.gi.GSystem;
 
@@ -32,20 +33,42 @@ const JsonUtil = imports.jsonutil;
 const JSUtil = imports.jsutil;
 const GuestFish = imports.guestfish;
 
-const TaskZDisks = new Lang.Class({
-    Name: 'TaskZDisks',
+const TaskEnsureDiskCaches = new Lang.Class({
+    Name: 'TaskEnsureDiskCaches',
     Extends: Task.Task,
 
     TaskDef: {
-        TaskName: "zdisks",
+        TaskName: "ensure-disk-caches",
         TaskAfter: ['build'],
-        TaskScheduleMinSecs: 3*60*60  // Only do this every 3 hours
     },
 
-    _exportDiskForProduct: function(ref, revision, cancellable) {
+    _ensureDiskForProduct: function(ref, revision, cancellable) {
 	      let refUnix = ref.replace(/\//g, '-');
-        let productDir = this._imageExportDir.get_child(refUnix);
-        let diskPathTmp = this.workdir.get_child(refUnix + '.qcow2');
+        let diskDir = this._imageCacheDir.get_child(refUnix);
+        GSystem.file_ensure_directory(diskDir, true, cancellable);
+        let cachedDisk = null;
+        let e = null;
+        try {
+            e = diskDir.enumerate_children('standard::name', 0, cancellable);
+            let info;
+            while ((info = e.next_file(cancellable)) != null) {
+                let name = info.get_name();
+                if (!JSUtil.stringEndswith(name, '.qcow2'))
+                    continue;
+                cachedDisk = e.get_child(info);
+                break;
+            }
+        } finally {
+            if (e) e.close(null);
+        }
+        
+        if (cachedDisk) {
+            print("Found cached disk " + cachedDisk.get_path() + " for " + ref);
+            return;
+        }
+
+        let diskPath = diskDir.get_child(revision + '.qcow2');
+        let diskPathTmp = diskDir.get_child(revision + '.qcow2.tmp');
         LibQA.createDisk(diskPathTmp, cancellable);
         let mntdir = Gio.File.new_for_path('mnt');
         GSystem.file_ensure_directory(mntdir, true, cancellable);
@@ -60,38 +83,17 @@ const TaskZDisks = new Lang.Class({
         } finally {
             gfmnt.umount(cancellable);
         }
-        let imageExportName = diskPathTmp.get_name() + '.xz';
-        let diskPathXz = diskPathTmp.get_parent().get_child(imageExportName);
-        ProcUtil.runSync(['xz', diskPathTmp.get_path() ], { cwd: diskPathTmp.get_parent(),
-                                                            logInitiation: true });
-        let imageExportTarget = productDir.get_child(imageExportName);
-        GSystem.file_rename(diskPathXz, imageExportTarget, cancellable);
-        print("Successfully created installed " + imageExportTarget.get_path());
-
-        let e = null;
-        try {
-            e = productDir.enumerate_children('standard::name');
-            while ((info = e.next_file(cancellable)) != null) {
-                let name = info.get_name();
-                if (!JSUtil.stringEndsWith(name, '.qcow2'))
-                    continue;
-                if (name == imageExportName)
-                    continue;
-                print("Deleting old " + name);
-                GSystem.file_unlink(e.get_child(info), cancellable);
-            }
-        } finally {
-            if (e) e.close(null);
-        }
+        GSystem.file_rename(diskPathTmp, diskPath, cancellable);
+        print("Successfully created disk cache " + diskPath.get_path());
     },
 
     execute: function(cancellable) {
-	      this._imageExportDir = this.workdir.get_child('images');
+	      this._imageCacheDir = this.cachedir.get_child('images');
         this._products = JsonUtil.loadJson(this.workdir.get_child('products.json'), cancellable);
         this._productsBuilt = JsonUtil.loadJson(this.builddir.get_child('products-built.json'), cancellable);
-        let productTrees = productsBuilt['trees'];
+        let productTrees = this._productsBuilt['trees'];
         for (let ref in productTrees) {
-            this._exportDiskForProduct(ref, productTrees[ref], cancellable);
+            this._ensureDiskForProduct(ref, productTrees[ref], cancellable);
         }
-    }
+    },
 });
