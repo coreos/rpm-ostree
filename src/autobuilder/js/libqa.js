@@ -139,7 +139,6 @@ function createDisk(diskpath, cancellable) {
     gfHandle.part_add("/dev/sda", "p", bootOffset, swapOffset - 1);
     gfHandle.part_add("/dev/sda", "p", swapOffset, rootOffset - 1);
     gfHandle.part_add("/dev/sda", "p", rootOffset, endOffset - 1);
-    gfHandle.part_set_bootable("/dev/sda", 1, true);
     gfHandle.mkfs("ext4", "/dev/sda1", null);
     gfHandle.set_e2uuid("/dev/sda1", BOOT_UUID);
     gfHandle.mkswap_U(SWAP_UUID, "/dev/sda2");
@@ -147,8 +146,11 @@ function createDisk(diskpath, cancellable) {
     gfHandle.set_e2uuid("/dev/sda3", ROOT_UUID);
     gfHandle.mount("/dev/sda3", "/");
     gfHandle.mkdir_mode("/boot", 493);
+    gfHandle.mount("/dev/sda1", "/boot");
     gfHandle.extlinux("/boot");
+    gfHandle.umount_all();
     gfHandle.pwrite_device("/dev/sda", syslinuxData, 0);
+    gfHandle.part_set_bootable("/dev/sda", 1, true);
     gfHandle.shutdown();
 }
 
