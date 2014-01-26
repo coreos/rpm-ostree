@@ -151,5 +151,8 @@ const TaskBuild = new Lang.Class({
 	print("Successful: " + successful.join(' '));
 	print("Failed: " + failed.join(' '));
 	print("Unchanged: " + unchanged.join(' '));
+
+        let modifiedPath = Gio.File.new_for_path('modified.json');
+        JsonUtil.writeJsonFileAtomic(modifiedPath, { modified: successful.length > 0 }, cancellable);
     }
 });
