@@ -28,12 +28,35 @@
 
 static char **opt_enable_repos;
 static char *opt_workdir;
+static char **opt_bootstrap_packages;
 
 static GOptionEntry option_entries[] = {
+  { "bootstrap-package", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_bootstrap_packages, "Install this package first", "PACKAGE" },
   { "enablerepo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_enable_repos, "Repositories to enable", "REPO" },
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "REPO" },
   { NULL }
 };
+
+static char *
+c_stringify (const guint8   *buf,
+             gsize           len)
+{
+  GString *ret = g_string_new ("");
+  gsize i;
+
+  for (i = 0; i < len; i++)
+    {
+      guint8 c = buf[i];
+      if (c == '\\')
+        g_string_append (ret, "\\\\");
+      else if (g_ascii_isprint (c))
+        g_string_append_c (ret, c);
+      else
+        g_string_append_printf (ret, "\\x%02x", c);
+    }
+
+  return g_string_free (ret, FALSE);
+}
 
 static gboolean
 replace_nsswitch (GFile         *target_usretc,
@@ -79,68 +102,106 @@ replace_nsswitch (GFile         *target_usretc,
   return ret;
 }
 
-static char *
-strconcat_push_malloced (GPtrArray *malloced,
-                         ...) G_GNUC_NULL_TERMINATED;
+typedef struct {
+  GSSubprocess *process;
+  GFile *reposdir_path;
+  GFile *tmp_reposdir_path;
+  GDataOutputStream *stdin;
+  /* GDataInputStream *stdout; */
+} YumContext;
 
-static char *
-strconcat_push_malloced (GPtrArray *malloced,
-                         ...)
-{
-  va_list args;
-  GString *buf = g_string_new ("");
-  const char *p;
-  char *ret;
-
-  va_start (args, malloced);
-
-  while ((p = va_arg (args, const char *)) != NULL)
-    g_string_append (buf, p);
-
-  va_end (args);
-
-  ret = g_string_free (buf, FALSE);
-  g_ptr_array_add (malloced, buf);
-  return ret;
-}
-    
 static gboolean
-run_yum (GFile          *yumroot,
-         char          **argv,
-         const char     *stdin_str,
-         GCancellable   *cancellable,
-         GError        **error)
+yum_context_close (YumContext   *yumctx,
+                   GCancellable *cancellable,
+                   GError      **error)
 {
   gboolean ret = FALSE;
-  GPtrArray *malloced_argv = g_ptr_array_new_with_free_func (g_free);
-  GPtrArray *yum_argv = g_ptr_array_new ();
+
+  if (!yumctx)
+    return TRUE;
+
+  if (yumctx->tmp_reposdir_path)
+    {
+      if (!gs_file_rename (yumctx->tmp_reposdir_path, yumctx->reposdir_path,
+                           cancellable, error))
+        goto out;
+      g_clear_object (&yumctx->reposdir_path);
+      g_clear_object (&yumctx->tmp_reposdir_path);
+    }
+  
+  if (yumctx->process)
+    {
+      if (yumctx->stdin)
+        {
+          if (!g_output_stream_close ((GOutputStream*)yumctx->stdin, cancellable, error))
+            goto out;
+          g_clear_object (&yumctx->stdin);
+        }
+      /*
+      if (yumctx->stdout)
+        {
+          if (!g_input_stream_close ((GInputStream*)yumctx->stdout, cancellable, error))
+            goto out;
+          g_clear_object (&yumctx->stdout);
+        }
+      */
+      
+      g_print ("Waiting for yum...\n");
+      if (!gs_subprocess_wait_sync_check (yumctx->process, cancellable, error))
+        goto out;
+      g_print ("Waiting for yum [OK]\n");
+      g_clear_object (&yumctx->process);
+    }
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+static void
+yum_context_free (YumContext  *yumctx)
+{
+  if (!yumctx)
+    return;
+  (void) yum_context_close (yumctx, NULL, NULL);
+  g_free (yumctx);
+}
+
+static void
+append_repo_opts (GPtrArray  *args)
+{
   char **strviter;
+
+  if (g_getenv ("RPM_OSTREE_OFFLINE"))
+    g_ptr_array_add (args, g_strdup ("-C"));
+
+  g_ptr_array_add (args, g_strdup ("--disablerepo=*"));
+  for (strviter = opt_enable_repos; strviter && *strviter; strviter++)
+    g_ptr_array_add (args, g_strconcat ("--enablerepo=", *strviter, NULL));
+}
+
+static YumContext *
+yum_context_new (GFile          *yumroot,
+                 GCancellable   *cancellable,
+                 GError        **error)
+{
+  gboolean success = FALSE;
+  YumContext *yumctx = NULL;
+  GPtrArray *yum_argv = g_ptr_array_new_with_free_func (g_free);
   gs_unref_object GSSubprocessContext *context = NULL;
   gs_unref_object GSSubprocess *yum_process = NULL;
   gs_unref_object GFile *reposdir_path = NULL;
-  gs_unref_object GFile *tmp_reposdir_path = NULL;
-  GOutputStream *stdin_pipe = NULL;
-  GMemoryInputStream *stdin_data = NULL;
 
-  g_ptr_array_add (yum_argv, "yum");
-  g_ptr_array_add (yum_argv, "-y");
-  g_ptr_array_add (yum_argv, "--setopt=keepcache=1");
-  g_ptr_array_add (yum_argv, strconcat_push_malloced (malloced_argv,
-                                                      "--installroot=",
-                                                      gs_file_get_path_cached (yumroot),
-                                                      NULL));
-  g_ptr_array_add (yum_argv, "--disablerepo=*");
+  g_ptr_array_add (yum_argv, g_strdup ("yum"));
+  g_ptr_array_add (yum_argv, g_strdup ("-y"));
+  g_ptr_array_add (yum_argv, g_strdup ("--setopt=keepcache=1"));
+  g_ptr_array_add (yum_argv, g_strconcat ("--installroot=",
+                                          gs_file_get_path_cached (yumroot),
+                                          NULL));
+
+  append_repo_opts (yum_argv);
   
-  for (strviter = opt_enable_repos; strviter && *strviter; strviter++)
-    {
-      g_ptr_array_add (yum_argv, strconcat_push_malloced (malloced_argv,
-                                                          "--enablerepo=",
-                                                          *strviter,
-                                                          NULL));
-    }
-  
-  for (strviter = argv; strviter && *strviter; strviter++)
-    g_ptr_array_add (yum_argv, *strviter);
+  g_ptr_array_add (yum_argv, g_strdup ("shell"));
 
   g_ptr_array_add (yum_argv, NULL);
 
@@ -158,75 +219,147 @@ run_yum (GFile          *yumroot,
      exists in the install root, yum will prefer it. */
   if (g_file_query_exists (reposdir_path, NULL))
     {
-      tmp_reposdir_path = g_file_resolve_relative_path (yumroot, "etc/yum.repos.d.tmp");
-      if (!gs_file_rename (reposdir_path, tmp_reposdir_path,
+      yumctx->reposdir_path = g_object_ref (reposdir_path);
+      yumctx->tmp_reposdir_path = g_file_resolve_relative_path (yumroot, "etc/yum.repos.d.tmp");
+      if (!gs_file_rename (reposdir_path, yumctx->tmp_reposdir_path,
                            cancellable, error))
         goto out;
     }
 
-  if (stdin_str)
-    gs_subprocess_context_set_stdin_disposition (context, GS_SUBPROCESS_STREAM_DISPOSITION_PIPE);
+  gs_subprocess_context_set_stdin_disposition (context, GS_SUBPROCESS_STREAM_DISPOSITION_PIPE);
+  /* gs_subprocess_context_set_stdout_disposition (context, GS_SUBPROCESS_STREAM_DISPOSITION_PIPE); */
 
-  yum_process = gs_subprocess_new (context, cancellable, error);
-  if (!yum_process)
+  yumctx = g_new0 (YumContext, 1);
+
+  g_print ("Starting yum...\n");
+  yumctx->process = gs_subprocess_new (context, cancellable, error);
+  if (!yumctx->process)
     goto out;
 
-  if (stdin_str)
-    {
-      stdin_pipe = gs_subprocess_get_stdin_pipe (yum_process);
-      g_assert (stdin_pipe);
-      
-      stdin_data = (GMemoryInputStream*)g_memory_input_stream_new_from_data (stdin_str,
-                                                                             strlen (stdin_str),
-                                                                             NULL);
-      
-      if (0 > g_output_stream_splice (stdin_pipe, (GInputStream*)stdin_data,
-                                      G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE |
-                                      G_OUTPUT_STREAM_SPLICE_CLOSE_TARGET,
-                                      cancellable, error))
-        goto out;
-    }
+  yumctx->stdin = (GDataOutputStream*)g_data_output_stream_new (gs_subprocess_get_stdin_pipe (yumctx->process));
+  /* yumctx->stdout = (GDataInputStream*)g_data_input_stream_new (gs_subprocess_get_stdout_pipe (yumctx->process)); */
 
-  if (!gs_subprocess_wait_sync_check (yum_process, cancellable, error))
-    goto out;
-
-  if (tmp_reposdir_path)
-    {
-      if (!gs_file_rename (tmp_reposdir_path, reposdir_path,
-                           cancellable, error))
-        goto out;
-    }
-
-  ret = TRUE;
+  success = TRUE;
  out:
-  return ret;
+  if (!success)
+    {
+      yum_context_free (yumctx);
+      return NULL;
+    }
+  return yumctx;
 }
 
 static gboolean
-yuminstall (GFile   *yumroot,
-            char   **packages,
-            GCancellable *cancellable,
-            GError      **error)
+yum_context_command (YumContext   *yumctx,
+                     const char   *cmd,
+                     GPtrArray   **out_lines,
+                     GCancellable *cancellable,
+                     GError      **error)
 {
   gboolean ret = FALSE;
-  GString *buf = g_string_new ("");
-  char **strviter;
-  char *yumargs[] = { "shell", NULL };
+  gsize bytes_written;
+  gs_unref_ptrarray GPtrArray *lines = g_ptr_array_new_with_free_func (g_free);
+  gs_free char *cmd_nl = g_strconcat (cmd, "\n", NULL);
 
-  g_string_append (buf, "makecache fast\n");
+  g_print ("yum> %s", cmd_nl);
+  if (!g_output_stream_write_all ((GOutputStream*)yumctx->stdin,
+                                  cmd_nl, strlen (cmd_nl), &bytes_written,
+                                  cancellable, error))
+    goto out;
+
+  /*
+  do
+    {
+      const guint8 *buf;
+      gsize len;
+      GBytes *bytes;
+      const guint8 *nl;
+
+      bytes = g_input_stream_read_bytes ((GInputStream*)yumctx->stdout, 8192,
+                                         cancellable, error);
+      if (!bytes)
+        goto out;
+      buf = g_bytes_get_data (bytes, &len);
+      if (g_bytes_get_size (bytes) == 0)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Received unexpected EOF from yum!");
+          goto out;
+        }
+
+      while ((nl = memchr (buf, '\n', len)) != NULL)
+        {
+          gsize linelen = nl - buf;
+          char *line;
+          if (!g_utf8_validate ((char*)buf, linelen, NULL))
+            {
+              gs_free char *cstr = c_stringify (buf, linelen);
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Invalid UTF-8 from yum: %s", cstr);
+              goto out;
+            }
+          line = g_strndup ((char*)buf, linelen);
+          g_print ("yum< %s\n", line);
+          g_ptr_array_add (lines, line);
+          len -= (linelen+1);
+          buf = nl + 1;
+        }
+
+      if (len < 2 || memcmp (buf, "> ", 2) != 0)
+        {
+          gs_free char *cstr = c_stringify (buf, len);
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Unexpected end of data '%s'", cstr);
+          goto out;
+        }
+    }
+  while (TRUE);
+  */
+
+  ret = TRUE;
+  gs_transfer_out_value (out_lines, &lines);
+ out:
+  return ret;
+}
+                  
+static gboolean
+yuminstall (GFile           *yumroot,
+            char           **packages,
+            GCancellable    *cancellable,
+            GError         **error)
+{
+  gboolean ret = FALSE;
+  char **strviter;
+  YumContext *yumctx;
+
+  yumctx = yum_context_new (yumroot, cancellable, error);
+  if (!yumctx)
+    goto out;
 
   for (strviter = packages; strviter && *strviter; strviter++)
     {
+      gs_free char *cmd = NULL;
       const char *package = *strviter;
-      if (g_str_has_prefix (package, "@"))
-        g_string_append_printf (buf, "group install %s\n", package);
-      else
-        g_string_append_printf (buf, "install %s\n", package);
-    }
-  g_string_append (buf, "run\n");
+      gs_unref_ptrarray GPtrArray *lines = NULL;
 
-  if (!run_yum (yumroot, yumargs, buf->str,
-                cancellable, error))
+      if (g_str_has_prefix (package, "@"))
+        cmd = g_strconcat ("group install ", package, NULL);
+      else
+        cmd = g_strconcat ("install ", package, NULL);
+        
+      if (!yum_context_command (yumctx, cmd, &lines,
+                                cancellable, error))
+        goto out;
+    }
+
+  {
+    gs_unref_ptrarray GPtrArray *lines = NULL;
+    if (!yum_context_command (yumctx, "run", &lines,
+                              cancellable, error))
+      goto out;
+  }
+
+  if (!yum_context_close (yumctx, cancellable, error))
     goto out;
 
   ret = TRUE;
@@ -251,13 +384,14 @@ main (int     argc,
   gs_unref_object GFile *yumcachedir = NULL;
   gs_unref_object GFile *yumcache_lookaside = NULL;
   gs_unref_object GFile *yumroot_varcache = NULL;
+  gs_unref_ptrarray GPtrArray *all_packages = NULL;
   
   g_option_context_add_main_entries (context, option_entries, NULL);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
 
-  if (argc < 3)
+  if (argc < 4)
     {
       g_printerr ("usage: %s create REFNAME PACKAGE [PACKAGE...]\n", argv[0]);
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -311,62 +445,25 @@ main (int     argc,
       g_print ("No cache found at: %s\n", gs_file_get_path_cached (yumroot_varcache));
     }
 
-  /* Ensure we have enough to modify NSS */
-  {
-    char *packages_for_nss[] = {"filesystem", "glibc", "nss-altfiles", "shadow-utils", NULL };
-    if (!yuminstall (yumroot, packages_for_nss, cancellable, error))
-      goto out;
-  }
-
-  /* Prepare NSS configuration; this needs to be done
-     before any invocations of "useradd" in %post */
-
-  {
-    gs_unref_object GFile *yumroot_passwd =
-      g_file_resolve_relative_path (yumroot, "usr/lib/passwd");
-    gs_unref_object GFile *yumroot_group =
-      g_file_resolve_relative_path (yumroot, "usr/lib/group");
-    gs_unref_object GFile *yumroot_etc = 
-      g_file_resolve_relative_path (yumroot, "etc");
-
-    if (!g_file_replace_contents (yumroot_passwd, "", 0, NULL, FALSE, 0,
-                                  NULL, cancellable, error))
-      goto out;
-    if (!g_file_replace_contents (yumroot_group, "", 0, NULL, FALSE, 0,
-                                  NULL, cancellable, error))
-      goto out;
-
-    if (!replace_nsswitch (yumroot_etc, cancellable, error))
-      goto out;
-  }
-
-  {
-    GPtrArray *packages = g_ptr_array_new ();
-    int i;
-    for (i = 3; i < argc; i++)
-      g_ptr_array_add (packages, argv[i - 1]);
-    
-    g_ptr_array_add (packages, NULL);
-
-    if (!yuminstall (yumroot, (char**)packages->pdata,
-                     cancellable, error))
-      goto out;
-  }
-
   ref_unix = g_strdelimit (g_strdup (ref), "/", '_');
 
-  /* Attempt to cache stuff between runs */
-  if (!gs_shutil_rm_rf (yumcache_lookaside, cancellable, error))
-    goto out;
-
-  g_print ("Saving yum cache %s\n", gs_file_get_path_cached (yumcache_lookaside));
-  if (!gs_file_rename (yumcachedir, yumcache_lookaside,
-                       cancellable, error))
-    goto out;
+  all_packages = g_ptr_array_new ();
+  if (opt_bootstrap_packages)
+    {
+      char **strviter;
+      for (strviter = opt_bootstrap_packages; strviter && *strviter; strviter++)
+        g_ptr_array_add (all_packages, *strviter);
+    }
 
   {
-    gs_unref_object GFile *yumroot_rpmlibdir = 
-      g_file_resolve_relative_path (yumroot, "var/lib/rpm");
+    guint i;
+    for (i = 3; i < argc; i++)
+      g_ptr_array_add (all_packages, argv[i]);
+  }
+    
+  g_ptr_array_add (all_packages, NULL);
+
+  {
     gs_free char *cached_packageset_name =
       g_strconcat ("packageset-", ref_unix, ".txt", NULL);
     gs_unref_object GFile *rpmtextlist_path = 
@@ -375,15 +472,37 @@ main (int     argc,
       g_strconcat (cached_packageset_name, ".new", NULL);
     gs_unref_object GFile *rpmtextlist_path_new = 
       g_file_resolve_relative_path (cachedir, cached_packageset_name_new);
-    char *rpmqa_argv[] = { PKGLIBDIR "/rpmqa-sorted", NULL };
-    gs_unref_object GSSubprocessContext *rpmqa_proc_ctx = NULL;
-    gs_unref_object GSSubprocess *rpmqa_proc = NULL;
+    GPtrArray *repoquery_argv = g_ptr_array_new_with_free_func (g_free);
+    gs_unref_object GSSubprocessContext *repoquery_proc_ctx = NULL;
+    gs_unref_object GSSubprocess *repoquery_proc = NULL;
+    guint i;
+
+    g_ptr_array_add (repoquery_argv, g_strdup (PKGLIBDIR "/repoquery-sorted"));
+    append_repo_opts (repoquery_argv);
+    g_ptr_array_add (repoquery_argv, g_strdup ("--recursive"));
+    g_ptr_array_add (repoquery_argv, g_strdup ("--requires"));
+    g_ptr_array_add (repoquery_argv, g_strdup ("--resolve"));
+
+    for (i = 0; i < all_packages->len; i++)
+      {
+        const char *package = all_packages->pdata[i];
+        if (!package)
+          continue;
+
+        g_ptr_array_add (repoquery_argv, g_strdup (package));
+      }
+
+    g_ptr_array_add (repoquery_argv, NULL);
       
-    rpmqa_proc_ctx = gs_subprocess_context_new (rpmqa_argv);
-    gs_subprocess_context_set_stdout_file_path (rpmqa_proc_ctx, gs_file_get_path_cached (rpmtextlist_path_new));
-    gs_subprocess_context_set_stderr_disposition (rpmqa_proc_ctx, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT);
-    rpmqa_proc = gs_subprocess_new (rpmqa_proc_ctx, cancellable, error);
-    if (!rpmqa_proc)
+    repoquery_proc_ctx = gs_subprocess_context_new ((char**)repoquery_argv->pdata);
+    gs_subprocess_context_set_stdout_file_path (repoquery_proc_ctx, gs_file_get_path_cached (rpmtextlist_path_new));
+    gs_subprocess_context_set_stderr_disposition (repoquery_proc_ctx, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT);
+    g_print ("Resolving dependencies...\n");
+    repoquery_proc = gs_subprocess_new (repoquery_proc_ctx, cancellable, error);
+    if (!repoquery_proc)
+      goto out;
+
+    if (!gs_subprocess_wait_sync_check (repoquery_proc, cancellable, error))
       goto out;
     
     if (g_file_query_exists (rpmtextlist_path, NULL))
@@ -436,24 +555,73 @@ main (int     argc,
                  gs_file_get_path_cached (rpmtextlist_path));
       }
 
-    if (!gs_file_rename (rpmtextlist_path_new, rpmtextlist_path,
+    /* Ensure we have enough to modify NSS */
+    if (opt_bootstrap_packages)
+      {
+        if (!yuminstall (yumroot, opt_bootstrap_packages, cancellable, error))
+          goto out;
+      }
+
+    /* Prepare NSS configuration; this needs to be done
+       before any invocations of "useradd" in %post */
+
+    {
+      gs_unref_object GFile *yumroot_passwd =
+        g_file_resolve_relative_path (yumroot, "usr/lib/passwd");
+      gs_unref_object GFile *yumroot_group =
+        g_file_resolve_relative_path (yumroot, "usr/lib/group");
+      gs_unref_object GFile *yumroot_etc = 
+        g_file_resolve_relative_path (yumroot, "etc");
+
+      if (!g_file_replace_contents (yumroot_passwd, "", 0, NULL, FALSE, 0,
+                                    NULL, cancellable, error))
+        goto out;
+      if (!g_file_replace_contents (yumroot_group, "", 0, NULL, FALSE, 0,
+                                    NULL, cancellable, error))
+        goto out;
+
+      if (!replace_nsswitch (yumroot_etc, cancellable, error))
+        goto out;
+    }
+
+    {
+      if (!yuminstall (yumroot, (char**)all_packages->pdata,
+                       cancellable, error))
+        goto out;
+    }
+
+    ref_unix = g_strdelimit (g_strdup (ref), "/", '_');
+
+    /* Attempt to cache stuff between runs */
+    if (!gs_shutil_rm_rf (yumcache_lookaside, cancellable, error))
+      goto out;
+
+    g_print ("Saving yum cache %s\n", gs_file_get_path_cached (yumcache_lookaside));
+    if (!gs_file_rename (yumcachedir, yumcache_lookaside,
                          cancellable, error))
       goto out;
-  }
+
+    {
+    }
   
-  {
-    /* OSTree commit messages aren't really useful. */
-    const char *commit_message = "";
-    if (!gs_subprocess_simple_run_sync (NULL,
-                                        GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                        cancellable,
-                                        error,
-                                        "rpm-ostree-postprocess-and-commit",
-                                        "--repo=repo",
-                                        "-m", commit_message,
-                                        gs_file_get_path_cached (yumroot),
-                                        ref,
-                                        NULL))
+    {
+      /* OSTree commit messages aren't really useful. */
+      const char *commit_message = "";
+      if (!gs_subprocess_simple_run_sync (NULL,
+                                          GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
+                                          cancellable,
+                                          error,
+                                          "rpm-ostree-postprocess-and-commit",
+                                          "--repo=repo",
+                                          "-m", commit_message,
+                                          gs_file_get_path_cached (yumroot),
+                                          ref,
+                                          NULL))
+        goto out;
+    }
+
+    if (!gs_file_rename (rpmtextlist_path_new, rpmtextlist_path,
+                         cancellable, error))
       goto out;
   }
 

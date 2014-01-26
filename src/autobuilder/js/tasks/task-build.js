@@ -58,6 +58,7 @@ const TaskBuild = new Lang.Class({
 	    repos.push.apply(repos, addRepos);
 
 	let packages = treeData['packages'];
+	let bootstrapBase = this._productData['bootstrap_base'];
 	let baseRequired = this._productData['base_required_packages'];
 	packages.push.apply(packages, baseRequired);
 
@@ -69,6 +70,7 @@ const TaskBuild = new Lang.Class({
 
 	let argv = ['rpm-ostree',
 		    '--workdir=' + this.workdir.get_path()];
+	argv.push.apply(argv, bootstrapBase.map(function (a) { return '--bootstrap-package=' + a; }));
 	argv.push.apply(argv, repos.map(function (a) { return '--enablerepo=' + a; }));
 	argv.push.apply(argv, ['create', ref]);
 	argv.push.apply(argv, packages);
