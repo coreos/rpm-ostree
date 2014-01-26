@@ -512,7 +512,7 @@ const TestOneDisk = new Lang.Class({
         }
 
         if (this._failed) {
-            throw new Error(this._failedMessage);
+            return this._failedMessage;
         }
 
         print("Completed testing of " + diskPath.get_basename());
@@ -640,7 +640,8 @@ const TestBase = new Lang.Class({
         this._productsBuilt = JsonUtil.loadJson(this.builddir.get_child('products-built.json'), cancellable);
         let productTrees = this._productsBuilt['trees'];
         for (let ref in productTrees) {
-            let snapshotDisk = this.getDiskSnapshotForRevision(ref, productTrees[ref], cancellable);
+            let revision = productTrees[ref];
+            let snapshotDisk = this.getDiskSnapshotForRevision(ref, revision, cancellable);
 	          let refUnix = ref.replace(/\//g, '-');
             let refWorkdir = Gio.File.new_for_path('work-' + refUnix);
             GSystem.file_ensure_directory(refWorkdir, true, cancellable);
@@ -648,8 +649,11 @@ const TestBase = new Lang.Class({
                                        this.BaseRequiredMessageIDs.concat(this.RequiredMessageIDs),
                                        this.BaseFailedMessageIDs.concat(this.FailedMessageIDs),
                                        this.StatusMessageID);
-            test.execute(refWorkdir, this._products['osname'], this.repo,
-                         snapshotDisk, cancellable);
+            let failedMsg = test.execute(refWorkdir, this._products['osname'], this.repo,
+                                         snapshotDisk, cancellable);
+            if (failedMsg) {
+                print("Testing of " + ref + " at " + revision + " failed");
+            }
         }
     }
 });
