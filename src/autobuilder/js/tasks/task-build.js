@@ -87,7 +87,7 @@ const TaskBuild = new Lang.Class({
 	    print("Build of " + productName + " failed");
 	    return [this.BuildState.failed, origRevision];
 	}
-	let [,newRevision] = this.ostreeRepo.resolve_rev(ref, false);
+	let [,newRevision] = this.ostreeRepo.resolve_rev(ref, true);
 	if (origRevision == newRevision)
 	    return [this.BuildState.unchanged, newRevision];
 	return [this.BuildState.successful, newRevision];
