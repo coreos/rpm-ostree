@@ -516,6 +516,7 @@ const TestOneDisk = new Lang.Class({
         }
 
         print("Completed testing of " + diskPath.get_basename());
+        return null;
     }
 });
 
