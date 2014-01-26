@@ -582,7 +582,7 @@ const TestBase = new Lang.Class({
         let osname = this._products['osname'];
         let originRepoUrl = this._products['repo'];
 
-        let snapshotPath = this.builddir.get_child('overlay-' + revision + '.qcow2');
+        let snapshotPath = Gio.File.new_for_path('overlay-' + revision + '.qcow2');
 
 	      let refUnix = ref.replace(/\//g, '-');
         let diskDir = this._imageCacheDir.get_child(refUnix);
