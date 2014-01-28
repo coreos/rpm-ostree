@@ -337,6 +337,99 @@ do_kernel_prep (GFile         *yumroot,
   return ret;
 }
 
+static gboolean
+convert_var_to_tmpfiles_d (GOutputStream *tmpfiles_out,
+                           GFile         *yumroot,
+                           GFile         *dir,
+                           GCancellable  *cancellable,
+                           GError       **error)
+{
+  gboolean ret = FALSE;
+  gs_unref_object GFileEnumerator *direnum = NULL;
+  gsize bytes_written;
+
+  direnum = g_file_enumerate_children (dir, "standard::name,standard::type,unix::mode,standard::symlink-target,unix::uid,unix::gid",
+                                       G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
+                                       cancellable, error);
+  if (!direnum)
+    {
+      g_prefix_error (error, "Enumerating /var in '%s'", gs_file_get_path_cached (dir));
+      goto out;
+    }
+
+  while (TRUE)
+    {
+      GFileInfo *file_info;
+      GFile *child;
+      GString *tmpfiles_d_buf;
+      gs_free char *tmpfiles_d_line = NULL;
+      char filetype_c;
+      gs_free char *relpath = NULL;
+
+      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
+                                       cancellable, error))
+        goto out;
+      if (!file_info)
+        break;
+
+      switch (g_file_info_get_file_type (file_info))
+        {
+        case G_FILE_TYPE_DIRECTORY:
+          filetype_c = 'd';
+          break;
+        case G_FILE_TYPE_SYMBOLIC_LINK:
+          filetype_c = 'L';
+          break;
+        default:
+          g_warning ("Ignoring non-directory/non-symlink '%s'",
+                     gs_file_get_path_cached (child));
+          continue;
+        }
+
+      tmpfiles_d_buf = g_string_new ("");
+      g_string_append_c (tmpfiles_d_buf, filetype_c);
+      g_string_append_c (tmpfiles_d_buf, ' ');
+
+      relpath = g_file_get_relative_path (yumroot, child);
+      g_assert (relpath);
+      
+      g_string_append_c (tmpfiles_d_buf, '/');
+      g_string_append (tmpfiles_d_buf, relpath);
+
+      if (filetype_c == 'd')
+        {
+          guint mode = g_file_info_get_attribute_uint32 (file_info, "unix::mode");
+          mode &= ~S_IFMT;
+          g_string_append_printf (tmpfiles_d_buf, " 0%02o", mode);
+          g_string_append_printf (tmpfiles_d_buf, " %d %d - -",
+                                  g_file_info_get_attribute_uint32 (file_info, "unix::uid"),
+                                  g_file_info_get_attribute_uint32 (file_info, "unix::gid"));
+
+          if (!convert_var_to_tmpfiles_d (tmpfiles_out, yumroot, child,
+                                          cancellable, error))
+            goto out;
+        }
+      else
+        {
+          g_string_append (tmpfiles_d_buf, " - - - - ");
+          g_string_append (tmpfiles_d_buf, g_file_info_get_symlink_target (file_info));
+        }
+
+      g_string_append_c (tmpfiles_d_buf, '\n');
+
+      tmpfiles_d_line = g_string_free (tmpfiles_d_buf, FALSE);
+
+      if (!g_output_stream_write_all (tmpfiles_out, tmpfiles_d_line,
+                                      strlen (tmpfiles_d_line), &bytes_written,
+                                      cancellable, error))
+        goto out;
+    }
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
 /* Prepare a root filesystem, taking mainly the contents of /usr from yumroot */
 static gboolean 
 create_rootfs_from_yumroot_content (GFile         *targetroot,
@@ -400,6 +493,35 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
       g_file_resolve_relative_path (targetroot, "usr/share/rpm");
 
     if (!gs_file_rename (legacyrpm_path, newrpm_path, cancellable, error))
+      goto out;
+  }
+
+  /* Remove /var/lib/yum; we don't want it here. */
+  {
+    gs_unref_object GFile *yumroot_yumlib = g_file_get_child (yumroot, "var/lib/yum");
+
+    if (!gs_shutil_rm_rf (yumroot_yumlib, cancellable, error))
+      goto out;
+  }
+
+  {
+    gs_unref_object GFile *yumroot_var = g_file_get_child (yumroot, "var");
+    gs_unref_object GFile *rpmostree_tmpfiles_path =
+      g_file_resolve_relative_path (targetroot, "usr/lib/tmpfiles.d/rpm-ostree-autovar.conf");
+    gs_unref_object GFileOutputStream *tmpfiles_out =
+      g_file_create (rpmostree_tmpfiles_path,
+                     G_FILE_CREATE_REPLACE_DESTINATION,
+                     cancellable, error);
+
+    if (!tmpfiles_out)
+      goto out;
+
+    
+    if (!convert_var_to_tmpfiles_d ((GOutputStream*)tmpfiles_out, yumroot, yumroot_var,
+                                    cancellable, error))
+      goto out;
+
+    if (!g_output_stream_close ((GOutputStream*)tmpfiles_out, cancellable, error))
       goto out;
   }
 
