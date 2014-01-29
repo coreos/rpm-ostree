@@ -15,11 +15,17 @@
     "base_required_packages": ["kernel", "ostree", "fedora-release", "lvm2",
 			       "btrfs-progs", "e2fsprogs", "xfsprogs"],
 
+    "postprocess": ["remove-root-password"],
+
     "products":
     {
 	"core":
 	{
-	    "docker": { "packages": ["docker-io", "NetworkManager"] },
+	    "docker": { "packages": ["docker-io", "NetworkManager"],
+		        "postprocess": ["remove-locales",
+				        "remove-gpu-drivers",
+				        "remove-docs"]
+		      },
 	},
 	"server":
 	{

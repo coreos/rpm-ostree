@@ -1,0 +1,4 @@
+#!/bin/sh
+set -e
+rm -rf ./usr/lib/modules/*/kernel/drivers/gpu/drm/{nouveau,i915,radeon}
+

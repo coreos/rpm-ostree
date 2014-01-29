@@ -30,11 +30,15 @@
 static char **opt_enable_repos;
 static char *opt_workdir;
 static char **opt_bootstrap_packages;
+static char **opt_internal_postprocessing;
+static char **opt_external_postprocessing;
 
 static GOptionEntry option_entries[] = {
   { "bootstrap-package", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_bootstrap_packages, "Install this package first", "PACKAGE" },
   { "enablerepo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_enable_repos, "Repositories to enable", "REPO" },
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "REPO" },
+  { "post", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_internal_postprocessing, "Run this builtin postprocessing step before commit", "NAME" },
+  { "xpost", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_external_postprocessing, "Run this external script on rootfs before committing", "PATH" },
   { NULL }
 };
 
@@ -378,6 +382,7 @@ main (int     argc,
   GOptionContext *context = g_option_context_new ("- Run yum and commit the result to an OSTree repository");
   const char *cmd;
   const char *ref;
+  char **strviter;
   gs_free char *ref_unix = NULL;
   gs_unref_object GFile *cachedir = NULL;
   gs_unref_object GFile *yumroot = NULL;
@@ -603,6 +608,40 @@ main (int     argc,
                          cancellable, error))
       goto out;
 
+    if (!rpmostree_postprocess (yumroot, cancellable, error))
+      goto out;
+
+    for (strviter = opt_internal_postprocessing; strviter && *strviter; strviter++)
+      {
+        const char *post_name = *strviter;
+        gs_unref_object GFile *pkglibdir = g_file_new_for_path (PKGLIBDIR);
+        gs_unref_object GFile *pkglibdir_posts = g_file_get_child (pkglibdir, "postprocessing");
+        gs_unref_object GFile *post_path = g_file_get_child (pkglibdir_posts, post_name);
+
+        g_print ("Running internal postprocessing command '%s'\n",
+                 gs_file_get_path_cached (post_path));
+        if (!gs_subprocess_simple_run_sync (gs_file_get_path_cached (yumroot),
+                                            GS_SUBPROCESS_STREAM_DISPOSITION_NULL,
+                                            cancellable, error,
+                                            gs_file_get_path_cached (post_path),
+                                            NULL))
+          goto out;
+      }
+
+    for (strviter = opt_external_postprocessing; strviter && *strviter; strviter++)
+      {
+        const char *post_path = *strviter;
+
+        g_print ("Running external postprocessing command '%s'\n",
+                 post_path);
+        if (!gs_subprocess_simple_run_sync (gs_file_get_path_cached (yumroot),
+                                            GS_SUBPROCESS_STREAM_DISPOSITION_NULL,
+                                            cancellable, error,
+                                            post_path,
+                                            NULL))
+          goto out;
+      }
+
     {
       gs_unref_object GFile *repo_path = g_file_new_for_path ("repo");
       repo = ostree_repo_new (repo_path);
@@ -611,11 +650,10 @@ main (int     argc,
     if (!ostree_repo_open (repo, cancellable, error))
       goto out;
 
-    if (!rpmostree_postprocess_and_commit (yumroot, repo,
-                                           ref, NULL,
-                                           cancellable, error))
+    if (!rpmostree_commit (yumroot, repo, ref, NULL,
+                           cancellable, error))
       goto out;
- 
+
     if (!gs_file_rename (rpmtextlist_path_new, rpmtextlist_path,
                          cancellable, error))
       goto out;

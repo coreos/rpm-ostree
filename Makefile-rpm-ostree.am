@@ -30,4 +30,9 @@ privdatadir=$(pkglibdir)
 privdata_DATA = src/tmpfiles-ostree-integration.conf
 
 internal_postscriptdir = $(pkglibdir)/postprocessing/
-internal_postscript_SCRIPTS = src/postprocessing/remove-root-password
+internal_postscript_SCRIPTS = $(addprefix src/postprocessing/, \
+	remove-docs \
+	remove-gpu-drivers \
+	remove-locales \
+	remove-root-password \
+	$(NULL))

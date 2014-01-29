@@ -62,6 +62,18 @@ const TaskBuild = new Lang.Class({
 	let baseRequired = this._productData['base_required_packages'];
 	packages.push.apply(packages, baseRequired);
 
+	let postprocessSteps = this._productData['postprocess'];
+	if (postprocessSteps === undefined)
+	    postprocessSteps = [];
+	else
+	    print("Using master postprocessing " + JSON.stringify(postprocessSteps));
+
+	let treePostprocess = treeData['postprocess'];
+	if (treePostprocess) {
+	    print("Appending postprocessing " + JSON.stringify(treePostprocess));
+	    postprocessSteps.push.apply(postprocessSteps, treePostprocess);
+	}
+
 	let [,origRevision] = this.ostreeRepo.resolve_rev(ref, true);
 	if (origRevision == null)
 	    print("Starting new build of " + ref);
@@ -72,6 +84,7 @@ const TaskBuild = new Lang.Class({
 		    '--workdir=' + this.workdir.get_path()];
 	argv.push.apply(argv, bootstrapBase.map(function (a) { return '--bootstrap-package=' + a; }));
 	argv.push.apply(argv, repos.map(function (a) { return '--enablerepo=' + a; }));
+	argv.push.apply(argv, postprocessSteps.map(function (a) { return '--post=' + a; }));
 	argv.push.apply(argv, ['create', ref]);
 	argv.push.apply(argv, packages);
 	let productNameUnix = ref.replace(/\//g, '_');

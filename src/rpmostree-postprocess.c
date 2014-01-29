@@ -566,25 +566,16 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
 }
 
 gboolean
-rpmostree_postprocess_and_commit (GFile         *rootfs,
-                                  OstreeRepo    *repo,
-                                  const char    *refname,
-                                  const char    *gpg_keyid,
-                                  GCancellable  *cancellable,
-                                  GError       **error)
+rpmostree_postprocess (GFile         *rootfs,
+                       GCancellable  *cancellable,
+                       GError       **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object GFile *root_tree = NULL;
   gs_unref_object GFile *rootfs_tmp = NULL;
-  gs_unref_object OstreeMutableTree *mtree = NULL;
-  OstreeRepoCommitModifier *commit_modifier = NULL;
-  gs_free char *parent_revision = NULL;
-  gs_free char *new_revision = NULL;
+  gs_free char *rootfs_tmp_path = NULL;
 
-  {
-    gs_free char *rootfs_tmp_path = g_strconcat (gs_file_get_path_cached (rootfs), ".tmp", NULL);
-    rootfs_tmp = g_file_new_for_path (rootfs_tmp_path);
-  }
+  rootfs_tmp_path = g_strconcat (gs_file_get_path_cached (rootfs), ".tmp", NULL);
+  rootfs_tmp = g_file_new_for_path (rootfs_tmp_path);
 
   if (!gs_shutil_rm_rf (rootfs_tmp, cancellable, error))
     goto out;
@@ -596,6 +587,26 @@ rpmostree_postprocess_and_commit (GFile         *rootfs,
     goto out;
   if (!gs_file_rename (rootfs_tmp, rootfs, cancellable, error))
     goto out;
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+gboolean
+rpmostree_commit (GFile         *rootfs,
+                  OstreeRepo    *repo,
+                  const char    *refname,
+                  const char    *gpg_keyid,
+                  GCancellable  *cancellable,
+                  GError       **error)
+{
+  gboolean ret = FALSE;
+  gs_unref_object OstreeMutableTree *mtree = NULL;
+  OstreeRepoCommitModifier *commit_modifier = NULL;
+  gs_free char *parent_revision = NULL;
+  gs_free char *new_revision = NULL;
+  gs_unref_object GFile *root_tree = NULL;
   
   // To make SELinux work, we need to do the labeling right before this.
   // This really needs some sort of API, so we can apply the xattrs as

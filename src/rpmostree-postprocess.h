@@ -23,9 +23,14 @@
 #include <ostree.h>
 
 gboolean
-rpmostree_postprocess_and_commit (GFile         *rootfs,
-                                  OstreeRepo    *repo,
-                                  const char    *refname,
-                                  const char    *gpg_keyid,
-                                  GCancellable  *cancellable,
-                                  GError       **error);
+rpmostree_postprocess (GFile         *rootfs,
+                       GCancellable  *cancellable,
+                       GError       **error);
+
+gboolean
+rpmostree_commit (GFile         *rootfs,
+                  OstreeRepo    *repo,
+                  const char    *refname,
+                  const char    *gpg_keyid,
+                  GCancellable  *cancellable,
+                  GError       **error);
