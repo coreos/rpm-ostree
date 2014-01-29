@@ -608,6 +608,9 @@ main (int     argc,
                          cancellable, error))
       goto out;
 
+    if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
+      goto out;
+
     if (!rpmostree_postprocess (yumroot, cancellable, error))
       goto out;
 
