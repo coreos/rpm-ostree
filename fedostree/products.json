@@ -17,14 +17,13 @@
 
     "products":
     {
-	"base":
+	"core":
 	{
-	    "minimal": { "packages": ["@core"] }
+	    "docker": { "packages": ["docker-io", "NetworkManager"] },
 	},
 	"server":
 	{
 	    "docker-io": { "packages": ["@core", "@standard", "NetworkManager-config-server", "docker-io"] },
-	    "freeipa": { "packages": ["@core", "@standard", "NetworkManager-config-server", "freeipa-server"] },
 	    "jbossas": { "packages": ["@core", "@standard", "NetworkManager-config-server", "@jbossas"] },
 	    "virthost": { "packages": ["@core", "@standard", "NetworkManager-config-server",
 				       "libvirt-daemon-kvm",
@@ -35,7 +34,6 @@
 	"workstation":
 	{
 	    "gnome/core": { "packages":  ["@standard", "@gnome-desktop"] },
-	    "gnome/basic": { "packages": ["@standard", "@gnome-desktop", "@firefox", "@gnome-games", "@libreoffice"] },
 	    "gnome/development-virt": { "packages": ["@standard", "@gnome-desktop", "@firefox", "@gnome-games", "@libreoffice", "@virtualization", "@development-tools"] }
 	}
     }
