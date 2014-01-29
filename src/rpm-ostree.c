@@ -23,7 +23,8 @@
 #include <string.h>
 #include <glib-unix.h>
 
-#include <ostree.h>
+#include "rpmostree-postprocess.h"
+
 #include "libgsystem.h"
 
 static char **opt_enable_repos;
@@ -384,6 +385,7 @@ main (int     argc,
   gs_unref_object GFile *yumcachedir = NULL;
   gs_unref_object GFile *yumcache_lookaside = NULL;
   gs_unref_object GFile *yumroot_varcache = NULL;
+  gs_unref_object OstreeRepo *repo = NULL;
   gs_unref_ptrarray GPtrArray *all_packages = NULL;
   
   g_option_context_add_main_entries (context, option_entries, NULL);
@@ -602,24 +604,18 @@ main (int     argc,
       goto out;
 
     {
+      gs_unref_object GFile *repo_path = g_file_new_for_path ("repo");
+      repo = ostree_repo_new (repo_path);
     }
-  
-    {
-      /* OSTree commit messages aren't really useful. */
-      const char *commit_message = "";
-      if (!gs_subprocess_simple_run_sync (NULL,
-                                          GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                          cancellable,
-                                          error,
-                                          "rpm-ostree-postprocess-and-commit",
-                                          "--repo=repo",
-                                          "-m", commit_message,
-                                          gs_file_get_path_cached (yumroot),
-                                          ref,
-                                          NULL))
-        goto out;
-    }
+    
+    if (!ostree_repo_open (repo, cancellable, error))
+      goto out;
 
+    if (!rpmostree_postprocess_and_commit (yumroot, repo,
+                                           ref, NULL,
+                                           cancellable, error))
+      goto out;
+ 
     if (!gs_file_rename (rpmtextlist_path_new, rpmtextlist_path,
                          cancellable, error))
       goto out;

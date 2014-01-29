@@ -22,19 +22,8 @@
 
 #include "string.h"
 
-#include <ostree.h>
+#include "rpmostree-postprocess.h"
 #include "libgsystem.h"
-
-static char *opt_repo_path;
-static char *opt_message;
-static char *opt_gpg_sign_keyid;
-
-static GOptionEntry option_entries[] = {
-  { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo_path, "Path to OSTree repository", "REPO" },
-  { "message", 'm', 0, G_OPTION_ARG_STRING, &opt_message, "Commit message", "MESSAGE" },
-  { "gpg-sign", 0, 0, G_OPTION_ARG_STRING, &opt_gpg_sign_keyid, "Sign commit using GPG key", "KEYID" },
-  { NULL }
-};
 
 static gboolean
 move_to_dir (GFile        *src,
@@ -576,45 +565,26 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   return ret;
 }
 
-int
-main (int argc, char **argv)
+gboolean
+rpmostree_postprocess_and_commit (GFile         *rootfs,
+                                  OstreeRepo    *repo,
+                                  const char    *refname,
+                                  const char    *gpg_keyid,
+                                  GCancellable  *cancellable,
+                                  GError       **error)
 {
-  GError *local_error = NULL;
-  GError **error = &local_error;
-  const char *rootfs_path;
-  GCancellable *cancellable = NULL;
-  gs_free char *rootfs_tmp_path = NULL;
-  gs_free char *parent_revision = NULL;
-  gs_free char *new_revision = NULL;
-  gs_unref_object GFile *rootfs_tmp = NULL;
-  gs_unref_object GFile *rootfs = NULL;
+  gboolean ret = FALSE;
   gs_unref_object GFile *root_tree = NULL;
+  gs_unref_object GFile *rootfs_tmp = NULL;
   gs_unref_object OstreeMutableTree *mtree = NULL;
   OstreeRepoCommitModifier *commit_modifier = NULL;
-  gs_unref_object OstreeRepo *repo = NULL;
-  const char *refname;
-  GOptionContext *context = g_option_context_new ("- Commit the result of an RPM installroot to OSTree repository");
+  gs_free char *parent_revision = NULL;
+  gs_free char *new_revision = NULL;
 
-  g_option_context_add_main_entries (context, option_entries, NULL);
-
-  if (!g_option_context_parse (context, &argc, &argv, error))
-    goto out;
-
-  if (argc < 2)
-    {
-      g_printerr ("usage: %s ROOTFS_PATH REFNAME\n", argv[0]);
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Option processing failed");
-      goto out;
-    }
-
-  rootfs_path = argv[1];
-  refname = argv[2];
-
-  rootfs = g_file_new_for_path (rootfs_path);
-
-  rootfs_tmp_path = g_strconcat (rootfs_path, ".tmp", NULL);
-  rootfs_tmp = g_file_new_for_path (rootfs_tmp_path);
+  {
+    gs_free char *rootfs_tmp_path = g_strconcat (gs_file_get_path_cached (rootfs), ".tmp", NULL);
+    rootfs_tmp = g_file_new_for_path (rootfs_tmp_path);
+  }
 
   if (!gs_shutil_rm_rf (rootfs_tmp, cancellable, error))
     goto out;
@@ -627,19 +597,6 @@ main (int argc, char **argv)
   if (!gs_file_rename (rootfs_tmp, rootfs, cancellable, error))
     goto out;
   
-  if (opt_repo_path)
-    {
-      gs_unref_object GFile *repo_path = g_file_new_for_path (opt_repo_path);
-      repo = ostree_repo_new (repo_path);
-    }
-  else
-    {
-      repo = ostree_repo_new_default ();
-    }
-
-  if (!ostree_repo_open (repo, cancellable, error))
-    goto out;
-
   // To make SELinux work, we need to do the labeling right before this.
   // This really needs some sort of API, so we can apply the xattrs as
   // we're committing into the repo, rather than having to label the
@@ -659,14 +616,14 @@ main (int argc, char **argv)
   if (!ostree_repo_resolve_rev (repo, refname, TRUE, &parent_revision, error))
     goto out;
 
-  if (!ostree_repo_write_commit (repo, parent_revision, "", opt_message,
+  if (!ostree_repo_write_commit (repo, parent_revision, "", "",
                                  NULL, (OstreeRepoFile*)root_tree, &new_revision,
                                  cancellable, error))
     goto out;
 
-  if (opt_gpg_sign_keyid)
+  if (gpg_keyid)
     {
-      if (!ostree_repo_sign_commit (repo, new_revision, opt_gpg_sign_keyid, NULL,
+      if (!ostree_repo_sign_commit (repo, new_revision, gpg_keyid, NULL,
                                     cancellable, error))
         goto out;
     }
@@ -683,22 +640,7 @@ main (int argc, char **argv)
   else
     g_print ("Preserved %s\n", gs_file_get_path_cached (rootfs));
 
+  ret = TRUE;
  out:
-  if (local_error != NULL)
-    {
-      int is_tty = isatty (1);
-      const char *prefix = "";
-      const char *suffix = "";
-      if (is_tty)
-        {
-          prefix = "\x1b[31m\x1b[1m"; /* red, bold */
-          suffix = "\x1b[22m\x1b[0m"; /* bold off, color reset */
-        }
-      g_printerr ("%serror: %s%s\n", prefix, suffix, local_error->message);
-      g_error_free (local_error);
-      return 2;
-    }
-  else
-    return 0;
+  return ret;
 }
-  
