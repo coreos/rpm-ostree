@@ -26,9 +26,8 @@ rpm_ostree_SOURCES = src/rpm-ostree.c \
 rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libgsystem -I$(srcdir)/src -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_OSTREE_CFLAGS)
 rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_OSTREE_LIBS) libgsystem.la
 
-rpm_ostree_postprocess_and_commit_SOURCES = src/rpm-ostree-postprocess-and-commit.c
-rpm_ostree_postprocess_and_commit_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libgsystem -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_OSTREE_CFLAGS)
-rpm_ostree_postprocess_and_commit_LDADD = $(AM_LDFLAGS) $(PKGDEP_OSTREE_LIBS) libgsystem.la
-
 privdatadir=$(pkglibdir)
 privdata_DATA = src/tmpfiles-ostree-integration.conf
+
+internal_postscriptdir = $(pkglibdir)/postprocessing/
+internal_postscript_SCRIPTS = src/postprocessing/remove-root-password
