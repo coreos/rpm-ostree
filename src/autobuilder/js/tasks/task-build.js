@@ -98,6 +98,7 @@ const TaskBuild = new Lang.Class({
 	let productNameUnix = ref.replace(/\//g, '_');
 	let buildOutputPath = Gio.File.new_for_path('log-' + productNameUnix + '.txt');
 	
+	print("Running: " + argv.map(GLib.shell_quote).join(' '));
 	let procContext = new GSystem.SubprocessContext({ argv: argv });
 	GSystem.shutil_rm_rf(buildOutputPath, cancellable);
 	procContext.set_stdout_file_path(buildOutputPath.get_path());
