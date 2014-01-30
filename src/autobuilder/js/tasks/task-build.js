@@ -86,6 +86,13 @@ const TaskBuild = new Lang.Class({
 	argv.push.apply(argv, bootstrapBase.map(function (a) { return '--bootstrap-package=' + a; }));
 	argv.push.apply(argv, repos.map(function (a) { return '--enablerepo=' + a; }));
 	argv.push.apply(argv, postprocessSteps.map(function (a) { return '--post=' + a; }));
+
+	let keyId = this._productData['gpg_key'];
+	if (keyId) {
+	    print("Signing using " + keyId);
+	    argv.push('--gpg-sign=' + keyId);
+	}
+
 	argv.push.apply(argv, ['create', ref]);
 	argv.push.apply(argv, packages);
 	let productNameUnix = ref.replace(/\//g, '_');

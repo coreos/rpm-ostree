@@ -664,6 +664,7 @@ rpmostree_commit (GFile         *rootfs,
 
   if (gpg_keyid)
     {
+      g_print ("Signing commit %s with key %s\n", new_revision, gpg_keyid);
       if (!ostree_repo_sign_commit (repo, new_revision, gpg_keyid, NULL,
                                     cancellable, error))
         goto out;

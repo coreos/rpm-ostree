@@ -3,6 +3,8 @@
 
     "osname": "fedostree",
     "repo": "http://rpm-ostree.cloud.fedoraproject.org/repo",
+    
+    "gpg_key": "843833DF",
 
     "architectures": ["x86_64"],
 
