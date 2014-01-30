@@ -15,7 +15,8 @@
     "bootstrap_base": ["filesystem", "glibc", "nss-altfiles", "shadow-utils"],
 
     "base_required_packages": ["kernel", "ostree", "fedora-release", "lvm2",
-			       "btrfs-progs", "e2fsprogs", "xfsprogs"],
+			       "btrfs-progs", "e2fsprogs", "xfsprogs",
+			       "rpm-ostree-gpg-public-gpg-key", "gnupg2"],
 
     "postprocess": ["remove-root-password"],
 
