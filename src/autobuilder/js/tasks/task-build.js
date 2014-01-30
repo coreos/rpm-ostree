@@ -62,11 +62,12 @@ const TaskBuild = new Lang.Class({
 	let baseRequired = this._productData['base_required_packages'];
 	packages.push.apply(packages, baseRequired);
 
-	let postprocessSteps = this._productData['postprocess'];
-	if (postprocessSteps === undefined)
-	    postprocessSteps = [];
-	else
-	    print("Using master postprocessing " + JSON.stringify(postprocessSteps));
+	let postprocessSteps = [];
+	let masterPostprocessSteps = this._productData['postprocess'];
+	if (masterPostprocessSteps) {
+	    postprocessSteps.push.apply(postprocessSteps, masterPostprocessSteps);
+	    print("Using master postprocessing " + JSON.stringify(masterPostprocessSteps));
+	}
 
 	let treePostprocess = treeData['postprocess'];
 	if (treePostprocess) {
