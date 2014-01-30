@@ -24,7 +24,7 @@
 	    "docker": { "packages": ["docker-io", "NetworkManager", "vim-minimal", "nano"],
 		        "postprocess": ["remove-locales",
 				        "remove-gpu-drivers",
-				        "remove-docs"]
+				        "remove-docs"],
 			"disk": { "sizeMb": 1024,
 				  "bootsizeMb": 0,
 				  "swapsizeMb": 0 }
