@@ -104,7 +104,7 @@ function createDisk(diskpath, cancellable) {
 
     let guestfishProcess;
     
-    ProcUtil.runSync(['qemu-img', 'create', '-f', 'qcow2', diskpath.get_path(), '' + sizeMb + 'M'], cancellable);
+    ProcUtil.runSync(['qemu-img', 'create', '-o', 'compat=0.10', '-f', 'qcow2', diskpath.get_path(), '' + sizeMb + 'M'], cancellable);
     let gfHandle = Guestfs.Session.new();
     gfHandle.add_drive(diskpath.get_path(), null);
     gfHandle.launch();
