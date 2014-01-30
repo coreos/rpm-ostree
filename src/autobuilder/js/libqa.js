@@ -97,31 +97,7 @@ function newReadWriteMount(diskpath, cancellable) {
     return [gfmnt, mntdir];
 }
 
-function createDisk(diskpath, cancellable) {
-    let sizeMb = 8 * 1024;
-    let bootsizeMb = 200;
-    let swapsizeMb = 64;
-
-    let guestfishProcess;
-    
-    ProcUtil.runSync(['qemu-img', 'create', '-o', 'compat=0.10', '-f', 'qcow2', diskpath.get_path(), '' + sizeMb + 'M'], cancellable);
-    let gfHandle = Guestfs.Session.new();
-    gfHandle.add_drive(diskpath.get_path(), null);
-    gfHandle.launch();
-    gfHandle.part_init("/dev/sda", "mbr");
-    gfHandle.part_init("/dev/sda", "mbr");
-    let diskBytesize = gfHandle.blockdev_getsize64("/dev/sda");
-    let diskSectorsize = gfHandle.blockdev_getss("/dev/sda");
-    print(Format.vprintf("bytesize: %s sectorsize: %s", [diskBytesize, diskSectorsize]));
-    let bootsizeSectors = bootsizeMb * 1024 / diskSectorsize * 1024;
-    let swapsizeSectors = swapsizeMb * 1024 / diskSectorsize * 1024;
-    let rootsizeSectors = diskBytesize / diskSectorsize - bootsizeSectors - swapsizeSectors - 64;
-    print(Format.vprintf("boot: %s swap: %s root: %s", [bootsizeSectors, swapsizeSectors, rootsizeSectors]));
-    let bootOffset = 64;
-    let swapOffset = bootOffset + bootsizeSectors;
-    let rootOffset = swapOffset + swapsizeSectors;
-    let endOffset = rootOffset + rootsizeSectors;
-
+function _installSyslinux(gfHandle, cancellable) {
     let syslinuxPaths = ['/usr/share/syslinux/mbr.bin', '/usr/lib/syslinux/mbr.bin'].map(function (a) { return Gio.File.new_for_path(a); });
     let syslinuxPath = null;
     for (let i = 0; i < syslinuxPaths.length; i++) {
@@ -136,20 +112,67 @@ function createDisk(diskpath, cancellable) {
 
     let [,syslinuxData,] = syslinuxPath.load_contents(cancellable);
 
-    gfHandle.part_add("/dev/sda", "p", bootOffset, swapOffset - 1);
-    gfHandle.part_add("/dev/sda", "p", swapOffset, rootOffset - 1);
+    gfHandle.pwrite_device("/dev/sda", syslinuxData, 0);
+}
+
+function createDisk(diskpath, cancellable, params) {
+    params = Params.parse(params, { sizeMb: 8 * 1024,
+				    bootsizeMb: 200,
+				    swapsizeMb: 64 });
+    let guestfishProcess;
+    
+    ProcUtil.runSync(['qemu-img', 'create', '-o', 'compat=0.10', '-f', 'qcow2', diskpath.get_path(), '' + params.sizeMb + 'M'], cancellable);
+    let gfHandle = Guestfs.Session.new();
+    gfHandle.add_drive(diskpath.get_path(), null);
+    gfHandle.launch();
+    gfHandle.part_init("/dev/sda", "mbr");
+    let diskBytesize = gfHandle.blockdev_getsize64("/dev/sda");
+    let diskSectorsize = gfHandle.blockdev_getss("/dev/sda");
+    print(Format.vprintf("bytesize: %s sectorsize: %s", [diskBytesize, diskSectorsize]));
+    let bootsizeSectors = 0;
+    if (params.bootsizeMb)
+	bootsizeSectors = params.bootsizeMb * 1024 / diskSectorsize * 1024;
+    let swapsizeSectors = 0;
+    if (params.swapsizeMb)
+	swapsizeSectors = params.swapsizeMb * 1024 / diskSectorsize * 1024;
+    let rootsizeSectors = diskBytesize / diskSectorsize - bootsizeSectors - swapsizeSectors - 64;
+    print(Format.vprintf("boot: %s swap: %s root: %s", [bootsizeSectors, swapsizeSectors, rootsizeSectors]));
+    let bootOffset = 64;
+    let swapOffset = bootOffset + bootsizeSectors;
+    let rootOffset = swapOffset + swapsizeSectors;
+    let endOffset = rootOffset + rootsizeSectors;
+
+    let bootPartitionOffset = -1
+    let swapPartitionOffset = -1;
+    let rootPartitionOffset = 1;
+    if (bootsizeSectors > 0) {
+	gfHandle.part_add("/dev/sda", "p", bootOffset, swapOffset - 1);
+	bootPartitionOffset = 1;
+	rootPartitionOffset++;
+    }
+    if (swapsizeSectors > 0) {
+	gfHandle.part_add("/dev/sda", "p", swapOffset, rootOffset - 1);
+	swapPartitionOffset = 2;
+	rootPartitionOffset++;
+    }
     gfHandle.part_add("/dev/sda", "p", rootOffset, endOffset - 1);
-    gfHandle.mkfs("ext4", "/dev/sda1", null);
-    gfHandle.set_e2uuid("/dev/sda1", BOOT_UUID);
-    gfHandle.mkswap_U(SWAP_UUID, "/dev/sda2");
-    gfHandle.mkfs("ext4", "/dev/sda3", null);
-    gfHandle.set_e2uuid("/dev/sda3", ROOT_UUID);
-    gfHandle.mount("/dev/sda3", "/");
+    if (bootsizeSectors > 0) {
+	gfHandle.mkfs("ext4", "/dev/sda" + bootPartitionOffset, null);
+	gfHandle.set_e2uuid("/dev/sda1", BOOT_UUID);
+    }
+    if (swapsizeSectors > 0) {
+	gfHandle.mkswap_U(SWAP_UUID, "/dev/sda" + swapPartitionOffset);
+    }
+    let rootPartition = "/dev/sda" + rootPartitionOffset;
+    gfHandle.mkfs("ext4", rootPartition, null);
+    gfHandle.set_e2uuid(rootPartition, ROOT_UUID);
+    gfHandle.mount(rootPartition, "/");
     gfHandle.mkdir_mode("/boot", 493);
-    gfHandle.mount("/dev/sda1", "/boot");
+    if (bootPartitionOffset > 0)
+	gfHandle.mount("/dev/sda" + bootPartitionOffset, "/boot");
     gfHandle.extlinux("/boot");
     gfHandle.umount_all();
-    gfHandle.pwrite_device("/dev/sda", syslinuxData, 0);
+    _installSyslinux(gfHandle, cancellable);
     gfHandle.part_set_bootable("/dev/sda", 1, true);
     gfHandle.shutdown();
 }

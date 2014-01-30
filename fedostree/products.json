@@ -25,6 +25,9 @@
 		        "postprocess": ["remove-locales",
 				        "remove-gpu-drivers",
 				        "remove-docs"]
+			"disk": { "sizeMb": 1024,
+				  "bootsizeMb": 0,
+				  "swapsizeMb": 0 }
 		      },
 	},
 	"server":
