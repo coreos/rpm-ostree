@@ -21,7 +21,7 @@
     {
 	"core":
 	{
-	    "docker": { "packages": ["docker-io", "NetworkManager"],
+	    "docker": { "packages": ["docker-io", "NetworkManager", "vim-minimal", "nano"],
 		        "postprocess": ["remove-locales",
 				        "remove-gpu-drivers",
 				        "remove-docs"]
