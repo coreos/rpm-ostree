@@ -28,7 +28,7 @@
 			"disk": { "sizeMb": 1024,
 				  "bootsizeMb": 0,
 				  "swapsizeMb": 0 }
-		      },
+		      }
 	},
 	"server":
 	{
