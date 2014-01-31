@@ -151,13 +151,14 @@ const TaskBuild = new Lang.Class({
 	let failed = [];
 	let unchanged = [];
 	let productTrees = {};
+	let buildmasterName = 'buildmaster';
 	for (let i = 0; i < releases.length; i++) {
 	    for (let j = 0; j < architectures.length; j++) {
 		for (let productName in products) {
 		    for (let treeName in products[productName]) {
 			let release = releases[i];
 			let architecture = architectures[j];
-			let ref = [this._productData['osname'], release, architecture, productName, treeName].join('/');
+			let ref = [this._productData['osname'], release, architecture, buildmasterName, productName, treeName].join('/');
 			if (this.parameters.onlyTreesMatching &&
 			    ref.indexOf(this.parameters.onlyTreesMatching) == -1) {
 			    log("Skipping " + ref + " which does not match " + this.parameters.onlyTreesMatching);
