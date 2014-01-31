@@ -23,8 +23,8 @@ rpm_ostree_SOURCES = src/rpm-ostree.c \
 	src/rpmostree-postprocess.h \
 	src/rpmostree-postprocess.c \
 	$(NULL)
-rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libgsystem -I$(srcdir)/src -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_OSTREE_CFLAGS)
-rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_OSTREE_LIBS) libgsystem.la
+rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libgsystem -I$(srcdir)/src -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
+rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS) libgsystem.la
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/tmpfiles-ostree-integration.conf

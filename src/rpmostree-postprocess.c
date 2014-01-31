@@ -23,6 +23,10 @@
 #include "string.h"
 
 #include "rpmostree-postprocess.h"
+#include <ostree.h>
+#include <errno.h>
+#include <selinux/selinux.h>
+#include <selinux/label.h>
 #include "libgsystem.h"
 
 static gboolean
@@ -595,6 +599,88 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   return ret;
 }
 
+static GVariant *
+xattr_cb (OstreeRepo    *repo,
+          const char    *path,
+          GFileInfo     *file_info,
+          gpointer       user_data)
+{
+  guint32 mode;
+  char *con;
+  int res;
+  GVariantBuilder builder;
+  GVariant *ret;
+  struct selabel_handle *hnd = user_data;
+
+  mode = g_file_info_get_attribute_uint32 (file_info, "unix::mode");
+
+  res = selabel_lookup_raw (hnd, &con, path, mode);
+  if (res != 0)
+    return NULL;
+
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ayay)"));
+  g_variant_builder_add (&builder, "(@ay@ay)",
+                         g_variant_new_bytestring ("security.selinux"),
+                         g_variant_new_bytestring (con));
+
+  freecon (con);
+
+  ret = g_variant_builder_end (&builder);
+  g_variant_ref_sink (ret);
+  return ret;
+}
+
+static char *
+selinux_type_from_config (GFile *config_path,
+                          GCancellable *cancellable,
+                          GError **error)
+{
+  gboolean success = FALSE;
+  gs_unref_object GFileInputStream *filein = NULL;
+  gs_unref_object GDataInputStream *datain = NULL;
+  char *ret = NULL;
+  const char *selinuxtype_prefix = "SELINUXTYPE=";
+
+  filein = g_file_read (config_path, cancellable, error);
+  if (!filein)
+    goto out;
+
+  datain = g_data_input_stream_new ((GInputStream*)filein);
+
+  while (TRUE)
+    {
+      gsize len;
+      GError *temp_error = NULL;
+      gs_free char *line = g_data_input_stream_read_line_utf8 (datain, &len,
+                                                               cancellable, &temp_error);
+      
+      if (temp_error)
+        {
+          g_propagate_error (error, temp_error);
+          goto out;
+        }
+
+      if (!line)
+        break;
+
+      
+      if (!g_str_has_prefix (line, selinuxtype_prefix))
+        continue;
+
+      ret = g_strstrip (g_strdup (line + strlen (selinuxtype_prefix))); 
+      break;
+    }
+
+  success = TRUE;
+ out:
+  if (!success)
+    {
+      g_free (ret);
+      return NULL;
+    }
+  return ret;
+}
+
 gboolean
 rpmostree_postprocess (GFile         *rootfs,
                        GCancellable  *cancellable,
@@ -638,17 +724,59 @@ rpmostree_commit (GFile         *rootfs,
   gs_free char *new_revision = NULL;
   gs_unref_object GFile *root_tree = NULL;
   
-  // To make SELinux work, we need to do the labeling right before this.
-  // This really needs some sort of API, so we can apply the xattrs as
-  // we're committing into the repo, rather than having to label the
-  // physical FS.
-  // For now, no xattrs (and hence no SELinux =( )
+  /* hardcode targeted policy for now */
+  {
+    gs_unref_object GFile *usr_etc_selinux = g_file_resolve_relative_path (rootfs, "usr/etc/selinux");
+    gs_unref_object GFile *usr_etc_selinux_config = g_file_resolve_relative_path (usr_etc_selinux, "config");
+    gs_unref_object GFile *selinux_root = NULL;
+    gs_free char *selinux_config_type = NULL;
+
+    if (g_file_query_exists (usr_etc_selinux_config, NULL))
+      {
+        selinux_config_type = selinux_type_from_config (usr_etc_selinux_config,
+                                                        cancellable, error);
+        if (!selinux_config_type)
+          {
+            g_prefix_error (error, "Failed to read SELINUXTYPE= from '%s': ",
+                            gs_file_get_path_cached (usr_etc_selinux_config));
+            goto out;
+          }
+
+        g_print ("Detected SELINUXTYPE=%s\n", selinux_config_type);
+        selinux_root = g_file_get_child (usr_etc_selinux, selinux_config_type);
+      }
+
+    if (selinux_root)
+      {
+        g_print ("Setting policy root: %s\n",
+                 gs_file_get_path_cached (selinux_root));
+        if (selinux_set_policy_root (gs_file_get_path_cached (selinux_root)) != 0)
+          {
+            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                         "selinux_set_policy_root(%s): %s",
+                         gs_file_get_path_cached (selinux_root),
+                         strerror (errno));
+            goto out;
+          }
+      }
+  }
+
   g_print ("Committing '%s' ...\n", gs_file_get_path_cached (rootfs));
   if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
     goto out;
 
   mtree = ostree_mutable_tree_new ();
-  commit_modifier = ostree_repo_commit_modifier_new (OSTREE_REPO_COMMIT_MODIFIER_FLAGS_SKIP_XATTRS, NULL, NULL, NULL);
+  commit_modifier = ostree_repo_commit_modifier_new (0, NULL, NULL, NULL);
+  {
+    struct selabel_handle *hnd = selabel_open (SELABEL_CTX_FILE, NULL, 0);
+    if (!hnd)
+      {
+        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                     "Failed selabel_open(): %s", strerror (errno));
+        goto out;
+      }
+    ostree_repo_commit_modifier_set_xattr_callback (commit_modifier, xattr_cb, NULL, hnd);
+  }
   if (!ostree_repo_write_directory_to_mtree (repo, rootfs, mtree, commit_modifier, cancellable, error))
     goto out;
   if (!ostree_repo_write_mtree (repo, mtree, &root_tree, cancellable, error))
