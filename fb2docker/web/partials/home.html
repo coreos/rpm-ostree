@@ -1,0 +1,35 @@
+<article>
+  <h1>B2Docker Fedora Remix</h1>
+  <blockquote>A fast moving, minimized operating system acting as a
+    <a href="http://www.docker.io/">Docker</a> host.</blockquote>
+  <img src="fedora-remix.png">
+  <h3>Features</h3>
+  <ul>
+    <li>Tracking latest Docker builds and testing</li>
+    <li>Built using Fedora RPM technology on the server side for a
+      known base, but
+      with <a href="http://live.gnome.org/Projects/OSTree">OSTree</a>
+      on the client side for <i>fully atomic</i> upgrades.
+    </li>
+    <li>A familiar Unix environment, with a writable <tt>etc</tt></li>
+    <li>The ability to choose between multiple variant trees, with
+        additional RPM content.</li>
+  </ul>
+  <h3>Installation</h3>
+  <p>The latest release is 20140131.0.</p>
+  <p>QEMU (qcow2):</p>
+  <p>VirtualBox: </p>
+  <p>Vagrant: </p>
+  <p>Inside the system, use <tt>ostree admin upgrade</tt> to download
+    the latest code, and then <tt>reboot</tt>.  Upgrades are GPG
+    signed for security.
+  </p>
+  <h3>News</h3>
+  <p>Fri Jan 31 21:44:57 UTC 2014: Project is created.</p>
+  <h3>Source code</h3>
+  <p>All source code used for this project
+  is <a href="https://www.gnu.org/philosophy/free-sw.html">Free
+  Software</a>.  You can find
+  the <a href="https://github.com/cgwalters/rpm-ostree">build server
+  source</a> here.</p>
+</article>

@@ -1,0 +1,132 @@
+<article>
+  <h1>Installation</h1>
+  <p>It is recommended currently to only use fedostree inside a
+     non-essential, disposable virtual machine (or a similar physical
+     machine).  While OSTree is carefully engineered to be safe, there
+     is the fact that at the moment the binaries are not GPG signed
+     nor is TLS not provided on the current server.
+   </p>
+  <h3>Installation instructions (install preconfigured VM)</h3>
+  <p>If you just want to experiment with complete safety, a prebuilt
+     VM image is provided <a href="http://rpm-ostree.cloud.fedoraproject.org/images/">here</a>.
+     It's called <tt>fedostree-f20-demo.img.xz</tt>.  To install, you must
+     first uncompress it with <tt>xz -d fedostree-f20-demo.img.xz</tt>.  Then
+     using e.g. <tt>virt-manager</tt>, choose "Import existing disk image".
+  </p>
+  <p>IMPORTANT: This system contains <b>both</b> a traditional Fedora
+    install and an OSTree root.  To try out fedostree, you must (at
+    present) run through the <tt>bls_import</tt> step at the GRUB
+    commandline <emphasis>every</emphasis> time you boot to reveal the
+    additional OSTree-generated boot entries.  Otherwise, you will be
+    booting the (quite ordinary) Fedora install.
+  </p>
+  <p>Log in to the VM as root - there is no password.</p>
+  <p>Skip to <b>Booting the system</b> below.</p>
+  <h3>Installation instructions (inside an existing OS)</h3>
+  <p>First, you should understand what you'll be doing here.  OSTree
+     allows dynamically parallel installing operating systems;
+     (almost) all of its data goes in the new toplevel
+     directory <tt>/ostree</tt>.  At the end you will have a dual
+     boot.
+  </p>
+  <p>Install the ostree package, and make sure you have ostree 2013.7
+    or newer.</p>
+  <pre>
+	yum install ostree
+  </pre>
+  <p>
+    This bit of one time initialization will both
+    create <tt>/ostree</tt> for you, as well
+    as <tt>/ostree/deploy/fedostree</tt>.  Only a few directories are
+    created, we haven't really affected the system much yet.
+  </p>
+  <pre>
+	ostree admin os-init fedostree
+  </pre>
+  <p>This step tells OSTree how to find the repository you built on
+    the server.  You only need to do this once.</p>
+<pre>
+	ostree remote add --set=gpg-verify=false fedostree http://rpm-ostree.cloud.fedoraproject.org/repo
+</pre>
+  <p>We still have only initialized configuration.  This next step
+    will just download (but not install) a "minimal" system (just
+    @core):</p>
+<pre>
+	ostree pull fedostree fedostree/20/x86_64/base/minimal
+</pre>
+  <p>This step extracts the root filesystem, and updates the bootloader
+    configuration:</p>
+<pre>
+	ostree admin deploy --os=fedostree fedostree:fedostree/20/x86_64/base/minimal
+</pre>
+  <p>We need to do some initial setup before we actually boot the system.
+    Copy in the storage configuration:</p>
+<pre>
+	cp /etc/fstab /ostree/deploy/fedostree/current/etc
+</pre>
+  <p>And set a root password:</p>
+<pre>
+	chroot /ostree/deploy/fedostree/current passwd
+</pre>
+  <p>And there is one final (manual) step: You must copy your system's
+    kernel arguments from <tt>/boot/grub2/grub.cfg</tt> and add them to
+    <tt>/boot/loader/entries/ostree-fedora-0.conf</tt>, on the <tt>options</tt>
+    line. This step may be automated further in the future.
+  </p>
+  <p>
+    IMPORTANT NOTE: You must use <tt>selinux=0</tt> for now.
+  </p>
+  <h3 id="booting">Booting the system</h3>
+  <p>Your system now contains <b>both</b> a traditional Fedora install
+    and an OSTree root.  There is no impact on your installed system
+    except for additional disk space in the <tt>/boot/loader</tt> and <tt>/ostree</tt>
+    directories.
+  </p>
+  <p>At the GRUB prompt, instead of choosing one of the two listed
+     entries, press <tt>c</tt> to get a command line.  Now, enter:</p>
+<pre>
+	bls_import
+</pre>
+  <p>Then press <tt>Esc</tt>.  You should have an additional boot menu entry,
+    named <tt>ostree:fedora:0</tt>.  Nagivate to it and press <tt>Enter</tt>.</p>
+
+  <h3>Inside the system</h3>
+  <p>To upgrade, run as root</p>
+<pre>
+	ostree admin upgrade
+</pre>
+  <p>Although <tt>yum</tt> is installed, it will operate in read-only
+     mode.  Do not attempt to use it at the moment.  See the section
+     on the homepage "Development area: Local package assembly".</p>
+
+  <p>But with OSTree, it's possible to atomically transition between
+    different complete bootable filesystem trees.  Let's now try the
+    <tt>standard-docker-io</tt> tree:</p>
+<pre>
+	ostree pull fedostree fedostree/20/x86_64/server/docker-io
+</pre>
+  <p>If you look at the <a href="https://github.com/cgwalters/rpm-ostree/blob/master/fedostree/products.json">products.json</a> script
+    you can see this tree contains <tt>@core</tt>, <tt>@standard</tt>, and finally
+    <tt>docker-io</tt>.
+  </p>
+  <p>Like above, let's now deploy it:</p>
+  <pre>
+	ostree admin deploy --os=fedostree fedostree:fedostree/20/x86_64/server/docker-io
+	systemctl reboot
+  </pre>
+  <p>After you reboot, note two things.  First, you'll have <i>two</i>
+    OSTree boot entries.  That's because our previous <tt>minimal</tt>
+    tree is still there.  Choose the first OSTree boot entry.  When you
+    boot into this tree, note that you'll have
+    a <tt>/usr/bin/docker</tt> binary.  We have successfully atomically
+    transitioned to a new filesystem tree.
+  </p>
+  <p>Why the triple specification of "fedostree"?  First, OSTree
+    allows arbitrarily named "OS"es which have independent /var.  You
+    could have two deployments of the same tree, say
+    "feostree-testing" and "fedostree".  Second, "fedostree" is the
+    name of the remote.  Third, a naming convention for refs includes
+    an OS name prefix at the front, here "fedostree".  Some or all of
+    these may be different.
+  </p>
+</article>

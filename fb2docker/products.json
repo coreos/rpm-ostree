@@ -1,0 +1,41 @@
+{
+    "comment": "B2Docker Fedora Remix",
+
+    "osname": "fb2docker",
+    "repo": "http://rpm-ostree.cloud.fedoraproject.org/repo",
+    
+    "gpg_key": "843833DF",
+
+    "architectures": ["x86_64"],
+
+    "releases": ["20", "rawhide"],
+
+    "add-repos": ["walters-rpm-ostree"],
+
+    "selinux": false,
+
+    "bootstrap_base": ["filesystem", "glibc", "nss-altfiles", "shadow-utils"],
+
+    "base_required_packages": ["kernel", "ostree", "fedora-release", "lvm2",
+			       "btrfs-progs", "e2fsprogs", "xfsprogs",
+			       "rpm-ostree-public-gpg-key", "gnupg2"],
+
+    "postprocess": ["remove-root-password"],
+
+    "products":
+    {
+	"core":
+	{
+	    "docker": { "packages": ["docker-io", "NetworkManager", "vim-minimal", "nano"],
+			"units": ["docker.service"],
+		        "postprocess": ["remove-locales",
+				        "remove-gpu-drivers",
+				        "remove-docs"],
+			"disk": { "sizeMb": 1024,
+				  "bootsizeMb": 0,
+				  "swapsizeMb": 0 }
+		      }
+	}
+    }
+}
+	    
