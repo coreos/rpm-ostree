@@ -32,5 +32,6 @@ rpmostree_commit (GFile         *rootfs,
                   OstreeRepo    *repo,
                   const char    *refname,
                   const char    *gpg_keyid,
+                  gboolean       enable_selinux,
                   GCancellable  *cancellable,
                   GError       **error);

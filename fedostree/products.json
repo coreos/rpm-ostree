@@ -12,6 +12,8 @@
 
     "add-repos": ["walters-rpm-ostree"],
 
+    "selinux": false,
+
     "bootstrap_base": ["filesystem", "glibc", "nss-altfiles", "shadow-utils"],
 
     "base_required_packages": ["kernel", "ostree", "fedora-release", "lvm2",
@@ -24,8 +26,7 @@
     {
 	"core":
 	{
-	    "docker": { "packages": ["docker-io", "NetworkManager", "vim-minimal", "nano",
-				     "selinux-policy-targeted"],
+	    "docker": { "packages": ["docker-io", "NetworkManager", "vim-minimal", "nano"],
 			"units": ["docker.service"],
 		        "postprocess": ["remove-locales",
 				        "remove-gpu-drivers",

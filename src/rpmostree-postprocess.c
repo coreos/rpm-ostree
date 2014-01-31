@@ -714,6 +714,7 @@ rpmostree_commit (GFile         *rootfs,
                   OstreeRepo    *repo,
                   const char    *refname,
                   const char    *gpg_keyid,
+                  gboolean       enable_selinux,
                   GCancellable  *cancellable,
                   GError       **error)
 {
@@ -725,58 +726,65 @@ rpmostree_commit (GFile         *rootfs,
   gs_unref_object GFile *root_tree = NULL;
   
   /* hardcode targeted policy for now */
-  {
-    gs_unref_object GFile *usr_etc_selinux = g_file_resolve_relative_path (rootfs, "usr/etc/selinux");
-    gs_unref_object GFile *usr_etc_selinux_config = g_file_resolve_relative_path (usr_etc_selinux, "config");
-    gs_unref_object GFile *selinux_root = NULL;
-    gs_free char *selinux_config_type = NULL;
+  if (enable_selinux)
+    {
+      gs_unref_object GFile *usr_etc_selinux = g_file_resolve_relative_path (rootfs, "usr/etc/selinux");
+      gs_unref_object GFile *usr_etc_selinux_config = g_file_resolve_relative_path (usr_etc_selinux, "config");
+      gs_unref_object GFile *selinux_root = NULL;
+      gs_free char *selinux_config_type = NULL;
 
-    if (g_file_query_exists (usr_etc_selinux_config, NULL))
-      {
-        selinux_config_type = selinux_type_from_config (usr_etc_selinux_config,
-                                                        cancellable, error);
-        if (!selinux_config_type)
-          {
-            g_prefix_error (error, "Failed to read SELINUXTYPE= from '%s': ",
-                            gs_file_get_path_cached (usr_etc_selinux_config));
-            goto out;
-          }
+      if (g_file_query_exists (usr_etc_selinux_config, NULL))
+        {
+          selinux_config_type = selinux_type_from_config (usr_etc_selinux_config,
+                                                          cancellable, error);
+          if (!selinux_config_type)
+            {
+              g_prefix_error (error, "Failed to read SELINUXTYPE= from '%s': ",
+                              gs_file_get_path_cached (usr_etc_selinux_config));
+              goto out;
+            }
 
-        g_print ("Detected SELINUXTYPE=%s\n", selinux_config_type);
-        selinux_root = g_file_get_child (usr_etc_selinux, selinux_config_type);
-      }
+          g_print ("Detected SELINUXTYPE=%s\n", selinux_config_type);
+          selinux_root = g_file_get_child (usr_etc_selinux, selinux_config_type);
+        }
 
-    if (selinux_root)
-      {
-        g_print ("Setting policy root: %s\n",
-                 gs_file_get_path_cached (selinux_root));
-        if (selinux_set_policy_root (gs_file_get_path_cached (selinux_root)) != 0)
-          {
-            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                         "selinux_set_policy_root(%s): %s",
-                         gs_file_get_path_cached (selinux_root),
-                         strerror (errno));
-            goto out;
-          }
-      }
-  }
+      if (selinux_root)
+        {
+          g_print ("Setting policy root: %s\n",
+                   gs_file_get_path_cached (selinux_root));
+          if (selinux_set_policy_root (gs_file_get_path_cached (selinux_root)) != 0)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "selinux_set_policy_root(%s): %s",
+                           gs_file_get_path_cached (selinux_root),
+                           strerror (errno));
+              goto out;
+            }
+        }
+      else
+        {
+          g_print ("Note: SELinux enabled but no policy found in this tree\n");
+          enable_selinux = FALSE;
+        }
+    }
 
   g_print ("Committing '%s' ...\n", gs_file_get_path_cached (rootfs));
   if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
     goto out;
 
   mtree = ostree_mutable_tree_new ();
-  commit_modifier = ostree_repo_commit_modifier_new (0, NULL, NULL, NULL);
-  {
-    struct selabel_handle *hnd = selabel_open (SELABEL_CTX_FILE, NULL, 0);
-    if (!hnd)
-      {
-        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                     "Failed selabel_open(): %s", strerror (errno));
-        goto out;
-      }
-    ostree_repo_commit_modifier_set_xattr_callback (commit_modifier, xattr_cb, NULL, hnd);
-  }
+  commit_modifier = ostree_repo_commit_modifier_new (enable_selinux ? 0 : OSTREE_REPO_COMMIT_MODIFIER_FLAGS_SKIP_XATTRS, NULL, NULL, NULL);
+  if (enable_selinux)
+    {
+      struct selabel_handle *hnd = selabel_open (SELABEL_CTX_FILE, NULL, 0);
+      if (!hnd)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Failed selabel_open(): %s", strerror (errno));
+          goto out;
+        }
+      ostree_repo_commit_modifier_set_xattr_callback (commit_modifier, xattr_cb, NULL, hnd);
+    }
   if (!ostree_repo_write_directory_to_mtree (repo, rootfs, mtree, commit_modifier, cancellable, error))
     goto out;
   if (!ostree_repo_write_mtree (repo, mtree, &root_tree, cancellable, error))

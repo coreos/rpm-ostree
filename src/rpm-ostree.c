@@ -33,6 +33,7 @@ static char **opt_bootstrap_packages;
 static char **opt_internal_postprocessing;
 static char **opt_external_postprocessing;
 static char *opt_gpg_sign;
+static gboolean opt_disable_selinux;
 
 static GOptionEntry option_entries[] = {
   { "bootstrap-package", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_bootstrap_packages, "Install this package first", "PACKAGE" },
@@ -41,6 +42,7 @@ static GOptionEntry option_entries[] = {
   { "post", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_internal_postprocessing, "Run this builtin postprocessing step before commit", "NAME" },
   { "xpost", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_external_postprocessing, "Run this external script on rootfs before committing", "PATH" },
   { "gpg-sign", 0, 0, G_OPTION_ARG_STRING, &opt_gpg_sign, "Sign commits with thiskey", "KEYID" },
+  { "disable-selinux", 0, 0, G_OPTION_ARG_NONE, &opt_disable_selinux, "Do not use SELinux", NULL },
   { NULL }
 };
 
@@ -656,6 +658,7 @@ main (int     argc,
       goto out;
 
     if (!rpmostree_commit (yumroot, repo, ref, opt_gpg_sign,
+                           !opt_disable_selinux,
                            cancellable, error))
       goto out;
 

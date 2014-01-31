@@ -107,6 +107,14 @@ const TaskBuild = new Lang.Class({
 	    argv.push('--gpg-sign=' + keyId);
 	}
 
+	let selinuxGlobalDefault = this._productData['selinux'];
+	let productSelinux = treeData['selinux'];
+	if (productSelinux === undefined)
+	    productSelinux = selinuxGlobalDefault;
+
+	if (!productSelinux)
+	    argv.push('--disable-selinux');
+
 	argv.push.apply(argv, ['create', ref]);
 	argv.push.apply(argv, packages);
 	let productNameUnix = ref.replace(/\//g, '_');
