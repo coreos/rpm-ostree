@@ -24,7 +24,8 @@
     {
 	"core":
 	{
-	    "docker": { "packages": ["docker-io", "NetworkManager", "vim-minimal", "nano"],
+	    "docker": { "packages": ["docker-io", "NetworkManager", "vim-minimal", "nano",
+				     "selinux-policy-targeted"],
 			"units": ["docker.service"],
 		        "postprocess": ["remove-locales",
 				        "remove-gpu-drivers",
