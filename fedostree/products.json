@@ -16,7 +16,7 @@
 
     "base_required_packages": ["kernel", "ostree", "fedora-release", "lvm2",
 			       "btrfs-progs", "e2fsprogs", "xfsprogs",
-			       "rpm-ostree-gpg-public-gpg-key", "gnupg2"],
+			       "rpm-ostree-public-gpg-key", "gnupg2"],
 
     "postprocess": ["remove-root-password"],
 
