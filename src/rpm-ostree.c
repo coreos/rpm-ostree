@@ -175,7 +175,8 @@ yum_context_free (YumContext  *yumctx)
 }
 
 static void
-append_repo_opts (GPtrArray  *args)
+append_repo_and_cache_opts (GFile      *yumcache_lookaside,
+                            GPtrArray  *args)
 {
   char **strviter;
 
@@ -185,10 +186,17 @@ append_repo_opts (GPtrArray  *args)
   g_ptr_array_add (args, g_strdup ("--disablerepo=*"));
   for (strviter = opt_enable_repos; strviter && *strviter; strviter++)
     g_ptr_array_add (args, g_strconcat ("--enablerepo=", *strviter, NULL));
+
+  g_ptr_array_add (args, g_strdup ("--setopt=keepcache=1"));
+  if (yumcache_lookaside)
+    g_ptr_array_add (args, g_strconcat ("--setopt=cachedir=",
+                                        gs_file_get_path_cached (yumcache_lookaside),
+                                        NULL));
 }
 
 static YumContext *
 yum_context_new (GFile          *yumroot,
+                 GFile          *cachedir,
                  GCancellable   *cancellable,
                  GError        **error)
 {
@@ -201,12 +209,12 @@ yum_context_new (GFile          *yumroot,
 
   g_ptr_array_add (yum_argv, g_strdup ("yum"));
   g_ptr_array_add (yum_argv, g_strdup ("-y"));
-  g_ptr_array_add (yum_argv, g_strdup ("--setopt=keepcache=1"));
+
+  append_repo_and_cache_opts (cachedir, yum_argv);
+
   g_ptr_array_add (yum_argv, g_strconcat ("--installroot=",
                                           gs_file_get_path_cached (yumroot),
                                           NULL));
-
-  append_repo_opts (yum_argv);
   
   g_ptr_array_add (yum_argv, g_strdup ("shell"));
 
@@ -331,6 +339,7 @@ yum_context_command (YumContext   *yumctx,
                   
 static gboolean
 yuminstall (GFile           *yumroot,
+            GFile           *cachedir,
             char           **packages,
             GCancellable    *cancellable,
             GError         **error)
@@ -339,7 +348,7 @@ yuminstall (GFile           *yumroot,
   char **strviter;
   YumContext *yumctx;
 
-  yumctx = yum_context_new (yumroot, cancellable, error);
+  yumctx = yum_context_new (yumroot, cachedir, cancellable, error);
   if (!yumctx)
     goto out;
 
@@ -434,25 +443,12 @@ main (int     argc,
 
   yumroot = g_file_get_child (cachedir, "yum");
   targetroot = g_file_resolve_relative_path (cachedir, "rootfs");
-  yumcachedir = g_file_resolve_relative_path (yumroot, "var/cache/yum");
   yumcache_lookaside = g_file_resolve_relative_path (cachedir, "yum-cache");
   
   if (!gs_shutil_rm_rf (yumroot, cancellable, error))
     goto out;
-  yumroot_varcache = g_file_resolve_relative_path (yumroot, "var/cache");
-  if (g_file_query_exists (yumcache_lookaside, NULL))
-    {
-      g_print ("Reusing cache: %s\n", gs_file_get_path_cached (yumroot_varcache));
-      if (!gs_file_ensure_directory (yumroot_varcache, TRUE, cancellable, error))
-        goto out;
-      if (!gs_shutil_cp_al_or_fallback (yumcache_lookaside, yumcachedir,
-                                        cancellable, error))
-        goto out;
-    }
-  else
-    {
-      g_print ("No cache found at: %s\n", gs_file_get_path_cached (yumroot_varcache));
-    }
+  if (!gs_file_ensure_directory (yumcache_lookaside, TRUE, cancellable, error))
+    goto out;
 
   ref_unix = g_strdelimit (g_strdup (ref), "/", '_');
 
@@ -485,12 +481,16 @@ main (int     argc,
     gs_unref_object GSSubprocessContext *repoquery_proc_ctx = NULL;
     gs_unref_object GSSubprocess *repoquery_proc = NULL;
     guint i;
+    GString *repoquery_arg_string = NULL;
+    gboolean first = TRUE;
 
     g_ptr_array_add (repoquery_argv, g_strdup (PKGLIBDIR "/repoquery-sorted"));
-    append_repo_opts (repoquery_argv);
+    append_repo_and_cache_opts (yumcache_lookaside, repoquery_argv);
     g_ptr_array_add (repoquery_argv, g_strdup ("--recursive"));
     g_ptr_array_add (repoquery_argv, g_strdup ("--requires"));
     g_ptr_array_add (repoquery_argv, g_strdup ("--resolve"));
+
+    repoquery_arg_string = g_string_new ("");
 
     for (i = 0; i < all_packages->len; i++)
       {
@@ -499,7 +499,15 @@ main (int     argc,
           continue;
 
         g_ptr_array_add (repoquery_argv, g_strdup (package));
+        if (first)
+          first = FALSE;
+        else
+          g_string_append_c (repoquery_arg_string, ' ');
+        g_string_append (repoquery_arg_string, package);
       }
+
+    g_print ("Running repoquery: %s\n", repoquery_arg_string->str);
+    g_string_free (repoquery_arg_string, TRUE);
 
     g_ptr_array_add (repoquery_argv, NULL);
       
@@ -567,7 +575,7 @@ main (int     argc,
     /* Ensure we have enough to modify NSS */
     if (opt_bootstrap_packages)
       {
-        if (!yuminstall (yumroot, opt_bootstrap_packages, cancellable, error))
+        if (!yuminstall (yumroot, yumcache_lookaside, opt_bootstrap_packages, cancellable, error))
           goto out;
       }
 
@@ -594,21 +602,13 @@ main (int     argc,
     }
 
     {
-      if (!yuminstall (yumroot, (char**)all_packages->pdata,
+      if (!yuminstall (yumroot, yumcache_lookaside,
+                       (char**)all_packages->pdata,
                        cancellable, error))
         goto out;
     }
 
     ref_unix = g_strdelimit (g_strdup (ref), "/", '_');
-
-    /* Attempt to cache stuff between runs */
-    if (!gs_shutil_rm_rf (yumcache_lookaside, cancellable, error))
-      goto out;
-
-    g_print ("Saving yum cache %s\n", gs_file_get_path_cached (yumcache_lookaside));
-    if (!gs_file_rename (yumcachedir, yumcache_lookaside,
-                         cancellable, error))
-      goto out;
 
     if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
       goto out;
