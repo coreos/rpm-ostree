@@ -25,6 +25,7 @@
 	"core":
 	{
 	    "docker": { "packages": ["docker-io", "NetworkManager", "vim-minimal", "nano"],
+			"units": ["docker.service"],
 		        "postprocess": ["remove-locales",
 				        "remove-gpu-drivers",
 				        "remove-docs"],

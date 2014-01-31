@@ -87,6 +87,20 @@ const TaskBuild = new Lang.Class({
 	argv.push.apply(argv, repos.map(function (a) { return '--enablerepo=' + a; }));
 	argv.push.apply(argv, postprocessSteps.map(function (a) { return '--post=' + a; }));
 
+	let enableUnitsScript = '#!/bin/sh\n';
+	let enabledUnits = treeData['units'];
+	if (enabledUnits) {
+	    for (let i = 0; i < enabledUnits.length; i++) {
+		let unit = enabledUnits[i];
+		print("Enabling unit " + unit);
+		enableUnitsScript += 'ln -s /usr/lib/systemd/system/' + unit + ' ' + './usr/etc/systemd/system/multi-user.target.wants\n';
+	    }
+	    let enableUnitsScriptPath = Gio.File.new_for_path('enable-units.sh');
+	    enableUnitsScriptPath.replace_contents(enableUnitsScript, null, false, 0, cancellable);
+	    GSystem.file_chmod(enableUnitsScriptPath, 493, cancellable);
+	    argv.push('--xpost=' + enableUnitsScriptPath.get_path());
+	}
+
 	let keyId = this._productData['gpg_key'];
 	if (keyId) {
 	    print("Signing using " + keyId);
