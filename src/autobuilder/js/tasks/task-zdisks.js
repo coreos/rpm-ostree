@@ -44,41 +44,77 @@ const TaskZDisks = new Lang.Class({
 
     _exportDiskForProduct: function(ref, revision, cancellable) {
 	      let refUnix = ref.replace(/\//g, '-');
-        let productDir = this._imageExportDir.get_child(refUnix);
-        let diskPathTmp = this.workdir.get_child(refUnix + '.qcow2');
-        LibQA.createDisk(diskPathTmp, cancellable);
-        let mntdir = Gio.File.new_for_path('mnt');
-        GSystem.file_ensure_directory(mntdir, true, cancellable);
-        let gfmnt = new GuestFish.GuestMount(diskPathTmp, { partitionOpts: LibQA.DEFAULT_GF_PARTITION_OPTS,
-                                                            readWrite: true });
-        gfmnt.mount(mntdir, cancellable);
-        try {
-            let osname = this._products['osname'];
-            let originRepoUrl = this._products['repo'];
-            LibQA.pullDeploy(mntdir, this.repo, osname, ref, revision, originRepoUrl,
-                             cancellable);
-        } finally {
-            gfmnt.umount(cancellable);
+        let diskDir = this._imageExportDir.get_child(refUnix);
+        GSystem.file_ensure_directory(diskDir, true, cancellable);
+        let latestDisk = LibQA.getACachedDisk(this._imageCacheDir.get_child(refUnix), cancellable);
+
+        if (!latestDisk) {
+            throw new Error("No cached disk found for " + ref);
         }
-        let imageExportName = diskPathTmp.get_basename() + '.xz';
-        let diskPathXz = diskPathTmp.get_parent().get_child(imageExportName);
-        ProcUtil.runSync(['xz', diskPathTmp.get_path() ], { cwd: diskPathTmp.get_parent(),
-                                                            logInitiation: true });
-        let imageExportTarget = productDir.get_child(imageExportName);
-        GSystem.file_rename(diskPathXz, imageExportTarget, cancellable);
-        print("Successfully created installed " + imageExportTarget.get_path());
+
+        let newDiskPath = diskDir.get_child(revision + '.qcow2.xz');
+        let newDiskName = newDiskPath.get_basename();
+        if (!newDiskPath.query_exists(null)) {
+            let newDiskPathTmp = Gio.File.new_for_path(revision + '.qcow2.xz.tmp');
+
+            let xzCtx = new GSystem.SubprocessContext({ argv: [ 'xz' ] })
+            xzCtx.set_stdin_file_path(latestDisk.get_path());
+            xzCtx.set_stdout_file_path(newDiskPathTmp.get_path());
+            let xz = new GSystem.Subprocess({ context: xzCtx });
+            xz.init(cancellable);
+            xz.wait_sync_check(cancellable);
+
+            print("Completed compression, renaming to " + newDiskPath.get_path());
+            GSystem.file_rename(newDiskPathTmp, newDiskPath, cancellable);
+        } else {
+            print("Already have " + newDiskPath.get_path());
+        }
+        BuildUtil.atomicSymlinkSwap(newDiskPath.get_parent().get_child('latest-qcow2.xz'),
+                                    newDiskPath, cancellable);
+
+        let vdiTmpPath = Gio.File.new_for_path(revision + '.vdi.tmp');
+        let newVdiPath = diskDir.get_child(revision + '.vdi.xz'); 
+        let newVdiName = newVdiPath.get_basename();
+        if (!newVdiPath.query_exists(null)) {
+            let newVdiPathTmp = Gio.File.new_for_path(revision + '.vdi.xz.tmp');
+
+            print("Creating " + vdiTmpPath.get_path());
+            ProcUtil.runSync(['qemu-img', 'convert', '-O', 'vdi',
+                              latestDisk.get_path(), vdiTmpPath.get_path()],
+                             cancellable,
+                             { logInitiation: true });
+
+            print("Creating " + newVdiPathTmp.get_path());
+            let xzCtx = new GSystem.SubprocessContext({ argv: [ 'xz' ] })
+            xzCtx.set_stdin_file_path(vdiTmpPath.get_path());
+            xzCtx.set_stdout_file_path(newVdiPathTmp.get_path());
+            let xz = new GSystem.Subprocess({ context: xzCtx });
+            xz.init(cancellable);
+            xz.wait_sync_check(cancellable);
+
+            print("Completed VDI compression, renaming to " + newVdiPathTmp.get_path());
+            GSystem.file_rename(newVdiPathTmp, newVdiPath, cancellable);
+            GSystem.file_unlink(vdiTmpPath, cancellable);
+        } else {
+            print("Already have " + newVdiPath.get_path());
+        }
+        BuildUtil.atomicSymlinkSwap(newVdiPath.get_parent().get_child('latest-vdi.xz'),
+                                    newVdiPath, cancellable);
 
         let e = null;
         try {
-            e = productDir.enumerate_children('standard::name');
+            e = diskDir.enumerate_children('standard::name', 0, cancellable);
+            let info;
             while ((info = e.next_file(cancellable)) != null) {
                 let name = info.get_name();
-                if (!JSUtil.stringEndsWith(name, '.qcow2'))
+                if (name == newDiskName || name == newVdiName)
                     continue;
-                if (name == imageExportName)
-                    continue;
-                print("Deleting old " + name);
-                GSystem.file_unlink(e.get_child(info), cancellable);
+                let child = e.get_child(info);
+                if (JSUtil.stringEndswith(name, '.qcow2.xz') ||
+                    JSUtil.stringEndswith(name, '.vdi.xz')) {
+                    print("Removing old " + child.get_path());
+                    GSystem.file_unlink(child, cancellable);
+                }
             }
         } finally {
             if (e) e.close(null);
@@ -86,6 +122,7 @@ const TaskZDisks = new Lang.Class({
     },
 
     execute: function(cancellable) {
+	      this._imageCacheDir = this.cachedir.get_child('images');
 	      this._imageExportDir = this.workdir.get_child('images');
         this._products = JsonUtil.loadJson(this.workdir.get_child('products.json'), cancellable);
         this._productsBuilt = JsonUtil.loadJson(this.builddir.get_child('products-built.json'), cancellable);

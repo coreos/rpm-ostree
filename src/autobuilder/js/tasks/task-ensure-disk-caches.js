@@ -42,29 +42,19 @@ const TaskEnsureDiskCaches = new Lang.Class({
         TaskAfter: ['build'],
     },
 
+    DefaultParameters: { regenerate: null },
+
     _ensureDiskForProduct: function(ref, revision, cancellable) {
 	      let refUnix = ref.replace(/\//g, '-');
         let diskDir = this._imageCacheDir.get_child(refUnix);
         GSystem.file_ensure_directory(diskDir, true, cancellable);
-        let cachedDisk = null;
-        let e = null;
-        try {
-            e = diskDir.enumerate_children('standard::name', 0, cancellable);
-            let info;
-            while ((info = e.next_file(cancellable)) != null) {
-                let name = info.get_name();
-                if (!JSUtil.stringEndswith(name, '.qcow2'))
-                    continue;
-                cachedDisk = e.get_child(info);
-                break;
-            }
-        } finally {
-            if (e) e.close(null);
-        }
-        
+        let cachedDisk = LibQA.getACachedDisk(diskDir, cancellable);
         if (cachedDisk) {
             print("Found cached disk " + cachedDisk.get_path() + " for " + ref);
-            return;
+            if (!this.parameters.regenerate)
+                return;
+            else
+                print("Regenerating...");
         }
 
         let diskPath = diskDir.get_child(revision + '.qcow2');
@@ -84,7 +74,25 @@ const TaskEnsureDiskCaches = new Lang.Class({
             gfmnt.umount(cancellable);
         }
         GSystem.file_rename(diskPathTmp, diskPath, cancellable);
+        let newDiskName = diskPath.get_basename();
         print("Successfully created disk cache " + diskPath.get_path());
+        let e = null;
+        try {
+            e = diskDir.enumerate_children('standard::name', 0, cancellable);
+            let info;
+            while ((info = e.next_file(cancellable)) != null) {
+                let name = info.get_name();
+                if (!JSUtil.stringEndswith(name, '.qcow2'))
+                    continue;
+                if (name != newDiskName) {
+                    let child = e.get_child(info);
+                    print("Removing old " + child.get_path());
+                    GSystem.file_unlink(child, cancellable);
+                }
+            }
+        } finally {
+            if (e) e.close(null);
+        }
     },
 
     execute: function(cancellable) {

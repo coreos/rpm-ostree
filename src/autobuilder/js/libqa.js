@@ -25,6 +25,7 @@ const GSystem = imports.gi.GSystem;
 const Params = imports.params;
 const ProcUtil = imports.procutil;
 const GuestFish = imports.guestfish;
+const JSUtil = imports.jsutil;
 
 const BOOT_UUID = "fdcaea3b-2775-45ef-b441-b46a4a18e8c4";
 const ROOT_UUID = "d230f7f0-99d3-4244-8bd9-665428054831";
@@ -429,3 +430,23 @@ function requestSnapshotForTree(task, resultdir, refname, revision) {
 
     print("Successfully updated " + diskDir.get_path() + " to " + revision);
 } 
+
+function getACachedDisk(diskDir, cancellable) {
+    let cachedDisk = null;
+    let e = null;
+    try {
+        e = diskDir.enumerate_children('standard::name', 0, cancellable);
+        let info;
+        while ((info = e.next_file(cancellable)) != null) {
+            let name = info.get_name();
+            if (!JSUtil.stringEndswith(name, '.qcow2'))
+                continue;
+            cachedDisk = e.get_child(info);
+            break;
+        }
+    } finally {
+        if (e) e.close(null);
+    }
+    
+    return cachedDisk;
+}
