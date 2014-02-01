@@ -12,7 +12,7 @@
 
     "add-repos": ["walters-rpm-ostree"],
 
-    "selinux": false,
+    "selinux": true,
 
     "bootstrap_base": ["filesystem", "glibc", "nss-altfiles", "shadow-utils"],
 
@@ -26,7 +26,8 @@
     {
 	"core":
 	{
-	    "docker": { "packages": ["docker-io", "openssh-server", "openssh-clients",
+	    "docker": { "packages": ["docker-io", "selinux-policy-targeted",
+				     "openssh-server", "openssh-clients",
 				     "NetworkManager", "vim-minimal", "nano"],
 			"units": ["docker.service"],
 		        "postprocess": ["remove-locales",
