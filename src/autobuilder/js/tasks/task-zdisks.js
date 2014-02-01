@@ -57,7 +57,7 @@ const TaskZDisks = new Lang.Class({
         if (!newDiskPath.query_exists(null)) {
             let newDiskPathTmp = Gio.File.new_for_path(revision + '.qcow2.xz.tmp');
 
-            print("Creating " + newDiskPathTmp.get_path());
+            print("Creating " + newDiskPath.get_path());
 
             let xzCtx = new GSystem.SubprocessContext({ argv: [ 'xz' ] })
             xzCtx.set_stdin_file_path(latestDisk.get_path());
@@ -125,7 +125,7 @@ const TaskZDisks = new Lang.Class({
 
     execute: function(cancellable) {
 	      this._imageCacheDir = this.cachedir.get_child('images');
-	      this._imageExportDir = this.workdir.get_child('images');
+	      this._imageExportDir = this.workdir.get_child('images/auto');
         this._products = JsonUtil.loadJson(this.workdir.get_child('products.json'), cancellable);
         this._productsBuilt = JsonUtil.loadJson(this.builddir.get_child('products-built.json'), cancellable);
         let productTrees = this._productsBuilt['trees'];
