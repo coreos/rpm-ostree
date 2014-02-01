@@ -57,6 +57,8 @@ const TaskZDisks = new Lang.Class({
         if (!newDiskPath.query_exists(null)) {
             let newDiskPathTmp = Gio.File.new_for_path(revision + '.qcow2.xz.tmp');
 
+            print("Creating " + newDiskPathTmp.get_path());
+
             let xzCtx = new GSystem.SubprocessContext({ argv: [ 'xz' ] })
             xzCtx.set_stdin_file_path(latestDisk.get_path());
             xzCtx.set_stdout_file_path(newDiskPathTmp.get_path());
@@ -73,10 +75,10 @@ const TaskZDisks = new Lang.Class({
                                     newDiskPath, cancellable);
 
         let vdiTmpPath = Gio.File.new_for_path(revision + '.vdi.tmp');
-        let newVdiPath = diskDir.get_child(revision + '.vdi.xz'); 
+        let newVdiPath = diskDir.get_child(revision + '.vdi.bz2'); 
         let newVdiName = newVdiPath.get_basename();
         if (!newVdiPath.query_exists(null)) {
-            let newVdiPathTmp = Gio.File.new_for_path(revision + '.vdi.xz.tmp');
+            let newVdiPathTmp = Gio.File.new_for_path(revision + '.vdi.bz2.tmp');
 
             print("Creating " + vdiTmpPath.get_path());
             ProcUtil.runSync(['qemu-img', 'convert', '-O', 'vdi',
@@ -85,7 +87,7 @@ const TaskZDisks = new Lang.Class({
                              { logInitiation: true });
 
             print("Creating " + newVdiPathTmp.get_path());
-            let xzCtx = new GSystem.SubprocessContext({ argv: [ 'xz' ] })
+            let xzCtx = new GSystem.SubprocessContext({ argv: [ 'bzip2' ] })
             xzCtx.set_stdin_file_path(vdiTmpPath.get_path());
             xzCtx.set_stdout_file_path(newVdiPathTmp.get_path());
             let xz = new GSystem.Subprocess({ context: xzCtx });
@@ -98,7 +100,7 @@ const TaskZDisks = new Lang.Class({
         } else {
             print("Already have " + newVdiPath.get_path());
         }
-        BuildUtil.atomicSymlinkSwap(newVdiPath.get_parent().get_child('latest-vdi.xz'),
+        BuildUtil.atomicSymlinkSwap(newVdiPath.get_parent().get_child('latest-vdi.bz2'),
                                     newVdiPath, cancellable);
 
         let e = null;
@@ -111,7 +113,7 @@ const TaskZDisks = new Lang.Class({
                     continue;
                 let child = e.get_child(info);
                 if (JSUtil.stringEndswith(name, '.qcow2.xz') ||
-                    JSUtil.stringEndswith(name, '.vdi.xz')) {
+                    JSUtil.stringEndswith(name, '.vdi.bz2')) {
                     print("Removing old " + child.get_path());
                     GSystem.file_unlink(child, cancellable);
                 }
