@@ -381,7 +381,7 @@ function pullDeploy(mntdir, srcrepo, osname, target, revision, originRepoUrl, ca
                          cancellable, { logInitiation: true });
     
     ProcUtil.runSync(['ostree', repoArg,
-                      'pull-local', '--remote=' + osname, srcrepo.get_path(), revOrTarget], cancellable,
+                      'pull-local', '--disable-fsync', '--remote=' + osname, srcrepo.get_path(), revOrTarget], cancellable,
                      {logInitiation: true, env: adminEnv});
 
     let origin = GLib.KeyFile.new();
