@@ -26,7 +26,8 @@
     {
 	"core":
 	{
-	    "docker": { "packages": ["docker-io", "NetworkManager", "vim-minimal", "nano"],
+	    "docker": { "packages": ["docker-io", "openssh-server", "openssh-clients",
+				     "NetworkManager", "vim-minimal", "nano"],
 			"units": ["docker.service"],
 		        "postprocess": ["remove-locales",
 				        "remove-gpu-drivers",
