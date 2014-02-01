@@ -331,7 +331,9 @@ function _findCurrentOstreeBootArg(mntdir, cancellable) {
     throw new Error("Failed to find ostree= kernel argument");
 }
 
-function pullDeploy(mntdir, srcrepo, osname, target, revision, originRepoUrl, cancellable) {
+function pullDeploy(mntdir, srcrepo, osname, target, revision, originRepoUrl, cancellable,
+		    params) {
+    params = Params.parse(params, { addKernelArgs: ['quiet'] });
     let ostreedir = mntdir.get_child('ostree');
     let ostreeOsdir = ostreedir.resolve_relative_path('deploy/' + osname);
 
@@ -391,9 +393,15 @@ function pullDeploy(mntdir, srcrepo, osname, target, revision, originRepoUrl, ca
     let tmpOrigin = Gio.File.new_for_path('origin.tmp');
     tmpOrigin.replace_contents(originData, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, cancellable);
 
+    adminCmd.push('deploy');
+
+    for (let i = 0; i < params.addKernelArgs.length; i++)
+	adminCmd.push('--karg=' + params.addKernelArgs[i]);
+
+    adminCmd.push.apply(adminCmd, ['--os=' + osname, '--origin-file=' + tmpOrigin.get_path(), revOrTarget]);
+
     let rootArg = 'root=UUID=' + ROOT_UUID;
-    ProcUtil.runSync(adminCmd.concat(['deploy', '--karg=' + rootArg, '--karg=quiet', '--karg=splash',
-				      '--os=' + osname, '--origin-file=' + tmpOrigin.get_path(), revOrTarget]), cancellable,
+    ProcUtil.runSync(adminCmd, cancellable,
                      {logInitiation: true, env: adminEnv});
 
     let defaultFstab = 'UUID=' + ROOT_UUID + ' / ext4 defaults 1 1\n\

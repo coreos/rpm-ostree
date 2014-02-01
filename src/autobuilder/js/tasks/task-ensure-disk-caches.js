@@ -68,8 +68,10 @@ const TaskEnsureDiskCaches = new Lang.Class({
         try {
             let osname = this._products['osname'];
             let originRepoUrl = this._products['repo'];
+            let addKernelArgs = this._products['kargs'];
+            if (!addKernelArgs) addKernelArgs = [];
             LibQA.pullDeploy(mntdir, this.repo, osname, ref, revision, originRepoUrl,
-                             cancellable);
+                             cancellable, { addKernelArgs: addKernelArgs });
         } finally {
             gfmnt.umount(cancellable);
         }
