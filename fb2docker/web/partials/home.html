@@ -25,15 +25,15 @@
     code, and then <tt>reboot</tt>.  Upgrades are GPG signed for
     security.
   </p>
-  <h3>Installation (Inside existing Fedora/EL 7 Beta)</h3>
+  <h3>Installation (Inside existing Fedora 20/EL 7 Beta)</h3>
   <p>A unique ability of OSTree is to safely parallel install
      operating systems into the new <tt>/ostree</tt> directory.  This
-     will on at least Fedora 20, or Red Hat Enterprise Linux 7 Beta.
-     First, ensure you have OSTree 2014.1 or newer.</p>
+     will work on at least Fedora 20, or Red Hat Enterprise Linux 7
+     Beta.  First, ensure you have OSTree 2014.1 or newer.</p>
   <pre>
     yum install ostree
     ostree admin os-init fb2docker
-    ostree remote add --set=gpg-verify=false fb2docker http://FIXMESERVER/repo
+    ostree remote add --set=gpg-verify=false fb2docker http://209.132.179.157/repo
     ostree pull fb2docker fb2docker/20/x86_64/buildmaster/core/docker
     ostree admin deploy --os=fb2docker fb2docker:fb2docker/20/x86_64/buildmaster/core/docker
     cp /etc/fstab /ostree/deploy/fb2docker/current/etc
