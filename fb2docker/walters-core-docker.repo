@@ -1,6 +1,6 @@
 [walters-core-docker]
 name=Copr repo for core-docker owned by walters
-baseurl=http://copr-be.cloud.fedoraproject.org/results/walters/core-docker/fedora-$releasever-$basearch/
+baseurl=http://copr-be.cloud.fedoraproject.org/results/walters/core-docker/fedora-20-$basearch/
 skip_if_unavailable=True
 gpgcheck=0
 enabled=0
