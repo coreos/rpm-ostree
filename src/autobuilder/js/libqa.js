@@ -395,12 +395,14 @@ function pullDeploy(mntdir, srcrepo, osname, target, revision, originRepoUrl, ca
 
     adminCmd.push('deploy');
 
+    let rootArg = 'root=UUID=' + ROOT_UUID;
+    adminCmd.push('--karg=' + rootArg);
+
     for (let i = 0; i < params.addKernelArgs.length; i++)
 	adminCmd.push('--karg=' + params.addKernelArgs[i]);
 
     adminCmd.push.apply(adminCmd, ['--os=' + osname, '--origin-file=' + tmpOrigin.get_path(), revOrTarget]);
 
-    let rootArg = 'root=UUID=' + ROOT_UUID;
     ProcUtil.runSync(adminCmd, cancellable,
                      {logInitiation: true, env: adminEnv});
 
