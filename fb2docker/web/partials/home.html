@@ -15,15 +15,28 @@
     <li>The ability to choose between multiple variant trees, with
         additional RPM content.</li>
   </ul>
-  <h3>Installation</h3>
-  <p>The latest release is 20140131.0.</p>
-  <p>QEMU (qcow2):</p>
-  <p>VirtualBox: </p>
-  <p>Vagrant: </p>
+  <h3>Installation (Prepared VMs)</h3>
+  <p>The latest release is 20140131.0.  You can download preinstalled
+  virtual machine disk
+  images <a href="/images/fb2docker-20-x86_64-buildmaster-core-docker">here</a></p>
+  <p>Vagrant: (Coming Soon)</p>
   <p>Inside the system, use <tt>ostree admin upgrade</tt> to download
     the latest code, and then <tt>reboot</tt>.  Upgrades are GPG
     signed for security.
   </p>
+  <h3>Installation (Inside existing Fedora/EL 7 Beta)</h3>
+  <p>A unique ability of OSTree is to safely parallel install
+     operating systems into the new <tt>/ostree</tt> directory.  This
+     will on at least Fedora 20, or Red Hat Enterprise Linux 7 Beta.
+     First, ensure you have OSTree 2014.1 or newer.</p>
+  <pre>
+    yum install ostree
+    ostree admin os-init fb2docker
+    ostree remote add --set=gpg-verify=false fb2docker http://FIXMESERVER/repo
+    ostree pull fb2docker fb2docker/20/x86_64/buildmaster/core/docker
+    ostree admin deploy --os=fb2docker fb2docker:fb2docker/20/x86_64/buildmaster/core/docker
+    cp /etc/fstab /ostree/deploy/fb2docker/current/etc
+  </pre>
   <h3>News</h3>
   <p>Fri Jan 31 21:44:57 UTC 2014: Project is created.</p>
   <h3>Source code</h3>
