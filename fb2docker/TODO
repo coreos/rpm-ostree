@@ -1,7 +1,9 @@
-* OSTree /var (and /boot) labeling
-* SELinux policy additions
+* OSTree /boot labeling
+* SELinux policy additions - get to enforcing
+  - Ensure "ostree admin upgrade" works
 * Publish initial vagrant
 * Rename
 * Glance format images
-* AWS format images
+  - cloud-init (eww, Python)
 * Automate Vagrant provisioning
+  - libguestfs, add in ssh keys
