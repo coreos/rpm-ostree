@@ -1,0 +1,7 @@
+* OSTree /var (and /boot) labeling
+* SELinux policy additions
+* Publish initial vagrant
+* Rename
+* Glance format images
+* AWS format images
+* Automate Vagrant provisioning
