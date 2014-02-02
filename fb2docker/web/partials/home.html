@@ -11,6 +11,7 @@
       with <a href="http://live.gnome.org/Projects/OSTree">OSTree</a>
       on the client side for <i>fully atomic</i> upgrades.
     </li>
+    <li>SELinux security for Docker container isolation</li>
     <li>A familiar Unix environment, with a writable <tt>etc</tt></li>
     <li>The ability to choose between multiple variant trees, with
         additional RPM content.</li>
@@ -23,8 +24,9 @@
   <p>Vagrant: (Coming Soon)</p>
   <p>Log in as <tt>root</tt>, there is no password.  Inside the
     system, use <tt>ostree admin upgrade</tt> to download the latest
-    code, and then <tt>reboot</tt>.  Upgrades are GPG signed for
-    security.
+    code, and then <tt>reboot</tt>.  Upgrades
+    are <a href="https://github.com/cgwalters/rpm-ostree/commit/ad46ed72f9ab3053b54f63d4dab87160dcb85866">GPG
+    signed</a> for security.
   </p>
   <h3>Installation (Inside existing Fedora 20/EL 7 Beta)</h3>
   <p>A unique ability of OSTree is to safely parallel install
