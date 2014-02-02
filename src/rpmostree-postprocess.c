@@ -616,7 +616,10 @@ xattr_cb (OstreeRepo    *repo,
 
   res = selabel_lookup_raw (hnd, &con, path, mode);
   if (res != 0)
-    return NULL;
+    {
+      g_printerr ("warning: selabel_lookup_raw(%s): %s\n", path, strerror (errno));
+      return NULL;
+    }
 
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ayay)"));
   g_variant_builder_add (&builder, "(@ay@ay)",
