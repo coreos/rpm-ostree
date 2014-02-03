@@ -40,6 +40,7 @@
 	{
 	    "gnome/core": { "packages":  ["@standard", "@gnome-desktop"] },
 	    "gnome/development-virt": { "packages": ["@standard", "@gnome-desktop", "@firefox", "@gnome-games", "@libreoffice", "@virtualization", "@development-tools"] }
+	    "kde/core": { "packages":  ["@standard", "@kde-desktop"] },
 	}
     }
 }
