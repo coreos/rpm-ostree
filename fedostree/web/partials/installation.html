@@ -49,33 +49,19 @@
 	ostree remote add --set=gpg-verify=false fedostree http://rpm-ostree.cloud.fedoraproject.org/repo
 </pre>
   <p>We still have only initialized configuration.  This next step
-    will just download (but not install) a "minimal" system (just
-    @core):</p>
+    will just download (but not install) a system with just <tt>@standard</tt> plus <tt>docker-io</tt>:</p>
 <pre>
-	ostree pull fedostree fedostree/20/x86_64/base/minimal
+	ostree pull fedostree fedostree/20/x86_64/server/docker-io
 </pre>
   <p>This step extracts the root filesystem, and updates the bootloader
     configuration:</p>
 <pre>
-	ostree admin deploy --os=fedostree --karg-proc-cmdline --karg=selinux=0 fedostree:fedostree/20/x86_64/base/minimal
+	ostree admin deploy --os=fedostree --karg-proc-cmdline --karg=selinux=0 fedostree:fedostree/20/x86_64/server/docker-io
 </pre>
-  <p>We need to do some initial setup before we actually boot the system.
-    Copy in the storage configuration:</p>
+  <p>Now, we need to copy in the storage configuration from the "host":</p>
 <pre>
 	cp /etc/fstab /ostree/deploy/fedostree/current/etc
 </pre>
-  <p>And set a root password:</p>
-<pre>
-	chroot /ostree/deploy/fedostree/current passwd
-</pre>
-  <p>And there is one final (manual) step: You must copy your system's
-    kernel arguments from <tt>/boot/grub2/grub.cfg</tt> and add them to
-    <tt>/boot/loader/entries/ostree-fedora-0.conf</tt>, on the <tt>options</tt>
-    line. This step may be automated further in the future.
-  </p>
-  <p>
-    IMPORTANT NOTE: You must use <tt>selinux=0</tt> for now.
-  </p>
   <h3 id="booting">Booting the system</h3>
   <p>Your system now contains <b>both</b> a traditional Fedora install
     and an OSTree root.  There is no impact on your installed system
@@ -101,17 +87,15 @@
 
   <p>But with OSTree, it's possible to atomically transition between
     different complete bootable filesystem trees.  Let's now try the
-    <tt>standard-docker-io</tt> tree:</p>
+    <tt>server/jbossas</tt> tree:</p>
 <pre>
-	ostree pull fedostree fedostree/20/x86_64/server/docker-io
+	ostree pull fedostree fedostree/20/x86_64/server/jbossas
 </pre>
   <p>If you look at the <a href="https://github.com/cgwalters/rpm-ostree/blob/master/fedostree/products.json">products.json</a> script
-    you can see this tree contains <tt>@core</tt>, <tt>@standard</tt>, and finally
-    <tt>docker-io</tt>.
-  </p>
+    you can see this tree does not have <tt>docker-io</tt>, but does have the <tt>@jbossas</tt> comps group.</p>
   <p>Like above, let's now deploy it:</p>
   <pre>
-	ostree admin deploy --os=fedostree fedostree:fedostree/20/x86_64/server/docker-io
+	ostree admin deploy --os=fedostree fedostree:fedostree/20/x86_64/server/jbossas
 	systemctl reboot
   </pre>
   <p>After you reboot, note two things.  First, you'll have <i>two</i>
