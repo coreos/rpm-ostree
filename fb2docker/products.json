@@ -2,7 +2,7 @@
     "comment": "B2Docker Fedora Remix",
 
     "osname": "fb2docker",
-    "repo": "http://rpm-ostree.cloud.fedoraproject.org/repo",
+    "repo": "http://209.132.179.157/repo",
     
     "gpg_key": "843833DF",
 
