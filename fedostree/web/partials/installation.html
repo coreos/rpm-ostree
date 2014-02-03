@@ -8,11 +8,14 @@
    </p>
   <h3>Installation instructions (install preconfigured VM)</h3>
   <p>If you just want to experiment with complete safety, a prebuilt
-     VM image is provided <a href="http://rpm-ostree.cloud.fedoraproject.org/images/">here</a>.
-     It's called <tt>fedostree-f20-demo.img.xz</tt>.  To install, you must
-     first uncompress it with <tt>xz -d fedostree-f20-demo.img.xz</tt>.  Then
-     using e.g. <tt>virt-manager</tt>, choose "Import existing disk image".
+     VM image is
+     provided <a href="http://rpm-ostree.cloud.fedoraproject.org/images/">here</a>.
+     It's called <tt>fedostree-f20-demo.img.xz</tt>. To install, you
+     must first uncompress it with <tt>xz -d
+     fedostree-f20-demo.img.xz</tt>.  Then using
+     e.g. <tt>virt-manager</tt>, choose "Import existing disk image".
   </p>
+  <p
   <p>IMPORTANT: This system contains <b>both</b> a traditional Fedora
     install and an OSTree root.  To try out fedostree, you must (at
     present) run through the <tt>bls_import</tt> step at the GRUB
@@ -21,6 +24,9 @@
     booting the (quite ordinary) Fedora install.
   </p>
   <p>Log in to the VM as root - there is no password.</p>
+  <p><b>New:</b> You will now also find smaller images available;
+    these contain <i>only</i> an OSTree-based installation using
+    syslinux, and no operating system in the physical <tt>/<tt>.</p>
   <p>Skip to <b>Booting the system</b> below.</p>
   <h3>Installation instructions (inside an existing OS)</h3>
   <p>First, you should understand what you'll be doing here.  OSTree
