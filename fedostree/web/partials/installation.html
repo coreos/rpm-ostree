@@ -29,8 +29,8 @@
      directory <tt>/ostree</tt>.  At the end you will have a dual
      boot.
   </p>
-  <p>Install the ostree package, and make sure you have ostree 2013.7
-    or newer.</p>
+  <p>Install the ostree package, and make sure you have ostree 2014.1
+    or newer (presently in Bodhi updates-testing).</p>
   <pre>
 	yum install ostree
   </pre>
@@ -57,7 +57,7 @@
   <p>This step extracts the root filesystem, and updates the bootloader
     configuration:</p>
 <pre>
-	ostree admin deploy --os=fedostree fedostree:fedostree/20/x86_64/base/minimal
+	ostree admin deploy --os=fedostree --karg-proc-cmdline --karg=selinux=0 fedostree:fedostree/20/x86_64/base/minimal
 </pre>
   <p>We need to do some initial setup before we actually boot the system.
     Copy in the storage configuration:</p>
