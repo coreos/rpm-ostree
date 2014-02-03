@@ -17,11 +17,15 @@
         additional RPM content.</li>
   </ul>
   <h3>Installation (Prepared VMs)</h3>
+  <p>The current release is <a href="/images/releases/">2014.2</a>.
+    Images are available in both XZ-compressed qcow2 (for QEMU) and
+    bzip2-compressed VDI (for VirtualBox).</p>
+  <p>Using Vagrant:
+    <pre>vagrant box add fb2docker http://209.132.179.157/images/releases/2014.2/vagrant/fb2docker-2014.2.box</pre>
+  </p>
   <p>Automatically generated disk images (several times a day)
-    are <a href="/images/auto/">available here</a>.  See
-    the <a href="/images/releases/">releases</a> directory for known
-    tagged releases.</p>
-  <p>Vagrant: (Coming Soon)</p>
+    are <a href="/images/auto/">available here</a>.</p>
+  <p>Vagrant: See <a href="/images/releases/</p>
   <p>Log in as <tt>root</tt>, there is no password.  Inside the
     system, use <tt>ostree admin upgrade</tt> to download the latest
     code, and then <tt>reboot</tt>.  Upgrades
