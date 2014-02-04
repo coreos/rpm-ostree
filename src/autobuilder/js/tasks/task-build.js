@@ -168,9 +168,9 @@ const TaskBuild = new Lang.Class({
 			    this._composeProduct(ref, productName, treeName, products[productName][treeName],
 						 release, architecture,
 						 cancellable);
-			productTrees[ref] = revision;
 			switch (result) {
 			    case this.BuildState.successful: {
+				productTrees[ref] = revision;
 				successful.push(ref);
 			    }
 			    break;
@@ -179,6 +179,7 @@ const TaskBuild = new Lang.Class({
 			    }
 			    break;
 			    case this.BuildState.unchanged: {
+				productTrees[ref] = revision;
 				unchanged.push(ref);
 			    }
 			    break;
