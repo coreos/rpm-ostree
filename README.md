@@ -35,3 +35,6 @@ That will automatically poll every hour for changes in the RPMs
 referenced by the products.json file, commit them to the
 /srv/rpm-ostree/repo, and generate cached disk images in
 /srv/rpm-ostree/images.
+
+You can export /srv/rpm-ostree/repo (and images/, and builds/) via any
+static webserver.
