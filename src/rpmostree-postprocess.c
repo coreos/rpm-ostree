@@ -480,7 +480,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   /* Plus the RPM database goes in usr/share/rpm */
   {
     gs_unref_object GFile *usrbin_rpm =
-      g_file_resolve_relative_path (yumroot, "usr/bin/rpm");
+      g_file_resolve_relative_path (targetroot, "usr/bin/rpm");
     gs_unref_object GFile *legacyrpm_path =
       g_file_resolve_relative_path (yumroot, "var/lib/rpm");
     gs_unref_object GFile *newrpm_path =
