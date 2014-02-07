@@ -485,12 +485,27 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
       g_file_resolve_relative_path (yumroot, "var/lib/rpm");
     gs_unref_object GFile *newrpm_path =
       g_file_resolve_relative_path (targetroot, "usr/share/rpm");
-
+    
     if (g_file_query_exists (usrbin_rpm, NULL))
       {
+        gs_unref_object GFile *src_yum_rpmdb_indexes =
+          g_file_resolve_relative_path (yumroot, "var/lib/yum");
+        gs_unref_object GFile *target_yum_rpmdb_indexes =
+          g_file_resolve_relative_path (targetroot, "usr/share/yumdb");
+
         g_print ("Placing RPM db in /usr/share/rpm\n");
         if (!gs_file_rename (legacyrpm_path, newrpm_path, cancellable, error))
           goto out;
+
+        /* Move the yum database to usr/share/yumdb */
+        if (g_file_query_exists (src_yum_rpmdb_indexes, NULL))
+          {
+            g_print ("Moving %s to %s\n", gs_file_get_path_cached (src_yum_rpmdb_indexes),
+                     gs_file_get_path_cached (target_yum_rpmdb_indexes));
+            if (!gs_file_rename (src_yum_rpmdb_indexes, target_yum_rpmdb_indexes,
+                                 cancellable, error))
+              goto out;
+          }
       }
     else
       {
