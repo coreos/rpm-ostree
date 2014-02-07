@@ -28,21 +28,5 @@ AM_CFLAGS += $(WARN_CFLAGS)
 
 EXTRA_DIST += autogen.sh COPYING
 
-libgsystem_srcpath := libgsystem
-libgsystem_cflags = $(PKGDEP_GIO_UNIX_CFLAGS) -I$(srcdir)/libgsystem
-libgsystem_libs = $(PKGDEP_GIO_UNIX_LIBS)
-include libgsystem/Makefile-libgsystem.am
-privlib_LTLIBRARIES += libgsystem.la
-
-include $(INTROSPECTION_MAKEFILE)
-
 include Makefile-rpm-ostree.am
-include Makefile-gsystem-introspection.am
-
-girdir = $(pkgdatadir)/gir-1.0
-typelibdir = $(pkglibdir)/girepository-1.0
-
-gir_DATA = $(INTROSPECTION_GIRS)
-typelib_DATA = $(gir_DATA:.gir=.typelib)
-
 include Makefile-autobuilder.am

@@ -15,14 +15,6 @@ fi
 
 mkdir -p m4
 
-# Fetch submodules if needed
-if test ! -f libgsystem/README;
-then
-  echo "+ Setting up submodules"
-  git submodule init
-  git submodule update
-fi
-
 autoreconf --force --install --verbose
 
 cd $olddir
