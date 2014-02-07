@@ -31,7 +31,7 @@
 	    "docker": { "packages": ["docker-io", "selinux-policy-targeted",
 				     "openssh-server", "openssh-clients",
 				     "NetworkManager", "vim-minimal", "nano",
-				     "strace",
+				     "rsync",
 				     "sudo"],
 			"units": ["docker.service"],
 		        "postprocess": ["remove-locales",
