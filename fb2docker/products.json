@@ -29,11 +29,12 @@
 	"core":
 	{
 	    "docker": { "packages": ["docker-io", "selinux-policy-targeted",
+				     "min-metadata-service",
 				     "openssh-server", "openssh-clients",
 				     "NetworkManager", "vim-minimal", "nano",
 				     "rsync",
 				     "sudo"],
-			"units": ["docker.service"],
+			"units": ["docker.service", "min-metadata.service"],
 		        "postprocess": ["remove-locales",
 				        "remove-gpu-drivers",
 				        "remove-docs"],
