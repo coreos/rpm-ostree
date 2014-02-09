@@ -38,9 +38,9 @@
 	},
 	"workstation":
 	{
-	    "gnome/core": { "packages":  ["@core", "@standard", "@gnome-desktop"] },
-	    "gnome/development-virt": { "packages": ["@core", "@standard", "@gnome-desktop", "@firefox", "@gnome-games", "@libreoffice", "@virtualization", "@development-tools"] },
-	    "kde/core": { "packages":  ["@core", "@standard", "@kde-desktop"] }
+	    "gnome/core": { "packages":  ["@core", "@standard", "@base-x", "@gnome-desktop"] },
+	    "gnome/development-virt": { "packages": ["@core", "@standard", "@base-x", "@gnome-desktop", "@firefox", "@gnome-games", "@libreoffice", "@virtualization", "@development-tools"] },
+	    "kde/core": { "packages":  ["@core", "@standard", "@base-x", "@kde-desktop"] }
 	}
     }
 }
