@@ -8,7 +8,7 @@
 
     "architectures": ["x86_64"],
 
-    "releases": ["20", "rawhide"],
+    "releases": ["rawhide"],
 
     "add-repos": ["walters-rpm-ostree"],
 
