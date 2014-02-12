@@ -52,8 +52,15 @@ const TaskZDisks = new Lang.Class({
             throw new Error("No cached disk found for " + ref);
         }
 
+        let formats = this._products['image_formats'];
+        if (!formats) formats = [];
+
+        let newDiskName = null;
+        let newVdiName = null;
+
+        if (formats.indexOf('qcow2') >= 0) {
         let newDiskPath = diskDir.get_child(revision + '.qcow2.xz');
-        let newDiskName = newDiskPath.get_basename();
+        newDiskName = newDiskPath.get_basename();
         if (!newDiskPath.query_exists(null)) {
             let newDiskPathTmp = Gio.File.new_for_path(revision + '.qcow2.xz.tmp');
 
@@ -73,10 +80,12 @@ const TaskZDisks = new Lang.Class({
         }
         BuildUtil.atomicSymlinkSwap(newDiskPath.get_parent().get_child('latest-qcow2.xz'),
                                     newDiskPath, cancellable);
+        }
 
+        if (formats.indexOf('vdi') >= 0) {
         let vdiTmpPath = Gio.File.new_for_path(revision + '.vdi.tmp');
         let newVdiPath = diskDir.get_child(revision + '.vdi.bz2'); 
-        let newVdiName = newVdiPath.get_basename();
+        newVdiName = newVdiPath.get_basename();
         if (!newVdiPath.query_exists(null)) {
             let newVdiPathTmp = Gio.File.new_for_path(revision + '.vdi.bz2.tmp');
 
@@ -102,6 +111,7 @@ const TaskZDisks = new Lang.Class({
         }
         BuildUtil.atomicSymlinkSwap(newVdiPath.get_parent().get_child('latest-vdi.bz2'),
                                     newVdiPath, cancellable);
+        }
 
         let e = null;
         try {

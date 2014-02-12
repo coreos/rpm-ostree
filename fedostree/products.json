@@ -14,6 +14,8 @@
 
     "selinux": true,
 
+    "image_formats": ["qcow2"],
+
     "kargs": ["quiet", "enforcing=0"],
 
     "bootstrap_base": ["filesystem", "glibc", "nss-altfiles", "shadow-utils"],
