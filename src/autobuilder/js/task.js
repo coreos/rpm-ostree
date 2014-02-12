@@ -398,6 +398,7 @@ const TaskRunner = new Lang.Class({
 
         this.buildName = this.workdir.get_relative_path(this.buildPath);
         this.taskCwd = this.buildPath.get_child(this.name);
+        GSystem.shutil_rm_rf(this.taskCwd, cancellable);
         GSystem.file_ensure_directory(this.taskCwd, false, cancellable);
 
 	let baseArgv = ['rpm-ostree-autobuilder', 'run-task', this.name, JSON.stringify(this.taskData.parameters)];
