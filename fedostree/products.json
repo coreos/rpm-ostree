@@ -30,8 +30,10 @@
     {
 	"server":
 	{
-	    "docker-io": { "packages": ["@core", "@standard", "NetworkManager-config-server", "docker-io"] },
-	    "virthost": { "packages": ["@core", "@standard", "NetworkManager-config-server",
+	    "docker-io": { "comment": "A system to just run Docker",
+			   "packages": ["@core", "@standard", "NetworkManager-config-server", "docker-io"] },
+	    "virthost": { "comment": "A system to just run libvirt",
+			  "packages": ["@core", "@standard", "NetworkManager-config-server",
 				       "libvirt-daemon-kvm",
 				       "libvirt-daemon-config-network",
 				       "qemu-kvm",
@@ -39,9 +41,13 @@
 	},
 	"workstation":
 	{
-	    "gnome/core": { "packages":  ["@core", "@standard", "@base-x", "@gnome-desktop"] },
-	    "gnome/development-virt": { "packages": ["@core", "@standard", "@base-x", "@gnome-desktop", "@firefox", "@gnome-games", "@libreoffice", "@virtualization", "@development-tools"] },
-	    "kde/core": { "packages":  ["@core", "@standard", "@base-x", "@kde-desktop"] }
+	    "gnome/core": { "comment": "The GNOME desktop core",
+			    "packages":  ["@core", "@standard", "@base-x", "@gnome-desktop"] },
+	    "gnome/development-virt": { "comment": "The GNOME desktop with Firefox, games, LibreOffice, virtualization and development tools",
+					"packages": ["@core", "@standard", "@base-x", "@gnome-desktop", "@firefox",
+						     "@gnome-games", "@libreoffice", "@virtualization", "@development-tools"] },
+	    "kde/core": { "comment": "The KDE desktop core",
+			  "packages":  ["@core", "@standard", "@base-x", "@kde-desktop"] }
 	}
     }
 }
