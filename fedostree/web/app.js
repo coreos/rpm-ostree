@@ -15,6 +15,12 @@
             when('/installation', {
                 templateUrl: 'partials/installation.html'
             }).
+            when('/background', {
+                templateUrl: 'partials/background.html'
+            }).
+            when('/implementation', {
+                templateUrl: 'partials/implementation.html'
+            }).
             otherwise({
                 redirectTo: 'partials/unknown.html',
             });

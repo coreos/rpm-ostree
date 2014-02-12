@@ -1,0 +1,71 @@
+<article>
+  <h1>Background</h1>
+  <p>Fedora today is an extremely flexible system.  One can find
+    Fedora builds running on everything from hobbyist ARM devices,
+    to workstations, to testing servers.
+  </p>
+  <p>
+    This flexibility derives in large part from the fact that from a
+    technological point of view, Fedora is a collection of packages.
+    While pre-assembled "deliverables" such as the Live CDs are
+    distributed by the project, they are only a temporary state.
+  </p>
+  <p>
+    For example, as soon as they are installed, upgrading involves
+    having a package manager that dynamically reassembles the system
+    from newer parts in the Fedora package collection.  One cannot
+    file a bug against the "default offering" as a whole - a package
+    must be chosen.
+  </p>
+  <p>
+    Nearly every aspect of the Fedora infrastructure (and
+    documentation) is structured in terms of packages, from
+    user-facing tools such as Bugzilla and Bodhi, to developer tools
+    such as Koji.  The announced security updates are based on package
+    names.
+  </p>
+  <p>
+    In contrast for example, ChromeOS is delivered and updated as an
+    pre-assembled atomic unit, targeted at specific hardware.
+    ChromeOS is (compared to Fedora) completely inflexible, but
+    fulfills a targeted role clearly well.
+  </p>
+  <h3>How OSTree allows a middle ground</h3>
+  <p>
+    Fundamentally, packages are partial filesystem trees with metadata
+    - they are traditionally assembled by a package manager on every
+    client machine into a complete bootable tree.  It's important to
+    emphasize that it is only these <emphasis>complete</emphasis>
+    trees that users run.
+  </p>
+  <p>
+    OSTree allows an OS distributor to
+    ship <emphasis>multiple</emphasis> pre-built complete bootable
+    filesystem trees, and furthermore, client machines can atomically
+    switch between them, or even track multiple trees independently.
+  </p>
+  <p>
+    This allows a middle ground between the two extremes of a
+    combinatorial explosion of packages, and a singular OS.
+  </p>
+  <h3>Initial goals</h3>
+  <p>
+    The first goal of this project is to be an <i>additional</i>
+    deployment option built in the Fedora infrastructure; possibly
+    only for Fedora rawhide.  Developers and testers can use OSTree to
+    atomically replicate, upgrade to newer versions of, and transition
+    between the pre-assembled trees produced by this build server.
+  </p>
+  <p>
+    Notably in this phase, no common mechanism for additional software
+    installation is provided. That said, individual trees can do so;
+    for example <tt>server/docker-io</tt> tree can use Docker to
+    install and run server container applications independent of
+    OSTree.
+  </p>
+  <p>
+    This phase does include basic integration testing on the build
+    server side, which will be a major benefit to the Fedora project
+    and its downstreams.
+  </p>
+</article>
