@@ -374,8 +374,8 @@ convert_var_to_tmpfiles_d (GOutputStream *tmpfiles_out,
           filetype_c = 'L';
           break;
         default:
-          g_warning ("Ignoring non-directory/non-symlink '%s'",
-                     gs_file_get_path_cached (child));
+          g_print ("Ignoring non-directory/non-symlink '%s'\n",
+                   gs_file_get_path_cached (child));
           continue;
         }
 
