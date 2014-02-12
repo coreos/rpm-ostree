@@ -9,7 +9,8 @@
     rpmostree.config(['$routeProvider', function($routeProvider) {
         $routeProvider.
             when('/', {
-                templateUrl: 'partials/home.html'
+                templateUrl: 'partials/home.html',
+                controller: 'rpmostreeHomeCtrl'
             }).
             when('/installation', {
                 templateUrl: 'partials/installation.html'

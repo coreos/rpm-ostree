@@ -9,6 +9,15 @@
     repository.  Client systems can them atomically upgrade and switch
     between these trees.
   </p>
+  <h3>Current build status</h3>
+  <div ng-repeat="(ref, treedata) in trees">
+    <div>
+      <div>Name: {{ ref }}</div>
+      <div>Description: {{ treedata.comment }}</div>
+      <div>Packages: {{ treedata.packages }}</div>
+      <div><a href="{{ treedata.screenshotUrl }}"><img src="{{ treedata.screenshotUrl }}" width="320" height="240"></img></div>
+    </div>
+  </div>
   <h3>Trying it out</h3>
   <p>See <a href="#installation">installation</a>.</p>
   <h3>Background</h3>

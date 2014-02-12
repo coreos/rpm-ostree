@@ -10,7 +10,7 @@
 
     "releases": ["rawhide"],
 
-    "add-repos": ["walters-rpm-ostree"],
+    "repos": ["fedora-rawhide", "walters-rpm-ostree"],
 
     "selinux": true,
 
@@ -18,11 +18,11 @@
 
     "kargs": ["quiet", "enforcing=0"],
 
-    "bootstrap_base": ["filesystem", "glibc", "nss-altfiles", "shadow-utils"],
+    "bootstrap_packages": ["filesystem", "glibc", "nss-altfiles", "shadow-utils"],
 
-    "base_required_packages": ["kernel", "ostree", "generic-release", "lvm2",
-			       "btrfs-progs", "e2fsprogs", "xfsprogs",
-			       "rpm-ostree-public-gpg-key", "gnupg2"],
+    "packages": ["kernel", "ostree", "generic-release", "lvm2",
+		 "btrfs-progs", "e2fsprogs", "xfsprogs",
+		 "rpm-ostree-public-gpg-key", "gnupg2"],
 
     "postprocess": ["remove-root-password"],
 

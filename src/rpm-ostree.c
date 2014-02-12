@@ -22,49 +22,75 @@
 
 #include <string.h>
 #include <glib-unix.h>
+#include <json-glib/json-glib.h>
 
 #include "rpmostree-postprocess.h"
 
 #include "libgsystem.h"
 
-static char **opt_enable_repos;
 static char *opt_workdir;
-static char **opt_bootstrap_packages;
-static char **opt_internal_postprocessing;
-static char **opt_external_postprocessing;
-static char *opt_gpg_sign;
-static gboolean opt_disable_selinux;
 
 static GOptionEntry option_entries[] = {
-  { "bootstrap-package", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_bootstrap_packages, "Install this package first", "PACKAGE" },
-  { "enablerepo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_enable_repos, "Repositories to enable", "REPO" },
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "REPO" },
-  { "post", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_internal_postprocessing, "Run this builtin postprocessing step before commit", "NAME" },
-  { "xpost", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_external_postprocessing, "Run this external script on rootfs before committing", "PATH" },
-  { "gpg-sign", 0, 0, G_OPTION_ARG_STRING, &opt_gpg_sign, "Sign commits with thiskey", "KEYID" },
-  { "disable-selinux", 0, 0, G_OPTION_ARG_NONE, &opt_disable_selinux, "Do not use SELinux", NULL },
   { NULL }
 };
 
-static char *
-c_stringify (const guint8   *buf,
-             gsize           len)
+static const char *
+object_require_string_member (JsonObject     *object,
+                              const char     *member_name,
+                              GError        **error)
 {
-  GString *ret = g_string_new ("");
-  gsize i;
-
-  for (i = 0; i < len; i++)
+  const char *ret = json_object_get_string_member (object, member_name);
+  if (!ret)
     {
-      guint8 c = buf[i];
-      if (c == '\\')
-        g_string_append (ret, "\\\\");
-      else if (g_ascii_isprint (c))
-        g_string_append_c (ret, c);
-      else
-        g_string_append_printf (ret, "\\x%02x", c);
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "No member '%s' found", member_name);
+      return NULL;
+    }
+  return ret;
+}
+
+static const char *
+array_require_string_element (JsonArray      *array,
+                              guint           i,
+                              GError        **error)
+{
+  const char *ret = json_array_get_string_element (array, i);
+  if (!ret)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Element at index %u is not a string", i);
+      return NULL;
+    }
+  return ret;
+}
+
+static gboolean
+append_string_array_to (JsonObject   *object,
+                        const char   *member_name,
+                        GPtrArray    *array,
+                        GError      **error)
+{
+  JsonArray *jarray = json_object_get_array_member (object, member_name);
+  guint i, len;
+
+  if (!jarray)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "No member '%s' found", member_name);
+      return FALSE;
     }
 
-  return g_string_free (ret, FALSE);
+  len = json_array_get_length (jarray);
+  for (i = 0; i < len; i++)
+    {
+      const char *v = array_require_string_element (jarray, i, error);
+      if (!v)
+        return FALSE;
+      g_ptr_array_add (array, g_strdup (v));
+    }
+
+  return TRUE;
 }
 
 static gboolean
@@ -176,28 +202,48 @@ yum_context_free (YumContext  *yumctx)
   g_free (yumctx);
 }
 
-static void
-append_repo_and_cache_opts (GFile      *yumcache_lookaside,
-                            GPtrArray  *args)
+static gboolean
+append_repo_and_cache_opts (JsonObject *treedata,
+                            GFile      *yumcache_lookaside,
+                            GPtrArray  *args,
+                            GError    **error)
 {
-  char **strviter;
+  gboolean ret = FALSE;
+  JsonArray *enable_repos;
 
   if (g_getenv ("RPM_OSTREE_OFFLINE"))
     g_ptr_array_add (args, g_strdup ("-C"));
 
   g_ptr_array_add (args, g_strdup ("--disablerepo=*"));
-  for (strviter = opt_enable_repos; strviter && *strviter; strviter++)
-    g_ptr_array_add (args, g_strconcat ("--enablerepo=", *strviter, NULL));
+
+  enable_repos = json_object_get_array_member (treedata, "repos");
+  if (enable_repos)
+    {
+      guint i;
+      guint n = json_array_get_length (enable_repos);
+      for (i = 0; i < n; i++)
+        {
+          const char *reponame = array_require_string_element (enable_repos, i, error);
+          if (!reponame)
+            goto out;
+          g_ptr_array_add (args, g_strconcat ("--enablerepo=", reponame, NULL));
+        }
+    }
 
   g_ptr_array_add (args, g_strdup ("--setopt=keepcache=1"));
   if (yumcache_lookaside)
     g_ptr_array_add (args, g_strconcat ("--setopt=cachedir=",
                                         gs_file_get_path_cached (yumcache_lookaside),
                                         NULL));
+
+  ret = TRUE;
+ out:
+  return ret;
 }
 
 static YumContext *
-yum_context_new (GFile          *yumroot,
+yum_context_new (JsonObject     *treedata,
+                 GFile          *yumroot,
                  GFile          *cachedir,
                  GCancellable   *cancellable,
                  GError        **error)
@@ -212,7 +258,8 @@ yum_context_new (GFile          *yumroot,
   g_ptr_array_add (yum_argv, g_strdup ("yum"));
   g_ptr_array_add (yum_argv, g_strdup ("-y"));
 
-  append_repo_and_cache_opts (cachedir, yum_argv);
+  if (!append_repo_and_cache_opts (treedata, cachedir, yum_argv, error))
+    goto out;
 
   g_ptr_array_add (yum_argv, g_strconcat ("--installroot=",
                                           gs_file_get_path_cached (yumroot),
@@ -340,7 +387,8 @@ yum_context_command (YumContext   *yumctx,
 }
                   
 static gboolean
-yuminstall (GFile           *yumroot,
+yuminstall (JsonObject      *treedata,
+            GFile           *yumroot,
             GFile           *cachedir,
             char           **packages,
             GCancellable    *cancellable,
@@ -350,7 +398,7 @@ yuminstall (GFile           *yumroot,
   char **strviter;
   YumContext *yumctx;
 
-  yumctx = yum_context_new (yumroot, cachedir, cancellable, error);
+  yumctx = yum_context_new (treedata, yumroot, cachedir, cancellable, error);
   if (!yumctx)
     goto out;
 
@@ -395,7 +443,11 @@ main (int     argc,
   GOptionContext *context = g_option_context_new ("- Run yum and commit the result to an OSTree repository");
   const char *cmd;
   const char *ref;
-  char **strviter;
+  JsonNode *treefile_root = NULL;
+  JsonObject *treefile = NULL;
+  JsonArray *internal_postprocessing;
+  JsonArray *units;
+  guint len;
   gs_free char *ref_unix = NULL;
   gs_unref_object GFile *cachedir = NULL;
   gs_unref_object GFile *yumroot = NULL;
@@ -404,16 +456,19 @@ main (int     argc,
   gs_unref_object GFile *yumcache_lookaside = NULL;
   gs_unref_object GFile *yumroot_varcache = NULL;
   gs_unref_object OstreeRepo *repo = NULL;
-  gs_unref_ptrarray GPtrArray *all_packages = NULL;
+  gs_unref_ptrarray GPtrArray *bootstrap_packages = NULL;
+  gs_unref_ptrarray GPtrArray *packages = NULL;
+  gs_unref_object GFile *treefile_path = NULL;
+  gs_unref_object JsonParser *treefile_parser = NULL;
   
   g_option_context_add_main_entries (context, option_entries, NULL);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
 
-  if (argc < 4)
+  if (argc < 3)
     {
-      g_printerr ("usage: %s create REFNAME PACKAGE [PACKAGE...]\n", argv[0]);
+      g_printerr ("usage: %s create treefile.json\n", argv[0]);
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Option processing failed");
       goto out;
@@ -426,18 +481,30 @@ main (int     argc,
                    "Unknown command '%s'", cmd);
       goto out;
     }
-  ref = argv[2];
+  treefile_path = g_file_new_for_path (argv[2]);
 
-  if (opt_workdir)
+  if (opt_workdir && chdir (opt_workdir) != 0)
     {
-      if (chdir (opt_workdir) != 0)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Failed to chdir to '%s': %s",
-                       opt_workdir, strerror (errno));
-          goto out;
-        }
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Failed to chdir to '%s': %s",
+                   opt_workdir, strerror (errno));
+      goto out;
     }
+
+  treefile_parser = json_parser_new ();
+  if (!json_parser_load_from_file (treefile_parser,
+                                   gs_file_get_path_cached (treefile_path),
+                                   error))
+    goto out;
+
+  treefile_root = json_parser_get_root (treefile_parser);
+  if (!JSON_NODE_HOLDS_OBJECT (treefile_root))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Treefile root is not an object");
+      goto out;
+    }
+  treefile = json_node_get_object (treefile_root);
 
   cachedir = g_file_new_for_path ("cache");
   if (!gs_file_ensure_directory (cachedir, TRUE, cancellable, error))
@@ -452,23 +519,23 @@ main (int     argc,
   if (!gs_file_ensure_directory (yumcache_lookaside, TRUE, cancellable, error))
     goto out;
 
+  ref = object_require_string_member (treefile, "ref", error);
+  if (!ref)
+    goto out;
+
   ref_unix = g_strdelimit (g_strdup (ref), "/", '_');
 
-  all_packages = g_ptr_array_new ();
-  if (opt_bootstrap_packages)
-    {
-      char **strviter;
-      for (strviter = opt_bootstrap_packages; strviter && *strviter; strviter++)
-        g_ptr_array_add (all_packages, *strviter);
-    }
+  bootstrap_packages = g_ptr_array_new ();
+  packages = g_ptr_array_new ();
 
-  {
-    guint i;
-    for (i = 3; i < argc; i++)
-      g_ptr_array_add (all_packages, argv[i]);
-  }
+  if (!append_string_array_to (treefile, "bootstrap_packages", bootstrap_packages, error))
+    goto out;
+  g_ptr_array_add (bootstrap_packages, NULL);
+
+  if (!append_string_array_to (treefile, "packages", packages, error))
+    goto out;
+  g_ptr_array_add (packages, NULL);
     
-  g_ptr_array_add (all_packages, NULL);
 
   {
     gs_free char *cached_packageset_name =
@@ -487,16 +554,17 @@ main (int     argc,
     gboolean first = TRUE;
 
     g_ptr_array_add (repoquery_argv, g_strdup (PKGLIBDIR "/repoquery-sorted"));
-    append_repo_and_cache_opts (yumcache_lookaside, repoquery_argv);
+    if (!append_repo_and_cache_opts (treefile, yumcache_lookaside, repoquery_argv, error))
+      goto out;
     g_ptr_array_add (repoquery_argv, g_strdup ("--recursive"));
     g_ptr_array_add (repoquery_argv, g_strdup ("--requires"));
     g_ptr_array_add (repoquery_argv, g_strdup ("--resolve"));
 
     repoquery_arg_string = g_string_new ("");
 
-    for (i = 0; i < all_packages->len; i++)
+    for (i = 0; i < packages->len; i++)
       {
-        const char *package = all_packages->pdata[i];
+        const char *package = packages->pdata[i];
         if (!package)
           continue;
 
@@ -575,11 +643,10 @@ main (int     argc,
       }
 
     /* Ensure we have enough to modify NSS */
-    if (opt_bootstrap_packages)
-      {
-        if (!yuminstall (yumroot, yumcache_lookaside, opt_bootstrap_packages, cancellable, error))
-          goto out;
-      }
+    if (!yuminstall (treefile, yumroot, yumcache_lookaside,
+                     (char**)bootstrap_packages->pdata,
+                     cancellable, error))
+      goto out;
 
     /* Prepare NSS configuration; this needs to be done
        before any invocations of "useradd" in %post */
@@ -604,8 +671,8 @@ main (int     argc,
     }
 
     {
-      if (!yuminstall (yumroot, yumcache_lookaside,
-                       (char**)all_packages->pdata,
+      if (!yuminstall (treefile, yumroot, yumcache_lookaside,
+                       (char**)packages->pdata,
                        cancellable, error))
         goto out;
     }
@@ -618,12 +685,24 @@ main (int     argc,
     if (!rpmostree_postprocess (yumroot, cancellable, error))
       goto out;
 
-    for (strviter = opt_internal_postprocessing; strviter && *strviter; strviter++)
+    internal_postprocessing = json_object_get_array_member (treefile, "postprocess");
+
+    if (internal_postprocessing)
+      len = json_array_get_length (internal_postprocessing);
+    else
+      len = 0;
+
+    for (i = 0; i < len; i++)
       {
-        const char *post_name = *strviter;
         gs_unref_object GFile *pkglibdir = g_file_new_for_path (PKGLIBDIR);
         gs_unref_object GFile *pkglibdir_posts = g_file_get_child (pkglibdir, "postprocessing");
-        gs_unref_object GFile *post_path = g_file_get_child (pkglibdir_posts, post_name);
+        gs_unref_object GFile *post_path = NULL;
+        const char *post_name = array_require_string_element (internal_postprocessing, i, error);
+
+        if (!post_name)
+          goto out;
+
+        post_path = g_file_get_child (pkglibdir_posts, post_name);
 
         g_print ("Running internal postprocessing command '%s'\n",
                  gs_file_get_path_cached (post_path));
@@ -635,20 +714,54 @@ main (int     argc,
           goto out;
       }
 
-    for (strviter = opt_external_postprocessing; strviter && *strviter; strviter++)
-      {
-        const char *post_path = *strviter;
+    units = json_object_get_array_member (treefile, "units");
 
-        g_print ("Running external postprocessing command '%s'\n",
-                 post_path);
-        if (!gs_subprocess_simple_run_sync (gs_file_get_path_cached (yumroot),
-                                            GS_SUBPROCESS_STREAM_DISPOSITION_NULL,
-                                            cancellable, error,
-                                            post_path,
-                                            NULL))
-          goto out;
-      }
+    if (units)
+      len = json_array_get_length (units);
+    else
+      len = 0;
 
+    {
+      gs_unref_object GFile *multiuser_wants_dir =
+        g_file_resolve_relative_path (yumroot, "usr/etc/systemd/system/multi-user.target.wants");
+      for (i = 0; i < len; i++)
+        {
+          const char *unitname = array_require_string_element (units, i, error);
+          gs_unref_object GFile *unit_link_target = NULL;
+          gs_free char *symlink_target = NULL;
+
+          if (!unitname)
+            goto out;
+
+          g_print ("Adding %s to multi-user.target.wants\n", unitname);
+          
+          symlink_target = g_strconcat ("/usr/lib/systemd/system/", unitname, NULL);
+          unit_link_target = g_file_get_child (multiuser_wants_dir, unitname);
+          if (!g_file_make_symbolic_link (unit_link_target, symlink_target,
+                                          cancellable, error))
+            goto out;
+        }
+    }
+
+    {
+      gs_unref_object GFile *target_treefile_dir_path =
+        g_file_resolve_relative_path (yumroot, "usr/share/rpm-ostree");
+      gs_unref_object GFile *target_treefile_path =
+        g_file_get_child (target_treefile_dir_path, "treefile.json");
+      
+      if (!gs_file_ensure_directory (target_treefile_dir_path, TRUE,
+                                     cancellable, error))
+        goto out;
+                                     
+      g_print ("Copying '%s' to '%s'\n",
+               gs_file_get_path_cached (treefile_path),
+               gs_file_get_path_cached (target_treefile_path));
+      if (!g_file_copy (treefile_path, target_treefile_path,
+                        G_FILE_COPY_TARGET_DEFAULT_PERMS,
+                        cancellable, NULL, NULL, error))
+        goto out;
+    }
+  
     {
       gs_unref_object GFile *repo_path = g_file_new_for_path ("repo");
       repo = ostree_repo_new (repo_path);
@@ -657,8 +770,8 @@ main (int     argc,
     if (!ostree_repo_open (repo, cancellable, error))
       goto out;
 
-    if (!rpmostree_commit (yumroot, repo, ref, opt_gpg_sign,
-                           !opt_disable_selinux,
+    if (!rpmostree_commit (yumroot, repo, ref, json_object_get_string_member (treefile, "gpg_key"),
+                           json_object_get_boolean_member (treefile, "selinux"),
                            cancellable, error))
       goto out;
 

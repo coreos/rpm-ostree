@@ -48,33 +48,7 @@ const TaskBuild = new Lang.Class({
 		  'successful': 'successful',
 		  'unchanged': 'unchanged' },
 
-    _composeProduct: function(ref, productName, treeName, treeData, release, architecture, cancellable) {
-	let repos = ['fedora-' + release];
-	if (release != 'rawhide')
-	    repos.push('fedora-' + release + '-updates');
-
-	let addRepos = this._productData['add-repos'];
-	if (addRepos)
-	    repos.push.apply(repos, addRepos);
-
-	let packages = treeData['packages'];
-	let bootstrapBase = this._productData['bootstrap_base'];
-	let baseRequired = this._productData['base_required_packages'];
-	packages.push.apply(packages, baseRequired);
-
-	let postprocessSteps = [];
-	let masterPostprocessSteps = this._productData['postprocess'];
-	if (masterPostprocessSteps) {
-	    postprocessSteps.push.apply(postprocessSteps, masterPostprocessSteps);
-	    print("Using master postprocessing " + JSON.stringify(masterPostprocessSteps));
-	}
-
-	let treePostprocess = treeData['postprocess'];
-	if (treePostprocess) {
-	    print("Appending postprocessing " + JSON.stringify(treePostprocess));
-	    postprocessSteps.push.apply(postprocessSteps, treePostprocess);
-	}
-
+    _composeProduct: function(ref, treefileData, cancellable) {
 	let [,origRevision] = this.ostreeRepo.resolve_rev(ref, true);
 	if (origRevision == null)
 	    print("Starting new build of " + ref);
@@ -83,43 +57,13 @@ const TaskBuild = new Lang.Class({
 
 	let argv = ['rpm-ostree',
 		    '--workdir=' + this.workdir.get_path()];
-	argv.push.apply(argv, bootstrapBase.map(function (a) { return '--bootstrap-package=' + a; }));
-	argv.push.apply(argv, repos.map(function (a) { return '--enablerepo=' + a; }));
-	argv.push.apply(argv, postprocessSteps.map(function (a) { return '--post=' + a; }));
 
-	let enableUnitsScript = '#!/bin/sh\n';
-	let enabledUnits = treeData['units'];
-	if (enabledUnits) {
-	    for (let i = 0; i < enabledUnits.length; i++) {
-		let unit = enabledUnits[i];
-		print("Enabling unit " + unit);
-		enableUnitsScript += 'ln -s /usr/lib/systemd/system/' + unit + ' ' + './usr/etc/systemd/system/multi-user.target.wants\n';
-	    }
-	    let enableUnitsScriptPath = Gio.File.new_for_path('enable-units.sh');
-	    enableUnitsScriptPath.replace_contents(enableUnitsScript, null, false, 0, cancellable);
-	    GSystem.file_chmod(enableUnitsScriptPath, 493, cancellable);
-	    argv.push('--xpost=' + enableUnitsScriptPath.get_path());
-	}
+	let treefilePath = Gio.File.new_for_path('treefile.json');
+	JsonUtil.writeJsonFileAtomic(treefilePath, treefileData, cancellable);
 
-	let keyId = this._productData['gpg_key'];
-	if (keyId) {
-	    print("Signing using " + keyId);
-	    argv.push('--gpg-sign=' + keyId);
-	}
-
-	let selinuxGlobalDefault = this._productData['selinux'];
-	let productSelinux = treeData['selinux'];
-	if (productSelinux === undefined)
-	    productSelinux = selinuxGlobalDefault;
-
-	if (!productSelinux)
-	    argv.push('--disable-selinux');
-
-	argv.push.apply(argv, ['create', ref]);
-	argv.push.apply(argv, packages);
+	argv.push.apply(argv, ['create', treefilePath.get_path()]);
 	let productNameUnix = ref.replace(/\//g, '_');
 	let buildOutputPath = Gio.File.new_for_path('log-' + productNameUnix + '.txt');
-	
 	print("Running: " + argv.map(GLib.shell_quote).join(' '));
 	let procContext = new GSystem.SubprocessContext({ argv: argv });
 	GSystem.shutil_rm_rf(buildOutputPath, cancellable);
@@ -130,13 +74,36 @@ const TaskBuild = new Lang.Class({
 	try {
 	    proc.wait_sync_check(cancellable);
 	} catch (e) {
-	    print("Build of " + productName + " failed");
-	    return [this.BuildState.failed, origRevision];
+	    print("Build of " + ref + " failed");
+	    return this.BuildState.failed;
 	}
 	let [,newRevision] = this.ostreeRepo.resolve_rev(ref, true);
+	treefileData.rev = newRevision;
+			
 	if (origRevision == newRevision)
-	    return [this.BuildState.unchanged, newRevision];
-	return [this.BuildState.successful, newRevision];
+	    return this.BuildState.unchanged;
+	return this.BuildState.successful;
+    },
+
+    _generateTreefile: function(ref, release, architecture,
+				subproductData) {
+	let treefile = JSON.parse(JSON.stringify(this._productData));
+	delete treefile.products;
+	
+	treefile.ref = ref;
+
+	treefile.packages.push.apply(treefile.packages, subproductData['packages'] || []);
+	if (!treefile.postprocess)
+	    treefile.postprocess = [];
+	treefile.postprocess.push.apply(treefile.postprocess, subproductData['postprocess'] || []);
+	treefile.units = subproductData['units'];
+
+	treefile.release = release;
+	delete treefile.releases;
+	treefile.architecture = architecture;
+	delete treefile.architectures;
+
+	return treefile;
     },
 
     execute: function(cancellable) {
@@ -164,13 +131,12 @@ const TaskBuild = new Lang.Class({
 			    log("Skipping " + ref + " which does not match " + this.parameters.onlyTreesMatching);
 			    continue;
 			}
-			let [result, revision] =
-			    this._composeProduct(ref, productName, treeName, products[productName][treeName],
-						 release, architecture,
-						 cancellable);
+			let subproductData = products[productName][treeName];
+			let treefileData = this._generateTreefile(ref, release, architecture, subproductData);
+			let result = this._composeProduct(ref, treefileData, cancellable);
 			switch (result) {
 			    case this.BuildState.successful: {
-				productTrees[ref] = revision;
+				productTrees[ref] = treefileData;
 				successful.push(ref);
 			    }
 			    break;
@@ -179,7 +145,7 @@ const TaskBuild = new Lang.Class({
 			    }
 			    break;
 			    case this.BuildState.unchanged: {
-				productTrees[ref] = revision;
+				productTrees[ref] = treefileData;
 				unchanged.push(ref);
 			    }
 			    break;

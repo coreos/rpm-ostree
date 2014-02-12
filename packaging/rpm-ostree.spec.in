@@ -13,6 +13,7 @@ BuildRequires: gtk-doc
 
 BuildRequires: gnome-common
 BuildRequires: pkgconfig(ostree-1)
+BuildRequires: pkgconfig(json-glib-1.0)
 BuildRequires: /usr/bin/g-ir-scanner
 
 Requires: ostree
