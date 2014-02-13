@@ -31,9 +31,6 @@
     
     "units": ["docker.service", "min-metadata.service"],
 
-    "postprocess": ["remove-root-password",
-		    "remove-locales",
-		    "remove-gpu-drivers",
-		    "remove-docs"]
+    "postprocess": ["remove-root-password"]
 }
 	    
