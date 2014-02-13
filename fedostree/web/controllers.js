@@ -25,6 +25,7 @@
 	    for (var ref in trees) {
 		var treeData = trees[ref];
 		var refUnix = ref.replace(/\//g, '-');
+		treeData.refUnix = refUnix;
 		treeData.screenshotUrl = '/results/tasks/smoketest/smoketest/work-' + refUnix + '/screenshot-final.png';
 	    }
 	    $scope.trees = trees;
