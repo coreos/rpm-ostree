@@ -103,6 +103,12 @@ const TaskBuild = new Lang.Class({
 	treefile.architecture = architecture;
 	delete treefile.architectures;
 
+	let overrideRepo = this.workdir.get_child('overrides');
+	if (overrideRepo.query_exists(null)) {
+	    print("Using override repo: " + overrideRepo.get_path()); 
+	    treefile.repos.push('rpm-ostree-overrides');
+	}
+
 	return treefile;
     },
 
