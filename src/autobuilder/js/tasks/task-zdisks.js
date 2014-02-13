@@ -140,7 +140,7 @@ const TaskZDisks = new Lang.Class({
         this._productsBuilt = JsonUtil.loadJson(this.builddir.get_child('products-built.json'), cancellable);
         let productTrees = this._productsBuilt['trees'];
         for (let ref in productTrees) {
-            this._exportDiskForProduct(ref, productTrees[ref], cancellable);
+            this._exportDiskForProduct(ref, productTrees[ref]['rev'], cancellable);
         }
     }
 });

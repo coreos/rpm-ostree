@@ -642,7 +642,7 @@ const TestBase = new Lang.Class({
         this._productsBuilt = JsonUtil.loadJson(this.builddir.get_child('products-built.json'), cancellable);
         let productTrees = this._productsBuilt['trees'];
         for (let ref in productTrees) {
-            let revision = productTrees[ref];
+            let revision = productTrees[ref]['rev'];
             let snapshotDisk = this.getDiskSnapshotForRevision(ref, revision, cancellable);
 	          let refUnix = ref.replace(/\//g, '-');
             let refWorkdir = Gio.File.new_for_path('work-' + refUnix);
