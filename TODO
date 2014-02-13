@@ -1,5 +1,4 @@
 * Split builds into separate tasks
-* Screenshots in web UI
 * Figure out why libguestfs is hanging
 * Write an intelligent scheduler
   - Task with same name of newer version wait until old one is done
