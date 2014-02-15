@@ -1,5 +1,7 @@
 * Split builds into separate tasks
 * Figure out why libguestfs is hanging
+* Look at DNF
+* Use RPM's idea of %doc for removing docs
 * Write an intelligent scheduler
   - Task with same name of newer version wait until old one is done
   - Walk infinite test matrix
