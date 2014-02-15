@@ -423,6 +423,48 @@ convert_var_to_tmpfiles_d (GOutputStream *tmpfiles_out,
   return ret;
 }
 
+static gboolean
+clean_uuid_files (GFile         *dir,
+                  GCancellable  *cancellable,
+                  GError       **error)
+{
+  gboolean ret = FALSE;
+  gs_unref_object GFileEnumerator *direnum = NULL;
+
+  direnum = g_file_enumerate_children (dir, "standard::name,standard::type",
+                                       G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
+                                       cancellable, error);
+  if (!direnum)
+    goto out;
+
+  while (TRUE)
+    {
+      GFileInfo *file_info;
+      GFile *child;
+
+      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
+                                       cancellable, error))
+        goto out;
+      if (!file_info)
+        break;
+
+      if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_DIRECTORY)
+        {
+          if (!clean_uuid_files (child, cancellable, error))
+            goto out;
+        }
+      else if (strcmp (g_file_info_get_name (file_info), "var_uuid") == 0)
+        {
+          if (!g_file_delete (child, cancellable, error))
+            goto out;
+        }
+    }
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
 /* Prepare a root filesystem, taking mainly the contents of /usr from yumroot */
 static gboolean 
 create_rootfs_from_yumroot_content (GFile         *targetroot,
@@ -504,6 +546,9 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
                      gs_file_get_path_cached (target_yum_rpmdb_indexes));
             if (!gs_file_rename (src_yum_rpmdb_indexes, target_yum_rpmdb_indexes,
                                  cancellable, error))
+              goto out;
+            
+            if (!clean_uuid_files (target_yum_rpmdb_indexes, cancellable, error))
               goto out;
           }
       }
