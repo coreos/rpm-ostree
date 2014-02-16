@@ -361,7 +361,7 @@ function pullDeploy(mntdir, srcrepo, osname, target, revision, originRepoUrl, ca
     bootLoaderLink.make_symbolic_link('loader.0', cancellable);
     GSystem.file_ensure_directory(bootLoaderDir0, true, cancellable);
     let syslinuxPath = mntdir.resolve_relative_path('boot/loader/syslinux.cfg');
-    syslinuxPath.replace_contents('TIMEOUT 10\n', null, false, Gio.FileCreateFlags.NONE, cancellable);
+    syslinuxPath.replace_contents('TIMEOUT 20\nPROMPT 1\n', null, false, Gio.FileCreateFlags.NONE, cancellable);
     
     // A compatibility symlink for syslinux
     let syslinuxDir = mntdir.resolve_relative_path('boot/syslinux');
