@@ -172,6 +172,10 @@ function createDisk(diskpath, cancellable, params) {
     if (bootPartitionOffset > 0)
 	gfHandle.mount("/dev/sda" + bootPartitionOffset, "/boot");
     gfHandle.extlinux("/boot");
+    // It's understandable that extlinux wants the loader to be
+    // immutable...except that later breaks our ability to set SELinux
+    // security contexts on it.
+    gfHandle.set_e2attrs("/boot/ldlinux.sys", "i", new Guestfs.SetE2attrs({ clear: Guestfs.Tristate.TRUE }));
     gfHandle.umount_all();
     _installSyslinux(gfHandle, cancellable);
     gfHandle.part_set_bootable("/dev/sda", 1, true);
@@ -406,11 +410,26 @@ function pullDeploy(mntdir, srcrepo, osname, target, revision, originRepoUrl, ca
     ProcUtil.runSync(adminCmd, cancellable,
                      {logInitiation: true, env: adminEnv});
 
+    let sysroot = OSTree.Sysroot.new(mntdir);
+    sysroot.load(null);
+    let deployments = sysroot.get_deployments();
+    let newDeployment = deployments[0];
+    let newDeploymentDirectory = sysroot.get_deployment_directory(newDeployment);
+
     let defaultFstab = 'UUID=' + ROOT_UUID + ' / ext4 defaults 1 1\n\
 UUID=' + BOOT_UUID + ' /boot ext4 defaults 1 2\n\
 UUID=' + SWAP_UUID + ' swap swap defaults 0 0\n';
-    let fstabPath = ostreeOsdir.resolve_relative_path('current/etc/fstab');
+    let fstabPath = newDeploymentDirectory.resolve_relative_path('etc/fstab');
     fstabPath.replace_contents(defaultFstab, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, cancellable);
+
+    print("Labeling deployment root");
+    let libdir = Gio.File.new_for_path(GLib.getenv('OSTBUILD_LIBDIR'));
+    ProcUtil.runSync([libdir.get_child('rpm-ostree-relabeling-helper').get_path(),
+		      newDeploymentDirectory.get_path(),
+		      newDeploymentDirectory.get_path(),
+		      ""],
+		     cancellable,
+		     { logInitiation: true });
 };
 
 function requestSnapshotForTree(task, resultdir, refname, revision) {

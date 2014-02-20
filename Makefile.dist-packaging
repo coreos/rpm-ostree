@@ -29,9 +29,9 @@ srpm: dist-snapshot
 	sed -e "s,^Version:.*,Version: $(GITREV_FOR_PKG)," $(srcdir)/packaging/$(PACKAGE).spec.in > $(PACKAGE).spec
 	$(srcdir)/packaging/rpmbuild-cwd -bs $(PACKAGE).spec
 
-rpm: srpm
-	$(srcdir)/packaging/rpmbuild-cwd --rebuild $(PKG_VER)*.src.rpm
+local-rpm: srpm
+	$(srcdir)/packaging/rpmbuild-cwd --rebuild packaging/$(PKG_VER)*.src.rpm
 
-buildinstall: rpm
+mock: srpm
 	sudo yum localinstall $(PKG_VER)*.src.rpm
 

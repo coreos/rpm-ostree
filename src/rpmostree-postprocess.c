@@ -27,8 +27,6 @@
 #include <errno.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <selinux/selinux.h>
-#include <selinux/label.h>
 #include "libgsystem.h"
 
 static gboolean
@@ -661,97 +659,6 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   return ret;
 }
 
-static GVariant *
-xattr_cb (OstreeRepo    *repo,
-          const char    *path,
-          GFileInfo     *file_info,
-          gpointer       user_data)
-{
-  guint32 mode;
-  char *con;
-  int res;
-  GVariantBuilder builder;
-  GVariant *ret;
-  struct selabel_handle *hnd = user_data;
-
-  mode = g_file_info_get_attribute_uint32 (file_info, "unix::mode");
-
-  res = selabel_lookup_raw (hnd, &con, path, mode);
-  if (res != 0)
-    {
-      if (strcmp (path, "/") == 0)
-        {
-          g_printerr ("error: selabel_lookup_raw(/) failed: %s", strerror (errno));
-          exit (1);
-        }
-      else
-        g_printerr ("warning: selabel_lookup_raw(%s): %s\n", path, strerror (errno));
-      return NULL;
-    }
-
-  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ayay)"));
-  g_variant_builder_add (&builder, "(@ay@ay)",
-                         g_variant_new_bytestring ("security.selinux"),
-                         g_variant_new_bytestring (con));
-
-  freecon (con);
-
-  ret = g_variant_builder_end (&builder);
-  g_variant_ref_sink (ret);
-  return ret;
-}
-
-static char *
-selinux_type_from_config (GFile *config_path,
-                          GCancellable *cancellable,
-                          GError **error)
-{
-  gboolean success = FALSE;
-  gs_unref_object GFileInputStream *filein = NULL;
-  gs_unref_object GDataInputStream *datain = NULL;
-  char *ret = NULL;
-  const char *selinuxtype_prefix = "SELINUXTYPE=";
-
-  filein = g_file_read (config_path, cancellable, error);
-  if (!filein)
-    goto out;
-
-  datain = g_data_input_stream_new ((GInputStream*)filein);
-
-  while (TRUE)
-    {
-      gsize len;
-      GError *temp_error = NULL;
-      gs_free char *line = g_data_input_stream_read_line_utf8 (datain, &len,
-                                                               cancellable, &temp_error);
-      
-      if (temp_error)
-        {
-          g_propagate_error (error, temp_error);
-          goto out;
-        }
-
-      if (!line)
-        break;
-
-      
-      if (!g_str_has_prefix (line, selinuxtype_prefix))
-        continue;
-
-      ret = g_strstrip (g_strdup (line + strlen (selinuxtype_prefix))); 
-      break;
-    }
-
-  success = TRUE;
- out:
-  if (!success)
-    {
-      g_free (ret);
-      return NULL;
-    }
-  return ret;
-}
-
 gboolean
 rpmostree_postprocess (GFile         *rootfs,
                        GCancellable  *cancellable,
@@ -780,106 +687,6 @@ rpmostree_postprocess (GFile         *rootfs,
   return ret;
 }
 
-static gboolean
-workaround_selinux_pcre_version_mismatch (GFile         *dir,
-                                          GCancellable  *cancellable,
-                                          GError       **error)
-{
-  gboolean ret = FALSE;
-  gs_unref_object GFile *contexts_files = g_file_resolve_relative_path (dir, "contexts/files");
-  gs_unref_object GFileEnumerator *direnum = NULL;
-
-  direnum = g_file_enumerate_children (contexts_files, "standard::name,standard::type",
-                                       G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                       cancellable, error);
-  if (!direnum)
-    goto out;
-
-  while (TRUE)
-    {
-      GFileInfo *file_info;
-      GFile *child;
-      const char *name;
-
-      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
-                                       cancellable, error))
-        goto out;
-      if (!file_info)
-        break;
-
-      name = g_file_info_get_name (file_info);
-
-      if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_REGULAR
-          && g_str_has_suffix (name, ".bin"))
-        {
-          gs_free char *bintmp_name = g_strconcat (name, ".tmp", NULL);
-          gs_unref_object GFile *bin_tmp = g_file_get_child (contexts_files, bintmp_name);
-
-          g_print ("Saving '%s' as '%s'\n", gs_file_get_path_cached (child),
-                   gs_file_get_path_cached (bin_tmp));
-          if (!gs_file_rename (child, bin_tmp, cancellable, error))
-            goto out;
-        }
-    }
-  
-  ret = TRUE;
- out:
-  return ret;
-}
-
-static gboolean
-undo_workaround_selinux_pcre_version_mismatch (GFile         *dir,
-                                               GCancellable  *cancellable,
-                                               GError       **error)
-{
-  gboolean ret = FALSE;
-  gs_unref_object GFile *contexts_files = g_file_resolve_relative_path (dir, "contexts/files");
-  gs_unref_object GFileEnumerator *direnum = NULL;
-
-  direnum = g_file_enumerate_children (contexts_files, "standard::name,standard::type",
-                                       G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                       cancellable, error);
-  if (!direnum)
-    goto out;
-
-  while (TRUE)
-    {
-      GFileInfo *file_info;
-      GFile *child;
-      const char *name;
-
-      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
-                                       cancellable, error))
-        goto out;
-      if (!file_info)
-        break;
-
-      name = g_file_info_get_name (file_info);
-
-      if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_REGULAR
-          && g_str_has_suffix (name, ".bin.tmp"))
-        {
-          const char *lastdot = strrchr (name, '.');
-          gs_free char *bin_name = NULL;
-          gs_unref_object GFile *bin_tmp = NULL;
-          
-          g_assert (lastdot);
-
-          bin_name = g_strndup (name, lastdot - name);
-          bin_tmp = g_file_get_child (contexts_files, bin_name);
-
-          g_print ("Moving '%s' back to '%s'\n", gs_file_get_path_cached (child),
-                   gs_file_get_path_cached (bin_tmp));
-          if (!gs_file_rename (child, bin_tmp, cancellable, error))
-            goto out;
-        }
-    }
-  
-  ret = TRUE;
- out:
-  return ret;
-}
-
 gboolean
 rpmostree_commit (GFile         *rootfs,
                   OstreeRepo    *repo,
@@ -895,52 +702,14 @@ rpmostree_commit (GFile         *rootfs,
   gs_free char *parent_revision = NULL;
   gs_free char *new_revision = NULL;
   gs_unref_object GFile *root_tree = NULL;
-  gs_unref_object GFile *selinux_root = NULL;
+  gs_unref_object OstreeSePolicy *sepolicy = NULL;
   
   /* hardcode targeted policy for now */
   if (enable_selinux)
     {
-      gs_unref_object GFile *usr_etc_selinux = g_file_resolve_relative_path (rootfs, "usr/etc/selinux");
-      gs_unref_object GFile *usr_etc_selinux_config = g_file_resolve_relative_path (usr_etc_selinux, "config");
-      gs_free char *selinux_config_type = NULL;
-
-      if (g_file_query_exists (usr_etc_selinux_config, NULL))
-        {
-          selinux_config_type = selinux_type_from_config (usr_etc_selinux_config,
-                                                          cancellable, error);
-          if (!selinux_config_type)
-            {
-              g_prefix_error (error, "Failed to read SELINUXTYPE= from '%s': ",
-                              gs_file_get_path_cached (usr_etc_selinux_config));
-              goto out;
-            }
-
-          g_print ("Detected SELINUXTYPE=%s\n", selinux_config_type);
-          selinux_root = g_file_get_child (usr_etc_selinux, selinux_config_type);
-        }
-
-      if (selinux_root)
-        {
-          g_print ("Setting policy root: %s\n",
-                   gs_file_get_path_cached (selinux_root));
-          if (selinux_set_policy_root (gs_file_get_path_cached (selinux_root)) != 0)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "selinux_set_policy_root(%s): %s",
-                           gs_file_get_path_cached (selinux_root),
-                           strerror (errno));
-              goto out;
-            }
-
-          g_print ("Enabling workaround for SELinux pcre versioning\n");
-          if (!workaround_selinux_pcre_version_mismatch (selinux_root, cancellable, error))
-            goto out;
-        }
-      else
-        {
-          g_print ("Note: SELinux enabled but no policy found in this tree\n");
-          enable_selinux = FALSE;
-        }
+      sepolicy = ostree_sepolicy_new (rootfs, cancellable, error);
+      if (!sepolicy)
+        goto out;
     }
 
   g_print ("Committing '%s' ...\n", gs_file_get_path_cached (rootfs));
@@ -948,29 +717,19 @@ rpmostree_commit (GFile         *rootfs,
     goto out;
 
   mtree = ostree_mutable_tree_new ();
-  commit_modifier = ostree_repo_commit_modifier_new (enable_selinux ? 0 : OSTREE_REPO_COMMIT_MODIFIER_FLAGS_SKIP_XATTRS, NULL, NULL, NULL);
-  if (enable_selinux)
+  /* For now skip ACLs */
+  commit_modifier = ostree_repo_commit_modifier_new (OSTREE_REPO_COMMIT_MODIFIER_FLAGS_SKIP_XATTRS, NULL, NULL, NULL);
+  if (sepolicy)
     {
-      struct selabel_handle *hnd = selabel_open (SELABEL_CTX_FILE, NULL, 0);
-      if (!hnd)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Failed selabel_open(): %s", strerror (errno));
-          goto out;
-        }
-      ostree_repo_commit_modifier_set_xattr_callback (commit_modifier, xattr_cb, NULL, hnd);
+      const char *policy_name = ostree_sepolicy_get_name (sepolicy);
+      g_print ("Labeling with SELinux policy '%s'\n", policy_name);
+      ostree_repo_commit_modifier_set_sepolicy (commit_modifier, sepolicy);
     }
+
   if (!ostree_repo_write_directory_to_mtree (repo, rootfs, mtree, commit_modifier, cancellable, error))
     goto out;
   if (!ostree_repo_write_mtree (repo, mtree, &root_tree, cancellable, error))
     goto out;
-
-  if (enable_selinux)
-    {
-      g_print ("Undoing workaround for SELinux pcre versioning\n");
-      if (!undo_workaround_selinux_pcre_version_mismatch (selinux_root, cancellable, error))
-        goto out;
-    }
 
   if (!ostree_repo_resolve_rev (repo, refname, TRUE, &parent_revision, error))
     goto out;

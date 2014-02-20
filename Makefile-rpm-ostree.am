@@ -17,6 +17,11 @@
 
 privlib_SCRIPTS = src/rpmqa-sorted src/repoquery-sorted
 
+privlib_PROGRAMS = rpm-ostree-relabeling-helper
+rpm_ostree_relabeling_helper_SOURCES = src/rpm-ostree-relabeling-helper.c
+rpm_ostree_relabeling_helper_CFLAGS = $(AM_CFLAGS) $(PKGDEP_RPMOSTREE_CFLAGS)
+rpm_ostree_relabeling_helper_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)
+
 bin_PROGRAMS += rpm-ostree
 
 rpm_ostree_SOURCES = src/rpm-ostree.c \
