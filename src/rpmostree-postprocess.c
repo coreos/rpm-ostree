@@ -527,54 +527,25 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
       g_file_resolve_relative_path (yumroot, "var/lib/rpm");
     gs_unref_object GFile *newrpm_path =
       g_file_resolve_relative_path (targetroot, "usr/share/rpm");
+    gs_unref_object GFile *src_yum_rpmdb_indexes =
+      g_file_resolve_relative_path (yumroot, "var/lib/yum");
+    gs_unref_object GFile *target_yum_rpmdb_indexes =
+      g_file_resolve_relative_path (targetroot, "usr/share/yumdb");
     
-    if (g_file_query_exists (usrbin_rpm, NULL))
+    g_print ("Placing RPM db in /usr/share/rpm\n");
+    if (!gs_file_rename (legacyrpm_path, newrpm_path, cancellable, error))
+      goto out;
+    
+    /* Move the yum database to usr/share/yumdb */
+    if (g_file_query_exists (src_yum_rpmdb_indexes, NULL))
       {
-        gs_unref_object GFile *src_yum_rpmdb_indexes =
-          g_file_resolve_relative_path (yumroot, "var/lib/yum");
-        gs_unref_object GFile *target_yum_rpmdb_indexes =
-          g_file_resolve_relative_path (targetroot, "usr/share/yumdb");
-
-        g_print ("Placing RPM db in /usr/share/rpm\n");
-        if (!gs_file_rename (legacyrpm_path, newrpm_path, cancellable, error))
-          goto out;
-
-        /* Move the yum database to usr/share/yumdb */
-        if (g_file_query_exists (src_yum_rpmdb_indexes, NULL))
-          {
-            g_print ("Moving %s to %s\n", gs_file_get_path_cached (src_yum_rpmdb_indexes),
-                     gs_file_get_path_cached (target_yum_rpmdb_indexes));
-            if (!gs_file_rename (src_yum_rpmdb_indexes, target_yum_rpmdb_indexes,
-                                 cancellable, error))
-              goto out;
-            
-            if (!clean_uuid_files (target_yum_rpmdb_indexes, cancellable, error))
-              goto out;
-          }
-      }
-    else
-      {
-        gs_unref_object GFile *rpm_manifest_txt =
-          g_file_resolve_relative_path (targetroot, "usr/share/rpm-manifest.txt");
-        gs_unref_object GSSubprocessContext *rpmqa_ctx = NULL;
-        gs_unref_object GSSubprocess *rpmqa_proc = NULL;
-        gs_free char *rpmqa_path = g_build_filename (PKGLIBDIR, "rpmqa-sorted", NULL);
-        char *rpmqa_argv[] = { rpmqa_path, NULL };
-        
-        g_print ("No rpm found in build root, generating: %s\n",
-                 gs_file_get_path_cached (rpm_manifest_txt));
-
-        rpmqa_ctx = gs_subprocess_context_new (rpmqa_argv);
-        gs_subprocess_context_set_cwd (rpmqa_ctx, gs_file_get_path_cached (legacyrpm_path));
-        gs_subprocess_context_set_stdout_file_path (rpmqa_ctx, gs_file_get_path_cached (rpm_manifest_txt));
-        rpmqa_proc = gs_subprocess_new (rpmqa_ctx, cancellable, error);
-        if (!rpmqa_proc)
+        g_print ("Moving %s to %s\n", gs_file_get_path_cached (src_yum_rpmdb_indexes),
+                 gs_file_get_path_cached (target_yum_rpmdb_indexes));
+        if (!gs_file_rename (src_yum_rpmdb_indexes, target_yum_rpmdb_indexes,
+                             cancellable, error))
           goto out;
         
-        if (!gs_subprocess_wait_sync_check (rpmqa_proc, cancellable, error))
-          goto out;
-
-        if (!gs_shutil_rm_rf (legacyrpm_path, cancellable, error))
+        if (!clean_uuid_files (target_yum_rpmdb_indexes, cancellable, error))
           goto out;
       }
   }
