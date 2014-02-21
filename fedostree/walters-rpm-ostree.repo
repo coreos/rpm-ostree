@@ -1,7 +1,0 @@
-[walters-rpm-ostree]
-name=Copr repo for rpm-ostree owned by walters
-description=RPM OSTree integration
-baseurl=http://copr-be.cloud.fedoraproject.org/results/walters/rpm-ostree/fedora-20-$basearch/
-skip_if_unavailable=True
-gpgcheck=0
-enabled=1
