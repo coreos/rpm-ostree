@@ -17,7 +17,7 @@
 
     "image_formats": ["qcow2"],
 
-    "kargs": ["quiet", "enforcing=0"],
+    "kargs": ["quiet"],
 
     "bootstrap_packages": ["filesystem", "glibc", "nss-altfiles", "shadow-utils"],
 
