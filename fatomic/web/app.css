@@ -1,0 +1,117 @@
+
+body {
+    font-family: sans-serif;
+
+    margin: 0;
+
+    display: -moz-box;
+    -moz-box-orient: vertical;
+
+    display: flex;
+    flex-direction: column;
+
+    width: 100%;
+    min-height: 100vh;
+}
+
+h1 {
+    text-align: center;
+    margin: 0;
+}
+
+.content {
+    -moz-box-flex: 1;
+    flex: 1;
+}
+
+article {
+    padding: 1em;
+}
+
+footer {
+    width: 100%;
+    height: 50px;
+    line-height: 50px;
+
+    text-align: center;
+    background-color: lightgray;
+    font-size: smaller;
+}
+
+.machine {
+    display: -moz-box;
+    display: flex;
+
+    border-radius: 6px;
+    padding: 1em;
+    margin: 1em 0;
+
+    background-color: beige;
+    color: #333366;
+
+    position: relative;
+
+    text-decoration: none;
+}
+
+.machine .status {
+    font-size: larger;
+    font-weight: bold;
+
+    align-self: center;
+    height: 64px;
+    line-height: 64px;
+
+    margin-right: 16px;
+    padding-right: 72px;
+    background-size: 64px 64px;
+    background-position: center right;
+    background-repeat: no-repeat;
+
+    text-decoration: none;
+}
+
+.task-failed {
+    color: red
+}
+
+.machine.good {
+    background-color: lightgreen;
+}
+
+.machine.bad {
+    background-color: salmon;
+}
+
+.machine.good .status {
+    background-image: url(images/build-good.svg);
+}
+
+.machine.bad .status {
+    background-image: url(images/build-bad.svg);
+}
+
+.app {
+    padding: 1em;
+    float: left;
+    text-align: center;
+}
+
+.app .icon, .app .icon img {
+    width: 96px;
+    height: 96px;
+
+    position: relative;
+}
+
+.app .emblem {
+    width: 48px;
+    height: 48px;
+    position: absolute;
+    right: 0px;
+    bottom: 0px;
+}
+
+.app.good .emblem {
+    background-image: url(images/app-good.png);
+}

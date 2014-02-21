@@ -1,0 +1,6 @@
+[fedora-rawhide]
+name=Fedora rawhide $basearch
+mirrorlist=https://mirrors.fedoraproject.org/metalink?repo=fedora-rawhide&arch=$basearch
+enabled=0
+gpgcheck=0
+metadata_expire=7d
