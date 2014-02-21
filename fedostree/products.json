@@ -10,7 +10,8 @@
 
     "releases": ["rawhide"],
 
-    "repos": ["fedora-rawhide", "walters-rpm-ostree"],
+    "repos": ["fedora-rawhide", "walters-rpm-ostree",
+	      "fedora-rawhide-kernel-nodebug"],
 
     "selinux": true,
 
