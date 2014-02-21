@@ -85,6 +85,15 @@ const TaskBuild = new Lang.Class({
 	return this.BuildState.successful;
     },
 
+    _inheritAttribute: function(obj, source, attrName, defaultValue) {
+	let value = source[attrName];
+	if (!value)
+	    value = this._productData[attrName];
+	if (!value)
+	    value = defaultValue;
+	obj[attrName] = value;
+    },
+
     _generateTreefile: function(ref, release, architecture,
 				subproductData) {
 	let treefile = JSON.parse(JSON.stringify(this._productData));
@@ -102,6 +111,8 @@ const TaskBuild = new Lang.Class({
 	delete treefile.releases;
 	treefile.architecture = architecture;
 	delete treefile.architectures;
+
+	this._inheritAttribute(treefile, subproductData, "comment", "");
 
 	let overrideRepo = this.workdir.get_child('overrides');
 	if (overrideRepo.query_exists(null)) {
