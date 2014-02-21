@@ -274,6 +274,8 @@ yum_context_new (JsonObject     *treedata,
     gs_strfreev char **duped_environ = g_get_environ ();
 
     duped_environ = g_environ_setenv (duped_environ, "OSTREE_KERNEL_INSTALL_NOOP", "1", TRUE);
+    /* See fedora's kernel.spec */
+    duped_environ = g_environ_setenv (duped_environ, "HARDLINK", "no", TRUE);
 
     gs_subprocess_context_set_environment (context, duped_environ);
   }
