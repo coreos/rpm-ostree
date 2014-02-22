@@ -25,6 +25,8 @@
 #include "rpmostree-postprocess.h"
 #include <ostree.h>
 #include <errno.h>
+#include <utime.h>
+#include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include "libgsystem.h"
@@ -465,6 +467,97 @@ clean_uuid_files (GFile         *dir,
   return ret;
 }
 
+static gboolean
+workaround_selinux_cross_labeling_recurse (GFile         *dir,
+                                           GCancellable  *cancellable,
+                                           GError       **error)
+{
+  gboolean ret = FALSE;
+  gs_unref_object GFileEnumerator *direnum = NULL;
+
+  direnum = g_file_enumerate_children (dir, "standard::name,standard::type,time::modified,time::access",
+                                       G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
+                                       cancellable, error);
+  if (!direnum)
+    goto out;
+
+  while (TRUE)
+    {
+      GFileInfo *file_info;
+      GFile *child;
+      const char *name;
+
+      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
+                                       cancellable, error))
+        goto out;
+      if (!file_info)
+        break;
+
+      name = g_file_info_get_name (file_info);
+
+      if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_DIRECTORY)
+        {
+          if (!workaround_selinux_cross_labeling_recurse (child, cancellable, error))
+            goto out;
+        }
+      else if (g_str_has_suffix (name, ".bin"))
+        {
+          const char *lastdot;
+          gs_free char *nonbin_name = NULL;
+          gs_unref_object GFile *nonbin_path = NULL;
+          guint64 mtime = g_file_info_get_attribute_uint64 (file_info, "time::modified");
+          guint64 atime = g_file_info_get_attribute_uint64 (file_info, "time::access");
+          struct utimbuf times;
+
+          lastdot = strrchr (name, '.');
+          g_assert (lastdot);
+
+          nonbin_name = g_strndup (name, lastdot - name);
+          nonbin_path = g_file_get_child (dir, nonbin_name);
+
+          times.actime = (time_t)atime;
+          times.modtime = ((time_t)mtime) + 60;
+
+          g_print ("Setting mtime of '%s' to newer than '%s'\n",
+                   gs_file_get_path_cached (nonbin_path),
+                   gs_file_get_path_cached (child));
+          if (utime (gs_file_get_path_cached (nonbin_path), &times) == -1)
+            {
+              int errsv = errno;
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "utime(%s): %s", gs_file_get_path_cached (nonbin_path),
+                           strerror (errsv));
+              goto out;
+            }
+        }
+    }
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+static gboolean
+workaround_selinux_cross_labeling (GFile         *rootfs,
+                                   GCancellable  *cancellable,
+                                   GError       **error)
+{
+  gboolean ret = FALSE;
+  gs_unref_object GFile *etc_selinux_dir = g_file_resolve_relative_path (rootfs, "usr/etc/selinux");
+
+  if (g_file_query_exists (etc_selinux_dir, NULL))
+    {
+      if (!workaround_selinux_cross_labeling_recurse (etc_selinux_dir,
+                                                      cancellable, error))
+        goto out;
+    }
+    
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+
 /* Prepare a root filesystem, taking mainly the contents of /usr from yumroot */
 static gboolean 
 create_rootfs_from_yumroot_content (GFile         *targetroot,
@@ -658,6 +751,7 @@ rpmostree_postprocess (GFile         *rootfs,
   return ret;
 }
 
+
 gboolean
 rpmostree_commit (GFile         *rootfs,
                   OstreeRepo    *repo,
@@ -678,6 +772,9 @@ rpmostree_commit (GFile         *rootfs,
   /* hardcode targeted policy for now */
   if (enable_selinux)
     {
+      if (!workaround_selinux_cross_labeling (rootfs, cancellable, error))
+        goto out;
+      
       sepolicy = ostree_sepolicy_new (rootfs, cancellable, error);
       if (!sepolicy)
         goto out;
