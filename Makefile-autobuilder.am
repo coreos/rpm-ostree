@@ -29,7 +29,7 @@ EXTRA_DIST += src/autobuilder/rpm-ostree-autobuilder.in
 bin_SCRIPTS += rpm-ostree-autobuilder \
 	$(NULL)
 
-jsautobuilderdir=$(pkgdatadir)/js
+jsautobuilderdir=$(pkgdatadir)-autobuilder/js
 jsautobuilder_DATA= \
 	src/autobuilder/js/argparse.js \
 	src/autobuilder/js/asyncutil.js \
@@ -70,7 +70,7 @@ jsautotasks_DATA= \
 	src/autobuilder/js/tasks/testbase.js \
 	$(NULL)
 
-testdatadir=$(pkgdatadir)
+testdatadir=$(pkgdatadir)-autobuilder
 testdata_DATA = src/autobuilder/rpm-ostree-export-journal-to-serialdev \
 	src/autobuilder/rpm-ostree-export-journal-to-serialdev.service \
 	$(NULL)
