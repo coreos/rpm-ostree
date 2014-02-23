@@ -40,7 +40,7 @@ _build
 *.typelib
 
 rpm-ostree
-rpm-ostree-postprocess-and-commit
+rpm-ostree-relabeling-helper
 rpm-ostree-autobuilder
 
 rpm-ostree-*.tar.xz
