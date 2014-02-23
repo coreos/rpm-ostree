@@ -51,7 +51,7 @@ The autobuilder instead takes as input a `products.json` which
 generates multiple treefiles.  Try this:
 
  # ln -s /path/to/rpm-ostree.git/fedostree/products.json .
- # rpm-ostree-autobuilder autobuilder
+ # rpm-ostree-autobuilder
 
 That will automatically poll every hour for changes in the RPMs
 referenced by the `products.json` file, commit them to the
