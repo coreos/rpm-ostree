@@ -50,12 +50,15 @@ function usage(ecode) {
 }
 
 let ecode;
-if (ARGV.length < 1) {
-    ecode = usage(1);
-} else if (ARGV[0] == '-h' || ARGV[0] == '--help') {
+if (ARGV.length > 0 && (ARGV[0] == '-h' || ARGV[0] == '--help')) {
     ecode = usage(0);
 } else {
-    let name = ARGV[0];
+    let name;
+    if (ARGV.length < 1) {
+	name = "autobuilder";
+    } else {
+	name = ARGV[0];
+    }
     let found = false;
     for (let i = 0; i < BUILTINS.length; i++) {
 	if (BUILTINS[i] == name) {
