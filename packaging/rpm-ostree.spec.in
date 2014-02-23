@@ -2,7 +2,8 @@ Summary: Commit RPMs to an OSTree repository
 Name: rpm-ostree
 Version: 2014.1
 Release: 1%{?dist}
-#VCS: git:git://git.gnome.org/ostree
+#VCS: https://github.com/cgwalters/rpm-ostree
+# This tarball is generated via "make -f Makefile.dist-packaging dist-snapshot"
 Source0: rpm-ostree-%{version}.tar.xz
 License: LGPLv2+
 URL: https://github.com/cgwalters/rpm-ostree
@@ -10,22 +11,29 @@ URL: https://github.com/cgwalters/rpm-ostree
 BuildRequires: autoconf automake libtool
 # For docs
 BuildRequires: gtk-doc
-
 BuildRequires: gnome-common
 BuildRequires: pkgconfig(ostree-1)
+BuildRequires: pkgconfig(libgsystem)
 BuildRequires: pkgconfig(json-glib-1.0)
 BuildRequires: /usr/bin/g-ir-scanner
 
-Requires: ostree
-
-# These are actually requirements for the autobuilder, not core
-Requires: /usr/bin/gjs
-Requires: /usr/bin/guestmount
-Requires: libguestfs-gobject
+Requires: /usr/bin/yum
 
 %description
 This tool takes a set of packages, and commits them to an OSTree
 repository.  At the moment, it is intended for use on build servers.
+
+%package        autobuilder
+Summary:        Build server for rpm-ostree
+Group:          System Environment/Base
+Requires:       %{name} = %{version}-%{release}
+Requires:	/usr/bin/gjs
+Requires:	/usr/bin/guestmount
+Requires:	libguestfs-gobject
+BuildRequires:  /usr/bin/g-ir-scanner
+
+%description    autobuilder
+An automatic build server for rpm-ostree.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -41,6 +49,10 @@ make install DESTDIR=$RPM_BUILD_ROOT INSTALL="install -p -c"
 %files
 %doc COPYING README.md
 %{_bindir}/rpm-ostree
-%{_bindir}/rpm-ostree-autobuilder
 %{_libdir}/%{name}/
 %{_datadir}/%{name}/
+
+%files autobuilder
+%{_bindir}/rpm-ostree-autobuilder
+%{_libdir}/%{name}-autobuilder/
+%{_datadir}/%{name}-autobuilder/
