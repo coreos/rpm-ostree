@@ -94,6 +94,14 @@ const TaskBuild = new Lang.Class({
 	obj[attrName] = value;
     },
 
+    _inheritExtendAttributeList: function(obj, source, attrName) {
+	let value = this._productData[attrName] || [];
+	let subValue = source[attrName];
+	if (subValue)
+	    value.push.apply(value, subValue);
+	obj[attrName] = value;
+    },
+
     _generateTreefile: function(ref, release, architecture,
 				subproductData) {
 	let treefile = JSON.parse(JSON.stringify(this._productData));
@@ -101,11 +109,9 @@ const TaskBuild = new Lang.Class({
 	
 	treefile.ref = ref;
 
-	treefile.packages.push.apply(treefile.packages, subproductData['packages'] || []);
-	if (!treefile.postprocess)
-	    treefile.postprocess = [];
-	treefile.postprocess.push.apply(treefile.postprocess, subproductData['postprocess'] || []);
-	treefile.units = subproductData['units'];
+	this._inheritExtendAttributeList(treefile, subproductData, 'packages');
+	this._inheritExtendAttributeList(treefile, subproductData, 'postprocess');
+	this._inheritExtendAttributeList(treefile, subproductData, 'units');
 
 	treefile.release = release;
 	delete treefile.releases;
@@ -114,10 +120,17 @@ const TaskBuild = new Lang.Class({
 
 	this._inheritAttribute(treefile, subproductData, "comment", "");
 
+	this._inheritExtendAttributeList(treefile, subproductData, 'repos');
+	this._inheritExtendAttributeList(treefile, subproductData, 'repos_data');
+
 	let overrideRepo = this.workdir.get_child('overrides');
 	if (overrideRepo.query_exists(null)) {
 	    print("Using override repo: " + overrideRepo.get_path()); 
-	    treefile.repos.push('rpm-ostree-overrides');
+	    treefile.repos_data.push('[rpm-ostree-internal-overrides]\n' +
+				     'name=Internal rpm-ostee overrides\n' +
+				     'baseurl=file://' + overrideRepo.get_path() + '\n' +
+				     'metadata_expire=1m\n' +
+				     'enabled=1\ngpgcheck=0\n');
 	}
 
 	return treefile;

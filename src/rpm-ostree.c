@@ -29,11 +29,29 @@
 #include "libgsystem.h"
 
 static char *opt_workdir;
+static char *opt_workdir;
 
 static GOptionEntry option_entries[] = {
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "REPO" },
   { NULL }
 };
+
+static char *
+subprocess_context_print_args (GSSubprocessContext   *ctx)
+{
+  GString *ret = g_string_new ("");
+  gs_strfreev char **argv = NULL;
+  char **strviter;
+
+  g_object_get ((GObject*)ctx, "argv", &argv, NULL);
+  for (strviter = argv; strviter && *strviter; strviter++)
+    {
+      gs_free char *quoted = g_shell_quote (*strviter);
+      g_string_append (ret, quoted);
+    }
+
+  return g_string_free (ret, FALSE);
+}
 
 static const char *
 object_require_string_member (JsonObject     *object,
@@ -202,21 +220,44 @@ yum_context_free (YumContext  *yumctx)
   g_free (yumctx);
 }
 
+static inline
+void cleanup_keyfile_unref (void *loc)
+{
+  GKeyFile *locp = *((GKeyFile**)loc);
+  if (locp)
+    g_key_file_unref (locp);
+}
+
 static gboolean
 append_repo_and_cache_opts (JsonObject *treedata,
-                            GFile      *yumcache_lookaside,
+                            GFile      *cachedir,
                             GPtrArray  *args,
+                            GCancellable *cancellable,
                             GError    **error)
 {
   gboolean ret = FALSE;
-  JsonArray *enable_repos;
+  JsonArray *enable_repos = NULL;
+  JsonArray *repos_data = NULL;
+  gs_unref_object GFile *yumcache_lookaside = NULL;
+  gs_unref_object GFile *repos_tmpdir = NULL;
+
+  yumcache_lookaside = g_file_resolve_relative_path (cachedir, "yum-cache");
+  if (!gs_file_ensure_directory (yumcache_lookaside, TRUE, cancellable, error))
+    goto out;
+
+  repos_tmpdir = g_file_resolve_relative_path (cachedir, "tmp-repos");
+  if (!gs_shutil_rm_rf (repos_tmpdir, cancellable, error))
+    goto out;
+  if (!gs_file_ensure_directory (repos_tmpdir, TRUE, cancellable, error))
+    goto out;
 
   if (g_getenv ("RPM_OSTREE_OFFLINE"))
     g_ptr_array_add (args, g_strdup ("-C"));
 
   g_ptr_array_add (args, g_strdup ("--disablerepo=*"));
 
-  enable_repos = json_object_get_array_member (treedata, "repos");
+  if (json_object_has_member (treedata, "repos"))
+    enable_repos = json_object_get_array_member (treedata, "repos");
   if (enable_repos)
     {
       guint i;
@@ -230,11 +271,69 @@ append_repo_and_cache_opts (JsonObject *treedata,
         }
     }
 
+  if (json_object_has_member (treedata, "repos_data"))
+    repos_data = json_object_get_array_member (treedata, "repos_data");
+  else
+    repos_data = NULL;
+  if (repos_data)
+    {
+      guint i;
+      guint n = json_array_get_length (repos_data);
+
+      if (n > 0)
+        g_ptr_array_add (args, g_strconcat ("--setopt=reposdir=/etc/yum.repos.d,",
+                                            gs_file_get_path_cached (repos_tmpdir),
+                                            NULL));
+
+      for (i = 0; i < n; i++)
+        {
+          const char *repodata = array_require_string_element (repos_data, i, error);
+          __attribute__ ((cleanup(cleanup_keyfile_unref))) GKeyFile *keyfile = NULL;
+          gs_strfreev char **groups = NULL;
+          const char *reponame;
+          gs_free char *rpmostree_reponame = NULL;
+          gs_free char *rpmostree_repo_filename = NULL;
+          gs_unref_object GFile *repo_tmp_file = NULL;
+          gsize len;
+
+          if (!repodata)
+            goto out;
+
+          keyfile = g_key_file_new ();
+          if (!g_key_file_load_from_data (keyfile, repodata, -1, 0, error))
+            {
+              g_prefix_error (error, "Parsing keyfile data in repos_data: ");
+              goto out;
+            }
+
+          groups = g_key_file_get_groups (keyfile, &len);
+          if (len == 0)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "No groups found in keyfile data in repos_data");
+              goto out;
+            }
+
+          reponame = groups[0];
+          g_assert (strchr (reponame, '/') == NULL);
+          rpmostree_reponame = g_strconcat (reponame, NULL);
+          rpmostree_repo_filename = g_strconcat (rpmostree_reponame, ".repo", NULL);
+          repo_tmp_file = g_file_get_child (repos_tmpdir, rpmostree_repo_filename);
+
+          if (!g_file_replace_contents (repo_tmp_file, repodata, strlen (repodata),
+                                        NULL, FALSE, 0,
+                                        NULL,
+                                        cancellable, error))
+            goto out;
+          
+          g_ptr_array_add (args, g_strconcat ("--enablerepo=", rpmostree_reponame, NULL));
+        }
+    }
+
   g_ptr_array_add (args, g_strdup ("--setopt=keepcache=1"));
-  if (yumcache_lookaside)
-    g_ptr_array_add (args, g_strconcat ("--setopt=cachedir=",
-                                        gs_file_get_path_cached (yumcache_lookaside),
-                                        NULL));
+  g_ptr_array_add (args, g_strconcat ("--setopt=cachedir=",
+                                      gs_file_get_path_cached (yumcache_lookaside),
+                                      NULL));
 
   ret = TRUE;
  out:
@@ -258,7 +357,8 @@ yum_context_new (JsonObject     *treedata,
   g_ptr_array_add (yum_argv, g_strdup ("yum"));
   g_ptr_array_add (yum_argv, g_strdup ("-y"));
 
-  if (!append_repo_and_cache_opts (treedata, cachedir, yum_argv, error))
+  if (!append_repo_and_cache_opts (treedata, cachedir, yum_argv,
+                                   cancellable, error))
     goto out;
 
   g_ptr_array_add (yum_argv, g_strconcat ("--installroot=",
@@ -297,7 +397,10 @@ yum_context_new (JsonObject     *treedata,
 
   yumctx = g_new0 (YumContext, 1);
 
-  g_print ("Starting yum...\n");
+  {
+    gs_free char *cmdline = subprocess_context_print_args (context);
+    g_print ("Starting %s\n", cmdline);
+  }
   yumctx->process = gs_subprocess_new (context, cancellable, error);
   if (!yumctx->process)
     goto out;
@@ -447,15 +550,13 @@ main (int     argc,
   const char *ref;
   JsonNode *treefile_root = NULL;
   JsonObject *treefile = NULL;
-  JsonArray *internal_postprocessing;
-  JsonArray *units;
+  JsonArray *internal_postprocessing = NULL;
+  JsonArray *units = NULL;
   guint len;
   gs_free char *ref_unix = NULL;
   gs_unref_object GFile *cachedir = NULL;
   gs_unref_object GFile *yumroot = NULL;
   gs_unref_object GFile *targetroot = NULL;
-  gs_unref_object GFile *yumcachedir = NULL;
-  gs_unref_object GFile *yumcache_lookaside = NULL;
   gs_unref_object GFile *yumroot_varcache = NULL;
   gs_unref_object OstreeRepo *repo = NULL;
   gs_unref_ptrarray GPtrArray *bootstrap_packages = NULL;
@@ -513,13 +614,9 @@ main (int     argc,
     goto out;
 
   yumroot = g_file_get_child (cachedir, "yum");
-  targetroot = g_file_resolve_relative_path (cachedir, "rootfs");
-  yumcache_lookaside = g_file_resolve_relative_path (cachedir, "yum-cache");
-  
   if (!gs_shutil_rm_rf (yumroot, cancellable, error))
     goto out;
-  if (!gs_file_ensure_directory (yumcache_lookaside, TRUE, cancellable, error))
-    goto out;
+  targetroot = g_file_resolve_relative_path (cachedir, "rootfs");
 
   ref = object_require_string_member (treefile, "ref", error);
   if (!ref)
@@ -556,7 +653,8 @@ main (int     argc,
     gboolean first = TRUE;
 
     g_ptr_array_add (repoquery_argv, g_strdup (PKGLIBDIR "/repoquery-sorted"));
-    if (!append_repo_and_cache_opts (treefile, yumcache_lookaside, repoquery_argv, error))
+    if (!append_repo_and_cache_opts (treefile, cachedir, repoquery_argv,
+                                     cancellable, error))
       goto out;
     g_ptr_array_add (repoquery_argv, g_strdup ("--recursive"));
     g_ptr_array_add (repoquery_argv, g_strdup ("--requires"));
@@ -645,7 +743,7 @@ main (int     argc,
       }
 
     /* Ensure we have enough to modify NSS */
-    if (!yuminstall (treefile, yumroot, yumcache_lookaside,
+    if (!yuminstall (treefile, yumroot, cachedir,
                      (char**)bootstrap_packages->pdata,
                      cancellable, error))
       goto out;
@@ -673,7 +771,7 @@ main (int     argc,
     }
 
     {
-      if (!yuminstall (treefile, yumroot, yumcache_lookaside,
+      if (!yuminstall (treefile, yumroot, cachedir,
                        (char**)packages->pdata,
                        cancellable, error))
         goto out;
@@ -687,7 +785,8 @@ main (int     argc,
     if (!rpmostree_postprocess (yumroot, cancellable, error))
       goto out;
 
-    internal_postprocessing = json_object_get_array_member (treefile, "postprocess");
+    if (json_object_has_member (treefile, "postprocess"))
+      internal_postprocessing = json_object_get_array_member (treefile, "postprocess");
 
     if (internal_postprocessing)
       len = json_array_get_length (internal_postprocessing);
@@ -716,7 +815,8 @@ main (int     argc,
           goto out;
       }
 
-    units = json_object_get_array_member (treefile, "units");
+    if (json_object_has_member (treefile, "units"))
+      units = json_object_get_array_member (treefile, "units");
 
     if (units)
       len = json_array_get_length (units);
