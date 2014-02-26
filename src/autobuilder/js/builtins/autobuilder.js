@@ -243,7 +243,6 @@ const Autobuilder = new Lang.Class({
 	    for (let i = 0; i < runningTasks.length; i++) {
 		newStatus += runningTasks[i].task.name;
 		let params = runningTasks[i].task.taskData.parameters;
-		print("modified: " + JSON.stringify(params));
 		for (let n in params) {
 		    newStatus += ' ' + n + '=' + params[n];
 		}
