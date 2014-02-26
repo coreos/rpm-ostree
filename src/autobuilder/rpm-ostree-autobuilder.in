@@ -25,4 +25,11 @@ export GIO_USE_VFS=local
 export OSTBUILD_DATADIR=@pkgdatadir@-autobuilder
 export OSTBUILD_LIBDIR=@pkglibdir@-autobuilder
 
+argv1="$1"
+externalpath="$OSTBUILD_LIBDIR/rpm-ostree-autobuilder-builtin-$1"
+if test -x "$externalpath"; then
+    shift
+    exec "$externalpath" "$@"
+fi
+
 exec $OSTBUILD_GDB gjs -I "${jsdir}" "${jsdir}/main.js" "$@"
