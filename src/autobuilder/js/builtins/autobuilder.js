@@ -60,11 +60,134 @@ const Autobuilder = new Lang.Class({
 	this._buildTimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT,
 						      60 * 60,
 						      Lang.bind(this, this._triggerBuild));
+	this._lastBuildPath = null;
 	this._triggerBuild();
 
 	this._updateStatus();
 
+	let commandSocketAddress = Gio.UnixSocketAddress.new(Gio.File.new_for_path("cmd.socket").get_path());
+	this._cmdSocketService = Gio.SocketService.new();
+	this._cmdSocketService.add_address(commandSocketAddress,
+					   Gio.SocketType.STREAM,
+					   Gio.SocketProtocol.DEFAULT,
+					   null);
+
+	this._cmdSocketService.connect('incoming', this._onCmdSocketIncoming.bind(this));
+	this._clientIdSerial = 0;
+	this._clients = {};
+
 	loop.run();
+    },
+
+    _onCmdSocketIncoming: function(svc, connection, source) {
+	this._clientIdSerial++;
+	let clientData = { 'serial': this._clientIdSerial,
+			   'connection': connection,
+			   'datainstream': Gio.DataInputStream.new(connection.get_input_stream()),
+			   'outstandingWrite': false,
+			   'bufs': [] };
+	this._clients[this._clientIdSerial] = clientData;
+	print("Connection from client " + clientData.serial);
+	clientData.datainstream.read_line_async(GLib.PRIORITY_DEFAULT, null,
+						this._onClientLineReady.bind(this, clientData));
+    },
+
+    _onClientSpliceComplete: function(clientData, stream, result) {
+	stream.splice_finish(result);
+	clientData.outstandingWrite = false;
+	this._rescheduleClientWrite(clientData);
+    },
+
+    _rescheduleClientWrite: function(clientData) {
+	if (clientData.bufs.length == 0 || 
+	    clientData.outstandingWrite)
+	    return;
+	let buf = clientData.bufs.shift();
+	let membuf = Gio.MemoryInputStream.new_from_bytes(GLib.Bytes.new(buf));
+	clientData.outstandingWrite = true;
+	clientData.connection.get_output_stream()
+	    .splice_async(membuf, 0, GLib.PRIORITY_DEFAULT, null,
+			  this._onClientSpliceComplete.bind(this, clientData));
+    },
+
+    _writeClient: function(clientData, buf) {
+	clientData.bufs.push(buf + '\n');
+	this._rescheduleClientWrite(clientData);
+    },
+
+    _parseParameters: function(paramStrings) {
+	let params = {};
+	for (let i = 0; i < paramStrings.length; i++) { 
+	    let param = paramStrings[i];
+	    let idx = param.indexOf('=');
+	    if (idx == -1)
+		throw new Error("Invalid key=value syntax");
+	    let k = param.substr(0, idx);
+	    let v = JSON.parse(param.substr(idx+1));
+	    params[k] = v;
+	}
+	return params;
+    },
+
+    _onClientLineReady: function(clientData, stream, result) {
+	let [line,len] = stream.read_line_finish_utf8(result);
+	if (line == null) {
+	    print("Disconnect from client " + clientData.serial);
+	    delete this._clients[clientData.serial];
+	    return;
+	}
+	let spcIdx = line.indexOf(' ');
+	let cmd, rest = "";
+	if (spcIdx == -1)
+	    cmd = line;
+	else {
+	    cmd = line.substring(0, spcIdx);
+	    rest = line.substring(spcIdx + 1);
+	}
+	print("[client " + clientData.serial + ']' + " Got cmd: " + cmd + " rest: " + rest);
+	
+	if (cmd == 'status') {
+	    this._writeClient(clientData, this._status);
+	} else if (cmd == 'build') {
+	    this._triggerBuild();
+	    this._writeClient(clientData, 'Build queued');
+	} else if (cmd == 'pushtask') {
+	    let nextSpcIdx = rest.indexOf(' ');
+	    let taskName;
+	    let args = {};
+	    if (nextSpcIdx != -1) {
+		taskName = rest.substring(0, nextSpcIdx);
+		rest = rest.substring(nextSpcIdx + 1);
+	    } else {
+		taskName = rest;
+		rest = null;
+	    }
+	    taskName = taskName.replace(/ /g, '');
+	    let parsedArgs = true;
+	    if (rest != null) {
+		try {
+		    args = this._parseParameters(rest.split(' '));
+		} catch (e) {
+		    this._writeClient(clientData, 'Invalid parameters: ' + e);
+		    parsedArgs = false;
+		}
+	    }
+	    if (parsedArgs) {
+		try {
+		    this._taskmaster.pushTask(this._lastBuildPath, taskName, args);
+		    this._updateStatus();
+		    this._writeClient(clientData, this._status);
+		} catch (e) {
+		    this._writeClient(clientData, 'Caught exception: ' + e);
+		    throw e;
+		}
+	    }
+	} else {
+	    this._writeClient(clientData, 'Unknown command: ' + cmd);
+	}
+	print("Processed cmd: " + cmd);
+	clientData.datainstream.read_line_async(GLib.PRIORITY_DEFAULT, null,
+						this._onClientLineReady.bind(this, clientData));
     },
 
     _onTaskExecuting: function(taskmaster, task) {
@@ -102,21 +225,34 @@ const Autobuilder = new Lang.Class({
 	let newStatus = "";
 	let taskstateList = this._taskmaster.getTaskState();
 	let runningTasks = [];
-	let queuedTasks = [];
+	let runningTaskNames = [];
+	let queuedTaskNames = [];
 	for (let i = 0; i < taskstateList.length; i++) {
 	    let taskstate = taskstateList[i];
-	    let name = taskstate.task.name;
-	    if (taskstate.running)
-		runningTasks.push(name);
-	    else
-		queuedTasks.push(name);
+	    if (taskstate.running) {
+		runningTasks.push(taskstate);
+		runningTaskNames.push(taskstate.task.name);
+	    } else {
+		queuedTaskNames.push(taskstate.task.name);
+	    }
 	}
-	if (runningTasks.length == 0 && queuedTasks.length == 0) {
+	if (runningTasks.length == 0 && queuedTaskNames.length == 0) {
 	    newStatus = "[idle]";
 	} else {
-	    newStatus = "running: " + JSON.stringify(runningTasks);
-	    if (queuedTasks.length)
-		newStatus += " queued: " + JSON.stringify(queuedTasks);
+	    newStatus = "running: ";
+	    for (let i = 0; i < runningTasks.length; i++) {
+		newStatus += runningTasks[i].task.name;
+		let params = runningTasks[i].task.taskData.parameters;
+		print("modified: " + JSON.stringify(params));
+		for (let n in params) {
+		    newStatus += ' ' + n + '=' + params[n];
+		}
+	    }
+	    if (queuedTaskNames.length > 0)
+		newStatus += " queued:";
+	    for (let i = 0; i < queuedTaskNames.length; i++) {
+		newStatus += " " + queuedTaskNames[i];
+	    }
 	}
 	if (newStatus != this._status) {
 	    this._status = newStatus;
@@ -124,8 +260,8 @@ const Autobuilder = new Lang.Class({
 	    let [success,loadAvg,etag] = Gio.File.new_for_path('/proc/loadavg').load_contents(null);
 	    loadAvg = loadAvg.toString().replace(/\n$/, '').split(' ');
 	    let statusPath = Gio.File.new_for_path('autobuilder-status.json');
-	    JsonUtil.writeJsonFileAtomic(statusPath, {'running': runningTasks,
-						      'queued': queuedTasks,
+	    JsonUtil.writeJsonFileAtomic(statusPath, {'running': runningTaskNames,
+						      'queued': queuedTaskNames,
 						      'systemLoad': loadAvg}, null);
 	}
     },
@@ -136,8 +272,8 @@ const Autobuilder = new Lang.Class({
 	if (this._taskmaster.isTaskQueued('build'))
 	    return true;
 
-	let buildPath = this._buildsDir.allocateNewVersion(cancellable);
-	this._taskmaster.pushTask(buildPath, 'build', { });
+	this._lastBuildPath = this._buildsDir.allocateNewVersion(cancellable);
+	this._taskmaster.pushTask(this._lastBuildPath, 'build', { });
 
 	this._updateStatus();
 
