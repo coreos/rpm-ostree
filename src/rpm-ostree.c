@@ -826,6 +826,10 @@ main (int     argc,
     {
       gs_unref_object GFile *multiuser_wants_dir =
         g_file_resolve_relative_path (yumroot, "usr/etc/systemd/system/multi-user.target.wants");
+
+      if (!gs_file_ensure_directory (multiuser_wants_dir, TRUE, cancellable, error))
+        goto out;
+
       for (i = 0; i < len; i++)
         {
           const char *unitname = array_require_string_element (units, i, error);
