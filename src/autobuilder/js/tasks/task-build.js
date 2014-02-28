@@ -95,11 +95,14 @@ const TaskBuild = new Lang.Class({
     },
 
     _inheritExtendAttributeList: function(obj, source, attrName) {
-	let value = this._productData[attrName] || [];
+	let result = [];
+	let value = this._productData[attrName];
+	if (value)
+	    result.push.apply(result, value);
 	let subValue = source[attrName];
 	if (subValue)
-	    value.push.apply(value, subValue);
-	obj[attrName] = value;
+	    result.push.apply(result, subValue);
+	obj[attrName] = result;
     },
 
     _generateTreefile: function(ref, release, architecture,
