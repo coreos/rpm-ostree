@@ -839,10 +839,14 @@ main (int     argc,
           if (!unitname)
             goto out;
 
-          g_print ("Adding %s to multi-user.target.wants\n", unitname);
-          
           symlink_target = g_strconcat ("/usr/lib/systemd/system/", unitname, NULL);
           unit_link_target = g_file_get_child (multiuser_wants_dir, unitname);
+
+          if (g_file_query_file_type (unit_link_target, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL) == G_FILE_TYPE_SYMBOLIC_LINK)
+            continue;
+          
+          g_print ("Adding %s to multi-user.target.wants\n", unitname);
+
           if (!g_file_make_symbolic_link (unit_link_target, symlink_target,
                                           cancellable, error))
             goto out;
