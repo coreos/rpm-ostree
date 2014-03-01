@@ -60,7 +60,7 @@ const Autobuilder = new Lang.Class({
 	this._buildTimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT,
 						      60 * 60,
 						      Lang.bind(this, this._triggerBuild));
-	this._lastBuildPath = null;
+	this._currentBuildPath = null;
 	this._triggerBuild();
 
 	this._updateStatus();
@@ -174,18 +174,22 @@ const Autobuilder = new Lang.Class({
 	    }
 	    if (parsedArgs) {
 		try {
-		    this._taskmaster.pushTask(this._lastBuildPath, taskName, args);
+		    let lastBuildPath = this._resultsDir.get_child('tasks/build');
+		    let lastBuildRealPath = GSystem.file_realpath(lastBuildPath);
+		    let taskPath = lastBuildRealPath.get_child(taskName);
+		    // Remove an already extant version of this
+		    GSystem.shutil_rm_rf(taskPath, null);
+		    this._taskmaster.pushTask(lastBuildRealPath, taskName, args);
 		    this._updateStatus();
 		    this._writeClient(clientData, this._status);
 		} catch (e) {
 		    this._writeClient(clientData, 'Caught exception: ' + e);
-		    throw e;
 		}
 	    }
 	} else {
 	    this._writeClient(clientData, 'Unknown command: ' + cmd);
 	}
-	print("Processed cmd: " + cmd);
+	print("Done processing cmd: " + cmd);
 	clientData.datainstream.read_line_async(GLib.PRIORITY_DEFAULT, null,
 						this._onClientLineReady.bind(this, clientData));
     },
@@ -271,8 +275,8 @@ const Autobuilder = new Lang.Class({
 	if (this._taskmaster.isTaskQueued('build'))
 	    return true;
 
-	this._lastBuildPath = this._buildsDir.allocateNewVersion(cancellable);
-	this._taskmaster.pushTask(this._lastBuildPath, 'build', { });
+	this._currentBuildPath = this._buildsDir.allocateNewVersion(cancellable);
+	this._taskmaster.pushTask(this._currentBuildPath, 'build', { });
 
 	this._updateStatus();
 
