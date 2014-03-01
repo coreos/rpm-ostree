@@ -644,17 +644,22 @@ const TestBase = new Lang.Class({
         for (let ref in productTrees) {
             let revision = productTrees[ref]['rev'];
             let snapshotDisk = this.getDiskSnapshotForRevision(ref, revision, cancellable);
-	          let refUnix = ref.replace(/\//g, '-');
-            let refWorkdir = Gio.File.new_for_path('work-' + refUnix);
-            GSystem.file_ensure_directory(refWorkdir, true, cancellable);
-            let test = new TestOneDisk(this,
-                                       this.BaseRequiredMessageIDs.concat(this.RequiredMessageIDs),
-                                       this.BaseFailedMessageIDs.concat(this.FailedMessageIDs),
-                                       this.StatusMessageID);
-            let failedMsg = test.execute(refWorkdir, this._products['osname'], this.repo,
-                                         snapshotDisk, cancellable);
-            if (failedMsg) {
-                print("Testing of " + ref + " at " + revision + " failed");
+            try {
+	              let refUnix = ref.replace(/\//g, '-');
+                let refWorkdir = Gio.File.new_for_path('work-' + refUnix);
+                GSystem.file_ensure_directory(refWorkdir, true, cancellable);
+                let test = new TestOneDisk(this,
+                                           this.BaseRequiredMessageIDs.concat(this.RequiredMessageIDs),
+                                           this.BaseFailedMessageIDs.concat(this.FailedMessageIDs),
+                                           this.StatusMessageID);
+                let failedMsg = test.execute(refWorkdir, this._products['osname'], this.repo,
+                                             snapshotDisk, cancellable);
+                if (failedMsg) {
+                    print("Testing of " + ref + " at " + revision + " failed");
+                }
+            } finally {
+                // These are too big to stick around
+                GSystem.shutil_rm_rf(snapshotDisk, cancellable);
             }
         }
     }
