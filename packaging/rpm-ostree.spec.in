@@ -15,7 +15,6 @@ BuildRequires: gnome-common
 BuildRequires: pkgconfig(ostree-1)
 BuildRequires: pkgconfig(libgsystem)
 BuildRequires: pkgconfig(json-glib-1.0)
-BuildRequires: /usr/bin/g-ir-scanner
 
 Requires: /usr/bin/yum
 
@@ -31,6 +30,7 @@ Requires:	/usr/bin/gjs
 Requires:	/usr/bin/guestmount
 Requires:	libguestfs-gobject
 BuildRequires:  /usr/bin/g-ir-scanner
+BuildRequires:	readline-devel
 
 %description    autobuilder
 An automatic build server for rpm-ostree.
@@ -50,7 +50,6 @@ make install DESTDIR=$RPM_BUILD_ROOT INSTALL="install -p -c"
 %doc COPYING README.md
 %{_bindir}/rpm-ostree
 %{_libdir}/%{name}/
-%{_datadir}/%{name}/
 
 %files autobuilder
 %{_bindir}/rpm-ostree-autobuilder
