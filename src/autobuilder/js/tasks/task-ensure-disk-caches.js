@@ -51,11 +51,17 @@ const TaskEnsureDiskCaches = new Lang.Class({
         GSystem.file_ensure_directory(diskDir, true, cancellable);
         let cachedDisk = LibQA.getACachedDisk(diskDir, cancellable);
         if (cachedDisk) {
-            print("Found cached disk " + cachedDisk.get_path() + " for " + ref);
-            if (!this.parameters.regenerate)
+            let name = cachedDisk.get_basename();
+            if (name.indexOf(revision) == 0) {
+                print("Cached disk is up to date");
                 return;
-            else
+            }
+            if (!this.parameters.regenerate) {
+                print("Found cached disk " + cachedDisk.get_path() + " for " + ref);
+                return;
+            } else {
                 print("Regenerating...");
+            }
         }
 
         let diskPath = diskDir.get_child(revision + '.qcow2');
