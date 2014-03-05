@@ -10,7 +10,7 @@
         $routeProvider.
             when('/', {
                 templateUrl: 'partials/home.html',
-                controller: 'rpmostreeRefsCtrl'
+                controller: 'rpmostreeHomeCtrl'
 	    }).
             when('/repoweb', {
                 templateUrl: 'partials/repoweb-overview.html',
