@@ -37,6 +37,8 @@ rpm_ostree_autobuilder_builtin_console_SOURCES = src/autobuilder/rpm-ostree-auto
 rpm_ostree_autobuilder_builtin_console_CFLAGS = $(AM_CFLAGS) $(PKGDEP_RPMOSTREE_CFLAGS)
 rpm_ostree_autobuilder_builtin_console_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS) -lreadline
 
+autobuilder_privlib_SCRIPTS = src/autobuilder/rpmqa-sorted 
+
 bin_SCRIPTS += rpm-ostree-autobuilder \
 	$(NULL)
 
@@ -76,6 +78,7 @@ jsautotasks_DATA= \
 	src/autobuilder/js/tasks/task-build.js \
 	src/autobuilder/js/tasks/task-bdiff.js \
 	src/autobuilder/js/tasks/task-ensure-disk-caches.js \
+	src/autobuilder/js/tasks/task-repoweb.js \
 	src/autobuilder/js/tasks/task-smoketest.js \
 	src/autobuilder/js/tasks/task-zdisks.js \
 	src/autobuilder/js/tasks/testbase.js \
