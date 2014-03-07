@@ -25,9 +25,9 @@ just "sudo make install" it.
 Once you have that done, choose a build directory.  Here we'll use
 /srv/rpm-ostree.
 
- # cd /srv/rpm-ostree
- # mkdir repo
- # ostree --repo=repo init --mode=archive-z2
+	# cd /srv/rpm-ostree
+	# mkdir repo
+	# ostree --repo=repo init --mode=archive-z2
 
 
 Running rpm-ostree
@@ -36,7 +36,7 @@ Running rpm-ostree
 The core "rpm-ostree" takes as input a "treefile".  There is a demo
 one in `src/demo-treefile.json`.
 
- # rpm-ostree sometreefile.json
+	# rpm-ostree sometreefile.json
 
 All this does is use yum to download RPMs from the referenced repos,
 and commit the result to the OSTree repository, using the ref named by
@@ -50,8 +50,8 @@ Running the autobuilder
 The autobuilder instead takes as input a `products.json` which
 generates multiple treefiles.  Try this:
 
- # ln -s /path/to/rpm-ostree.git/fedostree/products.json .
- # rpm-ostree-autobuilder
+	# ln -s /path/to/rpm-ostree.git/fedostree/products.json .
+	# rpm-ostree-autobuilder
 
 That will automatically poll every hour for changes in the RPMs
 referenced by the `products.json` file, commit them to the
