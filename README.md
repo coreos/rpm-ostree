@@ -34,9 +34,9 @@ Running rpm-ostree
 ------------------
 
 The core "rpm-ostree" takes as input a "treefile".  There is a demo
-one in `src/demo-treefile.json`.
+one in `doc/demo-treefile.json`.
 
-	# rpm-ostree sometreefile.json
+	# rpm-ostree create sometreefile.json
 
 All this does is use yum to download RPMs from the referenced repos,
 and commit the result to the OSTree repository, using the ref named by
