@@ -426,9 +426,9 @@ convert_var_to_tmpfiles_d (GOutputStream *tmpfiles_out,
 }
 
 static gboolean
-clean_uuid_files (GFile         *dir,
-                  GCancellable  *cancellable,
-                  GError       **error)
+clean_yumdb_extraneous_files (GFile         *dir,
+                              GCancellable  *cancellable,
+                              GError       **error)
 {
   gboolean ret = FALSE;
   gs_unref_object GFileEnumerator *direnum = NULL;
@@ -452,10 +452,12 @@ clean_uuid_files (GFile         *dir,
 
       if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_DIRECTORY)
         {
-          if (!clean_uuid_files (child, cancellable, error))
+          if (!clean_yumdb_extraneous_files (child, cancellable, error))
             goto out;
         }
-      else if (strcmp (g_file_info_get_name (file_info), "var_uuid") == 0)
+      else if (strcmp (g_file_info_get_name (file_info), "var_uuid") == 0 ||
+               strcmp (g_file_info_get_name (file_info), "from_repo_timestamp") == 0 ||
+               strcmp (g_file_info_get_name (file_info), "from_repo_revision") == 0)
         {
           if (!g_file_delete (child, cancellable, error))
             goto out;
@@ -638,7 +640,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
                              cancellable, error))
           goto out;
         
-        if (!clean_uuid_files (target_yum_rpmdb_indexes, cancellable, error))
+        if (!clean_yumdb_extraneous_files (target_yum_rpmdb_indexes, cancellable, error))
           goto out;
       }
   }
