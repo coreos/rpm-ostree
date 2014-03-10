@@ -25,7 +25,7 @@ repository.  At the moment, it is intended for use on build servers.
 %package        autobuilder
 Summary:	Build server for rpm-ostree
 Group:		System Environment/Base
-Requires:	%{name} = %{version}-%{release}
+Requires:	%{name}%{?_isa} = %{version}-%{release}
 Requires:	/usr/bin/gjs
 Requires:	/usr/bin/guestmount
 Requires:	libguestfs-gobject
