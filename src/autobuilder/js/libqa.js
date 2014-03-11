@@ -416,7 +416,7 @@ function pullDeploy(mntdir, srcrepo, osname, target, revision, originRepoUrl, ca
     let newDeployment = deployments[0];
     let newDeploymentDirectory = sysroot.get_deployment_directory(newDeployment);
 
-    let defaultFstab = 'UUID=' + ROOT_UUID + ' / ext4 defaults 1 1\n\
+    let defaultFstab = 'UUID=' + ROOT_UUID + ' / xfs defaults 1 1\n\
 UUID=' + BOOT_UUID + ' /boot ext4 defaults 1 2\n\
 UUID=' + SWAP_UUID + ' swap swap defaults 0 0\n';
     let fstabPath = newDeploymentDirectory.resolve_relative_path('etc/fstab');

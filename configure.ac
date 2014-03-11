@@ -37,6 +37,12 @@ AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GOBJECT_INTROSPECTION_REQUIRE([1.34.0])
 
+dnl FIXME remove this
+AC_ARG_ENABLE(trust-demo-gpg-key,
+	    AS_HELP_STRING([--enable-trust-demo-gpg-key], [If set, trust demo GPG key]),,
+	    enable_trust_demo_gpg_key=no)
+AM_CONDITIONAL(BUILDOPT_TRUST_DEMO_GPG_KEY, test x$enable_trust_demo_gpg_key = xyes)
+
 AC_CONFIG_FILES([
 Makefile
 ])
