@@ -165,8 +165,8 @@ function createDisk(diskpath, cancellable, params) {
 	gfHandle.mkswap_U(SWAP_UUID, "/dev/sda" + swapPartitionOffset);
     }
     let rootPartition = "/dev/sda" + rootPartitionOffset;
-    gfHandle.mkfs("ext4", rootPartition, null);
-    gfHandle.set_e2uuid(rootPartition, ROOT_UUID);
+    gfHandle.mkfs("xfs", rootPartition, null);
+    gfHandle.xfs_admin(rootPartition, new Guestfs.XfsAdmin({ "uuid": ROOT_UUID}));
     gfHandle.mount(rootPartition, "/");
     gfHandle.mkdir_mode("/boot", 493);
     if (bootPartitionOffset > 0)
