@@ -397,17 +397,18 @@ function pullDeploy(mntdir, srcrepo, osname, target, revision, originRepoUrl, ca
     let tmpOrigin = Gio.File.new_for_path('origin.tmp');
     tmpOrigin.replace_contents(originData, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, cancellable);
 
-    adminCmd.push('deploy');
+    let deployCmd = adminCmd.concat([]);
+    deployCmd.push('deploy');
 
     let rootArg = 'root=UUID=' + ROOT_UUID;
-    adminCmd.push('--karg=' + rootArg);
+    deployCmd.push('--karg=' + rootArg);
 
     for (let i = 0; i < params.addKernelArgs.length; i++)
-	adminCmd.push('--karg=' + params.addKernelArgs[i]);
+	deployCmd.push('--karg=' + params.addKernelArgs[i]);
 
-    adminCmd.push.apply(adminCmd, ['--os=' + osname, '--origin-file=' + tmpOrigin.get_path(), revOrTarget]);
+    deployCmd.push.apply(deployCmd, ['--os=' + osname, '--origin-file=' + tmpOrigin.get_path(), revOrTarget]);
 
-    ProcUtil.runSync(adminCmd, cancellable,
+    ProcUtil.runSync(deployCmd, cancellable,
                      {logInitiation: true, env: adminEnv});
 
     let sysroot = OSTree.Sysroot.new(mntdir);
@@ -423,11 +424,8 @@ UUID=' + SWAP_UUID + ' swap swap defaults 0 0\n';
     fstabPath.replace_contents(defaultFstab, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, cancellable);
 
     print("Labeling deployment root");
-    let libdir = Gio.File.new_for_path(GLib.getenv('OSTBUILD_LIBDIR'));
-    ProcUtil.runSync([libdir.get_child('rpm-ostree-relabeling-helper').get_path(),
-		      newDeploymentDirectory.get_path(),
-		      newDeploymentDirectory.get_path(),
-		      ""],
+    let relabelCmd = adminCmd.concat(['selinux-ensure-labeled', newDeploymentDirectory.get_path(), ""]);
+    ProcUtil.runSync(relabelCmd,
 		     cancellable,
 		     { logInitiation: true });
 };

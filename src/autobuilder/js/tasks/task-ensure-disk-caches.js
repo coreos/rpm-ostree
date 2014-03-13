@@ -80,13 +80,8 @@ const TaskEnsureDiskCaches = new Lang.Class({
             LibQA.pullDeploy(mntdir, this.repo, osname, ref, revision, originRepoUrl,
                              cancellable, { addKernelArgs: addKernelArgs });
             print("Doing initial labeling");
-            let sysroot = OSTree.Sysroot.new(mntdir);
-            sysroot.load(null);
-            let deployments = sysroot.get_deployments();
-            let newDeployment = deployments[0];
-            let newDeploymentDirectory = sysroot.get_deployment_directory(newDeployment);
-            ProcUtil.runSync([this.libdir.get_child('rpm-ostree-relabeling-helper').get_path(),
-                              newDeploymentDirectory.get_path(),
+            ProcUtil.runSync(['ostree', 'admin', '--sysroot=' + mntdir.get_path(),
+                              'selinux-ensure-labeled',
 		                          mntdir.get_path(),
 		                          ""],
 		                         cancellable,

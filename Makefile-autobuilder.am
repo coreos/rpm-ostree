@@ -27,12 +27,7 @@ rpm-ostree-autobuilder: src/autobuilder/rpm-ostree-autobuilder.in Makefile
 EXTRA_DIST += src/autobuilder/rpm-ostree-autobuilder.in
 
 autobuilder_privlibdir=$(libdir)/$(PACKAGE)-autobuilder
-autobuilder_privlib_PROGRAMS = rpm-ostree-relabeling-helper
-rpm_ostree_relabeling_helper_SOURCES = src/rpm-ostree-relabeling-helper.c
-rpm_ostree_relabeling_helper_CFLAGS = $(AM_CFLAGS) $(PKGDEP_RPMOSTREE_CFLAGS)
-rpm_ostree_relabeling_helper_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)
-
-autobuilder_privlib_PROGRAMS += rpm-ostree-autobuilder-builtin-console
+autobuilder_privlib_PROGRAMS = rpm-ostree-autobuilder-builtin-console
 rpm_ostree_autobuilder_builtin_console_SOURCES = src/autobuilder/rpm-ostree-autobuilder-builtin-console.c
 rpm_ostree_autobuilder_builtin_console_CFLAGS = $(AM_CFLAGS) $(PKGDEP_RPMOSTREE_CFLAGS)
 rpm_ostree_autobuilder_builtin_console_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS) -lreadline
