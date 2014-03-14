@@ -166,17 +166,18 @@ const TaskMaster = new Lang.Class({
 	this._queueRecalculate();
     },
 
-    pushTask: function(buildPath, taskName, parameters) {
+    pushTask: function(buildPath, taskName, parameters, pushParams) {
         this._setTaskBuildPath(taskName, buildPath);
-        this._pushTask(taskName, parameters);
+        this._pushTask(taskName, parameters, pushParams);
     },
 
-    _pushTask: function(name, parameters) {
+    _pushTask: function(name, parameters, pushParams) {
 	let taskDef = this._taskset.getTaskDef(name);
         let taskData = new TaskData(taskDef, parameters);
+	pushParams = Params.parse(pushParams, { force: false });
 	if (!this._isTaskPending(name)) {
 	    let scheduleMinSecs = taskDef.TaskScheduleMinSecs;
-	    if (scheduleMinSecs > 0) {
+	    if (!pushParams.force && scheduleMinSecs > 0) {
 		let info = this._scheduledTaskTimeouts[name];
 		if (!info) {
 		    info = [ 0, null ];

@@ -179,7 +179,7 @@ const Autobuilder = new Lang.Class({
 		    let taskPath = lastBuildRealPath.get_child(taskName);
 		    // Remove an already extant version of this
 		    GSystem.shutil_rm_rf(taskPath, null);
-		    this._taskmaster.pushTask(lastBuildRealPath, taskName, args);
+		    this._taskmaster.pushTask(lastBuildRealPath, taskName, args, { force: true });
 		    this._updateStatus();
 		    this._writeClient(clientData, this._status);
 		} catch (e) {
