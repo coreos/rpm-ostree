@@ -29,7 +29,6 @@
 #include "libgsystem.h"
 
 static char *opt_workdir;
-static char *opt_workdir;
 
 static GOptionEntry option_entries[] = {
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "REPO" },
