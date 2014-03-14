@@ -38,8 +38,7 @@ const TaskZDisks = new Lang.Class({
 
     TaskDef: {
         TaskName: "zdisks",
-        TaskAfter: ['build'],
-        TaskScheduleMinSecs: 3*60*60  // Only do this every 3 hours
+        TaskAfter: ['ensure-disk-caches']
     },
 
     _exportDiskForProduct: function(ref, revision, cancellable) {
