@@ -34,12 +34,12 @@ const Snapshot = imports.snapshot;
 const BuildUtil = imports.buildutil;
 const Vcs = imports.vcs;
 
-const TaskBuild = new Lang.Class({
-    Name: "TaskBuild",
+const TaskTreeCompose = new Lang.Class({
+    Name: "TaskTreeCompose",
     Extends: Task.Task,
 
     TaskDef: {
-        TaskName: "build",
+        TaskName: "treecompose",
     },
 
     DefaultParameters: {onlyTreesMatching: null},

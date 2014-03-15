@@ -40,7 +40,7 @@ const TaskEnsureDiskCaches = new Lang.Class({
 
     TaskDef: {
         TaskName: "ensure-disk-caches",
-        TaskAfter: ['build'],
+        TaskAfter: ['treecompose'],
     },
 
     DefaultParameters: { regenerate: null },

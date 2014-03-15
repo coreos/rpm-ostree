@@ -59,11 +59,9 @@ const Autobuilder = new Lang.Class({
 	// Build every hour
 	this._buildTimeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT,
 						      60 * 60,
-						      Lang.bind(this, this._triggerBuild));
+						      Lang.bind(this, this._triggerTreeCompose));
 	this._currentBuildPath = null;
-	this._triggerBuild();
 
-	this._updateStatus();
 
 	let commandSocketAddress = Gio.UnixSocketAddress.new(Gio.File.new_for_path("cmd.socket").get_path());
 	this._cmdSocketService = Gio.SocketService.new();
@@ -71,6 +69,9 @@ const Autobuilder = new Lang.Class({
 					   Gio.SocketType.STREAM,
 					   Gio.SocketProtocol.DEFAULT,
 					   null);
+
+	this._updateStatus();
+	this._triggerTreeCompose();
 
 	this._cmdSocketService.connect('incoming', this._onCmdSocketIncoming.bind(this));
 	this._clientIdSerial = 0;
@@ -148,9 +149,9 @@ const Autobuilder = new Lang.Class({
 	
 	if (cmd == 'status') {
 	    this._writeClient(clientData, this._status);
-	} else if (cmd == 'build') {
-	    this._triggerBuild();
-	    this._writeClient(clientData, 'Build queued');
+	} else if (cmd == 'treecompose') {
+	    this._triggerTreeCompose();
+	    this._writeClient(clientData, 'Treecompose queued');
 	} else if (cmd == 'pushtask') {
 	    let nextSpcIdx = rest.indexOf(' ');
 	    let taskName;
@@ -174,7 +175,7 @@ const Autobuilder = new Lang.Class({
 	    }
 	    if (parsedArgs) {
 		try {
-		    let lastBuildPath = this._resultsDir.get_child('tasks/build');
+		    let lastBuildPath = this._resultsDir.get_child('tasks/treecompose');
 		    let lastBuildRealPath = GSystem.file_realpath(lastBuildPath);
 		    let taskPath = lastBuildRealPath.get_child(taskName);
 		    // Remove an already extant version of this
@@ -269,14 +270,14 @@ const Autobuilder = new Lang.Class({
 	}
     },
 
-    _triggerBuild: function() {
+    _triggerTreeCompose: function() {
 	let cancellable = null;
 	
-	if (this._taskmaster.isTaskQueued('build'))
+	if (this._taskmaster.isTaskQueued('treecompose'))
 	    return true;
 
 	this._currentBuildPath = this._buildsDir.allocateNewVersion(cancellable);
-	this._taskmaster.pushTask(this._currentBuildPath, 'build', { });
+	this._taskmaster.pushTask(this._currentBuildPath, 'treecompose', { });
 
 	this._updateStatus();
 
