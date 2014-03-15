@@ -71,7 +71,6 @@ jsautobuiltins_DATA= \
 jsautotasksdir=$(jsautobuilderdir)/tasks
 jsautotasks_DATA= \
 	src/autobuilder/js/tasks/task-build.js \
-	src/autobuilder/js/tasks/task-bdiff.js \
 	src/autobuilder/js/tasks/task-ensure-disk-caches.js \
 	src/autobuilder/js/tasks/task-repoweb.js \
 	src/autobuilder/js/tasks/task-smoketest.js \
