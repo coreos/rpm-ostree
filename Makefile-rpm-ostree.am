@@ -26,6 +26,11 @@ rpm_ostree_SOURCES = src/rpm-ostree.c \
 rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
 rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)
 
+bin_PROGRAMS += rpm-ostree-sign
+rpm_ostree_sign_SOURCES = src/rpm-ostree-sign.c
+rpm_ostree_sign_CFLAGS = $(AM_CFLAGS) $(PKGDEP_RPMOSTREE_CFLAGS)
+rpm_ostree_sign_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)
+
 privdatadir=$(pkglibdir)
 privdata_DATA = src/tmpfiles-ostree-integration.conf
 
