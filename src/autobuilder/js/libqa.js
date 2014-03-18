@@ -424,7 +424,7 @@ UUID=' + SWAP_UUID + ' swap swap defaults 0 0\n';
     fstabPath.replace_contents(defaultFstab, null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, cancellable);
 
     print("Labeling deployment root");
-    let relabelCmd = adminCmd.concat(['selinux-ensure-labeled', newDeploymentDirectory.get_path(), ""]);
+    let relabelCmd = adminCmd.concat(['instutil', 'selinux-ensure-labeled', newDeploymentDirectory.get_path(), ""]);
     ProcUtil.runSync(relabelCmd,
 		     cancellable,
 		     { logInitiation: true });

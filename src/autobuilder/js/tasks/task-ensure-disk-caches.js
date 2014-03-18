@@ -81,7 +81,7 @@ const TaskEnsureDiskCaches = new Lang.Class({
                              cancellable, { addKernelArgs: addKernelArgs });
             print("Doing initial labeling");
             ProcUtil.runSync(['ostree', 'admin', '--sysroot=' + mntdir.get_path(),
-                              'selinux-ensure-labeled',
+                              'instutil', 'selinux-ensure-labeled',
 		                          mntdir.get_path(),
 		                          ""],
 		                         cancellable,
