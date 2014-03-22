@@ -33,6 +33,7 @@
 
 static RpmOstreeCommand commands[] = {
   { "create", rpmostree_builtin_create, 0 },
+  { "sign", rpmostree_builtin_sign, 0 },
   { NULL }
 };
 

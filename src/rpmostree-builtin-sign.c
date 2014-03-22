@@ -22,8 +22,8 @@
 
 #include <string.h>
 #include <glib-unix.h>
-#include <json-glib/json-glib.h>
-#include <ostree.h>
+
+#include "rpmostree-builtins.h"
 
 #include "libgsystem.h"
 
@@ -38,13 +38,13 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-int
-main (int     argc,
-      char  **argv)
+gboolean
+rpmostree_builtin_sign (int            argc,
+                        char         **argv,
+                        GCancellable  *cancellable,
+                        GError       **error)
 {
-  GError *local_error = NULL;
-  GError **error = &local_error;
-  GCancellable *cancellable = NULL;
+  gboolean ret = FALSE;
   GOptionContext *context = g_option_context_new ("- Use rpm-sign to sign an OSTree commit");
   gs_unref_object GFile *repopath = NULL;
   gs_unref_object OstreeRepo *repo = NULL;
@@ -132,25 +132,11 @@ main (int     argc,
   g_print ("Successfully signed OSTree commit=%s with key=%s\n",
            checksum, opt_key_id);
   
+  ret = TRUE;
  out:
   if (tmp_commitdata_file)
     (void) gs_file_unlink (tmp_commitdata_file, NULL, NULL);
   if (tmp_sig_file)
     (void) gs_file_unlink (tmp_sig_file, NULL, NULL);
-  if (local_error != NULL)
-    {
-      int is_tty = isatty (1);
-      const char *prefix = "";
-      const char *suffix = "";
-      if (is_tty)
-        {
-          prefix = "\x1b[31m\x1b[1m"; /* red, bold */
-          suffix = "\x1b[22m\x1b[0m"; /* bold off, color reset */
-        }
-      g_printerr ("%serror: %s%s\n", prefix, suffix, local_error->message);
-      g_error_free (local_error);
-      return 2;
-    }
-  else
-    return 0;
+  return ret;
 }
