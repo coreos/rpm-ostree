@@ -26,12 +26,14 @@ dist-snapshot:
 	xz $(PKG_VER).tar 
 
 srpm: dist-snapshot
-	sed -e "s,^Version:.*,Version: $(GITREV_FOR_PKG)," $(srcdir)/packaging/$(PACKAGE).spec.in > $(PACKAGE).spec
-	$(srcdir)/packaging/rpmbuild-cwd -bs $(PACKAGE).spec
+	(cd $(srcdir)/packaging; \
+	 cp ../$(PKG_VER).tar.xz . ; \
+	 sed -e "s,^Version:.*,Version: $(GITREV_FOR_PKG)," $(PACKAGE).spec.in > $(PACKAGE).spec; \
+	 ./rpmbuild-cwd -bs $(PACKAGE).spec)
 
-local-rpm: srpm
+rpm: srpm
 	$(srcdir)/packaging/rpmbuild-cwd --rebuild packaging/$(PKG_VER)*.src.rpm
 
-mock: srpm
+buildinstall: rpm
 	sudo yum localinstall $(PKG_VER)*.src.rpm
 
