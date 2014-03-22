@@ -24,6 +24,7 @@
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
 
+#include "rpmostree-builtins.h"
 #include "rpmostree-postprocess.h"
 
 #include "libgsystem.h"
@@ -537,15 +538,14 @@ yuminstall (JsonObject      *treedata,
   return ret;
 }
 
-int
-main (int     argc,
-      char  **argv)
+gboolean
+rpmostree_builtin_create (int             argc,
+                          char          **argv,
+                          GCancellable   *cancellable,
+                          GError        **error)
 {
-  GError *local_error = NULL;
-  GError **error = &local_error;
-  GCancellable *cancellable = NULL;
+  gboolean ret = FALSE;
   GOptionContext *context = g_option_context_new ("- Run yum and commit the result to an OSTree repository");
-  const char *cmd;
   const char *ref;
   JsonNode *treefile_root = NULL;
   JsonObject *treefile = NULL;
@@ -568,22 +568,15 @@ main (int     argc,
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
 
-  if (argc < 3)
+  if (argc < 2)
     {
-      g_printerr ("usage: %s create treefile.json\n", argv[0]);
+      g_printerr ("usage: " PACKAGE_STRING " create TREEFILE\n");
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Option processing failed");
       goto out;
     }
   
-  cmd = argv[1];
-  if (strcmp (cmd, "create") != 0)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Unknown command '%s'", cmd);
-      goto out;
-    }
-  treefile_path = g_file_new_for_path (argv[2]);
+  treefile_path = g_file_new_for_path (argv[1]);
 
   if (opt_workdir && chdir (opt_workdir) != 0)
     {
@@ -892,20 +885,5 @@ main (int     argc,
   g_print ("Complete\n");
   
  out:
-  if (local_error != NULL)
-    {
-      int is_tty = isatty (1);
-      const char *prefix = "";
-      const char *suffix = "";
-      if (is_tty)
-        {
-          prefix = "\x1b[31m\x1b[1m"; /* red, bold */
-          suffix = "\x1b[22m\x1b[0m"; /* bold off, color reset */
-        }
-      g_printerr ("%serror: %s%s\n", prefix, suffix, local_error->message);
-      g_error_free (local_error);
-      return 2;
-    }
-  else
-    return 0;
+  return ret;
 }

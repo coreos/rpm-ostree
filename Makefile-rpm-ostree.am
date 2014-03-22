@@ -19,9 +19,11 @@ privlib_SCRIPTS = src/repoquery-sorted
 
 bin_PROGRAMS += rpm-ostree
 
-rpm_ostree_SOURCES = src/rpm-ostree.c \
+rpm_ostree_SOURCES = src/main.c \
 	src/rpmostree-postprocess.h \
 	src/rpmostree-postprocess.c \
+	src/rpmostree-builtins.h \
+	src/rpmostree-builtin-create.c \
 	$(NULL)
 rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
 rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)
