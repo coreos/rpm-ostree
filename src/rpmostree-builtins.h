@@ -32,7 +32,7 @@ typedef struct {
 
 #define BUILTINPROTO(name) gboolean rpmostree_builtin_ ## name (int argc, char **argv, GCancellable *cancellable, GError **error)
 
-BUILTINPROTO(create);
+BUILTINPROTO(treecompose);
 BUILTINPROTO(sign);
 
 #undef BUILTINPROTO

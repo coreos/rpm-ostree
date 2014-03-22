@@ -23,7 +23,7 @@ rpm_ostree_SOURCES = src/main.c \
 	src/rpmostree-postprocess.h \
 	src/rpmostree-postprocess.c \
 	src/rpmostree-builtins.h \
-	src/rpmostree-builtin-create.c \
+	src/rpmostree-builtin-treecompose.c \
 	src/rpmostree-builtin-sign.c \
 	$(NULL)
 rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)

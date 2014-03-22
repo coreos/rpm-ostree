@@ -539,10 +539,10 @@ yuminstall (JsonObject      *treedata,
 }
 
 gboolean
-rpmostree_builtin_create (int             argc,
-                          char          **argv,
-                          GCancellable   *cancellable,
-                          GError        **error)
+rpmostree_builtin_treecompose (int             argc,
+                               char          **argv,
+                               GCancellable   *cancellable,
+                               GError        **error)
 {
   gboolean ret = FALSE;
   GOptionContext *context = g_option_context_new ("- Run yum and commit the result to an OSTree repository");
