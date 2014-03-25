@@ -1,4 +1,4 @@
-# Copyright (C) 2011,2013 Colin Walters <walters@verbum.org>
+# Copyright (C) 2014 Colin Walters <walters@verbum.org>
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,19 +15,18 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-include Makefile-decls.am
+man1_MANS = rpm-ostree.1
 
-privdatadir=$(pkglibdir)
+XSLTPROC_FLAGS = \
+        --nonet \
+        --stringparam man.output.quietly 1 \
+        --stringparam funcsynopsis.style ansi \
+        --stringparam man.th.extra1.suppress 1 \
+        --stringparam man.authors.section.enabled 0 \
+        --stringparam man.copyright.section.enabled 0
 
-ACLOCAL_AMFLAGS += -I m4 ${ACLOCAL_FLAGS}
-AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
-	-DLIBEXECDIR='"$(libexecdir)"' \
-	-DLOCALEDIR=\"$(datadir)/locale\" \
-	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_36 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_36
-AM_CFLAGS += $(WARN_CFLAGS)
+XSLTPROC_FLAGS_MAN = \
+	$(XSLTPROC_FLAGS) http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl
 
-EXTRA_DIST += autogen.sh COPYING
-
-include Makefile-rpm-ostree.am
-include Makefile-man.am
-include Makefile-autobuilder.am
+rpm-ostree.1: man/rpm-ostree.xml Makefile
+	$(AM_V_GEN) $(XSLTPROC) $(XSLTPROC_FLAGS_MAN) $<

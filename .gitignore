@@ -45,3 +45,5 @@ rpm-ostree-autobuilder
 
 rpm-ostree-*.tar.xz
 rpm-ostree-*.rpm
+
+rpm-ostree.1
