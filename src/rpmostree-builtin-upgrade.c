@@ -98,6 +98,7 @@ rpmostree_builtin_upgrade (int             argc,
   gs_unref_object OstreeAsyncProgress *progress = NULL;
   GSConsole *console;
   gboolean changed;
+  gs_free char *origin_description = NULL;
   
   g_option_context_add_main_entries (context, option_entries, NULL);
 
@@ -112,6 +113,10 @@ rpmostree_builtin_upgrade (int             argc,
   if (!upgrader)
     goto out;
 
+  origin_description = ostree_sysroot_upgrader_get_origin_description (upgrader);
+  if (origin_description)
+    g_print ("Updating from: %s\n", origin_description);
+
   console = gs_console_get ();
   if (console)
     {
@@ -125,7 +130,7 @@ rpmostree_builtin_upgrade (int             argc,
 
   if (!changed)
     {
-      g_print ("No update available.\n");
+      g_print ("No updates available.\n");
     }
   else
     {
