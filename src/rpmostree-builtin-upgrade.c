@@ -128,6 +128,12 @@ rpmostree_builtin_upgrade (int             argc,
                                      cancellable, error))
     goto out;
 
+  if (console)
+    {
+      if (!gs_console_end_status_line (console, cancellable, error))
+        goto out;
+    }
+
   if (!changed)
     {
       g_print ("No updates available.\n");
