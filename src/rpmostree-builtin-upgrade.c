@@ -141,6 +141,8 @@ rpmostree_builtin_upgrade (int             argc,
         gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
                                        cancellable, error,
                                        "systemctl", "reboot", NULL);
+      else
+        g_print ("Updates prepared for next boot; run \"systemctl reboot\" to start a reboot\n");
     }
   
   ret = TRUE;
