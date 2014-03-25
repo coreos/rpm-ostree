@@ -127,11 +127,15 @@ rpmostree_builtin_upgrade (int             argc,
     {
       g_print ("No update available.\n");
     }
-  else if (opt_reboot)
+  else
     {
-      gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                     cancellable, error,
-                                     "systemctl", "reboot", NULL);
+      if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+        goto out;
+
+      if (opt_reboot)
+        gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
+                                       cancellable, error,
+                                       "systemctl", "reboot", NULL);
     }
   
   ret = TRUE;
