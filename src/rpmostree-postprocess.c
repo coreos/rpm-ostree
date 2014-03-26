@@ -425,6 +425,7 @@ convert_var_to_tmpfiles_d (GOutputStream *tmpfiles_out,
   return ret;
 }
 
+#if 0
 static gboolean
 clean_yumdb_extraneous_files (GFile         *dir,
                               GCancellable  *cancellable,
@@ -468,6 +469,7 @@ clean_yumdb_extraneous_files (GFile         *dir,
  out:
   return ret;
 }
+#endif
 
 static gboolean
 workaround_selinux_cross_labeling_recurse (GFile         *dir,
@@ -631,7 +633,11 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
     if (!gs_file_rename (legacyrpm_path, newrpm_path, cancellable, error))
       goto out;
     
-    /* Move the yum database to usr/share/yumdb */
+    /* Move the yum database to usr/share/yumdb; disabled for now due
+     * to bad conflict with OSTree's current
+     * one-http-request-per-file.
+     */
+#if 0
     if (g_file_query_exists (src_yum_rpmdb_indexes, NULL))
       {
         g_print ("Moving %s to %s\n", gs_file_get_path_cached (src_yum_rpmdb_indexes),
@@ -643,6 +649,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
         if (!clean_yumdb_extraneous_files (target_yum_rpmdb_indexes, cancellable, error))
           goto out;
       }
+#endif
   }
 
   /* Remove /var/lib/yum; we don't want it here. */
