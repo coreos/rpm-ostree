@@ -19,16 +19,25 @@ privlib_SCRIPTS = src/repoquery-sorted
 
 bin_PROGRAMS += rpm-ostree
 
-rpm_ostree_SOURCES = src/main.c \
-	src/rpmostree-postprocess.h \
+noinst_LTLIBRARIES += librpmostree.la
+
+librpmostree_la_SOURCES = \
 	src/rpmostree-postprocess.c \
+	src/rpmostree-postprocess.h \
+	src/hif-utils.c \
+	src/hif-utils.h \
+	$(NULL)
+librpmostree_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
+librpmostree_la_LIBADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)
+
+rpm_ostree_SOURCES = src/main.c \
 	src/rpmostree-builtins.h \
 	src/rpmostree-builtin-treecompose.c \
 	src/rpmostree-builtin-sign.c \
 	src/rpmostree-builtin-upgrade.c \
 	$(NULL)
 rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
-rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)
+rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS) librpmostree.la
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/tmpfiles-ostree-integration.conf

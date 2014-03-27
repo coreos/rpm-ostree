@@ -25,6 +25,15 @@
 
 #include "rpmostree-builtins.h"
 
+#include <hawkey/packagelist.h>
+#include <hawkey/query.h>
+#include <hawkey/sack.h>
+#include <hawkey/stringarray.h>
+#include <hawkey/goal.h>
+#include <hawkey/version.h>
+#include <hawkey/util.h>
+#include "hif-utils.h"
+
 #include "libgsystem.h"
 
 static gboolean opt_reboot;
@@ -82,7 +91,155 @@ pull_progress (OstreeAsyncProgress       *progress,
   gs_console_begin_status_line (console, buf->str, NULL, NULL);
   
   g_string_free (buf, TRUE);
+}
+
+/* Todo: move this to libgsystem */
+#define DEFINE_TRIVIAL_CLEANUP_FUNC(type, func)                 \
+        static inline void func##p(type *p) {                   \
+                if (*p)                                         \
+                        func(*p);                               \
+        }                                                       \
+        struct __useless_struct_to_allow_trailing_semicolon__
+
+DEFINE_TRIVIAL_CLEANUP_FUNC(HySack, hy_sack_free);
+DEFINE_TRIVIAL_CLEANUP_FUNC(HyQuery, hy_query_free);
+DEFINE_TRIVIAL_CLEANUP_FUNC(HyPackageList, hy_packagelist_free);
+
+#define _cleanup_hysack_ __attribute__((cleanup(hy_sack_freep)))
+#define _cleanup_hyquery_ __attribute__((cleanup(hy_query_freep)))
+#define _cleanup_hypackagelist_ __attribute__((cleanup(hy_packagelist_freep)))
+
+static gboolean
+get_pkglist_for_root (GFile            *root,
+                      HySack           *out_sack,
+                      HyPackageList    *out_pkglist,
+                      GCancellable     *cancellable,
+                      GError          **error)
+{
+  gboolean ret = FALSE;
+  int rc;
+  _cleanup_hysack_ HySack sack = NULL;
+  _cleanup_hyquery_ HyQuery query = NULL;
+  _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+
+  sack = hy_sack_create (NULL, NULL, gs_file_get_path_cached (root), HY_MAKE_CACHE_DIR);
+  if (sack == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Failed to create sack cache");
+      goto out;
+    }
+
+  rc = hy_sack_load_system_repo (sack, NULL, HY_BUILD_CACHE);
+  if (!hif_rc_to_gerror (rc, error))
+    {
+      g_prefix_error (error, "Failed to load system repo: ");
+      goto out;
+    }
+  query = hy_query_create (sack);
+  hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
+  pkglist = hy_query_run (query);
+
+  ret = TRUE;
+  gs_transfer_out_value (out_sack, &sack);
+  gs_transfer_out_value (out_pkglist, &pkglist);
+ out:
+  return ret;
+}
+
+static gboolean
+print_rpmdb_diff (GFile          *oldroot,
+                  GFile          *newroot,
+                  GCancellable   *cancellable,
+                  GError        **error)
+{
+  gboolean ret = FALSE;
+  _cleanup_hysack_ HySack old_sack = NULL;
+  _cleanup_hypackagelist_ HyPackageList old_pkglist = NULL;
+  _cleanup_hysack_ HySack new_sack = NULL;
+  _cleanup_hypackagelist_ HyPackageList new_pkglist = NULL;
+  guint i;
+  HyPackage pkg;
+  gboolean printed_header = FALSE;
+
+  if (!get_pkglist_for_root (oldroot, &old_sack, &old_pkglist,
+                             cancellable, error))
+    goto out;
+
+  if (!get_pkglist_for_root (newroot, &new_sack, &new_pkglist,
+                             cancellable, error))
+    goto out;
   
+  printed_header = FALSE;
+  FOR_PACKAGELIST(pkg, old_pkglist, i)
+    {
+      _cleanup_hyquery_ HyQuery query = NULL;
+      _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+      
+      query = hy_query_create (new_sack);
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, hy_package_get_name (pkg));
+      hy_query_filter (query, HY_PKG_EVR, HY_NEQ, hy_package_get_evr (pkg));
+      hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
+      pkglist = hy_query_run (query);
+      if (hy_packagelist_count (pkglist) > 0)
+        {
+          gs_free char *nevra = hy_package_get_nevra (pkg);
+          if (!printed_header)
+            {
+              g_print ("Changed:\n");
+              printed_header = TRUE;
+            }
+          g_print ("  %s\n", nevra);
+        }
+    }
+
+  printed_header = FALSE;
+  FOR_PACKAGELIST(pkg, old_pkglist, i)
+    {
+      _cleanup_hyquery_ HyQuery query = NULL;
+      _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+      
+      query = hy_query_create (new_sack);
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, hy_package_get_name (pkg));
+      hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
+      pkglist = hy_query_run (query);
+      if (hy_packagelist_count (pkglist) == 0)
+        {
+          gs_free char *nevra = hy_package_get_nevra (pkg);
+          if (!printed_header)
+            {
+              g_print ("Removed:\n");
+              printed_header = TRUE;
+            }
+          g_print ("  %s\n", nevra);
+        }
+    }
+
+  printed_header = FALSE;
+  FOR_PACKAGELIST(pkg, new_pkglist, i)
+    {
+      _cleanup_hyquery_ HyQuery query = NULL;
+      _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+      
+      query = hy_query_create (old_sack);
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, hy_package_get_name (pkg));
+      hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
+      pkglist = hy_query_run (query);
+      if (hy_packagelist_count (pkglist) == 0)
+        {
+          gs_free char *nevra = hy_package_get_nevra (pkg);
+          if (!printed_header)
+            {
+              g_print ("Added:\n");
+              printed_header = TRUE;
+            }
+          g_print ("  %s\n", nevra);
+        }
+    }
+
+  ret = TRUE;
+ out:
+  return ret;
 }
 
 gboolean
@@ -152,7 +309,23 @@ rpmostree_builtin_upgrade (int             argc,
                                        cancellable, error,
                                        "systemctl", "reboot", NULL);
       else
-        g_print ("Updates prepared for next boot; run \"systemctl reboot\" to start a reboot\n");
+        {
+          gs_unref_object GFile *current_root = g_file_new_for_path ("/");
+          gs_unref_object GFile *new_root = NULL;
+          gs_unref_ptrarray GPtrArray *new_deployments = 
+            ostree_sysroot_get_deployments (sysroot);
+          OstreeDeployment *new_deployment;
+
+          g_assert (new_deployments->len > 1);
+          new_deployment = new_deployments->pdata[0];
+          new_root = ostree_sysroot_get_deployment_directory (sysroot, new_deployment);
+
+          if (!print_rpmdb_diff (current_root, new_root,
+                                 cancellable, error))
+            goto out;
+
+          g_print ("Updates prepared for next boot; run \"systemctl reboot\" to start a reboot\n");
+        }
     }
   
   ret = TRUE;
