@@ -131,7 +131,11 @@ rpmostree_builtin_upgrade (int             argc,
   if (console)
     {
       if (!gs_console_end_status_line (console, cancellable, error))
-        goto out;
+        {
+          console = NULL;
+          goto out;
+        }
+      console = NULL;
     }
 
   if (!changed)
@@ -153,5 +157,8 @@ rpmostree_builtin_upgrade (int             argc,
   
   ret = TRUE;
  out:
+  if (console)
+    (void) gs_console_end_status_line (console, NULL, NULL);
+
   return ret;
 }
