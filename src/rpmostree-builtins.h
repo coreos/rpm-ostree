@@ -35,6 +35,7 @@ typedef struct {
 BUILTINPROTO(treecompose);
 BUILTINPROTO(sign);
 BUILTINPROTO(upgrade);
+BUILTINPROTO(rollback);
 
 #undef BUILTINPROTO
 
