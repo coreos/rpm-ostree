@@ -253,7 +253,7 @@ rpmostree_builtin_upgrade (int             argc,
   gs_unref_object OstreeSysroot *sysroot = NULL;
   gs_unref_object OstreeSysrootUpgrader *upgrader = NULL;
   gs_unref_object OstreeAsyncProgress *progress = NULL;
-  GSConsole *console;
+  GSConsole *console = NULL;
   gboolean changed;
   gs_free char *origin_description = NULL;
   
