@@ -68,6 +68,33 @@ object_require_string_member (JsonObject     *object,
   return ret;
 }
 
+static gboolean
+object_get_optional_string_member (JsonObject     *object,
+                                   const char     *member_name,
+                                   const char    **out_value,
+                                   GError        **error)
+{
+  gboolean ret = FALSE;
+  JsonNode *node = json_object_get_member (object, member_name);
+
+  if (node != NULL)
+    {
+      *out_value = json_node_get_string (node);
+      if (!*out_value)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Member '%s' is not a string", member_name);
+          goto out;
+        }
+    }
+  else
+    *out_value = NULL;
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
 static const char *
 array_require_string_element (JsonArray      *array,
                               guint           i,
@@ -872,10 +899,17 @@ rpmostree_builtin_treecompose (int             argc,
     if (!ostree_repo_open (repo, cancellable, error))
       goto out;
 
-    if (!rpmostree_commit (yumroot, repo, ref, json_object_get_string_member (treefile, "gpg_key"),
-                           json_object_get_boolean_member (treefile, "selinux"),
-                           cancellable, error))
+    
+    {
+      const char *gpgkey;
+      if (!object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
+        goto out;
+
+      if (!rpmostree_commit (yumroot, repo, ref, gpgkey,
+                             json_object_get_boolean_member (treefile, "selinux"),
+                             cancellable, error))
       goto out;
+    }
 
     if (!gs_file_rename (rpmtextlist_path_new, rpmtextlist_path,
                          cancellable, error))
