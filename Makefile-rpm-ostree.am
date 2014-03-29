@@ -24,6 +24,8 @@ noinst_LTLIBRARIES += librpmostree.la
 librpmostree_la_SOURCES = \
 	src/rpmostree-postprocess.c \
 	src/rpmostree-postprocess.h \
+	src/rpmostree-treepkgdiff.c \
+	src/rpmostree-treepkgdiff.h \
 	src/hif-utils.c \
 	src/hif-utils.h \
 	$(NULL)

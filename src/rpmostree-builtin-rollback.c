@@ -24,6 +24,7 @@
 #include <glib-unix.h>
 
 #include "rpmostree-builtins.h"
+#include "rpmostree-treepkgdiff.h"
 
 #include "libgsystem.h"
 
@@ -123,6 +124,15 @@ rpmostree_builtin_rollback (int             argc,
     gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
                                    cancellable, error,
                                    "systemctl", "reboot", NULL);
+  else
+    {
+      if (!rpmostree_print_treepkg_diff (sysroot, cancellable, error))
+        goto out;
+
+      g_print ("Sucessfully reset deployment order; run \"systemctl reboot\" to start a reboot\n");
+    }
+
+  if (opt_reboot)
   ret = TRUE;
  out:
   return ret;
