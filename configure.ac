@@ -37,6 +37,15 @@ AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GOBJECT_INTROSPECTION_REQUIRE([1.34.0])
 
+AC_ARG_ENABLE(patched-hawkey-and-libsolv,
+              AS_HELP_STRING([--enable-patched-hawkey],
+                             [Assert that our copy of hawkey and libsolv understand /usr/share/rpm]),,
+              [enable_patched_hawkey_and_libsolv=no])
+AM_CONDITIONAL(BUILDOPT_PATCHED_HAWKEY_AND_LIBSOLV, [test x$enable_patched_hawkey_and_libsolv = xyes])
+AS_IF([test x$enable_patched_hawkey_and_libsolv = xyes], [
+    AC_DEFINE(HAVE_PATCHED_HAWKEY_AND_LIBSOLV, 1, [Define if we have patched hawkey and libsolv])
+])
+
 AC_CONFIG_FILES([
 Makefile
 ])
@@ -44,4 +53,6 @@ AC_OUTPUT
 
 echo "
     $PACKAGE $VERSION
+
+    patched hawkey:	$enable_patched_hawkey_and_libsolv
 "
