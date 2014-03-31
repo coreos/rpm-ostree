@@ -463,55 +463,6 @@ yum_context_command (YumContext   *yumctx,
                                   cancellable, error))
     goto out;
 
-  /*
-  do
-    {
-      const guint8 *buf;
-      gsize len;
-      GBytes *bytes;
-      const guint8 *nl;
-
-      bytes = g_input_stream_read_bytes ((GInputStream*)yumctx->stdout, 8192,
-                                         cancellable, error);
-      if (!bytes)
-        goto out;
-      buf = g_bytes_get_data (bytes, &len);
-      if (g_bytes_get_size (bytes) == 0)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Received unexpected EOF from yum!");
-          goto out;
-        }
-
-      while ((nl = memchr (buf, '\n', len)) != NULL)
-        {
-          gsize linelen = nl - buf;
-          char *line;
-          if (!g_utf8_validate ((char*)buf, linelen, NULL))
-            {
-              gs_free char *cstr = c_stringify (buf, linelen);
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Invalid UTF-8 from yum: %s", cstr);
-              goto out;
-            }
-          line = g_strndup ((char*)buf, linelen);
-          g_print ("yum< %s\n", line);
-          g_ptr_array_add (lines, line);
-          len -= (linelen+1);
-          buf = nl + 1;
-        }
-
-      if (len < 2 || memcmp (buf, "> ", 2) != 0)
-        {
-          gs_free char *cstr = c_stringify (buf, len);
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Unexpected end of data '%s'", cstr);
-          goto out;
-        }
-    }
-  while (TRUE);
-  */
-
   ret = TRUE;
   gs_transfer_out_value (out_lines, &lines);
  out:
