@@ -66,7 +66,7 @@
         </refsect1>
 
         <refsect1>
-                <title>Options</title>
+                <title>Commands</title>
 
                 <variablelist>
                         <varlistentry>
@@ -79,6 +79,26 @@
                                 present, no changes are made live; you
                                 must reboot for the changes to take
                                 effect.</para></listitem>
+                        </varlistentry>
+
+                        <varlistentry>
+                                <term><command>rollback</command></term>
+				
+				<listitem><para>OSTree mananges an
+				ordered list of bootloader entries,
+				called "deployments".  Each entry has
+				a separate <filename>/etc</filename>,
+				but they all share a single
+				<filename>/var</filename>.  You can
+				use the bootloader to choose between
+				entries.</para>
+
+                                <para>This command then changes the
+                                default bootloader entry.  If the
+                                current default is booted, then set
+                                the default to the previous entry.
+                                Otherwise, make the currently booted
+                                tree the default.</para></listitem>
                         </varlistentry>
 		</variablelist>
 
