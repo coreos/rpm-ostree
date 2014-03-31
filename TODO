@@ -3,6 +3,16 @@ Core
 
 * Support package installation on top
 
+Treecompose
+-----------
+
+* Use libhif
+  - Kill repoquery beforehand
+* Run mock in a container
+  - CLONE_NEWPID | CLONE_NEWNS
+  - Mount /proc
+  - CLONE_NEWNET ?
+
 Autobuilder
 -----------
 
