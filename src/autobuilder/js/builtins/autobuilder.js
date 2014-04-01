@@ -63,7 +63,9 @@ const Autobuilder = new Lang.Class({
 	this._currentBuildPath = null;
 
 
-	let commandSocketAddress = Gio.UnixSocketAddress.new(Gio.File.new_for_path("cmd.socket").get_path());
+	let path = Gio.File.new_for_path("cmd.socket");
+	GSystem.shutil_rm_rf(path, cancellable);
+	let commandSocketAddress = Gio.UnixSocketAddress.new(path.get_path());
 	this._cmdSocketService = Gio.SocketService.new();
 	this._cmdSocketService.add_address(commandSocketAddress,
 					   Gio.SocketType.STREAM,
