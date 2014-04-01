@@ -126,6 +126,7 @@ const TaskRepoweb = new Lang.Class({
             JsonUtil.writeJsonFileAtomic(this._repoWebPath.get_child('diff-' + revision + '.json'), diffData, cancellable);
         }
 
+        print("Generated data for " + revision);
         JsonUtil.writeJsonFileAtomic(commitDataOut, commitData, cancellable);
 
         if (parent)
