@@ -114,12 +114,12 @@ print_rpmdb_diff (GFile          *oldroot,
     goto out;
   
   printed_header = FALSE;
-  FOR_PACKAGELIST(pkg, old_pkglist, i)
+  FOR_PACKAGELIST(pkg, new_pkglist, i)
     {
       _cleanup_hyquery_ HyQuery query = NULL;
       _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
       
-      query = hy_query_create (new_sack);
+      query = hy_query_create (old_sack);
       hy_query_filter (query, HY_PKG_NAME, HY_EQ, hy_package_get_name (pkg));
       hy_query_filter (query, HY_PKG_EVR, HY_NEQ, hy_package_get_evr (pkg));
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
