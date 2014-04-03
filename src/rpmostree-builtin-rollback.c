@@ -117,9 +117,6 @@ rpmostree_builtin_rollback (int             argc,
                                          error))
     goto out;
 
-  if (!ostree_sysroot_cleanup (sysroot, cancellable, error))
-    goto out;
-
   if (opt_reboot)
     gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
                                    cancellable, error,
