@@ -29,9 +29,11 @@
 #include "libgsystem.h"
 
 static gboolean opt_reboot;
+static gboolean opt_allow_downgrade;
 
 static GOptionEntry option_entries[] = {
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after an upgrade is prepared", NULL },
+  { "allow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_allow_downgrade, "Permit deployment of chronologically older trees", NULL },
   { NULL }
 };
 
@@ -98,6 +100,7 @@ rpmostree_builtin_upgrade (int             argc,
   gs_unref_object OstreeAsyncProgress *progress = NULL;
   GSConsole *console = NULL;
   gboolean changed;
+  OstreeSysrootUpgraderPullFlags upgraderpullflags = 0;
   gs_free char *origin_description = NULL;
   
   g_option_context_add_main_entries (context, option_entries, NULL);
@@ -123,6 +126,9 @@ rpmostree_builtin_upgrade (int             argc,
       gs_console_begin_status_line (console, "", NULL, NULL);
       progress = ostree_async_progress_new_and_connect (pull_progress, console);
     }
+
+  if (opt_allow_downgrade)
+    upgraderpullflags |= OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER;
 
   if (!ostree_sysroot_upgrader_pull (upgrader, 0, 0, progress, &changed,
                                      cancellable, error))
