@@ -19,8 +19,30 @@ generate disk images and run smoketests.
 Installing and setting up a repository
 --------------------------------------
 
-There are packages available in the rpm-ostree COPR; you can also
-just "sudo make install" it.
+First, unfortunately you must *disable* SELinux on the build host in
+order to *support* SELinux on the built system.  See:
+https://bugzilla.redhat.com/show_bug.cgi?id=1060423
+
+Second, you must install `nss-altfiles` on the host system, and
+edit your /etc/nsswitch.conf to include `altfiles`, like this:
+
+	passwd: files altfiles 
+	group:  files altfiles
+
+You may or may not be using SSSD (and thus the `sss` option); if you
+are then it should look like:
+
+	passwd: files altfiles sss
+	group:  files altfiles sss
+
+For more information, see:
+http://lists.rpm.org/pipermail/rpm-maint/2014-January/003652.html
+
+There are packages available in the rpm-ostree COPR:
+http://copr-fe.cloud.fedoraproject.org/coprs/walters/rpm-ostree/
+
+At the moment, all of the tooling except for the patched
+`shadow-utils` is in Fedora rawhide.
 
 Once you have that done, choose a build directory.  Here we'll use
 /srv/rpm-ostree.
@@ -48,7 +70,7 @@ Running the autobuilder
 -----------------------
 
 The autobuilder instead takes as input a `products.json` which
-generates multiple treefiles.  Try this:
+generates *multiple* treefile internally.  Try this:
 
 	# ln -s /path/to/rpm-ostree.git/fedostree/products.json .
 	# rpm-ostree-autobuilder
