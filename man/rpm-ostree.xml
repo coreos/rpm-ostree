@@ -1,128 +1,128 @@
 <?xml version='1.0'?> <!--*-nxml-*-->
 <!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
-        "http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
+"http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
 
 <!--
-  Copyright 2011,2013,2014 Colin Walters <walters@verbum.org>
+Copyright 2011,2013,2014 Colin Walters <walters@verbum.org>
 
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2 of the License, or (at your option) any later version.
- 
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
- 
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the
-  Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-  Boston, MA 02111-1307, USA.
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the
+Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.
 -->
 
 <refentry id="rpm-ostree">
 
-        <refentryinfo>
-                <title>rpm-ostree</title>
-                <productname>rpm-ostree</productname>
+  <refentryinfo>
+    <title>rpm-ostree</title>
+    <productname>rpm-ostree</productname>
 
-                <authorgroup>
-                        <author>
-                                <contrib>Developer</contrib>
-                                <firstname>Colin</firstname>
-                                <surname>Walters</surname>
-                                <email>walters@redhat.com</email>
-                        </author>
-                </authorgroup>
-        </refentryinfo>
+    <authorgroup>
+      <author>
+        <contrib>Developer</contrib>
+        <firstname>Colin</firstname>
+        <surname>Walters</surname>
+        <email>walters@redhat.com</email>
+      </author>
+    </authorgroup>
+  </refentryinfo>
 
-        <refmeta>
-                <refentrytitle>rpm-ostree</refentrytitle>
-                <manvolnum>1</manvolnum>
-        </refmeta>
+  <refmeta>
+    <refentrytitle>rpm-ostree</refentrytitle>
+    <manvolnum>1</manvolnum>
+  </refmeta>
 
-        <refnamediv>
-                <refname>rpm-ostree</refname>
-                <refpurpose>Operating system upgrade and software management tool</refpurpose>
-        </refnamediv>
+  <refnamediv>
+    <refname>rpm-ostree</refname>
+    <refpurpose>Operating system upgrade and software management tool</refpurpose>
+  </refnamediv>
 
-        <refsynopsisdiv>
-                <cmdsynopsis>
-                        <command>rpm-ostree <arg choice="req">COMMAND</arg> <arg choice="opt" rep="repeat">OPTIONS</arg></command>
-                </cmdsynopsis>
-        </refsynopsisdiv>
+  <refsynopsisdiv>
+    <cmdsynopsis>
+      <command>rpm-ostree <arg choice="req">COMMAND</arg> <arg choice="opt" rep="repeat">OPTIONS</arg></command>
+    </cmdsynopsis>
+  </refsynopsisdiv>
 
-        <refsect1>
-                <title>Description</title>
+  <refsect1>
+    <title>Description</title>
 
-                <para>
-		  rpm-ostree is a system software management tool that
-		  combines features of both traditional RPM and
-		  OSTree.  At the moment, there are only two available
-		  commands: <literal>upgrade</literal> and
-		  <literal>rollback</literal>.
-		</para>
+    <para>
+      rpm-ostree is a system software management tool that
+      combines features of both traditional RPM and
+      OSTree.  At the moment, there are only two available
+      commands: <literal>upgrade</literal> and
+      <literal>rollback</literal>.
+    </para>
 
-		<para>
-		  On an rpm-ostree managed system, the traditional
-		  <literal>yum</literal> and <literal>rpm</literal>
-		  tools operate in a read-only state.  Instead, the
-		  underlying OSTree layer replicates a filesystem tree
-		  from a compose server.  In this "pure replication"
-		  model, there is no dependency resolution on the
-		  client machines, nor any ability to add or remove
-		  packages.
-		</para>
-        </refsect1>
+    <para>
+      On an rpm-ostree managed system, the traditional
+      <literal>yum</literal> and <literal>rpm</literal>
+      tools operate in a read-only state.  Instead, the
+      underlying OSTree layer replicates a filesystem tree
+      from a compose server.  In this "pure replication"
+      model, there is no dependency resolution on the
+      client machines, nor any ability to add or remove
+      packages.
+    </para>
+  </refsect1>
 
-        <refsect1>
-                <title>Commands</title>
+  <refsect1>
+    <title>Commands</title>
 
-                <variablelist>
-                        <varlistentry>
-                                <term><command>upgrade</command></term>
+    <variablelist>
+      <varlistentry>
+        <term><command>upgrade</command></term>
 
-                                <listitem><para>Download the latest
-                                version of the current tree, and
-                                deploy it, setting it up as the
-                                default for the next boot.  By design,
-                                this has no effect on your running
-                                filesystem tree.  You must reboot for
-                                any changes to take
-                                effect.</para></listitem>
-                        </varlistentry>
+        <listitem><para>Download the latest
+        version of the current tree, and
+        deploy it, setting it up as the
+        default for the next boot.  By design,
+        this has no effect on your running
+        filesystem tree.  You must reboot for
+        any changes to take
+        effect.</para></listitem>
+      </varlistentry>
 
-                        <varlistentry>
-                                <term><command>rollback</command></term>
-				
-				<listitem><para>OSTree mananges an
-				ordered list of bootloader entries,
-				called "deployments".  Each entry has
-				a separate <filename>/etc</filename>,
-				but they all share a single
-				<filename>/var</filename>.  You can
-				use the bootloader to choose between
-				entries.</para>
+      <varlistentry>
+        <term><command>rollback</command></term>
+	
+	<listitem><para>OSTree mananges an
+	ordered list of bootloader entries,
+	called "deployments".  Each entry has
+	a separate <filename>/etc</filename>,
+	but they all share a single
+	<filename>/var</filename>.  You can
+	use the bootloader to choose between
+	entries.</para>
 
-                                <para>This command then changes the
-                                default bootloader entry.  If the
-                                current default is booted, then set
-                                the default to the previous entry.
-                                Otherwise, make the currently booted
-                                tree the default.</para></listitem>
-                        </varlistentry>
-		</variablelist>
+        <para>This command then changes the
+        default bootloader entry.  If the
+        current default is booted, then set
+        the default to the previous entry.
+        Otherwise, make the currently booted
+        tree the default.</para></listitem>
+      </varlistentry>
+    </variablelist>
 
-        </refsect1>
+  </refsect1>
 
-        <refsect1>
-                <title>See Also</title>
+  <refsect1>
+    <title>See Also</title>
 
-                <para>
-                        <citerefentry><refentrytitle>ostree</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
-                        <citerefentry><refentrytitle>rpm</refentrytitle><manvolnum>8</manvolnum></citerefentry>
-		</para>
-        </refsect1>
+    <para>
+      <citerefentry><refentrytitle>ostree</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
+      <citerefentry><refentrytitle>rpm</refentrytitle><manvolnum>8</manvolnum></citerefentry>
+    </para>
+  </refsect1>
 
 </refentry>
