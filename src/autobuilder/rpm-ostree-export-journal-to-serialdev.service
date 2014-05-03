@@ -1,5 +1,0 @@
-[Unit]
-Description=QA: Copy bootup journal log to /dev/ttyS1
-
-[Service]
-ExecStart=/usr/bin/rpm-ostree-export-journal-to-serialdev

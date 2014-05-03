@@ -30,4 +30,3 @@ EXTRA_DIST += autogen.sh COPYING
 
 include Makefile-rpm-ostree.am
 include Makefile-man.am
-include Makefile-autobuilder.am

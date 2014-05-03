@@ -1,6 +1,6 @@
 Summary: Commit RPMs to an OSTree repository
 Name: rpm-ostree
-Version: 2015.1
+Version: 2014.1
 Release: 1%{?dist}
 #VCS: https://github.com/cgwalters/rpm-ostree
 # This tarball is generated via "make -f Makefile.dist-packaging dist-snapshot"
@@ -24,19 +24,6 @@ Requires: /usr/bin/yum
 This tool takes a set of packages, and commits them to an OSTree
 repository.  At the moment, it is intended for use on build servers.
 
-%package        autobuilder
-Summary:	Build server for rpm-ostree
-Group:		System Environment/Base
-Requires:	%{name}%{?_isa} = %{version}-%{release}
-Requires:	/usr/bin/gjs
-Requires:	/usr/bin/guestmount
-Requires:	libguestfs-gobject
-BuildRequires:	/usr/bin/g-ir-scanner
-BuildRequires:	readline-devel
-
-%description    autobuilder
-An automatic build server for rpm-ostree.
-
 %prep
 %setup -q -n %{name}-%{version}
 
@@ -52,12 +39,6 @@ make install DESTDIR=$RPM_BUILD_ROOT INSTALL="install -p -c"
 %doc COPYING README.md
 %{_bindir}/rpm-ostree
 %{_libdir}/%{name}/
-
-%files autobuilder
-%{_bindir}/rpm-ostree-autobuilder
-%{_libdir}/%{name}-autobuilder/
-%{_datadir}/%{name}-autobuilder/
-%{_mandir}/man1/*.gz
 
 %changelog
 * Fri Mar 07 2014 Colin Walters <walters@verbum.org> - 2014.5-1
