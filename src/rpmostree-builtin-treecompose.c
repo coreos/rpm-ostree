@@ -30,9 +30,15 @@
 #include "libgsystem.h"
 
 static char *opt_workdir;
+static char *opt_cachedir;
+static char *opt_proxy;
+static char *opt_repo;
 
 static GOptionEntry option_entries[] = {
-  { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "REPO" },
+  { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
+  { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
+  { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
+  { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { NULL }
 };
 
@@ -51,21 +57,6 @@ subprocess_context_print_args (GSSubprocessContext   *ctx)
     }
 
   return g_string_free (ret, FALSE);
-}
-
-static const char *
-object_require_string_member (JsonObject     *object,
-                              const char     *member_name,
-                              GError        **error)
-{
-  const char *ret = json_object_get_string_member (object, member_name);
-  if (!ret)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "No member '%s' found", member_name);
-      return NULL;
-    }
-  return ret;
 }
 
 static gboolean
@@ -92,6 +83,23 @@ object_get_optional_string_member (JsonObject     *object,
 
   ret = TRUE;
  out:
+  return ret;
+}
+
+static const char *
+object_require_string_member (JsonObject     *object,
+                              const char     *member_name,
+                              GError        **error)
+{
+  const char *ret;
+  if (!object_get_optional_string_member (object, member_name, &ret, error))
+    return NULL;
+  if (!ret)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Member '%s' not found", member_name);
+      return NULL;
+    }
   return ret;
 }
 
@@ -257,7 +265,7 @@ void cleanup_keyfile_unref (void *loc)
 
 static gboolean
 append_repo_and_cache_opts (JsonObject *treedata,
-                            GFile      *cachedir,
+                            GFile      *workdir,
                             GPtrArray  *args,
                             GCancellable *cancellable,
                             GError    **error)
@@ -268,11 +276,11 @@ append_repo_and_cache_opts (JsonObject *treedata,
   gs_unref_object GFile *yumcache_lookaside = NULL;
   gs_unref_object GFile *repos_tmpdir = NULL;
 
-  yumcache_lookaside = g_file_resolve_relative_path (cachedir, "yum-cache");
+  yumcache_lookaside = g_file_resolve_relative_path (workdir, "yum-cache");
   if (!gs_file_ensure_directory (yumcache_lookaside, TRUE, cancellable, error))
     goto out;
 
-  repos_tmpdir = g_file_resolve_relative_path (cachedir, "tmp-repos");
+  repos_tmpdir = g_file_resolve_relative_path (workdir, "tmp-repos");
   if (!gs_shutil_rm_rf (repos_tmpdir, cancellable, error))
     goto out;
   if (!gs_file_ensure_directory (repos_tmpdir, TRUE, cancellable, error))
@@ -282,6 +290,9 @@ append_repo_and_cache_opts (JsonObject *treedata,
     g_ptr_array_add (args, g_strdup ("-C"));
 
   g_ptr_array_add (args, g_strdup ("--disablerepo=*"));
+
+  if (opt_proxy)
+    g_ptr_array_add (args, g_strconcat ("--setopt=proxy=", opt_proxy, NULL));
 
   if (json_object_has_member (treedata, "repos"))
     enable_repos = json_object_get_array_member (treedata, "repos");
@@ -370,7 +381,7 @@ append_repo_and_cache_opts (JsonObject *treedata,
 static YumContext *
 yum_context_new (JsonObject     *treedata,
                  GFile          *yumroot,
-                 GFile          *cachedir,
+                 GFile          *workdir,
                  GCancellable   *cancellable,
                  GError        **error)
 {
@@ -384,7 +395,7 @@ yum_context_new (JsonObject     *treedata,
   g_ptr_array_add (yum_argv, g_strdup ("yum"));
   g_ptr_array_add (yum_argv, g_strdup ("-y"));
 
-  if (!append_repo_and_cache_opts (treedata, cachedir, yum_argv,
+  if (!append_repo_and_cache_opts (treedata, workdir, yum_argv,
                                    cancellable, error))
     goto out;
 
@@ -472,7 +483,7 @@ yum_context_command (YumContext   *yumctx,
 static gboolean
 yuminstall (JsonObject      *treedata,
             GFile           *yumroot,
-            GFile           *cachedir,
+            GFile           *workdir,
             char           **packages,
             GCancellable    *cancellable,
             GError         **error)
@@ -481,7 +492,7 @@ yuminstall (JsonObject      *treedata,
   char **strviter;
   YumContext *yumctx;
 
-  yumctx = yum_context_new (treedata, yumroot, cachedir, cancellable, error);
+  yumctx = yum_context_new (treedata, yumroot, workdir, cancellable, error);
   if (!yumctx)
     goto out;
 
@@ -531,6 +542,7 @@ rpmostree_builtin_treecompose (int             argc,
   JsonArray *units = NULL;
   guint len;
   gs_free char *ref_unix = NULL;
+  gs_unref_object GFile *workdir = NULL;
   gs_unref_object GFile *cachedir = NULL;
   gs_unref_object GFile *yumroot = NULL;
   gs_unref_object GFile *targetroot = NULL;
@@ -539,7 +551,9 @@ rpmostree_builtin_treecompose (int             argc,
   gs_unref_ptrarray GPtrArray *bootstrap_packages = NULL;
   gs_unref_ptrarray GPtrArray *packages = NULL;
   gs_unref_object GFile *treefile_path = NULL;
+  gs_unref_object GFile *repo_path = NULL;
   gs_unref_object JsonParser *treefile_parser = NULL;
+  gboolean workdir_is_tmp = FALSE;
   
   g_option_context_add_main_entries (context, option_entries, NULL);
 
@@ -554,9 +568,32 @@ rpmostree_builtin_treecompose (int             argc,
       goto out;
     }
   
+  if (!opt_repo)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "--repo must be specified");
+      goto out;
+    }
+
+  repo_path = g_file_new_for_path (opt_repo);
+  repo = ostree_repo_new (repo_path);
+  if (!ostree_repo_open (repo, cancellable, error))
+    goto out;
+  
   treefile_path = g_file_new_for_path (argv[1]);
 
-  if (opt_workdir && chdir (opt_workdir) != 0)
+  if (opt_workdir)
+    {
+      workdir = g_file_new_for_path (opt_workdir);
+    }
+  else
+    {
+      gs_free char *tmpd = g_mkdtemp (g_strdup ("/var/tmp/rpm-ostree.XXXXXX"));
+      workdir = g_file_new_for_path (tmpd);
+      workdir_is_tmp = TRUE;
+    }
+
+  if (chdir (gs_file_get_path_cached (workdir)) != 0)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Failed to chdir to '%s': %s",
@@ -579,14 +616,10 @@ rpmostree_builtin_treecompose (int             argc,
     }
   treefile = json_node_get_object (treefile_root);
 
-  cachedir = g_file_new_for_path ("cache");
-  if (!gs_file_ensure_directory (cachedir, TRUE, cancellable, error))
-    goto out;
-
-  yumroot = g_file_get_child (cachedir, "yum");
+  yumroot = g_file_get_child (workdir, "rootfs.tmp");
   if (!gs_shutil_rm_rf (yumroot, cancellable, error))
     goto out;
-  targetroot = g_file_resolve_relative_path (cachedir, "rootfs");
+  targetroot = g_file_get_child (workdir, "rootfs");
 
   ref = object_require_string_member (treefile, "ref", error);
   if (!ref)
@@ -607,113 +640,10 @@ rpmostree_builtin_treecompose (int             argc,
     
 
   {
-    gs_free char *cached_packageset_name =
-      g_strconcat ("packageset-", ref_unix, ".txt", NULL);
-    gs_unref_object GFile *rpmtextlist_path = 
-      g_file_resolve_relative_path (cachedir, cached_packageset_name);
-    gs_free char *cached_packageset_name_new =
-      g_strconcat (cached_packageset_name, ".new", NULL);
-    gs_unref_object GFile *rpmtextlist_path_new = 
-      g_file_resolve_relative_path (cachedir, cached_packageset_name_new);
-    GPtrArray *repoquery_argv = g_ptr_array_new_with_free_func (g_free);
-    gs_unref_object GSSubprocessContext *repoquery_proc_ctx = NULL;
-    gs_unref_object GSSubprocess *repoquery_proc = NULL;
     guint i;
-    GString *repoquery_arg_string = NULL;
-    gboolean first = TRUE;
-
-    g_ptr_array_add (repoquery_argv, g_strdup (PKGLIBDIR "/repoquery-sorted"));
-    if (!append_repo_and_cache_opts (treefile, cachedir, repoquery_argv,
-                                     cancellable, error))
-      goto out;
-    g_ptr_array_add (repoquery_argv, g_strdup ("--recursive"));
-    g_ptr_array_add (repoquery_argv, g_strdup ("--requires"));
-    g_ptr_array_add (repoquery_argv, g_strdup ("--resolve"));
-
-    repoquery_arg_string = g_string_new ("");
-
-    for (i = 0; i < packages->len; i++)
-      {
-        const char *package = packages->pdata[i];
-        if (!package)
-          continue;
-
-        g_ptr_array_add (repoquery_argv, g_strdup (package));
-        if (first)
-          first = FALSE;
-        else
-          g_string_append_c (repoquery_arg_string, ' ');
-        g_string_append (repoquery_arg_string, package);
-      }
-
-    g_print ("Running repoquery: %s\n", repoquery_arg_string->str);
-    g_string_free (repoquery_arg_string, TRUE);
-
-    g_ptr_array_add (repoquery_argv, NULL);
-      
-    repoquery_proc_ctx = gs_subprocess_context_new ((char**)repoquery_argv->pdata);
-    gs_subprocess_context_set_stdout_file_path (repoquery_proc_ctx, gs_file_get_path_cached (rpmtextlist_path_new));
-    gs_subprocess_context_set_stderr_disposition (repoquery_proc_ctx, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT);
-    g_print ("Resolving dependencies...\n");
-    repoquery_proc = gs_subprocess_new (repoquery_proc_ctx, cancellable, error);
-    if (!repoquery_proc)
-      goto out;
-
-    if (!gs_subprocess_wait_sync_check (repoquery_proc, cancellable, error))
-      goto out;
-    
-    if (g_file_query_exists (rpmtextlist_path, NULL))
-      {
-        GError *temp_error = NULL;
-        gs_unref_object GSSubprocess *diff_proc = NULL;
-        gboolean differs = FALSE;
-
-        g_print ("Comparing diff of previous tree\n");
-        diff_proc =
-          gs_subprocess_new_simple_argl (GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                         GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                         cancellable,
-                                         error,
-                                         "diff", "-u",
-                                         gs_file_get_path_cached (rpmtextlist_path),
-                                         gs_file_get_path_cached (rpmtextlist_path_new),
-                                         NULL);
-
-        if (!gs_subprocess_wait_sync_check (diff_proc, cancellable, &temp_error))
-          {
-            int ecode;
-            if (temp_error->domain != G_SPAWN_EXIT_ERROR)
-              {
-                g_propagate_error (error, temp_error);
-                goto out;
-              }
-            ecode = temp_error->code;
-            g_assert (ecode != 0);
-            if (ecode == 1)
-              differs = TRUE;
-            else
-              {
-                g_propagate_error (error, temp_error);
-                goto out;
-              }
-          }
-
-        if (!differs)
-          {
-            g_print ("No changes in package set\n");
-            if (!gs_file_unlink (rpmtextlist_path_new, cancellable, error))
-              goto out;
-            goto out;
-          }
-      }
-    else
-      {
-        g_print ("No previous diff file found at '%s'\n",
-                 gs_file_get_path_cached (rpmtextlist_path));
-      }
 
     /* Ensure we have enough to modify NSS */
-    if (!yuminstall (treefile, yumroot, cachedir,
+    if (!yuminstall (treefile, yumroot, workdir,
                      (char**)bootstrap_packages->pdata,
                      cancellable, error))
       goto out;
@@ -741,7 +671,7 @@ rpmostree_builtin_treecompose (int             argc,
     }
 
     {
-      if (!yuminstall (treefile, yumroot, cachedir,
+      if (!yuminstall (treefile, yumroot, workdir,
                        (char**)packages->pdata,
                        cancellable, error))
         goto out;
@@ -751,6 +681,13 @@ rpmostree_builtin_treecompose (int             argc,
 
     if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
       goto out;
+
+    /* Clean cached packages now */
+    {
+      gs_unref_object GFile *yumcache_lookaside = g_file_resolve_relative_path (workdir, "yum-cache");
+      if (!gs_shutil_rm_rf (yumcache_lookaside, cancellable, error))
+        goto out;
+    }
 
     if (!rpmostree_postprocess (yumroot, cancellable, error))
       goto out;
@@ -841,15 +778,6 @@ rpmostree_builtin_treecompose (int             argc,
                         cancellable, NULL, NULL, error))
         goto out;
     }
-  
-    {
-      gs_unref_object GFile *repo_path = g_file_new_for_path ("repo");
-      repo = ostree_repo_new (repo_path);
-    }
-    
-    if (!ostree_repo_open (repo, cancellable, error))
-      goto out;
-
     
     {
       const char *gpgkey;
@@ -861,14 +789,13 @@ rpmostree_builtin_treecompose (int             argc,
                              cancellable, error))
       goto out;
     }
-
-    if (!gs_file_rename (rpmtextlist_path_new, rpmtextlist_path,
-                         cancellable, error))
-      goto out;
   }
 
   g_print ("Complete\n");
   
+  if (workdir_is_tmp)
+    (void) gs_shutil_rm_rf (workdir, cancellable, NULL);
+
  out:
   return ret;
 }

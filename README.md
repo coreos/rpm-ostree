@@ -58,11 +58,13 @@ Running rpm-ostree
 The core "rpm-ostree" takes as input a "treefile".  There is a demo
 one in `doc/demo-treefile.json`.
 
-	# rpm-ostree create sometreefile.json
+	# rpm-ostree treecompose --repo=/srv/rpm-ostree/repo --proxy=http://127.0.0.1:8123 sometreefile.json
 
 All this does is use yum to download RPMs from the referenced repos,
 and commit the result to the OSTree repository, using the ref named by
-`ref`.
+`ref`.  Note that we've specified a local caching proxy (`polipo` in
+this case) - otherwise we you will download the packages for each
+treecompose.
 
 You can export `/srv/rpm-ostree/repo` via any static webserver.
 

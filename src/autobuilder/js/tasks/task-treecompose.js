@@ -60,7 +60,7 @@ const TaskTreeCompose = new Lang.Class({
 	let treefilePath = Gio.File.new_for_path('treefile.json');
 	JsonUtil.writeJsonFileAtomic(treefilePath, treefileData, cancellable);
 
-	argv.push.apply(argv, ['treecompose', '--workdir=' + this.workdir.get_path(), treefilePath.get_path()]);
+	argv.push.apply(argv, ['treecompose', treefilePath.get_path()]);
 	let productNameUnix = ref.replace(/\//g, '_');
 	let buildOutputPath = Gio.File.new_for_path('log-' + productNameUnix + '.txt');
 	print("Running: " + argv.map(GLib.shell_quote).join(' '));
