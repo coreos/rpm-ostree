@@ -23,6 +23,7 @@
 #include <string.h>
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
+#include <gio/gunixoutputstream.h>
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-postprocess.h"
@@ -33,12 +34,14 @@ static char *opt_workdir;
 static char *opt_cachedir;
 static char *opt_proxy;
 static char *opt_repo;
+static gboolean opt_print_only;
 
 static GOptionEntry option_entries[] = {
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
+  { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
   { NULL }
 };
 
@@ -527,6 +530,104 @@ yuminstall (JsonObject      *treedata,
   return ret;
 }
 
+static gboolean
+process_includes (GFile             *treefile_path,
+                  guint              depth,
+                  JsonObject        *root,
+                  GCancellable      *cancellable,
+                  GError           **error)
+{
+  gboolean ret = FALSE;
+  const char *include_path;
+  const guint maxdepth = 50;
+
+  if (depth > maxdepth)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Exceeded maximum include depth of %u", maxdepth);
+      goto out;
+    }
+
+  if (!object_get_optional_string_member (root, "include", &include_path, error))
+    goto out;
+                                          
+  if (include_path)
+    {
+      gs_unref_object GFile *treefile_dirpath = g_file_get_parent (treefile_path);
+      gs_unref_object GFile *parent_path = g_file_resolve_relative_path (treefile_dirpath, include_path);
+      gs_unref_object JsonParser *parent_parser = json_parser_new ();
+      JsonNode *parent_rootval;
+      JsonObject *parent_root;
+      GList *members;
+      GList *iter;
+
+      if (!json_parser_load_from_file (parent_parser,
+                                       gs_file_get_path_cached (parent_path),
+                                       error))
+        goto out;
+
+      parent_rootval = json_parser_get_root (parent_parser);
+      if (!JSON_NODE_HOLDS_OBJECT (parent_rootval))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Treefile root is not an object");
+          goto out;
+        }
+      parent_root = json_node_get_object (parent_rootval);
+      
+      if (!process_includes (parent_path, depth + 1, parent_root,
+                             cancellable, error))
+        goto out;
+                             
+      members = json_object_get_members (parent_root);
+      for (iter = members; iter; iter = iter->next)
+        {
+          const char *name = iter->data;
+          JsonNode *parent_val = json_object_get_member (parent_root, name);
+          JsonNode *val = json_object_get_member (root, name);
+
+          g_assert (parent_val);
+
+          if (!val)
+            json_object_set_member (root, name, json_node_copy (parent_val));
+          else
+            {
+              JsonNodeType parent_type =
+                json_node_get_node_type (parent_val);
+              JsonNodeType child_type =
+                json_node_get_node_type (val);
+              if (parent_type != child_type)
+                {
+                  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "Conflicting element type of '%s'",
+                               name);
+                  goto out;
+                }
+              if (child_type == JSON_NODE_ARRAY)
+                {
+                  JsonArray *parent_array = json_node_get_array (parent_val);
+                  JsonArray *child_array = json_node_get_array (val);
+                  JsonArray *new_child = json_array_new ();
+                  guint i, len;
+
+                  len = json_array_get_length (parent_array);
+                  for (i = 0; i < len; i++)
+                    json_array_add_element (new_child, json_node_copy (json_array_get_element (parent_array, i)));
+                  len = json_array_get_length (child_array);
+                  for (i = 0; i < len; i++)
+                    json_array_add_element (new_child, json_node_copy (json_array_get_element (child_array, i)));
+                  
+                  json_object_set_array_member (root, name, new_child);
+                }
+            }
+        }
+    }
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
 gboolean
 rpmostree_builtin_treecompose (int             argc,
                                char          **argv,
@@ -536,7 +637,7 @@ rpmostree_builtin_treecompose (int             argc,
   gboolean ret = FALSE;
   GOptionContext *context = g_option_context_new ("- Run yum and commit the result to an OSTree repository");
   const char *ref;
-  JsonNode *treefile_root = NULL;
+  JsonNode *treefile_rootval = NULL;
   JsonObject *treefile = NULL;
   JsonArray *internal_postprocessing = NULL;
   JsonArray *units = NULL;
@@ -607,14 +708,31 @@ rpmostree_builtin_treecompose (int             argc,
                                    error))
     goto out;
 
-  treefile_root = json_parser_get_root (treefile_parser);
-  if (!JSON_NODE_HOLDS_OBJECT (treefile_root))
+  treefile_rootval = json_parser_get_root (treefile_parser);
+  if (!JSON_NODE_HOLDS_OBJECT (treefile_rootval))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Treefile root is not an object");
       goto out;
     }
-  treefile = json_node_get_object (treefile_root);
+  treefile = json_node_get_object (treefile_rootval);
+
+  if (!process_includes (treefile_path, 0, treefile,
+                         cancellable, error))
+    goto out;
+
+  if (opt_print_only)
+    {
+      gs_unref_object JsonGenerator *generator = json_generator_new ();
+      gs_unref_object GOutputStream *stdout = g_unix_output_stream_new (1, FALSE);
+
+      json_generator_set_pretty (generator, TRUE);
+      json_generator_set_root (generator, treefile_rootval);
+      (void) json_generator_to_stream (generator, stdout, NULL, NULL);
+      
+      ret = TRUE;
+      goto out;
+    }
 
   yumroot = g_file_get_child (workdir, "rootfs.tmp");
   if (!gs_shutil_rm_rf (yumroot, cancellable, error))
