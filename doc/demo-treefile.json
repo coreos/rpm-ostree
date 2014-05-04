@@ -1,21 +1,13 @@
 {
     "description": "Demo treefile",
 
-    "ref": "fedostree/rawhide/x86_64/buildmaster/server/docker",
+    "ref": "fedora-atomic/rawhide/x86_64/server/docker",
 
-    "osname": "fedostree",
-    
     "gpg_key": "843833DF",
-
-    "architecture": "x86_64",
-
-    "release": "rawhide",
 
     "repos": ["fedora-rawhide", "walters-rpm-ostree"],
 
     "selinux": true,
-
-    "kargs": ["quiet", "enforcing=0"],
 
     "bootstrap_packages": ["filesystem", "glibc", "nss-altfiles", "shadow-utils"],
 
@@ -29,8 +21,6 @@
 		 "rsync",
 		 "sudo"],
     
-    "units": ["docker.service", "min-metadata.service"],
-
-    "postprocess": ["remove-root-password"]
+    "units": ["docker.service"]
 }
 	    
