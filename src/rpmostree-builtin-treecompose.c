@@ -56,6 +56,7 @@ subprocess_context_print_args (GSSubprocessContext   *ctx)
   for (strviter = argv; strviter && *strviter; strviter++)
     {
       gs_free char *quoted = g_shell_quote (*strviter);
+      g_string_append_c (ret, ' ');
       g_string_append (ret, quoted);
     }
 
