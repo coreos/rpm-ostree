@@ -1,7 +1,5 @@
 {
-    "description": "Demo treefile",
-
-    "ref": "fedora-atomic/rawhide/x86_64/server/docker",
+    "ref": "fedora-atomic/rawhide/x86_64/base/core",
 
     "gpg_key": "843833DF",
 
@@ -15,12 +13,7 @@
 		 "btrfs-progs", "e2fsprogs", "xfsprogs",
 		 "rpm-ostree-public-gpg-key", "gnupg2",
 		 "selinux-policy-targeted",
-		 "docker-io", "min-metadata-service",
 		 "openssh-server", "openssh-clients",
-		 "NetworkManager", "vim-minimal", "nano",
-		 "rsync",
-		 "sudo"],
-    
-    "units": ["docker.service"]
+		 "NetworkManager", "vim-minimal", "nano", "sudo"]
 }
 	    
