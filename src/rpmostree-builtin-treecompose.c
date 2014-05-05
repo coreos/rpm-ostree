@@ -200,15 +200,6 @@ yum_context_close (YumContext   *yumctx,
   if (!yumctx)
     return TRUE;
 
-  if (yumctx->tmp_reposdir_path)
-    {
-      if (!gs_file_rename (yumctx->tmp_reposdir_path, yumctx->reposdir_path,
-                           cancellable, error))
-        goto out;
-      g_clear_object (&yumctx->reposdir_path);
-      g_clear_object (&yumctx->tmp_reposdir_path);
-    }
-  
   if (yumctx->process)
     {
       if (yumctx->stdin)
@@ -231,6 +222,16 @@ yum_context_close (YumContext   *yumctx,
         goto out;
       g_print ("Waiting for yum [OK]\n");
       g_clear_object (&yumctx->process);
+    }
+
+  if (yumctx->tmp_reposdir_path)
+    {
+      g_print ("Moving yum repos back to %s\n", gs_file_get_path_cached (yumctx->reposdir_path));
+      if (!gs_file_rename (yumctx->tmp_reposdir_path, yumctx->reposdir_path,
+                           cancellable, error))
+        goto out;
+      g_clear_object (&yumctx->reposdir_path);
+      g_clear_object (&yumctx->tmp_reposdir_path);
     }
 
   ret = TRUE;
@@ -419,6 +420,7 @@ yum_context_new (JsonObject     *treedata,
     {
       yumctx->reposdir_path = g_object_ref (reposdir_path);
       yumctx->tmp_reposdir_path = g_file_resolve_relative_path (yumroot, "etc/yum.repos.d.tmp");
+      g_print ("Moving yum repos to %s\n", gs_file_get_path_cached (yumctx->tmp_reposdir_path));
       if (!gs_file_rename (reposdir_path, yumctx->tmp_reposdir_path,
                            cancellable, error))
         goto out;
