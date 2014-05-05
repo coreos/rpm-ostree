@@ -407,6 +407,11 @@ yum_context_new (JsonObject     *treedata,
     gs_subprocess_context_set_environment (context, duped_environ);
   }
 
+  gs_subprocess_context_set_stdin_disposition (context, GS_SUBPROCESS_STREAM_DISPOSITION_PIPE);
+  /* gs_subprocess_context_set_stdout_disposition (context, GS_SUBPROCESS_STREAM_DISPOSITION_PIPE); */
+
+  yumctx = g_new0 (YumContext, 1);
+
   reposdir_path = g_file_resolve_relative_path (yumroot, "etc/yum.repos.d");
   /* Hideous workaround for the fact that as soon as yum.repos.d
      exists in the install root, yum will prefer it. */
@@ -418,11 +423,6 @@ yum_context_new (JsonObject     *treedata,
                            cancellable, error))
         goto out;
     }
-
-  gs_subprocess_context_set_stdin_disposition (context, GS_SUBPROCESS_STREAM_DISPOSITION_PIPE);
-  /* gs_subprocess_context_set_stdout_disposition (context, GS_SUBPROCESS_STREAM_DISPOSITION_PIPE); */
-
-  yumctx = g_new0 (YumContext, 1);
 
   {
     gs_free char *cmdline = subprocess_context_print_args (context);
