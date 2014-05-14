@@ -642,7 +642,6 @@ rpmostree_builtin_treecompose (int             argc,
   const char *ref;
   JsonNode *treefile_rootval = NULL;
   JsonObject *treefile = NULL;
-  JsonArray *internal_postprocessing = NULL;
   JsonArray *units = NULL;
   guint len;
   gs_free char *ref_unix = NULL;
@@ -812,36 +811,6 @@ rpmostree_builtin_treecompose (int             argc,
 
     if (!rpmostree_postprocess (yumroot, cancellable, error))
       goto out;
-
-    if (json_object_has_member (treefile, "postprocess"))
-      internal_postprocessing = json_object_get_array_member (treefile, "postprocess");
-
-    if (internal_postprocessing)
-      len = json_array_get_length (internal_postprocessing);
-    else
-      len = 0;
-
-    for (i = 0; i < len; i++)
-      {
-        gs_unref_object GFile *pkglibdir = g_file_new_for_path (PKGLIBDIR);
-        gs_unref_object GFile *pkglibdir_posts = g_file_get_child (pkglibdir, "postprocessing");
-        gs_unref_object GFile *post_path = NULL;
-        const char *post_name = array_require_string_element (internal_postprocessing, i, error);
-
-        if (!post_name)
-          goto out;
-
-        post_path = g_file_get_child (pkglibdir_posts, post_name);
-
-        g_print ("Running internal postprocessing command '%s'\n",
-                 gs_file_get_path_cached (post_path));
-        if (!gs_subprocess_simple_run_sync (gs_file_get_path_cached (yumroot),
-                                            GS_SUBPROCESS_STREAM_DISPOSITION_NULL,
-                                            cancellable, error,
-                                            gs_file_get_path_cached (post_path),
-                                            NULL))
-          goto out;
-      }
 
     if (json_object_has_member (treefile, "units"))
       units = json_object_get_array_member (treefile, "units");

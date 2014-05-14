@@ -48,11 +48,3 @@ rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS) librpmostree.la
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/tmpfiles-ostree-integration.conf
-
-internal_postscriptdir = $(pkglibdir)/postprocessing/
-internal_postscript_SCRIPTS = $(addprefix src/postprocessing/, \
-	remove-docs \
-	remove-gpu-drivers \
-	remove-locales \
-	remove-root-password \
-	$(NULL))
