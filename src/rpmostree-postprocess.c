@@ -22,13 +22,16 @@
 
 #include "string.h"
 
-#include "rpmostree-postprocess.h"
 #include <ostree.h>
 #include <errno.h>
 #include <utime.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <stdlib.h>
+
+#include "rpmostree-postprocess.h"
+#include "rpmostree-util.h"
+
 #include "libgsystem.h"
 
 static gboolean
@@ -168,36 +171,6 @@ find_kernel_and_initramfs_in_bootdir (GFile       *bootdir,
 }
 
 static gboolean
-update_checksum_from_file (GChecksum    *checksum,
-                           GFile        *src,
-                           GCancellable *cancellable,
-                           GError      **error)
-{
-  gboolean ret = FALSE;
-  gsize bytes_read;
-  char buf[4096];
-  gs_unref_object GInputStream *filein = NULL;
-
-  filein = (GInputStream*)g_file_read (src, cancellable, error);
-  if (!filein)
-    goto out;
-
-  do
-    {
-      if (!g_input_stream_read_all (filein, buf, sizeof(buf), &bytes_read,
-                                    cancellable, error))
-        goto out;
-
-      g_checksum_update (checksum, (guint8*)buf, bytes_read);
-    }
-  while (bytes_read > 0);
-
-  ret = TRUE;
- out:
-  return ret;
-}
-
-static gboolean
 do_kernel_prep (GFile         *yumroot,
                 GCancellable  *cancellable,
                 GError       **error)
@@ -297,11 +270,11 @@ do_kernel_prep (GFile         *yumroot,
   }
 
   boot_checksum = g_checksum_new (G_CHECKSUM_SHA256);
-  if (!update_checksum_from_file (boot_checksum, kernel_path,
-                                  cancellable, error))
+  if (!_rpmostree_util_update_checksum_from_file (boot_checksum, kernel_path,
+                                                  cancellable, error))
     goto out;
-  if (!update_checksum_from_file (boot_checksum, initramfs_path,
-                                  cancellable, error))
+  if (!_rpmostree_util_update_checksum_from_file (boot_checksum, initramfs_path,
+                                                  cancellable, error))
     goto out;
 
   boot_checksum_str = g_checksum_get_string (boot_checksum);

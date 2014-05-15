@@ -26,6 +26,7 @@
 #include <gio/gunixoutputstream.h>
 
 #include "rpmostree-builtins.h"
+#include "rpmostree-util.h"
 #include "rpmostree-postprocess.h"
 
 #include "libgsystem.h"
@@ -631,6 +632,134 @@ process_includes (GFile             *treefile_path,
   return ret;
 }
 
+static char *
+cachedir_fssafe_key (const char  *primary_key)
+{
+  GString *ret = g_string_new ("");
+  
+  for (; *primary_key; primary_key++)
+    {
+      const char c = *primary_key;
+      if (!g_ascii_isprint (c) || c == '-')
+        g_string_append_printf (ret, "\\%02x", c);
+      else if (c == '/')
+        g_string_append_c (ret, '-');
+      else
+        g_string_append_c (ret, c);
+    }
+
+  return g_string_free (ret, FALSE);
+}
+
+static GFile *
+cachedir_keypath (GFile         *cachedir,
+                  const char    *primary_key)
+{
+  gs_free char *fssafe_key = cachedir_fssafe_key (primary_key);
+  return g_file_get_child (cachedir, fssafe_key);
+}
+
+static gboolean
+cachedir_lookup_string (GFile             *cachedir,
+                        const char        *key,
+                        char             **out_value,
+                        GCancellable      *cancellable,
+                        GError           **error)
+{
+  gboolean ret = FALSE;
+  gs_free char *ret_value = NULL;
+
+  if (cachedir)
+    {
+      gs_unref_object GFile *keypath = cachedir_keypath (cachedir, key);
+      if (!_rpmostree_file_load_contents_utf8_allow_noent (keypath, &ret_value,
+                                                           cancellable, error))
+        goto out;
+    }
+  
+  ret = TRUE;
+  gs_transfer_out_value (out_value, &ret_value);
+ out:
+  return ret;
+}
+
+static gboolean
+cachedir_set_string (GFile             *cachedir,
+                     const char        *key,
+                     const char        *value,
+                     GCancellable      *cancellable,
+                     GError           **error)
+{
+  gboolean ret = FALSE;
+  gs_unref_object GFile *keypath = NULL;
+
+  if (!cachedir)
+    return TRUE;
+
+  keypath = cachedir_keypath (cachedir, key);
+  if (!g_file_replace_contents (keypath, value, strlen (value), NULL,
+                                FALSE, 0, NULL,
+                                cancellable, error))
+    goto out;
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+static gboolean
+compute_checksum_for_compose (JsonObject   *treefile_rootval,
+                              GFile        *yumroot,
+                              char        **out_checksum,
+                              GCancellable *cancellable,
+                              GError      **error)
+{
+  gboolean ret = FALSE;
+  gs_free char *ret_checksum = NULL;
+  GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA256);
+  
+  {
+    JsonNode *treefile_rootnode = json_node_new (JSON_NODE_OBJECT);
+    gs_unref_object JsonGenerator *generator = json_generator_new ();
+    gs_free char *treefile_buf = NULL;
+    gsize len;
+
+    json_node_set_object (treefile_rootnode, treefile_rootval);
+    json_generator_set_root (generator, treefile_rootnode);
+    treefile_buf = json_generator_to_data (generator, &len);
+    
+    g_checksum_update (checksum, (guint8*)treefile_buf, len);
+
+    json_node_free (treefile_rootnode);
+  }
+
+  {
+    int estatus;
+    /* Ugly but it works... */
+    gs_free char *rpmqa_shell = g_strdup_printf ("rpm --dbpath=%s/usr/share/rpm | sort -u",
+                                                 gs_file_get_path_cached (yumroot));
+    const char *rpmqa_argv[] = { "/bin/sh", "-c", rpmqa_shell, NULL };
+    gs_free char *rpmqa_result = NULL;
+
+    if (!g_spawn_sync (NULL, (char**)rpmqa_argv, NULL,
+                       G_SPAWN_SEARCH_PATH, NULL, NULL,
+                       &rpmqa_result, NULL, &estatus, error))
+      goto out;
+    if (!g_spawn_check_exit_status (estatus, error))
+      goto out;
+    
+    g_checksum_update (checksum, (guint8*)rpmqa_result, strlen (rpmqa_result));
+  }
+
+  ret_checksum = g_strdup (g_checksum_get_string (checksum));
+
+  ret = TRUE;
+  gs_transfer_out_value (out_checksum, &ret_checksum);
+ out:
+  if (checksum) g_checksum_free (checksum);
+  return ret;
+}
+
 gboolean
 rpmostree_builtin_treecompose (int             argc,
                                char          **argv,
@@ -646,6 +775,9 @@ rpmostree_builtin_treecompose (int             argc,
   guint len;
   guint i;
   gs_free char *ref_unix = NULL;
+  gs_free char *cachekey = NULL;
+  gs_free char *cached_compose_checksum = NULL;
+  gs_free char *new_compose_checksum = NULL;
   gs_unref_object GFile *workdir = NULL;
   gs_unref_object GFile *cachedir = NULL;
   gs_unref_object GFile *yumroot = NULL;
@@ -696,6 +828,9 @@ rpmostree_builtin_treecompose (int             argc,
       workdir = g_file_new_for_path (tmpd);
       workdir_is_tmp = TRUE;
     }
+
+  if (opt_cachedir)
+    cachedir = g_file_new_for_path (opt_cachedir);
 
   if (chdir (gs_file_get_path_cached (workdir)) != 0)
     {
@@ -795,6 +930,24 @@ rpmostree_builtin_treecompose (int             argc,
       goto out;
   }
 
+  cachekey = g_strconcat ("treecompose/", ref, NULL);
+  if (!cachedir_lookup_string (cachedir, cachekey,
+                               &cached_compose_checksum,
+                               cancellable, error))
+    goto out;
+  
+  if (!compute_checksum_for_compose (treefile, yumroot,
+                                     &new_compose_checksum,
+                                     cancellable, error))
+    goto out;
+
+  if (g_strcmp0 (cached_compose_checksum, new_compose_checksum) == 0)
+    {
+      g_print ("No changes to input, reusing cached commit\n");
+      ret = TRUE;
+      goto out;
+    }
+
   ref_unix = g_strdelimit (g_strdup (ref), "/", '_');
 
   if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
@@ -870,6 +1023,11 @@ rpmostree_builtin_treecompose (int             argc,
                            cancellable, error))
       goto out;
   }
+
+  if (!cachedir_set_string (cachedir, cachekey,
+                            new_compose_checksum,
+                            cancellable, error))
+    goto out;
 
   g_print ("Complete\n");
   
