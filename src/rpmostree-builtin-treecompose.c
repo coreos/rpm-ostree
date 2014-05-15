@@ -644,6 +644,7 @@ rpmostree_builtin_treecompose (int             argc,
   JsonObject *treefile = NULL;
   JsonArray *units = NULL;
   guint len;
+  guint i;
   gs_free char *ref_unix = NULL;
   gs_unref_object GFile *workdir = NULL;
   gs_unref_object GFile *cachedir = NULL;
@@ -759,119 +760,115 @@ rpmostree_builtin_treecompose (int             argc,
   g_ptr_array_add (packages, NULL);
     
 
-  {
-    guint i;
+  /* Ensure we have enough to modify NSS */
+  if (!yuminstall (treefile, yumroot, workdir,
+                   (char**)bootstrap_packages->pdata,
+                   cancellable, error))
+    goto out;
 
-    /* Ensure we have enough to modify NSS */
+  /* Prepare NSS configuration; this needs to be done
+     before any invocations of "useradd" in %post */
+
+  {
+    gs_unref_object GFile *yumroot_passwd =
+      g_file_resolve_relative_path (yumroot, "usr/lib/passwd");
+    gs_unref_object GFile *yumroot_group =
+      g_file_resolve_relative_path (yumroot, "usr/lib/group");
+    gs_unref_object GFile *yumroot_etc = 
+      g_file_resolve_relative_path (yumroot, "etc");
+
+    if (!g_file_replace_contents (yumroot_passwd, "", 0, NULL, FALSE, 0,
+                                  NULL, cancellable, error))
+      goto out;
+    if (!g_file_replace_contents (yumroot_group, "", 0, NULL, FALSE, 0,
+                                  NULL, cancellable, error))
+      goto out;
+
+    if (!replace_nsswitch (yumroot_etc, cancellable, error))
+      goto out;
+  }
+
+  {
     if (!yuminstall (treefile, yumroot, workdir,
-                     (char**)bootstrap_packages->pdata,
+                     (char**)packages->pdata,
                      cancellable, error))
       goto out;
+  }
 
-    /* Prepare NSS configuration; this needs to be done
-       before any invocations of "useradd" in %post */
+  ref_unix = g_strdelimit (g_strdup (ref), "/", '_');
 
-    {
-      gs_unref_object GFile *yumroot_passwd =
-        g_file_resolve_relative_path (yumroot, "usr/lib/passwd");
-      gs_unref_object GFile *yumroot_group =
-        g_file_resolve_relative_path (yumroot, "usr/lib/group");
-      gs_unref_object GFile *yumroot_etc = 
-        g_file_resolve_relative_path (yumroot, "etc");
+  if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
+    goto out;
 
-      if (!g_file_replace_contents (yumroot_passwd, "", 0, NULL, FALSE, 0,
-                                    NULL, cancellable, error))
-        goto out;
-      if (!g_file_replace_contents (yumroot_group, "", 0, NULL, FALSE, 0,
-                                    NULL, cancellable, error))
-        goto out;
+  if (!rpmostree_postprocess (yumroot, cancellable, error))
+    goto out;
 
-      if (!replace_nsswitch (yumroot_etc, cancellable, error))
-        goto out;
-    }
+  if (json_object_has_member (treefile, "units"))
+    units = json_object_get_array_member (treefile, "units");
 
-    {
-      if (!yuminstall (treefile, yumroot, workdir,
-                       (char**)packages->pdata,
-                       cancellable, error))
-        goto out;
-    }
+  if (units)
+    len = json_array_get_length (units);
+  else
+    len = 0;
 
-    ref_unix = g_strdelimit (g_strdup (ref), "/", '_');
+  {
+    gs_unref_object GFile *multiuser_wants_dir =
+      g_file_resolve_relative_path (yumroot, "usr/etc/systemd/system/multi-user.target.wants");
 
-    if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
+    if (!gs_file_ensure_directory (multiuser_wants_dir, TRUE, cancellable, error))
       goto out;
 
-    if (!rpmostree_postprocess (yumroot, cancellable, error))
-      goto out;
+    for (i = 0; i < len; i++)
+      {
+        const char *unitname = array_require_string_element (units, i, error);
+        gs_unref_object GFile *unit_link_target = NULL;
+        gs_free char *symlink_target = NULL;
 
-    if (json_object_has_member (treefile, "units"))
-      units = json_object_get_array_member (treefile, "units");
+        if (!unitname)
+          goto out;
 
-    if (units)
-      len = json_array_get_length (units);
-    else
-      len = 0;
+        symlink_target = g_strconcat ("/usr/lib/systemd/system/", unitname, NULL);
+        unit_link_target = g_file_get_child (multiuser_wants_dir, unitname);
 
-    {
-      gs_unref_object GFile *multiuser_wants_dir =
-        g_file_resolve_relative_path (yumroot, "usr/etc/systemd/system/multi-user.target.wants");
-
-      if (!gs_file_ensure_directory (multiuser_wants_dir, TRUE, cancellable, error))
-        goto out;
-
-      for (i = 0; i < len; i++)
-        {
-          const char *unitname = array_require_string_element (units, i, error);
-          gs_unref_object GFile *unit_link_target = NULL;
-          gs_free char *symlink_target = NULL;
-
-          if (!unitname)
-            goto out;
-
-          symlink_target = g_strconcat ("/usr/lib/systemd/system/", unitname, NULL);
-          unit_link_target = g_file_get_child (multiuser_wants_dir, unitname);
-
-          if (g_file_query_file_type (unit_link_target, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL) == G_FILE_TYPE_SYMBOLIC_LINK)
-            continue;
+        if (g_file_query_file_type (unit_link_target, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL) == G_FILE_TYPE_SYMBOLIC_LINK)
+          continue;
           
-          g_print ("Adding %s to multi-user.target.wants\n", unitname);
+        g_print ("Adding %s to multi-user.target.wants\n", unitname);
 
-          if (!g_file_make_symbolic_link (unit_link_target, symlink_target,
-                                          cancellable, error))
-            goto out;
-        }
-    }
+        if (!g_file_make_symbolic_link (unit_link_target, symlink_target,
+                                        cancellable, error))
+          goto out;
+      }
+  }
 
-    {
-      gs_unref_object GFile *target_treefile_dir_path =
-        g_file_resolve_relative_path (yumroot, "usr/share/rpm-ostree");
-      gs_unref_object GFile *target_treefile_path =
-        g_file_get_child (target_treefile_dir_path, "treefile.json");
+  {
+    gs_unref_object GFile *target_treefile_dir_path =
+      g_file_resolve_relative_path (yumroot, "usr/share/rpm-ostree");
+    gs_unref_object GFile *target_treefile_path =
+      g_file_get_child (target_treefile_dir_path, "treefile.json");
       
-      if (!gs_file_ensure_directory (target_treefile_dir_path, TRUE,
-                                     cancellable, error))
-        goto out;
-                                     
-      g_print ("Copying '%s' to '%s'\n",
-               gs_file_get_path_cached (treefile_path),
-               gs_file_get_path_cached (target_treefile_path));
-      if (!g_file_copy (treefile_path, target_treefile_path,
-                        G_FILE_COPY_TARGET_DEFAULT_PERMS,
-                        cancellable, NULL, NULL, error))
-        goto out;
-    }
-    
-    {
-      const char *gpgkey;
-      if (!object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
-        goto out;
-
-      if (!rpmostree_commit (yumroot, repo, ref, gpgkey,
-                             json_object_get_boolean_member (treefile, "selinux"),
-                             cancellable, error))
+    if (!gs_file_ensure_directory (target_treefile_dir_path, TRUE,
+                                   cancellable, error))
       goto out;
-    }
+                                     
+    g_print ("Copying '%s' to '%s'\n",
+             gs_file_get_path_cached (treefile_path),
+             gs_file_get_path_cached (target_treefile_path));
+    if (!g_file_copy (treefile_path, target_treefile_path,
+                      G_FILE_COPY_TARGET_DEFAULT_PERMS,
+                      cancellable, NULL, NULL, error))
+      goto out;
+  }
+    
+  {
+    const char *gpgkey;
+    if (!object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
+      goto out;
+
+    if (!rpmostree_commit (yumroot, repo, ref, gpgkey,
+                           json_object_get_boolean_member (treefile, "selinux"),
+                           cancellable, error))
+      goto out;
   }
 
   g_print ("Complete\n");
