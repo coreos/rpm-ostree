@@ -802,13 +802,6 @@ rpmostree_builtin_treecompose (int             argc,
     if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
       goto out;
 
-    /* Clean cached packages now */
-    {
-      gs_unref_object GFile *yumcache_lookaside = g_file_resolve_relative_path (workdir, "yum-cache");
-      if (!gs_shutil_rm_rf (yumcache_lookaside, cancellable, error))
-        goto out;
-    }
-
     if (!rpmostree_postprocess (yumroot, cancellable, error))
       goto out;
 
