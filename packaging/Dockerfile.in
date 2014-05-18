@@ -6,4 +6,4 @@ RUN rm /etc/yum.repos.d/walters-rpm-ostree-fedora-20-i386.repo
 RUN sed -i -e 's,passwd:.*,\0 altfiles,' -e 's,group:.*,\0 altfiles,' /etc/nsswitch.conf
 ADD @PACKAGE@ /var/tmp/@PACKAGE@
 RUN yum -y localinstall /var/tmp/@PACKAGE@
-ENTRYPOINT ["rpm-ostree", "treecompose"]
+ENTRYPOINT ["rpm-ostree"]
