@@ -46,6 +46,10 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
+typedef struct {
+  GPtrArray *treefile_context_dirs;
+} RpmOstreeTreeComposeContext;
+
 static char *
 subprocess_context_print_args (GSSubprocessContext   *ctx)
 {
@@ -270,7 +274,8 @@ void cleanup_keyfile_unref (void *loc)
 }
 
 static gboolean
-append_repo_and_cache_opts (JsonObject *treedata,
+append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
+                            JsonObject *treedata,
                             GFile      *workdir,
                             GPtrArray  *args,
                             GCancellable *cancellable,
@@ -279,6 +284,7 @@ append_repo_and_cache_opts (JsonObject *treedata,
   gboolean ret = FALSE;
   JsonArray *enable_repos = NULL;
   JsonArray *repos_data = NULL;
+  guint i;
   gs_unref_object GFile *yumcache_lookaside = NULL;
   gs_unref_object GFile *repos_tmpdir = NULL;
 
@@ -295,8 +301,6 @@ append_repo_and_cache_opts (JsonObject *treedata,
   if (g_getenv ("RPM_OSTREE_OFFLINE"))
     g_ptr_array_add (args, g_strdup ("-C"));
 
-  g_ptr_array_add (args, g_strdup ("--disablerepo=*"));
-
   {
     const char *proxy;
     if (opt_proxy)
@@ -306,6 +310,23 @@ append_repo_and_cache_opts (JsonObject *treedata,
     if (proxy)
       g_ptr_array_add (args, g_strconcat ("--setopt=proxy=", proxy, NULL));
   }
+
+  {
+    GString *reposdir_value = g_string_new ("--setopt=reposdir=");
+    gboolean first = TRUE;
+    for (i = 0; i < self->treefile_context_dirs->len; i++)
+      {
+        GFile *contextdir = self->treefile_context_dirs->pdata[i];
+        if (first)
+          first = FALSE;
+        else
+          g_string_append_c (reposdir_value, ',');
+        g_string_append (reposdir_value, gs_file_get_path_cached (contextdir));
+      }
+    g_ptr_array_add (args, g_string_free (reposdir_value, FALSE));
+  }
+
+  g_ptr_array_add (args, g_strdup ("--disablerepo=*"));
 
   if (json_object_has_member (treedata, "repos"))
     enable_repos = json_object_get_array_member (treedata, "repos");
@@ -392,7 +413,8 @@ append_repo_and_cache_opts (JsonObject *treedata,
 }
 
 static YumContext *
-yum_context_new (JsonObject     *treedata,
+yum_context_new (RpmOstreeTreeComposeContext  *self,
+                 JsonObject     *treedata,
                  GFile          *yumroot,
                  GFile          *workdir,
                  GCancellable   *cancellable,
@@ -408,7 +430,7 @@ yum_context_new (JsonObject     *treedata,
   g_ptr_array_add (yum_argv, g_strdup ("yum"));
   g_ptr_array_add (yum_argv, g_strdup ("-y"));
 
-  if (!append_repo_and_cache_opts (treedata, workdir, yum_argv,
+  if (!append_repo_and_cache_opts (self, treedata, workdir, yum_argv,
                                    cancellable, error))
     goto out;
 
@@ -495,7 +517,8 @@ yum_context_command (YumContext   *yumctx,
 }
                   
 static gboolean
-yuminstall (JsonObject      *treedata,
+yuminstall (RpmOstreeTreeComposeContext  *self,
+            JsonObject      *treedata,
             GFile           *yumroot,
             GFile           *workdir,
             char           **packages,
@@ -506,7 +529,7 @@ yuminstall (JsonObject      *treedata,
   char **strviter;
   YumContext *yumctx;
 
-  yumctx = yum_context_new (treedata, yumroot, workdir, cancellable, error);
+  yumctx = yum_context_new (self, treedata, yumroot, workdir, cancellable, error);
   if (!yumctx)
     goto out;
 
@@ -542,7 +565,8 @@ yuminstall (JsonObject      *treedata,
 }
 
 static gboolean
-process_includes (GFile             *treefile_path,
+process_includes (RpmOstreeTreeComposeContext  *self,
+                  GFile             *treefile_path,
                   guint              depth,
                   JsonObject        *root,
                   GCancellable      *cancellable,
@@ -558,6 +582,22 @@ process_includes (GFile             *treefile_path,
                    "Exceeded maximum include depth of %u", maxdepth);
       goto out;
     }
+
+  {
+    gs_unref_object GFile *parent = g_file_get_parent (treefile_path);
+    gboolean existed = FALSE;
+    if (self->treefile_context_dirs->len > 0)
+      {
+        GFile *prev = self->treefile_context_dirs->pdata[self->treefile_context_dirs->len-1];
+        if (g_file_equal (parent, prev))
+          existed = TRUE;
+      }
+    if (!existed)
+      {
+        g_ptr_array_add (self->treefile_context_dirs, parent);
+        parent = NULL; /* Transfer ownership */
+      }
+  }
 
   if (!object_get_optional_string_member (root, "include", &include_path, error))
     goto out;
@@ -586,7 +626,7 @@ process_includes (GFile             *treefile_path,
         }
       parent_root = json_node_get_object (parent_rootval);
       
-      if (!process_includes (parent_path, depth + 1, parent_root,
+      if (!process_includes (self, parent_path, depth + 1, parent_root,
                              cancellable, error))
         goto out;
                              
@@ -776,6 +816,8 @@ rpmostree_builtin_treecompose (int             argc,
   gboolean ret = FALSE;
   GOptionContext *context = g_option_context_new ("- Run yum and commit the result to an OSTree repository");
   const char *ref;
+  RpmOstreeTreeComposeContext selfdata = { NULL, };
+  RpmOstreeTreeComposeContext *self = &selfdata;
   JsonNode *treefile_rootval = NULL;
   JsonObject *treefile = NULL;
   JsonArray *units = NULL;
@@ -797,6 +839,8 @@ rpmostree_builtin_treecompose (int             argc,
   gs_unref_object GFile *repo_path = NULL;
   gs_unref_object JsonParser *treefile_parser = NULL;
   gboolean workdir_is_tmp = FALSE;
+
+  self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
   
   g_option_context_add_main_entries (context, option_entries, NULL);
 
@@ -862,7 +906,7 @@ rpmostree_builtin_treecompose (int             argc,
     }
   treefile = json_node_get_object (treefile_rootval);
 
-  if (!process_includes (treefile_path, 0, treefile,
+  if (!process_includes (self, treefile_path, 0, treefile,
                          cancellable, error))
     goto out;
 
@@ -903,7 +947,7 @@ rpmostree_builtin_treecompose (int             argc,
     
 
   /* Ensure we have enough to modify NSS */
-  if (!yuminstall (treefile, yumroot, workdir,
+  if (!yuminstall (self, treefile, yumroot, workdir,
                    (char**)bootstrap_packages->pdata,
                    cancellable, error))
     goto out;
@@ -931,7 +975,7 @@ rpmostree_builtin_treecompose (int             argc,
   }
 
   {
-    if (!yuminstall (treefile, yumroot, workdir,
+    if (!yuminstall (self, treefile, yumroot, workdir,
                      (char**)packages->pdata,
                      cancellable, error))
       goto out;
@@ -1042,5 +1086,9 @@ rpmostree_builtin_treecompose (int             argc,
     (void) gs_shutil_rm_rf (workdir, cancellable, NULL);
 
  out:
+  if (self)
+    {
+      g_ptr_array_unref (self->treefile_context_dirs);
+    }
   return ret;
 }
