@@ -2,7 +2,6 @@
 
 include Makefile.dist-packaging
 
-
 docker-local: rpm
 	rm docker -rf
 	mkdir -p docker
@@ -10,4 +9,4 @@ docker-local: rpm
 	sed \
 	-e s,\@PACKAGE\@,$(PACKAGE).rpm,g \
 	< Dockerfile.in > docker/Dockerfile
-	(cd docker && docker build -t cgwalters/rpm-ostree .)
+	(set -x ;cd docker && docker build -t cgwalters/rpm-ostree .)
