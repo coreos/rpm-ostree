@@ -297,8 +297,15 @@ append_repo_and_cache_opts (JsonObject *treedata,
 
   g_ptr_array_add (args, g_strdup ("--disablerepo=*"));
 
-  if (opt_proxy)
-    g_ptr_array_add (args, g_strconcat ("--setopt=proxy=", opt_proxy, NULL));
+  {
+    const char *proxy;
+    if (opt_proxy)
+      proxy = opt_proxy;
+    else
+      proxy = g_getenv ("http_proxy");
+    if (proxy)
+      g_ptr_array_add (args, g_strconcat ("--setopt=proxy=", proxy, NULL));
+  }
 
   if (json_object_has_member (treedata, "repos"))
     enable_repos = json_object_get_array_member (treedata, "repos");
