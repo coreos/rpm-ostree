@@ -158,7 +158,7 @@ function createDisk(diskpath, cancellable, params) {
     }
     gfHandle.part_add("/dev/sda", "p", rootOffset, endOffset - 1);
     if (bootsizeSectors > 0) {
-	gfHandle.mkfs("ext4", "/dev/sda" + bootPartitionOffset, null);
+	gfHandle.mkfs("ext4", "/dev/sda" + bootPartitionOffset, new Guestfs.Mkfs({ features: "^64bit" }));
 	gfHandle.set_e2uuid("/dev/sda1", BOOT_UUID);
     }
     if (swapsizeSectors > 0) {
