@@ -849,7 +849,7 @@ rpmostree_builtin_treecompose (int             argc,
 
   if (argc < 2)
     {
-      g_printerr ("usage: " PACKAGE_STRING " create TREEFILE\n");
+      g_printerr ("usage: " PACKAGE_STRING " treecompose TREEFILE\n");
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Option processing failed");
       goto out;
