@@ -46,6 +46,12 @@ AS_IF([test x$enable_patched_hawkey_and_libsolv = xyes], [
     AC_DEFINE(HAVE_PATCHED_HAWKEY_AND_LIBSOLV, 1, [Define if we have patched hawkey and libsolv])
 ])
 
+AC_ARG_ENABLE(usrbinatomic,
+              AS_HELP_STRING([--enable-usrbinatomic],
+                             [Alias client binary as /usr/bin/atomic]),,
+              [enable_usrbinatomic=no])
+AM_CONDITIONAL(BUILDOPT_USRBINATOMIC, [test x$enable_usrbinatomic = xyes])
+
 AC_CONFIG_FILES([
 Makefile
 ])
@@ -55,4 +61,5 @@ echo "
     $PACKAGE $VERSION
 
     patched hawkey:	$enable_patched_hawkey_and_libsolv
+    usrbinatomic:	$enable_usrbinatomic
 "
