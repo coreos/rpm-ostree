@@ -14,7 +14,7 @@ composing trees, such as creating VM disk images and running
 smoketests.
 
 Since that time, the other functionality has moved to:
-https://github.com/cgwalters/rpm-ostree-autocompose
+https://github.com/cgwalters/rpm-ostree-toolbox
 
 This program now only commits trees to a repository, using "treefiles"
 which are very simple JSON input data.
