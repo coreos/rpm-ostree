@@ -55,6 +55,6 @@ privdata_DATA = src/tmpfiles-ostree-integration.conf
 if BUILDOPT_USRBINATOMIC
 INSTALL_DATA_HOOKS += install-usrbinatomic-hook
 install-usrbinatomic-hook:
-	ln -s rpm-ostree $(DESTDIR)$(bindir)/atomic
-	ln -s rpm-ostree.1.gz $(DESTDIR)$(mandir)/man1/atomic.1.gz
+	ln -sf rpm-ostree $(DESTDIR)$(bindir)/atomic
+	ln -sf rpm-ostree.1.gz $(DESTDIR)$(mandir)/man1/atomic.1.gz
 endif
