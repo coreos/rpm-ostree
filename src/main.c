@@ -32,8 +32,7 @@
 #include "libgsystem.h"
 
 static RpmOstreeCommand commands[] = {
-  { "treecompose", rpmostree_builtin_treecompose, 0 },
-  { "sign", rpmostree_builtin_sign, 0 },
+  { "compose", rpmostree_builtin_compose, 0 },
   { "upgrade", rpmostree_builtin_upgrade, 0 },
   { "rollback", rpmostree_builtin_rollback, 0 },
   { NULL }

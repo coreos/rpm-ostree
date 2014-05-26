@@ -23,7 +23,7 @@
 #include <string.h>
 #include <glib-unix.h>
 
-#include "rpmostree-builtins.h"
+#include "rpmostree-compose-builtins.h"
 
 #include "libgsystem.h"
 
@@ -39,10 +39,10 @@ static GOptionEntry option_entries[] = {
 };
 
 gboolean
-rpmostree_builtin_sign (int            argc,
-                        char         **argv,
-                        GCancellable  *cancellable,
-                        GError       **error)
+rpmostree_compose_builtin_sign (int            argc,
+                                char         **argv,
+                                GCancellable  *cancellable,
+                                GError       **error)
 {
   gboolean ret = FALSE;
   GOptionContext *context = g_option_context_new ("- Use rpm-sign to sign an OSTree commit");

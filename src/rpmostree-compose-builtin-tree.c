@@ -25,7 +25,7 @@
 #include <json-glib/json-glib.h>
 #include <gio/gunixoutputstream.h>
 
-#include "rpmostree-builtins.h"
+#include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
 #include "rpmostree-postprocess.h"
 
@@ -808,10 +808,10 @@ compute_checksum_for_compose (JsonObject   *treefile_rootval,
 }
 
 gboolean
-rpmostree_builtin_treecompose (int             argc,
-                               char          **argv,
-                               GCancellable   *cancellable,
-                               GError        **error)
+rpmostree_compose_builtin_tree (int             argc,
+                                char          **argv,
+                                GCancellable   *cancellable,
+                                GError        **error)
 {
   gboolean ret = FALSE;
   GOptionContext *context = g_option_context_new ("- Run yum and commit the result to an OSTree repository");
@@ -849,7 +849,7 @@ rpmostree_builtin_treecompose (int             argc,
 
   if (argc < 2)
     {
-      g_printerr ("usage: " PACKAGE_STRING " treecompose TREEFILE\n");
+      g_printerr ("usage: rpm-ostree compose tree TREEFILE\n");
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Option processing failed");
       goto out;
