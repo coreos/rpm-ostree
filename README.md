@@ -57,10 +57,10 @@ Once you have that done, choose a build directory.  Here we'll use
 Running rpm-ostree
 ------------------
 
-The core "rpm-ostree" takes as input a "treefile".  See examples in
-`doc/treefile-examples`.
+The core "rpm-ostree tree compose" builtin as input a "treefile".  See
+examples in `doc/treefile-examples`, as well as `doc/treefile.md`.
 
-	# rpm-ostree treecompose --repo=/srv/rpm-ostree/repo --proxy=http://127.0.0.1:8123 sometreefile.json
+	# rpm-ostree compose tree --repo=/srv/rpm-ostree/repo --proxy=http://127.0.0.1:8123 sometreefile.json
 
 All this does is use yum to download RPMs from the referenced repos,
 and commit the result to the OSTree repository, using the ref named by

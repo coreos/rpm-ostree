@@ -112,6 +112,16 @@ Boston, MA 02111-1307, USA.
         Otherwise, make the currently booted
         tree the default.</para></listitem>
       </varlistentry>
+
+      <varlistentry>
+        <term><command>compose</command></term>
+	
+	<listitem><para>Entrypoint for tree composition; most
+	typically used on servers to prepare trees for replication by
+	client systems.  Currently has two subcommands,
+	<literal>tree</literal> and
+	<literal>sign</literal>.</para></listitem>
+      </varlistentry>
     </variablelist>
 
   </refsect1>
