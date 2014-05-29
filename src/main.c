@@ -34,6 +34,7 @@
 static RpmOstreeCommand commands[] = {
   { "compose", rpmostree_builtin_compose, 0 },
   { "upgrade", rpmostree_builtin_upgrade, 0 },
+  { "rebase", rpmostree_builtin_rebase, 0 },
   { "rollback", rpmostree_builtin_rollback, 0 },
   { NULL }
 };

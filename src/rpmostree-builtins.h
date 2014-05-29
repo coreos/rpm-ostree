@@ -34,6 +34,7 @@ typedef struct {
 
 BUILTINPROTO(compose);
 BUILTINPROTO(upgrade);
+BUILTINPROTO(rebase);
 BUILTINPROTO(rollback);
 
 #undef BUILTINPROTO

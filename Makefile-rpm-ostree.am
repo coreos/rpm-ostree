@@ -24,6 +24,8 @@ noinst_LTLIBRARIES += librpmostree.la
 librpmostree_la_SOURCES = \
 	src/rpmostree-postprocess.c \
 	src/rpmostree-postprocess.h \
+	src/rpmostree-pull-progress.c \
+	src/rpmostree-pull-progress.h \
 	src/rpmostree-util.c \
 	src/rpmostree-util.h \
 	src/hif-utils.c \
@@ -43,6 +45,7 @@ rpm_ostree_SOURCES = src/main.c \
 	src/rpmostree-builtin-compose.c \
 	src/rpmostree-builtin-upgrade.c \
 	src/rpmostree-builtin-rollback.c \
+	src/rpmostree-builtin-rebase.c \
 	src/rpmostree-compose-builtin-tree.c \
 	src/rpmostree-compose-builtin-sign.c \
 	$(NULL)
