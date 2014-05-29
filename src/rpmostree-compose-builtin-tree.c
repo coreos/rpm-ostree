@@ -783,7 +783,7 @@ compute_checksum_for_compose (JsonObject   *treefile_rootval,
   {
     int estatus;
     /* Ugly but it works... */
-    gs_free char *rpmqa_shell = g_strdup_printf ("rpm --dbpath=%s/usr/share/rpm | sort -u",
+    gs_free char *rpmqa_shell = g_strdup_printf ("rpm --dbpath=%s/var/lib/rpm -qa | sort -u",
                                                  gs_file_get_path_cached (yumroot));
     const char *rpmqa_argv[] = { "/bin/sh", "-c", rpmqa_shell, NULL };
     gs_free char *rpmqa_result = NULL;
@@ -794,6 +794,13 @@ compute_checksum_for_compose (JsonObject   *treefile_rootval,
       goto out;
     if (!g_spawn_check_exit_status (estatus, error))
       goto out;
+
+    if (!*rpmqa_result)
+      {
+        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                     "Empty result from %s", rpmqa_shell);
+        goto out;
+      }
     
     g_checksum_update (checksum, (guint8*)rpmqa_result, strlen (rpmqa_result));
   }
