@@ -69,3 +69,9 @@ this case) - otherwise we you will download the packages for each
 treecompose.
 
 You can export `/srv/rpm-ostree/repo` via any static webserver.
+
+The use of `--proxy` is not mandatory but strongly recommended - with
+this option you can avoid continually redownloading the packages every
+compose.  I personally use
+[Polipo](http://www.pps.univ-paris-diderot.fr/~jch/software/polipo/),
+but you can of course any HTTP proxy you wish.
