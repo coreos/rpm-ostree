@@ -90,7 +90,16 @@ Boston, MA 02111-1307, USA.
         this has no effect on your running
         filesystem tree.  You must reboot for
         any changes to take
-        effect.</para></listitem>
+        effect.</para>
+
+        <para>
+          <command>--reboot</command> or <command>-r </command> to initiate a reboot after upgrade is prepared.
+        </para>
+
+          <para><command>--allow-downgrade</command> to permit deployment of chronologically older trees.
+
+        </para>
+      </listitem>
       </varlistentry>
 
       <varlistentry>
@@ -98,19 +107,26 @@ Boston, MA 02111-1307, USA.
 	
 	<listitem><para>OSTree mananges an
 	ordered list of bootloader entries,
-	called "deployments".  Each entry has
+	called "deployments".  The entry at index 0 is 
+  the default bootloader entry.  Each entry has
 	a separate <filename>/etc</filename>,
 	but they all share a single
 	<filename>/var</filename>.  You can
 	use the bootloader to choose between
-	entries.</para>
+	entries by pressing Tab to interrupt startup.</para>
 
         <para>This command then changes the
         default bootloader entry.  If the
         current default is booted, then set
         the default to the previous entry.
         Otherwise, make the currently booted
-        tree the default.</para></listitem>
+        tree the default.</para>
+        <para>
+          <command>--reboot</command> or <command>-r </command> to initiate a reboot after rollback is prepared.
+
+        </para>
+
+      </listitem>
       </varlistentry>
 
       <varlistentry>
