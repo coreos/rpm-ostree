@@ -93,6 +93,12 @@ rpmostree_builtin_rollback (int             argc,
       /* There is an earlier deployment, let's assume we want to just
        * insert the current one in front.
        */
+
+       /*
+       What this does is, if we're NOT in the default boot index, it plans to prepend
+       our current index (1, since we can't have more than two trees) so that it becomes index 0 
+       (default) and the current default becomes index 1
+       */
       index_to_prepend = booted_index;
     }
   else
