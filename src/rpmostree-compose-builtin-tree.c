@@ -896,7 +896,11 @@ rpmostree_compose_builtin_tree (int             argc,
     }
 
   if (opt_cachedir)
-    cachedir = g_file_new_for_path (opt_cachedir);
+    {
+      cachedir = g_file_new_for_path (opt_cachedir);
+      if (!gs_file_ensure_directory (cachedir, FALSE, cancellable, error))
+        goto out;
+    }
 
   if (chdir (gs_file_get_path_cached (workdir)) != 0)
     {
