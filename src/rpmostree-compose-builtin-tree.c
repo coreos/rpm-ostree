@@ -780,12 +780,16 @@ compute_checksum_for_compose (JsonObject   *treefile_rootval,
     json_node_free (treefile_rootnode);
   }
 
+  /* Query the generated rpmdb, to see if anything has changed. */
   {
     int estatus;
-    /* Ugly but it works... */
-    gs_free char *rpmqa_shell = g_strdup_printf ("rpm --dbpath=%s/var/lib/rpm -qa | sort -u",
-                                                 gs_file_get_path_cached (yumroot));
-    const char *rpmqa_argv[] = { "/bin/sh", "-c", rpmqa_shell, NULL };
+    gs_free char *yumroot_var_lib_rpm =
+      g_build_filename (gs_file_get_path_cached (yumroot),
+                        "var/lib/rpm",
+                        NULL);
+    const char *rpmqa_argv[] = { PKGLIBDIR "/rpmqa-sorted-and-clean",
+                                 yumroot_var_lib_rpm,
+                                 NULL };
     gs_free char *rpmqa_result = NULL;
 
     if (!g_spawn_sync (NULL, (char**)rpmqa_argv, NULL,
@@ -793,12 +797,16 @@ compute_checksum_for_compose (JsonObject   *treefile_rootval,
                        &rpmqa_result, NULL, &estatus, error))
       goto out;
     if (!g_spawn_check_exit_status (estatus, error))
-      goto out;
+      {
+        g_prefix_error (error, "Executing %s: ",
+                        rpmqa_argv[0]);
+        goto out;
+      }
 
     if (!*rpmqa_result)
       {
         g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                     "Empty result from %s", rpmqa_shell);
+                     "Empty result from %s", rpmqa_argv[0]);
         goto out;
       }
     

@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+# An ugly shell script to get the sorted output of "rpm -qa", and also
+# ensure that leftover __db files are deleted afterwards.  This helps
+# avoid things like SELinux policy denials from processes that try to
+# write to the lock file if it exists (as they'd try to write to
+# usr_t).
+#
+# Copyright (C) 2014 Colin Walters <walters@verbum.org>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published
+# by the Free Software Foundation; either version 2 of the licence or (at
+# your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General
+# Public License along with this library; if not, write to the
+# Free Software Foundation, Inc., 59 Temple Place, Suite 330,
+# Boston, MA 02111-1307, USA.
+
+set -e
+dbpath=$1
+test -n "$dbpath" || (echo 1>&2 "usage: $0 DBPATH"; exit 1)
+shift
+set -o pipefail
+rpm --dbpath=${dbpath} -qa | sort -u
+set +o pipefail
+rm -f ${dbpath}/__db.* ${dbpath}/{.dbenv,.rpm}.lock
+
