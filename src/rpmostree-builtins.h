@@ -36,6 +36,7 @@ BUILTINPROTO(compose);
 BUILTINPROTO(upgrade);
 BUILTINPROTO(rebase);
 BUILTINPROTO(rollback);
+BUILTINPROTO(status);
 
 #undef BUILTINPROTO
 

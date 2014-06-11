@@ -149,6 +149,18 @@ Boston, MA 02111-1307, USA.
 	<literal>tree</literal> and
 	<literal>sign</literal>.</para></listitem>
       </varlistentry>
+
+  <varlistentry>
+      <term><command>status</command></term>
+
+      <listitem>
+
+        <para>
+          Gives information pertaining to the current deployment in use.  Lists the names and refspecs of all possible deployments in order, such that the first deployment in the list is the default upon boot.  The deployment marked with * is the current booted deployment, and marking with 'r' indicates the most recent upgrade (the newest deployment version).
+      </para>
+      </listitem>
+  </varlistentry>
+
     </variablelist>
 
   </refsect1>
