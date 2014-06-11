@@ -1101,10 +1101,9 @@ rpmostree_compose_builtin_tree (int             argc,
 
   g_print ("Complete\n");
   
-  if (workdir_is_tmp)
-    (void) gs_shutil_rm_rf (workdir, cancellable, NULL);
-
  out:
+  if (workdir_is_tmp)
+    (void) gs_shutil_rm_rf (workdir, NULL, NULL);
   if (self)
     {
       g_ptr_array_unref (self->treefile_context_dirs);
