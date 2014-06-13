@@ -28,23 +28,42 @@
 
 #include "libgsystem.h"
 
+static gboolean opt_pretty;
+
+static GOptionEntry option_entries[] = {
+  { "pretty", 'p', 0, G_OPTION_ARG_NONE, &opt_pretty, "Display status in formatted rows", NULL },
+  { NULL }
+};
+
+static void 
+printchar (char *s, int n)
+{
+  int i;
+  for (i=0; i < n; i++)
+    g_print ("%s",s);
+  g_print ("\n");
+}
+
 gboolean
 rpmostree_builtin_status (int             argc,
-                              char          **argv,
-                              GCancellable   *cancellable,
-                              GError        **error)
+                          char          **argv,
+                          GCancellable   *cancellable,
+                          GError        **error)
 {
   gboolean ret = FALSE;
   gs_unref_object OstreeSysroot *sysroot = NULL;
   gs_unref_ptrarray GPtrArray *deployments = NULL;  // list of all depoyments
   OstreeDeployment *booted_deployment = NULL;   // current booted deployment
   GOptionContext *context = g_option_context_new ("- Get the version of the booted system");
-  char *default_boot_message = NULL;    // is this deployment default? 
-  char *rollback_instructions = NULL;       // how to use rollback to change default; depending on state
-  char *version_message = NULL;        // is this the most recent version?
-  OstreeDeployment *most_recent = NULL; // most recent deployment
-  guint i;
-  guint j;
+  const guint CSUM_DISP_LEN = 10; // number of checksum characters to display
+  guint i, j;
+  guint max_timestamp_len = 19; // length of timestamp "YYYY-MM-DD HH:MM:SS"
+  guint max_id_len = CSUM_DISP_LEN; // length of checksum ID
+  guint max_osname_len = 0; // maximum length of osname - determined in conde
+  guint max_refspec_len = 0; // maximum length of refspec - determined in code
+  guint buffer = 5; // minimum space between end of one entry and new column
+
+  g_option_context_add_main_entries (context, option_entries, NULL);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
@@ -58,100 +77,125 @@ rpmostree_builtin_status (int             argc,
     {
       g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                            "Not currently booted into an OSTree system");
-      goto out;
+        goto out;
     }
 
   deployments = ostree_sysroot_get_deployments (sysroot);
-  
   g_assert (booted_deployment != NULL);
 
-  if (deployments->len < 2)
+  /* find lengths for use in column output */
+  if(!opt_pretty)
     {
-      g_print ("Note: Fewer than two versions found\n");
-      default_boot_message = rollback_instructions = version_message = "";
-    }
-  else
-    {
-      // determine most recent version
-      for (i=0; i<deployments->len; i++)
+      /* find max lengths of osname and refspec */
+      for (j = 0; j < deployments->len; j++) 
         {
-          if (most_recent == NULL)
-            most_recent = deployments->pdata[i];
+          GKeyFile *origin;
+          gs_free char *origin_refspec = NULL;
+          OstreeDeployment *deployment = deployments->pdata[j];
+
+          max_osname_len = MAX (max_osname_len, strlen (ostree_deployment_get_osname (deployment)));
+
+          origin = ostree_deployment_get_origin (deployment);
+          if (!origin)
+            origin_refspec = "none";
           else
             {
-              gs_unref_variant GVariant *version = NULL;
-              gs_unref_variant GVariant *recent_version = NULL;
-              gs_unref_object OstreeRepo *repo = NULL;
-              const char *csum = ostree_deployment_get_csum (deployments->pdata[i]);
-              const char *recent_csum = ostree_deployment_get_csum (most_recent);
-
-              if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-                goto out;
-
-              if (!ostree_repo_load_variant (repo,
-                                           OSTREE_OBJECT_TYPE_COMMIT,
-                                           csum,
-                                           &version,
-                                           error))
-                goto out;
-
-              if (!ostree_repo_load_variant (repo,
-                                           OSTREE_OBJECT_TYPE_COMMIT,
-                                           recent_csum,
-                                           &recent_version,
-                                           error))
-                goto out;
-              
-              // the newer (most recent) version will have a larger timestamp
-              // i.e. if a > b then a is newer than b
-              if (ostree_commit_get_timestamp (version) > ostree_commit_get_timestamp (recent_version))
-                  most_recent = deployments->pdata[i];
+              origin_refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
+              if (!origin_refspec)
+                origin_refspec = "<unknown origin type>";
             }
+          max_refspec_len = MAX (max_refspec_len, strlen (origin_refspec));
         }
-
-      if (deployments->pdata[0] == booted_deployment) // if current deployment is default
-        {
-          default_boot_message = "The current booted deployment is the default\n";
-          rollback_instructions = "Use command 'rpm-ostree rollback' to switch defaults\n";
-        }
-      else // current boot not default
-        {
-          default_boot_message = "The current booted deployment is not the default\n";
-          rollback_instructions = "Use command 'rpm-ostree rollback' to make it default\n";
-        }
-      version_message = (booted_deployment == most_recent) 
-                      ? "\nThe current booted deployment is the most recent upgrade\n"
-                      : "\nThe current booted deployment is not the most recent upgrade\n";
+      /* print column headers */
+      g_print ("  %-*s%-*s%-*s%-*s\n", 
+              max_timestamp_len+buffer,"TIMESTAMP (UTC)",
+              max_id_len+buffer, "ID",
+              max_osname_len+buffer, "OSNAME",
+              max_refspec_len+buffer, "REFSPEC");
     }
+  /* header for "pretty" row output */
+  else
+    printchar ("=", 60);
 
-  for (j=0; j<deployments->len; j++)
+  /* print entries for each deployment */
+  for (i=0; i<deployments->len; i++)
     {
-      OstreeDeployment *deployment = deployments->pdata[j];
+      gs_unref_variant GVariant *version = NULL;
+      gs_unref_object OstreeRepo *repo = NULL;
+      const char *csum = ostree_deployment_get_csum (deployments->pdata[i]);
+      OstreeDeployment *deployment = deployments->pdata[i];
       GKeyFile *origin;
+      gs_free char *origin_refspec = NULL;
+      GDateTime *timestamp = NULL;
+      gs_free char *timestamp_string = NULL;
+      char *truncated_csum = NULL;
 
-      g_print ("%c %c %s %s.%d\n",
-               deployment == most_recent ? 'r' : ' ',
-               deployment == booted_deployment ? '*' : ' ',
-               ostree_deployment_get_osname (deployment),
-               ostree_deployment_get_csum (deployment),
-               ostree_deployment_get_deployserial (deployment));
+      /* get version for timestamp */
+      if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
+        goto out;
+      if (!ostree_repo_load_variant (repo,
+                                   OSTREE_OBJECT_TYPE_COMMIT,
+                                   csum,
+                                   &version,
+                                   error))
+        goto out;
 
+      /* format timestamp*/
+      timestamp = g_date_time_new_from_unix_utc (ostree_commit_get_timestamp (version));
+      g_assert (timestamp);
+      timestamp_string = g_date_time_format (timestamp, "%Y-%m-%d %T");
+      g_date_time_unref (timestamp);
+
+      /* get origin refspec */
       origin = ostree_deployment_get_origin (deployment);
       if (!origin)
-        g_print ("      origin: none\n");
+        origin_refspec = "none";
       else
         {
-          gs_free char *origin_refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
+          origin_refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
           if (!origin_refspec)
-            g_print ("      origin: <unknown origin type>\n");
-          else
-            g_print ("      origin refspec: %s\n", origin_refspec);
+            origin_refspec = "<unknown origin type>";
         }
-    } 
 
-    g_print ("%s", version_message);
-    g_print ("%s", default_boot_message);
-    g_print ("%s", rollback_instructions);
+      /* truncate checksum */
+      truncated_csum = g_strndup (csum, CSUM_DISP_LEN);
+
+      /* print deployment info column */
+      if (!opt_pretty)
+        {
+          g_print ("%c %-*s%-*s%-*s%-*s\n", 
+                  deployment == booted_deployment ? '*' : ' ',
+                  max_timestamp_len+buffer, timestamp_string,
+                  max_id_len+buffer, truncated_csum,
+                  max_osname_len+buffer, ostree_deployment_get_osname (deployment),
+                  max_refspec_len+buffer, origin_refspec);
+        }
+
+      /* print "pretty" row info */
+      else
+        {
+          guint tab = 11;
+          char *title = NULL;
+          if (i==0)
+            title = "DEFAULT ON BOOT";
+          else if (deployment == booted_deployment ||
+                  deployments->len <= 2)
+            title = "NON-DEFAULT ROLLBACK TARGET";
+          else
+            title = "NON-DEFAULT DEPLOYMENT";
+          g_print ("  %c %s\n",
+                  deployment == booted_deployment ? '*' : ' ',
+                  title);
+
+          printchar ("-", 40);
+          g_print ("  %-*s%-*s\n  %-*s%-*s.%d\n  %-*s%-*s\n  %-*s%-*s\n",
+                  tab, "timestamp", tab, timestamp_string,
+                  tab, "id", tab, csum, ostree_deployment_get_deployserial (deployment),
+                  tab, "osname", tab, ostree_deployment_get_osname (deployment),
+                  tab, "refspec", tab, origin_refspec);
+          printchar ("=", 60);
+        }
+    }
 
   ret = TRUE;
   out:
