@@ -1082,6 +1082,26 @@ rpmostree_compose_builtin_tree (int             argc,
                       cancellable, NULL, NULL, error))
       goto out;
   }
+
+  {
+    const char *default_target = NULL;
+      
+    if (!object_get_optional_string_member (treefile, "default_target",
+                                            &default_target, error))
+      goto out;
+
+    if (default_target != NULL)
+      {
+        gs_unref_object GFile *default_target_path =
+          g_file_resolve_relative_path (yumroot, "usr/etc/systemd/system/default.target");
+
+        (void) gs_file_unlink (default_target_path, NULL, NULL);
+        
+        if (!g_file_make_symbolic_link (default_target_path, default_target,
+                                        cancellable, error))
+          goto out;
+      }
+  }
     
   {
     const char *gpgkey;
