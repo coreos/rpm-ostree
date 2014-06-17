@@ -57,11 +57,11 @@ Boston, MA 02111-1307, USA.
     <title>Description</title>
 
     <para>
-      rpm-ostree is a system software management tool that
-      combines features of both traditional RPM and
-      OSTree.  At the moment, there are only two available
-      commands: <literal>upgrade</literal> and
-      <literal>rollback</literal>.
+      rpm-ostree (also called "atomic" if configured) is a system
+      software management tool that combines features of both
+      traditional RPM and OSTree.  It has support for both server-side
+      composing of trees, as well as client-side upgrading and
+      management of deployments.
     </para>
 
     <para>
