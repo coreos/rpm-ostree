@@ -66,13 +66,24 @@ Boston, MA 02111-1307, USA.
 
     <para>
       On an rpm-ostree managed system, the traditional
-      <literal>yum</literal> and <literal>rpm</literal>
-      tools operate in a read-only state.  Instead, the
-      underlying OSTree layer replicates a filesystem tree
-      from a compose server.  In this "pure replication"
-      model, there is no dependency resolution on the
-      client machines, nor any ability to add or remove
-      packages.
+      <literal>yum</literal> (if installed) and <literal>rpm</literal>
+      tools operate in a read-only state; the RPM database is stored
+      in <literal>/usr/share/rpm</literal> which is underneath a
+      read-only bind mount.
+    </para>
+    <para>
+      Instead of live package-by-package upgrades, the underlying
+      OSTree layer replicates a complete filesystem tree from a
+      compose server into a new deployment, available on the next
+      reboot.  One benefit of this is that there will always be a
+      previous deployment, available for rollback.
+    </para>
+    <para>
+      Note in this "pure replication" model, at present there is no
+      dependency resolution on the client machines, nor any ability to
+      add or remove packages.  You may however use /usr/local/bin, or
+      an application mechanism such as
+      <citerefentry><refentrytitle>docker</refentrytitle><manvolnum>1</manvolnum></citerefentry>.
     </para>
   </refsect1>
 
