@@ -402,7 +402,7 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
         }
     }
 
-  g_ptr_array_add (args, g_strdup ("--setopt=keepcache=1"));
+  g_ptr_array_add (args, g_strdup ("--setopt=keepcache=0"));
   g_ptr_array_add (args, g_strconcat ("--setopt=cachedir=",
                                       gs_file_get_path_cached (yumcache_lookaside),
                                       NULL));
