@@ -1,9 +1,11 @@
 rpm-ostree
 ==========
 
-This tool takes a set of packages, and commits them to an
-[OSTree](https://wiki.gnome.org/Projects/OSTree) repository.  At the
-moment, it is intended for use on build servers.
+This program serves a dual role; its "tree compose" command is
+intended for use on build servers, to take RPM packages and commit
+them to an [OSTree](https://wiki.gnome.org/Projects/OSTree)
+repository.  On the client side, it acts as a consumer of the
+`libostree` shared library, integrating upgrades with RPM.
 
 Major changes since 2014.8
 --------------------------
