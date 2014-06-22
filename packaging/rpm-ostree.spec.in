@@ -29,7 +29,7 @@ repository.  At the moment, it is intended for use on build servers.
 
 %build
 env NOCONFIGURE=1 ./autogen.sh
-%configure --disable-silent-rules
+%configure --disable-silent-rules --enable-patched-hawkey-and-libsolv --enable-usrbinatomic
 make %{?_smp_mflags}
 
 %install
