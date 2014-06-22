@@ -29,10 +29,14 @@
 
 #include "libgsystem.h"
 
+static char *opt_sysroot = "/";
+static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_allow_downgrade;
 
 static GOptionEntry option_entries[] = {
+  { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
+  { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after an upgrade is prepared", NULL },
   { "allow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_allow_downgrade, "Permit deployment of chronologically older trees", NULL },
   { NULL }
@@ -46,6 +50,7 @@ rpmostree_builtin_upgrade (int             argc,
 {
   gboolean ret = FALSE;
   GOptionContext *context = g_option_context_new ("- Perform a system upgrade");
+  gs_unref_object GFile *sysroot_path = NULL;
   gs_unref_object OstreeSysroot *sysroot = NULL;
   gs_unref_object OstreeSysrootUpgrader *upgrader = NULL;
   gs_unref_object OstreeAsyncProgress *progress = NULL;
@@ -59,11 +64,13 @@ rpmostree_builtin_upgrade (int             argc,
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
 
-  sysroot = ostree_sysroot_new_default ();
+  sysroot_path = g_file_new_for_path (opt_sysroot);
+  sysroot = ostree_sysroot_new (sysroot_path);
   if (!ostree_sysroot_load (sysroot, cancellable, error))
     goto out;
 
-  upgrader = ostree_sysroot_upgrader_new (sysroot, cancellable, error);
+  upgrader = ostree_sysroot_upgrader_new_for_os (sysroot, opt_osname,
+                                                 cancellable, error);
   if (!upgrader)
     goto out;
 

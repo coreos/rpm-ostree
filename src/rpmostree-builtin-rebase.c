@@ -29,7 +29,12 @@
 
 #include "libgsystem.h"
 
+static char *opt_sysroot = "/";
+static char *opt_osname;
+
 static GOptionEntry option_entries[] = {
+  { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
+  { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
   { NULL }
 };
 
@@ -51,6 +56,7 @@ rpmostree_builtin_rebase (int             argc,
   gs_free char *new_ref = NULL;
   gs_free char *new_refspec = NULL;
   gs_free char *new_revision = NULL;
+  gs_unref_object GFile *sysroot_path = NULL;
   gs_unref_object GFile *deployment_path = NULL;
   gs_unref_object GFile *deployment_origin_path = NULL;
   gs_unref_object OstreeDeployment *merge_deployment = NULL;
@@ -77,11 +83,12 @@ rpmostree_builtin_rebase (int             argc,
 
   new_provided_refspec = argv[1];
 
-  sysroot = ostree_sysroot_new_default ();
+  sysroot_path = g_file_new_for_path (opt_sysroot);
+  sysroot = ostree_sysroot_new (sysroot_path);
   if (!ostree_sysroot_load (sysroot, cancellable, error))
     goto out;
 
-  upgrader = ostree_sysroot_upgrader_new_for_os (sysroot, NULL,
+  upgrader = ostree_sysroot_upgrader_new_for_os (sysroot, opt_osname,
                                                  cancellable, error);
   if (!upgrader)
     goto out;

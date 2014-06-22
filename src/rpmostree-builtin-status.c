@@ -28,9 +28,11 @@
 
 #include "libgsystem.h"
 
+static char *opt_sysroot = "/";
 static gboolean opt_pretty;
 
 static GOptionEntry option_entries[] = {
+  { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { "pretty", 'p', 0, G_OPTION_ARG_NONE, &opt_pretty, "Display status in formatted rows", NULL },
   { NULL }
 };
@@ -51,6 +53,7 @@ rpmostree_builtin_status (int             argc,
                           GError        **error)
 {
   gboolean ret = FALSE;
+  gs_unref_object GFile *sysroot_path = NULL;
   gs_unref_object OstreeSysroot *sysroot = NULL;
   gs_unref_ptrarray GPtrArray *deployments = NULL;  // list of all depoyments
   OstreeDeployment *booted_deployment = NULL;   // current booted deployment
@@ -68,7 +71,8 @@ rpmostree_builtin_status (int             argc,
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
 
-  sysroot = ostree_sysroot_new_default ();
+  sysroot_path = g_file_new_for_path (opt_sysroot);
+  sysroot = ostree_sysroot_new (sysroot_path);
   if (!ostree_sysroot_load (sysroot, cancellable, error))
     goto out;
 
