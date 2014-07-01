@@ -98,7 +98,7 @@ Boston, MA 02111-1307, USA.
 
           <para><command>--allow-downgrade</command> to permit deployment of chronologically older trees.
 
-        </para>
+          <para><option>--check-only</option> or <option>-c</option> to display a true/false as to whether there is a new version available for upgrade, without downloading it.</para>
       </listitem>
       </varlistentry>
 
