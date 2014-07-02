@@ -733,6 +733,54 @@ rpmostree_postprocess (GFile         *rootfs,
   return ret;
 }
 
+static GVariant *
+read_xattrs_cb (OstreeRepo     *repo,
+                const char     *relpath,
+                GFileInfo      *file_info,
+                gpointer        user_data)
+{
+  GFile *rootpath = (GFile*)user_data;
+  /* Hardcoded at the moment, we're only taking file caps */
+  static const char *accepted_xattrs[] = { "security.capability" };
+  guint i;
+  gs_unref_variant GVariant *existing_xattrs = NULL;
+  gs_free_variant_iter GVariantIter *viter = NULL;
+  gs_unref_object GFile *path = NULL;
+  GError *local_error = NULL;
+  GError **error = &local_error;
+  GVariant *key, *value;
+  GVariantBuilder builder;
+
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ayay)"));
+
+  path = g_file_resolve_relative_path (rootpath, relpath[0] == '/' ? relpath+1 : relpath);
+  if (!gs_file_get_all_xattrs (path, &existing_xattrs, NULL, error))
+    goto out;
+
+  viter = g_variant_iter_new (existing_xattrs);
+
+  while (g_variant_iter_loop (viter, "(@ay@ay)", &key, &value))
+    {
+      for (i = 0; i < G_N_ELEMENTS (accepted_xattrs); i++)
+        {
+          const char *validkey = accepted_xattrs[i];
+          const char *attrkey = g_variant_get_bytestring (key);
+          if (strcmp (validkey, attrkey) == 0)
+            g_variant_builder_add (&builder, "(@ay@ay)", key, value);
+        }
+    }
+
+ out:
+  if (local_error)
+    {
+      g_variant_builder_clear (&builder);
+      /* Unfortunately we have no way to throw from this callback */
+      g_printerr ("Failed to read xattrs of '%s': %s\n",
+                  gs_file_get_path_cached (path), local_error->message);
+      exit (1);
+    }
+  return g_variant_ref_sink (g_variant_builder_end (&builder));
+}
 
 gboolean
 rpmostree_commit (GFile         *rootfs,
@@ -767,8 +815,10 @@ rpmostree_commit (GFile         *rootfs,
     goto out;
 
   mtree = ostree_mutable_tree_new ();
-  /* For now skip ACLs */
-  commit_modifier = ostree_repo_commit_modifier_new (OSTREE_REPO_COMMIT_MODIFIER_FLAGS_SKIP_XATTRS, NULL, NULL, NULL);
+  commit_modifier = ostree_repo_commit_modifier_new (0, NULL, NULL, NULL);
+  ostree_repo_commit_modifier_set_xattr_callback (commit_modifier,
+                                                  read_xattrs_cb, NULL,
+                                                  rootfs);
   if (sepolicy)
     {
       const char *policy_name = ostree_sepolicy_get_name (sepolicy);
