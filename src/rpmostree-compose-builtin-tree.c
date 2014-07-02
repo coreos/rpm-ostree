@@ -23,6 +23,7 @@
 #include <string.h>
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
+#include <sys/mount.h>
 #include <gio/gunixoutputstream.h>
 
 #include "rpmostree-compose-builtins.h"
@@ -32,6 +33,7 @@
 #include "libgsystem.h"
 
 static char *opt_workdir;
+static gboolean opt_workdir_tmpfs;
 static char *opt_cachedir;
 static char *opt_proxy;
 static char *opt_repo;
@@ -39,6 +41,7 @@ static gboolean opt_print_only;
 
 static GOptionEntry option_entries[] = {
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
+  { "workdir-tmpfs", 0, 0, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
@@ -893,6 +896,35 @@ rpmostree_compose_builtin_tree (int             argc,
       gs_free char *tmpd = g_mkdtemp (g_strdup ("/var/tmp/rpm-ostree.XXXXXX"));
       workdir = g_file_new_for_path (tmpd);
       workdir_is_tmp = TRUE;
+
+      if (opt_workdir_tmpfs)
+        {
+          /* Use a private mount namespace to avoid polluting the global
+           * namespace, and to ensure the mount gets cleaned up if we exit
+           * unexpectedly.
+           */
+          if (unshare (CLONE_NEWNS) != 0)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "unshare(CLONE_NEWNS): %s", g_strerror (errno));
+              goto out;
+            }
+          if (mount (NULL, "/", "none", MS_PRIVATE | MS_REC, NULL) == -1)
+            {
+              int errsv = errno;
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "mount(/, MS_PRIVATE | MS_REC): %s",
+                           g_strerror (errsv));
+              goto out;
+            }
+      
+          if (mount ("tmpfs", tmpd, "tmpfs", 0, (const void*)"mode=755") != 0)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "mount(tmpfs): %s", g_strerror (errno));
+              goto out;
+            }
+        }
     }
 
   if (opt_cachedir)
@@ -1122,8 +1154,13 @@ rpmostree_compose_builtin_tree (int             argc,
   g_print ("Complete\n");
   
  out:
+
   if (workdir_is_tmp)
-    (void) gs_shutil_rm_rf (workdir, NULL, NULL);
+    {
+      if (opt_workdir_tmpfs)
+        (void) umount (gs_file_get_path_cached (workdir));
+      (void) gs_shutil_rm_rf (workdir, NULL, NULL);
+    }
   if (self)
     {
       g_ptr_array_unref (self->treefile_context_dirs);
