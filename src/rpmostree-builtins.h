@@ -37,6 +37,7 @@ BUILTINPROTO(upgrade);
 BUILTINPROTO(rebase);
 BUILTINPROTO(rollback);
 BUILTINPROTO(status);
+BUILTINPROTO(rpm);
 
 #undef BUILTINPROTO
 
