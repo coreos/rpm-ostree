@@ -452,6 +452,8 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
     duped_environ = g_environ_setenv (duped_environ, "OSTREE_KERNEL_INSTALL_NOOP", "1", TRUE);
     /* See fedora's kernel.spec */
     duped_environ = g_environ_setenv (duped_environ, "HARDLINK", "no", TRUE);
+    /* See https://bugzilla.redhat.com/show_bug.cgi?id=1098304 */
+    duped_environ = g_environ_setenv (duped_environ, "SHADOW_USE_USRLIB", "1", TRUE);
 
     gs_subprocess_context_set_environment (context, duped_environ);
   }
