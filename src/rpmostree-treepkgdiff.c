@@ -89,12 +89,11 @@ get_pkglist_for_root (GFile            *root,
  out:
   return ret;
 }
-
-static gboolean
-print_rpmdb_diff (GFile          *oldroot,
-                  GFile          *newroot,
-                  GCancellable   *cancellable,
-                  GError        **error)
+gboolean
+print_rpmdb_diff (GFile *oldroot,
+                  GFile *newroot,
+                  GCancellable *cancellable,
+                  GError **error)
 {
   gboolean ret = FALSE;
   _cleanup_hysack_ HySack old_sack = NULL;

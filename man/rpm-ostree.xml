@@ -96,9 +96,13 @@ Boston, MA 02111-1307, USA.
           <command>--reboot</command> or <command>-r </command> to initiate a reboot after upgrade is prepared.
         </para>
 
-          <para><command>--allow-downgrade</command> to permit deployment of chronologically older trees.
+          <para><command>--allow-downgrade</command> to permit deployment of chronologically older trees.</para>
 
           <para><option>--check-only</option> or <option>-c</option> to display a true/false as to whether there is a new version available for upgrade, without downloading it.</para>
+
+          <para><option>--check-diff</option> to download a new version and print a package-level
+          diff, but do not deploy the new version.  A subsequent call to <command>upgrade</command> will
+          then skip re-pulling the same version, instead using the version downloaded here.</para>
       </listitem>
       </varlistentry>
 

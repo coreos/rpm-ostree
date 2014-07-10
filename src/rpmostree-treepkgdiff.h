@@ -23,6 +23,12 @@
 #include <ostree.h>
 
 gboolean
-rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
-                              GCancellable     *cancellable,
-                              GError          **error);
+rpmostree_print_treepkg_diff (OstreeSysroot *sysroot,
+                              GCancellable *cancellable,
+                              GError **error);
+
+gboolean
+print_rpmdb_diff (GFile *oldroot,
+                  GFile *newroot,
+                  GCancellable *cancellable,
+                  GError **error);
