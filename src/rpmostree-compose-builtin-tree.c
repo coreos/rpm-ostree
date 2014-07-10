@@ -158,50 +158,6 @@ append_string_array_to (JsonObject   *object,
   return TRUE;
 }
 
-static gboolean
-replace_nsswitch (GFile         *target_usretc,
-                  GCancellable  *cancellable,
-                  GError       **error)
-{
-  gboolean ret = FALSE;
-  gs_unref_object GFile *nsswitch_conf =
-    g_file_get_child (target_usretc, "nsswitch.conf");
-  gs_free char *nsswitch_contents = NULL;
-  gs_free char *new_nsswitch_contents = NULL;
-
-  static gsize regex_initialized;
-  static GRegex *passwd_regex;
-
-  if (g_once_init_enter (&regex_initialized))
-    {
-      passwd_regex = g_regex_new ("^(passwd|group):\\s+files(.*)$",
-                                  G_REGEX_MULTILINE, 0, NULL);
-      g_assert (passwd_regex);
-      g_once_init_leave (&regex_initialized, 1);
-    }
-
-  nsswitch_contents = gs_file_load_contents_utf8 (nsswitch_conf, cancellable, error);
-  if (!nsswitch_contents)
-    goto out;
-
-  new_nsswitch_contents = g_regex_replace (passwd_regex,
-                                           nsswitch_contents, -1, 0,
-                                           "\\1: files altfiles\\2",
-                                           0, error);
-  if (!new_nsswitch_contents)
-    goto out;
-
-  if (!g_file_replace_contents (nsswitch_conf, new_nsswitch_contents,
-                                strlen (new_nsswitch_contents),
-                                NULL, FALSE, 0, NULL,
-                                cancellable, error))
-    goto out;
-
-  ret = TRUE;
- out:
-  return ret;
-}
-
 typedef struct {
   GSSubprocess *process;
   GFile *reposdir_path;
@@ -452,8 +408,6 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
     duped_environ = g_environ_setenv (duped_environ, "OSTREE_KERNEL_INSTALL_NOOP", "1", TRUE);
     /* See fedora's kernel.spec */
     duped_environ = g_environ_setenv (duped_environ, "HARDLINK", "no", TRUE);
-    /* See https://bugzilla.redhat.com/show_bug.cgi?id=1098304 */
-    duped_environ = g_environ_setenv (duped_environ, "SHADOW_USE_USRLIB", "1", TRUE);
 
     gs_subprocess_context_set_environment (context, duped_environ);
   }
@@ -990,49 +944,16 @@ rpmostree_compose_builtin_tree (int             argc,
   bootstrap_packages = g_ptr_array_new ();
   packages = g_ptr_array_new ();
 
-  if (!append_string_array_to (treefile, "bootstrap_packages", bootstrap_packages, error))
+  if (!append_string_array_to (treefile, "bootstrap_packages", packages, error))
     goto out;
-  g_ptr_array_add (bootstrap_packages, NULL);
-
   if (!append_string_array_to (treefile, "packages", packages, error))
     goto out;
   g_ptr_array_add (packages, NULL);
-    
 
-  /* Ensure we have enough to modify NSS */
   if (!yuminstall (self, treefile, yumroot, workdir,
-                   (char**)bootstrap_packages->pdata,
+                   (char**)packages->pdata,
                    cancellable, error))
     goto out;
-
-  /* Prepare NSS configuration; this needs to be done
-     before any invocations of "useradd" in %post */
-
-  {
-    gs_unref_object GFile *yumroot_passwd =
-      g_file_resolve_relative_path (yumroot, "usr/lib/passwd");
-    gs_unref_object GFile *yumroot_group =
-      g_file_resolve_relative_path (yumroot, "usr/lib/group");
-    gs_unref_object GFile *yumroot_etc = 
-      g_file_resolve_relative_path (yumroot, "etc");
-
-    if (!g_file_replace_contents (yumroot_passwd, "", 0, NULL, FALSE, 0,
-                                  NULL, cancellable, error))
-      goto out;
-    if (!g_file_replace_contents (yumroot_group, "", 0, NULL, FALSE, 0,
-                                  NULL, cancellable, error))
-      goto out;
-
-    if (!replace_nsswitch (yumroot_etc, cancellable, error))
-      goto out;
-  }
-
-  {
-    if (!yuminstall (self, treefile, yumroot, workdir,
-                     (char**)packages->pdata,
-                     cancellable, error))
-      goto out;
-  }
 
   cachekey = g_strconcat ("treecompose/", ref, NULL);
   if (!cachedir_lookup_string (cachedir, cachekey,

@@ -24,8 +24,11 @@
 
 #include <ostree.h>
 #include <errno.h>
+#include <stdio.h>
 #include <utime.h>
 #include <sys/types.h>
+#include <pwd.h>
+#include <grp.h>
 #include <unistd.h>
 #include <stdlib.h>
 
@@ -534,6 +537,190 @@ workaround_selinux_cross_labeling (GFile         *rootfs,
   return ret;
 }
 
+static FILE *
+gfopen (const char       *path,
+        const char       *mode,
+        GCancellable     *cancellable,
+        GError          **error)
+{
+  FILE *ret = NULL; 
+
+  ret = fopen (path, mode);
+  if (!ret)
+    {
+      int errsv = errno;
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "fopen(%s): %s", path, g_strerror (errsv));
+      return NULL;
+    }
+  return ret;
+}
+
+static gboolean
+gfflush (FILE         *f,
+         GCancellable *cancellable,
+         GError      **error)
+{
+  if (fflush (f) != 0)
+    {
+      int errsv = errno;
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "fflush: %s", g_strerror (errsv));
+      return FALSE;
+    }
+  return TRUE;
+}
+
+typedef enum {
+  MIGRATE_PASSWD,
+  MIGRATE_GROUP
+} MigrateKind;
+
+/*
+ * This function is taking the /etc/passwd generated in the install
+ * root, and splitting it into two streams: a new /etc/passwd that
+ * just contains the root entry, and /usr/lib/passwd which contains
+ * everything else.
+ *
+ * The implementation is kind of horrible because I wanted to avoid
+ * duplicating the user/group code.
+ */
+static gboolean
+migrate_passwd_file_except_root (GFile         *rootfs,
+                                 MigrateKind    kind,
+                                 GCancellable  *cancellable,
+                                 GError       **error)
+{
+  gboolean ret = FALSE;
+  const char *name = kind == MIGRATE_PASSWD ? "passwd" : "group";
+  gs_free char *src_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, NULL);
+  gs_free char *etctmp_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, ".tmp", NULL);
+  gs_free char *usrdest_path = g_strconcat (gs_file_get_path_cached (rootfs), "/usr/lib/", name, NULL);
+  FILE *src_stream = NULL;
+  FILE *etcdest_stream = NULL;
+  FILE *usrdest_stream = NULL;
+
+  src_stream = gfopen (src_path, "r", cancellable, error);
+  if (!src_stream)
+    goto out;
+
+  etcdest_stream = gfopen (etctmp_path, "w", cancellable, error);
+  if (!etcdest_stream)
+    goto out;
+
+  usrdest_stream = gfopen (usrdest_path, "a", cancellable, error);
+  if (!usrdest_stream)
+    goto out;
+
+  errno = 0;
+  while (TRUE)
+    {
+      struct passwd *pw = NULL;
+      struct group *gr = NULL;
+      FILE *deststream;
+      int r;
+      
+      if (kind == MIGRATE_PASSWD)
+        pw = fgetpwent (src_stream);
+      else
+        gr = fgetgrent (src_stream);
+
+      if (!(pw || gr))
+        {
+          if (errno != 0 && errno != ENOENT)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "fgetpwent: %s", g_strerror (errno));
+              goto out;
+            }
+          else
+            break;
+        }
+
+      if ((pw && pw->pw_uid == 0) ||
+          (gr && gr->gr_gid == 0))
+        deststream = etcdest_stream;
+      else
+        deststream = usrdest_stream;
+
+      if (pw)
+        r = putpwent (pw, deststream);
+      else
+        r = putgrent (gr, deststream);
+
+      if (r == -1)
+        {
+          int errsv = errno;
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "putpwent: %s", g_strerror (errsv));
+          goto out;
+        }
+    }
+
+  if (!gfflush (etcdest_stream, cancellable, error))
+    goto out;
+  if (!gfflush (usrdest_stream, cancellable, error))
+    goto out;
+
+  if (rename (etctmp_path, src_path) != 0)
+    {
+      int errsv = errno;
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "rename(%s, %s): %s", etctmp_path, src_path, g_strerror (errsv));
+      goto out;
+    }
+
+  ret = TRUE;
+ out:
+  if (src_stream) (void) fclose (src_stream);
+  if (etcdest_stream) (void) fclose (etcdest_stream);
+  if (usrdest_stream) (void) fclose (usrdest_stream);
+  return ret;
+}
+
+static gboolean
+replace_nsswitch (GFile         *target_usretc,
+                  GCancellable  *cancellable,
+                  GError       **error)
+{
+  gboolean ret = FALSE;
+  gs_unref_object GFile *nsswitch_conf =
+    g_file_get_child (target_usretc, "nsswitch.conf");
+  gs_free char *nsswitch_contents = NULL;
+  gs_free char *new_nsswitch_contents = NULL;
+
+  static gsize regex_initialized;
+  static GRegex *passwd_regex;
+
+  if (g_once_init_enter (&regex_initialized))
+    {
+      passwd_regex = g_regex_new ("^(passwd|group):\\s+files(.*)$",
+                                  G_REGEX_MULTILINE, 0, NULL);
+      g_assert (passwd_regex);
+      g_once_init_leave (&regex_initialized, 1);
+    }
+
+  nsswitch_contents = gs_file_load_contents_utf8 (nsswitch_conf, cancellable, error);
+  if (!nsswitch_contents)
+    goto out;
+
+  new_nsswitch_contents = g_regex_replace (passwd_regex,
+                                           nsswitch_contents, -1, 0,
+                                           "\\1: files altfiles\\2",
+                                           0, error);
+  if (!new_nsswitch_contents)
+    goto out;
+
+  if (!g_file_replace_contents (nsswitch_conf, new_nsswitch_contents,
+                                strlen (new_nsswitch_contents),
+                                NULL, FALSE, 0, NULL,
+                                cancellable, error))
+    goto out;
+
+  ret = TRUE;
+ out:
+  return ret;
+}
 
 /* Prepare a root filesystem, taking mainly the contents of /usr from yumroot */
 static gboolean 
@@ -553,6 +740,22 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   g_print ("Initializing rootfs\n");
   if (!init_rootfs (targetroot, cancellable, error))
     goto out;
+
+  g_print ("Migrating /etc/passwd to /usr/lib/\n");
+  if (!migrate_passwd_file_except_root (yumroot, MIGRATE_PASSWD, cancellable, error))
+    goto out;
+  g_print ("Migrating /etc/group to /usr/lib/\n");
+  if (!migrate_passwd_file_except_root (yumroot, MIGRATE_GROUP, cancellable, error))
+    goto out;
+
+  /* NSS configuration to look at the new files */
+  {
+    gs_unref_object GFile *yumroot_etc = 
+      g_file_resolve_relative_path (yumroot, "etc");
+
+    if (!replace_nsswitch (yumroot_etc, cancellable, error))
+      goto out;
+  }
 
   /* We take /usr from the yum content */
   g_print ("Moving /usr to target\n");
