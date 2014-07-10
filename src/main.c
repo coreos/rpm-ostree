@@ -37,6 +37,7 @@ static RpmOstreeCommand commands[] = {
   { "rebase", rpmostree_builtin_rebase, 0 },
   { "rollback", rpmostree_builtin_rollback, 0 },
   { "status", rpmostree_builtin_status, 0 },
+  { "rpm", rpmostree_builtin_rpm, 0 },
   { NULL }
 };
 
