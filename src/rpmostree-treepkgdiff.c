@@ -23,6 +23,7 @@
 #include "string.h"
 
 #include "rpmostree-treepkgdiff.h"
+#include "rpmostree-util.h"
 #include <ostree.h>
 
 #include <hawkey/packagelist.h>
@@ -36,17 +37,9 @@
 
 #include "libgsystem.h"
 
-/* Todo: move this to libgsystem */
-#define DEFINE_TRIVIAL_CLEANUP_FUNC(type, func)                 \
-        static inline void func##p(type *p) {                   \
-                if (*p)                                         \
-                        func(*p);                               \
-        }                                                       \
-        struct __useless_struct_to_allow_trailing_semicolon__
-
-DEFINE_TRIVIAL_CLEANUP_FUNC(HySack, hy_sack_free);
-DEFINE_TRIVIAL_CLEANUP_FUNC(HyQuery, hy_query_free);
-DEFINE_TRIVIAL_CLEANUP_FUNC(HyPackageList, hy_packagelist_free);
+_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(HySack, hy_sack_free);
+_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(HyQuery, hy_query_free);
+_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(HyPackageList, hy_packagelist_free);
 
 #define _cleanup_hysack_ __attribute__((cleanup(hy_sack_freep)))
 #define _cleanup_hyquery_ __attribute__((cleanup(hy_query_freep)))
