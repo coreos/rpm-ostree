@@ -37,6 +37,7 @@ static gboolean opt_workdir_tmpfs;
 static char *opt_cachedir;
 static char *opt_proxy;
 static char *opt_repo;
+static char **opt_override_pkg_repos;
 static gboolean opt_print_only;
 
 static GOptionEntry option_entries[] = {
@@ -44,6 +45,7 @@ static GOptionEntry option_entries[] = {
   { "workdir-tmpfs", 0, 0, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
+  { "add-override-pkg-repo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_override_pkg_repos, "Include an additional package repository from DIRECTORY", "DIRECTORY" },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
   { NULL }
@@ -242,10 +244,11 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
 {
   gboolean ret = FALSE;
   JsonArray *enable_repos = NULL;
-  JsonArray *repos_data = NULL;
   guint i;
+  char **iter;
   gs_unref_object GFile *yumcache_lookaside = NULL;
   gs_unref_object GFile *repos_tmpdir = NULL;
+  gs_unref_ptrarray GPtrArray *reposdir_args = g_ptr_array_new_with_free_func (g_free);
 
   yumcache_lookaside = g_file_resolve_relative_path (workdir, "yum-cache");
   if (!gs_file_ensure_directory (yumcache_lookaside, TRUE, cancellable, error))
@@ -266,26 +269,65 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
       proxy = opt_proxy;
     else
       proxy = g_getenv ("http_proxy");
+
     if (proxy)
       g_ptr_array_add (args, g_strconcat ("--setopt=proxy=", proxy, NULL));
   }
 
+  g_ptr_array_add (args, g_strdup ("--disablerepo=*"));
+
+  /* Add the directory for each treefile to the reposdir argument */
+  for (i = 0; i < self->treefile_context_dirs->len; i++)
+    {
+      GFile *contextdir = self->treefile_context_dirs->pdata[i];
+      g_ptr_array_add (reposdir_args, g_file_get_path (contextdir));
+    }
+
+  /* Process local overrides */
+  for (iter = opt_override_pkg_repos; iter && *iter; iter++)
+    {
+      const char *repodir = *iter;
+      gs_free char *bn = g_path_get_basename (repodir);
+      gs_free char *reponame = g_strconcat ("rpm-ostree-override-", repodir, NULL);
+      gs_free char *baseurl = g_strconcat ("file://", repodir, NULL);
+      gs_free char *tmprepo_filename = g_strconcat (reponame, ".repo", NULL);
+      gs_unref_object GFile *tmprepo_path = g_file_get_child (repos_tmpdir, tmprepo_filename);
+      __attribute__ ((cleanup(cleanup_keyfile_unref)))  GKeyFile *keyfile = NULL;
+      gs_free char *data = NULL;
+      gsize len;
+
+      keyfile = g_key_file_new ();
+      g_key_file_set_string (keyfile, reponame, "name", reponame);
+      g_key_file_set_string (keyfile, reponame, "baseurl", baseurl);
+
+      data = g_key_file_to_data (keyfile, &len, NULL);
+
+      if (!g_file_replace_contents (tmprepo_path, data, len, NULL, FALSE, 0, NULL,
+                                    cancellable, error))
+        goto out;
+
+      g_ptr_array_add (args, g_strconcat ("--enablerepo=", reponame, NULL));
+    }
+
+  if (opt_override_pkg_repos)
+    g_ptr_array_add (reposdir_args, g_file_get_path (repos_tmpdir));
+
   {
-    GString *reposdir_value = g_string_new ("--setopt=reposdir=");
     gboolean first = TRUE;
-    for (i = 0; i < self->treefile_context_dirs->len; i++)
+    GString *reposdir_value = g_string_new ("--setopt=reposdir=");
+    
+    for (i = 0; i < reposdir_args->len; i++)
       {
-        GFile *contextdir = self->treefile_context_dirs->pdata[i];
+        const char *reponame = reposdir_args->pdata[i];
         if (first)
           first = FALSE;
         else
           g_string_append_c (reposdir_value, ',');
-        g_string_append (reposdir_value, gs_file_get_path_cached (contextdir));
+        g_string_append (reposdir_value, reponame); 
       }
     g_ptr_array_add (args, g_string_free (reposdir_value, FALSE));
   }
 
-  g_ptr_array_add (args, g_strdup ("--disablerepo=*"));
 
   if (json_object_has_member (treedata, "repos"))
     enable_repos = json_object_get_array_member (treedata, "repos");
@@ -299,65 +341,6 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
           if (!reponame)
             goto out;
           g_ptr_array_add (args, g_strconcat ("--enablerepo=", reponame, NULL));
-        }
-    }
-
-  if (json_object_has_member (treedata, "repos_data"))
-    repos_data = json_object_get_array_member (treedata, "repos_data");
-  else
-    repos_data = NULL;
-  if (repos_data)
-    {
-      guint i;
-      guint n = json_array_get_length (repos_data);
-
-      if (n > 0)
-        g_ptr_array_add (args, g_strconcat ("--setopt=reposdir=/etc/yum.repos.d,",
-                                            gs_file_get_path_cached (repos_tmpdir),
-                                            NULL));
-
-      for (i = 0; i < n; i++)
-        {
-          const char *repodata = array_require_string_element (repos_data, i, error);
-          __attribute__ ((cleanup(cleanup_keyfile_unref))) GKeyFile *keyfile = NULL;
-          gs_strfreev char **groups = NULL;
-          const char *reponame;
-          gs_free char *rpmostree_reponame = NULL;
-          gs_free char *rpmostree_repo_filename = NULL;
-          gs_unref_object GFile *repo_tmp_file = NULL;
-          gsize len;
-
-          if (!repodata)
-            goto out;
-
-          keyfile = g_key_file_new ();
-          if (!g_key_file_load_from_data (keyfile, repodata, -1, 0, error))
-            {
-              g_prefix_error (error, "Parsing keyfile data in repos_data: ");
-              goto out;
-            }
-
-          groups = g_key_file_get_groups (keyfile, &len);
-          if (len == 0)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "No groups found in keyfile data in repos_data");
-              goto out;
-            }
-
-          reponame = groups[0];
-          g_assert (strchr (reponame, '/') == NULL);
-          rpmostree_reponame = g_strconcat (reponame, NULL);
-          rpmostree_repo_filename = g_strconcat (rpmostree_reponame, ".repo", NULL);
-          repo_tmp_file = g_file_get_child (repos_tmpdir, rpmostree_repo_filename);
-
-          if (!g_file_replace_contents (repo_tmp_file, repodata, strlen (repodata),
-                                        NULL, FALSE, 0,
-                                        NULL,
-                                        cancellable, error))
-            goto out;
-          
-          g_ptr_array_add (args, g_strconcat ("--enablerepo=", rpmostree_reponame, NULL));
         }
     }
 
