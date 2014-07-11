@@ -22,6 +22,7 @@
 
 #include <string.h>
 #include <fnmatch.h>
+#include <sys/ioctl.h>
 #include <glib-unix.h>
 
 #include "rpmostree-builtins.h"
@@ -342,6 +343,27 @@ pkg_yumdb_strdup (GFile *root, Header pkg, const char *yumdb_key,
   return ret;
 }
 
+static gsize
+_console_get_width(int fd)
+{
+  struct winsize w;
+
+  ioctl (STDOUT_FILENO, TIOCGWINSZ, &w);
+
+  return w.ws_col;
+}
+
+static gsize
+_console_get_width_stdout_cached(void)
+{
+  static gsize align = 0;
+
+  if (!align)
+      align = _console_get_width (1);
+
+  return align;
+}
+
 static void
 pkg_print (GFile *root, Header pkg,
 	   GCancellable   *cancellable,
@@ -350,9 +372,25 @@ pkg_print (GFile *root, Header pkg,
   gs_free char *nevra = pkg_nevra_strdup (pkg);
   gs_free char *from_repo = pkg_yumdb_strdup (root, pkg, "from_repo",
 					      cancellable, error);
+  gsize align = _console_get_width_stdout_cached ();
 
   if (*from_repo)
-    printf("%s @%s\n", nevra, from_repo);
+    {
+      if (align)
+        {
+          gsize plen = strlen (nevra);
+          gsize rlen = strlen (from_repo) + 1;
+
+          --align; // hacky ... for leading spaces.
+
+          if (align > (plen + rlen))
+            printf ("%s%*s@%s\n", nevra, align - (plen + rlen), "", from_repo);
+          else
+            align = 0;
+        }
+      if (!align)
+        printf ("%s @%s\n", nevra, from_repo);
+    }
   else
     printf("%s\n", nevra);
 }
