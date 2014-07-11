@@ -51,13 +51,6 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-/* FIXME: merge and put into libgsystem or rpmostree-utils */
-#define DEFINE_TRIVIAL_CLEANUP_FUNC(type, func)                 \
-        static inline void func##p(type *p) {                   \
-                if (*p)                                         \
-                        func(*p);                               \
-        }                                                       \
-        struct __useless_struct_to_allow_trailing_semicolon__
 
 static void
 header_free_p (gpointer data)
@@ -521,7 +514,7 @@ rpmrev_free (struct RpmRevisionData *ptr)
   g_free (ptr);
 }
 
-DEFINE_TRIVIAL_CLEANUP_FUNC(struct RpmRevisionData *, rpmrev_free);
+_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(struct RpmRevisionData *, rpmrev_free);
 
 #define _cleanup_rpmrev_ __attribute__((cleanup(rpmrev_freep)))
 
