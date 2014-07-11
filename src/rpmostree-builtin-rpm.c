@@ -592,11 +592,11 @@ rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,
     goto out;
   }
 
-  revdir = g_file_resolve_relative_path (rpmdbdir, rev);
+  revdir = g_file_resolve_relative_path (rpmdbdir, commit);
 
-  targetp_path = g_strconcat (rev, "/var/lib", NULL);
+  targetp_path = g_strconcat (commit, "/var/lib", NULL);
   targetp = g_file_resolve_relative_path (rpmdbdir, targetp_path);
-  target_path = g_strconcat (rev, "/var/lib/rpm", NULL);
+  target_path = g_strconcat (commit, "/var/lib/rpm", NULL);
   target = g_file_resolve_relative_path (rpmdbdir, target_path);
   if (!g_file_query_exists (target, cancellable) &&
       (!gs_file_ensure_directory (targetp, TRUE, cancellable, error) ||
