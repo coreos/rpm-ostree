@@ -1,5 +1,5 @@
 AC_PREREQ([2.63])
-AC_INIT([rpm-ostree], [2014.103], [walters@verbum.org])
+AC_INIT([rpm-ostree], [2014.104], [walters@verbum.org])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 AC_CONFIG_AUX_DIR([build-aux])
