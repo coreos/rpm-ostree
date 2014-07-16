@@ -37,6 +37,12 @@ AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GOBJECT_INTROSPECTION_REQUIRE([1.34.0])
 
+AC_ARG_ENABLE(installed_tests,
+              AS_HELP_STRING([--enable-installed-tests],
+                             [Install test programs (default: no)]),,
+              [enable_installed_tests=no])
+AM_CONDITIONAL(BUILDOPT_INSTALL_TESTS, test x$enable_installed_tests = xyes)
+
 AC_ARG_ENABLE(patched-hawkey-and-libsolv,
               AS_HELP_STRING([--enable-patched-hawkey],
                              [Assert that our copy of hawkey and libsolv understand /usr/share/rpm]),,

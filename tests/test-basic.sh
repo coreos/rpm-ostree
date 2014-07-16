@@ -1,4 +1,6 @@
-# Copyright (C) 2011,2013 Colin Walters <walters@verbum.org>
+#!/bin/bash
+#
+# Copyright (C) 2014 Colin Walters <walters@verbum.org>
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,19 +17,20 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-include Makefile-decls.am
+set -e
 
-privdatadir=$(pkglibdir)
+. $(dirname $0)/libtest.sh
 
-ACLOCAL_AMFLAGS += -I m4 ${ACLOCAL_FLAGS}
-AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
-	-DLIBEXECDIR='"$(libexecdir)"' \
-	-DLOCALEDIR=\"$(datadir)/locale\" \
-	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_36 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_36
-AM_CFLAGS += $(WARN_CFLAGS)
+echo "1..1"
 
-EXTRA_DIST += autogen.sh COPYING
+setup_os_repository "archive-z2" "syslinux"
 
-include Makefile-rpm-ostree.am
-include Makefile-tests.am
-include Makefile-man.am
+echo "ok setup"
+
+# This initial deployment gets kicked off with some kernel arguments 
+ostree --repo=sysroot/ostree/repo remote add --set=gpg-verify=false testos file://$(pwd)/testos-repo testos/buildmaster/x86_64-runtime
+ostree --repo=sysroot/ostree/repo pull testos:testos/buildmaster/x86_64-runtime
+ostree admin --sysroot=sysroot deploy --karg=root=LABEL=MOO --karg=quiet --os=testos testos:testos/buildmaster/x86_64-runtime
+
+os_repository_new_commit
+rpm-ostree upgrade --sysroot=sysroot --os=testos
