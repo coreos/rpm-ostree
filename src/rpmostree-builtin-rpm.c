@@ -579,7 +579,10 @@ rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,
   
   subtree = g_file_resolve_relative_path (root, "/var/lib/rpm");
   if (!g_file_query_exists (subtree, cancellable))
-    subtree = g_file_resolve_relative_path (root, "/usr/share/rpm");
+    {
+      g_object_unref (subtree);
+      subtree = g_file_resolve_relative_path (root, "/usr/share/rpm");
+    }
 
   file_info = g_file_query_info (subtree, OSTREE_GIO_FAST_QUERYINFO,
                                  G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
