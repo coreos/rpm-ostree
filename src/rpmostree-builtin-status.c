@@ -73,15 +73,7 @@ rpmostree_builtin_status (int             argc,
     goto out;
 
   booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
-  if (booted_deployment == NULL)
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Not currently booted into an OSTree system");
-        goto out;
-    }
-
   deployments = ostree_sysroot_get_deployments (sysroot);
-  g_assert (booted_deployment != NULL);
 
   /* find lengths for use in column output */
   if(!opt_pretty)
