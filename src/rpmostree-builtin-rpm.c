@@ -158,7 +158,7 @@ struct RpmHeaders
 
 /* find a common prefix length that doesn't need fnmatch */
 static size_t
-pat_fnmatch_prefix (GPtrArray *patterns)
+pat_fnmatch_prefix (const GPtrArray *patterns)
 {
   gsize ret = G_MAXSIZE;
   int num = 0;
@@ -198,7 +198,7 @@ pat_fnmatch_prefix (GPtrArray *patterns)
 
 static gboolean
 pat_fnmatch_match (Header pkg, const char *name,
-		   gsize patprefixlen, GPtrArray *patterns)
+		   gsize patprefixlen, const GPtrArray *patterns)
 {
   int num = 0;
   gs_free char *pkg_na    = NULL;
@@ -234,7 +234,7 @@ pat_fnmatch_match (Header pkg, const char *name,
 }
 
 static struct RpmHeaders *
-rpmhdrs_new (const char *root, GPtrArray *patterns)
+rpmhdrs_new (const char *root, const GPtrArray *patterns)
 {
  rpmts ts = rpmtsCreate();
  int status = -1;
@@ -242,7 +242,7 @@ rpmhdrs_new (const char *root, GPtrArray *patterns)
  Header h1;
  GPtrArray *hs = NULL;
  struct RpmHeaders *ret = NULL;
- gsize patprefixlen = pat_fnmatch_prefix (patterns);;
+ gsize patprefixlen = pat_fnmatch_prefix (patterns);
 
  rpmtsSetVSFlags (ts, _RPMVSF_NODIGESTS | _RPMVSF_NOSIGNATURES);
 
@@ -561,7 +561,7 @@ _RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(struct RpmRevisionData *, rpmrev_free);
 
 static struct RpmRevisionData *
 rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,
-	    GPtrArray *patterns,
+	    const GPtrArray *patterns,
 	    GCancellable   *cancellable,
 	    GError        **error)
 {
@@ -622,6 +622,242 @@ rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,
   return rpmrev;
 }
 
+static char *
+ost_get_prev_commit(OstreeRepo *repo, char *checksum)
+{
+  char *ret = NULL;
+  gs_unref_variant GVariant *commit = NULL;
+  gs_unref_variant GVariant *parent_csum_v = NULL;
+  GError *tmp_error = NULL;
+
+  if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum,
+                                 &commit, &tmp_error))
+    goto out;
+  
+  g_variant_get_child (commit, 1, "@ay", &parent_csum_v);
+  if (g_variant_n_children (parent_csum_v) == 0)
+    goto out;
+  ret = ostree_checksum_from_bytes_v (parent_csum_v);
+
+ out:
+  g_clear_error (&tmp_error);
+
+  return ret;
+}
+
+#if 0
+/* glib? */
+static void
+_gptr_array_reverse (GPtrArray *data)
+{
+  gpointer *ptr = NULL;
+  guint num = 0;
+
+  g_assert (data);
+
+  ptr = data->pdata;
+  num = data->len;
+  while (num >= 2)
+    {
+      void *swap = ptr[0];
+      ptr[0] = ptr[num-1];
+      ptr[num-1] = swap;
+
+      num -= 2;
+      ptr++;
+    }
+}
+#endif
+
+static GPtrArray *
+ost_get_commit_hashes(OstreeRepo *repo, const char *beg, const char *end,
+                      GError        **error)
+{
+  char *parent = NULL;
+  GPtrArray *ret = NULL;
+  char *checksum = NULL;
+  char *end_checksum = NULL;
+
+  if (!ostree_repo_read_commit (repo, beg, NULL, &checksum, NULL, error))
+    goto out;
+
+  ret = g_ptr_array_new_with_free_func (g_free);
+  g_ptr_array_add (ret, g_strdup (beg));
+
+  if (end &&
+      !ostree_repo_read_commit (repo, end, NULL, &end_checksum, NULL, error))
+    goto out;
+
+  if (end && g_str_equal (end_checksum, checksum))
+      goto success_out;
+
+  while ((parent = ost_get_prev_commit (repo, checksum)))
+    {
+      if (end && g_str_equal (end_checksum, parent))
+        break;
+
+      g_ptr_array_add (ret, parent);
+      checksum = parent;
+    }
+
+  if (end && !parent)
+    goto out;
+
+  if (end)
+    g_ptr_array_add (ret, g_strdup (end));
+
+ success_out:
+  g_free (end_checksum);
+  end_checksum = NULL;
+  
+  // _gptr_array_reverse (ret);
+
+ out:
+  if (end_checksum)
+    {
+      g_free (end_checksum);
+      g_ptr_array_free (ret, TRUE);
+      ret = NULL;
+    }
+  return ret;
+}
+
+static GPtrArray *
+cmdline2ptrarray(int argc, char *argv[])
+{
+  GPtrArray *ret = NULL;
+
+  while (argc--)
+    {
+      if (!ret)
+        ret = g_ptr_array_new ();
+
+      g_ptr_array_add (ret, *argv++);
+    }
+
+  return ret;
+}
+
+static void
+_prnt_commit_line(const char *rev, struct RpmRevisionData *rpmrev)
+{
+  if (!g_str_equal (rev, rpmrev->commit))
+    printf ("ostree commit: %s (%s)\n", rev, rpmrev->commit);
+  else
+    printf ("ostree commit: %s\n", rev);
+}
+
+static gboolean
+_builtin_rpm_version(OstreeRepo *repo, GFile *rpmdbdir, GPtrArray *revs,
+                     GCancellable   *cancellable,
+                     GError        **error)
+{
+  int num = 0;
+  gboolean ret = FALSE;
+
+  for (num = 0; num < revs->len; num++)
+    {
+      char *rev = revs->pdata[num];
+      _cleanup_rpmrev_ struct RpmRevisionData *rpmrev = NULL;
+      gs_free char *rpmdbv = NULL;
+      char *mrev = strstr (rev, "..");
+
+      if (mrev)
+        {
+          gs_unref_ptrarray GPtrArray *range_revs = NULL;
+          gs_free char *revdup = g_strdup (rev);
+
+          mrev = revdup + (mrev - rev);
+          *mrev = 0;
+          mrev += 2;
+
+          if (!*mrev)
+            mrev = NULL;
+
+          if (!(range_revs = ost_get_commit_hashes (repo, revdup, mrev, error)))
+            /* treat none valid ranges as weird tags?? */
+            goto none_range_rev;
+
+          if (!_builtin_rpm_version (repo, rpmdbdir, range_revs,
+                                     cancellable, error))
+            goto out;
+
+          continue;
+        }
+
+    none_range_rev:
+	rpmrev = rpmrev_new (repo, rpmdbdir, rev, NULL, cancellable, error);
+	if (!rpmrev)
+	  goto out;
+
+	rpmdbv = rpmhdrs_rpmdbv (rpmrev->root, rpmrev->rpmdb,
+				 cancellable, error);
+
+	// FIXME: g_console?
+        _prnt_commit_line (rev, rpmrev);
+        printf ("  rpmdbv is: %24s%s\n", "", rpmdbv);
+      }
+
+  ret = TRUE;
+
+ out:
+  return ret;
+}
+
+static gboolean
+_builtin_rpm_list(OstreeRepo *repo, GFile *rpmdbdir,
+                  GPtrArray *revs, const GPtrArray *patterns,
+                  GCancellable   *cancellable,
+                  GError        **error)
+{
+  int num = 0;
+  gboolean ret = FALSE;
+
+  for (num = 0; num < revs->len; num++)
+    {
+      char *rev = revs->pdata[num];
+      _cleanup_rpmrev_ struct RpmRevisionData *rpmrev = NULL;
+      char *mrev = strstr (rev, "..");
+
+      if (mrev)
+        {
+          gs_unref_ptrarray GPtrArray *range_revs = NULL;
+          gs_free char *revdup = g_strdup (rev);
+
+          mrev = revdup + (mrev - rev);
+          *mrev = 0;
+          mrev += 2;
+
+          if (!*mrev)
+            mrev = NULL;
+
+          if (!(range_revs = ost_get_commit_hashes (repo, revdup, mrev, error)))
+            /* treat none valid ranges as weird tags?? */
+            goto none_range_rev;
+
+          if (!_builtin_rpm_list (repo, rpmdbdir, range_revs, patterns,
+                                  cancellable, error))
+            goto out;
+
+          continue;
+        }
+
+    none_range_rev:
+      rpmrev = rpmrev_new (repo, rpmdbdir, rev, patterns,
+                           cancellable, error);
+      if (!rpmrev)
+        goto out;
+
+      _prnt_commit_line (rev, rpmrev);
+      rpmhdrs_list (rpmrev->root, rpmrev->rpmdb, cancellable, error);
+    }
+
+  ret = TRUE;
+
+ out:
+  return ret;
+}
+
 gboolean
 rpmostree_builtin_rpm (int             argc,
 		       char          **argv,
@@ -635,22 +871,17 @@ rpmostree_builtin_rpm (int             argc,
   gs_unref_object GFile *rpmdbdir = NULL;
   gboolean rpmdbdir_is_tmp = FALSE;
   const char *cmd = NULL;
-  int argnum = 2;
   
   g_option_context_add_main_entries (context, option_entries, NULL);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
 
-
-  if (argc < 3)
-    {
-      g_printerr ("usage: rpm-ostree rpm diff|list|version COMMIT...\n");
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Argument processing failed");
-      goto out;
-    }
+  if (argc < 2)
+    goto help_output;
   cmd = argv[1];
+  if (argc < 3)
+    goto help_output;
 
   if ((g_str_equal (cmd, "diff")) && (argc != 4))
     {
@@ -689,34 +920,21 @@ rpmostree_builtin_rpm (int             argc,
       rpmdbdir = g_file_new_for_path (opt_rpmdbdir);
     }
   else
-    {
-      gs_free char *tmpd = g_mkdtemp (g_strdup ("/var/tmp/rpm-ostree.XXXXXX"));
+    { // tmp n tmpfs is much faster than /var/tmp ...
+      // and rpmdb on their own shouldn't be too big.
+      gs_free char *tmpd = g_mkdtemp (g_strdup ("/tmp/rpm-ostree.XXXXXX"));
       rpmdbdir = g_file_new_for_path (tmpd);
       rpmdbdir_is_tmp = TRUE;
     }
 
   if (FALSE) {}
   else if (g_str_equal(cmd, "version"))
-    for (; argnum < argc; ++argnum)
-      {
-	const char *rev = argv[argnum];
-	_cleanup_rpmrev_ struct RpmRevisionData *rpmrev = NULL;
-	gs_free char *rpmdbv = NULL;
+    {
+      gs_unref_ptrarray GPtrArray *revs = cmdline2ptrarray (argc - 2, argv + 2);
 
-	rpmrev = rpmrev_new (repo, rpmdbdir, rev, NULL, cancellable, error);
-	if (!rpmrev)
-	  goto out;
-
-	rpmdbv = rpmhdrs_rpmdbv (rpmrev->root, rpmrev->rpmdb,
-				 cancellable, error);
-	
-	// FIXME: g_console
-	if (!g_str_equal (rev, rpmrev->commit))
-	  printf ("ostree commit: %s (%s)\n", rev, rpmrev->commit);
-	else
-	  printf ("ostree commit: %s\n", rev);
-	printf ("  rpmdbv is: %24s%s\n", "", rpmdbv);
-      }
+      if (!_builtin_rpm_version (repo, rpmdbdir, revs, cancellable, error))
+        goto out;
+    }
   else if (g_str_equal (cmd, "diff"))
     {
       _cleanup_rpmrev_ struct RpmRevisionData *rpmrev1 = NULL;
@@ -747,6 +965,7 @@ rpmostree_builtin_rpm (int             argc,
       int listnum = argc - 3;
       char **listargv = argv + 2;
       char *commit;
+      gs_unref_ptrarray GPtrArray *revs = NULL;
 
       // Find first commit arg. ... all before it are list args.
       while ((listnum > 0) &&
@@ -759,39 +978,24 @@ rpmostree_builtin_rpm (int             argc,
 
       argc -= listnum;
       argv += listnum;
-      if (listnum)
-	{
-	  patterns = g_ptr_array_new ();
-	  while (listnum--)
-	    g_ptr_array_add (patterns, *listargv++);
-	}
 
-      for (; argnum < argc; ++argnum)
-	{
-	  const char *rev = argv[argnum];
-	  _cleanup_rpmrev_ struct RpmRevisionData *rpmrev = NULL;
+      patterns = cmdline2ptrarray (listnum, listargv);
+      revs = cmdline2ptrarray (argc - 2, argv + 2);
 
-	  rpmrev = rpmrev_new (repo, rpmdbdir, rev, patterns,
-			       cancellable, error);
-	  if (!rpmrev)
-	    goto out;
-	  
-	  if (!g_str_equal (rev, rpmrev->commit))
-	    printf ("ostree commit: %s (%s)\n", rev, rpmrev->commit);
-	  else
-	    printf ("ostree commit: %s\n", rev);
-	  
-	  rpmhdrs_list (rpmrev->root, rpmrev->rpmdb, cancellable, error);
-	}
+      if (!_builtin_rpm_list (repo, rpmdbdir, revs, patterns,
+                              cancellable, error))
+          goto out;
     }
   else
     {
+    help_output:
       g_printerr ("rpm-ostree rpm SUB-COMMANDS:\n");
       g_printerr ("  diff COMMIT COMMIT\n");
       g_printerr ("  list [prefix-pkgname...] COMMIT...\n");
       g_printerr ("  version COMMIT...\n");
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Command processing failed");
+      if (cmd && !g_str_equal (cmd, "help"))
+        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                     "Command processing failed");
       goto out;
     }
   
