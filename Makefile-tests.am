@@ -1,4 +1,6 @@
-# Copyright (C) 2011,2013 Colin Walters <walters@verbum.org>
+# Makefile for tests code
+#
+# Copyright (C) 2013,2014 Colin Walters <walters@verbum.org>
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,19 +17,25 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-include Makefile-decls.am
+if BUILDOPT_INSTALL_TESTS
+insttest_PROGRAMS = 
 
-privdatadir=$(pkglibdir)
+insttestdir=$(pkglibexecdir)/installed-tests
+testfiles = test-basic \
+	$(NULL)
+insttest_SCRIPTS = $(addprefix tests/,$(testfiles:=.sh))
 
-ACLOCAL_AMFLAGS += -I m4 ${ACLOCAL_FLAGS}
-AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
-	-DLIBEXECDIR='"$(libexecdir)"' \
-	-DLOCALEDIR=\"$(datadir)/locale\" \
-	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_36 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_36
-AM_CFLAGS += $(WARN_CFLAGS)
+testmetadir = $(datadir)/installed-tests/$(PACKAGE)
+testmeta_DATA = $(testfiles:=.test)
 
-EXTRA_DIST += autogen.sh COPYING
+insttest_DATA = tests/libtest.sh \
+	$(NULL)
 
-include Makefile-rpm-ostree.am
-include Makefile-tests.am
-include Makefile-man.am
+%.test: tests/%.sh Makefile
+	$(AM_V_GEN) (echo '[Test]' > $@.tmp; \
+	 echo 'Exec=$(pkglibexecdir)/installed-tests/$(notdir $<)' >> $@.tmp; \
+	 echo 'Type=session' >> $@.tmp; \
+	 echo 'Output=TAP' >> $@.tmp; \
+	 mv $@.tmp $@)
+
+endif
