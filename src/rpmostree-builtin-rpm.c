@@ -380,11 +380,14 @@ pkg_print (GFile *root, Header pkg,
         {
           gsize plen = strlen (nevra);
           gsize rlen = strlen (from_repo) + 1;
+          int off = 0;
 
           --align; // hacky ... for leading spaces.
 
+          off = align - (plen + rlen);
+
           if (align > (plen + rlen))
-            printf ("%s%*s@%s\n", nevra, align - (plen + rlen), "", from_repo);
+            printf ("%s%*s@%s\n", nevra, off, "", from_repo);
           else
             align = 0;
         }
