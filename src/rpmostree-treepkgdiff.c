@@ -192,12 +192,11 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
   gs_unref_object GFile *new_root = NULL;
 
   booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
-  g_assert (booted_deployment);
+  
   g_assert (deployments->len > 1);
-
   new_deployment = deployments->pdata[0];
-
-  if (new_deployment != booted_deployment)
+  
+  if (booted_deployment && new_deployment != booted_deployment)
     {
       booted_root = ostree_sysroot_get_deployment_directory (sysroot, booted_deployment);
       new_root = ostree_sysroot_get_deployment_directory (sysroot, new_deployment);
