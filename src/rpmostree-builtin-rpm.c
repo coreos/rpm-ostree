@@ -633,11 +633,8 @@ ost_get_prev_commit(OstreeRepo *repo, char *checksum)
   if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum,
                                  &commit, &tmp_error))
     goto out;
-  
-  g_variant_get_child (commit, 1, "@ay", &parent_csum_v);
-  if (g_variant_n_children (parent_csum_v) == 0)
-    goto out;
-  ret = ostree_checksum_from_bytes_v (parent_csum_v);
+
+  ret = ostree_commit_get_parent (commit);
 
  out:
   g_clear_error (&tmp_error);
