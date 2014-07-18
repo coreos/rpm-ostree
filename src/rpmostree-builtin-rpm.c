@@ -670,49 +670,52 @@ static GPtrArray *
 ost_get_commit_hashes(OstreeRepo *repo, const char *beg, const char *end,
                       GError        **error)
 {
-  char *parent = NULL;
   GPtrArray *ret = NULL;
+  gs_free char *beg_checksum = NULL;
+  gs_free char *end_checksum = NULL;
+  gs_free char *parent = NULL;
   char *checksum = NULL;
-  char *end_checksum = NULL;
+  gboolean worked = FALSE;
 
-  if (!ostree_repo_read_commit (repo, beg, NULL, &checksum, NULL, error))
+  if (!ostree_repo_read_commit (repo, beg, NULL, &beg_checksum, NULL, error))
     goto out;
 
   ret = g_ptr_array_new_with_free_func (g_free);
-  g_ptr_array_add (ret, g_strdup (beg));
+  g_ptr_array_add (ret, g_strdup (beg));  // Add the user defined REFSPEC.
 
   if (end &&
       !ostree_repo_read_commit (repo, end, NULL, &end_checksum, NULL, error))
-    goto out;
+      goto out;
 
-  if (end && g_str_equal (end_checksum, checksum))
-      goto success_out;
+  if (end && g_str_equal (end_checksum, beg_checksum))
+      goto worked_out;
 
+  checksum = beg_checksum;
   while ((parent = ost_get_prev_commit (repo, checksum)))
     {
       if (end && g_str_equal (end_checksum, parent))
-        break;
+        { // Add the user defined REFSPEC.
+          g_ptr_array_add (ret, g_strdup (end));
+          break;
+        }
 
       g_ptr_array_add (ret, parent);
       checksum = parent;
     }
 
   if (end && !parent)
-    goto out;
-
-  if (end)
-    g_ptr_array_add (ret, g_strdup (end));
-
- success_out:
-  g_free (end_checksum);
-  end_checksum = NULL;
-  
-  // _gptr_array_reverse (ret);
-
- out:
-  if (end_checksum)
     {
-      g_free (end_checksum);
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Invalid ref range: %s is not a parent of %s", end, beg);
+      goto out;
+    }
+
+ worked_out:
+  worked = TRUE;
+  
+ out:
+  if (!worked)
+    {
       g_ptr_array_free (ret, TRUE);
       ret = NULL;
     }
@@ -772,8 +775,7 @@ _builtin_rpm_version(OstreeRepo *repo, GFile *rpmdbdir, GPtrArray *revs,
             mrev = NULL;
 
           if (!(range_revs = ost_get_commit_hashes (repo, revdup, mrev, error)))
-            /* treat none valid ranges as weird tags?? */
-            goto none_range_rev;
+            goto out;
 
           if (!_builtin_rpm_version (repo, rpmdbdir, range_revs,
                                      cancellable, error))
@@ -782,7 +784,6 @@ _builtin_rpm_version(OstreeRepo *repo, GFile *rpmdbdir, GPtrArray *revs,
           continue;
         }
 
-    none_range_rev:
 	rpmrev = rpmrev_new (repo, rpmdbdir, rev, NULL, cancellable, error);
 	if (!rpmrev)
 	  goto out;
@@ -829,8 +830,7 @@ _builtin_rpm_list(OstreeRepo *repo, GFile *rpmdbdir,
             mrev = NULL;
 
           if (!(range_revs = ost_get_commit_hashes (repo, revdup, mrev, error)))
-            /* treat none valid ranges as weird tags?? */
-            goto none_range_rev;
+            goto out;
 
           if (!_builtin_rpm_list (repo, rpmdbdir, range_revs, patterns,
                                   cancellable, error))
@@ -839,7 +839,6 @@ _builtin_rpm_list(OstreeRepo *repo, GFile *rpmdbdir,
           continue;
         }
 
-    none_range_rev:
       rpmrev = rpmrev_new (repo, rpmdbdir, rev, patterns,
                            cancellable, error);
       if (!rpmrev)
