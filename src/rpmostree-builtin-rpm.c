@@ -41,6 +41,7 @@
 #include <rpm/rpmlib.h>
 #include <rpm/rpmdb.h>
 #include <rpm/rpmts.h>
+#include <rpm/rpmlog.h>
 
 
 static char *opt_repo;
@@ -244,10 +245,14 @@ rpmhdrs_new (const char *root, const GPtrArray *patterns)
  struct RpmHeaders *ret = NULL;
  gsize patprefixlen = pat_fnmatch_prefix (patterns);
 
+ // rpm also aborts on mem errors, so this is fine.
+ g_assert (ts);
  rpmtsSetVSFlags (ts, _RPMVSF_NODIGESTS | _RPMVSF_NOSIGNATURES);
 
+ // This only fails if root isn't absolute.
+ g_assert (root && root[0] == '/');
  status = rpmtsSetRootDir (ts, root);
- if (status) exit (2); // FIXME: better fail.
+ g_assert (status == 0);
 
  /* iter = rpmtsInitIterator (ts, RPMTAG_NAME, "yum", 0); */
  iter = rpmtsInitIterator (ts, RPMDBI_PACKAGES, NULL, 0);
@@ -909,7 +914,11 @@ rpmostree_builtin_rpm (int             argc,
     }
   
   if (rpmReadConfigFiles (NULL, NULL))
-    exit (2); // FIXME: Better fail
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "rpm failed to init: %s", rpmlogMessage());
+      goto out;
+    }
 
   if (opt_rpmdbdir)
     {
