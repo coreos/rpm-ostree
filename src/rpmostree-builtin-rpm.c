@@ -930,6 +930,7 @@ rpmostree_builtin_rpm (int             argc,
       gs_free char *tmpd = g_mkdtemp (g_strdup ("/tmp/rpm-ostree.XXXXXX"));
       rpmdbdir = g_file_new_for_path (tmpd);
       rpmdbdir_is_tmp = TRUE;
+      ostree_repo_set_disable_fsync (repo, TRUE);
     }
 
   if (FALSE) {}
