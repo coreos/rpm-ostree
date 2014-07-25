@@ -337,13 +337,20 @@ pkg_yumdb_strdup (GFile *root, Header pkg, const char *yumdb_key,
   gs_free char *pkgpath = pkg_yumdb_relpath (pkg);
   gs_free char *path = g_strconcat ("/var/lib/yum/yumdb/", pkgpath, "/",
 				    yumdb_key, NULL);
+  GError *tmp_error = NULL;
   char *ret = NULL;
   
   f = g_file_resolve_relative_path (root, path);
 
+  // allow_noent returns true for noent, false for other errors.
   if (!_rpmostree_file_load_contents_utf8_allow_noent (f, &ret,
-						       cancellable, error))
-    return g_strdup ("");
+						       cancellable,
+                                                       &tmp_error) ||
+      !ret)
+    {
+      g_clear_error (&tmp_error);
+      return g_strdup ("");
+    }
 
   return ret;
 }
