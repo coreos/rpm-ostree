@@ -44,10 +44,12 @@
 #include <rpm/rpmlog.h>
 
 
+static char *opt_format;
 static char *opt_repo;
 static char *opt_rpmdbdir;
 
 static GOptionEntry option_entries[] = {
+  { "format", 'F', 0, G_OPTION_ARG_STRING, &opt_format, "Format to output in", "FORMAT" },
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
   { "rpmdbdir", 0, 0, G_OPTION_ARG_STRING, &opt_rpmdbdir, "Working directory", "WORKDIR" },
   { NULL }
@@ -591,9 +593,9 @@ static void
 _gptr_array_reverse (GPtrArray *data);
 
 static void
-rpmhdrs_diff_prnt_1 (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff,
-                     GCancellable   *cancellable,
-                     GError        **error)
+rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff,
+                        GCancellable   *cancellable,
+                        GError        **error)
 {
   _gptr_array_reverse (diff->hs_add);
   _gptr_array_reverse (diff->hs_del);
@@ -644,6 +646,58 @@ rpmhdrs_diff_prnt_1 (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff,
             pkg_print (root2, ha, cancellable, error);
             g_ptr_array_remove_index(diff->hs_add, diff->hs_add->len-1);
           }
+    }
+
+  rpmhdrs_diff_free (diff);
+}
+
+static void
+rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
+                         struct RpmHeadersDiff *diff,
+                         GCancellable   *cancellable,
+                         GError        **error)
+{
+  int num = 0;
+
+  g_assert (diff->hs_mod_old->len == diff->hs_mod_new->len);
+
+  if (diff->hs_mod_old->len)
+    {
+      g_print ("Changed:\n");
+
+      for (num = 0; num < diff->hs_mod_new->len; ++num)
+        {
+          Header hm = diff->hs_mod_new->pdata[num];
+
+          printf (" ");
+          pkg_print (root2, hm, cancellable, error);
+        }
+    }
+
+  if (diff->hs_del->len)
+    {
+      g_print ("Removed:\n");
+
+      for (num = 0; num < diff->hs_del->len; ++num)
+        {
+          Header hd = diff->hs_del->pdata[num];
+
+          printf (" ");
+          pkg_print (root1, hd, cancellable, error);
+        }
+    }
+
+  if (diff->hs_add->len)
+    {
+      g_print ("Added:\n");
+
+      for (num = 0; num < diff->hs_add->len; ++num)
+        {
+          Header ha = diff->hs_add->pdata[num];
+
+          printf (" ");
+          pkg_print (root2, ha, cancellable, error);
+        }
     }
 
   rpmhdrs_diff_free (diff);
@@ -1078,9 +1132,24 @@ rpmostree_builtin_rpm (int             argc,
       else
 	printf ("ostree diff commit new: %s\n", argv[3]);
 
-      rpmhdrs_diff_prnt_1 (rpmrev1->root, rpmrev2->root,
-                           rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb),
-                           cancellable, error);
+      if (!opt_format)
+        opt_format = "diff";
+
+      if (FALSE) {}
+      else if (g_str_equal (opt_format, "diff"))
+        rpmhdrs_diff_prnt_diff (rpmrev1->root, rpmrev2->root,
+                                rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb),
+                                cancellable, error);
+      else if (g_str_equal (opt_format, "block"))
+        rpmhdrs_diff_prnt_block (rpmrev1->root, rpmrev2->root,
+                                 rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb),
+                                 cancellable, error);
+      else
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Format argument is invalid, pick one of: diff, block");
+          goto out;
+        }
     }
   else if (g_str_equal (cmd, "list"))
     {
