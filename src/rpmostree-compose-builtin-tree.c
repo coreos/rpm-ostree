@@ -160,7 +160,6 @@ append_string_array_to (JsonObject   *object,
 
 typedef struct {
   GSSubprocess *process;
-  GFile *reposdir_path;
   GFile *tmp_reposdir_path;
   GDataOutputStream *stdin;
   /* GDataInputStream *stdout; */
@@ -198,16 +197,6 @@ yum_context_close (YumContext   *yumctx,
         goto out;
       g_print ("Waiting for yum [OK]\n");
       g_clear_object (&yumctx->process);
-    }
-
-  if (yumctx->tmp_reposdir_path)
-    {
-      g_print ("Moving yum repos back to %s\n", gs_file_get_path_cached (yumctx->reposdir_path));
-      if (!gs_file_rename (yumctx->tmp_reposdir_path, yumctx->reposdir_path,
-                           cancellable, error))
-        goto out;
-      g_clear_object (&yumctx->reposdir_path);
-      g_clear_object (&yumctx->tmp_reposdir_path);
     }
 
   ret = TRUE;
@@ -384,7 +373,6 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
   GPtrArray *yum_argv = g_ptr_array_new_with_free_func (g_free);
   gs_unref_object GSSubprocessContext *context = NULL;
   gs_unref_object GSSubprocess *yum_process = NULL;
-  gs_unref_object GFile *reposdir_path = NULL;
 
   g_ptr_array_add (yum_argv, g_strdup ("yum"));
   g_ptr_array_add (yum_argv, g_strdup ("-y"));
@@ -416,19 +404,6 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
   /* gs_subprocess_context_set_stdout_disposition (context, GS_SUBPROCESS_STREAM_DISPOSITION_PIPE); */
 
   yumctx = g_new0 (YumContext, 1);
-
-  reposdir_path = g_file_resolve_relative_path (yumroot, "etc/yum.repos.d");
-  /* Hideous workaround for the fact that as soon as yum.repos.d
-     exists in the install root, yum will prefer it. */
-  if (g_file_query_exists (reposdir_path, NULL))
-    {
-      yumctx->reposdir_path = g_object_ref (reposdir_path);
-      yumctx->tmp_reposdir_path = g_file_resolve_relative_path (yumroot, "etc/yum.repos.d.tmp");
-      g_print ("Moving yum repos to %s\n", gs_file_get_path_cached (yumctx->tmp_reposdir_path));
-      if (!gs_file_rename (reposdir_path, yumctx->tmp_reposdir_path,
-                           cancellable, error))
-        goto out;
-    }
 
   {
     gs_free char *cmdline = subprocess_context_print_args (context);
