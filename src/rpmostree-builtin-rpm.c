@@ -651,6 +651,10 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff,
   rpmhdrs_diff_free (diff);
 }
 
+_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(rpmtd, rpmtdFreeData);
+
+#define _cleanup_rpmtddata_ __attribute__((cleanup(rpmtdFreeDatap)))
+
 static void
 rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
                          struct RpmHeadersDiff *diff,
@@ -663,14 +667,127 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
 
   if (diff->hs_mod_old->len)
     {
-      g_print ("Changed:\n");
+      gboolean done = FALSE;
 
       for (num = 0; num < diff->hs_mod_new->len; ++num)
         {
-          Header hm = diff->hs_mod_new->pdata[num];
+          Header ho = diff->hs_mod_old->pdata[num];
+          Header hn = diff->hs_mod_new->pdata[num];
+          struct rpmtd_s ochanges_date_s;
+          _cleanup_rpmtddata_ rpmtd ochanges_date = NULL;
+          struct rpmtd_s ochanges_name_s;
+          _cleanup_rpmtddata_ rpmtd ochanges_name = NULL;
+          struct rpmtd_s ochanges_text_s;
+          _cleanup_rpmtddata_ rpmtd ochanges_text = NULL;
+          struct rpmtd_s nchanges_date_s;
+          _cleanup_rpmtddata_ rpmtd nchanges_date = NULL;
+          struct rpmtd_s nchanges_name_s;
+          _cleanup_rpmtddata_ rpmtd nchanges_name = NULL;
+          struct rpmtd_s nchanges_text_s;
+          _cleanup_rpmtddata_ rpmtd nchanges_text = NULL;
+          int ocnum = 0;
+          int ncnum = 0;
+          uint64_t    ochange_date = 0;
+          const char *ochange_name = NULL;
+          const char *ochange_text = NULL;
+          uint64_t    nchange_date = 0;
+          const char *nchange_name = NULL;
+          const char *nchange_text = NULL;
+
+          g_assert (!header_name_cmp (ho, hn));
+          if (rpmVersionCompare (ho, hn) > 0)
+            continue;
+
+          if (!done)
+            {
+              done = TRUE;
+              g_print ("Upgraded:\n");
+            }
 
           printf (" ");
-          pkg_print (root2, hm, cancellable, error);
+          pkg_print (root2, hn, cancellable, error);
+
+          // Load the old %changelog entries
+          ochanges_date = &ochanges_date_s;
+          headerGet (ho, RPMTAG_CHANGELOGTIME, ochanges_date, HEADERGET_MINMEM);
+          ochanges_name = &ochanges_name_s;
+          headerGet (ho, RPMTAG_CHANGELOGNAME, ochanges_name, HEADERGET_MINMEM);
+          ochanges_text = &ochanges_text_s;
+          headerGet (ho, RPMTAG_CHANGELOGTEXT, ochanges_text, HEADERGET_MINMEM);
+
+          ocnum = rpmtdCount (ochanges_date);
+          if (!ocnum)
+            continue;
+
+          // Load the new %changelog entries
+          nchanges_date = &nchanges_date_s;
+          headerGet (hn, RPMTAG_CHANGELOGTIME, nchanges_date, HEADERGET_MINMEM);
+          nchanges_name = &nchanges_name_s;
+          headerGet (hn, RPMTAG_CHANGELOGNAME, nchanges_name, HEADERGET_MINMEM);
+          nchanges_text = &nchanges_text_s;
+          headerGet (hn, RPMTAG_CHANGELOGTEXT, nchanges_text, HEADERGET_MINMEM);
+
+          ncnum = rpmtdCount (nchanges_date);
+          if (!ncnum)
+            continue;
+
+          // Load the latest old %changelog entry.
+          ochange_date = rpmtdGetNumber (ochanges_date);
+          ochange_name = rpmtdGetString (ochanges_name);
+          ochange_text = rpmtdGetString (ochanges_text);
+
+          while (ncnum > 0)
+            {
+              GDateTime *dt = NULL;
+              gs_free char *date_time_str = NULL;
+
+              // Load next new %changelog entry, starting at the newest.
+              rpmtdNext (nchanges_date);
+              rpmtdNext (nchanges_name);
+              rpmtdNext (nchanges_text);
+              nchange_date = rpmtdGetNumber (nchanges_date);
+              nchange_name = rpmtdGetString (nchanges_name);
+              nchange_text = rpmtdGetString (nchanges_text);
+
+              //  If we are now older than, or match, the latest old %changelog
+              // then we are done.
+              if (ochange_date > nchange_date)
+                break;
+              if ((ochange_date == nchange_date) &&
+                  g_str_equal (ochange_name, nchange_name) &&
+                  g_str_equal (ochange_text, nchange_text))
+                break;
+
+              // Otherwise, print.
+              dt = g_date_time_new_from_unix_utc (nchange_date);
+              date_time_str = g_date_time_format (dt, "%a %b %d %Y");
+              g_date_time_unref (dt);
+
+              printf ("* %s %s\n%s\n\n", date_time_str, nchange_name,
+                      nchange_text);
+
+              --ncnum;
+            }
+        }
+
+      done = FALSE;
+      for (num = 0; num < diff->hs_mod_new->len; ++num)
+        {
+          Header ho = diff->hs_mod_old->pdata[num];
+          Header hn = diff->hs_mod_new->pdata[num];
+
+          g_assert (!header_name_cmp (ho, hn));
+          if (rpmVersionCompare (ho, hn) < 0)
+            continue;
+
+          if (!done)
+            {
+              done = TRUE;
+              g_print ("Downgraded:\n");
+            }
+
+          printf (" ");
+          pkg_print (root2, hn, cancellable, error);
         }
     }
 
