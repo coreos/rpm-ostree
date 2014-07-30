@@ -1250,7 +1250,7 @@ rpmostree_builtin_rpm (int             argc,
 	printf ("ostree diff commit new: %s\n", argv[3]);
 
       if (!opt_format)
-        opt_format = "diff";
+        opt_format = "block";
 
       if (FALSE) {}
       else if (g_str_equal (opt_format, "diff"))
