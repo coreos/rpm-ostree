@@ -47,6 +47,7 @@ rpm_ostree_SOURCES = src/main.c \
 	src/rpmostree-builtin-rollback.c \
 	src/rpmostree-builtin-rebase.c \
 	src/rpmostree-builtin-status.c \
+	src/rpmostree-builtin-rpm.c \
 	src/rpmostree-compose-builtin-tree.c \
 	src/rpmostree-compose-builtin-sign.c \
 	$(NULL)

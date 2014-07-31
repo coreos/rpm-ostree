@@ -172,6 +172,28 @@ Boston, MA 02111-1307, USA.
       </listitem>
   </varlistentry>
 
+  <varlistentry>
+      <term><command>rpm</command></term>
+
+      <listitem>
+        <para>
+          Gives information pertaining to <literal>rpm</literal> data within the file system trees within the ostree commits. There are three sub-commands:
+      </para>
+
+        <para>
+          <command>diff</command> to see how the packages are different between the trees in two commits.
+        </para>
+
+        <para>
+          <command>list</command> to see which packages are within the commit(s) (works like yum list). At least one commit must be specified, but more than one or a range will also work.
+        </para>
+
+        <para>
+          <command>version</command> to see the rpmdb version of the packages within the commit (works like yum version nogroups). At least one commit must be specified, but more than one or a range will also work.
+        </para>
+      </listitem>
+  </varlistentry>
+
     </variablelist>
 
   </refsect1>
