@@ -28,6 +28,7 @@
 #include "rpmostree-builtins.h"
 #include "rpmostree-treepkgdiff.h"
 #include "rpmostree-util.h"
+#include "rpmostree-builtin-rpm.h"
 
 /* FIXME: */
 #define OSTREE_GIO_FAST_QUERYINFO ("standard::name,standard::type,standard::size,standard::is-symlink,standard::symlink-target," \
@@ -517,7 +518,7 @@ _RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(struct RpmHeadersDiff *,
 
 #define _cleanup_rpmhdrs_diff_ __attribute__((cleanup(rpmhdrs_diff_freep)))
 
-static struct RpmHeadersDiff *
+struct RpmHeadersDiff *
 rpmhdrs_diff (struct RpmHeaders *l1,
 	      struct RpmHeaders *l2)
 {
@@ -592,7 +593,7 @@ _rpmhdrs_diff_cmp_end (const GPtrArray *hs1, const GPtrArray *hs2)
 static void
 _gptr_array_reverse (GPtrArray *data);
 
-static void
+void
 rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff,
                         GCancellable   *cancellable,
                         GError        **error)
@@ -820,15 +821,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
   rpmhdrs_diff_free (diff);
 }
 
-/* data needed to extract rpm/yum data from a commit revision */
-struct RpmRevisionData
-{
-  struct RpmHeaders *rpmdb;
-  GFile *root;
-  char *commit;
-};
-
-static void
+void
 rpmrev_free (struct RpmRevisionData *ptr)
 {
   gs_unref_object GFile *root = NULL;
@@ -849,11 +842,7 @@ rpmrev_free (struct RpmRevisionData *ptr)
   g_free (ptr);
 }
 
-_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(struct RpmRevisionData *, rpmrev_free);
-
-#define _cleanup_rpmrev_ __attribute__((cleanup(rpmrev_freep)))
-
-static struct RpmRevisionData *
+struct RpmRevisionData *
 rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,
 	    const GPtrArray *patterns,
 	    GCancellable   *cancellable,

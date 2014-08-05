@@ -22,10 +22,12 @@
 
 #include <string.h>
 #include <glib-unix.h>
+#include <gio/gio.h>
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-treepkgdiff.h"
 #include "rpmostree-pull-progress.h"
+#include "rpmostree-builtin-rpm.h"
 
 #include "libgsystem.h"
 
@@ -33,12 +35,14 @@ static char *opt_sysroot = "/";
 static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_allow_downgrade;
+static gboolean opt_check_diff;
 
 static GOptionEntry option_entries[] = {
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after an upgrade is prepared", NULL },
   { "allow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_allow_downgrade, "Permit deployment of chronologically older trees", NULL },
+  { "check-diff", 0, 0, G_OPTION_ARG_NONE, &opt_check_diff, "Check for upgrades and print package diff only", NULL },
   { NULL }
 };
 
@@ -57,11 +61,13 @@ rpmostree_builtin_upgrade (int             argc,
   GSConsole *console = NULL;
   gboolean changed;
   OstreeSysrootUpgraderPullFlags upgraderpullflags = 0;
+
   gs_free char *origin_description = NULL;
-  
+  gs_unref_object OstreeRepo *repo = NULL; 
+
   g_option_context_add_main_entries (context, option_entries, NULL);
 
-  if (!g_option_context_parse (context, &argc, &argv, error))
+   if (!g_option_context_parse (context, &argc, &argv, error))
     goto out;
 
   sysroot_path = g_file_new_for_path (opt_sysroot);
@@ -78,6 +84,9 @@ rpmostree_builtin_upgrade (int             argc,
   if (origin_description)
     g_print ("Updating from: %s\n", origin_description);
 
+  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
+    goto out;
+
   console = gs_console_get ();
   if (console)
     {
@@ -85,12 +94,22 @@ rpmostree_builtin_upgrade (int             argc,
       progress = ostree_async_progress_new_and_connect (_rpmostree_pull_progress, console);
     }
 
-  if (opt_allow_downgrade)
+  if (opt_allow_downgrade)  
     upgraderpullflags |= OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER;
 
-  if (!ostree_sysroot_upgrader_pull (upgrader, 0, 0, progress, &changed,
+  if (opt_check_diff)
+    {
+      if (!ostree_sysroot_upgrader_pull_one_dir (upgrader, "/usr/share/rpm", 0, 0, progress, &changed,
                                      cancellable, error))
-    goto out;
+        goto out;
+    }
+
+  else
+    {
+      if (!ostree_sysroot_upgrader_pull (upgrader, 0, 0, progress, &changed,
+                                       cancellable, error))
+        goto out;
+    }
 
   if (console)
     {
@@ -108,21 +127,62 @@ rpmostree_builtin_upgrade (int             argc,
     }
   else
     {
-      if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
-        goto out;
-
-      if (opt_reboot)
-        gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                       cancellable, error,
-                                       "systemctl", "reboot", NULL);
-      else
+      if (!opt_check_diff)
         {
+          if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+                goto out;
+        
+          if (opt_reboot)
+            gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
+                                           cancellable, error,
+                                           "systemctl", "reboot", NULL);
+          else
+            {
 #ifdef HAVE_PATCHED_HAWKEY_AND_LIBSOLV
-          if (!rpmostree_print_treepkg_diff (sysroot, cancellable, error))
-            goto out;
+              if (!rpmostree_print_treepkg_diff (sysroot, cancellable, error))
+                goto out;
 #endif
 
-          g_print ("Updates prepared for next boot; run \"systemctl reboot\" to start a reboot\n");
+              g_print ("Updates prepared for next boot; run \"systemctl reboot\" to start a reboot\n");
+            }
+        }
+
+
+      else
+        {
+          gs_unref_object GFile *rpmdbdir = NULL;
+          _cleanup_rpmrev_ struct RpmRevisionData *rpmrev1 = NULL;
+          _cleanup_rpmrev_ struct RpmRevisionData *rpmrev2 = NULL;
+
+          gs_free char *tmpd = g_mkdtemp (g_strdup ("/tmp/rpm-ostree.XXXXXX"));
+
+          gs_free char *ref = NULL; // location of this rev
+          gs_free char *remote = NULL;
+
+          if (!ostree_parse_refspec (origin_description, &remote, &ref, error))
+             goto out;
+
+          if (rpmReadConfigFiles (NULL, NULL))
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "rpm failed to init: %s", rpmlogMessage());
+              goto out;
+            }
+
+          rpmdbdir = g_file_new_for_path (tmpd);
+
+          if (!(rpmrev1 = rpmrev_new (repo, rpmdbdir, 
+                                      ostree_deployment_get_csum (ostree_sysroot_get_booted_deployment (sysroot)),
+                                      NULL, cancellable, error)))
+            goto out;
+
+          if (!(rpmrev2 = rpmrev_new (repo, rpmdbdir, ref,
+                                      NULL, cancellable, error)))
+            goto out;
+
+          rpmhdrs_diff_prnt_diff (rpmrev1->root, rpmrev2->root,
+                            rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb),
+                            cancellable, error);
         }
     }
   
