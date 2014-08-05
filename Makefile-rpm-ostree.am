@@ -30,6 +30,9 @@ librpmostree_la_SOURCES = \
 	src/rpmostree-util.h \
 	src/hif-utils.c \
 	src/hif-utils.h \
+	src/rpmostree-treepkgdiff.c \
+	src/rpmostree-treepkgdiff.h \
+	src/rpmostree-builtin-rpm.h  \
 	$(NULL)
 if BUILDOPT_PATCHED_HAWKEY_AND_LIBSOLV
 librpmostree_la_SOURCES += \
