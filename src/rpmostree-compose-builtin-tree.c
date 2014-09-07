@@ -53,6 +53,8 @@ static GOptionEntry option_entries[] = {
 
 typedef struct {
   GPtrArray *treefile_context_dirs;
+
+  GBytes *serialized_treefile;
 } RpmOstreeTreeComposeContext;
 
 static char *
@@ -589,6 +591,8 @@ process_includes (RpmOstreeTreeComposeContext  *self,
                 }
             }
         }
+
+      json_object_remove_member (root, "include");
     }
 
   ret = TRUE;
@@ -672,7 +676,8 @@ cachedir_set_string (GFile             *cachedir,
 }
 
 static gboolean
-compute_checksum_for_compose (JsonObject   *treefile_rootval,
+compute_checksum_for_compose (RpmOstreeTreeComposeContext  *self,
+                              JsonObject   *treefile_rootval,
                               GFile        *yumroot,
                               char        **out_checksum,
                               GCancellable *cancellable,
@@ -683,18 +688,10 @@ compute_checksum_for_compose (JsonObject   *treefile_rootval,
   GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA256);
   
   {
-    JsonNode *treefile_rootnode = json_node_new (JSON_NODE_OBJECT);
-    gs_unref_object JsonGenerator *generator = json_generator_new ();
-    gs_free char *treefile_buf = NULL;
     gsize len;
+    const guint8* buf = g_bytes_get_data (self->serialized_treefile, &len);
 
-    json_node_set_object (treefile_rootnode, treefile_rootval);
-    json_generator_set_root (generator, treefile_rootnode);
-    treefile_buf = json_generator_to_data (generator, &len);
-    
-    g_checksum_update (checksum, (guint8*)treefile_buf, len);
-
-    json_node_free (treefile_rootnode);
+    g_checksum_update (checksum, buf, len);
   }
 
   /* Query the generated rpmdb, to see if anything has changed. */
@@ -919,7 +916,7 @@ rpmostree_compose_builtin_tree (int             argc,
                                cancellable, error))
     goto out;
   
-  if (!compute_checksum_for_compose (treefile, yumroot,
+  if (!compute_checksum_for_compose (self, treefile, yumroot,
                                      &new_compose_checksum,
                                      cancellable, error))
     goto out;
@@ -982,7 +979,16 @@ rpmostree_compose_builtin_tree (int             argc,
       g_file_resolve_relative_path (yumroot, "usr/share/rpm-ostree");
     gs_unref_object GFile *target_treefile_path =
       g_file_get_child (target_treefile_dir_path, "treefile.json");
-      
+    gs_unref_object JsonGenerator *generator = json_generator_new ();
+    char *treefile_buf = NULL;
+    gsize len;
+
+    json_generator_set_root (generator, treefile_rootval);
+    json_generator_set_pretty (generator, TRUE);
+    treefile_buf = json_generator_to_data (generator, &len);
+
+    self->serialized_treefile = g_bytes_new_take (treefile_buf, len);
+
     if (!gs_file_ensure_directory (target_treefile_dir_path, TRUE,
                                    cancellable, error))
       goto out;
@@ -990,9 +996,9 @@ rpmostree_compose_builtin_tree (int             argc,
     g_print ("Copying '%s' to '%s'\n",
              gs_file_get_path_cached (treefile_path),
              gs_file_get_path_cached (target_treefile_path));
-    if (!g_file_copy (treefile_path, target_treefile_path,
-                      G_FILE_COPY_TARGET_DEFAULT_PERMS,
-                      cancellable, NULL, NULL, error))
+    if (!g_file_replace_contents (target_treefile_path, treefile_buf, len,
+                                  NULL, FALSE, G_FILE_CREATE_REPLACE_DESTINATION,
+                                  NULL, cancellable, error))
       goto out;
   }
 
@@ -1044,6 +1050,7 @@ rpmostree_compose_builtin_tree (int             argc,
     }
   if (self)
     {
+      g_clear_pointer (&self->serialized_treefile, g_bytes_unref);
       g_ptr_array_unref (self->treefile_context_dirs);
     }
   return ret;
