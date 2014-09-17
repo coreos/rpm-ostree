@@ -32,7 +32,9 @@
 #include "libgsystem.h"
 
 static RpmOstreeCommand commands[] = {
+#ifdef HAVE_COMPOSE_TOOLING
   { "compose", rpmostree_builtin_compose, 0 },
+#endif
   { "upgrade", rpmostree_builtin_upgrade, 0 },
   { "rebase", rpmostree_builtin_rebase, 0 },
   { "rollback", rpmostree_builtin_rollback, 0 },

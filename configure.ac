@@ -52,6 +52,17 @@ AC_ARG_ENABLE(usrbinatomic,
               [enable_usrbinatomic=no])
 AM_CONDITIONAL(BUILDOPT_USRBINATOMIC, [test x$enable_usrbinatomic = xyes])
 
+dnl Some distributions may want to support the client tooling, but not
+dnl the server side.
+AC_ARG_ENABLE(compose-tooling,
+              AS_HELP_STRING([--enable-compose-tooling],
+                             [Build compose tooling]),,
+              [enable_compose_tooling=yes])
+AM_CONDITIONAL(BUILDOPT_COMPOSE_TOOLING, [test x$enable_compose_tooling = xyes])
+AS_IF([test x$enable_compose_tooling = xyes], [
+    AC_DEFINE(HAVE_COMPOSE_TOOLING, 1, [Define if we are building compose tooling])
+])
+
 AC_CONFIG_FILES([
 Makefile
 ])
@@ -62,4 +73,5 @@ echo "
 
     patched hawkey:	$enable_patched_hawkey_and_libsolv
     usrbinatomic:	$enable_usrbinatomic
+    compose tooling:	$enable_compose_tooling
 "
