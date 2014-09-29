@@ -905,6 +905,18 @@ rpmostree_compose_builtin_tree (int             argc,
     goto out;
   g_ptr_array_add (packages, NULL);
 
+  {
+    gs_unref_object JsonGenerator *generator = json_generator_new ();
+    char *treefile_buf = NULL;
+    gsize len;
+
+    json_generator_set_root (generator, treefile_rootval);
+    json_generator_set_pretty (generator, TRUE);
+    treefile_buf = json_generator_to_data (generator, &len);
+
+    self->serialized_treefile = g_bytes_new_take (treefile_buf, len);
+  }
+
   if (!yuminstall (self, treefile, yumroot, workdir,
                    (char**)packages->pdata,
                    cancellable, error))
@@ -979,15 +991,6 @@ rpmostree_compose_builtin_tree (int             argc,
       g_file_resolve_relative_path (yumroot, "usr/share/rpm-ostree");
     gs_unref_object GFile *target_treefile_path =
       g_file_get_child (target_treefile_dir_path, "treefile.json");
-    gs_unref_object JsonGenerator *generator = json_generator_new ();
-    char *treefile_buf = NULL;
-    gsize len;
-
-    json_generator_set_root (generator, treefile_rootval);
-    json_generator_set_pretty (generator, TRUE);
-    treefile_buf = json_generator_to_data (generator, &len);
-
-    self->serialized_treefile = g_bytes_new_take (treefile_buf, len);
 
     if (!gs_file_ensure_directory (target_treefile_dir_path, TRUE,
                                    cancellable, error))
@@ -996,10 +999,15 @@ rpmostree_compose_builtin_tree (int             argc,
     g_print ("Copying '%s' to '%s'\n",
              gs_file_get_path_cached (treefile_path),
              gs_file_get_path_cached (target_treefile_path));
-    if (!g_file_replace_contents (target_treefile_path, treefile_buf, len,
-                                  NULL, FALSE, G_FILE_CREATE_REPLACE_DESTINATION,
-                                  NULL, cancellable, error))
-      goto out;
+    {
+      gsize len;
+      const guint8 *buf = g_bytes_get_data (self->serialized_treefile, &len);
+
+      if (!g_file_replace_contents (target_treefile_path, (char*)buf, len,
+                                    NULL, FALSE, G_FILE_CREATE_REPLACE_DESTINATION,
+                                    NULL, cancellable, error))
+        goto out;
+    }
   }
 
   {
