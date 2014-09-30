@@ -34,3 +34,6 @@ ostree admin --sysroot=sysroot deploy --karg=root=LABEL=MOO --karg=quiet --os=te
 
 os_repository_new_commit
 rpm-ostree upgrade --sysroot=sysroot --os=testos
+
+ostree --repo=sysroot/ostree/repo remote add --set=gpg-verify=false otheros file://$(pwd)/testos-repo testos/buildmaster/x86_64-runtime
+rpm-ostree rebase --sysroot=sysroot --os=testos otheros:
