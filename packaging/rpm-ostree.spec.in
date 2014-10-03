@@ -37,6 +37,7 @@ make install DESTDIR=$RPM_BUILD_ROOT INSTALL="install -p -c"
 
 %files
 %doc COPYING README.md
+%{_bindir}/atomic
 %{_bindir}/rpm-ostree
 %{_libdir}/%{name}/
 %{_mandir}/man1/*
