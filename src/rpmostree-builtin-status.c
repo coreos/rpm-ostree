@@ -98,7 +98,7 @@ rpmostree_builtin_status (int             argc,
             {
               origin_refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
               if (!origin_refspec)
-                origin_refspec = "<unknown origin type>";
+                origin_refspec = g_strdup ("<unknown origin type>");
             }
           max_refspec_len = MAX (max_refspec_len, strlen (origin_refspec));
         }
@@ -145,12 +145,12 @@ rpmostree_builtin_status (int             argc,
       /* get origin refspec */
       origin = ostree_deployment_get_origin (deployment);
       if (!origin)
-        origin_refspec = "none";
+        origin_refspec = g_strdup ("none");
       else
         {
           origin_refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
           if (!origin_refspec)
-            origin_refspec = "<unknown origin type>";
+            origin_refspec = g_strdup ("<unknown origin type>");
         }
 
       /* truncate checksum */
