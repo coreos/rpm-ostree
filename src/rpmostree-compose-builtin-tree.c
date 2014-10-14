@@ -36,11 +36,13 @@ static char *opt_workdir;
 static gboolean opt_workdir_tmpfs;
 static char *opt_cachedir;
 static char *opt_proxy;
+static char **opt_metadata_strings;
 static char *opt_repo;
 static char **opt_override_pkg_repos;
 static gboolean opt_print_only;
 
 static GOptionEntry option_entries[] = {
+  { "add-metadata-string", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_strings, "Append given key and value (in string format) to metadata", "KEY=VALUE" },
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
   { "workdir-tmpfs", 0, 0, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
@@ -136,8 +138,10 @@ array_require_string_element (JsonArray      *array,
 
 static gboolean
 append_string_array_to (JsonObject   *object,
+                        GFile        *treefile_path,
                         const char   *member_name,
                         GPtrArray    *array,
+                        GCancellable *cancellable,
                         GError      **error)
 {
   JsonArray *jarray = json_object_get_array_member (object, member_name);
@@ -736,6 +740,45 @@ compute_checksum_for_compose (RpmOstreeTreeComposeContext  *self,
   return ret;
 }
 
+static gboolean
+parse_keyvalue_strings (char             **strings,
+                        GVariant         **out_metadata,
+                        GError           **error)
+{
+  gboolean ret = FALSE;
+  char **iter;
+  gs_unref_variant_builder GVariantBuilder *builder = NULL;
+
+  builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+
+  for (iter = strings; *iter; iter++)
+    {
+      const char *s;
+      const char *eq;
+      gs_free char *key = NULL;
+
+      s = *iter;
+
+      eq = strchr (s, '=');
+      if (!eq)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Missing '=' in KEY=VALUE metadata '%s'", s);
+          goto out;
+        }
+          
+      key = g_strndup (s, eq - s);
+      g_variant_builder_add (builder, "{sv}", key,
+                             g_variant_new_string (eq + 1));
+    }
+
+  ret = TRUE;
+  *out_metadata = g_variant_builder_end (builder);
+  g_variant_ref_sink (*out_metadata);
+ out:
+  return ret;
+}
+
 gboolean
 rpmostree_compose_builtin_tree (int             argc,
                                 char          **argv,
@@ -767,6 +810,7 @@ rpmostree_compose_builtin_tree (int             argc,
   gs_unref_object GFile *treefile_path = NULL;
   gs_unref_object GFile *repo_path = NULL;
   gs_unref_object JsonParser *treefile_parser = NULL;
+  gs_unref_variant GVariant *metadata = NULL;
   gboolean workdir_is_tmp = FALSE;
 
   self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
@@ -795,7 +839,7 @@ rpmostree_compose_builtin_tree (int             argc,
   repo = ostree_repo_new (repo_path);
   if (!ostree_repo_open (repo, cancellable, error))
     goto out;
-  
+
   treefile_path = g_file_new_for_path (argv[1]);
 
   if (opt_workdir)
@@ -842,6 +886,13 @@ rpmostree_compose_builtin_tree (int             argc,
     {
       cachedir = g_file_new_for_path (opt_cachedir);
       if (!gs_file_ensure_directory (cachedir, FALSE, cancellable, error))
+        goto out;
+    }
+
+  if (opt_metadata_strings)
+    {
+      if (!parse_keyvalue_strings (opt_metadata_strings,
+                                   &metadata, error))
         goto out;
     }
 
@@ -899,9 +950,11 @@ rpmostree_compose_builtin_tree (int             argc,
   bootstrap_packages = g_ptr_array_new ();
   packages = g_ptr_array_new ();
 
-  if (!append_string_array_to (treefile, "bootstrap_packages", packages, error))
+  if (!append_string_array_to (treefile, treefile_path, "bootstrap_packages", packages,
+                               cancellable, error))
     goto out;
-  if (!append_string_array_to (treefile, "packages", packages, error))
+  if (!append_string_array_to (treefile, treefile_path, "packages", packages,
+                               cancellable, error))
     goto out;
   g_ptr_array_add (packages, NULL);
 
@@ -1063,7 +1116,7 @@ rpmostree_compose_builtin_tree (int             argc,
     if (!object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
       goto out;
 
-    if (!rpmostree_commit (yumroot, repo, ref, gpgkey,
+    if (!rpmostree_commit (yumroot, repo, ref, metadata, gpgkey,
                            json_object_get_boolean_member (treefile, "selinux"),
                            cancellable, error))
       goto out;

@@ -38,6 +38,7 @@ gboolean
 rpmostree_commit (GFile         *rootfs,
                   OstreeRepo    *repo,
                   const char    *refname,
+                  GVariant      *metadata,
                   const char    *gpg_keyid,
                   gboolean       enable_selinux,
                   GCancellable  *cancellable,
