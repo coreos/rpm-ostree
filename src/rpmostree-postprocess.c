@@ -985,10 +985,52 @@ read_xattrs_cb (OstreeRepo     *repo,
   return g_variant_ref_sink (g_variant_builder_end (&builder));
 }
 
+static gboolean
+metadata_version_unique (OstreeRepo  *repo,
+                         const char  *checksum,
+                         const char  *version,
+                         GError     **error)
+{
+  gs_unref_variant GVariant *variant = NULL;
+  gs_unref_variant GVariant *metadata = NULL;
+  gs_unref_variant GVariant *value = NULL;
+  gs_free gchar *parent = NULL;
+
+  if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum,
+                                 &variant, error))
+    {
+      if (g_error_matches (*error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+        {
+          g_clear_error (error);
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Do not have full history to validate version metadata is unique.");
+        }
+      goto out;
+    }
+
+  metadata = g_variant_get_child_value (variant, 0);
+  if ((value = g_variant_lookup_value (metadata, "version", NULL)))
+    if (g_str_equal (version, g_variant_get_string (value, NULL)))
+      {
+        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                     "Version already specified in commit %s", checksum);
+        goto out;
+      }
+  
+  if (!(parent = ostree_commit_get_parent (variant)))
+    return TRUE;
+  
+  return metadata_version_unique (repo, parent, version, error);
+
+ out:
+  return FALSE;
+}
+
 gboolean
 rpmostree_commit (GFile         *rootfs,
                   OstreeRepo    *repo,
                   const char    *refname,
+                  GVariant      *metadata,
                   const char    *gpg_keyid,
                   gboolean       enable_selinux,
                   GCancellable  *cancellable,
@@ -1037,8 +1079,20 @@ rpmostree_commit (GFile         *rootfs,
   if (!ostree_repo_resolve_rev (repo, refname, TRUE, &parent_revision, error))
     goto out;
 
-  if (!ostree_repo_write_commit (repo, parent_revision, "", "",
-                                 NULL, (OstreeRepoFile*)root_tree, &new_revision,
+
+  if (metadata && parent_revision)
+    {
+      gs_unref_variant GVariant *md_version = g_variant_lookup_value (metadata,
+                                                                      "version",
+                                                                      NULL);
+      const char *version = g_variant_get_string (md_version, NULL);
+
+      if (!metadata_version_unique (repo, parent_revision, version, error))
+        goto out;
+    }
+
+  if (!ostree_repo_write_commit (repo, parent_revision, "", "", metadata,
+                                 (OstreeRepoFile*)root_tree, &new_revision,
                                  cancellable, error))
     goto out;
 
