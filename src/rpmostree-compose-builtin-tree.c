@@ -1021,10 +1021,12 @@ rpmostree_compose_builtin_tree (int             argc,
       {
         gs_unref_object GFile *default_target_path =
           g_file_resolve_relative_path (yumroot, "usr/etc/systemd/system/default.target");
+        gs_free char *dest_default_target_path =
+          g_strconcat ("/usr/lib/systemd/system/", default_target, NULL);
 
         (void) gs_file_unlink (default_target_path, NULL, NULL);
         
-        if (!g_file_make_symbolic_link (default_target_path, default_target,
+        if (!g_file_make_symbolic_link (default_target_path, dest_default_target_path,
                                         cancellable, error))
           goto out;
       }
