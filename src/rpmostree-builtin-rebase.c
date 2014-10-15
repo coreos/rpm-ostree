@@ -24,6 +24,7 @@
 #include <glib-unix.h>
 
 #include "rpmostree-builtins.h"
+#include "rpmostree-util.h"
 #include "rpmostree-treepkgdiff.h"
 #include "rpmostree-pull-progress.h"
 
@@ -37,6 +38,10 @@ static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
   { NULL }
 };
+
+_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(GKeyFile*, g_key_file_unref);
+
+#define _cleanup_gkeyfile_ __attribute__((cleanup(g_key_file_unrefp)))
 
 gboolean
 rpmostree_builtin_rebase (int             argc,
@@ -55,19 +60,14 @@ rpmostree_builtin_rebase (int             argc,
   gs_free char *new_remote = NULL;
   gs_free char *new_ref = NULL;
   gs_free char *new_refspec = NULL;
-  gs_free char *new_revision = NULL;
   gs_unref_object GFile *sysroot_path = NULL;
-  gs_unref_object GFile *deployment_path = NULL;
-  gs_unref_object GFile *deployment_origin_path = NULL;
-  gs_unref_object OstreeDeployment *merge_deployment = NULL;
-  gs_unref_object OstreeDeployment *new_deployment = NULL;
   gs_unref_object OstreeSysrootUpgrader *upgrader = NULL;
   gs_unref_object OstreeAsyncProgress *progress = NULL;
   gboolean changed;
   GSConsole *console = NULL;
   gboolean in_status_line = FALSE;
-  GKeyFile *old_origin;
-  GKeyFile *new_origin = NULL;
+  _cleanup_gkeyfile_ GKeyFile *old_origin = NULL;
+  _cleanup_gkeyfile_ GKeyFile *new_origin = NULL;
   
   g_option_context_add_main_entries (context, option_entries, NULL);
 
