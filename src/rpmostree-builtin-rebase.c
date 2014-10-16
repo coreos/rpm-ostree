@@ -136,12 +136,6 @@ rpmostree_builtin_rebase (int             argc,
       progress = ostree_async_progress_new_and_connect (_rpmostree_pull_progress, console);
     }
 
-  if (in_status_line)
-    {
-      gs_console_end_status_line (console, NULL, NULL);
-      in_status_line = FALSE;
-    }
-
   /* Always allow older...there's not going to be a chronological
    * relationship necessarily.
    */
@@ -150,6 +144,12 @@ rpmostree_builtin_rebase (int             argc,
                                      progress, &changed,
                                      cancellable, error))
     goto out;
+
+  if (in_status_line)
+    {
+      gs_console_end_status_line (console, NULL, NULL);
+      in_status_line = FALSE;
+    }
 
   if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
     goto out;
