@@ -889,7 +889,7 @@ rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,
   target = g_file_resolve_relative_path (rpmdbdir, target_path);
   if (!g_file_query_exists (target, cancellable) &&
       (!gs_file_ensure_directory (targetp, TRUE, cancellable, error) ||
-       !ostree_repo_checkout_tree (repo, OSTREE_REPO_CHECKOUT_MODE_NONE,
+       !ostree_repo_checkout_tree (repo, OSTREE_REPO_CHECKOUT_MODE_USER,
 				   OSTREE_REPO_CHECKOUT_OVERWRITE_NONE,
 				   target, OSTREE_REPO_FILE (subtree),
 				   file_info, cancellable, error)))
