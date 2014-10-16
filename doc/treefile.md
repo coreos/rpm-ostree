@@ -14,6 +14,14 @@ Treefile
  * `selinux`: boolean, optional: Defaults to `true`.  If `false`, then
    no SELinux labeling will be performed on the server side.
 
+ * `boot_location`: string, optional: Historically, ostree put bootloader data
+    in /boot.  However, this has a few flaws; it gets shadowed at boot time,
+    and also makes dealing with Anaconda installation harder.  There are 3
+    possible values:
+    * "legacy": the default, data goes in /boot
+    * "both": Kernel data in /boot and /usr/lib/ostree-boot
+    * "new": Kernel data in /usr/lib/ostree-boot
+
  * `bootstrap_packages`: Array of strings, mandatory: The `glibc` and
    `nss-altfiles` packages (and ideally nothing else) must be in this
    set; rpm-ostree will modify the `/etc/nsswitch.conf` in the target

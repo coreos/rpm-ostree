@@ -725,6 +725,7 @@ replace_nsswitch (GFile         *target_usretc,
 /* Prepare a root filesystem, taking mainly the contents of /usr from yumroot */
 static gboolean 
 create_rootfs_from_yumroot_content (GFile         *targetroot,
+                                    RpmOstreePostprocessBootLocation boot_location,
                                     GFile         *yumroot,
                                     GCancellable  *cancellable,
                                     GError       **error)
@@ -862,9 +863,44 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   {
     gs_unref_object GFile *yumroot_boot =
       g_file_get_child (yumroot, "boot");
+    gs_unref_object GFile *target_boot =
+      g_file_get_child (targetroot, "boot");
+    gs_unref_object GFile *target_usrlib =
+      g_file_resolve_relative_path (targetroot, "usr/lib");
+    gs_unref_object GFile *target_usrlib_ostree_boot =
+      g_file_resolve_relative_path (target_usrlib, "ostree-boot");
 
-    if (!move_to_dir (yumroot_boot, targetroot, cancellable, error))
+    if (!gs_file_ensure_directory (target_usrlib, TRUE, cancellable, error))
       goto out;
+
+    switch (boot_location)
+      {
+      case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY:
+        {
+          g_print ("Using boot location: legacy\n");
+          if (!gs_file_rename (yumroot_boot, target_boot, cancellable, error))
+            goto out;
+        }
+        break;
+      case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH:
+        {
+          g_print ("Using boot location: both\n");
+          if (!gs_file_rename (yumroot_boot, target_boot, cancellable, error))
+            goto out;
+          /* Hardlink the existing content, only a little ugly as
+           * we'll end up sha256'ing it twice, but oh well. */
+          if (!gs_shutil_cp_al_or_fallback (target_boot, target_usrlib_ostree_boot, cancellable, error))
+            goto out;
+        }
+        break;
+      case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW:
+        {
+          g_print ("Using boot location: new\n");
+          if (!gs_file_rename (yumroot_boot, target_usrlib_ostree_boot, cancellable, error))
+            goto out;
+        }
+        break;
+      }
   }
 
   /* Also carry along toplevel compat links */
@@ -910,6 +946,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
 
 gboolean
 rpmostree_postprocess (GFile         *rootfs,
+                       RpmOstreePostprocessBootLocation boot_location,
                        GCancellable  *cancellable,
                        GError       **error)
 {
@@ -923,7 +960,7 @@ rpmostree_postprocess (GFile         *rootfs,
   if (!gs_shutil_rm_rf (rootfs_tmp, cancellable, error))
     goto out;
 
-  if (!create_rootfs_from_yumroot_content (rootfs_tmp, rootfs, cancellable, error))
+  if (!create_rootfs_from_yumroot_content (rootfs_tmp, boot_location, rootfs, cancellable, error))
     goto out;
 
   if (!gs_shutil_rm_rf (rootfs, cancellable, error))

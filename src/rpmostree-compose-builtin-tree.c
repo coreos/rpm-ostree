@@ -945,8 +945,34 @@ rpmostree_compose_builtin_tree (int             argc,
   if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
     goto out;
 
-  if (!rpmostree_postprocess (yumroot, cancellable, error))
-    goto out;
+  {
+    const char *boot_location_str = NULL;
+    RpmOstreePostprocessBootLocation boot_location =
+      RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
+      
+    if (!object_get_optional_string_member (treefile, "boot_location",
+                                            &boot_location_str, error))
+      goto out;
+
+    if (boot_location_str != NULL)
+      {
+        if (strcmp (boot_location_str, "legacy") == 0)
+          boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY;
+        else if (strcmp (boot_location_str, "both") == 0)
+          boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
+        else if (strcmp (boot_location_str, "new") == 0)
+          boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
+        else
+          {
+            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                         "Invalid boot location '%s'", boot_location_str);
+            goto out;
+          }
+      }
+    
+    if (!rpmostree_postprocess (yumroot, boot_location, cancellable, error))
+      goto out;
+  }
 
   if (json_object_has_member (treefile, "units"))
     units = json_object_get_array_member (treefile, "units");
