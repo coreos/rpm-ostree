@@ -106,8 +106,8 @@ rpmostree_builtin_upgrade (int             argc,
 
   else
     {
-      if (!ostree_sysroot_upgrader_pull (upgrader, 0, 0, progress, &changed,
-                                       cancellable, error))
+      if (!ostree_sysroot_upgrader_pull (upgrader, 0, upgraderpullflags, progress, &changed,
+                                         cancellable, error))
         goto out;
     }
 
