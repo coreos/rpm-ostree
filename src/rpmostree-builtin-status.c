@@ -172,6 +172,13 @@ rpmostree_builtin_status (int             argc,
         {
           guint tab = 11;
           char *title = NULL;
+          char *name = NULL;
+          GFile *path_to_customs = g_file_new_for_path (g_strdup_printf ("%s/state/custom_names", 
+                               g_file_get_path (ostree_repo_get_path (repo))));
+
+           if (!ostree_deployment_get_name (g_strdup (csum), path_to_customs, &name, error))
+            goto out;
+
           if (i==0)
             title = "DEFAULT ON BOOT";
           else if (deployment == booted_deployment ||
@@ -184,11 +191,12 @@ rpmostree_builtin_status (int             argc,
                   title);
 
           printchar ("-", 40);
-          g_print ("  %-*s%-*s\n  %-*s%-*s.%d\n  %-*s%-*s\n  %-*s%-*s\n",
+          g_print ("  %-*s%-*s\n  %-*s%-*s.%d\n  %-*s%-*s\n  %-*s%-*s\n  %-*s%-*s\n",
                   tab, "timestamp", tab, timestamp_string,
                   tab, "id", tab, csum, ostree_deployment_get_deployserial (deployment),
                   tab, "osname", tab, ostree_deployment_get_osname (deployment),
-                  tab, "refspec", tab, origin_refspec);
+                  tab, "refspec", tab, origin_refspec,
+                  tab, "name", tab, name);
           printchar ("=", 60);
         }
     }
