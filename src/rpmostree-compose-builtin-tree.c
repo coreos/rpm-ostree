@@ -1110,6 +1110,48 @@ rpmostree_compose_builtin_tree (int             argc,
           goto out;
       }
   }
+
+  {
+    JsonArray *remove;
+
+    if (json_object_has_member (treefile, "remove-files"))
+      {
+        remove = json_object_get_array_member (treefile, "remove-files");
+        len = json_array_get_length (remove);
+      }
+    else
+      len = 0;
+    
+    for (i = 0; i < len; i++)
+      {
+        const char *val = array_require_string_element (remove, i, error);
+        gs_unref_object GFile *child = NULL;
+
+        if (!val)
+          return FALSE;
+        if (g_path_is_absolute (val))
+          {
+            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                         "'remove' elements must be relative");
+            goto out;
+          }
+
+        child = g_file_resolve_relative_path (yumroot, val);
+        
+        if (g_file_query_exists (child, NULL))
+          {
+            g_print ("Removing '%s'\n", val);
+            if (!gs_shutil_rm_rf (child, cancellable, error))
+              goto out;
+          }
+        else
+          {
+            g_printerr ("warning: Targeted path for remove-files does not exist: %s\n",
+                        gs_file_get_path_cached (child));
+          }
+      }
+  }
+
     
   {
     const char *gpgkey;
