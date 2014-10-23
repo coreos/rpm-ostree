@@ -36,6 +36,7 @@ static char *opt_workdir;
 static gboolean opt_workdir_tmpfs;
 static char *opt_cachedir;
 static char *opt_proxy;
+static char *opt_output_repodata_dir;
 static char **opt_metadata_strings;
 static char *opt_repo;
 static char **opt_override_pkg_repos;
@@ -45,6 +46,7 @@ static GOptionEntry option_entries[] = {
   { "add-metadata-string", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_strings, "Append given key and value (in string format) to metadata", "KEY=VALUE" },
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
   { "workdir-tmpfs", 0, 0, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
+  { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
   { "add-override-pkg-repo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_override_pkg_repos, "Include an additional package repository from DIRECTORY", "DIRECTORY" },
@@ -245,10 +247,15 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
   gs_unref_object GFile *repos_tmpdir = NULL;
   gs_unref_ptrarray GPtrArray *reposdir_args = g_ptr_array_new_with_free_func (g_free);
 
-  yumcache_lookaside = g_file_resolve_relative_path (workdir, "yum-cache");
-  if (!gs_file_ensure_directory (yumcache_lookaside, TRUE, cancellable, error))
-    goto out;
-
+  if (opt_output_repodata_dir)
+    yumcache_lookaside = g_file_new_for_path (opt_output_repodata_dir);
+  else
+    {
+      yumcache_lookaside = g_file_resolve_relative_path (workdir, "yum-cache");
+      if (!gs_file_ensure_directory (yumcache_lookaside, TRUE, cancellable, error))
+        goto out;
+    }
+      
   repos_tmpdir = g_file_resolve_relative_path (workdir, "tmp-repos");
   if (!gs_shutil_rm_rf (repos_tmpdir, cancellable, error))
     goto out;
