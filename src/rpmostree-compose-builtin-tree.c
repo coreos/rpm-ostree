@@ -1119,7 +1119,7 @@ rpmostree_compose_builtin_tree (int             argc,
   }
 
   {
-    JsonArray *remove;
+    JsonArray *remove = NULL;
 
     if (json_object_has_member (treefile, "remove-files"))
       {
