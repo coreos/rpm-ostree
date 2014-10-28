@@ -32,8 +32,18 @@ ostree --repo=sysroot/ostree/repo remote add --set=gpg-verify=false testos file:
 ostree --repo=sysroot/ostree/repo pull testos:testos/buildmaster/x86_64-runtime
 ostree admin --sysroot=sysroot deploy --karg=root=LABEL=MOO --karg=quiet --os=testos testos:testos/buildmaster/x86_64-runtime
 
+rpm-ostree status --sysroot=sysroot | tee OUTPUT-status.txt
+
+assert_file_has_content OUTPUT-status.txt '1.0.10'
+
 os_repository_new_commit
 rpm-ostree upgrade --sysroot=sysroot --os=testos
 
 ostree --repo=sysroot/ostree/repo remote add --set=gpg-verify=false otheros file://$(pwd)/testos-repo testos/buildmaster/x86_64-runtime
 rpm-ostree rebase --sysroot=sysroot --os=testos otheros:
+
+rpm-ostree status --sysroot=sysroot | tee OUTPUT-status.txt
+
+assert_not_file_has_content OUTPUT-status.txt '1.0.10'
+version=$(date "+%Y%m%d.0")
+assert_file_has_content OUTPUT-status.txt $version
