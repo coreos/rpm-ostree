@@ -1,25 +1,20 @@
 rpm-ostree
 ==========
 
-This program serves a dual role; its "tree compose" command is
-intended for use on build servers, to take RPM packages and commit
-them to an [OSTree](https://wiki.gnome.org/Projects/OSTree)
-repository.  On the client side, it acts as a consumer of the
-`libostree` shared library, integrating upgrades with RPM.
+RPM-OSTree (also nicknamed `/usr/bin/atomic`) is a mechanism to
+assemble RPMs on a server side into an
+[OSTree](https://wiki.gnome.org/Projects/OSTree) repository.  Then
+clients can update from that repository in a reliable image-like
+fashion, via `atomic upgrade`.
 
-Major changes since 2014.8
---------------------------
+Currently, rpm operates on a read-only mode on installed systems; it
+is not possible to add or remove anything on the client.  In return,
+client systems are reliably synchronized with the server-provided
+tree.  For example, if a package is removed in the server-composed
+set, when clients update, it also drops out of their tree.
 
-The previous major release of this program contained within it an
-"autobuilder" codebase which had significant functionality beyond just
-composing trees, such as creating VM disk images and running
-smoketests.
-
-Since that time, the other functionality has moved to:
-https://github.com/cgwalters/rpm-ostree-toolbox
-
-This program now only commits trees to a repository, using "treefiles"
-which are very simple JSON input data.
+This model works well in scenarios where one wants reliable state
+replication of master to many client machines.
 
 Installing and setting up a repository
 --------------------------------------
@@ -35,11 +30,16 @@ Once you have that done, choose a build directory.  Here we'll use
 	# mkdir repo
 	# ostree --repo=repo init --mode=archive-z2
 
-Running rpm-ostree
-------------------
+Running `rpm-ostree compose tree`
+---------------------------------
 
-The core "rpm-ostree tree compose" builtin as input a "treefile".  See
-examples in `doc/treefile-examples`, as well as `doc/treefile.md`.
+This program takes as input a manifest file that describes the target
+system, and commits the result to an OSTree repository.
+
+See also: https://github.com/projectatomic/rpm-ostree-toolbox
+
+The input format is a JSON "treefile".  See examples in
+`doc/treefile-examples`, as well as `doc/treefile.md`.
 
 	# rpm-ostree compose tree --repo=/srv/rpm-ostree/repo --proxy=http://127.0.0.1:8123 sometreefile.json
 
