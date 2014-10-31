@@ -28,6 +28,8 @@
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
+#include "rpmostree-hawkey-utils.h"
+#include "rpmostree-treepkgdiff.h"
 #include "rpmostree-postprocess.h"
 
 #include "libgsystem.h"
@@ -707,35 +709,23 @@ compute_checksum_for_compose (RpmOstreeTreeComposeContext  *self,
 
   /* Query the generated rpmdb, to see if anything has changed. */
   {
-    int estatus;
-    gs_free char *yumroot_var_lib_rpm =
-      g_build_filename (gs_file_get_path_cached (yumroot),
-                        "var/lib/rpm",
-                        NULL);
-    const char *rpmqa_argv[] = { PKGLIBDIR "/rpmqa-sorted-and-clean",
-                                 yumroot_var_lib_rpm,
-                                 NULL };
-    gs_free char *rpmqa_result = NULL;
+    _cleanup_hysack_ HySack sack = NULL;
+    _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+    HyPackage pkg;
+    guint i;
 
-    if (!g_spawn_sync (NULL, (char**)rpmqa_argv, NULL,
-                       G_SPAWN_SEARCH_PATH, NULL, NULL,
-                       &rpmqa_result, NULL, &estatus, error))
-      goto out;
-    if (!g_spawn_check_exit_status (estatus, error))
+    if (!rpmostree_get_pkglist_for_root (yumroot, &sack, &pkglist,
+                                         cancellable, error))
       {
-        g_prefix_error (error, "Executing %s: ",
-                        rpmqa_argv[0]);
+        g_prefix_error (error, "Reading package set: ");
         goto out;
       }
 
-    if (!*rpmqa_result)
+    FOR_PACKAGELIST(pkg, pkglist, i)
       {
-        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                     "Empty result from %s", rpmqa_argv[0]);
-        goto out;
+        gs_free char *nevra = hy_package_get_nevra (pkg);
+        g_checksum_update (checksum, (guint8*)nevra, strlen (nevra));
       }
-    
-    g_checksum_update (checksum, (guint8*)rpmqa_result, strlen (rpmqa_result));
   }
 
   ret_checksum = g_strdup (g_checksum_get_string (checksum));
