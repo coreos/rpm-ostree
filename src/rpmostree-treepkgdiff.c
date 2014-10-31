@@ -23,34 +23,14 @@
 #include "string.h"
 
 #include "rpmostree-treepkgdiff.h"
-#include "rpmostree-util.h"
-#include <ostree.h>
+#include "rpmostree-hawkey-utils.h"
 
-#include <hawkey/packagelist.h>
-#include <hawkey/query.h>
-#include <hawkey/sack.h>
-#include <hawkey/stringarray.h>
-#include <hawkey/goal.h>
-#include <hawkey/version.h>
-#include <hawkey/util.h>
-#include "hif-utils.h"
-
-#include "libgsystem.h"
-
-_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(HySack, hy_sack_free);
-_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(HyQuery, hy_query_free);
-_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(HyPackageList, hy_packagelist_free);
-
-#define _cleanup_hysack_ __attribute__((cleanup(hy_sack_freep)))
-#define _cleanup_hyquery_ __attribute__((cleanup(hy_query_freep)))
-#define _cleanup_hypackagelist_ __attribute__((cleanup(hy_packagelist_freep)))
-
-static gboolean
-get_pkglist_for_root (GFile            *root,
-                      HySack           *out_sack,
-                      HyPackageList    *out_pkglist,
-                      GCancellable     *cancellable,
-                      GError          **error)
+gboolean
+rpmostree_get_pkglist_for_root (GFile            *root,
+                                HySack           *out_sack,
+                                HyPackageList    *out_pkglist,
+                                GCancellable     *cancellable,
+                                GError          **error)
 {
   gboolean ret = FALSE;
   int rc;
@@ -98,12 +78,12 @@ print_rpmdb_diff (GFile          *oldroot,
   HyPackage pkg;
   gboolean printed_header = FALSE;
 
-  if (!get_pkglist_for_root (oldroot, &old_sack, &old_pkglist,
-                             cancellable, error))
+  if (!rpmostree_get_pkglist_for_root (oldroot, &old_sack, &old_pkglist,
+                                       cancellable, error))
     goto out;
 
-  if (!get_pkglist_for_root (newroot, &new_sack, &new_pkglist,
-                             cancellable, error))
+  if (!rpmostree_get_pkglist_for_root (newroot, &new_sack, &new_pkglist,
+                                       cancellable, error))
     goto out;
   
   printed_header = FALSE;
