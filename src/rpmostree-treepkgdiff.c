@@ -58,7 +58,7 @@ get_pkglist_for_root (GFile            *root,
   _cleanup_hyquery_ HyQuery query = NULL;
   _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
 
-  sack = hy_sack_create (NULL, NULL, gs_file_get_path_cached (root), HY_MAKE_CACHE_DIR);
+  sack = hy_sack_create (NULL, NULL, gs_file_get_path_cached (root), 0);
   if (sack == NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -66,7 +66,7 @@ get_pkglist_for_root (GFile            *root,
       goto out;
     }
 
-  rc = hy_sack_load_system_repo (sack, NULL, HY_BUILD_CACHE);
+  rc = hy_sack_load_system_repo (sack, NULL, 0);
   if (!hif_rc_to_gerror (rc, error))
     {
       g_prefix_error (error, "Failed to load system repo: ");
