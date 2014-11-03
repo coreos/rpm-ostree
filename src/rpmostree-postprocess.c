@@ -722,6 +722,91 @@ replace_nsswitch (GFile         *target_usretc,
   return ret;
 }
 
+static gboolean
+migrate_rpm_and_yumdb (GFile          *targetroot,
+                       GFile          *yumroot,
+                       GCancellable   *cancellable,
+                       GError        **error)
+
+{
+  gboolean ret = FALSE;
+  gs_unref_object GFile *usrbin_rpm =
+    g_file_resolve_relative_path (targetroot, "usr/bin/rpm");
+  gs_unref_object GFile *legacyrpm_path =
+    g_file_resolve_relative_path (yumroot, "var/lib/rpm");
+  gs_unref_object GFile *newrpm_path =
+    g_file_resolve_relative_path (targetroot, "usr/share/rpm");
+  gs_unref_object GFile *src_yum_rpmdb_indexes =
+    g_file_resolve_relative_path (yumroot, "var/lib/yum");
+  gs_unref_object GFile *target_yum_rpmdb_indexes =
+    g_file_resolve_relative_path (targetroot, "usr/share/yumdb");
+  gs_unref_object GFile *yumroot_yumlib =
+    g_file_get_child (yumroot, "var/lib/yum");
+  gs_unref_object GFileEnumerator *direnum = NULL;
+
+  direnum = g_file_enumerate_children (legacyrpm_path, "standard::name",
+                                       G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
+                                       cancellable, error);
+  if (!direnum)
+    goto out;
+
+  while (TRUE)
+    {
+      const char *name;
+      GFileInfo *file_info;
+      GFile *child;
+
+      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
+                                       cancellable, error))
+        goto out;
+      if (!file_info)
+        break;
+
+      name = g_file_info_get_name (file_info);
+
+      if (g_str_has_prefix (name, "__db.") ||
+          strcmp (name, ".dbenv.lock") == 0 ||
+          strcmp (name, ".rpm.lock") == 0)
+        {
+          if (!gs_file_unlink (child, cancellable, error))
+            goto out;
+        }
+    }
+
+  (void) g_file_enumerator_close (direnum, cancellable, error);
+    
+  g_print ("Placing RPM db in /usr/share/rpm\n");
+  if (!gs_file_rename (legacyrpm_path, newrpm_path, cancellable, error))
+    goto out;
+    
+  /* Move the yum database to usr/share/yumdb; disabled for now due
+   * to bad conflict with OSTree's current
+   * one-http-request-per-file.
+   */
+#if 0
+  if (g_file_query_exists (src_yum_rpmdb_indexes, NULL))
+    {
+      g_print ("Moving %s to %s\n", gs_file_get_path_cached (src_yum_rpmdb_indexes),
+               gs_file_get_path_cached (target_yum_rpmdb_indexes));
+      if (!gs_file_rename (src_yum_rpmdb_indexes, target_yum_rpmdb_indexes,
+                           cancellable, error))
+        goto out;
+        
+      if (!clean_yumdb_extraneous_files (target_yum_rpmdb_indexes, cancellable, error))
+        goto out;
+    }
+#endif
+
+  /* Remove /var/lib/yum; we don't want it here. */
+  if (!gs_shutil_rm_rf (yumroot_yumlib, cancellable, error))
+    goto out;
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+
 /* Prepare a root filesystem, taking mainly the contents of /usr from yumroot */
 static gboolean 
 create_rootfs_from_yumroot_content (GFile         *targetroot,
@@ -793,49 +878,8 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
       goto out;
   }
 
-  /* Plus the RPM database goes in usr/share/rpm */
-  {
-    gs_unref_object GFile *usrbin_rpm =
-      g_file_resolve_relative_path (targetroot, "usr/bin/rpm");
-    gs_unref_object GFile *legacyrpm_path =
-      g_file_resolve_relative_path (yumroot, "var/lib/rpm");
-    gs_unref_object GFile *newrpm_path =
-      g_file_resolve_relative_path (targetroot, "usr/share/rpm");
-    gs_unref_object GFile *src_yum_rpmdb_indexes =
-      g_file_resolve_relative_path (yumroot, "var/lib/yum");
-    gs_unref_object GFile *target_yum_rpmdb_indexes =
-      g_file_resolve_relative_path (targetroot, "usr/share/yumdb");
-    
-    g_print ("Placing RPM db in /usr/share/rpm\n");
-    if (!gs_file_rename (legacyrpm_path, newrpm_path, cancellable, error))
-      goto out;
-    
-    /* Move the yum database to usr/share/yumdb; disabled for now due
-     * to bad conflict with OSTree's current
-     * one-http-request-per-file.
-     */
-#if 0
-    if (g_file_query_exists (src_yum_rpmdb_indexes, NULL))
-      {
-        g_print ("Moving %s to %s\n", gs_file_get_path_cached (src_yum_rpmdb_indexes),
-                 gs_file_get_path_cached (target_yum_rpmdb_indexes));
-        if (!gs_file_rename (src_yum_rpmdb_indexes, target_yum_rpmdb_indexes,
-                             cancellable, error))
-          goto out;
-        
-        if (!clean_yumdb_extraneous_files (target_yum_rpmdb_indexes, cancellable, error))
-          goto out;
-      }
-#endif
-  }
-
-  /* Remove /var/lib/yum; we don't want it here. */
-  {
-    gs_unref_object GFile *yumroot_yumlib = g_file_get_child (yumroot, "var/lib/yum");
-
-    if (!gs_shutil_rm_rf (yumroot_yumlib, cancellable, error))
-      goto out;
-  }
+  if (!migrate_rpm_and_yumdb (targetroot, yumroot, cancellable, error))
+    goto out;
 
   {
     gs_unref_object GFile *yumroot_var = g_file_get_child (yumroot, "var");
