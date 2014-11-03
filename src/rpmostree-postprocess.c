@@ -742,6 +742,38 @@ migrate_rpm_and_yumdb (GFile          *targetroot,
     g_file_resolve_relative_path (targetroot, "usr/share/yumdb");
   gs_unref_object GFile *yumroot_yumlib =
     g_file_get_child (yumroot, "var/lib/yum");
+  gs_unref_object GFileEnumerator *direnum = NULL;
+
+  direnum = g_file_enumerate_children (legacyrpm_path, "standard::name",
+                                       G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
+                                       cancellable, error);
+  if (!direnum)
+    goto out;
+
+  while (TRUE)
+    {
+      const char *name;
+      GFileInfo *file_info;
+      GFile *child;
+
+      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
+                                       cancellable, error))
+        goto out;
+      if (!file_info)
+        break;
+
+      name = g_file_info_get_name (file_info);
+
+      if (g_str_has_prefix (name, "__db.") ||
+          strcmp (name, ".dbenv.lock") == 0 ||
+          strcmp (name, ".rpm.lock") == 0)
+        {
+          if (!gs_file_unlink (child, cancellable, error))
+            goto out;
+        }
+    }
+
+  (void) g_file_enumerator_close (direnum, cancellable, error);
     
   g_print ("Placing RPM db in /usr/share/rpm\n");
   if (!gs_file_rename (legacyrpm_path, newrpm_path, cancellable, error))
