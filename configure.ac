@@ -31,6 +31,12 @@ LT_INIT([disable-static])
 
 PKG_PROG_PKG_CONFIG
 
+save_LIBS="$LIBS"
+LIBS=
+AC_SEARCH_LIBS([cap_init], [cap], [], [AC_MSG_ERROR([*** POSIX caps library not found])])
+CAP_LIBS="$LIBS"
+AC_SUBST(CAP_LIBS)
+
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 json-glib-1.0 ostree-1 >= 2014.7 libgsystem rpm hawkey])
 AC_PATH_PROG([XSLTPROC], [xsltproc])

@@ -25,6 +25,14 @@
 #include <json-glib/json-glib.h>
 #include <sys/mount.h>
 #include <gio/gunixoutputstream.h>
+#include <sys/types.h>
+#include <sys/prctl.h>
+#include <stdio.h>
+#include <sys/fsuid.h>
+#include <sys/syscall.h>
+#include <sys/wait.h>
+#include <sys/capability.h>
+#include <sched.h>
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
@@ -64,13 +72,11 @@ typedef struct {
 } RpmOstreeTreeComposeContext;
 
 static char *
-subprocess_context_print_args (GSSubprocessContext   *ctx)
+strv_join_shell_quote (char **argv)
 {
   GString *ret = g_string_new ("");
-  gs_strfreev char **argv = NULL;
   char **strviter;
 
-  g_object_get ((GObject*)ctx, "argv", &argv, NULL);
   for (strviter = argv; strviter && *strviter; strviter++)
     {
       gs_free char *quoted = g_shell_quote (*strviter);
@@ -171,11 +177,23 @@ append_string_array_to (JsonObject   *object,
 }
 
 typedef struct {
-  GSSubprocess *process;
+  gboolean running;
+  pid_t pid;
   GFile *tmp_reposdir_path;
   GDataOutputStream *stdin;
-  /* GDataInputStream *stdout; */
+  gboolean caught_error;
+  GError **error;
 } YumContext;
+
+static gboolean
+on_yum_exited (GPid pid, gint status, gpointer user_data)
+{
+  YumContext *ctx = user_data;
+  ctx->caught_error = !g_spawn_check_exit_status (status, ctx->error);
+  ctx->running = FALSE;
+  
+  return FALSE;
+}
 
 static gboolean
 yum_context_close (YumContext   *yumctx,
@@ -187,7 +205,7 @@ yum_context_close (YumContext   *yumctx,
   if (!yumctx)
     return TRUE;
 
-  if (yumctx->process)
+  if (yumctx->running)
     {
       if (yumctx->stdin)
         {
@@ -195,20 +213,28 @@ yum_context_close (YumContext   *yumctx,
             goto out;
           g_clear_object (&yumctx->stdin);
         }
-      /*
-      if (yumctx->stdout)
-        {
-          if (!g_input_stream_close ((GInputStream*)yumctx->stdout, cancellable, error))
-            goto out;
-          g_clear_object (&yumctx->stdout);
-        }
-      */
+
+      {
+        GSource *child_src = g_child_watch_source_new (yumctx->pid);
+        GMainContext *tmp_context = g_main_context_new ();
+
+        g_source_set_callback (child_src, (GSourceFunc)on_yum_exited, yumctx, NULL);
+        g_source_attach (child_src, tmp_context);
+        g_source_unref (child_src);
+
+        yumctx->error = error;
       
-      g_print ("Waiting for yum...\n");
-      if (!gs_subprocess_wait_sync_check (yumctx->process, cancellable, error))
-        goto out;
-      g_print ("Waiting for yum [OK]\n");
-      g_clear_object (&yumctx->process);
+        g_print ("Waiting for yum...\n");
+        while (yumctx->running)
+          g_main_context_iteration (tmp_context, TRUE);
+      
+        g_print ("Waiting for yum [OK]\n");
+
+        g_main_context_unref (tmp_context);
+
+        if (yumctx->caught_error)
+          goto out;
+      }
     }
 
   ret = TRUE;
@@ -358,6 +384,14 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
   return ret;
 }
 
+static void perror_fatal (const char *message) __attribute__ ((noreturn));
+static void perror_fatal (const char *message)
+{
+  perror (message);
+  exit (1);
+}
+
+
 static YumContext *
 yum_context_new (RpmOstreeTreeComposeContext  *self,
                  JsonObject     *treedata,
@@ -369,8 +403,9 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
   gboolean success = FALSE;
   YumContext *yumctx = NULL;
   GPtrArray *yum_argv = g_ptr_array_new_with_free_func (g_free);
-  gs_unref_object GSSubprocessContext *context = NULL;
-  gs_unref_object GSSubprocess *yum_process = NULL;
+  pid_t child;
+  int clone_flags = SIGCHLD | CLONE_NEWNS | CLONE_NEWPID;
+  int pipefds[2];
 
   g_ptr_array_add (yum_argv, g_strdup ("yum"));
   g_ptr_array_add (yum_argv, g_strdup ("-y"));
@@ -387,32 +422,50 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
 
   g_ptr_array_add (yum_argv, NULL);
 
-  context = gs_subprocess_context_new ((char**)yum_argv->pdata);
-  {
-    gs_strfreev char **duped_environ = g_get_environ ();
-
-    duped_environ = g_environ_setenv (duped_environ, "OSTREE_KERNEL_INSTALL_NOOP", "1", TRUE);
-    /* See fedora's kernel.spec */
-    duped_environ = g_environ_setenv (duped_environ, "HARDLINK", "no", TRUE);
-
-    gs_subprocess_context_set_environment (context, duped_environ);
-  }
-
-  gs_subprocess_context_set_stdin_disposition (context, GS_SUBPROCESS_STREAM_DISPOSITION_PIPE);
-  /* gs_subprocess_context_set_stdout_disposition (context, GS_SUBPROCESS_STREAM_DISPOSITION_PIPE); */
-
-  yumctx = g_new0 (YumContext, 1);
-
-  {
-    gs_free char *cmdline = subprocess_context_print_args (context);
-    g_print ("Starting %s\n", cmdline);
-  }
-  yumctx->process = gs_subprocess_new (context, cancellable, error);
-  if (!yumctx->process)
+  if (!g_unix_open_pipe (pipefds, FD_CLOEXEC, error))
     goto out;
 
-  yumctx->stdin = (GDataOutputStream*)g_data_output_stream_new (gs_subprocess_get_stdin_pipe (yumctx->process));
-  /* yumctx->stdout = (GDataInputStream*)g_data_input_stream_new (gs_subprocess_get_stdout_pipe (yumctx->process)); */
+  if ((child = syscall (__NR_clone, clone_flags, NULL)) < 0)
+    {
+      int errsv = errno;
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "clone(): %s",
+                   g_strerror (errsv));
+      goto out;
+    }
+  
+  if (child == 0)
+    {
+      if (dup2 (pipefds[0], 0) != 0)
+        perror_fatal ("dup2()");
+      
+      setenv ("OSTREE_KERNEL_INSTALL_NOOP", "1", TRUE);
+      /* See fedora's kernel.spec */
+      setenv ("HARDLINK", "no", TRUE);
+
+      /* Turn off setuid binaries, we shouldn't need them */
+      if (mount (NULL, "/", "none", MS_PRIVATE | MS_REMOUNT | MS_NOSUID, NULL) < 0)
+        perror_fatal ("mount(/, MS_PRIVATE | MS_NOSUID)");
+
+      if (execvp ("yum", (char**)yum_argv->pdata) < 0)
+        perror_fatal ("execvp");
+    }
+
+  (void) close (pipefds[0]);
+
+  {
+    gs_free char *cmdline = strv_join_shell_quote ((char**)yum_argv->pdata);
+    g_print ("Starting %s\n", cmdline);
+  }
+
+  yumctx = g_new0 (YumContext, 1);
+  yumctx->running = TRUE;
+  yumctx->pid = child;
+
+  {
+    gs_unref_object GOutputStream *yumproc_stdin = g_unix_output_stream_new (pipefds[1], TRUE);
+    yumctx->stdin = (GDataOutputStream*)g_data_output_stream_new (yumproc_stdin);
+  }
 
   success = TRUE;
  out:
@@ -776,6 +829,35 @@ parse_keyvalue_strings (char             **strings,
   return ret;
 }
 
+static gboolean
+bind_mount_readonly (const char *path, GError **error)
+{
+  gboolean ret = FALSE;
+
+  if (mount (path, path, NULL, MS_BIND | MS_PRIVATE, NULL) != 0)
+    {
+      int errsv = errno;
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "mount(%s, MS_BIND): %s",
+                   path,
+                   g_strerror (errsv));
+      goto out;
+    }
+  if (mount (path, path, NULL, MS_BIND | MS_PRIVATE | MS_REMOUNT | MS_RDONLY, NULL) != 0)
+    {
+      int errsv = errno;
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "mount(%s, MS_BIND | MS_RDONLY): %s",
+                   path,
+                   g_strerror (errsv));
+      goto out;
+    }
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
 gboolean
 rpmostree_compose_builtin_tree (int             argc,
                                 char          **argv,
@@ -832,6 +914,46 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
     }
 
+  /* Use a private mount namespace to avoid polluting the global
+   * namespace, and to ensure any tmpfs mounts get cleaned up if we
+   * exit unexpectedly.
+   *
+   * We also rely on this for the yum confinement.
+   */
+  if (unshare (CLONE_NEWNS) != 0)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "unshare(CLONE_NEWNS): %s", g_strerror (errno));
+      goto out;
+    }
+  if (mount (NULL, "/", "none", MS_PRIVATE | MS_REC, NULL) == -1)
+    {
+      int errsv = errno;
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "mount(/, MS_PRIVATE | MS_REC): %s",
+                   g_strerror (errsv));
+      goto out;
+    }
+
+  /* Mount several directories read only for protection from librpm
+   * and any stray code in yum/hawkey.
+   */
+  {
+    struct stat stbuf;
+    /* Protect /var/lib/rpm if it's a directory */
+    if (lstat ("/var/lib/rpm", &stbuf) == 0 && S_ISDIR (stbuf.st_mode))
+      {
+        if (!bind_mount_readonly ("/var/lib/rpm", error))
+          goto out;
+      }
+
+    /* Protect the system's /etc and /usr */
+    if (!bind_mount_readonly ("/etc", error))
+      goto out;
+    if (!bind_mount_readonly ("/usr", error))
+      goto out;
+  }
+
   repo_path = g_file_new_for_path (opt_repo);
   repo = ostree_repo_new (repo_path);
   if (!ostree_repo_open (repo, cancellable, error))
@@ -851,25 +973,6 @@ rpmostree_compose_builtin_tree (int             argc,
 
       if (opt_workdir_tmpfs)
         {
-          /* Use a private mount namespace to avoid polluting the global
-           * namespace, and to ensure the mount gets cleaned up if we exit
-           * unexpectedly.
-           */
-          if (unshare (CLONE_NEWNS) != 0)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "unshare(CLONE_NEWNS): %s", g_strerror (errno));
-              goto out;
-            }
-          if (mount (NULL, "/", "none", MS_PRIVATE | MS_REC, NULL) == -1)
-            {
-              int errsv = errno;
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "mount(/, MS_PRIVATE | MS_REC): %s",
-                           g_strerror (errsv));
-              goto out;
-            }
-      
           if (mount ("tmpfs", tmpd, "tmpfs", 0, (const void*)"mode=755") != 0)
             {
               g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
