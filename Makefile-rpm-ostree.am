@@ -42,7 +42,7 @@ librpmostree_la_SOURCES += \
 	$(NULL)
 endif
 librpmostree_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
-librpmostree_la_LIBADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)
+librpmostree_la_LIBADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS) $(CAP_LIBS)
 
 rpm_ostree_SOURCES = src/main.c \
 	src/rpmostree-builtins.h \
