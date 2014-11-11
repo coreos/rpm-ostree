@@ -36,7 +36,7 @@
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
-#include "rpmostree-hawkey-utils.h"
+#include "rpmostree-cleanup.h"
 #include "rpmostree-treepkgdiff.h"
 #include "rpmostree-postprocess.h"
 

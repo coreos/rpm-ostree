@@ -35,6 +35,10 @@
 
 #include "libgsystem.h"
 
+/* This one is in libgsystem git master, but not 2014.2 */
+GS_DEFINE_CLEANUP_FUNCTION0(GKeyFile*, _cleanup_g_key_file_unref, g_key_file_unref);
+#define _cleanup_gkeyfile_ __attribute__((cleanup(_cleanup_g_key_file_unref)))
+
 GS_DEFINE_CLEANUP_FUNCTION0(HySack, _cleanup_hy_sack_free, hy_sack_free);
 GS_DEFINE_CLEANUP_FUNCTION0(HyQuery, _cleanup_hy_query_free, hy_query_free);
 GS_DEFINE_CLEANUP_FUNCTION0(HyPackageList, _cleanup_hy_packagelist_free, hy_packagelist_free);
