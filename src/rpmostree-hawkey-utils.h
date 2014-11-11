@@ -35,10 +35,10 @@
 
 #include "libgsystem.h"
 
-_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(HySack, hy_sack_free);
-_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(HyQuery, hy_query_free);
-_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(HyPackageList, hy_packagelist_free);
+GS_DEFINE_CLEANUP_FUNCTION0(HySack, _cleanup_hy_sack_free, hy_sack_free);
+GS_DEFINE_CLEANUP_FUNCTION0(HyQuery, _cleanup_hy_query_free, hy_query_free);
+GS_DEFINE_CLEANUP_FUNCTION0(HyPackageList, _cleanup_hy_packagelist_free, hy_packagelist_free);
 
-#define _cleanup_hysack_ __attribute__((cleanup(hy_sack_freep)))
-#define _cleanup_hyquery_ __attribute__((cleanup(hy_query_freep)))
-#define _cleanup_hypackagelist_ __attribute__((cleanup(hy_packagelist_freep)))
+#define _cleanup_hysack_ __attribute__((cleanup(_cleanup_hy_sack_free)))
+#define _cleanup_hyquery_ __attribute__((cleanup(_cleanup_hy_query_free)))
+#define _cleanup_hypackagelist_ __attribute__((cleanup(_cleanup_hy_packagelist_free)))

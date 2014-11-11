@@ -39,9 +39,8 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(GKeyFile*, g_key_file_unref);
-
-#define _cleanup_gkeyfile_ __attribute__((cleanup(g_key_file_unrefp)))
+GS_DEFINE_CLEANUP_FUNCTION0(GKeyFile*, _cleanup_g_key_file_unref, g_key_file_unref);
+#define _cleanup_gkeyfile_ __attribute__((cleanup(_cleanup_g_key_file_unref)))
 
 gboolean
 rpmostree_builtin_rebase (int             argc,
