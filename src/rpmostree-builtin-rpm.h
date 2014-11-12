@@ -41,9 +41,8 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff,
 void
 rpmrev_free (struct RpmRevisionData *ptr);
 
-_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(struct RpmRevisionData *, rpmrev_free);
-
-#define _cleanup_rpmrev_ __attribute__((cleanup(rpmrev_freep)))
+GS_DEFINE_CLEANUP_FUNCTION0(struct RpmRevisionData *, _cleanup_rpmrev_free, rpmrev_free);
+#define _cleanup_rpmrev_ __attribute__((cleanup(_cleanup_rpmrev_free)))
 
 struct RpmRevisionData *
 rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,

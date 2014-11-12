@@ -21,7 +21,7 @@
 #pragma once
 
 #include <ostree.h>
-#include "rpmostree-hawkey-utils.h"
+#include "rpmostree-cleanup.h"
 
 gboolean
 rpmostree_get_pkglist_for_root (GFile            *root,

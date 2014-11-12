@@ -22,14 +22,6 @@
 
 #include <gio/gio.h>
 
-#define _RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(type, func)      \
-        static inline void func##p(type *p) {                   \
-                if (*p)                                         \
-                        func(*p);                               \
-        }                                                       \
-        struct __useless_struct_to_allow_trailing_semicolon__
-
-
 gboolean
 _rpmostree_util_enumerate_directory_allow_noent (GFile               *dirpath,
 						 const char          *queryargs,

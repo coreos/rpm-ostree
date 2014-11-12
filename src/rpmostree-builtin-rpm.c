@@ -513,10 +513,8 @@ rpmhdrs_diff_free (struct RpmHeadersDiff *diff)
   g_free (diff);
 }
 
-_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(struct RpmHeadersDiff *,
-                                       rpmhdrs_diff_free);
-
-#define _cleanup_rpmhdrs_diff_ __attribute__((cleanup(rpmhdrs_diff_freep)))
+GS_DEFINE_CLEANUP_FUNCTION0(struct RpmHeadersDiff *, _cleanup_rpmhdrs_diff_free, rpmhdrs_diff_free);
+#define _cleanup_rpmhdrs_diff_ __attribute__((cleanup(_cleanup_rpmhdrs_diff_free)))
 
 struct RpmHeadersDiff *
 rpmhdrs_diff (struct RpmHeaders *l1,
@@ -652,9 +650,8 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff,
   rpmhdrs_diff_free (diff);
 }
 
-_RPMOSTREE_DEFINE_TRIVIAL_CLEANUP_FUNC(rpmtd, rpmtdFreeData);
-
-#define _cleanup_rpmtddata_ __attribute__((cleanup(rpmtdFreeDatap)))
+GS_DEFINE_CLEANUP_FUNCTION0(rpmtd, _cleanup_rpmtdFreeData, rpmtdFreeData);
+#define _cleanup_rpmtddata_ __attribute__((cleanup(_cleanup_rpmtdFreeData)))
 
 static void
 rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
