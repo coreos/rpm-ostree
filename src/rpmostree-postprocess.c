@@ -24,6 +24,7 @@
 
 #include <ostree.h>
 #include <errno.h>
+#include <json-glib/json-glib.h>
 #include <stdio.h>
 #include <utime.h>
 #include <sys/types.h>
@@ -33,6 +34,7 @@
 #include <stdlib.h>
 
 #include "rpmostree-postprocess.h"
+#include "rpmostree-json-parsing.h"
 #include "rpmostree-util.h"
 
 #include "libgsystem.h"
@@ -983,6 +985,138 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
       goto out;
   }
 
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+gboolean
+rpmostree_treefile_postprocessing (GFile         *yumroot,
+                                   GBytes        *serialized_treefile,
+                                   JsonObject    *treefile,
+                                   GCancellable  *cancellable,
+                                   GError       **error)
+{
+  gboolean ret = FALSE;
+  guint i, len;
+  JsonArray *units = NULL;
+  JsonArray *remove = NULL;
+  const char *default_target = NULL;
+
+  if (json_object_has_member (treefile, "units"))
+    units = json_object_get_array_member (treefile, "units");
+
+  if (units)
+    len = json_array_get_length (units);
+  else
+    len = 0;
+
+  {
+    gs_unref_object GFile *multiuser_wants_dir =
+      g_file_resolve_relative_path (yumroot, "etc/systemd/system/multi-user.target.wants");
+
+    if (!gs_file_ensure_directory (multiuser_wants_dir, TRUE, cancellable, error))
+      goto out;
+
+    for (i = 0; i < len; i++)
+      {
+        const char *unitname = _rpmostree_jsonutil_array_require_string_element (units, i, error);
+        gs_unref_object GFile *unit_link_target = NULL;
+        gs_free char *symlink_target = NULL;
+
+        if (!unitname)
+          goto out;
+
+        symlink_target = g_strconcat ("/usr/lib/systemd/system/", unitname, NULL);
+        unit_link_target = g_file_get_child (multiuser_wants_dir, unitname);
+
+        if (g_file_query_file_type (unit_link_target, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL) == G_FILE_TYPE_SYMBOLIC_LINK)
+          continue;
+          
+        g_print ("Adding %s to multi-user.target.wants\n", unitname);
+
+        if (!g_file_make_symbolic_link (unit_link_target, symlink_target,
+                                        cancellable, error))
+          goto out;
+      }
+  }
+
+  {
+    gs_unref_object GFile *target_treefile_dir_path =
+      g_file_resolve_relative_path (yumroot, "usr/share/rpm-ostree");
+    gs_unref_object GFile *target_treefile_path =
+      g_file_get_child (target_treefile_dir_path, "treefile.json");
+    const guint8 *buf;
+    gsize len;
+
+    if (!gs_file_ensure_directory (target_treefile_dir_path, TRUE,
+                                   cancellable, error))
+      goto out;
+                                     
+    g_print ("Writing '%s'\n", gs_file_get_path_cached (target_treefile_path));
+    buf = g_bytes_get_data (serialized_treefile, &len);
+    
+    if (!g_file_replace_contents (target_treefile_path, (char*)buf, len,
+                                  NULL, FALSE, G_FILE_CREATE_REPLACE_DESTINATION,
+                                    NULL, cancellable, error))
+      goto out;
+  }
+
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "default_target",
+                                                              &default_target, error))
+    goto out;
+  
+  if (default_target != NULL)
+    {
+      gs_unref_object GFile *default_target_path =
+        g_file_resolve_relative_path (yumroot, "etc/systemd/system/default.target");
+      gs_free char *dest_default_target_path =
+        g_strconcat ("/usr/lib/systemd/system/", default_target, NULL);
+
+      (void) gs_file_unlink (default_target_path, NULL, NULL);
+        
+      if (!g_file_make_symbolic_link (default_target_path, dest_default_target_path,
+                                      cancellable, error))
+        goto out;
+    }
+
+  if (json_object_has_member (treefile, "remove-files"))
+    {
+      remove = json_object_get_array_member (treefile, "remove-files");
+      len = json_array_get_length (remove);
+    }
+  else
+    len = 0;
+    
+  for (i = 0; i < len; i++)
+    {
+      const char *val = _rpmostree_jsonutil_array_require_string_element (remove, i, error);
+      gs_unref_object GFile *child = NULL;
+
+      if (!val)
+        return FALSE;
+      if (g_path_is_absolute (val))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "'remove' elements must be relative");
+          goto out;
+        }
+
+      child = g_file_resolve_relative_path (yumroot, val);
+        
+      if (g_file_query_exists (child, NULL))
+        {
+          g_print ("Removing '%s'\n", val);
+          if (!gs_shutil_rm_rf (child, cancellable, error))
+            goto out;
+        }
+      else
+        {
+          g_printerr ("warning: Targeted path for remove-files does not exist: %s\n",
+                      gs_file_get_path_cached (child));
+        }
+    }
+  
   ret = TRUE;
  out:
   return ret;

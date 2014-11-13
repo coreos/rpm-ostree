@@ -29,6 +29,13 @@ typedef enum {
 } RpmOstreePostprocessBootLocation;
 
 gboolean
+rpmostree_treefile_postprocessing (GFile         *rootfs,
+                                   GBytes        *serialized_treefile,
+                                   JsonObject    *treefile,
+                                   GCancellable  *cancellable,
+                                   GError       **error);
+
+gboolean
 rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
                                      RpmOstreePostprocessBootLocation boot_style,
                                      GCancellable  *cancellable,
