@@ -36,6 +36,7 @@
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
+#include "rpmostree-json-parsing.h"
 #include "rpmostree-cleanup.h"
 #include "rpmostree-treepkgdiff.h"
 #include "rpmostree-postprocess.h"
@@ -87,94 +88,6 @@ strv_join_shell_quote (char **argv)
   return g_string_free (ret, FALSE);
 }
 
-static gboolean
-object_get_optional_string_member (JsonObject     *object,
-                                   const char     *member_name,
-                                   const char    **out_value,
-                                   GError        **error)
-{
-  gboolean ret = FALSE;
-  JsonNode *node = json_object_get_member (object, member_name);
-
-  if (node != NULL)
-    {
-      *out_value = json_node_get_string (node);
-      if (!*out_value)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Member '%s' is not a string", member_name);
-          goto out;
-        }
-    }
-  else
-    *out_value = NULL;
-
-  ret = TRUE;
- out:
-  return ret;
-}
-
-static const char *
-object_require_string_member (JsonObject     *object,
-                              const char     *member_name,
-                              GError        **error)
-{
-  const char *ret;
-  if (!object_get_optional_string_member (object, member_name, &ret, error))
-    return NULL;
-  if (!ret)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Member '%s' not found", member_name);
-      return NULL;
-    }
-  return ret;
-}
-
-static const char *
-array_require_string_element (JsonArray      *array,
-                              guint           i,
-                              GError        **error)
-{
-  const char *ret = json_array_get_string_element (array, i);
-  if (!ret)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Element at index %u is not a string", i);
-      return NULL;
-    }
-  return ret;
-}
-
-static gboolean
-append_string_array_to (JsonObject   *object,
-                        GFile        *treefile_path,
-                        const char   *member_name,
-                        GPtrArray    *array,
-                        GCancellable *cancellable,
-                        GError      **error)
-{
-  JsonArray *jarray = json_object_get_array_member (object, member_name);
-  guint i, len;
-
-  if (!jarray)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "No member '%s' found", member_name);
-      return FALSE;
-    }
-
-  len = json_array_get_length (jarray);
-  for (i = 0; i < len; i++)
-    {
-      const char *v = array_require_string_element (jarray, i, error);
-      if (!v)
-        return FALSE;
-      g_ptr_array_add (array, g_strdup (v));
-    }
-
-  return TRUE;
-}
 
 typedef struct {
   gboolean running;
@@ -367,7 +280,7 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
       guint n = json_array_get_length (enable_repos);
       for (i = 0; i < n; i++)
         {
-          const char *reponame = array_require_string_element (enable_repos, i, error);
+          const char *reponame = _rpmostree_jsonutil_array_require_string_element (enable_repos, i, error);
           if (!reponame)
             goto out;
           g_ptr_array_add (args, g_strconcat ("--enablerepo=", reponame, NULL));
@@ -590,7 +503,7 @@ process_includes (RpmOstreeTreeComposeContext  *self,
       }
   }
 
-  if (!object_get_optional_string_member (root, "include", &include_path, error))
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (root, "include", &include_path, error))
     goto out;
                                           
   if (include_path)
@@ -1051,7 +964,7 @@ rpmostree_compose_builtin_tree (int             argc,
     goto out;
   targetroot = g_file_get_child (workdir, "rootfs");
 
-  ref = object_require_string_member (treefile, "ref", error);
+  ref = _rpmostree_jsonutil_object_require_string_member (treefile, "ref", error);
   if (!ref)
     goto out;
 
@@ -1060,11 +973,11 @@ rpmostree_compose_builtin_tree (int             argc,
   bootstrap_packages = g_ptr_array_new ();
   packages = g_ptr_array_new ();
 
-  if (!append_string_array_to (treefile, treefile_path, "bootstrap_packages", packages,
-                               cancellable, error))
+  if (!_rpmostree_jsonutil_append_string_array_to (treefile, "bootstrap_packages", packages,
+                                                   cancellable, error))
     goto out;
-  if (!append_string_array_to (treefile, treefile_path, "packages", packages,
-                               cancellable, error))
+  if (!_rpmostree_jsonutil_append_string_array_to (treefile, "packages", packages,
+                                                   cancellable, error))
     goto out;
   g_ptr_array_add (packages, NULL);
 
@@ -1113,7 +1026,7 @@ rpmostree_compose_builtin_tree (int             argc,
     RpmOstreePostprocessBootLocation boot_location =
       RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
       
-    if (!object_get_optional_string_member (treefile, "boot_location",
+    if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "boot_location",
                                             &boot_location_str, error))
       goto out;
 
@@ -1154,7 +1067,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
     for (i = 0; i < len; i++)
       {
-        const char *unitname = array_require_string_element (units, i, error);
+        const char *unitname = _rpmostree_jsonutil_array_require_string_element (units, i, error);
         gs_unref_object GFile *unit_link_target = NULL;
         gs_free char *symlink_target = NULL;
 
@@ -1202,7 +1115,7 @@ rpmostree_compose_builtin_tree (int             argc,
   {
     const char *default_target = NULL;
       
-    if (!object_get_optional_string_member (treefile, "default_target",
+    if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "default_target",
                                             &default_target, error))
       goto out;
 
@@ -1234,7 +1147,7 @@ rpmostree_compose_builtin_tree (int             argc,
     
     for (i = 0; i < len; i++)
       {
-        const char *val = array_require_string_element (remove, i, error);
+        const char *val = _rpmostree_jsonutil_array_require_string_element (remove, i, error);
         gs_unref_object GFile *child = NULL;
 
         if (!val)
@@ -1265,7 +1178,7 @@ rpmostree_compose_builtin_tree (int             argc,
     
   {
     const char *gpgkey;
-    if (!object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
+    if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
       goto out;
 
     if (!rpmostree_commit (yumroot, repo, ref, metadata, gpgkey,
