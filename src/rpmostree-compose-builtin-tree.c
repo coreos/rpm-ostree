@@ -1133,7 +1133,7 @@ rpmostree_compose_builtin_tree (int             argc,
           }
       }
     
-    if (!rpmostree_postprocess (yumroot, boot_location, cancellable, error))
+    if (!rpmostree_prepare_rootfs_for_commit (yumroot, boot_location, cancellable, error))
       goto out;
   }
 

@@ -988,11 +988,21 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   return ret;
 }
 
+/**
+ * rpmostree_prepare_rootfs_for_commit:
+ *
+ * Walk over the root filesystem and perform some core conversions
+ * from RPM conventions to OSTree conventions.  For example:
+ *
+ *  * Move /etc to /usr/etc
+ *  * Checksum the kernel in /boot
+ *  * Migrate content in /var to systemd-tmpfiles
+ */
 gboolean
-rpmostree_postprocess (GFile         *rootfs,
-                       RpmOstreePostprocessBootLocation boot_location,
-                       GCancellable  *cancellable,
-                       GError       **error)
+rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
+                                     RpmOstreePostprocessBootLocation boot_location,
+                                     GCancellable  *cancellable,
+                                     GError       **error)
 {
   gboolean ret = FALSE;
   gs_unref_object GFile *rootfs_tmp = NULL;
