@@ -36,6 +36,7 @@
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
+#include "rpmostree-json-parsing.h"
 #include "rpmostree-cleanup.h"
 #include "rpmostree-treepkgdiff.h"
 #include "rpmostree-postprocess.h"
@@ -87,94 +88,6 @@ strv_join_shell_quote (char **argv)
   return g_string_free (ret, FALSE);
 }
 
-static gboolean
-object_get_optional_string_member (JsonObject     *object,
-                                   const char     *member_name,
-                                   const char    **out_value,
-                                   GError        **error)
-{
-  gboolean ret = FALSE;
-  JsonNode *node = json_object_get_member (object, member_name);
-
-  if (node != NULL)
-    {
-      *out_value = json_node_get_string (node);
-      if (!*out_value)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Member '%s' is not a string", member_name);
-          goto out;
-        }
-    }
-  else
-    *out_value = NULL;
-
-  ret = TRUE;
- out:
-  return ret;
-}
-
-static const char *
-object_require_string_member (JsonObject     *object,
-                              const char     *member_name,
-                              GError        **error)
-{
-  const char *ret;
-  if (!object_get_optional_string_member (object, member_name, &ret, error))
-    return NULL;
-  if (!ret)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Member '%s' not found", member_name);
-      return NULL;
-    }
-  return ret;
-}
-
-static const char *
-array_require_string_element (JsonArray      *array,
-                              guint           i,
-                              GError        **error)
-{
-  const char *ret = json_array_get_string_element (array, i);
-  if (!ret)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Element at index %u is not a string", i);
-      return NULL;
-    }
-  return ret;
-}
-
-static gboolean
-append_string_array_to (JsonObject   *object,
-                        GFile        *treefile_path,
-                        const char   *member_name,
-                        GPtrArray    *array,
-                        GCancellable *cancellable,
-                        GError      **error)
-{
-  JsonArray *jarray = json_object_get_array_member (object, member_name);
-  guint i, len;
-
-  if (!jarray)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "No member '%s' found", member_name);
-      return FALSE;
-    }
-
-  len = json_array_get_length (jarray);
-  for (i = 0; i < len; i++)
-    {
-      const char *v = array_require_string_element (jarray, i, error);
-      if (!v)
-        return FALSE;
-      g_ptr_array_add (array, g_strdup (v));
-    }
-
-  return TRUE;
-}
 
 typedef struct {
   gboolean running;
@@ -367,7 +280,7 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
       guint n = json_array_get_length (enable_repos);
       for (i = 0; i < n; i++)
         {
-          const char *reponame = array_require_string_element (enable_repos, i, error);
+          const char *reponame = _rpmostree_jsonutil_array_require_string_element (enable_repos, i, error);
           if (!reponame)
             goto out;
           g_ptr_array_add (args, g_strconcat ("--enablerepo=", reponame, NULL));
@@ -590,7 +503,7 @@ process_includes (RpmOstreeTreeComposeContext  *self,
       }
   }
 
-  if (!object_get_optional_string_member (root, "include", &include_path, error))
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (root, "include", &include_path, error))
     goto out;
                                           
   if (include_path)
@@ -877,9 +790,6 @@ rpmostree_compose_builtin_tree (int             argc,
   RpmOstreeTreeComposeContext *self = &selfdata;
   JsonNode *treefile_rootval = NULL;
   JsonObject *treefile = NULL;
-  JsonArray *units = NULL;
-  guint len;
-  guint i;
   gs_free char *ref_unix = NULL;
   gs_free char *cachekey = NULL;
   gs_free char *cached_compose_checksum = NULL;
@@ -1051,7 +961,7 @@ rpmostree_compose_builtin_tree (int             argc,
     goto out;
   targetroot = g_file_get_child (workdir, "rootfs");
 
-  ref = object_require_string_member (treefile, "ref", error);
+  ref = _rpmostree_jsonutil_object_require_string_member (treefile, "ref", error);
   if (!ref)
     goto out;
 
@@ -1060,11 +970,11 @@ rpmostree_compose_builtin_tree (int             argc,
   bootstrap_packages = g_ptr_array_new ();
   packages = g_ptr_array_new ();
 
-  if (!append_string_array_to (treefile, treefile_path, "bootstrap_packages", packages,
-                               cancellable, error))
+  if (!_rpmostree_jsonutil_append_string_array_to (treefile, "bootstrap_packages", packages,
+                                                   cancellable, error))
     goto out;
-  if (!append_string_array_to (treefile, treefile_path, "packages", packages,
-                               cancellable, error))
+  if (!_rpmostree_jsonutil_append_string_array_to (treefile, "packages", packages,
+                                                   cancellable, error))
     goto out;
   g_ptr_array_add (packages, NULL);
 
@@ -1108,12 +1018,16 @@ rpmostree_compose_builtin_tree (int             argc,
   if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
     goto out;
 
+  if (!rpmostree_treefile_postprocessing (yumroot, self->serialized_treefile, treefile,
+                                          cancellable, error))
+    goto out;
+
   {
     const char *boot_location_str = NULL;
     RpmOstreePostprocessBootLocation boot_location =
       RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
       
-    if (!object_get_optional_string_member (treefile, "boot_location",
+    if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "boot_location",
                                             &boot_location_str, error))
       goto out;
 
@@ -1133,139 +1047,13 @@ rpmostree_compose_builtin_tree (int             argc,
           }
       }
     
-    if (!rpmostree_postprocess (yumroot, boot_location, cancellable, error))
+    if (!rpmostree_prepare_rootfs_for_commit (yumroot, boot_location, cancellable, error))
       goto out;
   }
-
-  if (json_object_has_member (treefile, "units"))
-    units = json_object_get_array_member (treefile, "units");
-
-  if (units)
-    len = json_array_get_length (units);
-  else
-    len = 0;
-
-  {
-    gs_unref_object GFile *multiuser_wants_dir =
-      g_file_resolve_relative_path (yumroot, "usr/etc/systemd/system/multi-user.target.wants");
-
-    if (!gs_file_ensure_directory (multiuser_wants_dir, TRUE, cancellable, error))
-      goto out;
-
-    for (i = 0; i < len; i++)
-      {
-        const char *unitname = array_require_string_element (units, i, error);
-        gs_unref_object GFile *unit_link_target = NULL;
-        gs_free char *symlink_target = NULL;
-
-        if (!unitname)
-          goto out;
-
-        symlink_target = g_strconcat ("/usr/lib/systemd/system/", unitname, NULL);
-        unit_link_target = g_file_get_child (multiuser_wants_dir, unitname);
-
-        if (g_file_query_file_type (unit_link_target, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL) == G_FILE_TYPE_SYMBOLIC_LINK)
-          continue;
-          
-        g_print ("Adding %s to multi-user.target.wants\n", unitname);
-
-        if (!g_file_make_symbolic_link (unit_link_target, symlink_target,
-                                        cancellable, error))
-          goto out;
-      }
-  }
-
-  {
-    gs_unref_object GFile *target_treefile_dir_path =
-      g_file_resolve_relative_path (yumroot, "usr/share/rpm-ostree");
-    gs_unref_object GFile *target_treefile_path =
-      g_file_get_child (target_treefile_dir_path, "treefile.json");
-
-    if (!gs_file_ensure_directory (target_treefile_dir_path, TRUE,
-                                   cancellable, error))
-      goto out;
-                                     
-    g_print ("Copying '%s' to '%s'\n",
-             gs_file_get_path_cached (treefile_path),
-             gs_file_get_path_cached (target_treefile_path));
-    {
-      gsize len;
-      const guint8 *buf = g_bytes_get_data (self->serialized_treefile, &len);
-
-      if (!g_file_replace_contents (target_treefile_path, (char*)buf, len,
-                                    NULL, FALSE, G_FILE_CREATE_REPLACE_DESTINATION,
-                                    NULL, cancellable, error))
-        goto out;
-    }
-  }
-
-  {
-    const char *default_target = NULL;
-      
-    if (!object_get_optional_string_member (treefile, "default_target",
-                                            &default_target, error))
-      goto out;
-
-    if (default_target != NULL)
-      {
-        gs_unref_object GFile *default_target_path =
-          g_file_resolve_relative_path (yumroot, "usr/etc/systemd/system/default.target");
-        gs_free char *dest_default_target_path =
-          g_strconcat ("/usr/lib/systemd/system/", default_target, NULL);
-
-        (void) gs_file_unlink (default_target_path, NULL, NULL);
-        
-        if (!g_file_make_symbolic_link (default_target_path, dest_default_target_path,
-                                        cancellable, error))
-          goto out;
-      }
-  }
-
-  {
-    JsonArray *remove = NULL;
-
-    if (json_object_has_member (treefile, "remove-files"))
-      {
-        remove = json_object_get_array_member (treefile, "remove-files");
-        len = json_array_get_length (remove);
-      }
-    else
-      len = 0;
-    
-    for (i = 0; i < len; i++)
-      {
-        const char *val = array_require_string_element (remove, i, error);
-        gs_unref_object GFile *child = NULL;
-
-        if (!val)
-          return FALSE;
-        if (g_path_is_absolute (val))
-          {
-            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                         "'remove' elements must be relative");
-            goto out;
-          }
-
-        child = g_file_resolve_relative_path (yumroot, val);
-        
-        if (g_file_query_exists (child, NULL))
-          {
-            g_print ("Removing '%s'\n", val);
-            if (!gs_shutil_rm_rf (child, cancellable, error))
-              goto out;
-          }
-        else
-          {
-            g_printerr ("warning: Targeted path for remove-files does not exist: %s\n",
-                        gs_file_get_path_cached (child));
-          }
-      }
-  }
-
     
   {
     const char *gpgkey;
-    if (!object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
+    if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
       goto out;
 
     if (!rpmostree_commit (yumroot, repo, ref, metadata, gpgkey,

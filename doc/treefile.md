@@ -35,6 +35,8 @@ Treefile
 
  * `default_target`: String, optional: Set the default systemd target
 
+ * `remove-files`: Delete these files from the generated tree
+
  * `include`: string, optional: Path to another treefile which will be
    used as an inheritance base.  The semantics for inheritance are:
    Non-array values in child values override parent values.  Array
