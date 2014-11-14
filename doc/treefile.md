@@ -38,6 +38,24 @@ Treefile
 
  * `default_target`: String, optional: Set the default systemd target
 
+ * `postprocess-script`: String, optional: Full filesystem path to a script
+   that will be executed in the context of the target tree.  The script
+   will be copied into the target into `/tmp`, and run as a container
+   (a restricted chroot, with no network access).  After execution is
+   complete, it will be deleted.
+
+   It is *strongly recommended* to avoid using this except as a last resort.
+   Having the system generated through RPMs allows administrators to understand
+   the inputs to the system.  Any new files created through this mechanism will
+   not have the versioning inherent in RPM.
+
+   Only the script file will be copied in; thus if it has any dependencies,
+   on data beyond what is in the target tree, you must embed them in the binary
+   itself.
+
+   An example use for this is working around bugs in the input RPMs that are
+   hard to fix in stable releases.
+
  * `remove-files`: Delete these files from the generated tree
 
  * `remove-from-packages`: Array, optional: Delete from specified packages
