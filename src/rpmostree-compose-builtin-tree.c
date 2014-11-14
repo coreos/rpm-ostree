@@ -1038,7 +1038,8 @@ rpmostree_compose_builtin_tree (int             argc,
   if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
     goto out;
 
-  if (!rpmostree_treefile_postprocessing (yumroot, self->serialized_treefile, treefile,
+  if (!rpmostree_treefile_postprocessing (yumroot, self->treefile_context_dirs->pdata[0],
+                                          self->serialized_treefile, treefile,
                                           cancellable, error))
     goto out;
 

@@ -42,7 +42,9 @@ GS_DEFINE_CLEANUP_FUNCTION0(GKeyFile*, _cleanup_g_key_file_unref, g_key_file_unr
 GS_DEFINE_CLEANUP_FUNCTION0(HySack, _cleanup_hy_sack_free, hy_sack_free);
 GS_DEFINE_CLEANUP_FUNCTION0(HyQuery, _cleanup_hy_query_free, hy_query_free);
 GS_DEFINE_CLEANUP_FUNCTION0(HyPackageList, _cleanup_hy_packagelist_free, hy_packagelist_free);
+GS_DEFINE_CLEANUP_FUNCTION0(HyStringArray, _cleanup_hy_stringarray_free, hy_stringarray_free);
 
 #define _cleanup_hysack_ __attribute__((cleanup(_cleanup_hy_sack_free)))
 #define _cleanup_hyquery_ __attribute__((cleanup(_cleanup_hy_query_free)))
 #define _cleanup_hypackagelist_ __attribute__((cleanup(_cleanup_hy_packagelist_free)))
+#define _cleanup_hystringarray_ __attribute__((cleanup(_cleanup_hy_stringarray_free)))
