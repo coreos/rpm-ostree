@@ -30,6 +30,7 @@ typedef enum {
 
 gboolean
 rpmostree_treefile_postprocessing (GFile         *rootfs,
+                                   GFile         *context_directory,
                                    GBytes        *serialized_treefile,
                                    JsonObject    *treefile,
                                    GCancellable  *cancellable,

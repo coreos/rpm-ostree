@@ -1061,6 +1061,7 @@ handle_remove_files_from_package (GFile         *yumroot,
 
 gboolean
 rpmostree_treefile_postprocessing (GFile         *yumroot,
+                                   GFile         *context_directory,
                                    GBytes        *serialized_treefile,
                                    JsonObject    *treefile,
                                    GCancellable  *cancellable,
@@ -1071,6 +1072,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
   JsonArray *units = NULL;
   JsonArray *remove = NULL;
   const char *default_target = NULL;
+  const char *postprocess_script = NULL;
 
   if (json_object_has_member (treefile, "units"))
     units = json_object_get_array_member (treefile, "units");
@@ -1208,6 +1210,36 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
           if (!handle_remove_files_from_package (yumroot, sack, elt, cancellable, error))
             goto out;
         }
+    }
+
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "postprocess-script",
+                                                              &postprocess_script, error))
+    goto out;
+    
+  if (postprocess_script)
+    {
+      gs_unref_object GFile *src = g_file_resolve_relative_path (context_directory, postprocess_script);
+      const char *bn = gs_file_get_basename_cached (src);
+      gs_unref_object GFile *yumroot_tmp = g_file_resolve_relative_path (yumroot, "tmp");
+      gs_unref_object GFile *dest = g_file_resolve_relative_path (yumroot_tmp, bn);
+      gs_free char *targetpath = g_build_filename ("/tmp", gs_file_get_basename_cached (src), NULL);
+
+      if (!g_file_copy (src, dest, 0, cancellable, NULL, NULL, error))
+        {
+          g_prefix_error (error, "Copying postprocess-script '%s' into target: ", bn);
+          goto out;
+        }
+      
+      g_print ("Executing postprocessing script '%s'...\n", bn);
+      if (!gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_NULL,
+                                          cancellable, error,
+                                          "systemd-nspawn", "-D", gs_file_get_path_cached (yumroot),
+                                          "--private-network",
+                                          targetpath,
+                                          NULL))
+        goto out;
+                                          
+      g_print ("Executing postprocessing script '%s'...done\n", bn);
     }
   
   ret = TRUE;
