@@ -34,10 +34,10 @@
 #include <stdlib.h>
 
 #include "rpmostree-postprocess.h"
+#include "rpmostree-cleanup.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-util.h"
-
-#include "libgsystem.h"
+#include "rpmostree-treepkgdiff.h"
 
 static gboolean
 move_to_dir (GFile        *src,
@@ -990,6 +990,75 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   return ret;
 }
 
+static gboolean
+handle_remove_files_from_package (GFile         *yumroot,
+                                  HySack         sack,
+                                  JsonArray     *removespec,
+                                  GCancellable  *cancellable,
+                                  GError       **error)
+{
+  gboolean ret = FALSE;
+  const char *pkg = json_array_get_string_element (removespec, 0);
+  guint i, j, npackages;
+  guint len = json_array_get_length (removespec);
+  HyPackage hypkg;
+  _cleanup_hyquery_ HyQuery query = NULL;
+  _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+      
+  query = hy_query_create (sack);
+  hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkg);
+  pkglist = hy_query_run (query);
+  npackages = hy_packagelist_count (pkglist);
+  if (npackages == 0)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Unable to find package '%s' specified in remove-files-from", pkg);
+      goto out;
+    }
+
+  for (j = 0; j < npackages; j++)
+    {
+      _cleanup_hystringarray_ HyStringArray pkg_files = NULL;
+
+      hypkg = hy_packagelist_get (pkglist, 0);
+      pkg_files = hy_package_get_files (hypkg);
+
+      for (i = 1; i < len; i++)
+        {
+          const char *remove_regex_pattern = json_array_get_string_element (removespec, i);
+          GRegex *regex;
+          char **strviter;
+
+          regex = g_regex_new (remove_regex_pattern, G_REGEX_JAVASCRIPT_COMPAT, 0, error);
+
+          if (!regex)
+            goto out;
+      
+          for (strviter = pkg_files; strviter && strviter[0]; strviter++)
+            {
+              const char *file = *strviter;
+
+              if (g_regex_match (regex, file, 0, NULL))
+                {
+                  gs_unref_object GFile *child = NULL;
+              
+                  if (file[0] == '/')
+                    file++;
+              
+                  child = g_file_resolve_relative_path (yumroot, file);
+                  g_print ("Deleting: %s\n", file);
+                  if (!gs_shutil_rm_rf (child, cancellable, error))
+                    goto out;
+                }
+            }
+        }
+    }
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
 gboolean
 rpmostree_treefile_postprocessing (GFile         *yumroot,
                                    GBytes        *serialized_treefile,
@@ -1114,6 +1183,30 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
         {
           g_printerr ("warning: Targeted path for remove-files does not exist: %s\n",
                       gs_file_get_path_cached (child));
+        }
+    }
+
+  if (json_object_has_member (treefile, "remove-from-packages"))
+    {
+      _cleanup_hysack_ HySack sack = NULL;
+      _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+      guint i;
+
+      remove = json_object_get_array_member (treefile, "remove-from-packages");
+      len = json_array_get_length (remove);
+
+      if (!rpmostree_get_pkglist_for_root (yumroot, &sack, &pkglist,
+                                           cancellable, error))
+        {
+          g_prefix_error (error, "Reading package set: ");
+          goto out;
+        }
+
+      for (i = 0; i < len; i++)
+        {
+          JsonArray *elt = json_array_get_array_element (remove, i);
+          if (!handle_remove_files_from_package (yumroot, sack, elt, cancellable, error))
+            goto out;
         }
     }
   

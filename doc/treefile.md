@@ -40,6 +40,18 @@ Treefile
 
  * `remove-files`: Delete these files from the generated tree
 
+ * `remove-from-packages`: Array, optional: Delete from specified packages
+   files which match the provided array of regular expressions.
+   This is safer than `remove-files` as it allows finer grained control
+   with less risk of too-wide regular expressions.
+
+   Each array element is an array, whose first member is a package name,
+   and subsequent members are regular expressions (compatible with JavaScript).
+
+   Example: `remove-from-packages: [["cpio", "/usr/share/.*"], ["dhclient", "/usr/lib/.*", "/usr/share/.*"]]`
+
+   Note this does not alter the RPM database, so `rpm -V` will complain.
+
  * `include`: string, optional: Path to another treefile which will be
    used as an inheritance base.  The semantics for inheritance are:
    Non-array values in child values override parent values.  Array
