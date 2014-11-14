@@ -27,6 +27,9 @@ Treefile
    set; rpm-ostree will modify the `/etc/nsswitch.conf` in the target
    root to ensure that `/usr/lib/passwd` is used.
 
+ * `install-langs`: Array of strings, optional.  This sets the RPM
+   _install_langs macro.  Set this to e.g. `["en_US", "fr_FR"]`.
+
  * `packages`: Array of strings, mandatory: Set of installed packages.
    Names prefixed with an `@` (e.g. `@core`) are taken to be the names
    of comps groups.

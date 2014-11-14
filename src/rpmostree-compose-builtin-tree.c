@@ -315,6 +315,7 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
 {
   gboolean success = FALSE;
   YumContext *yumctx = NULL;
+  JsonNode *install_langs_n;
   GPtrArray *yum_argv = g_ptr_array_new_with_free_func (g_free);
   pid_t child;
   int clone_flags = SIGCHLD | CLONE_NEWNS | CLONE_NEWPID;
@@ -326,6 +327,25 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
   if (!append_repo_and_cache_opts (self, treedata, workdir, yum_argv,
                                    cancellable, error))
     goto out;
+
+  install_langs_n = json_object_get_member (treedata, "install-langs");
+  if (install_langs_n != NULL)
+    {
+      JsonArray *instlangs_a = json_node_get_array (install_langs_n);
+      guint len = json_array_get_length (instlangs_a);
+      guint i;
+      GString *opt = g_string_new ("--setopt=override_install_langs=");
+
+      for (i = 0; i < len; i++)
+        {
+          g_string_append (opt, json_array_get_string_element (instlangs_a, i));
+          if (i < len - 1)
+            g_string_append_c (opt, ',');
+        }
+
+      g_ptr_array_add (yum_argv, opt->str);
+      g_string_free (opt, FALSE);
+    }
 
   g_ptr_array_add (yum_argv, g_strconcat ("--installroot=",
                                           gs_file_get_path_cached (yumroot),
