@@ -112,3 +112,20 @@ _rpmostree_jsonutil_append_string_array_to (JsonObject   *object,
 
   return TRUE;
 }
+
+GHashTable *
+_rpmostree_jsonutil_jsarray_strings_to_set (JsonArray  *array)
+{
+  GHashTable *ret = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
+  guint i;
+  guint len = json_array_get_length (array);
+
+  for (i = 0; i < len; i++)
+    {
+      const char *elt = json_array_get_string_element (array, i);
+      char *duped = g_strdup (elt);
+      g_hash_table_insert (ret, duped, duped);
+    }
+  
+  return ret;
+}

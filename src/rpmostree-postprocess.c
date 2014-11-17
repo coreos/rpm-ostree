@@ -39,6 +39,12 @@
 #include "rpmostree-util.h"
 #include "rpmostree-treepkgdiff.h"
 
+typedef enum {
+  RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY,
+  RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH,
+  RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW
+} RpmOstreePostprocessBootLocation;
+
 static gboolean
 move_to_dir (GFile        *src,
              GFile        *dest_dir,
@@ -590,6 +596,7 @@ typedef enum {
 static gboolean
 migrate_passwd_file_except_root (GFile         *rootfs,
                                  MigrateKind    kind,
+                                 GHashTable    *preserve,
                                  GCancellable  *cancellable,
                                  GError       **error)
 {
@@ -621,6 +628,8 @@ migrate_passwd_file_except_root (GFile         *rootfs,
       struct group *gr = NULL;
       FILE *deststream;
       int r;
+      guint32 id;
+      const char *name;
       
       if (kind == MIGRATE_PASSWD)
         pw = fgetpwent (src_stream);
@@ -639,11 +648,21 @@ migrate_passwd_file_except_root (GFile         *rootfs,
             break;
         }
 
-      if ((pw && pw->pw_uid == 0) ||
-          (gr && gr->gr_gid == 0))
-        deststream = etcdest_stream;
+      deststream = usrdest_stream;
+
+      if (pw)
+        {
+          id = pw->pw_uid;
+          name = pw->pw_name;
+        }
       else
-        deststream = usrdest_stream;
+        {
+          id = gr->gr_gid;
+          name = gr->gr_name;
+        }
+
+      if (id == 0 || (preserve && g_hash_table_contains (preserve, name)))
+        deststream = etcdest_stream;
 
       if (pw)
         r = putpwent (pw, deststream);
@@ -812,14 +831,15 @@ migrate_rpm_and_yumdb (GFile          *targetroot,
 /* Prepare a root filesystem, taking mainly the contents of /usr from yumroot */
 static gboolean 
 create_rootfs_from_yumroot_content (GFile         *targetroot,
-                                    RpmOstreePostprocessBootLocation boot_location,
                                     GFile         *yumroot,
+                                    JsonObject    *treefile,
                                     GCancellable  *cancellable,
                                     GError       **error)
 {
   gboolean ret = FALSE;
   gs_unref_object GFile *kernel_path = NULL;
   gs_unref_object GFile *initramfs_path = NULL;
+  gs_unref_hashtable GHashTable *preserve_groups_set = NULL;
 
   g_print ("Preparing kernel\n");
   if (!do_kernel_prep (yumroot, cancellable, error))
@@ -830,10 +850,19 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
     goto out;
 
   g_print ("Migrating /etc/passwd to /usr/lib/\n");
-  if (!migrate_passwd_file_except_root (yumroot, MIGRATE_PASSWD, cancellable, error))
+  if (!migrate_passwd_file_except_root (yumroot, MIGRATE_PASSWD, NULL,
+                                        cancellable, error))
     goto out;
+
+  if (json_object_has_member (treefile, "etc-group-members"))
+    {
+      JsonArray *etc_group_members = json_object_get_array_member (treefile, "etc-group-members");
+      preserve_groups_set = _rpmostree_jsonutil_jsarray_strings_to_set (etc_group_members);
+    }
+      
   g_print ("Migrating /etc/group to /usr/lib/\n");
-  if (!migrate_passwd_file_except_root (yumroot, MIGRATE_GROUP, cancellable, error))
+  if (!migrate_passwd_file_except_root (yumroot, MIGRATE_GROUP, preserve_groups_set,
+                                        cancellable, error))
     goto out;
 
   /* NSS configuration to look at the new files */
@@ -915,7 +944,31 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
       g_file_resolve_relative_path (targetroot, "usr/lib");
     gs_unref_object GFile *target_usrlib_ostree_boot =
       g_file_resolve_relative_path (target_usrlib, "ostree-boot");
+    RpmOstreePostprocessBootLocation boot_location =
+      RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
+    const char *boot_location_str = NULL;
+      
+    if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile,
+                                                                "boot_location",
+                                                                &boot_location_str, error))
+      goto out;
 
+    if (boot_location_str != NULL)
+      {
+        if (strcmp (boot_location_str, "legacy") == 0)
+          boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY;
+        else if (strcmp (boot_location_str, "both") == 0)
+          boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
+        else if (strcmp (boot_location_str, "new") == 0)
+          boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
+        else
+          {
+            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                         "Invalid boot location '%s'", boot_location_str);
+            goto out;
+          }
+      }
+    
     if (!gs_file_ensure_directory (target_usrlib, TRUE, cancellable, error))
       goto out;
 
@@ -1259,7 +1312,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
  */
 gboolean
 rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
-                                     RpmOstreePostprocessBootLocation boot_location,
+                                     JsonObject    *treefile,
                                      GCancellable  *cancellable,
                                      GError       **error)
 {
@@ -1273,7 +1326,8 @@ rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
   if (!gs_shutil_rm_rf (rootfs_tmp, cancellable, error))
     goto out;
 
-  if (!create_rootfs_from_yumroot_content (rootfs_tmp, boot_location, rootfs, cancellable, error))
+  if (!create_rootfs_from_yumroot_content (rootfs_tmp, rootfs, treefile,
+                                           cancellable, error))
     goto out;
 
   if (!gs_shutil_rm_rf (rootfs, cancellable, error))
