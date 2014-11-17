@@ -27,6 +27,10 @@ Treefile
    set; rpm-ostree will modify the `/etc/nsswitch.conf` in the target
    root to ensure that `/usr/lib/passwd` is used.
 
+ * `etc-group-members`: Array of strings, optional: Unix groups in this
+   list will be stored in `/etc/group` instead of `/usr/lib/group`.  Use
+   this option for groups for which humans should be a member.
+
  * `install-langs`: Array of strings, optional.  This sets the RPM
    _install_langs macro.  Set this to e.g. `["en_US", "fr_FR"]`.
 

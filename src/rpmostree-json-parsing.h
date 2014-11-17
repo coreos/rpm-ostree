@@ -46,4 +46,7 @@ _rpmostree_jsonutil_append_string_array_to (JsonObject   *object,
                                             GCancellable *cancellable,
                                             GError      **error);
 
+GHashTable *
+_rpmostree_jsonutil_jsarray_strings_to_set (JsonArray  *array);
+
 
