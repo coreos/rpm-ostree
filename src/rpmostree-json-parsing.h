@@ -43,7 +43,6 @@ gboolean
 _rpmostree_jsonutil_append_string_array_to (JsonObject   *object,
                                             const char   *member_name,
                                             GPtrArray    *array,
-                                            GCancellable *cancellable,
                                             GError      **error);
 
 GHashTable *

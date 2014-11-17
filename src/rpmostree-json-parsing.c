@@ -88,7 +88,6 @@ gboolean
 _rpmostree_jsonutil_append_string_array_to (JsonObject   *object,
 					    const char   *member_name,
 					    GPtrArray    *array,
-					    GCancellable *cancellable,
 					    GError      **error)
 {
   JsonArray *jarray = json_object_get_array_member (object, member_name);

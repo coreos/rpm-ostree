@@ -991,12 +991,10 @@ rpmostree_compose_builtin_tree (int             argc,
 
   if (json_object_has_member (treefile, "bootstrap_packages"))
     {
-      if (!_rpmostree_jsonutil_append_string_array_to (treefile, "bootstrap_packages", packages,
-                                                       cancellable, error))
+      if (!_rpmostree_jsonutil_append_string_array_to (treefile, "bootstrap_packages", packages, error))
         goto out;
     }
-  if (!_rpmostree_jsonutil_append_string_array_to (treefile, "packages", packages,
-                                                   cancellable, error))
+  if (!_rpmostree_jsonutil_append_string_array_to (treefile, "packages", packages, error))
     goto out;
   g_ptr_array_add (packages, NULL);
 
