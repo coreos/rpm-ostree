@@ -68,6 +68,8 @@ static GOptionEntry option_entries[] = {
 
 typedef struct {
   GPtrArray *treefile_context_dirs;
+  
+  GFile *workdir;
 
   GBytes *serialized_treefile;
 } RpmOstreeTreeComposeContext;
@@ -175,7 +177,6 @@ void cleanup_keyfile_unref (void *loc)
 static gboolean
 append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
                             JsonObject *treedata,
-                            GFile      *workdir,
                             GPtrArray  *args,
                             GCancellable *cancellable,
                             GError    **error)
@@ -192,12 +193,12 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
     yumcache_lookaside = g_file_new_for_path (opt_output_repodata_dir);
   else
     {
-      yumcache_lookaside = g_file_resolve_relative_path (workdir, "yum-cache");
+      yumcache_lookaside = g_file_resolve_relative_path (self->workdir, "yum-cache");
       if (!gs_file_ensure_directory (yumcache_lookaside, TRUE, cancellable, error))
         goto out;
     }
       
-  repos_tmpdir = g_file_resolve_relative_path (workdir, "tmp-repos");
+  repos_tmpdir = g_file_resolve_relative_path (self->workdir, "tmp-repos");
   if (!gs_shutil_rm_rf (repos_tmpdir, cancellable, error))
     goto out;
   if (!gs_file_ensure_directory (repos_tmpdir, TRUE, cancellable, error))
@@ -309,7 +310,6 @@ static YumContext *
 yum_context_new (RpmOstreeTreeComposeContext  *self,
                  JsonObject     *treedata,
                  GFile          *yumroot,
-                 GFile          *workdir,
                  GCancellable   *cancellable,
                  GError        **error)
 {
@@ -324,7 +324,7 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
   g_ptr_array_add (yum_argv, g_strdup ("yum"));
   g_ptr_array_add (yum_argv, g_strdup ("-y"));
 
-  if (!append_repo_and_cache_opts (self, treedata, workdir, yum_argv,
+  if (!append_repo_and_cache_opts (self, treedata, yum_argv,
                                    cancellable, error))
     goto out;
 
@@ -444,7 +444,6 @@ static gboolean
 yuminstall (RpmOstreeTreeComposeContext  *self,
             JsonObject      *treedata,
             GFile           *yumroot,
-            GFile           *workdir,
             char           **packages,
             GCancellable    *cancellable,
             GError         **error)
@@ -453,7 +452,7 @@ yuminstall (RpmOstreeTreeComposeContext  *self,
   char **strviter;
   YumContext *yumctx;
 
-  yumctx = yum_context_new (self, treedata, yumroot, workdir, cancellable, error);
+  yumctx = yum_context_new (self, treedata, yumroot, cancellable, error);
   if (!yumctx)
     goto out;
 
@@ -814,7 +813,6 @@ rpmostree_compose_builtin_tree (int             argc,
   gs_free char *cachekey = NULL;
   gs_free char *cached_compose_checksum = NULL;
   gs_free char *new_compose_checksum = NULL;
-  gs_unref_object GFile *workdir = NULL;
   gs_unref_object GFile *cachedir = NULL;
   gs_unref_object GFile *yumroot = NULL;
   gs_unref_object GFile *targetroot = NULL;
@@ -903,12 +901,12 @@ rpmostree_compose_builtin_tree (int             argc,
 
   if (opt_workdir)
     {
-      workdir = g_file_new_for_path (opt_workdir);
+      self->workdir = g_file_new_for_path (opt_workdir);
     }
   else
     {
       gs_free char *tmpd = g_mkdtemp (g_strdup ("/var/tmp/rpm-ostree.XXXXXX"));
-      workdir = g_file_new_for_path (tmpd);
+      self->workdir = g_file_new_for_path (tmpd);
       workdir_is_tmp = TRUE;
 
       if (opt_workdir_tmpfs)
@@ -936,11 +934,12 @@ rpmostree_compose_builtin_tree (int             argc,
         goto out;
     }
 
-  if (chdir (gs_file_get_path_cached (workdir)) != 0)
+  if (chdir (gs_file_get_path_cached (self->workdir)) != 0)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Failed to chdir to '%s': %s",
-                   opt_workdir, strerror (errno));
+                   gs_file_get_path_cached (self->workdir),
+                   strerror (errno));
       goto out;
     }
 
@@ -976,10 +975,10 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
     }
 
-  yumroot = g_file_get_child (workdir, "rootfs.tmp");
+  yumroot = g_file_get_child (self->workdir, "rootfs.tmp");
   if (!gs_shutil_rm_rf (yumroot, cancellable, error))
     goto out;
-  targetroot = g_file_get_child (workdir, "rootfs");
+  targetroot = g_file_get_child (self->workdir, "rootfs");
 
   ref = _rpmostree_jsonutil_object_require_string_member (treefile, "ref", error);
   if (!ref)
@@ -1010,7 +1009,7 @@ rpmostree_compose_builtin_tree (int             argc,
     self->serialized_treefile = g_bytes_new_take (treefile_buf, len);
   }
 
-  if (!yuminstall (self, treefile, yumroot, workdir,
+  if (!yuminstall (self, treefile, yumroot,
                    (char**)packages->pdata,
                    cancellable, error))
     goto out;
@@ -1095,11 +1094,12 @@ rpmostree_compose_builtin_tree (int             argc,
   if (workdir_is_tmp)
     {
       if (opt_workdir_tmpfs)
-        (void) umount (gs_file_get_path_cached (workdir));
-      (void) gs_shutil_rm_rf (workdir, NULL, NULL);
+        (void) umount (gs_file_get_path_cached (self->workdir));
+      (void) gs_shutil_rm_rf (self->workdir, NULL, NULL);
     }
   if (self)
     {
+      g_clear_object (&self->workdir);
       g_clear_pointer (&self->serialized_treefile, g_bytes_unref);
       g_ptr_array_unref (self->treefile_context_dirs);
     }
