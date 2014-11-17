@@ -9,7 +9,7 @@ Treefile
    none.
 
  * `repos` array of strings, mandatory: Names of yum repositories to
-   use, from the system `/etc/yum.repos.d`.
+   use, from `.repo` files in the same directory as the treefile.
 
  * `selinux`: boolean, optional: Defaults to `true`.  If `false`, then
    no SELinux labeling will be performed on the server side.
