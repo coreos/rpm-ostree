@@ -22,12 +22,6 @@
 
 #include <ostree.h>
 
-typedef enum {
-  RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY,
-  RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH,
-  RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW
-} RpmOstreePostprocessBootLocation;
-
 gboolean
 rpmostree_treefile_postprocessing (GFile         *rootfs,
                                    GFile         *context_directory,
@@ -38,7 +32,7 @@ rpmostree_treefile_postprocessing (GFile         *rootfs,
 
 gboolean
 rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
-                                     RpmOstreePostprocessBootLocation boot_style,
+                                     JsonObject    *treefile,
                                      GCancellable  *cancellable,
                                      GError       **error);
 
