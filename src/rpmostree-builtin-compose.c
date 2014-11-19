@@ -45,7 +45,6 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
   gboolean ret = FALSE;
   RpmOstreeComposeCommand *subcommand;
   const char *subcommand_name = NULL;
-  gboolean want_help = FALSE;
   int in, out, i;
   gboolean skip;
 
@@ -70,7 +69,8 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
             }
           else if (g_str_equal (argv[in], "--help"))
             {
-              want_help = TRUE;
+              /* If a subcommand was given, let GOptionContext handle the
+               * help option.  Otherwise eat it and list the subcommands. */
             }
           else if (subcommand_name == NULL)
             {
@@ -89,7 +89,8 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
               switch (argv[in][i])
               {
                 case 'h':
-                  want_help = TRUE;
+                  /* If a subcommand was given, let GOptionContext handle the
+                   * help option.  Otherwise eat it and list the subcommands. */
                   break;
 
                 default:
@@ -113,17 +114,17 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
 
   argc = out;
 
-  if (subcommand_name == NULL || want_help)
+  if (subcommand_name == NULL)
     {
       subcommand = compose_subcommands;
-      g_print ("usage: %s compose COMMAND [options]\n", g_get_prgname ());
+      g_print ("usage: %s COMMAND [options]\n", g_get_prgname ());
       g_print ("Builtin commands:\n");
       while (subcommand->name)
         {
           g_print ("  %s\n", subcommand->name);
           subcommand++;
         }
-      return subcommand_name == NULL ? 1 : 0;
+      return 1;
     }
 
   subcommand = compose_subcommands;
