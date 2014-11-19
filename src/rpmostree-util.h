@@ -21,6 +21,8 @@
 #pragma once
 
 #include <gio/gio.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 void
 _rpmostree_set_error_from_errno (GError    **error,
@@ -51,3 +53,7 @@ _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
                                            GFile        *src,
                                            GCancellable *cancellable,
                                            GError      **error);
+
+gboolean
+_rpmostree_sync_wait_on_pid (pid_t          pid,
+                             GError       **error);

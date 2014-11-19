@@ -96,19 +96,7 @@ typedef struct {
   pid_t pid;
   GFile *tmp_reposdir_path;
   GDataOutputStream *stdin;
-  gboolean caught_error;
-  GError **error;
 } YumContext;
-
-static gboolean
-on_yum_exited (GPid pid, gint status, gpointer user_data)
-{
-  YumContext *ctx = user_data;
-  ctx->caught_error = !g_spawn_check_exit_status (status, ctx->error);
-  ctx->running = FALSE;
-  
-  return FALSE;
-}
 
 static gboolean
 yum_context_close (YumContext   *yumctx,
@@ -129,27 +117,11 @@ yum_context_close (YumContext   *yumctx,
           g_clear_object (&yumctx->stdin);
         }
 
-      {
-        GSource *child_src = g_child_watch_source_new (yumctx->pid);
-        GMainContext *tmp_context = g_main_context_new ();
+      g_print ("Waiting for yum...\n");
+      if (!_rpmostree_sync_wait_on_pid (yumctx->pid, error))
+        goto out;
 
-        g_source_set_callback (child_src, (GSourceFunc)on_yum_exited, yumctx, NULL);
-        g_source_attach (child_src, tmp_context);
-        g_source_unref (child_src);
-
-        yumctx->error = error;
-      
-        g_print ("Waiting for yum...\n");
-        while (yumctx->running)
-          g_main_context_iteration (tmp_context, TRUE);
-      
-        g_print ("Waiting for yum [OK]\n");
-
-        g_main_context_unref (tmp_context);
-
-        if (yumctx->caught_error)
-          goto out;
-      }
+      g_print ("Waiting for yum [OK]\n");
     }
 
   ret = TRUE;

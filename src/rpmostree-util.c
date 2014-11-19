@@ -149,3 +149,29 @@ _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
  out:
   return ret;
 }
+
+gboolean
+_rpmostree_sync_wait_on_pid (pid_t          pid,
+                             GError       **error)
+{
+  gboolean ret = FALSE;
+  pid_t r;
+  int estatus;
+
+  do
+    r = waitpid (pid, &estatus, 0);
+  while (G_UNLIKELY (r == -1 && errno == EINTR));
+
+  if (r == -1)
+    {
+      _rpmostree_set_prefix_error_from_errno (error, errno, "waitpid: ");
+      goto out;
+    }
+
+  if (!g_spawn_check_exit_status (estatus, error))
+    goto out;
+
+  ret = TRUE;
+ out:
+  return ret;
+}
