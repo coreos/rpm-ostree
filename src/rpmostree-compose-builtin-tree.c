@@ -23,22 +23,15 @@
 #include <string.h>
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
-#include <sys/mount.h>
 #include <gio/gunixoutputstream.h>
-#include <sys/types.h>
-#include <sys/prctl.h>
 #include <stdio.h>
-#include <sys/fsuid.h>
-#include <sys/syscall.h>
-#include <sys/wait.h>
-#include <sys/capability.h>
-#include <sched.h>
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-cleanup.h"
 #include "rpmostree-treepkgdiff.h"
+#include "rpmostree-libcontainer.h"
 #include "rpmostree-postprocess.h"
 
 #include "libgsystem.h"
