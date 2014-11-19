@@ -34,6 +34,7 @@
 #include <stdlib.h>
 
 #include "rpmostree-postprocess.h"
+#include "rpmostree-libcontainer.h"
 #include "rpmostree-cleanup.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-util.h"
@@ -1264,25 +1265,25 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
     
   if (postprocess_script)
     {
+      const char *yumroot_path = gs_file_get_path_cached (yumroot);
       gs_unref_object GFile *src = g_file_resolve_relative_path (context_directory, postprocess_script);
       const char *bn = gs_file_get_basename_cached (src);
-      gs_unref_object GFile *yumroot_tmp = g_file_resolve_relative_path (yumroot, "tmp");
-      gs_unref_object GFile *dest = g_file_resolve_relative_path (yumroot_tmp, bn);
-      gs_free char *targetpath = g_build_filename ("/tmp", gs_file_get_basename_cached (src), NULL);
+      gs_free char *binpath = g_strconcat ("/usr/bin/rpmostree-postprocess-", bn, NULL);
+      char *child_argv[] = { binpath, NULL };
+      gs_free char *destpath = g_strconcat (yumroot_path, binpath, NULL);
+      gs_unref_object GFile *dest = g_file_new_for_path (destpath);
+      pid_t child;
+      /* Clone all the things */
 
       if (!g_file_copy (src, dest, 0, cancellable, NULL, NULL, error))
         {
           g_prefix_error (error, "Copying postprocess-script '%s' into target: ", bn);
           goto out;
         }
-      
-      g_print ("Executing postprocessing script '%s'...\n", bn);
-      if (!gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_NULL,
-                                          cancellable, error,
-                                          "systemd-nspawn", "-D", gs_file_get_path_cached (yumroot),
-                                          "--private-network",
-                                          targetpath,
-                                          NULL))
+
+      child = _rpmostree_libcontainer_run_in_root (yumroot_path, binpath, child_argv);
+
+      if (!_rpmostree_sync_wait_on_pid (child, error))
         goto out;
                                           
       g_print ("Executing postprocessing script '%s'...done\n", bn);

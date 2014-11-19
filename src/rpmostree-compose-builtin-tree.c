@@ -23,22 +23,15 @@
 #include <string.h>
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
-#include <sys/mount.h>
 #include <gio/gunixoutputstream.h>
-#include <sys/types.h>
-#include <sys/prctl.h>
 #include <stdio.h>
-#include <sys/fsuid.h>
-#include <sys/syscall.h>
-#include <sys/wait.h>
-#include <sys/capability.h>
-#include <sched.h>
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-cleanup.h"
 #include "rpmostree-treepkgdiff.h"
+#include "rpmostree-libcontainer.h"
 #include "rpmostree-postprocess.h"
 
 #include "libgsystem.h"
@@ -344,8 +337,11 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
       setenv ("HARDLINK", "no", TRUE);
 
       /* Turn off setuid binaries, we shouldn't need them */
-      if (mount (NULL, "/", "none", MS_PRIVATE | MS_REMOUNT | MS_NOSUID, NULL) < 0)
-        _rpmostree_perror_fatal ("mount(/, MS_PRIVATE | MS_NOSUID)");
+      if (_rpmostree_libcontainer_get_available ())
+        {
+          if (mount (NULL, "/", "none", MS_PRIVATE | MS_REMOUNT | MS_NOSUID, NULL) < 0)
+            _rpmostree_perror_fatal ("mount(/, MS_PRIVATE | MS_NOSUID)");
+        }
 
       if (execvp ("yum", (char**)yum_argv->pdata) < 0)
         _rpmostree_perror_fatal ("execvp");
@@ -728,27 +724,6 @@ parse_keyvalue_strings (char             **strings,
   return ret;
 }
 
-static gboolean
-bind_mount_readonly (const char *path, GError **error)
-{
-  gboolean ret = FALSE;
-
-  if (mount (path, path, NULL, MS_BIND | MS_PRIVATE, NULL) != 0)
-    {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "mount(MS_BIND)");
-      goto out;
-    }
-  if (mount (path, path, NULL, MS_BIND | MS_PRIVATE | MS_REMOUNT | MS_RDONLY, NULL) != 0)
-    {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "mount(MS_BIND | MS_RDONLY)");
-      goto out;
-    }
-
-  ret = TRUE;
- out:
-  return ret;
-}
-
 gboolean
 rpmostree_compose_builtin_tree (int             argc,
                                 char          **argv,
@@ -814,32 +789,39 @@ rpmostree_compose_builtin_tree (int             argc,
     }
   if (mount (NULL, "/", "none", MS_PRIVATE | MS_REC, NULL) == -1)
     {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "mount(/, MS_PRIVATE): ");
-      goto out;
+      /* This happens on RHEL6, not going to debug it further right now... */
+      if (errno == EINVAL)
+        _rpmostree_libcontainer_set_not_available ();
+      else
+        {
+          _rpmostree_set_prefix_error_from_errno (error, errno, "mount(/, MS_PRIVATE): ");
+          goto out;
+        }
     }
 
   /* Mount several directories read only for protection from librpm
    * and any stray code in yum/hawkey.
    */
-  {
-    struct stat stbuf;
-    /* Protect /var/lib/rpm if (and only if) it's a regular directory.
-       This happens when you're running compose-tree from inside a
-       "mainline" system.  On an rpm-ostree based system,
-       /var/lib/rpm -> /usr/share/rpm, which is already protected by a read-only
-       bind mount.  */
-    if (lstat ("/var/lib/rpm", &stbuf) == 0 && S_ISDIR (stbuf.st_mode))
-      {
-        if (!bind_mount_readonly ("/var/lib/rpm", error))
-          goto out;
-      }
+  if (_rpmostree_libcontainer_get_available ())
+    {
+      struct stat stbuf;
+      /* Protect /var/lib/rpm if (and only if) it's a regular directory.
+         This happens when you're running compose-tree from inside a
+         "mainline" system.  On an rpm-ostree based system,
+         /var/lib/rpm -> /usr/share/rpm, which is already protected by a read-only
+         bind mount.  */
+      if (lstat ("/var/lib/rpm", &stbuf) == 0 && S_ISDIR (stbuf.st_mode))
+        {
+          if (!_rpmostree_libcontainer_bind_mount_readonly ("/var/lib/rpm", error))
+            goto out;
+        }
 
-    /* Protect the system's /etc and /usr */
-    if (!bind_mount_readonly ("/etc", error))
-      goto out;
-    if (!bind_mount_readonly ("/usr", error))
-      goto out;
-  }
+      /* Protect the system's /etc and /usr */
+      if (!_rpmostree_libcontainer_bind_mount_readonly ("/etc", error))
+        goto out;
+      if (!_rpmostree_libcontainer_bind_mount_readonly ("/usr", error))
+        goto out;
+    }
 
   repo_path = g_file_new_for_path (opt_repo);
   repo = ostree_repo_new (repo_path);
