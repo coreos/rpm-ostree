@@ -360,10 +360,7 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
 
   if ((child = syscall (__NR_clone, clone_flags, NULL)) < 0)
     {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "clone(): %s",
-                   g_strerror (errsv));
+      _rpmostree_set_error_from_errno (error, errno);
       goto out;
     }
   
@@ -774,20 +771,12 @@ bind_mount_readonly (const char *path, GError **error)
 
   if (mount (path, path, NULL, MS_BIND | MS_PRIVATE, NULL) != 0)
     {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "mount(%s, MS_BIND): %s",
-                   path,
-                   g_strerror (errsv));
+      _rpmostree_set_prefix_error_from_errno (error, errno, "mount(MS_BIND)");
       goto out;
     }
   if (mount (path, path, NULL, MS_BIND | MS_PRIVATE | MS_REMOUNT | MS_RDONLY, NULL) != 0)
     {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "mount(%s, MS_BIND | MS_RDONLY): %s",
-                   path,
-                   g_strerror (errsv));
+      _rpmostree_set_prefix_error_from_errno (error, errno, "mount(MS_BIND | MS_RDONLY)");
       goto out;
     }
 
@@ -856,16 +845,12 @@ rpmostree_compose_builtin_tree (int             argc,
    */
   if (unshare (CLONE_NEWNS) != 0)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "unshare(CLONE_NEWNS): %s", g_strerror (errno));
+      _rpmostree_set_prefix_error_from_errno (error, errno, "unshare(CLONE_NEWNS): ");
       goto out;
     }
   if (mount (NULL, "/", "none", MS_PRIVATE | MS_REC, NULL) == -1)
     {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "mount(/, MS_PRIVATE | MS_REC): %s",
-                   g_strerror (errsv));
+      _rpmostree_set_prefix_error_from_errno (error, errno, "mount(/, MS_PRIVATE): ");
       goto out;
     }
 
@@ -913,8 +898,8 @@ rpmostree_compose_builtin_tree (int             argc,
         {
           if (mount ("tmpfs", tmpd, "tmpfs", 0, (const void*)"mode=755") != 0)
             {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "mount(tmpfs): %s", g_strerror (errno));
+              _rpmostree_set_prefix_error_from_errno (error, errno,
+                                                      "mount(tmpfs): ");
               goto out;
             }
         }

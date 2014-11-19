@@ -22,6 +22,15 @@
 
 #include <gio/gio.h>
 
+void
+_rpmostree_set_error_from_errno (GError    **error,
+                                 gint        errsv);
+
+void
+_rpmostree_set_prefix_error_from_errno (GError     **error,
+                                        gint         errsv,
+                                        const char  *prefix);
+
 gboolean
 _rpmostree_util_enumerate_directory_allow_noent (GFile               *dirpath,
 						 const char          *queryargs,

@@ -556,9 +556,8 @@ gfopen (const char       *path,
   ret = fopen (path, mode);
   if (!ret)
     {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "fopen(%s): %s", path, g_strerror (errsv));
+      _rpmostree_set_error_from_errno (error, errno);
+      g_prefix_error (error, "fopen(%s): ", path);
       return NULL;
     }
   return ret;
@@ -571,9 +570,7 @@ gfflush (FILE         *f,
 {
   if (fflush (f) != 0)
     {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "fflush: %s", g_strerror (errsv));
+      _rpmostree_set_prefix_error_from_errno (error, errno, "fflush: ");
       return FALSE;
     }
   return TRUE;
@@ -640,8 +637,7 @@ migrate_passwd_file_except_root (GFile         *rootfs,
         {
           if (errno != 0 && errno != ENOENT)
             {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "fgetpwent: %s", g_strerror (errno));
+              _rpmostree_set_prefix_error_from_errno (error, errno, "fgetpwent: ");
               goto out;
             }
           else
@@ -671,9 +667,7 @@ migrate_passwd_file_except_root (GFile         *rootfs,
 
       if (r == -1)
         {
-          int errsv = errno;
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "putpwent: %s", g_strerror (errsv));
+          _rpmostree_set_prefix_error_from_errno (error, errno, "putpwent: ");
           goto out;
         }
     }
@@ -685,9 +679,8 @@ migrate_passwd_file_except_root (GFile         *rootfs,
 
   if (rename (etctmp_path, src_path) != 0)
     {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "rename(%s, %s): %s", etctmp_path, src_path, g_strerror (errsv));
+      _rpmostree_set_error_from_errno (error, errno);
+      g_prefix_error (error, "rename(%s, %s): ", etctmp_path, src_path);
       goto out;
     }
 

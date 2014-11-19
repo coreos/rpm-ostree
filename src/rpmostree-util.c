@@ -28,6 +28,27 @@
 #include "rpmostree-util.h"
 #include "libgsystem.h"
 
+void
+_rpmostree_set_error_from_errno (GError    **error,
+                                 gint        errsv)
+{
+  g_set_error_literal (error,
+                       G_IO_ERROR,
+                       g_io_error_from_errno (errsv),
+                       g_strerror (errsv));
+  errno = errsv;
+}
+
+void
+_rpmostree_set_prefix_error_from_errno (GError     **error,
+                                        gint         errsv,
+                                        const char  *prefix)
+{
+  _rpmostree_set_error_from_errno (error, errsv);
+  g_prefix_error (error, "%s", prefix);
+  errno = errsv;
+}
+
 gboolean
 _rpmostree_util_enumerate_directory_allow_noent (GFile               *dirpath,
 						 const char          *queryargs,
