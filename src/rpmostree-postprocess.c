@@ -58,6 +58,30 @@ move_to_dir (GFile        *src,
   return gs_file_rename (src, dest, cancellable, error);
 }
 
+static gboolean
+run_sync_in_root (GFile        *yumroot,
+                  const char   *binpath,
+                  char        **child_argv,
+                  GError     **error)
+{
+  gboolean ret = FALSE;
+  const char *yumroot_path = gs_file_get_path_cached (yumroot);
+  pid_t child = _rpmostree_libcontainer_run_in_root (yumroot_path, binpath, child_argv);
+
+  if (child == -1)
+    {
+      _rpmostree_set_error_from_errno (error, errno);
+      goto out;
+    }
+  
+  if (!_rpmostree_sync_wait_on_pid (child, error))
+    goto out;
+  
+  ret = TRUE;
+ out:
+  return ret;
+}
+
 typedef struct {
   const char *target;
   const char *src;
@@ -222,13 +246,11 @@ do_kernel_prep (GFile         *yumroot,
       goto out;
   }
 
-  if (!gs_subprocess_simple_run_sync (gs_file_get_path_cached (yumroot),
-                                      GS_SUBPROCESS_STREAM_DISPOSITION_NULL,
-                                      cancellable, error,
-                                      "chroot", gs_file_get_path_cached (yumroot),
-                                      "depmod", kver,
-                                      NULL))
-    goto out;
+  {
+    char *child_argv[] = { "depmod", (char*)kver, NULL };
+    if (!run_sync_in_root (yumroot, "/usr/sbin/depmod", child_argv, error))
+      goto out;
+  }
 
   /* Copy of code from gnome-continuous; yes, we hardcode
      the machine id for now, because distributing pre-generated
@@ -248,16 +270,13 @@ do_kernel_prep (GFile         *yumroot,
       goto out;
   }
 
-  if (!gs_subprocess_simple_run_sync (gs_file_get_path_cached (yumroot),
-                                      GS_SUBPROCESS_STREAM_DISPOSITION_NULL,
-                                      cancellable, error,
-                                      "chroot", gs_file_get_path_cached (yumroot),
-                                      "dracut", "-v", "--tmpdir=/tmp",
-                                      "-f", "/tmp/initramfs.img", kver,
-                                      NULL))
-    goto out;
+  {
+    char *child_argv[] = { "dracut", "-v", "--tmpdir=/tmp", "-f", "/var/tmp/initramfs.img", (char*)kver, NULL };
+    if (!run_sync_in_root (yumroot, "/usr/sbin/dracut", (char**)child_argv, error))
+      goto out;
+  }
 
-  initramfs_path = g_file_resolve_relative_path (yumroot, "tmp/initramfs.img");
+  initramfs_path = g_file_resolve_relative_path (yumroot, "var/tmp/initramfs.img");
   if (!g_file_query_exists (initramfs_path, NULL))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -1269,10 +1288,8 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
       gs_unref_object GFile *src = g_file_resolve_relative_path (context_directory, postprocess_script);
       const char *bn = gs_file_get_basename_cached (src);
       gs_free char *binpath = g_strconcat ("/usr/bin/rpmostree-postprocess-", bn, NULL);
-      char *child_argv[] = { binpath, NULL };
       gs_free char *destpath = g_strconcat (yumroot_path, binpath, NULL);
       gs_unref_object GFile *dest = g_file_new_for_path (destpath);
-      pid_t child;
       /* Clone all the things */
 
       if (!g_file_copy (src, dest, 0, cancellable, NULL, NULL, error))
@@ -1281,10 +1298,11 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
           goto out;
         }
 
-      child = _rpmostree_libcontainer_run_in_root (yumroot_path, binpath, child_argv);
-
-      if (!_rpmostree_sync_wait_on_pid (child, error))
-        goto out;
+      {
+        char *child_argv[] = { binpath, NULL };
+        if (!run_sync_in_root (yumroot, binpath, child_argv, error))
+          goto out;
+      }
                                           
       g_print ("Executing postprocessing script '%s'...done\n", bn);
     }
