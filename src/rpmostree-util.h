@@ -33,6 +33,8 @@ _rpmostree_set_prefix_error_from_errno (GError     **error,
                                         gint         errsv,
                                         const char  *prefix);
 
+void _rpmostree_perror_fatal (const char *message) __attribute__ ((noreturn));
+
 gboolean
 _rpmostree_util_enumerate_directory_allow_noent (GFile               *dirpath,
 						 const char          *queryargs,

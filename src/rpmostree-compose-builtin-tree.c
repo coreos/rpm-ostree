@@ -270,14 +270,6 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
   return ret;
 }
 
-static void perror_fatal (const char *message) __attribute__ ((noreturn));
-static void perror_fatal (const char *message)
-{
-  perror (message);
-  exit (1);
-}
-
-
 static YumContext *
 yum_context_new (RpmOstreeTreeComposeContext  *self,
                  JsonObject     *treedata,
@@ -339,7 +331,7 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
   if (child == 0)
     {
       if (dup2 (pipefds[0], 0) != 0)
-        perror_fatal ("dup2()");
+        _rpmostree_perror_fatal ("dup2()");
       
       /* This is used at the moment, but eventually I'd like to teach
        * Fedora's kernel.spec to e.g. skip making an initramfs,
@@ -353,10 +345,10 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
 
       /* Turn off setuid binaries, we shouldn't need them */
       if (mount (NULL, "/", "none", MS_PRIVATE | MS_REMOUNT | MS_NOSUID, NULL) < 0)
-        perror_fatal ("mount(/, MS_PRIVATE | MS_NOSUID)");
+        _rpmostree_perror_fatal ("mount(/, MS_PRIVATE | MS_NOSUID)");
 
       if (execvp ("yum", (char**)yum_argv->pdata) < 0)
-        perror_fatal ("execvp");
+        _rpmostree_perror_fatal ("execvp");
     }
 
   (void) close (pipefds[0]);
