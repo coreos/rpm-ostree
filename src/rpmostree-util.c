@@ -21,6 +21,7 @@
 #include "config.h"
 
 #include <string.h>
+#include <stdio.h>
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
 #include <gio/gunixoutputstream.h>
@@ -55,6 +56,13 @@ _rpmostree_set_prefix_error_from_errno (GError     **error,
   _rpmostree_set_error_from_errno (error, errsv);
   g_prefix_error (error, "%s", formatted);
   errno = errsv;
+}
+
+void
+_rpmostree_perror_fatal (const char *message)
+{
+  perror (message);
+  exit (1);
 }
 
 gboolean
