@@ -33,6 +33,7 @@
 #include "rpmostree-treepkgdiff.h"
 #include "rpmostree-libcontainer.h"
 #include "rpmostree-postprocess.h"
+#include "rpmostree-passwd-util.h"
 
 #include "libgsystem.h"
 
@@ -45,6 +46,8 @@ static char **opt_metadata_strings;
 static char *opt_repo;
 static char **opt_override_pkg_repos;
 static gboolean opt_print_only;
+static char *opt_check_passwd = NULL;
+static char *opt_check_groups = NULL;
 
 static GOptionEntry option_entries[] = {
   { "add-metadata-string", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_strings, "Append given key and value (in string format) to metadata", "KEY=VALUE" },
@@ -56,6 +59,8 @@ static GOptionEntry option_entries[] = {
   { "add-override-pkg-repo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_override_pkg_repos, "Include an additional package repository from DIRECTORY", "DIRECTORY" },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
+  { "check-passwd", 0, 0, G_OPTION_ARG_STRING, &opt_check_passwd, "Old passwd", "PASSWD" },
+  { "check-groups", 0, 0, G_OPTION_ARG_STRING, &opt_check_groups, "Old groups", "GROUP" },
   { NULL }
 };
 
@@ -975,6 +980,14 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!rpmostree_prepare_rootfs_for_commit (yumroot, treefile, cancellable, error))
     goto out;
     
+  if (!rpmostree_check_passwd (repo, opt_check_passwd, yumroot, treefile,
+                               cancellable, error))
+    goto out;
+
+  if (!rpmostree_check_groups (repo, opt_check_groups, yumroot, treefile,
+                               cancellable, error))
+    goto out;
+
   {
     const char *gpgkey;
     if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
