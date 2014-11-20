@@ -61,6 +61,44 @@ Treefile
 
    Note this does not alter the RPM database, so `rpm -V` will complain.
 
+ * `check-passwd`: Object, optional: Checks to run against the new passwd file
+   before accepting the tree. All the entries specified should exist (unless
+   ignored) and have the same values or the compose will fail. There are four
+   types: none (for no checking), previous (to check against the passwd file in
+   the previous commit), file (to check against another passwd file), and data
+   to specify the relevant passwd data in the json itself.
+
+   Example: `check-passwd: { "type": "none" }`
+   Example: `check-passwd: { "type": "previous" }`
+   Example: `check-passwd: { "type": "file", "filename": "local-passwd" }`
+   Example: `check-passwd: { "type": "data", "entries": { "bin": 1, "adm": [3, 4] } }`
+   See also: `ignore-remove-users`
+
+ * `check-groups`: Object, optional: Checks to run against the new group file
+   before accepting the tree. All the entries specified should exist (unless
+   ignored) and have the same values or the compose will fail. There are four
+   types: none (for no checking), previous (to check against the group file in
+   the previous commit), file (to check against another group file), and data
+   to specify the relevant group data in the json itself.
+
+   Example: `check-groups: { "type": "none" }`
+   Example: `check-groups: { "type": "previous" }`
+   Example: `check-groups: { "type": "file", "filename": "local-group" }`
+   Example: `check-groups: { "type": "data", "entries": { "bin": 1, "adm": 4 } }`
+   See also: `ignore-remove-groups`
+
+ * `ignore-remove-users`: Array, optional: Users to ignore if they are missing
+   in the new passwd file. If an entry of `*` is specified then any user can be
+   removed without failing the compose.
+
+   Example: `ignore-remove-users: ["avahi-autoipd", "tss"]`
+
+ * `ignore-remove-groups`: Array, optional: Groups to ignore if they are missing
+   in the new group file. If an entry of `*` is specified then any group can be
+   removed without failing the compose.
+
+   Example: `ignore-remove-users: ["avahi"]`
+
  * `postprocess-script`: String, optional: Full filesystem path to a script
    that will be executed in the context of the target tree.  The script
    will be copied into the target into `/tmp`, and run as a container
