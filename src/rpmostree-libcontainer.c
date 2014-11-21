@@ -46,7 +46,7 @@ _rpmostree_libcontainer_get_available (void)
 }
 
 gboolean
-rpmostree_container_bind_mount_readonly (const char *path, GError **error)
+_rpmostree_libcontainer_bind_mount_readonly (const char *path, GError **error)
 {
   gboolean ret = FALSE;
 

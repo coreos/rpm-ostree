@@ -724,27 +724,6 @@ parse_keyvalue_strings (char             **strings,
   return ret;
 }
 
-static gboolean
-bind_mount_readonly (const char *path, GError **error)
-{
-  gboolean ret = FALSE;
-
-  if (mount (path, path, NULL, MS_BIND | MS_PRIVATE, NULL) != 0)
-    {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "mount(MS_BIND)");
-      goto out;
-    }
-  if (mount (path, path, NULL, MS_BIND | MS_PRIVATE | MS_REMOUNT | MS_RDONLY, NULL) != 0)
-    {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "mount(MS_BIND | MS_RDONLY)");
-      goto out;
-    }
-
-  ret = TRUE;
- out:
-  return ret;
-}
-
 gboolean
 rpmostree_compose_builtin_tree (int             argc,
                                 char          **argv,
@@ -833,14 +812,14 @@ rpmostree_compose_builtin_tree (int             argc,
          bind mount.  */
       if (lstat ("/var/lib/rpm", &stbuf) == 0 && S_ISDIR (stbuf.st_mode))
         {
-          if (!bind_mount_readonly ("/var/lib/rpm", error))
+          if (!_rpmostree_libcontainer_bind_mount_readonly ("/var/lib/rpm", error))
             goto out;
         }
 
       /* Protect the system's /etc and /usr */
-      if (!bind_mount_readonly ("/etc", error))
+      if (!_rpmostree_libcontainer_bind_mount_readonly ("/etc", error))
         goto out;
-      if (!bind_mount_readonly ("/usr", error))
+      if (!_rpmostree_libcontainer_bind_mount_readonly ("/usr", error))
         goto out;
     }
 

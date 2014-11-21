@@ -34,7 +34,7 @@
 void _rpmostree_libcontainer_set_not_available (void);
 gboolean _rpmostree_libcontainer_get_available (void);
 
-gboolean rpmostree_container_bind_mount_readonly (const char *path, GError **error);
+gboolean _rpmostree_libcontainer_bind_mount_readonly (const char *path, GError **error);
 
 int _rpmostree_libcontainer_make_api_mounts (const char *dest);
 int _rpmostree_libcontainer_prep_dev (const char  *dest);
