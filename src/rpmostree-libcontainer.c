@@ -31,6 +31,20 @@
 #include "rpmostree-libcontainer.h"
 #include "libgsystem.h"
 
+static gboolean container_available = TRUE;
+
+void
+_rpmostree_libcontainer_set_not_available (void)
+{
+  container_available = FALSE;
+}
+
+gboolean
+_rpmostree_libcontainer_get_available (void)
+{
+  return !container_available;
+}
+
 gboolean
 rpmostree_container_bind_mount_readonly (const char *path, GError **error)
 {
@@ -170,32 +184,46 @@ _rpmostree_libcontainer_run_in_root (const char  *dest,
     SIGCHLD | CLONE_NEWPID | CLONE_NEWNS | CLONE_NEWNET | CLONE_SYSVSEM | CLONE_NEWUTS;
   pid_t child;
 
-  if ((child = syscall (__NR_clone, cloneflags, NULL)) < 0)
-    return -1;
+  if (container_available)
+    {
+      if ((child = syscall (__NR_clone, cloneflags, NULL)) < 0)
+        return -1;
+    }
+  else
+    {
+      if ((child = fork ()) < 0)
+        return -1;
+    }
 
   if (child != 0)
     return child;
 
-  if (mount (NULL, "/", "none", MS_PRIVATE | MS_REC, NULL) != 0)
-    _rpmostree_perror_fatal ("mount: ");
-    
-  if (mount (NULL, "/", "none", MS_PRIVATE | MS_REMOUNT | MS_NOSUID, NULL) != 0)
-    _rpmostree_perror_fatal ("mount (MS_NOSUID): ");
+  if (container_available)
+    {
+      if (mount (NULL, "/", "none", MS_PRIVATE | MS_REC, NULL) != 0)
+        _rpmostree_perror_fatal ("mount: ");
+      
+      if (mount (NULL, "/", "none", MS_PRIVATE | MS_REMOUNT | MS_NOSUID, NULL) != 0)
+        _rpmostree_perror_fatal ("mount (MS_NOSUID): ");
+    }
 
   if (chdir (dest) != 0)
     _rpmostree_perror_fatal ("chdir: ");
 
-  if (_rpmostree_libcontainer_make_api_mounts (dest) != 0)
-    _rpmostree_perror_fatal ("preparing api mounts: ");
+  if (container_available)
+    {
+      if (_rpmostree_libcontainer_make_api_mounts (dest) != 0)
+        _rpmostree_perror_fatal ("preparing api mounts: ");
 
-  if (_rpmostree_libcontainer_prep_dev ("dev") != 0)
-    _rpmostree_perror_fatal ("preparing /dev: ");
-
-  if (mount (".", ".", NULL, MS_BIND | MS_PRIVATE, NULL) != 0)
-    _rpmostree_perror_fatal ("mount (MS_BIND)");
-
-  if (mount (dest, "/", NULL, MS_MOVE, NULL) != 0)
-    _rpmostree_perror_fatal ("mount (MS_MOVE)");
+      if (_rpmostree_libcontainer_prep_dev ("dev") != 0)
+        _rpmostree_perror_fatal ("preparing /dev: ");
+      
+      if (mount (".", ".", NULL, MS_BIND | MS_PRIVATE, NULL) != 0)
+        _rpmostree_perror_fatal ("mount (MS_BIND)");
+      
+      if (mount (dest, "/", NULL, MS_MOVE, NULL) != 0)
+        _rpmostree_perror_fatal ("mount (MS_MOVE)");
+    }
 
   if (chroot (".") != 0)
     _rpmostree_perror_fatal ("chroot: ");

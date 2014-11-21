@@ -31,6 +31,9 @@
 #include <sys/capability.h>
 #include <sched.h>
 
+void _rpmostree_libcontainer_set_not_available (void);
+gboolean _rpmostree_libcontainer_get_available (void);
+
 gboolean rpmostree_container_bind_mount_readonly (const char *path, GError **error);
 
 int _rpmostree_libcontainer_make_api_mounts (const char *dest);

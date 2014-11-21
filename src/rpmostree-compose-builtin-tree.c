@@ -337,8 +337,11 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
       setenv ("HARDLINK", "no", TRUE);
 
       /* Turn off setuid binaries, we shouldn't need them */
-      if (mount (NULL, "/", "none", MS_PRIVATE | MS_REMOUNT | MS_NOSUID, NULL) < 0)
-        _rpmostree_perror_fatal ("mount(/, MS_PRIVATE | MS_NOSUID)");
+      if (_rpmostree_libcontainer_get_available ())
+        {
+          if (mount (NULL, "/", "none", MS_PRIVATE | MS_REMOUNT | MS_NOSUID, NULL) < 0)
+            _rpmostree_perror_fatal ("mount(/, MS_PRIVATE | MS_NOSUID)");
+        }
 
       if (execvp ("yum", (char**)yum_argv->pdata) < 0)
         _rpmostree_perror_fatal ("execvp");
@@ -807,32 +810,39 @@ rpmostree_compose_builtin_tree (int             argc,
     }
   if (mount (NULL, "/", "none", MS_PRIVATE | MS_REC, NULL) == -1)
     {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "mount(/, MS_PRIVATE): ");
-      goto out;
+      /* This happens on RHEL6, not going to debug it further right now... */
+      if (errno == EINVAL)
+        _rpmostree_libcontainer_set_not_available ();
+      else
+        {
+          _rpmostree_set_prefix_error_from_errno (error, errno, "mount(/, MS_PRIVATE): ");
+          goto out;
+        }
     }
 
   /* Mount several directories read only for protection from librpm
    * and any stray code in yum/hawkey.
    */
-  {
-    struct stat stbuf;
-    /* Protect /var/lib/rpm if (and only if) it's a regular directory.
-       This happens when you're running compose-tree from inside a
-       "mainline" system.  On an rpm-ostree based system,
-       /var/lib/rpm -> /usr/share/rpm, which is already protected by a read-only
-       bind mount.  */
-    if (lstat ("/var/lib/rpm", &stbuf) == 0 && S_ISDIR (stbuf.st_mode))
-      {
-        if (!bind_mount_readonly ("/var/lib/rpm", error))
-          goto out;
-      }
+  if (_rpmostree_libcontainer_get_available ())
+    {
+      struct stat stbuf;
+      /* Protect /var/lib/rpm if (and only if) it's a regular directory.
+         This happens when you're running compose-tree from inside a
+         "mainline" system.  On an rpm-ostree based system,
+         /var/lib/rpm -> /usr/share/rpm, which is already protected by a read-only
+         bind mount.  */
+      if (lstat ("/var/lib/rpm", &stbuf) == 0 && S_ISDIR (stbuf.st_mode))
+        {
+          if (!bind_mount_readonly ("/var/lib/rpm", error))
+            goto out;
+        }
 
-    /* Protect the system's /etc and /usr */
-    if (!bind_mount_readonly ("/etc", error))
-      goto out;
-    if (!bind_mount_readonly ("/usr", error))
-      goto out;
-  }
+      /* Protect the system's /etc and /usr */
+      if (!bind_mount_readonly ("/etc", error))
+        goto out;
+      if (!bind_mount_readonly ("/usr", error))
+        goto out;
+    }
 
   repo_path = g_file_new_for_path (opt_repo);
   repo = ostree_repo_new (repo_path);
