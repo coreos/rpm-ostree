@@ -576,8 +576,7 @@ gfopen (const char       *path,
   ret = fopen (path, mode);
   if (!ret)
     {
-      _rpmostree_set_error_from_errno (error, errno);
-      g_prefix_error (error, "fopen(%s): ", path);
+      _rpmostree_set_prefix_error_from_errno (error, errno, "fopen(%s): ", path);
       return NULL;
     }
   return ret;
@@ -699,8 +698,8 @@ migrate_passwd_file_except_root (GFile         *rootfs,
 
   if (rename (etctmp_path, src_path) != 0)
     {
-      _rpmostree_set_error_from_errno (error, errno);
-      g_prefix_error (error, "rename(%s, %s): ", etctmp_path, src_path);
+      _rpmostree_set_prefix_error_from_errno (error, errno, "rename(%s, %s): ",
+                                              etctmp_path, src_path);
       goto out;
     }
 
