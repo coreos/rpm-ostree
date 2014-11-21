@@ -106,11 +106,9 @@ _rpmostree_libcontainer_make_api_mounts (const char *dest)
   for (k = 0; k < G_N_ELEMENTS(mount_table); k++)
     {
       gs_free char *where = NULL;
-      gs_free char *options = NULL;
-      const char *o;
       int t;
 
-      where = g_build_filename (dest, "/", mount_table[k].where, NULL);
+      where = g_build_filename (dest, mount_table[k].where, NULL);
 
       t = mkdir (where, 0755);
       if (t < 0 && errno != EEXIST)
@@ -120,13 +118,11 @@ _rpmostree_libcontainer_make_api_mounts (const char *dest)
           return -1;
         }
 
-      o = mount_table[k].options;
-
       if (mount (mount_table[k].what,
                  where,
                  mount_table[k].type,
                  mount_table[k].flags,
-                 o) < 0)
+                 mount_table[k].options) < 0)
         {
           if (errno == ENOENT && !mount_table[k].fatal)
             continue;
