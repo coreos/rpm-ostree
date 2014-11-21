@@ -21,6 +21,20 @@
 #pragma once
 
 #include <gio/gio.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+void
+_rpmostree_set_error_from_errno (GError    **error,
+                                 gint        errsv);
+
+void
+_rpmostree_set_prefix_error_from_errno (GError     **error,
+                                        gint         errsv,
+                                        const char  *format,
+                                        ...) G_GNUC_PRINTF (3,4);
+
+void _rpmostree_perror_fatal (const char *message) __attribute__ ((noreturn));
 
 gboolean
 _rpmostree_util_enumerate_directory_allow_noent (GFile               *dirpath,
@@ -41,3 +55,7 @@ _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
                                            GFile        *src,
                                            GCancellable *cancellable,
                                            GError      **error);
+
+gboolean
+_rpmostree_sync_wait_on_pid (pid_t          pid,
+                             GError       **error);

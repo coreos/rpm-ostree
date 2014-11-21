@@ -34,6 +34,7 @@
 #include <stdlib.h>
 
 #include "rpmostree-postprocess.h"
+#include "rpmostree-libcontainer.h"
 #include "rpmostree-cleanup.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-util.h"
@@ -55,6 +56,30 @@ move_to_dir (GFile        *src,
     g_file_get_child (dest_dir, gs_file_get_basename_cached (src));
 
   return gs_file_rename (src, dest, cancellable, error);
+}
+
+static gboolean
+run_sync_in_root (GFile        *yumroot,
+                  const char   *binpath,
+                  char        **child_argv,
+                  GError     **error)
+{
+  gboolean ret = FALSE;
+  const char *yumroot_path = gs_file_get_path_cached (yumroot);
+  pid_t child = _rpmostree_libcontainer_run_in_root (yumroot_path, binpath, child_argv);
+
+  if (child == -1)
+    {
+      _rpmostree_set_error_from_errno (error, errno);
+      goto out;
+    }
+  
+  if (!_rpmostree_sync_wait_on_pid (child, error))
+    goto out;
+  
+  ret = TRUE;
+ out:
+  return ret;
 }
 
 typedef struct {
@@ -221,13 +246,11 @@ do_kernel_prep (GFile         *yumroot,
       goto out;
   }
 
-  if (!gs_subprocess_simple_run_sync (gs_file_get_path_cached (yumroot),
-                                      GS_SUBPROCESS_STREAM_DISPOSITION_NULL,
-                                      cancellable, error,
-                                      "chroot", gs_file_get_path_cached (yumroot),
-                                      "depmod", kver,
-                                      NULL))
-    goto out;
+  {
+    char *child_argv[] = { "depmod", (char*)kver, NULL };
+    if (!run_sync_in_root (yumroot, "/usr/sbin/depmod", child_argv, error))
+      goto out;
+  }
 
   /* Copy of code from gnome-continuous; yes, we hardcode
      the machine id for now, because distributing pre-generated
@@ -247,16 +270,13 @@ do_kernel_prep (GFile         *yumroot,
       goto out;
   }
 
-  if (!gs_subprocess_simple_run_sync (gs_file_get_path_cached (yumroot),
-                                      GS_SUBPROCESS_STREAM_DISPOSITION_NULL,
-                                      cancellable, error,
-                                      "chroot", gs_file_get_path_cached (yumroot),
-                                      "dracut", "-v", "--tmpdir=/tmp",
-                                      "-f", "/tmp/initramfs.img", kver,
-                                      NULL))
-    goto out;
+  {
+    char *child_argv[] = { "dracut", "-v", "--tmpdir=/tmp", "-f", "/var/tmp/initramfs.img", (char*)kver, NULL };
+    if (!run_sync_in_root (yumroot, "/usr/sbin/dracut", (char**)child_argv, error))
+      goto out;
+  }
 
-  initramfs_path = g_file_resolve_relative_path (yumroot, "tmp/initramfs.img");
+  initramfs_path = g_file_resolve_relative_path (yumroot, "var/tmp/initramfs.img");
   if (!g_file_query_exists (initramfs_path, NULL))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -556,9 +576,8 @@ gfopen (const char       *path,
   ret = fopen (path, mode);
   if (!ret)
     {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "fopen(%s): %s", path, g_strerror (errsv));
+      _rpmostree_set_error_from_errno (error, errno);
+      g_prefix_error (error, "fopen(%s): ", path);
       return NULL;
     }
   return ret;
@@ -571,9 +590,7 @@ gfflush (FILE         *f,
 {
   if (fflush (f) != 0)
     {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "fflush: %s", g_strerror (errsv));
+      _rpmostree_set_prefix_error_from_errno (error, errno, "fflush: ");
       return FALSE;
     }
   return TRUE;
@@ -640,8 +657,7 @@ migrate_passwd_file_except_root (GFile         *rootfs,
         {
           if (errno != 0 && errno != ENOENT)
             {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "fgetpwent: %s", g_strerror (errno));
+              _rpmostree_set_prefix_error_from_errno (error, errno, "fgetpwent: ");
               goto out;
             }
           else
@@ -671,9 +687,7 @@ migrate_passwd_file_except_root (GFile         *rootfs,
 
       if (r == -1)
         {
-          int errsv = errno;
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "putpwent: %s", g_strerror (errsv));
+          _rpmostree_set_prefix_error_from_errno (error, errno, "putpwent: ");
           goto out;
         }
     }
@@ -685,9 +699,8 @@ migrate_passwd_file_except_root (GFile         *rootfs,
 
   if (rename (etctmp_path, src_path) != 0)
     {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "rename(%s, %s): %s", etctmp_path, src_path, g_strerror (errsv));
+      _rpmostree_set_error_from_errno (error, errno);
+      g_prefix_error (error, "rename(%s, %s): ", etctmp_path, src_path);
       goto out;
     }
 
@@ -1271,26 +1284,25 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
     
   if (postprocess_script)
     {
+      const char *yumroot_path = gs_file_get_path_cached (yumroot);
       gs_unref_object GFile *src = g_file_resolve_relative_path (context_directory, postprocess_script);
       const char *bn = gs_file_get_basename_cached (src);
-      gs_unref_object GFile *yumroot_tmp = g_file_resolve_relative_path (yumroot, "tmp");
-      gs_unref_object GFile *dest = g_file_resolve_relative_path (yumroot_tmp, bn);
-      gs_free char *targetpath = g_build_filename ("/tmp", gs_file_get_basename_cached (src), NULL);
+      gs_free char *binpath = g_strconcat ("/usr/bin/rpmostree-postprocess-", bn, NULL);
+      gs_free char *destpath = g_strconcat (yumroot_path, binpath, NULL);
+      gs_unref_object GFile *dest = g_file_new_for_path (destpath);
+      /* Clone all the things */
 
       if (!g_file_copy (src, dest, 0, cancellable, NULL, NULL, error))
         {
           g_prefix_error (error, "Copying postprocess-script '%s' into target: ", bn);
           goto out;
         }
-      
-      g_print ("Executing postprocessing script '%s'...\n", bn);
-      if (!gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_NULL,
-                                          cancellable, error,
-                                          "systemd-nspawn", "-D", gs_file_get_path_cached (yumroot),
-                                          "--private-network",
-                                          targetpath,
-                                          NULL))
-        goto out;
+
+      {
+        char *child_argv[] = { binpath, NULL };
+        if (!run_sync_in_root (yumroot, binpath, child_argv, error))
+          goto out;
+      }
                                           
       g_print ("Executing postprocessing script '%s'...done\n", bn);
     }

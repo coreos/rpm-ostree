@@ -23,22 +23,15 @@
 #include <string.h>
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
-#include <sys/mount.h>
 #include <gio/gunixoutputstream.h>
-#include <sys/types.h>
-#include <sys/prctl.h>
 #include <stdio.h>
-#include <sys/fsuid.h>
-#include <sys/syscall.h>
-#include <sys/wait.h>
-#include <sys/capability.h>
-#include <sched.h>
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-cleanup.h"
 #include "rpmostree-treepkgdiff.h"
+#include "rpmostree-libcontainer.h"
 #include "rpmostree-postprocess.h"
 
 #include "libgsystem.h"
@@ -96,19 +89,7 @@ typedef struct {
   pid_t pid;
   GFile *tmp_reposdir_path;
   GDataOutputStream *stdin;
-  gboolean caught_error;
-  GError **error;
 } YumContext;
-
-static gboolean
-on_yum_exited (GPid pid, gint status, gpointer user_data)
-{
-  YumContext *ctx = user_data;
-  ctx->caught_error = !g_spawn_check_exit_status (status, ctx->error);
-  ctx->running = FALSE;
-  
-  return FALSE;
-}
 
 static gboolean
 yum_context_close (YumContext   *yumctx,
@@ -129,27 +110,11 @@ yum_context_close (YumContext   *yumctx,
           g_clear_object (&yumctx->stdin);
         }
 
-      {
-        GSource *child_src = g_child_watch_source_new (yumctx->pid);
-        GMainContext *tmp_context = g_main_context_new ();
+      g_print ("Waiting for yum...\n");
+      if (!_rpmostree_sync_wait_on_pid (yumctx->pid, error))
+        goto out;
 
-        g_source_set_callback (child_src, (GSourceFunc)on_yum_exited, yumctx, NULL);
-        g_source_attach (child_src, tmp_context);
-        g_source_unref (child_src);
-
-        yumctx->error = error;
-      
-        g_print ("Waiting for yum...\n");
-        while (yumctx->running)
-          g_main_context_iteration (tmp_context, TRUE);
-      
-        g_print ("Waiting for yum [OK]\n");
-
-        g_main_context_unref (tmp_context);
-
-        if (yumctx->caught_error)
-          goto out;
-      }
+      g_print ("Waiting for yum [OK]\n");
     }
 
   ret = TRUE;
@@ -298,14 +263,6 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
   return ret;
 }
 
-static void perror_fatal (const char *message) __attribute__ ((noreturn));
-static void perror_fatal (const char *message)
-{
-  perror (message);
-  exit (1);
-}
-
-
 static YumContext *
 yum_context_new (RpmOstreeTreeComposeContext  *self,
                  JsonObject     *treedata,
@@ -360,17 +317,14 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
 
   if ((child = syscall (__NR_clone, clone_flags, NULL)) < 0)
     {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "clone(): %s",
-                   g_strerror (errsv));
+      _rpmostree_set_error_from_errno (error, errno);
       goto out;
     }
   
   if (child == 0)
     {
       if (dup2 (pipefds[0], 0) != 0)
-        perror_fatal ("dup2()");
+        _rpmostree_perror_fatal ("dup2()");
       
       /* This is used at the moment, but eventually I'd like to teach
        * Fedora's kernel.spec to e.g. skip making an initramfs,
@@ -383,11 +337,14 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
       setenv ("HARDLINK", "no", TRUE);
 
       /* Turn off setuid binaries, we shouldn't need them */
-      if (mount (NULL, "/", "none", MS_PRIVATE | MS_REMOUNT | MS_NOSUID, NULL) < 0)
-        perror_fatal ("mount(/, MS_PRIVATE | MS_NOSUID)");
+      if (_rpmostree_libcontainer_get_available ())
+        {
+          if (mount (NULL, "/", "none", MS_PRIVATE | MS_REMOUNT | MS_NOSUID, NULL) < 0)
+            _rpmostree_perror_fatal ("mount(/, MS_PRIVATE | MS_NOSUID)");
+        }
 
       if (execvp ("yum", (char**)yum_argv->pdata) < 0)
-        perror_fatal ("execvp");
+        _rpmostree_perror_fatal ("execvp");
     }
 
   (void) close (pipefds[0]);
@@ -767,35 +724,6 @@ parse_keyvalue_strings (char             **strings,
   return ret;
 }
 
-static gboolean
-bind_mount_readonly (const char *path, GError **error)
-{
-  gboolean ret = FALSE;
-
-  if (mount (path, path, NULL, MS_BIND | MS_PRIVATE, NULL) != 0)
-    {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "mount(%s, MS_BIND): %s",
-                   path,
-                   g_strerror (errsv));
-      goto out;
-    }
-  if (mount (path, path, NULL, MS_BIND | MS_PRIVATE | MS_REMOUNT | MS_RDONLY, NULL) != 0)
-    {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "mount(%s, MS_BIND | MS_RDONLY): %s",
-                   path,
-                   g_strerror (errsv));
-      goto out;
-    }
-
-  ret = TRUE;
- out:
-  return ret;
-}
-
 gboolean
 rpmostree_compose_builtin_tree (int             argc,
                                 char          **argv,
@@ -856,41 +784,44 @@ rpmostree_compose_builtin_tree (int             argc,
    */
   if (unshare (CLONE_NEWNS) != 0)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "unshare(CLONE_NEWNS): %s", g_strerror (errno));
+      _rpmostree_set_prefix_error_from_errno (error, errno, "unshare(CLONE_NEWNS): ");
       goto out;
     }
   if (mount (NULL, "/", "none", MS_PRIVATE | MS_REC, NULL) == -1)
     {
-      int errsv = errno;
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "mount(/, MS_PRIVATE | MS_REC): %s",
-                   g_strerror (errsv));
-      goto out;
+      /* This happens on RHEL6, not going to debug it further right now... */
+      if (errno == EINVAL)
+        _rpmostree_libcontainer_set_not_available ();
+      else
+        {
+          _rpmostree_set_prefix_error_from_errno (error, errno, "mount(/, MS_PRIVATE): ");
+          goto out;
+        }
     }
 
   /* Mount several directories read only for protection from librpm
    * and any stray code in yum/hawkey.
    */
-  {
-    struct stat stbuf;
-    /* Protect /var/lib/rpm if (and only if) it's a regular directory.
-       This happens when you're running compose-tree from inside a
-       "mainline" system.  On an rpm-ostree based system,
-       /var/lib/rpm -> /usr/share/rpm, which is already protected by a read-only
-       bind mount.  */
-    if (lstat ("/var/lib/rpm", &stbuf) == 0 && S_ISDIR (stbuf.st_mode))
-      {
-        if (!bind_mount_readonly ("/var/lib/rpm", error))
-          goto out;
-      }
+  if (_rpmostree_libcontainer_get_available ())
+    {
+      struct stat stbuf;
+      /* Protect /var/lib/rpm if (and only if) it's a regular directory.
+         This happens when you're running compose-tree from inside a
+         "mainline" system.  On an rpm-ostree based system,
+         /var/lib/rpm -> /usr/share/rpm, which is already protected by a read-only
+         bind mount.  */
+      if (lstat ("/var/lib/rpm", &stbuf) == 0 && S_ISDIR (stbuf.st_mode))
+        {
+          if (!_rpmostree_libcontainer_bind_mount_readonly ("/var/lib/rpm", error))
+            goto out;
+        }
 
-    /* Protect the system's /etc and /usr */
-    if (!bind_mount_readonly ("/etc", error))
-      goto out;
-    if (!bind_mount_readonly ("/usr", error))
-      goto out;
-  }
+      /* Protect the system's /etc and /usr */
+      if (!_rpmostree_libcontainer_bind_mount_readonly ("/etc", error))
+        goto out;
+      if (!_rpmostree_libcontainer_bind_mount_readonly ("/usr", error))
+        goto out;
+    }
 
   repo_path = g_file_new_for_path (opt_repo);
   repo = ostree_repo_new (repo_path);
@@ -913,8 +844,8 @@ rpmostree_compose_builtin_tree (int             argc,
         {
           if (mount ("tmpfs", tmpd, "tmpfs", 0, (const void*)"mode=755") != 0)
             {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "mount(tmpfs): %s", g_strerror (errno));
+              _rpmostree_set_prefix_error_from_errno (error, errno,
+                                                      "mount(tmpfs): ");
               goto out;
             }
         }

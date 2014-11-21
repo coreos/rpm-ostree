@@ -21,12 +21,49 @@
 #include "config.h"
 
 #include <string.h>
+#include <stdio.h>
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
 #include <gio/gunixoutputstream.h>
 
 #include "rpmostree-util.h"
 #include "libgsystem.h"
+
+void
+_rpmostree_set_error_from_errno (GError    **error,
+                                 gint        errsv)
+{
+  g_set_error_literal (error,
+                       G_IO_ERROR,
+                       g_io_error_from_errno (errsv),
+                       g_strerror (errsv));
+  errno = errsv;
+}
+
+void
+_rpmostree_set_prefix_error_from_errno (GError     **error,
+                                        gint         errsv,
+                                        const char  *format,
+                                        ...)
+{
+  gs_free char *formatted = NULL;
+  va_list args;
+  
+  va_start (args, format);
+  formatted = g_strdup_vprintf (format, args);
+  va_end (args);
+  
+  _rpmostree_set_error_from_errno (error, errsv);
+  g_prefix_error (error, "%s", formatted);
+  errno = errsv;
+}
+
+void
+_rpmostree_perror_fatal (const char *message)
+{
+  perror (message);
+  exit (1);
+}
 
 gboolean
 _rpmostree_util_enumerate_directory_allow_noent (GFile               *dirpath,
@@ -115,6 +152,32 @@ _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
       g_checksum_update (checksum, (guint8*)buf, bytes_read);
     }
   while (bytes_read > 0);
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+gboolean
+_rpmostree_sync_wait_on_pid (pid_t          pid,
+                             GError       **error)
+{
+  gboolean ret = FALSE;
+  pid_t r;
+  int estatus;
+
+  do
+    r = waitpid (pid, &estatus, 0);
+  while (G_UNLIKELY (r == -1 && errno == EINTR));
+
+  if (r == -1)
+    {
+      _rpmostree_set_prefix_error_from_errno (error, errno, "waitpid: ");
+      goto out;
+    }
+
+  if (!g_spawn_check_exit_status (estatus, error))
+    goto out;
 
   ret = TRUE;
  out:
