@@ -31,7 +31,8 @@ _rpmostree_set_error_from_errno (GError    **error,
 void
 _rpmostree_set_prefix_error_from_errno (GError     **error,
                                         gint         errsv,
-                                        const char  *prefix);
+                                        const char  *format,
+                                        ...) G_GNUC_PRINTF (3,4);
 
 void _rpmostree_perror_fatal (const char *message) __attribute__ ((noreturn));
 
