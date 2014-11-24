@@ -3,7 +3,7 @@
 
     "gpg_key": "<SET KEY ID FOR GPG>",
 
-    "repos": ["rawhide"],
+    "repos": ["fedora-rawhide"],
 
     "selinux": true,
 
