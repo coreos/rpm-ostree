@@ -46,7 +46,7 @@ rpmostree_builtin_rebase (int             argc,
                           GError        **error)
 {
   gboolean ret = FALSE;
-  GOptionContext *context = g_option_context_new ("- Switch to a different tree");
+  GOptionContext *context = g_option_context_new ("REFSPEC - Switch to a different tree");
   const char *new_provided_refspec;
   gs_unref_object OstreeSysroot *sysroot = NULL;
   gs_unref_object OstreeRepo *repo = NULL;
@@ -73,7 +73,7 @@ rpmostree_builtin_rebase (int             argc,
   if (argc < 2)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "REF must be specified");
+                   "REFSPEC must be specified");
       goto out;
     }
 

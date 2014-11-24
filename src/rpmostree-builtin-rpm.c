@@ -50,7 +50,7 @@ static char *opt_repo;
 static char *opt_rpmdbdir;
 
 static GOptionEntry option_entries[] = {
-  { "format", 'F', 0, G_OPTION_ARG_STRING, &opt_format, "Format to output in", "FORMAT" },
+  { "format", 'F', 0, G_OPTION_ARG_STRING, &opt_format, "Output format: \"diff\" or (default) \"block\"", "FORMAT" },
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
   { "rpmdbdir", 0, 0, G_OPTION_ARG_STRING, &opt_rpmdbdir, "Working directory", "WORKDIR" },
   { NULL }
