@@ -756,9 +756,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
   self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
   
-  g_option_context_add_main_entries (context, option_entries, NULL);
-
-  if (!g_option_context_parse (context, &argc, &argv, error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
   if (argc < 2)

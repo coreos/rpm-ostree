@@ -23,6 +23,7 @@
 #include <gio/gio.h>
 
 #include <errno.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <locale.h>
@@ -43,28 +44,59 @@ static RpmOstreeCommand commands[] = {
   { NULL }
 };
 
-static int
-usage (char    **argv,
-       gboolean is_error)
+static gboolean opt_version;
+
+static GOptionEntry global_entries[] = {
+  { "version", 0, 0, G_OPTION_ARG_NONE, &opt_version, "Print version information and exit", NULL },
+  { NULL }
+};
+
+static GOptionContext *
+option_context_new_with_commands (void)
 {
   RpmOstreeCommand *command = commands;
-  void (*print_func) (const gchar *format, ...);
+  GOptionContext *context;
+  GString *summary;
 
-  if (is_error)
-    print_func = g_printerr;
-  else
-    print_func = g_print;
+  context = g_option_context_new ("COMMAND");
 
-  print_func ("usage: %s COMMAND [options]\n",
-              argv[0]);
-  print_func ("Builtin commands:\n");
+  summary = g_string_new ("Builtin Commands:");
 
-  while (command->name)
+  while (command->name != NULL)
     {
-      print_func ("  %s\n", command->name);
+      g_string_append_printf (summary, "\n  %s", command->name);
       command++;
     }
-  return (is_error ? 1 : 0);
+
+  g_option_context_set_summary (context, summary->str);
+
+  g_string_free (summary, TRUE);
+
+  return context;
+}
+
+gboolean
+rpmostree_option_context_parse (GOptionContext *context,
+                                const GOptionEntry *main_entries,
+                                int *argc,
+                                char ***argv,
+                                GError **error)
+{
+  if (main_entries != NULL)
+    g_option_context_add_main_entries (context, main_entries, NULL);
+
+  g_option_context_add_main_entries (context, global_entries, NULL);
+
+  if (!g_option_context_parse (context, argc, argv, error))
+    return FALSE;
+
+  if (opt_version)
+    {
+      g_print ("%s\n  %s\n", PACKAGE_NAME, RPM_OSTREE_FEATURES);
+      exit (EXIT_SUCCESS);
+    }
+
+  return TRUE;
 }
 
 int
@@ -74,10 +106,9 @@ main (int    argc,
   GError *error = NULL;
   GCancellable *cancellable = NULL;
   RpmOstreeCommand *command;
-  int i, in, out;
-  gboolean skip;
-  gboolean want_help = FALSE;
-  const char *cmd = NULL;
+  int in, out;
+  const char *command_name = NULL;
+  gs_free char *prgname = NULL;
   
   /* avoid gvfs (http://bugzilla.gnome.org/show_bug.cgi?id=526454) */
   g_setenv ("GIO_USE_VFS", "local", TRUE);
@@ -95,96 +126,64 @@ main (int    argc,
       /* The non-option is the command, take it out of the arguments */
       if (argv[in][0] != '-')
         {
-          skip = (cmd == NULL);
-          if (cmd == NULL)
-              cmd = argv[in];
+          if (command_name == NULL)
+            {
+              command_name = argv[in];
+              out--;
+              continue;
+            }
         }
 
-      /* The global long options */
-      else if (argv[in][1] == '-')
+      else if (g_str_equal (argv[in], "--"))
         {
-          skip = FALSE;
-
-          if (g_str_equal (argv[in], "--"))
-            {
-              break;
-            }
-          else if (g_str_equal (argv[in], "--help"))
-            {
-              want_help = TRUE;
-            }
-          else if (cmd == NULL && g_str_equal (argv[in], "--version"))
-            {
-              g_print ("%s\n  %s\n", PACKAGE_STRING, RPM_OSTREE_FEATURES);
-              return 0;
-            }
-          else if (cmd == NULL)
-            {
-              g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Unknown or invalid global option: %s", argv[in]);
-              goto out;
-            }
+          break;
         }
 
-      /* The global short options */
-      else
-        {
-          skip = FALSE;
-          for (i = 1; argv[in][i] != '\0'; i++)
-            {
-              switch (argv[in][i])
-              {
-                case 'h':
-                  want_help = TRUE;
-                  break;
-                default:
-                  if (cmd == NULL)
-                    {
-                      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                                   "Unknown or invalid global option: %s", argv[in]);
-                      goto out;
-                    }
-                  break;
-              }
-            }
-        }
-
-      /* Skipping this argument? */
-      if (skip)
-        out--;
-      else
-        argv[out] = argv[in];
+      argv[out] = argv[in];
     }
 
   argc = out;
 
-  if (cmd == NULL)
-    {
-      if (!want_help)
-        {
-          g_set_error_literal (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "No command specified");
-        }
-      usage (argv, TRUE);
-      goto out;
-    }
-
   command = commands;
   while (command->name)
     {
-      if (g_strcmp0 (cmd, command->name) == 0)
+      if (g_strcmp0 (command_name, command->name) == 0)
         break;
       command++;
     }
 
   if (!command->fn)
     {
-      gs_free char *msg = g_strdup_printf ("Unknown command '%s'", cmd);
-      g_set_error_literal (&error, G_IO_ERROR, G_IO_ERROR_NOT_SUPPORTED, msg);
+      GOptionContext *context;
+      gs_free char *help;
+
+      context = option_context_new_with_commands ();
+
+      /* This will not return for some options (e.g. --version). */
+      if (rpmostree_option_context_parse (context, NULL, &argc, &argv, &error))
+        {
+          if (command_name == NULL)
+            {
+              g_set_error_literal (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                                   "No command specified");
+            }
+          else
+            {
+              g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Unknown command '%s'", command_name);
+            }
+        }
+
+      help = g_option_context_get_help (context, FALSE, NULL);
+      g_printerr ("%s", help);
+
+      g_option_context_free (context);
+
       goto out;
     }
 
-  g_set_prgname (g_strdup_printf (PACKAGE_STRING " %s", cmd));
+  prgname = g_strdup_printf ("%s %s", g_get_prgname (), command_name);
+  g_set_prgname (prgname);
 
   if (!command->fn (argc, argv, cancellable, &error))
     goto out;

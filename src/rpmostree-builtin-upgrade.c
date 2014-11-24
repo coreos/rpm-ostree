@@ -65,9 +65,7 @@ rpmostree_builtin_upgrade (int             argc,
   gs_free char *origin_description = NULL;
   gs_unref_object OstreeRepo *repo = NULL; 
 
-  g_option_context_add_main_entries (context, option_entries, NULL);
-
-   if (!g_option_context_parse (context, &argc, &argv, error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
   sysroot_path = g_file_new_for_path (opt_sysroot);

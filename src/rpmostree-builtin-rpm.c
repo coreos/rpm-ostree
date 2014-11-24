@@ -1146,9 +1146,7 @@ rpmostree_builtin_rpm (int             argc,
   gboolean rpmdbdir_is_tmp = FALSE;
   const char *cmd = NULL;
   
-  g_option_context_add_main_entries (context, option_entries, NULL);
-
-  if (!g_option_context_parse (context, &argc, &argv, error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
   if (argc < 2)

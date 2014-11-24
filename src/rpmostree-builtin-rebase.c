@@ -65,9 +65,7 @@ rpmostree_builtin_rebase (int             argc,
   _cleanup_gkeyfile_ GKeyFile *old_origin = NULL;
   _cleanup_gkeyfile_ GKeyFile *new_origin = NULL;
   
-  g_option_context_add_main_entries (context, option_entries, NULL);
-
-  if (!g_option_context_parse (context, &argc, &argv, error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
   if (argc < 2)

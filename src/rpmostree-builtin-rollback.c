@@ -56,9 +56,7 @@ rpmostree_builtin_rollback (int             argc,
   guint booted_index;
   guint index_to_prepend;
   
-  g_option_context_add_main_entries (context, option_entries, NULL);
-
-  if (!g_option_context_parse (context, &argc, &argv, error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
   sysroot_path = g_file_new_for_path (opt_sysroot);

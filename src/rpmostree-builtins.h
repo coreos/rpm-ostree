@@ -41,5 +41,11 @@ BUILTINPROTO(rpm);
 
 #undef BUILTINPROTO
 
+gboolean rpmostree_option_context_parse (GOptionContext *context,
+                                         const GOptionEntry *main_entries,
+                                         int *argc,
+                                         char ***argv,
+                                         GError **error);
+
 G_END_DECLS
 

@@ -98,9 +98,7 @@ rpmostree_builtin_status (int             argc,
   gboolean missing_version = FALSE; // Are any deployments missing a version?
   guint buffer = 5; // minimum space between end of one entry and new column
 
-  g_option_context_add_main_entries (context, option_entries, NULL);
-
-  if (!g_option_context_parse (context, &argc, &argv, error))
+  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
   sysroot_path = g_file_new_for_path (opt_sysroot);
