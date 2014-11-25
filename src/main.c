@@ -115,7 +115,7 @@ main (int    argc,
             }
           else if (cmd == NULL && g_str_equal (argv[in], "--version"))
             {
-              g_print ("%s\n  %s\n", PACKAGE_STRING, "");
+              g_print ("%s\n", PACKAGE_STRING);
               return 0;
             }
           else if (cmd == NULL)
