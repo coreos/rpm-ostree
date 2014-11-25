@@ -42,7 +42,7 @@ _rpmostree_libcontainer_set_not_available (void)
 gboolean
 _rpmostree_libcontainer_get_available (void)
 {
-  return !container_available;
+  return container_available;
 }
 
 gboolean
