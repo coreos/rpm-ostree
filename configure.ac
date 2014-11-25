@@ -29,6 +29,9 @@ AC_SUBST(WARN_CFLAGS)
 LT_PREREQ([2.2.4])
 LT_INIT([disable-static])
 
+RPM_OSTREE_FEATURES=""
+AC_SUBST([RPM_OSTREE_FEATURES])
+
 PKG_PROG_PKG_CONFIG
 
 save_LIBS="$LIBS"
@@ -58,12 +61,14 @@ AM_CONDITIONAL(BUILDOPT_PATCHED_HAWKEY_AND_LIBSOLV, [test x$enable_patched_hawke
 AS_IF([test x$enable_patched_hawkey_and_libsolv = xyes], [
     AC_DEFINE(HAVE_PATCHED_HAWKEY_AND_LIBSOLV, 1, [Define if we have patched hawkey and libsolv])
 ])
+if test x$enable_patched_hawkey_and_libsolv != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES +patched_hawkey"; fi
 
 AC_ARG_ENABLE(usrbinatomic,
               AS_HELP_STRING([--enable-usrbinatomic],
                              [Alias client binary as /usr/bin/atomic]),,
               [enable_usrbinatomic=no])
 AM_CONDITIONAL(BUILDOPT_USRBINATOMIC, [test x$enable_usrbinatomic = xyes])
+if test x$enable_usrbinatomic != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES +usrbinatomic"; fi
 
 dnl Some distributions may want to support the client tooling, but not
 dnl the server side.
@@ -75,6 +80,7 @@ AM_CONDITIONAL(BUILDOPT_COMPOSE_TOOLING, [test x$enable_compose_tooling = xyes])
 AS_IF([test x$enable_compose_tooling = xyes], [
     AC_DEFINE(HAVE_COMPOSE_TOOLING, 1, [Define if we are building compose tooling])
 ])
+if test x$enable_compose_tooling != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES +compose_tooling"; fi
 
 AC_CONFIG_FILES([
 Makefile
