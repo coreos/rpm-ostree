@@ -179,8 +179,7 @@ rpmostree_builtin_upgrade (int             argc,
             goto out;
 
           rpmhdrs_diff_prnt_diff (rpmrev1->root, rpmrev2->root,
-                            rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb),
-                            cancellable, error);
+                                  rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb));
         }
     }
   

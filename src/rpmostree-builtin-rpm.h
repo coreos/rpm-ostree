@@ -34,9 +34,7 @@ rpmhdrs_diff (struct RpmHeaders *l1,
               struct RpmHeaders *l2);
 
 void
-rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff,
-                        GCancellable   *cancellable,
-                        GError        **error);
+rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff);
 
 void
 rpmrev_free (struct RpmRevisionData *ptr);

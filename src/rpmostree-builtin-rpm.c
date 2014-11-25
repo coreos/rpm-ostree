@@ -353,28 +353,19 @@ pkg_yumdb_file_read (GFile *root, Header pkg, const char *yumdb_key,
 }
 
 static char *
-pkg_yumdb_strdup (GFile *root, Header pkg, const char *yumdb_key,
-		  GCancellable   *cancellable,
-		  GError        **error)
+pkg_yumdb_strdup (GFile *root, Header pkg, const char *yumdb_key)
 {
   gs_unref_object GFile *f = NULL;
   gs_free char *pkgpath = pkg_yumdb_relpath (pkg);
   gs_free char *path = g_strconcat ("/var/lib/yum/yumdb/", pkgpath, "/",
 				    yumdb_key, NULL);
-  GError *tmp_error = NULL;
   char *ret = NULL;
   
   f = g_file_resolve_relative_path (root, path);
 
   // allow_noent returns true for noent, false for other errors.
-  if (!_rpmostree_file_load_contents_utf8_allow_noent (f, &ret,
-						       cancellable,
-                                                       &tmp_error) ||
-      !ret)
-    {
-      g_clear_error (&tmp_error);
-      return g_strdup ("");
-    }
+  if (!_rpmostree_file_load_contents_utf8_allow_noent (f, &ret, NULL, NULL) || !ret)
+    ret = g_strdup ("");
 
   return ret;
 }
@@ -401,13 +392,10 @@ _console_get_width_stdout_cached(void)
 }
 
 static void
-pkg_print (GFile *root, Header pkg,
-	   GCancellable   *cancellable,
-	   GError        **error)
+pkg_print (GFile *root, Header pkg)
 {
   gs_free char *nevra = pkg_nevra_strdup (pkg);
-  gs_free char *from_repo = pkg_yumdb_strdup (root, pkg, "from_repo",
-					      cancellable, error);
+  gs_free char *from_repo = pkg_yumdb_strdup (root, pkg, "from_repo");
   gsize align = _console_get_width_stdout_cached ();
 
   if (*from_repo)
@@ -435,9 +423,7 @@ pkg_print (GFile *root, Header pkg,
 }
 
 static void
-rpmhdrs_list (GFile *root, struct RpmHeaders *l1,
-	      GCancellable   *cancellable,
-	      GError        **error)
+rpmhdrs_list (GFile *root, struct RpmHeaders *l1)
 {
  int num = 0;
 
@@ -445,7 +431,7 @@ rpmhdrs_list (GFile *root, struct RpmHeaders *l1,
  {
    Header h1 = l1->hs->pdata[num++];
    printf (" ");
-   pkg_print (root, h1, cancellable, error);
+   pkg_print (root, h1);
  }
 }
 
@@ -613,9 +599,7 @@ static void
 _gptr_array_reverse (GPtrArray *data);
 
 void
-rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff,
-                        GCancellable   *cancellable,
-                        GError        **error)
+rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff)
 {
   _gptr_array_reverse (diff->hs_add);
   _gptr_array_reverse (diff->hs_del);
@@ -634,11 +618,11 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff,
             Header hm = diff->hs_mod_old->pdata[diff->hs_mod_old->len-1];
 
             printf("!");
-            pkg_print (root1, hm, cancellable, error);
+            pkg_print (root1, hm);
             g_ptr_array_remove_index(diff->hs_mod_old, diff->hs_mod_old->len-1);
             printf("=");
             hm = diff->hs_mod_new->pdata[diff->hs_mod_new->len-1];
-            pkg_print (root2, hm, cancellable, error);
+            pkg_print (root2, hm);
             g_ptr_array_remove_index(diff->hs_mod_new, diff->hs_mod_new->len-1);
           }
         else
@@ -646,7 +630,7 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff,
             Header ha = diff->hs_add->pdata[diff->hs_add->len-1];
 
             printf ("+");
-            pkg_print (root2, ha, cancellable, error);
+            pkg_print (root2, ha);
             g_ptr_array_remove_index(diff->hs_add, diff->hs_add->len-1);
           }
       else
@@ -655,7 +639,7 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff,
             Header hd = diff->hs_del->pdata[diff->hs_del->len-1];
 
             printf ("-");
-            pkg_print (root1, hd, cancellable, error);
+            pkg_print (root1, hd);
             g_ptr_array_remove_index(diff->hs_del, diff->hs_del->len-1);
           }
         else
@@ -663,7 +647,7 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff,
             Header ha = diff->hs_add->pdata[diff->hs_add->len-1];
 
             printf ("+");
-            pkg_print (root2, ha, cancellable, error);
+            pkg_print (root2, ha);
             g_ptr_array_remove_index(diff->hs_add, diff->hs_add->len-1);
           }
     }
@@ -676,9 +660,7 @@ GS_DEFINE_CLEANUP_FUNCTION0(rpmtd, _cleanup_rpmtdFreeData, rpmtdFreeData);
 
 static void
 rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
-                         struct RpmHeadersDiff *diff,
-                         GCancellable   *cancellable,
-                         GError        **error)
+                         struct RpmHeadersDiff *diff)
 {
   int num = 0;
 
@@ -724,7 +706,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
             }
 
           printf (" ");
-          pkg_print (root2, hn, cancellable, error);
+          pkg_print (root2, hn);
 
           // Load the old %changelog entries
           ochanges_date = &ochanges_date_s;
@@ -806,7 +788,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
             }
 
           printf (" ");
-          pkg_print (root2, hn, cancellable, error);
+          pkg_print (root2, hn);
         }
     }
 
@@ -819,7 +801,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
           Header hd = diff->hs_del->pdata[num];
 
           printf (" ");
-          pkg_print (root1, hd, cancellable, error);
+          pkg_print (root1, hd);
         }
     }
 
@@ -832,7 +814,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
           Header ha = diff->hs_add->pdata[num];
 
           printf (" ");
-          pkg_print (root2, ha, cancellable, error);
+          pkg_print (root2, ha);
         }
     }
 
@@ -1144,7 +1126,7 @@ _builtin_rpm_list(OstreeRepo *repo, GFile *rpmdbdir,
         goto out;
 
       _prnt_commit_line (rev, rpmrev);
-      rpmhdrs_list (rpmrev->root, rpmrev->rpmdb, cancellable, error);
+      rpmhdrs_list (rpmrev->root, rpmrev->rpmdb);
     }
 
   ret = TRUE;
@@ -1210,14 +1192,12 @@ rpmostree_rpm_builtin_diff (int argc, char **argv, GCancellable *cancellable, GE
   if (g_str_equal (opt_format, "diff"))
     {
       rpmhdrs_diff_prnt_diff (rpmrev1->root, rpmrev2->root,
-                              rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb),
-                              cancellable, error);
+                              rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb));
     }
   else if (g_str_equal (opt_format, "block"))
     {
       rpmhdrs_diff_prnt_block (rpmrev1->root, rpmrev2->root,
-                               rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb),
-                               cancellable, error);
+                               rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb));
     }
   else
     {
