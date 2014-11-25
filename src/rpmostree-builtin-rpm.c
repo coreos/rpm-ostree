@@ -44,18 +44,39 @@
 #include <rpm/rpmts.h>
 #include <rpm/rpmlog.h>
 
+gboolean rpmostree_rpm_builtin_diff (int argc, char **argv, GCancellable *cancellable, GError **error);
+gboolean rpmostree_rpm_builtin_list (int argc, char **argv, GCancellable *cancellable, GError **error);
+gboolean rpmostree_rpm_builtin_version (int argc, char **argv, GCancellable *cancellable, GError **error);
+
+gboolean rpmostree_rpm_option_context_parse (GOptionContext *context,
+                                             const GOptionEntry *main_entries,
+                                             int *argc, char ***argv,
+                                             OstreeRepo **out_repo,
+                                             GFile **out_rpmdbdir,
+                                             gboolean *out_rpmdbdir_is_tmp,
+                                             GCancellable *cancellable, GError **error);
+
+typedef struct {
+  const char *name;
+  gboolean (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
+} RpmOstreeRpmCommand;
+
+static RpmOstreeRpmCommand rpm_subcommands[] = {
+  { "diff", rpmostree_rpm_builtin_diff },
+  { "list", rpmostree_rpm_builtin_list },
+  { "version", rpmostree_rpm_builtin_version },
+  { NULL, NULL }
+};
 
 static char *opt_format;
 static char *opt_repo;
 static char *opt_rpmdbdir;
 
-static GOptionEntry option_entries[] = {
-  { "format", 'F', 0, G_OPTION_ARG_STRING, &opt_format, "Output format: \"diff\" or (default) \"block\"", "FORMAT" },
-  { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
-  { "rpmdbdir", 0, 0, G_OPTION_ARG_STRING, &opt_rpmdbdir, "Working directory", "WORKDIR" },
+static GOptionEntry global_rpm_entries[] = {
+  { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository (defaults to /sysroot/ostree/repo)", "PATH" },
+  { "rpmdbdir", 0, 0, G_OPTION_ARG_STRING, &opt_rpmdbdir, "Working directory for rpm", "WORKDIR" },
   { NULL }
 };
-
 
 static void
 header_free_p (gpointer data)
@@ -1132,172 +1153,379 @@ _builtin_rpm_list(OstreeRepo *repo, GFile *rpmdbdir,
   return ret;
 }
 
+static GOptionEntry rpm_diff_entries[] = {
+  { "format", 'F', 0, G_OPTION_ARG_STRING, &opt_format, "Output format: \"diff\" or (default) \"block\"", "FORMAT" },
+  { NULL }
+};
+
 gboolean
-rpmostree_builtin_rpm (int             argc,
-		       char          **argv,
-		       GCancellable   *cancellable,
-		       GError        **error)
+rpmostree_rpm_builtin_diff (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
-  gboolean ret = FALSE;
-  gs_unref_ptrarray GPtrArray *deployments = NULL;  // list of all depoyments
-  GOptionContext *context = g_option_context_new ("- Run rpm commands on systems");
+  GOptionContext *context;
   gs_unref_object OstreeRepo *repo = NULL;
   gs_unref_object GFile *rpmdbdir = NULL;
   gboolean rpmdbdir_is_tmp = FALSE;
-  const char *cmd = NULL;
-  
-  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
+  struct RpmRevisionData *rpmrev1 = NULL;
+  struct RpmRevisionData *rpmrev2 = NULL;
+  gboolean success = FALSE;
+
+  context = g_option_context_new ("COMMIT COMMIT - Show package changes between two commits");
+
+  if (!rpmostree_rpm_option_context_parse (context, rpm_diff_entries, &argc, &argv, &repo,
+                                           &rpmdbdir, &rpmdbdir_is_tmp, cancellable, error))
     goto out;
 
-  if (argc < 2)
-    goto help_output;
-  cmd = argv[1];
-  if (argc < 3)
-    goto help_output;
-
-  if ((g_str_equal (cmd, "diff")) && (argc != 4))
+  if (argc != 3)
     {
-      g_printerr ("usage: rpm-ostree rpm diff COMMIT COMMIT\n");
+      gs_free char *help;
+
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Argument processing failed");
+                   "\"%s\" takes exactly 2 arguments", g_get_prgname ());
+
+      help = g_option_context_get_help (context, FALSE, NULL);
+      g_printerr ("%s", help);
+
       goto out;
     }
 
-  if (!opt_repo)
-  {
-    gs_unref_object OstreeSysroot *sysroot = NULL;
+  if (!(rpmrev1 = rpmrev_new (repo, rpmdbdir, argv[1], NULL, cancellable, error)))
+    goto out;
 
-    sysroot = ostree_sysroot_new_default ();
-    if (!ostree_sysroot_load (sysroot, cancellable, error))
-      goto out;
+  if (!(rpmrev2 = rpmrev_new (repo, rpmdbdir, argv[2], NULL, cancellable, error)))
+    goto out;
 
-    if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-      goto out;
-  }
+  if (!g_str_equal (argv[1], rpmrev1->commit))
+    printf ("ostree diff commit old: %s (%s)\n", argv[1], rpmrev1->commit);
+  else
+    printf ("ostree diff commit old: %s\n", argv[1]);
+
+  if (!g_str_equal (argv[2], rpmrev2->commit))
+    printf ("ostree diff commit new: %s (%s)\n", argv[2], rpmrev2->commit);
+  else
+    printf ("ostree diff commit new: %s\n", argv[2]);
+
+  if (opt_format == NULL)
+    opt_format = "block";
+
+  if (g_str_equal (opt_format, "diff"))
+    {
+      rpmhdrs_diff_prnt_diff (rpmrev1->root, rpmrev2->root,
+                              rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb),
+                              cancellable, error);
+    }
+  else if (g_str_equal (opt_format, "block"))
+    {
+      rpmhdrs_diff_prnt_block (rpmrev1->root, rpmrev2->root,
+                               rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb),
+                               cancellable, error);
+    }
   else
     {
-      gs_unref_object GFile *repo_path = NULL;
-
-      repo_path = g_file_new_for_path (opt_repo);
-      repo = ostree_repo_new (repo_path);
-      if (!ostree_repo_open (repo, cancellable, error))
-	goto out;
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Format argument is invalid, pick one of: diff, block");
+      goto out;
     }
-  
+
+  success = TRUE;
+
+out:
+  /* Free the RpmRevisionData structs explicitly *before* possibly removing
+   * the database directory, since rpmhdrs_free() depends on that directory
+   * being there. */
+  rpmrev_free (rpmrev1);
+  rpmrev_free (rpmrev2);
+
+  if (rpmdbdir_is_tmp)
+    (void) gs_shutil_rm_rf (rpmdbdir, NULL, NULL);
+
+  g_option_context_free (context);
+
+  return success;
+}
+
+static GOptionEntry rpm_list_entries[] = {
+  { NULL }
+};
+
+gboolean
+rpmostree_rpm_builtin_list (int argc, char **argv, GCancellable *cancellable, GError **error)
+{
+  GOptionContext *context;
+  gs_unref_object OstreeRepo *repo = NULL;
+  gs_unref_object GFile *rpmdbdir = NULL;
+  gboolean rpmdbdir_is_tmp = FALSE;
+  gs_unref_ptrarray GPtrArray *patterns = NULL;
+  gboolean success = FALSE;
+
+  context = g_option_context_new ("[PREFIX-PKGNAME...] COMMIT... - List packages within commits");
+
+  if (!rpmostree_rpm_option_context_parse (context, rpm_list_entries, &argc, &argv, &repo,
+                                           &rpmdbdir, &rpmdbdir_is_tmp, cancellable, error))
+    goto out;
+
+  /* Put all the arguments in a GPtrArray (because it's easier to deal with
+   * than a string vector), and then split the trailing arguments which are
+   * valid commit checksums into a separate GPtrArray. */
+
+  patterns = cmdline2ptrarray (argc - 1, argv + 1);
+
+  /* XXX Error message for no arguments? */
+  if (patterns != NULL)
+    {
+      gs_unref_ptrarray GPtrArray *revs = g_ptr_array_new ();
+      GQueue queue = G_QUEUE_INIT;
+
+      while (patterns->len > 0)
+        {
+          gs_free char *commit = NULL;
+          guint index = patterns->len - 1;
+          char *arg = patterns->pdata[index];
+
+          ostree_repo_resolve_rev (repo, arg, TRUE, &commit, NULL);
+
+          /* Stop when we find a non-commit argument. */
+          if (commit == NULL)
+            break;
+
+          /* XXX Need to PREPEND to the 'revs' array to preserve order, but
+           *     in GLib versions prior to 2.40 you can only (easily) APPEND
+           *     to a GPtrArray.  g_ptr_array_insert() is not available to us
+           *     at this time, so use a GQueue to swap the order. */
+          g_queue_push_head (&queue, arg);
+          g_ptr_array_remove_index (patterns, index);
+        }
+
+      while (!g_queue_is_empty (&queue))
+        g_ptr_array_add (revs, g_queue_pop_head (&queue));
+
+      if (!_builtin_rpm_list (repo, rpmdbdir, revs, patterns, cancellable, error))
+        goto out;
+    }
+
+  success = TRUE;
+
+out:
+  if (rpmdbdir_is_tmp)
+    (void) gs_shutil_rm_rf (rpmdbdir, NULL, NULL);
+
+  g_option_context_free (context);
+
+  return success;
+}
+
+static GOptionEntry rpm_version_entries[] = {
+  { NULL }
+};
+
+gboolean
+rpmostree_rpm_builtin_version (int argc, char **argv, GCancellable *cancellable, GError **error)
+{
+  GOptionContext *context;
+  gs_unref_object OstreeRepo *repo = NULL;
+  gs_unref_object GFile *rpmdbdir = NULL;
+  gboolean rpmdbdir_is_tmp = FALSE;
+  gs_unref_ptrarray GPtrArray *revs = NULL;
+  gboolean success = FALSE;
+
+  context = g_option_context_new ("COMMIT... - Show rpmdb version of packages within the commits");
+
+  if (!rpmostree_rpm_option_context_parse (context, rpm_version_entries, &argc, &argv, &repo,
+                                           &rpmdbdir, &rpmdbdir_is_tmp, cancellable, error))
+    goto out;
+
+  revs = cmdline2ptrarray (argc - 1, argv + 1);
+
+  if (!_builtin_rpm_version (repo, rpmdbdir, revs, cancellable, error))
+    goto out;
+
+  success = TRUE;
+
+out:
+  if (rpmdbdir_is_tmp)
+    (void) gs_shutil_rm_rf (rpmdbdir, NULL, NULL);
+
+  g_option_context_free (context);
+
+  return success;
+}
+
+static GOptionContext *
+rpm_option_context_new_with_commands (void)
+{
+  RpmOstreeRpmCommand *command = rpm_subcommands;
+  GOptionContext *context;
+  GString *summary;
+
+  context = g_option_context_new ("COMMAND");
+
+  summary = g_string_new ("Builtin \"rpm\" Commands:");
+
+  while (command->name != NULL)
+    {
+      g_string_append_printf (summary, "\n  %s", command->name);
+      command++;
+    }
+
+  g_option_context_set_summary (context, summary->str);
+
+  g_string_free (summary, TRUE);
+
+  return context;
+}
+
+gboolean
+rpmostree_rpm_option_context_parse (GOptionContext *context,
+                                    const GOptionEntry *main_entries,
+                                    int *argc, char ***argv,
+                                    OstreeRepo **out_repo,
+                                    GFile **out_rpmdbdir,
+                                    gboolean *out_rpmdbdir_is_tmp,
+                                    GCancellable *cancellable, GError **error)
+{
+  gs_unref_object OstreeRepo *repo = NULL;
+  gs_unref_object GFile *rpmdbdir = NULL;
+  gboolean rpmdbdir_is_tmp = FALSE;
+  gboolean success = FALSE;
+
+  /* Entries are listed in --help output in the order added.  We add the
+   * main entries ourselves so that we can add the --repo entry first. */
+
+  g_option_context_add_main_entries (context, global_rpm_entries, NULL);
+
+  if (!rpmostree_option_context_parse (context, main_entries, argc, argv, error))
+    goto out;
+
+  if (opt_repo == NULL)
+    {
+      gs_unref_object OstreeSysroot *sysroot = NULL;
+
+      sysroot = ostree_sysroot_new_default ();
+      if (!ostree_sysroot_load (sysroot, cancellable, error))
+        goto out;
+
+      if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
+        goto out;
+    }
+  else
+    {
+      gs_unref_object GFile *repo_file = g_file_new_for_path (opt_repo);
+
+      repo = ostree_repo_new (repo_file);
+      if (!ostree_repo_open (repo, cancellable, error))
+        goto out;
+    }
+
   if (rpmReadConfigFiles (NULL, NULL))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "rpm failed to init: %s", rpmlogMessage());
+                   "rpm failed to init: %s", rpmlogMessage ());
       goto out;
     }
 
-  if (opt_rpmdbdir)
+  if (opt_rpmdbdir != NULL)
     {
       rpmdbdir = g_file_new_for_path (opt_rpmdbdir);
     }
   else
-    { // tmp n tmpfs is much faster than /var/tmp ...
-      // and rpmdb on their own shouldn't be too big.
+    {
+      /* tmp on tmpfs is much faster than /var/tmp,
+       * and the rpmdb itself shouldn't be too big. */
       gs_free char *tmpd = g_mkdtemp (g_strdup ("/tmp/rpm-ostree.XXXXXX"));
       rpmdbdir = g_file_new_for_path (tmpd);
       rpmdbdir_is_tmp = TRUE;
       ostree_repo_set_disable_fsync (repo, TRUE);
     }
 
-  if (FALSE) {}
-  else if (g_str_equal(cmd, "version"))
+  gs_transfer_out_value (out_repo, &repo);
+  gs_transfer_out_value (out_rpmdbdir, &rpmdbdir);
+
+  if (out_rpmdbdir_is_tmp != NULL)
+    *out_rpmdbdir_is_tmp = rpmdbdir_is_tmp;
+
+  success = TRUE;
+
+out:
+  return success;
+}
+
+gboolean
+rpmostree_builtin_rpm (int argc, char **argv, GCancellable *cancellable, GError **error)
+{
+  RpmOstreeRpmCommand *subcommand;
+  const char *subcommand_name = NULL;
+  gs_free char *prgname = NULL;
+  gboolean ret = FALSE;
+  int in, out;
+
+  for (in = 1, out = 1; in < argc; in++, out++)
     {
-      gs_unref_ptrarray GPtrArray *revs = cmdline2ptrarray (argc - 2, argv + 2);
-
-      if (!_builtin_rpm_version (repo, rpmdbdir, revs, cancellable, error))
-        goto out;
-    }
-  else if (g_str_equal (cmd, "diff"))
-    {
-      _cleanup_rpmrev_ struct RpmRevisionData *rpmrev1 = NULL;
-      _cleanup_rpmrev_ struct RpmRevisionData *rpmrev2 = NULL;
-      
-      if (!(rpmrev1 = rpmrev_new (repo, rpmdbdir, argv[2], NULL,
-				  cancellable, error)))
-	goto out;
-      if (!(rpmrev2 = rpmrev_new (repo, rpmdbdir, argv[3], NULL,
-				  cancellable, error)))
-	goto out;
-
-      if (!g_str_equal (argv[2], rpmrev1->commit))
-	printf ("ostree diff commit old: %s (%s)\n", argv[2], rpmrev1->commit);
-      else
-	printf ("ostree diff commit old: %s\n", argv[2]);
-      if (!g_str_equal (argv[3], rpmrev2->commit))
-	printf ("ostree diff commit new: %s (%s)\n", argv[3], rpmrev2->commit);
-      else
-	printf ("ostree diff commit new: %s\n", argv[3]);
-
-      if (!opt_format)
-        opt_format = "block";
-
-      if (FALSE) {}
-      else if (g_str_equal (opt_format, "diff"))
-        rpmhdrs_diff_prnt_diff (rpmrev1->root, rpmrev2->root,
-                                rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb),
-                                cancellable, error);
-      else if (g_str_equal (opt_format, "block"))
-        rpmhdrs_diff_prnt_block (rpmrev1->root, rpmrev2->root,
-                                 rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb),
-                                 cancellable, error);
-      else
+      /* The non-option is the command, take it out of the arguments */
+      if (argv[in][0] != '-')
         {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Format argument is invalid, pick one of: diff, block");
-          goto out;
+          if (subcommand_name == NULL)
+            {
+              subcommand_name = argv[in];
+              out--;
+              continue;
+            }
         }
+
+      else if (g_str_equal (argv[in], "--"))
+        {
+          break;
+        }
+
+      argv[out] = argv[in];
     }
-  else if (g_str_equal (cmd, "list"))
+
+  argc = out;
+
+  subcommand = rpm_subcommands;
+  while (subcommand->name)
     {
-      gs_unref_ptrarray GPtrArray *patterns = NULL;
-      int listnum = argc - 3;
-      char **listargv = argv + 2;
-      char *commit;
-      gs_unref_ptrarray GPtrArray *revs = NULL;
-
-      // Find first commit arg. ... all before it are list args.
-      while ((listnum > 0) &&
-	     ostree_repo_resolve_rev (repo, listargv[listnum-1], TRUE,
-				      &commit, NULL) && commit)
-	{
-	  g_free (commit); // FiXME: broken allow_noent?
-	  listnum--;
-	}
-
-      argc -= listnum;
-      argv += listnum;
-
-      patterns = cmdline2ptrarray (listnum, listargv);
-      revs = cmdline2ptrarray (argc - 2, argv + 2);
-
-      if (!_builtin_rpm_list (repo, rpmdbdir, revs, patterns,
-                              cancellable, error))
-          goto out;
+      if (g_strcmp0 (subcommand_name, subcommand->name) == 0)
+        break;
+      subcommand++;
     }
-  else
+
+  if (!subcommand->name)
     {
-    help_output:
-      g_printerr ("rpm-ostree rpm SUB-COMMANDS:\n");
-      g_printerr ("  diff COMMIT COMMIT\n");
-      g_printerr ("  list [prefix-pkgname...] COMMIT...\n");
-      g_printerr ("  version COMMIT...\n");
-      if (cmd && !g_str_equal (cmd, "help"))
-        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                     "Command processing failed");
+      GOptionContext *context;
+      gs_free char *help;
+
+      context = rpm_option_context_new_with_commands ();
+
+      /* This will not return for some options (e.g. --version). */
+      if (rpmostree_option_context_parse (context, NULL, &argc, &argv, error))
+        {
+          if (subcommand_name == NULL)
+            {
+              g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                                   "No \"rpm\" subcommand specified");
+            }
+          else
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Unknown \"rpm\" subcommand '%s'", subcommand_name);
+            }
+        }
+
+      help = g_option_context_get_help (context, FALSE, NULL);
+      g_printerr ("%s", help);
+
+      g_option_context_free (context);
+
       goto out;
     }
-  
+
+  prgname = g_strdup_printf ("%s %s", g_get_prgname (), subcommand_name);
+  g_set_prgname (prgname);
+
+  if (!subcommand->fn (argc, argv, cancellable, error))
+    goto out;
+
   ret = TRUE;
  out:
-  if (rpmdbdir_is_tmp)
-    (void) gs_shutil_rm_rf (rpmdbdir, NULL, NULL);
-  if (context)
-    g_option_context_free (context);
-
   return ret;
 }
+
