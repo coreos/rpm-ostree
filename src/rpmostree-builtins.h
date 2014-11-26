@@ -27,7 +27,6 @@ G_BEGIN_DECLS
 typedef struct {
   const char *name;
   gboolean (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
-  int flags;
 } RpmOstreeCommand;
 
 #define BUILTINPROTO(name) gboolean rpmostree_builtin_ ## name (int argc, char **argv, GCancellable *cancellable, GError **error)
