@@ -50,7 +50,7 @@ cleanup_closep (int *fdp)
   int fd;
 
   g_assert (fdp);
-  
+
   fd = *fdp;
   if (fd != -1)
     (void) close (fd);

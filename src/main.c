@@ -78,7 +78,7 @@ main (int    argc,
   gboolean skip;
   gboolean want_help = FALSE;
   const char *cmd = NULL;
-  
+
   /* avoid gvfs (http://bugzilla.gnome.org/show_bug.cgi?id=526454) */
   g_setenv ("GIO_USE_VFS", "local", TRUE);
   g_set_prgname (argv[0]);

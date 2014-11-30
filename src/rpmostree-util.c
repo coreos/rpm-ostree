@@ -48,11 +48,11 @@ _rpmostree_set_prefix_error_from_errno (GError     **error,
 {
   gs_free char *formatted = NULL;
   va_list args;
-  
+
   va_start (args, format);
   formatted = g_strdup_vprintf (format, args);
   va_end (args);
-  
+
   _rpmostree_set_error_from_errno (error, errsv);
   g_prefix_error (error, "%s", formatted);
   errno = errsv;

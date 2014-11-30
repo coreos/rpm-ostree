@@ -64,7 +64,7 @@ rpmostree_builtin_rebase (int             argc,
   gboolean in_status_line = FALSE;
   _cleanup_gkeyfile_ GKeyFile *old_origin = NULL;
   _cleanup_gkeyfile_ GKeyFile *new_origin = NULL;
-  
+
   g_option_context_add_main_entries (context, option_entries, NULL);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
@@ -92,7 +92,7 @@ rpmostree_builtin_rebase (int             argc,
 
   old_origin = ostree_sysroot_upgrader_get_origin (upgrader);
   origin_refspec = g_key_file_get_string (old_origin, "origin", "refspec", NULL);
-  
+
   if (!ostree_parse_refspec (origin_refspec, &origin_remote, &origin_ref, error))
     goto out;
 
@@ -108,12 +108,12 @@ rpmostree_builtin_rebase (int             argc,
       if (!ostree_parse_refspec (new_provided_refspec, &new_remote, &new_ref, error))
         goto out;
     }
-  
+
   if (!new_remote)
     new_refspec = g_strconcat (origin_remote, ":", new_ref, NULL);
   else
     new_refspec = g_strconcat (new_remote, ":", new_ref, NULL);
-  
+
   if (strcmp (origin_refspec, new_refspec) == 0)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -158,15 +158,15 @@ rpmostree_builtin_rebase (int             argc,
 
   g_print ("Deleting ref '%s:%s'\n", origin_remote, origin_ref);
   ostree_repo_transaction_set_ref (repo, origin_remote, origin_ref, NULL);
-  
+
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
     goto out;
-  
+
 #ifdef HAVE_PATCHED_HAWKEY_AND_LIBSOLV
   if (!rpmostree_print_treepkg_diff (sysroot, cancellable, error))
     goto out;
 #endif
-  
+
   ret = TRUE;
  out:
   return ret;

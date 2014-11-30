@@ -264,7 +264,7 @@ rpmhdrs_new (const char *root, const GPtrArray *patterns)
  while ((h1 = rpmdbNextIterator (iter)))
  {
    const char*    name = headerGetString (h1, RPMTAG_NAME);
-   
+
    if (g_str_equal (name, "gpg-pubkey")) continue; /* rpmdb abstraction leak */
 
    if (!pat_fnmatch_match (h1, name, patprefixlen, patterns))
@@ -342,7 +342,7 @@ pkg_yumdb_strdup (GFile *root, Header pkg, const char *yumdb_key,
 				    yumdb_key, NULL);
   GError *tmp_error = NULL;
   char *ret = NULL;
-  
+
   f = g_file_resolve_relative_path (root, path);
 
   // allow_noent returns true for noent, false for other errors.
@@ -447,13 +447,13 @@ rpmhdrs_rpmdbv (GFile *root, struct RpmHeaders *l1,
       gs_free char *envra = pkg_envra_strdup (pkg);
       gsize tbytes_read = 0;
       gsize dbytes_read = 0;
-      
+
       g_checksum_update (checksum, (guint8*)envra, strlen(envra));
-      
+
       tin = pkg_yumdb_file_read (root, pkg, "checksum_type", cancellable,error);
       if (!tin)
 	continue;
-    
+
       din = pkg_yumdb_file_read (root, pkg, "checksum_data", cancellable,error);
       if (!din)
 	continue;
@@ -464,20 +464,20 @@ rpmhdrs_rpmdbv (GFile *root, struct RpmHeaders *l1,
       if (!g_input_stream_read_all (din, dbuf, sizeof(dbuf), &dbytes_read,
 				    cancellable, error))
 	continue;
-      
+
       if (tbytes_read >= 512)
 	continue; // should be == len(md5) or len(sha256) etc.
       if (dbytes_read >= 1024)
 	continue; // should be digest size of md5/sha256/sha512/etc.
-      
+
       g_checksum_update (checksum, (guint8*)tbuf, tbytes_read);
       g_checksum_update (checksum, (guint8*)dbuf, dbytes_read);
     }
-  
+
   checksum_cstr = g_strdup (g_checksum_get_string (checksum));
-  
+
   g_checksum_free (checksum);
-  
+
   return g_strdup_printf ("%u:%s", num, checksum_cstr);
 }
 
@@ -536,7 +536,7 @@ rpmhdrs_diff (struct RpmHeaders *l1,
        {
 	 Header h2 = l2->hs->pdata[n2];
 	 int cmp = header_name_cmp (h1, h2);
-	 
+
 	 if (cmp > 0)
 	   {
              g_ptr_array_add (ret->hs_add, h2);
@@ -551,7 +551,7 @@ rpmhdrs_diff (struct RpmHeaders *l1,
 	   {
 	     cmp = rpmVersionCompare (h1, h2);
 	     if (!cmp) { ++n1; ++n2; continue; }
-	     
+
              g_ptr_array_add (ret->hs_mod_old, h1);
 	     ++n1;
              g_ptr_array_add (ret->hs_mod_new, h2);
@@ -563,7 +563,7 @@ rpmhdrs_diff (struct RpmHeaders *l1,
  while (n2 < l2->hs->len)
    {
      Header h2 = l2->hs->pdata[n2];
-     
+
      g_ptr_array_add (ret->hs_add, h2);
      ++n2;
    }
@@ -826,10 +826,10 @@ rpmrev_free (struct RpmRevisionData *ptr)
 
   if (!ptr)
     return;
-  
+
   rpmhdrs_free (ptr->rpmdb);
   ptr->rpmdb = NULL;
-  
+
   root = ptr->root;
   ptr->root = NULL;
 
@@ -856,10 +856,10 @@ rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,
   struct RpmRevisionData *rpmrev = NULL;
   gs_unref_object GFile *root = NULL;
   gs_free char *commit = NULL;
-  
+
   if (!ostree_repo_read_commit (repo, rev, &root, &commit, NULL, error))
     goto out;
-  
+
   subtree = g_file_resolve_relative_path (root, "/var/lib/rpm");
   if (!g_file_query_exists (subtree, cancellable))
     {
@@ -893,7 +893,7 @@ rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,
     goto out;
 
   rpmrev = g_malloc0 (sizeof(struct RpmRevisionData));
-  
+
   rpmrev->root   = root;   root = NULL;
   rpmrev->commit = commit; commit = NULL;
   rpmrev->rpmdb  = rpmhdrs_new (gs_file_get_path_cached (revdir), patterns);
@@ -990,7 +990,7 @@ ost_get_commit_hashes(OstreeRepo *repo, const char *beg, const char *end,
 
  worked_out:
   worked = TRUE;
-  
+
  out:
   if (!worked)
     {
@@ -1145,7 +1145,7 @@ rpmostree_builtin_rpm (int             argc,
   gs_unref_object GFile *rpmdbdir = NULL;
   gboolean rpmdbdir_is_tmp = FALSE;
   const char *cmd = NULL;
-  
+
   g_option_context_add_main_entries (context, option_entries, NULL);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
@@ -1185,7 +1185,7 @@ rpmostree_builtin_rpm (int             argc,
       if (!ostree_repo_open (repo, cancellable, error))
 	goto out;
     }
-  
+
   if (rpmReadConfigFiles (NULL, NULL))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -1218,7 +1218,7 @@ rpmostree_builtin_rpm (int             argc,
     {
       _cleanup_rpmrev_ struct RpmRevisionData *rpmrev1 = NULL;
       _cleanup_rpmrev_ struct RpmRevisionData *rpmrev2 = NULL;
-      
+
       if (!(rpmrev1 = rpmrev_new (repo, rpmdbdir, argv[2], NULL,
 				  cancellable, error)))
 	goto out;
@@ -1293,7 +1293,7 @@ rpmostree_builtin_rpm (int             argc,
                      "Command processing failed");
       goto out;
     }
-  
+
   ret = TRUE;
  out:
   if (rpmdbdir_is_tmp)

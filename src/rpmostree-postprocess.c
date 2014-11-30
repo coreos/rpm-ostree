@@ -73,10 +73,10 @@ run_sync_in_root (GFile        *yumroot,
       _rpmostree_set_error_from_errno (error, errno);
       goto out;
     }
-  
+
   if (!_rpmostree_sync_wait_on_pid (child, error))
     goto out;
-  
+
   ret = TRUE;
  out:
   return ret;
@@ -110,7 +110,7 @@ init_rootfs (GFile         *targetroot,
   if (!gs_file_ensure_directory (targetroot, TRUE,
                                  cancellable, error))
     goto out;
-  
+
   for (i = 0; i < G_N_ELEMENTS (toplevel_dirs); i++)
     {
       gs_unref_object GFile *dir = g_file_get_child (targetroot, toplevel_dirs[i]);
@@ -130,7 +130,7 @@ init_rootfs (GFile         *targetroot,
                                       cancellable, error))
         goto out;
     }
-  
+
   ret = TRUE;
  out:
   return ret;
@@ -148,7 +148,7 @@ find_kernel_and_initramfs_in_bootdir (GFile       *bootdir,
   gs_unref_object GFile *ret_kernel = NULL;
   gs_unref_object GFile *ret_initramfs = NULL;
 
-  direnum = g_file_enumerate_children (bootdir, "standard::name", 0, 
+  direnum = g_file_enumerate_children (bootdir, "standard::name", 0,
                                        cancellable, error);
   if (!direnum)
     goto out;
@@ -212,7 +212,7 @@ do_kernel_prep (GFile         *yumroot,
                 GError       **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object GFile *bootdir = 
+  gs_unref_object GFile *bootdir =
     g_file_get_child (yumroot, "boot");
   gs_unref_object GFile *kernel_path = NULL;
   gs_unref_object GFile *initramfs_path = NULL;
@@ -309,7 +309,7 @@ do_kernel_prep (GFile         *yumroot,
     goto out;
 
   boot_checksum_str = g_checksum_get_string (boot_checksum);
-  
+
   {
     gs_free char *new_kernel_name =
       g_strconcat (gs_file_get_basename_cached (kernel_path), "-",
@@ -391,7 +391,7 @@ convert_var_to_tmpfiles_d (GOutputStream *tmpfiles_out,
 
       relpath = g_file_get_relative_path (yumroot, child);
       g_assert (relpath);
-      
+
       g_string_append_c (tmpfiles_d_buf, '/');
       g_string_append (tmpfiles_d_buf, relpath);
 
@@ -559,7 +559,7 @@ workaround_selinux_cross_labeling (GFile         *rootfs,
                                                       cancellable, error))
         goto out;
     }
-    
+
   ret = TRUE;
  out:
   return ret;
@@ -571,7 +571,7 @@ gfopen (const char       *path,
         GCancellable     *cancellable,
         GError          **error)
 {
-  FILE *ret = NULL; 
+  FILE *ret = NULL;
 
   ret = fopen (path, mode);
   if (!ret)
@@ -646,7 +646,7 @@ migrate_passwd_file_except_root (GFile         *rootfs,
       int r;
       guint32 id;
       const char *name;
-      
+
       if (kind == MIGRATE_PASSWD)
         pw = fgetpwent (src_stream);
       else
@@ -807,11 +807,11 @@ migrate_rpm_and_yumdb (GFile          *targetroot,
     }
 
   (void) g_file_enumerator_close (direnum, cancellable, error);
-    
+
   g_print ("Placing RPM db in /usr/share/rpm\n");
   if (!gs_file_rename (legacyrpm_path, newrpm_path, cancellable, error))
     goto out;
-    
+
   /* Move the yum database to usr/share/yumdb; disabled for now due
    * to bad conflict with OSTree's current
    * one-http-request-per-file.
@@ -824,7 +824,7 @@ migrate_rpm_and_yumdb (GFile          *targetroot,
       if (!gs_file_rename (src_yum_rpmdb_indexes, target_yum_rpmdb_indexes,
                            cancellable, error))
         goto out;
-        
+
       if (!clean_yumdb_extraneous_files (target_yum_rpmdb_indexes, cancellable, error))
         goto out;
     }
@@ -841,7 +841,7 @@ migrate_rpm_and_yumdb (GFile          *targetroot,
 
 
 /* Prepare a root filesystem, taking mainly the contents of /usr from yumroot */
-static gboolean 
+static gboolean
 create_rootfs_from_yumroot_content (GFile         *targetroot,
                                     GFile         *yumroot,
                                     JsonObject    *treefile,
@@ -856,7 +856,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   g_print ("Preparing kernel\n");
   if (!do_kernel_prep (yumroot, cancellable, error))
     goto out;
-  
+
   g_print ("Initializing rootfs\n");
   if (!init_rootfs (targetroot, cancellable, error))
     goto out;
@@ -871,7 +871,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
       JsonArray *etc_group_members = json_object_get_array_member (treefile, "etc-group-members");
       preserve_groups_set = _rpmostree_jsonutil_jsarray_strings_to_set (etc_group_members);
     }
-      
+
   g_print ("Migrating /etc/group to /usr/lib/\n");
   if (!migrate_passwd_file_except_root (yumroot, MIGRATE_GROUP, preserve_groups_set,
                                         cancellable, error))
@@ -879,7 +879,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
 
   /* NSS configuration to look at the new files */
   {
-    gs_unref_object GFile *yumroot_etc = 
+    gs_unref_object GFile *yumroot_etc =
       g_file_resolve_relative_path (yumroot, "etc");
 
     if (!replace_nsswitch (yumroot_etc, cancellable, error))
@@ -915,7 +915,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
       g_file_get_child (yumroot, "etc");
     gs_unref_object GFile *target_usretc =
       g_file_resolve_relative_path (targetroot, "usr/etc");
-    
+
     if (!gs_file_rename (yumroot_etc, target_usretc,
                          cancellable, error))
       goto out;
@@ -936,7 +936,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
     if (!tmpfiles_out)
       goto out;
 
-    
+
     if (!convert_var_to_tmpfiles_d ((GOutputStream*)tmpfiles_out, yumroot, yumroot_var,
                                     cancellable, error))
       goto out;
@@ -959,7 +959,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
     RpmOstreePostprocessBootLocation boot_location =
       RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
     const char *boot_location_str = NULL;
-      
+
     if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile,
                                                                 "boot_location",
                                                                 &boot_location_str, error))
@@ -980,7 +980,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
             goto out;
           }
       }
-    
+
     if (!gs_file_ensure_directory (target_usrlib, TRUE, cancellable, error))
       goto out;
 
@@ -1041,7 +1041,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
     gs_unref_object GFile *target_tmpfilesd =
       g_file_resolve_relative_path (targetroot, "usr/lib/tmpfiles.d/tmpfiles-ostree-integration.conf");
     gs_unref_object GFile *target_tmpfilesd_parent = g_file_get_parent (target_tmpfilesd);
-    
+
     if (!gs_file_ensure_directory (target_tmpfilesd_parent, TRUE, cancellable, error))
       goto out;
 
@@ -1069,7 +1069,7 @@ handle_remove_files_from_package (GFile         *yumroot,
   HyPackage hypkg;
   _cleanup_hyquery_ HyQuery query = NULL;
   _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
-      
+
   query = hy_query_create (sack);
   hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkg);
   pkglist = hy_query_run (query);
@@ -1098,7 +1098,7 @@ handle_remove_files_from_package (GFile         *yumroot,
 
           if (!regex)
             goto out;
-      
+
           for (strviter = pkg_files; strviter && strviter[0]; strviter++)
             {
               const char *file = *strviter;
@@ -1106,10 +1106,10 @@ handle_remove_files_from_package (GFile         *yumroot,
               if (g_regex_match (regex, file, 0, NULL))
                 {
                   gs_unref_object GFile *child = NULL;
-              
+
                   if (file[0] == '/')
                     file++;
-              
+
                   child = g_file_resolve_relative_path (yumroot, file);
                   g_print ("Deleting: %s\n", file);
                   if (!gs_shutil_rm_rf (child, cancellable, error))
@@ -1168,7 +1168,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
 
         if (g_file_query_file_type (unit_link_target, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL) == G_FILE_TYPE_SYMBOLIC_LINK)
           continue;
-          
+
         g_print ("Adding %s to multi-user.target.wants\n", unitname);
 
         if (!g_file_make_symbolic_link (unit_link_target, symlink_target,
@@ -1188,10 +1188,10 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
     if (!gs_file_ensure_directory (target_treefile_dir_path, TRUE,
                                    cancellable, error))
       goto out;
-                                     
+
     g_print ("Writing '%s'\n", gs_file_get_path_cached (target_treefile_path));
     buf = g_bytes_get_data (serialized_treefile, &len);
-    
+
     if (!g_file_replace_contents (target_treefile_path, (char*)buf, len,
                                   NULL, FALSE, G_FILE_CREATE_REPLACE_DESTINATION,
                                     NULL, cancellable, error))
@@ -1201,7 +1201,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "default_target",
                                                               &default_target, error))
     goto out;
-  
+
   if (default_target != NULL)
     {
       gs_unref_object GFile *default_target_path =
@@ -1210,7 +1210,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
         g_strconcat ("/usr/lib/systemd/system/", default_target, NULL);
 
       (void) gs_file_unlink (default_target_path, NULL, NULL);
-        
+
       if (!g_file_make_symbolic_link (default_target_path, dest_default_target_path,
                                       cancellable, error))
         goto out;
@@ -1223,7 +1223,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
     }
   else
     len = 0;
-    
+
   for (i = 0; i < len; i++)
     {
       const char *val = _rpmostree_jsonutil_array_require_string_element (remove, i, error);
@@ -1239,7 +1239,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
         }
 
       child = g_file_resolve_relative_path (yumroot, val);
-        
+
       if (g_file_query_exists (child, NULL))
         {
           g_print ("Removing '%s'\n", val);
@@ -1280,7 +1280,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "postprocess-script",
                                                               &postprocess_script, error))
     goto out;
-    
+
   if (postprocess_script)
     {
       const char *yumroot_path = gs_file_get_path_cached (yumroot);
@@ -1302,10 +1302,10 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
         if (!run_sync_in_root (yumroot, binpath, child_argv, error))
           goto out;
       }
-                                          
+
       g_print ("Executing postprocessing script '%s'...done\n", bn);
     }
-  
+
   ret = TRUE;
  out:
   return ret;
@@ -1431,10 +1431,10 @@ metadata_version_unique (OstreeRepo  *repo,
                      "Version already specified in commit %s", checksum);
         goto out;
       }
-  
+
   if (!(parent = ostree_commit_get_parent (variant)))
     return TRUE;
-  
+
   return metadata_version_unique (repo, parent, version, error);
 
  out:
@@ -1458,13 +1458,13 @@ rpmostree_commit (GFile         *rootfs,
   gs_free char *new_revision = NULL;
   gs_unref_object GFile *root_tree = NULL;
   gs_unref_object OstreeSePolicy *sepolicy = NULL;
-  
+
   /* hardcode targeted policy for now */
   if (enable_selinux)
     {
       if (!workaround_selinux_cross_labeling (rootfs, cancellable, error))
         goto out;
-      
+
       sepolicy = ostree_sepolicy_new (rootfs, cancellable, error);
       if (!sepolicy)
         goto out;
@@ -1518,7 +1518,7 @@ rpmostree_commit (GFile         *rootfs,
                                     cancellable, error))
         goto out;
     }
-  
+
   ostree_repo_transaction_set_ref (repo, NULL, refname, new_revision);
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))

@@ -153,7 +153,7 @@ _rpmostree_libcontainer_prep_dev (const char  *dest_devdir)
   for (i = 0; i < G_N_ELEMENTS (devnodes); i++)
     {
       const char *nodename = devnodes[i];
-      
+
       if (fstatat (src_fd, nodename, &stbuf, 0) == -1)
         {
           if (errno == ENOENT)
@@ -176,7 +176,7 @@ _rpmostree_libcontainer_run_in_root (const char  *dest,
                                      const char  *binary,
                                      char **argv)
 {
-  const int cloneflags = 
+  const int cloneflags =
     SIGCHLD | CLONE_NEWPID | CLONE_NEWNS | CLONE_NEWNET | CLONE_SYSVSEM | CLONE_NEWUTS;
   pid_t child;
 
@@ -198,7 +198,7 @@ _rpmostree_libcontainer_run_in_root (const char  *dest,
     {
       if (mount (NULL, "/", "none", MS_PRIVATE | MS_REC, NULL) != 0)
         _rpmostree_perror_fatal ("mount: ");
-      
+
       if (mount (NULL, "/", "none", MS_PRIVATE | MS_REMOUNT | MS_NOSUID, NULL) != 0)
         _rpmostree_perror_fatal ("mount (MS_NOSUID): ");
     }
@@ -213,10 +213,10 @@ _rpmostree_libcontainer_run_in_root (const char  *dest,
 
       if (_rpmostree_libcontainer_prep_dev ("dev") != 0)
         _rpmostree_perror_fatal ("preparing /dev: ");
-      
+
       if (mount (".", ".", NULL, MS_BIND | MS_PRIVATE, NULL) != 0)
         _rpmostree_perror_fatal ("mount (MS_BIND)");
-      
+
       if (mount (dest, "/", NULL, MS_MOVE, NULL) != 0)
         _rpmostree_perror_fatal ("mount (MS_MOVE)");
     }
