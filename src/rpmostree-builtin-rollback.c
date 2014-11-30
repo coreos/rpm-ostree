@@ -55,7 +55,7 @@ rpmostree_builtin_rollback (int             argc,
   guint i;
   guint booted_index;
   guint index_to_prepend;
-  
+
   g_option_context_add_main_entries (context, option_entries, NULL);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
@@ -91,7 +91,7 @@ rpmostree_builtin_rollback (int             argc,
     }
   g_assert (booted_index < deployments->len);
   g_assert (deployments->pdata[booted_index] == booted_deployment);
-  
+
   if (booted_index != 0)
     {
       /* There is an earlier deployment, let's assume we want to just
@@ -100,7 +100,7 @@ rpmostree_builtin_rollback (int             argc,
 
        /*
        What this does is, if we're NOT in the default boot index, it plans to prepend
-       our current index (1, since we can't have more than two trees) so that it becomes index 0 
+       our current index (1, since we can't have more than two trees) so that it becomes index 0
        (default) and the current default becomes index 1
        */
       index_to_prepend = booted_index;
@@ -110,7 +110,7 @@ rpmostree_builtin_rollback (int             argc,
       /* We're booted into the first, let's roll back to the previous */
       index_to_prepend = 1;
     }
-  
+
   g_ptr_array_add (new_deployments, g_object_ref (deployments->pdata[index_to_prepend]));
   for (i = 0; i < deployments->len; i++)
     {

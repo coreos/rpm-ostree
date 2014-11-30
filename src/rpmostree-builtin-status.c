@@ -37,7 +37,7 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-static void 
+static void
 printchar (char *s, int n)
 {
   int i;
@@ -65,7 +65,7 @@ static char *
 version_of_commit (OstreeRepo *repo, const char *checksum)
 {
   gs_unref_variant GVariant *variant = NULL;
-  
+
   /* Shouldn't fail, but if it does, we ignore it */
   if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum,
                                  &variant, NULL))
@@ -115,7 +115,7 @@ rpmostree_builtin_status (int             argc,
   if(!opt_pretty)
     {
       /* find max lengths of osname and refspec */
-      for (j = 0; j < deployments->len; j++) 
+      for (j = 0; j < deployments->len; j++)
         {
           gs_unref_object OstreeRepo *repo = NULL;
           const char *csum = ostree_deployment_get_csum (deployments->pdata[j]);
@@ -148,13 +148,13 @@ rpmostree_builtin_status (int             argc,
         }
       /* print column headers */
       if (missing_version)
-        g_print ("  %-*s%-*s%-*s%-*s\n", 
+        g_print ("  %-*s%-*s%-*s%-*s\n",
                  max_timestamp_len+buffer,"TIMESTAMP (UTC)",
                  max_id_len+buffer, "ID",
                  max_osname_len+buffer, "OSNAME",
                  max_refspec_len+buffer, "REFSPEC");
       else
-        g_print ("  %-*s%-*s%-*s%-*s\n", 
+        g_print ("  %-*s%-*s%-*s%-*s\n",
                  max_version_len+buffer,"VERSION",
                  max_id_len+buffer, "ID",
                  max_osname_len+buffer, "OSNAME",
@@ -226,7 +226,7 @@ rpmostree_builtin_status (int             argc,
               ts_ver_len    = max_version_len;
             }
 
-          g_print ("%c %-*s%-*s%-*s%-*s\n", 
+          g_print ("%c %-*s%-*s%-*s%-*s\n",
                   deployment == booted_deployment ? '*' : ' ',
                   ts_ver_len+buffer, ts_ver_string,
                   max_id_len+buffer, truncated_csum,

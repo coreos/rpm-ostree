@@ -124,6 +124,6 @@ _rpmostree_jsonutil_jsarray_strings_to_set (JsonArray  *array)
       const char *elt = json_array_get_string_element (array, i);
       g_hash_table_add (ret, g_strdup (elt));
     }
-  
+
   return ret;
 }

@@ -63,7 +63,7 @@ rpmostree_builtin_upgrade (int             argc,
   OstreeSysrootUpgraderPullFlags upgraderpullflags = 0;
 
   gs_free char *origin_description = NULL;
-  gs_unref_object OstreeRepo *repo = NULL; 
+  gs_unref_object OstreeRepo *repo = NULL;
 
   g_option_context_add_main_entries (context, option_entries, NULL);
 
@@ -94,7 +94,7 @@ rpmostree_builtin_upgrade (int             argc,
       progress = ostree_async_progress_new_and_connect (_rpmostree_pull_progress, console);
     }
 
-  if (opt_allow_downgrade)  
+  if (opt_allow_downgrade)
     upgraderpullflags |= OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER;
 
   if (opt_check_diff)
@@ -131,7 +131,7 @@ rpmostree_builtin_upgrade (int             argc,
         {
           if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
                 goto out;
-        
+
           if (opt_reboot)
             gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
                                            cancellable, error,
@@ -171,7 +171,7 @@ rpmostree_builtin_upgrade (int             argc,
 
           rpmdbdir = g_file_new_for_path (tmpd);
 
-          if (!(rpmrev1 = rpmrev_new (repo, rpmdbdir, 
+          if (!(rpmrev1 = rpmrev_new (repo, rpmdbdir,
                                       ostree_deployment_get_csum (ostree_sysroot_get_booted_deployment (sysroot)),
                                       NULL, cancellable, error)))
             goto out;
@@ -185,7 +185,7 @@ rpmostree_builtin_upgrade (int             argc,
                             cancellable, error);
         }
     }
-  
+
   ret = TRUE;
  out:
   if (console)

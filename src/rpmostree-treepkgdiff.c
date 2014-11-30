@@ -85,13 +85,13 @@ print_rpmdb_diff (GFile          *oldroot,
   if (!rpmostree_get_pkglist_for_root (newroot, &new_sack, &new_pkglist,
                                        cancellable, error))
     goto out;
-  
+
   printed_header = FALSE;
   FOR_PACKAGELIST(pkg, new_pkglist, i)
     {
       _cleanup_hyquery_ HyQuery query = NULL;
       _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
-      
+
       query = hy_query_create (old_sack);
       hy_query_filter (query, HY_PKG_NAME, HY_EQ, hy_package_get_name (pkg));
       hy_query_filter (query, HY_PKG_EVR, HY_NEQ, hy_package_get_evr (pkg));
@@ -114,7 +114,7 @@ print_rpmdb_diff (GFile          *oldroot,
     {
       _cleanup_hyquery_ HyQuery query = NULL;
       _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
-      
+
       query = hy_query_create (new_sack);
       hy_query_filter (query, HY_PKG_NAME, HY_EQ, hy_package_get_name (pkg));
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
@@ -136,7 +136,7 @@ print_rpmdb_diff (GFile          *oldroot,
     {
       _cleanup_hyquery_ HyQuery query = NULL;
       _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
-      
+
       query = hy_query_create (old_sack);
       hy_query_filter (query, HY_PKG_NAME, HY_EQ, hy_package_get_name (pkg));
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
@@ -166,21 +166,21 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
   gboolean ret = FALSE;
   OstreeDeployment *booted_deployment;
   OstreeDeployment *new_deployment;
-  gs_unref_ptrarray GPtrArray *deployments = 
+  gs_unref_ptrarray GPtrArray *deployments =
     ostree_sysroot_get_deployments (sysroot);
   gs_unref_object GFile *booted_root = NULL;
   gs_unref_object GFile *new_root = NULL;
 
   booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
-  
+
   g_assert (deployments->len > 1);
   new_deployment = deployments->pdata[0];
-  
+
   if (booted_deployment && new_deployment != booted_deployment)
     {
       booted_root = ostree_sysroot_get_deployment_directory (sysroot, booted_deployment);
       new_root = ostree_sysroot_get_deployment_directory (sysroot, new_deployment);
-      
+
       if (!print_rpmdb_diff (booted_root, new_root, cancellable, error))
         goto out;
     }

@@ -57,7 +57,7 @@ rpmostree_compose_builtin_sign (int            argc,
   gs_free char *checksum = NULL;
   gs_unref_variant GVariant *commit_variant = NULL;
   gs_unref_bytes GBytes *commit_bytes = NULL;
-  
+
   g_option_context_add_main_entries (context, option_entries, NULL);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
@@ -84,7 +84,7 @@ rpmostree_compose_builtin_sign (int            argc,
 
   commit_bytes = g_variant_get_data_as_bytes (commit_variant);
   commit_data = (GInputStream*)g_memory_input_stream_new_from_bytes (commit_bytes);
-  
+
   tmp_commitdata_file = g_file_new_tmp ("tmpsigXXXXXX", &tmp_commitdata_stream,
                                        error);
   if (!tmp_commitdata_file)
@@ -103,7 +103,7 @@ rpmostree_compose_builtin_sign (int            argc,
     goto out;
 
   (void) g_io_stream_close ((GIOStream*)tmp_sig_stream, NULL, NULL);
-                                  
+
   if (!gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_NULL,
                                       cancellable, error,
                                       "rpm-sign",
@@ -131,7 +131,7 @@ rpmostree_compose_builtin_sign (int            argc,
 
   g_print ("Successfully signed OSTree commit=%s with key=%s\n",
            checksum, opt_key_id);
-  
+
   ret = TRUE;
  out:
   if (tmp_commitdata_file)

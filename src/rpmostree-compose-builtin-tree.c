@@ -61,7 +61,7 @@ static GOptionEntry option_entries[] = {
 
 typedef struct {
   GPtrArray *treefile_context_dirs;
-  
+
   GFile *workdir;
 
   GBytes *serialized_treefile;
@@ -162,7 +162,7 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
       if (!gs_file_ensure_directory (yumcache_lookaside, TRUE, cancellable, error))
         goto out;
     }
-      
+
   repos_tmpdir = g_file_resolve_relative_path (self->workdir, "tmp-repos");
   if (!gs_shutil_rm_rf (repos_tmpdir, cancellable, error))
     goto out;
@@ -224,7 +224,7 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
   {
     gboolean first = TRUE;
     GString *reposdir_value = g_string_new ("--setopt=reposdir=");
-    
+
     for (i = 0; i < reposdir_args->len; i++)
       {
         const char *reponame = reposdir_args->pdata[i];
@@ -232,7 +232,7 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
           first = FALSE;
         else
           g_string_append_c (reposdir_value, ',');
-        g_string_append (reposdir_value, reponame); 
+        g_string_append (reposdir_value, reponame);
       }
     g_ptr_array_add (args, g_string_free (reposdir_value, FALSE));
   }
@@ -307,7 +307,7 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
   g_ptr_array_add (yum_argv, g_strconcat ("--installroot=",
                                           gs_file_get_path_cached (yumroot),
                                           NULL));
-  
+
   g_ptr_array_add (yum_argv, g_strdup ("shell"));
 
   g_ptr_array_add (yum_argv, NULL);
@@ -320,12 +320,12 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
       _rpmostree_set_error_from_errno (error, errno);
       goto out;
     }
-  
+
   if (child == 0)
     {
       if (dup2 (pipefds[0], 0) != 0)
         _rpmostree_perror_fatal ("dup2()");
-      
+
       /* This is used at the moment, but eventually I'd like to teach
        * Fedora's kernel.spec to e.g. skip making an initramfs,
        * because we're going to be making one.
@@ -396,7 +396,7 @@ yum_context_command (YumContext   *yumctx,
  out:
   return ret;
 }
-                  
+
 static gboolean
 yuminstall (RpmOstreeTreeComposeContext  *self,
             JsonObject      *treedata,
@@ -423,7 +423,7 @@ yuminstall (RpmOstreeTreeComposeContext  *self,
         cmd = g_strconcat ("group install ", package, NULL);
       else
         cmd = g_strconcat ("install ", package, NULL);
-        
+
       if (!yum_context_command (yumctx, cmd, &lines,
                                 cancellable, error))
         goto out;
@@ -481,7 +481,7 @@ process_includes (RpmOstreeTreeComposeContext  *self,
 
   if (!_rpmostree_jsonutil_object_get_optional_string_member (root, "include", &include_path, error))
     goto out;
-                                          
+
   if (include_path)
     {
       gs_unref_object GFile *treefile_dirpath = g_file_get_parent (treefile_path);
@@ -505,11 +505,11 @@ process_includes (RpmOstreeTreeComposeContext  *self,
           goto out;
         }
       parent_root = json_node_get_object (parent_rootval);
-      
+
       if (!process_includes (self, parent_path, depth + 1, parent_root,
                              cancellable, error))
         goto out;
-                             
+
       members = json_object_get_members (parent_root);
       for (iter = members; iter; iter = iter->next)
         {
@@ -547,7 +547,7 @@ process_includes (RpmOstreeTreeComposeContext  *self,
                   len = json_array_get_length (child_array);
                   for (i = 0; i < len; i++)
                     json_array_add_element (new_child, json_node_copy (json_array_get_element (child_array, i)));
-                  
+
                   json_object_set_array_member (root, name, new_child);
                 }
             }
@@ -565,7 +565,7 @@ static char *
 cachedir_fssafe_key (const char  *primary_key)
 {
   GString *ret = g_string_new ("");
-  
+
   for (; *primary_key; primary_key++)
     {
       const char c = *primary_key;
@@ -605,7 +605,7 @@ cachedir_lookup_string (GFile             *cachedir,
                                                            cancellable, error))
         goto out;
     }
-  
+
   ret = TRUE;
   gs_transfer_out_value (out_value, &ret_value);
  out:
@@ -647,7 +647,7 @@ compute_checksum_for_compose (RpmOstreeTreeComposeContext  *self,
   gboolean ret = FALSE;
   gs_free char *ret_checksum = NULL;
   GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA256);
-  
+
   {
     gsize len;
     const guint8* buf = g_bytes_get_data (self->serialized_treefile, &len);
@@ -711,7 +711,7 @@ parse_keyvalue_strings (char             **strings,
                        "Missing '=' in KEY=VALUE metadata '%s'", s);
           goto out;
         }
-          
+
       key = g_strndup (s, eq - s);
       g_variant_builder_add (builder, "{sv}", key,
                              g_variant_new_string (eq + 1));
@@ -755,7 +755,7 @@ rpmostree_compose_builtin_tree (int             argc,
   gboolean workdir_is_tmp = FALSE;
 
   self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-  
+
   g_option_context_add_main_entries (context, option_entries, NULL);
 
   if (!g_option_context_parse (context, &argc, &argv, error))
@@ -768,7 +768,7 @@ rpmostree_compose_builtin_tree (int             argc,
                    "Option processing failed");
       goto out;
     }
-  
+
   if (!opt_repo)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -901,7 +901,7 @@ rpmostree_compose_builtin_tree (int             argc,
       json_generator_set_pretty (generator, TRUE);
       json_generator_set_root (generator, treefile_rootval);
       (void) json_generator_to_stream (generator, stdout, NULL, NULL);
-      
+
       ret = TRUE;
       goto out;
     }
@@ -951,7 +951,7 @@ rpmostree_compose_builtin_tree (int             argc,
                                &cached_compose_checksum,
                                cancellable, error))
     goto out;
-  
+
   if (!compute_checksum_for_compose (self, treefile, yumroot,
                                      &new_compose_checksum,
                                      cancellable, error))
@@ -976,7 +976,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
   if (!rpmostree_prepare_rootfs_for_commit (yumroot, treefile, cancellable, error))
     goto out;
-    
+
   {
     const char *gpgkey;
     if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
@@ -994,7 +994,7 @@ rpmostree_compose_builtin_tree (int             argc,
     goto out;
 
   g_print ("Complete\n");
-  
+
  out:
 
   if (workdir_is_tmp)
