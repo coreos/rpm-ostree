@@ -35,7 +35,7 @@ librpmostree_la_SOURCES = \
 	src/rpmostree-cleanup.h \
 	src/rpmostree-treepkgdiff.c \
 	src/rpmostree-treepkgdiff.h \
-	src/rpmostree-builtin-rpm.h  \
+	src/rpmostree-builtin-db.h  \
 	$(NULL)
 if BUILDOPT_PATCHED_HAWKEY_AND_LIBSOLV
 librpmostree_la_SOURCES += \
@@ -52,7 +52,7 @@ rpm_ostree_SOURCES = src/main.c \
 	src/rpmostree-builtin-rollback.c \
 	src/rpmostree-builtin-rebase.c \
 	src/rpmostree-builtin-status.c \
-	src/rpmostree-builtin-rpm.c \
+	src/rpmostree-builtin-db.c \
 	$(NULL)
 
 if BUILDOPT_COMPOSE_TOOLING

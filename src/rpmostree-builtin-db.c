@@ -28,7 +28,7 @@
 #include "rpmostree-builtins.h"
 #include "rpmostree-treepkgdiff.h"
 #include "rpmostree-util.h"
-#include "rpmostree-builtin-rpm.h"
+#include "rpmostree-builtin-db.h"
 
 /* FIXME: */
 #define OSTREE_GIO_FAST_QUERYINFO ("standard::name,standard::type,standard::size,standard::is-symlink,standard::symlink-target," \
@@ -44,17 +44,17 @@
 #include <rpm/rpmts.h>
 #include <rpm/rpmlog.h>
 
-gboolean rpmostree_rpm_builtin_diff (int argc, char **argv, GCancellable *cancellable, GError **error);
-gboolean rpmostree_rpm_builtin_list (int argc, char **argv, GCancellable *cancellable, GError **error);
-gboolean rpmostree_rpm_builtin_version (int argc, char **argv, GCancellable *cancellable, GError **error);
+gboolean rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GError **error);
+gboolean rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GError **error);
+gboolean rpmostree_db_builtin_version (int argc, char **argv, GCancellable *cancellable, GError **error);
 
-gboolean rpmostree_rpm_option_context_parse (GOptionContext *context,
-                                             const GOptionEntry *main_entries,
-                                             int *argc, char ***argv,
-                                             OstreeRepo **out_repo,
-                                             GFile **out_rpmdbdir,
-                                             gboolean *out_rpmdbdir_is_tmp,
-                                             GCancellable *cancellable, GError **error);
+gboolean rpmostree_db_option_context_parse (GOptionContext *context,
+                                            const GOptionEntry *main_entries,
+                                            int *argc, char ***argv,
+                                            OstreeRepo **out_repo,
+                                            GFile **out_rpmdbdir,
+                                            gboolean *out_rpmdbdir_is_tmp,
+                                            GCancellable *cancellable, GError **error);
 
 typedef struct {
   const char *name;
@@ -62,9 +62,9 @@ typedef struct {
 } RpmOstreeRpmCommand;
 
 static RpmOstreeRpmCommand rpm_subcommands[] = {
-  { "diff", rpmostree_rpm_builtin_diff },
-  { "list", rpmostree_rpm_builtin_list },
-  { "version", rpmostree_rpm_builtin_version },
+  { "diff", rpmostree_db_builtin_diff },
+  { "list", rpmostree_db_builtin_list },
+  { "version", rpmostree_db_builtin_version },
   { NULL, NULL }
 };
 
@@ -72,7 +72,7 @@ static char *opt_format;
 static char *opt_repo;
 static char *opt_rpmdbdir;
 
-static GOptionEntry global_rpm_entries[] = {
+static GOptionEntry global_db_entries[] = {
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository (defaults to /sysroot/ostree/repo)", "PATH" },
   { "rpmdbdir", 0, 0, G_OPTION_ARG_STRING, &opt_rpmdbdir, "Working directory for rpm", "WORKDIR" },
   { NULL }
@@ -1029,7 +1029,7 @@ _prnt_commit_line(const char *rev, struct RpmRevisionData *rpmrev)
 }
 
 static gboolean
-_builtin_rpm_version(OstreeRepo *repo, GFile *rpmdbdir, GPtrArray *revs,
+_builtin_db_version (OstreeRepo *repo, GFile *rpmdbdir, GPtrArray *revs,
                      GCancellable   *cancellable,
                      GError        **error)
 {
@@ -1058,8 +1058,8 @@ _builtin_rpm_version(OstreeRepo *repo, GFile *rpmdbdir, GPtrArray *revs,
           if (!(range_revs = ost_get_commit_hashes (repo, revdup, mrev, error)))
             goto out;
 
-          if (!_builtin_rpm_version (repo, rpmdbdir, range_revs,
-                                     cancellable, error))
+          if (!_builtin_db_version (repo, rpmdbdir, range_revs,
+                                    cancellable, error))
             goto out;
 
           continue;
@@ -1084,7 +1084,7 @@ _builtin_rpm_version(OstreeRepo *repo, GFile *rpmdbdir, GPtrArray *revs,
 }
 
 static gboolean
-_builtin_rpm_list(OstreeRepo *repo, GFile *rpmdbdir,
+_builtin_db_list (OstreeRepo *repo, GFile *rpmdbdir,
                   GPtrArray *revs, const GPtrArray *patterns,
                   GCancellable   *cancellable,
                   GError        **error)
@@ -1113,8 +1113,8 @@ _builtin_rpm_list(OstreeRepo *repo, GFile *rpmdbdir,
           if (!(range_revs = ost_get_commit_hashes (repo, revdup, mrev, error)))
             goto out;
 
-          if (!_builtin_rpm_list (repo, rpmdbdir, range_revs, patterns,
-                                  cancellable, error))
+          if (!_builtin_db_list (repo, rpmdbdir, range_revs, patterns,
+                                 cancellable, error))
             goto out;
 
           continue;
@@ -1135,13 +1135,13 @@ _builtin_rpm_list(OstreeRepo *repo, GFile *rpmdbdir,
   return ret;
 }
 
-static GOptionEntry rpm_diff_entries[] = {
+static GOptionEntry db_diff_entries[] = {
   { "format", 'F', 0, G_OPTION_ARG_STRING, &opt_format, "Output format: \"diff\" or (default) \"block\"", "FORMAT" },
   { NULL }
 };
 
 gboolean
-rpmostree_rpm_builtin_diff (int argc, char **argv, GCancellable *cancellable, GError **error)
+rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
   GOptionContext *context;
   gs_unref_object OstreeRepo *repo = NULL;
@@ -1153,8 +1153,8 @@ rpmostree_rpm_builtin_diff (int argc, char **argv, GCancellable *cancellable, GE
 
   context = g_option_context_new ("COMMIT COMMIT - Show package changes between two commits");
 
-  if (!rpmostree_rpm_option_context_parse (context, rpm_diff_entries, &argc, &argv, &repo,
-                                           &rpmdbdir, &rpmdbdir_is_tmp, cancellable, error))
+  if (!rpmostree_db_option_context_parse (context, db_diff_entries, &argc, &argv, &repo,
+                                          &rpmdbdir, &rpmdbdir_is_tmp, cancellable, error))
     goto out;
 
   if (argc != 3)
@@ -1223,12 +1223,12 @@ out:
   return success;
 }
 
-static GOptionEntry rpm_list_entries[] = {
+static GOptionEntry db_list_entries[] = {
   { NULL }
 };
 
 gboolean
-rpmostree_rpm_builtin_list (int argc, char **argv, GCancellable *cancellable, GError **error)
+rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
   GOptionContext *context;
   gs_unref_object OstreeRepo *repo = NULL;
@@ -1239,8 +1239,8 @@ rpmostree_rpm_builtin_list (int argc, char **argv, GCancellable *cancellable, GE
 
   context = g_option_context_new ("[PREFIX-PKGNAME...] COMMIT... - List packages within commits");
 
-  if (!rpmostree_rpm_option_context_parse (context, rpm_list_entries, &argc, &argv, &repo,
-                                           &rpmdbdir, &rpmdbdir_is_tmp, cancellable, error))
+  if (!rpmostree_db_option_context_parse (context, db_list_entries, &argc, &argv, &repo,
+                                          &rpmdbdir, &rpmdbdir_is_tmp, cancellable, error))
     goto out;
 
   /* Put all the arguments in a GPtrArray (because it's easier to deal with
@@ -1278,7 +1278,7 @@ rpmostree_rpm_builtin_list (int argc, char **argv, GCancellable *cancellable, GE
       while (!g_queue_is_empty (&queue))
         g_ptr_array_add (revs, g_queue_pop_head (&queue));
 
-      if (!_builtin_rpm_list (repo, rpmdbdir, revs, patterns, cancellable, error))
+      if (!_builtin_db_list (repo, rpmdbdir, revs, patterns, cancellable, error))
         goto out;
     }
 
@@ -1293,12 +1293,12 @@ out:
   return success;
 }
 
-static GOptionEntry rpm_version_entries[] = {
+static GOptionEntry db_version_entries[] = {
   { NULL }
 };
 
 gboolean
-rpmostree_rpm_builtin_version (int argc, char **argv, GCancellable *cancellable, GError **error)
+rpmostree_db_builtin_version (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
   GOptionContext *context;
   gs_unref_object OstreeRepo *repo = NULL;
@@ -1309,13 +1309,13 @@ rpmostree_rpm_builtin_version (int argc, char **argv, GCancellable *cancellable,
 
   context = g_option_context_new ("COMMIT... - Show rpmdb version of packages within the commits");
 
-  if (!rpmostree_rpm_option_context_parse (context, rpm_version_entries, &argc, &argv, &repo,
-                                           &rpmdbdir, &rpmdbdir_is_tmp, cancellable, error))
+  if (!rpmostree_db_option_context_parse (context, db_version_entries, &argc, &argv, &repo,
+                                          &rpmdbdir, &rpmdbdir_is_tmp, cancellable, error))
     goto out;
 
   revs = cmdline2ptrarray (argc - 1, argv + 1);
 
-  if (!_builtin_rpm_version (repo, rpmdbdir, revs, cancellable, error))
+  if (!_builtin_db_version (repo, rpmdbdir, revs, cancellable, error))
     goto out;
 
   success = TRUE;
@@ -1338,7 +1338,7 @@ rpm_option_context_new_with_commands (void)
 
   context = g_option_context_new ("COMMAND");
 
-  summary = g_string_new ("Builtin \"rpm\" Commands:");
+  summary = g_string_new ("Builtin \"db\" Commands:");
 
   while (command->name != NULL)
     {
@@ -1354,13 +1354,13 @@ rpm_option_context_new_with_commands (void)
 }
 
 gboolean
-rpmostree_rpm_option_context_parse (GOptionContext *context,
-                                    const GOptionEntry *main_entries,
-                                    int *argc, char ***argv,
-                                    OstreeRepo **out_repo,
-                                    GFile **out_rpmdbdir,
-                                    gboolean *out_rpmdbdir_is_tmp,
-                                    GCancellable *cancellable, GError **error)
+rpmostree_db_option_context_parse (GOptionContext *context,
+                                   const GOptionEntry *main_entries,
+                                   int *argc, char ***argv,
+                                   OstreeRepo **out_repo,
+                                   GFile **out_rpmdbdir,
+                                   gboolean *out_rpmdbdir_is_tmp,
+                                   GCancellable *cancellable, GError **error)
 {
   gs_unref_object OstreeRepo *repo = NULL;
   gs_unref_object GFile *rpmdbdir = NULL;
@@ -1370,7 +1370,7 @@ rpmostree_rpm_option_context_parse (GOptionContext *context,
   /* Entries are listed in --help output in the order added.  We add the
    * main entries ourselves so that we can add the --repo entry first. */
 
-  g_option_context_add_main_entries (context, global_rpm_entries, NULL);
+  g_option_context_add_main_entries (context, global_db_entries, NULL);
 
   if (!rpmostree_option_context_parse (context, main_entries, argc, argv, error))
     goto out;
@@ -1429,7 +1429,7 @@ out:
 }
 
 gboolean
-rpmostree_builtin_rpm (int argc, char **argv, GCancellable *cancellable, GError **error)
+rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
   RpmOstreeRpmCommand *subcommand;
   const char *subcommand_name = NULL;
@@ -1481,12 +1481,12 @@ rpmostree_builtin_rpm (int argc, char **argv, GCancellable *cancellable, GError 
           if (subcommand_name == NULL)
             {
               g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                                   "No \"rpm\" subcommand specified");
+                                   "No \"db\" subcommand specified");
             }
           else
             {
               g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Unknown \"rpm\" subcommand '%s'", subcommand_name);
+                           "Unknown \"db\" subcommand '%s'", subcommand_name);
             }
         }
 
