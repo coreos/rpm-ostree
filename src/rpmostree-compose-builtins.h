@@ -22,6 +22,8 @@
 
 #include <ostree.h>
 
+#include "rpmostree-builtins.h"
+
 G_BEGIN_DECLS
 
 gboolean rpmostree_compose_builtin_tree (int argc, char **argv, GCancellable *cancellable, GError **error);

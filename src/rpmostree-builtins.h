@@ -27,7 +27,6 @@ G_BEGIN_DECLS
 typedef struct {
   const char *name;
   gboolean (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
-  int flags;
 } RpmOstreeCommand;
 
 #define BUILTINPROTO(name) gboolean rpmostree_builtin_ ## name (int argc, char **argv, GCancellable *cancellable, GError **error)
@@ -40,6 +39,12 @@ BUILTINPROTO(status);
 BUILTINPROTO(rpm);
 
 #undef BUILTINPROTO
+
+gboolean rpmostree_option_context_parse (GOptionContext *context,
+                                         const GOptionEntry *main_entries,
+                                         int *argc,
+                                         char ***argv,
+                                         GError **error);
 
 G_END_DECLS
 

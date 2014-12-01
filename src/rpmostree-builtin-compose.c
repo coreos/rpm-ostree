@@ -39,93 +39,61 @@ static RpmOstreeComposeCommand compose_subcommands[] = {
   { NULL, NULL }
 };
 
+static GOptionContext *
+compose_option_context_new_with_commands (void)
+{
+  RpmOstreeComposeCommand *command = compose_subcommands;
+  GOptionContext *context;
+  GString *summary;
+
+  context = g_option_context_new ("COMMAND");
+
+  summary = g_string_new ("Builtin \"compose\" Commands:");
+
+  while (command->name != NULL)
+    {
+      g_string_append_printf (summary, "\n  %s", command->name);
+      command++;
+    }
+
+  g_option_context_set_summary (context, summary->str);
+
+  g_string_free (summary, TRUE);
+
+  return context;
+}
+
 gboolean
 rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
   gboolean ret = FALSE;
   RpmOstreeComposeCommand *subcommand;
   const char *subcommand_name = NULL;
-  int in, out, i;
-  gboolean skip;
+  gs_free char *prgname = NULL;
+  int in, out;
 
   for (in = 1, out = 1; in < argc; in++, out++)
     {
       /* The non-option is the command, take it out of the arguments */
       if (argv[in][0] != '-')
         {
-          skip = (subcommand_name == NULL);
           if (subcommand_name == NULL)
-            subcommand_name = argv[in];
+            {
+              subcommand_name = argv[in];
+              out--;
+              continue;
+            }
         }
 
-      /* The global long options */
-      else if (argv[in][1] == '-')
+      else if (g_str_equal (argv[in], "--"))
         {
-          skip = FALSE;
-
-          if (g_str_equal (argv[in], "--"))
-            {
-              break;
-            }
-          else if (g_str_equal (argv[in], "--help"))
-            {
-              /* If a subcommand was given, let GOptionContext handle the
-               * help option.  Otherwise eat it and list the subcommands. */
-            }
-          else if (subcommand_name == NULL)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Unknown or invalid compose option: %s", argv[in]);
-              goto out;
-            }
+          break;
         }
 
-      /* The global short options */
-      else
-        {
-          skip = FALSE;
-          for (i = 1; argv[in][i] != '\0'; i++)
-            {
-              switch (argv[in][i])
-              {
-                case 'h':
-                  /* If a subcommand was given, let GOptionContext handle the
-                   * help option.  Otherwise eat it and list the subcommands. */
-                  break;
-
-                default:
-                  if (subcommand_name == NULL)
-                    {
-                      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                                   "Unknown or invalid compose option: %s", argv[in]);
-                      goto out;
-                    }
-                  break;
-              }
-            }
-        }
-
-      /* Skipping this argument? */
-      if (skip)
-        out--;
-      else
-        argv[out] = argv[in];
+      argv[out] = argv[in];
     }
 
   argc = out;
-
-  if (subcommand_name == NULL)
-    {
-      subcommand = compose_subcommands;
-      g_print ("usage: %s COMMAND [options]\n", g_get_prgname ());
-      g_print ("Builtin commands:\n");
-      while (subcommand->name)
-        {
-          g_print ("  %s\n", subcommand->name);
-          subcommand++;
-        }
-      return 1;
-    }
 
   subcommand = compose_subcommands;
   while (subcommand->name)
@@ -137,10 +105,36 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
 
   if (!subcommand->name)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Unknown compose command '%s'", subcommand_name);
+      GOptionContext *context;
+      gs_free char *help;
+
+      context = compose_option_context_new_with_commands ();
+
+      /* This will not return for some options (e.g. --version). */
+      if (rpmostree_option_context_parse (context, NULL, &argc, &argv, error))
+        {
+          if (subcommand_name == NULL)
+            {
+              g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                                   "No command specified");
+            }
+          else
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Unknown compose command '%s'", subcommand_name);
+            }
+        }
+
+      help = g_option_context_get_help (context, FALSE, NULL);
+      g_printerr ("%s", help);
+
+      g_option_context_free (context);
+
       goto out;
     }
+
+  prgname = g_strdup_printf ("%s %s", g_get_prgname (), subcommand_name);
+  g_set_prgname (prgname);
 
   if (!subcommand->fn (argc, argv, cancellable, error))
     goto out;
