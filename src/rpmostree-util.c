@@ -158,6 +158,85 @@ _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
   return ret;
 }
 
+static char *
+ost_get_prev_commit (OstreeRepo *repo, char *checksum)
+{
+  char *ret = NULL;
+  gs_unref_variant GVariant *commit = NULL;
+  gs_unref_variant GVariant *parent_csum_v = NULL;
+  GError *tmp_error = NULL;
+
+  if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum,
+                                 &commit, &tmp_error))
+    goto out;
+
+  ret = ostree_commit_get_parent (commit);
+
+ out:
+  g_clear_error (&tmp_error);
+
+  return ret;
+}
+
+GPtrArray *
+_rpmostree_util_get_commit_hashes (OstreeRepo    *repo,
+                                   const char    *beg,
+                                   const char    *end,
+                                   GCancellable  *cancellable,
+                                   GError       **error)
+{
+  GPtrArray *ret = NULL;
+  gs_free char *beg_checksum = NULL;
+  gs_free char *end_checksum = NULL;
+  gs_free char *parent = NULL;
+  char *checksum = NULL;
+  gboolean worked = FALSE;
+
+  if (!ostree_repo_read_commit (repo, beg, NULL, &beg_checksum, cancellable, error))
+    goto out;
+
+  ret = g_ptr_array_new_with_free_func (g_free);
+  g_ptr_array_add (ret, g_strdup (beg));  // Add the user defined REFSPEC.
+
+  if (end &&
+      !ostree_repo_read_commit (repo, end, NULL, &end_checksum, cancellable, error))
+      goto out;
+
+  if (end && g_str_equal (end_checksum, beg_checksum))
+      goto worked_out;
+
+  checksum = beg_checksum;
+  while ((parent = ost_get_prev_commit (repo, checksum)))
+    {
+      if (end && g_str_equal (end_checksum, parent))
+        { // Add the user defined REFSPEC.
+          g_ptr_array_add (ret, g_strdup (end));
+          break;
+        }
+
+      g_ptr_array_add (ret, parent);
+      checksum = parent;
+    }
+
+  if (end && !parent)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Invalid ref range: %s is not a parent of %s", end, beg);
+      goto out;
+    }
+
+ worked_out:
+  worked = TRUE;
+
+ out:
+  if (!worked)
+    {
+      g_ptr_array_free (ret, TRUE);
+      ret = NULL;
+    }
+  return ret;
+}
+
 gboolean
 _rpmostree_sync_wait_on_pid (pid_t          pid,
                              GError       **error)

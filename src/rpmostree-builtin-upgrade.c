@@ -27,7 +27,7 @@
 #include "rpmostree-builtins.h"
 #include "rpmostree-treepkgdiff.h"
 #include "rpmostree-pull-progress.h"
-#include "rpmostree-builtin-db.h"
+#include "rpmostree-rpm-util.h"
 
 #include "libgsystem.h"
 
