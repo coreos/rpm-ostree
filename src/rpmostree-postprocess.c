@@ -208,6 +208,7 @@ find_kernel_and_initramfs_in_bootdir (GFile       *bootdir,
 
 static gboolean
 do_kernel_prep (GFile         *yumroot,
+                JsonObject    *treefile,
                 GCancellable  *cancellable,
                 GError       **error)
 {
@@ -271,8 +272,35 @@ do_kernel_prep (GFile         *yumroot,
   }
 
   {
-    char *child_argv[] = { "dracut", "-v", "--tmpdir=/tmp", "-f", "/var/tmp/initramfs.img", (char*)kver, NULL };
-    if (!run_sync_in_root (yumroot, "/usr/sbin/dracut", (char**)child_argv, error))
+    gs_unref_ptrarray GPtrArray *dracut_argv = g_ptr_array_new ();
+
+    g_ptr_array_add (dracut_argv, "dracut");
+    g_ptr_array_add (dracut_argv, "-v");
+    g_ptr_array_add (dracut_argv, "--tmpdir=/tmp");
+    g_ptr_array_add (dracut_argv, "-f");
+    g_ptr_array_add (dracut_argv, "/var/tmp/initramfs.img");
+    g_ptr_array_add (dracut_argv, (char*)kver);
+
+    if (json_object_has_member (treefile, "initramfs-args"))
+      {
+        guint i, len;
+        JsonArray *initramfs_args;
+
+        initramfs_args = json_object_get_array_member (treefile, "initramfs-args");
+        len = json_array_get_length (initramfs_args);
+
+        for (i = 0; i < len; i++)
+          {
+            const char *arg = _rpmostree_jsonutil_array_require_string_element (initramfs_args, i, error);
+            if (!arg)
+              goto out;
+            g_ptr_array_add (dracut_argv, (char*)arg);
+          }
+      }
+
+    g_ptr_array_add (dracut_argv, NULL);
+
+    if (!run_sync_in_root (yumroot, "/usr/sbin/dracut", (char**)dracut_argv->pdata, error))
       goto out;
   }
 
@@ -854,7 +882,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   gs_unref_hashtable GHashTable *preserve_groups_set = NULL;
 
   g_print ("Preparing kernel\n");
-  if (!do_kernel_prep (yumroot, cancellable, error))
+  if (!do_kernel_prep (yumroot, treefile, cancellable, error))
     goto out;
   
   g_print ("Initializing rootfs\n");

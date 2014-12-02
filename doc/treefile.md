@@ -42,6 +42,11 @@ Treefile
 
  * `default_target`: String, optional: Set the default systemd target
 
+ * `initramfs-args`: Array of strings, optional.  Passed to the
+    initramfs generation program (presently `dracut`).  An example use
+    case for this with Dracut is `--filesystems xfs,ext4` to ensure
+    specific filesystem drivers are included.
+
  * `remove-files`: Delete these files from the generated tree
 
  * `remove-from-packages`: Array, optional: Delete from specified packages
