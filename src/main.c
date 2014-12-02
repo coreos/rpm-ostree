@@ -40,7 +40,7 @@ static RpmOstreeCommand commands[] = {
   { "rebase", rpmostree_builtin_rebase },
   { "rollback", rpmostree_builtin_rollback },
   { "status", rpmostree_builtin_status },
-  { "rpm", rpmostree_builtin_rpm },
+  { "db", rpmostree_builtin_db },
   { NULL }
 };
 
@@ -143,6 +143,10 @@ main (int    argc,
     }
 
   argc = out;
+
+  /* Keep the "rpm" command working for backward-compatibility. */
+  if (g_strcmp0 (command_name, "rpm") == 0)
+    command_name = "db";
 
   command = commands;
   while (command->name)
