@@ -691,7 +691,6 @@ migrate_passwd_file_except_root (GFile         *rootfs,
             break;
         }
 
-      deststream = usrdest_stream;
 
       if (pw)
         {
@@ -704,13 +703,32 @@ migrate_passwd_file_except_root (GFile         *rootfs,
           name = gr->gr_name;
         }
 
-      if (id == 0 || (preserve && g_hash_table_contains (preserve, name)))
+      if (id == 0)
         deststream = etcdest_stream;
+      else
+        deststream = usrdest_stream;
 
       if (pw)
         r = putpwent (pw, deststream);
       else
         r = putgrent (gr, deststream);
+
+      /* If it's marked in the preserve group, we need to write to
+       * *both* /etc and /usr/lib in order to preserve semantics for
+       * upgraded systems from before we supported the preserve
+       * concept.
+       */
+      if (preserve && g_hash_table_contains (preserve, name))
+        {
+          /* We should never be trying to preserve the root entry, it
+           * should always be only in /etc.
+           */
+          g_assert (deststream == usrdest_stream);
+          if (pw)
+            r = putpwent (pw, etcdest_stream);
+          else
+            r = putgrent (gr, etcdest_stream);
+        }
 
       if (r == -1)
         {
