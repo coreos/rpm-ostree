@@ -93,7 +93,6 @@ rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GEr
   gboolean rpmdbdir_is_tmp = FALSE;
   gs_unref_ptrarray GPtrArray *patterns = NULL;
   gs_unref_ptrarray GPtrArray *revs = NULL;
-  GQueue queue = G_QUEUE_INIT;
   gboolean success = FALSE;
   int ii;
 
@@ -103,41 +102,34 @@ rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GEr
                                           &rpmdbdir, &rpmdbdir_is_tmp, cancellable, error))
     goto out;
 
-  /* Put all the arguments in a GPtrArray (because it's easier to deal with
-   * than a string vector), and then split the trailing arguments which are
-   * valid commit checksums into a separate GPtrArray. */
-
-  patterns = g_ptr_array_new ();
+  /* Iterate over all arguments. When we see the first argument which
+   * appears to be an OSTree commit, take all other arguments to be
+   * patterns.
+   */
   revs = g_ptr_array_new ();
 
   for (ii = 1; ii < argc; ii++)
-    g_ptr_array_add (patterns, argv[ii]);
+    {
+      if (patterns != NULL)
+        g_ptr_array_add (patterns, argv[ii]);
+      else
+        {
+          gs_free char *commit = NULL;
 
-    while (patterns->len > 0)
-      {
-        gs_free char *commit = NULL;
-        guint index = patterns->len - 1;
-        char *arg = patterns->pdata[index];
+          ostree_repo_resolve_rev (repo, argv[ii], TRUE, &commit, NULL);
 
-        ostree_repo_resolve_rev (repo, arg, TRUE, &commit, NULL);
+          if (!commit)
+            {
+              patterns = g_ptr_array_new ();
+              g_ptr_array_add (patterns, argv[ii]);
+            }
+          else
+            g_ptr_array_add (revs, argv[ii]);
+        }
+    }
 
-        /* Stop when we find a non-commit argument. */
-        if (commit == NULL)
-          break;
-
-        /* XXX Need to PREPEND to the 'revs' array to preserve order, but
-         *     in GLib versions prior to 2.40 you can only (easily) APPEND
-         *     to a GPtrArray.  g_ptr_array_insert() is not available to us
-         *     at this time, so use a GQueue to swap the order. */
-        g_queue_push_head (&queue, arg);
-        g_ptr_array_remove_index (patterns, index);
-      }
-
-    while (!g_queue_is_empty (&queue))
-      g_ptr_array_add (revs, g_queue_pop_head (&queue));
-
-    if (!_builtin_db_list (repo, rpmdbdir, revs, patterns, cancellable, error))
-      goto out;
+  if (!_builtin_db_list (repo, rpmdbdir, revs, patterns, cancellable, error))
+    goto out;
 
   success = TRUE;
 
