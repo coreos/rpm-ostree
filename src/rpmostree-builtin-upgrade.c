@@ -121,7 +121,7 @@ rpmostree_builtin_upgrade (int             argc,
 
   if (!changed)
     {
-      g_print ("No updates available.\n");
+      g_print ("No upgrade available.\n");
     }
   else
     {
@@ -141,7 +141,7 @@ rpmostree_builtin_upgrade (int             argc,
                 goto out;
 #endif
 
-              g_print ("Updates prepared for next boot; run \"systemctl reboot\" to start a reboot\n");
+              g_print ("Upgrade prepared for next boot; run \"systemctl reboot\" to start a reboot\n");
             }
         }
 
