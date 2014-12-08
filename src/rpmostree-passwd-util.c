@@ -41,37 +41,38 @@
 #include "libgsystem.h"
 
 static gboolean
-_string_in_ptr_array0 (GPtrArray *haystack, const char *needle)
-{ /* faster if sorted+bsearch ... but probably doesn't matter */
-  unsigned int num = 0;
+ptrarray_contains_str (GPtrArray *haystack, const char *needle)
+{
+  /* faster if sorted+bsearch ... but probably doesn't matter */
+  guint i;
 
   if (!haystack || !needle)
     return FALSE;
 
-  while (num < haystack->len)
-  {
-    const char *data = haystack->pdata[num];
+  for (i = 0; i < haystack->len; i++)
+    {
+      const char *data = haystack->pdata[i];
 
-    if (g_str_equal (data, needle))
-      return TRUE;
-
-    ++num;
-  }
+      if (g_str_equal (data, needle))
+        return TRUE;
+    }
 
   return FALSE;
 }
 
 static gboolean
-_files_exist_for_id (GFile         *root,
-                     guint32        id,
-                     const char    *attr,
-                     GCancellable  *cancellable,
-                     GError       **error)
+dir_contains_uid_or_gid (GFile         *root,
+                         guint32        id,
+                         const char    *attr,
+                         gboolean      *out_found_match,
+                         GCancellable  *cancellable,
+                         GError       **error)
 {
   gboolean ret = FALSE;
   gs_unref_object GFileInfo *file_info = NULL;
   guint32 type;
   guint32 tid;
+  gboolean found_match = FALSE;
 
   file_info = g_file_query_info (root, OSTREE_GIO_FAST_QUERYINFO,
                                  G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
@@ -85,21 +86,11 @@ _files_exist_for_id (GFile         *root,
     {
     case G_FILE_TYPE_DIRECTORY:
     case G_FILE_TYPE_SYMBOLIC_LINK:
-      // Ignore these, as just having empty dirs. isn't a big deal.
-      break;
-
     case G_FILE_TYPE_REGULAR:
-      if (!g_file_info_get_attribute_uint64 (file_info, "standard::size"))
-        break; // Ignore empty files??
-
-      // FALLTHOUGH
     case G_FILE_TYPE_SPECIAL:
       tid = g_file_info_get_attribute_uint32 (file_info, attr);
       if (tid == id)
-        {
-          ret = TRUE;
-          goto out;
-        }
+        found_match = TRUE;
       break;
 
     case G_FILE_TYPE_UNKNOWN:
@@ -110,7 +101,7 @@ _files_exist_for_id (GFile         *root,
     }
 
   // Now recurse for dirs.
-  if (type == G_FILE_TYPE_DIRECTORY)
+  if (!found_match && type == G_FILE_TYPE_DIRECTORY)
     {
       gs_unref_object GFileEnumerator *dir_enum = NULL;
       gs_unref_object GFileInfo *child_info = NULL;
@@ -122,45 +113,50 @@ _files_exist_for_id (GFile         *root,
       if (!dir_enum)
         goto out;
   
-      while ((child_info = g_file_enumerator_next_file (dir_enum, NULL,
-                                                        error)) != NULL)
+      while (TRUE)
         {
-          gs_unref_object GFile *child = NULL;
+          GFileInfo *file_info;
+          GFile *child;
 
-          child = g_file_get_child (root, g_file_info_get_name (child_info));
+          if (!gs_file_enumerator_iterate (dir_enum, &file_info, &child,
+                                           cancellable, error))
+            goto out;
 
-          if (_files_exist_for_id (child, id, attr, cancellable, error))
-            {
-              ret = TRUE;
-              goto out;
-            }
+          if (!dir_contains_uid_or_gid (child, id, attr, &found_match,
+                                        cancellable, error))
+            goto out;
 
-          g_clear_object (&child_info);
+          if (found_match)
+            break;
         }
-      if (*error)
-        goto out;
     }
   
+  ret = TRUE;
+  *out_found_match = found_match;
  out:
   return ret;
 }
 
 static gboolean
-_files_exist_for_uid (GFile           *yumroot,
-                      uid_t            uid,
-                      GCancellable    *cancellable,
-                      GError         **error)
+dir_contains_uid (GFile           *yumroot,
+                  uid_t            uid,
+                  gboolean        *out_found_match,
+                  GCancellable    *cancellable,
+                  GError         **error)
 {
-  return _files_exist_for_id (yumroot, uid, "unix::uid", cancellable, error);
+  return dir_contains_uid_or_gid (yumroot, uid, "unix::uid",
+                                  out_found_match, cancellable, error);
 }
 
 static gboolean
-_files_exist_for_gid (GFile           *yumroot,
-                      gid_t            gid,
-                      GCancellable    *cancellable,
-                      GError         **error)
+dir_contains_gid (GFile           *yumroot,
+                  gid_t            gid,
+                  gboolean        *out_found_match,
+                  GCancellable    *cancellable,
+                  GError         **error)
 {
-  return _files_exist_for_id (yumroot, gid, "unix::gid", cancellable, error);
+  return dir_contains_uid_or_gid (yumroot, gid, "unix::gid",
+                                  out_found_match, cancellable, error);
 }
 
 static char *
@@ -287,7 +283,7 @@ rpmostree_check_passwd (OstreeRepo      *repo,
       if (!_rpmostree_jsonutil_append_string_array_to (treedata, "ignore-removed-users", ignore_removed_users, error))
         goto out;
     }
-  ignore_all_removed = _string_in_ptr_array0 (ignore_removed_users, "*");
+  ignore_all_removed = ptrarray_contains_str (ignore_removed_users, "*");
 
   new_ents = data2passwdents (new_contents);
   g_ptr_array_sort (new_ents, compare_passwd_ents);
@@ -319,30 +315,38 @@ rpmostree_check_passwd (OstreeRepo      *repo,
 
           ++oiter;
           ++niter;
-          continue;
         }
-
-      if (cmp < 0) // Missing value from new passwd
+      else if (cmp < 0) // Missing value from new passwd
         {
+          gboolean found_matching_uid;
+
           if (ignore_all_removed ||
-              _string_in_ptr_array0 (ignore_removed_users, odata->name) ||
-              !_files_exist_for_uid (yumroot, odata->uid, cancellable, error))
+              ptrarray_contains_str (ignore_removed_users, odata->name))
             {
-              if (*error)
-                goto out;
               g_print ("Ignored user missing from new passwd file: %s\n",
                        odata->name);
-              ++oiter;
-              continue;
             }
-
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "User missing from new passwd file: %s", odata->name);
-          goto out;
+          else
+            {
+              if (!dir_contains_uid (yumroot, odata->uid, &found_matching_uid,
+                                     cancellable, error))
+                goto out;
+              
+              if (found_matching_uid)
+                {
+                  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "User missing from new passwd file: %s", odata->name);
+                  goto out;
+                }
+            }
+              
+          ++oiter;
         }
-
-      g_print ("New passwd entry: %s\n", ndata->name);
-      ++niter;
+      else
+        {
+          g_print ("New passwd entry: %s\n", ndata->name);
+          ++niter;
+        }
     }
 
   if (oiter < old_ents->len)
@@ -455,7 +459,7 @@ rpmostree_check_groups (OstreeRepo      *repo,
       if (!_rpmostree_jsonutil_append_string_array_to (treedata, "ignore-removed-groups", ignore_removed_groups, error))
         goto out;
     }
-  ignore_all_removed = _string_in_ptr_array0 (ignore_removed_groups, "*");
+  ignore_all_removed = ptrarray_contains_str (ignore_removed_groups, "*");
 
   new_ents = data2groupents (new_contents);
   g_ptr_array_sort (new_ents, compare_group_ents);
@@ -482,28 +486,38 @@ rpmostree_check_groups (OstreeRepo      *repo,
           ++niter;
           continue;
         }
-
-      if (cmp < 0) // Missing value from new group
+      else if (cmp < 0) // Missing value from new group
         {
+
           if (ignore_all_removed ||
-              _string_in_ptr_array0 (ignore_removed_groups, odata->name) ||
-              !_files_exist_for_gid (yumroot, odata->gid, cancellable, error))
+              ptrarray_contains_str (ignore_removed_groups, odata->name))
             {
-              if (*error)
-                goto out;
               g_print ("Ignored group missing from new group file: %s\n",
                        odata->name);
-              ++oiter;
-              continue;
             }
+          else
+            {
+              gboolean found_gid;
 
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+              if (!dir_contains_gid (yumroot, odata->gid, &found_gid,
+                                     cancellable, error))
+                goto out;
+
+              if (found_gid)
+                {
+                  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Group missing from new group file: %s", odata->name);
-          goto out;
+                  goto out;
+                }
+            }
+          
+          ++oiter;
         }
-
-      g_print ("New group entry: %s\n", ndata->name);
-      ++niter;
+      else
+        {
+          g_print ("New group entry: %s\n", ndata->name);
+          ++niter;
+        }
     }
 
   if (oiter < old_ents->len)
