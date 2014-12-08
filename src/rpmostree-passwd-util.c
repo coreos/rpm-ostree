@@ -338,6 +338,9 @@ rpmostree_check_passwd (OstreeRepo      *repo,
                                "User missing from new passwd file: %s", odata->name);
                   goto out;
                 }
+              else
+                g_print ("User removed from new passwd file: %s\n",
+                         odata->name);
             }
               
           ++oiter;
@@ -509,6 +512,9 @@ rpmostree_check_groups (OstreeRepo      *repo,
                        "Group missing from new group file: %s", odata->name);
                   goto out;
                 }
+              else
+                g_print ("Group removed from new passwd file: %s\n",
+                         odata->name);
             }
           
           ++oiter;
