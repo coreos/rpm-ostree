@@ -471,6 +471,7 @@ rpmhdrs_rpmdbv (GFile *root, struct RpmHeaders *l1,
 {
   GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA1);
   gs_free char *checksum_cstr = NULL;
+  char *ret = NULL;
   int num = 0;
 
   while (num < l1->hs->len)
@@ -483,23 +484,46 @@ rpmhdrs_rpmdbv (GFile *root, struct RpmHeaders *l1,
       gs_free char *envra = pkg_envra_strdup (pkg);
       gsize tbytes_read = 0;
       gsize dbytes_read = 0;
+      GError *local_error = NULL;
 
       g_checksum_update (checksum, (guint8*)envra, strlen(envra));
 
-      tin = pkg_yumdb_file_read (root, pkg, "checksum_type", cancellable,error);
-      if (!tin)
-        continue;
+      tin = pkg_yumdb_file_read (root, pkg, "checksum_type", cancellable, &local_error);
+
+      /* Tolerate missing database files. */
+      if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+        {
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      if (local_error != NULL)
+        {
+          g_propagate_error (error, local_error);
+          goto out;
+        }
 
       din = pkg_yumdb_file_read (root, pkg, "checksum_data", cancellable,error);
-      if (!din)
-        continue;
+
+      /* Tolerate missing database files. */
+      if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+        {
+          g_clear_error (&local_error);
+          continue;
+        }
+
+      if (local_error != NULL)
+        {
+          g_propagate_error (error, local_error);
+          goto out;
+        }
 
       if (!g_input_stream_read_all (tin, tbuf, sizeof(tbuf), &tbytes_read,
                                     cancellable, error))
-        continue;
+        goto out;
       if (!g_input_stream_read_all (din, dbuf, sizeof(dbuf), &dbytes_read,
                                     cancellable, error))
-        continue;
+        goto out;
 
       if (tbytes_read >= 512)
         continue; // should be == len(md5) or len(sha256) etc.
@@ -512,9 +536,12 @@ rpmhdrs_rpmdbv (GFile *root, struct RpmHeaders *l1,
 
   checksum_cstr = g_strdup (g_checksum_get_string (checksum));
 
+  ret = g_strdup_printf ("%u:%s", num, checksum_cstr);
+
+out:
   g_checksum_free (checksum);
 
-  return g_strdup_printf ("%u:%s", num, checksum_cstr);
+  return ret;
 }
 
 /* glib? */
