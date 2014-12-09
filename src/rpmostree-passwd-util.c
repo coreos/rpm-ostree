@@ -74,6 +74,9 @@ dir_contains_uid_or_gid (GFile         *root,
   guint32 tid;
   gboolean found_match = FALSE;
 
+  /* zero it out, just to be sure */
+  *out_found_match = found_match;
+
   file_info = g_file_query_info (root, OSTREE_GIO_FAST_QUERYINFO,
                                  G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
                                  cancellable, error);
@@ -121,6 +124,8 @@ dir_contains_uid_or_gid (GFile         *root,
           if (!gs_file_enumerator_iterate (dir_enum, &file_info, &child,
                                            cancellable, error))
             goto out;
+          if (!file_info)
+            break;
 
           if (!dir_contains_uid_or_gid (child, id, attr, &found_match,
                                         cancellable, error))
