@@ -979,20 +979,18 @@ rpmostree_compose_builtin_tree (int             argc,
 
   if (!rpmostree_prepare_rootfs_for_commit (yumroot, treefile, cancellable, error))
     goto out;
-    
-  if (opt_check_passwd)
-    {
-      if (!rpmostree_check_passwd (repo, opt_check_passwd, yumroot, treefile,
-                                   cancellable, error))
-        goto out;
-    }
 
-  if (opt_check_groups)
-    {
-      if (!rpmostree_check_groups (repo, opt_check_groups, yumroot, treefile,
-                                   cancellable, error))
-        goto out;
-    }
+  if (opt_check_passwd && !opt_check_groups)
+    g_print ("Using file for passwd checks, but previous commit for group\n");
+  if (!opt_check_passwd && opt_check_groups)
+    g_print ("Using file for group checks, but previous commit for passwd\n");
+
+  if (!rpmostree_check_passwd (repo, opt_check_passwd, yumroot, treefile,
+                               cancellable, error))
+    goto out;
+
+  if (!rpmostree_check_groups (repo, opt_check_groups, yumroot, treefile,
+                               cancellable, error))
 
   {
     const char *gpgkey;

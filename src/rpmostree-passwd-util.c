@@ -161,30 +161,36 @@ dir_contains_gid (GFile           *yumroot,
 
 static char *
 load_file_direct_or_rev (OstreeRepo      *repo,
-                         const char      *direct_or_rev,
+                         const char      *direct,
+                         const char      *rev,
                          const char      *path,
                          GCancellable    *cancellable,
                          GError         **error)
 {
   gs_unref_object GFile *root = NULL;
-  gs_unref_object GFile *fpathd = g_file_new_for_path (direct_or_rev);
   gs_unref_object GFile *fpathc = NULL;
-  GError *tmp_error = NULL;
   char *ret = NULL;
+  GError *tmp_error = NULL;
 
-  ret = gs_file_load_contents_utf8 (fpathd, cancellable, &tmp_error);
-  if (ret)
-    goto out;
-
-  if (!path)
+  if (direct)
     {
+      gs_unref_object GFile *fpathd = g_file_new_for_path (direct);
+      ret = gs_file_load_contents_utf8 (fpathd, cancellable, error);
+      /* if path is passed use it, or error */
+      goto out;
+    }
+  
+  if (!ostree_repo_read_commit (repo, rev, &root, NULL, NULL, error))
+    {
+      if (g_error_matches (tmp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+        { /* this is kind of a hack, makes it work if it's the first commit */
+          g_clear_error (&tmp_error);
+          return g_strdup ("");
+        }
+
       g_propagate_error (error, tmp_error);
       goto out;
     }
-  g_clear_error (&tmp_error);
-
-  if (!ostree_repo_read_commit (repo, direct_or_rev, &root, NULL, NULL, error))
-    goto out;
 
   fpathc = g_file_resolve_relative_path (root, path);
   ret = gs_file_load_contents_utf8 (fpathc, cancellable, error);
@@ -247,13 +253,14 @@ compare_passwd_ents (gconstpointer a, gconstpointer b)
 */
 gboolean
 rpmostree_check_passwd (OstreeRepo      *repo,
-                        const char      *direct_or_rev,
+                        const char      *direct,
                         GFile           *yumroot,
                         JsonObject      *treedata,
                         GCancellable    *cancellable,
                         GError         **error)
 {
   gboolean ret = FALSE;
+  const char *ref;
   gs_unref_object GFile *new_path = g_file_resolve_relative_path (yumroot, "usr/lib/passwd");
   gs_unref_ptrarray GPtrArray *ignore_removed_users = NULL;
   gboolean ignore_all_removed = FALSE;
@@ -264,8 +271,12 @@ rpmostree_check_passwd (OstreeRepo      *repo,
   unsigned int oiter = 0;
   unsigned int niter = 0;
 
+  ref = _rpmostree_jsonutil_object_require_string_member (treedata, "ref",
+                                                          error);
+  if (!ref)
+    goto out;
   old_contents = load_file_direct_or_rev (repo,
-                                          direct_or_rev, "usr/lib/passwd",
+                                          direct, ref, "usr/lib/passwd",
                                           cancellable, error);
   if (!old_contents)
     goto out;
@@ -426,13 +437,14 @@ compare_group_ents (gconstpointer a, gconstpointer b)
  */
 gboolean
 rpmostree_check_groups (OstreeRepo      *repo,
-                        const char      *direct_or_rev,
+                        const char      *direct,
                         GFile           *yumroot,
                         JsonObject      *treedata,
                         GCancellable    *cancellable,
                         GError         **error)
 {
   gboolean ret = FALSE;
+  const char *ref;
   gs_unref_object GFile *new_path = g_file_resolve_relative_path (yumroot, "usr/lib/group");
   gs_unref_ptrarray GPtrArray *ignore_removed_groups = NULL;
   gboolean ignore_all_removed = FALSE;
@@ -443,8 +455,12 @@ rpmostree_check_groups (OstreeRepo      *repo,
   unsigned int oiter = 0;
   unsigned int niter = 0;
 
+  ref = _rpmostree_jsonutil_object_require_string_member (treedata, "ref",
+                                                          error);
+  if (!ref)
+    goto out;
   old_contents = load_file_direct_or_rev (repo,
-                                          direct_or_rev, "usr/lib/group",
+                                          direct, ref, "usr/lib/group",
                                           cancellable, error);
   if (!old_contents)
     goto out;
