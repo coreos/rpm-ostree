@@ -95,7 +95,6 @@ rpmostree_builtin_status (int             argc,
   guint max_osname_len = 0; // maximum length of osname - determined in conde
   guint max_refspec_len = 0; // maximum length of refspec - determined in code
   guint max_version_len = 0; // maximum length of version - determined in code
-  gboolean missing_version = FALSE; // Are any deployments missing a version?
   guint buffer = 5; // minimum space between end of one entry and new column
 
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
@@ -139,24 +138,17 @@ rpmostree_builtin_status (int             argc,
             goto out;
 
           version_string = version_of_commit (repo, csum);
-          if (!version_string)
-            missing_version = TRUE;
-          else
+          if (version_string)
             max_version_len = MAX (max_version_len, strlen (version_string));
         }
       /* print column headers */
-      if (missing_version)
-        g_print ("  %-*s%-*s%-*s%-*s\n", 
-                 max_timestamp_len+buffer,"TIMESTAMP (UTC)",
-                 max_id_len+buffer, "ID",
-                 max_osname_len+buffer, "OSNAME",
-                 max_refspec_len+buffer, "REFSPEC");
-      else
-        g_print ("  %-*s%-*s%-*s%-*s\n", 
-                 max_version_len+buffer,"VERSION",
-                 max_id_len+buffer, "ID",
-                 max_osname_len+buffer, "OSNAME",
-                 max_refspec_len+buffer, "REFSPEC");
+      g_print ("  %-*s", max_timestamp_len+buffer,"TIMESTAMP (UTC)");
+      if (max_version_len)
+        g_print ("%-*s", max_version_len+buffer,"VERSION");
+      g_print ("%-*s%-*s%-*s\n",
+               max_id_len+buffer, "ID",
+               max_osname_len+buffer, "OSNAME",
+               max_refspec_len+buffer, "REFSPEC");
     }
   /* header for "pretty" row output */
   else
@@ -210,26 +202,17 @@ rpmostree_builtin_status (int             argc,
       /* print deployment info column */
       if (!opt_pretty)
         {
-          const char *ts_ver_string = NULL;
-          guint       ts_ver_len    = 0;
+          g_print ("%c %-*s",
+                   deployment == booted_deployment ? '*' : ' ',
+                   max_timestamp_len+buffer, timestamp_string);
 
-          if (missing_version)
-            {
-              ts_ver_string = timestamp_string;
-              ts_ver_len    = max_timestamp_len;
-            }
-          else
-            {
-              ts_ver_string = version_string;
-              ts_ver_len    = max_version_len;
-            }
-
-          g_print ("%c %-*s%-*s%-*s%-*s\n", 
-                  deployment == booted_deployment ? '*' : ' ',
-                  ts_ver_len+buffer, ts_ver_string,
-                  max_id_len+buffer, truncated_csum,
-                  max_osname_len+buffer, ostree_deployment_get_osname (deployment),
-                  max_refspec_len+buffer, origin_refspec);
+          if (max_version_len)
+            g_print ("%-*s",
+                     max_version_len+buffer, version_string ? version_string : "");
+          g_print ("%-*s%-*s%-*s\n",
+                   max_id_len+buffer, truncated_csum,
+                   max_osname_len+buffer, ostree_deployment_get_osname (deployment),
+                   max_refspec_len+buffer, origin_refspec);
         }
 
       /* print "pretty" row info */
