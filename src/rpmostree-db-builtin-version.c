@@ -71,6 +71,8 @@ _builtin_db_version (OstreeRepo *repo, GFile *rpmdbdir, GPtrArray *revs,
 
         rpmdbv = rpmhdrs_rpmdbv (rpmrev->root, rpmrev->rpmdb,
                                  cancellable, error);
+        if (rpmdbv == NULL)
+          goto out;
 
         // FIXME: g_console?
         if (!g_str_equal (rev, rpmrev->commit))
