@@ -24,6 +24,7 @@
 #include <glib-unix.h>
 #include <gio/gunixoutputstream.h>
 #include <stdio.h>
+#include <json-glib/json-glib.h>
 
 #include <pwd.h>
 #include <grp.h>
@@ -164,46 +165,6 @@ dir_contains_gid (GFile           *yumroot,
                                   out_found_match, cancellable, error);
 }
 
-static char *
-load_file_direct_or_rev (OstreeRepo      *repo,
-                         const char      *direct,
-                         const char      *rev,
-                         const char      *path,
-                         GCancellable    *cancellable,
-                         GError         **error)
-{
-  gs_unref_object GFile *root = NULL;
-  gs_unref_object GFile *fpathc = NULL;
-  char *ret = NULL;
-  GError *tmp_error = NULL;
-
-  if (direct)
-    {
-      gs_unref_object GFile *fpathd = g_file_new_for_path (direct);
-      ret = gs_file_load_contents_utf8 (fpathd, cancellable, error);
-      /* if path is passed use it, or error */
-      goto out;
-    }
-  
-  if (!ostree_repo_read_commit (repo, rev, &root, NULL, NULL, error))
-    {
-      if (g_error_matches (tmp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        { /* this is kind of a hack, makes it work if it's the first commit */
-          g_clear_error (&tmp_error);
-          return g_strdup ("");
-        }
-
-      g_propagate_error (error, tmp_error);
-      goto out;
-    }
-
-  fpathc = g_file_resolve_relative_path (root, path);
-  ret = gs_file_load_contents_utf8 (fpathc, cancellable, error);
-
- out:
-  return ret;
-}
-
 struct conv_passwd_ent
 {
   char *name;
@@ -226,9 +187,9 @@ data2passwdents (const char *data)
   struct passwd *ent = NULL;
   FILE *mf = NULL;
   GPtrArray *ret = g_ptr_array_new_with_free_func (conv_passwd_ent_free);
-  
+
   mf = fmemopen ((void *)data, strlen (data), "r");
-  
+
   while ((ent = fgetpwent (mf)))
     {
       struct conv_passwd_ent *convent = g_new (struct conv_passwd_ent, 1);
@@ -251,143 +212,6 @@ compare_passwd_ents (gconstpointer a, gconstpointer b)
   const struct conv_passwd_ent **sb = (const struct conv_passwd_ent **)b;
 
   return strcmp ((*sa)->name, (*sb)->name);
-}
-
-/* See "man 5 passwd" We just make sure the name and uid/gid match,
-   and that none are missing. don't care about GECOS/dir/shell.
-*/
-gboolean
-rpmostree_check_passwd (OstreeRepo      *repo,
-                        const char      *direct,
-                        GFile           *yumroot,
-                        JsonObject      *treedata,
-                        GCancellable    *cancellable,
-                        GError         **error)
-{
-  gboolean ret = FALSE;
-  const char *ref;
-  gs_unref_object GFile *new_path = g_file_resolve_relative_path (yumroot, "usr/lib/passwd");
-  gs_unref_ptrarray GPtrArray *ignore_removed_users = NULL;
-  gboolean ignore_all_removed = FALSE;
-  gs_free char *old_contents = NULL;
-  gs_free char *new_contents = NULL;
-  gs_unref_ptrarray GPtrArray *old_ents = NULL;
-  gs_unref_ptrarray GPtrArray *new_ents = NULL;
-  unsigned int oiter = 0;
-  unsigned int niter = 0;
-
-  ref = _rpmostree_jsonutil_object_require_string_member (treedata, "ref",
-                                                          error);
-  if (!ref)
-    goto out;
-  old_contents = load_file_direct_or_rev (repo,
-                                          direct, ref, "usr/lib/passwd",
-                                          cancellable, error);
-  if (!old_contents)
-    goto out;
-
-  new_contents = gs_file_load_contents_utf8 (new_path, cancellable, error);
-  if (!new_contents)
-      goto out;
-
-  old_ents = data2passwdents (old_contents);
-  g_ptr_array_sort (old_ents, compare_passwd_ents);
-  
-  if (json_object_has_member (treedata, "ignore-removed-users"))
-    {
-      ignore_removed_users = g_ptr_array_new ();
-      if (!_rpmostree_jsonutil_append_string_array_to (treedata, "ignore-removed-users", ignore_removed_users, error))
-        goto out;
-    }
-  ignore_all_removed = ptrarray_contains_str (ignore_removed_users, "*");
-
-  new_ents = data2passwdents (new_contents);
-  g_ptr_array_sort (new_ents, compare_passwd_ents);
-
-  while ((oiter < old_ents->len) && (niter < new_ents->len))
-    {
-      struct conv_passwd_ent *odata = old_ents->pdata[oiter];
-      struct conv_passwd_ent *ndata = new_ents->pdata[niter];
-      int cmp = 0;
-
-      cmp = g_strcmp0 (odata->name, ndata->name);
-
-      if (cmp == 0)
-        {
-          if (odata->uid != ndata->uid)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "passwd UID changed: %s (%u to %u)",
-                           odata->name, (guint)odata->uid, (guint)ndata->uid);
-              goto out;
-            }
-          if (odata->gid != ndata->gid)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "passwd GID changed: %s (%u to %u)",
-                           odata->name, (guint)odata->gid, (guint)ndata->gid);
-              goto out;
-            }
-
-          ++oiter;
-          ++niter;
-        }
-      else if (cmp < 0) // Missing value from new passwd
-        {
-          gboolean found_matching_uid;
-
-          if (ignore_all_removed ||
-              ptrarray_contains_str (ignore_removed_users, odata->name))
-            {
-              g_print ("Ignored user missing from new passwd file: %s\n",
-                       odata->name);
-            }
-          else
-            {
-              if (!dir_contains_uid (yumroot, odata->uid, &found_matching_uid,
-                                     cancellable, error))
-                goto out;
-              
-              if (found_matching_uid)
-                {
-                  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "User missing from new passwd file: %s", odata->name);
-                  goto out;
-                }
-              else
-                g_print ("User removed from new passwd file: %s\n",
-                         odata->name);
-            }
-              
-          ++oiter;
-        }
-      else
-        {
-          g_print ("New passwd entry: %s\n", ndata->name);
-          ++niter;
-        }
-    }
-
-  if (oiter < old_ents->len)
-    {
-      struct conv_passwd_ent *odata = old_ents->pdata[oiter];
-
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "User missing from new passwd file: %s", odata->name);
-      goto out;
-    }
-
-  while (niter < new_ents->len)
-    {
-      struct conv_passwd_ent *ndata = new_ents->pdata[niter];
-
-      g_print ("New passwd entry: %s\n", ndata->name);
-      ++niter;
-    }
-
-  ret = TRUE;
- out:
-  return ret;
 }
 
 struct conv_group_ent
@@ -437,21 +261,28 @@ compare_group_ents (gconstpointer a, gconstpointer b)
   return strcmp ((*sa)->name, (*sb)->name);
 }
 
-/* See "man 5 group" We just need to make sure the name and gid match,
-   and that none are missing. Don't care about users.
- */
-gboolean
-rpmostree_check_groups (OstreeRepo      *repo,
-                        const char      *direct,
-                        GFile           *yumroot,
-                        JsonObject      *treedata,
-                        GCancellable    *cancellable,
-                        GError         **error)
+/* See "man 5 passwd" We just make sure the name and uid/gid match,
+   and that none are missing. don't care about GECOS/dir/shell.
+*/
+static gboolean
+rpmostree_check_passwd_groups (gboolean         passwd,
+                               OstreeRepo      *repo,
+                               GFile           *yumroot,
+                               GFile           *treefile_dirpath,
+                               JsonObject      *treedata,
+                               GCancellable    *cancellable,
+                               GError         **error)
 {
   gboolean ret = FALSE;
-  const char *ref;
-  gs_unref_object GFile *new_path = g_file_resolve_relative_path (yumroot, "usr/lib/group");
-  gs_unref_ptrarray GPtrArray *ignore_removed_groups = NULL;
+  const char *direct = NULL;
+  const char *chk_type = "previous";
+  const char *ref = NULL;
+  const char *commit_filepath = passwd ? "usr/lib/passwd" : "usr/lib/group";
+  const char *json_conf_name  = passwd ? "check-passwd" : "check-groups";
+  const char *json_conf_ign   = passwd ? "ignore-removed-users" : "ignore-removed-groups";
+  gs_unref_object GFile *old_path = NULL;
+  gs_unref_object GFile *new_path = g_file_resolve_relative_path (yumroot, commit_filepath);
+  gs_unref_ptrarray GPtrArray *ignore_removed_ents = NULL;
   gboolean ignore_all_removed = FALSE;
   gs_free char *old_contents = NULL;
   gs_free char *new_contents = NULL;
@@ -460,35 +291,251 @@ rpmostree_check_groups (OstreeRepo      *repo,
   unsigned int oiter = 0;
   unsigned int niter = 0;
 
-  ref = _rpmostree_jsonutil_object_require_string_member (treedata, "ref",
-                                                          error);
-  if (!ref)
-    goto out;
-  old_contents = load_file_direct_or_rev (repo,
-                                          direct, ref, "usr/lib/group",
-                                          cancellable, error);
-  if (!old_contents)
-    goto out;
+  if (json_object_has_member (treedata, json_conf_name))
+    {
+      JsonObject *chk = json_object_get_object_member (treedata,json_conf_name);
+      if (!chk)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "%s is not an object", json_conf_name);
+          goto out;
+        }
+
+      chk_type = _rpmostree_jsonutil_object_require_string_member (chk, "type",
+                                                                   error);
+      if (!chk_type)
+        goto out;
+      if (g_str_equal (chk_type, "none"))
+        {
+          ret = TRUE;
+          goto out;
+        }
+      else if (g_str_equal (chk_type, "file"))
+        {
+          direct = _rpmostree_jsonutil_object_require_string_member (chk,
+                                                                     "filename",
+                                                                     error);
+          if (!direct)
+            goto out;
+        }
+      else if (g_str_equal (chk_type, "data"))
+        {
+          JsonNode *ents_node = json_object_get_member (chk, "entries");
+          JsonObject *ents_obj = NULL;
+          GList *ents;
+          GList *iter;
+
+          if (!ents_node)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "No entries member for data in %s", json_conf_name);
+              goto out;
+            }
+
+          ents_obj = json_node_get_object (ents_node);
+
+          if (passwd)
+            old_ents = g_ptr_array_new_with_free_func (conv_passwd_ent_free);
+          else
+            old_ents = g_ptr_array_new_with_free_func (conv_group_ent_free);
+
+          ents = json_object_get_members (ents_obj);
+          for (iter = ents; iter; iter = iter->next)
+            if (passwd)
+            {
+              const char *name = iter->data;
+              JsonNode *val = json_object_get_member (ents_obj, name);
+              JsonNodeType child_type = json_node_get_node_type (val);
+              gint64 uid = 0;
+              gint64 gid = 0;
+              struct conv_passwd_ent *convent = g_new (struct conv_passwd_ent, 1);
+
+              if (child_type != JSON_NODE_ARRAY)
+                {
+                  if (!_rpmostree_jsonutil_object_require_int_member (ents_obj, name, &uid, error))
+                    goto out;
+                  gid = uid;
+                }
+              else
+                {
+                  JsonArray *child_array = json_node_get_array (val);
+                  guint len = json_array_get_length (child_array);
+
+                  if (!len || (len > 2))
+                    {
+                      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                                   "Array %s is only for uid and gid. Has length %u",
+                                   name, len);
+                      goto out;
+                    }
+                  if (!_rpmostree_jsonutil_array_require_int_element (child_array, 0, &uid, error))
+                    goto out;
+                  if (len == 1)
+                    gid = uid;
+                  else if (!_rpmostree_jsonutil_array_require_int_element (child_array, 1, &gid, error))
+                    goto out;
+                }
+
+              convent->name = g_strdup (name);
+              convent->uid  = uid;
+              convent->gid  = gid;
+              g_ptr_array_add (old_ents, convent);
+            }
+            else
+            {
+              const char *name = iter->data;
+              gint64 gid = 0;
+              struct conv_group_ent *convent = g_new (struct conv_group_ent, 1);
+
+              if (!_rpmostree_jsonutil_object_require_int_member (ents_obj, name, &gid, error))
+                goto out;
+
+              convent->name = g_strdup (name);
+              convent->gid  = gid;
+              g_ptr_array_add (old_ents, convent);
+            }
+        }
+    }
+
+  if (g_str_equal (chk_type, "previous"))
+    {
+      gs_unref_object GFile *root = NULL;
+      GError *tmp_error = NULL;
+
+      ref = _rpmostree_jsonutil_object_require_string_member (treedata, "ref",
+                                                              error);
+      if (!ref)
+        goto out;
+
+      if (!ostree_repo_read_commit (repo, ref, &root, NULL, NULL, &tmp_error))
+        {
+          if (g_error_matches (tmp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+            { /* this is kind of a hack, makes it work if it's the first commit */
+              g_clear_error (&tmp_error);
+              ret = TRUE;
+            }
+          else
+            {
+              g_propagate_error (error, tmp_error);
+            }
+          goto out;
+        }
+
+      old_path = g_file_resolve_relative_path (root, commit_filepath);
+    }
+
+  if (g_str_equal (chk_type, "file"))
+    {
+      old_path = g_file_resolve_relative_path (treefile_dirpath, direct);
+    }
+
+  if (g_str_equal (chk_type, "previous") || g_str_equal (chk_type, "file"))
+    {
+      old_contents = gs_file_load_contents_utf8 (old_path, cancellable, error);
+      if (!old_contents)
+        goto out;
+      if (passwd)
+        old_ents = data2passwdents (old_contents);
+      else
+        old_ents = data2groupents (old_contents);
+    }
+  g_assert (old_ents);
+
+  if (passwd)
+    g_ptr_array_sort (old_ents, compare_passwd_ents);
+  else
+    g_ptr_array_sort (old_ents, compare_group_ents);
 
   new_contents = gs_file_load_contents_utf8 (new_path, cancellable, error);
   if (!new_contents)
-    goto out;
+      goto out;
 
-  old_ents = data2groupents (old_contents);
-  g_ptr_array_sort (old_ents, compare_group_ents);
-  
-  if (json_object_has_member (treedata, "ignore-removed-groups"))
+  if (json_object_has_member (treedata, json_conf_ign))
     {
-      ignore_removed_groups = g_ptr_array_new ();
-      if (!_rpmostree_jsonutil_append_string_array_to (treedata, "ignore-removed-groups", ignore_removed_groups, error))
+      ignore_removed_ents = g_ptr_array_new ();
+      if (!_rpmostree_jsonutil_append_string_array_to (treedata, json_conf_ign,
+                                                       ignore_removed_ents,
+                                                       error))
         goto out;
     }
-  ignore_all_removed = ptrarray_contains_str (ignore_removed_groups, "*");
+  ignore_all_removed = ptrarray_contains_str (ignore_removed_ents, "*");
 
-  new_ents = data2groupents (new_contents);
-  g_ptr_array_sort (new_ents, compare_group_ents);
+  if (passwd)
+    {
+      new_ents = data2passwdents (new_contents);
+      g_ptr_array_sort (new_ents, compare_passwd_ents);
+    }
+  else
+    {
+      new_ents = data2groupents (new_contents);
+      g_ptr_array_sort (new_ents, compare_group_ents);
+    }
 
   while ((oiter < old_ents->len) && (niter < new_ents->len))
+    if (passwd)
+    {
+      struct conv_passwd_ent *odata = old_ents->pdata[oiter];
+      struct conv_passwd_ent *ndata = new_ents->pdata[niter];
+      int cmp = 0;
+
+      cmp = g_strcmp0 (odata->name, ndata->name);
+
+      if (cmp == 0)
+        {
+          if (odata->uid != ndata->uid)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "passwd UID changed: %s (%u to %u)",
+                           odata->name, (guint)odata->uid, (guint)ndata->uid);
+              goto out;
+            }
+          if (odata->gid != ndata->gid)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "passwd GID changed: %s (%u to %u)",
+                           odata->name, (guint)odata->gid, (guint)ndata->gid);
+              goto out;
+            }
+
+          ++oiter;
+          ++niter;
+        }
+      else if (cmp < 0) // Missing value from new passwd
+        {
+          gboolean found_matching_uid;
+
+          if (ignore_all_removed ||
+              ptrarray_contains_str (ignore_removed_ents, odata->name))
+            {
+              g_print ("Ignored user missing from new passwd file: %s\n",
+                       odata->name);
+            }
+          else
+            {
+              if (!dir_contains_uid (yumroot, odata->uid, &found_matching_uid,
+                                     cancellable, error))
+                goto out;
+              
+              if (found_matching_uid)
+                {
+                  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "User missing from new passwd file: %s", odata->name);
+                  goto out;
+                }
+              else
+                g_print ("User removed from new passwd file: %s\n",
+                         odata->name);
+            }
+              
+          ++oiter;
+        }
+      else
+        {
+          g_print ("New passwd entry: %s\n", ndata->name);
+          ++niter;
+        }
+    }
+    else
     {
       struct conv_group_ent *odata = old_ents->pdata[oiter];
       struct conv_group_ent *ndata = new_ents->pdata[niter];
@@ -514,7 +561,7 @@ rpmostree_check_groups (OstreeRepo      *repo,
         {
 
           if (ignore_all_removed ||
-              ptrarray_contains_str (ignore_removed_groups, odata->name))
+              ptrarray_contains_str (ignore_removed_ents, odata->name))
             {
               g_print ("Ignored group missing from new group file: %s\n",
                        odata->name);
@@ -547,24 +594,76 @@ rpmostree_check_groups (OstreeRepo      *repo,
         }
     }
 
-  if (oiter < old_ents->len)
+  if (passwd)
     {
-      struct conv_group_ent *odata = old_ents->pdata[oiter];
+      if (oiter < old_ents->len)
+        {
+          struct conv_passwd_ent *odata = old_ents->pdata[oiter];
 
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Group missing from new group file: %s", odata->name);
-      goto out;
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "User missing from new passwd file: %s", odata->name);
+          goto out;
+        }
+
+      while (niter < new_ents->len)
+        {
+          struct conv_passwd_ent *ndata = new_ents->pdata[niter];
+
+          g_print ("New passwd entry: %s\n", ndata->name);
+          ++niter;
+        }
     }
-
-  while (niter < new_ents->len)
+  else
     {
-      struct conv_group_ent *ndata = new_ents->pdata[niter];
+      if (oiter < old_ents->len)
+        {
+          struct conv_group_ent *odata = old_ents->pdata[oiter];
 
-      g_print ("New group entry: %s\n", ndata->name);
-      ++niter;
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Group missing from new group file: %s", odata->name);
+          goto out;
+        }
+
+      while (niter < new_ents->len)
+        {
+          struct conv_group_ent *ndata = new_ents->pdata[niter];
+
+          g_print ("New group entry: %s\n", ndata->name);
+          ++niter;
+        }
     }
 
   ret = TRUE;
  out:
   return ret;
+}
+
+/* See "man 5 passwd" We just make sure the name and uid/gid match,
+   and that none are missing. don't care about GECOS/dir/shell.
+*/
+gboolean
+rpmostree_check_passwd (OstreeRepo      *repo,
+                        GFile           *yumroot,
+                        GFile           *treefile_dirpath,
+                        JsonObject      *treedata,
+                        GCancellable    *cancellable,
+                        GError         **error)
+{
+  return rpmostree_check_passwd_groups (TRUE, repo, yumroot, treefile_dirpath,
+                                        treedata, cancellable, error);
+}
+
+/* See "man 5 group" We just need to make sure the name and gid match,
+   and that none are missing. Don't care about users.
+ */
+gboolean
+rpmostree_check_groups (OstreeRepo      *repo,
+                        GFile           *yumroot,
+                        GFile           *treefile_dirpath,
+                        JsonObject      *treedata,
+                        GCancellable    *cancellable,
+                        GError         **error)
+{
+  return rpmostree_check_passwd_groups (TRUE, repo, yumroot, treefile_dirpath,
+                                        treedata, cancellable, error);
 }

@@ -26,16 +26,16 @@
 
 gboolean
 rpmostree_check_passwd (OstreeRepo      *repo,
-                        const char      *direct_or_rev,
                         GFile           *yumroot,
+                        GFile           *treefile_path,
                         JsonObject      *treedata,
                         GCancellable    *cancellable,
                         GError         **error);
 
 gboolean
 rpmostree_check_groups (OstreeRepo      *repo,
-                        const char      *direct_or_rev,
                         GFile           *yumroot,
+                        GFile           *treefile_path,
                         JsonObject      *treedata,
                         GCancellable    *cancellable,
                         GError         **error);
