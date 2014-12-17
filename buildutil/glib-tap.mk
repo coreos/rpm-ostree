@@ -6,27 +6,17 @@ TESTS_ENVIRONMENT= \
 	G_DEBUG=gc-friendly 			\
 	MALLOC_CHECK_=2 			\
 	MALLOC_PERTURB_=$$(($${RANDOM:-256} % 256))
-LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/build/autotools/tap-driver.sh
-LOG_COMPILER = $(top_srcdir)/build/autotools/tap-test
+LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) $(top_srcdir)/buildutil/tap-driver.sh
+LOG_COMPILER = $(top_srcdir)/buildutil/tap-test
 
-NULL =
-
-# initialize variables for unconditional += appending
-BUILT_SOURCES =
-BUILT_EXTRA_DIST =
-CLEANFILES = *.log *.trs
-DISTCLEANFILES =
-MAINTAINERCLEANFILES =
-EXTRA_DIST =
 TESTS =
 
 installed_test_LTLIBRARIES =
 installed_test_PROGRAMS =
 installed_test_SCRIPTS =
+installed_test_DATA =
 nobase_installed_test_DATA =
 
-noinst_LTLIBRARIES =
-noinst_PROGRAMS =
 noinst_SCRIPTS =
 noinst_DATA =
 
@@ -115,8 +105,8 @@ installed_test_SCRIPTS += $(test_scripts) $(installed_test_scripts) \
                           $(test_extra_scripts) $(test_installed_extra_scripts)
 installed_test_SCRIPTS += $(dist_test_scripts) $(dist_test_extra_scripts) \
                           $(dist_installed_test_scripts) $(dist_installed_test_extra_scripts)
-nobase_installed_test_DATA += $(test_data) $(installed_test_data)
-nobase_installed_test_DATA += $(dist_test_data) $(dist_installed_test_data)
+installed_test_DATA += $(test_data) $(installed_test_data)
+installed_test_DATA += $(dist_test_data) $(dist_installed_test_data)
 installed_test_LTLIBRARIES += $(test_ltlibraries) $(installed_test_ltlibraries)
 installed_testcases = $(test_programs) $(installed_test_programs) \
                       $(test_scripts) $(installed_test_scripts) \
@@ -127,7 +117,7 @@ installed_test_meta_DATA = $(installed_testcases:=.test)
 %.test: %$(EXEEXT) Makefile
 	$(AM_V_GEN) (echo '[Test]' > $@.tmp; \
 	echo 'Type=session' >> $@.tmp; \
-	echo 'Exec=$(installed_testdir)/$<' >> $@.tmp; \
+	echo 'Exec=$(installed_testdir)/$(notdir $<)' >> $@.tmp; \
 	mv $@.tmp $@)
 
 CLEANFILES += $(installed_test_meta_DATA)
