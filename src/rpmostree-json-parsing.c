@@ -69,6 +69,59 @@ _rpmostree_jsonutil_object_require_string_member (JsonObject     *object,
   return ret;
 }
 
+gboolean
+_rpmostree_jsonutil_object_get_optional_int_member (JsonObject     *object,
+                                                    const char     *member_name,
+                                                    gint64         *out_value,
+                                                    gboolean       *found,
+                                                    GError        **error)
+{
+  gboolean ret = FALSE;
+  JsonNode *node = json_object_get_member (object, member_name);
+
+  if (node != NULL)
+    {
+      if ((json_node_get_value_type (node) != G_TYPE_INT) &&
+          (json_node_get_value_type (node) != G_TYPE_INT64))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Member '%s' is not an integer", member_name);
+          goto out;
+        }
+      if (found)
+        *found = TRUE;
+      *out_value = json_node_get_int (node);
+    }
+  else
+    {
+      if (found)
+        *found = FALSE;
+      *out_value = 0;
+    }
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+gboolean
+_rpmostree_jsonutil_object_require_int_member (JsonObject     *object,
+                                               const char     *member_name,
+                                               gint64         *out_val,
+                                               GError        **error)
+{
+  gboolean found;
+  if (!_rpmostree_jsonutil_object_get_optional_int_member (object, member_name, out_val, &found, error))
+    return FALSE;
+  if (!found)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Member '%s' not found", member_name);
+      return FALSE;
+    }
+  return TRUE;
+}
+
 const char *
 _rpmostree_jsonutil_array_require_string_element (JsonArray      *array,
 						  guint           i,
@@ -82,6 +135,28 @@ _rpmostree_jsonutil_array_require_string_element (JsonArray      *array,
       return NULL;
     }
   return ret;
+}
+
+gboolean
+_rpmostree_jsonutil_array_require_int_element (JsonArray      *array,
+                                               guint           i,
+                                               gint64         *out_val,
+                                               GError        **error)
+{
+  JsonNode *node = json_array_get_element (array, i);
+
+  if (!node ||
+      ((json_node_get_value_type (node) != G_TYPE_INT) &&
+       (json_node_get_value_type (node) != G_TYPE_INT64)))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Element at index %u is not an integer", i);
+      *out_val = 0;
+      return FALSE;
+    }
+
+  *out_val = json_array_get_int_element (array, i);
+  return TRUE;
 }
 
 gboolean
