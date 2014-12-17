@@ -1,7 +1,7 @@
 AC_PREREQ([2.63])
 AC_INIT([rpm-ostree], [2014.114], [walters@verbum.org])
 AC_CONFIG_HEADER([config.h])
-AC_CONFIG_MACRO_DIR([m4])
+AC_CONFIG_MACRO_DIR([buildutil])
 AC_CONFIG_AUX_DIR([build-aux])
 
 AM_INIT_AUTOMAKE([1.11 -Wno-portability foreign no-define tar-ustar no-dist-gzip dist-xz])
@@ -44,6 +44,8 @@ LIBS="$save_LIBS"
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 json-glib-1.0 ostree-1 >= 2014.7 libgsystem rpm hawkey])
 AC_PATH_PROG([XSLTPROC], [xsltproc])
+
+GLIB_TESTS
 
 GOBJECT_INTROSPECTION_REQUIRE([1.34.0])
 

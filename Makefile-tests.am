@@ -1,41 +1,11 @@
-# Makefile for tests code
-#
-# Copyright (C) 2013,2014 Colin Walters <walters@verbum.org>
-#
-# This library is free software; you can redistribute it and/or
-# modify it under the terms of the GNU Lesser General Public
-# License as published by the Free Software Foundation; either
-# version 2 of the License, or (at your option) any later version.
-#
-# This library is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-# Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public
-# License along with this library; if not, write to the
-# Free Software Foundation, Inc., 59 Temple Place - Suite 330,
-# Boston, MA 02111-1307, USA.
+include $(top_srcdir)/buildutil/glib-tap.mk
 
-if BUILDOPT_INSTALL_TESTS
-insttest_PROGRAMS = 
+tests_shutil_CPPFLAGS = -I $(srcdir)/src
+tests_shutil_CFLAGS = $(BUILDDEP_GIO_UNIX_CFLAGS)
+tests_shutil_LDADD = $(BUILDDEP_GIO_UNIX_LIBS) libgsystem.la
 
-insttestdir=$(pkglibexecdir)/installed-tests
-testfiles = test-basic \
+installed_test_data = tests/libtest.sh
+
+test_scripts = \
+	tests/test-basic.sh			\
 	$(NULL)
-insttest_SCRIPTS = $(addprefix tests/,$(testfiles:=.sh))
-
-testmetadir = $(datadir)/installed-tests/$(PACKAGE)
-testmeta_DATA = $(testfiles:=.test)
-
-insttest_DATA = tests/libtest.sh \
-	$(NULL)
-
-%.test: tests/%.sh Makefile
-	$(AM_V_GEN) (echo '[Test]' > $@.tmp; \
-	 echo 'Exec=$(pkglibexecdir)/installed-tests/$(notdir $<)' >> $@.tmp; \
-	 echo 'Type=session' >> $@.tmp; \
-	 echo 'Output=TAP' >> $@.tmp; \
-	 mv $@.tmp $@)
-
-endif
