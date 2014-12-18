@@ -69,6 +69,18 @@ _rpmostree_jsonutil_object_require_string_member (JsonObject     *object,
   return ret;
 }
 
+static gboolean
+_jsonutil_node_check_int (JsonNode *node)
+{
+  if (!node)
+    return FALSE;
+
+  if (json_node_get_value_type (node) != G_TYPE_INT64)
+    return FALSE;
+
+  return TRUE;
+}
+
 gboolean
 _rpmostree_jsonutil_object_get_optional_int_member (JsonObject     *object,
                                                     const char     *member_name,
@@ -81,8 +93,7 @@ _rpmostree_jsonutil_object_get_optional_int_member (JsonObject     *object,
 
   if (node != NULL)
     {
-      if ((json_node_get_value_type (node) != G_TYPE_INT) &&
-          (json_node_get_value_type (node) != G_TYPE_INT64))
+      if (!_jsonutil_node_check_int (node))
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Member '%s' is not an integer", member_name);
@@ -145,9 +156,7 @@ _rpmostree_jsonutil_array_require_int_element (JsonArray      *array,
 {
   JsonNode *node = json_array_get_element (array, i);
 
-  if (!node ||
-      ((json_node_get_value_type (node) != G_TYPE_INT) &&
-       (json_node_get_value_type (node) != G_TYPE_INT64)))
+  if (!_jsonutil_node_check_int (node))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Element at index %u is not an integer", i);
