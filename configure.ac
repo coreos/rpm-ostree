@@ -42,7 +42,7 @@ AC_SUBST(CAP_LIBS)
 LIBS="$save_LIBS"
 
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
-PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 json-glib-1.0 ostree-1 >= 2014.7 libgsystem rpm hawkey])
+PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 json-glib-1.0 ostree-1 >= 2014.13 libgsystem rpm hawkey])
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GOBJECT_INTROSPECTION_REQUIRE([1.34.0])

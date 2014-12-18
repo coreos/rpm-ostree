@@ -26,7 +26,6 @@
 #include "rpmostree-builtins.h"
 #include "rpmostree-util.h"
 #include "rpmostree-treepkgdiff.h"
-#include "rpmostree-pull-progress.h"
 
 #include "libgsystem.h"
 
@@ -127,7 +126,7 @@ rpmostree_builtin_rebase (int             argc,
   if (console)
     {
       gs_console_begin_status_line (console, "", NULL, NULL);
-      progress = ostree_async_progress_new_and_connect (_rpmostree_pull_progress, console);
+      progress = ostree_async_progress_new_and_connect (ostree_repo_pull_default_console_progress_changed, console);
     }
 
   /* Always allow older...there's not going to be a chronological
