@@ -34,10 +34,29 @@ _rpmostree_jsonutil_object_require_string_member (JsonObject     *object,
                                                   const char     *member_name,
                                                   GError        **error);
 
+gboolean
+_rpmostree_jsonutil_object_get_optional_int_member (JsonObject     *object,
+                                                    const char     *member_name,
+                                                    gint64         *out_value,
+                                                    gboolean       *found,
+                                                    GError        **error);
+
+gboolean
+_rpmostree_jsonutil_object_require_int_member (JsonObject     *object,
+                                               const char     *member_name,
+                                               gint64         *out_val,
+                                               GError        **error);
+
 const char *
 _rpmostree_jsonutil_array_require_string_element (JsonArray      *array,
                                                   guint           i,
                                                   GError        **error);
+
+gboolean
+_rpmostree_jsonutil_array_require_int_element (JsonArray      *array,
+                                               guint           i,
+                                               gint64         *out_val,
+                                               GError        **error);
 
 gboolean
 _rpmostree_jsonutil_append_string_array_to (JsonObject   *object,

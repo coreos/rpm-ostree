@@ -28,6 +28,8 @@ librpmostree_la_SOURCES = \
 	src/rpmostree-json-parsing.h \
 	src/rpmostree-util.c \
 	src/rpmostree-util.h \
+	src/rpmostree-passwd-util.c \
+	src/rpmostree-passwd-util.h \
 	src/rpmostree-libcontainer.c \
 	src/rpmostree-libcontainer.h \
 	src/hif-utils.c \

@@ -33,6 +33,7 @@
 #include "rpmostree-treepkgdiff.h"
 #include "rpmostree-libcontainer.h"
 #include "rpmostree-postprocess.h"
+#include "rpmostree-passwd-util.h"
 
 #include "libgsystem.h"
 
@@ -974,7 +975,15 @@ rpmostree_compose_builtin_tree (int             argc,
 
   if (!rpmostree_prepare_rootfs_for_commit (yumroot, treefile, cancellable, error))
     goto out;
-    
+
+  if (!rpmostree_check_passwd (repo, yumroot, treefile_path, treefile,
+                               cancellable, error))
+    goto out;
+
+  if (!rpmostree_check_groups (repo, yumroot, treefile_path, treefile,
+                               cancellable, error))
+    goto out;
+
   {
     const char *gpgkey;
     if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
