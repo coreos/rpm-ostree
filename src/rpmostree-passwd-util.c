@@ -667,3 +667,106 @@ rpmostree_check_groups (OstreeRepo      *repo,
   return rpmostree_check_passwd_groups (TRUE, repo, yumroot, treefile_dirpath,
                                         treedata, cancellable, error);
 }
+
+static gboolean
+concat_passwd_file (GFile           *yumroot,
+                    GFile           *previous_commit,
+                    const char      *filename,
+                    GCancellable    *cancellable,
+                    GError         **error)
+{
+  gboolean ret = FALSE;
+  gs_free char *etc_subpath = g_strconcat ("etc/", filename, NULL);
+  gs_free char *usrlib_subpath = g_strconcat ("usr/lib/", filename, NULL);
+  gs_unref_object GFile *yumroot_etc = g_file_resolve_relative_path (yumroot, "etc");
+  gs_unref_object GFile *yumroot_dest = g_file_resolve_relative_path (yumroot, etc_subpath);
+  gs_unref_object GFile *orig_etc_content = g_file_resolve_relative_path (previous_commit, etc_subpath);
+  gs_unref_object GFile *orig_usrlib_content = g_file_resolve_relative_path (previous_commit, usrlib_subpath);
+  gs_unref_object GFileOutputStream *out = NULL;
+  gboolean have_etc, have_usr;
+
+  if (!gs_file_ensure_directory (yumroot_etc, TRUE, cancellable, error))
+    goto out;
+
+  have_etc = g_file_query_exists (orig_etc_content, NULL);
+  have_usr = g_file_query_exists (orig_usrlib_content, NULL);
+
+  if (!(have_etc || have_usr))
+    {
+      ret = TRUE;
+      goto out;
+    }
+
+  out = g_file_replace (yumroot_dest, NULL, FALSE, G_FILE_CREATE_REPLACE_DESTINATION,
+                        cancellable, error);
+  if (!out)
+    goto out;
+
+  if (have_etc)
+    {
+      gs_unref_object GInputStream *src =
+        (GInputStream*)g_file_read (orig_etc_content, cancellable, error);
+      if (g_output_stream_splice ((GOutputStream*)out, src,
+                                  G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE,
+                                  cancellable, error ) < 0)
+        goto out;
+    }
+
+  if (have_usr)
+    {
+      gs_unref_object GInputStream *src =
+        (GInputStream*)g_file_read (orig_usrlib_content, cancellable, error);
+      if (g_output_stream_splice ((GOutputStream*)out, src,
+                                  G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE,
+                                  cancellable, error ) < 0)
+        goto out;
+    }
+
+  if (!g_output_stream_flush ((GOutputStream*)out, cancellable, error))
+    goto out;
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+                    
+
+gboolean
+rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
+                                         GFile           *yumroot,
+                                         const char      *ref,
+                                         GCancellable    *cancellable,
+                                         GError         **error)
+{
+  gboolean ret = FALSE;
+  GError *temp_error = NULL;
+  gs_unref_object GFile *previous_root = NULL;
+  gs_unref_object GFile *yumroot_etc_group = g_file_resolve_relative_path (yumroot, "etc/group");
+  gs_unref_object GFile *out = NULL;
+
+  if (!ostree_repo_read_commit (repo, ref, &previous_root, NULL, NULL, &temp_error))
+    {
+      if (g_error_matches (temp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+        { 
+          g_clear_error (&temp_error);
+          ret = TRUE;
+        }
+      else
+        {
+          g_propagate_error (error, temp_error);
+        }
+      goto out;
+    }
+
+  if (!concat_passwd_file (yumroot, previous_root, "passwd",
+                           cancellable, error))
+    goto out;
+
+  if (!concat_passwd_file (yumroot, previous_root, "group",
+                           cancellable, error))
+    goto out;
+
+  ret = TRUE;
+ out:
+  return ret;
+}

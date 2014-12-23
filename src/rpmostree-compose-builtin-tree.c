@@ -940,6 +940,23 @@ rpmostree_compose_builtin_tree (int             argc,
     self->serialized_treefile = g_bytes_new_take (treefile_buf, len);
   }
 
+  {
+    gboolean generate_from_previous = TRUE;
+
+    if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
+                                                                 "preserve-passwd",
+                                                                 &generate_from_previous,
+                                                                 error))
+      goto out;
+
+    if (generate_from_previous)
+      {
+        if (!rpmostree_generate_passwd_from_previous (repo, yumroot, ref,
+                                                      cancellable, error))
+          goto out;
+      }
+  }
+
   if (!yuminstall (self, treefile, yumroot,
                    (char**)packages->pdata,
                    cancellable, error))

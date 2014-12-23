@@ -61,6 +61,13 @@ Treefile
 
    Note this does not alter the RPM database, so `rpm -V` will complain.
 
+ * `preserve-passwd`: boolean, optional: Defaults to `true`.  If enabled,
+   copy the `/etc/passwd` (and `/usr/lib/passwd`) files from the previous commit
+   if they exist.  This helps ensure consistent uid/gid allocations across
+   builds.  However, it does mean that removed users will exist in the `passwd`
+   database forever.  It also does not help clients switch between unrelated
+   trees.
+
  * `check-passwd`: Object, optional: Checks to run against the new passwd file
    before accepting the tree. All the entries specified should exist (unless
    ignored) and have the same values or the compose will fail. There are four
