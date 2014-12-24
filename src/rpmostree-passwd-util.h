@@ -39,3 +39,10 @@ rpmostree_check_groups (OstreeRepo      *repo,
                         JsonObject      *treedata,
                         GCancellable    *cancellable,
                         GError         **error);
+
+gboolean
+rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
+                                         GFile           *yumroot,
+                                         const char      *ref,
+                                         GCancellable    *cancellable,
+                                         GError         **error);

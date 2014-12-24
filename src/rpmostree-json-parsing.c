@@ -133,6 +133,31 @@ _rpmostree_jsonutil_object_require_int_member (JsonObject     *object,
   return TRUE;
 }
 
+gboolean
+_rpmostree_jsonutil_object_get_optional_boolean_member (JsonObject     *object,
+                                                       const char     *member_name,
+                                                       gboolean       *out_value,
+                                                       GError        **error)
+{
+  gboolean ret = FALSE;
+  JsonNode *node = json_object_get_member (object, member_name);
+
+  if (node != NULL)
+    {
+      if (json_node_get_value_type (node) != G_TYPE_BOOLEAN)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Member '%s' is not a boolean", member_name);
+          goto out;
+        }
+      *out_value = json_node_get_boolean (node);
+    }
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
 const char *
 _rpmostree_jsonutil_array_require_string_element (JsonArray      *array,
 						  guint           i,

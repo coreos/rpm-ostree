@@ -47,6 +47,12 @@ _rpmostree_jsonutil_object_require_int_member (JsonObject     *object,
                                                gint64         *out_val,
                                                GError        **error);
 
+gboolean
+_rpmostree_jsonutil_object_get_optional_boolean_member (JsonObject     *object,
+                                                       const char     *member_name,
+                                                       gboolean       *out_value,
+                                                       GError        **error);
+
 const char *
 _rpmostree_jsonutil_array_require_string_element (JsonArray      *array,
                                                   guint           i,
