@@ -44,7 +44,7 @@ LIBS="$save_LIBS"
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 json-glib-1.0
 				     ostree-1 >= 2015.1 libgsystem >= 2015.1
-				     rpm hawkey])
+				     rpm hawkey libhif])
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GLIB_TESTS
