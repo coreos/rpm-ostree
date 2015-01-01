@@ -35,6 +35,7 @@
 #include "rpmostree-cleanup.h"
 #include "rpmostree-treepkgdiff.h"
 #include "rpmostree-libcontainer.h"
+#include "rpmostree-console-progress.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
 
@@ -86,6 +87,15 @@ typedef struct {
   GBytes *serialized_treefile;
 } RpmOstreeTreeComposeContext;
 
+static void
+on_hifstate_percentage_changed (HifState   *hifstate,
+                                guint       percentage,
+                                gpointer    user_data)
+{
+  const char *text = user_data;
+  rpmostree_console_progress_text_percent (text, percentage);
+}
+
 static gboolean
 install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                           JsonObject      *treedata,
@@ -95,6 +105,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                           GError         **error)
 {
   gboolean ret = FALSE;
+  guint progress_sigid;
   char **strviter;
   GFile *contextdir = self->treefile_context_dirs->pdata[0];
   gs_unref_object HifContext *hifctx = NULL;
@@ -192,15 +203,80 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
       }
   }
 
+  /* --- Downloading metadata --- */
+  { _cleanup_rpmostree_console_progress_ G_GNUC_UNUSED gpointer dummy;
+    gs_unref_object HifState *hifstate = hif_state_new ();
+
+    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                     G_CALLBACK (on_hifstate_percentage_changed), 
+                                     "Downloading metadata:");
+
+    rpmostree_console_progress_start ();
+
+    if (!hif_context_setup_sack (hifctx, hifstate, error))
+      goto out;
+
+    g_signal_handler_disconnect (hifstate, progress_sigid);
+  }
+
   for (strviter = packages; strviter && *strviter; strviter++)
     {
       if (!hif_context_install (hifctx, *strviter, error))
         goto out;
     }
 
-  if (!hif_context_run (hifctx, cancellable, error))
-    goto out;
+  /* --- Resolving dependencies --- */
+  { _cleanup_rpmostree_console_progress_ G_GNUC_UNUSED gpointer dummy;
+    gs_unref_object HifState *hifstate = hif_state_new ();
 
+    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                     G_CALLBACK (on_hifstate_percentage_changed), 
+                                     "Resolving dependencies:");
+
+    rpmostree_console_progress_start ();
+
+    if (!hif_transaction_depsolve (hif_context_get_transaction (hifctx),
+                                   hif_context_get_goal (hifctx),
+                                   hifstate, error))
+      goto out;
+
+    g_signal_handler_disconnect (hifstate, progress_sigid);
+  }
+
+  /* --- Downloading packages --- */
+  { _cleanup_rpmostree_console_progress_ G_GNUC_UNUSED gpointer dummy;
+    gs_unref_object HifState *hifstate = hif_state_new ();
+
+    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                     G_CALLBACK (on_hifstate_percentage_changed), 
+                                     "Downloading packages:");
+
+    rpmostree_console_progress_start ();
+
+    if (!hif_transaction_download (hif_context_get_transaction (hifctx), hifstate, error))
+      goto out;
+
+    g_signal_handler_disconnect (hifstate, progress_sigid);
+  }
+
+  { _cleanup_rpmostree_console_progress_ G_GNUC_UNUSED gpointer dummy;
+    gs_unref_object HifState *hifstate = hif_state_new ();
+
+    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                     G_CALLBACK (on_hifstate_percentage_changed), 
+                                     "Installing packages:");
+
+    rpmostree_console_progress_start ();
+
+    if (!hif_transaction_commit (hif_context_get_transaction (hifctx),
+                                 hif_context_get_goal (hifctx),
+                                 hifstate,
+                                 error))
+      goto out;
+
+    g_signal_handler_disconnect (hifstate, progress_sigid);
+  }
+      
   ret = TRUE;
  out:
   return ret;
