@@ -27,6 +27,7 @@
 #include <libhif.h>
 #include <libhif/hif-context-private.h>
 #include <stdio.h>
+#include <rpm/rpmmacro.h>
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
@@ -107,6 +108,10 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                                             "lock",
                                             NULL);
 
+  /* Apparently there's only one process-global macro context;
+   * realistically, we're going to have to refactor all of the RPM
+   * stuff to a subprocess.
+   */
   hifctx = hif_context_new ();
 
   hif_context_set_install_root (hifctx, gs_file_get_path_cached (yumroot));
@@ -118,6 +123,28 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   hif_context_set_check_transaction (hifctx, FALSE);
 
   hif_context_set_repo_dir (hifctx, gs_file_get_path_cached (contextdir));
+
+  { JsonNode *install_langs_n =
+      json_object_get_member (treedata, "install-langs");
+
+    if (install_langs_n != NULL)
+      {
+        JsonArray *instlangs_a = json_node_get_array (install_langs_n);
+        guint len = json_array_get_length (instlangs_a);
+        guint i;
+        GString *opt = g_string_new ("");
+
+        for (i = 0; i < len; i++)
+          {
+            g_string_append (opt, json_array_get_string_element (instlangs_a, i));
+            if (i < len - 1)
+              g_string_append_c (opt, ':');
+          }
+
+        hif_context_set_rpm_macro (hifctx, "_install_langs", opt->str);
+        g_string_free (opt, TRUE);
+      }
+  }
 
   if (!hif_context_setup (hifctx, cancellable, error))
     goto out;
