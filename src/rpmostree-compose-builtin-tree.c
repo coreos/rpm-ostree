@@ -160,6 +160,12 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (!hif_context_setup (hifctx, cancellable, error))
     goto out;
 
+  /* Forcibly override rpm/librepo SIGINT handlers.  We always operate
+   * in a fully idempotent/atomic mode, and can be killed at any time.
+   */
+  signal (SIGINT, SIG_DFL);
+  signal (SIGTERM, SIG_DFL);
+
   /* Bind the json \"repos\" member to the hif state, which looks at the
    * enabled= member of the repos file.  By default we forcibly enable
    * only repos which are specified, ignoring the enabled= flag.
