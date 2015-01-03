@@ -688,14 +688,11 @@ compute_checksum_for_compose (RpmOstreeTreeComposeContext  *self,
 
 static gboolean
 parse_keyvalue_strings (char             **strings,
-                        GVariant         **out_metadata,
+                        GVariantBuilder   *builder,
                         GError           **error)
 {
   gboolean ret = FALSE;
   char **iter;
-  gs_unref_variant_builder GVariantBuilder *builder = NULL;
-
-  builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
 
   for (iter = strings; *iter; iter++)
     {
@@ -719,8 +716,6 @@ parse_keyvalue_strings (char             **strings,
     }
 
   ret = TRUE;
-  *out_metadata = g_variant_builder_end (builder);
-  g_variant_ref_sink (*out_metadata);
  out:
   return ret;
 }
@@ -752,7 +747,8 @@ rpmostree_compose_builtin_tree (int             argc,
   gs_unref_object GFile *treefile_path = NULL;
   gs_unref_object GFile *repo_path = NULL;
   gs_unref_object JsonParser *treefile_parser = NULL;
-  gs_unref_variant GVariant *metadata = NULL;
+  gs_unref_variant_builder GVariantBuilder *metadata_builder = 
+    g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
   gboolean workdir_is_tmp = FALSE;
 
   self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
@@ -860,7 +856,7 @@ rpmostree_compose_builtin_tree (int             argc,
   if (opt_metadata_strings)
     {
       if (!parse_keyvalue_strings (opt_metadata_strings,
-                                   &metadata, error))
+                                   metadata_builder, error))
         goto out;
     }
 
@@ -1003,6 +999,9 @@ rpmostree_compose_builtin_tree (int             argc,
 
   {
     const char *gpgkey;
+    gs_unref_variant GVariant *metadata =
+      g_variant_ref_sink (g_variant_builder_end (metadata_builder));
+
     if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
       goto out;
 
