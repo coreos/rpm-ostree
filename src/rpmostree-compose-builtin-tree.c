@@ -727,6 +727,7 @@ rpmostree_compose_builtin_tree (int             argc,
                                 GError        **error)
 {
   gboolean ret = FALSE;
+  GError *temp_error = NULL;
   GOptionContext *context = g_option_context_new ("- Run yum and commit the result to an OSTree repository");
   const char *ref;
   RpmOstreeTreeComposeContext selfdata = { NULL, };
@@ -738,6 +739,8 @@ rpmostree_compose_builtin_tree (int             argc,
   gs_free char *cached_compose_checksum = NULL;
   gs_free char *new_compose_checksum = NULL;
   gs_unref_object GFile *cachedir = NULL;
+  gs_unref_object GFile *previous_root = NULL;
+  gs_free char *previous_checksum = NULL;
   gs_unref_object GFile *yumroot = NULL;
   gs_unref_object GFile *targetroot = NULL;
   gs_unref_object GFile *yumroot_varcache = NULL;
@@ -901,16 +904,33 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
     }
 
-  yumroot = g_file_get_child (self->workdir, "rootfs.tmp");
-  if (!gs_shutil_rm_rf (yumroot, cancellable, error))
-    goto out;
-  targetroot = g_file_get_child (self->workdir, "rootfs");
-
   ref = _rpmostree_jsonutil_object_require_string_member (treefile, "ref", error);
   if (!ref)
     goto out;
 
   ref_unix = g_strdelimit (g_strdup (ref), "/", '_');
+
+  if (!ostree_repo_read_commit (repo, ref, &previous_root, &previous_checksum,
+                                cancellable, &temp_error))
+    {
+      if (g_error_matches (temp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+        { 
+          g_clear_error (&temp_error);
+          g_print ("No previous commit for %s\n", ref);
+        }
+      else
+        {
+          g_propagate_error (error, temp_error);
+          goto out;
+        }
+    }
+  else
+    g_print ("Previous commit: %s\n", previous_checksum);
+
+  yumroot = g_file_get_child (self->workdir, "rootfs.tmp");
+  if (!gs_shutil_rm_rf (yumroot, cancellable, error))
+    goto out;
+  targetroot = g_file_get_child (self->workdir, "rootfs");
 
   bootstrap_packages = g_ptr_array_new ();
   packages = g_ptr_array_new ();
@@ -936,22 +956,23 @@ rpmostree_compose_builtin_tree (int             argc,
     self->serialized_treefile = g_bytes_new_take (treefile_buf, len);
   }
 
-  {
-    gboolean generate_from_previous = TRUE;
+  if (previous_root != NULL)
+    {
+      gboolean generate_from_previous = TRUE;
 
-    if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
-                                                                 "preserve-passwd",
-                                                                 &generate_from_previous,
-                                                                 error))
-      goto out;
+      if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
+                                                                   "preserve-passwd",
+                                                                   &generate_from_previous,
+                                                                   error))
+        goto out;
 
-    if (generate_from_previous)
-      {
-        if (!rpmostree_generate_passwd_from_previous (repo, yumroot, ref,
-                                                      cancellable, error))
-          goto out;
-      }
-  }
+      if (generate_from_previous)
+        {
+          if (!rpmostree_generate_passwd_from_previous (repo, yumroot, previous_root,
+                                                        cancellable, error))
+            goto out;
+        }
+    }
 
   if (!yuminstall (self, treefile, yumroot,
                    (char**)packages->pdata,

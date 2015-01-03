@@ -43,6 +43,6 @@ rpmostree_check_groups (OstreeRepo      *repo,
 gboolean
 rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                          GFile           *yumroot,
-                                         const char      *ref,
+                                         GFile           *previous_root,
                                          GCancellable    *cancellable,
                                          GError         **error);
