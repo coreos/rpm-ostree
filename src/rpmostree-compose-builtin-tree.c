@@ -44,6 +44,7 @@
 static char *opt_workdir;
 static gboolean opt_workdir_tmpfs;
 static char *opt_cachedir;
+static gboolean opt_force_nocache;
 static char *opt_proxy;
 static char *opt_output_repodata_dir;
 static char **opt_metadata_strings;
@@ -57,6 +58,7 @@ static GOptionEntry option_entries[] = {
   { "workdir-tmpfs", 0, 0, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
   { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
+  { "force-nocache", 0, 0, G_OPTION_ARG_NONE, &opt_force_nocache, "Always create a new OSTree commit, even if nothing appears to have changed", NULL },
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
   { "add-override-pkg-repo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_override_pkg_repos, "Include an additional package repository from DIRECTORY", "DIRECTORY" },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
@@ -83,9 +85,73 @@ typedef struct {
   GPtrArray *treefile_context_dirs;
   
   GFile *workdir;
+  OstreeRepo *repo;
+  char *previous_checksum;
 
   GBytes *serialized_treefile;
 } RpmOstreeTreeComposeContext;
+
+static int
+ptrarray_sort_compare_strings (gconstpointer ap,
+                               gconstpointer bp)
+{
+  char **asp = (gpointer)ap;
+  char **bsp = (gpointer)bp;
+  return strcmp (*asp, *bsp);
+}
+
+static gboolean
+compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
+                                         HyGoal                         goal,
+                                         char                        **out_checksum,
+                                         GError                      **error)
+{
+  gboolean ret = FALSE;
+  gs_free char *ret_checksum = NULL;
+  GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA256);
+  
+  /* Hash in the raw treefile; this means reordering the input packages
+   * or adding a comment will cause a recompose, but let's be conservative
+   * here.
+   */
+  { gsize len;
+    const guint8* buf = g_bytes_get_data (self->serialized_treefile, &len);
+
+    g_checksum_update (checksum, buf, len);
+  }
+
+  /* FIXME; we should also hash the post script */
+
+  /* Hash in each package */
+  { _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+    HyPackage pkg;
+    guint i;
+    gs_unref_ptrarray GPtrArray *nevras = g_ptr_array_new_with_free_func (g_free);
+
+    pkglist = hy_goal_list_installs (goal);
+
+    FOR_PACKAGELIST(pkg, pkglist, i)
+      {
+        g_ptr_array_add (nevras, hy_package_get_nevra (pkg));
+      }
+
+    g_ptr_array_sort (nevras, ptrarray_sort_compare_strings);
+    
+    for (i = 0; i < nevras->len; i++)
+      {
+        const char *nevra = nevras->pdata[i];
+        g_checksum_update (checksum, (guint8*)nevra, strlen (nevra));
+      }
+  }
+
+  ret_checksum = g_strdup (g_checksum_get_string (checksum));
+
+  ret = TRUE;
+  gs_transfer_out_value (out_checksum, &ret_checksum);
+  if (checksum) g_checksum_free (checksum);
+  return ret;
+}
+
 
 static void
 on_hifstate_percentage_changed (HifState   *hifstate,
@@ -101,6 +167,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                           JsonObject      *treedata,
                           GFile           *yumroot,
                           char           **packages,
+                          gboolean        *out_unmodified,
+                          char           **out_new_inputhash,
                           GCancellable    *cancellable,
                           GError         **error)
 {
@@ -118,6 +186,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   gs_free char *lockdir = g_build_filename (gs_file_get_path_cached (self->workdir),
                                             "lock",
                                             NULL);
+  gs_free char *ret_new_inputhash = NULL;
 
   /* Apparently there's only one process-global macro context;
    * realistically, we're going to have to refactor all of the RPM
@@ -249,6 +318,35 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     g_signal_handler_disconnect (hifstate, progress_sigid);
   }
 
+  if (!compute_checksum_from_treefile_and_goal (self, hif_context_get_goal (hifctx),
+                                                &ret_new_inputhash, error))
+    goto out;
+
+  if (self->previous_checksum)
+    {
+      gs_unref_variant GVariant *commit_v = NULL;
+      gs_unref_variant GVariant *commit_metadata = NULL;
+      const char *previous_inputhash = NULL;
+      
+      if (!ostree_repo_load_variant (self->repo, OSTREE_OBJECT_TYPE_COMMIT,
+                                     self->previous_checksum,
+                                     &commit_v, error))
+        goto out;
+
+      commit_metadata = g_variant_get_child_value (commit_v, 0);
+      if (g_variant_lookup (commit_metadata, "rpmostree.inputhash", "&s", &previous_inputhash))
+        {
+          if (strcmp (previous_inputhash, ret_new_inputhash) == 0)
+            {
+              *out_unmodified = TRUE;
+              ret = TRUE;
+              goto out;
+            }
+        }
+      else
+        g_print ("Previous commit found, but without rpmostree.inputhash metadata key\n");
+    }
+
   /* --- Downloading packages --- */
   { _cleanup_rpmostree_console_progress_ G_GNUC_UNUSED gpointer dummy;
     gs_unref_object HifState *hifstate = hif_state_new ();
@@ -284,6 +382,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   }
       
   ret = TRUE;
+  *out_unmodified = FALSE;
+  gs_transfer_out_value (out_new_inputhash, &ret_new_inputhash);
  out:
   return ret;
 }
@@ -405,130 +505,6 @@ process_includes (RpmOstreeTreeComposeContext  *self,
   return ret;
 }
 
-static char *
-cachedir_fssafe_key (const char  *primary_key)
-{
-  GString *ret = g_string_new ("");
-  
-  for (; *primary_key; primary_key++)
-    {
-      const char c = *primary_key;
-      if (!g_ascii_isprint (c) || c == '-')
-        g_string_append_printf (ret, "\\%02x", c);
-      else if (c == '/')
-        g_string_append_c (ret, '-');
-      else
-        g_string_append_c (ret, c);
-    }
-
-  return g_string_free (ret, FALSE);
-}
-
-static GFile *
-cachedir_keypath (GFile         *cachedir,
-                  const char    *primary_key)
-{
-  gs_free char *fssafe_key = cachedir_fssafe_key (primary_key);
-  return g_file_get_child (cachedir, fssafe_key);
-}
-
-static gboolean
-cachedir_lookup_string (GFile             *cachedir,
-                        const char        *key,
-                        char             **out_value,
-                        GCancellable      *cancellable,
-                        GError           **error)
-{
-  gboolean ret = FALSE;
-  gs_free char *ret_value = NULL;
-
-  if (cachedir)
-    {
-      gs_unref_object GFile *keypath = cachedir_keypath (cachedir, key);
-      if (!_rpmostree_file_load_contents_utf8_allow_noent (keypath, &ret_value,
-                                                           cancellable, error))
-        goto out;
-    }
-  
-  ret = TRUE;
-  gs_transfer_out_value (out_value, &ret_value);
- out:
-  return ret;
-}
-
-static gboolean
-cachedir_set_string (GFile             *cachedir,
-                     const char        *key,
-                     const char        *value,
-                     GCancellable      *cancellable,
-                     GError           **error)
-{
-  gboolean ret = FALSE;
-  gs_unref_object GFile *keypath = NULL;
-
-  if (!cachedir)
-    return TRUE;
-
-  keypath = cachedir_keypath (cachedir, key);
-  if (!g_file_replace_contents (keypath, value, strlen (value), NULL,
-                                FALSE, 0, NULL,
-                                cancellable, error))
-    goto out;
-
-  ret = TRUE;
- out:
-  return ret;
-}
-
-static gboolean
-compute_checksum_for_compose (RpmOstreeTreeComposeContext  *self,
-                              JsonObject   *treefile_rootval,
-                              GFile        *yumroot,
-                              char        **out_checksum,
-                              GCancellable *cancellable,
-                              GError      **error)
-{
-  gboolean ret = FALSE;
-  gs_free char *ret_checksum = NULL;
-  GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA256);
-  
-  {
-    gsize len;
-    const guint8* buf = g_bytes_get_data (self->serialized_treefile, &len);
-
-    g_checksum_update (checksum, buf, len);
-  }
-
-  /* Query the generated rpmdb, to see if anything has changed. */
-  {
-    _cleanup_hysack_ HySack sack = NULL;
-    _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
-    HyPackage pkg;
-    guint i;
-
-    if (!rpmostree_get_pkglist_for_root (yumroot, &sack, &pkglist,
-                                         cancellable, error))
-      {
-        g_prefix_error (error, "Reading package set: ");
-        goto out;
-      }
-
-    FOR_PACKAGELIST(pkg, pkglist, i)
-      {
-        gs_free char *nevra = hy_package_get_nevra (pkg);
-        g_checksum_update (checksum, (guint8*)nevra, strlen (nevra));
-      }
-  }
-
-  ret_checksum = g_strdup (g_checksum_get_string (checksum));
-
-  ret = TRUE;
-  gs_transfer_out_value (out_checksum, &ret_checksum);
- out:
-  if (checksum) g_checksum_free (checksum);
-  return ret;
-}
-
 static gboolean
 parse_keyvalue_strings (char             **strings,
                         GVariantBuilder   *builder,
@@ -595,10 +571,8 @@ rpmostree_compose_builtin_tree (int             argc,
   RpmOstreeTreeComposeContext *self = &selfdata;
   JsonNode *treefile_rootval = NULL;
   JsonObject *treefile = NULL;
-  gs_free char *ref_unix = NULL;
   gs_free char *cachekey = NULL;
-  gs_free char *cached_compose_checksum = NULL;
-  gs_free char *new_compose_checksum = NULL;
+  gs_free char *new_inputhash = NULL;
   gs_unref_object GFile *cachedir = NULL;
   gs_unref_object GFile *previous_root = NULL;
   gs_free char *previous_checksum = NULL;
@@ -684,7 +658,7 @@ rpmostree_compose_builtin_tree (int             argc,
     }
 
   repo_path = g_file_new_for_path (opt_repo);
-  repo = ostree_repo_new (repo_path);
+  repo = self->repo = ostree_repo_new (repo_path);
   if (!ostree_repo_open (repo, cancellable, error))
     goto out;
 
@@ -770,8 +744,6 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!ref)
     goto out;
 
-  ref_unix = g_strdelimit (g_strdup (ref), "/", '_');
-
   if (!ostree_repo_read_commit (repo, ref, &previous_root, &previous_checksum,
                                 cancellable, &temp_error))
     {
@@ -788,6 +760,8 @@ rpmostree_compose_builtin_tree (int             argc,
     }
   else
     g_print ("Previous commit: %s\n", previous_checksum);
+
+  self->previous_checksum = previous_checksum;
 
   yumroot = g_file_get_child (self->workdir, "rootfs.tmp");
   if (!gs_shutil_rm_rf (yumroot, cancellable, error))
@@ -867,30 +841,22 @@ rpmostree_compose_builtin_tree (int             argc,
         }
     }
 
-  if (!install_packages_in_root (self, treefile, yumroot,
-                                 (char**)packages->pdata,
-                                 cancellable, error))
-    goto out;
+  { gboolean unmodified = FALSE;
 
-  cachekey = g_strconcat ("treecompose/", ref, NULL);
-  if (!cachedir_lookup_string (cachedir, cachekey,
-                               &cached_compose_checksum,
-                               cancellable, error))
-    goto out;
-  
-  if (!compute_checksum_for_compose (self, treefile, yumroot,
-                                     &new_compose_checksum,
-                                     cancellable, error))
-    goto out;
-
-  if (g_strcmp0 (cached_compose_checksum, new_compose_checksum) == 0)
-    {
-      g_print ("No changes to input, reusing cached commit\n");
-      ret = TRUE;
+    if (!install_packages_in_root (self, treefile, yumroot,
+                                   (char**)packages->pdata,
+                                   &unmodified,
+                                   &new_inputhash,
+                                   cancellable, error))
       goto out;
-    }
 
-  ref_unix = g_strdelimit (g_strdup (ref), "/", '_');
+    if (unmodified)
+      {
+        g_print ("No apparent changes since previous commit; use --force-nocache to override\n");
+        ret = TRUE;
+        goto out;
+      }
+  }
 
   if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
     goto out;
@@ -913,8 +879,13 @@ rpmostree_compose_builtin_tree (int             argc,
 
   {
     const char *gpgkey;
-    gs_unref_variant GVariant *metadata =
-      g_variant_ref_sink (g_variant_builder_end (metadata_builder));
+    gs_unref_variant GVariant *metadata = NULL;
+
+    g_variant_builder_add (metadata_builder, "{sv}",
+                           "rpmostree.inputhash",
+                           g_variant_new_string (new_inputhash));
+
+    metadata = g_variant_ref_sink (g_variant_builder_end (metadata_builder));
 
     if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
       goto out;
@@ -924,11 +895,6 @@ rpmostree_compose_builtin_tree (int             argc,
                            cancellable, error))
       goto out;
   }
-
-  if (!cachedir_set_string (cachedir, cachekey,
-                            new_compose_checksum,
-                            cancellable, error))
-    goto out;
 
   g_print ("Complete\n");
   
