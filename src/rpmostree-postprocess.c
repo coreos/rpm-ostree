@@ -1543,13 +1543,13 @@ rpmostree_commit (GFile         *rootfs,
 
   if (metadata && parent_revision)
     {
-      gs_unref_variant GVariant *md_version = g_variant_lookup_value (metadata,
-                                                                      "version",
-                                                                      NULL);
-      const char *version = g_variant_get_string (md_version, NULL);
+      const char *version = NULL;
 
-      if (!metadata_version_unique (repo, parent_revision, version, error))
-        goto out;
+      if (g_variant_lookup (metadata, "version", "&s", &version))
+        {
+          if (!metadata_version_unique (repo, parent_revision, version, error))
+            goto out;
+        }
     }
 
   if (!ostree_repo_write_commit (repo, parent_revision, "", "", metadata,
