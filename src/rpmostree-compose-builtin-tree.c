@@ -193,6 +193,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
    * stuff to a subprocess.
    */
   hifctx = hif_context_new ();
+  hif_context_set_http_proxy (hifctx, g_getenv ("http_proxy"));
 
   hif_context_set_install_root (hifctx, gs_file_get_path_cached (yumroot));
 
