@@ -34,8 +34,6 @@ librpmostree_la_SOURCES = \
 	src/rpmostree-libcontainer.h \
 	src/rpmostree-console-progress.c \
 	src/rpmostree-console-progress.h \
-	src/hif-utils.c \
-	src/hif-utils.h \
 	src/rpmostree-cleanup.h \
 	src/rpmostree-treepkgdiff.c \
 	src/rpmostree-treepkgdiff.h \

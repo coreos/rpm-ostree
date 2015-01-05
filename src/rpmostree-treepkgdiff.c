@@ -47,7 +47,7 @@ rpmostree_get_pkglist_for_root (GFile            *root,
     }
 
   rc = hy_sack_load_system_repo (sack, NULL, 0);
-  if (!hif_rc_to_gerror (rc, error))
+  if (!hif_error_set_from_hawkey (rc, error))
     {
       g_prefix_error (error, "Failed to load system repo: ");
       goto out;
