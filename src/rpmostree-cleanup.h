@@ -40,19 +40,6 @@ GS_DEFINE_CLEANUP_FUNCTION0(HyQuery, _cleanup_hy_query_free, hy_query_free);
 GS_DEFINE_CLEANUP_FUNCTION0(HyPackageList, _cleanup_hy_packagelist_free, hy_packagelist_free);
 GS_DEFINE_CLEANUP_FUNCTION0(HyStringArray, _cleanup_hy_stringarray_free, hy_stringarray_free);
 
-static inline void
-cleanup_closep (int *fdp)
-{
-  int fd;
-
-  g_assert (fdp);
-  
-  fd = *fdp;
-  if (fd != -1)
-    (void) close (fd);
-}
-
-#define _cleanup_close_ __attribute__((cleanup(cleanup_closep)))
 #define _cleanup_hysack_ __attribute__((cleanup(_cleanup_hy_sack_free)))
 #define _cleanup_hyquery_ __attribute__((cleanup(_cleanup_hy_query_free)))
 #define _cleanup_hypackagelist_ __attribute__((cleanup(_cleanup_hy_packagelist_free)))

@@ -1514,7 +1514,7 @@ rpmostree_commit (GFile         *rootfs,
   gs_free char *new_revision = NULL;
   gs_unref_object GFile *root_tree = NULL;
   gs_unref_object OstreeSePolicy *sepolicy = NULL;
-  _cleanup_close_ int rootfs_fd = -1;
+  gs_fd_close int rootfs_fd = -1;
   
   /* hardcode targeted policy for now */
   if (enable_selinux)
