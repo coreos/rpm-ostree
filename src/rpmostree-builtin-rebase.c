@@ -61,8 +61,8 @@ rpmostree_builtin_rebase (int             argc,
   gboolean changed;
   GSConsole *console = NULL;
   gboolean in_status_line = FALSE;
-  _cleanup_gkeyfile_ GKeyFile *old_origin = NULL;
-  _cleanup_gkeyfile_ GKeyFile *new_origin = NULL;
+  gs_unref_keyfile GKeyFile *old_origin = NULL;
+  gs_unref_keyfile GKeyFile *new_origin = NULL;
   
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;

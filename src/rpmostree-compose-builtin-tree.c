@@ -132,14 +132,6 @@ yum_context_free (YumContext  *yumctx)
   g_free (yumctx);
 }
 
-static inline
-void cleanup_keyfile_unref (void *loc)
-{
-  GKeyFile *locp = *((GKeyFile**)loc);
-  if (locp)
-    g_key_file_unref (locp);
-}
-
 static gboolean
 append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
                             JsonObject *treedata,
@@ -202,7 +194,7 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
       gs_free char *baseurl = g_strconcat ("file://", repodir, NULL);
       gs_free char *tmprepo_filename = g_strconcat (reponame, ".repo", NULL);
       gs_unref_object GFile *tmprepo_path = g_file_get_child (repos_tmpdir, tmprepo_filename);
-      __attribute__ ((cleanup(cleanup_keyfile_unref)))  GKeyFile *keyfile = NULL;
+      gs_unref_keyfile GKeyFile *keyfile = NULL;
       gs_free char *data = NULL;
       gsize len;
 
