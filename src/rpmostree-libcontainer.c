@@ -136,8 +136,8 @@ _rpmostree_libcontainer_make_api_mounts (const char *dest)
 int
 _rpmostree_libcontainer_prep_dev (const char  *dest_devdir)
 {
-  _cleanup_close_ int src_fd = -1;
-  _cleanup_close_ int dest_fd = -1;
+  gs_fd_close int src_fd = -1;
+  gs_fd_close int dest_fd = -1;
   struct stat stbuf;
   guint i;
   static const char *const devnodes[] = { "null", "zero", "full", "random", "urandom", "tty" };
