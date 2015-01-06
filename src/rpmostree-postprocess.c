@@ -1403,23 +1403,33 @@ read_xattrs_cb (OstreeRepo     *repo,
                 GFileInfo      *file_info,
                 gpointer        user_data)
 {
-  GFile *rootpath = (GFile*)user_data;
+  int rootfs_fd = GPOINTER_TO_INT (user_data);
   /* Hardcoded at the moment, we're only taking file caps */
   static const char *accepted_xattrs[] = { "security.capability" };
   guint i;
   gs_unref_variant GVariant *existing_xattrs = NULL;
   gs_free_variant_iter GVariantIter *viter = NULL;
-  gs_unref_object GFile *path = NULL;
   GError *local_error = NULL;
   GError **error = &local_error;
   GVariant *key, *value;
   GVariantBuilder builder;
 
+  if (relpath[0] == '/')
+    relpath++;
+
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ayay)"));
 
-  path = g_file_resolve_relative_path (rootpath, relpath[0] == '/' ? relpath+1 : relpath);
-  if (!gs_file_get_all_xattrs (path, &existing_xattrs, NULL, error))
-    goto out;
+  if (!*relpath)
+    {
+      if (!gs_fd_get_all_xattrs (rootfs_fd, &existing_xattrs, NULL, error))
+        goto out;
+    }
+  else
+    {
+      if (!gs_dfd_and_name_get_all_xattrs (rootfs_fd, relpath, &existing_xattrs,
+                                           NULL, error))
+        goto out;
+    }
 
   viter = g_variant_iter_new (existing_xattrs);
 
@@ -1440,7 +1450,7 @@ read_xattrs_cb (OstreeRepo     *repo,
       g_variant_builder_clear (&builder);
       /* Unfortunately we have no way to throw from this callback */
       g_printerr ("Failed to read xattrs of '%s': %s\n",
-                  gs_file_get_path_cached (path), local_error->message);
+                  relpath, local_error->message);
       exit (1);
     }
   return g_variant_ref_sink (g_variant_builder_end (&builder));
@@ -1504,6 +1514,7 @@ rpmostree_commit (GFile         *rootfs,
   gs_free char *new_revision = NULL;
   gs_unref_object GFile *root_tree = NULL;
   gs_unref_object OstreeSePolicy *sepolicy = NULL;
+  _cleanup_close_ int rootfs_fd = -1;
   
   /* hardcode targeted policy for now */
   if (enable_selinux)
@@ -1520,11 +1531,14 @@ rpmostree_commit (GFile         *rootfs,
   if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
     goto out;
 
+  if (!gs_file_open_dir_fd (rootfs, &rootfs_fd, cancellable, error))
+    goto out;
+
   mtree = ostree_mutable_tree_new ();
   commit_modifier = ostree_repo_commit_modifier_new (0, NULL, NULL, NULL);
   ostree_repo_commit_modifier_set_xattr_callback (commit_modifier,
                                                   read_xattrs_cb, NULL,
-                                                  rootfs);
+                                                  GINT_TO_POINTER (rootfs_fd));
   if (sepolicy)
     {
       const char *policy_name = ostree_sepolicy_get_name (sepolicy);
