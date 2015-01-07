@@ -34,6 +34,7 @@
 #include <stdlib.h>
 
 #include "rpmostree-postprocess.h"
+#include "rpmostree-passwd-util.h"
 #include "rpmostree-libcontainer.h"
 #include "rpmostree-cleanup.h"
 #include "rpmostree-json-parsing.h"
@@ -593,170 +594,6 @@ workaround_selinux_cross_labeling (GFile         *rootfs,
   return ret;
 }
 
-static FILE *
-gfopen (const char       *path,
-        const char       *mode,
-        GCancellable     *cancellable,
-        GError          **error)
-{
-  FILE *ret = NULL; 
-
-  ret = fopen (path, mode);
-  if (!ret)
-    {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "fopen(%s): ", path);
-      return NULL;
-    }
-  return ret;
-}
-
-static gboolean
-gfflush (FILE         *f,
-         GCancellable *cancellable,
-         GError      **error)
-{
-  if (fflush (f) != 0)
-    {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "fflush: ");
-      return FALSE;
-    }
-  return TRUE;
-}
-
-typedef enum {
-  MIGRATE_PASSWD,
-  MIGRATE_GROUP
-} MigrateKind;
-
-/*
- * This function is taking the /etc/passwd generated in the install
- * root, and splitting it into two streams: a new /etc/passwd that
- * just contains the root entry, and /usr/lib/passwd which contains
- * everything else.
- *
- * The implementation is kind of horrible because I wanted to avoid
- * duplicating the user/group code.
- */
-static gboolean
-migrate_passwd_file_except_root (GFile         *rootfs,
-                                 MigrateKind    kind,
-                                 GHashTable    *preserve,
-                                 GCancellable  *cancellable,
-                                 GError       **error)
-{
-  gboolean ret = FALSE;
-  const char *name = kind == MIGRATE_PASSWD ? "passwd" : "group";
-  gs_free char *src_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, NULL);
-  gs_free char *etctmp_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, ".tmp", NULL);
-  gs_free char *usrdest_path = g_strconcat (gs_file_get_path_cached (rootfs), "/usr/lib/", name, NULL);
-  FILE *src_stream = NULL;
-  FILE *etcdest_stream = NULL;
-  FILE *usrdest_stream = NULL;
-
-  src_stream = gfopen (src_path, "r", cancellable, error);
-  if (!src_stream)
-    goto out;
-
-  etcdest_stream = gfopen (etctmp_path, "w", cancellable, error);
-  if (!etcdest_stream)
-    goto out;
-
-  usrdest_stream = gfopen (usrdest_path, "a", cancellable, error);
-  if (!usrdest_stream)
-    goto out;
-
-  errno = 0;
-  while (TRUE)
-    {
-      struct passwd *pw = NULL;
-      struct group *gr = NULL;
-      FILE *deststream;
-      int r;
-      guint32 id;
-      const char *name;
-      
-      if (kind == MIGRATE_PASSWD)
-        pw = fgetpwent (src_stream);
-      else
-        gr = fgetgrent (src_stream);
-
-      if (!(pw || gr))
-        {
-          if (errno != 0 && errno != ENOENT)
-            {
-              _rpmostree_set_prefix_error_from_errno (error, errno, "fgetpwent: ");
-              goto out;
-            }
-          else
-            break;
-        }
-
-
-      if (pw)
-        {
-          id = pw->pw_uid;
-          name = pw->pw_name;
-        }
-      else
-        {
-          id = gr->gr_gid;
-          name = gr->gr_name;
-        }
-
-      if (id == 0)
-        deststream = etcdest_stream;
-      else
-        deststream = usrdest_stream;
-
-      if (pw)
-        r = putpwent (pw, deststream);
-      else
-        r = putgrent (gr, deststream);
-
-      /* If it's marked in the preserve group, we need to write to
-       * *both* /etc and /usr/lib in order to preserve semantics for
-       * upgraded systems from before we supported the preserve
-       * concept.
-       */
-      if (preserve && g_hash_table_contains (preserve, name))
-        {
-          /* We should never be trying to preserve the root entry, it
-           * should always be only in /etc.
-           */
-          g_assert (deststream == usrdest_stream);
-          if (pw)
-            r = putpwent (pw, etcdest_stream);
-          else
-            r = putgrent (gr, etcdest_stream);
-        }
-
-      if (r == -1)
-        {
-          _rpmostree_set_prefix_error_from_errno (error, errno, "putpwent: ");
-          goto out;
-        }
-    }
-
-  if (!gfflush (etcdest_stream, cancellable, error))
-    goto out;
-  if (!gfflush (usrdest_stream, cancellable, error))
-    goto out;
-
-  if (rename (etctmp_path, src_path) != 0)
-    {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "rename(%s, %s): ",
-                                              etctmp_path, src_path);
-      goto out;
-    }
-
-  ret = TRUE;
- out:
-  if (src_stream) (void) fclose (src_stream);
-  if (etcdest_stream) (void) fclose (etcdest_stream);
-  if (usrdest_stream) (void) fclose (usrdest_stream);
-  return ret;
-}
-
 static gboolean
 replace_nsswitch (GFile         *target_usretc,
                   GCancellable  *cancellable,
@@ -908,8 +745,8 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
     goto out;
 
   g_print ("Migrating /etc/passwd to /usr/lib/\n");
-  if (!migrate_passwd_file_except_root (yumroot, MIGRATE_PASSWD, NULL,
-                                        cancellable, error))
+  if (!rpmostree_passwd_migrate_except_root (yumroot, RPM_OSTREE_PASSWD_MIGRATE_PASSWD, NULL,
+                                             cancellable, error))
     goto out;
 
   if (json_object_has_member (treefile, "etc-group-members"))
@@ -919,8 +756,9 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
     }
       
   g_print ("Migrating /etc/group to /usr/lib/\n");
-  if (!migrate_passwd_file_except_root (yumroot, MIGRATE_GROUP, preserve_groups_set,
-                                        cancellable, error))
+  if (!rpmostree_passwd_migrate_except_root (yumroot, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
+                                             preserve_groups_set,
+                                             cancellable, error))
     goto out;
 
   /* NSS configuration to look at the new files */
