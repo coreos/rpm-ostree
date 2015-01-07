@@ -830,66 +830,133 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
 static gboolean
 concat_passwd_file (GFile           *yumroot,
                     GFile           *previous_commit,
-                    const char      *filename,
+                    RpmOstreePasswdMigrateKind kind,
                     GCancellable    *cancellable,
                     GError         **error)
 {
   gboolean ret = FALSE;
+  const char *filename = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD ? "passwd" : "group";
   gs_free char *etc_subpath = g_strconcat ("etc/", filename, NULL);
   gs_free char *usretc_subpath = g_strconcat ("usr/etc/", filename, NULL);
   gs_free char *usrlib_subpath = g_strconcat ("usr/lib/", filename, NULL);
   gs_unref_object GFile *yumroot_etc = g_file_resolve_relative_path (yumroot, "etc");
-  gs_unref_object GFile *yumroot_dest = g_file_resolve_relative_path (yumroot, etc_subpath);
-  gs_unref_object GFile *orig_etc_content = g_file_resolve_relative_path (previous_commit, usretc_subpath);
-  gs_unref_object GFile *orig_usrlib_content = g_file_resolve_relative_path (previous_commit, usrlib_subpath);
+  gs_unref_object GFile *orig_etc_content =
+    g_file_resolve_relative_path (previous_commit, usretc_subpath);
+  gs_unref_object GFile *orig_usrlib_content =
+    g_file_resolve_relative_path (previous_commit, usrlib_subpath);
   gs_unref_object GFileOutputStream *out = NULL;
+  gs_unref_hashtable GHashTable *seen_names =
+    g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
+  gs_free char *contents = NULL;
+  GFile *sources[] = { orig_etc_content, orig_usrlib_content };
+  guint i;
+  gsize len;
   gboolean have_etc, have_usr;
+  FILE *src_stream = NULL;
+  FILE *dest_stream = NULL;
 
+  /* Create /etc in the target root; FIXME - should ensure we're using
+   * the right permissions from the filesystem RPM.  Doing this right
+   * is really hard because filesystem depends on setup which installs
+   * the files...
+   */
   if (!gs_file_ensure_directory (yumroot_etc, TRUE, cancellable, error))
     goto out;
 
   have_etc = g_file_query_exists (orig_etc_content, NULL);
   have_usr = g_file_query_exists (orig_usrlib_content, NULL);
 
+  /* This could actually happen after we transition to
+   * systemd-sysusers; we won't have a need for preallocated user data
+   * in the tree.
+   */
   if (!(have_etc || have_usr))
     {
       ret = TRUE;
       goto out;
     }
 
-  out = g_file_replace (yumroot_dest, NULL, FALSE, G_FILE_CREATE_REPLACE_DESTINATION,
-                        cancellable, error);
-  if (!out)
-    goto out;
+  { gs_free char *target_etc =
+      g_build_filename (gs_file_get_path_cached (yumroot), etc_subpath, NULL);
+    dest_stream = gfopen (target_etc, "w", cancellable, error);
+    if (!dest_stream)
+      goto out;
+  }
 
-  if (have_etc)
+  for (i = 0; i < G_N_ELEMENTS (sources); i++)
     {
-      gs_unref_object GInputStream *src =
-        (GInputStream*)g_file_read (orig_etc_content, cancellable, error);
-      if (g_output_stream_splice ((GOutputStream*)out, src,
-                                  G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE,
-                                  cancellable, error ) < 0)
+      GFile *source = sources[i];
+
+      /* We read the file into memory using Gio (which talks
+       * to libostree), then memopen it, which works with libc.
+       */
+      if (!g_file_load_contents (source, cancellable,
+                                 &contents, &len, NULL, error))
         goto out;
+      
+      if (src_stream) (void) fclose (src_stream);
+      src_stream = fmemopen (contents, len, "r");
+      if (!src_stream)
+        {
+          gs_set_error_from_errno (error, errno);
+          goto out;
+        }
+      
+      errno = 0;
+      while (TRUE)
+        {
+          struct passwd *pw = NULL;
+          struct group *gr = NULL;
+          int r;
+          const char *name;
+      
+          if (kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD)
+            pw = fgetpwent (src_stream);
+          else
+            gr = fgetgrent (src_stream);
+
+          if (!(pw || gr))
+            {
+              if (errno != 0 && errno != ENOENT)
+                {
+                  _rpmostree_set_prefix_error_from_errno (error, errno, "fgetpwent: ");
+                  goto out;
+                }
+              else
+                break;
+            }
+
+          if (pw)
+            name = pw->pw_name;
+          else
+            name = gr->gr_name;
+
+          /* Deduplicate */
+          if (g_hash_table_lookup (seen_names, name))
+            continue;
+          g_hash_table_add (seen_names, g_strdup (name));
+
+          if (pw)
+            r = putpwent (pw, dest_stream);
+          else
+            r = putgrent (gr, dest_stream);
+          if (r == -1)
+            {
+              _rpmostree_set_prefix_error_from_errno (error, errno, "putpwent: ");
+              goto out;
+            }
+        }
     }
 
-  if (have_usr)
-    {
-      gs_unref_object GInputStream *src =
-        (GInputStream*)g_file_read (orig_usrlib_content, cancellable, error);
-      if (g_output_stream_splice ((GOutputStream*)out, src,
-                                  G_OUTPUT_STREAM_SPLICE_CLOSE_SOURCE,
-                                  cancellable, error ) < 0)
-        goto out;
-    }
-
-  if (!g_output_stream_flush ((GOutputStream*)out, cancellable, error))
+  if (!gfflush (dest_stream, cancellable, error))
     goto out;
 
   ret = TRUE;
  out:
+  if (src_stream) (void) fclose (src_stream);
+  if (dest_stream) (void) fclose (dest_stream);
   return ret;
 }
-                    
 
 gboolean
 rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
@@ -918,11 +985,13 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
       goto out;
     }
 
-  if (!concat_passwd_file (yumroot, previous_root, "passwd",
+  if (!concat_passwd_file (yumroot, previous_root,
+                           RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
                            cancellable, error))
     goto out;
 
-  if (!concat_passwd_file (yumroot, previous_root, "group",
+  if (!concat_passwd_file (yumroot, previous_root,
+                           RPM_OSTREE_PASSWD_MIGRATE_GROUP,
                            cancellable, error))
     goto out;
 
