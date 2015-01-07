@@ -677,10 +677,11 @@ concat_passwd_file (GFile           *yumroot,
 {
   gboolean ret = FALSE;
   gs_free char *etc_subpath = g_strconcat ("etc/", filename, NULL);
+  gs_free char *usretc_subpath = g_strconcat ("usr/etc/", filename, NULL);
   gs_free char *usrlib_subpath = g_strconcat ("usr/lib/", filename, NULL);
   gs_unref_object GFile *yumroot_etc = g_file_resolve_relative_path (yumroot, "etc");
   gs_unref_object GFile *yumroot_dest = g_file_resolve_relative_path (yumroot, etc_subpath);
-  gs_unref_object GFile *orig_etc_content = g_file_resolve_relative_path (previous_commit, etc_subpath);
+  gs_unref_object GFile *orig_etc_content = g_file_resolve_relative_path (previous_commit, usretc_subpath);
   gs_unref_object GFile *orig_usrlib_content = g_file_resolve_relative_path (previous_commit, usrlib_subpath);
   gs_unref_object GFileOutputStream *out = NULL;
   gboolean have_etc, have_usr;
