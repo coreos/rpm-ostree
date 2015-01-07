@@ -735,29 +735,13 @@ concat_passwd_file (GFile           *yumroot,
 gboolean
 rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                          GFile           *yumroot,
-                                         const char      *ref,
+                                         GFile           *previous_root,
                                          GCancellable    *cancellable,
                                          GError         **error)
 {
   gboolean ret = FALSE;
-  GError *temp_error = NULL;
-  gs_unref_object GFile *previous_root = NULL;
   gs_unref_object GFile *yumroot_etc_group = g_file_resolve_relative_path (yumroot, "etc/group");
   gs_unref_object GFile *out = NULL;
-
-  if (!ostree_repo_read_commit (repo, ref, &previous_root, NULL, NULL, &temp_error))
-    {
-      if (g_error_matches (temp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        { 
-          g_clear_error (&temp_error);
-          ret = TRUE;
-        }
-      else
-        {
-          g_propagate_error (error, temp_error);
-        }
-      goto out;
-    }
 
   if (!concat_passwd_file (yumroot, previous_root, "passwd",
                            cancellable, error))
