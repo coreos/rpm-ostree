@@ -60,6 +60,21 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
+/* FIXME: This is a copy of ot_admin_checksum_version */
+static char *
+checksum_version (GVariant *checksum)
+{
+  gs_unref_variant GVariant *metadata = NULL;
+  const char *ret = NULL;
+
+  metadata = g_variant_get_child_value (checksum, 0);
+
+  if (!g_variant_lookup (metadata, "version", "&s", &ret))
+    return NULL;
+
+  return g_strdup (ret);
+}
+
 typedef struct {
   GPtrArray *treefile_context_dirs;
   
@@ -712,6 +727,24 @@ parse_keyvalue_strings (char             **strings,
   return ret;
 }
 
+static gboolean
+compose_strv_contains_prefix (gchar **strv,
+                              const gchar  *prefix)
+{
+  if (!strv)
+    return FALSE;
+
+  while (*strv)
+    {
+      if (g_str_has_prefix (*strv, prefix))
+        return TRUE;
+      ++strv;
+    }
+
+  return FALSE;
+}
+
+
 gboolean
 rpmostree_compose_builtin_tree (int             argc,
                                 char          **argv,
@@ -923,6 +956,48 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!gs_shutil_rm_rf (yumroot, cancellable, error))
     goto out;
   targetroot = g_file_get_child (self->workdir, "rootfs");
+
+  if (json_object_has_member (treefile, "automatic_version_prefix") &&
+      !compose_strv_contains_prefix (opt_metadata_strings, "version="))
+    {
+      gs_unref_variant GVariant *variant = NULL;
+      gs_free char *last_version = NULL;
+      gs_free char *next_version = NULL;
+      const char *ver_prefix;
+
+      ver_prefix = _rpmostree_jsonutil_object_require_string_member (treefile,
+                                                                     "automatic_version_prefix",
+                                                                     error);
+      if (!ver_prefix)
+          goto out;
+
+      if (previous_checksum)
+        {
+          if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
+                                         previous_checksum, &variant, error))
+            goto out;
+
+          last_version = checksum_version (variant);
+        }
+
+      if (!last_version || !g_str_has_prefix (last_version, ver_prefix))
+        next_version = g_strdup (ver_prefix);
+      else if (g_str_equal (last_version, ver_prefix))
+        next_version = g_strdup_printf ("version=%s.1", ver_prefix);
+      else
+        {
+          unsigned long long num;
+          const char *end = last_version + strlen(ver_prefix);
+
+          if (*end == '.')
+            ++end;
+          num = g_ascii_strtoull (end, NULL, 10);
+          next_version = g_strdup_printf ("%s.%llu", ver_prefix, num + 1);
+        }
+
+      g_variant_builder_add (metadata_builder, "{sv}", "version",
+                             g_variant_new_string (next_version));
+    }
 
   bootstrap_packages = g_ptr_array_new ();
   packages = g_ptr_array_new ();
