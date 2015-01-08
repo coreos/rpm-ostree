@@ -40,6 +40,18 @@ rpmostree_check_groups (OstreeRepo      *repo,
                         GCancellable    *cancellable,
                         GError         **error);
 
+typedef enum {
+  RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
+  RPM_OSTREE_PASSWD_MIGRATE_GROUP
+} RpmOstreePasswdMigrateKind;
+
+gboolean
+rpmostree_passwd_migrate_except_root (GFile         *rootfs,
+                                      RpmOstreePasswdMigrateKind    kind,
+                                      GHashTable    *preserve,
+                                      GCancellable  *cancellable,
+                                      GError       **error);
+
 gboolean
 rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                          GFile           *yumroot,
