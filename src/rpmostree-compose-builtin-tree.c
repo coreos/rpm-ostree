@@ -323,7 +323,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                                                 &ret_new_inputhash, error))
     goto out;
 
-  if (self->previous_checksum)
+  /* Only look for previous checksum if caller has passed *out_unmodified */
+  if (self->previous_checksum && out_unmodified != NULL)
     {
       gs_unref_variant GVariant *commit_v = NULL;
       gs_unref_variant GVariant *commit_metadata = NULL;
@@ -383,7 +384,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   }
       
   ret = TRUE;
-  *out_unmodified = FALSE;
+  if (out_unmodified)
+    *out_unmodified = FALSE;
   gs_transfer_out_value (out_new_inputhash, &ret_new_inputhash);
  out:
   return ret;
@@ -846,7 +848,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
     if (!install_packages_in_root (self, treefile, yumroot,
                                    (char**)packages->pdata,
-                                   &unmodified,
+                                   opt_force_nocache ? NULL : &unmodified,
                                    &new_inputhash,
                                    cancellable, error))
       goto out;
