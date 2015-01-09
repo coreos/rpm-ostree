@@ -893,6 +893,9 @@ concat_passwd_file (GFile           *yumroot,
       if (!g_file_load_contents (source, cancellable,
                                  &contents, &len, NULL, error))
         goto out;
+
+      if (len == 0)
+        continue;
       
       if (src_stream) (void) fclose (src_stream);
       src_stream = fmemopen (contents, len, "r");
