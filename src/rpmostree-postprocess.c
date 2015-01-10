@@ -1161,6 +1161,34 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
         }
     }
 
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "postprocess-script-external",
+                                                              &postprocess_script, error))
+    goto out;
+
+  if (postprocess_script)
+
+    {
+       pid_t child;
+       char *child_argv[] = { postprocess_script, NULL };
+       g_print ("Executing postprocessing script outside of root '%s'...starting\n", postprocess_script);
+       if ((child = fork ()) < 0)
+          goto out;
+
+       if (child == 0) {
+          if (!g_setenv ("OSTREE_ROOT", gs_file_get_path_cached (yumroot), TRUE))
+             _rpmostree_perror_fatal ("g_setenv");
+
+          if (execv (postprocess_script, child_argv) != 0)
+             _rpmostree_perror_fatal ("execvp");
+
+          g_assert_not_reached ();
+       }
+
+       g_print ("Executing postprocessing script outside of root '%s'...done\n", postprocess_script);
+       if (!_rpmostree_sync_wait_on_pid (child, error))
+          goto out;
+    }
+
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "postprocess-script",
                                                               &postprocess_script, error))
     goto out;
