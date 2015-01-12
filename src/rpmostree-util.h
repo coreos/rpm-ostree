@@ -67,3 +67,7 @@ _rpmostree_util_get_commit_hashes (OstreeRepo *repo,
 gboolean
 _rpmostree_sync_wait_on_pid (pid_t          pid,
                              GError       **error);
+
+char *
+_rpmostree_util_next_version (const char *auto_version_prefix,
+                              const char *last_version);

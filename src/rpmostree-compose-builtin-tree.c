@@ -980,21 +980,7 @@ rpmostree_compose_builtin_tree (int             argc,
           last_version = checksum_version (variant);
         }
 
-      if (!last_version || !g_str_has_prefix (last_version, ver_prefix))
-        next_version = g_strdup (ver_prefix);
-      else if (g_str_equal (last_version, ver_prefix))
-        next_version = g_strdup_printf ("version=%s.1", ver_prefix);
-      else
-        {
-          unsigned long long num;
-          const char *end = last_version + strlen(ver_prefix);
-
-          if (*end == '.')
-            ++end;
-          num = g_ascii_strtoull (end, NULL, 10);
-          next_version = g_strdup_printf ("%s.%llu", ver_prefix, num + 1);
-        }
-
+      next_version = _rpmostree_util_next_version (ver_prefix, last_version);
       g_variant_builder_add (metadata_builder, "{sv}", "version",
                              g_variant_new_string (next_version));
     }
