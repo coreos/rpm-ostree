@@ -29,7 +29,6 @@
 #include <pwd.h>
 #include <grp.h>
 
-#include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-cleanup.h"
