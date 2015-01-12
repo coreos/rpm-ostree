@@ -262,3 +262,26 @@ _rpmostree_sync_wait_on_pid (pid_t          pid,
  out:
   return ret;
 }
+
+char *
+_rpmostree_util_next_version (const char *auto_version_prefix,
+                              const char *last_version)
+{
+  unsigned long long num = 0;
+  const char *end = NULL;
+
+  if (!last_version || !g_str_has_prefix (last_version, auto_version_prefix))
+    return g_strdup (auto_version_prefix);
+
+  if (g_str_equal (last_version, auto_version_prefix))
+    return g_strdup_printf ("%s.1", auto_version_prefix);
+
+  end = last_version + strlen(auto_version_prefix);
+
+  if (*end != '.')
+    return g_strdup (auto_version_prefix);
+  ++end;
+
+  num = g_ascii_strtoull (end, NULL, 10);
+  return g_strdup_printf ("%s.%llu", auto_version_prefix, num + 1);
+}

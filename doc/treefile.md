@@ -106,6 +106,18 @@ Treefile
 
    Example: `ignore-remove-users: ["avahi"]`
 
+ * `automatic_version_prefix`: String, optional: Set the prefix for versions
+   on the commits. The idea is that if the previous commit on the branch to the
+   doesn't match the prefix, or doesn't have a version, then the new commit will
+   have the version as specified. If the prefix matches exactly, then we append
+   ".1". Otherwise we parse the number after the prefix and increment it by one
+   and then append that to the prefix.
+
+   This means that on an empty branch with an automatic_version_prefix of "22"
+   the first three commits would get the versions: "22", "22.1", "22.2"
+
+   Example: `automatic_version_prefix: "22.0"`
+
  * `postprocess-script`: String, optional: Full filesystem path to a script
    that will be executed in the context of the target tree.  The script
    will be copied into the target into `/tmp`, and run as a container

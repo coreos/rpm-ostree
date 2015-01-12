@@ -80,7 +80,7 @@ _builtin_db_version (OstreeRepo *repo, GFile *rpmdbdir, GPtrArray *revs,
         else
           printf ("ostree commit: %s\n", rev);
 
-        printf ("  rpmdbv is: %24s%s\n", "", rpmdbv);
+        printf ("  rpmdbv is: %66s\n", rpmdbv);
       }
 
   ret = TRUE;
