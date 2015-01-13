@@ -20,6 +20,8 @@ bin_PROGRAMS += rpm-ostree
 noinst_LTLIBRARIES += librpmostree.la
 
 librpmostree_la_SOURCES = \
+	src/rpmostree-console-progress.c \
+	src/rpmostree-console-progress.h \
 	src/rpmostree-postprocess.c \
 	src/rpmostree-postprocess.h \
 	src/rpmostree-json-parsing.c \
