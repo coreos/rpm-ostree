@@ -156,7 +156,7 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
 {
   gboolean ret = FALSE;
   JsonArray *enable_repos = NULL;
-  guint i;
+  guint i, j;
   char **iter;
   gs_unref_object GFile *yumcache_lookaside = NULL;
   gs_unref_object GFile *repos_tmpdir = NULL;
@@ -255,8 +255,29 @@ append_repo_and_cache_opts (RpmOstreeTreeComposeContext *self,
       for (i = 0; i < n; i++)
         {
           const char *reponame = _rpmostree_jsonutil_array_require_string_element (enable_repos, i, error);
+          gs_free char *repofile = NULL;
+          gboolean found = FALSE;
           if (!reponame)
             goto out;
+          for (j = 0; j < reposdir_args->len; j++)
+            {
+              repofile = g_strconcat (reposdir_args->pdata[j], "/", reponame, ".repo", NULL);
+	      printf("%s\n", repofile);
+              if (g_file_test(repofile, (G_FILE_TEST_EXISTS|G_FILE_TEST_IS_REGULAR)))
+                found = TRUE;
+            }
+          if (!found)
+            {
+              gs_free char *searched_dirs = NULL;
+              for (j = 0; j < reposdir_args->len; j++)
+                searched_dirs = g_strconcat (reposdir_args->pdata[j], " ", searched_dirs, NULL);
+
+              g_set_error (error, G_FILE_ERROR,
+                           g_file_error_from_errno (ENOENT),
+                           "The repo file %s%s do not exist in any of the following directories: %s",
+                           reponame, ".repo", searched_dirs );
+              goto out;
+            }
           g_ptr_array_add (args, g_strconcat ("--enablerepo=", reponame, NULL));
         }
     }
