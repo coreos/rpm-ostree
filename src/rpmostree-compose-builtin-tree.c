@@ -312,6 +312,19 @@ yum_context_new (RpmOstreeTreeComposeContext  *self,
       g_string_free (opt, FALSE);
     }
 
+  if (TRUE)
+    {
+      gboolean docs = TRUE;
+
+      if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treedata,
+                                                                   "documentation",
+                                                                   &docs,
+                                                                   error))
+        goto out;
+      if (!docs)
+        g_ptr_array_add (yum_argv, g_strdup ("--setopt=tsflags=nodocs"));
+    }
+
   g_ptr_array_add (yum_argv, g_strconcat ("--installroot=",
                                           gs_file_get_path_cached (yumroot),
                                           NULL));
