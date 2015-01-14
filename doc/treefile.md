@@ -34,6 +34,10 @@ Treefile
  * `install-langs`: Array of strings, optional.  This sets the RPM
    _install_langs macro.  Set this to e.g. `["en_US", "fr_FR"]`.
 
+ * `documentation`: boolean, optional. If this is set to false it sets the RPM
+   transaction flag "nodocs" which makes yum/rpm not install files marked as
+   documentation. The default is true.
+
  * `packages`: Array of strings, mandatory: Set of installed packages.
    Names prefixed with an `@` (e.g. `@core`) are taken to be the names
    of comps groups.
