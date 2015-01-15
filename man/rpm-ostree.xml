@@ -116,7 +116,7 @@ Boston, MA 02111-1307, USA.
       <varlistentry>
         <term><command>rollback</command></term>
 	
-	<listitem><para>OSTree mananges an
+	<listitem><para>OSTree manages an
 	ordered list of bootloader entries,
 	called "deployments".  The entry at index 0 is 
   the default bootloader entry.  Each entry has
