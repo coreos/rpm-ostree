@@ -279,6 +279,19 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
       }
   }
 
+  { gboolean docs = TRUE;
+
+    if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treedata,
+                                                                 "documentation",
+                                                                 &docs,
+                                                                 error))
+      goto out;
+
+    if (!docs)
+      hif_transaction_set_flags (hif_context_get_transaction (hifctx),
+                                 HIF_TRANSACTION_FLAG_NODOCS);
+  }
+
   /* --- Downloading metadata --- */
   { _cleanup_rpmostree_console_progress_ G_GNUC_UNUSED gpointer dummy;
     gs_unref_object HifState *hifstate = hif_state_new ();
