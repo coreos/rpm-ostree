@@ -66,11 +66,12 @@ Treefile
    Note this does not alter the RPM database, so `rpm -V` will complain.
 
  * `preserve-passwd`: boolean, optional: Defaults to `true`.  If enabled,
-   copy the `/etc/passwd` (and `/usr/lib/passwd`) files from the previous commit
-   if they exist.  This helps ensure consistent uid/gid allocations across
-   builds.  However, it does mean that removed users will exist in the `passwd`
-   database forever.  It also does not help clients switch between unrelated
-   trees.
+   and `check-passwd` has a type other than file, copy the `/etc/passwd` (and
+   `/usr/lib/passwd`) files from the previous commit if they exist. If
+   check-passwd has the file type, then the data is preserved from that file to
+   `/usr/lib/passwd`.
+   This helps ensure consistent uid/gid allocations across builds.  However, it
+   does mean that removed users will exist in the `passwd` database forever.
 
  * `check-passwd`: Object, optional: Checks to run against the new passwd file
    before accepting the tree. All the entries specified should exist (unless
@@ -78,6 +79,8 @@ Treefile
    types: none (for no checking), previous (to check against the passwd file in
    the previous commit), file (to check against another passwd file), and data
    to specify the relevant passwd data in the json itself.
+   Note that if you choose file, and preserve-passwd is true then the data will
+   be copied from the referenced file and not the previous commit.
 
    Example: `check-passwd: { "type": "none" }`
    Example: `check-passwd: { "type": "previous" }`
@@ -91,6 +94,8 @@ Treefile
    types: none (for no checking), previous (to check against the group file in
    the previous commit), file (to check against another group file), and data
    to specify the relevant group data in the json itself.
+   Note that if you choose file, and preserve-passwd is true then the data will
+   be copied from the referenced file and not the previous commit.
 
    Example: `check-groups: { "type": "none" }`
    Example: `check-groups: { "type": "previous" }`

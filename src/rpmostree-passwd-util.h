@@ -55,6 +55,8 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
 gboolean
 rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                          GFile           *yumroot,
+                                         GFile           *treefile_dirpath,
                                          GFile           *previous_root,
+                                         JsonObject      *treedata,
                                          GCancellable    *cancellable,
                                          GError         **error);
