@@ -40,6 +40,10 @@
 
 #include "libgsystem.h"
 
+GS_DEFINE_CLEANUP_FUNCTION0(FILE*, _cleanup_stdio_file, fclose);
+#define _cleanup_stdio_file_ __attribute__((cleanup(_cleanup_stdio_file)))
+
+
 static gboolean
 ptrarray_contains_str (GPtrArray *haystack, const char *needle)
 {
@@ -184,7 +188,7 @@ static GPtrArray *
 data2passwdents (const char *data)
 {
   struct passwd *ent = NULL;
-  FILE *mf = NULL;
+  _cleanup_stdio_file_ FILE *mf = NULL;
   GPtrArray *ret = g_ptr_array_new_with_free_func (conv_passwd_ent_free);
 
   mf = fmemopen ((void *)data, strlen (data), "r");
@@ -232,7 +236,7 @@ static GPtrArray *
 data2groupents (const char *data)
 {
   struct group *ent = NULL;
-  FILE *mf = NULL;
+  _cleanup_stdio_file_ FILE *mf = NULL;
   GPtrArray *ret = g_ptr_array_new_with_free_func (conv_group_ent_free);
   
   mf = fmemopen ((void *)data, strlen (data), "r");
@@ -718,9 +722,9 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
   gs_free char *src_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, NULL);
   gs_free char *etctmp_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, ".tmp", NULL);
   gs_free char *usrdest_path = g_strconcat (gs_file_get_path_cached (rootfs), "/usr/lib/", name, NULL);
-  FILE *src_stream = NULL;
-  FILE *etcdest_stream = NULL;
-  FILE *usrdest_stream = NULL;
+  _cleanup_stdio_file_ FILE *src_stream = NULL;
+  _cleanup_stdio_file_ FILE *etcdest_stream = NULL;
+  _cleanup_stdio_file_ FILE *usrdest_stream = NULL;
 
   src_stream = gfopen (src_path, "r", cancellable, error);
   if (!src_stream)
@@ -820,9 +824,121 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
 
   ret = TRUE;
  out:
-  if (src_stream) (void) fclose (src_stream);
-  if (etcdest_stream) (void) fclose (etcdest_stream);
-  if (usrdest_stream) (void) fclose (usrdest_stream);
+  return ret;
+}
+
+static FILE *
+target_etc_filename (GFile         *yumroot,
+                     const char    *filename,
+                     GCancellable  *cancellable,
+                     GError       **error)
+{
+  FILE *ret = NULL;
+  gs_free char *etc_subpath = g_strconcat ("etc/", filename, NULL);
+  gs_free char *target_etc =
+    g_build_filename (gs_file_get_path_cached (yumroot), etc_subpath, NULL);
+
+  ret = gfopen (target_etc, "w", cancellable, error);
+  if (!ret)
+    goto out;
+
+ out:
+  return ret;
+}
+
+static gboolean
+_rpmostree_gfile2stdio (GFile         *source,
+                        char         **storage_buf,
+                        FILE         **ret_src_stream,
+                        GCancellable  *cancellable,
+                        GError       **error)
+{
+  gboolean ret = FALSE;
+  gsize len;
+  FILE *src_stream = NULL;
+
+  /* We read the file into memory using Gio (which talks
+   * to libostree), then memopen it, which works with libc.
+   */
+  if (!g_file_load_contents (source, cancellable,
+                             storage_buf, &len, NULL, error))
+    goto out;
+
+  if (len == 0)
+    goto done;
+
+  src_stream = fmemopen (*storage_buf, len, "r");
+  if (!src_stream)
+    {
+      gs_set_error_from_errno (error, errno);
+      goto out;
+    }
+
+ done:
+  ret = TRUE;
+ out:
+  *ret_src_stream = src_stream;
+  return ret;
+}
+
+
+static gboolean
+concat_entries (FILE    *src_stream,
+                FILE    *dest_stream,
+                RpmOstreePasswdMigrateKind kind,
+                GHashTable *seen_names,
+                GError **error)
+{
+  gboolean ret = FALSE;
+
+  errno = 0;
+  while (TRUE)
+    {
+      struct passwd *pw = NULL;
+      struct group *gr = NULL;
+      int r;
+      const char *name;
+
+      if (kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD)
+        pw = fgetpwent (src_stream);
+      else
+        gr = fgetgrent (src_stream);
+
+      if (!(pw || gr))
+        {
+          if (errno != 0 && errno != ENOENT)
+            {
+              _rpmostree_set_prefix_error_from_errno (error, errno, "fgetpwent: ");
+              goto out;
+            }
+          else
+            break;
+        }
+
+      if (pw)
+        name = pw->pw_name;
+      else
+        name = gr->gr_name;
+
+      /* Deduplicate */
+      if (g_hash_table_lookup (seen_names, name))
+        continue;
+      g_hash_table_add (seen_names, g_strdup (name));
+
+      if (pw)
+        r = putpwent (pw, dest_stream);
+      else
+        r = putgrent (gr, dest_stream);
+
+      if (r == -1)
+        {
+          _rpmostree_set_prefix_error_from_errno (error, errno, "putpwent: ");
+          goto out;
+        }
+    }
+
+  ret = TRUE;
+ out:
   return ret;
 }
 
@@ -835,10 +951,8 @@ concat_passwd_file (GFile           *yumroot,
 {
   gboolean ret = FALSE;
   const char *filename = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD ? "passwd" : "group";
-  gs_free char *etc_subpath = g_strconcat ("etc/", filename, NULL);
   gs_free char *usretc_subpath = g_strconcat ("usr/etc/", filename, NULL);
   gs_free char *usrlib_subpath = g_strconcat ("usr/lib/", filename, NULL);
-  gs_unref_object GFile *yumroot_etc = g_file_resolve_relative_path (yumroot, "etc");
   gs_unref_object GFile *orig_etc_content =
     g_file_resolve_relative_path (previous_commit, usretc_subpath);
   gs_unref_object GFile *orig_usrlib_content =
@@ -849,18 +963,8 @@ concat_passwd_file (GFile           *yumroot,
   gs_free char *contents = NULL;
   GFile *sources[] = { orig_etc_content, orig_usrlib_content };
   guint i;
-  gsize len;
   gboolean have_etc, have_usr;
-  FILE *src_stream = NULL;
-  FILE *dest_stream = NULL;
-
-  /* Create /etc in the target root; FIXME - should ensure we're using
-   * the right permissions from the filesystem RPM.  Doing this right
-   * is really hard because filesystem depends on setup which installs
-   * the files...
-   */
-  if (!gs_file_ensure_directory (yumroot_etc, TRUE, cancellable, error))
-    goto out;
+  _cleanup_stdio_file_ FILE *dest_stream = NULL;
 
   have_etc = g_file_query_exists (orig_etc_content, NULL);
   have_usr = g_file_query_exists (orig_usrlib_content, NULL);
@@ -875,79 +979,25 @@ concat_passwd_file (GFile           *yumroot,
       goto out;
     }
 
-  { gs_free char *target_etc =
-      g_build_filename (gs_file_get_path_cached (yumroot), etc_subpath, NULL);
-    dest_stream = gfopen (target_etc, "w", cancellable, error);
-    if (!dest_stream)
+  if (!(dest_stream = target_etc_filename (yumroot, filename,
+                                           cancellable, error)))
       goto out;
-  }
 
   for (i = 0; i < G_N_ELEMENTS (sources); i++)
     {
       GFile *source = sources[i];
+      _cleanup_stdio_file_ FILE *src_stream = NULL;
 
-      /* We read the file into memory using Gio (which talks
-       * to libostree), then memopen it, which works with libc.
-       */
-      if (!g_file_load_contents (source, cancellable,
-                                 &contents, &len, NULL, error))
+      if (!_rpmostree_gfile2stdio (source, &contents, &src_stream,
+                                   cancellable, error))
         goto out;
 
-      if (len == 0)
-        continue;
-      
-      if (src_stream) (void) fclose (src_stream);
-      src_stream = fmemopen (contents, len, "r");
       if (!src_stream)
-        {
-          gs_set_error_from_errno (error, errno);
-          goto out;
-        }
-      
-      errno = 0;
-      while (TRUE)
-        {
-          struct passwd *pw = NULL;
-          struct group *gr = NULL;
-          int r;
-          const char *name;
-      
-          if (kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD)
-            pw = fgetpwent (src_stream);
-          else
-            gr = fgetgrent (src_stream);
+        continue;
 
-          if (!(pw || gr))
-            {
-              if (errno != 0 && errno != ENOENT)
-                {
-                  _rpmostree_set_prefix_error_from_errno (error, errno, "fgetpwent: ");
-                  goto out;
-                }
-              else
-                break;
-            }
-
-          if (pw)
-            name = pw->pw_name;
-          else
-            name = gr->gr_name;
-
-          /* Deduplicate */
-          if (g_hash_table_lookup (seen_names, name))
-            continue;
-          g_hash_table_add (seen_names, g_strdup (name));
-
-          if (pw)
-            r = putpwent (pw, dest_stream);
-          else
-            r = putgrent (gr, dest_stream);
-          if (r == -1)
-            {
-              _rpmostree_set_prefix_error_from_errno (error, errno, "putpwent: ");
-              goto out;
-            }
-        }
+      if (!concat_entries (src_stream, dest_stream, kind,
+                           seen_names, error))
+        goto out;
     }
 
   if (!gfflush (dest_stream, cancellable, error))
@@ -955,30 +1005,148 @@ concat_passwd_file (GFile           *yumroot,
 
   ret = TRUE;
  out:
-  if (src_stream) (void) fclose (src_stream);
-  if (dest_stream) (void) fclose (dest_stream);
+  return ret;
+}
+
+static gboolean
+_data_from_json (GFile           *yumroot,
+                 GFile           *treefile_dirpath,
+                 JsonObject      *treedata,
+                 RpmOstreePasswdMigrateKind kind,
+                 gboolean        *out_found,
+                 GCancellable    *cancellable,
+                 GError         **error)
+{
+  gboolean ret = FALSE;
+  const gboolean passwd = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD;
+  const char *json_conf_name = passwd ? "check-passwd" : "check-groups";
+  const char *filebasename   = passwd ? "passwd" : "group";
+  JsonObject *chk = NULL;
+  const char *chk_type = NULL;
+  const char *filename = NULL;
+  gs_unref_object GFile *source = NULL;
+  gs_free char *contents = NULL;
+  gs_unref_hashtable GHashTable *seen_names =
+    g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
+  _cleanup_stdio_file_ FILE *src_stream = NULL;
+  _cleanup_stdio_file_ FILE *dest_stream = NULL;
+
+  *out_found = FALSE;
+  if (!json_object_has_member (treedata, json_conf_name))
+    return TRUE;
+  
+  chk = json_object_get_object_member (treedata,json_conf_name);
+  if (!chk)
+    return TRUE;
+  
+  chk_type = _rpmostree_jsonutil_object_require_string_member (chk, "type",
+                                                               error);
+  if (!chk_type)
+    goto out;
+
+  if (!g_str_equal (chk_type, "file"))
+    return TRUE;
+
+  filename = _rpmostree_jsonutil_object_require_string_member (chk,
+                                                               "filename",
+                                                               error);
+  if (!filename)
+    goto out;
+
+  source = g_file_resolve_relative_path (treefile_dirpath, filename);
+  if (!source)
+    goto out;
+
+  /* migrate the check data from the specified file to /etc */
+  if (!_rpmostree_gfile2stdio (source, &contents, &src_stream,
+                               cancellable, error))
+    goto out;
+
+  if (!src_stream)
+    return TRUE;
+
+  /* no matter what we've used the data now */
+  *out_found = TRUE;
+
+  if (!(dest_stream = target_etc_filename (yumroot, filebasename,
+                                           cancellable, error)))
+    goto out;
+
+  if (!concat_entries (src_stream, dest_stream, kind, seen_names, error))
+    goto out;
+
+  ret = TRUE;
+ out:
   return ret;
 }
 
 gboolean
 rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                          GFile           *yumroot,
+                                         GFile           *treefile_dirpath,
                                          GFile           *previous_root,
+                                         JsonObject      *treedata,
                                          GCancellable    *cancellable,
                                          GError         **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object GFile *out = NULL;
+  gboolean found_passwd_data = FALSE;
+  gboolean found_groups_data = FALSE;
+  gboolean perform_migrate = FALSE;
+  gs_unref_object GFile *yumroot_etc = g_file_resolve_relative_path (yumroot, "etc");
 
-  if (!concat_passwd_file (yumroot, previous_root,
-                           RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
-                           cancellable, error))
+  /* Create /etc in the target root; FIXME - should ensure we're using
+   * the right permissions from the filesystem RPM.  Doing this right
+   * is really hard because filesystem depends on setup which installs
+   * the files...
+   */
+  if (!gs_file_ensure_directory (yumroot_etc, TRUE, cancellable, error))
     goto out;
 
-  if (!concat_passwd_file (yumroot, previous_root,
-                           RPM_OSTREE_PASSWD_MIGRATE_GROUP,
-                           cancellable, error))
+  if (!_data_from_json (yumroot, treefile_dirpath,
+                        treedata, RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
+                        &found_passwd_data, cancellable, error))
     goto out;
+  perform_migrate = !found_passwd_data;
+
+  if (!previous_root)
+    perform_migrate = FALSE;
+
+  if (perform_migrate && !concat_passwd_file (yumroot, previous_root,
+                                              RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
+                                              cancellable, error))
+    goto out;
+
+  if (!_data_from_json (yumroot, treefile_dirpath,
+                        treedata, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
+                        &found_groups_data, cancellable, error))
+    goto out;
+
+  perform_migrate = !found_groups_data;
+
+  if (!previous_root)
+    perform_migrate = FALSE;
+
+  if (perform_migrate && !concat_passwd_file (yumroot, previous_root,
+                                              RPM_OSTREE_PASSWD_MIGRATE_GROUP,
+                                              cancellable, error))
+    goto out;
+
+  // We should error if we are getting passwd data from JSON and group from
+  // previous commit, or vice versa, as that'll confuse everyone when it goes
+  // wrong.
+  if ( found_passwd_data && !found_groups_data)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Configured to migrate passwd data from JSON, and group data from commit");
+      goto out;
+    }
+  if (!found_passwd_data &&  found_groups_data)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Configured to migrate passwd data from commit, and group data from JSON");
+      goto out;
+    }
 
   ret = TRUE;
  out:

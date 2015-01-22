@@ -786,6 +786,7 @@ rpmostree_compose_builtin_tree (int             argc,
   gs_unref_ptrarray GPtrArray *bootstrap_packages = NULL;
   gs_unref_ptrarray GPtrArray *packages = NULL;
   gs_unref_object GFile *treefile_path = NULL;
+  gs_unref_object GFile *treefile_dirpath = NULL;
   gs_unref_object GFile *repo_path = NULL;
   gs_unref_object JsonParser *treefile_parser = NULL;
   gs_unref_variant_builder GVariantBuilder *metadata_builder = 
@@ -1022,7 +1023,8 @@ rpmostree_compose_builtin_tree (int             argc,
     self->serialized_treefile = g_bytes_new_take (treefile_buf, len);
   }
 
-  if (previous_root != NULL)
+  treefile_dirpath = g_file_get_parent (treefile_path);
+  if (TRUE)
     {
       gboolean generate_from_previous = TRUE;
 
@@ -1034,7 +1036,9 @@ rpmostree_compose_builtin_tree (int             argc,
 
       if (generate_from_previous)
         {
-          if (!rpmostree_generate_passwd_from_previous (repo, yumroot, previous_root,
+          if (!rpmostree_generate_passwd_from_previous (repo, yumroot,
+                                                        treefile_dirpath,
+                                                        previous_root, treefile,
                                                         cancellable, error))
             goto out;
         }
@@ -1076,11 +1080,11 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!rpmostree_prepare_rootfs_for_commit (yumroot, treefile, cancellable, error))
     goto out;
 
-  if (!rpmostree_check_passwd (repo, yumroot, treefile_path, treefile,
+  if (!rpmostree_check_passwd (repo, yumroot, treefile_dirpath, treefile,
                                cancellable, error))
     goto out;
 
-  if (!rpmostree_check_groups (repo, yumroot, treefile_path, treefile,
+  if (!rpmostree_check_groups (repo, yumroot, treefile_dirpath, treefile,
                                cancellable, error))
     goto out;
 
