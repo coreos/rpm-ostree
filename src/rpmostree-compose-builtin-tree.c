@@ -50,6 +50,7 @@ static char *opt_output_repodata_dir;
 static char **opt_metadata_strings;
 static char *opt_repo;
 static char **opt_override_pkg_repos;
+static char *opt_touch_if_changed;
 static gboolean opt_print_only;
 
 static GOptionEntry option_entries[] = {
@@ -62,6 +63,7 @@ static GOptionEntry option_entries[] = {
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
   { "add-override-pkg-repo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_override_pkg_repos, "Include an additional package repository from DIRECTORY", "DIRECTORY" },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
+  { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if a new commit was created", "FILE" },
   { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
   { NULL }
 };
@@ -912,8 +914,22 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
   }
 
-  g_print ("Complete\n");
-  
+  if (opt_touch_if_changed)
+    {
+      gs_fd_close int fd = open (opt_touch_if_changed, O_CREAT|O_WRONLY|O_NOCTTY, 0644);
+      if (fd == -1)
+        {
+          gs_set_error_from_errno (error, errno);
+          g_prefix_error (error, "Updating '%s': ", opt_touch_if_changed);
+          goto out;
+        }
+      if (futimens (fd, NULL) == -1)
+        {
+          gs_set_error_from_errno (error, errno);
+          goto out;
+        }
+    }
+
  out:
 
   if (workdir_is_tmp)
