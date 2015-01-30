@@ -103,17 +103,17 @@ Treefile
    Example: `check-groups: { "type": "data", "entries": { "bin": 1, "adm": 4 } }`
    See also: `ignore-remove-groups`
 
- * `ignore-remove-users`: Array, optional: Users to ignore if they are missing
+ * `ignore-removed-users`: Array, optional: Users to ignore if they are missing
    in the new passwd file. If an entry of `*` is specified then any user can be
    removed without failing the compose.
 
-   Example: `ignore-remove-users: ["avahi-autoipd", "tss"]`
+   Example: `ignore-removed-users: ["avahi-autoipd", "tss"]`
 
- * `ignore-remove-groups`: Array, optional: Groups to ignore if they are missing
+ * `ignore-removed-groups`: Array, optional: Groups to ignore if they are missing
    in the new group file. If an entry of `*` is specified then any group can be
    removed without failing the compose.
 
-   Example: `ignore-remove-users: ["avahi"]`
+   Example: `ignore-removed-groups: ["avahi"]`
 
  * `automatic_version_prefix`: String, optional: Set the prefix for versions
    on the commits. The idea is that if the previous commit on the branch to the
