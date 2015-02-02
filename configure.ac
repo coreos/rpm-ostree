@@ -44,7 +44,7 @@ LIBS="$save_LIBS"
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 json-glib-1.0
 				     ostree-1 >= 2015.1 libgsystem >= 2015.1
-				     rpm hawkey libhif])
+				     rpm hawkey libhif >= 0.2.0])
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GLIB_TESTS
@@ -57,15 +57,10 @@ AC_ARG_ENABLE(installed_tests,
               [enable_installed_tests=no])
 AM_CONDITIONAL(BUILDOPT_INSTALL_TESTS, test x$enable_installed_tests = xyes)
 
-AC_ARG_ENABLE(patched-hawkey-and-libsolv,
-              AS_HELP_STRING([--enable-patched-hawkey-and-libsolv],
-                             [Assert that our copy of hawkey and libsolv understand /usr/share/rpm]),,
-              [enable_patched_hawkey_and_libsolv=no])
-AM_CONDITIONAL(BUILDOPT_PATCHED_HAWKEY_AND_LIBSOLV, [test x$enable_patched_hawkey_and_libsolv = xyes])
-AS_IF([test x$enable_patched_hawkey_and_libsolv = xyes], [
-    AC_DEFINE(HAVE_PATCHED_HAWKEY_AND_LIBSOLV, 1, [Define if we have patched hawkey and libsolv])
-])
-if test x$enable_patched_hawkey_and_libsolv != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES +packaging"; fi
+dnl Unconditionally enable hawkey/libsolv patches for now, assume we have
+dnl new enough versions because libhif depends on them.
+AM_CONDITIONAL(BUILDOPT_PATCHED_HAWKEY_AND_LIBSOLV, [true])
+AC_DEFINE(HAVE_PATCHED_HAWKEY_AND_LIBSOLV, 1, [Define if we have patched hawkey and libsolv])
 
 AC_ARG_ENABLE(usrbinatomic,
               AS_HELP_STRING([--enable-usrbinatomic],
@@ -93,7 +88,6 @@ AC_OUTPUT
 echo "
     $PACKAGE $VERSION
 
-    patched hawkey:	$enable_patched_hawkey_and_libsolv
     usrbinatomic:	$enable_usrbinatomic
     compose tooling:	$enable_compose_tooling
 "
