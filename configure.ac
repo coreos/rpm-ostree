@@ -58,7 +58,7 @@ AC_ARG_ENABLE(installed_tests,
 AM_CONDITIONAL(BUILDOPT_INSTALL_TESTS, test x$enable_installed_tests = xyes)
 
 AC_ARG_ENABLE(patched-hawkey-and-libsolv,
-              AS_HELP_STRING([--enable-patched-hawkey],
+              AS_HELP_STRING([--enable-patched-hawkey-and-libsolv],
                              [Assert that our copy of hawkey and libsolv understand /usr/share/rpm]),,
               [enable_patched_hawkey_and_libsolv=no])
 AM_CONDITIONAL(BUILDOPT_PATCHED_HAWKEY_AND_LIBSOLV, [test x$enable_patched_hawkey_and_libsolv = xyes])
