@@ -25,7 +25,7 @@
 #include <json-glib/json-glib.h>
 #include <gio/gunixoutputstream.h>
 #include <libhif.h>
-#include <libhif/hif-context-private.h>
+#include <libhif/hif-utils.h>
 #include <stdio.h>
 #include <rpm/rpmmacro.h>
 
