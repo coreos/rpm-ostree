@@ -9,7 +9,10 @@ Treefile
    none.
 
  * `repos` array of strings, mandatory: Names of yum repositories to
-   use, from `.repo` files in the same directory as the treefile.
+   use, from any files that end in `.repo`, in the same directory as
+   the treefile.  `rpm-ostree compose tree` does not use the system
+   `/etc/yum.repos.d`, because it's common to want to compose a target
+   system distinct from the one the host sytem is running.
 
  * `selinux`: boolean, optional: Defaults to `true`.  If `false`, then
    no SELinux labeling will be performed on the server side.
