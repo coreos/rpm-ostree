@@ -1,9 +1,5 @@
 ## Installing and setting up a repository
 
-First, unfortunately you must *disable* SELinux on the build host in
-order to *support* SELinux on the built system.  See:
-https://bugzilla.redhat.com/show_bug.cgi?id=1060423
-
 Once you have that done, choose a build directory.  Here we'll use
 /srv/rpm-ostree.
 
