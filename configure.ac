@@ -45,6 +45,8 @@ PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 json-glib-1.0
 				     ostree-1 >= 2015.1 libgsystem >= 2015.1
 				     rpm hawkey libhif >= 0.2.0])
+AS_IF([pkg-config --atleast-version=0.5.3 hawkey],
+      [AC_DEFINE([BUILDOPT_HAWKEY_SACK_CREATE2], 1, [Hawkey ABI change in 0.5.3])])
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GLIB_TESTS

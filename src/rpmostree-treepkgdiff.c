@@ -38,7 +38,16 @@ rpmostree_get_pkglist_for_root (GFile            *root,
   _cleanup_hyquery_ HyQuery query = NULL;
   _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
 
-  sack = hy_sack_create (NULL, NULL, gs_file_get_path_cached (root), 0);
+#ifdef BUILDOPT_HAWKEY_SACK_CREATE2	
+  sack = hy_sack_create (NULL, NULL,
+                         gs_file_get_path_cached (root),
+                         NULL,
+                         HY_MAKE_CACHE_DIR);
+#else
+  sack = hy_sack_create (NULL, NULL,
+                         gs_file_get_path_cached (root),
+                         HY_MAKE_CACHE_DIR);
+#endif
   if (sack == NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
