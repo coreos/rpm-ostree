@@ -50,6 +50,7 @@ BUILTINPROTO(status);
 BUILTINPROTO(db);
 BUILTINPROTO(internals);
 BUILTINPROTO(container);
+BUILTINPROTO(pkg_add);
 
 #undef BUILTINPROTO
 

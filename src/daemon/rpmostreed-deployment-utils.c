@@ -125,17 +125,36 @@ out:
 char *
 rpmostreed_deployment_get_refspec (OstreeDeployment *deployment)
 {
-  GKeyFile *origin = NULL; /* owned by deployment */
   char *origin_refspec = NULL;
+  rpmostreed_deployment_get_refspec_packages (deployment, &origin_refspec, NULL);
+  return origin_refspec;
+}
+
+void
+rpmostreed_deployment_get_refspec_packages (OstreeDeployment *deployment,
+					    char            **out_refspec,
+					    char           ***out_packages)
+{
+  GKeyFile *origin = NULL; /* owned by deployment */
+  gsize len;
+
+  g_return_if_fail (out_refspec != NULL);
+
   origin = ostree_deployment_get_origin (deployment);
 
   if (!origin)
-    goto out;
+    {
+      *out_refspec = NULL;
+      *out_packages = NULL;
+      return;
+    }
 
-  origin_refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
+  *out_refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
+  if (!*out_refspec)
+    *out_refspec = g_key_file_get_string (origin, "origin", "baserefspec", NULL);
 
-out:
-  return origin_refspec;
+  if (out_packages)
+    *out_packages = g_key_file_get_string_list (origin, "packages", "requested", &len, NULL);
 }
 
 GVariant *
@@ -192,6 +211,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   g_autoptr(GVariant) commit = NULL;
 
   g_autofree gchar *origin_refspec = NULL;
+  g_auto(GStrv) origin_packages = NULL;
   g_autofree gchar *id = NULL;
 
   GVariant *sigs = NULL; /* floating variant */
@@ -203,7 +223,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   gint serial = ostree_deployment_get_deployserial (deployment);
   id = rpmostreed_deployment_generate_id (deployment);
 
-  origin_refspec = rpmostreed_deployment_get_refspec (deployment);
+  rpmostreed_deployment_get_refspec_packages (deployment, &origin_refspec, &origin_packages);
   if (origin_refspec)
     sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, csum);
 
@@ -218,6 +238,8 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   variant_add_commit_details (&dict, repo, csum);
   if (origin_refspec != NULL)
     g_variant_dict_insert (&dict, "origin", "s", origin_refspec);
+  if (origin_packages != NULL)
+    g_variant_dict_insert (&dict, "packages", "^as", origin_packages);
   if (sigs != NULL)
     g_variant_dict_insert_value (&dict, "signatures", sigs);
 

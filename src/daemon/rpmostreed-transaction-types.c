@@ -26,11 +26,12 @@
 #include "rpmostreed-transaction.h"
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostreed-sysroot.h"
+#include "rpmostree-sysroot-upgrader.h"
 #include "rpmostreed-utils.h"
 
 static gboolean
 change_upgrader_refspec (OstreeSysroot *sysroot,
-                         OstreeSysrootUpgrader *upgrader,
+                         RpmOstreeSysrootUpgrader *upgrader,
                          const gchar *refspec,
                          GCancellable *cancellable,
                          gchar **out_old_refspec,
@@ -38,40 +39,30 @@ change_upgrader_refspec (OstreeSysroot *sysroot,
                          GError **error)
 {
   gboolean ret = FALSE;
-
-  g_autofree gchar *old_refspec = NULL;
+  const char *current_refspec = rpmostree_sysroot_upgrader_get_refspec (upgrader);
   g_autofree gchar *new_refspec = NULL;
-  g_autoptr(GKeyFile) new_origin = NULL;
-  GKeyFile *old_origin = NULL; /* owned by deployment */
-
-  old_origin = ostree_sysroot_upgrader_get_origin (upgrader);
-  old_refspec = g_key_file_get_string (old_origin, "origin",
-                                        "refspec", NULL);
 
   if (!rpmostreed_refspec_parse_partial (refspec,
-                                         old_refspec,
+                                         current_refspec,
                                          &new_refspec,
                                          error))
     goto out;
 
-  if (strcmp (old_refspec, new_refspec) == 0)
+  if (strcmp (current_refspec, new_refspec) == 0)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Old and new refs are equal: %s", new_refspec);
       goto out;
     }
 
-  new_origin = ostree_sysroot_origin_new_from_refspec (sysroot,
-                                                       new_refspec);
-  if (!ostree_sysroot_upgrader_set_origin (upgrader, new_origin,
-                                           cancellable, error))
+  if (!rpmostree_sysroot_upgrader_set_origin_rebase (upgrader, new_refspec, error))
     goto out;
 
   if (out_new_refspec != NULL)
     *out_new_refspec = g_steal_pointer (&new_refspec);
 
   if (out_old_refspec != NULL)
-    *out_old_refspec = g_steal_pointer (&old_refspec);
+    *out_old_refspec = g_strdup (current_refspec);
 
   ret = TRUE;
 
@@ -117,30 +108,37 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
   PackageDiffTransaction *self;
   OstreeSysroot *sysroot;
 
-  glnx_unref_object OstreeSysrootUpgrader *upgrader = NULL;
+  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
-  g_autoptr(GKeyFile) origin = NULL;
+  glnx_unref_object OstreeDeployment *merge_deployment = NULL;
   g_autofree gchar *origin_description = NULL;
 
-  OstreeSysrootUpgraderPullFlags upgrader_flags = 0;
+  RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   gboolean upgrading = FALSE;
   gboolean changed = FALSE;
   gboolean ret = FALSE;
 
   self = (PackageDiffTransaction *) transaction;
+
+  if (self->revision != NULL)
+    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
+
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
-  upgrader = ostree_sysroot_upgrader_new_for_os (sysroot,
-                                                 self->osname,
-                                                 cancellable,
-                                                 error);
+  upgrader = rpmostree_sysroot_upgrader_new (sysroot,
+					     self->osname,
+					     upgrader_flags,
+					     cancellable,
+					     error);
   if (upgrader == NULL)
     goto out;
 
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     goto out;
 
-  origin = ostree_sysroot_upgrader_dup_origin (upgrader);
+  merge_deployment = ostree_sysroot_get_merge_deployment (sysroot, self->osname);
+
+  self->refspec = g_strdup (rpmostree_sysroot_upgrader_get_refspec (upgrader));
 
   /* Determine if we're upgrading before we set the refspec. */
   upgrading = (self->refspec == NULL && self->revision == NULL);
@@ -151,15 +149,6 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
                                     self->refspec, cancellable,
                                     NULL, NULL, error))
         goto out;
-    }
-  else if (origin != NULL)
-    {
-      self->refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
-      if (self->refspec == NULL)
-        {
-          g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "Could not find refspec for booted deployment");
-        }
     }
   else
     {
@@ -176,8 +165,6 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
     {
       g_autofree char *checksum = NULL;
       g_autofree char *version = NULL;
-
-      upgrader_flags |= OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER;
 
       if (!rpmostreed_parse_revision (self->revision,
                                       &checksum,
@@ -201,35 +188,26 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
             goto out;
         }
 
-      g_key_file_set_string (origin, "origin", "override-commit", checksum);
-
-      if (!ostree_sysroot_upgrader_set_origin (upgrader, origin,
-                                               cancellable, error))
-        goto out;
+      rpmostree_sysroot_upgrader_set_origin_override (upgrader, checksum);
     }
   else if (upgrading)
     {
-      if (g_key_file_remove_key (origin, "origin", "override-commit", NULL))
-        {
-          if (!ostree_sysroot_upgrader_set_origin (upgrader, origin,
-                                                   cancellable, error))
-            goto out;
-        }
+      rpmostree_sysroot_upgrader_set_origin_override (upgrader, NULL);
     }
 
-  origin_description = ostree_sysroot_upgrader_get_origin_description (upgrader);
+  origin_description = rpmostree_sysroot_upgrader_get_origin_description (upgrader);
   if (origin_description != NULL)
     rpmostreed_transaction_emit_message_printf (transaction,
                                                 "Updating from: %s",
                                                 origin_description);
 
-  if (!ostree_sysroot_upgrader_pull_one_dir (upgrader,
-					     "/usr/share/rpm",
-					     0, upgrader_flags,
-					     progress,
-					     &changed,
-					     cancellable,
-					     error))
+  if (!rpmostree_sysroot_upgrader_pull (upgrader,
+                                        "/usr/share/rpm",
+                                        0,
+                                        progress,
+                                        &changed,
+                                        cancellable,
+                                        error))
     goto out;
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
@@ -584,50 +562,36 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
                              GCancellable *cancellable,
                              GError **error)
 {
+  gboolean ret = FALSE;
   UpgradeTransaction *self;
   OstreeSysroot *sysroot;
 
-  glnx_unref_object OstreeSysrootUpgrader *upgrader = NULL;
+  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
-  g_autoptr(GKeyFile) origin = NULL;
-
   g_autofree gchar *origin_description = NULL;
 
-  OstreeSysrootUpgraderPullFlags upgrader_pull_flags = 0;
-
+  RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   gboolean changed = FALSE;
-  gboolean ret = FALSE;
 
   self = (UpgradeTransaction *) transaction;
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-  upgrader = ostree_sysroot_upgrader_new_for_os (sysroot, self->osname,
-                                                 cancellable, error);
+  if (self->allow_downgrade)
+    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
+
+  upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags,
+					     cancellable, error);
   if (upgrader == NULL)
     goto out;
 
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     goto out;
 
-  origin = ostree_sysroot_upgrader_dup_origin (upgrader);
-  if (origin != NULL)
-    {
-      /* Strip any override-commit from the origin file so
-       * we always upgrade to the latest available commit. */
-      if (g_key_file_remove_key (origin, "origin", "override-commit", NULL))
-        {
-          /* XXX GCancellable parameter is not used. */
-          if (!ostree_sysroot_upgrader_set_origin (upgrader, origin, NULL, error))
-            goto out;
-        }
-    }
+  rpmostree_sysroot_upgrader_set_origin_override (upgrader, NULL);
 
-  if (self->allow_downgrade)
-    upgrader_pull_flags |= OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER;
-
-  origin_description = ostree_sysroot_upgrader_get_origin_description (upgrader);
+  origin_description = rpmostree_sysroot_upgrader_get_origin_description (upgrader);
   if (origin_description != NULL)
     rpmostreed_transaction_emit_message_printf (transaction,
                                                 "Updating from: %s",
@@ -637,16 +601,16 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
   rpmostreed_transaction_connect_download_progress (transaction, progress);
   rpmostreed_transaction_connect_signature_progress (transaction, repo);
 
-  if (!ostree_sysroot_upgrader_pull (upgrader, 0, upgrader_pull_flags,
-                                     progress, &changed,
-                                     cancellable, error))
+  if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0,
+					progress, &changed,
+					cancellable, error))
     goto out;
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
   if (changed)
     {
-      if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+      if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
         goto out;
 
       if (self->reboot)
@@ -747,7 +711,7 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
   RebaseTransaction *self;
   OstreeSysroot *sysroot;
 
-  glnx_unref_object OstreeSysrootUpgrader *upgrader = NULL;
+  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
 
@@ -758,13 +722,22 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
   gboolean changed = FALSE;
   gboolean ret = FALSE;
 
+  RpmOstreeSysrootUpgraderFlags flags = 0;
+
   self = (RebaseTransaction *) transaction;
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-  upgrader = ostree_sysroot_upgrader_new_for_os_with_flags (sysroot, self->osname,
-							    OSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED,
-							    cancellable, error);
+  /* Always allow older; there's not going to be a chronological
+   * relationship necessarily. */
+  flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
+
+  /* We should be able to switch to a different tree even if the current origin
+   * is unconfigured */
+  flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED;
+
+  upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, flags,
+					     cancellable, error);
   if (upgrader == NULL)
     goto out;
 
@@ -780,17 +753,14 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
   rpmostreed_transaction_connect_download_progress (transaction, progress);
   rpmostreed_transaction_connect_signature_progress (transaction, repo);
 
-  /* Always allow older; there's not going to be a chronological
-   * relationship necessarily. */
-  if (!ostree_sysroot_upgrader_pull (upgrader, 0,
-                                     OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER,
-                                     progress, &changed,
-                                     cancellable, error))
+  if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0,
+					progress, &changed,
+					cancellable, error))
     goto out;
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
-  if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+  if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
     goto out;
 
   if (!self->skip_purge)
@@ -904,7 +874,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   DeployTransaction *self;
   OstreeSysroot *sysroot;
 
-  glnx_unref_object OstreeSysrootUpgrader *upgrader = NULL;
+  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
 
@@ -919,15 +889,16 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-  upgrader = ostree_sysroot_upgrader_new_for_os (sysroot, self->osname,
-                                                 cancellable, error);
+  upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname,
+					     RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER,
+					     cancellable, error);
   if (upgrader == NULL)
     goto out;
 
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     goto out;
 
-  origin = ostree_sysroot_upgrader_dup_origin (upgrader);
+  origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
   if (origin == NULL)
     {
       g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -947,13 +918,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   if (version != NULL)
     {
-      g_autofree char *refspec = NULL;
+      const char *refspec = NULL;
 
       rpmostreed_transaction_emit_message_printf (transaction,
                                                   "Resolving version '%s'",
                                                   version);
 
-      refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
+      refspec = rpmostree_sysroot_upgrader_get_refspec (upgrader);
       if (refspec == NULL)
         {
           g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -982,19 +953,18 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       g_key_file_set_comment (origin, "origin", "override-commit", comment, NULL);
     }
 
-  if (!ostree_sysroot_upgrader_set_origin (upgrader, origin, cancellable, error))
+  if (!rpmostree_sysroot_upgrader_set_origin (upgrader, origin, cancellable, error))
     goto out;
 
-  if (!ostree_sysroot_upgrader_pull (upgrader, 0,
-                                     OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER,
-                                     progress, &changed, cancellable, error))
+  if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0,
+					progress, &changed, cancellable, error))
     goto out;
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
   if (changed)
     {
-      if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+      if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
 	goto out;
 
       if (self->reboot)
