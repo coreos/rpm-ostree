@@ -325,3 +325,16 @@ _rpmostree_util_next_version (const char *auto_version_prefix,
   num = g_ascii_strtoull (end, NULL, 10);
   return g_strdup_printf ("%s.%llu", auto_version_prefix, num + 1);
 }
+
+GKeyFile *
+_rpmostree_util_keyfile_clone (GKeyFile *keyfile)
+{
+  GKeyFile *ret = g_key_file_new ();
+  gsize len;
+  gs_free char *data = g_key_file_to_data (keyfile, &len, NULL);
+  gboolean loaded;
+
+  loaded = g_key_file_load_from_data (ret, data, len, 0, NULL);
+  g_assert (loaded);
+  return ret;
+}

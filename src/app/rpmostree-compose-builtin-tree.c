@@ -232,13 +232,14 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
    * only repos which are specified, ignoring the enabled= flag.
    */
   {
+    GPtrArray *sources;
     JsonArray *enable_repos = NULL;
     gs_unref_hashtable GHashTable *repos_to_enable =
       g_hash_table_new (g_str_hash, g_str_equal);
     guint i;
     guint n;
 
-    _rpmostree_libhif_repos_disable_all (hifctx);
+    sources = hif_context_get_sources (hifctx);
 
     if (!json_object_has_member (treedata, "repos"))
       {

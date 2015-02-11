@@ -76,3 +76,6 @@ _rpmostree_sync_wait_on_pid (pid_t          pid,
 char *
 _rpmostree_util_next_version (const char *auto_version_prefix,
                               const char *last_version);
+
+GKeyFile *
+_rpmostree_util_keyfile_clone (GKeyFile *keyfile);
