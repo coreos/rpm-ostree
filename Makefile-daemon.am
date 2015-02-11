@@ -29,6 +29,8 @@ librpmostreed_la_SOURCES = \
 	src/daemon/rpmostreed-utils.c \
 	src/daemon/rpmostreed-sysroot.h \
 	src/daemon/rpmostreed-sysroot.c \
+	src/daemon/rpmostree-sysroot-upgrader.h \
+	src/daemon/rpmostree-sysroot-upgrader.c \
 	src/daemon/rpmostreed-errors.h \
 	src/daemon/rpmostreed-errors.c \
 	src/daemon/rpmostreed-deployment-utils.h \
@@ -39,6 +41,7 @@ librpmostreed_la_SOURCES = \
 	src/daemon/rpmostreed-transaction-monitor.c \
 	src/daemon/rpmostreed-transaction-types.h \
 	src/daemon/rpmostreed-transaction-types.c \
+	src/daemon/rpmostreed-transaction-pkg-add.c \
 	src/daemon/rpmostree-package-variants.h \
 	src/daemon/rpmostree-package-variants.c \
 	src/daemon/rpmostreed-os.h \

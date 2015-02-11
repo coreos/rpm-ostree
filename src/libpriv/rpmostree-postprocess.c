@@ -695,7 +695,6 @@ workaround_selinux_cross_labeling_recurse (int            dfd,
 
           nonbin_name = g_strndup (name, lastdot - name);
 
-          g_print ("Setting mtime of '%s' to newer than '%s'\n", nonbin_name, name);
           if (TEMP_FAILURE_RETRY (utimensat (dfd_iter.fd, nonbin_name, NULL, 0)) == -1)
             {
               glnx_set_error_from_errno (error);
@@ -1549,12 +1548,14 @@ read_xattrs_cb (OstreeRepo     *repo,
 }
 
 gboolean
-rpmostree_commit (GFile         *rootfs,
+rpmostree_commit (int            rootfs_fd,
                   OstreeRepo    *repo,
                   const char    *refname,
                   GVariant      *metadata,
                   const char    *gpg_keyid,
                   gboolean       enable_selinux,
+                  OstreeRepoDevInoCache *devino_cache,
+                  char         **out_new_revision,
                   GCancellable  *cancellable,
                   GError       **error)
 {
@@ -1565,10 +1566,6 @@ rpmostree_commit (GFile         *rootfs,
   gs_free char *new_revision = NULL;
   gs_unref_object GFile *root_tree = NULL;
   gs_unref_object OstreeSePolicy *sepolicy = NULL;
-  gs_fd_close int rootfs_fd = -1;
-
-  if (!gs_file_open_dir_fd (rootfs, &rootfs_fd, cancellable, error))
-    goto out;
   
   /* hardcode targeted policy for now */
   if (enable_selinux)
@@ -1577,7 +1574,6 @@ rpmostree_commit (GFile         *rootfs,
         goto out;
     }
 
-  g_print ("Committing '%s' ...\n", gs_file_get_path_cached (rootfs));
   if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
     goto out;
 
@@ -1586,12 +1582,9 @@ rpmostree_commit (GFile         *rootfs,
   ostree_repo_commit_modifier_set_xattr_callback (commit_modifier,
                                                   read_xattrs_cb, NULL,
                                                   GINT_TO_POINTER (rootfs_fd));
+
   if (sepolicy && ostree_sepolicy_get_name (sepolicy) != NULL)
-    {
-      const char *policy_name = ostree_sepolicy_get_name (sepolicy);
-      g_print ("Labeling with SELinux policy '%s'\n", policy_name);
-      ostree_repo_commit_modifier_set_sepolicy (commit_modifier, sepolicy);
-    }
+    ostree_repo_commit_modifier_set_sepolicy (commit_modifier, sepolicy);
   else if (enable_selinux)
     {
       g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -1599,13 +1592,19 @@ rpmostree_commit (GFile         *rootfs,
       goto out;
     }
 
-  if (!ostree_repo_write_directory_to_mtree (repo, rootfs, mtree, commit_modifier, cancellable, error))
+  if (devino_cache)
+    ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
+
+  if (!ostree_repo_write_dfd_to_mtree (repo, rootfs_fd, ".", mtree, commit_modifier, cancellable, error))
     goto out;
   if (!ostree_repo_write_mtree (repo, mtree, &root_tree, cancellable, error))
     goto out;
 
-  if (!ostree_repo_resolve_rev (repo, refname, TRUE, &parent_revision, error))
-    goto out;
+  if (refname)
+    {
+      if (!ostree_repo_resolve_rev (repo, refname, TRUE, &parent_revision, error))
+        goto out;
+    }
 
   if (!ostree_repo_write_commit (repo, parent_revision, "", "", metadata,
                                  (OstreeRepoFile*)root_tree, &new_revision,
@@ -1614,25 +1613,20 @@ rpmostree_commit (GFile         *rootfs,
 
   if (gpg_keyid)
     {
-      g_print ("Signing commit %s with key %s\n", new_revision, gpg_keyid);
       if (!ostree_repo_sign_commit (repo, new_revision, gpg_keyid, NULL,
                                     cancellable, error))
         goto out;
     }
   
-  ostree_repo_transaction_set_ref (repo, NULL, refname, new_revision);
+  if (refname)
+    ostree_repo_transaction_set_ref (repo, NULL, refname, new_revision);
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
     goto out;
 
-  g_print ("%s => %s\n", refname, new_revision);
-
-  if (!g_getenv ("RPM_OSTREE_PRESERVE_ROOTFS"))
-    (void) gs_shutil_rm_rf (rootfs, NULL, NULL);
-  else
-    g_print ("Preserved %s\n", gs_file_get_path_cached (rootfs));
-
   ret = TRUE;
+  if (out_new_revision)
+    *out_new_revision = g_steal_pointer (&new_revision);
  out:
   return ret;
 }
