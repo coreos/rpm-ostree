@@ -27,6 +27,7 @@
 #include <libhif.h>
 #include <libhif/hif-utils.h>
 #include <stdio.h>
+#include <libglnx.h>
 #include <rpm/rpmmacro.h>
 
 #include "rpmostree-compose-builtins.h"
@@ -87,6 +88,7 @@ typedef struct {
   GPtrArray *treefile_context_dirs;
   
   GFile *workdir;
+  int workdir_dfd;
   OstreeRepo *repo;
   char *previous_checksum;
 
@@ -595,7 +597,6 @@ rpmostree_compose_builtin_tree (int             argc,
   gs_unref_object GFile *previous_root = NULL;
   gs_free char *previous_checksum = NULL;
   gs_unref_object GFile *yumroot = NULL;
-  gs_unref_object GFile *targetroot = NULL;
   gs_unref_object GFile *yumroot_varcache = NULL;
   gs_unref_object OstreeRepo *repo = NULL;
   gs_unref_ptrarray GPtrArray *bootstrap_packages = NULL;
@@ -703,6 +704,10 @@ rpmostree_compose_builtin_tree (int             argc,
         }
     }
 
+  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (self->workdir),
+                       FALSE, &self->workdir_dfd, error))
+    goto out;
+
   if (opt_cachedir)
     {
       cachedir = g_file_new_for_path (opt_cachedir);
@@ -717,12 +722,9 @@ rpmostree_compose_builtin_tree (int             argc,
         goto out;
     }
 
-  if (chdir (gs_file_get_path_cached (self->workdir)) != 0)
+  if (fchdir (self->workdir_dfd) != 0)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Failed to chdir to '%s': %s",
-                   gs_file_get_path_cached (self->workdir),
-                   strerror (errno));
+      glnx_set_error_from_errno (error);
       goto out;
     }
 
@@ -782,9 +784,8 @@ rpmostree_compose_builtin_tree (int             argc,
   self->previous_checksum = previous_checksum;
 
   yumroot = g_file_get_child (self->workdir, "rootfs.tmp");
-  if (!gs_shutil_rm_rf (yumroot, cancellable, error))
+  if (!glnx_shutil_rm_rf_at (self->workdir_dfd, "rootfs.tmp", cancellable, error))
     goto out;
-  targetroot = g_file_get_child (self->workdir, "rootfs");
 
   if (json_object_has_member (treefile, "automatic_version_prefix") &&
       !compose_strv_contains_prefix (opt_metadata_strings, "version="))
