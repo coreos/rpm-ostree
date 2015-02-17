@@ -29,6 +29,12 @@ AM_CFLAGS += $(WARN_CFLAGS)
 
 EXTRA_DIST += autogen.sh COPYING
 
+libglnx_srcpath := $(srcdir)/libglnx
+libglnx_cflags := $(PKGDEP_GIO_UNIX_CFLAGS) -I$(libglnx_srcpath)
+libglnx_libs := $(PKGDEP_GIO_UNIX_LIBS)
+
+include libglnx/Makefile-libglnx.am
+noinst_LTLIBRARIES += libglnx.la
 include Makefile-rpm-ostree.am
 include Makefile-tests.am
 include Makefile-man.am

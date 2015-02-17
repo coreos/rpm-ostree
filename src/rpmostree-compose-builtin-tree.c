@@ -27,6 +27,7 @@
 #include <libhif.h>
 #include <libhif/hif-utils.h>
 #include <stdio.h>
+#include <libglnx.h>
 #include <rpm/rpmmacro.h>
 
 #include "rpmostree-compose-builtins.h"
@@ -35,7 +36,6 @@
 #include "rpmostree-cleanup.h"
 #include "rpmostree-treepkgdiff.h"
 #include "rpmostree-libcontainer.h"
-#include "rpmostree-console-progress.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
 
@@ -87,6 +87,7 @@ typedef struct {
   GPtrArray *treefile_context_dirs;
   
   GFile *workdir;
+  int workdir_dfd;
   OstreeRepo *repo;
   char *previous_checksum;
 
@@ -161,7 +162,7 @@ on_hifstate_percentage_changed (HifState   *hifstate,
                                 gpointer    user_data)
 {
   const char *text = user_data;
-  rpmostree_console_progress_text_percent (text, percentage);
+  glnx_console_progress_text_percent (text, percentage);
 }
 
 static gboolean
@@ -295,14 +296,14 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   }
 
   /* --- Downloading metadata --- */
-  { _cleanup_rpmostree_console_progress_ G_GNUC_UNUSED gpointer dummy;
+  { g_auto(GLnxConsoleRef) console = { 0, };
     gs_unref_object HifState *hifstate = hif_state_new ();
 
     progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                      G_CALLBACK (on_hifstate_percentage_changed), 
                                      "Downloading metadata:");
 
-    rpmostree_console_progress_start ();
+    glnx_console_lock (&console);
 
     if (!hif_context_setup_sack (hifctx, hifstate, error))
       goto out;
@@ -317,14 +318,14 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     }
 
   /* --- Resolving dependencies --- */
-  { _cleanup_rpmostree_console_progress_ G_GNUC_UNUSED gpointer dummy;
+  { g_auto(GLnxConsoleRef) console = { 0, };
     gs_unref_object HifState *hifstate = hif_state_new ();
 
     progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                      G_CALLBACK (on_hifstate_percentage_changed), 
                                      "Resolving dependencies:");
 
-    rpmostree_console_progress_start ();
+    glnx_console_lock (&console);
 
     if (!hif_transaction_depsolve (hif_context_get_transaction (hifctx),
                                    hif_context_get_goal (hifctx),
@@ -365,14 +366,14 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     }
 
   /* --- Downloading packages --- */
-  { _cleanup_rpmostree_console_progress_ G_GNUC_UNUSED gpointer dummy;
+  { g_auto(GLnxConsoleRef) console = { 0, };
     gs_unref_object HifState *hifstate = hif_state_new ();
 
     progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                      G_CALLBACK (on_hifstate_percentage_changed), 
                                      "Downloading packages:");
 
-    rpmostree_console_progress_start ();
+    glnx_console_lock (&console);
 
     if (!hif_transaction_download (hif_context_get_transaction (hifctx), hifstate, error))
       goto out;
@@ -380,14 +381,14 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     g_signal_handler_disconnect (hifstate, progress_sigid);
   }
 
-  { _cleanup_rpmostree_console_progress_ G_GNUC_UNUSED gpointer dummy;
+  { g_auto(GLnxConsoleRef) console = { 0, };
     gs_unref_object HifState *hifstate = hif_state_new ();
 
     progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                      G_CALLBACK (on_hifstate_percentage_changed), 
                                      "Installing packages:");
 
-    rpmostree_console_progress_start ();
+    glnx_console_lock (&console);
 
     if (!hif_transaction_commit (hif_context_get_transaction (hifctx),
                                  hif_context_get_goal (hifctx),
@@ -595,7 +596,6 @@ rpmostree_compose_builtin_tree (int             argc,
   gs_unref_object GFile *previous_root = NULL;
   gs_free char *previous_checksum = NULL;
   gs_unref_object GFile *yumroot = NULL;
-  gs_unref_object GFile *targetroot = NULL;
   gs_unref_object GFile *yumroot_varcache = NULL;
   gs_unref_object OstreeRepo *repo = NULL;
   gs_unref_ptrarray GPtrArray *bootstrap_packages = NULL;
@@ -703,6 +703,10 @@ rpmostree_compose_builtin_tree (int             argc,
         }
     }
 
+  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (self->workdir),
+                       FALSE, &self->workdir_dfd, error))
+    goto out;
+
   if (opt_cachedir)
     {
       cachedir = g_file_new_for_path (opt_cachedir);
@@ -717,12 +721,9 @@ rpmostree_compose_builtin_tree (int             argc,
         goto out;
     }
 
-  if (chdir (gs_file_get_path_cached (self->workdir)) != 0)
+  if (fchdir (self->workdir_dfd) != 0)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Failed to chdir to '%s': %s",
-                   gs_file_get_path_cached (self->workdir),
-                   strerror (errno));
+      glnx_set_error_from_errno (error);
       goto out;
     }
 
@@ -782,9 +783,8 @@ rpmostree_compose_builtin_tree (int             argc,
   self->previous_checksum = previous_checksum;
 
   yumroot = g_file_get_child (self->workdir, "rootfs.tmp");
-  if (!gs_shutil_rm_rf (yumroot, cancellable, error))
+  if (!glnx_shutil_rm_rf_at (self->workdir_dfd, "rootfs.tmp", cancellable, error))
     goto out;
-  targetroot = g_file_get_child (self->workdir, "rootfs");
 
   if (json_object_has_member (treefile, "automatic_version_prefix") &&
       !compose_strv_contains_prefix (opt_metadata_strings, "version="))

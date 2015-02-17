@@ -34,6 +34,7 @@
 #include "rpmostree-util.h"
 
 #include "libgsystem.h"
+#include "libglnx.h"
 
 GS_DEFINE_CLEANUP_FUNCTION0(HySack, _cleanup_hy_sack_free, hy_sack_free);
 GS_DEFINE_CLEANUP_FUNCTION0(HyQuery, _cleanup_hy_query_free, hy_query_free);
