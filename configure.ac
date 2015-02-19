@@ -41,6 +41,11 @@ CAP_LIBS="$LIBS"
 AC_SUBST(CAP_LIBS)
 LIBS="$save_LIBS"
 
+AC_SEARCH_LIBS([rpmsqSetInterruptSafety], [rpmio],
+  AC_DEFINE([BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY], 1, [Set to 1 if we have interrupt safety API]),
+  AC_DEFINE([BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY], 0, [Set to 1 if we have interrupt safety API])
+)
+
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 json-glib-1.0
 				     ostree-1 >= 2015.1 libgsystem >= 2015.1

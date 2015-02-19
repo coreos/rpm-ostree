@@ -24,6 +24,7 @@
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
 #include <gio/gunixoutputstream.h>
+#include <rpm/rpmsq.h>
 #include <libhif.h>
 #include <libhif/hif-utils.h>
 #include <stdio.h>
@@ -190,6 +191,11 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                                             "lock",
                                             NULL);
   gs_free char *ret_new_inputhash = NULL;
+
+  /* We can be control-c'd at any time */
+#if BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY
+  rpmsqSetInterruptSafety (FALSE);
+#endif
 
   /* Apparently there's only one process-global macro context;
    * realistically, we're going to have to refactor all of the RPM
