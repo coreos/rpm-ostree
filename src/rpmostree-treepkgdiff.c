@@ -199,3 +199,30 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
   return ret;
 }
 
+
+void
+rpmostree_print_transaction (HifContext   *hifctx)
+{
+  guint i;
+  g_autoptr(GPtrArray) install;
+
+  install = hif_goal_get_packages (hif_context_get_goal (hifctx),
+                                   HIF_PACKAGE_INFO_INSTALL,
+                                   HIF_PACKAGE_INFO_REINSTALL,
+                                   HIF_PACKAGE_INFO_DOWNGRADE,
+                                   HIF_PACKAGE_INFO_UPDATE,
+                                   -1);
+
+  g_print ("Transaction: %u packages\n", install->len);
+  
+  if (install->len == 0)
+    g_print ("  (empty)\n");
+  else
+    {
+      for (i = 0; i < install->len; i++)
+        {
+          HyPackage pkg = install->pdata[i];
+          g_print ("  %s\n", hif_package_get_nevra (pkg));
+        }
+    }
+}

@@ -365,6 +365,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
         g_print ("Previous commit found, but without rpmostree.inputhash metadata key\n");
     }
 
+  rpmostree_print_transaction (hifctx);
+
   /* --- Downloading packages --- */
   { g_auto(GLnxConsoleRef) console = { 0, };
     gs_unref_object HifState *hifstate = hif_state_new ();

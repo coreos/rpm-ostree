@@ -34,3 +34,6 @@ gboolean
 rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
                               GCancellable     *cancellable,
                               GError          **error);
+
+void
+rpmostree_print_transaction (HifContext   *context);
