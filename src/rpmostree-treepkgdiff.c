@@ -199,6 +199,12 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
   return ret;
 }
 
+static gint
+pkg_array_compare (HyPackage *p_pkg1,
+                   HyPackage *p_pkg2)
+{
+  return hy_package_cmp (*p_pkg1, *p_pkg2);
+}
 
 void
 rpmostree_print_transaction (HifContext   *hifctx)
@@ -219,6 +225,8 @@ rpmostree_print_transaction (HifContext   *hifctx)
     g_print ("  (empty)\n");
   else
     {
+      g_ptr_array_sort (install, (GCompareFunc) pkg_array_compare);
+
       for (i = 0; i < install->len; i++)
         {
           HyPackage pkg = install->pdata[i];
