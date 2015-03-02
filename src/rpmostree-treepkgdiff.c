@@ -38,7 +38,7 @@ rpmostree_get_pkglist_for_root (GFile            *root,
   _cleanup_hyquery_ HyQuery query = NULL;
   _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
 
-#ifdef BUILDOPT_HAWKEY_SACK_CREATE2	
+#if BUILDOPT_HAWKEY_SACK_CREATE2
   sack = hy_sack_create (NULL, NULL,
                          gs_file_get_path_cached (root),
                          NULL,

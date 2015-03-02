@@ -45,8 +45,15 @@ PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 json-glib-1.0
 				     ostree-1 >= 2015.1 libgsystem >= 2015.1
 				     rpm hawkey libhif >= 0.2.0])
-AS_IF([pkg-config --atleast-version=0.5.3 hawkey],
-      [AC_DEFINE([BUILDOPT_HAWKEY_SACK_CREATE2], 1, [Hawkey ABI change in 0.5.3])])
+# Hawkey ABI change in 0.5.3
+AC_MSG_CHECKING([For hawkey 0.5.3 ABI break])
+AC_TRY_COMPILE([#include <stdlib.h>
+#include <hawkey/sack.h>],
+               [hy_sack_create(NULL, NULL, NULL, 0); return 0;],
+               [AC_MSG_RESULT([no]); BUILDOPT_HAWKEY_SACK_CREATE2=0],
+               [AC_MSG_RESULT([yes]); BUILDOPT_HAWKEY_SACK_CREATE2=1])
+AC_DEFINE_UNQUOTED(BUILDOPT_HAWKEY_SACK_CREATE2, $BUILDOPT_HAWKEY_SACK_CREATE2, [Hawkey ABI change])
+
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GLIB_TESTS
