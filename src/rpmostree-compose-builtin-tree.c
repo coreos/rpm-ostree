@@ -35,7 +35,6 @@
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-cleanup.h"
 #include "rpmostree-treepkgdiff.h"
-#include "rpmostree-libcontainer.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
 
@@ -645,7 +644,7 @@ rpmostree_compose_builtin_tree (int             argc,
     {
       /* This happens on RHEL6, not going to debug it further right now... */
       if (errno == EINVAL)
-        _rpmostree_libcontainer_set_not_available ();
+        glnx_libcontainer_set_not_available ();
       else
         {
           _rpmostree_set_prefix_error_from_errno (error, errno, "mount(/, MS_PRIVATE): ");
@@ -656,7 +655,7 @@ rpmostree_compose_builtin_tree (int             argc,
   /* Mount several directories read only for protection from librpm
    * and any stray code in yum/hawkey.
    */
-  if (_rpmostree_libcontainer_get_available ())
+  if (glnx_libcontainer_get_available ())
     {
       struct stat stbuf;
       /* Protect /var/lib/rpm if (and only if) it's a regular directory.
@@ -666,14 +665,14 @@ rpmostree_compose_builtin_tree (int             argc,
          bind mount.  */
       if (lstat ("/var/lib/rpm", &stbuf) == 0 && S_ISDIR (stbuf.st_mode))
         {
-          if (!_rpmostree_libcontainer_bind_mount_readonly ("/var/lib/rpm", error))
+          if (!glnx_libcontainer_bind_mount_readonly ("/var/lib/rpm", error))
             goto out;
         }
 
       /* Protect the system's /etc and /usr */
-      if (!_rpmostree_libcontainer_bind_mount_readonly ("/etc", error))
+      if (!glnx_libcontainer_bind_mount_readonly ("/etc", error))
         goto out;
-      if (!_rpmostree_libcontainer_bind_mount_readonly ("/usr", error))
+      if (!glnx_libcontainer_bind_mount_readonly ("/usr", error))
         goto out;
     }
 

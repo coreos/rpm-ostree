@@ -31,11 +31,11 @@
 #include <pwd.h>
 #include <grp.h>
 #include <unistd.h>
+#include <libglnx.h>
 #include <stdlib.h>
 
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
-#include "rpmostree-libcontainer.h"
 #include "rpmostree-cleanup.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-util.h"
@@ -67,7 +67,7 @@ run_sync_in_root (GFile        *yumroot,
 {
   gboolean ret = FALSE;
   const char *yumroot_path = gs_file_get_path_cached (yumroot);
-  pid_t child = _rpmostree_libcontainer_run_in_root (yumroot_path, binpath, child_argv);
+  pid_t child = glnx_libcontainer_run_in_root (yumroot_path, binpath, child_argv);
 
   if (child == -1)
     {

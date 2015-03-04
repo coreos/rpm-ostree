@@ -28,8 +28,6 @@ librpmostree_la_SOURCES = \
 	src/rpmostree-util.h \
 	src/rpmostree-passwd-util.c \
 	src/rpmostree-passwd-util.h \
-	src/rpmostree-libcontainer.c \
-	src/rpmostree-libcontainer.h \
 	src/rpmostree-cleanup.h \
 	src/rpmostree-treepkgdiff.c \
 	src/rpmostree-treepkgdiff.h \
