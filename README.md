@@ -1,5 +1,5 @@
 # rpm-ostree, aka /usr/bin/atomic
-An system to compose RPMs on a server side into an
+A system to compose RPMs on a server side into an
 [OSTree](https://wiki.gnome.org/Projects/OSTree)
 repository, and a client side tool to perform updates.
 
