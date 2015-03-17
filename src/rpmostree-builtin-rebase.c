@@ -60,7 +60,6 @@ rpmostree_builtin_rebase (int             argc,
   gs_unref_object OstreeAsyncProgress *progress = NULL;
   gboolean changed;
   GSConsole *console = NULL;
-  gboolean in_status_line = FALSE;
   gs_unref_keyfile GKeyFile *old_origin = NULL;
   gs_unref_keyfile GKeyFile *new_origin = NULL;
   
@@ -138,10 +137,14 @@ rpmostree_builtin_rebase (int             argc,
                                      cancellable, error))
     goto out;
 
-  if (in_status_line)
+  if (console)
     {
-      gs_console_end_status_line (console, NULL, NULL);
-      in_status_line = FALSE;
+      if (!gs_console_end_status_line (console, cancellable, error))
+        {
+          console = NULL;
+          goto out;
+        }
+      console = NULL;
     }
 
   if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
@@ -166,5 +169,7 @@ rpmostree_builtin_rebase (int             argc,
   
   ret = TRUE;
  out:
+  if (console)
+    (void) gs_console_end_status_line (console, NULL, NULL);
   return ret;
 }
