@@ -24,6 +24,7 @@
 
 #include <fnmatch.h>
 #include <sys/ioctl.h>
+#include <libglnx.h>
 
 #include <rpm/rpmdb.h>
 #include <rpm/rpmts.h>
@@ -34,27 +35,6 @@
 
 GS_DEFINE_CLEANUP_FUNCTION0(rpmtd, _cleanup_rpmtdFreeData, rpmtdFreeData);
 #define _cleanup_rpmtddata_ __attribute__((cleanup(_cleanup_rpmtdFreeData)))
-
-static gsize
-_console_get_width(int fd)
-{
-  struct winsize w;
-
-  ioctl (STDOUT_FILENO, TIOCGWINSZ, &w);
-
-  return w.ws_col;
-}
-
-static gsize
-_console_get_width_stdout_cached(void)
-{
-  static gsize align = 0;
-
-  if (!align)
-      align = _console_get_width (1);
-
-  return align;
-}
 
 static int
 header_name_cmp (Header h1, Header h2)
@@ -189,7 +169,7 @@ pkg_print (GFile *root, Header pkg)
 {
   gs_free char *nevra = pkg_nevra_strdup (pkg);
   gs_free char *from_repo = pkg_yumdb_strdup (root, pkg, "from_repo");
-  gsize align = _console_get_width_stdout_cached ();
+  gsize align = glnx_console_lines ();
 
   if (*from_repo)
     {
