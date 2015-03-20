@@ -135,10 +135,8 @@ rpmostree_builtin_upgrade (int             argc,
                                            "systemctl", "reboot", NULL);
           else
             {
-#ifdef HAVE_PATCHED_HAWKEY_AND_LIBSOLV
               if (!rpmostree_print_treepkg_diff (sysroot, cancellable, error))
                 goto out;
-#endif
 
               g_print ("Upgrade prepared for next boot; run \"systemctl reboot\" to start a reboot\n");
             }

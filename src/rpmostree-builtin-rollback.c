@@ -131,10 +131,8 @@ rpmostree_builtin_rollback (int             argc,
                                    "systemctl", "reboot", NULL);
   else
     {
-#ifdef HAVE_PATCHED_HAWKEY_AND_LIBSOLV
       if (!rpmostree_print_treepkg_diff (sysroot, cancellable, error))
         goto out;
-#endif
 
       g_print ("Sucessfully reset deployment order; run \"systemctl reboot\" to start a reboot\n");
     }

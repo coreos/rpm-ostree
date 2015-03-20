@@ -71,11 +71,6 @@ AC_ARG_ENABLE(installed_tests,
               [enable_installed_tests=no])
 AM_CONDITIONAL(BUILDOPT_INSTALL_TESTS, test x$enable_installed_tests = xyes)
 
-dnl Unconditionally enable hawkey/libsolv patches for now, assume we have
-dnl new enough versions because libhif depends on them.
-AM_CONDITIONAL(BUILDOPT_PATCHED_HAWKEY_AND_LIBSOLV, [true])
-AC_DEFINE(HAVE_PATCHED_HAWKEY_AND_LIBSOLV, 1, [Define if we have patched hawkey and libsolv])
-
 AC_ARG_ENABLE(usrbinatomic,
               AS_HELP_STRING([--enable-usrbinatomic],
                              [Alias client binary as /usr/bin/atomic]),,

@@ -162,10 +162,8 @@ rpmostree_builtin_rebase (int             argc,
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
     goto out;
   
-#ifdef HAVE_PATCHED_HAWKEY_AND_LIBSOLV
   if (!rpmostree_print_treepkg_diff (sysroot, cancellable, error))
     goto out;
-#endif
   
   ret = TRUE;
  out:

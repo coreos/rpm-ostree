@@ -33,13 +33,9 @@ librpmostree_la_SOURCES = \
 	src/rpmostree-treepkgdiff.h \
 	src/rpmostree-rpm-util.c \
 	src/rpmostree-rpm-util.h \
-	$(NULL)
-if BUILDOPT_PATCHED_HAWKEY_AND_LIBSOLV
-librpmostree_la_SOURCES += \
 	src/rpmostree-treepkgdiff.c \
 	src/rpmostree-treepkgdiff.h \
 	$(NULL)
-endif
 librpmostree_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src -I$(libglnx_srcpath) -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
 librpmostree_la_LIBADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS) libglnx.la $(CAP_LIBS)
 
