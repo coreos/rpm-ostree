@@ -63,7 +63,10 @@ AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GLIB_TESTS
 
-GOBJECT_INTROSPECTION_REQUIRE([1.34.0])
+m4_ifdef([GOBJECT_INTROSPECTION_CHECK], [
+  GOBJECT_INTROSPECTION_CHECK([1.34.0])
+])
+AM_CONDITIONAL(BUILDOPT_INTROSPECTION, test "x$found_introspection" = xyes)
 
 AC_ARG_ENABLE(installed_tests,
               AS_HELP_STRING([--enable-installed-tests],
@@ -91,6 +94,7 @@ if test x$enable_compose_tooling != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_F
 
 AC_CONFIG_FILES([
 Makefile
+src/lib/rpm-ostree-1.pc
 ])
 AC_OUTPUT
 
