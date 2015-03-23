@@ -1,12 +1,36 @@
 include $(top_srcdir)/buildutil/glib-tap.mk
 
+
+# Needed by the compose test
+tests/compose/yum/empty: tests/compose/yum/empty.c
+	$(CC) -nostdlib  $< -o $@
+
+tests/compose/yum/repodata/repomd.xml: tests/compose/yum/empty tests/compose/yum/empty.spec
+	(cd tests/compose/yum && \
+	rpmbuild --define "_sourcedir $(shell pwd)/tests/compose/yum" --define "_specdir $(shell pwd)/tests/compose/yum" --define "_builddir $(shell pwd)/tests/compose/yum" \
+		--define "_srcrpmdir $(shell pwd)/tests/compose/yum" --define "_rpmdir $(shell pwd)/tests/compose/yum" --define "_buildrootdir $(shell pwd)/tests/compose/yum/.build" \
+	-ba empty.spec && createrepo --database $(shell pwd)/tests/compose/yum/)
+
+tests/compose/test-repo.repo: tests/compose/test-repo.repo.in tests/compose/yum/repodata/repomd.xml
+	cat $< | sed -e "s|%WHERE%|$(installed_testdir)|" > $@
+
 tests_jsonutil_CPPFLAGS = -I $(srcdir)/src/libpriv
 tests_jsonutil_CFLAGS = $(PKGDEP_RPMOSTREE_CFLAGS)
 tests_jsonutil_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostree.la
 
-installed_test_data = tests/libtest.sh
+tests/test-compose.sh: tests/compose/test-repo.repo
+
+installed_test_data = tests/libtest.sh \
+	tests/compose/test-repo.repo \
+	tests/compose/test-repo.json \
+	tests/compose/test-repo.repo.in \
+	$(NULL)
+
+nobase_installed_test_DATA += $(shell find tests/compose/yum/ -type f) \
+	$(NULL)
 
 installed_test_scripts = \
+	tests/test-compose.sh			\
 	tests/test-basic.sh			\
 	$(NULL)
 

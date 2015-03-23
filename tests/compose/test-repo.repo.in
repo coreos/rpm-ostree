@@ -1,0 +1,6 @@
+[test-repo]
+name=test-repo
+baseurl=file://%WHERE%/tests/compose/yum
+enabled=1
+gpgcheck=0
+skip_if_unavailable=False
