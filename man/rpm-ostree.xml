@@ -181,7 +181,14 @@ Boston, MA 02111-1307, USA.
       </para>
 
         <para>
-          <command>diff</command> to see how the packages are different between the trees in two commits.
+          <command>diff</command> to see how the packages are
+          different between the trees in two commits.  The
+          <option>--format=diff</option> option uses
+          <literal>-<literal> for removed packages,
+          <literal>+</literal> for added packages, and finally
+          <literal>!</literal> for the old version of an updated
+          package, with a following <literal>=</literal> for the new
+          version.
         </para>
 
         <para>
