@@ -6,7 +6,7 @@ tests_jsonutil_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostree.la
 
 installed_test_data = tests/libtest.sh
 
-test_scripts = \
+installed_test_scripts = \
 	tests/test-basic.sh			\
 	$(NULL)
 
