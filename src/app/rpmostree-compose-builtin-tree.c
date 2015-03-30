@@ -857,6 +857,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
   {
     const char *gpgkey;
+    gboolean selinux = TRUE;
     gs_unref_variant GVariant *metadata = NULL;
 
     g_variant_builder_add (metadata_builder, "{sv}",
@@ -868,8 +869,13 @@ rpmostree_compose_builtin_tree (int             argc,
     if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
       goto out;
 
-    if (!rpmostree_commit (yumroot, repo, ref, metadata, gpgkey,
-                           json_object_get_boolean_member (treefile, "selinux"),
+    if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
+                                                                 "selinux",
+                                                                 &selinux,
+                                                                 error))
+      goto out;
+
+    if (!rpmostree_commit (yumroot, repo, ref, metadata, gpgkey, selinux,
                            cancellable, error))
       goto out;
   }

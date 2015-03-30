@@ -35,4 +35,4 @@ ostree init --repo=repo --mode=archive-z2
 
 echo "ok setup"
 
-rpm-ostree --repo=repo compose tree $SRCDIR/test-repo.json
+rpm-ostree --repo=repo compose tree ${SRCDIR}/test-repo-no-selinux-tag.json

@@ -1,0 +1,9 @@
+{
+    "ref": "fedora/test",
+
+    "repos": ["test-repo"],
+
+    "bootstrap_packages": ["empty"],
+
+    "packages": []
+}
