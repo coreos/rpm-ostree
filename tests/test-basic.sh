@@ -21,6 +21,8 @@ set -e
 
 . $(dirname $0)/libtest.sh
 
+check_root_test
+
 echo "1..1"
 
 setup_os_repository "archive-z2" "syslinux"

@@ -298,3 +298,12 @@ os_repository_new_commit ()
     ostree --repo=${test_tmpdir}/testos-repo commit  --add-metadata-string "version=${version}" -b testos/buildmaster/x86_64-runtime -s "Build"
     cd ${test_tmpdir}
 }
+
+check_root_test ()
+{
+    if test "$(id -u)" != "0"; then
+       echo 1>&2 "$0 can be run only as root"
+       echo "1..0"
+       exit 0
+    fi
+}
