@@ -45,6 +45,20 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
+static void
+gpg_verify_result_cb (OstreeRepo *repo,
+                      const char *checksum,
+                      OstreeGpgVerifyResult *result,
+                      GSConsole *console)
+{
+  /* Temporarily place the GSConsole stream (which is just stdout)
+   * back in normal mode before printing GPG verification results. */
+  gs_console_end_status_line (console, NULL, NULL);
+
+  g_print ("\n");
+  rpmostree_print_gpg_verify_result (result);
+}
+
 gboolean
 rpmostree_builtin_upgrade (int             argc,
                            char          **argv,
@@ -63,6 +77,7 @@ rpmostree_builtin_upgrade (int             argc,
 
   gs_free char *origin_description = NULL;
   gs_unref_object OstreeRepo *repo = NULL; 
+  gulong signal_handler_id = 0;
 
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
@@ -89,6 +104,10 @@ rpmostree_builtin_upgrade (int             argc,
     {
       gs_console_begin_status_line (console, "", NULL, NULL);
       progress = ostree_async_progress_new_and_connect (ostree_repo_pull_default_console_progress_changed, console);
+      signal_handler_id = g_signal_connect (repo, "gpg-verify-result",
+                                            G_CALLBACK (gpg_verify_result_cb),
+                                            console);
+
     }
 
   if (opt_allow_downgrade)  
@@ -184,6 +203,9 @@ rpmostree_builtin_upgrade (int             argc,
  out:
   if (console)
     (void) gs_console_end_status_line (console, NULL, NULL);
+
+  if (signal_handler_id > 0)
+    g_signal_handler_disconnect (repo, signal_handler_id);
 
   return ret;
 }
