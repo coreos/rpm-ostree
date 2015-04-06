@@ -46,5 +46,9 @@ gboolean rpmostree_option_context_parse (GOptionContext *context,
                                          char ***argv,
                                          GError **error);
 
+void rpmostree_print_gpg_verify_result (OstreeRepo *repo,
+                                        const char *checksum,
+                                        OstreeGpgVerifyResult *result);
+
 G_END_DECLS
 

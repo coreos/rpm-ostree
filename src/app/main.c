@@ -99,6 +99,32 @@ rpmostree_option_context_parse (GOptionContext *context,
   return TRUE;
 }
 
+void
+rpmostree_print_gpg_verify_result (OstreeRepo *repo,
+                                   const char *checksum,
+                                   OstreeGpgVerifyResult *result)
+{
+  GString *buffer;
+  guint n_sigs, ii;
+
+  n_sigs = ostree_gpg_verify_result_count_all (result);
+
+  /* XXX If we ever add internationalization, use ngettext() here. */
+  g_print ("\nFound %u signature%s:\n", n_sigs, n_sigs == 1 ? "" : "s");
+
+  buffer = g_string_sized_new (256);
+
+  for (ii = 0; ii < n_sigs; ii++)
+    {
+      g_string_append_c (buffer, '\n');
+      ostree_gpg_verify_result_describe (result, ii, buffer, "  ",
+                                         OSTREE_GPG_SIGNATURE_FORMAT_DEFAULT);
+    }
+
+  g_print ("%s\n", buffer->str);
+  g_string_free (buffer, TRUE);
+}
+
 int
 main (int    argc,
       char **argv)
