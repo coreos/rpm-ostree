@@ -76,6 +76,37 @@ version_of_commit (OstreeRepo *repo, const char *checksum)
   return NULL;
 }
 
+static gboolean
+deployment_get_gpg_verify (OstreeDeployment *deployment,
+                           OstreeRepo *repo)
+{
+  /* XXX Something like this could be added to the OstreeDeployment
+   *     API in libostree if the OstreeRepo parameter is acceptable. */
+
+  GKeyFile *origin;
+  gs_free char *refspec = NULL;
+  gs_free char *remote = NULL;
+  gboolean gpg_verify = FALSE;
+
+  origin = ostree_deployment_get_origin (deployment);
+
+  if (origin == NULL)
+    goto out;
+
+  refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
+
+  if (refspec == NULL)
+    goto out;
+
+  if (!ostree_parse_refspec (refspec, &remote, NULL, NULL))
+    goto out;
+
+  (void) ostree_repo_remote_get_gpg_verify (repo, remote, &gpg_verify, NULL);
+
+out:
+  return gpg_verify;
+}
+
 gboolean
 rpmostree_builtin_status (int             argc,
                           char          **argv,
@@ -85,6 +116,7 @@ rpmostree_builtin_status (int             argc,
   gboolean ret = FALSE;
   gs_unref_object GFile *sysroot_path = NULL;
   gs_unref_object OstreeSysroot *sysroot = NULL;
+  gs_unref_object OstreeRepo *repo = NULL;
   gs_unref_ptrarray GPtrArray *deployments = NULL;  // list of all depoyments
   OstreeDeployment *booted_deployment = NULL;   // current booted deployment
   GOptionContext *context = g_option_context_new ("- Get the version of the booted system");
@@ -96,6 +128,7 @@ rpmostree_builtin_status (int             argc,
   guint max_refspec_len = 0; // maximum length of refspec - determined in code
   guint max_version_len = 0; // maximum length of version - determined in code
   guint buffer = 5; // minimum space between end of one entry and new column
+  gs_free char *booted_csum = NULL;
 
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
@@ -103,6 +136,9 @@ rpmostree_builtin_status (int             argc,
   sysroot_path = g_file_new_for_path (opt_sysroot);
   sysroot = ostree_sysroot_new (sysroot_path);
   if (!ostree_sysroot_load (sysroot, cancellable, error))
+    goto out;
+
+  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     goto out;
 
   booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
@@ -114,7 +150,6 @@ rpmostree_builtin_status (int             argc,
       /* find max lengths of osname and refspec */
       for (j = 0; j < deployments->len; j++) 
         {
-          gs_unref_object OstreeRepo *repo = NULL;
           const char *csum = ostree_deployment_get_csum (deployments->pdata[j]);
           GKeyFile *origin;
           gs_free char *origin_refspec = NULL;
@@ -133,9 +168,6 @@ rpmostree_builtin_status (int             argc,
                 origin_refspec = g_strdup ("<unknown origin type>");
             }
           max_refspec_len = MAX (max_refspec_len, strlen (origin_refspec));
-
-          if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-            goto out;
 
           version_string = version_of_commit (repo, csum);
           if (version_string)
@@ -158,7 +190,6 @@ rpmostree_builtin_status (int             argc,
   for (i=0; i<deployments->len; i++)
     {
       gs_unref_variant GVariant *commit = NULL;
-      gs_unref_object OstreeRepo *repo = NULL;
       const char *csum = ostree_deployment_get_csum (deployments->pdata[i]);
       OstreeDeployment *deployment = deployments->pdata[i];
       GKeyFile *origin;
@@ -169,8 +200,6 @@ rpmostree_builtin_status (int             argc,
       gs_free char *version_string = NULL;
 
       /* get commit for timestamp */
-      if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-        goto out;
       if (!ostree_repo_load_variant (repo,
                                    OSTREE_OBJECT_TYPE_COMMIT,
                                    csum,
@@ -202,6 +231,13 @@ rpmostree_builtin_status (int             argc,
       /* print deployment info column */
       if (!opt_pretty)
         {
+          if (deployment == booted_deployment)
+            {
+              /* Stash this for printing signatures later. */
+              if (deployment_get_gpg_verify (deployment, repo))
+                booted_csum = g_strdup (csum);
+            }
+
           g_print ("%c %-*s",
                    deployment == booted_deployment ? '*' : ' ',
                    max_timestamp_len+buffer, timestamp_string);
@@ -218,8 +254,11 @@ rpmostree_builtin_status (int             argc,
       /* print "pretty" row info */
       else
         {
+          gs_unref_object OstreeGpgVerifyResult *result = NULL;
           guint tab = 11;
           char *title = NULL;
+          GError *local_error = NULL;
+
           if (i==0)
             title = "DEFAULT ON BOOT";
           else if (deployment == booted_deployment ||
@@ -239,7 +278,90 @@ rpmostree_builtin_status (int             argc,
                   tab, "id", tab, csum, ostree_deployment_get_deployserial (deployment),
                   tab, "osname", tab, ostree_deployment_get_osname (deployment),
                   tab, "refspec", tab, origin_refspec);
+
+          if (deployment_get_gpg_verify (deployment, repo))
+            {
+              result = ostree_repo_verify_commit_ext (repo, csum, NULL, NULL,
+                                                      cancellable, &local_error);
+
+              /* NOT_FOUND just means the commit is not signed. */
+              if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+                {
+                  g_clear_error (&local_error);
+                }
+              else if (local_error != NULL)
+                {
+                  g_propagate_error (error, local_error);
+                  goto out;
+                }
+              else
+                {
+                  GString *sigs_buffer;
+                  guint n_sigs, ii;
+
+                  n_sigs = ostree_gpg_verify_result_count_all (result);
+
+                  sigs_buffer = g_string_sized_new (256);
+
+                  for (ii = 0; ii < n_sigs; ii++)
+                    {
+                      g_string_append_c (sigs_buffer, '\n');
+                      ostree_gpg_verify_result_describe (result, ii, sigs_buffer, "  GPG: ",
+                                                         OSTREE_GPG_SIGNATURE_FORMAT_DEFAULT);
+                    }
+
+                  g_print ("%s", sigs_buffer->str);
+                  g_string_free (sigs_buffer, TRUE);
+                }
+            }
+
           printchar ("=", 60);
+        }
+    }
+
+  /* Print any signatures for the booted deployment, but only in NON-pretty
+   * mode.  We save this for the end to preserve the tabular formatting for
+   * deployments. */
+  if (booted_csum != NULL)
+    {
+      gs_unref_object OstreeGpgVerifyResult *result = NULL;
+      GError *local_error = NULL;
+
+      result = ostree_repo_verify_commit_ext (repo, booted_csum, NULL, NULL,
+                                              cancellable, &local_error);
+
+      /* NOT_FOUND just means the commit is not signed. */
+      if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+        {
+          g_clear_error (&local_error);
+        }
+      else if (local_error != NULL)
+        {
+          g_propagate_error (error, local_error);
+          goto out;
+        }
+      else
+        {
+          GString *sigs_buffer;
+          guint n_sigs, ii;
+
+          n_sigs = ostree_gpg_verify_result_count_all (result);
+
+          /* XXX If we ever add internationalization, use ngettext() here. */
+          g_print ("\nFound %u signature%s on the booted deployment (*):\n",
+                   n_sigs, n_sigs == 1 ? "" : "s");
+
+          sigs_buffer = g_string_sized_new (256);
+
+          for (ii = 0; ii < n_sigs; ii++)
+            {
+              g_string_append_c (sigs_buffer, '\n');
+              ostree_gpg_verify_result_describe (result, ii, sigs_buffer, "  ",
+                                                 OSTREE_GPG_SIGNATURE_FORMAT_DEFAULT);
+            }
+
+          g_print ("%s", sigs_buffer->str);
+          g_string_free (sigs_buffer, TRUE);
         }
     }
 

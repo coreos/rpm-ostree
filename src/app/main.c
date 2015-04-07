@@ -100,9 +100,7 @@ rpmostree_option_context_parse (GOptionContext *context,
 }
 
 void
-rpmostree_print_gpg_verify_result (OstreeRepo *repo,
-                                   const char *checksum,
-                                   OstreeGpgVerifyResult *result)
+rpmostree_print_gpg_verify_result (OstreeGpgVerifyResult *result)
 {
   GString *buffer;
   guint n_sigs, ii;
