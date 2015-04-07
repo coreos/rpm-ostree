@@ -134,7 +134,7 @@ rpmostree_builtin_rollback (int             argc,
       if (!rpmostree_print_treepkg_diff (sysroot, cancellable, error))
         goto out;
 
-      g_print ("Sucessfully reset deployment order; run \"systemctl reboot\" to start a reboot\n");
+      g_print ("Successfully reset deployment order; run \"systemctl reboot\" to start a reboot\n");
     }
 
   if (opt_reboot)
