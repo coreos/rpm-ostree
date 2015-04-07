@@ -20,51 +20,51 @@ bin_PROGRAMS += rpm-ostree
 noinst_LTLIBRARIES += librpmostree.la
 
 librpmostree_la_SOURCES = \
-	src/rpmostree-postprocess.c \
-	src/rpmostree-postprocess.h \
-	src/rpmostree-json-parsing.c \
-	src/rpmostree-json-parsing.h \
-	src/rpmostree-util.c \
-	src/rpmostree-util.h \
-	src/rpmostree-passwd-util.c \
-	src/rpmostree-passwd-util.h \
-	src/rpmostree-cleanup.h \
-	src/rpmostree-treepkgdiff.c \
-	src/rpmostree-treepkgdiff.h \
-	src/rpmostree-rpm-util.c \
-	src/rpmostree-rpm-util.h \
-	src/rpmostree-treepkgdiff.c \
-	src/rpmostree-treepkgdiff.h \
+	src/libpriv/rpmostree-postprocess.c \
+	src/libpriv/rpmostree-postprocess.h \
+	src/libpriv/rpmostree-json-parsing.c \
+	src/libpriv/rpmostree-json-parsing.h \
+	src/libpriv/rpmostree-util.c \
+	src/libpriv/rpmostree-util.h \
+	src/libpriv/rpmostree-passwd-util.c \
+	src/libpriv/rpmostree-passwd-util.h \
+	src/libpriv/rpmostree-cleanup.h \
+	src/libpriv/rpmostree-treepkgdiff.c \
+	src/libpriv/rpmostree-treepkgdiff.h \
+	src/libpriv/rpmostree-rpm-util.c \
+	src/libpriv/rpmostree-rpm-util.h \
+	src/libpriv/rpmostree-treepkgdiff.c \
+	src/libpriv/rpmostree-treepkgdiff.h \
 	$(NULL)
-librpmostree_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src -I$(libglnx_srcpath) -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
+librpmostree_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
 librpmostree_la_LIBADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS) libglnx.la $(CAP_LIBS)
 
-rpm_ostree_SOURCES = src/main.c \
-	src/rpmostree-builtins.h \
-	src/rpmostree-db-builtins.h \
-	src/rpmostree-builtin-upgrade.c \
-	src/rpmostree-builtin-rollback.c \
-	src/rpmostree-builtin-rebase.c \
-	src/rpmostree-builtin-status.c \
-	src/rpmostree-builtin-db.c \
-	src/rpmostree-db-builtin-diff.c \
-	src/rpmostree-db-builtin-list.c \
-	src/rpmostree-db-builtin-version.c \
+rpm_ostree_SOURCES = src/app/main.c \
+	src/app/rpmostree-builtins.h \
+	src/app/rpmostree-db-builtins.h \
+	src/app/rpmostree-builtin-upgrade.c \
+	src/app/rpmostree-builtin-rollback.c \
+	src/app/rpmostree-builtin-rebase.c \
+	src/app/rpmostree-builtin-status.c \
+	src/app/rpmostree-builtin-db.c \
+	src/app/rpmostree-db-builtin-diff.c \
+	src/app/rpmostree-db-builtin-list.c \
+	src/app/rpmostree-db-builtin-version.c \
 	$(NULL)
 
 if BUILDOPT_COMPOSE_TOOLING
 rpm_ostree_SOURCES += \
-	src/rpmostree-compose-builtin-tree.c \
-	src/rpmostree-compose-builtin-sign.c \
-	src/rpmostree-builtin-compose.c \
+	src/app/rpmostree-compose-builtin-tree.c \
+	src/app/rpmostree-compose-builtin-sign.c \
+	src/app/rpmostree-builtin-compose.c \
 	$(NULL)
 endif
 
-rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src -I$(libglnx_srcpath) -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
+rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/app -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
 rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)  libglnx.la librpmostree.la
 
 privdatadir=$(pkglibdir)
-privdata_DATA = src/tmpfiles-ostree-integration.conf
+privdata_DATA = src/app/tmpfiles-ostree-integration.conf
 
 if BUILDOPT_USRBINATOMIC
 INSTALL_DATA_HOOKS += install-usrbinatomic-hook
