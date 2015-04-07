@@ -42,6 +42,7 @@ librpmostree_la_LIBADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS) libglnx.la $(CAP
 rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-builtins.h \
 	src/app/rpmostree-db-builtins.h \
+	src/app/rpmostree-compose-builtins.h \
 	src/app/rpmostree-builtin-upgrade.c \
 	src/app/rpmostree-builtin-rollback.c \
 	src/app/rpmostree-builtin-rebase.c \
