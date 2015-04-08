@@ -25,6 +25,15 @@
 #include "rpmostree-db.h"
 #include "rpmostree-cleanup.h"
 
+/**
+ * SECTION:librpmostree-dbquery
+ * @title: Query RPM database
+ * @short_description: Access the RPM database in commits
+ *
+ * These APIs provide queryable access to the RPM database inside an
+ * OSTree repository.
+ */
+
 struct RpmOstreeDbQueryResult 
 {
   volatile gint refcount;

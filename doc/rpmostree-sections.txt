@@ -1,0 +1,9 @@
+<SECTION>
+<FILE>librpmostree-dbquery</FILE>
+RpmOstreeDbQueryResult
+rpm_ostree_db_query_result_get_type
+rpm_ostree_db_query_result_get_packages
+rpm_ostree_db_query_ref
+rpm_ostree_db_query_unref
+rpm_ostree_db_query
+</SECTION>

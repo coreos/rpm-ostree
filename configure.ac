@@ -68,6 +68,8 @@ m4_ifdef([GOBJECT_INTROSPECTION_CHECK], [
 ])
 AM_CONDITIONAL(BUILDOPT_INTROSPECTION, test "x$found_introspection" = xyes)
 
+GTK_DOC_CHECK([1.15], [--flavour no-tmpl])
+
 AC_ARG_ENABLE(installed_tests,
               AS_HELP_STRING([--enable-installed-tests],
                              [Install test programs (default: no)]),,
@@ -94,6 +96,7 @@ if test x$enable_compose_tooling != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_F
 
 AC_CONFIG_FILES([
 Makefile
+doc/Makefile
 src/lib/rpm-ostree-1.pc
 ])
 AC_OUTPUT
@@ -103,4 +106,5 @@ echo "
 
     usrbinatomic:	$enable_usrbinatomic
     compose tooling:	$enable_compose_tooling
+    gtk-doc:            $enable_gtk_doc
 "
