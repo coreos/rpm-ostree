@@ -15,7 +15,6 @@ fi
 
 mkdir -p m4
 
-cd $olddir
 if ! test -f libglnx/README.md; then
     git submodule update --init
 fi
