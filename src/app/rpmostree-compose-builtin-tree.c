@@ -635,53 +635,6 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
     }
 
-  /* Use a private mount namespace to avoid polluting the global
-   * namespace, and to ensure any tmpfs mounts get cleaned up if we
-   * exit unexpectedly.
-   *
-   * We also rely on this for the yum confinement.
-   */
-  if (unshare (CLONE_NEWNS) != 0)
-    {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "unshare(CLONE_NEWNS): ");
-      goto out;
-    }
-  if (mount (NULL, "/", "none", MS_PRIVATE | MS_REC, NULL) == -1)
-    {
-      /* This happens on RHEL6, not going to debug it further right now... */
-      if (errno == EINVAL)
-        glnx_libcontainer_set_not_available ();
-      else
-        {
-          _rpmostree_set_prefix_error_from_errno (error, errno, "mount(/, MS_PRIVATE): ");
-          goto out;
-        }
-    }
-
-  /* Mount several directories read only for protection from librpm
-   * and any stray code in yum/hawkey.
-   */
-  if (glnx_libcontainer_get_available ())
-    {
-      struct stat stbuf;
-      /* Protect /var/lib/rpm if (and only if) it's a regular directory.
-         This happens when you're running compose-tree from inside a
-         "mainline" system.  On an rpm-ostree based system,
-         /var/lib/rpm -> /usr/share/rpm, which is already protected by a read-only
-         bind mount.  */
-      if (lstat ("/var/lib/rpm", &stbuf) == 0 && S_ISDIR (stbuf.st_mode))
-        {
-          if (!glnx_libcontainer_bind_mount_readonly ("/var/lib/rpm", error))
-            goto out;
-        }
-
-      /* Protect the system's /etc and /usr */
-      if (!glnx_libcontainer_bind_mount_readonly ("/etc", error))
-        goto out;
-      if (!glnx_libcontainer_bind_mount_readonly ("/usr", error))
-        goto out;
-    }
-
   repo_path = g_file_new_for_path (opt_repo);
   repo = self->repo = ostree_repo_new (repo_path);
   if (!ostree_repo_open (repo, cancellable, error))
