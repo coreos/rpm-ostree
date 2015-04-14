@@ -20,4 +20,8 @@
 
 #pragma once
 
+#ifndef _RPMOSTREE_EXTERN
+#define _RPMOSTREE_EXTERN extern
+#endif
+
 #include <rpmostree-db.h>
