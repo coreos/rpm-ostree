@@ -26,16 +26,16 @@ G_BEGIN_DECLS
 
 typedef struct RpmOstreeDbQueryResult RpmOstreeDbQueryResult;
 
-GType rpm_ostree_db_query_result_get_type (void);
-const char *const *rpm_ostree_db_query_result_get_packages (RpmOstreeDbQueryResult *queryresult);
+_RPMOSTREE_EXTERN GType rpm_ostree_db_query_result_get_type (void);
+_RPMOSTREE_EXTERN const char *const *rpm_ostree_db_query_result_get_packages (RpmOstreeDbQueryResult *queryresult);
 
-RpmOstreeDbQueryResult *rpm_ostree_db_query_ref (RpmOstreeDbQueryResult *result);
-void rpm_ostree_db_query_unref (RpmOstreeDbQueryResult *result);
+_RPMOSTREE_EXTERN RpmOstreeDbQueryResult *rpm_ostree_db_query_ref (RpmOstreeDbQueryResult *result);
+_RPMOSTREE_EXTERN void rpm_ostree_db_query_unref (RpmOstreeDbQueryResult *result);
 
-RpmOstreeDbQueryResult *rpm_ostree_db_query (OstreeRepo               *repo,
-                                             const char               *ref,
-                                             GVariant                 *query,
-                                             GCancellable             *cancellable,
-                                             GError                  **error);
+_RPMOSTREE_EXTERN RpmOstreeDbQueryResult *rpm_ostree_db_query (OstreeRepo               *repo,
+                                                               const char               *ref,
+                                                               GVariant                 *query,
+                                                               GCancellable             *cancellable,
+                                                               GError                  **error);
 
 G_END_DECLS

@@ -29,8 +29,9 @@ librpmostree_1_la_SOURCES = \
 	$(NULL)
 
 librpmostree_1_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libglnx -I$(srcdir)/src/libpriv -I$(srcdir)/src/lib \
+	-fvisibility=hidden '-D_RPMOSTREE_EXTERN=__attribute((visibility("default"))) extern' \
 	$(PKGDEP_RPMOSTREE_CFLAGS)
-librpmostree_1_la_LDFLAGS = -version-number 1:0:0 -Bsymbolic-functions -export-symbols-regex '^rpm_ostree_'
+librpmostree_1_la_LDFLAGS = -version-number 1:0:0 -Bsymbolic-functions
 librpmostree_1_la_LIBADD = libglnx.la $(PKGDEP_RPMOSTREE_LIBS)
 
 if BUILDOPT_INTROSPECTION

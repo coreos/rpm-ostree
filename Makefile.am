@@ -36,7 +36,8 @@ AM_CFLAGS += $(WARN_CFLAGS)
 EXTRA_DIST += autogen.sh COPYING
 
 libglnx_srcpath := $(srcdir)/libglnx
-libglnx_cflags := $(PKGDEP_GIO_UNIX_CFLAGS) -I$(libglnx_srcpath)
+libglnx_cflags := $(PKGDEP_GIO_UNIX_CFLAGS) -I$(libglnx_srcpath) -fvisibility=hidden
+libglnx_ldflags := 
 libglnx_libs := $(PKGDEP_GIO_UNIX_LIBS)
 
 include $(INTROSPECTION_MAKEFILE)
