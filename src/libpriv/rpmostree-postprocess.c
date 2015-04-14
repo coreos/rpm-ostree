@@ -254,15 +254,12 @@ do_kernel_prep (GFile         *yumroot,
       goto out;
   }
 
-  /* Copy of code from gnome-continuous; yes, we hardcode
-     the machine id for now, because distributing pre-generated
-     initramfs images with dracut/systemd at the moment
-     effectively requires this.
-     http://lists.freedesktop.org/archives/systemd-devel/2013-July/011770.html
-  */
-  g_print ("Hardcoding machine-id\n");
+  /* Ensure the /etc/machine-id file is present and empty. Apparently systemd
+     doesn't work when the file is missing (as of systemd-219-9.fc22) but it is
+     correctly populated if the file is there.  */
+  g_print ("Creating empty machine-id\n");
   {
-    const char *hardcoded_machine_id = "45bb3b96146aa94f299b9eb43646eb35\n";
+    const char *hardcoded_machine_id = "";
     gs_unref_object GFile *machineid_path =
       g_file_resolve_relative_path (yumroot, "etc/machine-id");
     if (!g_file_replace_contents (machineid_path, hardcoded_machine_id,
