@@ -4,20 +4,20 @@ At the moment, there are three primary commands to be familiar with on
 an rpm-ostree based system.  Remember that `atomic` is an alias for
 `rpm-ostree`.  The author tends to use the former on client systems,
 and the latter on compose servers.
-
+```
    # atomic status
-
+```
 Will show you your deployments, in the order in which they will appear
 in the bootloader.  The `*` shows the currently booted deployment.
-
+```
    # atomic upgrade
-
+```
 Will perform a system upgrade, creating a *new* chroot, and set it as
 the default for the next boot.  You should use `systemctl reboot`
 shortly afterwards.
-
+```
    # atomic rollback
-
+```
 By default, the `atomic upgrade` will keep at most two bootable
 "deployments", though the underlying technology supports more.
 
