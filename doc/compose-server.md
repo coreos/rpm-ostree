@@ -15,14 +15,14 @@ system, and commits the result to an OSTree repository.
 See also: https://github.com/projectatomic/rpm-ostree-toolbox
 
 The input format is a JSON "treefile".  See examples in
-`doc/treefile-examples`, as well as `doc/treefile.md`.
+`doc/treefile-examples` as well as `doc/treefile.md`.
 
 	# rpm-ostree compose tree --repo=/srv/rpm-ostree/repo --proxy=http://127.0.0.1:8123 sometreefile.json
 
 All this does is use yum to download RPMs from the referenced repos,
 and commit the result to the OSTree repository, using the ref named by
 `ref`.  Note that we've specified a local caching proxy (`polipo` in
-this case) - otherwise we you will download the packages for each
+this case) - otherwise we will download the packages for each
 treecompose.
 
 You can export `/srv/rpm-ostree/repo` via any static webserver.
