@@ -41,8 +41,8 @@ that.  What OSTree adds to this picture is support for file uid/gid,
 extended attributes, handling of bootloader configuration, and merges
 of `/etc`.
 
-To emphasize, replication is at a filesystem level - that means that
-that things like SELinux labels and uid/gid mappings are assigned on
+To emphasize, replication is at a filesystem level - that means things 
+like SELinux labels and uid/gid mappings are assigned on
 the server side.
 
 On the other hand, rpm-ostree works on top of any Unix filesystem.  It
