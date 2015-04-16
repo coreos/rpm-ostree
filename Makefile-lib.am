@@ -26,6 +26,8 @@ librpmostreeinclude_HEADERS = $(librpmostree_public_headers)
 
 librpmostree_1_la_SOURCES = \
 	src/lib/rpmostree-db.c \
+	src/lib/rpmostree-package.c \
+	src/lib/rpmostree-refsack.c \
 	$(NULL)
 
 librpmostree_1_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libglnx -I$(srcdir)/src/libpriv -I$(srcdir)/src/lib \

@@ -1,6 +1,6 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*-
  *
- * Copyright (C) 2015 Red Hat, Inc.
+ * Copyright (C) 2015 Colin Walters <walters@verbum.org>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published
@@ -18,17 +18,32 @@
  * Boston, MA 02111-1307, USA.
  */
 
-#pragma once
+#include "config.h"
 
-#include <ostree.h>
-#include <rpmostree-package.h>
+#include <string.h>
+#include "rpmostree-priv.h"
 
-G_BEGIN_DECLS
+RpmOstreeRefSack *
+_rpm_ostree_refsack_new (HySack sack)
+{
+  RpmOstreeRefSack *rsack = g_new0 (RpmOstreeRefSack, 1);
+  rsack->sack = sack;
+  rsack->refcount = 1;
+  return rsack;
+}
 
-_RPMOSTREE_EXTERN GPtrArray *rpm_ostree_db_query (OstreeRepo               *repo,
-                                                  const char               *ref,
-                                                  GVariant                 *query,
-                                                  GCancellable             *cancellable,
-                                                  GError                  **error);
+RpmOstreeRefSack *
+_rpm_ostree_refsack_ref (RpmOstreeRefSack *rsack)
+{
+  g_atomic_int_inc (&rsack->refcount);
+  return rsack;
+}
 
-G_END_DECLS
+void
+_rpm_ostree_refsack_unref (RpmOstreeRefSack *rsack)
+{
+  if (!g_atomic_int_dec_and_test (&rsack->refcount))
+    return;
+  hy_sack_free (rsack->sack);
+  g_free (rsack);
+}
