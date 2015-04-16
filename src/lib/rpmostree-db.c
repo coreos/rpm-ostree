@@ -23,6 +23,7 @@
 #include "string.h"
 
 #include "rpmostree-db.h"
+#include "rpmostree-priv.h"
 #include "rpmostree-cleanup.h"
 
 /**
@@ -33,46 +34,6 @@
  * These APIs provide queryable access to the RPM database inside an
  * OSTree repository.
  */
-
-struct RpmOstreeDbQueryResult 
-{
-  volatile gint refcount;
-  GPtrArray *packages;
-};
-
-RpmOstreeDbQueryResult *
-rpm_ostree_db_query_ref (RpmOstreeDbQueryResult *result)
-{
-  g_atomic_int_inc (&result->refcount);
-  return result;
-}
-
-void
-rpm_ostree_db_query_unref (RpmOstreeDbQueryResult *result)
-{
-  if (!g_atomic_int_dec_and_test (&result->refcount))
-    return;
-
-  g_ptr_array_unref (result->packages);
-  g_free (result);
-}
-
-G_DEFINE_BOXED_TYPE(RpmOstreeDbQueryResult, rpm_ostree_db_query_result,
-                    rpm_ostree_db_query_ref,
-                    rpm_ostree_db_query_unref);
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeDbQueryResult, rpm_ostree_db_query_unref)
-
-/**
- * rpm_ostree_db_query_result_get_packages:
- * @queryresult: Query result
- *
- * Returns: (transfer none) (array zero-terminated=1) (element-type utf8): List of packages, %NULL terminated
- */
-const char *const *
-rpm_ostree_db_query_result_get_packages (RpmOstreeDbQueryResult *queryresult)
-{
-  return (const char * const *)queryresult->packages->pdata;
-}
 
 /**
  * rpm_ostree_db_query:
@@ -87,9 +48,9 @@ rpm_ostree_db_query_result_get_packages (RpmOstreeDbQueryResult *queryresult)
  * returned.  A future enhancement to this API may allow querying a
  * subset of packages.
  *
- * Returns: (transfer full): A new query result, or %NULL on error
+ * Returns: (transfer container) (element-type RpmOstreePackage): A query result, or %NULL on error
  */
-RpmOstreeDbQueryResult *
+GPtrArray *
 rpm_ostree_db_query (OstreeRepo                *repo,
                      const char                *ref,
                      GVariant                  *query,
@@ -99,7 +60,7 @@ rpm_ostree_db_query (OstreeRepo                *repo,
   int rc;
   OstreeRepoCheckoutOptions checkout_options = { 0, };
   g_autofree char *commit = NULL;
-  _cleanup_hysack_ HySack sack = NULL;
+  g_autoptr(RpmOstreeRefSack) sack = NULL;
   _cleanup_hyquery_ HyQuery hquery = NULL;
   _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
   g_autofree char *tempdir = g_strdup ("/tmp/rpmostree-dbquery-XXXXXXXX");
@@ -134,30 +95,35 @@ rpm_ostree_db_query (OstreeRepo                *repo,
                                      cancellable, error))
     goto out;
 
-#if BUILDOPT_HAWKEY_SACK_CREATE2
-  sack = hy_sack_create (NULL, NULL,
-                         rpmdb_tempdir,
-                         NULL,
-                         0);
-#else
-  sack = hy_sack_create (NULL, NULL,
-                         rpmdb_tempdir,
-                         0);
-#endif
-  if (sack == NULL)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Failed to create sack cache");
-      goto out;
-    }
+  {
+    HySack hsack; 
 
-  rc = hy_sack_load_system_repo (sack, NULL, 0);
+#if BUILDOPT_HAWKEY_SACK_CREATE2
+    hsack = hy_sack_create (NULL, NULL,
+                            rpmdb_tempdir,
+                            NULL,
+                            0);
+#else
+    hsack = hy_sack_create (NULL, NULL,
+                            rpmdb_tempdir,
+                            0);
+#endif
+    if (hsack == NULL)
+      {
+        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                     "Failed to create sack cache");
+        goto out;
+      }
+    sack = _rpm_ostree_refsack_new (hsack);
+  }
+
+  rc = hy_sack_load_system_repo (sack->sack, NULL, 0);
   if (!hif_error_set_from_hawkey (rc, error))
     {
       g_prefix_error (error, "Failed to load system repo: ");
       goto out;
     }
-  hquery = hy_query_create (sack);
+  hquery = hy_query_create (sack->sack);
   hy_query_filter (hquery, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
   pkglist = hy_query_run (hquery);
 
@@ -165,19 +131,15 @@ rpm_ostree_db_query (OstreeRepo                *repo,
 
   /* Do output creation now, no errors can be thrown */
   {
-    RpmOstreeDbQueryResult *result = g_new0 (RpmOstreeDbQueryResult, 1);
+    GPtrArray *result = g_ptr_array_new_with_free_func (g_object_unref);
     int i, c;
 
-    result->refcount = 1;
-    result->packages = g_ptr_array_new_with_free_func (free);
-    
     c = hy_packagelist_count (pkglist);
     for (i = 0; i < c; i++)
       {
         HyPackage pkg = hy_packagelist_get (pkglist, i);
-        g_ptr_array_add (result->packages, hy_package_get_nevra (pkg));
+        g_ptr_array_add (result, _rpm_ostree_package_new (sack, pkg));
       }
-    g_ptr_array_add (result->packages, NULL);
     
     return g_steal_pointer (&result);
   }

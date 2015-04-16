@@ -25,3 +25,4 @@
 #endif
 
 #include <rpmostree-db.h>
+#include <rpmostree-package.h>
