@@ -108,7 +108,8 @@ rpmostree_print_gpg_verify_result (OstreeGpgVerifyResult *result)
   n_sigs = ostree_gpg_verify_result_count_all (result);
 
   /* XXX If we ever add internationalization, use ngettext() here. */
-  g_print ("\nFound %u signature%s:\n", n_sigs, n_sigs == 1 ? "" : "s");
+  g_print ("GPG: Verification enabled, found %u signature%s:\n",
+           n_sigs, n_sigs == 1 ? "" : "s");
 
   buffer = g_string_sized_new (256);
 
