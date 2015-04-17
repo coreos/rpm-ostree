@@ -26,19 +26,18 @@
 #include "rpmostree-cleanup.h"
 
 gboolean
-rpmostree_get_pkglist_for_root (int               dfd,
-                                const char       *path,
-                                HySack           *out_sack,
-                                HyPackageList    *out_pkglist,
-                                GCancellable     *cancellable,
-                                GError          **error)
+rpmostree_get_sack_for_root (int               dfd,
+                             const char       *path,
+                             HySack           *out_sack,
+                             GCancellable     *cancellable,
+                             GError          **error)
 {
   gboolean ret = FALSE;
   int rc;
   _cleanup_hysack_ HySack sack = NULL;
-  _cleanup_hyquery_ HyQuery query = NULL;
-  _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
   g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
+
+  g_return_val_if_fail (out_sack != NULL, FALSE);
 
 #if BUILDOPT_HAWKEY_SACK_CREATE2
   sack = hy_sack_create (NULL, NULL,
@@ -63,6 +62,30 @@ rpmostree_get_pkglist_for_root (int               dfd,
       g_prefix_error (error, "Failed to load system repo: ");
       goto out;
     }
+
+  ret = TRUE;
+  *out_sack = g_steal_pointer (&sack);
+ out:
+  return ret;
+}
+
+gboolean
+rpmostree_get_pkglist_for_root (int               dfd,
+                                const char       *path,
+                                HySack           *out_sack,
+                                HyPackageList    *out_pkglist,
+                                GCancellable     *cancellable,
+                                GError          **error)
+{
+  gboolean ret = FALSE;
+  _cleanup_hysack_ HySack sack = NULL;
+  _cleanup_hyquery_ HyQuery query = NULL;
+  _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+  g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
+
+  if (!rpmostree_get_sack_for_root (dfd, path, &sack, cancellable, error))
+    goto out;
+
   query = hy_query_create (sack);
   hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
   pkglist = hy_query_run (query);

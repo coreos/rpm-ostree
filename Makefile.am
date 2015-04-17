@@ -46,6 +46,7 @@ TYPELIBS = $(GIRS:.gir=.typelib)
 
 include libglnx/Makefile-libglnx.am
 noinst_LTLIBRARIES += libglnx.la
+include Makefile-libpriv.am
 include Makefile-lib.am
 include Makefile-rpm-ostree.am
 include Makefile-tests.am

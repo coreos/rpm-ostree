@@ -1,0 +1,36 @@
+# Copyright (C) 2015 Colin Walters <walters@verbum.org>
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library; if not, write to the
+# Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+# Boston, MA 02111-1307, USA.
+
+noinst_LTLIBRARIES += librpmostreepriv.la
+
+librpmostreepriv_la_SOURCES = \
+	src/libpriv/rpmostree-postprocess.c \
+	src/libpriv/rpmostree-postprocess.h \
+	src/libpriv/rpmostree-json-parsing.c \
+	src/libpriv/rpmostree-json-parsing.h \
+	src/libpriv/rpmostree-util.c \
+	src/libpriv/rpmostree-util.h \
+	src/libpriv/rpmostree-passwd-util.c \
+	src/libpriv/rpmostree-passwd-util.h \
+	src/libpriv/rpmostree-cleanup.h \
+	src/libpriv/rpmostree-rpm-util.c \
+	src/libpriv/rpmostree-rpm-util.h \
+	src/libpriv/rpmostree-treepkgdiff.c \
+	src/libpriv/rpmostree-treepkgdiff.h \
+	$(NULL)
+librpmostreepriv_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
+librpmostreepriv_la_LIBADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS) libglnx.la $(CAP_LIBS)
