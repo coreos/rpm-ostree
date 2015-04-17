@@ -25,6 +25,7 @@
 #include "rpmostree-db.h"
 #include "rpmostree-priv.h"
 #include "rpmostree-cleanup.h"
+#include "rpmostree-treepkgdiff.h"
 
 /**
  * SECTION:librpmostree-dbquery
@@ -98,22 +99,10 @@ rpm_ostree_db_query (OstreeRepo                *repo,
   {
     HySack hsack; 
 
-#if BUILDOPT_HAWKEY_SACK_CREATE2
-    hsack = hy_sack_create (NULL, NULL,
-                            rpmdb_tempdir,
-                            NULL,
-                            0);
-#else
-    hsack = hy_sack_create (NULL, NULL,
-                            rpmdb_tempdir,
-                            0);
-#endif
-    if (hsack == NULL)
-      {
-        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                     "Failed to create sack cache");
-        goto out;
-      }
+    if (!rpmostree_get_sack_for_root (tempdir_dfd, ".",
+                                      &hsack, cancellable, error))
+      goto out;
+
     sack = _rpm_ostree_refsack_new (hsack);
   }
 

@@ -17,28 +17,6 @@
 
 bin_PROGRAMS += rpm-ostree
 
-noinst_LTLIBRARIES += librpmostree.la
-
-librpmostree_la_SOURCES = \
-	src/libpriv/rpmostree-postprocess.c \
-	src/libpriv/rpmostree-postprocess.h \
-	src/libpriv/rpmostree-json-parsing.c \
-	src/libpriv/rpmostree-json-parsing.h \
-	src/libpriv/rpmostree-util.c \
-	src/libpriv/rpmostree-util.h \
-	src/libpriv/rpmostree-passwd-util.c \
-	src/libpriv/rpmostree-passwd-util.h \
-	src/libpriv/rpmostree-cleanup.h \
-	src/libpriv/rpmostree-treepkgdiff.c \
-	src/libpriv/rpmostree-treepkgdiff.h \
-	src/libpriv/rpmostree-rpm-util.c \
-	src/libpriv/rpmostree-rpm-util.h \
-	src/libpriv/rpmostree-treepkgdiff.c \
-	src/libpriv/rpmostree-treepkgdiff.h \
-	$(NULL)
-librpmostree_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
-librpmostree_la_LIBADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS) libglnx.la $(CAP_LIBS)
-
 rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-builtins.h \
 	src/app/rpmostree-db-builtins.h \
@@ -62,7 +40,7 @@ rpm_ostree_SOURCES += \
 endif
 
 rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/app -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
-rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)  libglnx.la librpmostree.la
+rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)  librpmostreepriv.la
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/app/tmpfiles-ostree-integration.conf

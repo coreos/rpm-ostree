@@ -24,6 +24,13 @@
 #include "rpmostree-cleanup.h"
 
 gboolean
+rpmostree_get_sack_for_root (int               dfd,
+                             const char       *path,
+                             HySack           *out_sack,
+                             GCancellable     *cancellable,
+                             GError          **error);
+
+gboolean
 rpmostree_get_pkglist_for_root (int               dfd,
                                 const char       *path,
                                 HySack           *out_sack,
