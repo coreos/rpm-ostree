@@ -1143,7 +1143,8 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
       remove = json_object_get_array_member (treefile, "remove-from-packages");
       len = json_array_get_length (remove);
 
-      if (!rpmostree_get_pkglist_for_root (yumroot, &sack, &pkglist,
+      if (!rpmostree_get_pkglist_for_root (AT_FDCWD, gs_file_get_path_cached (yumroot),
+                                           &sack, &pkglist,
                                            cancellable, error))
         {
           g_prefix_error (error, "Reading package set: ");
