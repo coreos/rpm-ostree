@@ -36,40 +36,16 @@
  * OSTree repository.
  */
 
-/**
- * rpm_ostree_db_query:
- * @repo: An OSTree repository
- * @ref: A branch name or commit
- * @query: (allow-none): Currently, this must be %NULL
- * @cancellable: Cancellable
- * @error: Error
- *
- * Query the RPM packages present in the @ref branch or commit in
- * @repo. At present, @query must be %NULL; all packages will be
- * returned.  A future enhancement to this API may allow querying a
- * subset of packages.
- *
- * Returns: (transfer container) (element-type RpmOstreePackage): A query result, or %NULL on error
- */
-GPtrArray *
-rpm_ostree_db_query (OstreeRepo                *repo,
-                     const char                *ref,
-                     GVariant                  *query,
-                     GCancellable              *cancellable,
-                     GError                   **error)
+static RpmOstreeRefSack *
+get_refsack_for_commit (OstreeRepo                *repo,
+                        const char                *ref,
+                        GCancellable              *cancellable,
+                        GError                   **error)
 {
-  int rc;
-  OstreeRepoCheckoutOptions checkout_options = { 0, };
   g_autofree char *commit = NULL;
-  g_autoptr(RpmOstreeRefSack) sack = NULL;
-  _cleanup_hyquery_ HyQuery hquery = NULL;
-  _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
   g_autofree char *tempdir = g_strdup ("/tmp/rpmostree-dbquery-XXXXXXXX");
-  g_autofree char *rpmdb_tempdir = NULL;
-  gs_unref_object GFile* commit_rpmdb = NULL;
+  OstreeRepoCheckoutOptions checkout_options = { 0, };
   glnx_fd_close int tempdir_dfd = -1;
-
-  g_return_val_if_fail (query == NULL, FALSE);
 
   if (!ostree_repo_resolve_rev (repo, ref, FALSE, &commit, error))
     goto out;
@@ -103,35 +79,64 @@ rpm_ostree_db_query (OstreeRepo                *repo,
                                       &hsack, cancellable, error))
       goto out;
 
-    sack = _rpm_ostree_refsack_new (hsack);
+    return _rpm_ostree_refsack_new (hsack, AT_FDCWD, tempdir);
   }
 
-  rc = hy_sack_load_system_repo (sack->sack, NULL, 0);
-  if (!hif_error_set_from_hawkey (rc, error))
-    {
-      g_prefix_error (error, "Failed to load system repo: ");
-      goto out;
-    }
-  hquery = hy_query_create (sack->sack);
+ out:
+  return NULL;
+}
+
+static GPtrArray *
+query_all_packages_in_sack (RpmOstreeRefSack *rsack)
+{
+  _cleanup_hyquery_ HyQuery hquery = NULL;
+  _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+  GPtrArray *result;
+  int i, c;
+
+  hquery = hy_query_create (rsack->sack);
   hy_query_filter (hquery, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
   pkglist = hy_query_run (hquery);
 
-  (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, cancellable, NULL);
+  result = g_ptr_array_new_with_free_func (g_object_unref);
+  
+  c = hy_packagelist_count (pkglist);
+  for (i = 0; i < c; i++)
+    {
+      HyPackage pkg = hy_packagelist_get (pkglist, i);
+      g_ptr_array_add (result, _rpm_ostree_package_new (rsack, pkg));
+    }
+  
+  return g_steal_pointer (&result);
+}
 
-  /* Do output creation now, no errors can be thrown */
-  {
-    GPtrArray *result = g_ptr_array_new_with_free_func (g_object_unref);
-    int i, c;
+/**
+ * rpm_ostree_db_query:
+ * @repo: An OSTree repository
+ * @ref: A branch name or commit
+ * @query: (allow-none): Currently, this must be %NULL
+ * @cancellable: Cancellable
+ * @error: Error
+ *
+ * Query the RPM packages present in the @ref branch or commit in
+ * @repo. At present, @query must be %NULL; all packages will be
+ * returned.  A future enhancement to this API may allow querying a
+ * subset of packages.
+ *
+ * Returns: (transfer container) (element-type RpmOstreePackage): A query result, or %NULL on error
+ */
+GPtrArray *
+rpm_ostree_db_query (OstreeRepo                *repo,
+                     const char                *ref,
+                     GVariant                  *query,
+                     GCancellable              *cancellable,
+                     GError                   **error)
+{
+  g_autoptr(RpmOstreeRefSack) rsack = NULL;
 
-    c = hy_packagelist_count (pkglist);
-    for (i = 0; i < c; i++)
-      {
-        HyPackage pkg = hy_packagelist_get (pkglist, i);
-        g_ptr_array_add (result, _rpm_ostree_package_new (sack, pkg));
-      }
-    
-    return g_steal_pointer (&result);
-  }
- out:
-  return NULL;
+  g_return_val_if_fail (query == NULL, FALSE);
+
+  rsack = get_refsack_for_commit (repo, ref, cancellable, error);
+
+  return query_all_packages_in_sack (rsack);
 }
