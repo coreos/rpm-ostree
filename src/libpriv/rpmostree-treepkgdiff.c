@@ -26,7 +26,8 @@
 #include "rpmostree-cleanup.h"
 
 gboolean
-rpmostree_get_pkglist_for_root (GFile            *root,
+rpmostree_get_pkglist_for_root (int               dfd,
+                                const char       *path,
                                 HySack           *out_sack,
                                 HyPackageList    *out_pkglist,
                                 GCancellable     *cancellable,
@@ -37,15 +38,16 @@ rpmostree_get_pkglist_for_root (GFile            *root,
   _cleanup_hysack_ HySack sack = NULL;
   _cleanup_hyquery_ HyQuery query = NULL;
   _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+  g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
 
 #if BUILDOPT_HAWKEY_SACK_CREATE2
   sack = hy_sack_create (NULL, NULL,
-                         gs_file_get_path_cached (root),
+                         fullpath,
                          NULL,
                          HY_MAKE_CACHE_DIR);
 #else
   sack = hy_sack_create (NULL, NULL,
-                         gs_file_get_path_cached (root),
+                         fullpath,
                          HY_MAKE_CACHE_DIR);
 #endif
   if (sack == NULL)
@@ -73,8 +75,9 @@ rpmostree_get_pkglist_for_root (GFile            *root,
 }
 
 static gboolean
-print_rpmdb_diff (GFile          *oldroot,
-                  GFile          *newroot,
+print_rpmdb_diff (int             dfd,
+                  const char     *oldroot,
+                  const char     *newroot,
                   GCancellable   *cancellable,
                   GError        **error)
 {
@@ -87,11 +90,11 @@ print_rpmdb_diff (GFile          *oldroot,
   HyPackage pkg;
   gboolean printed_header = FALSE;
 
-  if (!rpmostree_get_pkglist_for_root (oldroot, &old_sack, &old_pkglist,
+  if (!rpmostree_get_pkglist_for_root (dfd, oldroot, &old_sack, &old_pkglist,
                                        cancellable, error))
     goto out;
 
-  if (!rpmostree_get_pkglist_for_root (newroot, &new_sack, &new_pkglist,
+  if (!rpmostree_get_pkglist_for_root (dfd, newroot, &new_sack, &new_pkglist,
                                        cancellable, error))
     goto out;
   
@@ -177,20 +180,23 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
   OstreeDeployment *new_deployment;
   gs_unref_ptrarray GPtrArray *deployments = 
     ostree_sysroot_get_deployments (sysroot);
-  gs_unref_object GFile *booted_root = NULL;
-  gs_unref_object GFile *new_root = NULL;
+  int sysroot_dfd;
 
   booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
   
   g_assert (deployments->len > 1);
   new_deployment = deployments->pdata[0];
+
+  sysroot_dfd = ostree_sysroot_get_fd (sysroot);
   
   if (booted_deployment && new_deployment != booted_deployment)
     {
-      booted_root = ostree_sysroot_get_deployment_directory (sysroot, booted_deployment);
-      new_root = ostree_sysroot_get_deployment_directory (sysroot, new_deployment);
+      g_autofree char *booted_root =
+        ostree_sysroot_get_deployment_dirpath (sysroot, booted_deployment);
+      g_autofree char *new_root =
+        ostree_sysroot_get_deployment_dirpath (sysroot, new_deployment);
       
-      if (!print_rpmdb_diff (booted_root, new_root, cancellable, error))
+      if (!print_rpmdb_diff (sysroot_dfd, booted_root, new_root, cancellable, error))
         goto out;
     }
 
