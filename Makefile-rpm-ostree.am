@@ -29,6 +29,8 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-db-builtin-diff.c \
 	src/app/rpmostree-db-builtin-list.c \
 	src/app/rpmostree-db-builtin-version.c \
+	src/app/rpmostree-libbuiltin.c \
+	src/app/rpmostree-libbuiltin.h \
 	$(NULL)
 
 if BUILDOPT_COMPOSE_TOOLING
@@ -39,8 +41,8 @@ rpm_ostree_SOURCES += \
 	$(NULL)
 endif
 
-rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/app -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
-rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)  librpmostreepriv.la
+rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/app -I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
+rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)  librpmostreepriv.la librpmostree-1.la
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/app/tmpfiles-ostree-integration.conf
