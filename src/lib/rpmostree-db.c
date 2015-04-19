@@ -25,7 +25,7 @@
 #include "rpmostree-db.h"
 #include "rpmostree-priv.h"
 #include "rpmostree-cleanup.h"
-#include "rpmostree-treepkgdiff.h"
+#include "rpmostree-rpm-util.h"
 
 /**
  * SECTION:librpmostree-dbquery

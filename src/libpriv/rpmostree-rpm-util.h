@@ -25,8 +25,9 @@
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
 #include "rpmostree-util.h"
+#include "rpmostree-cleanup.h"
 
-#include "libgsystem.h"
+#include "libglnx.h"
 
 struct RpmHeaders
 {
@@ -86,4 +87,22 @@ rpmrev_free (struct RpmRevisionData *ptr);
 
 GS_DEFINE_CLEANUP_FUNCTION0(struct RpmRevisionData *, _cleanup_rpmrev_free, rpmrev_free);
 #define _cleanup_rpmrev_ __attribute__((cleanup(_cleanup_rpmrev_free)))
+
+gboolean
+rpmostree_get_sack_for_root (int               dfd,
+                             const char       *path,
+                             HySack           *out_sack,
+                             GCancellable     *cancellable,
+                             GError          **error);
+
+gboolean
+rpmostree_get_pkglist_for_root (int               dfd,
+                                const char       *path,
+                                HySack           *out_sack,
+                                HyPackageList    *out_pkglist,
+                                GCancellable     *cancellable,
+                                GError          **error);
+
+void
+rpmostree_print_transaction (HifContext   *context);
 
