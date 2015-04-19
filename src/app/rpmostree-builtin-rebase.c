@@ -25,7 +25,7 @@
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-util.h"
-#include "rpmostree-treepkgdiff.h"
+#include "rpmostree-libbuiltin.h"
 
 #include "libgsystem.h"
 

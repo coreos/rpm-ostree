@@ -25,7 +25,7 @@
 #include <gio/gio.h>
 
 #include "rpmostree-builtins.h"
-#include "rpmostree-treepkgdiff.h"
+#include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 
 #include "libgsystem.h"
