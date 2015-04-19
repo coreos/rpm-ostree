@@ -36,10 +36,10 @@
 
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
+#include "rpmostree-rpm-util.h"
 #include "rpmostree-cleanup.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-util.h"
-#include "rpmostree-treepkgdiff.h"
 
 typedef enum {
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY,

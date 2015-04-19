@@ -24,7 +24,6 @@
 #include <glib-unix.h>
 
 #include "rpmostree-builtins.h"
-#include "rpmostree-treepkgdiff.h"
 
 #include "libgsystem.h"
 
