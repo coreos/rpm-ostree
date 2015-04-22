@@ -254,6 +254,9 @@ do_kernel_prep (GFile         *yumroot,
       goto out;
   }
 
+  /* Ensure the /etc/machine-id file is present and empty. Apparently systemd
+     doesn't work when the file is missing (as of systemd-219-9.fc22) but it is
+     correctly populated if the file is there.  */
   g_print ("Creating empty machine-id\n");
   {
     const char *hardcoded_machine_id = "";
