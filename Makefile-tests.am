@@ -1,5 +1,11 @@
 include $(top_srcdir)/buildutil/glib-tap.mk
 
+CLEANFILES += \
+	tests/compose/yum/empty tests/compose/yum/repodata/repomd.xml \
+	tests/compose/test-repo.repo \
+	tests/compose/yum/repodata/*.bz2 \
+	tests/compose/yum/repodata/*.gz \
+	$(NULL)
 
 # Needed by the compose test
 tests/compose/yum/empty: tests/compose/yum/empty.c
