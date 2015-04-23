@@ -31,4 +31,15 @@ _RPMOSTREE_EXTERN GPtrArray *rpm_ostree_db_query (OstreeRepo               *repo
                                                   GCancellable             *cancellable,
                                                   GError                  **error);
 
+_RPMOSTREE_EXTERN gboolean rpm_ostree_db_diff (OstreeRepo               *repo,
+                                               const char               *orig_ref,
+                                               const char               *new_ref,
+                                               GVariant                 *query,
+                                               GPtrArray               **out_removed,
+                                               GPtrArray               **out_added,
+                                               GPtrArray               **out_modified_old,
+                                               GPtrArray               **out_modified_new,
+                                               GCancellable             *cancellable,
+                                               GError                  **error);
+
 G_END_DECLS

@@ -24,11 +24,13 @@
 #include "rpmostree-priv.h"
 
 RpmOstreeRefSack *
-_rpm_ostree_refsack_new (HySack sack)
+_rpm_ostree_refsack_new (HySack sack, int temp_base_dfd, const char *temp_path)
 {
   RpmOstreeRefSack *rsack = g_new0 (RpmOstreeRefSack, 1);
   rsack->sack = sack;
   rsack->refcount = 1;
+  rsack->temp_base_dfd = temp_base_dfd;
+  rsack->temp_path = g_strdup (temp_path);
   return rsack;
 }
 
@@ -45,5 +47,13 @@ _rpm_ostree_refsack_unref (RpmOstreeRefSack *rsack)
   if (!g_atomic_int_dec_and_test (&rsack->refcount))
     return;
   hy_sack_free (rsack->sack);
+  
+  /* The sack might point to a temporarily allocated rpmdb copy, if so,
+   * prune it now.
+   */
+  if (rsack->temp_path)
+    (void) glnx_shutil_rm_rf_at (rsack->temp_base_dfd, rsack->temp_path, NULL, NULL);
+
+  g_free (rsack->temp_path);
   g_free (rsack);
 }

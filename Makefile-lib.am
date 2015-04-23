@@ -34,7 +34,7 @@ librpmostree_1_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libglnx -I$(srcdir)/src/libp
 	-fvisibility=hidden '-D_RPMOSTREE_EXTERN=__attribute((visibility("default"))) extern' \
 	$(PKGDEP_RPMOSTREE_CFLAGS)
 librpmostree_1_la_LDFLAGS = -version-number 1:0:0 -Bsymbolic-functions
-librpmostree_1_la_LIBADD = libglnx.la $(PKGDEP_RPMOSTREE_LIBS)
+librpmostree_1_la_LIBADD =  $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la
 
 if BUILDOPT_INTROSPECTION
 RpmOstree-1.0.gir: librpmostree-1.la Makefile

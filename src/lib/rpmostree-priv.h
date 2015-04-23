@@ -29,13 +29,15 @@
 typedef struct {
   volatile gint refcount;
   HySack sack;
+  int temp_base_dfd;
+  char *temp_path;
 } RpmOstreeRefSack;
 
 RpmOstreePackage *
 _rpm_ostree_package_new (RpmOstreeRefSack *rsack, HyPackage hypkg);
 
 RpmOstreeRefSack *
-_rpm_ostree_refsack_new (HySack sack);
+_rpm_ostree_refsack_new (HySack sack, int temp_base_dfd, const char *temp_path);
 
 RpmOstreeRefSack *
 _rpm_ostree_refsack_ref (RpmOstreeRefSack *rsack);
