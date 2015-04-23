@@ -56,7 +56,7 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
       if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
         goto out;
       
-      if (!rpm_ostree_db_diff (repo, from_rev, to_rev, NULL,
+      if (!rpm_ostree_db_diff (repo, from_rev, to_rev,
                                &removed, &added, &modified_old, &modified_new,
                                cancellable, error))
         goto out;

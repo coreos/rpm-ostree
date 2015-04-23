@@ -33,7 +33,6 @@ _RPMOSTREE_EXTERN GPtrArray *rpm_ostree_db_query_all (OstreeRepo               *
 _RPMOSTREE_EXTERN gboolean rpm_ostree_db_diff (OstreeRepo               *repo,
                                                const char               *orig_ref,
                                                const char               *new_ref,
-                                               GVariant                 *query,
                                                GPtrArray               **out_removed,
                                                GPtrArray               **out_added,
                                                GPtrArray               **out_modified_old,

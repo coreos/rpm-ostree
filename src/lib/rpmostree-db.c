@@ -140,7 +140,6 @@ rpm_ostree_db_query_all (OstreeRepo                *repo,
  * @repo: An OSTree repository
  * @orig_ref: Original ref (branch or commit)
  * @new_ref: New ref (branch or commit)
- * @query: (allow-none): A query, currently must be %NULL
  * @out_removed: (out) (transfer container) (element-type RpmOstreePackage): Return location for removed packages
  * @out_added: (out) (transfer container) (element-type RpmOstreePackage): Return location for added packages
  * @out_modified_old: (out) (transfer container) (element-type RpmOstreePackage): Return location for modified old packages
@@ -165,7 +164,6 @@ gboolean
 rpm_ostree_db_diff (OstreeRepo               *repo,
                     const char               *orig_ref,
                     const char               *new_ref,
-                    GVariant                 *query,
                     GPtrArray               **out_removed,
                     GPtrArray               **out_added,
                     GPtrArray               **out_modified_old,
@@ -185,7 +183,6 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
   guint i;
   HyPackage pkg;
 
-  g_return_val_if_fail (query == NULL, FALSE);
   g_return_val_if_fail (out_removed != NULL && out_added != NULL &&
                         out_modified_old != NULL && out_modified_new != NULL, FALSE);
 

@@ -12,7 +12,7 @@ print "Package list: "
 for p in qr:
     print p.get_nevra()
 
-_,removed,added,modold,modnew = RpmOstree.db_diff(r, ref + '^', ref, None, None)
+_,removed,added,modold,modnew = RpmOstree.db_diff(r, ref + '^', ref, None)
 for p in removed:
     print "D " + p.get_nevra()
 for p in added:
