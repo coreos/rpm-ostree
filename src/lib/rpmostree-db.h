@@ -25,11 +25,10 @@
 
 G_BEGIN_DECLS
 
-_RPMOSTREE_EXTERN GPtrArray *rpm_ostree_db_query (OstreeRepo               *repo,
-                                                  const char               *ref,
-                                                  GVariant                 *query,
-                                                  GCancellable             *cancellable,
-                                                  GError                  **error);
+_RPMOSTREE_EXTERN GPtrArray *rpm_ostree_db_query_all (OstreeRepo               *repo,
+                                                      const char               *ref,
+                                                      GCancellable             *cancellable,
+                                                      GError                  **error);
 
 _RPMOSTREE_EXTERN gboolean rpm_ostree_db_diff (OstreeRepo               *repo,
                                                const char               *orig_ref,

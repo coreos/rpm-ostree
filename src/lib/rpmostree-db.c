@@ -111,30 +111,24 @@ query_all_packages_in_sack (RpmOstreeRefSack *rsack)
 }
 
 /**
- * rpm_ostree_db_query:
+ * rpm_ostree_db_query_all:
  * @repo: An OSTree repository
  * @ref: A branch name or commit
- * @query: (allow-none): Currently, this must be %NULL
  * @cancellable: Cancellable
  * @error: Error
  *
- * Query the RPM packages present in the @ref branch or commit in
- * @repo. At present, @query must be %NULL; all packages will be
- * returned.  A future enhancement to this API may allow querying a
- * subset of packages.
+ * Return all of the RPM packages present in the @ref branch or commit
+ * in @repo.
  *
  * Returns: (transfer container) (element-type RpmOstreePackage): A query result, or %NULL on error
  */
 GPtrArray *
-rpm_ostree_db_query (OstreeRepo                *repo,
-                     const char                *ref,
-                     GVariant                  *query,
-                     GCancellable              *cancellable,
-                     GError                   **error)
+rpm_ostree_db_query_all (OstreeRepo                *repo,
+                         const char                *ref,
+                         GCancellable              *cancellable,
+                         GError                   **error)
 {
   g_autoptr(RpmOstreeRefSack) rsack = NULL;
-
-  g_return_val_if_fail (query == NULL, FALSE);
 
   rsack = get_refsack_for_commit (repo, ref, cancellable, error);
 
