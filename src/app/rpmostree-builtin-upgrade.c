@@ -84,7 +84,7 @@ rpmostree_builtin_upgrade (int             argc,
   gboolean ret = FALSE;
   GOptionContext *context = g_option_context_new ("- Perform a system upgrade");
   gs_unref_object GDBusConnection *connection = NULL;
-  gs_unref_object RPMOSTreeSysroot *sysroot = NULL;
+  gs_unref_object RPMOSTreeManager *manager = NULL;
   gs_unref_object RPMOSTreeRefSpec *refspec = NULL;
   gs_free gchar *refspec_path = NULL;
   gs_free gchar *remote = NULL;
@@ -104,21 +104,23 @@ rpmostree_builtin_upgrade (int             argc,
   if (!connection)
     goto out;
 
-  // Get sysroot
-  sysroot = rpmostree_get_sysroot_proxy (connection,
-                                         opt_sysroot,
-                                         cancellable,
-                                         error);
-  if (!sysroot)
+  // Get manager
+  manager = rpmostree_manager_proxy_new_sync (connection,
+                                              G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
+                                              BUS_NAME,
+                                              "/org/projectatomic/rpmostree1/Manager",
+                                              cancellable,
+                                              error);
+  if (!manager)
     goto out;
 
 
   variant_args = get_args_variant ();
-  if (!rpmostree_sysroot_call_get_upgrade_ref_spec_sync (sysroot,
-                                                    variant_args,
-                                                    &refspec_path,
-                                                    cancellable,
-                                                    error))
+  if (!rpmostree_manager_call_get_upgrade_ref_spec_sync (manager,
+                                                         variant_args,
+                                                         &refspec_path,
+                                                         cancellable,
+                                                         error))
     goto out;
 
   if (rpmostree_is_valid_object_path (refspec_path))
@@ -140,10 +142,10 @@ rpmostree_builtin_upgrade (int             argc,
   if (refspec == NULL)
       goto out;
 
-  g_signal_connect (sysroot, "notify::DefaultDeployment",
+  g_signal_connect (manager, "notify::DefaultDeployment",
                     G_CALLBACK (transfer_changed_callback),
                     &new_deployment_path);
-  g_signal_connect (refspec, "notify::Head",
+  g_signal_connect (manager, "notify::Head",
                     G_CALLBACK (transfer_changed_callback),
                     &new_head);
 
@@ -152,7 +154,7 @@ rpmostree_builtin_upgrade (int             argc,
   g_print ("Updating from %s:%s\n", remote, ref);
   if (opt_check_diff)
     {
-      if (!rpmostree_refspec_update_sync (sysroot, refspec, "PullRpmDb",
+      if (!rpmostree_refspec_update_sync (manager, refspec, "PullRpmDb",
                                           NULL, cancellable, error))
         goto out;
 
@@ -160,7 +162,7 @@ rpmostree_builtin_upgrade (int             argc,
     }
   else
     {
-      if (!rpmostree_refspec_update_sync (sysroot, refspec, "Deploy",
+      if (!rpmostree_refspec_update_sync (manager, refspec, "Deploy",
                                           g_variant_new ("(@a{sv})", variant_args),
                                           cancellable, error))
         goto out;

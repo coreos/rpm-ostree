@@ -46,7 +46,7 @@ rpmostree_builtin_rollback (int             argc,
 {
   GOptionContext *context = g_option_context_new ("- Revert to the previously booted tree");
   gs_unref_object GDBusConnection *connection = NULL;
-  gs_unref_object RPMOSTreeSysroot *sysroot = NULL;
+  gs_unref_object RPMOSTreeManager *manager = NULL;
   gs_unref_object RPMOSTreeDeployment *booted_deployment = NULL;
   gs_unref_object RPMOSTreeDeployment *new_default_deployment = NULL;
   gs_unref_ptrarray GPtrArray *deployments = NULL;
@@ -70,17 +70,19 @@ rpmostree_builtin_rollback (int             argc,
   if (!connection)
     goto out;
 
-  // Get sysroot
-  sysroot = rpmostree_get_sysroot_proxy (connection,
-                                         opt_sysroot,
-                                         cancellable,
-                                         error);
-  if (!sysroot)
+  // Get manager
+  manager = rpmostree_manager_proxy_new_sync (connection,
+                                              G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
+                                              BUS_NAME,
+                                              "/org/projectatomic/rpmostree1/Manager",
+                                              cancellable,
+                                              error);
+  if (!manager)
     goto out;
 
   // populate deployment information
   variant_args = g_variant_ref_sink (g_variant_new ("a{sv}", NULL));
-  booted_deployment_path = rpmostree_sysroot_dup_booted_deployment (sysroot);
+  booted_deployment_path = rpmostree_manager_dup_booted_deployment (manager);
   if (rpmostree_is_valid_object_path (booted_deployment_path))
     {
       booted_deployment = rpmostree_deployment_proxy_new_sync (connection,
@@ -99,7 +101,7 @@ rpmostree_builtin_rollback (int             argc,
   if (booted_deployment == NULL)
     goto out;
 
-  if (!rpmostree_sysroot_call_get_deployments_sync (sysroot,
+  if (!rpmostree_manager_call_get_deployments_sync (manager,
                                                     variant_args,
                                                     &deployment_paths,
                                                     cancellable,
@@ -151,7 +153,7 @@ rpmostree_builtin_rollback (int             argc,
     goto out;
 
 
-  if (!rpmostree_deployment_deploy_sync (sysroot,
+  if (!rpmostree_deployment_deploy_sync (manager,
                                          new_default_deployment,
                                          cancellable,
                                          error))

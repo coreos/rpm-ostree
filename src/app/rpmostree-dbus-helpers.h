@@ -29,23 +29,17 @@
 
 #define BUS_NAME "org.projectatomic.rpmostree1"
 
-RPMOSTreeSysroot *
-rpmostree_get_sysroot_proxy                  (GDBusConnection *connection,
-                                              gchar *sysroot_arg,
-                                              GCancellable *cancellable,
-                                              GError **error);
-
 gboolean
 rpmostree_is_valid_object_path               (gchar *string);
 
 gboolean
-rpmostree_deployment_deploy_sync             (RPMOSTreeSysroot *sysroot,
+rpmostree_deployment_deploy_sync             (RPMOSTreeManager *manager,
                                               RPMOSTreeDeployment *deployment,
                                               GCancellable *cancellable,
                                               GError **error);
 
 gboolean
-rpmostree_refspec_update_sync                (RPMOSTreeSysroot *sysroot,
+rpmostree_refspec_update_sync                (RPMOSTreeManager *manager,
                                               RPMOSTreeRefSpec *refspec,
                                               const gchar *method,
                                               GVariant *parameters,

@@ -32,8 +32,7 @@ G_BEGIN_DECLS
 
 GType                   deployment_get_type     (void) G_GNUC_CONST;
 
-RPMOSTreeDeployment *   deployment_new          (Sysroot *sysroot,
-                                                 gchar *id);
+RPMOSTreeDeployment *   deployment_new          (gchar *id);
 
 gboolean                deployment_populate     (Deployment *deployment,
                                                  OstreeDeployment *ostree_deployment,

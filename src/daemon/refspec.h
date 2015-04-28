@@ -33,8 +33,7 @@ G_BEGIN_DECLS
 
 GType               refspec_get_type                (void) G_GNUC_CONST;
 
-RPMOSTreeRefSpec *  refspec_new                     (Sysroot *sysroot,
-                                                     const gchar *id);
+RPMOSTreeRefSpec *  refspec_new                     (const gchar *id);
 
 gboolean            refspec_populate                (RefSpec *refspec,
                                                      const gchar *refspec_string,
@@ -43,7 +42,7 @@ gboolean            refspec_populate                (RefSpec *refspec,
 
 gboolean            refspec_is_updating             (RefSpec *refspec);
 
-gboolean            refspec_resolve_partial_aysnc   (Sysroot *sysroot,
+gboolean            refspec_resolve_partial_aysnc   (gpointer source_object,
                                                      const gchar *new_provided_refspec,
                                                      RefSpec *current_refspec,
                                                      GAsyncReadyCallback callback,

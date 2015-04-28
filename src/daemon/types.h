@@ -33,9 +33,6 @@ typedef struct _Daemon Daemon;
 struct _Manager;
 typedef struct _Manager Manager;
 
-struct _Sysroot;
-typedef struct _Sysroot Sysroot;
-
 struct _Deployment;
 typedef struct _Deployment Deployment;
 

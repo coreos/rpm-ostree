@@ -78,7 +78,7 @@ rpmostree_builtin_status (int             argc,
   gboolean ret = FALSE;
   GOptionContext *context = g_option_context_new ("- Get the version of the booted system");
   gs_unref_object GDBusConnection *connection = NULL;
-  gs_unref_object RPMOSTreeSysroot *sysroot = NULL;
+  gs_unref_object RPMOSTreeManager *manager = NULL;
   gs_unref_ptrarray GPtrArray *deployments = NULL;
   gs_unref_variant GVariant *variant_args = NULL;
   gs_unref_variant GVariant *booted_signatures = NULL;
@@ -106,18 +106,20 @@ rpmostree_builtin_status (int             argc,
   if (!connection)
     goto out;
 
-  // Get sysroot
-  sysroot = rpmostree_get_sysroot_proxy (connection,
-                                         opt_sysroot,
-                                         cancellable,
-                                         error);
-  if (!sysroot)
+  // Get manager
+  manager = rpmostree_manager_proxy_new_sync (connection,
+                                              G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
+                                              BUS_NAME,
+                                              "/org/projectatomic/rpmostree1/Manager",
+                                              cancellable,
+                                              error);
+  if (!manager)
     goto out;
 
   // populate deployment information
   variant_args = g_variant_ref_sink (g_variant_new ("a{sv}", NULL));
-  booted_deployment = rpmostree_sysroot_dup_booted_deployment (sysroot);
-  if (!rpmostree_sysroot_call_get_deployments_sync (sysroot,
+  booted_deployment = rpmostree_manager_dup_booted_deployment (manager);
+  if (!rpmostree_manager_call_get_deployments_sync (manager,
                                                     variant_args,
                                                     &deployment_paths,
                                                     cancellable,

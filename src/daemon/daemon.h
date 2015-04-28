@@ -27,6 +27,9 @@ G_BEGIN_DECLS
 #define DAEMON(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), TYPE_DAEMON, Daemon))
 #define IS_DAEMON(o)  (G_TYPE_CHECK_INSTANCE_TYPE ((o), TYPE_DAEMON))
 
+#define DBUS_NAME "org.projectatomic.rpmostree1"
+#define BASE_DBUS_PATH "/org/projectatomic/rpmostree1"
+
 GType                      daemon_get_type           (void) G_GNUC_CONST;
 
 Daemon *                   daemon_get                (void);
@@ -42,10 +45,6 @@ void                       daemon_publish            (Daemon *self,
 void                       daemon_unpublish          (Daemon *self,
                                                       const gchar *path,
                                                       gpointer thing);
-
-void                       daemon_watch_client       (Daemon *self,
-                                                      GDBusConnection *connection,
-                                                      const gchar *bus_name);
 
 GTask *                    daemon_get_new_task        (Daemon *self,
                                                        gpointer source_object,

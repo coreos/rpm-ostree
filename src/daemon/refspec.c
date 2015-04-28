@@ -23,8 +23,8 @@
 #include "refspec.h"
 #include "manager.h"
 #include "daemon.h"
-#include "sysroot.h"
 #include "utils.h"
+#include "auth.h"
 #include "errors.h"
 
 #include "libgsystem.h"
@@ -44,7 +44,6 @@ struct _RefSpec
 
   gchar *id;
   gchar *dbus_path;
-  Sysroot *sysroot;
 
   volatile gint updating;
   GCancellable *cancellable;
@@ -58,7 +57,6 @@ struct _RefSpecClass
 enum
 {
   PROP_0,
-  PROP_SYSROOT,
   PROP_DBUS_PATH,
   PROP_ID,
 };
@@ -178,7 +176,7 @@ _do_upgrade_in_thread (GTask *task,
   GMainContext *m_context = g_main_context_new ();
   g_main_context_push_thread_default (m_context);
 
-  if (!utils_load_sysroot_and_repo (sysroot_get_path (self->sysroot),
+  if (!utils_load_sysroot_and_repo (manager_get_sysroot_path ( manager_get ()),
                                     cancellable,
                                     &ot_sysroot,
                                     &ot_repo,
@@ -219,7 +217,7 @@ _do_upgrade_in_thread (GTask *task,
   else
     {
       // We are rebasing
-      rpmostree_sysroot_set_update_running (RPMOSTREE_SYSROOT (self->sysroot),
+      rpmostree_manager_set_update_running (RPMOSTREE_MANAGER (manager_get ()),
                                             "rebase");
 
       //downgrade is always allowed for rebasing
@@ -275,8 +273,7 @@ out:
 
 
 static gboolean
-pull_dir (Sysroot *sysroot,
-          const gchar *dir,
+pull_dir (const gchar *dir,
           const gchar *remote,
           const gchar *ref,
           OstreeAsyncProgress *progress,
@@ -297,7 +294,7 @@ pull_dir (Sysroot *sysroot,
   m_context = g_main_context_new ();
   g_main_context_push_thread_default (m_context);
 
-  if (!utils_load_sysroot_and_repo (sysroot_get_path(sysroot),
+  if (!utils_load_sysroot_and_repo (manager_get_sysroot_path ( manager_get ()),
                                     cancellable,
                                     &ot_sysroot,
                                     &ot_repo,
@@ -331,12 +328,10 @@ _do_pull_nodata (GTask *task,
 
   gchar *refspec = data_ptr;
 
-  Sysroot *sysroot = SYSROOT (object);
-
   if (!ostree_parse_refspec (refspec, &remote, &ref, &error))
     goto out;
 
-  pull_dir (sysroot, "/nonexistent", remote, ref,
+  pull_dir ("/nonexistent", remote, ref,
             NULL, cancellable, &error);
 
 out:
@@ -368,7 +363,7 @@ _do_pull_rpm (GTask *task,
 
   progress = ostree_async_progress_new_and_connect (_pull_progress,
                                                     object);
-  pull_dir (self->sysroot, "/usr/share/rpm", remote, ref,
+  pull_dir ("/usr/share/rpm", remote, ref,
             progress, cancellable, &error);
 
   if (error == NULL)
@@ -421,7 +416,7 @@ _pull_rpm_callback (GObject *source_object,
   else
     message = g_strdup ("Pull Complete.");
 
-  sysroot_end_update_operation (self->sysroot, success, message, FALSE);
+  manager_end_update_operation (manager_get (), success, message, FALSE);
 
   g_clear_error (&error);
   g_free (message);
@@ -458,7 +453,7 @@ _update_callback (GObject *source_object,
         message = g_strdup ("No upgrade available.");
     }
 
-  sysroot_end_update_operation (self->sysroot, result, message, success);
+  manager_end_update_operation (manager_get (), result, message, success);
 
   g_clear_error (&error);
 }
@@ -492,7 +487,7 @@ handle_pull_rpm_db (RPMOSTreeRefSpec *object,
   if (!_refspec_ensure_remote (self, invocation))
     return TRUE;
 
-  if (sysroot_begin_update_operation(self->sysroot,
+  if (manager_begin_update_operation(manager_get (),
                                      invocation,
                                      "rpm-pull"))
     {
@@ -515,7 +510,7 @@ handle_deploy (RPMOSTreeRefSpec *object,
   if (!_refspec_ensure_remote (self, invocation))
     return TRUE;
 
-  if (sysroot_begin_update_operation(self->sysroot,
+  if (manager_begin_update_operation(manager_get (),
                                      invocation,
                                      "upgrade"))
     {
@@ -610,7 +605,7 @@ refspec_dispose (GObject *object)
   g_cancellable_cancel (self->cancellable);
 
   daemon_unpublish (daemon_get (), self->dbus_path, self);
-  g_signal_handlers_disconnect_by_data (self->sysroot, self);
+  g_signal_handlers_disconnect_by_data (manager_get (), self);
   G_OBJECT_CLASS (refspec_parent_class)->dispose (object);
 }
 
@@ -655,10 +650,6 @@ refspec_set_property (GObject *object,
 
   switch (prop_id)
     {
-    case PROP_SYSROOT:
-      g_assert (refspec->sysroot == NULL);
-      refspec->sysroot = g_value_get_object (value);
-      break;
     case PROP_DBUS_PATH:
       g_assert (refspec->dbus_path == NULL);
       refspec->dbus_path = g_value_dup_string (value);
@@ -687,8 +678,8 @@ refspec_constructed (GObject *object)
   G_OBJECT_CLASS (refspec_parent_class)->constructed (object);
 
   g_signal_connect (RPMOSTREE_REF_SPEC(self), "g-authorize-method",
-                    G_CALLBACK (sysroot_track_client_auth), self->sysroot);
-  g_signal_connect_swapped (self->sysroot, "cancel-tasks",
+                    G_CALLBACK (auth_check_root_or_access_denied), NULL);
+  g_signal_connect_swapped (manager_get (), "cancel-tasks",
                     G_CALLBACK (cancel_tasks), self);
 }
 
@@ -736,20 +727,6 @@ refspec_class_init (RefSpecClass *klass)
                                                         G_PARAM_CONSTRUCT_ONLY |
                                                         G_PARAM_STATIC_STRINGS));
 
- /**
-  * RefSpec:sysroot:
-  *
-  * A pointer back to the #Sysroot object.
-  */
-  g_object_class_install_property (gobject_class,
-                                   PROP_SYSROOT,
-                                   g_param_spec_object ("sysroot",
-                                                        NULL,
-                                                        NULL,
-                                                        RPM_OSTREE_TYPE_DAEMON_SYSROOT,
-                                                        G_PARAM_WRITABLE |
-                                                        G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS));
 }
 
 
@@ -767,7 +744,6 @@ refspec_is_updating (RefSpec *self)
 
 /**
  * refspec_new:
- * @sysroot: A #Sysroot
  * @id: The refspec id
  *
  * Creates a new #RefSpec instance.
@@ -775,22 +751,19 @@ refspec_is_updating (RefSpec *self)
  * Returns: A new #RPMOSTreeRefSpec. Free with g_object_unref().
  */
 RPMOSTreeRefSpec *
-refspec_new (Sysroot *sysroot,
-             const gchar *id)
+refspec_new (const gchar *id)
 {
   gs_free gchar *dbus_path = NULL;
 
   g_return_val_if_fail (id != NULL, NULL);
-  g_return_val_if_fail (RPM_OSTREE_IS_DAEMON_SYSROOT (sysroot), NULL);
 
-  dbus_path = sysroot_generate_sub_object_path (sysroot,
-                                                REFSPEC_DBUS_PATH_NAME,
-                                                id,
-                                                NULL);
+  dbus_path = utils_generate_object_path (BASE_DBUS_PATH,
+                                          REFSPEC_DBUS_PATH_NAME,
+                                          id,
+                                          NULL);
   g_return_val_if_fail (dbus_path != NULL, NULL);
 
   return RPMOSTREE_REF_SPEC (g_object_new (RPM_OSTREE_TYPE_DAEMON_REFSPEC,
-                                           "sysroot", sysroot,
                                            "id", id,
                                            "dbus_path", dbus_path,
                                            NULL));
@@ -936,7 +909,7 @@ _default_callback (GObject *source_object,
  * Returns: True if callback will be called..
  */
 gboolean
-refspec_resolve_partial_aysnc (Sysroot *sysroot,
+refspec_resolve_partial_aysnc (gpointer source_object,
                                const gchar *new_provided_refspec,
                                RefSpec *current_refspec,
                                GAsyncReadyCallback callback,
@@ -959,7 +932,7 @@ refspec_resolve_partial_aysnc (Sysroot *sysroot,
     {
       GTask *task = NULL;
       task = daemon_get_new_task (daemon_get (),
-                                  sysroot,
+                                  source_object,
                                   NULL,
                                   callback,
                                   callback_data);

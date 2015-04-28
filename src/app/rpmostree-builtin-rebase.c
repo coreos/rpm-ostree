@@ -67,7 +67,7 @@ rpmostree_builtin_rebase (int             argc,
   gboolean ret = FALSE;
   GOptionContext *context = g_option_context_new ("REFSPEC - Switch to a different tree");
   gs_unref_object GDBusConnection *connection = NULL;
-  gs_unref_object RPMOSTreeSysroot *sysroot = NULL;
+  gs_unref_object RPMOSTreeManager *manager = NULL;
   gs_unref_object RPMOSTreeRefSpec *refspec = NULL;
   gs_free gchar *refspec_path = NULL;
   gs_unref_variant GVariant *variant_args = NULL;
@@ -94,16 +94,18 @@ rpmostree_builtin_rebase (int             argc,
   if (!connection)
     goto out;
 
-  // Get sysroot
-  sysroot = rpmostree_get_sysroot_proxy (connection,
-                                         opt_sysroot,
-                                         cancellable,
-                                         error);
-  if (!sysroot)
+  // Get manager
+  manager = rpmostree_manager_proxy_new_sync (connection,
+                                              G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
+                                              BUS_NAME,
+                                              "/org/projectatomic/rpmostree1/Manager",
+                                              cancellable,
+                                              error);
+  if (!manager)
     goto out;
 
   variant_args = get_args_variant ();
-  if (!rpmostree_sysroot_call_add_ref_spec_sync (sysroot, variant_args,
+  if (!rpmostree_manager_call_add_ref_spec_sync (manager, variant_args,
                                                  new_provided_refspec,
                                                  &refspec_path, cancellable,
                                                  error))
@@ -118,7 +120,7 @@ rpmostree_builtin_rebase (int             argc,
   if (refspec == NULL)
       goto out;
 
-  if (!rpmostree_refspec_update_sync (sysroot, refspec, "Deploy",
+  if (!rpmostree_refspec_update_sync (manager, refspec, "Deploy",
                                       g_variant_new ("(@a{sv})", variant_args),
                                       cancellable, error))
     goto out;

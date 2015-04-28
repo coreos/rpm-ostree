@@ -22,8 +22,6 @@ librpmostreed_la_SOURCES = \
 	src/daemon/daemon.c \
 	src/daemon/manager.h \
 	src/daemon/manager.c \
-	src/daemon/sysroot.h \
-	src/daemon/sysroot.c \
 	src/daemon/deployment.h \
 	src/daemon/deployment.c \
 	src/daemon/refspec.h \

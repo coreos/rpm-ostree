@@ -27,9 +27,25 @@ G_BEGIN_DECLS
 #define MANAGER(o)          (G_TYPE_CHECK_INSTANCE_CAST ((o), RPM_OSTREE_TYPE_DAEMON_MANAGER, Manager))
 #define RPM_OSTREE_IS_DAEMON_MANAGER(o) (G_TYPE_CHECK_INSTANCE_TYPE ((o), RPM_OSTREE_TYPE_DAEMON_MANAGER))
 
-GType             manager_get_type    (void) G_GNUC_CONST;
+#define SYSROOT_DEFAULT_PATH "/"
 
-Manager *         manager_get         (void);
+GType             manager_get_type                  (void) G_GNUC_CONST;
+
+Manager *         manager_get                       (void);
+
+gchar *           manager_get_sysroot_path          (Manager *self);
+
+gboolean          manager_populate                  (Manager *self,
+                                                     GError **error);
+
+gboolean          manager_begin_update_operation    (Manager *self,
+                                                     GDBusMethodInvocation *invocation,
+                                                     const gchar *type);
+
+void              manager_end_update_operation      (Manager *self,
+                                                     gboolean success,
+                                                     const gchar *message,
+                                                     gboolean wait_for_refresh);
 
 G_END_DECLS
 

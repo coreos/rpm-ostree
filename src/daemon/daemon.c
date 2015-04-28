@@ -21,7 +21,9 @@
 #include "daemon.h"
 #include "types.h"
 #include "manager.h"
-#include "ostree.h"
+#include "utils.h"
+
+#include "libgsystem.h"
 
 /**
  * SECTION:daemon
@@ -60,9 +62,9 @@ struct _Daemon
   guint ticker_id;
 
   GMutex mutex;
-  GHashTable *watched_clients;
-
   gint num_tasks;
+
+  gchar *sysroot_path;
 
   GDBusConnection *connection;
   GDBusObjectManagerServer *object_manager;
@@ -83,6 +85,7 @@ enum
   PROP_CONNECTION,
   PROP_OBJECT_MANAGER,
   PROP_PERSIST,
+  PROP_SYSROOT_PATH,
 };
 
 G_DEFINE_TYPE (Daemon, daemon, G_TYPE_OBJECT);
@@ -101,22 +104,18 @@ daemon_finalize (GObject *object)
   if (self->name_owner_id)
     g_bus_unown_name (self->name_owner_id);
 
-  g_object_unref (self->object_manager);
+  g_clear_object (&self->object_manager);
   self->object_manager = NULL;
 
-  g_object_unref (self->manager);
+  g_clear_object (&self->manager);
   g_object_unref (self->connection);
 
   if (self->ticker_id > 0)
     g_source_remove (self->ticker_id);
 
-  g_mutex_lock (&self->mutex);
-  g_hash_table_remove_all (self->watched_clients);
-  g_hash_table_unref (self->watched_clients);
-  g_mutex_unlock (&self->mutex);
-
   g_mutex_clear (&self->mutex);
 
+  g_free (self->sysroot_path);
   G_OBJECT_CLASS (daemon_parent_class)->finalize (object);
 
   _daemon_instance = NULL;
@@ -158,6 +157,10 @@ daemon_set_property (GObject *object,
       g_assert (self->connection == NULL);
       self->connection = g_value_dup_object (value);
       break;
+    case PROP_SYSROOT_PATH:
+      g_assert (self->sysroot_path == NULL);
+      self->sysroot_path = g_value_dup_string (value);
+      break;
    case PROP_PERSIST:
       self->persist = g_value_get_boolean (value);
       break;
@@ -176,11 +179,8 @@ daemon_init (Daemon *self)
 
   self->num_tasks = 0;
   self->last_message = g_get_monotonic_time ();
+  self->sysroot_path = NULL;
 
-  self->watched_clients = g_hash_table_new_full (g_str_hash,
-                                                 g_str_equal,
-                                                 g_free,
-                                                 NULL);
   g_mutex_init (&self->mutex);
 }
 
@@ -205,8 +205,7 @@ maybe_finished (Daemon *self)
       if (g_mutex_trylock (&self->mutex))
         {
           guint64 oldest_allowed = g_get_monotonic_time () - (MAX_MESSAGE_WAIT_SECONDS * G_USEC_PER_SEC);
-          if (g_hash_table_size (self->watched_clients) == 0 &&
-              oldest_allowed > self->last_message)
+          if (oldest_allowed > self->last_message)
             {
               g_debug ("Too long since last message, closing");
               done = TRUE;
@@ -227,55 +226,6 @@ on_tick (gpointer user_data)
 
   maybe_finished (daemon);
   return TRUE;
-}
-
-
-static void
-on_client_lost (GDBusConnection *connection,
-                const gchar *bus_name,
-                gpointer user_data)
-{
-  Daemon *self = DAEMON (user_data);
-  gpointer value = NULL;
-
-  g_mutex_lock (&self->mutex);
-  value = g_hash_table_lookup (self->watched_clients, bus_name);
-  if (value != NULL)
-    {
-      guint watched = GPOINTER_TO_UINT (value);
-      g_debug ("Losing client %s %d", bus_name, watched);
-      g_hash_table_remove (self->watched_clients, bus_name);
-      g_bus_unwatch_name (watched);
-    }
-  g_mutex_unlock (&self->mutex);
-}
-
-/**
- * daemon_watch_client:
- *
- * Tells the daemon to stay alive until the
- * #bus_name is released on the dbus connection.
- *
- * Returns: A new GTask*. Free with g_object_unref ()
- */
-void
-daemon_watch_client (Daemon *self,
-                     GDBusConnection *connection,
-                     const gchar *bus_name)
-{
-  g_mutex_lock (&self->mutex);
-  if (!g_hash_table_contains (self->watched_clients,
-                              bus_name))
-    {
-      guint watched = g_bus_watch_name_on_connection (connection, bus_name,
-                                                G_BUS_NAME_WATCHER_FLAGS_NONE,
-                                                NULL, on_client_lost, self, NULL);
-      g_debug ("Watching client %s %d", bus_name, watched);
-      g_hash_table_insert (self->watched_clients,
-                           g_strdup (bus_name),
-                           GUINT_TO_POINTER (watched));
-    }
-  g_mutex_unlock (&self->mutex);
 }
 
 
@@ -390,20 +340,31 @@ static void
 daemon_constructed (GObject *_object)
 {
   Daemon *self;
+  GError *error = NULL;
+  gs_free gchar *path = NULL;
 
   self = DAEMON (_object);
-  self->object_manager = g_dbus_object_manager_server_new ("/org/projectatomic/rpmostree1");
+  self->object_manager = g_dbus_object_manager_server_new (BASE_DBUS_PATH);
   /* Export the ObjectManager */
   g_dbus_object_manager_server_set_connection (self->object_manager, self->connection);
   g_debug ("exported object manager");
 
-  /* /org/projectatomic/rpmostree1/Manager */
+
+  path = utils_generate_object_path(BASE_DBUS_PATH, "Manager", NULL);
   self->manager = g_object_new (RPM_OSTREE_TYPE_DAEMON_MANAGER,
+      	                        "sysroot-path", self->sysroot_path,
                                 NULL);
-  daemon_publish (self, "/org/projectatomic/rpmostree1/Manager", FALSE, self->manager);
+
+  if (!manager_populate (manager_get (), &error))
+    {
+      g_error ("Error setting up manager: %s", error->message);
+      goto out;
+    }
+
+  daemon_publish (self, path, FALSE, self->manager);
 
   self->name_owner_id = g_bus_own_name_on_connection (self->connection,
-                                                      "org.projectatomic.rpmostree1",
+                                                      DBUS_NAME,
                                                       G_BUS_NAME_OWNER_FLAGS_NONE,
                                                       on_name_acquired,
                                                       on_name_lost,
@@ -420,6 +381,9 @@ daemon_constructed (GObject *_object)
   G_OBJECT_CLASS (daemon_parent_class)->constructed (_object);
 
   g_debug ("daemon constructed");
+
+out:
+  g_clear_error (&error);
 }
 
 static void
@@ -465,6 +429,16 @@ daemon_class_init (DaemonClass *klass)
                                    g_param_spec_boolean ("persist",
                                                          "Persist",
                                                          "Don't stop daemon automatically",
+                                                         FALSE,
+                                                         G_PARAM_WRITABLE |
+                                                         G_PARAM_CONSTRUCT_ONLY |
+                                                         G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (gobject_class,
+                                   PROP_SYSROOT_PATH,
+                                   g_param_spec_string ("sysroot-path",
+                                                         "Sysroot Path",
+                                                         "Sysroot location on the filesystem",
                                                          FALSE,
                                                          G_PARAM_WRITABLE |
                                                          G_PARAM_CONSTRUCT_ONLY |

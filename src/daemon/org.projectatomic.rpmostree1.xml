@@ -4,21 +4,6 @@
 <node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
 
   <interface name="org.projectatomic.rpmostree1.Manager">
-    <property name="DefaultSysroot" type="o" access="read"/>
-
-    <!--
-         Returns a object path for the Sysroot
-         at the give path. If the path is not
-         not a valid sysroot an error is returned.
-    -->
-    <method name="GetSysroot">
-      <arg name="path" type="s" direction="in"/>
-
-      <arg name="sysroot" type="o" direction="out"/>
-    </method>
-  </interface>
-
-  <interface name="org.projectatomic.rpmostree1.Sysroot">
     <!--
       The basic interface for working with an OSTree.
 
@@ -28,8 +13,6 @@
       * The signals are never fired before the method returns.
       * The daemon never exits while a long running task is running.
     -->
-
-    <property name="SysrootPath" type="s" access="read"/>
 
     <!--
          Current Deployment
@@ -105,7 +88,6 @@
     	<arg name="success" type="b" direction="out"/>
     	<arg name="message" type="s" direction="out"/>
     </signal>
-
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.RefSpec">

@@ -25,9 +25,11 @@
 /* ---------------------------------------------------------------------------------------------------- */
 static GMainLoop *loop = NULL;
 static gboolean opt_debug = FALSE;
+static char *opt_sysroot = "/";
 static GOptionEntry opt_entries[] =
 {
   {"debug", 'd', 0, G_OPTION_ARG_NONE, &opt_debug, "Print debug information on stderr", NULL},
+  { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   {NULL }
 };
 
@@ -60,6 +62,7 @@ on_bus_acquired (GObject *source,
       *daemon = g_object_new (TYPE_DAEMON,
                               "connection", connection,
                               "persist", opt_debug,
+                              "sysroot-path", opt_sysroot,
                               NULL);
       g_signal_connect (*daemon, "finished",
                                 G_CALLBACK (on_close), NULL);

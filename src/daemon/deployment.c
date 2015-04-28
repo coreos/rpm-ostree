@@ -22,8 +22,9 @@
 
 #include "deployment.h"
 #include "refspec.h"
-#include "sysroot.h"
 #include "daemon.h"
+#include "manager.h"
+#include "auth.h"
 #include "utils.h"
 
 #include "libgsystem.h"
@@ -45,8 +46,6 @@ struct _Deployment
   gchar *dbus_path;
   gchar *rel_path;
 
-  Sysroot *sysroot;
-
   GCancellable *cancellable;
 };
 
@@ -58,7 +57,6 @@ struct _DeploymentClass
 enum
 {
   PROP_0,
-  PROP_SYSROOT,
   PROP_DBUS_PATH,
   PROP_ID
 };
@@ -100,7 +98,7 @@ _do_make_default_thread (GTask         *task,
   guint spot = 0;
 
   g_debug ("Starting threaded");
-  if (!utils_load_sysroot_and_repo (sysroot_get_path (self->sysroot),
+  if (!utils_load_sysroot_and_repo (manager_get_sysroot_path ( manager_get ()),
                                     cancellable,
                                     &ot_sysroot,
                                     &ot_repo,
@@ -158,10 +156,10 @@ _task_callback (GObject *source_object,
                 GAsyncResult *res,
                 gpointer user_data)
 {
-  Deployment *self = DEPLOYMENT (user_data);
-  GTask *task = G_TASK (res);
   GError *error = NULL;
-  gchar *message = NULL;
+  gs_unref_object GTask *task = G_TASK (res);
+  gs_free gchar *message = NULL;
+
   gboolean success = TRUE;
 
   success = g_task_propagate_boolean (task, &error);
@@ -170,7 +168,10 @@ _task_callback (GObject *source_object,
   else
       message = g_strdup ("Sucessfully reset deployment order");
 
-  sysroot_end_update_operation (self->sysroot, success, message, success);
+  manager_end_update_operation (manager_get (),
+                                success,
+                                message,
+                                success);
 
   g_clear_error (&error);
   g_free (message);
@@ -184,7 +185,7 @@ handle_make_default (RPMOSTreeDeployment *object,
   Deployment *self = DEPLOYMENT (object);
   GTask *task = NULL;
 
-  if (sysroot_begin_update_operation (self->sysroot,
+  if (manager_begin_update_operation (manager_get (),
                                       invocation,
                                       "rebase"))
     {
@@ -282,7 +283,6 @@ out:
 gboolean
 deployment_populate (Deployment *deployment,
                      OstreeDeployment *ostree_deployment,
-
                      OstreeRepo *repo,
                      gboolean publish)
 {
@@ -332,10 +332,10 @@ deployment_populate (Deployment *deployment,
       if (origin_refspec)
         {
 
-          refpath = sysroot_generate_sub_object_path (deployment->sysroot,
-                                                      REFSPEC_DBUS_PATH_NAME,
-                                                      origin_refspec,
-                                                      NULL);
+          refpath = utils_generate_object_path (BASE_DBUS_PATH,
+                                                REFSPEC_DBUS_PATH_NAME,
+                                                origin_refspec,
+                                                NULL);
           deployment_add_gpg_results (deployment,
                                       repo,
                                       origin_refspec,
@@ -432,7 +432,7 @@ deployment_dispose (GObject *object)
 
   g_cancellable_cancel (self->cancellable);
   daemon_unpublish (daemon_get (), self->dbus_path, self);
-  g_signal_handlers_disconnect_by_data (self->sysroot, self);
+  g_signal_handlers_disconnect_by_data (manager_get (), self);
 
   G_OBJECT_CLASS (deployment_parent_class)->dispose (object);
 }
@@ -480,10 +480,6 @@ deployment_set_property (GObject *object,
 
   switch (prop_id)
     {
-    case PROP_SYSROOT:
-      g_assert (deployment->sysroot == NULL);
-      deployment->sysroot = g_value_get_object (value);
-      break;
     case PROP_ID:
       g_assert (deployment->id == NULL);
       deployment->id = g_value_dup_string (value);
@@ -513,8 +509,8 @@ deployment_constructed (GObject *object)
   G_OBJECT_CLASS (deployment_parent_class)->constructed (object);
 
   g_signal_connect (RPMOSTREE_DEPLOYMENT(self), "g-authorize-method",
-                                    G_CALLBACK (sysroot_track_client_auth), self->sysroot);
-  g_signal_connect_swapped (self->sysroot, "cancel-tasks",
+                    G_CALLBACK (auth_check_root_or_access_denied), NULL);
+  g_signal_connect_swapped (manager_get (), "cancel-tasks",
                             G_CALLBACK (cancel_tasks), self);
 }
 
@@ -529,21 +525,6 @@ deployment_class_init (DeploymentClass *klass)
   gobject_class->constructed  = deployment_constructed;
   gobject_class->set_property = deployment_set_property;
   gobject_class->get_property = deployment_get_property;
-
-  /**
-   * Deployment:sysroot:
-   *
-   * A pointer back to the #Sysroot object.
-   */
-  g_object_class_install_property (gobject_class,
-                                   PROP_SYSROOT,
-                                   g_param_spec_object ("sysroot",
-                                                        NULL,
-                                                        NULL,
-                                                        RPM_OSTREE_TYPE_DAEMON_SYSROOT,
-                                                        G_PARAM_WRITABLE |
-                                                        G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS));
 
   /**
    * Deployment:id:
@@ -580,7 +561,6 @@ deployment_class_init (DeploymentClass *klass)
 
 /**
  * deployment_new:
- * @sysroot: A #Sysroot
  * @id: The deployment id
  *
  * Creates a new #Deployment instance.
@@ -588,21 +568,19 @@ deployment_class_init (DeploymentClass *klass)
  * Returns: A new #RPMOSTreeDeployment. Free with g_object_unref().
  */
 RPMOSTreeDeployment *
-deployment_new (Sysroot *sysroot, gchar *id)
+deployment_new (gchar *id)
 {
   gs_free gchar *dbus_path = NULL;
-
   g_return_val_if_fail (id != NULL, NULL);
-  g_return_val_if_fail (RPM_OSTREE_IS_DAEMON_SYSROOT (sysroot), NULL);
 
-  dbus_path = sysroot_generate_sub_object_path (sysroot,
-                                                DEPLOYMENT_DBUS_PATH_NAME,
-                                                id,
-                                                NULL);
+  dbus_path = utils_generate_object_path (BASE_DBUS_PATH,
+                                          DEPLOYMENT_DBUS_PATH_NAME,
+                                          id,
+                                          NULL);
+
   g_return_val_if_fail (dbus_path != NULL, NULL);
 
   return RPMOSTREE_DEPLOYMENT (g_object_new (RPM_OSTREE_TYPE_DAEMON_DEPLOYMENT,
-                                             "sysroot", sysroot,
                                              "id", id,
                                              "dbus_path", dbus_path,
                                              NULL));

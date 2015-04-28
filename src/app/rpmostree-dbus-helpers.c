@@ -37,44 +37,6 @@ rpmostree_is_valid_object_path (gchar *string)
          g_variant_is_object_path (string);
 }
 
-
-RPMOSTreeSysroot *
-rpmostree_get_sysroot_proxy (GDBusConnection *connection,
-                             gchar *sysroot_arg,
-                             GCancellable *cancellable,
-                             GError **error)
-{
-  gs_unref_object RPMOSTreeManager *manager = NULL;
-  RPMOSTreeSysroot *sysroot = NULL;
-  gs_free gchar *sysroot_path = NULL;
-
-  manager = rpmostree_manager_proxy_new_sync (connection,
-                                              G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                              BUS_NAME,
-                                              "/org/projectatomic/rpmostree1/Manager",
-                                              cancellable,
-                                              error);
-
-  if (!manager)
-    goto out;
-
-  if (!rpmostree_manager_call_get_sysroot_sync (manager,
-                                                sysroot_arg,
-                                                &sysroot_path,
-                                                NULL, error))
-      goto out;
-
-  sysroot = rpmostree_sysroot_proxy_new_sync (connection,
-                                         G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                         BUS_NAME,
-                                         sysroot_path,
-                                         cancellable,
-                                         error);
-
-out:
-  return sysroot;
-}
-
 /**
 * refspec_console_get_progress_line
 * @refspec: RPMOSTreeRefSpec
@@ -397,13 +359,13 @@ static void
 cancelled_handler (GCancellable *cancellable,
                    gpointer user_data)
 {
-  RPMOSTreeSysroot *sysroot = user_data;
-  rpmostree_sysroot_call_cancel_update_sync (sysroot, NULL, NULL);
+  RPMOSTreeManager *manager = user_data;
+  rpmostree_manager_call_cancel_update_sync (manager, NULL, NULL);
 }
 
 
 static gboolean
-dbus_call_sync_on_signal (RPMOSTreeSysroot *sysroot,
+dbus_call_sync_on_signal (RPMOSTreeManager *manager,
                           GDBusProxy *proxy,
                           const gchar *method,
                           GVariant *parameters,
@@ -417,7 +379,7 @@ dbus_call_sync_on_signal (RPMOSTreeSysroot *sysroot,
   gulong property_handler = 0;
   gulong obj_sig_handler = 0;
   gboolean success = FALSE;
-  GDBusObjectManager *manager = NULL;
+  GDBusObjectManager *object_manager = NULL;
   GDBusConnection *connection = NULL;
   ConsoleProgress *cp = console_progress_new ();
 
@@ -425,25 +387,21 @@ dbus_call_sync_on_signal (RPMOSTreeSysroot *sysroot,
     parameters = g_variant_new ("()", NULL);
 
   // Setup manager connection
-  connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot));
-  manager = rpmostree_object_manager_client_new_sync (connection,
+  connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (manager));
+  object_manager = rpmostree_object_manager_client_new_sync (connection,
                                                       G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
                                                       BUS_NAME,
                                                       "/org/projectatomic/rpmostree1",
                                                       cancellable,
                                                       error);
 
-  if (manager != NULL)
-    {
-      g_signal_connect (manager,
-                        "notify::name-owner",
-                        G_CALLBACK (on_owner_changed),
-                        cp);
-    }
-  else
-    {
-      goto out;
-    }
+  if (object_manager == NULL)
+    goto out;
+
+  g_signal_connect (object_manager,
+                    "notify::name-owner",
+                    G_CALLBACK (on_owner_changed),
+                    cp);
 
   // setup cancel handler
   id = 0;
@@ -451,11 +409,11 @@ dbus_call_sync_on_signal (RPMOSTreeSysroot *sysroot,
     {
       id = g_cancellable_connect (cancellable,
                                   G_CALLBACK (cancelled_handler),
-                                  sysroot, NULL);
+                                  manager, NULL);
     }
 
   // Setup finished signal handlers
-  signal_handler = g_signal_connect (sysroot, "g-signal",
+  signal_handler = g_signal_connect (manager, "g-signal",
                                      G_CALLBACK (on_update_completed),
                                      cp);
   if (properties_callback != NULL)
@@ -500,7 +458,7 @@ dbus_call_sync_on_signal (RPMOSTreeSysroot *sysroot,
 
 out:
   if (signal_handler)
-    g_signal_handler_disconnect (sysroot, signal_handler);
+    g_signal_handler_disconnect (manager, signal_handler);
 
   if (property_handler)
     g_signal_handler_disconnect (proxy, property_handler);
@@ -514,25 +472,25 @@ out:
 
 
 gboolean
-rpmostree_refspec_update_sync (RPMOSTreeSysroot *sysroot,
+rpmostree_refspec_update_sync (RPMOSTreeManager *manager,
                                RPMOSTreeRefSpec *refspec,
                                const gchar *method,
                                GVariant *parameters,
                                GCancellable *cancellable,
                                GError **error)
 {
-  return dbus_call_sync_on_signal (sysroot, G_DBUS_PROXY (refspec), method, parameters,
+  return dbus_call_sync_on_signal (manager, G_DBUS_PROXY (refspec), method, parameters,
                                    NULL, G_CALLBACK (on_refspec_progress),
                                    cancellable, error);
 }
 
 gboolean
-rpmostree_deployment_deploy_sync (RPMOSTreeSysroot *sysroot,
+rpmostree_deployment_deploy_sync (RPMOSTreeManager *manager,
                                   RPMOSTreeDeployment *deployment,
                                   GCancellable *cancellable,
                                   GError **error)
 {
-  return dbus_call_sync_on_signal (sysroot, G_DBUS_PROXY (deployment), "MakeDefault",
+  return dbus_call_sync_on_signal (manager, G_DBUS_PROXY (deployment), "MakeDefault",
                                    NULL, NULL, NULL, cancellable, error);
 }
 
