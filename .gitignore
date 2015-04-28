@@ -47,3 +47,10 @@ rpm-ostree-*.tar.xz
 rpm-ostree-*.rpm
 
 rpm-ostree.1
+
+rpm-ostreed
+rpm-ostreed.1
+org.projectatomic.rpmostree1.service
+rpm-ostreed.service
+rpm-ostreed-generated.c
+rpm-ostreed-generated.h
