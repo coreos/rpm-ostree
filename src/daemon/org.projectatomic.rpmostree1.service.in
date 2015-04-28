@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=org.projectatomic.rpmostree1
+Exec=@libexecdir@/rpm-ostreed
+User=root
