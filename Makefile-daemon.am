@@ -1,0 +1,84 @@
+libexec_PROGRAMS += rpm-ostreed
+
+dbus_built_sources = rpm-ostreed-generated.h rpm-ostreed-generated.c
+
+rpm-ostreed-generated.h: rpm-ostreed-generated.c
+rpm-ostreed-generated.c: Makefile.am $(top_srcdir)/src/daemon/org.projectatomic.rpmostree1.xml
+	$(AM_V_GEN) gdbus-codegen \
+		--interface-prefix org.projectatomic.rpmostree1 \
+		--c-namespace RPMOSTree \
+		--c-generate-object-manager \
+		--generate-c-code rpm-ostreed-generated \
+		$(top_srcdir)/src/daemon/org.projectatomic.rpmostree1.xml \
+		$(NULL)
+BUILT_SOURCES += $(dbus_built_sources)
+CLEANFILES += rpm-ostreed-generated*
+
+noinst_LTLIBRARIES += librpmostreed.la
+nodist_librpmostreed_la_SOURCES = $(dbus_built_sources)
+
+librpmostreed_la_SOURCES = \
+	src/daemon/daemon.h \
+	src/daemon/daemon.c \
+	$(NULL)
+
+librpmostreed_la_CFLAGS = \
+	$(AM_CFLAGS) \
+	$(PKGDEP_RPMOSTREE_CFLAGS) \
+	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
+	-I$(srcdir)/src/daemon \
+	-I$(srcdir)/libglnx \
+	-I$(srcdir)/src/lib \
+	$(NULL)
+
+librpmostreed_la_LIBADD = \
+	$(AM_LDFLAGS) \
+	$(PKGDEP_RPMOSTREE_LIBS) \
+	librpmostree-1.la \
+	$(CAP_LIBS)
+	$(NULL)
+
+rpm_ostreed_SOURCES = \
+	src/daemon/main.c \
+	$(NULL)
+
+rpm_ostreed_CFLAGS = \
+	$(AM_CFLAGS) \
+	-DPKGLIBDIR=\"$(pkglibdir)\" \
+	$(PKGDEP_RPMOSTREE_CFLAGS) \
+	-I$(srcdir)/src/daemon \
+	-I$(srcdir)/libglnx \
+	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
+	$(NULL)
+
+rpm_ostreed_LDADD = \
+	librpmostreed.la \
+	$(AM_LDFLAGS) \
+	$(PKGDEP_RPMOSTREE_LIBS) \
+	$(NULL)
+
+dbusconf_DATA = $(srcdir)/src/daemon/org.projectatomic.rpmostree1.conf
+dbusconfdir = ${sysconfdir}/dbus-1/system.d
+
+systemdunit_in_files = $(srcdir)/src/daemon/rpm-ostreed.service.in
+systemdunit_DATA     = $(systemdunit_in_files:.service.in=.service)
+systemdunitdir       = $(prefix)/lib/systemd/system/
+$(systemdunit_DATA):
+	$(SED_SUBST) $@.in > $@
+
+service_in_files = $(srcdir)/src/daemon/org.projectatomic.rpmostree1.service.in
+service_DATA     = $(service_in_files:.service.in=.service)
+servicedir       = $(dbusservicedir)
+$(service_DATA):
+	$(SED_SUBST) $@.in > $@
+
+EXTRA_DIST += \
+	$(dbusservice_DATA) \
+	$(service_in_files) \
+	$(systemdunit_in_files) \
+	$(NULL)
+
+CLEANFILES += \
+	$(service_DATA) \
+	$(systemdunit_DATA) \
+	$(NULL)

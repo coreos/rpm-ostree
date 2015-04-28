@@ -1,0 +1,7 @@
+[Unit]
+Description=RPM OSTree Manager
+
+[Service]
+Type=dbus
+BusName=org.projectatomic.rpmostree1
+ExecStart=@libexecdir@/rpm-ostreed
