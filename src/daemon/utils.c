@@ -140,9 +140,8 @@ utils_load_sysroot_and_repo (gchar *path,
                              OstreeRepo **out_repo,
                              GError **error)
 {
-  GFile *sysroot_path = NULL;
-  OstreeSysroot *ot_sysroot = NULL;
-  OstreeRepo *ot_repo = NULL;
+  gs_unref_object GFile *sysroot_path = NULL;
+  gs_unref_object OstreeSysroot *ot_sysroot = NULL;
   gboolean ret = FALSE;
 
   sysroot_path = g_file_new_for_path (path);
@@ -153,20 +152,17 @@ utils_load_sysroot_and_repo (gchar *path,
                             error))
       goto out;
 
+  // ostree_sysroot_get_repo now just adds a
+  // ref to it's singleton
   if (!ostree_sysroot_get_repo (ot_sysroot,
-                                &ot_repo,
+                                out_repo,
                                 cancellable,
                                 error))
-    {
-      g_object_unref (ot_sysroot);
       goto out;
-    }
 
   gs_transfer_out_value (out_sysroot, &ot_sysroot);
-  gs_transfer_out_value (out_repo, &ot_repo);
   ret = TRUE;
 
 out:
-  g_object_unref (sysroot_path);
   return ret;
 }

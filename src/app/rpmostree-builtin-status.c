@@ -136,26 +136,26 @@ rpmostree_builtin_status (int             argc,
                                                   deployment_paths[j],
                                                   cancellable,
                                                   error);
-      if (deployment)
+      if (!deployment)
+        goto out;
+
+      g_ptr_array_add (deployments, deployment);
+
+      /* find lengths for use in column output */
+      if(!opt_pretty)
         {
-          g_ptr_array_add (deployments, deployment);
+          gs_free gchar *origin_refspec = NULL;
+          gs_free gchar *os_name = NULL;
+          gs_free gchar *version_string = NULL;
+          gs_free gchar *checksum = NULL;
 
-          /* find lengths for use in column output */
-          if(!opt_pretty)
-            {
-              gs_free gchar *origin_refspec = NULL;
-              gs_free gchar *os_name = NULL;
-              gs_free gchar *version_string = NULL;
-              gs_free gchar *checksum = NULL;
-
-              os_name = rpmostree_deployment_dup_osname (deployment);
-              version_string = rpmostree_deployment_dup_commit (deployment);
-              origin_refspec = format_origin_refspec (deployment, connection, cancellable);
-              max_osname_len = MAX (max_osname_len, strlen (os_name));
-              max_refspec_len = MAX (max_refspec_len, strlen (origin_refspec));
-              if (version_string)
-                max_version_len = MAX (max_version_len, strlen (version_string));
-            }
+          os_name = rpmostree_deployment_dup_osname (deployment);
+          version_string = rpmostree_deployment_dup_commit (deployment);
+          origin_refspec = format_origin_refspec (deployment, connection, cancellable);
+          max_osname_len = MAX (max_osname_len, strlen (os_name));
+          max_refspec_len = MAX (max_refspec_len, strlen (origin_refspec));
+          if (version_string)
+            max_version_len = MAX (max_version_len, strlen (version_string));
         }
     }
 

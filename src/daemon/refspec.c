@@ -76,6 +76,7 @@ _pull_progress (OstreeAsyncProgress *progress,
 {
   gs_free char *status = NULL;
   RefSpec *refspec = REFSPEC (user_data);
+
   status = ostree_async_progress_get_status (progress);
   if (status)
     {
@@ -144,9 +145,9 @@ _do_upgrade_in_thread (GTask *task,
                        gpointer data_ptr,
                        GCancellable *cancellable)
 {
-  GError *error = NULL;
-  GVariant *options = data_ptr;
+  GVariant *options = data_ptr; // owned by task
 
+  GError *error = NULL;
   gs_unref_object OstreeSysroot *ot_sysroot = NULL;
   gs_unref_object OstreeRepo *ot_repo = NULL;
   gs_unref_object OstreeSysrootUpgrader *upgrader = NULL;
@@ -259,8 +260,6 @@ _do_upgrade_in_thread (GTask *task,
         ret = TRUE;
     }
 out:
-
-
   // Clean up context
   g_main_context_pop_thread_default (m_context);
   g_main_context_unref (m_context);
@@ -403,9 +402,11 @@ _pull_rpm_callback (GObject *source_object,
                     gpointer user_data)
 {
   RefSpec *self = REFSPEC (user_data);
-  GTask *task = G_TASK (res);
+
+  gs_unref_object GTask *task = G_TASK (res);
+  gs_free gchar *message = NULL;
+
   GError *error = NULL;
-  gchar *message = NULL;
   gboolean success = FALSE;
 
   g_atomic_int_set (&self->updating, FALSE);
@@ -419,8 +420,6 @@ _pull_rpm_callback (GObject *source_object,
   manager_end_update_operation (manager_get (), success, message, FALSE);
 
   g_clear_error (&error);
-  g_free (message);
-  g_object_unref (task);
 }
 
 
@@ -430,10 +429,9 @@ _update_callback (GObject *source_object,
                   gpointer user_data)
 {
   GError *error = NULL;
-
-  RefSpec *self = REFSPEC (user_data);
   gs_unref_object GTask *task = G_TASK (res);
   gs_free gchar *message = NULL;
+
   gboolean success = FALSE;
   gboolean result = FALSE;
 

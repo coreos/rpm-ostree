@@ -117,8 +117,8 @@ _do_make_default_thread (GTask         *task,
       // find the spot
       for (i = 0; i < deployments->len; i++)
       {
-        gint c = g_strcmp0 (deployment_generate_id (deployments->pdata[i]),
-                            self->id);
+        gs_free gchar *id = deployment_generate_id (deployments->pdata[i]);
+        gint c = g_strcmp0 (id, self->id);
         if (c == 0)
           {
             spot = i;
@@ -174,8 +174,6 @@ _task_callback (GObject *source_object,
                                 success);
 
   g_clear_error (&error);
-  g_free (message);
-  g_object_unref (task);
 }
 
 static gboolean
@@ -290,7 +288,7 @@ deployment_populate (Deployment *deployment,
   GVariantBuilder builder;
 
   GError *error = NULL;
-  GKeyFile *origin = NULL;
+  g_autoptr (GKeyFile) origin = NULL;
 
   gs_free gchar *origin_refspec = NULL;
   gs_free gchar *version_commit = NULL;
@@ -373,8 +371,6 @@ deployment_populate (Deployment *deployment,
     }
 
   g_clear_error (&error);
-  if (origin != NULL)
-    g_key_file_free (origin);
   return ret;
 }
 
@@ -418,9 +414,6 @@ deployment_get_refspec (Deployment *self)
                                                default_path,
                                                "org.projectatomic.rpmostree1.RefSpec"));
     }
-
-  if (refspec)
-    g_object_ref (refspec);
 
   return refspec;
 }
