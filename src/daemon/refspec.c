@@ -557,15 +557,17 @@ refspec_populate (RefSpec *refspec,
       goto out;
     }
 
-  if (repo != NULL &&
-      !ostree_repo_resolve_rev (repo, refspec_string, FALSE, &head, &error))
+  if (repo != NULL && ostree_repo_resolve_rev (repo, refspec_string,
+                                               FALSE, &head, &error))
     {
-        g_warning ("error couldn't get head for refspec %s: %s",
-                  refspec->id, error->message);
-        goto out;
+        rpmostree_ref_spec_set_head (RPMOSTREE_REF_SPEC (refspec), head);
+    }
+  else
+    {
+      g_message ("error couldn't get head for refspec %s: %s",
+                refspec->id, error->message);
     }
 
-  rpmostree_ref_spec_set_head (RPMOSTREE_REF_SPEC (refspec), head);
   rpmostree_ref_spec_set_remote_name (RPMOSTREE_REF_SPEC (refspec), remote_name);
   rpmostree_ref_spec_set_ref (RPMOSTREE_REF_SPEC (refspec), ref);
 

@@ -391,6 +391,91 @@ _get_refspec_for_os (Manager *self,
 }
 
 
+static gboolean
+_manager_add_refspec (Manager *self,
+                      gchar *refspec_string,
+                      OstreeRepo *ot_repo)
+{
+  RefSpec *refspec = NULL;
+  gboolean ret = FALSE;
+
+  refspec = g_hash_table_lookup (self->refspecs, refspec_string);
+  if (refspec == NULL)
+    {
+      g_debug ("adding refspec %s", refspec_string);
+      refspec = REFSPEC (refspec_new (refspec_string));
+      if (refspec != NULL)
+        {
+          g_hash_table_insert (self->refspecs,
+                               g_strdup (refspec_string),
+                               g_object_ref (refspec));
+          g_object_unref (refspec);
+          ret = refspec_populate (refspec, refspec_string, ot_repo, TRUE);
+        }
+      else
+        {
+          g_warning ("Could not create refspec for %s", refspec_string);
+        }
+    }
+  else
+    {
+      ret = refspec_populate (refspec, refspec_string, ot_repo, FALSE);
+    }
+
+  return ret;
+}
+
+static void
+_manager_load_refspecs (Manager *self,
+                        OstreeRepo *ot_repo)
+{
+  GHashTable *refs = NULL;
+  GHashTableIter iter;
+  GHashTableIter iter_old;
+  GError *error = NULL;
+  gpointer hashkey;
+  gpointer value;
+
+  // Add refspec interfaces
+  if (!ostree_repo_list_refs (ot_repo,
+                              NULL,
+                              &refs,
+                              self->cancellable,
+                              &error))
+    {
+      g_warning ("Couldn't load refspecs %s", error->message);
+      return;
+    }
+
+  g_rw_lock_writer_lock (&self->children_lock);
+
+  // Remove no longer needed
+  g_hash_table_iter_init (&iter_old, self->refspecs);
+  while (g_hash_table_iter_next (&iter_old, &hashkey, &value))
+    {
+      if (!g_hash_table_contains (refs, hashkey) &&
+          !refspec_is_updating (value))
+        {
+          // Dispose unpublishes
+          g_object_run_dispose (G_OBJECT (value));
+          g_hash_table_iter_remove (&iter_old);
+        }
+    }
+
+  // Add all refs
+  g_hash_table_iter_init (&iter, refs);
+  while (g_hash_table_iter_next (&iter, &hashkey, NULL))
+    _manager_add_refspec (self, hashkey, ot_repo);
+
+  g_hash_table_remove_all (refs);
+  g_hash_table_unref (refs);
+  g_debug ("finished refspecs");
+
+  g_rw_lock_writer_unlock (&self->children_lock);
+
+  g_clear_error (&error);
+}
+
 
 static gboolean
 _manager_add_deployment (Manager *self,
@@ -429,7 +514,7 @@ _manager_add_deployment (Manager *self,
     {
       gs_free gchar *ref_id = rpmostree_deployment_dup_origin_refspec (RPMOSTREE_DEPLOYMENT (deployment));
       if (!g_hash_table_contains (self->refspecs, ref_id))
-        refspec_resolve_partial_aysnc (self, ref_id, NULL, NULL, NULL, NULL);
+        _manager_add_refspec (self, ref_id, ot_repo);
     }
 
   return ret;
@@ -527,91 +612,6 @@ _manager_load_deployments (Manager *self,
   g_debug ("finished deployments");
 }
 
-
-static gboolean
-_manager_add_refspec (Manager *self,
-                      gchar *refspec_string,
-                      OstreeRepo *ot_repo)
-{
-  RefSpec *refspec = NULL;
-  gboolean ret = FALSE;
-
-  refspec = g_hash_table_lookup (self->refspecs, refspec_string);
-  if (refspec == NULL)
-    {
-      g_debug ("adding refspec %s", refspec_string);
-      refspec = REFSPEC (refspec_new (refspec_string));
-      if (refspec != NULL)
-        {
-          g_hash_table_insert (self->refspecs,
-                               g_strdup (refspec_string),
-                               g_object_ref (refspec));
-          g_object_unref (refspec);
-          ret = refspec_populate (refspec, refspec_string, ot_repo, TRUE);
-        }
-      else
-        {
-          g_warning ("Could not create refspec for %s", refspec_string);
-        }
-    }
-  else
-    {
-      ret = refspec_populate (refspec, refspec_string, ot_repo, FALSE);
-    }
-
-  return ret;
-}
-
-static void
-_manager_load_refspecs (Manager *self,
-                        OstreeRepo *ot_repo)
-{
-  GHashTable *refs = NULL;
-  GHashTableIter iter;
-  GHashTableIter iter_old;
-  GError *error = NULL;
-  gpointer hashkey;
-  gpointer value;
-
-  // Add refspec interfaces
-  if (!ostree_repo_list_refs (ot_repo,
-                              NULL,
-                              &refs,
-                              self->cancellable,
-                              &error))
-    {
-      g_warning ("Couldn't load refspecs %s", error->message);
-      return;
-    }
-
-  g_rw_lock_writer_lock (&self->children_lock);
-
-  // Remove no longer needed
-  g_hash_table_iter_init (&iter_old, self->refspecs);
-  while (g_hash_table_iter_next (&iter_old, &hashkey, &value))
-    {
-      if (!g_hash_table_contains (refs, hashkey) &&
-          !refspec_is_updating (value))
-        {
-          // Dispose unpublishes
-          g_object_run_dispose (G_OBJECT (value));
-          g_hash_table_iter_remove (&iter_old);
-        }
-    }
-
-  // Add all refs
-  g_hash_table_iter_init (&iter, refs);
-  while (g_hash_table_iter_next (&iter, &hashkey, NULL))
-    _manager_add_refspec (self, hashkey, ot_repo);
-
-  g_hash_table_remove_all (refs);
-  g_hash_table_unref (refs);
-  g_debug ("finished refspecs");
-
-  g_rw_lock_writer_unlock (&self->children_lock);
-
-  g_clear_error (&error);
-}
 
 static gboolean
 manager_load_internals (Manager *self,
@@ -924,10 +924,7 @@ add_ref_spec_callback (GObject *source_object,
 
 
   if (!g_task_propagate_boolean (task, &error))
-    {
-      g_dbus_method_invocation_take_error (invocation, error);
-      goto out;
-    }
+    goto out;
 
   dbus_path = utils_generate_object_path (BASE_DBUS_PATH,
                                           REFSPEC_DBUS_PATH_NAME,
