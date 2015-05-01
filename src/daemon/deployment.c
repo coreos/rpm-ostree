@@ -28,6 +28,7 @@
 #include "utils.h"
 
 #include "libgsystem.h"
+#include "libglnx.h"
 
 /**
  * SECTION:daemon

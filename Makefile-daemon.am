@@ -39,6 +39,7 @@ librpmostreed_la_CFLAGS = \
 	$(PKGDEP_RPMOSTREE_CFLAGS) \
 	-DG_LOG_DOMAIN=\"rpm-ostree\" \
 	-I$(srcdir)/src/daemon \
+	-I$(srcdir)/libglnx \
 	$(NULL)
 
 librpmostreed_la_LIBADD = \
@@ -56,6 +57,7 @@ rpm_ostreed_CFLAGS = \
 	-DPKGLIBDIR=\"$(pkglibdir)\" \
 	$(PKGDEP_RPMOSTREE_CFLAGS) \
 	-I$(srcdir)/src/daemon \
+	-I$(srcdir)/libglnx \
 	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
 	$(NULL)
 

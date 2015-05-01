@@ -22,6 +22,7 @@
 
 #include "rpmostree-dbus-helpers.h"
 #include "libgsystem.h"
+#include "libglnx.h"
 
 /**
 * utils_is_valid_object_path
