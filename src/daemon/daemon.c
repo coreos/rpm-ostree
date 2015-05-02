@@ -56,6 +56,7 @@ struct _Daemon
 
   gint name_owner_id;
   gboolean name_owned;
+  gboolean on_message_bus;
   gboolean persist;
 
   gint64 last_message;
@@ -86,6 +87,7 @@ enum
   PROP_OBJECT_MANAGER,
   PROP_PERSIST,
   PROP_SYSROOT_PATH,
+  PROP_ON_MESSAGE_BUS,
 };
 
 G_DEFINE_TYPE (Daemon, daemon, G_TYPE_OBJECT);
@@ -164,6 +166,9 @@ daemon_set_property (GObject *object,
    case PROP_PERSIST:
       self->persist = g_value_get_boolean (value);
       break;
+   case PROP_ON_MESSAGE_BUS:
+      self->on_message_bus = g_value_get_boolean (value);
+      break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -189,8 +194,7 @@ static void
 maybe_finished (Daemon *self)
 {
   gboolean done = FALSE;
-
-  if (self->name_owned == FALSE)
+  if (!self->on_message_bus && self->name_owned == FALSE)
     {
       done = TRUE;
       g_debug ("We don't own the name, quit");
@@ -363,23 +367,29 @@ daemon_constructed (GObject *_object)
 
   daemon_publish (self, path, FALSE, self->manager);
 
-  self->name_owner_id = g_bus_own_name_on_connection (self->connection,
-                                                      DBUS_NAME,
-                                                      G_BUS_NAME_OWNER_FLAGS_NONE,
-                                                      on_name_acquired,
-                                                      on_name_lost,
-                                                      self,
-                                                      NULL);
+  if (self->on_message_bus)
+    {
+      self->name_owner_id = g_bus_own_name_on_connection (self->connection,
+                                                          DBUS_NAME,
+                                                          G_BUS_NAME_OWNER_FLAGS_NONE,
+                                                          on_name_acquired,
+                                                          on_name_lost,
+                                                          self,
+                                                          NULL);
+    }
 
   // Setup message checks
   self->ticker_id = g_timeout_add_seconds (MAX_MESSAGE_WAIT_SECONDS,
                                            on_tick, self);
+
+
   g_dbus_connection_add_filter (self->connection,
                                 on_connection_filter,
                                 self, NULL);
 
   G_OBJECT_CLASS (daemon_parent_class)->constructed (_object);
 
+  g_dbus_connection_start_message_processing (self->connection);
   g_debug ("daemon constructed");
 
 out:
@@ -395,6 +405,8 @@ daemon_class_init (DaemonClass *klass)
   gobject_class->constructed  = daemon_constructed;
   gobject_class->set_property = daemon_set_property;
   gobject_class->get_property = daemon_get_property;
+
+
 
   /**
    * Daemon:connection:
@@ -444,6 +456,16 @@ daemon_class_init (DaemonClass *klass)
                                                          G_PARAM_CONSTRUCT_ONLY |
                                                          G_PARAM_STATIC_STRINGS));
 
+  g_object_class_install_property (gobject_class,
+                                   PROP_ON_MESSAGE_BUS,
+                                   g_param_spec_boolean ("on-message-bus",
+                                                         "On Message Bus",
+                                                         "Are we listining on the message bus",
+                                                         TRUE,
+                                                         G_PARAM_WRITABLE |
+                                                         G_PARAM_CONSTRUCT_ONLY |
+                                                         G_PARAM_STATIC_STRINGS));
+
   signals[FINISHED] = g_signal_new ("finished",
                                     TYPE_DAEMON,
                                     G_SIGNAL_RUN_LAST,
@@ -464,6 +486,11 @@ daemon_get (void)
   return _daemon_instance;
 }
 
+gboolean
+daemon_on_message_bus (Daemon *self)
+{
+  return self->on_message_bus;
+}
 
 void
 daemon_publish (Daemon *self,

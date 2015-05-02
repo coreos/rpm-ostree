@@ -30,6 +30,15 @@
 #define BUS_NAME "org.projectatomic.rpmostree1"
 
 gboolean
+rpmostree_load_connection_and_manager        (gchar *sysroot,
+                                              gboolean force_peer,
+                                              GCancellable *cancellable,
+                                              GDBusConnection **out_connection,
+                                              RPMOSTreeManager **out_manager,
+                                              gboolean *out_is_peer,
+                                              GError **error);
+
+gboolean
 rpmostree_is_valid_object_path               (gchar *string);
 
 gboolean

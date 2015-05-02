@@ -30,10 +30,12 @@
 
 static char *opt_sysroot = "/";
 static gboolean opt_pretty;
+static gboolean opt_force_peer;
 
 static GOptionEntry option_entries[] = {
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { "pretty", 'p', 0, G_OPTION_ARG_NONE, &opt_pretty, "Display status in formatted rows", NULL },
+  { "peer", 0, 0, G_OPTION_ARG_NONE, &opt_force_peer, "Force a peer to peer connection instead of using the system message bus", NULL },
   { NULL }
 };
 
@@ -76,6 +78,7 @@ rpmostree_builtin_status (int             argc,
                           GError        **error)
 {
   gboolean ret = FALSE;
+  gboolean is_peer = FALSE;
   GOptionContext *context = g_option_context_new ("- Get the version of the booted system");
   gs_unref_object GDBusConnection *connection = NULL;
   gs_unref_object RPMOSTreeManager *manager = NULL;
@@ -99,21 +102,13 @@ rpmostree_builtin_status (int             argc,
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
-  if (!opt_sysroot)
-    opt_sysroot = "/";
-
-  connection = g_bus_get_sync(G_BUS_TYPE_SYSTEM, cancellable, error);
-  if (!connection)
-    goto out;
-
-  // Get manager
-  manager = rpmostree_manager_proxy_new_sync (connection,
-                                              G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                              BUS_NAME,
-                                              "/org/projectatomic/rpmostree1/Manager",
+  if (!rpmostree_load_connection_and_manager (opt_sysroot,
+                                              opt_force_peer,
                                               cancellable,
-                                              error);
-  if (!manager)
+                                              &connection,
+                                              &manager,
+                                              &is_peer,
+                                              error))
     goto out;
 
   // populate deployment information
@@ -132,7 +127,7 @@ rpmostree_builtin_status (int             argc,
     {
       RPMOSTreeDeployment *deployment = rpmostree_deployment_proxy_new_sync (connection,
                                                   G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                                  BUS_NAME,
+                                                  is_peer ? NULL : BUS_NAME,
                                                   deployment_paths[j],
                                                   cancellable,
                                                   error);
@@ -280,6 +275,7 @@ rpmostree_builtin_status (int             argc,
     }
 
   ret = TRUE;
+
   out:
   	return ret;
 }

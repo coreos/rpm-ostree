@@ -22,14 +22,18 @@
 #include <glib-unix.h>
 #include <gio/gio.h>
 #include <syslog.h>
+#include "libgsystem.h"
+
 /* ---------------------------------------------------------------------------------------------------- */
 static GMainLoop *loop = NULL;
 static gboolean opt_debug = FALSE;
 static char *opt_sysroot = "/";
+static gint service_dbus_fd = -1;
 static GOptionEntry opt_entries[] =
 {
   {"debug", 'd', 0, G_OPTION_ARG_NONE, &opt_debug, "Print debug information on stderr", NULL},
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
+  { "dbus-peer", 0, 0, G_OPTION_ARG_INT, &service_dbus_fd, "Use a peer to peer dbus connection on this fd", NULL },
   {NULL }
 };
 
@@ -41,13 +45,28 @@ on_close (Daemon *daemon, gpointer data)
   g_main_loop_quit (loop);
 }
 
+static void
+start_daemon (GDBusConnection *connection,
+              gboolean on_messsage_bus,
+              gpointer user_data)
+{
+  Daemon **daemon = user_data;
+  *daemon = g_object_new (TYPE_DAEMON,
+                          "connection", connection,
+                          "persist", opt_debug,
+                          "sysroot-path", opt_sysroot,
+                          "on-message-bus", on_messsage_bus,
+                          NULL);
+  g_signal_connect (*daemon, "finished",
+                    G_CALLBACK (on_close), NULL);
+}
+
 
 static void
 on_bus_acquired (GObject *source,
                  GAsyncResult *res,
                  gpointer user_data)
 {
-  Daemon **daemon = user_data;
   GDBusConnection *connection;
   GError *error = NULL;
   connection = g_bus_get_finish (res, &error);
@@ -59,15 +78,32 @@ on_bus_acquired (GObject *source,
     }
   else
     {
-      *daemon = g_object_new (TYPE_DAEMON,
-                              "connection", connection,
-                              "persist", opt_debug,
-                              "sysroot-path", opt_sysroot,
-                              NULL);
-      g_signal_connect (*daemon, "finished",
-                                G_CALLBACK (on_close), NULL);
+      g_debug ("Connected to the system bus");
+      start_daemon (connection, TRUE, user_data);
     }
-    g_debug ("Connected to the system bus");
+}
+
+
+static void
+on_peer_acquired (GObject *source,
+                  GAsyncResult *result,
+                  gpointer user_data)
+{
+  GDBusConnection *connection;
+  GError *error = NULL;
+
+  connection = g_dbus_connection_new_finish (result, &error);
+  if (error != NULL)
+    {
+      g_warning ("Couldn't connect to peer: %s", error->message);
+      g_main_loop_quit (loop);
+      g_error_free (error);
+    }
+  else
+    {
+      g_debug ("connected to peer");
+      start_daemon (connection, FALSE, user_data);
+    }
 }
 
 
@@ -213,6 +249,50 @@ on_log_handler (const gchar *log_domain,
   syslog (priority, "%s", message);
 }
 
+
+static gboolean
+connect_to_bus_or_peer (gpointer daemon_p)
+{
+  gs_unref_object GSocketConnection *stream = NULL;
+  gs_unref_object GSocket *socket = NULL;
+  GError *error = NULL;
+  gs_free gchar *guid = NULL;
+  gboolean ret = FALSE;
+
+  if (service_dbus_fd == -1)
+    {
+      g_bus_get (G_BUS_TYPE_SYSTEM, NULL, &on_bus_acquired, daemon_p);
+      ret = TRUE;
+      goto out;
+    }
+
+  socket = g_socket_new_from_fd (service_dbus_fd, &error);
+  if (error != NULL)
+    {
+      g_warning ("Couldn't create socket: %s", error->message);
+      goto out;
+    }
+
+  stream = g_socket_connection_factory_create_connection (socket);
+  if (!stream)
+    {
+      g_warning ("Couldn't create socket stream");
+      goto out;
+    }
+
+  guid = g_dbus_generate_guid ();
+  g_dbus_connection_new (G_IO_STREAM (stream), guid,
+                         G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_SERVER |
+                         G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING,
+                         NULL, NULL, on_peer_acquired, daemon_p);
+  ret = TRUE;
+
+out:
+  g_clear_error (&error);
+  return ret;
+}
+
+
 int
 main (int argc,
       char **argv)
@@ -278,7 +358,11 @@ main (int argc,
   g_unix_signal_add (SIGTERM, on_sigint, &daemon);
   g_unix_signal_add (SIGHUP, on_sigint, &daemon);
 
-  g_bus_get (G_BUS_TYPE_SYSTEM, NULL, &on_bus_acquired, &daemon);
+  if (!connect_to_bus_or_peer (&daemon))
+    {
+      ret = 1;
+      goto out;
+    }
 
   g_debug ("Entering main event loop");
 

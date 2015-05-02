@@ -23,9 +23,141 @@
 #include "rpmostree-dbus-helpers.h"
 #include "libgsystem.h"
 #include "libglnx.h"
+#include <sys/socket.h>
+
+
+static gboolean
+get_connection_for_path (gchar *sysroot,
+                         gboolean force_peer,
+                         GCancellable *cancellable,
+                         GDBusConnection **out_connection,
+                         gboolean *out_is_peer,
+                         GError **error)
+{
+  gs_unref_object GDBusConnection *connection = NULL;
+  gs_unref_object GSocketConnection *stream = NULL;
+  gs_unref_object GSocket *socket = NULL;
+
+  gchar buffer[16];
+  GPid pid = 0;
+  int pair[2];
+  gboolean ret = FALSE;
+  gboolean is_peer = FALSE;
+
+  const gchar *args[] = {
+    "rpm-ostreed",
+    "--sysroot", sysroot,
+    "--dbus-peer", buffer,
+    NULL
+  };
+
+  if (!sysroot)
+    sysroot = "/";
+
+  if (g_strcmp0 ("/", sysroot) == 0 && force_peer == FALSE)
+    {
+      connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
+      goto out;
+    }
+
+  g_print ("Running in single user mode. Be sure no other users are modifying the system\n");
+  is_peer = TRUE;
+  if (socketpair (AF_UNIX, SOCK_STREAM, 0, pair) < 0)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Couldn't create socket pair: %s",
+                   g_strerror (errno));
+      goto out;
+    }
+
+  g_snprintf (buffer, sizeof (buffer), "%d", pair[1]);
+
+  socket = g_socket_new_from_fd (pair[0], error);
+  if (socket == NULL)
+    {
+      close(pair[0]);
+      close(pair[1]);
+      goto out;
+    }
+
+  if (!g_spawn_async (NULL, (gchar **)args, NULL,
+                      G_SPAWN_LEAVE_DESCRIPTORS_OPEN | G_SPAWN_DO_NOT_REAP_CHILD,
+                      NULL, NULL, &pid, error))
+    {
+      close(pair[1]);
+      goto out;
+    }
+
+  close(pair[1]);
+  stream = g_socket_connection_factory_create_connection (socket);
+
+  connection = g_dbus_connection_new_sync (G_IO_STREAM (stream), NULL,
+                                           G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
+                                           NULL, cancellable, error);
+out:
+  if (connection)
+    {
+      ret = TRUE;
+      gs_transfer_out_value (out_connection, &connection);
+      *out_is_peer = is_peer;
+    }
+  return ret;
+}
+/**
+* rpmostree_load_connection_and_manager
+* @sysroot: sysroot path
+* @force_peer: Force a peer connection
+* @cancellable: A GCancellable
+* @out_connection: (out) Return location for connection.
+* @out_manager: (out) Return location for manager
+* @out_is_peer: (out) indicates if connection is connected to a peer.
+* @error: A pointer to a GError pointer.
+*
+* Returns: True on success
+**/
+gboolean
+rpmostree_load_connection_and_manager (gchar *sysroot,
+                                       gboolean force_peer,
+                                       GCancellable *cancellable,
+                                       GDBusConnection **out_connection,
+                                       RPMOSTreeManager **out_manager,
+                                       gboolean *out_is_peer,
+                                       GError **error)
+{
+  gboolean ret = FALSE;
+  gboolean is_peer = FALSE;
+  gs_unref_object GDBusConnection *connection = NULL;
+  gs_unref_object RPMOSTreeManager *manager = NULL;
+
+  if (!get_connection_for_path (sysroot,
+                                force_peer,
+                                cancellable,
+                                &connection,
+                                &is_peer,
+                                error))
+    goto out;
+
+  // Get manager
+  manager = rpmostree_manager_proxy_new_sync (connection,
+                                              G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
+                                              is_peer ? NULL : BUS_NAME,
+                                              "/org/projectatomic/rpmostree1/Manager",
+                                              NULL,
+                                              error);
+  if (!manager)
+    goto out;
+
+  gs_transfer_out_value (out_connection, &connection);
+  *out_is_peer = is_peer;
+  gs_transfer_out_value (out_manager, &manager);
+  ret = TRUE;
+
+out:
+  return ret;
+}
 
 /**
-* utils_is_valid_object_path
+* rpmostree_is_valid_object_path
 * @string: string to check
 *
 * Like g_variant_is_object_path except an
@@ -387,22 +519,26 @@ dbus_call_sync_on_signal (RPMOSTreeManager *manager,
   if (parameters == NULL)
     parameters = g_variant_new ("()", NULL);
 
-  // Setup manager connection
+  // If we are on the message bus, setup object manager connection
+  // to notify if the owner changes.
   connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (manager));
-  object_manager = rpmostree_object_manager_client_new_sync (connection,
-                                                      G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                                      BUS_NAME,
-                                                      "/org/projectatomic/rpmostree1",
-                                                      cancellable,
-                                                      error);
+  if (g_dbus_connection_get_unique_name (connection) != NULL)
+    {
+      object_manager = rpmostree_object_manager_client_new_sync (connection,
+                                                          G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
+                                                          BUS_NAME,
+                                                          "/org/projectatomic/rpmostree1",
+                                                          cancellable,
+                                                          error);
 
-  if (object_manager == NULL)
-    goto out;
+      if (object_manager == NULL)
+        goto out;
 
-  g_signal_connect (object_manager,
-                    "notify::name-owner",
-                    G_CALLBACK (on_owner_changed),
-                    cp);
+      g_signal_connect (object_manager,
+                        "notify::name-owner",
+                        G_CALLBACK (on_owner_changed),
+                        cp);
+    }
 
   // setup cancel handler
   id = 0;

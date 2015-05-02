@@ -34,6 +34,8 @@ GType                      daemon_get_type           (void) G_GNUC_CONST;
 
 Daemon *                   daemon_get                (void);
 
+gboolean                   daemon_on_message_bus     (Daemon *self);
+
 Daemon *                   daemon_new                (GDBusConnection *connection,
                                                       gboolean persist);
 

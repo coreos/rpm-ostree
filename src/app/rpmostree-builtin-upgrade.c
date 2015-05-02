@@ -36,6 +36,7 @@ static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_allow_downgrade;
 static gboolean opt_check_diff;
+static gboolean opt_force_peer;
 
 static GOptionEntry option_entries[] = {
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
@@ -43,6 +44,7 @@ static GOptionEntry option_entries[] = {
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after an upgrade is prepared", NULL },
   { "allow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_allow_downgrade, "Permit deployment of chronologically older trees", NULL },
   { "check-diff", 0, 0, G_OPTION_ARG_NONE, &opt_check_diff, "Check for upgrades and print package diff only", NULL },
+  { "peer", 0, 0, G_OPTION_ARG_NONE, &opt_force_peer, "Force a peer to peer connection instead of using the system message bus", NULL },
   { NULL }
 };
 
@@ -82,6 +84,8 @@ rpmostree_builtin_upgrade (int             argc,
                            GError        **error)
 {
   gboolean ret = FALSE;
+  gboolean is_peer = FALSE;
+
   GOptionContext *context = g_option_context_new ("- Perform a system upgrade");
   gs_unref_object GDBusConnection *connection = NULL;
   gs_unref_object RPMOSTreeManager *manager = NULL;
@@ -97,23 +101,14 @@ rpmostree_builtin_upgrade (int             argc,
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
-  if (!opt_sysroot)
-    opt_sysroot = "/";
-
-  connection = g_bus_get_sync(G_BUS_TYPE_SYSTEM, cancellable, error);
-  if (!connection)
-    goto out;
-
-  // Get manager
-  manager = rpmostree_manager_proxy_new_sync (connection,
-                                              G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                              BUS_NAME,
-                                              "/org/projectatomic/rpmostree1/Manager",
+  if (!rpmostree_load_connection_and_manager (opt_sysroot,
+                                              opt_force_peer,
                                               cancellable,
-                                              error);
-  if (!manager)
+                                              &connection,
+                                              &manager,
+                                              &is_peer,
+                                              error))
     goto out;
-
 
   variant_args = get_args_variant ();
   if (!rpmostree_manager_call_get_upgrade_ref_spec_sync (manager,
@@ -127,7 +122,7 @@ rpmostree_builtin_upgrade (int             argc,
     {
       refspec = rpmostree_ref_spec_proxy_new_sync (connection,
                                                    G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                                   BUS_NAME,
+                                                   is_peer ? NULL : BUS_NAME,
                                                    refspec_path,
                                                    cancellable,
                                                    error);

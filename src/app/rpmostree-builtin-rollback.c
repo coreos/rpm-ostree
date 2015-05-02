@@ -31,10 +31,12 @@
 
 static char *opt_sysroot = "/";
 static gboolean opt_reboot;
+static gboolean opt_force_peer;
 
 static GOptionEntry option_entries[] = {
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after rollback is prepared", NULL },
+  { "peer", 0, 0, G_OPTION_ARG_NONE, &opt_force_peer, "Force a peer to peer connection instead of using the system message bus", NULL },
   { NULL }
 };
 
@@ -59,25 +61,18 @@ rpmostree_builtin_rollback (int             argc,
   guint n;
   guint booted_index;
   gboolean ret = FALSE;
+  gboolean is_peer = FALSE;
 
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
-  if (!opt_sysroot)
-    opt_sysroot = "/";
-
-  connection = g_bus_get_sync(G_BUS_TYPE_SYSTEM, cancellable, error);
-  if (!connection)
-    goto out;
-
-  // Get manager
-  manager = rpmostree_manager_proxy_new_sync (connection,
-                                              G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                              BUS_NAME,
-                                              "/org/projectatomic/rpmostree1/Manager",
+  if (!rpmostree_load_connection_and_manager (opt_sysroot,
+                                              opt_force_peer,
                                               cancellable,
-                                              error);
-  if (!manager)
+                                              &connection,
+                                              &manager,
+                                              &is_peer,
+                                              error))
     goto out;
 
   // populate deployment information
@@ -87,7 +82,7 @@ rpmostree_builtin_rollback (int             argc,
     {
       booted_deployment = rpmostree_deployment_proxy_new_sync (connection,
                                                       G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                                      BUS_NAME,
+                                                      is_peer ? NULL : BUS_NAME,
                                                       booted_deployment_path,
                                                       cancellable,
                                                       error);
@@ -145,7 +140,7 @@ rpmostree_builtin_rollback (int             argc,
 
   new_default_deployment = rpmostree_deployment_proxy_new_sync (connection,
                                                   G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                                  BUS_NAME,
+                                                  is_peer ? NULL : BUS_NAME,
                                                   new_deployment_path,
                                                   cancellable,
                                                   error);

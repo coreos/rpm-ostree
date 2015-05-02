@@ -20,6 +20,8 @@
 #include "types.h"
 #include "auth.h"
 #include "errors.h"
+#include "daemon.h"
+#include "libgsystem.h"
 
 /**
  * auth_check_root_or_access_denied:
@@ -36,10 +38,18 @@ auth_check_root_or_access_denied (GDBusInterfaceSkeleton *instance,
                                   gpointer user_data)
 {
   const gchar *sender;
-  GVariant *value = NULL;
+  gboolean ret = FALSE;
+
+  gs_unref_variant GVariant *value = NULL;
   GError *error = NULL;
   GDBusConnection *connection = NULL;
   guint32 uid = UINT32_MAX;
+
+  if (!daemon_on_message_bus (daemon_get ()))
+    {
+      ret = TRUE;
+      goto out;
+    }
 
   sender = g_dbus_method_invocation_get_sender (invocation);
   connection = g_dbus_method_invocation_get_connection (invocation);
@@ -60,13 +70,18 @@ auth_check_root_or_access_denied (GDBusInterfaceSkeleton *instance,
                                        NULL,
                                        &error);
 
-  if (error == NULL)
-      g_variant_get (value, "(u)", &uid);
-  else
+  if (error != NULL)
+    {
       g_critical ("Couldn't get uid for '%s': %s",
                   sender, error->message);
+      goto out;
+    }
 
-  if (uid != 0)
+  g_variant_get (value, "(u)", &uid);
+  ret = uid == 0;
+
+out:
+  if (!ret)
     {
       g_dbus_method_invocation_return_error_literal (invocation,
                                                      RPM_OSTREED_ERROR,
@@ -75,5 +90,5 @@ auth_check_root_or_access_denied (GDBusInterfaceSkeleton *instance,
     }
 
   g_clear_error (&error);
-  return uid == 0;
+  return ret;
 }

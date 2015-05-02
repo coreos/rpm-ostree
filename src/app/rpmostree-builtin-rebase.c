@@ -34,12 +34,14 @@ static char *opt_sysroot = "/";
 static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_skip_purge;
+static gboolean opt_force_peer;
 
 static GOptionEntry option_entries[] = {
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after rebase is finished", NULL },
   { "allow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_skip_purge, "Keep previous refspec after rebase", NULL },
+  { "peer", 0, 0, G_OPTION_ARG_NONE, &opt_force_peer, "Force a peer to peer connection instead of using the system message bus", NULL },
   { NULL }
 };
 
@@ -65,6 +67,8 @@ rpmostree_builtin_rebase (int             argc,
                           GError        **error)
 {
   gboolean ret = FALSE;
+  gboolean is_peer = FALSE;
+
   GOptionContext *context = g_option_context_new ("REFSPEC - Switch to a different tree");
   gs_unref_object GDBusConnection *connection = NULL;
   gs_unref_object RPMOSTreeManager *manager = NULL;
@@ -78,9 +82,6 @@ rpmostree_builtin_rebase (int             argc,
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
-  if (!opt_sysroot)
-    opt_sysroot = "/";
-
   if (argc < 2)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -90,18 +91,13 @@ rpmostree_builtin_rebase (int             argc,
 
   new_provided_refspec = argv[1];
 
-  connection = g_bus_get_sync(G_BUS_TYPE_SYSTEM, cancellable, error);
-  if (!connection)
-    goto out;
-
-  // Get manager
-  manager = rpmostree_manager_proxy_new_sync (connection,
-                                              G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                              BUS_NAME,
-                                              "/org/projectatomic/rpmostree1/Manager",
+  if (!rpmostree_load_connection_and_manager (opt_sysroot,
+                                              opt_force_peer,
                                               cancellable,
-                                              error);
-  if (!manager)
+                                              &connection,
+                                              &manager,
+                                              &is_peer,
+                                              error))
     goto out;
 
   variant_args = get_args_variant ();
@@ -113,7 +109,7 @@ rpmostree_builtin_rebase (int             argc,
 
   refspec = rpmostree_ref_spec_proxy_new_sync (connection,
                                                G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                               BUS_NAME,
+                                               is_peer ? NULL : BUS_NAME,
                                                refspec_path,
                                                cancellable,
                                                error);
