@@ -545,9 +545,12 @@ refspec_populate (RefSpec *refspec,
   gs_free gchar *ref = NULL;
   gs_free gchar *remote_name = NULL;
   gs_free gchar *head = NULL;
+  gs_free gchar *version_commit = NULL;
+  gs_unref_variant GVariant *commit = NULL;
 
   GError *error = NULL;
   gboolean ret;
+  guint64 timestamp = 0;
 
   ret = FALSE;
   if (!ostree_parse_refspec (refspec_string, &remote_name, &ref, &error))
@@ -561,6 +564,22 @@ refspec_populate (RefSpec *refspec,
                                                FALSE, &head, &error))
     {
         rpmostree_ref_spec_set_head (RPMOSTREE_REF_SPEC (refspec), head);
+        if (ostree_repo_load_variant (repo,
+                                      OSTREE_OBJECT_TYPE_COMMIT,
+                                      head,
+                                      &commit,
+                                      &error))
+          {
+            gs_unref_variant GVariant *metadata = NULL;
+            timestamp = ostree_commit_get_timestamp (commit);
+            metadata = g_variant_get_child_value (commit, 0);
+            if (metadata != NULL)
+                g_variant_lookup (metadata, "version", "s", &version_commit);
+          }
+        else
+          {
+            g_warning ("error loading commit %s", error->message);
+          }
     }
   else
     {
@@ -568,8 +587,13 @@ refspec_populate (RefSpec *refspec,
                 refspec->id, error->message);
     }
 
+
+
   rpmostree_ref_spec_set_remote_name (RPMOSTREE_REF_SPEC (refspec), remote_name);
   rpmostree_ref_spec_set_ref (RPMOSTREE_REF_SPEC (refspec), ref);
+  rpmostree_ref_spec_set_version (RPMOSTREE_REF_SPEC (refspec), version_commit);
+  rpmostree_ref_spec_set_timestamp (RPMOSTREE_REF_SPEC (refspec),
+                                      timestamp ? timestamp : 0);
 
   ret = TRUE;
   if (publish)

@@ -94,6 +94,8 @@
     <property name="Head" type="s" access="read"/>
     <property name="Ref" type="s" access="read"/>
     <property name="RemoteName" type="s" access="read"/>
+    <property name="Version" type="s" access="read"/>
+    <property name="Timestamp" type="t" access="read"/>
 
     <!--
          Pull and deploy this refspec.
@@ -185,7 +187,7 @@
   <interface name="org.projectatomic.rpmostree1.Deployment">
     <property name="OSName" type="s" access="read"/>
     <property name="Checksum" type="s" access="read"/>
-    <property name="Commit" type="s" access="read"/>
+    <property name="Version" type="s" access="read"/>
     <property name="Timestamp" type="t" access="read"/>
     <property name="RefspecObjectpath" type="o" access="read"/>
     <property name="OriginRefspec" type="s" access="read"/>

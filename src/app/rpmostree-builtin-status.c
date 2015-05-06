@@ -145,7 +145,7 @@ rpmostree_builtin_status (int             argc,
           gs_free gchar *checksum = NULL;
 
           os_name = rpmostree_deployment_dup_osname (deployment);
-          version_string = rpmostree_deployment_dup_commit (deployment);
+          version_string = rpmostree_deployment_dup_version (deployment);
           origin_refspec = format_origin_refspec (deployment, connection, cancellable);
           max_osname_len = MAX (max_osname_len, strlen (os_name));
           max_refspec_len = MAX (max_refspec_len, strlen (origin_refspec));
@@ -191,7 +191,7 @@ rpmostree_builtin_status (int             argc,
       signatures = rpmostree_deployment_dup_signatures (deployment);
       os_name = rpmostree_deployment_dup_osname (deployment);
       checksum = rpmostree_deployment_dup_checksum (deployment);
-      version_string = rpmostree_deployment_dup_commit (deployment);
+      version_string = rpmostree_deployment_dup_version (deployment);
       origin_refspec = format_origin_refspec (deployment, connection, cancellable);
 
       t = rpmostree_deployment_get_timestamp (deployment);

@@ -348,7 +348,7 @@ deployment_populate (Deployment *deployment,
   rpmostree_deployment_set_index (RPMOSTREE_DEPLOYMENT (deployment), index);
   rpmostree_deployment_set_serial (RPMOSTREE_DEPLOYMENT (deployment), serial);
   rpmostree_deployment_set_checksum (RPMOSTREE_DEPLOYMENT (deployment), csum);
-  rpmostree_deployment_set_commit (RPMOSTREE_DEPLOYMENT (deployment), version_commit);
+  rpmostree_deployment_set_version (RPMOSTREE_DEPLOYMENT (deployment), version_commit);
   rpmostree_deployment_set_osname (RPMOSTREE_DEPLOYMENT (deployment),
                                    osname ? osname : "");
   rpmostree_deployment_set_timestamp (RPMOSTREE_DEPLOYMENT (deployment),
