@@ -69,6 +69,29 @@ G_DEFINE_TYPE_WITH_CODE (RefSpec, refspec, RPMOSTREE_TYPE_REF_SPEC_SKELETON,
 
 /* ---------------------------------------------------------------------------------------------------- */
 
+static void
+gpg_verify_result_cb (OstreeRepo *repo,
+                      const char *checksum,
+                      OstreeGpgVerifyResult *result,
+                      gpointer user_data)
+{
+  RefSpec *refspec = REFSPEC (user_data);
+  guint n, i;
+  GVariantBuilder builder;
+
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("av"));
+
+  n = ostree_gpg_verify_result_count_all (result);
+
+  for (i = 0; i < n; i++)
+    {
+      g_variant_builder_add (&builder, "v",
+                                   ostree_gpg_verify_result_get_all (result, i));
+    }
+  rpmostree_ref_spec_emit_progress_signature (RPMOSTREE_REF_SPEC (refspec),
+                                              g_variant_builder_end (&builder),
+                                              g_strdup(checksum));
+}
 
 static void
 _pull_progress (OstreeAsyncProgress *progress,
@@ -169,6 +192,7 @@ _do_upgrade_in_thread (GTask *task,
   gboolean allow_downgrade = FALSE;
   gboolean changed = FALSE;
   gboolean ret = FALSE;
+  gulong signature_signal_id = 0;
 
   RefSpec *self = REFSPEC (object);
 
@@ -236,6 +260,9 @@ _do_upgrade_in_thread (GTask *task,
     upgraderpullflags |= OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER;
 
   progress = ostree_async_progress_new_and_connect (_pull_progress, self);
+  signature_signal_id = g_signal_connect (ot_repo, "gpg-verify-result",
+                                          G_CALLBACK (gpg_verify_result_cb),
+                                          self);
   if (!ostree_sysroot_upgrader_pull (upgrader, 0, upgraderpullflags,
                                      progress, &changed, cancellable, &error))
     goto out;
@@ -260,6 +287,9 @@ _do_upgrade_in_thread (GTask *task,
         ret = TRUE;
     }
 out:
+  if (signature_signal_id > 0)
+    g_signal_handler_disconnect (ot_repo, signature_signal_id);
+
   // Clean up context
   g_main_context_pop_thread_default (m_context);
   g_main_context_unref (m_context);
@@ -272,7 +302,9 @@ out:
 
 
 static gboolean
-pull_dir (const gchar *dir,
+pull_dir (OstreeSysroot *ot_sysroot,
+          OstreeRepo *ot_repo,
+          const gchar *dir,
           const gchar *remote,
           const gchar *ref,
           OstreeAsyncProgress *progress,
@@ -282,9 +314,8 @@ pull_dir (const gchar *dir,
   gboolean ret = FALSE;
 
   gs_free gchar *refs_to_fetch[] = { NULL, NULL };
-  gs_unref_object OstreeSysroot *ot_sysroot = NULL;
-  gs_unref_object OstreeRepo *ot_repo = NULL;
   GMainContext *m_context = NULL;
+
   refs_to_fetch[0] = g_strdup (ref);
 
   g_debug ("pulling dir %s", dir);
@@ -292,13 +323,6 @@ pull_dir (const gchar *dir,
   // so we need to run in our own context.
   m_context = g_main_context_new ();
   g_main_context_push_thread_default (m_context);
-
-  if (!utils_load_sysroot_and_repo (manager_get_sysroot_path ( manager_get ()),
-                                    cancellable,
-                                    &ot_sysroot,
-                                    &ot_repo,
-                                    error))
-    goto out;
 
   ret = ostree_repo_pull_one_dir (ot_repo, remote,
                                   dir, refs_to_fetch,
@@ -309,7 +333,6 @@ pull_dir (const gchar *dir,
   g_main_context_pop_thread_default (m_context);
   g_main_context_unref (m_context);
 
-out:
   return ret;
 }
 
@@ -324,13 +347,23 @@ _do_pull_nodata (GTask *task,
 
   gs_free gchar *ref = NULL;
   gs_free gchar *remote = NULL;
+  gs_unref_object OstreeSysroot *ot_sysroot = NULL;
+  gs_unref_object OstreeRepo *ot_repo = NULL;
 
   gchar *refspec = data_ptr;
 
   if (!ostree_parse_refspec (refspec, &remote, &ref, &error))
     goto out;
 
-  pull_dir ("/nonexistent", remote, ref,
+  if (!utils_load_sysroot_and_repo (manager_get_sysroot_path ( manager_get ()),
+                                    cancellable,
+                                    &ot_sysroot,
+                                    &ot_repo,
+                                    &error))
+    goto out;
+
+  pull_dir (ot_sysroot, ot_repo,
+            "/nonexistent", remote, ref,
             NULL, cancellable, &error);
 
 out:
@@ -349,21 +382,40 @@ _do_pull_rpm (GTask *task,
 {
   GError *error = NULL;
 
+  gs_unref_object OstreeSysroot *ot_sysroot = NULL;
+  gs_unref_object OstreeRepo *ot_repo = NULL;
   gs_unref_object OstreeAsyncProgress *progress = NULL;
   gs_free gchar *ref = NULL;
   gs_free gchar *remote = NULL;
 
+  gulong signature_signal_id = 0;
   RefSpec *self = REFSPEC (object);
 
   g_debug ("Pull starting");
+
+  if (!utils_load_sysroot_and_repo (manager_get_sysroot_path ( manager_get ()),
+                                    cancellable,
+                                    &ot_sysroot,
+                                    &ot_repo,
+                                    &error))
+    goto out;
 
   remote = rpmostree_ref_spec_dup_remote_name (RPMOSTREE_REF_SPEC(self));
   ref = rpmostree_ref_spec_dup_ref (RPMOSTREE_REF_SPEC(self));
 
   progress = ostree_async_progress_new_and_connect (_pull_progress,
                                                     object);
-  pull_dir ("/usr/share/rpm", remote, ref,
+
+  signature_signal_id = g_signal_connect (ot_repo, "gpg-verify-result",
+                                          G_CALLBACK (gpg_verify_result_cb),
+                                          self);
+  pull_dir (ot_sysroot, ot_repo,
+            "/usr/share/rpm", remote, ref,
             progress, cancellable, &error);
+
+out:
+  if (signature_signal_id > 0)
+    g_signal_handler_disconnect (ot_repo, signature_signal_id);
 
   if (error == NULL)
     g_task_return_boolean (task, TRUE);

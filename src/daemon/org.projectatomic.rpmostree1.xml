@@ -146,6 +146,15 @@
     	<arg name="message" type="s" direction="out"/>
     </signal>
 
+    <signal name="ProgressSignature">
+      <!-- An ostree GVariant containing signature data
+           see ostree_gpg_verify_result_get_all.
+      -->
+    	<arg name="signature" type="av" direction="out"/>
+      <!-- The signed commit -->
+    	<arg name="commit" type="s" direction="out"/>
+    </signal>
+
     <signal name="ProgressData">
       <!-- time data, format is:
             start time, elapsed seconds

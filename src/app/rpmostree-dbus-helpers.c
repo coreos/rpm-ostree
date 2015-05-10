@@ -376,6 +376,13 @@ on_refspec_progress (GDBusProxy *proxy,
                      gpointer user_data)
 {
   ConsoleProgress *cp = user_data;
+  if (g_strcmp0(signal_name, "ProgressSignature") == 0)
+    {
+      gs_unref_variant GVariant *sig = NULL;
+      sig = g_variant_get_child_value (parameters, 0);
+      rpmostree_print_signatures (g_variant_ref (sig), "  ");
+      add_status_line(cp, "\n");
+    }
   if (g_strcmp0(signal_name, "ProgressMessage") == 0)
     {
       gs_free gchar *message = NULL;
