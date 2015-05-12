@@ -168,7 +168,8 @@ find_kernel_and_initramfs_in_bootdir (GFile       *bootdir,
 
       name = g_file_info_get_name (file_info);
 
-      if (g_str_has_prefix (name, "vmlinuz-"))
+      /* Current Fedora rawhide kernel.spec installs as just vmlinuz */
+      if (strcmp (name, "vmlinuz") == 0 || g_str_has_prefix (name, "vmlinuz-"))
         {
           if (ret_kernel)
             {
@@ -192,17 +193,50 @@ find_kernel_and_initramfs_in_bootdir (GFile       *bootdir,
         }
     }
 
-  if (!ret_kernel)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Unable to find vmlinuz- in %s",
-                   gs_file_get_path_cached (bootdir));
-      goto out;
-    }
-
   ret = TRUE;
   gs_transfer_out_value (out_kernel, &ret_kernel);
   gs_transfer_out_value (out_initramfs, &ret_initramfs);
+ out:
+  return ret;
+}
+
+/* Given a directory @d, find the first child that is a directory,
+ * returning it in @out_subdir. */
+static gboolean
+find_first_subdirectory (GFile         *d,
+                         GFile        **out_subdir,
+                         GCancellable  *cancellable,
+                         GError       **error)
+{
+  gboolean ret = FALSE;
+  gs_unref_object GFileEnumerator *direnum = NULL;
+  gs_unref_object GFile *ret_subdir = NULL;
+
+  direnum = g_file_enumerate_children (d, "standard::name,standard::type", 0, 
+                                       cancellable, error);
+  if (!direnum)
+    goto out;
+
+  while (TRUE)
+    {
+      GFileInfo *file_info;
+      GFile *child;
+
+      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
+                                       cancellable, error))
+        goto out;
+      if (!file_info)
+        break;
+
+      if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_DIRECTORY)
+        {
+          ret_subdir = g_object_ref (child);
+          break;
+        }
+    }
+
+  ret = TRUE;
+  gs_transfer_out_value (out_subdir, &ret_subdir);
  out:
   return ret;
 }
@@ -220,14 +254,38 @@ do_kernel_prep (GFile         *yumroot,
   gs_unref_object GFile *initramfs_path = NULL;
   const char *boot_checksum_str = NULL;
   GChecksum *boot_checksum = NULL;
-  const char *kname;
-  const char *kver;
+  g_autofree char *kver = NULL;
 
   if (!find_kernel_and_initramfs_in_bootdir (bootdir, &kernel_path,
                                              &initramfs_path,
                                              cancellable, error))
     goto out;
 
+  if (kernel_path == NULL)
+    {
+      gs_unref_object GFile *mod_dir = g_file_resolve_relative_path (yumroot, "usr/lib/modules");
+      gs_unref_object GFile *modversion_dir = NULL;
+
+      if (!find_first_subdirectory (mod_dir, &modversion_dir, cancellable, error))
+        goto out;
+
+      if (modversion_dir)
+        {
+          kver = g_file_get_basename (modversion_dir);
+          if (!find_kernel_and_initramfs_in_bootdir (modversion_dir, &kernel_path,
+                                                     &initramfs_path,
+                                                     cancellable, error))
+            goto out;
+        }
+    }
+
+  if (kernel_path == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Unable to find kernel (vmlinuz) in /boot or /usr/lib/modules");
+      goto out;
+    }
+      
   if (initramfs_path)
     {
       g_print ("Removing RPM-generated '%s'\n",
@@ -236,10 +294,15 @@ do_kernel_prep (GFile         *yumroot,
         goto out;
     }
 
-  kname = gs_file_get_basename_cached (kernel_path);
-  kver = strchr (kname, '-');
-  g_assert (kver);
-  kver += 1;
+  if (!kver)
+    {
+      const char *kname = gs_file_get_basename_cached (kernel_path);
+      const char *kver_p;
+
+      kver_p = strchr (kname, '-');
+      g_assert (kver_p);
+      kver = g_strdup (kver_p + 1);
+    }
 
   /* OSTree needs to own this */
   {
