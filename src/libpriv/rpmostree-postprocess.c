@@ -168,7 +168,7 @@ find_kernel_and_initramfs_in_bootdir (GFile       *bootdir,
 
       name = g_file_info_get_name (file_info);
 
-      /* Current Fedora rawhide kernel.spec installs as just vmlinuz */
+      /* Current Fedora 23 kernel.spec installs as just vmlinuz */
       if (strcmp (name, "vmlinuz") == 0 || g_str_has_prefix (name, "vmlinuz-"))
         {
           if (ret_kernel)
@@ -201,12 +201,14 @@ find_kernel_and_initramfs_in_bootdir (GFile       *bootdir,
 }
 
 /* Given a directory @d, find the first child that is a directory,
- * returning it in @out_subdir. */
+ * returning it in @out_subdir.  If there are multiple directories,
+ * return an error.
+ */
 static gboolean
-find_first_subdirectory (GFile         *d,
-                         GFile        **out_subdir,
-                         GCancellable  *cancellable,
-                         GError       **error)
+find_ensure_one_subdirectory (GFile         *d,
+                              GFile        **out_subdir,
+                              GCancellable  *cancellable,
+                              GError       **error)
 {
   gboolean ret = FALSE;
   gs_unref_object GFileEnumerator *direnum = NULL;
@@ -230,8 +232,13 @@ find_first_subdirectory (GFile         *d,
 
       if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_DIRECTORY)
         {
+          if (ret_subdir)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Multiple subdirectories found in: %s", gs_file_get_path_cached (d));
+              goto out;
+            }
           ret_subdir = g_object_ref (child);
-          break;
         }
     }
 
@@ -266,7 +273,7 @@ do_kernel_prep (GFile         *yumroot,
       gs_unref_object GFile *mod_dir = g_file_resolve_relative_path (yumroot, "usr/lib/modules");
       gs_unref_object GFile *modversion_dir = NULL;
 
-      if (!find_first_subdirectory (mod_dir, &modversion_dir, cancellable, error))
+      if (!find_ensure_one_subdirectory (mod_dir, &modversion_dir, cancellable, error))
         goto out;
 
       if (modversion_dir)
