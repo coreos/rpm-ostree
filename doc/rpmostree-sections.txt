@@ -11,4 +11,5 @@ rpm_ostree_package_get_name
 rpm_ostree_package_get_evr
 rpm_ostree_package_get_arch
 rpm_ostree_package_get_nevra
+rpm_ostree_package_cmp
 </SECTION>
