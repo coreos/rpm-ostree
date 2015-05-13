@@ -125,6 +125,51 @@ rpm_ostree_package_get_arch (RpmOstreePackage *p)
   return hy_package_get_arch (p->hypkg);
 }
 
+/**
+ * rpm_ostree_package_cmp:
+ * @p1: Package
+ * @p2: Package
+ *
+ * Compares two packages by name, epoch:version-release and architecture.
+ *
+ * Returns: an integer suitable for sorting functions; negative if @p1 should
+ *          sort before @p2 in name or version, 0 if equal, positive if @p1
+ *          should sort after @p2
+ */
+int
+rpm_ostree_package_cmp (RpmOstreePackage *p1, RpmOstreePackage *p2)
+{
+  /* XXX This is equivalent to hy_package_cmp(), but works
+   *     for comparing packages from different memory pools.
+   *
+   *     See https://github.com/rpm-software-management/hawkey/pull/90
+   */
+
+  const char *str1, *str2;
+  gint ret;
+
+  str1 = rpm_ostree_package_get_name (p1);
+  str2 = rpm_ostree_package_get_name (p2);
+  ret = strcmp (str1, str2);
+
+  if (ret != 0)
+    return ret;
+
+  str1 = rpm_ostree_package_get_evr (p1);
+  str2 = rpm_ostree_package_get_evr (p2);
+
+  /* This assumes both pools (if they are different)
+   * have identical configuration for epoch handling. */
+  ret = hy_sack_evr_cmp (p1->sack->sack, str1, str2);
+
+  if (ret != 0)
+    return ret;
+
+  str1 = rpm_ostree_package_get_arch (p1);
+  str2 = rpm_ostree_package_get_arch (p2);
+  return strcmp (str1, str2);
+}
+
 RpmOstreePackage *
 _rpm_ostree_package_new (RpmOstreeRefSack *rsack, HyPackage hypkg)
 {
