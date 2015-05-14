@@ -170,6 +170,22 @@ rpm_ostree_package_cmp (RpmOstreePackage *p1, RpmOstreePackage *p2)
   return strcmp (str1, str2);
 }
 
+/**
+ * rpm_ostree_package_to_variant
+ * @package: RpmOstreePackage
+ *
+ * Returns: A GVariant of (sss) where values are
+ * (package name, evr, arch)
+ */
+GVariant *
+rpm_ostree_package_to_variant (RpmOstreePackage *package)
+{
+  return g_variant_new ("(sss)",
+                        rpm_ostree_package_get_name (package),
+                        rpm_ostree_package_get_evr (package),
+                        rpm_ostree_package_get_arch (package));
+}
+
 RpmOstreePackage *
 _rpm_ostree_package_new (RpmOstreeRefSack *rsack, HyPackage hypkg)
 {
