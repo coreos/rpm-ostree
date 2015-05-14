@@ -704,14 +704,14 @@ _throttle_refresh (gpointer user_data)
 }
 
 static void
-on_transaction_file (GFileMonitor *monitor,
+on_repo_file (GFileMonitor *monitor,
                      GFile *file,
                      GFile *other_file,
                      GFileMonitorEvent event_type,
                      gpointer user_data)
 {
   Manager *self = MANAGER (user_data);
-  if (event_type == G_FILE_MONITOR_EVENT_DELETED)
+  if (event_type == G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED)
     {
       g_rw_lock_writer_lock (&self->children_lock);
       if (self->last_transaction_end == 0)
@@ -1022,7 +1022,6 @@ manager_populate (Manager *self,
 {
   gboolean ret = FALSE;
   gs_unref_object OstreeRepo *ot_repo = NULL;
-  GFile *repo_file = NULL; // owned by ot_repo;
   gs_unref_object GFile *transaction_file = NULL;
 
   g_return_val_if_fail (self != NULL, FALSE);
@@ -1032,17 +1031,16 @@ manager_populate (Manager *self,
 
   if (self->monitor == NULL)
     {
-      repo_file = ostree_repo_get_path (ot_repo);
-      transaction_file = g_file_get_child (repo_file, "transaction");
-      self->monitor = g_file_monitor (transaction_file, 0, NULL, error);
+      GFile *repo_file = ostree_repo_get_path (ot_repo); // owned by ot_repo
+      self->monitor = g_file_monitor (repo_file, 0, NULL, error);
 
       if (self->monitor == NULL)
         goto out;
 
       self->sig_changed = g_signal_connect (self->monitor,
-                                               "changed",
-                                               G_CALLBACK (on_transaction_file),
-                                               self);
+                                            "changed",
+                                            G_CALLBACK (on_repo_file),
+                                            self);
     }
 
   ret = TRUE;
