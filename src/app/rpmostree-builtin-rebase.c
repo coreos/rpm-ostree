@@ -123,14 +123,12 @@ rpmostree_builtin_rebase (int             argc,
 
   if (!opt_reboot)
     {
-      gs_unref_variant GVariant *out_difference;
-      if (!rpmostree_ref_spec_call_get_rpm_diff_sync (refspec,
-                                                      &out_difference,
-                                                      cancellable,
-                                                      error))
+      // by request, doing this without dbus
+      if (!rpmostree_print_treepkg_diff_from_sysroot_path (opt_sysroot,
+                                                           cancellable,
+                                                           error))
         goto out;
 
-      g_print ("diff will be here: %s\n", g_variant_print (out_difference, TRUE));
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
   else

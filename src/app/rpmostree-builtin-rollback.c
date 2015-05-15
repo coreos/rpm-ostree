@@ -167,11 +167,10 @@ rpmostree_builtin_rollback (int             argc,
     }
   else
     {
-      gs_unref_variant GVariant *out_difference;
-      if (!rpmostree_deployment_call_get_rpm_diff_sync (new_default_deployment,
-                                                        &out_difference,
-                                                        cancellable,
-                                                        error))
+      // by request, doing this without dbus
+      if (!rpmostree_print_treepkg_diff_from_sysroot_path (opt_sysroot,
+                                                           cancellable,
+                                                           error))
         goto out;
 
       g_print ("Run \"systemctl reboot\" to start a reboot\n");

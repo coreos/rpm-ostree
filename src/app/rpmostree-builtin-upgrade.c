@@ -154,21 +154,59 @@ rpmostree_builtin_upgrade (int             argc,
           goto out;
     }
 
-  // we want to display a diff even if we didn't pull anything
-  // new as long as the default deployment isn't the booted one.
-  if (opt_check_diff || !opt_reboot)
+  if (opt_check_diff)
     {
-      gs_unref_variant GVariant *out_difference;
-      if (!rpmostree_ref_spec_call_get_rpm_diff_sync (refspec,
-                                                      &out_difference,
-                                                      cancellable,
-                                                      error))
+      // yes, doing this without using dbus, because....
+      gs_unref_object GFile *rpmdbdir = NULL;
+      _cleanup_rpmrev_ struct RpmRevisionData *rpmrev1 = NULL;
+      _cleanup_rpmrev_ struct RpmRevisionData *rpmrev2 = NULL;
+      gs_unref_object OstreeSysroot *sysroot = NULL;
+      gs_unref_object OstreeRepo *repo = NULL;
+      gs_unref_object GFile *sysroot_path = NULL;
+      gs_free gchar *new_csum = NULL;
+      gs_free char *tmpd = g_mkdtemp (g_strdup ("/tmp/rpm-ostree.XXXXXX"));
+      const gchar *csum = NULL;
+
+      sysroot_path = g_file_new_for_path (opt_sysroot);
+      sysroot = ostree_sysroot_new (sysroot_path);
+
+      if (!ostree_sysroot_load (sysroot, cancellable, error))
         goto out;
 
-      g_print ("diff will be here: %s\n", g_variant_print (out_difference, TRUE));
-    }
+      // by request, doing this without dbus
+      csum = ostree_deployment_get_csum (ostree_sysroot_get_booted_deployment (sysroot));
+      new_csum = rpmostree_ref_spec_dup_head (refspec);
+      if (g_strcmp0 (csum, new_csum) == 0)
+        {
+          g_print ("No upgrade available.\n");
+          ret = TRUE;
+          goto out;
+        }
 
-  if (!opt_check_diff)
+      if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
+        goto out;
+
+      if (rpmReadConfigFiles (NULL, NULL))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "rpm failed to init: %s", rpmlogMessage());
+          goto out;
+        }
+
+      rpmdbdir = g_file_new_for_path (tmpd);
+      if (!(rpmrev1 = rpmrev_new (repo, rpmdbdir,
+                                  csum,
+                                  NULL, cancellable, error)))
+        goto out;
+
+      if (!(rpmrev2 = rpmrev_new (repo, rpmdbdir, ref,
+                                  NULL, cancellable, error)))
+        goto out;
+
+      rpmhdrs_diff_prnt_diff (rpmrev1->root, rpmrev2->root,
+                              rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb));
+    }
+  else
     {
       if (opt_reboot)
         {
@@ -178,6 +216,11 @@ rpmostree_builtin_upgrade (int             argc,
         }
       else
         {
+          if (!rpmostree_print_treepkg_diff_from_sysroot_path (opt_sysroot,
+                                                               cancellable,
+                                                               error))
+            goto out;
+
           g_print ("Run \"systemctl reboot\" to start a reboot\n");
         }
     }

@@ -27,6 +27,27 @@
 #include "rpmostree-cleanup.h"
 
 gboolean
+rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
+                                                GCancellable *cancellable,
+                                                GError **error)
+{
+  gs_unref_object OstreeSysroot *sysroot = NULL;
+  gs_unref_object GFile *sysroot_file = NULL;
+  gboolean ret = FALSE;
+
+  sysroot_file = g_file_new_for_path (sysroot_path);
+  sysroot = ostree_sysroot_new (sysroot_file);
+
+  if (!ostree_sysroot_load (sysroot, cancellable, error))
+    goto out;
+
+  ret = rpmostree_print_treepkg_diff (sysroot, cancellable, error);
+
+out:
+  return ret;
+}
+
+gboolean
 rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
                               GCancellable     *cancellable,
                               GError          **error)
