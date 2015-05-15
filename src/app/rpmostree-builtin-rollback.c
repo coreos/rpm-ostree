@@ -56,6 +56,7 @@ rpmostree_builtin_rollback (int             argc,
 
   gs_free gchar *booted_deployment_path = NULL;
   gs_free gchar *new_deployment_path = NULL;
+  gs_free gchar *new_csum = NULL;
   gs_strfreev gchar **deployment_paths = NULL;
 
   guint n;
@@ -148,6 +149,10 @@ rpmostree_builtin_rollback (int             argc,
     goto out;
 
 
+  new_csum = rpmostree_deployment_dup_checksum (new_default_deployment);
+  g_print ("Moving '%s.%d' to be first deployment\n", new_csum,
+           rpmostree_deployment_get_serial (new_default_deployment));
+
   if (!rpmostree_deployment_deploy_sync (manager,
                                          new_default_deployment,
                                          cancellable,
@@ -169,8 +174,6 @@ rpmostree_builtin_rollback (int             argc,
                                                         error))
         goto out;
 
-      //TODO: output real diffs
-      g_print ("diff will be here: %s\n", g_variant_print (out_difference, TRUE));
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
 

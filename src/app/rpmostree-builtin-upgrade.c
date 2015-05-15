@@ -68,12 +68,8 @@ transfer_changed_callback (GObject *object,
                            GParamSpec *pspec,
                            gpointer user_data)
 {
-  gs_free gchar *value = NULL;
-  gchar **out_value = user_data;
+  gchar **value = user_data;
   g_object_get(object, pspec->name, value, NULL);
-
-  if (value && out_value)
-    gs_transfer_out_value (out_value, &value);
 }
 
 
@@ -94,9 +90,6 @@ rpmostree_builtin_upgrade (int             argc,
   gs_free gchar *remote = NULL;
   gs_free gchar *ref = NULL;
   gs_unref_variant GVariant *variant_args = NULL;
-  gs_free gchar *new_deployment_path = NULL;
-  gs_free gchar *new_head = NULL;
-  gboolean changed = FALSE;
 
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
@@ -137,13 +130,6 @@ rpmostree_builtin_upgrade (int             argc,
   if (refspec == NULL)
       goto out;
 
-  g_signal_connect (manager, "notify::DefaultDeployment",
-                    G_CALLBACK (transfer_changed_callback),
-                    &new_deployment_path);
-  g_signal_connect (manager, "notify::Head",
-                    G_CALLBACK (transfer_changed_callback),
-                    &new_head);
-
   remote = rpmostree_ref_spec_dup_remote_name (refspec);
   ref = rpmostree_ref_spec_dup_ref (refspec);
   g_print ("Updating from %s:%s\n", remote, ref);
@@ -152,22 +138,24 @@ rpmostree_builtin_upgrade (int             argc,
       if (!rpmostree_refspec_update_sync (manager, refspec, "PullRpmDb",
                                           NULL, cancellable, error))
         goto out;
-
-      changed = new_deployment_path != NULL;
     }
   else
     {
+      gs_free gchar *new_deployment_path = NULL;
+      g_signal_connect (manager, "notify::default-deployment",
+                        G_CALLBACK (transfer_changed_callback),
+                        &new_deployment_path);
       if (!rpmostree_refspec_update_sync (manager, refspec, "Deploy",
                                           g_variant_new ("(@a{sv})", variant_args),
                                           cancellable, error))
         goto out;
 
-      changed = new_head != NULL;
+      if (new_deployment_path == NULL)
+          goto out;
     }
 
-  if (!changed)
-    goto out;
-
+  // we want to display a diff even if we didn't pull anything
+  // new as long as the default deployment isn't the booted one.
   if (opt_check_diff || !opt_reboot)
     {
       gs_unref_variant GVariant *out_difference;
