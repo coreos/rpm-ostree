@@ -37,6 +37,16 @@ gboolean   utils_load_sysroot_and_repo          (gchar *path,
                                                  OstreeSysroot **out_sysroot,
                                                  OstreeRepo **out_repo,
                                                  GError **error);
+
+void       utils_get_diff_variant_in_thread     (GTask *task,
+                                                 gpointer object,
+                                                 gpointer data_ptr,
+                                                 GCancellable *cancellable);
+
+void       utils_task_result_invoke             (GObject *source_object,
+                                                 GAsyncResult *res,
+                                                 gpointer user_data);
+
 G_END_DECLS
 
 #endif /* RPM_OSTREED_H__ */

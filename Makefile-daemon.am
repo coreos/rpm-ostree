@@ -32,6 +32,8 @@ librpmostreed_la_SOURCES = \
 	src/daemon/auth.c \
 	src/daemon/errors.h \
 	src/daemon/errors.c \
+	src/daemon/rpmostree-package-variants.h \
+	src/daemon/rpmostree-package-variants.c \
 	$(NULL)
 
 librpmostreed_la_CFLAGS = \
@@ -40,11 +42,13 @@ librpmostreed_la_CFLAGS = \
 	-DG_LOG_DOMAIN=\"rpm-ostree\" \
 	-I$(srcdir)/src/daemon \
 	-I$(srcdir)/libglnx \
+	-I$(srcdir)/src/lib \
 	$(NULL)
 
 librpmostreed_la_LIBADD = \
 	$(AM_LDFLAGS) \
 	$(PKGDEP_RPMOSTREE_LIBS) \
+	librpmostree-1.la \
 	$(CAP_LIBS)
 	$(NULL)
 
@@ -83,12 +87,12 @@ $(service_DATA):
 	$(SED_SUBST) $@.in > $@
 
 EXTRA_DIST += \
-  $(dbusservice_DATA) \
+	$(dbusservice_DATA) \
 	$(service_in_files) \
 	$(systemdunit_in_files) \
 	$(NULL)
 
 CLEANFILES += \
-  $(service_DATA) \
+	$(service_DATA) \
 	$(systemdunit_DATA) \
 	$(NULL)

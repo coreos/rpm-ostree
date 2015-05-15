@@ -74,10 +74,17 @@ static gboolean
 handle_get_rpm_diff (RPMOSTreeDeployment *object,
                      GDBusMethodInvocation *invocation)
 {
-  // XXX: Make real calls
-  GVariant *value = NULL;
-  value = g_variant_new ("a(sya{sv})", NULL);
-  rpmostree_deployment_complete_get_rpm_diff (object, invocation, value);
+  Deployment *self = DEPLOYMENT (object);
+  gchar *csum = rpmostree_deployment_dup_checksum (object); //freed by task
+
+  GTask *task = daemon_get_new_task (daemon_get (),
+                                     self,
+                                     self->cancellable,
+                                     utils_task_result_invoke,
+                                     invocation);
+  g_task_set_task_data (task, csum, g_free);
+  g_task_run_in_thread (task, utils_get_diff_variant_in_thread);
+
   return TRUE;
 }
 

@@ -122,10 +122,10 @@
          Returns the RPM diff between head and the
          current booted deployment.
 
-         Format is an array of (sya{sv}) variants
+         Format is an array of (sua{sv}) variants
 
           s is package name
-          y is diff type. Possible values are:
+          u is diff type. Possible values are:
             * 0 add
             * 1 remove
             * 2 upgrade
@@ -133,13 +133,12 @@
 
           {sv} contains optional arguments
 
-          NewPackage: v. Present for delete, upgrade and downgrade types.
-          Will specify type once implemented.
+          NewPackage: (sss). Present for add, upgrade and downgrade types.
 
-          PreviousPackage: v. Same format a package in Deployment PackageList call. Will specify type once implemented.
+          PreviousPackage: (sss). Present for delete, upgrade and downgrade types.
     -->
     <method name="GetRpmDiff">
-      <arg name="difference" type="a(sya{sv})" direction="out"/>
+      <arg name="difference" type="a(sua{sv})" direction="out"/>
     </method>
 
     <signal name="ProgressMessage">
@@ -208,10 +207,10 @@
          Returns the RPM diff between this deployment
          and the current booted deployment.
 
-         Format is an array of (sya{sv}) variants
+         Format is an array of (sua{sv}) variants
 
           s is package name
-          y is diff type. Possible values are:
+          u is diff type. Possible values are:
             * 0 add
             * 1 remove
             * 2 upgrade
@@ -219,13 +218,12 @@
 
           {sv} contains optional arguments
 
-          NewPackage: v. Present for delete, upgrade and downgrade types.
-          Will specify type once implemented.
+          NewPackage: (sss). Present for add, upgrade and downgrade types.
 
-          PreviousPackage: v. Same format a package in Deployment PackageList call. Will specify type once implemented.
+          PreviousPackage: (sss). Present for delete, upgrade and downgrade types.
     -->
     <method name="GetRpmDiff">
-      <arg name="difference" type="a(sya{sv})" direction="out"/>
+      <arg name="difference" type="a(sua{sv})" direction="out"/>
     </method>
 
     <!--

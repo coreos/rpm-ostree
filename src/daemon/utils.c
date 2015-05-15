@@ -18,7 +18,9 @@
 
 #include "config.h"
 
+#include "rpmostree-package-variants.h"
 #include "utils.h"
+#include "manager.h"
 #include "ostree.h"
 
 #include "libgsystem.h"
@@ -153,7 +155,7 @@ utils_load_sysroot_and_repo (gchar *path,
       goto out;
 
   // ostree_sysroot_get_repo now just adds a
-  // ref to it's singleton
+  // ref to its singleton
   if (!ostree_sysroot_get_repo (ot_sysroot,
                                 out_repo,
                                 cancellable,
@@ -165,4 +167,82 @@ utils_load_sysroot_and_repo (gchar *path,
 
 out:
   return ret;
+}
+
+
+void
+utils_get_diff_variant_in_thread (GTask *task,
+                                  gpointer object,
+                                  gpointer data_ptr,
+                                  GCancellable *cancellable)
+{
+  gs_unref_object OstreeSysroot *ot_sysroot = NULL;
+  gs_unref_object OstreeRepo *ot_repo = NULL;
+  gs_unref_object OstreeDeployment *booted = NULL;
+
+  GVariant *value = NULL; // freed when invoked
+  GError *error = NULL; // freed when invoked
+  gchar *csum = data_ptr; // freed by task
+
+  const char *booted_csum = NULL;
+
+  if (!utils_load_sysroot_and_repo (manager_get_sysroot_path ( manager_get ()),
+                                    cancellable,
+                                    &ot_sysroot,
+                                    &ot_repo,
+                                    &error))
+    goto out;
+
+  booted = ostree_sysroot_get_booted_deployment (ot_sysroot);
+  if (booted)
+    booted_csum = ostree_deployment_get_csum (booted);
+
+  if (g_strcmp0 (booted_csum, csum) == 0)
+    {
+      value = g_variant_new ("a(sua{sv})", NULL);
+      goto out;
+    }
+
+  value = rpm_ostree_db_diff_variant (ot_repo,
+                                      booted_csum,
+                                      csum,
+                                      cancellable,
+                                      &error);
+out:
+  if (error == NULL)
+    {
+      g_task_return_pointer (task,
+                             g_variant_new ("(@a(sua{sv}))", value),
+                             NULL);
+    }
+  else
+    {
+      g_task_return_error (task, error);
+    }
+}
+
+
+/**
+ * utils_task_result_invoke:
+ *
+ * Completes a GTask where the user_data is
+ * an invocation and the task data or error is
+ * passed to the invocation when called back.
+ */
+void
+utils_task_result_invoke (GObject *source_object,
+                          GAsyncResult *res,
+                          gpointer user_data)
+{
+    gs_unref_object GTask *task = G_TASK (res);
+    GError *error = NULL;
+
+    GDBusMethodInvocation *invocation = user_data;
+
+    GVariant *result = g_task_propagate_pointer (task, &error);
+
+    if (error)
+      g_dbus_method_invocation_take_error (invocation, error);
+    else
+      g_dbus_method_invocation_return_value (invocation, result);
 }

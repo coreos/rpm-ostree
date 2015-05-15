@@ -469,7 +469,7 @@ _pull_rpm_callback (GObject *source_object,
   else
     message = g_strdup ("Pull Complete.");
 
-  manager_end_update_operation (manager_get (), success, message, FALSE);
+  manager_end_update_operation (manager_get (), success, message, success);
 
   g_clear_error (&error);
 }
@@ -578,10 +578,29 @@ static gboolean
 handle_get_rpm_diff (RPMOSTreeRefSpec *object,
                      GDBusMethodInvocation *invocation)
 {
-  // TODO: Get RPM diff
-  GVariant *value = NULL;
-  value = g_variant_new ("a(sya{sv})", NULL);
-  rpmostree_ref_spec_complete_get_rpm_diff (object, invocation, value);
+  RefSpec *self = REFSPEC (object);
+  GError *error = NULL;
+  gchar *csum = rpmostree_ref_spec_dup_head (object); //freed by task
+
+  if (!csum)
+    {
+      g_set_error_literal (&error,
+                           RPM_OSTREED_ERROR,
+                           RPM_OSTREED_ERROR_INVALID_REFSPEC,
+                           "Couldn't find current commit, you need to pull first.");
+      g_dbus_method_invocation_take_error (invocation, error);
+    }
+  else
+    {
+      GTask *task = daemon_get_new_task (daemon_get (),
+                                         self,
+                                         self->cancellable,
+                                         utils_task_result_invoke,
+                                         invocation);
+      g_task_set_task_data (task, csum, g_free);
+      g_task_run_in_thread (task, utils_get_diff_variant_in_thread);
+    }
+
   return TRUE;
 }
 
