@@ -76,7 +76,7 @@ dbusconfdir = ${sysconfdir}/dbus-1/system.d
 
 systemdunit_in_files = $(srcdir)/src/daemon/rpm-ostreed.service.in
 systemdunit_DATA     = $(systemdunit_in_files:.service.in=.service)
-systemdunitdir       = $(datadir)/systemd/system/
+systemdunitdir       = $(prefix)/lib/systemd/system/
 $(systemdunit_DATA):
 	$(SED_SUBST) $@.in > $@
 
