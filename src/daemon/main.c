@@ -356,7 +356,6 @@ main (int argc,
 
   g_unix_signal_add (SIGINT, on_sigint, &daemon);
   g_unix_signal_add (SIGTERM, on_sigint, &daemon);
-  g_unix_signal_add (SIGHUP, on_sigint, &daemon);
 
   if (!connect_to_bus_or_peer (&daemon))
     {
