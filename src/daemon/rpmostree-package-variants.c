@@ -18,9 +18,11 @@
  * Boston, MA 02111-1307, USA.
  */
 
+#include "config.h"
+
 #include <rpmostree.h>
 #include "rpmostree-package-variants.h"
-
+#include <libglnx.h>
 
 static GVariant *
 build_diff_variant (const gchar *name,
