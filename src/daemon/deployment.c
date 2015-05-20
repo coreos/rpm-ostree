@@ -193,7 +193,7 @@ handle_make_default (RPMOSTreeDeployment *object,
 
   if (manager_begin_update_operation (manager_get (),
                                       invocation,
-                                      "rebase"))
+                                      "rollback"))
     {
       rpmostree_deployment_complete_make_default (object, invocation);
       task = daemon_get_new_task (daemon_get (),
