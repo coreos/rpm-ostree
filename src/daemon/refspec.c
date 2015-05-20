@@ -242,8 +242,8 @@ _do_upgrade_in_thread (GTask *task,
   else
     {
       // We are rebasing
-      rpmostree_manager_set_update_running (RPMOSTREE_MANAGER (manager_get ()),
-                                            "rebase");
+      rpmostree_manager_set_active_operation (RPMOSTREE_MANAGER (manager_get ()),
+					      "rebase");
 
       //downgrade is always allowed for rebasing
       allow_downgrade = TRUE;

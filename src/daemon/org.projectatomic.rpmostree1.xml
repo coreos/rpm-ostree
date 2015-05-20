@@ -25,18 +25,19 @@
     <property name="BootedDeployment" type="o" access="read"/>
 
     <!--
-         Type of update in progress. Possible values are:
+         Type of operation in progress. Possible values are:
+           * idle
            * rpm-pull
            * upgrade
            * rebase
            * rollback
     -->
-    <property name="UpdateRunning" type="s" access="read"/>
+    <property name="ActiveOperation" type="s" access="read"/>
 
     <!--
-         Cancels a running update.
+         Cancels a running operation.
     -->
-    <method name="CancelUpdate">
+    <method name="CancelOperation">
     </method>
 
     <!--

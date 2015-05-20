@@ -500,7 +500,7 @@ cancelled_handler (GCancellable *cancellable,
                    gpointer user_data)
 {
   RPMOSTreeManager *manager = user_data;
-  rpmostree_manager_call_cancel_update_sync (manager, NULL, NULL);
+  rpmostree_manager_call_cancel_operation_sync (manager, NULL, NULL);
 }
 
 

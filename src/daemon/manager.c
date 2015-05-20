@@ -801,13 +801,13 @@ handle_get_deployments (RPMOSTreeManager *object,
 
 
 static gboolean
-handle_cancel_update (RPMOSTreeManager *object,
-                      GDBusMethodInvocation *invocation)
+handle_cancel_operation (RPMOSTreeManager *object,
+			 GDBusMethodInvocation *invocation)
 {
   Manager *self = MANAGER (object);
   g_debug ("Canceling tasks");
   g_signal_emit (self, manager_signals[CANCEL_TASKS], 0);
-  rpmostree_manager_complete_cancel_update (object, invocation);
+  rpmostree_manager_complete_cancel_operation (object, invocation);
   return TRUE;
 }
 
@@ -825,8 +825,8 @@ manager_begin_update_operation (Manager *self,
                                                    RPM_OSTREED_ERROR_UPDATE_IN_PROGRESS,
                                                    "Task already running");
   else
-    rpmostree_manager_set_update_running (RPMOSTREE_MANAGER (self),
-                                          type);
+    rpmostree_manager_set_active_operation (RPMOSTREE_MANAGER (self),
+					    type);
   return ret;
 }
 
@@ -836,8 +836,8 @@ emit_update_complete_after_refresh (Manager *self,
                                     gpointer user_data)
 {
   gchar *message = user_data;
-  rpmostree_manager_set_update_running (RPMOSTREE_MANAGER (self),
-                                        "");
+  rpmostree_manager_set_active_operation (RPMOSTREE_MANAGER (self),
+                                        "idle");
   rpmostree_manager_emit_update_completed (RPMOSTREE_MANAGER (self),
                                           TRUE,
                                           message);
@@ -854,8 +854,8 @@ manager_end_update_operation (Manager *self,
 {
   if (!wait_for_refresh)
     {
-      rpmostree_manager_set_update_running (RPMOSTREE_MANAGER (self),
-                                            "");
+      rpmostree_manager_set_active_operation (RPMOSTREE_MANAGER (self),
+					      "idle");
       rpmostree_manager_emit_update_completed (RPMOSTREE_MANAGER (self),
                                               success,
                                               g_strdup (message));
@@ -981,7 +981,7 @@ manager_iface_init (RPMOSTreeManagerIface *iface)
   iface->handle_get_upgrade_ref_spec = handle_get_upgrade_ref_spec;
   iface->handle_get_deployments = handle_get_deployments;
   iface->handle_add_ref_spec = handle_add_ref_spec;
-  iface->handle_cancel_update = handle_cancel_update;
+  iface->handle_cancel_operation = handle_cancel_operation;
 }
 
 
