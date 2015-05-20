@@ -876,6 +876,7 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
 
     if (!rpmostree_commit (yumroot, repo, ref, metadata, gpgkey, selinux,
+                           previous_checksum,
                            cancellable, error))
       goto out;
   }

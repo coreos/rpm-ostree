@@ -43,5 +43,6 @@ rpmostree_commit (GFile         *rootfs,
                   GVariant      *metadata,
                   const char    *gpg_keyid,
                   gboolean       enable_selinux,
+                  const char    *previous_commit,
                   GCancellable  *cancellable,
                   GError       **error);
