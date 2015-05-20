@@ -21,7 +21,8 @@
 #include "config.h"
 
 #include <string.h>
-#include "rpmostree-priv.h"
+#include "rpmostree-refsack.h"
+#include "rpmostree-rpm-util.h"
 
 RpmOstreeRefSack *
 _rpm_ostree_refsack_new (HySack sack, int temp_base_dfd, const char *temp_path)
@@ -57,3 +58,54 @@ _rpm_ostree_refsack_unref (RpmOstreeRefSack *rsack)
   g_free (rsack->temp_path);
   g_free (rsack);
 }
+
+RpmOstreeRefSack *
+_rpm_ostree_get_refsack_for_commit (OstreeRepo                *repo,
+                                    const char                *ref,
+                                    GCancellable              *cancellable,
+                                    GError                   **error)
+{
+  g_autofree char *commit = NULL;
+  g_autofree char *tempdir = g_strdup ("/tmp/rpmostree-dbquery-XXXXXXXX");
+  OstreeRepoCheckoutOptions checkout_options = { 0, };
+  glnx_fd_close int tempdir_dfd = -1;
+
+  if (!ostree_repo_resolve_rev (repo, ref, FALSE, &commit, error))
+    goto out;
+
+  if (mkdtemp (tempdir) == NULL)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
+
+  if (!glnx_opendirat (AT_FDCWD, tempdir, FALSE, &tempdir_dfd, error))
+    goto out;
+
+  /* Create intermediate dirs */ 
+  if (!glnx_shutil_mkdir_p_at (tempdir_dfd, "usr/share", 0777, cancellable, error))
+    goto out;
+
+  checkout_options.mode = OSTREE_REPO_CHECKOUT_MODE_USER;
+  checkout_options.subpath = "usr/share/rpm";
+
+  if (!ostree_repo_checkout_tree_at (repo, &checkout_options,
+                                     tempdir_dfd, "usr/share/rpm",
+                                     commit, 
+                                     cancellable, error))
+    goto out;
+
+  {
+    HySack hsack; 
+
+    if (!rpmostree_get_sack_for_root (tempdir_dfd, ".",
+                                      &hsack, cancellable, error))
+      goto out;
+
+    return _rpm_ostree_refsack_new (hsack, AT_FDCWD, tempdir);
+  }
+
+ out:
+  return NULL;
+}
+
