@@ -26,6 +26,8 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-util.h \
 	src/libpriv/rpmostree-passwd-util.c \
 	src/libpriv/rpmostree-passwd-util.h \
+	src/libpriv/rpmostree-refsack.h \
+	src/libpriv/rpmostree-refsack.c \
 	src/libpriv/rpmostree-cleanup.h \
 	src/libpriv/rpmostree-rpm-util.c \
 	src/libpriv/rpmostree-rpm-util.h \

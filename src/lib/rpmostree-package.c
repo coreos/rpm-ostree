@@ -30,7 +30,7 @@
 
 #include "config.h"
 
-#include "rpmostree-priv.h"
+#include "rpmostree-package-priv.h"
 
 #include <string.h>
 #include <stdlib.h>

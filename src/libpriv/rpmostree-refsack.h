@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include <rpmostree-package.h>
 #include <hawkey/package.h>
 #include <hawkey/sack.h>
 #include "rpmostree-cleanup.h"
@@ -33,9 +32,6 @@ typedef struct {
   char *temp_path;
 } RpmOstreeRefSack;
 
-RpmOstreePackage *
-_rpm_ostree_package_new (RpmOstreeRefSack *rsack, HyPackage hypkg);
-
 RpmOstreeRefSack *
 _rpm_ostree_refsack_new (HySack sack, int temp_base_dfd, const char *temp_path);
 
@@ -44,6 +40,12 @@ _rpm_ostree_refsack_ref (RpmOstreeRefSack *rsack);
 
 void
 _rpm_ostree_refsack_unref (RpmOstreeRefSack *rsack);
+
+RpmOstreeRefSack *
+_rpm_ostree_get_refsack_for_commit (OstreeRepo                *repo,
+                                    const char                *ref,
+                                    GCancellable              *cancellable,
+                                    GError                   **error);
 
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRefSack, _rpm_ostree_refsack_unref);
 
