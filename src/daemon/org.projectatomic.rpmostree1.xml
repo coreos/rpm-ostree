@@ -70,6 +70,7 @@
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.Transaction">
+    <property name="Method" type="s" access="read"/>
     <property name="InitiatingOwner" type="s" access="read"/>
     
     <!-- Yes, we can. -->
