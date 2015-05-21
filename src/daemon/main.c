@@ -37,26 +37,25 @@ static GOptionEntry opt_entries[] =
   {NULL }
 };
 
+static Daemon *rpm_ostree_daemon = NULL;
 
 static void
 on_close (Daemon *daemon, gpointer data)
 {
-  g_object_unref (daemon);
   g_main_loop_quit (loop);
 }
 
 static void
 start_daemon (GDBusConnection *connection,
-              gboolean on_messsage_bus,
-              gpointer user_data)
+              gboolean on_messsage_bus)
 {
-  Daemon **daemon = user_data;
-  *daemon = g_object_new (TYPE_DAEMON,
-                          "connection", connection,
-                          "sysroot-path", opt_sysroot,
-                          "on-message-bus", on_messsage_bus,
-                          NULL);
-  g_signal_connect (*daemon, "finished",
+  rpm_ostree_daemon = g_object_new (TYPE_DAEMON,
+                                    "connection", connection,
+                                    "sysroot-path", opt_sysroot,
+                                    "on-message-bus", on_messsage_bus,
+                                    NULL);
+
+  g_signal_connect (rpm_ostree_daemon, "finished",
                     G_CALLBACK (on_close), NULL);
 }
 
@@ -78,7 +77,7 @@ on_bus_acquired (GObject *source,
   else
     {
       g_debug ("Connected to the system bus");
-      start_daemon (connection, TRUE, user_data);
+      start_daemon (connection, TRUE);
     }
 }
 
@@ -101,7 +100,7 @@ on_peer_acquired (GObject *source,
   else
     {
       g_debug ("connected to peer");
-      start_daemon (connection, FALSE, user_data);
+      start_daemon (connection, FALSE);
     }
 }
 
@@ -109,9 +108,8 @@ on_peer_acquired (GObject *source,
 static gboolean
 on_sigint (gpointer user_data)
 {
-  Daemon **daemon = user_data;
   g_info ("Caught signal. Initiating shutdown");
-  on_close (*daemon, NULL);
+  g_main_loop_quit (loop);
   return FALSE;
 }
 
@@ -254,7 +252,7 @@ on_log_handler (const gchar *log_domain,
 
 
 static gboolean
-connect_to_bus_or_peer (gpointer daemon_p)
+connect_to_bus_or_peer (void)
 {
   gs_unref_object GSocketConnection *stream = NULL;
   gs_unref_object GSocket *socket = NULL;
@@ -264,7 +262,7 @@ connect_to_bus_or_peer (gpointer daemon_p)
 
   if (service_dbus_fd == -1)
     {
-      g_bus_get (G_BUS_TYPE_SYSTEM, NULL, &on_bus_acquired, daemon_p);
+      g_bus_get (G_BUS_TYPE_SYSTEM, NULL, &on_bus_acquired, NULL);
       ret = TRUE;
       goto out;
     }
@@ -287,7 +285,7 @@ connect_to_bus_or_peer (gpointer daemon_p)
   g_dbus_connection_new (G_IO_STREAM (stream), guid,
                          G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_SERVER |
                          G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING,
-                         NULL, NULL, on_peer_acquired, daemon_p);
+                         NULL, NULL, on_peer_acquired, NULL);
   ret = TRUE;
 
 out:
@@ -303,7 +301,6 @@ main (int argc,
   GError *error;
   GOptionContext *opt_context;
   GIOChannel *channel;
-  Daemon *daemon = NULL;
   gint ret;
 
   ret = 1;
@@ -357,10 +354,10 @@ main (int argc,
 
   loop = g_main_loop_new (NULL, FALSE);
 
-  g_unix_signal_add (SIGINT, on_sigint, &daemon);
-  g_unix_signal_add (SIGTERM, on_sigint, &daemon);
+  g_unix_signal_add (SIGINT, on_sigint, NULL);
+  g_unix_signal_add (SIGTERM, on_sigint, NULL);
 
-  if (!connect_to_bus_or_peer (&daemon))
+  if (!connect_to_bus_or_peer ())
     {
       ret = 1;
       goto out;
@@ -369,6 +366,8 @@ main (int argc,
   g_debug ("Entering main event loop");
 
   g_main_loop_run (loop);
+
+  g_clear_object (&rpm_ostree_daemon);
 
   ret = 0;
 
