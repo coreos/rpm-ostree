@@ -13,6 +13,19 @@ AC_SYS_LARGEFILE
 AC_PROG_CC
 AM_PROG_CC_C_O
 
+# dbus system dir
+AC_MSG_CHECKING(for dbus system services directory)
+if test "$enable_prefix_only" = "yes"; then
+  dbusservicedir='${datadir}/dbus-1/system-services'
+else
+  dbusservicedir='${datadir}/dbus-1/system-services'
+  if test "$dbusservicedir" = ""; then
+    AC_MSG_ERROR(Couldn't find dbus services directory. Try installing dbus-devel)
+  fi
+fi
+AC_SUBST([dbusservicedir], [$dbusservicedir])
+AC_MSG_RESULT(dbusservicedir)
+
 changequote(,)dnl
 if test "x$GCC" = "xyes"; then
   WARN_CFLAGS="-Wall -Wstrict-prototypes -Werror=missing-prototypes \

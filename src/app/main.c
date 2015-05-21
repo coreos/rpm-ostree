@@ -21,6 +21,7 @@
 #include "config.h"
 
 #include <gio/gio.h>
+#include <glib-unix.h>
 
 #include <errno.h>
 #include <stdlib.h>
@@ -124,17 +125,28 @@ rpmostree_print_gpg_verify_result (OstreeGpgVerifyResult *result)
   g_string_free (buffer, TRUE);
 }
 
+
+static gboolean
+on_sigint (gpointer user_data)
+{
+  GCancellable *cancellable = user_data;
+  g_debug ("Caught signal. Canceling");
+  g_cancellable_cancel (cancellable);
+  return FALSE;
+}
+
+
 int
 main (int    argc,
       char **argv)
 {
   GError *error = NULL;
-  GCancellable *cancellable = NULL;
+  GCancellable *cancellable = g_cancellable_new ();
   RpmOstreeCommand *command;
   int in, out;
   const char *command_name = NULL;
   gs_free char *prgname = NULL;
-  
+
   /* avoid gvfs (http://bugzilla.gnome.org/show_bug.cgi?id=526454) */
   g_setenv ("GIO_USE_VFS", "local", TRUE);
   g_set_prgname (argv[0]);
@@ -168,6 +180,10 @@ main (int    argc,
     }
 
   argc = out;
+
+  g_unix_signal_add (SIGINT, on_sigint, cancellable);
+  g_unix_signal_add (SIGTERM, on_sigint, cancellable);
+  g_unix_signal_add (SIGHUP, on_sigint, cancellable);
 
   /* Keep the "rpm" command working for backward-compatibility. */
   if (g_strcmp0 (command_name, "rpm") == 0)
@@ -228,6 +244,7 @@ main (int    argc,
           prefix = "\x1b[31m\x1b[1m"; /* red, bold */
           suffix = "\x1b[22m\x1b[0m"; /* bold off, color reset */
         }
+      g_dbus_error_strip_remote_error (error);
       g_printerr ("%serror: %s%s\n", prefix, suffix, error->message);
       g_error_free (error);
       return 1;

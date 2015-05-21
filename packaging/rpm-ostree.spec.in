@@ -53,6 +53,10 @@ find $RPM_BUILD_ROOT -name '*.la' -delete
 %{_mandir}/man1/*
 %{_libdir}/*.so.1*
 %{_libdir}/girepository-1.0/*.typelib
+%{_libexecdir}/rpm-ostreed
+%{_datadir}/dbus-1/system-services/org.projectatomic.rpmostree1.service
+%{_prefix}/lib/systemd/system/rpm-ostreed.service
+%{_sysconfdir}/dbus-1/system.d/org.projectatomic.rpmostree1.conf
 
 %files devel
 %{_libdir}/lib*.so

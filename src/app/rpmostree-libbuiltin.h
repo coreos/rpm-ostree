@@ -28,4 +28,9 @@ gboolean
 rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
                               GCancellable     *cancellable,
                               GError          **error);
+
+gboolean
+rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
+                                                GCancellable *cancellable,
+                                                GError **error);
 G_END_DECLS

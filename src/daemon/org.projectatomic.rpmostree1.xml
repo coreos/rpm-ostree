@@ -1,0 +1,235 @@
+<!DOCTYPE node PUBLIC
+"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
+
+  <interface name="org.projectatomic.rpmostree1.Manager">
+    <!--
+      The basic interface for working with an OSTree.
+
+      * Only one OSTree related action that mutates data can run at once.
+      * All DBus methods that mutate data return immediately, and fire
+        signals when complete.
+      * The signals are never fired before the method returns.
+      * The daemon never exits while a long running task is running.
+    -->
+
+    <!--
+         Current Deployment
+    -->
+    <property name="DefaultDeployment" type="o" access="read"/>
+
+    <!--
+         Deployment that the system was booted with.
+    -->
+    <property name="BootedDeployment" type="o" access="read"/>
+
+    <!--
+         Type of operation in progress. Possible values are:
+           * idle
+           * rpm-pull
+           * upgrade
+           * rebase
+           * rollback
+    -->
+    <property name="ActiveOperation" type="s" access="read"/>
+
+    <!--
+         Cancels a running operation.
+    -->
+    <method name="CancelOperation">
+    </method>
+
+    <!--
+         Returns a list deployment object paths sorted by
+         their index. So that the first one is always
+         the default for the given os.
+    -->
+    <method name="GetDeployments">
+      <arg name="options" type="a{sv}" direction="in"/>
+      <arg name="deployments" type="ao" direction="out"/>
+    </method>
+
+    <!--
+         Returns a list of current RefSpecs and
+         their object paths.
+    -->
+    <method name="GetRefSpecs">
+      <arg name="refspecs" type="a{so}" direction="out"/>
+    </method>
+
+    <!--
+         Add a new refspec
+
+         Doesn't pull actual data just ensures
+         that the given refspec exists and
+         adds it to list of known refspecs
+    -->
+
+    <method name="AddRefSpec">
+      <arg name="options" type="a{sv}" direction="in"/>
+      <arg name="refspec" type="s" direction="in"/>
+
+      <!--
+           The refspec we created.
+      -->
+      <arg name="refspec_path" type="o" direction="out"/>
+    </method>
+
+    <!--
+         Returns the refspec to use for an upgrade.
+    -->
+
+    <method name="GetUpgradeRefSpec">
+      <arg name="options" type="a{sv}" direction="in"/>
+      <arg name="refspec_path" type="o" direction="out"/>
+    </method>
+
+    <signal name="UpdateCompleted">
+    	<arg name="success" type="b" direction="out"/>
+    	<arg name="message" type="s" direction="out"/>
+    </signal>
+  </interface>
+
+  <interface name="org.projectatomic.rpmostree1.RefSpec">
+    <property name="Head" type="s" access="read"/>
+    <property name="Ref" type="s" access="read"/>
+    <property name="RemoteName" type="s" access="read"/>
+    <property name="Version" type="s" access="read"/>
+    <property name="Timestamp" type="t" access="read"/>
+
+    <!--
+         Pull and deploy this refspec.
+
+         Will return an error if
+         changes are currently being
+         made to this system root.
+    -->
+    <method name="Deploy">
+      <arg name="options" type="a{sv}" direction="in"/>
+    </method>
+
+    <!--
+         If there is a valid remote, pull latest
+         RPM data from upstream.
+
+         Will return an error if
+         changes are currently being
+         made to this system root.
+    -->
+    <method name="PullRpmDb"></method>
+
+    <!--
+         Returns the RPM diff between head and the
+         current booted deployment.
+
+         Format is an array of (sua{sv}) variants
+
+          s is package name
+          u is diff type. Possible values are:
+            * 0 add
+            * 1 remove
+            * 2 upgrade
+            * 3 downgrade
+
+          {sv} contains optional arguments
+
+          NewPackage: (sss). Present for add, upgrade and downgrade types.
+
+          PreviousPackage: (sss). Present for delete, upgrade and downgrade types.
+    -->
+    <method name="GetRpmDiff">
+      <arg name="difference" type="a(sua{sv})" direction="out"/>
+    </method>
+
+    <signal name="ProgressMessage">
+    	<arg name="message" type="s" direction="out"/>
+    </signal>
+
+    <signal name="ProgressSignature">
+      <!-- An ostree GVariant containing signature data
+           see ostree_gpg_verify_result_get_all.
+      -->
+    	<arg name="signature" type="av" direction="out"/>
+      <!-- The signed commit -->
+    	<arg name="commit" type="s" direction="out"/>
+    </signal>
+
+    <signal name="ProgressData">
+      <!-- time data, format is:
+            start time, elapsed seconds
+      -->
+    	<arg name="time" type="(tt)" direction="out"/>
+
+      <!--
+         outstanding data counts, format is:
+         (outstanding fetches, outstanding writes)
+      -->
+      <arg name="outstanding" type="(uu)" direction="out"/>
+
+      <!--
+         metadata counts, format is:
+         (scanned, fetched, outstanding)
+      -->
+    	<arg name="metadata" type="(uuu)" direction="out"/>
+
+      <!--
+         delta data, format is:
+         (total parts, fetched parts, total super blocks, total size)
+      -->
+    	<arg name="delta" type="(uuut)" direction="out"/>
+
+      <!--
+         content data, format is:
+         (fetched, requested)
+      -->
+    	<arg name="content" type="(uu)" direction="out"/>
+
+      <!--
+         transfer data, format is:
+         (bytes transfered, bytes/s)
+      -->
+    	<arg name="transfer" type="(tt)" direction="out"/>
+    </signal>
+  </interface>
+
+  <interface name="org.projectatomic.rpmostree1.Deployment">
+    <property name="OSName" type="s" access="read"/>
+    <property name="Checksum" type="s" access="read"/>
+    <property name="Version" type="s" access="read"/>
+    <property name="Timestamp" type="t" access="read"/>
+    <property name="RefspecObjectpath" type="o" access="read"/>
+    <property name="OriginRefspec" type="s" access="read"/>
+    <property name="Index" type="i" access="read"/>
+    <property name="Serial" type="i" access="read"/>
+    <property name="Signatures" type="av" access="read"/>
+
+    <!--
+         Returns the RPM diff between this deployment
+         and the current booted deployment.
+
+         Format is an array of (sua{sv}) variants
+
+          s is package name
+          u is diff type. Possible values are:
+            * 0 add
+            * 1 remove
+            * 2 upgrade
+            * 3 downgrade
+
+          {sv} contains optional arguments
+
+          NewPackage: (sss). Present for add, upgrade and downgrade types.
+
+          PreviousPackage: (sss). Present for delete, upgrade and downgrade types.
+    -->
+    <method name="GetRpmDiff">
+      <arg name="difference" type="a(sua{sv})" direction="out"/>
+    </method>
+
+    <!--
+         Marks this deployment as bootable    -->
+    <method name="MakeDefault"></method>
+
+  </interface>
+</node>
