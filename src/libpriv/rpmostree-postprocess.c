@@ -802,9 +802,16 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   gs_unref_object GFile *kernel_path = NULL;
   gs_unref_object GFile *initramfs_path = NULL;
   gs_unref_hashtable GHashTable *preserve_groups_set = NULL;
+  gboolean container = FALSE;
+
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
+                                                               "container",
+                                                               &container,
+                                                               error))
+    goto out;
 
   g_print ("Preparing kernel\n");
-  if (!do_kernel_prep (yumroot, treefile, cancellable, error))
+  if (!container && !do_kernel_prep (yumroot, treefile, cancellable, error))
     goto out;
   
   g_print ("Initializing rootfs\n");
@@ -897,73 +904,75 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   }
 
   /* Move boot, but rename the kernel/initramfs to have a checksum */
-  g_print ("Moving /boot\n");
-  {
-    gs_unref_object GFile *yumroot_boot =
-      g_file_get_child (yumroot, "boot");
-    gs_unref_object GFile *target_boot =
-      g_file_get_child (targetroot, "boot");
-    gs_unref_object GFile *target_usrlib =
-      g_file_resolve_relative_path (targetroot, "usr/lib");
-    gs_unref_object GFile *target_usrlib_ostree_boot =
-      g_file_resolve_relative_path (target_usrlib, "ostree-boot");
-    RpmOstreePostprocessBootLocation boot_location =
-      RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
-    const char *boot_location_str = NULL;
-      
-    if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile,
-                                                                "boot_location",
-                                                                &boot_location_str, error))
-      goto out;
+  if (!container)
+    {
+      gs_unref_object GFile *yumroot_boot =
+        g_file_get_child (yumroot, "boot");
+      gs_unref_object GFile *target_boot =
+        g_file_get_child (targetroot, "boot");
+      gs_unref_object GFile *target_usrlib =
+        g_file_resolve_relative_path (targetroot, "usr/lib");
+      gs_unref_object GFile *target_usrlib_ostree_boot =
+        g_file_resolve_relative_path (target_usrlib, "ostree-boot");
+      RpmOstreePostprocessBootLocation boot_location =
+        RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
+      const char *boot_location_str = NULL;
 
-    if (boot_location_str != NULL)
-      {
-        if (strcmp (boot_location_str, "legacy") == 0)
-          boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY;
-        else if (strcmp (boot_location_str, "both") == 0)
-          boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
-        else if (strcmp (boot_location_str, "new") == 0)
-          boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
-        else
+      g_print ("Moving /boot\n");
+
+      if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile,
+                                                                  "boot_location",
+                                                                  &boot_location_str, error))
+        goto out;
+
+      if (boot_location_str != NULL)
+        {
+          if (strcmp (boot_location_str, "legacy") == 0)
+            boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY;
+          else if (strcmp (boot_location_str, "both") == 0)
+            boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
+          else if (strcmp (boot_location_str, "new") == 0)
+            boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
+          else
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Invalid boot location '%s'", boot_location_str);
+              goto out;
+            }
+        }
+
+      if (!gs_file_ensure_directory (target_usrlib, TRUE, cancellable, error))
+        goto out;
+
+      switch (boot_location)
+        {
+        case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY:
           {
-            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                         "Invalid boot location '%s'", boot_location_str);
-            goto out;
+            g_print ("Using boot location: legacy\n");
+            if (!gs_file_rename (yumroot_boot, target_boot, cancellable, error))
+              goto out;
           }
-      }
-    
-    if (!gs_file_ensure_directory (target_usrlib, TRUE, cancellable, error))
-      goto out;
-
-    switch (boot_location)
-      {
-      case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY:
-        {
-          g_print ("Using boot location: legacy\n");
-          if (!gs_file_rename (yumroot_boot, target_boot, cancellable, error))
-            goto out;
+          break;
+        case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH:
+          {
+            g_print ("Using boot location: both\n");
+            if (!gs_file_rename (yumroot_boot, target_boot, cancellable, error))
+              goto out;
+            /* Hardlink the existing content, only a little ugly as
+             * we'll end up sha256'ing it twice, but oh well. */
+            if (!gs_shutil_cp_al_or_fallback (target_boot, target_usrlib_ostree_boot, cancellable, error))
+              goto out;
+          }
+          break;
+        case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW:
+          {
+            g_print ("Using boot location: new\n");
+            if (!gs_file_rename (yumroot_boot, target_usrlib_ostree_boot, cancellable, error))
+              goto out;
+          }
+          break;
         }
-        break;
-      case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH:
-        {
-          g_print ("Using boot location: both\n");
-          if (!gs_file_rename (yumroot_boot, target_boot, cancellable, error))
-            goto out;
-          /* Hardlink the existing content, only a little ugly as
-           * we'll end up sha256'ing it twice, but oh well. */
-          if (!gs_shutil_cp_al_or_fallback (target_boot, target_usrlib_ostree_boot, cancellable, error))
-            goto out;
-        }
-        break;
-      case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW:
-        {
-          g_print ("Using boot location: new\n");
-          if (!gs_file_rename (yumroot_boot, target_usrlib_ostree_boot, cancellable, error))
-            goto out;
-        }
-        break;
-      }
-  }
+    }
 
   /* Also carry along toplevel compat links */
   g_print ("Copying toplevel compat symlinks\n");
