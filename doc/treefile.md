@@ -155,3 +155,8 @@ Treefile
    Non-array values in child values override parent values.  Array
    values are concatenated.  Filenames will be resolved relative to
    the including treefile.
+
+ * `container`: boolean, optional: Defaults to `false`.  If `true`, then
+   rpm-ostree will not do any special handling of kernel, initrd or the
+   /boot directory. This is useful if the target for the tree is some kind
+   of container which does not have its own kernel.
