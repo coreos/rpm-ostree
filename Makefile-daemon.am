@@ -20,6 +20,8 @@ nodist_librpmostreed_la_SOURCES = $(dbus_built_sources)
 librpmostreed_la_SOURCES = \
 	src/daemon/daemon.h \
 	src/daemon/daemon.c \
+	src/daemon/utils.h \
+	src/daemon/utils.c \
 	$(NULL)
 
 librpmostreed_la_CFLAGS = \
