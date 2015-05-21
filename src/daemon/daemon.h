@@ -39,6 +39,10 @@ gboolean                   daemon_on_message_bus     (Daemon *self);
 Daemon *                   daemon_new                (GDBusConnection *connection,
                                                       gboolean persist);
 
+void                       daemon_hold               (Daemon *self);
+
+void                       daemon_release            (Daemon *self);
+
 void                       daemon_publish            (Daemon *self,
                                                       const gchar *path,
                                                       gboolean uniquely,

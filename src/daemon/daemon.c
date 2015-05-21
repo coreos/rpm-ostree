@@ -50,9 +50,8 @@ struct _Daemon
 {
   GObject parent_instance;
 
-  gint name_owner_id;
-  gboolean name_owned;
   gboolean on_message_bus;
+  guint use_count;
 
   gint64 last_message;
   guint ticker_id;
@@ -96,8 +95,6 @@ static void
 daemon_finalize (GObject *object)
 {
   Daemon *self = DAEMON (object);
-  if (self->name_owner_id)
-    g_bus_unown_name (self->name_owner_id);
 
   g_clear_object (&self->object_manager);
   self->object_manager = NULL;
@@ -179,24 +176,6 @@ daemon_init (Daemon *self)
 }
 
 static void
-on_name_lost (GDBusConnection *connection,
-              const gchar *name,
-              gpointer user_data)
-{
-  Daemon *self = user_data;
-  self->name_owned = FALSE;
-}
-
-static void
-on_name_acquired (GDBusConnection *connection,
-                  const gchar *bus_name,
-                  gpointer user_data)
-{
-  Daemon *self = user_data;
-  self->name_owned = TRUE;
-}
-
-static void
 daemon_constructed (GObject *_object)
 {
   Daemon *self;
@@ -208,17 +187,6 @@ daemon_constructed (GObject *_object)
   /* Export the ObjectManager */
   g_dbus_object_manager_server_set_connection (self->object_manager, self->connection);
   g_debug ("exported object manager");
-
-  if (self->on_message_bus)
-    {
-      self->name_owner_id = g_bus_own_name_on_connection (self->connection,
-                                                          DBUS_NAME,
-                                                          G_BUS_NAME_OWNER_FLAGS_NONE,
-                                                          on_name_acquired,
-                                                          on_name_lost,
-                                                          self,
-                                                          NULL);
-    }
 
   G_OBJECT_CLASS (daemon_parent_class)->constructed (_object);
 
@@ -310,4 +278,19 @@ gboolean
 daemon_on_message_bus (Daemon *self)
 {
   return self->on_message_bus;
+}
+
+void
+daemon_hold (Daemon *self)
+{
+  self->use_count++;
+}
+
+void
+daemon_release (Daemon *self)
+{
+  self->use_count--;
+
+  if (self->use_count == 0)
+    g_signal_emit (self, signals[FINISHED], 0);
 }
