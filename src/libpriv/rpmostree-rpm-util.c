@@ -779,12 +779,12 @@ rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
   return ret;
 }
 
-gboolean
-rpmostree_get_sack_for_root (int               dfd,
-                             const char       *path,
-                             HySack           *out_sack,
-                             GCancellable     *cancellable,
-                             GError          **error)
+static gboolean
+get_sack_for_root (int               dfd,
+                   const char       *path,
+                   HySack           *out_sack,
+                   GCancellable     *cancellable,
+                   GError          **error)
 {
   gboolean ret = FALSE;
   int rc;
@@ -823,29 +823,76 @@ rpmostree_get_sack_for_root (int               dfd,
   return ret;
 }
 
+RpmOstreeRefSack *
+rpmostree_get_refsack_for_root (int              dfd,
+                                const char      *path,
+                                GCancellable    *cancellable,
+                                GError         **error)
+{
+  RpmOstreeRefSack *ret = NULL;
+  HySack sack;
+
+  if (!get_sack_for_root (dfd, path,
+                          &sack, cancellable, error))
+    goto out;
+
+  ret = _rpm_ostree_refsack_new (sack, AT_FDCWD, NULL);
+ out:
+  return ret;
+}
+
+
+RpmOstreeRefSack *
+_rpm_ostree_get_refsack_for_commit (OstreeRepo                *repo,
+                                    const char                *ref,
+                                    GCancellable              *cancellable,
+                                    GError                   **error)
+{
+  RpmOstreeRefSack *ret = NULL;
+  g_autofree char *tempdir = NULL;
+  glnx_fd_close int tempdir_dfd = -1;
+  HySack hsack; 
+  
+  if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref, &tempdir, &tempdir_dfd,
+                                              cancellable, error))
+    goto out;
+  
+  if (!get_sack_for_root (tempdir_dfd, ".",
+                          &hsack, cancellable, error))
+    goto out;
+
+  ret = _rpm_ostree_refsack_new (hsack, AT_FDCWD, tempdir);
+  tempdir = NULL; /* Transfer ownership */
+ out:
+  if (tempdir)
+    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
+  return ret;
+}
+
 gboolean
 rpmostree_get_pkglist_for_root (int               dfd,
                                 const char       *path,
-                                HySack           *out_sack,
+                                RpmOstreeRefSack **out_refsack,
                                 HyPackageList    *out_pkglist,
                                 GCancellable     *cancellable,
                                 GError          **error)
 {
   gboolean ret = FALSE;
-  _cleanup_hysack_ HySack sack = NULL;
+  g_autoptr(RpmOstreeRefSack) refsack = NULL;
   _cleanup_hyquery_ HyQuery query = NULL;
   _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
   g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
 
-  if (!rpmostree_get_sack_for_root (dfd, path, &sack, cancellable, error))
+  refsack = rpmostree_get_refsack_for_root (dfd, path, cancellable, error);
+  if (!refsack)
     goto out;
 
-  query = hy_query_create (sack);
+  query = hy_query_create (refsack->sack);
   hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
   pkglist = hy_query_run (query);
 
   ret = TRUE;
-  gs_transfer_out_value (out_sack, &sack);
+  gs_transfer_out_value (out_refsack, &refsack);
   gs_transfer_out_value (out_pkglist, &pkglist);
  out:
   return ret;

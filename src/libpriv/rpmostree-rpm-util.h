@@ -25,6 +25,7 @@
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
 #include "rpmostree-util.h"
+#include "rpmostree-refsack.h"
 #include "rpmostree-cleanup.h"
 
 #include "libglnx.h"
@@ -88,17 +89,22 @@ rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
                                        GCancellable     *cancellable,
                                        GError          **error);
 
-gboolean
-rpmostree_get_sack_for_root (int               dfd,
-                             const char       *path,
-                             HySack           *out_sack,
-                             GCancellable     *cancellable,
-                             GError          **error);
+RpmOstreeRefSack *
+_rpm_ostree_get_refsack_for_commit (OstreeRepo                *repo,
+                                    const char                *ref,
+                                    GCancellable              *cancellable,
+                                    GError                   **error);
+
+RpmOstreeRefSack *
+rpmostree_get_refsack_for_root (int              dfd,
+                                const char      *path,
+                                GCancellable    *cancellable,
+                                GError         **error);
 
 gboolean
 rpmostree_get_pkglist_for_root (int               dfd,
                                 const char       *path,
-                                HySack           *out_sack,
+                                RpmOstreeRefSack **out_refsack,
                                 HyPackageList    *out_pkglist,
                                 GCancellable     *cancellable,
                                 GError          **error);

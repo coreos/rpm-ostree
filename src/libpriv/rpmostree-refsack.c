@@ -58,31 +58,3 @@ _rpm_ostree_refsack_unref (RpmOstreeRefSack *rsack)
   g_free (rsack->temp_path);
   g_free (rsack);
 }
-
-RpmOstreeRefSack *
-_rpm_ostree_get_refsack_for_commit (OstreeRepo                *repo,
-                                    const char                *ref,
-                                    GCancellable              *cancellable,
-                                    GError                   **error)
-{
-  RpmOstreeRefSack *ret = NULL;
-  g_autofree char *tempdir = NULL;
-  glnx_fd_close int tempdir_dfd = -1;
-  HySack hsack; 
-  
-  if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref, &tempdir, &tempdir_dfd,
-                                              cancellable, error))
-    goto out;
-  
-  if (!rpmostree_get_sack_for_root (tempdir_dfd, ".",
-                                    &hsack, cancellable, error))
-    goto out;
-
-  ret = _rpm_ostree_refsack_new (hsack, AT_FDCWD, tempdir);
-  tempdir = NULL; /* Transfer ownership */
- out:
-  if (tempdir)
-    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
-  return ret;
-}
-

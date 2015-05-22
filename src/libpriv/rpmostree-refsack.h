@@ -41,11 +41,5 @@ _rpm_ostree_refsack_ref (RpmOstreeRefSack *rsack);
 void
 _rpm_ostree_refsack_unref (RpmOstreeRefSack *rsack);
 
-RpmOstreeRefSack *
-_rpm_ostree_get_refsack_for_commit (OstreeRepo                *repo,
-                                    const char                *ref,
-                                    GCancellable              *cancellable,
-                                    GError                   **error);
-
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRefSack, _rpm_ostree_refsack_unref);
 
