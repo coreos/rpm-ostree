@@ -870,6 +870,38 @@ rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
 }
 
 gboolean
+rpmostree_get_refts_for_commit (OstreeRepo                *repo,
+                                const char                *ref,
+                                RpmOstreeRefTs           **out_ts,
+                                GCancellable              *cancellable,
+                                GError                   **error)
+{
+  gboolean ret = FALSE;
+  g_autofree char *tempdir = NULL;
+  rpmts ts;
+  int r;
+  
+  if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref, &tempdir, NULL,
+                                              cancellable, error))
+    goto out;
+
+  ts = rpmtsCreate ();
+  /* This actually makes sense because we know we've verified it at build time */
+  rpmtsSetVSFlags (ts, _RPMVSF_NODIGESTS | _RPMVSF_NOSIGNATURES);
+
+  r = rpmtsSetRootDir (ts, tempdir);
+  g_assert_cmpint (r, ==, 0);
+  
+  ret = TRUE;
+  *out_ts = rpmostree_refts_new (ts, AT_FDCWD, tempdir);
+  g_clear_pointer (&tempdir, g_free);
+ out:
+  if (tempdir)
+    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
+  return ret;
+}
+
+gboolean
 rpmostree_get_pkglist_for_root (int               dfd,
                                 const char       *path,
                                 RpmOstreeRefSack **out_refsack,
