@@ -36,6 +36,14 @@
 GS_DEFINE_CLEANUP_FUNCTION0(rpmtd, _cleanup_rpmtdFreeData, rpmtdFreeData);
 #define _cleanup_rpmtddata_ __attribute__((cleanup(_cleanup_rpmtdFreeData)))
 
+struct RpmRevisionData
+{
+  struct RpmHeaders *rpmdb;
+  GFile *root;
+  char *tempdir;
+  char *commit;
+};
+
 static int
 header_name_cmp (Header h1, Header h2)
 {
@@ -726,6 +734,18 @@ rpmrev_new (OstreeRepo *repo, const char *rev,
   if (created_tmpdir && tempdir)
     (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
   return rpmrev;
+}
+
+struct RpmHeaders *
+rpmrev_get_headers (struct RpmRevisionData *self)
+{
+  return self->rpmdb;
+}
+
+const char *
+rpmrev_get_commit (struct RpmRevisionData *self)
+{
+  return self->commit;
 }
 
 void

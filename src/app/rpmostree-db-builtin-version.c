@@ -69,14 +69,14 @@ _builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
         if (!rpmrev)
           goto out;
 
-        rpmdbv = rpmhdrs_rpmdbv (rpmrev->rpmdb,
+        rpmdbv = rpmhdrs_rpmdbv (rpmrev_get_headers (rpmrev),
                                  cancellable, error);
         if (rpmdbv == NULL)
           goto out;
 
         // FIXME: g_console?
-        if (!g_str_equal (rev, rpmrev->commit))
-          printf ("ostree commit: %s (%s)\n", rev, rpmrev->commit);
+        if (!g_str_equal (rev, rpmrev_get_commit (rpmrev)))
+          printf ("ostree commit: %s (%s)\n", rev, rpmrev_get_commit (rpmrev));
         else
           printf ("ostree commit: %s\n", rev);
 

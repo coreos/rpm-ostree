@@ -64,13 +64,13 @@ rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GEr
   if (!(rpmrev2 = rpmrev_new (repo, argv[2], NULL, cancellable, error)))
     goto out;
 
-  if (!g_str_equal (argv[1], rpmrev1->commit))
-    printf ("ostree diff commit old: %s (%s)\n", argv[1], rpmrev1->commit);
+  if (!g_str_equal (argv[1], rpmrev_get_commit (rpmrev1)))
+    printf ("ostree diff commit old: %s (%s)\n", argv[1], rpmrev_get_commit (rpmrev1));
   else
     printf ("ostree diff commit old: %s\n", argv[1]);
 
-  if (!g_str_equal (argv[2], rpmrev2->commit))
-    printf ("ostree diff commit new: %s (%s)\n", argv[2], rpmrev2->commit);
+  if (!g_str_equal (argv[2], rpmrev_get_commit (rpmrev2)))
+    printf ("ostree diff commit new: %s (%s)\n", argv[2], rpmrev_get_commit (rpmrev2));
   else
     printf ("ostree diff commit new: %s\n", argv[2]);
 
@@ -79,11 +79,13 @@ rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GEr
 
   if (g_str_equal (opt_format, "diff"))
     {
-      rpmhdrs_diff_prnt_diff (rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb));
+      rpmhdrs_diff_prnt_diff (rpmhdrs_diff (rpmrev_get_headers (rpmrev1),
+                                            rpmrev_get_headers (rpmrev2)));
     }
   else if (g_str_equal (opt_format, "block"))
     {
-      rpmhdrs_diff_prnt_block (rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb));
+      rpmhdrs_diff_prnt_block (rpmhdrs_diff (rpmrev_get_headers (rpmrev1),
+                                             rpmrev_get_headers (rpmrev2)));
     }
   else
     {

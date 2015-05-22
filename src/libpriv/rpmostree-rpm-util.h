@@ -43,13 +43,7 @@ struct RpmHeadersDiff
   GPtrArray *hs_mod_new; /* list of rpm header objects from <rpm.h> = Header */
 };
 
-struct RpmRevisionData
-{
-  struct RpmHeaders *rpmdb;
-  GFile *root;
-  char *tempdir;
-  char *commit;
-};
+struct RpmRevisionData;
 
 struct RpmHeadersDiff *
 rpmhdrs_diff (struct RpmHeaders *l1,
@@ -75,6 +69,10 @@ rpmrev_new (OstreeRepo *repo,
             const GPtrArray *patterns,
             GCancellable *cancellable,
             GError **error);
+
+struct RpmHeaders *rpmrev_get_headers (struct RpmRevisionData *self);
+
+const char *rpmrev_get_commit (struct RpmRevisionData *self);
 
 void
 rpmrev_free (struct RpmRevisionData *ptr);

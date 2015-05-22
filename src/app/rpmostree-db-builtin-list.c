@@ -70,12 +70,12 @@ _builtin_db_list (OstreeRepo *repo,
       if (!rpmrev)
         goto out;
 
-      if (!g_str_equal (rev, rpmrev->commit))
-        printf ("ostree commit: %s (%s)\n", rev, rpmrev->commit);
+      if (!g_str_equal (rev, rpmrev_get_commit (rpmrev)))
+        printf ("ostree commit: %s (%s)\n", rev, rpmrev_get_commit (rpmrev));
       else
         printf ("ostree commit: %s\n", rev);
 
-      rpmhdrs_list (rpmrev->rpmdb);
+      rpmhdrs_list (rpmrev_get_headers (rpmrev));
     }
 
   ret = TRUE;
