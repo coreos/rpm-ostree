@@ -18,7 +18,11 @@
 
 #pragma once
 
+#include <ostree.h>
+
 #include "types.h"
+
+char * deployment_generate_id (OstreeDeployment *deployment);
 
 RPMOSTreeTransaction * new_transaction (GDBusMethodInvocation *invocation,
                                         GCancellable *method_cancellable,

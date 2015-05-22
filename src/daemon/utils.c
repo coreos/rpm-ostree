@@ -18,6 +18,20 @@
 
 #include "utils.h"
 
+char *
+deployment_generate_id (OstreeDeployment *deployment)
+{
+  const char *osname;
+  guint hash;
+
+  g_return_val_if_fail (OSTREE_IS_DEPLOYMENT (deployment), NULL);
+
+  osname = ostree_deployment_get_osname (deployment);
+  hash = ostree_deployment_hash (deployment);
+
+  return g_strdup_printf ("%s_%u", osname, hash);
+}
+
 static gboolean
 handle_cancel_cb (RPMOSTreeTransaction *transaction,
                   GDBusMethodInvocation *invocation,
