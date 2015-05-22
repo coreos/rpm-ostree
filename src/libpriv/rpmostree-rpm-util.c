@@ -39,7 +39,6 @@ GS_DEFINE_CLEANUP_FUNCTION0(rpmtd, _cleanup_rpmtdFreeData, rpmtdFreeData);
 struct RpmRevisionData
 {
   struct RpmHeaders *rpmdb;
-  GFile *root;
   char *tempdir;
   char *commit;
 };
@@ -665,74 +664,19 @@ rpmrev_new (OstreeRepo *repo, const char *rev,
             GCancellable   *cancellable,
             GError        **error)
 {
-  gs_unref_object GFile *subtree = NULL;
-  gs_unref_object GFileInfo *file_info = NULL;
-  gs_unref_object GFile *targetp = NULL;
-  gs_unref_object GFile *target = NULL;
-  gs_free char *targetp_path = NULL;
-  gs_free char *target_path = NULL;
-  gs_unref_object GFile *revdir = NULL;
-  GError *tmp_error = NULL;
   struct RpmRevisionData *rpmrev = NULL;
-  gs_unref_object GFile *root = NULL;
-  gs_unref_object GFile *tempdir_f = NULL;
-  gs_free char *commit = NULL;
-  g_autofree char *tempdir = g_strdup ("/tmp/rpmostree-dbquery-XXXXXXXX");
-  gboolean created_tmpdir = FALSE;
+  g_autofree char *tempdir = NULL;
 
-  if (mkdtemp (tempdir) == NULL)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
-  created_tmpdir = TRUE;
-
-  if (!ostree_repo_read_commit (repo, rev, &root, &commit, NULL, error))
-    goto out;
-
-  subtree = g_file_resolve_relative_path (root, "/var/lib/rpm");
-  if (!g_file_query_exists (subtree, cancellable))
-    {
-      g_object_unref (subtree);
-      subtree = g_file_resolve_relative_path (root, "/usr/share/rpm");
-    }
-
-  file_info = g_file_query_info (subtree, OSTREE_GIO_FAST_QUERYINFO,
-                                 G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                 cancellable, &tmp_error);
-  if (!file_info) // g_file_query_exists (subtree, cancellable))
-  {
-    g_propagate_error (error, tmp_error);
-    //    g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-    //                 "No rpmdb directory found");
-    goto out;
-  }
-
-  tempdir_f = g_file_new_for_path (tempdir);
-  revdir = g_file_resolve_relative_path (tempdir_f, commit);
-
-  targetp_path = g_strconcat (commit, "/var/lib", NULL);
-  targetp = g_file_resolve_relative_path (tempdir_f, targetp_path);
-  target_path = g_strconcat (commit, "/var/lib/rpm", NULL);
-  target = g_file_resolve_relative_path (tempdir_f, target_path);
-  if (!g_file_query_exists (target, cancellable) &&
-      (!gs_file_ensure_directory (targetp, TRUE, cancellable, error) ||
-       !ostree_repo_checkout_tree (repo, OSTREE_REPO_CHECKOUT_MODE_USER,
-                                   OSTREE_REPO_CHECKOUT_OVERWRITE_NONE,
-                                   target, OSTREE_REPO_FILE (subtree),
-                                   file_info, cancellable, error)))
+  if (!rpmostree_checkout_only_rpmdb_tempdir (repo, rev, &tempdir, NULL,
+                                              cancellable, error))
     goto out;
 
   rpmrev = g_malloc0 (sizeof(struct RpmRevisionData));
-
-  rpmrev->tempdir = tempdir; tempdir = NULL;
-  rpmrev->root   = root;   root = NULL;
-  rpmrev->commit = commit; commit = NULL;
-  rpmrev->rpmdb  = rpmhdrs_new (gs_file_get_path_cached (revdir), patterns);
+  rpmrev->tempdir = tempdir;  tempdir = NULL;
+  rpmrev->commit = g_strdup (rev);
+  rpmrev->rpmdb = rpmhdrs_new (rpmrev->tempdir, patterns);
 
  out:
-  if (created_tmpdir && tempdir)
-    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
   return rpmrev;
 }
 
@@ -756,8 +700,6 @@ rpmrev_free (struct RpmRevisionData *ptr)
 
   rpmhdrs_free (ptr->rpmdb);
   ptr->rpmdb = NULL;
-
-  g_clear_pointer (&ptr->root, g_object_unref);
 
   if (ptr->tempdir)
     {
