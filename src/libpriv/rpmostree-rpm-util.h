@@ -25,13 +25,15 @@
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
 #include "rpmostree-util.h"
+#include "rpmostree-refsack.h"
+#include "rpmostree-refts.h"
 #include "rpmostree-cleanup.h"
 
 #include "libglnx.h"
 
 struct RpmHeaders
 {
-  rpmts ts; /* rpm transaction set the headers belong to */
+  RpmOstreeRefTs *refts; /* rpm transaction set the headers belong to */
   GPtrArray *hs; /* list of rpm header objects from <rpm.h> = Header */
 };
 
@@ -43,44 +45,36 @@ struct RpmHeadersDiff
   GPtrArray *hs_mod_new; /* list of rpm header objects from <rpm.h> = Header */
 };
 
-struct RpmRevisionData
-{
-  struct RpmHeaders *rpmdb;
-  GFile *root;
-  char *commit;
-};
+struct RpmRevisionData;
 
 struct RpmHeadersDiff *
 rpmhdrs_diff (struct RpmHeaders *l1,
               struct RpmHeaders *l2);
 
 void
-rpmhdrs_list (GFile *root,
-              struct RpmHeaders *l1);
+rpmhdrs_list (struct RpmHeaders *l1);
 
 char *
-rpmhdrs_rpmdbv (GFile *root,
-                struct RpmHeaders *l1,
+rpmhdrs_rpmdbv (struct RpmHeaders *l1,
                 GCancellable *cancellable,
                 GError **error);
 
 void
-rpmhdrs_diff_prnt_block (GFile *root1,
-                         GFile *root2,
-                         struct RpmHeadersDiff *diff);
+rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff);
 
 void
-rpmhdrs_diff_prnt_diff (GFile *root1,
-                        GFile *root2,
-                        struct RpmHeadersDiff *diff);
+rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff);
 
 struct RpmRevisionData *
 rpmrev_new (OstreeRepo *repo,
-            GFile *rpmdbdir,
             const char *rev,
             const GPtrArray *patterns,
             GCancellable *cancellable,
             GError **error);
+
+struct RpmHeaders *rpmrev_get_headers (struct RpmRevisionData *self);
+
+const char *rpmrev_get_commit (struct RpmRevisionData *self);
 
 void
 rpmrev_free (struct RpmRevisionData *ptr);
@@ -89,16 +83,36 @@ GS_DEFINE_CLEANUP_FUNCTION0(struct RpmRevisionData *, _cleanup_rpmrev_free, rpmr
 #define _cleanup_rpmrev_ __attribute__((cleanup(_cleanup_rpmrev_free)))
 
 gboolean
-rpmostree_get_sack_for_root (int               dfd,
-                             const char       *path,
-                             HySack           *out_sack,
-                             GCancellable     *cancellable,
-                             GError          **error);
+rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
+                                       const char       *ref,
+                                       char            **out_tempdir,
+                                       int              *out_tempdir_dfd,
+                                       GCancellable     *cancellable,
+                                       GError          **error);
+
+RpmOstreeRefSack *
+rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
+                                  const char                *ref,
+                                  GCancellable              *cancellable,
+                                  GError                   **error);
+
+RpmOstreeRefSack *
+rpmostree_get_refsack_for_root (int              dfd,
+                                const char      *path,
+                                GCancellable    *cancellable,
+                                GError         **error);
+
+gboolean
+rpmostree_get_refts_for_commit (OstreeRepo                *repo,
+                                const char                *ref,
+                                RpmOstreeRefTs           **out_ts,
+                                GCancellable              *cancellable,
+                                GError                   **error);
 
 gboolean
 rpmostree_get_pkglist_for_root (int               dfd,
                                 const char       *path,
-                                HySack           *out_sack,
+                                RpmOstreeRefSack **out_refsack,
                                 HyPackageList    *out_pkglist,
                                 GCancellable     *cancellable,
                                 GError          **error);

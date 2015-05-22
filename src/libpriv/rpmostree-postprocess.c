@@ -1017,7 +1017,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
 
 static gboolean
 handle_remove_files_from_package (GFile         *yumroot,
-                                  HySack         sack,
+                                  RpmOstreeRefSack *refsack,
                                   JsonArray     *removespec,
                                   GCancellable  *cancellable,
                                   GError       **error)
@@ -1030,7 +1030,7 @@ handle_remove_files_from_package (GFile         *yumroot,
   _cleanup_hyquery_ HyQuery query = NULL;
   _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
       
-  query = hy_query_create (sack);
+  query = hy_query_create (refsack->sack);
   hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkg);
   pkglist = hy_query_run (query);
   npackages = hy_packagelist_count (pkglist);
@@ -1215,7 +1215,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
 
   if (json_object_has_member (treefile, "remove-from-packages"))
     {
-      _cleanup_hysack_ HySack sack = NULL;
+      g_autoptr(RpmOstreeRefSack) refsack = NULL;
       _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
       guint i;
 
@@ -1223,7 +1223,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
       len = json_array_get_length (remove);
 
       if (!rpmostree_get_pkglist_for_root (AT_FDCWD, gs_file_get_path_cached (yumroot),
-                                           &sack, &pkglist,
+                                           &refsack, &pkglist,
                                            cancellable, error))
         {
           g_prefix_error (error, "Reading package set: ");
@@ -1233,7 +1233,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
       for (i = 0; i < len; i++)
         {
           JsonArray *elt = json_array_get_array_element (remove, i);
-          if (!handle_remove_files_from_package (yumroot, sack, elt, cancellable, error))
+          if (!handle_remove_files_from_package (yumroot, refsack, elt, cancellable, error))
             goto out;
         }
     }

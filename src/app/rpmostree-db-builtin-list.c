@@ -28,7 +28,7 @@ static GOptionEntry option_entries[] = {
 };
 
 static gboolean
-_builtin_db_list (OstreeRepo *repo, GFile *rpmdbdir,
+_builtin_db_list (OstreeRepo *repo,
                   GPtrArray *revs, const GPtrArray *patterns,
                   GCancellable   *cancellable,
                   GError        **error)
@@ -58,24 +58,24 @@ _builtin_db_list (OstreeRepo *repo, GFile *rpmdbdir,
           if (!range_revs)
             goto out;
 
-          if (!_builtin_db_list (repo, rpmdbdir, range_revs, patterns,
+          if (!_builtin_db_list (repo, range_revs, patterns,
                                  cancellable, error))
             goto out;
 
           continue;
         }
 
-      rpmrev = rpmrev_new (repo, rpmdbdir, rev, patterns,
+      rpmrev = rpmrev_new (repo, rev, patterns,
                            cancellable, error);
       if (!rpmrev)
         goto out;
 
-      if (!g_str_equal (rev, rpmrev->commit))
-        printf ("ostree commit: %s (%s)\n", rev, rpmrev->commit);
+      if (!g_str_equal (rev, rpmrev_get_commit (rpmrev)))
+        printf ("ostree commit: %s (%s)\n", rev, rpmrev_get_commit (rpmrev));
       else
         printf ("ostree commit: %s\n", rev);
 
-      rpmhdrs_list (rpmrev->root, rpmrev->rpmdb);
+      rpmhdrs_list (rpmrev_get_headers (rpmrev));
     }
 
   ret = TRUE;
@@ -89,8 +89,6 @@ rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GEr
 {
   GOptionContext *context;
   gs_unref_object OstreeRepo *repo = NULL;
-  gs_unref_object GFile *rpmdbdir = NULL;
-  gboolean rpmdbdir_is_tmp = FALSE;
   gs_unref_ptrarray GPtrArray *patterns = NULL;
   gs_unref_ptrarray GPtrArray *revs = NULL;
   gboolean success = FALSE;
@@ -99,7 +97,7 @@ rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GEr
   context = g_option_context_new ("[PREFIX-PKGNAME...] COMMIT... - List packages within commits");
 
   if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv, &repo,
-                                          &rpmdbdir, &rpmdbdir_is_tmp, cancellable, error))
+                                          cancellable, error))
     goto out;
 
   /* Iterate over all arguments. When we see the first argument which
@@ -128,15 +126,12 @@ rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GEr
         }
     }
 
-  if (!_builtin_db_list (repo, rpmdbdir, revs, patterns, cancellable, error))
+  if (!_builtin_db_list (repo, revs, patterns, cancellable, error))
     goto out;
 
   success = TRUE;
 
 out:
-  if (rpmdbdir_is_tmp)
-    (void) gs_shutil_rm_rf (rpmdbdir, NULL, NULL);
-
   g_option_context_free (context);
 
   return success;

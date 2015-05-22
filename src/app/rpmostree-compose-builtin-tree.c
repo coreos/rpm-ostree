@@ -648,7 +648,11 @@ rpmostree_compose_builtin_tree (int             argc,
     }
   else
     {
-      gs_free char *tmpd = g_mkdtemp (g_strdup ("/var/tmp/rpm-ostree.XXXXXX"));
+      gs_free char *tmpd = NULL;
+
+      if (!rpmostree_mkdtemp ("/var/tmp/rpm-ostree.XXXXXX", &tmpd, NULL, error))
+        goto out;
+
       self->workdir = g_file_new_for_path (tmpd);
       workdir_is_tmp = TRUE;
 
