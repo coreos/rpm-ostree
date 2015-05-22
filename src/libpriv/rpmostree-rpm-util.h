@@ -90,10 +90,10 @@ rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
                                        GError          **error);
 
 RpmOstreeRefSack *
-_rpm_ostree_get_refsack_for_commit (OstreeRepo                *repo,
-                                    const char                *ref,
-                                    GCancellable              *cancellable,
-                                    GError                   **error);
+rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
+                                  const char                *ref,
+                                  GCancellable              *cancellable,
+                                  GError                   **error);
 
 RpmOstreeRefSack *
 rpmostree_get_refsack_for_root (int              dfd,

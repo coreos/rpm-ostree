@@ -836,17 +836,17 @@ rpmostree_get_refsack_for_root (int              dfd,
                           &sack, cancellable, error))
     goto out;
 
-  ret = _rpm_ostree_refsack_new (sack, AT_FDCWD, NULL);
+  ret = rpmostree_refsack_new (sack, AT_FDCWD, NULL);
  out:
   return ret;
 }
 
 
 RpmOstreeRefSack *
-_rpm_ostree_get_refsack_for_commit (OstreeRepo                *repo,
-                                    const char                *ref,
-                                    GCancellable              *cancellable,
-                                    GError                   **error)
+rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
+                                  const char                *ref,
+                                  GCancellable              *cancellable,
+                                  GError                   **error)
 {
   RpmOstreeRefSack *ret = NULL;
   g_autofree char *tempdir = NULL;
@@ -861,7 +861,7 @@ _rpm_ostree_get_refsack_for_commit (OstreeRepo                *repo,
                           &hsack, cancellable, error))
     goto out;
 
-  ret = _rpm_ostree_refsack_new (hsack, AT_FDCWD, tempdir);
+  ret = rpmostree_refsack_new (hsack, AT_FDCWD, tempdir);
   tempdir = NULL; /* Transfer ownership */
  out:
   if (tempdir)

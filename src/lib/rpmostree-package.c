@@ -55,7 +55,7 @@ rpm_ostree_package_finalize (GObject *object)
   hy_package_free (pkg->hypkg);
   
   /* We do internal refcounting of the sack because hawkey doesn't */
-  _rpm_ostree_refsack_unref (pkg->sack);
+  rpmostree_refsack_unref (pkg->sack);
 
   G_OBJECT_CLASS (rpm_ostree_package_parent_class)->finalize (object);
 }
@@ -174,7 +174,7 @@ RpmOstreePackage *
 _rpm_ostree_package_new (RpmOstreeRefSack *rsack, HyPackage hypkg)
 {
   RpmOstreePackage *p = g_object_new (RPM_OSTREE_TYPE_PACKAGE, NULL);
-  p->sack = _rpm_ostree_refsack_ref (rsack);
+  p->sack = rpmostree_refsack_ref (rsack);
   p->hypkg = hy_package_link (hypkg);
   return p;
 }

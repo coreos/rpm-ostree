@@ -25,7 +25,7 @@
 #include "rpmostree-rpm-util.h"
 
 RpmOstreeRefSack *
-_rpm_ostree_refsack_new (HySack sack, int temp_base_dfd, const char *temp_path)
+rpmostree_refsack_new (HySack sack, int temp_base_dfd, const char *temp_path)
 {
   RpmOstreeRefSack *rsack = g_new0 (RpmOstreeRefSack, 1);
   rsack->sack = sack;
@@ -36,14 +36,14 @@ _rpm_ostree_refsack_new (HySack sack, int temp_base_dfd, const char *temp_path)
 }
 
 RpmOstreeRefSack *
-_rpm_ostree_refsack_ref (RpmOstreeRefSack *rsack)
+rpmostree_refsack_ref (RpmOstreeRefSack *rsack)
 {
   g_atomic_int_inc (&rsack->refcount);
   return rsack;
 }
 
 void
-_rpm_ostree_refsack_unref (RpmOstreeRefSack *rsack)
+rpmostree_refsack_unref (RpmOstreeRefSack *rsack)
 {
   if (!g_atomic_int_dec_and_test (&rsack->refcount))
     return;

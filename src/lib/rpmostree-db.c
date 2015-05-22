@@ -81,7 +81,7 @@ rpm_ostree_db_query_all (OstreeRepo                *repo,
 {
   g_autoptr(RpmOstreeRefSack) rsack = NULL;
 
-  rsack = _rpm_ostree_get_refsack_for_commit (repo, ref, cancellable, error);
+  rsack = rpmostree_get_refsack_for_commit (repo, ref, cancellable, error);
 
   return query_all_packages_in_sack (rsack);
 }
@@ -137,7 +137,7 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
   g_return_val_if_fail (out_removed != NULL && out_added != NULL &&
                         out_modified_old != NULL && out_modified_new != NULL, FALSE);
 
-  orig_sack = _rpm_ostree_get_refsack_for_commit (repo, orig_ref, cancellable, error);
+  orig_sack = rpmostree_get_refsack_for_commit (repo, orig_ref, cancellable, error);
   if (!orig_sack)
     goto out;
 
@@ -146,7 +146,7 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
     orig_pkglist = hy_query_run (query);
   }
 
-  new_sack = _rpm_ostree_get_refsack_for_commit (repo, new_ref, cancellable, error);
+  new_sack = rpmostree_get_refsack_for_commit (repo, new_ref, cancellable, error);
   if (!new_sack)
     goto out;
 

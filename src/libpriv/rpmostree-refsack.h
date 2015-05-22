@@ -33,13 +33,13 @@ typedef struct {
 } RpmOstreeRefSack;
 
 RpmOstreeRefSack *
-_rpm_ostree_refsack_new (HySack sack, int temp_base_dfd, const char *temp_path);
+rpmostree_refsack_new (HySack sack, int temp_base_dfd, const char *temp_path);
 
 RpmOstreeRefSack *
-_rpm_ostree_refsack_ref (RpmOstreeRefSack *rsack);
+rpmostree_refsack_ref (RpmOstreeRefSack *rsack);
 
 void
-_rpm_ostree_refsack_unref (RpmOstreeRefSack *rsack);
+rpmostree_refsack_unref (RpmOstreeRefSack *rsack);
 
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRefSack, _rpm_ostree_refsack_unref);
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRefSack, rpmostree_refsack_unref);
 
