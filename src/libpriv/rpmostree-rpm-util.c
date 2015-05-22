@@ -710,24 +710,16 @@ rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
 {
   gboolean ret = FALSE;
   g_autofree char *commit = NULL;
-  g_autofree char *tempdir = g_strdup ("/tmp/rpmostree-dbquery-XXXXXXXX");
-  gboolean created_tmpdir = FALSE;
+  g_autofree char *tempdir = NULL;
   OstreeRepoCheckoutOptions checkout_options = { 0, };
   glnx_fd_close int tempdir_dfd = -1;
 
   g_return_val_if_fail (out_tempdir != NULL, FALSE);
 
-  if (!ostree_repo_resolve_rev (repo, ref, FALSE, &commit, error))
+  if (!rpmostree_mkdtemp ("/tmp/rpmostree-dbquery-XXXXXX", &tempdir, &tempdir_dfd, error))
     goto out;
 
-  if (mkdtemp (tempdir) == NULL)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
-  created_tmpdir = TRUE;
-
-  if (!glnx_opendirat (AT_FDCWD, tempdir, FALSE, &tempdir_dfd, error))
+  if (!ostree_repo_resolve_rev (repo, ref, FALSE, &commit, error))
     goto out;
 
   /* Create intermediate dirs */ 
@@ -753,8 +745,7 @@ rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
       goto out;
     }
 
-  *out_tempdir = tempdir;
-  tempdir = NULL;
+  *out_tempdir = g_steal_pointer (&tempdir);
   if (out_tempdir_dfd)
     {
       *out_tempdir_dfd = tempdir_dfd;
@@ -762,7 +753,7 @@ rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
     }
   ret = TRUE;
  out:
-  if (created_tmpdir && tempdir)
+  if (tempdir)
     (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
   return ret;
 }
