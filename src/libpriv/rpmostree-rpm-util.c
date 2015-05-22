@@ -813,6 +813,16 @@ rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
                                      cancellable, error))
     goto out;
 
+  /* And make a compat symlink to keep rpm happy */ 
+  if (!glnx_shutil_mkdir_p_at (tempdir_dfd, "var/lib", 0777, cancellable, error))
+    goto out;
+
+  if (symlinkat ("../../usr/share/rpm", tempdir_dfd, "var/lib/rpm") == -1)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
+
   *out_tempdir = tempdir;
   tempdir = NULL;
   if (out_tempdir_dfd)
