@@ -33,7 +33,7 @@
 
 struct RpmHeaders
 {
-  rpmts ts; /* rpm transaction set the headers belong to */
+  RpmOstreeRefTs *refts; /* rpm transaction set the headers belong to */
   GPtrArray *hs; /* list of rpm header objects from <rpm.h> = Header */
 };
 
