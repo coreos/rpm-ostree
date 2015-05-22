@@ -75,7 +75,7 @@ _builtin_db_list (OstreeRepo *repo, GFile *rpmdbdir,
       else
         printf ("ostree commit: %s\n", rev);
 
-      rpmhdrs_list (rpmrev->root, rpmrev->rpmdb);
+      rpmhdrs_list (rpmrev->rpmdb);
     }
 
   ret = TRUE;

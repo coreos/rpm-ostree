@@ -55,24 +55,18 @@ rpmhdrs_diff (struct RpmHeaders *l1,
               struct RpmHeaders *l2);
 
 void
-rpmhdrs_list (GFile *root,
-              struct RpmHeaders *l1);
+rpmhdrs_list (struct RpmHeaders *l1);
 
 char *
-rpmhdrs_rpmdbv (GFile *root,
-                struct RpmHeaders *l1,
+rpmhdrs_rpmdbv (struct RpmHeaders *l1,
                 GCancellable *cancellable,
                 GError **error);
 
 void
-rpmhdrs_diff_prnt_block (GFile *root1,
-                         GFile *root2,
-                         struct RpmHeadersDiff *diff);
+rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff);
 
 void
-rpmhdrs_diff_prnt_diff (GFile *root1,
-                        GFile *root2,
-                        struct RpmHeadersDiff *diff);
+rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff);
 
 struct RpmRevisionData *
 rpmrev_new (OstreeRepo *repo,

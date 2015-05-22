@@ -81,13 +81,11 @@ rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GEr
 
   if (g_str_equal (opt_format, "diff"))
     {
-      rpmhdrs_diff_prnt_diff (rpmrev1->root, rpmrev2->root,
-                              rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb));
+      rpmhdrs_diff_prnt_diff (rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb));
     }
   else if (g_str_equal (opt_format, "block"))
     {
-      rpmhdrs_diff_prnt_block (rpmrev1->root, rpmrev2->root,
-                               rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb));
+      rpmhdrs_diff_prnt_block (rpmhdrs_diff (rpmrev1->rpmdb, rpmrev2->rpmdb));
     }
   else
     {

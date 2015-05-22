@@ -110,89 +110,11 @@ pkg_nvr_strdup (Header h1)
   return g_strdup_printf ("%s-%s-%s", name, version, release);
 }
 
-static char *
-pkg_yumdb_relpath (Header h1)
-{
-   const char*    name = headerGetString (h1, RPMTAG_NAME);
-   const char* version = headerGetString (h1, RPMTAG_VERSION);
-   const char* release = headerGetString (h1, RPMTAG_RELEASE);
-   const char*    arch = headerGetString (h1, RPMTAG_ARCH);
-   const char*   pkgid = headerGetString (h1, RPMTAG_SHA1HEADER);
-   char *path = NULL;
-
-   g_assert (name[0]);
-
-   // FIXME: sanitize name ... remove '/' and '~'
-
-   // FIXME: If pkgid doesn't exist use: name.buildtime
-
-   path = g_strdup_printf ("%c/%s-%s-%s-%s-%s", name[0],
-                           pkgid, name, version, release, arch);
-
-   return path;
-}
-
-static GInputStream *
-pkg_yumdb_file_read (GFile *root, Header pkg, const char *yumdb_key,
-                     GCancellable   *cancellable,
-                     GError        **error)
-{
-  gs_unref_object GFile *f = NULL;
-  gs_free char *pkgpath = pkg_yumdb_relpath (pkg);
-  gs_free char *path = g_strconcat ("/var/lib/yum/yumdb/", pkgpath, "/",
-                                    yumdb_key, NULL);
-
-  f = g_file_resolve_relative_path (root, path);
-  return (GInputStream*)g_file_read (f, cancellable, error);
-}
-
-static char *
-pkg_yumdb_strdup (GFile *root, Header pkg, const char *yumdb_key)
-{
-  gs_unref_object GFile *f = NULL;
-  gs_free char *pkgpath = pkg_yumdb_relpath (pkg);
-  gs_free char *path = g_strconcat ("/var/lib/yum/yumdb/", pkgpath, "/",
-                                    yumdb_key, NULL);
-  char *ret = NULL;
-
-  f = g_file_resolve_relative_path (root, path);
-
-  // allow_noent returns true for noent, false for other errors.
-  if (!_rpmostree_file_load_contents_utf8_allow_noent (f, &ret, NULL, NULL) || !ret)
-    ret = g_strdup ("");
-
-  return ret;
-}
-
 static void
-pkg_print (GFile *root, Header pkg)
+pkg_print (Header pkg)
 {
   gs_free char *nevra = pkg_nevra_strdup (pkg);
-  gs_free char *from_repo = pkg_yumdb_strdup (root, pkg, "from_repo");
-  gsize align = glnx_console_lines ();
-
-  if (*from_repo)
-    {
-      if (align)
-        {
-          gsize plen = strlen (nevra);
-          gsize rlen = strlen (from_repo) + 1;
-          int off = 0;
-
-          --align; // hacky ... for leading spaces.
-
-          off = align - (plen + rlen);
-
-          if (align > (plen + rlen))
-            printf ("%s%*s@%s\n", nevra, off, "", from_repo);
-          else
-            align = 0;
-        }
-      if (!align)
-        printf ("%s @%s\n", nevra, from_repo);
-    }
-  else
-    printf("%s\n", nevra);
+  printf("%s\n", nevra);
 }
 
 #define CASENCMP_EQ(x, y, n) (g_ascii_strncasecmp (x, y, n) == 0)
@@ -432,7 +354,7 @@ rpmhdrs_diff (struct RpmHeaders *l1,
 }
 
 void
-rpmhdrs_list (GFile *root, struct RpmHeaders *l1)
+rpmhdrs_list (struct RpmHeaders *l1)
 {
   int num = 0;
 
@@ -440,12 +362,12 @@ rpmhdrs_list (GFile *root, struct RpmHeaders *l1)
     {
       Header h1 = l1->hs->pdata[num++];
       printf (" ");
-      pkg_print (root, h1);
+      pkg_print (h1);
     }
 }
 
 char *
-rpmhdrs_rpmdbv (GFile *root, struct RpmHeaders *l1,
+rpmhdrs_rpmdbv (struct RpmHeaders *l1,
                 GCancellable   *cancellable,
                 GError        **error)
 {
@@ -457,68 +379,15 @@ rpmhdrs_rpmdbv (GFile *root, struct RpmHeaders *l1,
   while (num < l1->hs->len)
     {
       Header pkg = l1->hs->pdata[num++];
-      gs_unref_object GInputStream *tin = NULL;
-      gs_unref_object GInputStream *din = NULL;
-      char tbuf[1024];
-      char dbuf[1024];
       gs_free char *envra = pkg_envra_strdup (pkg);
-      gsize tbytes_read = 0;
-      gsize dbytes_read = 0;
-      GError *local_error = NULL;
 
       g_checksum_update (checksum, (guint8*)envra, strlen(envra));
-
-      tin = pkg_yumdb_file_read (root, pkg, "checksum_type", cancellable, &local_error);
-
-      /* Tolerate missing database files. */
-      if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        {
-          g_clear_error (&local_error);
-          continue;
-        }
-
-      if (local_error != NULL)
-        {
-          g_propagate_error (error, local_error);
-          goto out;
-        }
-
-      din = pkg_yumdb_file_read (root, pkg, "checksum_data", cancellable,error);
-
-      /* Tolerate missing database files. */
-      if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        {
-          g_clear_error (&local_error);
-          continue;
-        }
-
-      if (local_error != NULL)
-        {
-          g_propagate_error (error, local_error);
-          goto out;
-        }
-
-      if (!g_input_stream_read_all (tin, tbuf, sizeof(tbuf), &tbytes_read,
-                                    cancellable, error))
-        goto out;
-      if (!g_input_stream_read_all (din, dbuf, sizeof(dbuf), &dbytes_read,
-                                    cancellable, error))
-        goto out;
-
-      if (tbytes_read >= 512)
-        continue; // should be == len(md5) or len(sha256) etc.
-      if (dbytes_read >= 1024)
-        continue; // should be digest size of md5/sha256/sha512/etc.
-
-      g_checksum_update (checksum, (guint8*)tbuf, tbytes_read);
-      g_checksum_update (checksum, (guint8*)dbuf, dbytes_read);
     }
 
   checksum_cstr = g_strdup (g_checksum_get_string (checksum));
 
   ret = g_strdup_printf ("%u:%s", num, checksum_cstr);
 
-out:
   g_checksum_free (checksum);
 
   return ret;
@@ -564,8 +433,7 @@ _rpmhdrs_diff_cmp_end (const GPtrArray *hs1, const GPtrArray *hs2)
 }
 
 void
-rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
-                         struct RpmHeadersDiff *diff)
+rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff)
 {
   int num = 0;
 
@@ -611,7 +479,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
             }
 
           printf (" ");
-          pkg_print (root2, hn);
+          pkg_print (hn);
 
           // Load the old %changelog entries
           ochanges_date = &ochanges_date_s;
@@ -693,7 +561,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
             }
 
           printf (" ");
-          pkg_print (root2, hn);
+          pkg_print (hn);
         }
     }
 
@@ -706,7 +574,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
           Header hd = diff->hs_del->pdata[num];
 
           printf (" ");
-          pkg_print (root1, hd);
+          pkg_print (hd);
         }
     }
 
@@ -719,7 +587,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
           Header ha = diff->hs_add->pdata[num];
 
           printf (" ");
-          pkg_print (root2, ha);
+          pkg_print (ha);
         }
     }
 
@@ -727,7 +595,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
 }
 
 void
-rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff)
+rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
 {
   _gptr_array_reverse (diff->hs_add);
   _gptr_array_reverse (diff->hs_del);
@@ -746,11 +614,11 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff)
             Header hm = diff->hs_mod_old->pdata[diff->hs_mod_old->len-1];
 
             printf("!");
-            pkg_print (root1, hm);
+            pkg_print (hm);
             g_ptr_array_remove_index(diff->hs_mod_old, diff->hs_mod_old->len-1);
             printf("=");
             hm = diff->hs_mod_new->pdata[diff->hs_mod_new->len-1];
-            pkg_print (root2, hm);
+            pkg_print (hm);
             g_ptr_array_remove_index(diff->hs_mod_new, diff->hs_mod_new->len-1);
           }
         else
@@ -758,7 +626,7 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff)
             Header ha = diff->hs_add->pdata[diff->hs_add->len-1];
 
             printf ("+");
-            pkg_print (root2, ha);
+            pkg_print (ha);
             g_ptr_array_remove_index(diff->hs_add, diff->hs_add->len-1);
           }
       else
@@ -767,7 +635,7 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff)
             Header hd = diff->hs_del->pdata[diff->hs_del->len-1];
 
             printf ("-");
-            pkg_print (root1, hd);
+            pkg_print (hd);
             g_ptr_array_remove_index(diff->hs_del, diff->hs_del->len-1);
           }
         else
@@ -775,7 +643,7 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff)
             Header ha = diff->hs_add->pdata[diff->hs_add->len-1];
 
             printf ("+");
-            pkg_print (root2, ha);
+            pkg_print (ha);
             g_ptr_array_remove_index(diff->hs_add, diff->hs_add->len-1);
           }
     }

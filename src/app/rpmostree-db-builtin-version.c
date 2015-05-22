@@ -69,7 +69,7 @@ _builtin_db_version (OstreeRepo *repo, GFile *rpmdbdir, GPtrArray *revs,
         if (!rpmrev)
           goto out;
 
-        rpmdbv = rpmhdrs_rpmdbv (rpmrev->root, rpmrev->rpmdb,
+        rpmdbv = rpmhdrs_rpmdbv (rpmrev->rpmdb,
                                  cancellable, error);
         if (rpmdbv == NULL)
           goto out;
