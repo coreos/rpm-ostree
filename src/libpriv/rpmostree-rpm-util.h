@@ -26,6 +26,7 @@
 #include <rpm/rpmlog.h>
 #include "rpmostree-util.h"
 #include "rpmostree-refsack.h"
+#include "rpmostree-refts.h"
 #include "rpmostree-cleanup.h"
 
 #include "libglnx.h"
@@ -100,6 +101,13 @@ rpmostree_get_refsack_for_root (int              dfd,
                                 const char      *path,
                                 GCancellable    *cancellable,
                                 GError         **error);
+
+gboolean
+rpmostree_get_refts_for_commit (OstreeRepo                *repo,
+                                const char                *ref,
+                                RpmOstreeRefTs           **out_ts,
+                                GCancellable              *cancellable,
+                                GError                   **error);
 
 gboolean
 rpmostree_get_pkglist_for_root (int               dfd,
