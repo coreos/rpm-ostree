@@ -868,6 +868,63 @@ rpmrev_free (struct RpmRevisionData *ptr)
 }
 
 gboolean
+rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
+                                       const char       *ref,
+                                       char            **out_tempdir,
+                                       int              *out_tempdir_dfd,
+                                       GCancellable     *cancellable,
+                                       GError          **error)
+{
+  gboolean ret = FALSE;
+  g_autofree char *commit = NULL;
+  g_autofree char *tempdir = g_strdup ("/tmp/rpmostree-dbquery-XXXXXXXX");
+  gboolean created_tmpdir = FALSE;
+  OstreeRepoCheckoutOptions checkout_options = { 0, };
+  glnx_fd_close int tempdir_dfd = -1;
+
+  g_return_val_if_fail (out_tempdir != NULL, FALSE);
+
+  if (!ostree_repo_resolve_rev (repo, ref, FALSE, &commit, error))
+    goto out;
+
+  if (mkdtemp (tempdir) == NULL)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
+  created_tmpdir = TRUE;
+
+  if (!glnx_opendirat (AT_FDCWD, tempdir, FALSE, &tempdir_dfd, error))
+    goto out;
+
+  /* Create intermediate dirs */ 
+  if (!glnx_shutil_mkdir_p_at (tempdir_dfd, "usr/share", 0777, cancellable, error))
+    goto out;
+
+  checkout_options.mode = OSTREE_REPO_CHECKOUT_MODE_USER;
+  checkout_options.subpath = "usr/share/rpm";
+
+  if (!ostree_repo_checkout_tree_at (repo, &checkout_options,
+                                     tempdir_dfd, "usr/share/rpm",
+                                     commit, 
+                                     cancellable, error))
+    goto out;
+
+  *out_tempdir = tempdir;
+  tempdir = NULL;
+  if (out_tempdir_dfd)
+    {
+      *out_tempdir_dfd = tempdir_dfd;
+      tempdir_dfd = -1;
+    }
+  ret = TRUE;
+ out:
+  if (created_tmpdir && tempdir)
+    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
+  return ret;
+}
+
+gboolean
 rpmostree_get_sack_for_root (int               dfd,
                              const char       *path,
                              HySack           *out_sack,
