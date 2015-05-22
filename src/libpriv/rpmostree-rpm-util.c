@@ -852,7 +852,7 @@ rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
     goto out;
 
   ret = rpmostree_refsack_new (hsack, AT_FDCWD, tempdir);
-  tempdir = NULL; /* Transfer ownership */
+  g_clear_pointer (&tempdir, g_free);
  out:
   if (tempdir)
     (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
