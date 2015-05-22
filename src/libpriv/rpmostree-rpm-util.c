@@ -39,7 +39,7 @@ GS_DEFINE_CLEANUP_FUNCTION0(rpmtd, _cleanup_rpmtdFreeData, rpmtdFreeData);
 struct RpmRevisionData
 {
   struct RpmHeaders *rpmdb;
-  char *tempdir;
+  RpmOstreeRefTs *refts;
   char *commit;
 };
 
@@ -224,27 +224,16 @@ header_cmp_p (gconstpointer gph1, gconstpointer gph2)
 }
 
 static struct RpmHeaders *
-rpmhdrs_new (const char *root, const GPtrArray *patterns)
+rpmhdrs_new (RpmOstreeRefTs *refts, const GPtrArray *patterns)
 {
-  rpmts ts = rpmtsCreate();
-  int status = -1;
   rpmdbMatchIterator iter;
   Header h1;
   GPtrArray *hs = NULL;
   struct RpmHeaders *ret = NULL;
   gsize patprefixlen = pat_fnmatch_prefix (patterns);
 
-  // rpm also aborts on mem errors, so this is fine.
-  g_assert (ts);
-  rpmtsSetVSFlags (ts, _RPMVSF_NODIGESTS | _RPMVSF_NOSIGNATURES);
-
-  // This only fails if root isn't absolute.
-  g_assert (root && root[0] == '/');
-  status = rpmtsSetRootDir (ts, root);
-  g_assert (status == 0);
-
   /* iter = rpmtsInitIterator (ts, RPMTAG_NAME, "yum", 0); */
-  iter = rpmtsInitIterator (ts, RPMDBI_PACKAGES, NULL, 0);
+  iter = rpmtsInitIterator (refts->ts, RPMDBI_PACKAGES, NULL, 0);
 
   hs = g_ptr_array_new_with_free_func (header_free_p);
   while ((h1 = rpmdbNextIterator (iter)))
@@ -265,7 +254,7 @@ rpmhdrs_new (const char *root, const GPtrArray *patterns)
 
   ret = g_malloc0 (sizeof (struct RpmHeaders));
 
-  ret->ts = ts;
+  ret->refts = rpmostree_refts_ref (refts);
   ret->hs = hs;
 
   return ret;
@@ -276,7 +265,7 @@ rpmhdrs_free (struct RpmHeaders *l1)
 {
   g_ptr_array_free (l1->hs, TRUE);
   l1->hs = NULL;
-  l1->ts = rpmtsFree (l1->ts);
+  rpmostree_refts_unref (l1->refts);
 
   g_free (l1);
 }
@@ -665,16 +654,19 @@ rpmrev_new (OstreeRepo *repo, const char *rev,
             GError        **error)
 {
   struct RpmRevisionData *rpmrev = NULL;
-  g_autofree char *tempdir = NULL;
+  g_autofree char *commit = NULL;
+  g_autoptr(RpmOstreeRefTs) refts = NULL;
 
-  if (!rpmostree_checkout_only_rpmdb_tempdir (repo, rev, &tempdir, NULL,
-                                              cancellable, error))
+  if (!ostree_repo_resolve_rev (repo, rev, FALSE, &commit, error))
+    goto out;
+
+  if (!rpmostree_get_refts_for_commit (repo, commit, &refts, cancellable, error))
     goto out;
 
   rpmrev = g_malloc0 (sizeof(struct RpmRevisionData));
-  rpmrev->tempdir = tempdir;  tempdir = NULL;
-  rpmrev->commit = g_strdup (rev);
-  rpmrev->rpmdb = rpmhdrs_new (rpmrev->tempdir, patterns);
+  rpmrev->refts = g_steal_pointer (&refts);
+  rpmrev->commit = g_steal_pointer (&commit);
+  rpmrev->rpmdb = rpmhdrs_new (rpmrev->refts, patterns);
 
  out:
   return rpmrev;
@@ -701,11 +693,7 @@ rpmrev_free (struct RpmRevisionData *ptr)
   rpmhdrs_free (ptr->rpmdb);
   ptr->rpmdb = NULL;
 
-  if (ptr->tempdir)
-    {
-      (void) glnx_shutil_rm_rf_at (AT_FDCWD, ptr->tempdir, NULL, NULL);
-      g_clear_pointer (&ptr->tempdir, g_free);
-    }
+  rpmostree_refts_unref (ptr->refts);
 
   g_clear_pointer (&ptr->commit, g_free);
 
