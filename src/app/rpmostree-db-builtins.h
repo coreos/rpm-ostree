@@ -34,8 +34,6 @@ gboolean rpmostree_db_option_context_parse (GOptionContext *context,
                                             const GOptionEntry *main_entries,
                                             int *argc, char ***argv,
                                             OstreeRepo **out_repo,
-                                            GFile **out_rpmdbdir,
-                                            gboolean *out_rpmdbdir_is_tmp,
                                             GCancellable *cancellable,
                                             GError **error);
 

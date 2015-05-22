@@ -35,8 +35,6 @@ rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GEr
 {
   GOptionContext *context;
   gs_unref_object OstreeRepo *repo = NULL;
-  gs_unref_object GFile *rpmdbdir = NULL;
-  gboolean rpmdbdir_is_tmp = FALSE;
   struct RpmRevisionData *rpmrev1 = NULL;
   struct RpmRevisionData *rpmrev2 = NULL;
   gboolean success = FALSE;
@@ -44,7 +42,7 @@ rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GEr
   context = g_option_context_new ("COMMIT COMMIT - Show package changes between two commits");
 
   if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv, &repo,
-                                          &rpmdbdir, &rpmdbdir_is_tmp, cancellable, error))
+                                          cancellable, error))
     goto out;
 
   if (argc != 3)
@@ -60,10 +58,10 @@ rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GEr
       goto out;
     }
 
-  if (!(rpmrev1 = rpmrev_new (repo, rpmdbdir, argv[1], NULL, cancellable, error)))
+  if (!(rpmrev1 = rpmrev_new (repo, argv[1], NULL, cancellable, error)))
     goto out;
 
-  if (!(rpmrev2 = rpmrev_new (repo, rpmdbdir, argv[2], NULL, cancellable, error)))
+  if (!(rpmrev2 = rpmrev_new (repo, argv[2], NULL, cancellable, error)))
     goto out;
 
   if (!g_str_equal (argv[1], rpmrev1->commit))
@@ -102,9 +100,6 @@ out:
    * being there. */
   rpmrev_free (rpmrev1);
   rpmrev_free (rpmrev2);
-
-  if (rpmdbdir_is_tmp)
-    (void) gs_shutil_rm_rf (rpmdbdir, NULL, NULL);
 
   g_option_context_free (context);
 

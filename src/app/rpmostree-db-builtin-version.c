@@ -28,7 +28,7 @@ static GOptionEntry db_version_entries[] = {
 };
 
 static gboolean
-_builtin_db_version (OstreeRepo *repo, GFile *rpmdbdir, GPtrArray *revs,
+_builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
                      GCancellable   *cancellable,
                      GError        **error)
 {
@@ -58,14 +58,14 @@ _builtin_db_version (OstreeRepo *repo, GFile *rpmdbdir, GPtrArray *revs,
           if (!range_revs)
             goto out;
 
-          if (!_builtin_db_version (repo, rpmdbdir, range_revs,
+          if (!_builtin_db_version (repo, range_revs,
                                     cancellable, error))
             goto out;
 
           continue;
         }
 
-        rpmrev = rpmrev_new (repo, rpmdbdir, rev, NULL, cancellable, error);
+        rpmrev = rpmrev_new (repo, rev, NULL, cancellable, error);
         if (!rpmrev)
           goto out;
 
@@ -94,8 +94,6 @@ rpmostree_db_builtin_version (int argc, char **argv, GCancellable *cancellable, 
 {
   GOptionContext *context;
   gs_unref_object OstreeRepo *repo = NULL;
-  gs_unref_object GFile *rpmdbdir = NULL;
-  gboolean rpmdbdir_is_tmp = FALSE;
   gs_unref_ptrarray GPtrArray *revs = NULL;
   gboolean success = FALSE;
   gint ii;
@@ -103,7 +101,7 @@ rpmostree_db_builtin_version (int argc, char **argv, GCancellable *cancellable, 
   context = g_option_context_new ("COMMIT... - Show rpmdb version of packages within the commits");
 
   if (!rpmostree_db_option_context_parse (context, db_version_entries, &argc, &argv, &repo,
-                                          &rpmdbdir, &rpmdbdir_is_tmp, cancellable, error))
+                                          cancellable, error))
     goto out;
 
   revs = g_ptr_array_new ();
@@ -111,15 +109,12 @@ rpmostree_db_builtin_version (int argc, char **argv, GCancellable *cancellable, 
   for (ii = 1; ii < argc; ii++)
     g_ptr_array_add (revs, argv[ii]);
 
-  if (!_builtin_db_version (repo, rpmdbdir, revs, cancellable, error))
+  if (!_builtin_db_version (repo, revs, cancellable, error))
     goto out;
 
   success = TRUE;
 
 out:
-  if (rpmdbdir_is_tmp)
-    (void) gs_shutil_rm_rf (rpmdbdir, NULL, NULL);
-
   g_option_context_free (context);
 
   return success;

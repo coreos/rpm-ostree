@@ -652,7 +652,7 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
 }
 
 struct RpmRevisionData *
-rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,
+rpmrev_new (OstreeRepo *repo, const char *rev,
             const GPtrArray *patterns,
             GCancellable   *cancellable,
             GError        **error)
@@ -667,7 +667,17 @@ rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,
   GError *tmp_error = NULL;
   struct RpmRevisionData *rpmrev = NULL;
   gs_unref_object GFile *root = NULL;
+  gs_unref_object GFile *tempdir_f = NULL;
   gs_free char *commit = NULL;
+  g_autofree char *tempdir = g_strdup ("/tmp/rpmostree-dbquery-XXXXXXXX");
+  gboolean created_tmpdir = FALSE;
+
+  if (mkdtemp (tempdir) == NULL)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
+  created_tmpdir = TRUE;
 
   if (!ostree_repo_read_commit (repo, rev, &root, &commit, NULL, error))
     goto out;
@@ -690,12 +700,13 @@ rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,
     goto out;
   }
 
-  revdir = g_file_resolve_relative_path (rpmdbdir, commit);
+  tempdir_f = g_file_new_for_path (tempdir);
+  revdir = g_file_resolve_relative_path (tempdir_f, commit);
 
   targetp_path = g_strconcat (commit, "/var/lib", NULL);
-  targetp = g_file_resolve_relative_path (rpmdbdir, targetp_path);
+  targetp = g_file_resolve_relative_path (tempdir_f, targetp_path);
   target_path = g_strconcat (commit, "/var/lib/rpm", NULL);
-  target = g_file_resolve_relative_path (rpmdbdir, target_path);
+  target = g_file_resolve_relative_path (tempdir_f, target_path);
   if (!g_file_query_exists (target, cancellable) &&
       (!gs_file_ensure_directory (targetp, TRUE, cancellable, error) ||
        !ostree_repo_checkout_tree (repo, OSTREE_REPO_CHECKOUT_MODE_USER,
@@ -706,31 +717,35 @@ rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,
 
   rpmrev = g_malloc0 (sizeof(struct RpmRevisionData));
 
+  rpmrev->tempdir = tempdir; tempdir = NULL;
   rpmrev->root   = root;   root = NULL;
   rpmrev->commit = commit; commit = NULL;
   rpmrev->rpmdb  = rpmhdrs_new (gs_file_get_path_cached (revdir), patterns);
 
  out:
+  if (created_tmpdir && tempdir)
+    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
   return rpmrev;
 }
 
 void
 rpmrev_free (struct RpmRevisionData *ptr)
 {
-  gs_unref_object GFile *root = NULL;
-  gs_free char *commit = NULL;
-
   if (!ptr)
     return;
 
   rpmhdrs_free (ptr->rpmdb);
   ptr->rpmdb = NULL;
 
-  root = ptr->root;
-  ptr->root = NULL;
+  g_clear_pointer (&ptr->root, g_object_unref);
 
-  commit = ptr->commit;
-  ptr->commit = NULL;
+  if (ptr->tempdir)
+    {
+      (void) glnx_shutil_rm_rf_at (AT_FDCWD, ptr->tempdir, NULL, NULL);
+      g_clear_pointer (&ptr->tempdir, g_free);
+    }
+
+  g_clear_pointer (&ptr->commit, g_free);
 
   g_free (ptr);
 }

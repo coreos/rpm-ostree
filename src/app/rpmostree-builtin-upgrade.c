@@ -168,8 +168,6 @@ rpmostree_builtin_upgrade (int             argc,
           _cleanup_rpmrev_ struct RpmRevisionData *rpmrev1 = NULL;
           _cleanup_rpmrev_ struct RpmRevisionData *rpmrev2 = NULL;
 
-          gs_free char *tmpd = g_mkdtemp (g_strdup ("/tmp/rpm-ostree.XXXXXX"));
-
           gs_free char *ref = NULL; // location of this rev
           gs_free char *remote = NULL;
 
@@ -183,14 +181,12 @@ rpmostree_builtin_upgrade (int             argc,
               goto out;
             }
 
-          rpmdbdir = g_file_new_for_path (tmpd);
-
-          if (!(rpmrev1 = rpmrev_new (repo, rpmdbdir, 
+          if (!(rpmrev1 = rpmrev_new (repo, 
                                       ostree_deployment_get_csum (ostree_sysroot_get_booted_deployment (sysroot)),
                                       NULL, cancellable, error)))
             goto out;
 
-          if (!(rpmrev2 = rpmrev_new (repo, rpmdbdir, ref,
+          if (!(rpmrev2 = rpmrev_new (repo, ref,
                                       NULL, cancellable, error)))
             goto out;
 

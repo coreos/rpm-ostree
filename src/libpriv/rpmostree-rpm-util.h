@@ -47,6 +47,7 @@ struct RpmRevisionData
 {
   struct RpmHeaders *rpmdb;
   GFile *root;
+  char *tempdir;
   char *commit;
 };
 
@@ -70,7 +71,6 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff);
 
 struct RpmRevisionData *
 rpmrev_new (OstreeRepo *repo,
-            GFile *rpmdbdir,
             const char *rev,
             const GPtrArray *patterns,
             GCancellable *cancellable,
