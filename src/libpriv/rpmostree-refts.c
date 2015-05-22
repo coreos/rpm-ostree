@@ -21,40 +21,44 @@
 #include "config.h"
 
 #include <string.h>
-#include "rpmostree-refsack.h"
+#include "rpmostree-refts.h"
 #include "rpmostree-rpm-util.h"
 
-RpmOstreeRefSack *
-rpmostree_refsack_new (HySack sack, int temp_base_dfd, const char *temp_path)
+/*
+ * A wrapper for an `rpmts` that supports:
+ *
+ *  - Reference counting
+ *  - Possibly holding a pointer to a tempdir, and cleaning it when unref'd
+ */
+
+RpmOstreeRefTs *
+rpmostree_refts_new (rpmts ts, int temp_base_dfd, const char *temp_path)
 {
-  RpmOstreeRefSack *rsack = g_new0 (RpmOstreeRefSack, 1);
-  rsack->sack = sack;
-  rsack->refcount = 1;
-  rsack->temp_base_dfd = temp_base_dfd;
-  rsack->temp_path = g_strdup (temp_path);
-  return rsack;
+  RpmOstreeRefTs *rts = g_new0 (RpmOstreeRefTs, 1);
+  rts->ts = ts;
+  rts->refcount = 1;
+  rts->temp_base_dfd = temp_base_dfd;
+  rts->temp_path = g_strdup (temp_path);
+  return rts;
 }
 
-RpmOstreeRefSack *
-rpmostree_refsack_ref (RpmOstreeRefSack *rsack)
+RpmOstreeRefTs *
+rpmostree_refts_ref (RpmOstreeRefTs *rts)
 {
-  g_atomic_int_inc (&rsack->refcount);
-  return rsack;
+  g_atomic_int_inc (&rts->refcount);
+  return rts;
 }
 
 void
-rpmostree_refsack_unref (RpmOstreeRefSack *rsack)
+rpmostree_refts_unref (RpmOstreeRefTs *rts)
 {
-  if (!g_atomic_int_dec_and_test (&rsack->refcount))
+  if (!g_atomic_int_dec_and_test (&rts->refcount))
     return;
-  hy_sack_free (rsack->sack);
+  rpmtsFree (rts->ts);
   
-  /* The sack might point to a temporarily allocated rpmdb copy, if so,
-   * prune it now.
-   */
-  if (rsack->temp_path)
-    (void) glnx_shutil_rm_rf_at (rsack->temp_base_dfd, rsack->temp_path, NULL, NULL);
+  if (rts->temp_path)
+    (void) glnx_shutil_rm_rf_at (rts->temp_base_dfd, rts->temp_path, NULL, NULL);
 
-  g_free (rsack->temp_path);
-  g_free (rsack);
+  g_free (rts->temp_path);
+  g_free (rts);
 }

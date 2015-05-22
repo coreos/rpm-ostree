@@ -27,19 +27,19 @@
 
 typedef struct {
   volatile gint refcount;
-  HySack sack;
+  rpmts ts;
   int temp_base_dfd;
   char *temp_path;
-} RpmOstreeRefSack;
+} RpmOstreeRefTs;
 
-RpmOstreeRefSack *
-rpmostree_refsack_new (HySack sack, int temp_base_dfd, const char *temp_path);
+RpmOstreeRefTs *
+rpmostree_refts_new (rpmts ts, int temp_base_dfd, const char *temp_path);
 
-RpmOstreeRefSack *
-rpmostree_refsack_ref (RpmOstreeRefSack *rsack);
+RpmOstreeRefTs *
+rpmostree_refts_ref (RpmOstreeRefTs *rts);
 
 void
-rpmostree_refsack_unref (RpmOstreeRefSack *rsack);
+rpmostree_refts_unref (RpmOstreeRefTs *rts);
 
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRefSack, rpmostree_refsack_unref);
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRefTs, rpmostree_refts_unref);
 

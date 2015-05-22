@@ -36,6 +36,13 @@
 GS_DEFINE_CLEANUP_FUNCTION0(rpmtd, _cleanup_rpmtdFreeData, rpmtdFreeData);
 #define _cleanup_rpmtddata_ __attribute__((cleanup(_cleanup_rpmtdFreeData)))
 
+struct RpmRevisionData
+{
+  struct RpmHeaders *rpmdb;
+  RpmOstreeRefTs *refts;
+  char *commit;
+};
+
 static int
 header_name_cmp (Header h1, Header h2)
 {
@@ -110,89 +117,11 @@ pkg_nvr_strdup (Header h1)
   return g_strdup_printf ("%s-%s-%s", name, version, release);
 }
 
-static char *
-pkg_yumdb_relpath (Header h1)
-{
-   const char*    name = headerGetString (h1, RPMTAG_NAME);
-   const char* version = headerGetString (h1, RPMTAG_VERSION);
-   const char* release = headerGetString (h1, RPMTAG_RELEASE);
-   const char*    arch = headerGetString (h1, RPMTAG_ARCH);
-   const char*   pkgid = headerGetString (h1, RPMTAG_SHA1HEADER);
-   char *path = NULL;
-
-   g_assert (name[0]);
-
-   // FIXME: sanitize name ... remove '/' and '~'
-
-   // FIXME: If pkgid doesn't exist use: name.buildtime
-
-   path = g_strdup_printf ("%c/%s-%s-%s-%s-%s", name[0],
-                           pkgid, name, version, release, arch);
-
-   return path;
-}
-
-static GInputStream *
-pkg_yumdb_file_read (GFile *root, Header pkg, const char *yumdb_key,
-                     GCancellable   *cancellable,
-                     GError        **error)
-{
-  gs_unref_object GFile *f = NULL;
-  gs_free char *pkgpath = pkg_yumdb_relpath (pkg);
-  gs_free char *path = g_strconcat ("/var/lib/yum/yumdb/", pkgpath, "/",
-                                    yumdb_key, NULL);
-
-  f = g_file_resolve_relative_path (root, path);
-  return (GInputStream*)g_file_read (f, cancellable, error);
-}
-
-static char *
-pkg_yumdb_strdup (GFile *root, Header pkg, const char *yumdb_key)
-{
-  gs_unref_object GFile *f = NULL;
-  gs_free char *pkgpath = pkg_yumdb_relpath (pkg);
-  gs_free char *path = g_strconcat ("/var/lib/yum/yumdb/", pkgpath, "/",
-                                    yumdb_key, NULL);
-  char *ret = NULL;
-
-  f = g_file_resolve_relative_path (root, path);
-
-  // allow_noent returns true for noent, false for other errors.
-  if (!_rpmostree_file_load_contents_utf8_allow_noent (f, &ret, NULL, NULL) || !ret)
-    ret = g_strdup ("");
-
-  return ret;
-}
-
 static void
-pkg_print (GFile *root, Header pkg)
+pkg_print (Header pkg)
 {
   gs_free char *nevra = pkg_nevra_strdup (pkg);
-  gs_free char *from_repo = pkg_yumdb_strdup (root, pkg, "from_repo");
-  gsize align = glnx_console_lines ();
-
-  if (*from_repo)
-    {
-      if (align)
-        {
-          gsize plen = strlen (nevra);
-          gsize rlen = strlen (from_repo) + 1;
-          int off = 0;
-
-          --align; // hacky ... for leading spaces.
-
-          off = align - (plen + rlen);
-
-          if (align > (plen + rlen))
-            printf ("%s%*s@%s\n", nevra, off, "", from_repo);
-          else
-            align = 0;
-        }
-      if (!align)
-        printf ("%s @%s\n", nevra, from_repo);
-    }
-  else
-    printf("%s\n", nevra);
+  printf("%s\n", nevra);
 }
 
 #define CASENCMP_EQ(x, y, n) (g_ascii_strncasecmp (x, y, n) == 0)
@@ -295,27 +224,16 @@ header_cmp_p (gconstpointer gph1, gconstpointer gph2)
 }
 
 static struct RpmHeaders *
-rpmhdrs_new (const char *root, const GPtrArray *patterns)
+rpmhdrs_new (RpmOstreeRefTs *refts, const GPtrArray *patterns)
 {
-  rpmts ts = rpmtsCreate();
-  int status = -1;
   rpmdbMatchIterator iter;
   Header h1;
   GPtrArray *hs = NULL;
   struct RpmHeaders *ret = NULL;
   gsize patprefixlen = pat_fnmatch_prefix (patterns);
 
-  // rpm also aborts on mem errors, so this is fine.
-  g_assert (ts);
-  rpmtsSetVSFlags (ts, _RPMVSF_NODIGESTS | _RPMVSF_NOSIGNATURES);
-
-  // This only fails if root isn't absolute.
-  g_assert (root && root[0] == '/');
-  status = rpmtsSetRootDir (ts, root);
-  g_assert (status == 0);
-
   /* iter = rpmtsInitIterator (ts, RPMTAG_NAME, "yum", 0); */
-  iter = rpmtsInitIterator (ts, RPMDBI_PACKAGES, NULL, 0);
+  iter = rpmtsInitIterator (refts->ts, RPMDBI_PACKAGES, NULL, 0);
 
   hs = g_ptr_array_new_with_free_func (header_free_p);
   while ((h1 = rpmdbNextIterator (iter)))
@@ -336,7 +254,7 @@ rpmhdrs_new (const char *root, const GPtrArray *patterns)
 
   ret = g_malloc0 (sizeof (struct RpmHeaders));
 
-  ret->ts = ts;
+  ret->refts = rpmostree_refts_ref (refts);
   ret->hs = hs;
 
   return ret;
@@ -347,7 +265,7 @@ rpmhdrs_free (struct RpmHeaders *l1)
 {
   g_ptr_array_free (l1->hs, TRUE);
   l1->hs = NULL;
-  l1->ts = rpmtsFree (l1->ts);
+  rpmostree_refts_unref (l1->refts);
 
   g_free (l1);
 }
@@ -432,7 +350,7 @@ rpmhdrs_diff (struct RpmHeaders *l1,
 }
 
 void
-rpmhdrs_list (GFile *root, struct RpmHeaders *l1)
+rpmhdrs_list (struct RpmHeaders *l1)
 {
   int num = 0;
 
@@ -440,12 +358,12 @@ rpmhdrs_list (GFile *root, struct RpmHeaders *l1)
     {
       Header h1 = l1->hs->pdata[num++];
       printf (" ");
-      pkg_print (root, h1);
+      pkg_print (h1);
     }
 }
 
 char *
-rpmhdrs_rpmdbv (GFile *root, struct RpmHeaders *l1,
+rpmhdrs_rpmdbv (struct RpmHeaders *l1,
                 GCancellable   *cancellable,
                 GError        **error)
 {
@@ -457,68 +375,15 @@ rpmhdrs_rpmdbv (GFile *root, struct RpmHeaders *l1,
   while (num < l1->hs->len)
     {
       Header pkg = l1->hs->pdata[num++];
-      gs_unref_object GInputStream *tin = NULL;
-      gs_unref_object GInputStream *din = NULL;
-      char tbuf[1024];
-      char dbuf[1024];
       gs_free char *envra = pkg_envra_strdup (pkg);
-      gsize tbytes_read = 0;
-      gsize dbytes_read = 0;
-      GError *local_error = NULL;
 
       g_checksum_update (checksum, (guint8*)envra, strlen(envra));
-
-      tin = pkg_yumdb_file_read (root, pkg, "checksum_type", cancellable, &local_error);
-
-      /* Tolerate missing database files. */
-      if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        {
-          g_clear_error (&local_error);
-          continue;
-        }
-
-      if (local_error != NULL)
-        {
-          g_propagate_error (error, local_error);
-          goto out;
-        }
-
-      din = pkg_yumdb_file_read (root, pkg, "checksum_data", cancellable,error);
-
-      /* Tolerate missing database files. */
-      if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        {
-          g_clear_error (&local_error);
-          continue;
-        }
-
-      if (local_error != NULL)
-        {
-          g_propagate_error (error, local_error);
-          goto out;
-        }
-
-      if (!g_input_stream_read_all (tin, tbuf, sizeof(tbuf), &tbytes_read,
-                                    cancellable, error))
-        goto out;
-      if (!g_input_stream_read_all (din, dbuf, sizeof(dbuf), &dbytes_read,
-                                    cancellable, error))
-        goto out;
-
-      if (tbytes_read >= 512)
-        continue; // should be == len(md5) or len(sha256) etc.
-      if (dbytes_read >= 1024)
-        continue; // should be digest size of md5/sha256/sha512/etc.
-
-      g_checksum_update (checksum, (guint8*)tbuf, tbytes_read);
-      g_checksum_update (checksum, (guint8*)dbuf, dbytes_read);
     }
 
   checksum_cstr = g_strdup (g_checksum_get_string (checksum));
 
   ret = g_strdup_printf ("%u:%s", num, checksum_cstr);
 
-out:
   g_checksum_free (checksum);
 
   return ret;
@@ -564,8 +429,7 @@ _rpmhdrs_diff_cmp_end (const GPtrArray *hs1, const GPtrArray *hs2)
 }
 
 void
-rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
-                         struct RpmHeadersDiff *diff)
+rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff)
 {
   int num = 0;
 
@@ -611,7 +475,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
             }
 
           printf (" ");
-          pkg_print (root2, hn);
+          pkg_print (hn);
 
           // Load the old %changelog entries
           ochanges_date = &ochanges_date_s;
@@ -693,7 +557,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
             }
 
           printf (" ");
-          pkg_print (root2, hn);
+          pkg_print (hn);
         }
     }
 
@@ -706,7 +570,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
           Header hd = diff->hs_del->pdata[num];
 
           printf (" ");
-          pkg_print (root1, hd);
+          pkg_print (hd);
         }
     }
 
@@ -719,7 +583,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
           Header ha = diff->hs_add->pdata[num];
 
           printf (" ");
-          pkg_print (root2, ha);
+          pkg_print (ha);
         }
     }
 
@@ -727,7 +591,7 @@ rpmhdrs_diff_prnt_block (GFile *root1, GFile *root2,
 }
 
 void
-rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff)
+rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
 {
   _gptr_array_reverse (diff->hs_add);
   _gptr_array_reverse (diff->hs_del);
@@ -746,11 +610,11 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff)
             Header hm = diff->hs_mod_old->pdata[diff->hs_mod_old->len-1];
 
             printf("!");
-            pkg_print (root1, hm);
+            pkg_print (hm);
             g_ptr_array_remove_index(diff->hs_mod_old, diff->hs_mod_old->len-1);
             printf("=");
             hm = diff->hs_mod_new->pdata[diff->hs_mod_new->len-1];
-            pkg_print (root2, hm);
+            pkg_print (hm);
             g_ptr_array_remove_index(diff->hs_mod_new, diff->hs_mod_new->len-1);
           }
         else
@@ -758,7 +622,7 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff)
             Header ha = diff->hs_add->pdata[diff->hs_add->len-1];
 
             printf ("+");
-            pkg_print (root2, ha);
+            pkg_print (ha);
             g_ptr_array_remove_index(diff->hs_add, diff->hs_add->len-1);
           }
       else
@@ -767,7 +631,7 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff)
             Header hd = diff->hs_del->pdata[diff->hs_del->len-1];
 
             printf ("-");
-            pkg_print (root1, hd);
+            pkg_print (hd);
             g_ptr_array_remove_index(diff->hs_del, diff->hs_del->len-1);
           }
         else
@@ -775,7 +639,7 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff)
             Header ha = diff->hs_add->pdata[diff->hs_add->len-1];
 
             printf ("+");
-            pkg_print (root2, ha);
+            pkg_print (ha);
             g_ptr_array_remove_index(diff->hs_add, diff->hs_add->len-1);
           }
     }
@@ -784,95 +648,133 @@ rpmhdrs_diff_prnt_diff (GFile *root1, GFile *root2, struct RpmHeadersDiff *diff)
 }
 
 struct RpmRevisionData *
-rpmrev_new (OstreeRepo *repo, GFile *rpmdbdir, const char *rev,
+rpmrev_new (OstreeRepo *repo, const char *rev,
             const GPtrArray *patterns,
             GCancellable   *cancellable,
             GError        **error)
 {
-  gs_unref_object GFile *subtree = NULL;
-  gs_unref_object GFileInfo *file_info = NULL;
-  gs_unref_object GFile *targetp = NULL;
-  gs_unref_object GFile *target = NULL;
-  gs_free char *targetp_path = NULL;
-  gs_free char *target_path = NULL;
-  gs_unref_object GFile *revdir = NULL;
-  GError *tmp_error = NULL;
   struct RpmRevisionData *rpmrev = NULL;
-  gs_unref_object GFile *root = NULL;
-  gs_free char *commit = NULL;
+  g_autofree char *commit = NULL;
+  g_autoptr(RpmOstreeRefTs) refts = NULL;
 
-  if (!ostree_repo_read_commit (repo, rev, &root, &commit, NULL, error))
+  if (!ostree_repo_resolve_rev (repo, rev, FALSE, &commit, error))
     goto out;
 
-  subtree = g_file_resolve_relative_path (root, "/var/lib/rpm");
-  if (!g_file_query_exists (subtree, cancellable))
-    {
-      g_object_unref (subtree);
-      subtree = g_file_resolve_relative_path (root, "/usr/share/rpm");
-    }
-
-  file_info = g_file_query_info (subtree, OSTREE_GIO_FAST_QUERYINFO,
-                                 G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                 cancellable, &tmp_error);
-  if (!file_info) // g_file_query_exists (subtree, cancellable))
-  {
-    g_propagate_error (error, tmp_error);
-    //    g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-    //                 "No rpmdb directory found");
-    goto out;
-  }
-
-  revdir = g_file_resolve_relative_path (rpmdbdir, commit);
-
-  targetp_path = g_strconcat (commit, "/var/lib", NULL);
-  targetp = g_file_resolve_relative_path (rpmdbdir, targetp_path);
-  target_path = g_strconcat (commit, "/var/lib/rpm", NULL);
-  target = g_file_resolve_relative_path (rpmdbdir, target_path);
-  if (!g_file_query_exists (target, cancellable) &&
-      (!gs_file_ensure_directory (targetp, TRUE, cancellable, error) ||
-       !ostree_repo_checkout_tree (repo, OSTREE_REPO_CHECKOUT_MODE_USER,
-                                   OSTREE_REPO_CHECKOUT_OVERWRITE_NONE,
-                                   target, OSTREE_REPO_FILE (subtree),
-                                   file_info, cancellable, error)))
+  if (!rpmostree_get_refts_for_commit (repo, commit, &refts, cancellable, error))
     goto out;
 
   rpmrev = g_malloc0 (sizeof(struct RpmRevisionData));
-
-  rpmrev->root   = root;   root = NULL;
-  rpmrev->commit = commit; commit = NULL;
-  rpmrev->rpmdb  = rpmhdrs_new (gs_file_get_path_cached (revdir), patterns);
+  rpmrev->refts = refts;
+  refts = NULL;
+  rpmrev->commit = commit;
+  commit = NULL;
+  rpmrev->rpmdb = rpmhdrs_new (rpmrev->refts, patterns);
 
  out:
   return rpmrev;
 }
 
+struct RpmHeaders *
+rpmrev_get_headers (struct RpmRevisionData *self)
+{
+  return self->rpmdb;
+}
+
+const char *
+rpmrev_get_commit (struct RpmRevisionData *self)
+{
+  return self->commit;
+}
+
 void
 rpmrev_free (struct RpmRevisionData *ptr)
 {
-  gs_unref_object GFile *root = NULL;
-  gs_free char *commit = NULL;
-
   if (!ptr)
     return;
 
   rpmhdrs_free (ptr->rpmdb);
   ptr->rpmdb = NULL;
 
-  root = ptr->root;
-  ptr->root = NULL;
+  rpmostree_refts_unref (ptr->refts);
 
-  commit = ptr->commit;
-  ptr->commit = NULL;
+  g_clear_pointer (&ptr->commit, g_free);
 
   g_free (ptr);
 }
 
 gboolean
-rpmostree_get_sack_for_root (int               dfd,
-                             const char       *path,
-                             HySack           *out_sack,
-                             GCancellable     *cancellable,
-                             GError          **error)
+rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
+                                       const char       *ref,
+                                       char            **out_tempdir,
+                                       int              *out_tempdir_dfd,
+                                       GCancellable     *cancellable,
+                                       GError          **error)
+{
+  gboolean ret = FALSE;
+  g_autofree char *commit = NULL;
+  g_autofree char *tempdir = g_strdup ("/tmp/rpmostree-dbquery-XXXXXXXX");
+  gboolean created_tmpdir = FALSE;
+  OstreeRepoCheckoutOptions checkout_options = { 0, };
+  glnx_fd_close int tempdir_dfd = -1;
+
+  g_return_val_if_fail (out_tempdir != NULL, FALSE);
+
+  if (!ostree_repo_resolve_rev (repo, ref, FALSE, &commit, error))
+    goto out;
+
+  if (mkdtemp (tempdir) == NULL)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
+  created_tmpdir = TRUE;
+
+  if (!glnx_opendirat (AT_FDCWD, tempdir, FALSE, &tempdir_dfd, error))
+    goto out;
+
+  /* Create intermediate dirs */ 
+  if (!glnx_shutil_mkdir_p_at (tempdir_dfd, "usr/share", 0777, cancellable, error))
+    goto out;
+
+  checkout_options.mode = OSTREE_REPO_CHECKOUT_MODE_USER;
+  checkout_options.subpath = "usr/share/rpm";
+
+  if (!ostree_repo_checkout_tree_at (repo, &checkout_options,
+                                     tempdir_dfd, "usr/share/rpm",
+                                     commit, 
+                                     cancellable, error))
+    goto out;
+
+  /* And make a compat symlink to keep rpm happy */ 
+  if (!glnx_shutil_mkdir_p_at (tempdir_dfd, "var/lib", 0777, cancellable, error))
+    goto out;
+
+  if (symlinkat ("../../usr/share/rpm", tempdir_dfd, "var/lib/rpm") == -1)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
+
+  *out_tempdir = tempdir;
+  tempdir = NULL;
+  if (out_tempdir_dfd)
+    {
+      *out_tempdir_dfd = tempdir_dfd;
+      tempdir_dfd = -1;
+    }
+  ret = TRUE;
+ out:
+  if (created_tmpdir && tempdir)
+    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
+  return ret;
+}
+
+static gboolean
+get_sack_for_root (int               dfd,
+                   const char       *path,
+                   HySack           *out_sack,
+                   GCancellable     *cancellable,
+                   GError          **error)
 {
   gboolean ret = FALSE;
   int rc;
@@ -911,29 +813,108 @@ rpmostree_get_sack_for_root (int               dfd,
   return ret;
 }
 
+RpmOstreeRefSack *
+rpmostree_get_refsack_for_root (int              dfd,
+                                const char      *path,
+                                GCancellable    *cancellable,
+                                GError         **error)
+{
+  RpmOstreeRefSack *ret = NULL;
+  HySack sack;
+
+  if (!get_sack_for_root (dfd, path,
+                          &sack, cancellable, error))
+    goto out;
+
+  ret = rpmostree_refsack_new (sack, AT_FDCWD, NULL);
+ out:
+  return ret;
+}
+
+
+RpmOstreeRefSack *
+rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
+                                  const char                *ref,
+                                  GCancellable              *cancellable,
+                                  GError                   **error)
+{
+  RpmOstreeRefSack *ret = NULL;
+  g_autofree char *tempdir = NULL;
+  glnx_fd_close int tempdir_dfd = -1;
+  HySack hsack; 
+  
+  if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref, &tempdir, &tempdir_dfd,
+                                              cancellable, error))
+    goto out;
+  
+  if (!get_sack_for_root (tempdir_dfd, ".",
+                          &hsack, cancellable, error))
+    goto out;
+
+  ret = rpmostree_refsack_new (hsack, AT_FDCWD, tempdir);
+  tempdir = NULL; /* Transfer ownership */
+ out:
+  if (tempdir)
+    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
+  return ret;
+}
+
+gboolean
+rpmostree_get_refts_for_commit (OstreeRepo                *repo,
+                                const char                *ref,
+                                RpmOstreeRefTs           **out_ts,
+                                GCancellable              *cancellable,
+                                GError                   **error)
+{
+  gboolean ret = FALSE;
+  g_autofree char *tempdir = NULL;
+  rpmts ts;
+  int r;
+  
+  if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref, &tempdir, NULL,
+                                              cancellable, error))
+    goto out;
+
+  ts = rpmtsCreate ();
+  /* This actually makes sense because we know we've verified it at build time */
+  rpmtsSetVSFlags (ts, _RPMVSF_NODIGESTS | _RPMVSF_NOSIGNATURES);
+
+  r = rpmtsSetRootDir (ts, tempdir);
+  g_assert_cmpint (r, ==, 0);
+  
+  ret = TRUE;
+  *out_ts = rpmostree_refts_new (ts, AT_FDCWD, tempdir);
+  tempdir = NULL; /* Transfer ownership */
+ out:
+  if (tempdir)
+    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
+  return ret;
+}
+
 gboolean
 rpmostree_get_pkglist_for_root (int               dfd,
                                 const char       *path,
-                                HySack           *out_sack,
+                                RpmOstreeRefSack **out_refsack,
                                 HyPackageList    *out_pkglist,
                                 GCancellable     *cancellable,
                                 GError          **error)
 {
   gboolean ret = FALSE;
-  _cleanup_hysack_ HySack sack = NULL;
+  g_autoptr(RpmOstreeRefSack) refsack = NULL;
   _cleanup_hyquery_ HyQuery query = NULL;
   _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
   g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
 
-  if (!rpmostree_get_sack_for_root (dfd, path, &sack, cancellable, error))
+  refsack = rpmostree_get_refsack_for_root (dfd, path, cancellable, error);
+  if (!refsack)
     goto out;
 
-  query = hy_query_create (sack);
+  query = hy_query_create (refsack->sack);
   hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
   pkglist = hy_query_run (query);
 
   ret = TRUE;
-  gs_transfer_out_value (out_sack, &sack);
+  gs_transfer_out_value (out_refsack, &refsack);
   gs_transfer_out_value (out_pkglist, &pkglist);
  out:
   return ret;

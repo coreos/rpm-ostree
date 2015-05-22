@@ -36,11 +36,9 @@ static RpmOstreeDbCommand rpm_subcommands[] = {
 };
 
 static char *opt_repo;
-static char *opt_rpmdbdir;
 
 static GOptionEntry global_entries[] = {
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository (defaults to /sysroot/ostree/repo)", "PATH" },
-  { "rpmdbdir", 0, 0, G_OPTION_ARG_STRING, &opt_rpmdbdir, "Working directory for rpm", "WORKDIR" },
   { NULL }
 };
 
@@ -73,13 +71,9 @@ rpmostree_db_option_context_parse (GOptionContext *context,
                                    const GOptionEntry *main_entries,
                                    int *argc, char ***argv,
                                    OstreeRepo **out_repo,
-                                   GFile **out_rpmdbdir,
-                                   gboolean *out_rpmdbdir_is_tmp,
                                    GCancellable *cancellable, GError **error)
 {
   gs_unref_object OstreeRepo *repo = NULL;
-  gs_unref_object GFile *rpmdbdir = NULL;
-  gboolean rpmdbdir_is_tmp = FALSE;
   gboolean success = FALSE;
 
   /* Entries are listed in --help output in the order added.  We add the
@@ -117,28 +111,9 @@ rpmostree_db_option_context_parse (GOptionContext *context,
       goto out;
     }
 
-  if (opt_rpmdbdir != NULL)
-    {
-      rpmdbdir = g_file_new_for_path (opt_rpmdbdir);
-    }
-  else
-    {
-      /* tmp on tmpfs is much faster than /var/tmp,
-       * and the rpmdb itself shouldn't be too big. */
-      gs_free char *tmpd = g_mkdtemp (g_strdup ("/tmp/rpm-ostree.XXXXXX"));
-      rpmdbdir = g_file_new_for_path (tmpd);
-      rpmdbdir_is_tmp = TRUE;
-      ostree_repo_set_disable_fsync (repo, TRUE);
-    }
-
   gs_transfer_out_value (out_repo, &repo);
-  gs_transfer_out_value (out_rpmdbdir, &rpmdbdir);
-
-  if (out_rpmdbdir_is_tmp != NULL)
-    *out_rpmdbdir_is_tmp = rpmdbdir_is_tmp;
 
   success = TRUE;
-
 out:
   return success;
 }

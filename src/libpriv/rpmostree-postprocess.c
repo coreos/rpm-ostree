@@ -36,6 +36,7 @@
 
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
+#include "rpmostree-pkgobject-cache.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-cleanup.h"
 #include "rpmostree-json-parsing.h"
@@ -1017,7 +1018,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
 
 static gboolean
 handle_remove_files_from_package (GFile         *yumroot,
-                                  HySack         sack,
+                                  RpmOstreeRefSack *refsack,
                                   JsonArray     *removespec,
                                   GCancellable  *cancellable,
                                   GError       **error)
@@ -1030,7 +1031,7 @@ handle_remove_files_from_package (GFile         *yumroot,
   _cleanup_hyquery_ HyQuery query = NULL;
   _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
       
-  query = hy_query_create (sack);
+  query = hy_query_create (refsack->sack);
   hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkg);
   pkglist = hy_query_run (query);
   npackages = hy_packagelist_count (pkglist);
@@ -1215,7 +1216,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
 
   if (json_object_has_member (treefile, "remove-from-packages"))
     {
-      _cleanup_hysack_ HySack sack = NULL;
+      g_autoptr(RpmOstreeRefSack) refsack = NULL;
       _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
       guint i;
 
@@ -1223,7 +1224,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
       len = json_array_get_length (remove);
 
       if (!rpmostree_get_pkglist_for_root (AT_FDCWD, gs_file_get_path_cached (yumroot),
-                                           &sack, &pkglist,
+                                           &refsack, &pkglist,
                                            cancellable, error))
         {
           g_prefix_error (error, "Reading package set: ");
@@ -1233,7 +1234,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
       for (i = 0; i < len; i++)
         {
           JsonArray *elt = json_array_get_array_element (remove, i);
-          if (!handle_remove_files_from_package (yumroot, sack, elt, cancellable, error))
+          if (!handle_remove_files_from_package (yumroot, refsack, elt, cancellable, error))
             goto out;
         }
     }
@@ -1371,6 +1372,26 @@ read_xattrs_cb (OstreeRepo     *repo,
   return g_variant_ref_sink (g_variant_builder_end (&builder));
 }
 
+typedef struct {
+  RpmOstreePkgObjectCache *cache;
+  guint hits;
+  guint total;
+} CacheState;
+
+static char *
+file_cache_callback (OstreeRepo           *self,
+                     const char           *path,
+                     gpointer              user_data)
+{
+  CacheState *state = user_data;
+  char *ret = g_strdup (_rpmostree_pkg_object_cache_query (state->cache, path));
+
+  if (ret)
+    state->hits++;
+  state->total++;
+  return ret;
+}
+
 gboolean
 rpmostree_commit (GFile         *rootfs,
                   OstreeRepo    *repo,
@@ -1378,12 +1399,14 @@ rpmostree_commit (GFile         *rootfs,
                   GVariant      *metadata,
                   const char    *gpg_keyid,
                   gboolean       enable_selinux,
+                  const char    *previous_checksum,
                   GCancellable  *cancellable,
                   GError       **error)
 {
   gboolean ret = FALSE;
   gs_unref_object OstreeMutableTree *mtree = NULL;
   OstreeRepoCommitModifier *commit_modifier = NULL;
+  CacheState cachestate = { NULL, };
   gs_free char *parent_revision = NULL;
   gs_free char *new_revision = NULL;
   gs_unref_object GFile *root_tree = NULL;
@@ -1408,8 +1431,25 @@ rpmostree_commit (GFile         *rootfs,
   if (!gs_file_open_dir_fd (rootfs, &rootfs_fd, cancellable, error))
     goto out;
 
-  mtree = ostree_mutable_tree_new ();
   commit_modifier = ostree_repo_commit_modifier_new (0, NULL, NULL, NULL);
+
+  if (previous_checksum)
+    {
+      cachestate.cache = _rpmostree_pkg_object_cache_new ();
+      
+      if (!_rpmostree_pkg_object_cache_load_source (cachestate.cache, repo, previous_checksum,
+                                                    cancellable, error))
+        goto out;
+
+      if (!_rpmostree_pkg_object_cache_load_target (cachestate.cache, rootfs_fd, cancellable, error))
+        goto out;
+
+      ostree_repo_commit_modifier_set_file_cache_callback (commit_modifier,
+                                                           file_cache_callback, NULL,
+                                                           &cachestate);
+    }
+
+  mtree = ostree_mutable_tree_new ();
   ostree_repo_commit_modifier_set_xattr_callback (commit_modifier,
                                                   read_xattrs_cb, NULL,
                                                   GINT_TO_POINTER (rootfs_fd));
@@ -1433,6 +1473,9 @@ rpmostree_commit (GFile         *rootfs,
                                  cancellable, error))
     goto out;
 
+  if (cachestate.cache)
+    g_print ("Cache hits: %u/%u\n", cachestate.hits, cachestate.total);
+
   if (gpg_keyid)
     {
       g_print ("Signing commit %s with key %s\n", new_revision, gpg_keyid);
@@ -1455,5 +1498,7 @@ rpmostree_commit (GFile         *rootfs,
 
   ret = TRUE;
  out:
+  if (cachestate.cache)
+    _rpmostree_pkg_object_cache_free (cachestate.cache);
   return ret;
 }
