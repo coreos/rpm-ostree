@@ -24,6 +24,7 @@
 
 RPMOSTreeTransaction * new_transaction (GDBusMethodInvocation *invocation,
                                         GCancellable *method_cancellable,
+                                        OstreeAsyncProgress **out_progress,
                                         GError **error);
 
 gchar *    utils_generate_object_path     (const gchar  *base,

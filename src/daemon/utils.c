@@ -32,9 +32,86 @@ handle_cancel_cb (RPMOSTreeTransaction *transaction,
   return TRUE;
 }
 
+static void
+progress_changed_cb (OstreeAsyncProgress *progress,
+                     RPMOSTreeTransaction *transaction)
+{
+  guint64 start_time = ostree_async_progress_get_uint64 (progress, "start-time");
+  guint64 elapsed_secs = 0;
+
+  guint outstanding_fetches = ostree_async_progress_get_uint (progress, "outstanding-fetches");
+  guint outstanding_writes = ostree_async_progress_get_uint (progress, "outstanding-writes");
+
+  guint n_scanned_metadata = ostree_async_progress_get_uint (progress, "scanned-metadata");
+  guint metadata_fetched = ostree_async_progress_get_uint (progress, "metadata-fetched");
+  guint outstanding_metadata_fetches = ostree_async_progress_get_uint (progress, "outstanding-metadata-fetches");
+
+  guint total_delta_parts = ostree_async_progress_get_uint (progress, "total-delta-parts");
+  guint fetched_delta_parts = ostree_async_progress_get_uint (progress, "fetched-delta-parts");
+  guint total_delta_superblocks = ostree_async_progress_get_uint (progress, "total-delta-superblocks");
+  guint64 total_delta_part_size = ostree_async_progress_get_uint64 (progress, "total-delta-part-size");
+
+  guint fetched = ostree_async_progress_get_uint (progress, "fetched");
+  guint requested = ostree_async_progress_get_uint (progress, "requested");
+
+  guint64 bytes_sec = 0;
+  guint64 bytes_transferred = ostree_async_progress_get_uint64 (progress, "bytes-transferred");
+
+  GVariant *arg_time;
+  GVariant *arg_outstanding;
+  GVariant *arg_metadata;
+  GVariant *arg_delta;
+  GVariant *arg_content;
+  GVariant *arg_transfer;
+
+  if (start_time)
+    {
+      guint64 elapsed_secs = (g_get_monotonic_time () - start_time) / G_USEC_PER_SEC;
+      if (elapsed_secs)
+        bytes_sec = bytes_transferred / elapsed_secs;
+    }
+
+  arg_time = g_variant_new ("(tt)",
+                            start_time,
+                            elapsed_secs);
+
+  arg_outstanding = g_variant_new ("(uu)",
+                                   outstanding_fetches,
+                                   outstanding_writes);
+
+  arg_metadata = g_variant_new ("(uuu)",
+                                n_scanned_metadata,
+                                metadata_fetched,
+                                outstanding_metadata_fetches);
+
+  arg_delta = g_variant_new ("(uuut)",
+                             total_delta_parts,
+                             fetched_delta_parts,
+                             total_delta_superblocks,
+                             total_delta_part_size);
+
+  arg_content = g_variant_new ("(uu)",
+                               fetched,
+                               requested);
+
+  arg_transfer = g_variant_new ("(tt)",
+                                bytes_transferred,
+                                bytes_sec);
+
+  /* This sinks the floating GVariant refs (I think...). */
+  rpmostree_transaction_emit_download_progress (transaction,
+                                                arg_time,
+                                                arg_outstanding,
+                                                arg_metadata,
+                                                arg_delta,
+                                                arg_content,
+                                                arg_transfer);
+}
+
 RPMOSTreeTransaction *
 new_transaction (GDBusMethodInvocation *invocation,
                  GCancellable *method_cancellable,
+                 OstreeAsyncProgress **out_progress,
                  GError **error)
 {
   RPMOSTreeTransaction *transaction;
@@ -63,6 +140,20 @@ new_transaction (GDBusMethodInvocation *invocation,
                                "handle-cancel",
                                G_CALLBACK (handle_cancel_cb),
                                method_cancellable, 0);
+    }
+
+  if (out_progress != NULL)
+    {
+      OstreeAsyncProgress *progress;
+
+      progress = ostree_async_progress_new ();
+
+      g_signal_connect_object (progress,
+                               "changed",
+                               G_CALLBACK (progress_changed_cb),
+                               transaction, 0);
+
+      *out_progress = g_steal_pointer (&progress);
     }
 
   if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (transaction),
