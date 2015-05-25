@@ -22,6 +22,16 @@ librpmostreed_la_SOURCES = \
 	src/daemon/daemon.c \
 	src/daemon/utils.h \
 	src/daemon/utils.c \
+	src/daemon/sysroot.h \
+	src/daemon/sysroot.c \
+	src/daemon/errors.h \
+	src/daemon/errors.c \
+	src/daemon/auth.h \
+	src/daemon/auth.c \
+	src/daemon/deployment-utils.h \
+	src/daemon/deployment-utils.c \
+	src/daemon/os.h \
+	src/daemon/os.c \
 	$(NULL)
 
 librpmostreed_la_CFLAGS = \

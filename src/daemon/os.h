@@ -16,24 +16,19 @@
 * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 */
 
-#ifndef RPM_OSTREED_TYPES_H__
-#define RPM_OSTREED_TYPES_H__
+#ifndef RPM_OSTREED_OSSTUB_H__
+#define RPM_OSTREED_OSSTUB_H__
 
-#include <glib-unix.h>
-#include <gio/gio.h>
+#include "types.h"
 
-#include "rpm-ostreed-generated.h"
+G_BEGIN_DECLS
 
-#include <stdint.h>
-#include <string.h>
+#define TYPE_OSSTUB   (osstub_get_type ())
+#define OSSTUB(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), TYPE_OSSTUB, OSSTUB))
+#define IS_OSSTUB(o)  (G_TYPE_CHECK_INSTANCE_TYPE ((o), TYPE_OSSTUB))
 
-struct _Daemon;
-typedef struct _Daemon Daemon;
+GType             osstub_get_type                  (void) G_GNUC_CONST;
 
-struct _Sysroot;
-typedef struct _Sysroot Sysroot;
+G_END_DECLS
 
-struct _OSStub;
-typedef struct _OSStub OSStub;
-
-#endif /* RPM_OSTREED_TYPES_H__ */
+#endif /* RPM_OSTREED_OS_H__ */

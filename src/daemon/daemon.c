@@ -19,7 +19,9 @@
 #include "config.h"
 
 #include "daemon.h"
+#include "sysroot.h"
 #include "types.h"
+#include "utils.h"
 
 #include "libgsystem.h"
 
@@ -59,6 +61,7 @@ struct _Daemon
   GMutex mutex;
   gint num_tasks;
 
+  Sysroot *sysroot;
   gchar *sysroot_path;
 
   GDBusConnection *connection;
@@ -98,6 +101,8 @@ daemon_finalize (GObject *object)
 
   g_clear_object (&self->object_manager);
   self->object_manager = NULL;
+
+  g_clear_object (&self->sysroot);
 
   g_object_unref (self->connection);
 
@@ -171,6 +176,7 @@ daemon_init (Daemon *self)
   self->num_tasks = 0;
   self->last_message = g_get_monotonic_time ();
   self->sysroot_path = NULL;
+  self->sysroot = NULL;
 
   g_mutex_init (&self->mutex);
 }
@@ -192,7 +198,21 @@ daemon_constructed (GObject *_object)
 
   g_dbus_connection_start_message_processing (self->connection);
 
+  path = utils_generate_object_path(BASE_DBUS_PATH, "Sysroot", NULL);
+  self->sysroot = g_object_new (TYPE_SYSROOT,
+      	                        "sysroot-path", self->sysroot_path,
+                                NULL);
+
+  if (!sysroot_populate (sysroot_get (), &error))
+    {
+      g_error ("Error setting up sysroot: %s", error->message);
+      goto out;
+    }
+
+  daemon_publish (self, path, FALSE, self->sysroot);
   g_debug ("daemon constructed");
+
+out:
   g_clear_error (&error);
 }
 
