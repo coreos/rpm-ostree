@@ -124,6 +124,7 @@ handle_create_osname (RPMOSTreeSysroot *object,
   gs_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GFile) dir = NULL;
   gs_free gchar *deploy_dir = NULL;
+  gs_free gchar *base_name = NULL;
 
   GError *error = NULL;
   gs_free gchar *dbus_path = NULL;
@@ -141,6 +142,16 @@ handle_create_osname (RPMOSTreeSysroot *object,
                                           self->cancellable,
                                           &error))
     goto out;
+
+  base_name = g_path_get_basename(osname);
+  if (g_strcmp0 (base_name, osname) != 0)
+    {
+      g_set_error_literal (&error,
+                           RPM_OSTREED_ERROR,
+                           RPM_OSTREED_ERROR_FAILED,
+                           "Invalid osname");
+      goto out;
+    }
 
   // TODO: The operations here are copied from ostree init-os
   // command, should be refactored into shared code
