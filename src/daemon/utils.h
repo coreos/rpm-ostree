@@ -22,8 +22,20 @@
 
 #include "types.h"
 
-char * deployment_generate_id (OstreeDeployment *deployment);
-
 RPMOSTreeTransaction * new_transaction (GDBusMethodInvocation *invocation,
                                         GCancellable *method_cancellable,
                                         GError **error);
+
+gchar *    utils_generate_object_path     (const gchar  *base,
+                                           const gchar  *part,
+                                           ...);
+
+gchar *    utils_generate_object_path_from_va   (const gchar *base,
+                                                 const gchar  *part,
+                                                 va_list va);
+
+gboolean   utils_load_sysroot_and_repo          (gchar *path,
+                                                 GCancellable *cancellable,
+                                                 OstreeSysroot **out_sysroot,
+                                                 OstreeRepo **out_repo,
+                                                 GError **error);
