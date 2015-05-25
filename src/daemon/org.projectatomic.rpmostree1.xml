@@ -14,8 +14,18 @@
       <arg type="o" name="result" direction="out"/>
     </method>
 
-    <!-- All deployments in boot order -->
-    <property name="Deployments" type="a(ss)" access="read"/>
+    <!-- All deployments in boot order
+         deployment format:
+         s - Deployment id
+         s - OSName
+         i - Serial
+         s - Checksum
+         s - Version
+         t - Timestamp
+         s - Origin Refspec
+         av - Signature information
+    -->
+    <property name="Deployments" type="a(ssisstsav)" access="read"/>
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.OS">
@@ -72,7 +82,7 @@
   <interface name="org.projectatomic.rpmostree1.Transaction">
     <property name="Method" type="s" access="read"/>
     <property name="InitiatingOwner" type="s" access="read"/>
-    
+
     <!-- Yes, we can. -->
     <method name="Cancel">
     </method>
