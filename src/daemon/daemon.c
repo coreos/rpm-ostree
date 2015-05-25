@@ -294,3 +294,126 @@ daemon_release (Daemon *self)
   if (self->use_count == 0)
     g_signal_emit (self, signals[FINISHED], 0);
 }
+
+void
+daemon_publish (Daemon *self,
+                const gchar *path,
+                gboolean uniquely,
+                gpointer thing)
+{
+  GDBusInterface *prev = NULL;
+  GDBusInterfaceInfo *info = NULL;
+  GDBusObjectSkeleton *object = NULL;
+
+  g_return_if_fail (IS_DAEMON (self));
+  g_return_if_fail (path != NULL);
+
+  if (G_IS_DBUS_INTERFACE (thing))
+    {
+      g_debug ("%spublishing iface: %s %s", uniquely ? "uniquely " : "", path,
+               g_dbus_interface_get_info (thing)->name);
+
+      object = G_DBUS_OBJECT_SKELETON (g_dbus_object_manager_get_object (G_DBUS_OBJECT_MANAGER (self->object_manager), path));
+      if (object != NULL)
+        {
+          if (uniquely)
+            {
+              info = g_dbus_interface_get_info (thing);
+              prev = g_dbus_object_get_interface (G_DBUS_OBJECT (object), info->name);
+              if (prev)
+                {
+                  g_object_unref (prev);
+                  g_object_unref (object);
+                  object = NULL;
+                }
+            }
+        }
+
+      if (object == NULL)
+        object = g_dbus_object_skeleton_new (path);
+
+      g_dbus_object_skeleton_add_interface (object, thing);
+    }
+  else
+    {
+      g_critical ("Unsupported type to publish: %s", G_OBJECT_TYPE_NAME (thing));
+      return;
+    }
+
+  if (uniquely)
+    g_dbus_object_manager_server_export_uniquely (self->object_manager, object);
+  else
+    g_dbus_object_manager_server_export (self->object_manager, object);
+
+  if (object)
+    g_object_unref (object);
+}
+
+GDBusInterface *
+daemon_get_interface (Daemon *self,
+                      const gchar *object_path,
+                      const gchar *interface_name)
+{
+  return g_dbus_object_manager_get_interface (G_DBUS_OBJECT_MANAGER (self->object_manager),
+                                              object_path, interface_name);
+}
+
+void
+daemon_unpublish (Daemon *self,
+                  const gchar *path,
+                  gpointer thing)
+{
+  GDBusObject *object;
+  gboolean unexport = FALSE;
+  GList *interfaces, *l;
+
+  g_return_if_fail (IS_DAEMON (self));
+  g_return_if_fail (path != NULL);
+
+  if (self->object_manager == NULL)
+    return;
+
+  object = g_dbus_object_manager_get_object (G_DBUS_OBJECT_MANAGER (self->object_manager), path);
+  if (object == NULL)
+    return;
+
+  path = g_dbus_object_get_object_path (G_DBUS_OBJECT (object));
+  if (G_IS_DBUS_INTERFACE (thing))
+    {
+      g_debug ("unpublishing interface: %s %s", path,
+               g_dbus_interface_get_info (thing)->name);
+
+      unexport = TRUE;
+
+      interfaces = g_dbus_object_get_interfaces (object);
+      for (l = interfaces; l != NULL; l = g_list_next (l))
+        {
+          if (G_DBUS_INTERFACE (l->data) != G_DBUS_INTERFACE (thing))
+            unexport = FALSE;
+        }
+      g_list_free_full (interfaces, g_object_unref);
+
+      /*
+      * HACK: GDBusObjectManagerServer is broken ... and sends InterfaceRemoved
+      * too many times, if you remove all interfaces manually, and then unexport
+      * a GDBusObject. So only do it here if we're not unexporting the object.
+      */
+      if (!unexport)
+        g_dbus_object_skeleton_remove_interface (G_DBUS_OBJECT_SKELETON (object), thing);
+      else
+        g_debug ("(unpublishing object, too)");
+    }
+  else if (thing == NULL)
+    {
+      unexport = TRUE;
+    }
+  else
+    {
+      g_critical ("Unsupported type to unpublish: %s", G_OBJECT_TYPE_NAME (thing));
+    }
+
+  if (unexport)
+    g_dbus_object_manager_server_unexport (self->object_manager, path);
+
+  g_object_unref (object);
+}
