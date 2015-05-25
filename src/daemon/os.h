@@ -24,10 +24,13 @@
 G_BEGIN_DECLS
 
 #define TYPE_OSSTUB   (osstub_get_type ())
-#define OSSTUB(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), TYPE_OSSTUB, OSSTUB))
+#define OSSTUB(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), TYPE_OSSTUB, OSStub))
 #define IS_OSSTUB(o)  (G_TYPE_CHECK_INSTANCE_TYPE ((o), TYPE_OSSTUB))
 
 GType             osstub_get_type                  (void) G_GNUC_CONST;
+RPMOSTreeOS *     osstub_new                       (OstreeSysroot *sysroot,
+                                                    const char *name);
+OstreeSysroot *   osstub_ref_sysroot               (OSStub *self);
 
 G_END_DECLS
 

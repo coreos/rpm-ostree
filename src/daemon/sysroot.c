@@ -466,7 +466,7 @@ sysroot_load_internals (Sysroot *self,
           gs_free gchar *path = utils_generate_object_path (BASE_DBUS_PATH,
                                                             os, NULL);
           //TODO: stub for real OS implementation
-          RPMOSTreeOS *obj = RPMOSTREE_OS (g_object_new (TYPE_OSSTUB, NULL));
+          RPMOSTreeOS *obj = osstub_new (ot_sysroot, os);
           g_hash_table_insert(self->os_interfaces,
                               g_strdup (os),
                               obj);
