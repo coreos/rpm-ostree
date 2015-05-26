@@ -284,6 +284,10 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
           hif_source_set_enabled (src, HIF_SOURCE_ENABLED_NONE);
         else
           hif_source_set_enabled (src, HIF_SOURCE_ENABLED_PACKAGES);
+        
+#ifdef HAVE_HIF_SOURCE_SET_REQUIRED
+        hif_source_set_required (src, TRUE);
+#endif
       }
   }
 
