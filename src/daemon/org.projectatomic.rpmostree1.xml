@@ -14,6 +14,11 @@
       <arg type="o" name="result" direction="out"/>
     </method>
 
+    <method name="GetOS">
+      <arg name="name" type="s"/>
+      <arg name="object_path" type="o" direction="out"/>
+    </method>
+
     <!-- All deployments in boot order
          deployment format:
          s - Deployment id

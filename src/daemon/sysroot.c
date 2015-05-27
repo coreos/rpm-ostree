@@ -210,6 +210,40 @@ out:
   return TRUE;
 }
 
+static gboolean
+handle_get_os (RPMOSTreeSysroot *object,
+               GDBusMethodInvocation *invocation,
+               const char *arg_name)
+{
+  Sysroot *self = SYSROOT (object);
+  glnx_unref_object GDBusInterfaceSkeleton *os_interface = NULL;
+
+  g_rw_lock_reader_lock (&self->children_lock);
+
+  os_interface = g_hash_table_lookup (self->os_interfaces, arg_name);
+  if (os_interface != NULL)
+    g_object_ref (os_interface);
+
+  g_rw_lock_reader_unlock (&self->children_lock);
+
+  if (os_interface != NULL)
+    {
+      const char *object_path;
+      object_path = g_dbus_interface_skeleton_get_object_path (os_interface);
+      rpmostree_sysroot_complete_get_os (object, invocation, object_path);
+    }
+  else
+    {
+      g_dbus_method_invocation_return_error (invocation,
+                                             G_IO_ERROR,
+                                             G_IO_ERROR_NOT_FOUND,
+                                             "OS name \"%s\" not found",
+                                             arg_name);
+    }
+
+  return TRUE;
+}
+
 /* ---------------------------------------------------------------------------------------------------- */
 static void
 sysroot_dispose (GObject *object)
@@ -598,6 +632,7 @@ static void
 sysroot_iface_init (RPMOSTreeSysrootIface *iface)
 {
   iface->handle_create_osname = handle_create_osname;
+  iface->handle_get_os = handle_get_os;
 }
 
 
