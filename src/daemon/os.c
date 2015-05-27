@@ -182,7 +182,8 @@ osstub_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
 
 static gboolean
 osstub_handle_upgrade (RPMOSTreeOS *interface,
-                       GDBusMethodInvocation *invocation)
+                       GDBusMethodInvocation *invocation,
+                       GVariant *arg_options)
 {
   glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;

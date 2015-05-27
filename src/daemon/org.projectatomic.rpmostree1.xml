@@ -48,7 +48,11 @@
       <arg type="o" name="transaction" direction="out"/>
     </method>
 
+    <!-- Available options:
+         "allow-downgrade" (type 'b')
+    -->
     <method name="Upgrade">
+      <arg type="a{sv}" name="options" direction="in"/>
       <arg type="o" name="transaction" direction="out"/>
     </method>
 
@@ -86,6 +90,17 @@
     <!-- Yes, we can. -->
     <method name="Cancel">
     </method>
+
+    <!-- XXX Blindly mimicing UDisks2.Job for now. -->
+    <signal name="Completed">
+      <arg name="success" type="b" direction="out"/>
+      <arg name="message" type="s" direction="out"/>
+    </signal>
+
+    <!-- For miscellaneous messages. -->
+    <signal name="Message">
+      <arg name="text" type="s" direction="out"/>
+    </signal>
 
     <signal name="DownloadProgress">
       <!-- time data, format is:
