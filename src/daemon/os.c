@@ -26,6 +26,7 @@
 #include "utils.h"
 
 typedef struct _OSStubClass OSStubClass;
+typedef struct _TaskData TaskData;
 
 struct _OSStub
 {
@@ -39,6 +40,14 @@ struct _OSStubClass
   RPMOSTreeOSSkeletonClass parent_class;
 };
 
+struct _TaskData {
+  OstreeSysroot *sysroot;
+  gboolean sysroot_locked;
+  OstreeAsyncProgress *progress;
+  RPMOSTreeTransaction *transaction;
+  GVariantDict *options;
+};
+
 enum {
   PROP_0,
   PROP_SYSROOT
@@ -50,6 +59,19 @@ static void osstub_iface_init (RPMOSTreeOSIface *iface);
 G_DEFINE_TYPE_WITH_CODE (OSStub, osstub, RPMOSTREE_TYPE_OS_SKELETON,
                          G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_OS,
                                                 osstub_iface_init));
+
+static void
+task_data_free (TaskData *data)
+{
+  if (data->sysroot_locked)
+    ostree_sysroot_unlock (data->sysroot);
+
+  g_clear_object (&data->sysroot);
+  g_clear_object (&data->progress);
+  g_clear_object (&data->transaction);
+
+  g_clear_pointer (&data->options, (GDestroyNotify) g_variant_dict_unref);
+}
 
 static void
 osstub_set_sysroot (OSStub *self,
@@ -137,6 +159,89 @@ osstub_class_init (OSStubClass *klass)
 
 /* ---------------------------------------------------------------------------------------------------- */
 
+static void
+osstub_upgrade_thread (GTask *task,
+                       gpointer source_object,
+                       gpointer task_data,
+                       GCancellable *cancellable)
+{
+  RPMOSTreeOS *interface = source_object;
+  TaskData *data = task_data;
+  gboolean opt_allow_downgrade = FALSE;
+  glnx_unref_object OstreeSysrootUpgrader *upgrader = NULL;
+  glnx_unref_object OstreeRepo *repo = NULL;
+  g_autofree char *origin_description = NULL;
+  const char *name;
+  OstreeSysrootUpgraderPullFlags upgrader_pull_flags = 0;
+  gboolean changed = FALSE;
+  GError *local_error = NULL;
+
+  /* XXX Fail if option type is wrong? */
+  g_variant_dict_lookup (data->options,
+                         "allow-downgrade", "b",
+                         &opt_allow_downgrade);
+
+  name = rpmostree_os_get_name (interface);
+
+  upgrader = ostree_sysroot_upgrader_new_for_os (data->sysroot, name,
+                                                 cancellable, &local_error);
+  if (upgrader == NULL)
+    goto out;
+
+  origin_description = ostree_sysroot_upgrader_get_origin_description (upgrader);
+  /* FIXME Emit origin description in transaction message. */
+
+  if (!ostree_sysroot_get_repo (data->sysroot, &repo,
+                                cancellable, &local_error))
+    goto out;
+
+  if (opt_allow_downgrade)
+    upgrader_pull_flags |= OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER;
+
+  if (!ostree_sysroot_upgrader_pull (upgrader, 0, upgrader_pull_flags,
+                                     data->progress, &changed,
+                                     cancellable, &local_error))
+    goto out;
+
+  if (changed)
+    {
+      if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, &local_error))
+        goto out;
+    }
+  else
+    {
+      /* FIXME Emit "No upgrade available." in transaction message. */
+    }
+
+out:
+  if (local_error != NULL)
+    g_task_return_error (task, local_error);
+  else
+    g_task_return_boolean (task, TRUE);
+}
+
+/* ---------------------------------------------------------------------------------------------------- */
+
+static void
+osstub_transaction_complete (GObject *source_object,
+                             GAsyncResult *result,
+                             gpointer user_data)
+{
+  TaskData *data;
+  gboolean success;
+  const char *message;
+  GError *local_error = NULL;
+
+  data = g_task_get_task_data (G_TASK (result));
+
+  success = g_task_propagate_boolean (G_TASK (result), &local_error);
+  message = (local_error != NULL) ? local_error->message : "";
+
+  rpmostree_transaction_emit_completed (data->transaction, success, message);
+
+  g_clear_error (&local_error);
+}
+
 static gboolean
 osstub_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
                                           GDBusMethodInvocation *invocation,
@@ -185,16 +290,47 @@ osstub_handle_upgrade (RPMOSTreeOS *interface,
                        GDBusMethodInvocation *invocation,
                        GVariant *arg_options)
 {
-  glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
+  glnx_unref_object OstreeSysroot *sysroot = NULL;
+  glnx_unref_object OstreeAsyncProgress *progress = NULL;
+  glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
+  g_autoptr(GTask) task = NULL;
+  TaskData *data;
+  gboolean lock_acquired = FALSE;
   GError *local_error = NULL;
 
   cancellable = g_cancellable_new ();
 
-  /* FIXME Do locking here, make sure we have exclusive access. */
+  sysroot = osstub_ref_sysroot (OSSTUB (interface));
+  g_return_val_if_fail (sysroot != NULL, FALSE);
 
-  transaction = new_transaction (invocation, cancellable, NULL, &local_error);
+  if (!ostree_sysroot_try_lock (sysroot, &lock_acquired, &local_error))
+    goto out;
 
+  if (!lock_acquired)
+    {
+      local_error = g_error_new_literal (G_IO_ERROR, G_IO_ERROR_BUSY,
+                                         "System transaction in progress");
+      goto out;
+    }
+
+  transaction = new_transaction (invocation, cancellable,
+                                 &progress, &local_error);
+
+  data = g_slice_new0 (TaskData);
+  data->sysroot = g_object_ref (sysroot);
+  data->sysroot_locked = TRUE;
+  data->progress = g_object_ref (progress);
+  data->transaction = g_object_ref (transaction);
+  data->options = g_variant_dict_new (arg_options);
+
+  task = g_task_new (interface, cancellable, osstub_transaction_complete, NULL);
+  g_task_set_check_cancellable (task, FALSE);
+  g_task_set_source_tag (task, osstub_handle_upgrade);
+  g_task_set_task_data (task, data, (GDestroyNotify) task_data_free);
+  g_task_run_in_thread (task, osstub_upgrade_thread);
+
+out:
   if (local_error == NULL)
     {
       const char *object_path;
