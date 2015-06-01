@@ -72,7 +72,7 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
 
           g_assert_cmpuint (i, <, modified_new->len);
 
-          newpkg = modified_old->pdata[i];
+          newpkg = modified_new->pdata[i];
 
           g_print ("  %s %s -> %s\n", name,
                    rpm_ostree_package_get_evr (oldpkg),
