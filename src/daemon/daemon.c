@@ -23,7 +23,7 @@
 #include "types.h"
 #include "utils.h"
 
-#include "libgsystem.h"
+#include <libglnx.h>
 
 /**
  * SECTION:daemon
@@ -186,7 +186,7 @@ daemon_constructed (GObject *_object)
 {
   Daemon *self;
   GError *error = NULL;
-  gs_free gchar *path = NULL;
+  g_autofree gchar *path = NULL;
 
   self = DAEMON (_object);
   self->object_manager = g_dbus_object_manager_server_new (BASE_DBUS_PATH);
@@ -198,7 +198,7 @@ daemon_constructed (GObject *_object)
 
   g_dbus_connection_start_message_processing (self->connection);
 
-  path = utils_generate_object_path(BASE_DBUS_PATH, "Sysroot", NULL);
+  path = utils_generate_object_path (BASE_DBUS_PATH, "Sysroot", NULL);
   self->sysroot = g_object_new (TYPE_SYSROOT,
       	                        "sysroot-path", self->sysroot_path,
                                 NULL);

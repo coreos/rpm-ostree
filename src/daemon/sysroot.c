@@ -55,8 +55,11 @@ struct _Sysroot
 
   gchar *sysroot_path;
 
+  OstreeSysroot *ot_sysroot;
+
   GHashTable *os_interfaces;
   GRWLock children_lock;
+
 
   GFileMonitor *monitor;
   guint sig_changed;
@@ -98,8 +101,8 @@ _build_file (const char *first, ...)
 {
   va_list args;
   const gchar *arg;
-  gs_free gchar *path = NULL;
-  g_autoptr(GPtrArray) parts = NULL;
+  g_autofree gchar *path = NULL;
+  g_autoptr (GPtrArray) parts = NULL;
 
   va_start (args, first);
   parts = g_ptr_array_new ();
@@ -121,29 +124,21 @@ handle_create_osname (RPMOSTreeSysroot *object,
                      GDBusMethodInvocation *invocation,
                      const gchar *osname)
 {
-  gs_unref_object OstreeSysroot *ot_sysroot = NULL;
-  g_autoptr(GFile) dir = NULL;
-  gs_free gchar *deploy_dir = NULL;
-  gs_free gchar *base_name = NULL;
+  g_autoptr (GFile) dir = NULL;
+  g_autofree gchar *deploy_dir = NULL;
+  g_autofree gchar *base_name = NULL;
 
   GError *error = NULL;
-  gs_free gchar *dbus_path = NULL;
+  g_autofree gchar *dbus_path = NULL;
 
   Sysroot *self = SYSROOT (object);
 
-  if (!utils_load_sysroot_and_repo (self->sysroot_path,
-                                    self->cancellable,
-                                    &ot_sysroot,
-                                    NULL,
-                                    &error))
-      goto out;
-
-  if (!ostree_sysroot_ensure_initialized (ot_sysroot,
+  if (!ostree_sysroot_ensure_initialized (self->ot_sysroot,
                                           self->cancellable,
                                           &error))
     goto out;
 
-  base_name = g_path_get_basename(osname);
+  base_name = g_path_get_basename (osname);
   if (g_strcmp0 (base_name, osname) != 0)
     {
       g_set_error_literal (&error,
@@ -289,6 +284,7 @@ sysroot_dispose (GObject *object)
 
   g_rw_lock_writer_unlock (&self->children_lock);
 
+  g_object_unref (self->ot_sysroot);
   G_OBJECT_CLASS (sysroot_parent_class)->dispose (object);
 }
 
@@ -389,7 +385,9 @@ sysroot_class_init (SysrootClass *klass)
                                            G_SIGNAL_RUN_LAST,
                                            0, NULL, NULL,
                                            g_cclosure_marshal_generic,
-                                           G_TYPE_NONE, 0);
+                                           G_TYPE_NONE,
+                                           1,
+                                           OSTREE_TYPE_SYSROOT);
 }
 
 
@@ -398,7 +396,7 @@ sysroot_populate_deployments (Sysroot *self,
                               OstreeSysroot *ot_sysroot,
                               OstreeRepo *ot_repo)
 {
-  gs_unref_object OstreeDeployment *booted = NULL;
+  OstreeDeployment *booted = NULL; // owned by sysroot
   g_autoptr (GPtrArray) deployments = NULL;
 
   GVariantBuilder builder;
@@ -425,7 +423,7 @@ sysroot_populate_deployments (Sysroot *self,
   if (booted)
     {
       const gchar *os = ostree_deployment_get_osname (booted);
-      gs_free gchar *path = utils_generate_object_path (BASE_DBUS_PATH,
+      g_autofree gchar *path = utils_generate_object_path (BASE_DBUS_PATH,
                                                         os, NULL);
       rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path);
     }
@@ -434,7 +432,6 @@ sysroot_populate_deployments (Sysroot *self,
       rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), "/");
     }
 
-  g_debug ("we think we are here");
   rpmostree_sysroot_set_deployments (RPMOSTREE_SYSROOT (self),
                                      g_variant_builder_end (&builder));
   g_debug ("finished deployments");
@@ -442,17 +439,16 @@ sysroot_populate_deployments (Sysroot *self,
 out:
   return ret;
 }
+
+
 static gboolean
 sysroot_load_internals (Sysroot *self,
-                        OstreeSysroot **out_sysroot,
-                        OstreeRepo **out_repo,
                         GError **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object OstreeSysroot *ot_sysroot = NULL;
-  gs_unref_object OstreeRepo *ot_repo = NULL;
+  glnx_unref_object OstreeRepo *ot_repo = NULL;
   g_autoptr (GHashTable) seen = NULL;
-  gs_free gchar *os_path = NULL;
+  g_autofree gchar *os_path = NULL;
   GDir *os_dir = NULL;
 
   GHashTableIter iter;
@@ -460,12 +456,6 @@ sysroot_load_internals (Sysroot *self,
   gpointer value;
 
   g_rw_lock_writer_lock (&self->children_lock);
-  if (!utils_load_sysroot_and_repo (self->sysroot_path,
-                                    self->cancellable,
-                                    &ot_sysroot,
-                                    &ot_repo,
-                                    error))
-      goto out;
 
   os_path = g_build_filename (self->sysroot_path, "ostree",
                               "deploy", NULL);
@@ -475,10 +465,21 @@ sysroot_load_internals (Sysroot *self,
   if (!os_dir)
     goto out;
 
+  if (!ostree_sysroot_load (self->ot_sysroot,
+                            NULL,
+                            error))
+      goto out;
+
+  if (!ostree_sysroot_get_repo (self->ot_sysroot,
+                                &ot_repo,
+                                NULL,
+                                error))
+      goto out;
+
   while (TRUE)
     {
       const gchar *os = g_dir_read_name (os_dir);
-      gs_free gchar *full_path = NULL;
+      g_autofree gchar *full_path = NULL;
 
       if (os == NULL) {
         if (errno && errno != ENOENT)
@@ -494,17 +495,13 @@ sysroot_load_internals (Sysroot *self,
       if (g_hash_table_contains (self->os_interfaces, os))
         continue;
 
-      full_path = g_build_filename(os_path, os, NULL);
+      full_path = g_build_filename (os_path, os, NULL);
       if (g_file_test (full_path, G_FILE_TEST_IS_DIR))
         {
-          gs_free gchar *path = utils_generate_object_path (BASE_DBUS_PATH,
-                                                            os, NULL);
-          //TODO: stub for real OS implementation
-          RPMOSTreeOS *obj = osstub_new (ot_sysroot, os);
-          g_hash_table_insert(self->os_interfaces,
-                              g_strdup (os),
-                              obj);
-          daemon_publish (daemon_get (), path, FALSE, obj);
+          RPMOSTreeOS *obj = osstub_new (self->ot_sysroot, os);
+          g_hash_table_insert (self->os_interfaces,
+                               g_strdup (os),
+                               obj);
         }
     }
 
@@ -514,23 +511,13 @@ sysroot_load_internals (Sysroot *self,
     {
       if (!g_hash_table_contains (seen, hashkey))
         {
-          //TODO: stub for real implementation
-          gs_free gchar *path = utils_generate_object_path (BASE_DBUS_PATH,
-                                                            hashkey, NULL);
-          daemon_unpublish (daemon_get (),
-                            path,
-                            G_OBJECT (value));
           g_object_run_dispose (G_OBJECT (value));
           g_hash_table_iter_remove (&iter);
         }
     }
 
   // update deployments
-  sysroot_populate_deployments (self, ot_sysroot, ot_repo);
-
-  gs_transfer_out_value (out_sysroot, &ot_sysroot);
-  if (out_repo != NULL)
-    *out_repo = g_object_ref (ot_repo);
+  sysroot_populate_deployments (self, self->ot_sysroot, ot_repo);
 
   ret = TRUE;
 
@@ -538,7 +525,7 @@ out:
   g_rw_lock_writer_unlock (&self->children_lock);
 
   if (os_dir)
-    g_dir_close(os_dir);
+    g_dir_close (os_dir);
 
   return ret;
 }
@@ -555,16 +542,11 @@ _do_reload_data (GTask         *task,
   GError *error = NULL;
   Sysroot *self = SYSROOT (object);
 
-  g_debug ("reloading");
+  if (!sysroot_load_internals (self, &error))
+    g_task_return_error (task, error);
+  else
+    g_task_return_boolean (task, TRUE);
 
-  // this was valid once, make sure it is tried again
-  // TODO, should we bail at some point?
-  if (!sysroot_load_internals (self, NULL, NULL, &error)) {
-      g_message ("Error refreshing sysroot data: %s", error->message);
-      g_timeout_add_seconds (UPDATED_THROTTLE_SECONDS,
-                             _throttle_refresh,
-                             self);
-  }
   g_clear_error (&error);
 }
 
@@ -576,9 +558,25 @@ _reload_callback (GObject *source_object,
 {
     Sysroot *self = SYSROOT (user_data);
     GTask *task = G_TASK (res);
+    GError *error = NULL;
 
-    g_signal_emit (self, sysroot_signals[UPDATED], 0);
+    g_task_propagate_boolean (task, &error);
+    if (error)
+      {
+        // this was valid once, make sure it is tried again
+        // TODO, should we bail at some point?
+        g_message ("Error refreshing sysroot data: %s", error->message);
+        g_timeout_add_seconds (UPDATED_THROTTLE_SECONDS,
+                               _throttle_refresh,
+                               self);
+      }
+    else
+      {
+        g_signal_emit (self, sysroot_signals[UPDATED], 0, self->ot_sysroot);
+      }
+
     g_object_unref (task);
+    g_clear_error (&error);
 }
 
 
@@ -667,10 +665,17 @@ sysroot_populate (Sysroot *self,
                   GError **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object OstreeRepo *ot_repo = NULL;
+  glnx_unref_object OstreeRepo *ot_repo = NULL;
   g_return_val_if_fail (self != NULL, FALSE);
 
-  if (!sysroot_load_internals (self, NULL, &ot_repo, error))
+  if (!utils_load_sysroot_and_repo (self->sysroot_path,
+                                    NULL,
+                                    &self->ot_sysroot,
+                                    &ot_repo,
+                                    error))
+    goto out;
+
+  if (!sysroot_load_internals (self, error))
     goto out;
 
   if (self->monitor == NULL)

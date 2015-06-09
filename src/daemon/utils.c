@@ -16,9 +16,11 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "config.h"
 #include "utils.h"
 
 #include "libgsystem.h"
+#include <libglnx.h>
 
 static gboolean
 handle_cancel_cb (RPMOSTreeTransaction *transaction,
@@ -230,8 +232,8 @@ utils_generate_object_path (const gchar *base,
 
 gchar *
 utils_generate_object_path_from_va (const gchar *base,
-                              const gchar *part,
-                              va_list va)
+                                    const gchar *part,
+                                    va_list va)
 {
   GString *path;
 
@@ -276,8 +278,8 @@ utils_load_sysroot_and_repo (gchar *path,
                              OstreeRepo **out_repo,
                              GError **error)
 {
-  gs_unref_object GFile *sysroot_path = NULL;
-  gs_unref_object OstreeSysroot *ot_sysroot = NULL;
+  glnx_unref_object GFile *sysroot_path = NULL;
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   gboolean ret = FALSE;
 
   sysroot_path = g_file_new_for_path (path);

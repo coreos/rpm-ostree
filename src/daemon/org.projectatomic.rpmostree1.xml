@@ -34,10 +34,9 @@
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.OS">
-    <property name="BootedDeployment" type="o" access="read"/>
-    <property name="DefaultDeployment" type="o" access="read"/>
-    <property name="RollbackDeployment" type="o" access="read"/>
-    <property name="Deployments" type="as" access="read"/>
+    <property name="BootedDeployment" type="(ssisstsav)" access="read"/>
+    <property name="DefaultDeployment" type="(ssisstsav)" access="read"/>
+    <property name="RollbackDeployment" type="(ssisstsav)" access="read"/>
     <property name="HasCachedUpdateRpmDiff" type="b" access="read"/>
     <!-- NONE, DIFF, PREPARE, REBOOT -->
     <property name="AutomaticUpdatePolicy" type="s" access="read"/>

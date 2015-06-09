@@ -21,7 +21,8 @@
 #include "auth.h"
 #include "errors.h"
 #include "daemon.h"
-#include "libgsystem.h"
+
+#include <libglnx.h>
 
 /**
  * auth_check_root_or_access_denied:
@@ -38,7 +39,7 @@ auth_check_root_or_access_denied (GDBusInterfaceSkeleton *instance,
   const gchar *sender;
   gboolean ret = FALSE;
 
-  gs_unref_variant GVariant *value = NULL;
+  g_autoptr (GVariant) value = NULL;
   GError *error = NULL;
   GDBusConnection *connection = NULL;
   guint32 uid = UINT32_MAX;

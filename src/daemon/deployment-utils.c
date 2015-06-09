@@ -137,7 +137,7 @@ deployment_generate_variant (OstreeDeployment *deployment,
     }
 
   if (!sigs)
-    sigs = g_variant_new("av", NULL);
+    sigs = g_variant_new ("av", NULL);
 
   g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
   g_variant_builder_add (&builder, "s", id);

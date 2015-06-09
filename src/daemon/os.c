@@ -19,9 +19,15 @@
 #include "config.h"
 #include "ostree.h"
 
-#include "libglnx.h"
+#include <libglnx.h>
 
+#include "sysroot.h"
+#include "daemon.h"
+#include "deployment-utils.h"
+#include "rpmostree-package-variants.h"
 #include "types.h"
+#include "errors.h"
+#include "auth.h"
 #include "os.h"
 #include "utils.h"
 
@@ -31,8 +37,7 @@ typedef struct _TaskData TaskData;
 struct _OSStub
 {
   RPMOSTreeOSSkeleton parent_instance;
-
-  GWeakRef sysroot;
+  guint signal_id;
 };
 
 struct _OSStubClass
@@ -55,6 +60,8 @@ enum {
 
 static void osstub_iface_init (RPMOSTreeOSIface *iface);
 
+static void osstub_load_internals (OSStub *self,
+                                   OstreeSysroot *ot_sysroot);
 
 G_DEFINE_TYPE_WITH_CODE (OSStub, osstub, RPMOSTREE_TYPE_OS_SKELETON,
                          G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_OS,
@@ -73,67 +80,53 @@ task_data_free (TaskData *data)
   g_clear_pointer (&data->options, (GDestroyNotify) g_variant_dict_unref);
 }
 
-static void
-osstub_set_sysroot (OSStub *self,
-                    OstreeSysroot *sysroot)
-{
-  g_weak_ref_set (&self->sysroot, sysroot);
-}
 
 static void
-osstub_set_property (GObject *object,
-                     guint property_id,
-                     const GValue *value,
-                     GParamSpec *pspec)
+sysroot_changed (Sysroot *sysroot,
+                 OstreeSysroot *ot_sysroot,
+                 gpointer user_data)
 {
-  OSStub *self = OSSTUB (object);
+  OSStub *self = OSSTUB (user_data);
+  g_return_val_if_fail (OSTREE_IS_SYSROOT (ot_sysroot), NULL);
 
-  switch (property_id)
-    {
-      case PROP_SYSROOT:
-        osstub_set_sysroot (self, g_value_get_object (value));
-        break;
-
-      default:
-        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-        break;
-    }
-}
-
-static void
-osstub_get_property (GObject *object,
-                     guint property_id,
-                     GValue *value,
-                     GParamSpec *pspec)
-{
-  OSStub *self = OSSTUB (object);
-
-  switch (property_id)
-    {
-      case PROP_SYSROOT:
-        g_value_take_object (value, osstub_ref_sysroot (self));
-        break;
-
-      default:
-        G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-        break;
-    }
+  osstub_load_internals (self, ot_sysroot);
 }
 
 static void
 osstub_dispose (GObject *object)
 {
   OSStub *self = OSSTUB (object);
+  const gchar *object_path;
+  object_path = g_dbus_interface_skeleton_get_object_path (self);
+  if (object_path)
+    {
+      daemon_unpublish (daemon_get (),
+                        object_path,
+                        object);
+    }
 
-  g_weak_ref_clear (&self->sysroot);
+  if (self->signal_id > 0)
+      g_signal_handler_disconnect (sysroot_get (), self->signal_id);
 
+  self->signal_id = 0;
   G_OBJECT_CLASS (osstub_parent_class)->dispose (object);
 }
 
 static void
 osstub_init (OSStub *self)
 {
-  g_weak_ref_init (&self->sysroot, NULL);
+}
+
+static void
+osstub_constructed (GObject *object)
+{
+  OSStub *self = OSSTUB (object);
+  g_signal_connect (RPMOSTREE_OS(self), "g-authorize-method",
+    G_CALLBACK (auth_check_root_or_access_denied), NULL);
+
+  self->signal_id = g_signal_connect (sysroot_get (), "sysroot-updated",
+                                      G_CALLBACK (sysroot_changed), self);
+  G_OBJECT_CLASS (osstub_parent_class)->constructed (object);
 }
 
 static void
@@ -142,22 +135,69 @@ osstub_class_init (OSStubClass *klass)
   GObjectClass *gobject_class;
 
   gobject_class = G_OBJECT_CLASS (klass);
-  gobject_class->set_property = osstub_set_property;
-  gobject_class->get_property = osstub_get_property;
   gobject_class->dispose = osstub_dispose;
+  gobject_class->constructed  = osstub_constructed;
 
-  g_object_class_install_property (gobject_class,
-                                   PROP_SYSROOT,
-                                   g_param_spec_object ("sysroot",
-                                                        NULL,
-                                                        NULL,
-                                                        OSTREE_TYPE_SYSROOT,
-                                                        G_PARAM_READWRITE |
-                                                        G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS));
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
+
+static gint
+rollback_deployment_index (const gchar *name,
+                           OstreeSysroot *ot_sysroot,
+                           GError **error)
+{
+  g_autoptr (GPtrArray) deployments = NULL;
+  glnx_unref_object OstreeDeployment *merge_deployment = NULL;
+
+  gint index_to_prepend = -1;
+  gint merge_index = -1;
+  gint previous_index = -1;
+  guint i;
+
+  merge_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
+  if (merge_deployment == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "No deployments found for os %s", name);
+      goto out;
+    }
+
+  deployments = ostree_sysroot_get_deployments (ot_sysroot);
+  if (deployments->len < 2)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Found %u deployments, at least 2 required for rollback",
+                   deployments->len);
+      goto out;
+    }
+
+  g_assert (merge_deployment != NULL);
+  for (i = 0; i < deployments->len; i++)
+    {
+      if (deployments->pdata[i] == merge_deployment)
+        merge_index = i;
+
+      if (g_strcmp0 (ostree_deployment_get_osname (deployments->pdata[i]), name) == 0 &&
+              deployments->pdata[i] != merge_deployment &&
+              previous_index < 0)
+        {
+            previous_index = i;
+        }
+    }
+
+  g_assert (merge_index < deployments->len);
+  g_assert (deployments->pdata[merge_index] == merge_deployment);
+
+  /* If merge deployment is not booted assume we are using it. */
+  if (merge_index == 0 && previous_index > 0)
+      index_to_prepend = previous_index;
+  else
+      index_to_prepend = merge_index;
+
+out:
+  return index_to_prepend;
+}
 
 static void
 osstub_upgrade_thread (GTask *task,
@@ -294,14 +334,20 @@ osstub_handle_upgrade (RPMOSTreeOS *interface,
   glnx_unref_object OstreeSysroot *sysroot = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
   glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
-  g_autoptr(GTask) task = NULL;
+  g_autoptr (GTask) task = NULL;
   TaskData *data;
   gboolean lock_acquired = FALSE;
   GError *local_error = NULL;
 
   cancellable = g_cancellable_new ();
 
-  sysroot = osstub_ref_sysroot (OSSTUB (interface));
+  if (!utils_load_sysroot_and_repo (sysroot_get_sysroot_path ( sysroot_get ()),
+                                  cancellable,
+                                  &sysroot,
+                                  NULL,
+                                  &local_error))
+    goto out;
+
   g_return_val_if_fail (sysroot != NULL, FALSE);
 
   if (!ostree_sysroot_try_lock (sysroot, &lock_acquired, &local_error))
@@ -470,9 +516,111 @@ osstub_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
 }
 
 static void
+osstub_load_internals (OSStub *self,
+                       OstreeSysroot *ot_sysroot)
+{
+  const gchar *name;
+
+  OstreeDeployment *booted = NULL; // owned by sysroot
+  glnx_unref_object  OstreeDeployment *merge_deployment = NULL; // transfered
+
+  glnx_unref_object OstreeRepo *ot_repo = NULL;
+  g_autoptr (GPtrArray) deployments = NULL;
+
+  GError *error = NULL;
+  GVariant *booted_variant = NULL;
+  GVariant *default_variant = NULL;
+  GVariant *rollback_variant = NULL;
+
+  gboolean has_cached_updates = FALSE;
+  gint rollback_index;
+  guint i;
+
+  name = rpmostree_os_get_name (RPMOSTREE_OS (self));
+  if (!ostree_sysroot_get_repo (ot_sysroot,
+                                &ot_repo,
+                                NULL,
+                                &error))
+    goto out;
+
+  deployments = ostree_sysroot_get_deployments (ot_sysroot);
+  if (deployments == NULL)
+    goto out;
+
+  for (i=0; i<deployments->len; i++)
+    {
+      if (g_strcmp0 (ostree_deployment_get_osname (deployments->pdata[i]), name) == 0)
+        {
+          default_variant = deployment_generate_variant (deployments->pdata[i],
+                                                         ot_repo);
+          break;
+        }
+    }
+
+  booted = ostree_sysroot_get_booted_deployment (ot_sysroot);
+  if (booted && g_strcmp0 (ostree_deployment_get_osname (booted),
+                           name) == 0)
+    {
+      booted_variant = deployment_generate_variant (booted,
+                                                    ot_repo);
+
+    }
+
+  rollback_index = rollback_deployment_index (name, ot_sysroot, &error);
+  if (error == NULL)
+    {
+      rollback_variant = deployment_generate_variant (deployments->pdata[rollback_index],
+                                                      ot_repo);
+    }
+
+  merge_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
+  if (merge_deployment)
+    {
+      g_autofree gchar *head = NULL;
+      g_autofree gchar *origin_refspec = NULL;
+
+      origin_refspec = deployment_get_refspec (merge_deployment);
+      if (!origin_refspec)
+        goto out;
+
+      if (!ostree_repo_resolve_rev (ot_repo, origin_refspec,
+                                   FALSE, &head, NULL))
+        goto out;
+
+      has_cached_updates = g_strcmp0 (ostree_deployment_get_csum(merge_deployment),
+                                      head) != 0;
+    }
+
+out:
+  g_clear_error (&error);
+
+  if (!booted_variant)
+    booted_variant = deployment_generate_blank_variant ();
+  rpmostree_os_set_booted_deployment (RPMOSTREE_OS (self),
+                                      booted_variant);
+
+  if (!default_variant)
+    default_variant = deployment_generate_blank_variant ();
+  rpmostree_os_set_default_deployment (RPMOSTREE_OS (self),
+                                       default_variant);
+
+  if (!rollback_variant)
+    rollback_variant = deployment_generate_blank_variant ();
+  rpmostree_os_set_rollback_deployment (RPMOSTREE_OS (self),
+                                        rollback_variant);
+
+  rpmostree_os_set_has_cached_update_rpm_diff (RPMOSTREE_OS (self),
+                                               has_cached_updates);
+
+  rpmostree_os_set_has_cached_update_rpm_diff (RPMOSTREE_OS (self),
+                                               has_cached_updates);
+}
+
+static void
 osstub_iface_init (RPMOSTreeOSIface *iface)
 {
   iface->handle_get_cached_update_rpm_diff = osstub_handle_get_cached_update_rpm_diff;
+  iface->handle_get_deployments_rpm_diff = handle_get_deployments_rpm_diff;
   iface->handle_download_update_rpm_diff   = osstub_handle_download_update_rpm_diff;
   iface->handle_upgrade                    = osstub_handle_upgrade;
   iface->handle_rollback                   = osstub_handle_rollback;
@@ -488,16 +636,17 @@ RPMOSTreeOS *
 osstub_new (OstreeSysroot *sysroot,
             const char *name)
 {
+  const gchar *path;
+  OSStub *obj = NULL;
+
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
   g_return_val_if_fail (name != NULL, NULL);
 
-  return g_object_new (TYPE_OSSTUB, "sysroot", sysroot, "name", name, NULL);
-}
+  path = utils_generate_object_path (BASE_DBUS_PATH,
+                                     name, NULL);
 
-OstreeSysroot *
-osstub_ref_sysroot (OSStub *self)
-{
-  g_return_val_if_fail (IS_OSSTUB (self), NULL);
-
-  return g_weak_ref_get (&self->sysroot);
+  obj = g_object_new (TYPE_OSSTUB, "name", name, NULL);
+  osstub_load_internals (obj, sysroot);
+  daemon_publish (daemon_get (), path, FALSE, obj);
+  return RPMOSTREE_OS (obj);
 }
