@@ -67,6 +67,34 @@ G_DEFINE_TYPE_WITH_CODE (OSStub, osstub, RPMOSTREE_TYPE_OS_SKELETON,
                          G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_OS,
                                                 osstub_iface_init));
 
+/* ---------------------------------------------------------------------------------------------------- */
+
+/**
+  * task_result_invoke:
+  *
+  * Completes a GTask where the user_data is
+  * an invocation and the task data or error is
+  * passed to the invocation when called back.
+  */
+static void
+task_result_invoke (GObject *source_object,
+                    GAsyncResult *res,
+                    gpointer user_data)
+{
+    glnx_unref_object GTask *task = G_TASK (res);
+    GError *error = NULL;
+
+    GDBusMethodInvocation *invocation = user_data;
+
+    GVariant *result = g_task_propagate_pointer (task, &error);
+
+    if (error)
+      g_dbus_method_invocation_take_error (invocation, error);
+    else
+      g_dbus_method_invocation_return_value (invocation, result);
+}
+
+
 static void
 task_data_free (TaskData *data)
 {
@@ -87,7 +115,7 @@ sysroot_changed (Sysroot *sysroot,
                  gpointer user_data)
 {
   OSStub *self = OSSTUB (user_data);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (ot_sysroot), NULL);
+  g_return_if_fail (OSTREE_IS_SYSROOT (ot_sysroot));
 
   osstub_load_internals (self, ot_sysroot);
 }
@@ -199,6 +227,318 @@ out:
   return index_to_prepend;
 }
 
+
+/**
+ * refspec_parse_partial:
+ * @new_provided_refspec: The provided refspec
+ * @base_refspec: The refspec string to base on.
+ * @out_refspec: Pointer to the new refspec
+ * @error: Pointer to an error pointer.
+ *
+ * Takes a refspec string and adds any missing bits based on the
+ * base_refspec argument. Errors if a full valid refspec can't
+ * be derived.
+ *
+ * Returns: True on sucess.
+ */
+static gboolean
+refspec_parse_partial (const gchar *new_provided_refspec,
+                       gchar *base_refspec,
+                       gchar **out_refspec,
+                       GError **error)
+{
+
+  g_autofree gchar *ref = NULL;
+  g_autofree gchar *remote = NULL;
+  g_autofree gchar *origin_ref = NULL;
+  g_autofree gchar *origin_remote = NULL;
+  GError *parse_error = NULL;
+
+  gboolean ret = FALSE;
+
+  /* Allow just switching remotes */
+  if (g_str_has_suffix (new_provided_refspec, ":"))
+    {
+      remote = g_strdup (new_provided_refspec);
+      remote[strlen (remote) - 1] = '\0';
+    }
+  else
+    {
+      if (!ostree_parse_refspec (new_provided_refspec, &remote,
+                                 &ref, &parse_error))
+        {
+          g_set_error_literal (error, RPM_OSTREED_ERROR,
+                       RPM_OSTREED_ERROR_INVALID_REFSPEC,
+                       parse_error->message);
+          g_clear_error (&parse_error);
+          goto out;
+        }
+    }
+
+  if (base_refspec != NULL)
+    {
+      if (!ostree_parse_refspec (base_refspec, &origin_remote,
+                               &origin_ref, &parse_error))
+        goto out;
+    }
+
+  if (ref == NULL)
+    {
+      if (origin_ref)
+        {
+          ref = g_strdup (origin_ref);
+        }
+
+      else
+        {
+          g_set_error (error, RPM_OSTREED_ERROR,
+                       RPM_OSTREED_ERROR_INVALID_REFSPEC,
+                      "Could not determine default ref to pull.");
+          goto out;
+        }
+
+    }
+  else if (remote == NULL)
+    {
+      if (origin_remote)
+        {
+          remote = g_strdup (origin_remote);
+        }
+      else
+        {
+          g_set_error (error, RPM_OSTREED_ERROR,
+                       RPM_OSTREED_ERROR_INVALID_REFSPEC,
+                       "Could not determine default remote to pull.");
+          goto out;
+        }
+    }
+
+  if (g_strcmp0 (origin_remote, remote) == 0 &&
+      g_strcmp0 (origin_ref, ref) == 0)
+    {
+      g_set_error (error, RPM_OSTREED_ERROR,
+                   RPM_OSTREED_ERROR_INVALID_REFSPEC,
+                   "Old and new refs are equal: %s:%s",
+                   remote, ref);
+      goto out;
+    }
+
+  *out_refspec = g_strconcat (remote, ":", ref, NULL);
+  ret = TRUE;
+
+out:
+  return ret;
+}
+
+
+static OstreeDeployment *
+get_deployment_for_id (OstreeSysroot *sysroot,
+                       const gchar *deploy_id)
+{
+  g_autoptr (GPtrArray) deployments = NULL;
+  guint i;
+
+  OstreeDeployment *deployment = NULL;
+
+  deployments = ostree_sysroot_get_deployments (sysroot);
+  if (deployments == NULL)
+    goto out;
+
+  for (i=0; i<deployments->len; i++)
+    {
+      g_autofree gchar *id = deployment_generate_id (deployments->pdata[i]);
+      if (g_strcmp0 (deploy_id, id) == 0) {
+        deployment = g_object_ref (deployments->pdata[i]);
+      }
+    }
+
+out:
+  return deployment;
+}
+
+static void
+set_diff_task_result (GTask *task,
+                      GVariant *value,
+                      GError *error)
+{
+  if (error == NULL)
+    {
+      g_task_return_pointer (task,
+                             g_variant_new ("(@a(sua{sv}))", value),
+                             NULL);
+    }
+  else
+    {
+      g_task_return_error (task, error);
+    }
+}
+
+static void
+get_rebase_diff_variant_in_thread (GTask *task,
+                                   gpointer object,
+                                   gpointer data_ptr,
+                                   GCancellable *cancellable)
+{
+  RPMOSTreeOS *self = RPMOSTREE_OS (object);
+  const gchar *name;
+
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  glnx_unref_object OstreeRepo *ot_repo = NULL;
+  glnx_unref_object OstreeDeployment *base_deployment = NULL;
+  g_autofree gchar *comp_ref = NULL;
+  g_autofree gchar *base_refspec = NULL;
+
+  GVariant *value = NULL; // freed when invoked
+  GError *error = NULL; // freed when invoked
+  gchar *refspec = data_ptr; // freed by task
+
+  if (!utils_load_sysroot_and_repo (sysroot_get_sysroot_path ( sysroot_get ()),
+                                    cancellable,
+                                    &ot_sysroot,
+                                    &ot_repo,
+                                    &error))
+    goto out;
+
+  name = rpmostree_os_get_name (self);
+  base_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
+  if (base_deployment == NULL)
+    {
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "No deployments found for os %s", name);
+      goto out;
+    }
+
+  base_refspec = deployment_get_refspec (base_deployment);
+  if (!refspec_parse_partial (refspec,
+                              base_refspec,
+                              &comp_ref,
+                              &error))
+    goto out;
+
+  value = rpm_ostree_db_diff_variant (ot_repo,
+                                      ostree_deployment_get_csum (base_deployment),
+                                      comp_ref,
+                                      cancellable,
+                                      &error);
+
+out:
+  set_diff_task_result (task, value, error);
+}
+
+static void
+get_upgrade_diff_variant_in_thread (GTask *task,
+                                    gpointer object,
+                                    gpointer data_ptr,
+                                    GCancellable *cancellable)
+{
+  RPMOSTreeOS *self = RPMOSTREE_OS (object);
+  const gchar *name;
+
+  g_autofree gchar *comp_ref = NULL;
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  glnx_unref_object OstreeRepo *ot_repo = NULL;
+  glnx_unref_object OstreeDeployment *base_deployment = NULL;
+
+  GVariant *value = NULL; // freed when invoked
+  GError *error = NULL; // freed when invoked
+
+  if (!utils_load_sysroot_and_repo (sysroot_get_sysroot_path ( sysroot_get ()),
+                                    cancellable,
+                                    &ot_sysroot,
+                                    &ot_repo,
+                                    &error))
+    goto out;
+
+  name = rpmostree_os_get_name (self);
+  base_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
+  if (base_deployment == NULL)
+    {
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "No deployments found for os %s", name);
+      goto out;
+    }
+
+  comp_ref = deployment_get_refspec (base_deployment);
+  if (!comp_ref)
+    {
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "No upgrade remote found for os %s", name);
+      goto out;
+    }
+
+  value = rpm_ostree_db_diff_variant (ot_repo,
+                                      ostree_deployment_get_csum (base_deployment),
+                                      comp_ref,
+                                      cancellable,
+                                      &error);
+
+out:
+  set_diff_task_result (task, value, error);
+}
+
+static void
+get_deployments_diff_variant_in_thread (GTask *task,
+                                        gpointer object,
+                                        gpointer data_ptr,
+                                        GCancellable *cancellable)
+{
+  const gchar *ref0;
+  const gchar *ref1;
+
+  glnx_unref_object OstreeDeployment *deployment0 = NULL;
+  glnx_unref_object OstreeDeployment *deployment1 = NULL;
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  glnx_unref_object OstreeRepo *ot_repo = NULL;
+
+  GVariant *value = NULL; // freed when invoked
+  GError *error = NULL; // freed when invoked
+  GPtrArray *compare_refs = data_ptr; // freed by task
+
+  g_return_if_fail (compare_refs->len == 2);
+
+  if (!utils_load_sysroot_and_repo (sysroot_get_sysroot_path ( sysroot_get ()),
+                                    cancellable,
+                                    &ot_sysroot,
+                                    &ot_repo,
+                                    &error))
+    goto out;
+
+  deployment0 = get_deployment_for_id (ot_sysroot, compare_refs->pdata[0]);
+  if (!deployment0)
+    {
+      gchar *id = compare_refs->pdata[0];
+      g_set_error (&error,
+                   RPM_OSTREED_ERROR,
+                   RPM_OSTREED_ERROR_FAILED,
+                   "Invalid deployment id %s",
+                   id);
+      goto out;
+    }
+  ref0 = ostree_deployment_get_csum (deployment0);
+
+  deployment1 = get_deployment_for_id (ot_sysroot, compare_refs->pdata[1]);
+  if (!deployment1)
+    {
+      gchar *id = compare_refs->pdata[1];
+      g_set_error (&error,
+                   RPM_OSTREED_ERROR,
+                   RPM_OSTREED_ERROR_FAILED,
+                   "Invalid deployment id %s",
+                   id);
+      goto out;
+    }
+  ref1 = ostree_deployment_get_csum (deployment1);
+
+  value = rpm_ostree_db_diff_variant (ot_repo,
+                                      ref0,
+                                      ref1,
+                                      cancellable,
+                                      &error);
+
+out:
+  set_diff_task_result (task, value, error);
+}
+
 static void
 osstub_upgrade_thread (GTask *task,
                        gpointer source_object,
@@ -282,12 +622,47 @@ osstub_transaction_complete (GObject *source_object,
   g_clear_error (&local_error);
 }
 
+
+static gboolean
+handle_get_deployments_rpm_diff (RPMOSTreeOS *interface,
+                                 GDBusMethodInvocation *invocation,
+                                 const char *arg_deployid0,
+                                 const char *arg_deployid1)
+{
+  OSStub *self = OSSTUB (interface);
+  GPtrArray *compare_refs = NULL; // freed by task
+  GTask *task = NULL;
+
+  glnx_unref_object GCancellable *cancellable = NULL;
+
+  compare_refs = g_ptr_array_new_with_free_func (g_free);
+  g_ptr_array_add (compare_refs, g_strdup (arg_deployid0));
+  g_ptr_array_add (compare_refs, g_strdup (arg_deployid1));
+
+  task = g_task_new (self, cancellable,
+                     task_result_invoke,
+                     invocation);
+  g_task_set_task_data (task,
+                        compare_refs,
+                        (GDestroyNotify) g_ptr_array_unref);
+  g_task_run_in_thread (task, get_deployments_diff_variant_in_thread);
+
+  return TRUE;
+}
+
 static gboolean
 osstub_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
-                                          GDBusMethodInvocation *invocation,
-                                          const char *arg_deployid)
+                                          GDBusMethodInvocation *invocation)
 {
-  /* FIXME */
+  OSStub *self = OSSTUB (interface);
+  GTask *task = NULL;
+
+  glnx_unref_object GCancellable *cancellable = NULL;
+
+  task = g_task_new (self, cancellable,
+                     task_result_invoke,
+                     invocation);
+  g_task_run_in_thread (task, get_upgrade_diff_variant_in_thread);
 
   return TRUE;
 }
@@ -476,7 +851,18 @@ osstub_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
                                           const char *arg_refspec,
                                           const char * const *arg_packages)
 {
-  /* FIXME */
+  OSStub *self = OSSTUB (interface);
+  GTask *task = NULL;
+  glnx_unref_object GCancellable *cancellable = NULL;
+
+  /* TODO: Totally ignoring packages for now */
+  task = g_task_new (self, cancellable,
+                     task_result_invoke,
+                     invocation);
+  g_task_set_task_data (task,
+                        g_strdup (arg_refspec),
+                        g_free);
+  g_task_run_in_thread (task, get_rebase_diff_variant_in_thread);
 
   return TRUE;
 }

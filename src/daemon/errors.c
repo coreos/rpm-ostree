@@ -29,6 +29,8 @@ static const GDBusErrorEntry dbus_error_entries[] =
    "org.projectatomic.rpmostreed.Error.NotAuthorized"},
   {RPM_OSTREED_ERROR_UPDATE_IN_PROGRESS,
    "org.projectatomic.rpmostreed.Error.UpdateInProgress"},
+  {RPM_OSTREED_ERROR_INVALID_REFSPEC,
+   "org.projectatomic.rpmostreed.Error.InvalidRefspec"},
 };
 
 GQuark

@@ -16,9 +16,11 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "config.h"
+
 #include "deployment-utils.h"
 
-#include "libgsystem.h"
+#include <libglnx.h>
 
 char *
 deployment_generate_id (OstreeDeployment *deployment)
@@ -42,8 +44,9 @@ deployment_gpg_results (OstreeRepo *repo,
   GError *error = NULL;
   GVariant *ret = NULL;
 
-  gs_free gchar *remote = NULL;
-  gs_unref_object OstreeGpgVerifyResult *result = NULL;
+  g_autofree gchar *remote = NULL;
+  glnx_unref_object OstreeGpgVerifyResult *result = NULL;
+
   guint n_sigs, i;
   gboolean gpg_verify;
   GVariantBuilder builder;
@@ -87,17 +90,47 @@ out:
   return ret;
 }
 
+char *
+deployment_get_refspec (OstreeDeployment *deployment)
+{
+  GKeyFile *origin = NULL; // owned by deployment
+  char *origin_refspec = NULL;
+  origin = ostree_deployment_get_origin (deployment);
+
+  if (!origin)
+    goto out;
+
+  origin_refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
+
+out:
+  return origin_refspec;
+}
+
+GVariant *
+deployment_generate_blank_variant (void)
+{
+  GVariantBuilder builder;
+  g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+  g_variant_builder_add (&builder, "s", "");
+  g_variant_builder_add (&builder, "s", "");
+  g_variant_builder_add (&builder, "i", -1);
+  g_variant_builder_add (&builder, "s", "");
+  g_variant_builder_add (&builder, "s", "");
+  g_variant_builder_add (&builder, "t", 0);
+  g_variant_builder_add (&builder, "s", "");
+  g_variant_builder_add_value (&builder, g_variant_new("av", NULL));
+  return g_variant_builder_end (&builder);
+}
 
 GVariant *
 deployment_generate_variant (OstreeDeployment *deployment,
                              OstreeRepo *repo)
 {
-  gs_unref_variant GVariant *commit = NULL;
-  g_autoptr (GKeyFile) origin = NULL;
+  g_autoptr (GVariant) commit = NULL;
 
-  gs_free gchar *origin_refspec = NULL;
-  gs_free gchar *version_commit = NULL;
-  gs_free gchar *id = NULL;
+  g_autofree gchar *origin_refspec = NULL;
+  g_autofree gchar *version_commit = NULL;
+  g_autofree gchar *id = NULL;
 
   GVariant *sigs = NULL; // floating variant
   GError *error = NULL;
@@ -116,7 +149,7 @@ deployment_generate_variant (OstreeDeployment *deployment,
                                 &commit,
                                 &error))
     {
-      gs_unref_variant GVariant *metadata = NULL;
+      g_autoptr (GVariant) metadata = NULL;
       timestamp = ostree_commit_get_timestamp (commit);
       metadata = g_variant_get_child_value (commit, 0);
       if (metadata != NULL)
@@ -128,13 +161,9 @@ deployment_generate_variant (OstreeDeployment *deployment,
     }
   g_clear_error (&error);
 
-  origin = ostree_deployment_get_origin (deployment);
-  if (origin)
-    {
-      origin_refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
-      if (origin_refspec)
-          sigs = deployment_gpg_results (repo, origin_refspec, csum);
-    }
+  origin_refspec = deployment_get_refspec (deployment);
+  if (origin_refspec)
+    sigs = deployment_gpg_results (repo, origin_refspec, csum);
 
   if (!sigs)
     sigs = g_variant_new ("av", NULL);

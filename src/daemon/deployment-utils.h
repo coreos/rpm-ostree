@@ -24,5 +24,8 @@
 
 char * deployment_generate_id (OstreeDeployment *deployment);
 
+char * deployment_get_refspec (OstreeDeployment *deployment);
+
+GVariant * deployment_generate_blank_variant (void);
 GVariant * deployment_generate_variant (OstreeDeployment *deployment,
                                         OstreeRepo *repo);

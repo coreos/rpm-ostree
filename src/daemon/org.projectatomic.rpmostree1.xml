@@ -38,12 +38,18 @@
     <property name="DefaultDeployment" type="(ssisstsav)" access="read"/>
     <property name="RollbackDeployment" type="(ssisstsav)" access="read"/>
     <property name="HasCachedUpdateRpmDiff" type="b" access="read"/>
+
     <!-- NONE, DIFF, PREPARE, REBOOT -->
     <property name="AutomaticUpdatePolicy" type="s" access="read"/>
     <property name="Name" type="s" access="read"/>
 
+    <method name="GetDeploymentsRpmDiff">
+      <arg type="s" name="deployid0"/>
+      <arg type="s" name="deployid1"/>
+      <arg type="a(sua{sv})" name="result" direction="out"/>
+    </method>
+
     <method name="GetCachedUpdateRpmDiff">
-      <arg type="s" name="deployid"/>
       <arg type="a(sua{sv})" name="result" direction="out"/>
     </method>
 
