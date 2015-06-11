@@ -30,6 +30,7 @@
 #include "auth.h"
 #include "os.h"
 #include "utils.h"
+#include "transactions.h"
 
 typedef struct _OSStubClass OSStubClass;
 typedef struct _TaskData TaskData;
@@ -48,14 +49,9 @@ struct _OSStubClass
 struct _TaskData {
   OstreeSysroot *sysroot;
   gboolean sysroot_locked;
-  OstreeAsyncProgress *progress;
+  gchar *refspec;
   RPMOSTreeTransaction *transaction;
   GVariantDict *options;
-};
-
-enum {
-  PROP_0,
-  PROP_SYSROOT
 };
 
 static void osstub_iface_init (RPMOSTreeOSIface *iface);
@@ -81,12 +77,11 @@ task_result_invoke (GObject *source_object,
                     GAsyncResult *res,
                     gpointer user_data)
 {
-    glnx_unref_object GTask *task = G_TASK (res);
     GError *error = NULL;
 
     GDBusMethodInvocation *invocation = user_data;
 
-    GVariant *result = g_task_propagate_pointer (task, &error);
+    GVariant *result = g_task_propagate_pointer (G_TASK (res), &error);
 
     if (error)
       g_dbus_method_invocation_take_error (invocation, error);
@@ -102,9 +97,9 @@ task_data_free (TaskData *data)
     ostree_sysroot_unlock (data->sysroot);
 
   g_clear_object (&data->sysroot);
-  g_clear_object (&data->progress);
   g_clear_object (&data->transaction);
 
+  g_free (data->refspec);
   g_clear_pointer (&data->options, (GDestroyNotify) g_variant_dict_unref);
 }
 
@@ -125,7 +120,7 @@ osstub_dispose (GObject *object)
 {
   OSStub *self = OSSTUB (object);
   const gchar *object_path;
-  object_path = g_dbus_interface_skeleton_get_object_path (self);
+  object_path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON(self));
   if (object_path)
     {
       daemon_unpublish (daemon_get (),
@@ -170,190 +165,55 @@ osstub_class_init (OSStubClass *klass)
 
 /* ---------------------------------------------------------------------------------------------------- */
 
-static gint
-rollback_deployment_index (const gchar *name,
-                           OstreeSysroot *ot_sysroot,
-                           GError **error)
-{
-  g_autoptr (GPtrArray) deployments = NULL;
-  glnx_unref_object OstreeDeployment *merge_deployment = NULL;
-
-  gint index_to_prepend = -1;
-  gint merge_index = -1;
-  gint previous_index = -1;
-  guint i;
-
-  merge_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
-  if (merge_deployment == NULL)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "No deployments found for os %s", name);
-      goto out;
-    }
-
-  deployments = ostree_sysroot_get_deployments (ot_sysroot);
-  if (deployments->len < 2)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Found %u deployments, at least 2 required for rollback",
-                   deployments->len);
-      goto out;
-    }
-
-  g_assert (merge_deployment != NULL);
-  for (i = 0; i < deployments->len; i++)
-    {
-      if (deployments->pdata[i] == merge_deployment)
-        merge_index = i;
-
-      if (g_strcmp0 (ostree_deployment_get_osname (deployments->pdata[i]), name) == 0 &&
-              deployments->pdata[i] != merge_deployment &&
-              previous_index < 0)
-        {
-            previous_index = i;
-        }
-    }
-
-  g_assert (merge_index < deployments->len);
-  g_assert (deployments->pdata[merge_index] == merge_deployment);
-
-  /* If merge deployment is not booted assume we are using it. */
-  if (merge_index == 0 && previous_index > 0)
-      index_to_prepend = previous_index;
-  else
-      index_to_prepend = merge_index;
-
-out:
-  return index_to_prepend;
-}
-
-
-/**
- * refspec_parse_partial:
- * @new_provided_refspec: The provided refspec
- * @base_refspec: The refspec string to base on.
- * @out_refspec: Pointer to the new refspec
- * @error: Pointer to an error pointer.
- *
- * Takes a refspec string and adds any missing bits based on the
- * base_refspec argument. Errors if a full valid refspec can't
- * be derived.
- *
- * Returns: True on sucess.
- */
 static gboolean
-refspec_parse_partial (const gchar *new_provided_refspec,
-                       gchar *base_refspec,
-                       gchar **out_refspec,
-                       GError **error)
+change_upgrader_refspec (OstreeSysroot *sysroot,
+                         OstreeSysrootUpgrader *upgrader,
+                         const gchar *refspec,
+                         GCancellable *cancellable,
+                         gchar **out_old_refspec,
+                         gchar **out_new_refspec,
+                         GError **error)
 {
-
-  g_autofree gchar *ref = NULL;
-  g_autofree gchar *remote = NULL;
-  g_autofree gchar *origin_ref = NULL;
-  g_autofree gchar *origin_remote = NULL;
-  GError *parse_error = NULL;
-
   gboolean ret = FALSE;
 
-  /* Allow just switching remotes */
-  if (g_str_has_suffix (new_provided_refspec, ":"))
-    {
-      remote = g_strdup (new_provided_refspec);
-      remote[strlen (remote) - 1] = '\0';
-    }
-  else
-    {
-      if (!ostree_parse_refspec (new_provided_refspec, &remote,
-                                 &ref, &parse_error))
-        {
-          g_set_error_literal (error, RPM_OSTREED_ERROR,
-                       RPM_OSTREED_ERROR_INVALID_REFSPEC,
-                       parse_error->message);
-          g_clear_error (&parse_error);
-          goto out;
-        }
-    }
+  g_autofree gchar *old_refspec = NULL;
+  g_autofree gchar *new_refspec = NULL;
+  g_autoptr (GKeyFile) new_origin = NULL;
+  GKeyFile *old_origin = NULL; // owned by deployment
 
-  if (base_refspec != NULL)
-    {
-      if (!ostree_parse_refspec (base_refspec, &origin_remote,
-                               &origin_ref, &parse_error))
-        goto out;
-    }
+  old_origin = ostree_sysroot_upgrader_get_origin (upgrader);
+  old_refspec = g_key_file_get_string (old_origin, "origin",
+                                        "refspec", NULL);
 
-  if (ref == NULL)
-    {
-      if (origin_ref)
-        {
-          ref = g_strdup (origin_ref);
-        }
+  if (!refspec_parse_partial (refspec,
+                              old_refspec,
+                              &new_refspec,
+                              error))
+    goto out;
 
-      else
-        {
-          g_set_error (error, RPM_OSTREED_ERROR,
-                       RPM_OSTREED_ERROR_INVALID_REFSPEC,
-                      "Could not determine default ref to pull.");
-          goto out;
-        }
-
-    }
-  else if (remote == NULL)
+  if (strcmp (old_refspec, new_refspec) == 0)
     {
-      if (origin_remote)
-        {
-          remote = g_strdup (origin_remote);
-        }
-      else
-        {
-          g_set_error (error, RPM_OSTREED_ERROR,
-                       RPM_OSTREED_ERROR_INVALID_REFSPEC,
-                       "Could not determine default remote to pull.");
-          goto out;
-        }
-    }
-
-  if (g_strcmp0 (origin_remote, remote) == 0 &&
-      g_strcmp0 (origin_ref, ref) == 0)
-    {
-      g_set_error (error, RPM_OSTREED_ERROR,
-                   RPM_OSTREED_ERROR_INVALID_REFSPEC,
-                   "Old and new refs are equal: %s:%s",
-                   remote, ref);
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Old and new refs are equal: %s", new_refspec);
       goto out;
     }
 
-  *out_refspec = g_strconcat (remote, ":", ref, NULL);
+  new_origin = ostree_sysroot_origin_new_from_refspec (sysroot,
+                                                       new_refspec);
+  if (!ostree_sysroot_upgrader_set_origin (upgrader, new_origin,
+                                           cancellable, error))
+    goto out;
+
+  if (out_new_refspec != NULL)
+    *out_new_refspec = g_steal_pointer (&new_refspec);
+
+  if (out_old_refspec != NULL)
+    *out_old_refspec = g_steal_pointer (&old_refspec);
+
   ret = TRUE;
 
 out:
   return ret;
-}
-
-
-static OstreeDeployment *
-get_deployment_for_id (OstreeSysroot *sysroot,
-                       const gchar *deploy_id)
-{
-  g_autoptr (GPtrArray) deployments = NULL;
-  guint i;
-
-  OstreeDeployment *deployment = NULL;
-
-  deployments = ostree_sysroot_get_deployments (sysroot);
-  if (deployments == NULL)
-    goto out;
-
-  for (i=0; i<deployments->len; i++)
-    {
-      g_autofree gchar *id = deployment_generate_id (deployments->pdata[i]);
-      if (g_strcmp0 (deploy_id, id) == 0) {
-        deployment = g_object_ref (deployments->pdata[i]);
-      }
-    }
-
-out:
-  return deployment;
 }
 
 static void
@@ -433,6 +293,7 @@ get_upgrade_diff_variant_in_thread (GTask *task,
 {
   RPMOSTreeOS *self = RPMOSTREE_OS (object);
   const gchar *name;
+  gchar *compare_deployment = data_ptr; // freed by task
 
   g_autofree gchar *comp_ref = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
@@ -450,12 +311,28 @@ get_upgrade_diff_variant_in_thread (GTask *task,
     goto out;
 
   name = rpmostree_os_get_name (self);
-  base_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
-  if (base_deployment == NULL)
+  if (compare_deployment == NULL || compare_deployment[0] == '\0')
     {
-      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "No deployments found for os %s", name);
-      goto out;
+      base_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
+      if (base_deployment == NULL)
+        {
+          g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "No deployments found for os %s", name);
+          goto out;
+        }
+    }
+  else
+    {
+      base_deployment = deployment_get_for_id (ot_sysroot, compare_deployment);
+      if (!base_deployment)
+        {
+          g_set_error (&error,
+                       RPM_OSTREED_ERROR,
+                       RPM_OSTREED_ERROR_FAILED,
+                       "Invalid deployment id %s",
+                       compare_deployment);
+          goto out;
+        }
     }
 
   comp_ref = deployment_get_refspec (base_deployment);
@@ -503,7 +380,7 @@ get_deployments_diff_variant_in_thread (GTask *task,
                                     &error))
     goto out;
 
-  deployment0 = get_deployment_for_id (ot_sysroot, compare_refs->pdata[0]);
+  deployment0 = deployment_get_for_id (ot_sysroot, compare_refs->pdata[0]);
   if (!deployment0)
     {
       gchar *id = compare_refs->pdata[0];
@@ -516,7 +393,7 @@ get_deployments_diff_variant_in_thread (GTask *task,
     }
   ref0 = ostree_deployment_get_csum (deployment0);
 
-  deployment1 = get_deployment_for_id (ot_sysroot, compare_refs->pdata[1]);
+  deployment1 = deployment_get_for_id (ot_sysroot, compare_refs->pdata[1]);
   if (!deployment1)
     {
       gchar *id = compare_refs->pdata[1];
@@ -540,6 +417,78 @@ out:
 }
 
 static void
+osstub_pull_dir_thread (GTask *task,
+                       gpointer source_object,
+                       gpointer task_data,
+                       GCancellable *cancellable)
+{
+  RPMOSTreeOS *interface = source_object;
+  TaskData *data = task_data;
+
+  glnx_unref_object OstreeSysrootUpgrader *upgrader = NULL;
+  glnx_unref_object OstreeAsyncProgress *progress = NULL;
+  glnx_unref_object OstreeRepo *repo = NULL;
+  g_autofree gchar *origin_description = NULL;
+
+  const char *name;
+
+  gboolean changed = FALSE;
+  GError *local_error = NULL;
+
+  // libostree iterates and calls quit on main loop
+  // so we need to run in our own context.
+  GMainContext *m_context = g_main_context_new ();
+  g_main_context_push_thread_default (m_context);
+
+  name = rpmostree_os_get_name (interface);
+  upgrader = ostree_sysroot_upgrader_new_for_os (data->sysroot, name,
+                                                 cancellable, &local_error);
+  if (upgrader == NULL)
+    goto out;
+
+  if (data->refspec != NULL)
+    {
+      if (!change_upgrader_refspec (data->sysroot, upgrader, data->refspec, cancellable,
+                                    NULL, NULL, &local_error))
+        goto out;
+    }
+
+  origin_description = ostree_sysroot_upgrader_get_origin_description (upgrader);
+  if (origin_description != NULL)
+    rpmostree_transaction_emit_message (data->transaction,
+                                        g_strdup_printf ("Updating from: %s\n",
+                                                         origin_description));
+
+  if (!ostree_sysroot_get_repo (data->sysroot, &repo,
+                                cancellable, &local_error))
+    goto out;
+
+  progress = ostree_async_progress_new ();
+  transaction_connect_download_progress (data->transaction, progress);
+  transaction_connect_signature_progress (data->transaction, repo);
+  if (!ostree_sysroot_upgrader_pull_one_dir (upgrader, "/usr/share/rpm",
+                                             0, 0, progress, &changed,
+                                             cancellable, &local_error))
+    goto out;
+
+  if (!changed)
+    {
+      rpmostree_transaction_set_result_message (data->transaction,
+                                                "No upgrade available.");
+    }
+
+out:
+  // Clean up context
+  g_main_context_pop_thread_default (m_context);
+  g_main_context_unref (m_context);
+
+  if (local_error != NULL)
+    g_task_return_error (task, local_error);
+  else
+    g_task_return_boolean (task, TRUE);
+}
+
+static void
 osstub_upgrade_thread (GTask *task,
                        gpointer source_object,
                        gpointer task_data,
@@ -547,14 +496,28 @@ osstub_upgrade_thread (GTask *task,
 {
   RPMOSTreeOS *interface = source_object;
   TaskData *data = task_data;
-  gboolean opt_allow_downgrade = FALSE;
+
   glnx_unref_object OstreeSysrootUpgrader *upgrader = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
-  g_autofree char *origin_description = NULL;
+  glnx_unref_object OstreeAsyncProgress *progress = NULL;
+
+  g_autofree gchar *new_refspec = NULL;
+  g_autofree gchar *old_refspec = NULL;
+  g_autofree gchar *origin_description = NULL;
+
   const char *name;
-  OstreeSysrootUpgraderPullFlags upgrader_pull_flags = 0;
-  gboolean changed = FALSE;
   GError *local_error = NULL;
+
+  OstreeSysrootUpgraderPullFlags upgrader_pull_flags = 0;
+
+  gboolean opt_allow_downgrade = FALSE;
+  gboolean skip_purge = FALSE;
+  gboolean changed = FALSE;
+
+  // libostree iterates and calls quit on main loop
+  // so we need to run in our own context.
+  GMainContext *m_context = g_main_context_new ();
+  g_main_context_push_thread_default (m_context);
 
   /* XXX Fail if option type is wrong? */
   g_variant_dict_lookup (data->options,
@@ -563,23 +526,41 @@ osstub_upgrade_thread (GTask *task,
 
   name = rpmostree_os_get_name (interface);
 
-  upgrader = ostree_sysroot_upgrader_new_for_os (data->sysroot, name,
+	upgrader = ostree_sysroot_upgrader_new_for_os (data->sysroot, name,
                                                  cancellable, &local_error);
   if (upgrader == NULL)
     goto out;
-
-  origin_description = ostree_sysroot_upgrader_get_origin_description (upgrader);
-  /* FIXME Emit origin description in transaction message. */
 
   if (!ostree_sysroot_get_repo (data->sysroot, &repo,
                                 cancellable, &local_error))
     goto out;
 
-  if (opt_allow_downgrade)
+  if (data->refspec != NULL)
+    {
+      if (!change_upgrader_refspec (data->sysroot, upgrader, data->refspec, cancellable,
+                                    &old_refspec, &new_refspec, &local_error))
+        goto out;
+
+      g_variant_dict_lookup (data->options,
+                             "skip-purge", "b",
+                             &skip_purge);
+    }
+
+  if (opt_allow_downgrade || new_refspec)
     upgrader_pull_flags |= OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER;
 
+  origin_description = ostree_sysroot_upgrader_get_origin_description (upgrader);
+  if (origin_description != NULL)
+    rpmostree_transaction_emit_message (data->transaction,
+                                        g_strdup_printf ("Updating from: %s\n",
+                                                         origin_description));
+
+  progress = ostree_async_progress_new ();
+  transaction_connect_download_progress (data->transaction, progress);
+  transaction_connect_signature_progress (data->transaction, repo);
+
   if (!ostree_sysroot_upgrader_pull (upgrader, 0, upgrader_pull_flags,
-                                     data->progress, &changed,
+                                     progress, &changed,
                                      cancellable, &local_error))
     goto out;
 
@@ -587,20 +568,206 @@ osstub_upgrade_thread (GTask *task,
     {
       if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, &local_error))
         goto out;
+
+      if (!skip_purge && old_refspec != NULL)
+        {
+          g_autofree gchar *remote = NULL;
+          g_autofree gchar *ref = NULL;
+
+          if (!ostree_parse_refspec (old_refspec, &remote,
+                                     &ref, &local_error))
+            goto out;
+
+          if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, &local_error))
+            goto out;
+
+          ostree_repo_transaction_set_ref (repo, remote, ref, NULL);
+
+          rpmostree_transaction_emit_message (data->transaction,
+                                        g_strdup_printf ("deleting ref %s\n",
+                                                         old_refspec));
+
+          if (!ostree_repo_commit_transaction (repo, NULL, cancellable, &local_error))
+            goto out;
+        }
     }
   else
     {
-      /* FIXME Emit "No upgrade available." in transaction message. */
+      rpmostree_transaction_set_result_message (data->transaction,
+                                                "No upgrade available.");
     }
 
 out:
+  // Clean up context
+  g_main_context_pop_thread_default (m_context);
+  g_main_context_unref (m_context);
+
   if (local_error != NULL)
     g_task_return_error (task, local_error);
   else
     g_task_return_boolean (task, TRUE);
 }
 
+static void
+osstub_rollback_thread (GTask         *task,
+                        gpointer       source_object,
+                        gpointer       task_data,
+                        GCancellable  *cancellable)
+{
+  RPMOSTreeOS *interface = source_object;
+  TaskData *data = task_data;
+  const char *name;
+  const char *csum;
+  g_autoptr (GPtrArray) deployments = NULL;
+  g_autoptr (GPtrArray) new_deployments = NULL;
+
+  GError *error = NULL;
+
+  gint rollback_index;
+  guint i;
+  gint deployserial;
+
+  name = rpmostree_os_get_name (interface);
+
+  rollback_index = rollback_deployment_index (name, data->sysroot, &error);
+  if (rollback_index < 0)
+    goto out;
+
+  deployments = ostree_sysroot_get_deployments (data->sysroot);
+  new_deployments = g_ptr_array_new_with_free_func (g_object_unref);
+
+  // build out the reordered array
+  g_ptr_array_add (new_deployments, g_object_ref (deployments->pdata[rollback_index]));
+  for (i = 0; i < deployments->len; i++)
+  {
+    if (i == rollback_index)
+      continue;
+
+    g_ptr_array_add (new_deployments, g_object_ref (deployments->pdata[i]));
+  }
+
+  csum = ostree_deployment_get_csum (deployments->pdata[rollback_index]);
+  deployserial = ostree_deployment_get_deployserial (deployments->pdata[rollback_index]);
+  rpmostree_transaction_emit_message (data->transaction,
+                                      g_strdup_printf ("Moving '%s.%d' to be first deployment\n",
+                                                       csum, deployserial));
+
+  // if default changed write it.
+  if (deployments->pdata[0] != new_deployments->pdata[0])
+    ostree_sysroot_write_deployments (data->sysroot,
+                                      new_deployments,
+                                      cancellable,
+                                      &error);
+
+out:
+  if (error == NULL)
+      g_task_return_boolean (task, TRUE);
+  else
+      g_task_return_error (task, error);
+}
+
+static void
+osstub_clear_rollback_thread (GTask         *task,
+                               gpointer       source_object,
+                               gpointer       task_data,
+                               GCancellable  *cancellable)
+{
+  RPMOSTreeOS *interface = source_object;
+  TaskData *data = task_data;
+  const char *name;
+
+  g_autoptr (GPtrArray) deployments = NULL;
+  g_autoptr (GPtrArray) new_deployments = NULL;
+
+  GError *error = NULL;
+
+  gint rollback_index;
+
+  name = rpmostree_os_get_name (interface);
+
+  rollback_index = rollback_deployment_index (name, data->sysroot, &error);
+  if (rollback_index < 0)
+    goto out;
+
+  deployments = ostree_sysroot_get_deployments (data->sysroot);
+
+  if (deployments->pdata[rollback_index] == ostree_sysroot_get_booted_deployment (data->sysroot))
+    {
+      g_set_error (&error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                   "Cannot undeploy currently booted deployment %i",
+                   rollback_index);
+      goto out;
+    }
+
+  g_ptr_array_remove_index (deployments, rollback_index);
+
+  ostree_sysroot_write_deployments (data->sysroot,
+                                    deployments,
+                                    cancellable,
+                                    &error);
+
+out:
+  if (error == NULL)
+      g_task_return_boolean (task, TRUE);
+  else
+      g_task_return_error (task, error);
+}
+
 /* ---------------------------------------------------------------------------------------------------- */
+
+static gboolean
+acquire_sysroot_lock (GCancellable *cancellable,
+                      OstreeSysroot **out_sysroot,
+                      GError **error)
+{
+  glnx_unref_object OstreeSysroot *sysroot = NULL;
+  gboolean lock_acquired = FALSE;
+
+  if (!utils_load_sysroot_and_repo (sysroot_get_sysroot_path ( sysroot_get ()),
+                                    cancellable,
+                                    &sysroot,
+                                    NULL,
+                                    error))
+    goto out;
+
+  g_return_val_if_fail (sysroot != NULL, FALSE);
+
+  if (!ostree_sysroot_try_lock (sysroot, &lock_acquired, error))
+    goto out;
+
+  if (!lock_acquired)
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_BUSY,
+                           "System transaction in progress");
+      goto out;
+    }
+
+  *out_sysroot = g_steal_pointer (&sysroot);
+
+out:
+  return lock_acquired;
+}
+
+static void
+respond_to_transaction_invocation (GDBusMethodInvocation *invocation,
+                                   RPMOSTreeTransaction *transaction,
+                                   GError *error)
+{
+  if (error == NULL)
+    {
+      const char *object_path;
+
+      g_return_if_fail (transaction != NULL);
+
+      object_path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON(transaction));
+      g_dbus_method_invocation_return_value (invocation,
+                                             g_variant_new ("(o)", object_path));
+    }
+  else
+    {
+      g_dbus_method_invocation_take_error (invocation, error);
+    }
+}
 
 static void
 osstub_transaction_complete (GObject *source_object,
@@ -609,19 +776,99 @@ osstub_transaction_complete (GObject *source_object,
 {
   TaskData *data;
   gboolean success;
-  const char *message;
+  const gchar *message;
+
   GError *local_error = NULL;
 
   data = g_task_get_task_data (G_TASK (result));
 
   success = g_task_propagate_boolean (G_TASK (result), &local_error);
-  message = (local_error != NULL) ? local_error->message : "";
+  if (success)
+    sysroot_emit_update (sysroot_get (), data->sysroot);
 
-  rpmostree_transaction_emit_completed (data->transaction, success, message);
+  if (local_error)
+      message = local_error->message;
+  else
+      message = NULL;
 
+  complete_transaction (data->transaction, success, message);
   g_clear_error (&local_error);
 }
 
+static gboolean
+osstub_handle_pull_dir (RPMOSTreeOS *interface,
+                        GDBusMethodInvocation *invocation,
+                        gchar *refspec)
+{
+  g_autoptr (GTask) task = NULL;
+  glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
+  glnx_unref_object OstreeSysroot *sysroot = NULL;
+  glnx_unref_object GCancellable *cancellable = NULL;
+  TaskData *data;
+  GError *local_error = NULL;
+
+  cancellable = g_cancellable_new ();
+
+  if (!acquire_sysroot_lock (cancellable, &sysroot, &local_error))
+    goto out;
+
+  transaction = new_transaction (invocation, cancellable, &local_error);
+
+  data = g_slice_new0 (TaskData);
+  data->sysroot = g_object_ref (sysroot);
+  data->sysroot_locked = TRUE;
+  data->refspec = refspec;
+  data->transaction = g_object_ref (transaction);
+  data->options = NULL;
+
+  task = g_task_new (interface, cancellable, osstub_transaction_complete, NULL);
+  g_task_set_check_cancellable (task, FALSE);
+  g_task_set_source_tag (task, osstub_handle_pull_dir);
+  g_task_set_task_data (task, data, (GDestroyNotify) task_data_free);
+  g_task_run_in_thread (task, osstub_pull_dir_thread);
+
+out:
+  respond_to_transaction_invocation (invocation, transaction, local_error);
+  return TRUE;
+}
+
+static gboolean
+osstub_handle_deploy (RPMOSTreeOS *interface,
+                      GDBusMethodInvocation *invocation,
+                      GVariant *arg_options,
+                      gchar *refspec)
+{
+  glnx_unref_object GCancellable *cancellable = NULL;
+  glnx_unref_object OstreeSysroot *sysroot = NULL;
+  glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
+  g_autoptr (GTask) task = NULL;
+  TaskData *data;
+  GError *local_error = NULL;
+
+  cancellable = g_cancellable_new ();
+
+  if (!acquire_sysroot_lock (cancellable, &sysroot, &local_error))
+    goto out;
+
+  transaction = new_transaction (invocation, cancellable, &local_error);
+
+  data = g_slice_new0 (TaskData);
+  data->sysroot = g_object_ref (sysroot);
+  data->sysroot_locked = TRUE;
+  data->refspec = refspec;
+  data->transaction = g_object_ref (transaction);
+  data->options = g_variant_dict_new (arg_options);
+
+  task = g_task_new (interface, cancellable, osstub_transaction_complete, NULL);
+  g_task_set_check_cancellable (task, FALSE);
+  g_task_set_source_tag (task, osstub_handle_deploy);
+  g_task_set_task_data (task, data, (GDestroyNotify) task_data_free);
+  g_task_run_in_thread (task, osstub_upgrade_thread);
+
+out:
+  respond_to_transaction_invocation (invocation, transaction, local_error);
+  return TRUE;
+}
 
 static gboolean
 handle_get_deployments_rpm_diff (RPMOSTreeOS *interface,
@@ -631,7 +878,7 @@ handle_get_deployments_rpm_diff (RPMOSTreeOS *interface,
 {
   OSStub *self = OSSTUB (interface);
   GPtrArray *compare_refs = NULL; // freed by task
-  GTask *task = NULL;
+  g_autoptr (GTask) task = NULL;
 
   glnx_unref_object GCancellable *cancellable = NULL;
 
@@ -652,16 +899,20 @@ handle_get_deployments_rpm_diff (RPMOSTreeOS *interface,
 
 static gboolean
 osstub_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
-                                          GDBusMethodInvocation *invocation)
+                                          GDBusMethodInvocation *invocation,
+                                          const char *arg_deployid)
 {
   OSStub *self = OSSTUB (interface);
-  GTask *task = NULL;
+  g_autoptr (GTask) task = NULL;
 
   glnx_unref_object GCancellable *cancellable = NULL;
 
   task = g_task_new (self, cancellable,
                      task_result_invoke,
                      invocation);
+  g_task_set_task_data (task,
+                        g_strdup (arg_deployid),
+                        g_free);
   g_task_run_in_thread (task, get_upgrade_diff_variant_in_thread);
 
   return TRUE;
@@ -669,35 +920,9 @@ osstub_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
 
 static gboolean
 osstub_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
-                                        GDBusMethodInvocation *invocation,
-                                        const char *arg_deployid)
+                                        GDBusMethodInvocation *invocation)
 {
-  glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
-  glnx_unref_object GCancellable *cancellable = NULL;
-  GError *local_error = NULL;
-
-  cancellable = g_cancellable_new ();
-
-  /* FIXME Do locking here, make sure we have exclusive access. */
-
-  transaction = new_transaction (invocation, cancellable, NULL, &local_error);
-
-  if (local_error == NULL)
-    {
-      const char *object_path;
-
-      object_path = g_dbus_object_get_object_path (G_DBUS_OBJECT (transaction));
-
-      rpmostree_os_complete_download_update_rpm_diff (interface,
-                                                      invocation,
-                                                      object_path);
-    }
-  else
-    {
-      g_dbus_method_invocation_take_error (invocation, local_error);
-    }
-
-  return TRUE;
+  return osstub_handle_pull_dir (interface, invocation, NULL);
 }
 
 static gboolean
@@ -705,69 +930,7 @@ osstub_handle_upgrade (RPMOSTreeOS *interface,
                        GDBusMethodInvocation *invocation,
                        GVariant *arg_options)
 {
-  glnx_unref_object GCancellable *cancellable = NULL;
-  glnx_unref_object OstreeSysroot *sysroot = NULL;
-  glnx_unref_object OstreeAsyncProgress *progress = NULL;
-  glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
-  g_autoptr (GTask) task = NULL;
-  TaskData *data;
-  gboolean lock_acquired = FALSE;
-  GError *local_error = NULL;
-
-  cancellable = g_cancellable_new ();
-
-  if (!utils_load_sysroot_and_repo (sysroot_get_sysroot_path ( sysroot_get ()),
-                                  cancellable,
-                                  &sysroot,
-                                  NULL,
-                                  &local_error))
-    goto out;
-
-  g_return_val_if_fail (sysroot != NULL, FALSE);
-
-  if (!ostree_sysroot_try_lock (sysroot, &lock_acquired, &local_error))
-    goto out;
-
-  if (!lock_acquired)
-    {
-      local_error = g_error_new_literal (G_IO_ERROR, G_IO_ERROR_BUSY,
-                                         "System transaction in progress");
-      goto out;
-    }
-
-  transaction = new_transaction (invocation, cancellable,
-                                 &progress, &local_error);
-
-  data = g_slice_new0 (TaskData);
-  data->sysroot = g_object_ref (sysroot);
-  data->sysroot_locked = TRUE;
-  data->progress = g_object_ref (progress);
-  data->transaction = g_object_ref (transaction);
-  data->options = g_variant_dict_new (arg_options);
-
-  task = g_task_new (interface, cancellable, osstub_transaction_complete, NULL);
-  g_task_set_check_cancellable (task, FALSE);
-  g_task_set_source_tag (task, osstub_handle_upgrade);
-  g_task_set_task_data (task, data, (GDestroyNotify) task_data_free);
-  g_task_run_in_thread (task, osstub_upgrade_thread);
-
-out:
-  if (local_error == NULL)
-    {
-      const char *object_path;
-
-      object_path = g_dbus_object_get_object_path (G_DBUS_OBJECT (transaction));
-
-      rpmostree_os_complete_upgrade (interface,
-                                     invocation,
-                                     object_path);
-    }
-  else
-    {
-      g_dbus_method_invocation_take_error (invocation, local_error);
-    }
-
-  return TRUE;
+  return osstub_handle_deploy (interface, invocation, arg_options, NULL);
 }
 
 static gboolean
@@ -775,30 +938,35 @@ osstub_handle_rollback (RPMOSTreeOS *interface,
                         GDBusMethodInvocation *invocation)
 {
   glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
+  glnx_unref_object OstreeSysroot *sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
   GError *local_error = NULL;
 
+  g_autoptr (GTask) task = NULL;
+  TaskData *data;
+
   cancellable = g_cancellable_new ();
 
-  /* FIXME Do locking here, make sure we have exclusive access. */
+  if (!acquire_sysroot_lock (cancellable, &sysroot, &local_error))
+    goto out;
 
-  transaction = new_transaction (invocation, cancellable, NULL, &local_error);
+  transaction = new_transaction (invocation, cancellable, &local_error);
 
-  if (local_error == NULL)
-    {
-      const char *object_path;
+  data = g_slice_new0 (TaskData);
+  data->sysroot = g_object_ref (sysroot);
+  data->sysroot_locked = TRUE;
+  data->refspec = NULL;
+  data->transaction = g_object_ref (transaction);
+  data->options = NULL;
 
-      object_path = g_dbus_object_get_object_path (G_DBUS_OBJECT (transaction));
+  task = g_task_new (interface, cancellable, osstub_transaction_complete, NULL);
+  g_task_set_check_cancellable (task, FALSE);
+  g_task_set_source_tag (task, osstub_handle_rollback);
+  g_task_set_task_data (task, data, (GDestroyNotify) task_data_free);
+  g_task_run_in_thread (task, osstub_rollback_thread);
 
-      rpmostree_os_complete_rollback (interface,
-                                      invocation,
-                                      object_path);
-    }
-  else
-    {
-      g_dbus_method_invocation_take_error (invocation, local_error);
-    }
-
+out:
+  respond_to_transaction_invocation (invocation, transaction, local_error);
   return TRUE;
 }
 
@@ -807,42 +975,48 @@ osstub_handle_clear_rollback_target (RPMOSTreeOS *interface,
                                      GDBusMethodInvocation *invocation)
 {
   glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
+  glnx_unref_object OstreeSysroot *sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
   GError *local_error = NULL;
 
+  g_autoptr (GTask) task = NULL;
+  TaskData *data;
+
   cancellable = g_cancellable_new ();
 
-  /* FIXME Do locking here, make sure we have exclusive access. */
+  if (!acquire_sysroot_lock (cancellable, &sysroot, &local_error))
+    goto out;
 
-  transaction = new_transaction (invocation, cancellable, NULL, &local_error);
+  transaction = new_transaction (invocation, cancellable, &local_error);
 
-  if (local_error == NULL)
-    {
-      const char *object_path;
+  data = g_slice_new0 (TaskData);
+  data->sysroot = g_object_ref (sysroot);
+  data->sysroot_locked = TRUE;
+  data->refspec = NULL;
+  data->transaction = g_object_ref (transaction);
+  data->options = NULL;
 
-      object_path = g_dbus_object_get_object_path (G_DBUS_OBJECT (transaction));
+  task = g_task_new (interface, cancellable, osstub_transaction_complete, NULL);
+  g_task_set_check_cancellable (task, FALSE);
+  g_task_set_source_tag (task, osstub_handle_clear_rollback_target);
+  g_task_set_task_data (task, data, (GDestroyNotify) task_data_free);
+  g_task_run_in_thread (task, osstub_clear_rollback_thread);
 
-      rpmostree_os_complete_clear_rollback_target (interface,
-                                                   invocation,
-                                                   object_path);
-    }
-  else
-    {
-      g_dbus_method_invocation_take_error (invocation, local_error);
-    }
-
+out:
+  respond_to_transaction_invocation (invocation, transaction, local_error);
   return TRUE;
 }
 
 static gboolean
 osstub_handle_rebase (RPMOSTreeOS *interface,
                       GDBusMethodInvocation *invocation,
+                      GVariant *arg_options,
                       const char *arg_refspec,
                       const char * const *arg_packages)
 {
-  /* FIXME */
-
-  return TRUE;
+  /* TODO: Totally ignoring arg_packages for now */
+  return osstub_handle_deploy (interface, invocation,
+                               arg_options, g_strdup (arg_refspec));
 }
 
 static gboolean
@@ -852,7 +1026,7 @@ osstub_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
                                           const char * const *arg_packages)
 {
   OSStub *self = OSSTUB (interface);
-  GTask *task = NULL;
+  g_autoptr (GTask) task = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
 
   /* TODO: Totally ignoring packages for now */
@@ -873,32 +1047,8 @@ osstub_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
                                         const char *arg_refspec,
                                         const char * const *arg_packages)
 {
-  glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
-  glnx_unref_object GCancellable *cancellable = NULL;
-  GError *local_error = NULL;
-
-  cancellable = g_cancellable_new ();
-
-  /* FIXME Do locking here, make sure we have exclusive access. */
-
-  transaction = new_transaction (invocation, cancellable, NULL, &local_error);
-
-  if (local_error == NULL)
-    {
-      const char *object_path;
-
-      object_path = g_dbus_object_get_object_path (G_DBUS_OBJECT (transaction));
-
-      rpmostree_os_complete_download_rebase_rpm_diff (interface,
-                                                      invocation,
-                                                      object_path);
-    }
-  else
-    {
-      g_dbus_method_invocation_take_error (invocation, local_error);
-    }
-
-  return TRUE;
+  /* TODO: Totally ignoring arg_packages for now */
+  return osstub_handle_pull_dir (interface, invocation, g_strdup (arg_refspec));
 }
 
 static void
@@ -912,6 +1062,7 @@ osstub_load_internals (OSStub *self,
 
   glnx_unref_object OstreeRepo *ot_repo = NULL;
   g_autoptr (GPtrArray) deployments = NULL;
+  g_autofree gchar *origin_refspec = NULL;
 
   GError *error = NULL;
   GVariant *booted_variant = NULL;
@@ -923,6 +1074,8 @@ osstub_load_internals (OSStub *self,
   guint i;
 
   name = rpmostree_os_get_name (RPMOSTREE_OS (self));
+  g_debug ("loading %s", name);
+
   if (!ostree_sysroot_get_repo (ot_sysroot,
                                 &ot_repo,
                                 NULL,
@@ -963,7 +1116,6 @@ osstub_load_internals (OSStub *self,
   if (merge_deployment)
     {
       g_autofree gchar *head = NULL;
-      g_autofree gchar *origin_refspec = NULL;
 
       origin_refspec = deployment_get_refspec (merge_deployment);
       if (!origin_refspec)
@@ -973,7 +1125,7 @@ osstub_load_internals (OSStub *self,
                                    FALSE, &head, NULL))
         goto out;
 
-      has_cached_updates = g_strcmp0 (ostree_deployment_get_csum(merge_deployment),
+      has_cached_updates = g_strcmp0 (ostree_deployment_get_csum (merge_deployment),
                                       head) != 0;
     }
 
@@ -998,8 +1150,9 @@ out:
   rpmostree_os_set_has_cached_update_rpm_diff (RPMOSTREE_OS (self),
                                                has_cached_updates);
 
-  rpmostree_os_set_has_cached_update_rpm_diff (RPMOSTREE_OS (self),
-                                               has_cached_updates);
+  rpmostree_os_set_upgrade_origin (RPMOSTREE_OS (self),
+                                   origin_refspec ? origin_refspec : "");
+  g_dbus_interface_skeleton_flush(G_DBUS_INTERFACE_SKELETON (self));
 }
 
 static void

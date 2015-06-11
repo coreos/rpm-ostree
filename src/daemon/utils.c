@@ -18,157 +18,9 @@
 
 #include "config.h"
 #include "utils.h"
+#include "errors.h"
 
-#include "libgsystem.h"
 #include <libglnx.h>
-
-static gboolean
-handle_cancel_cb (RPMOSTreeTransaction *transaction,
-                  GDBusMethodInvocation *invocation,
-                  GCancellable *method_cancellable)
-{
-  g_cancellable_cancel (method_cancellable);
-
-  rpmostree_transaction_complete_cancel (transaction, invocation);
-
-  return TRUE;
-}
-
-static void
-progress_changed_cb (OstreeAsyncProgress *progress,
-                     RPMOSTreeTransaction *transaction)
-{
-  guint64 start_time = ostree_async_progress_get_uint64 (progress, "start-time");
-  guint64 elapsed_secs = 0;
-
-  guint outstanding_fetches = ostree_async_progress_get_uint (progress, "outstanding-fetches");
-  guint outstanding_writes = ostree_async_progress_get_uint (progress, "outstanding-writes");
-
-  guint n_scanned_metadata = ostree_async_progress_get_uint (progress, "scanned-metadata");
-  guint metadata_fetched = ostree_async_progress_get_uint (progress, "metadata-fetched");
-  guint outstanding_metadata_fetches = ostree_async_progress_get_uint (progress, "outstanding-metadata-fetches");
-
-  guint total_delta_parts = ostree_async_progress_get_uint (progress, "total-delta-parts");
-  guint fetched_delta_parts = ostree_async_progress_get_uint (progress, "fetched-delta-parts");
-  guint total_delta_superblocks = ostree_async_progress_get_uint (progress, "total-delta-superblocks");
-  guint64 total_delta_part_size = ostree_async_progress_get_uint64 (progress, "total-delta-part-size");
-
-  guint fetched = ostree_async_progress_get_uint (progress, "fetched");
-  guint requested = ostree_async_progress_get_uint (progress, "requested");
-
-  guint64 bytes_sec = 0;
-  guint64 bytes_transferred = ostree_async_progress_get_uint64 (progress, "bytes-transferred");
-
-  GVariant *arg_time;
-  GVariant *arg_outstanding;
-  GVariant *arg_metadata;
-  GVariant *arg_delta;
-  GVariant *arg_content;
-  GVariant *arg_transfer;
-
-  if (start_time)
-    {
-      guint64 elapsed_secs = (g_get_monotonic_time () - start_time) / G_USEC_PER_SEC;
-      if (elapsed_secs)
-        bytes_sec = bytes_transferred / elapsed_secs;
-    }
-
-  arg_time = g_variant_new ("(tt)",
-                            start_time,
-                            elapsed_secs);
-
-  arg_outstanding = g_variant_new ("(uu)",
-                                   outstanding_fetches,
-                                   outstanding_writes);
-
-  arg_metadata = g_variant_new ("(uuu)",
-                                n_scanned_metadata,
-                                metadata_fetched,
-                                outstanding_metadata_fetches);
-
-  arg_delta = g_variant_new ("(uuut)",
-                             total_delta_parts,
-                             fetched_delta_parts,
-                             total_delta_superblocks,
-                             total_delta_part_size);
-
-  arg_content = g_variant_new ("(uu)",
-                               fetched,
-                               requested);
-
-  arg_transfer = g_variant_new ("(tt)",
-                                bytes_transferred,
-                                bytes_sec);
-
-  /* This sinks the floating GVariant refs (I think...). */
-  rpmostree_transaction_emit_download_progress (transaction,
-                                                arg_time,
-                                                arg_outstanding,
-                                                arg_metadata,
-                                                arg_delta,
-                                                arg_content,
-                                                arg_transfer);
-}
-
-RPMOSTreeTransaction *
-new_transaction (GDBusMethodInvocation *invocation,
-                 GCancellable *method_cancellable,
-                 OstreeAsyncProgress **out_progress,
-                 GError **error)
-{
-  RPMOSTreeTransaction *transaction;
-  GDBusConnection *connection;
-  const char *method_name;
-  const char *object_path;
-  const char *sender;
-  g_autofree gchar *child_object_path = NULL;
-
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), FALSE);
-
-  connection = g_dbus_method_invocation_get_connection (invocation);
-  method_name = g_dbus_method_invocation_get_method_name (invocation);
-  object_path = g_dbus_method_invocation_get_object_path (invocation);
-  sender = g_dbus_method_invocation_get_sender (invocation);
-
-  child_object_path = g_build_path ("/", object_path, "Transaction", NULL);
-
-  transaction = rpmostree_transaction_skeleton_new ();
-  rpmostree_transaction_set_method (transaction, method_name);
-  rpmostree_transaction_set_initiating_owner (transaction, sender);
-
-  if (G_IS_CANCELLABLE (method_cancellable))
-    {
-      g_signal_connect_object (transaction,
-                               "handle-cancel",
-                               G_CALLBACK (handle_cancel_cb),
-                               method_cancellable, 0);
-    }
-
-  if (out_progress != NULL)
-    {
-      OstreeAsyncProgress *progress;
-
-      progress = ostree_async_progress_new ();
-
-      g_signal_connect_object (progress,
-                               "changed",
-                               G_CALLBACK (progress_changed_cb),
-                               transaction, 0);
-
-      *out_progress = g_steal_pointer (&progress);
-    }
-
-  if (!g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (transaction),
-                                         connection,
-                                         child_object_path,
-                                         error))
-    {
-      g_clear_object (&transaction);
-    }
-
-  return transaction;
-}
-
 
 static void
 append_to_object_path (GString *str,
@@ -298,7 +150,111 @@ utils_load_sysroot_and_repo (gchar *path,
                                 error))
       goto out;
 
-  gs_transfer_out_value (out_sysroot, &ot_sysroot);
+  if (out_sysroot != NULL)
+    *out_sysroot = g_steal_pointer (&ot_sysroot);
+
+  ret = TRUE;
+
+out:
+  return ret;
+}
+
+/**
+ * refspec_parse_partial:
+ * @new_provided_refspec: The provided refspec
+ * @base_refspec: The refspec string to base on.
+ * @out_refspec: Pointer to the new refspec
+ * @error: Pointer to an error pointer.
+ *
+ * Takes a refspec string and adds any missing bits based on the
+ * base_refspec argument. Errors if a full valid refspec can't
+ * be derived.
+ *
+ * Returns: True on sucess.
+ */
+gboolean
+refspec_parse_partial (const gchar *new_provided_refspec,
+                       gchar *base_refspec,
+                       gchar **out_refspec,
+                       GError **error)
+{
+
+  g_autofree gchar *ref = NULL;
+  g_autofree gchar *remote = NULL;
+  g_autofree gchar *origin_ref = NULL;
+  g_autofree gchar *origin_remote = NULL;
+  GError *parse_error = NULL;
+
+  gboolean ret = FALSE;
+
+  /* Allow just switching remotes */
+  if (g_str_has_suffix (new_provided_refspec, ":"))
+    {
+      remote = g_strdup (new_provided_refspec);
+      remote[strlen (remote) - 1] = '\0';
+    }
+  else
+    {
+      if (!ostree_parse_refspec (new_provided_refspec, &remote,
+                                 &ref, &parse_error))
+        {
+          g_set_error_literal (error, RPM_OSTREED_ERROR,
+                       RPM_OSTREED_ERROR_INVALID_REFSPEC,
+                       parse_error->message);
+          g_clear_error (&parse_error);
+          goto out;
+        }
+    }
+
+  if (base_refspec != NULL)
+    {
+      if (!ostree_parse_refspec (base_refspec, &origin_remote,
+                               &origin_ref, &parse_error))
+        goto out;
+    }
+
+  if (ref == NULL)
+    {
+      if (origin_ref)
+        {
+          ref = g_strdup (origin_ref);
+        }
+
+      else
+        {
+          g_set_error (error, RPM_OSTREED_ERROR,
+                       RPM_OSTREED_ERROR_INVALID_REFSPEC,
+                      "Could not determine default ref to pull.");
+          goto out;
+        }
+
+    }
+  else if (remote == NULL)
+    {
+      if (origin_remote)
+        {
+          remote = g_strdup (origin_remote);
+        }
+      else
+        {
+          g_set_error (error, RPM_OSTREED_ERROR,
+                       RPM_OSTREED_ERROR_INVALID_REFSPEC,
+                       "Could not determine default remote to pull.");
+          goto out;
+        }
+    }
+
+  if (g_strcmp0 (origin_remote, remote) == 0 &&
+      g_strcmp0 (origin_ref, ref) == 0)
+    {
+      g_set_error (error, RPM_OSTREED_ERROR,
+                   RPM_OSTREED_ERROR_INVALID_REFSPEC,
+                   "Old and new refs are equal: %s:%s",
+                   remote, ref);
+      goto out;
+    }
+
+  *out_refspec = g_strconcat (remote, ":", ref, NULL);
   ret = TRUE;
 
 out:

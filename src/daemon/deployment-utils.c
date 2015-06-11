@@ -36,6 +36,31 @@ deployment_generate_id (OstreeDeployment *deployment)
   return g_strdup_printf ("%s_%u", osname, hash);
 }
 
+OstreeDeployment *
+deployment_get_for_id (OstreeSysroot *sysroot,
+                       const gchar *deploy_id)
+{
+  g_autoptr (GPtrArray) deployments = NULL;
+  guint i;
+
+  OstreeDeployment *deployment = NULL;
+
+  deployments = ostree_sysroot_get_deployments (sysroot);
+  if (deployments == NULL)
+    goto out;
+
+  for (i=0; i<deployments->len; i++)
+    {
+      g_autofree gchar *id = deployment_generate_id (deployments->pdata[i]);
+      if (g_strcmp0 (deploy_id, id) == 0) {
+        deployment = g_object_ref (deployments->pdata[i]);
+      }
+    }
+
+out:
+  return deployment;
+}
+
 static GVariant *
 deployment_gpg_results (OstreeRepo *repo,
                         const gchar *origin_refspec,
@@ -179,4 +204,61 @@ deployment_generate_variant (OstreeDeployment *deployment,
   g_variant_builder_add_value (&builder, sigs);
 
   return g_variant_builder_end (&builder);
+}
+
+gint
+rollback_deployment_index (const gchar *name,
+                           OstreeSysroot *ot_sysroot,
+                           GError **error)
+{
+  g_autoptr (GPtrArray) deployments = NULL;
+  glnx_unref_object OstreeDeployment *merge_deployment = NULL;
+
+  gint index_to_prepend = -1;
+  gint merge_index = -1;
+  gint previous_index = -1;
+  guint i;
+
+  merge_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
+  if (merge_deployment == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "No deployments found for os %s", name);
+      goto out;
+    }
+
+  deployments = ostree_sysroot_get_deployments (ot_sysroot);
+  if (deployments->len < 2)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Found %u deployments, at least 2 required for rollback",
+                   deployments->len);
+      goto out;
+    }
+
+  g_assert (merge_deployment != NULL);
+  for (i = 0; i < deployments->len; i++)
+    {
+      if (deployments->pdata[i] == merge_deployment)
+        merge_index = i;
+
+      if (g_strcmp0 (ostree_deployment_get_osname (deployments->pdata[i]), name) == 0 &&
+              deployments->pdata[i] != merge_deployment &&
+              previous_index < 0)
+        {
+            previous_index = i;
+        }
+    }
+
+  g_assert (merge_index < deployments->len);
+  g_assert (deployments->pdata[merge_index] == merge_deployment);
+
+  /* If merge deployment is not booted assume we are using it. */
+  if (merge_index == 0 && previous_index > 0)
+      index_to_prepend = previous_index;
+  else
+      index_to_prepend = merge_index;
+
+out:
+  return index_to_prepend;
 }

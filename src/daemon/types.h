@@ -36,4 +36,7 @@ typedef struct _Sysroot Sysroot;
 struct _OSStub;
 typedef struct _OSStub OSStub;
 
+struct _Transaction;
+typedef struct _Transaction Transaction;
+
 #endif /* RPM_OSTREED_TYPES_H__ */

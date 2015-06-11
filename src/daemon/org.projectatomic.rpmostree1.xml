@@ -37,6 +37,7 @@
     <property name="BootedDeployment" type="(ssisstsav)" access="read"/>
     <property name="DefaultDeployment" type="(ssisstsav)" access="read"/>
     <property name="RollbackDeployment" type="(ssisstsav)" access="read"/>
+    <property name="UpgradeOrigin" type="s" access="read"/>
     <property name="HasCachedUpdateRpmDiff" type="b" access="read"/>
 
     <!-- NONE, DIFF, PREPARE, REBOOT -->
@@ -50,11 +51,11 @@
     </method>
 
     <method name="GetCachedUpdateRpmDiff">
+      <arg type="s" name="deployid"/>
       <arg type="a(sua{sv})" name="result" direction="out"/>
     </method>
 
     <method name="DownloadUpdateRpmDiff">
-      <arg type="s" name="deployid"/>
       <arg type="o" name="transaction" direction="out"/>
     </method>
 
@@ -74,9 +75,14 @@
       <arg type="o" name="transaction" direction="out"/>
     </method>
 
+    <!-- Available options:
+         "skip-purge" (type 'b')
+    -->
     <method name="Rebase">
+      <arg type="a{sv}" name="options" direction="in"/>
       <arg type="s" name="refspec"/>
       <arg type="as" name="packages"/>
+      <arg type="o" name="transaction" direction="out"/>
     </method>
 
     <method name="GetCachedRebaseRpmDiff">
@@ -96,16 +102,13 @@
   <interface name="org.projectatomic.rpmostree1.Transaction">
     <property name="Method" type="s" access="read"/>
     <property name="InitiatingOwner" type="s" access="read"/>
+    <property name="Complete" type="b" access="read"/>
+    <property name="Success" type="b" access="read"/>
+    <property name="ResultMessage" type="s" access="read"/>
 
     <!-- Yes, we can. -->
     <method name="Cancel">
     </method>
-
-    <!-- XXX Blindly mimicing UDisks2.Job for now. -->
-    <signal name="Completed">
-      <arg name="success" type="b" direction="out"/>
-      <arg name="message" type="s" direction="out"/>
-    </signal>
 
     <!-- For miscellaneous messages. -->
     <signal name="Message">

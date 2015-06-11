@@ -196,8 +196,6 @@ daemon_constructed (GObject *_object)
 
   G_OBJECT_CLASS (daemon_parent_class)->constructed (_object);
 
-  g_dbus_connection_start_message_processing (self->connection);
-
   path = utils_generate_object_path (BASE_DBUS_PATH, "Sysroot", NULL);
   self->sysroot = g_object_new (TYPE_SYSROOT,
       	                        "sysroot-path", self->sysroot_path,
@@ -210,6 +208,8 @@ daemon_constructed (GObject *_object)
     }
 
   daemon_publish (self, path, FALSE, self->sysroot);
+  g_dbus_connection_start_message_processing (self->connection);
+
   g_debug ("daemon constructed");
 
 out:

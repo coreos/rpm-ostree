@@ -22,11 +22,6 @@
 
 #include "types.h"
 
-RPMOSTreeTransaction * new_transaction (GDBusMethodInvocation *invocation,
-                                        GCancellable *method_cancellable,
-                                        OstreeAsyncProgress **out_progress,
-                                        GError **error);
-
 gchar *    utils_generate_object_path     (const gchar  *base,
                                            const gchar  *part,
                                            ...);
@@ -39,4 +34,9 @@ gboolean   utils_load_sysroot_and_repo          (gchar *path,
                                                  GCancellable *cancellable,
                                                  OstreeSysroot **out_sysroot,
                                                  OstreeRepo **out_repo,
+                                                 GError **error);
+
+gboolean   refspec_parse_partial                (const gchar *new_provided_refspec,
+                                                 gchar *base_refspec,
+                                                 gchar **out_refspec,
                                                  GError **error);

@@ -22,18 +22,18 @@
 
 #include "types.h"
 
-char * deployment_generate_id (OstreeDeployment *deployment);
+RPMOSTreeTransaction * new_transaction (GDBusMethodInvocation *invocation,
+                                        GCancellable *method_cancellable,
+                                        GError **error);
 
-OstreeDeployment * deployment_get_for_id (OstreeSysroot *sysroot,
-                                          const gchar *deploy_id);
+void complete_transaction (RPMOSTreeTransaction *transaction,
+                           gboolean success,
+                           const gchar *message);
 
-char * deployment_get_refspec (OstreeDeployment *deployment);
+void
+transaction_connect_download_progress (RPMOSTreeTransaction *transaction,
+                                       OstreeAsyncProgress *progress);
 
-GVariant * deployment_generate_blank_variant (void);
-
-GVariant * deployment_generate_variant (OstreeDeployment *deployment,
-                                        OstreeRepo *repo);
-
-gint rollback_deployment_index (const gchar *name,
-                                OstreeSysroot *ot_sysroot,
-                                GError **error);
+void
+transaction_connect_signature_progress (RPMOSTreeTransaction *transaction,
+                                       OstreeRepo *repo);

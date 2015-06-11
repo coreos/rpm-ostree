@@ -20,6 +20,7 @@
 #define RPM_OSTREED_SYSROOT_H__
 
 #include "types.h"
+#include "ostree.h"
 
 G_BEGIN_DECLS
 
@@ -38,7 +39,9 @@ gchar *           sysroot_get_sysroot_path          (Sysroot *self);
 gboolean          sysroot_populate                  (Sysroot *self,
                                                      GError **error);
 
-void              sysroot_ensure_refresh            (Sysroot *self);
+void              sysroot_emit_update               (Sysroot *self,
+                                                     OstreeSysroot *ot_sysroot);
+
 G_END_DECLS
 
 #endif /* RPM_OSTREED_SYSROOT_H__ */

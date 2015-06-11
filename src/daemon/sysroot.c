@@ -86,7 +86,7 @@ static guint64 UPDATED_THROTTLE_SECONDS = 2;
 static guint sysroot_signals[NUM_SIGNALS] = { 0, };
 
 static void sysroot_iface_init (RPMOSTreeSysrootIface *iface);
-
+static gboolean _throttle_refresh (gpointer user_data);
 
 G_DEFINE_TYPE_WITH_CODE (Sysroot, sysroot, RPMOSTREE_TYPE_SYSROOT_SKELETON,
                          G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_SYSROOT,
@@ -130,6 +130,8 @@ handle_create_osname (RPMOSTreeSysroot *object,
 
   GError *error = NULL;
   g_autofree gchar *dbus_path = NULL;
+
+  gboolean needs_refresh = FALSE;
 
   Sysroot *self = SYSROOT (object);
 
@@ -194,7 +196,13 @@ handle_create_osname (RPMOSTreeSysroot *object,
 
   dbus_path = utils_generate_object_path (BASE_DBUS_PATH,
                                           osname, NULL);
-  sysroot_ensure_refresh (SYSROOT (self));
+  g_rw_lock_reader_lock (&self->children_lock);
+    needs_refresh = self->last_monitor_event == 0;
+  g_rw_lock_reader_unlock (&self->children_lock);
+
+  if (needs_refresh)
+    _throttle_refresh (self);
+
   rpmostree_sysroot_complete_create_osname (RPMOSTREE_SYSROOT (self),
                                             invocation,
                                             g_strdup (dbus_path));
@@ -212,6 +220,14 @@ handle_get_os (RPMOSTreeSysroot *object,
 {
   Sysroot *self = SYSROOT (object);
   glnx_unref_object GDBusInterfaceSkeleton *os_interface = NULL;
+
+  if (arg_name[0] == '\0')
+    {
+      rpmostree_sysroot_complete_get_os (object,
+                                         invocation,
+                                         rpmostree_sysroot_dup_booted (object));
+      goto out;
+    }
 
   g_rw_lock_reader_lock (&self->children_lock);
 
@@ -236,6 +252,7 @@ handle_get_os (RPMOSTreeSysroot *object,
                                              arg_name);
     }
 
+out:
   return TRUE;
 }
 
@@ -530,9 +547,6 @@ out:
   return ret;
 }
 
-
-static gboolean _throttle_refresh (gpointer user_data);
-
 static void
 _do_reload_data (GTask         *task,
                  gpointer       object,
@@ -564,7 +578,7 @@ _reload_callback (GObject *source_object,
     if (error)
       {
         // this was valid once, make sure it is tried again
-        // TODO, should we bail at some point?
+        // TODO: should we bail at some point?
         g_message ("Error refreshing sysroot data: %s", error->message);
         g_timeout_add_seconds (UPDATED_THROTTLE_SECONDS,
                                _throttle_refresh,
@@ -635,22 +649,16 @@ sysroot_iface_init (RPMOSTreeSysrootIface *iface)
 
 
 /**
- * sysroot_ensure_refresh:
+ * sysroot_emit_update:
  *
- * Ensures that the sysroot will reload it's
- * internal data.
+ * Emits an sysroot-updated signal
+ * requires a known up to date sysroot
  */
-
 void
-sysroot_ensure_refresh (Sysroot *self)
+sysroot_emit_update (Sysroot *self,
+                     OstreeSysroot *ot_sysroot)
 {
-  gboolean needs_run;
-  g_rw_lock_reader_lock (&self->children_lock);
-    needs_run = self->last_monitor_event == 0;
-  g_rw_lock_reader_unlock (&self->children_lock);
-
-  if (needs_run)
-    _throttle_refresh (self);
+  g_signal_emit (self, sysroot_signals[UPDATED], 0, ot_sysroot);
 }
 
 /**
