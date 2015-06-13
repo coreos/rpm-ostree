@@ -25,15 +25,19 @@
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-libbuiltin.h"
+#include "rpmostree-dbus-helpers.h"
 
 #include "libgsystem.h"
+#include <libglnx.h>
 
 static char *opt_sysroot = "/";
 static gboolean opt_reboot;
+static gboolean opt_force_peer;
 
 static GOptionEntry option_entries[] = {
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after rollback is prepared", NULL },
+  { "peer", 0, 0, G_OPTION_ARG_NONE, &opt_force_peer, "Force a peer to peer connection instead of using the system message bus", NULL },
   { NULL }
 };
 
@@ -44,101 +48,64 @@ rpmostree_builtin_rollback (int             argc,
                             GError        **error)
 {
   gboolean ret = FALSE;
+  gboolean is_peer = FALSE;
+
   GOptionContext *context = g_option_context_new ("- Revert to the previously booted tree");
-  gs_unref_object GFile *sysroot_path = NULL;
-  gs_unref_object OstreeSysroot *sysroot = NULL;
-  gs_free char *origin_description = NULL;
-  gs_unref_ptrarray GPtrArray *deployments = NULL;
-  gs_unref_ptrarray GPtrArray *new_deployments =
-    g_ptr_array_new_with_free_func (g_object_unref);
-  OstreeDeployment *booted_deployment = NULL;
-  guint i;
-  guint booted_index;
-  guint index_to_prepend;
-  
+  glnx_unref_object GDBusConnection *connection = NULL;
+  glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
+  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
+  g_autofree char *transaction_object_path = NULL;
+
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
-  sysroot_path = g_file_new_for_path (opt_sysroot);
-  sysroot = ostree_sysroot_new (sysroot_path);
-  if (!ostree_sysroot_load (sysroot, cancellable, error))
+  if (!rpmostree_load_connection_and_sysroot (opt_sysroot,
+                                              opt_force_peer,
+                                              cancellable,
+                                              &connection,
+                                              &sysroot_proxy,
+                                              &is_peer,
+                                              error))
     goto out;
 
-  booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
-  if (booted_deployment == NULL)
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Not currently booted into an OSTree system");
-      goto out;
-    }
-
-  deployments = ostree_sysroot_get_deployments (sysroot);
-  if (deployments->len < 2)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Found %u deployments, at least 2 required for rollback",
-                   deployments->len);
-      goto out;
-    }
-
-  g_assert (booted_deployment != NULL);
-  for (booted_index = 0; booted_index < deployments->len; booted_index++)
-    {
-      if (deployments->pdata[booted_index] == booted_deployment)
-        break;
-    }
-  g_assert (booted_index < deployments->len);
-  g_assert (deployments->pdata[booted_index] == booted_deployment);
-  
-  if (booted_index != 0)
-    {
-      /* There is an earlier deployment, let's assume we want to just
-       * insert the current one in front.
-       */
-
-       /*
-       What this does is, if we're NOT in the default boot index, it plans to prepend
-       our current index (1, since we can't have more than two trees) so that it becomes index 0 
-       (default) and the current default becomes index 1
-       */
-      index_to_prepend = booted_index;
-    }
-  else
-    {
-      /* We're booted into the first, let's roll back to the previous */
-      index_to_prepend = 1;
-    }
-  
-  g_ptr_array_add (new_deployments, g_object_ref (deployments->pdata[index_to_prepend]));
-  for (i = 0; i < deployments->len; i++)
-    {
-      if (i == index_to_prepend)
-        continue;
-      g_ptr_array_add (new_deployments, g_object_ref (deployments->pdata[i]));
-    }
-
-  g_print ("Moving '%s.%d' to be first deployment\n",
-           ostree_deployment_get_csum (deployments->pdata[index_to_prepend]),
-           ostree_deployment_get_deployserial (deployments->pdata[index_to_prepend]));
-
-  if (!ostree_sysroot_write_deployments (sysroot, new_deployments, cancellable,
-                                         error))
+  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL, is_peer,
+                                cancellable, &os_proxy, error))
     goto out;
 
-  if (opt_reboot)
-    gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                   cancellable, error,
-                                   "systemctl", "reboot", NULL);
-  else
+  if (!rpmostree_os_call_rollback_sync (os_proxy,
+                                        &transaction_object_path,
+                                        cancellable,
+                                        error))
+    goto out;
+
+  if (!rpmostree_transaction_get_response_sync (connection,
+                                                transaction_object_path,
+                                                cancellable,
+                                                error))
+    goto out;
+
+  if (!opt_reboot)
     {
-      if (!rpmostree_print_treepkg_diff (sysroot, cancellable, error))
+      // by request, doing this without dbus
+      if (!rpmostree_print_treepkg_diff_from_sysroot_path (opt_sysroot,
+                                                           cancellable,
+                                                           error))
         goto out;
 
-      g_print ("Successfully reset deployment order; run \"systemctl reboot\" to start a reboot\n");
+      g_print ("Run \"systemctl reboot\" to start a reboot\n");
+    }
+  else
+    {
+      gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
+                                     cancellable, error,
+                                     "systemctl", "reboot", NULL);
     }
 
-  if (opt_reboot)
   ret = TRUE;
- out:
+
+out:
+  if (is_peer)
+    rpmostree_cleanup_peer ();
+
   return ret;
 }

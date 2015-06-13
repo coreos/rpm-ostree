@@ -27,6 +27,27 @@
 #include "rpmostree-cleanup.h"
 
 gboolean
+rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
+                                                GCancellable *cancellable,
+                                                GError **error)
+{
+  gs_unref_object OstreeSysroot *sysroot = NULL;
+  gs_unref_object GFile *sysroot_file = NULL;
+  gboolean ret = FALSE;
+
+  sysroot_file = g_file_new_for_path (sysroot_path);
+  sysroot = ostree_sysroot_new (sysroot_file);
+
+  if (!ostree_sysroot_load (sysroot, cancellable, error))
+    goto out;
+
+  ret = rpmostree_print_treepkg_diff (sysroot, cancellable, error);
+
+out:
+  return ret;
+}
+
+gboolean
 rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
                               GCancellable     *cancellable,
                               GError          **error)
@@ -34,11 +55,11 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
   gboolean ret = FALSE;
   OstreeDeployment *booted_deployment;
   OstreeDeployment *new_deployment;
-  gs_unref_ptrarray GPtrArray *deployments = 
+  gs_unref_ptrarray GPtrArray *deployments =
     ostree_sysroot_get_deployments (sysroot);
 
   booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
-  
+
   g_assert (deployments->len > 1);
   new_deployment = deployments->pdata[0];
 
@@ -52,10 +73,10 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
       g_autoptr(GPtrArray) modified_old = NULL;
       g_autoptr(GPtrArray) modified_new = NULL;
       guint i;
-      
+
       if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
         goto out;
-      
+
       if (!rpm_ostree_db_diff (repo, from_rev, to_rev,
                                &removed, &added, &modified_old, &modified_new,
                                cancellable, error))

@@ -26,17 +26,36 @@
 #include "rpmostree-builtins.h"
 #include "rpmostree-util.h"
 #include "rpmostree-libbuiltin.h"
+#include "rpmostree-dbus-helpers.h"
 
 #include "libgsystem.h"
+#include <libglnx.h>
 
 static char *opt_sysroot = "/";
 static char *opt_osname;
+static gboolean opt_reboot;
+static gboolean opt_skip_purge;
+static gboolean opt_force_peer;
 
 static GOptionEntry option_entries[] = {
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after rebase is finished", NULL },
+  { "skip-purge", 0, 0, G_OPTION_ARG_NONE, &opt_skip_purge, "Keep previous refspec after rebase", NULL },
+  { "peer", 0, 0, G_OPTION_ARG_NONE, &opt_force_peer, "Force a peer to peer connection instead of using the system message bus", NULL },
   { NULL }
 };
+
+static GVariant *
+get_args_variant (void)
+{
+  GVariantDict dict;
+
+  g_variant_dict_init (&dict, NULL);
+  g_variant_dict_insert (&dict, "skip-purge", "b", opt_skip_purge);
+
+  return g_variant_dict_end (&dict);
+}
 
 gboolean
 rpmostree_builtin_rebase (int             argc,
@@ -45,129 +64,73 @@ rpmostree_builtin_rebase (int             argc,
                           GError        **error)
 {
   gboolean ret = FALSE;
-  GOptionContext *context = g_option_context_new ("REFSPEC - Switch to a different tree");
+  gboolean is_peer = FALSE;
   const char *new_provided_refspec;
-  gs_unref_object OstreeSysroot *sysroot = NULL;
-  gs_unref_object OstreeRepo *repo = NULL;
-  gs_free char *origin_refspec = NULL;
-  gs_free char *origin_remote = NULL;
-  gs_free char *origin_ref = NULL;
-  gs_free char *new_remote = NULL;
-  gs_free char *new_ref = NULL;
-  gs_free char *new_refspec = NULL;
-  gs_unref_object GFile *sysroot_path = NULL;
-  gs_unref_object OstreeSysrootUpgrader *upgrader = NULL;
-  gs_unref_object OstreeAsyncProgress *progress = NULL;
-  gboolean changed;
-  GSConsole *console = NULL;
-  gs_unref_keyfile GKeyFile *old_origin = NULL;
-  gs_unref_keyfile GKeyFile *new_origin = NULL;
-  
+
+  /* forced blank for now */
+  const char *packages[] = { NULL };
+
+  GOptionContext *context = g_option_context_new ("REFSPEC - Switch to a different tree");
+  glnx_unref_object GDBusConnection *connection = NULL;
+  glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
+  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
+  g_autofree char *transaction_object_path = NULL;
+
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
-  if (argc < 2)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "REFSPEC must be specified");
-      goto out;
-    }
+  if (!rpmostree_load_connection_and_sysroot (opt_sysroot,
+                                              opt_force_peer,
+                                              cancellable,
+                                              &connection,
+                                              &sysroot_proxy,
+                                              &is_peer,
+                                              error))
+    goto out;
+
+  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname, is_peer,
+                                cancellable, &os_proxy, error))
+    goto out;
 
   new_provided_refspec = argv[1];
 
-  sysroot_path = g_file_new_for_path (opt_sysroot);
-  sysroot = ostree_sysroot_new (sysroot_path);
-  if (!ostree_sysroot_load (sysroot, cancellable, error))
+  if (!rpmostree_os_call_rebase_sync (os_proxy,
+                                      get_args_variant (),
+                                      new_provided_refspec,
+                                      packages,
+                                      &transaction_object_path,
+                                      cancellable,
+                                      error))
     goto out;
 
-  upgrader = ostree_sysroot_upgrader_new_for_os_with_flags (sysroot, opt_osname,
-                                                            OSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED,
-                                                            cancellable, error);
-  if (!upgrader)
+  if (!rpmostree_transaction_get_response_sync (connection,
+                                                transaction_object_path,
+                                                cancellable,
+                                                error))
     goto out;
 
-  old_origin = ostree_sysroot_upgrader_get_origin (upgrader);
-  origin_refspec = g_key_file_get_string (old_origin, "origin", "refspec", NULL);
-  
-  if (!ostree_parse_refspec (origin_refspec, &origin_remote, &origin_ref, error))
-    goto out;
-
-  /* Allow just switching remotes */
-  if (g_str_has_suffix (new_provided_refspec, ":"))
+  if (!opt_reboot)
     {
-      new_remote = g_strdup (new_provided_refspec);
-      new_remote[strlen(new_remote)-1] = '\0';
-      new_ref = g_strdup (origin_ref);
-    }
-  else
-    {
-      if (!ostree_parse_refspec (new_provided_refspec, &new_remote, &new_ref, error))
+      // by request, doing this without dbus
+      if (!rpmostree_print_treepkg_diff_from_sysroot_path (opt_sysroot,
+                                                           cancellable,
+                                                           error))
         goto out;
+
+      g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
-  
-  if (!new_remote)
-    new_refspec = g_strconcat (origin_remote, ":", new_ref, NULL);
   else
-    new_refspec = g_strconcat (new_remote, ":", new_ref, NULL);
-  
-  if (strcmp (origin_refspec, new_refspec) == 0)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Old and new refs are equal: %s", new_refspec);
-      goto out;
+      gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
+                                     cancellable, error,
+                                     "systemctl", "reboot", NULL);
     }
 
-  new_origin = ostree_sysroot_origin_new_from_refspec (sysroot, new_refspec);
-  if (!ostree_sysroot_upgrader_set_origin (upgrader, new_origin, cancellable, error))
-    goto out;
-
-  console = gs_console_get ();
-  if (console)
-    {
-      gs_console_begin_status_line (console, "", NULL, NULL);
-      progress = ostree_async_progress_new_and_connect (ostree_repo_pull_default_console_progress_changed, console);
-    }
-
-  /* Always allow older...there's not going to be a chronological
-   * relationship necessarily.
-   */
-  if (!ostree_sysroot_upgrader_pull (upgrader, 0,
-                                     OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER,
-                                     progress, &changed,
-                                     cancellable, error))
-    goto out;
-
-  if (console)
-    {
-      if (!gs_console_end_status_line (console, cancellable, error))
-        {
-          console = NULL;
-          goto out;
-        }
-      console = NULL;
-    }
-
-  if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
-    goto out;
-
-  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-    goto out;
-
-  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
-    goto out;
-
-  g_print ("Deleting ref '%s:%s'\n", origin_remote, origin_ref);
-  ostree_repo_transaction_set_ref (repo, origin_remote, origin_ref, NULL);
-  
-  if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
-    goto out;
-  
-  if (!rpmostree_print_treepkg_diff (sysroot, cancellable, error))
-    goto out;
-  
   ret = TRUE;
- out:
-  if (console)
-    (void) gs_console_end_status_line (console, NULL, NULL);
+
+out:
+  if (is_peer)
+    rpmostree_cleanup_peer ();
+
   return ret;
 }
