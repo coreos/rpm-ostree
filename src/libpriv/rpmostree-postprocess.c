@@ -320,7 +320,7 @@ do_kernel_prep (GFile         *yumroot,
 
   {
     char *child_argv[] = { "depmod", (char*)kver, NULL };
-    if (!run_sync_in_root (yumroot, "/usr/sbin/depmod", child_argv, error))
+    if (!run_sync_in_root (yumroot, "depmod", child_argv, error))
       goto out;
   }
 
@@ -368,7 +368,7 @@ do_kernel_prep (GFile         *yumroot,
 
     g_ptr_array_add (dracut_argv, NULL);
 
-    if (!run_sync_in_root (yumroot, "/usr/sbin/dracut", (char**)dracut_argv->pdata, error))
+    if (!run_sync_in_root (yumroot, "dracut", (char**)dracut_argv->pdata, error))
       goto out;
   }
 
