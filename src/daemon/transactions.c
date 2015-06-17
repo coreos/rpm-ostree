@@ -19,6 +19,7 @@
 #include "config.h"
 #include "transactions.h"
 #include "errors.h"
+#include "sysroot.h"
 #include "daemon.h"
 
 static guint TRANSACTION_KEEP_SECONDS = 300;
@@ -221,6 +222,7 @@ new_transaction (GDBusMethodInvocation *invocation,
   RPMOSTreeTransaction *transaction;
   const char *method_name;
   const char *object_path;
+  const char *active_path;
   const char *sender;
   g_autofree gchar *child_object_path = NULL;
 
@@ -244,8 +246,13 @@ new_transaction (GDBusMethodInvocation *invocation,
                                method_cancellable, 0);
     }
 
+
   /* Published uniquely */
   daemon_publish (daemon_get (), child_object_path, TRUE, transaction);
+
+  active_path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON(transaction));
+  rpmostree_sysroot_set_active_transaction (RPMOSTREE_SYSROOT (sysroot_get ()),
+                                            active_path);
 
   return transaction;
 }
@@ -255,6 +262,9 @@ complete_transaction (RPMOSTreeTransaction *transaction,
                       gboolean success,
                       const gchar *message)
 {
+  rpmostree_sysroot_set_active_transaction (RPMOSTREE_SYSROOT (sysroot_get ()),
+                                            "/");
+
   if (message != NULL)
     rpmostree_transaction_set_result_message (transaction, message);
 
