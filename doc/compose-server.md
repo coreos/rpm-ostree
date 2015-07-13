@@ -52,8 +52,8 @@ but you can of course any HTTP proxy you wish.
     in /boot.  However, this has a few flaws; it gets shadowed at boot time,
     and also makes dealing with Anaconda installation harder.  There are 3
     possible values:
-    * "legacy": the default, data goes in /boot
-    * "both": Kernel data in /boot and /usr/lib/ostree-boot
+    * "legacy": Kernel data in /boot
+    * "both": default option, kernel data in both /boot and /usr/lib/ostree-boot
     * "new": Kernel data in /usr/lib/ostree-boot
 
  * `bootstrap_packages`: Array of strings, mandatory: The `glibc` and
