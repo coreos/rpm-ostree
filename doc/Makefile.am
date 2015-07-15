@@ -96,8 +96,16 @@ GTKDOC_LIBS=
 rpmostree-sections.txt: $(srcdir)/rpmostree-sections.txt
 	cp $< $@
 
+$(DOC_MAIN_SGML_FILE): $(DOC_MAIN_SGML_FILE).in
+	sed -e 's|\@SRCDIR\@|$(top_srcdir)|g' $< > $(@)
+
 version.xml:
 	echo -n $(VERSION) > "$@"
 
+BUILT_SOURCES = $(DOC_MAIN_SGML_FILE)
+
 # This includes the standard gtk-doc make rules, copied by gtkdocize.
 include $(top_srcdir)/gtk-doc.make
+
+CLEANFILES += $(BUILT_SOURCES)
+EXTRA_DIST += $(DOC_MAIN_SGML_FILE).in

@@ -9,6 +9,7 @@ rpm-ostreed-generated.c: Makefile.am $(top_srcdir)/src/daemon/org.projectatomic.
 		--c-namespace RPMOSTree \
 		--c-generate-object-manager \
 		--generate-c-code rpm-ostreed-generated \
+		--generate-docbook rpm-ostreed-generated \
 		$(top_srcdir)/src/daemon/org.projectatomic.rpmostree1.xml \
 		$(NULL)
 BUILT_SOURCES += $(dbus_built_sources)

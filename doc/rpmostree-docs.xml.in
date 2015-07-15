@@ -21,4 +21,11 @@
 		</index>
 
 	</chapter>
+
+	<chapter>
+		<title>D-Bus Interfaces</title>
+		<xi:include href="@SRCDIR@/rpm-ostreed-generated-org.projectatomic.rpmostree1.Sysroot.xml"/>
+		<xi:include href="@SRCDIR@/rpm-ostreed-generated-org.projectatomic.rpmostree1.OS.xml"/>
+		<xi:include href="@SRCDIR@/rpm-ostreed-generated-org.projectatomic.rpmostree1.Transaction.xml"/>
+	</chapter>
 </book>
