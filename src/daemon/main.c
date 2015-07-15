@@ -49,11 +49,19 @@ static void
 start_daemon (GDBusConnection *connection,
               gboolean on_messsage_bus)
 {
-  rpm_ostree_daemon = g_object_new (TYPE_DAEMON,
-                                    "connection", connection,
-                                    "sysroot-path", opt_sysroot,
-                                    "on-message-bus", on_messsage_bus,
-                                    NULL);
+  GError *local_error = NULL;
+
+  rpm_ostree_daemon = g_initable_new (TYPE_DAEMON, NULL, &local_error,
+                                      "connection", connection,
+                                      "sysroot-path", opt_sysroot,
+                                      "on-message-bus", on_messsage_bus,
+                                      NULL);
+
+  if (local_error != NULL)
+    {
+      g_error ("%s", local_error->message);
+      g_assert_not_reached ();
+    }
 
   daemon_hold (rpm_ostree_daemon);
 
@@ -67,8 +75,6 @@ on_bus_acquired (GDBusConnection *connection,
                  gpointer user_data)
 {
   g_debug ("Connected to the system bus");
-
-  start_daemon (connection, TRUE);
 }
 
 
@@ -78,6 +84,8 @@ on_name_acquired (GDBusConnection *connection,
                   gpointer user_data)
 {
   g_debug ("Acquired the name %s on the system bus", name);
+
+  start_daemon (connection, TRUE);
 }
 
 static void
@@ -85,17 +93,15 @@ on_name_lost (GDBusConnection *connection,
               const char *name,
               gpointer user_data)
 {
+  g_critical ("Lost (or failed to acquire) the "
+              "name %s on the system bus", name);
+
   if (rpm_ostree_daemon == NULL)
     {
-      g_critical ("Failed to connect to the system bus");
-
       g_main_loop_quit (loop);
     }
   else
     {
-      g_critical ("Lost (or failed to acquire) the "
-                  "name %s on the system bus", name);
-
       daemon_release (rpm_ostree_daemon);
     }
 }

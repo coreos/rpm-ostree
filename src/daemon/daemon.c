@@ -85,7 +85,11 @@ enum
   PROP_ON_MESSAGE_BUS,
 };
 
-G_DEFINE_TYPE (Daemon, daemon, G_TYPE_OBJECT);
+static void daemon_initable_iface_init (GInitableIface *iface);
+
+G_DEFINE_TYPE_WITH_CODE (Daemon, daemon, G_TYPE_OBJECT,
+                         G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
+                                                daemon_initable_iface_init))
 
 typedef struct {
   GAsyncReadyCallback callback;
@@ -181,29 +185,28 @@ daemon_init (Daemon *self)
   g_mutex_init (&self->mutex);
 }
 
-static void
-daemon_constructed (GObject *_object)
+static gboolean
+daemon_initable_init (GInitable *initable,
+                      GCancellable *cancellable,
+                      GError **error)
 {
-  Daemon *self;
-  GError *error = NULL;
+  Daemon *self = DAEMON (initable);
   g_autofree gchar *path = NULL;
+  gboolean ret = FALSE;
 
-  self = DAEMON (_object);
   self->object_manager = g_dbus_object_manager_server_new (BASE_DBUS_PATH);
   /* Export the ObjectManager */
   g_dbus_object_manager_server_set_connection (self->object_manager, self->connection);
   g_debug ("exported object manager");
 
-  G_OBJECT_CLASS (daemon_parent_class)->constructed (_object);
-
   path = utils_generate_object_path (BASE_DBUS_PATH, "Sysroot", NULL);
   self->sysroot = g_object_new (TYPE_SYSROOT,
-      	                        "sysroot-path", self->sysroot_path,
+                                "sysroot-path", self->sysroot_path,
                                 NULL);
 
-  if (!sysroot_populate (sysroot_get (), &error))
+  if (!sysroot_populate (sysroot_get (), error))
     {
-      g_error ("Error setting up sysroot: %s", error->message);
+      g_prefix_error (error, "Error setting up sysroot: ");
       goto out;
     }
 
@@ -212,8 +215,10 @@ daemon_constructed (GObject *_object)
 
   g_debug ("daemon constructed");
 
+  ret = TRUE;
+
 out:
-  g_clear_error (&error);
+  return ret;
 }
 
 static void
@@ -222,7 +227,6 @@ daemon_class_init (DaemonClass *klass)
   GObjectClass *gobject_class;
   gobject_class = G_OBJECT_CLASS (klass);
   gobject_class->finalize     = daemon_finalize;
-  gobject_class->constructed  = daemon_constructed;
   gobject_class->set_property = daemon_set_property;
   gobject_class->get_property = daemon_get_property;
 
@@ -280,6 +284,12 @@ daemon_class_init (DaemonClass *klass)
                                     0, NULL, NULL,
                                     g_cclosure_marshal_generic,
                                     G_TYPE_NONE, 0);
+}
+
+static void
+daemon_initable_iface_init (GInitableIface *iface)
+{
+  iface->init = daemon_initable_init;
 }
 
 /**
