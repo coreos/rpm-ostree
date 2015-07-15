@@ -36,11 +36,11 @@ static RpmOstreeCommand commands[] = {
 #ifdef HAVE_COMPOSE_TOOLING
   { "compose", rpmostree_builtin_compose },
 #endif
-  { "upgrade", rpmostree_builtin_upgrade },
+  { "db", rpmostree_builtin_db },
   { "rebase", rpmostree_builtin_rebase },
   { "rollback", rpmostree_builtin_rollback },
   { "status", rpmostree_builtin_status },
-  { "db", rpmostree_builtin_db },
+  { "upgrade", rpmostree_builtin_upgrade },
   { NULL }
 };
 
