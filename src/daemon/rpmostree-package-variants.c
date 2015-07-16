@@ -132,11 +132,11 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
   GVariant *variant = NULL;
   GVariantBuilder builder;
 
-  g_autoptr (GPtrArray) removed = NULL;
-  g_autoptr (GPtrArray) added = NULL;
-  g_autoptr (GPtrArray) modified_old = NULL;
-  g_autoptr (GPtrArray) modified_new = NULL;
-  g_autoptr (GPtrArray) found = NULL;
+  g_autoptr(GPtrArray) removed = NULL;
+  g_autoptr(GPtrArray) added = NULL;
+  g_autoptr(GPtrArray) modified_old = NULL;
+  g_autoptr(GPtrArray) modified_new = NULL;
+  g_autoptr(GPtrArray) found = NULL;
 
   guint i;
 

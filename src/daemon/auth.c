@@ -39,7 +39,7 @@ auth_check_root_or_access_denied (GDBusInterfaceSkeleton *instance,
   const gchar *sender;
   gboolean ret = FALSE;
 
-  g_autoptr (GVariant) value = NULL;
+  g_autoptr(GVariant) value = NULL;
   GError *error = NULL;
   GDBusConnection *connection = NULL;
   guint32 uid = UINT32_MAX;

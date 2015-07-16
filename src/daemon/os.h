@@ -16,12 +16,9 @@
 * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 */
 
-#ifndef RPM_OSTREED_OSSTUB_H__
-#define RPM_OSTREED_OSSTUB_H__
+#pragma once
 
 #include "types.h"
-
-G_BEGIN_DECLS
 
 #define TYPE_OSSTUB   (osstub_get_type ())
 #define OSSTUB(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), TYPE_OSSTUB, OSStub))
@@ -31,7 +28,3 @@ GType             osstub_get_type                  (void) G_GNUC_CONST;
 RPMOSTreeOS *     osstub_new                       (OstreeSysroot *sysroot,
                                                     const char *name);
 OstreeSysroot *   osstub_ref_sysroot               (OSStub *self);
-
-G_END_DECLS
-
-#endif /* RPM_OSTREED_OS_H__ */

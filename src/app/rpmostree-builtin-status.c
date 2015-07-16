@@ -71,19 +71,19 @@ rpmostree_builtin_status (int             argc,
   glnx_unref_object GDBusConnection *connection = NULL;
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr (GVariant) booted_deployment = NULL;
-  g_autoptr (GVariant) deployments = NULL;
-  g_autoptr (GVariant) booted_signatures = NULL;
-  gchar *booted_id = NULL; // borrowed
+  g_autoptr(GVariant) booted_deployment = NULL;
+  g_autoptr(GVariant) deployments = NULL;
+  g_autoptr(GVariant) booted_signatures = NULL;
+  gchar *booted_id = NULL; /* borrowed */
 
-  const guint CSUM_DISP_LEN = 10; // number of checksum characters to display
+  const guint CSUM_DISP_LEN = 10; /* number of checksum characters to display */
   guint i, n;
-  guint max_timestamp_len = 19; // length of timestamp "YYYY-MM-DD HH:MM:SS"
-  guint max_id_len = CSUM_DISP_LEN; // length of checksum ID
-  guint max_osname_len = 0; // maximum length of osname - determined in conde
-  guint max_refspec_len = 0; // maximum length of refspec - determined in code
-  guint max_version_len = 0; // maximum length of version - determined in code
-  guint buffer = 5; // minimum space between end of one entry and new column
+  guint max_timestamp_len = 19; /* length of timestamp "YYYY-MM-DD HH:MM:SS" */
+  guint max_id_len = CSUM_DISP_LEN; /* length of checksum ID */
+  guint max_osname_len = 0; /* maximum length of osname - determined in code */
+  guint max_refspec_len = 0; /* maximum length of refspec - determined in code */
+  guint max_version_len = 0; /* maximum length of version - determined in code */
+  guint buffer = 5; /* minimum space between end of one entry and new column */
 
 
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
@@ -120,10 +120,10 @@ rpmostree_builtin_status (int             argc,
       /* find lengths for use in column output */
       if (!opt_pretty)
         {
-          g_autoptr (GVariant) v = NULL;
-          gchar *origin_refspec = NULL; // borrowed
-          gchar *os_name = NULL; // borrowed
-          gchar *version_string = NULL; // borrowed
+          g_autoptr(GVariant) v = NULL;
+          gchar *origin_refspec = NULL; /* borrowed */
+          gchar *os_name = NULL; /* borrowed */
+          gchar *version_string = NULL; /* borrowed */
 
           v = g_variant_get_child_value (deployments, i);
           g_variant_get_child (v, OSNAME, "&s", &os_name);
@@ -157,14 +157,14 @@ rpmostree_builtin_status (int             argc,
       GDateTime *timestamp = NULL;
       g_autofree char *timestamp_string = NULL;
       g_autofree gchar *truncated_csum = NULL;
-      g_autoptr (GVariant) v = NULL;
-      g_autoptr (GVariant) signatures = NULL;
+      g_autoptr(GVariant) v = NULL;
+      g_autoptr(GVariant) signatures = NULL;
 
-      gchar *id = NULL; // borrowed
-      gchar *origin_refspec = NULL; // borrowed
-      gchar *os_name = NULL; // borrowed
-      gchar *version_string = NULL; // borrowed
-      gchar *checksum = NULL; // borrowed
+      gchar *id = NULL; /* borrowed */
+      gchar *origin_refspec = NULL; /* borrowed */
+      gchar *os_name = NULL; /* borrowed */
+      gchar *version_string = NULL; /* borrowed */
+      gchar *checksum = NULL; /* borrowed */
 
       gint64 t;
       gint serial;

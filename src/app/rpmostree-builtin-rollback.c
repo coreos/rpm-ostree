@@ -86,7 +86,7 @@ rpmostree_builtin_rollback (int             argc,
 
   if (!opt_reboot)
     {
-      // by request, doing this without dbus
+      /* By request, doing this without dbus */
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (opt_sysroot,
                                                            cancellable,
                                                            error))

@@ -40,7 +40,7 @@ OstreeDeployment *
 deployment_get_for_id (OstreeSysroot *sysroot,
                        const gchar *deploy_id)
 {
-  g_autoptr (GPtrArray) deployments = NULL;
+  g_autoptr(GPtrArray) deployments = NULL;
   guint i;
 
   OstreeDeployment *deployment = NULL;
@@ -118,7 +118,7 @@ out:
 char *
 deployment_get_refspec (OstreeDeployment *deployment)
 {
-  GKeyFile *origin = NULL; // owned by deployment
+  GKeyFile *origin = NULL; /* owned by deployment */
   char *origin_refspec = NULL;
   origin = ostree_deployment_get_origin (deployment);
 
@@ -151,13 +151,13 @@ GVariant *
 deployment_generate_variant (OstreeDeployment *deployment,
                              OstreeRepo *repo)
 {
-  g_autoptr (GVariant) commit = NULL;
+  g_autoptr(GVariant) commit = NULL;
 
   g_autofree gchar *origin_refspec = NULL;
   g_autofree gchar *version_commit = NULL;
   g_autofree gchar *id = NULL;
 
-  GVariant *sigs = NULL; // floating variant
+  GVariant *sigs = NULL; /* floating variant */
   GError *error = NULL;
 
   GVariantBuilder builder;
@@ -174,7 +174,7 @@ deployment_generate_variant (OstreeDeployment *deployment,
                                 &commit,
                                 &error))
     {
-      g_autoptr (GVariant) metadata = NULL;
+      g_autoptr(GVariant) metadata = NULL;
       timestamp = ostree_commit_get_timestamp (commit);
       metadata = g_variant_get_child_value (commit, 0);
       if (metadata != NULL)
@@ -211,7 +211,7 @@ rollback_deployment_index (const gchar *name,
                            OstreeSysroot *ot_sysroot,
                            GError **error)
 {
-  g_autoptr (GPtrArray) deployments = NULL;
+  g_autoptr(GPtrArray) deployments = NULL;
   glnx_unref_object OstreeDeployment *merge_deployment = NULL;
 
   gint index_to_prepend = -1;

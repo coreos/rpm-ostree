@@ -178,8 +178,8 @@ change_upgrader_refspec (OstreeSysroot *sysroot,
 
   g_autofree gchar *old_refspec = NULL;
   g_autofree gchar *new_refspec = NULL;
-  g_autoptr (GKeyFile) new_origin = NULL;
-  GKeyFile *old_origin = NULL; // owned by deployment
+  g_autoptr(GKeyFile) new_origin = NULL;
+  GKeyFile *old_origin = NULL; /* owned by deployment */
 
   old_origin = ostree_sysroot_upgrader_get_origin (upgrader);
   old_refspec = g_key_file_get_string (old_origin, "origin",
@@ -248,9 +248,9 @@ get_rebase_diff_variant_in_thread (GTask *task,
   g_autofree gchar *comp_ref = NULL;
   g_autofree gchar *base_refspec = NULL;
 
-  GVariant *value = NULL; // freed when invoked
-  GError *error = NULL; // freed when invoked
-  gchar *refspec = data_ptr; // freed by task
+  GVariant *value = NULL; /* freed when invoked */
+  GError *error = NULL; /* freed when invoked */
+  gchar *refspec = data_ptr; /* freed by task */
 
   if (!utils_load_sysroot_and_repo (sysroot_get_sysroot_path ( sysroot_get ()),
                                     cancellable,
@@ -293,15 +293,15 @@ get_upgrade_diff_variant_in_thread (GTask *task,
 {
   RPMOSTreeOS *self = RPMOSTREE_OS (object);
   const gchar *name;
-  gchar *compare_deployment = data_ptr; // freed by task
+  gchar *compare_deployment = data_ptr; /* freed by task */
 
   g_autofree gchar *comp_ref = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object OstreeRepo *ot_repo = NULL;
   glnx_unref_object OstreeDeployment *base_deployment = NULL;
 
-  GVariant *value = NULL; // freed when invoked
-  GError *error = NULL; // freed when invoked
+  GVariant *value = NULL; /* freed when invoked */
+  GError *error = NULL; /* freed when invoked */
 
   if (!utils_load_sysroot_and_repo (sysroot_get_sysroot_path ( sysroot_get ()),
                                     cancellable,
@@ -367,9 +367,9 @@ get_deployments_diff_variant_in_thread (GTask *task,
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object OstreeRepo *ot_repo = NULL;
 
-  GVariant *value = NULL; // freed when invoked
-  GError *error = NULL; // freed when invoked
-  GPtrArray *compare_refs = data_ptr; // freed by task
+  GVariant *value = NULL; /* freed when invoked */
+  GError *error = NULL; /* freed when invoked */
+  GPtrArray *compare_refs = data_ptr; /* freed by task */
 
   g_return_if_fail (compare_refs->len == 2);
 
@@ -435,8 +435,8 @@ osstub_pull_dir_thread (GTask *task,
   gboolean changed = FALSE;
   GError *local_error = NULL;
 
-  // libostree iterates and calls quit on main loop
-  // so we need to run in our own context.
+  /* libostree iterates and calls quit on main loop
+   * so we need to run in our own context. */
   GMainContext *m_context = g_main_context_new ();
   g_main_context_push_thread_default (m_context);
 
@@ -478,7 +478,7 @@ osstub_pull_dir_thread (GTask *task,
     }
 
 out:
-  // Clean up context
+  /* Clean up context */
   g_main_context_pop_thread_default (m_context);
   g_main_context_unref (m_context);
 
@@ -514,8 +514,8 @@ osstub_upgrade_thread (GTask *task,
   gboolean skip_purge = FALSE;
   gboolean changed = FALSE;
 
-  // libostree iterates and calls quit on main loop
-  // so we need to run in our own context.
+  /* libostree iterates and calls quit on main loop
+   * so we need to run in our own context. */
   GMainContext *m_context = g_main_context_new ();
   g_main_context_push_thread_default (m_context);
 
@@ -598,7 +598,7 @@ osstub_upgrade_thread (GTask *task,
     }
 
 out:
-  // Clean up context
+  /* Clean up context */
   g_main_context_pop_thread_default (m_context);
   g_main_context_unref (m_context);
 
@@ -618,8 +618,8 @@ osstub_rollback_thread (GTask         *task,
   TaskData *data = task_data;
   const char *name;
   const char *csum;
-  g_autoptr (GPtrArray) deployments = NULL;
-  g_autoptr (GPtrArray) new_deployments = NULL;
+  g_autoptr(GPtrArray) deployments = NULL;
+  g_autoptr(GPtrArray) new_deployments = NULL;
 
   GError *error = NULL;
 
@@ -636,7 +636,7 @@ osstub_rollback_thread (GTask         *task,
   deployments = ostree_sysroot_get_deployments (data->sysroot);
   new_deployments = g_ptr_array_new_with_free_func (g_object_unref);
 
-  // build out the reordered array
+  /* build out the reordered array */
   g_ptr_array_add (new_deployments, g_object_ref (deployments->pdata[rollback_index]));
   for (i = 0; i < deployments->len; i++)
   {
@@ -652,7 +652,7 @@ osstub_rollback_thread (GTask         *task,
                                       g_strdup_printf ("Moving '%s.%d' to be first deployment\n",
                                                        csum, deployserial));
 
-  // if default changed write it.
+  /* if default changed write it */
   if (deployments->pdata[0] != new_deployments->pdata[0])
     ostree_sysroot_write_deployments (data->sysroot,
                                       new_deployments,
@@ -676,8 +676,8 @@ osstub_clear_rollback_thread (GTask         *task,
   TaskData *data = task_data;
   const char *name;
 
-  g_autoptr (GPtrArray) deployments = NULL;
-  g_autoptr (GPtrArray) new_deployments = NULL;
+  g_autoptr(GPtrArray) deployments = NULL;
+  g_autoptr(GPtrArray) new_deployments = NULL;
 
   GError *error = NULL;
 
@@ -800,7 +800,7 @@ osstub_handle_pull_dir (RPMOSTreeOS *interface,
                         GDBusMethodInvocation *invocation,
                         gchar *refspec)
 {
-  g_autoptr (GTask) task = NULL;
+  g_autoptr(GTask) task = NULL;
   glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
@@ -841,7 +841,7 @@ osstub_handle_deploy (RPMOSTreeOS *interface,
   glnx_unref_object GCancellable *cancellable = NULL;
   glnx_unref_object OstreeSysroot *sysroot = NULL;
   glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
-  g_autoptr (GTask) task = NULL;
+  g_autoptr(GTask) task = NULL;
   TaskData *data;
   GError *local_error = NULL;
 
@@ -877,8 +877,8 @@ handle_get_deployments_rpm_diff (RPMOSTreeOS *interface,
                                  const char *arg_deployid1)
 {
   OSStub *self = OSSTUB (interface);
-  GPtrArray *compare_refs = NULL; // freed by task
-  g_autoptr (GTask) task = NULL;
+  GPtrArray *compare_refs = NULL; /* freed by task */
+  g_autoptr(GTask) task = NULL;
 
   glnx_unref_object GCancellable *cancellable = NULL;
 
@@ -903,7 +903,7 @@ osstub_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
                                           const char *arg_deployid)
 {
   OSStub *self = OSSTUB (interface);
-  g_autoptr (GTask) task = NULL;
+  g_autoptr(GTask) task = NULL;
 
   glnx_unref_object GCancellable *cancellable = NULL;
 
@@ -942,7 +942,7 @@ osstub_handle_rollback (RPMOSTreeOS *interface,
   glnx_unref_object GCancellable *cancellable = NULL;
   GError *local_error = NULL;
 
-  g_autoptr (GTask) task = NULL;
+  g_autoptr(GTask) task = NULL;
   TaskData *data;
 
   cancellable = g_cancellable_new ();
@@ -979,7 +979,7 @@ osstub_handle_clear_rollback_target (RPMOSTreeOS *interface,
   glnx_unref_object GCancellable *cancellable = NULL;
   GError *local_error = NULL;
 
-  g_autoptr (GTask) task = NULL;
+  g_autoptr(GTask) task = NULL;
   TaskData *data;
 
   cancellable = g_cancellable_new ();
@@ -1026,7 +1026,7 @@ osstub_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
                                           const char * const *arg_packages)
 {
   OSStub *self = OSSTUB (interface);
-  g_autoptr (GTask) task = NULL;
+  g_autoptr(GTask) task = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
 
   /* TODO: Totally ignoring packages for now */
@@ -1057,11 +1057,11 @@ osstub_load_internals (OSStub *self,
 {
   const gchar *name;
 
-  OstreeDeployment *booted = NULL; // owned by sysroot
-  glnx_unref_object  OstreeDeployment *merge_deployment = NULL; // transfered
+  OstreeDeployment *booted = NULL; /* owned by sysroot */
+  glnx_unref_object  OstreeDeployment *merge_deployment = NULL; /* transfered */
 
   glnx_unref_object OstreeRepo *ot_repo = NULL;
-  g_autoptr (GPtrArray) deployments = NULL;
+  g_autoptr(GPtrArray) deployments = NULL;
   g_autofree gchar *origin_refspec = NULL;
 
   GError *error = NULL;

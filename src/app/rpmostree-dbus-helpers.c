@@ -179,7 +179,7 @@ rpmostree_load_os_proxy (RPMOSTreeSysroot *sysroot_proxy,
   g_autofree char *os_object_path = NULL;
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
 
-  GDBusConnection *connection = NULL; // owned by sysroot_proxy
+  GDBusConnection *connection = NULL; /* owned by sysroot_proxy */
 
   if (opt_osname == NULL)
     {
@@ -371,7 +371,7 @@ on_transaction_progress (GDBusProxy *proxy,
   TransactionProgress *tp = user_data;
   if (g_strcmp0(signal_name, "SignatureProgress") == 0)
     {
-      g_autoptr (GVariant) sig = NULL;
+      g_autoptr(GVariant) sig = NULL;
       sig = g_variant_get_child_value (parameters, 0);
       rpmostree_print_signatures (g_variant_ref (sig), "  ");
       add_status_line (tp, "\n");
@@ -514,8 +514,8 @@ rpmostree_transaction_get_response_sync (GDBusConnection *connection,
   gulong signal_handler = 0;
   gboolean success = FALSE;
 
-  // If we are on the message bus, setup object manager connection
-  // to notify if the owner changes.
+  /* If we are on the message bus, setup object manager connection
+   * to notify if the owner changes. */
   if (g_dbus_connection_get_unique_name (connection) != NULL)
     {
       is_peer = FALSE;
@@ -544,7 +544,7 @@ rpmostree_transaction_get_response_sync (GDBusConnection *connection,
   if (transaction == NULL)
     goto out;
 
-  // setup cancel handler
+  /* setup cancel handler */
   cancel_handler = g_cancellable_connect (cancellable,
                                           G_CALLBACK (cancelled_handler),
                                           transaction, NULL);
@@ -553,7 +553,7 @@ rpmostree_transaction_get_response_sync (GDBusConnection *connection,
                                      G_CALLBACK (on_transaction_progress),
                                      tp);
 
-  // Setup finished signal handlers
+  /* Setup finished signal handlers */
   property_handler = g_signal_connect (transaction, "notify::complete",
                                        G_CALLBACK (on_transaction_finished),
                                        tp);
@@ -600,7 +600,7 @@ rpmostree_print_signatures (GVariant *variant,
 
   for (i = 0; i < n_sigs; i++)
     {
-      g_autoptr (GVariant) v = NULL;
+      g_autoptr(GVariant) v = NULL;
       g_string_append_c (sigs_buffer, '\n');
       g_variant_get_child (variant, i, "v", &v);
       ostree_gpg_verify_result_describe_variant (v, sigs_buffer, sep,

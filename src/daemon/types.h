@@ -16,8 +16,7 @@
 * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 */
 
-#ifndef RPM_OSTREED_TYPES_H__
-#define RPM_OSTREED_TYPES_H__
+#pragma once
 
 #include <glib-unix.h>
 #include <gio/gio.h>
@@ -38,5 +37,3 @@ typedef struct _OSStub OSStub;
 
 struct _Transaction;
 typedef struct _Transaction Transaction;
-
-#endif /* RPM_OSTREED_TYPES_H__ */

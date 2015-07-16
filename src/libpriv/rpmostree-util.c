@@ -236,7 +236,7 @@ _rpmostree_util_get_commit_hashes (OstreeRepo    *repo,
     goto out;
 
   ret = g_ptr_array_new_with_free_func (g_free);
-  g_ptr_array_add (ret, g_strdup (beg));  // Add the user defined REFSPEC.
+  g_ptr_array_add (ret, g_strdup (beg));  /* Add the user defined REFSPEC. */
 
   if (end &&
       !ostree_repo_read_commit (repo, end, NULL, &end_checksum, cancellable, error))
@@ -249,7 +249,7 @@ _rpmostree_util_get_commit_hashes (OstreeRepo    *repo,
   while ((parent = ost_get_prev_commit (repo, checksum)))
     {
       if (end && g_str_equal (end_checksum, parent))
-        { // Add the user defined REFSPEC.
+        { /* Add the user defined REFSPEC. */
           g_ptr_array_add (ret, g_strdup (end));
           break;
         }

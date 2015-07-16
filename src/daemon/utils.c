@@ -142,8 +142,8 @@ utils_load_sysroot_and_repo (gchar *path,
                             error))
       goto out;
 
-  // ostree_sysroot_get_repo now just adds a
-  // ref to its singleton
+  /* ostree_sysroot_get_repo now just adds a
+   * ref to its singleton */
   if (!ostree_sysroot_get_repo (ot_sysroot,
                                 out_repo,
                                 cancellable,

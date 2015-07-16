@@ -83,7 +83,7 @@ rpmostree_builtin_upgrade (int             argc,
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_object_path = NULL;
-  g_autoptr (GVariant) default_deployment = NULL;
+  g_autoptr(GVariant) default_deployment = NULL;
 
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
@@ -131,7 +131,7 @@ rpmostree_builtin_upgrade (int             argc,
 
   if (opt_check_diff)
     {
-      // yes, doing this without using dbus
+      /* yes, doing this without using dbus */
       gs_unref_object OstreeSysroot *sysroot = NULL;
       gs_unref_object OstreeRepo *repo = NULL;
       gs_unref_object GFile *rpmdbdir = NULL;
@@ -141,7 +141,7 @@ rpmostree_builtin_upgrade (int             argc,
       _cleanup_rpmrev_ struct RpmRevisionData *rpmrev1 = NULL;
       _cleanup_rpmrev_ struct RpmRevisionData *rpmrev2 = NULL;
 
-      gs_free char *ref = NULL; // location of this rev
+      gs_free char *ref = NULL; /* location of this rev */
       gs_free char *remote = NULL;
 
       if (!rpmostree_os_get_has_cached_update_rpm_diff (os_proxy))

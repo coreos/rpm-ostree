@@ -16,13 +16,10 @@
 * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 */
 
-#ifndef RPM_OSTREED_SYSROOT_H__
-#define RPM_OSTREED_SYSROOT_H__
+#pragma once
 
 #include "types.h"
 #include "ostree.h"
-
-G_BEGIN_DECLS
 
 #define TYPE_SYSROOT   (sysroot_get_type ())
 #define SYSROOT(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), TYPE_SYSROOT, Sysroot))
@@ -41,7 +38,3 @@ gboolean          sysroot_populate                  (Sysroot *self,
 
 void              sysroot_emit_update               (Sysroot *self,
                                                      OstreeSysroot *ot_sysroot);
-
-G_END_DECLS
-
-#endif /* RPM_OSTREED_SYSROOT_H__ */

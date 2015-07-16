@@ -16,13 +16,9 @@
 * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 */
 
-
-#ifndef RPM_OSTREED_ERRORS_H__
-#define RPM_OSTREED_ERRORS_H__
+#pragma once
 
 #include <gio/gio.h>
-
-G_BEGIN_DECLS
 
 #define RPM_OSTREED_ERROR (rpmostreed_error_quark ())
 
@@ -36,7 +32,3 @@ typedef enum {
 } RpmOstreedError;
 
 GQuark rpmostreed_error_quark (void);
-
-G_END_DECLS
-
-#endif /* RPM_OSTREED_ERRORS_H__ */

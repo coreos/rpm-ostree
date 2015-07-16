@@ -477,7 +477,7 @@ rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff)
           printf (" ");
           pkg_print (hn);
 
-          // Load the old %changelog entries
+          /* Load the old %changelog entries */
           ochanges_date = &ochanges_date_s;
           headerGet (ho, RPMTAG_CHANGELOGTIME, ochanges_date, HEADERGET_MINMEM);
           ochanges_name = &ochanges_name_s;
@@ -489,7 +489,7 @@ rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff)
           if (!ocnum)
             continue;
 
-          // Load the new %changelog entries
+          /* Load the new %changelog entries */
           nchanges_date = &nchanges_date_s;
           headerGet (hn, RPMTAG_CHANGELOGTIME, nchanges_date, HEADERGET_MINMEM);
           nchanges_name = &nchanges_name_s;
@@ -501,7 +501,7 @@ rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff)
           if (!ncnum)
             continue;
 
-          // Load the latest old %changelog entry.
+          /* Load the latest old %changelog entry. */
           ochange_date = rpmtdGetNumber (ochanges_date);
           ochange_name = rpmtdGetString (ochanges_name);
           ochange_text = rpmtdGetString (ochanges_text);
@@ -511,7 +511,7 @@ rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff)
               GDateTime *dt = NULL;
               gs_free char *date_time_str = NULL;
 
-              // Load next new %changelog entry, starting at the newest.
+              /* Load next new %changelog entry, starting at the newest. */
               rpmtdNext (nchanges_date);
               rpmtdNext (nchanges_name);
               rpmtdNext (nchanges_text);
@@ -519,8 +519,8 @@ rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff)
               nchange_name = rpmtdGetString (nchanges_name);
               nchange_text = rpmtdGetString (nchanges_text);
 
-              //  If we are now older than, or match, the latest old %changelog
-              // then we are done.
+              /*  If we are now older than, or match, the latest old %changelog
+               * then we are done. */
               if (ochange_date > nchange_date)
                 break;
               if ((ochange_date == nchange_date) &&
@@ -528,7 +528,7 @@ rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff)
                   g_str_equal (ochange_text, nchange_text))
                 break;
 
-              // Otherwise, print.
+              /* Otherwise, print. */
               dt = g_date_time_new_from_unix_utc (nchange_date);
               date_time_str = g_date_time_format (dt, "%a %b %d %Y");
               g_date_time_unref (dt);
@@ -606,7 +606,7 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
     {
       if (_rpmhdrs_diff_cmp_end (diff->hs_mod_old, diff->hs_del) < 0)
         if (_rpmhdrs_diff_cmp_end (diff->hs_mod_old, diff->hs_add) < 0)
-          { // mod is first
+          { /* mod is first */
             Header hm = diff->hs_mod_old->pdata[diff->hs_mod_old->len-1];
 
             printf("!");
@@ -618,7 +618,7 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
             g_ptr_array_remove_index(diff->hs_mod_new, diff->hs_mod_new->len-1);
           }
         else
-          { // add is first
+          { /* add is first */
             Header ha = diff->hs_add->pdata[diff->hs_add->len-1];
 
             printf ("+");
@@ -627,7 +627,7 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
           }
       else
         if (_rpmhdrs_diff_cmp_end (diff->hs_del, diff->hs_add) < 0)
-          { // del is first
+          { /* del is first */
             Header hd = diff->hs_del->pdata[diff->hs_del->len-1];
 
             printf ("-");
@@ -635,7 +635,7 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
             g_ptr_array_remove_index(diff->hs_del, diff->hs_del->len-1);
           }
         else
-          { // add is first
+          { /* add is first */
             Header ha = diff->hs_add->pdata[diff->hs_add->len-1];
 
             printf ("+");

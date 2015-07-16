@@ -107,7 +107,7 @@ dir_contains_uid_or_gid (GFile         *root,
       break;
     }
 
-  // Now recurse for dirs.
+  /* Now recurse for dirs. */
   if (!found_match && type == G_FILE_TYPE_DIRECTORY)
     {
       gs_unref_object GFileEnumerator *dir_enum = NULL;
@@ -200,7 +200,7 @@ data2passwdents (const char *data)
       convent->name = g_strdup (ent->pw_name);
       convent->uid  = ent->pw_uid;
       convent->gid  = ent->pw_gid;
-      // Want to add anymore, like dir?
+      /* Want to add anymore, like dir? */
 
       g_ptr_array_add (ret, convent);
     }
@@ -247,7 +247,7 @@ data2groupents (const char *data)
 
       convent->name = g_strdup (ent->gr_name);
       convent->gid  = ent->gr_gid;
-      // Want to add anymore, like users?
+      /* Want to add anymore, like users? */
 
       g_ptr_array_add (ret, convent);
     }
@@ -503,7 +503,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
           ++oiter;
           ++niter;
         }
-      else if (cmp < 0) // Missing value from new passwd
+      else if (cmp < 0) /* Missing value from new passwd */
         {
           gboolean found_matching_uid;
 
@@ -560,7 +560,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
           ++niter;
           continue;
         }
-      else if (cmp < 0) // Missing value from new group
+      else if (cmp < 0) /* Missing value from new group */
         {
 
           if (ignore_all_removed ||
@@ -1132,9 +1132,9 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                               cancellable, error))
     goto out;
 
-  // We should error if we are getting passwd data from JSON and group from
-  // previous commit, or vice versa, as that'll confuse everyone when it goes
-  // wrong.
+  /* We should error if we are getting passwd data from JSON and group from
+   * previous commit, or vice versa, as that'll confuse everyone when it goes
+   * wrong. */
   if ( found_passwd_data && !found_groups_data)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,

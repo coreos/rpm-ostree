@@ -16,17 +16,10 @@
 * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 */
 
-#ifndef RPM_OSTREED_AUTH_H__
-#define RPM_OSTREED_AUTH_H__
+#pragma once
 
 #include "types.h"
-
-G_BEGIN_DECLS
 
 gboolean    auth_check_root_or_access_denied     (GDBusInterfaceSkeleton *instance,
                                                   GDBusMethodInvocation *invocation,
                                                   gpointer user_data);
-
-G_END_DECLS
-
-#endif /* RPM_OSTREED_AUTH_H__ */

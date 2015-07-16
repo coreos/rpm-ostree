@@ -102,7 +102,7 @@ _build_file (const char *first, ...)
   va_list args;
   const gchar *arg;
   g_autofree gchar *path = NULL;
-  g_autoptr (GPtrArray) parts = NULL;
+  g_autoptr(GPtrArray) parts = NULL;
 
   va_start (args, first);
   parts = g_ptr_array_new ();
@@ -124,7 +124,7 @@ handle_create_osname (RPMOSTreeSysroot *object,
                      GDBusMethodInvocation *invocation,
                      const gchar *osname)
 {
-  g_autoptr (GFile) dir = NULL;
+  g_autoptr(GFile) dir = NULL;
   g_autofree gchar *deploy_dir = NULL;
   g_autofree gchar *base_name = NULL;
 
@@ -150,8 +150,8 @@ handle_create_osname (RPMOSTreeSysroot *object,
       goto out;
     }
 
-  // TODO: The operations here are copied from ostree init-os
-  // command, should be refactored into shared code
+  /* TODO: The operations here are copied from ostree init-os
+   * command, should be refactored into shared code */
   deploy_dir = g_build_filename (self->sysroot_path,
                                  "ostree", "deploy", osname, NULL);
 
@@ -273,15 +273,16 @@ sysroot_dispose (GObject *object)
         g_signal_handler_disconnect (self->monitor, self->sig_changed);
       self->sig_changed = 0;
 
-      // HACK - It is not generally safe to just unref a GFileMonitor.
-      // Some events might be on their way to the main loop from its
-      // worker thread and if they arrive after the GFileMonitor has
-      // been destroyed, bad things will happen.
-      //
-      // As a workaround, we cancel the monitor and then spin the main
-      // loop a bit until nothing is pending anymore.
-      //
-      // https://bugzilla.gnome.org/show_bug.cgi?id=740491
+      /* HACK - It is not generally safe to just unref a GFileMonitor.
+       * Some events might be on their way to the main loop from its
+       * worker thread and if they arrive after the GFileMonitor has
+       * been destroyed, bad things will happen.
+       *
+       * As a workaround, we cancel the monitor and then spin the main
+       * loop a bit until nothing is pending anymore.
+       *
+       * https://bugzilla.gnome.org/show_bug.cgi?id=740491
+       */
 
       g_file_monitor_cancel (self->monitor);
       for (tries = 0; tries < 10; tries ++)
@@ -413,8 +414,8 @@ sysroot_populate_deployments (Sysroot *self,
                               OstreeSysroot *ot_sysroot,
                               OstreeRepo *ot_repo)
 {
-  OstreeDeployment *booted = NULL; // owned by sysroot
-  g_autoptr (GPtrArray) deployments = NULL;
+  OstreeDeployment *booted = NULL; /* owned by sysroot */
+  g_autoptr(GPtrArray) deployments = NULL;
 
   GVariantBuilder builder;
   guint i;
@@ -423,7 +424,7 @@ sysroot_populate_deployments (Sysroot *self,
   g_debug ("loading deployments");
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ssisstsav)"));
 
-  // Add deployment interfaces
+  /* Add deployment interfaces */
   deployments = ostree_sysroot_get_deployments (ot_sysroot);
 
   if (deployments == NULL)
@@ -464,7 +465,7 @@ sysroot_load_internals (Sysroot *self,
 {
   gboolean ret = FALSE;
   glnx_unref_object OstreeRepo *ot_repo = NULL;
-  g_autoptr (GHashTable) seen = NULL;
+  g_autoptr(GHashTable) seen = NULL;
   g_autofree gchar *os_path = NULL;
   GDir *os_dir = NULL;
 
@@ -508,7 +509,7 @@ sysroot_load_internals (Sysroot *self,
       }
 
       g_hash_table_add (seen, g_strdup (os));
-      // If we've already seen it, continue
+      /* If we've already seen it, continue */
       if (g_hash_table_contains (self->os_interfaces, os))
         continue;
 
@@ -522,7 +523,7 @@ sysroot_load_internals (Sysroot *self,
         }
     }
 
-  // Remove dead os paths
+  /* Remove dead os paths */
   g_hash_table_iter_init (&iter, self->os_interfaces);
   while (g_hash_table_iter_next (&iter, &hashkey, &value))
     {
@@ -533,7 +534,7 @@ sysroot_load_internals (Sysroot *self,
         }
     }
 
-  // update deployments
+  /* update deployments */
   sysroot_populate_deployments (self, self->ot_sysroot, ot_repo);
 
   ret = TRUE;
@@ -577,8 +578,8 @@ _reload_callback (GObject *source_object,
     g_task_propagate_boolean (task, &error);
     if (error)
       {
-        // this was valid once, make sure it is tried again
-        // TODO: should we bail at some point?
+        /* this was valid once, make sure it is tried again
+         * TODO: should we bail at some point? */
         g_message ("Error refreshing sysroot data: %s", error->message);
         g_timeout_add_seconds (UPDATED_THROTTLE_SECONDS,
                                _throttle_refresh,
@@ -600,7 +601,7 @@ _throttle_refresh (gpointer user_data)
   Sysroot *self = SYSROOT (user_data);
   gboolean ret = TRUE;
 
-  // Only run the update if there isn't another one pending.
+  /* Only run the update if there isn't another one pending. */
   g_rw_lock_writer_lock (&self->children_lock);
   if ((g_get_monotonic_time () - self->last_monitor_event) >
       UPDATED_THROTTLE_SECONDS * G_USEC_PER_SEC)
@@ -688,7 +689,7 @@ sysroot_populate (Sysroot *self,
 
   if (self->monitor == NULL)
     {
-      GFile *repo_file = ostree_repo_get_path (ot_repo); // owned by ot_repo
+      GFile *repo_file = ostree_repo_get_path (ot_repo); /* owned by ot_repo */
       self->monitor = g_file_monitor (repo_file, 0, NULL, error);
 
       if (self->monitor == NULL)
