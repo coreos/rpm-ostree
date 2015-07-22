@@ -253,7 +253,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   {
     GPtrArray *sources;
     JsonArray *enable_repos = NULL;
-    gs_unref_hashtable GHashTable *enabled_repo_names =
+    gs_unref_hashtable GHashTable *repos_to_enable =
       g_hash_table_new (g_str_hash, g_str_equal);
     guint i;
     guint n;
@@ -275,21 +275,45 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
         const char *reponame = _rpmostree_jsonutil_array_require_string_element (enable_repos, i, error);
         if (!reponame)
           goto out;
-        g_hash_table_add (enabled_repo_names, (char*)reponame);
+        g_hash_table_add (repos_to_enable, (char*)reponame);
       }
 
     for (i = 0; i < sources->len; i++)
       {
         HifSource *src = g_ptr_array_index (sources, i);
+        const char *id = hif_source_get_id (src);
 
-        if (!g_hash_table_lookup (enabled_repo_names, hif_source_get_id (src)))
-          hif_source_set_enabled (src, HIF_SOURCE_ENABLED_NONE);
-        else
-          hif_source_set_enabled (src, HIF_SOURCE_ENABLED_PACKAGES);
-        
+        /* Note side effect here */
+        if (g_hash_table_remove (repos_to_enable, id))
+          {
+            hif_source_set_enabled (src, HIF_SOURCE_ENABLED_PACKAGES);
 #ifdef HAVE_HIF_SOURCE_SET_REQUIRED
-        hif_source_set_required (src, TRUE);
+            hif_source_set_required (src, TRUE);
 #endif
+          }
+        else
+          hif_source_set_enabled (src, HIF_SOURCE_ENABLED_NONE);
+      }
+    
+    /* Did we have any leftovers? */
+    if (g_hash_table_size (repos_to_enable) > 0)
+      {
+        GString *repos_str = g_string_new ("");
+        GHashTableIter hiter;
+        gpointer key, value;
+        
+        g_hash_table_iter_init (&hiter, repos_to_enable);
+        while (g_hash_table_iter_next (&hiter, &key, &value))
+          {
+            if (repos_str->len > 0)
+              g_string_append (repos_str, ", ");
+            g_string_append (repos_str, (char*) key);
+          }
+
+        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                     "Repositories specified not found: %s", repos_str->str);
+        g_string_free (repos_str, TRUE);
+        goto out;
       }
   }
 
