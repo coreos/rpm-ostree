@@ -27,6 +27,7 @@
 #include "deployment-utils.h"
 #include "auth.h"
 #include "errors.h"
+#include "transaction-monitor.h"
 
 #include "libgsystem.h"
 #include <libglnx.h>
@@ -56,10 +57,10 @@ struct _Sysroot
   gchar *sysroot_path;
 
   OstreeSysroot *ot_sysroot;
+  TransactionMonitor *transaction_monitor;
 
   GHashTable *os_interfaces;
   GRWLock children_lock;
-
 
   GFileMonitor *monitor;
   guint sig_changed;
@@ -256,6 +257,28 @@ out:
   return TRUE;
 }
 
+static gboolean
+sysroot_transform_transaction_to_path (GBinding *binding,
+                                       const GValue *src_value,
+                                       GValue *dst_value,
+                                       gpointer user_data)
+{
+  GDBusInterfaceSkeleton *transaction;
+  const char *object_path = NULL;
+
+  transaction = g_value_get_object (src_value);
+
+  if (transaction != NULL)
+    object_path = g_dbus_interface_skeleton_get_object_path (transaction);
+
+  if (object_path == NULL)
+    object_path = "/";
+
+  g_value_set_string (dst_value, object_path);
+
+  return TRUE;
+}
+
 /* ---------------------------------------------------------------------------------------------------- */
 static void
 sysroot_dispose (GObject *object)
@@ -302,7 +325,9 @@ sysroot_dispose (GObject *object)
 
   g_rw_lock_writer_unlock (&self->children_lock);
 
-  g_object_unref (self->ot_sysroot);
+  g_clear_object (&self->ot_sysroot);
+  g_clear_object (&self->transaction_monitor);
+
   G_OBJECT_CLASS (sysroot_parent_class)->dispose (object);
 }
 
@@ -340,14 +365,29 @@ sysroot_init (Sysroot *self)
   self->monitor = NULL;
   self->sig_changed = 0;
   self->last_monitor_event = 0;
+
+  self->transaction_monitor = transaction_monitor_new ();
 }
 
 static void
 sysroot_constructed (GObject *object)
 {
   Sysroot *self = SYSROOT (object);
+
   g_signal_connect (RPMOSTREE_SYSROOT(self), "g-authorize-method",
                     G_CALLBACK (auth_check_root_or_access_denied), NULL);
+
+  g_object_bind_property_full (self->transaction_monitor,
+                               "active-transaction",
+                               self,
+                               "active-transaction",
+                               G_BINDING_DEFAULT |
+                               G_BINDING_SYNC_CREATE,
+                               sysroot_transform_transaction_to_path,
+                               NULL,
+                               NULL,
+                               NULL);
+
   G_OBJECT_CLASS (sysroot_parent_class)->constructed (object);
 }
 
@@ -516,7 +556,8 @@ sysroot_load_internals (Sysroot *self,
       full_path = g_build_filename (os_path, os, NULL);
       if (g_file_test (full_path, G_FILE_TEST_IS_DIR))
         {
-          RPMOSTreeOS *obj = osstub_new (self->ot_sysroot, os);
+          RPMOSTreeOS *obj = osstub_new (self->ot_sysroot, os,
+                                         self->transaction_monitor);
           g_hash_table_insert (self->os_interfaces,
                                g_strdup (os),
                                obj);

@@ -37,3 +37,6 @@ typedef struct _OSStub OSStub;
 
 struct _Transaction;
 typedef struct _Transaction Transaction;
+
+struct _TransactionMonitor;
+typedef struct _TransactionMonitor TransactionMonitor;

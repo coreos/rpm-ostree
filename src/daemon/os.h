@@ -26,5 +26,6 @@
 
 GType             osstub_get_type                  (void) G_GNUC_CONST;
 RPMOSTreeOS *     osstub_new                       (OstreeSysroot *sysroot,
-                                                    const char *name);
+                                                    const char *name,
+                                                    TransactionMonitor *monitor);
 OstreeSysroot *   osstub_ref_sysroot               (OSStub *self);

@@ -339,6 +339,7 @@ end_status_line (TransactionProgress *self)
 
 static gboolean
 add_status_line (TransactionProgress *self,
+
                  const char *line)
 {
   gboolean ret = TRUE;
@@ -444,12 +445,11 @@ on_owner_changed (GObject    *object,
 }
 
 static void
-transaction_finished (RPMOSTreeTransaction *transaction,
-                      TransactionProgress *tp)
+transaction_done (RPMOSTreeTransaction *transaction,
+                  TransactionProgress *tp)
 {
   g_autofree gchar *message = NULL;
   gboolean success = FALSE;
-  gboolean complete = FALSE;
 
   /* if we are already finished don't process */
   if (tp->complete)
@@ -459,20 +459,19 @@ transaction_finished (RPMOSTreeTransaction *transaction,
 
   if (!tp->error)
     {
-      complete = rpmostree_transaction_get_complete (transaction);
-      success = rpmostree_transaction_get_success (transaction);
-      message = rpmostree_transaction_dup_result_message (transaction);
-
-      g_return_if_fail (complete == TRUE);
-
-      if (success)
+      if (rpmostree_transaction_call_finish_sync (transaction,
+                                                  &success, &message,
+                                                  NULL, &tp->error))
         {
-          add_status_line (tp, message);
-        }
-      else
-        {
-          tp->error = g_dbus_error_new_for_dbus_error ("org.projectatomic.rpmostreed.Error.Failed",
-                                                       message);
+          if (success)
+            {
+              add_status_line (tp, message);
+            }
+          else
+            {
+              tp->error = g_dbus_error_new_for_dbus_error ("org.projectatomic.rpmostreed.Error.Failed",
+                                                           message);
+            }
         }
     }
 
@@ -480,12 +479,12 @@ transaction_finished (RPMOSTreeTransaction *transaction,
 }
 
 static void
-on_transaction_finished (GObject *object,
-                         GParamSpec *pspec,
-                         gpointer user_data)
+on_transaction_done (RPMOSTreeTransaction *transaction,
+                     GParamSpec *pspec,
+                     TransactionProgress *tp)
 {
-  TransactionProgress *tp = user_data;
-  transaction_finished (RPMOSTREE_TRANSACTION (object), tp);
+  if (!rpmostree_transaction_get_active (transaction))
+    transaction_done (transaction, tp);
 }
 
 static void
@@ -554,14 +553,14 @@ rpmostree_transaction_get_response_sync (GDBusConnection *connection,
                                      tp);
 
   /* Setup finished signal handlers */
-  property_handler = g_signal_connect (transaction, "notify::complete",
-                                       G_CALLBACK (on_transaction_finished),
+  property_handler = g_signal_connect (transaction, "notify::active",
+                                       G_CALLBACK (on_transaction_done),
                                        tp);
 
-  if (!rpmostree_transaction_get_complete (transaction))
+  if (rpmostree_transaction_get_active (transaction))
     g_main_loop_run (tp->loop);
   else
-    transaction_finished (transaction, tp);
+    transaction_done (transaction, tp);
 
   g_cancellable_disconnect (cancellable, cancel_handler);
 

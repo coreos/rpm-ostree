@@ -31,8 +31,10 @@ librpmostreed_la_SOURCES = \
 	src/daemon/auth.c \
 	src/daemon/deployment-utils.h \
 	src/daemon/deployment-utils.c \
-	src/daemon/transactions.h \
-	src/daemon/transactions.c \
+	src/daemon/transaction.h \
+	src/daemon/transaction.c \
+	src/daemon/transaction-monitor.h \
+	src/daemon/transaction-monitor.c \
 	src/daemon/rpmostree-package-variants.h \
 	src/daemon/rpmostree-package-variants.c \
 	src/daemon/os.h \
