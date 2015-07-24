@@ -206,6 +206,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   hif_context_set_install_root (hifctx, gs_file_get_path_cached (yumroot));
 
   hif_context_set_cache_dir (hifctx, cachedir);
+  hif_context_set_cache_age (hifctx, G_MAXUINT);
   hif_context_set_solv_dir (hifctx, solvdir);
   hif_context_set_lock_dir (hifctx, lockdir);
   hif_context_set_check_disk_space (hifctx, FALSE);
