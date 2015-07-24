@@ -665,6 +665,13 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
     }
 
+  if (getuid () != 0)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "compose tree must presently be run as uid 0 (root)");
+      goto out;
+    }
+
   repo_path = g_file_new_for_path (opt_repo);
   repo = self->repo = ostree_repo_new (repo_path);
   if (!ostree_repo_open (repo, cancellable, error))
