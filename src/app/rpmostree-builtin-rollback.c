@@ -48,7 +48,6 @@ rpmostree_builtin_rollback (int             argc,
                             GError        **error)
 {
   gboolean ret = FALSE;
-  gboolean is_peer = FALSE;
 
   GOptionContext *context = g_option_context_new ("- Revert to the previously booted tree");
   glnx_unref_object GDBusConnection *connection = NULL;
@@ -64,11 +63,10 @@ rpmostree_builtin_rollback (int             argc,
                                               cancellable,
                                               &connection,
                                               &sysroot_proxy,
-                                              &is_peer,
                                               error))
     goto out;
 
-  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL, is_peer,
+  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,
                                 cancellable, &os_proxy, error))
     goto out;
 
@@ -104,8 +102,8 @@ rpmostree_builtin_rollback (int             argc,
   ret = TRUE;
 
 out:
-  if (is_peer)
-    rpmostree_cleanup_peer ();
+  /* Does nothing if using the message bus. */
+  rpmostree_cleanup_peer ();
 
   return ret;
 }

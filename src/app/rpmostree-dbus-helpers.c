@@ -41,7 +41,6 @@ get_connection_for_path (gchar *sysroot,
                          gboolean force_peer,
                          GCancellable *cancellable,
                          GDBusConnection **out_connection,
-                         gboolean *out_is_peer,
                          GError **error)
 {
   glnx_unref_object GDBusConnection *connection = NULL;
@@ -53,7 +52,6 @@ get_connection_for_path (gchar *sysroot,
 
   int pair[2];
   gboolean ret = FALSE;
-  gboolean is_peer = FALSE;
 
   const gchar *args[] = {
     "rpm-ostreed",
@@ -72,7 +70,6 @@ get_connection_for_path (gchar *sysroot,
     }
 
   g_print ("Running in single user mode. Be sure no other users are modifying the system\n");
-  is_peer = TRUE;
   if (socketpair (AF_UNIX, SOCK_STREAM, 0, pair) < 0)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -109,7 +106,6 @@ out:
     {
       ret = TRUE;
       *out_connection = g_steal_pointer (&connection);
-      *out_is_peer = is_peer;
     }
   return ret;
 }
@@ -122,7 +118,6 @@ out:
 * @cancellable: A GCancellable
 * @out_connection: (out) Return location for connection.
 * @out_sysroot: (out) Return location for sysroot
-* @out_is_peer: (out) indicates if connection is connected to a peer.
 * @error: A pointer to a GError pointer.
 *
 * Returns: True on success
@@ -133,11 +128,10 @@ rpmostree_load_connection_and_sysroot (gchar *sysroot,
                                        GCancellable *cancellable,
                                        GDBusConnection **out_connection,
                                        RPMOSTreeSysroot **out_sysroot_proxy,
-                                       gboolean *out_is_peer,
                                        GError **error)
 {
   gboolean ret = FALSE;
-  gboolean is_peer = FALSE;
+  const char *bus_name = NULL;
   glnx_unref_object GDBusConnection *connection = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
 
@@ -145,13 +139,15 @@ rpmostree_load_connection_and_sysroot (gchar *sysroot,
                                 force_peer,
                                 cancellable,
                                 &connection,
-                                &is_peer,
                                 error))
     goto out;
 
+  if (g_dbus_connection_get_unique_name (connection) != NULL)
+    bus_name = BUS_NAME;
+
   sysroot_proxy = rpmostree_sysroot_proxy_new_sync (connection,
                                                     G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                                    is_peer ? NULL : BUS_NAME,
+                                                    bus_name,
                                                     "/org/projectatomic/rpmostree1/Sysroot",
                                                     NULL,
                                                     error);
@@ -159,7 +155,6 @@ rpmostree_load_connection_and_sysroot (gchar *sysroot,
     goto out;
 
   *out_connection = g_steal_pointer (&connection);
-  *out_is_peer = is_peer;
   *out_sysroot_proxy = g_steal_pointer (&sysroot_proxy);
   ret = TRUE;
 
@@ -170,12 +165,12 @@ out:
 gboolean
 rpmostree_load_os_proxy (RPMOSTreeSysroot *sysroot_proxy,
                          gchar *opt_osname,
-                         gboolean is_peer,
                          GCancellable *cancellable,
                          RPMOSTreeOS **out_os_proxy,
                          GError **error)
 {
   gboolean ret = FALSE;
+  const char *bus_name;
   g_autofree char *os_object_path = NULL;
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
 
@@ -204,9 +199,13 @@ rpmostree_load_os_proxy (RPMOSTreeSysroot *sysroot_proxy,
     }
 
   connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
+
+  if (g_dbus_connection_get_unique_name (connection) != NULL)
+    bus_name = BUS_NAME;
+
   os_proxy = rpmostree_os_proxy_new_sync (connection,
                                           G_DBUS_PROXY_FLAGS_NONE,
-                                          is_peer ? NULL : BUS_NAME,
+                                          bus_name,
                                           os_object_path,
                                           cancellable,
                                           error);
@@ -507,20 +506,22 @@ rpmostree_transaction_get_response_sync (GDBusConnection *connection,
 
   TransactionProgress *tp = transaction_progress_new ();
 
+  const char *bus_name;
   gint cancel_handler;
-  gboolean is_peer = TRUE;
   gulong property_handler = 0;
   gulong signal_handler = 0;
   gboolean success = FALSE;
 
+  if (g_dbus_connection_get_unique_name (connection) != NULL)
+    bus_name = BUS_NAME;
+
   /* If we are on the message bus, setup object manager connection
    * to notify if the owner changes. */
-  if (g_dbus_connection_get_unique_name (connection) != NULL)
+  if (bus_name != NULL)
     {
-      is_peer = FALSE;
       object_manager = rpmostree_object_manager_client_new_sync (connection,
                                                           G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                                          BUS_NAME,
+                                                          bus_name,
                                                           "/org/projectatomic/rpmostree1",
                                                           cancellable,
                                                           error);
@@ -536,7 +537,7 @@ rpmostree_transaction_get_response_sync (GDBusConnection *connection,
 
   transaction = rpmostree_transaction_proxy_new_sync (connection,
                                                       G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                                      is_peer ? NULL : BUS_NAME,
+                                                      bus_name,
                                                       object_path,
                                                       cancellable,
                                                       error);

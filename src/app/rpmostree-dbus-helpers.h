@@ -38,13 +38,11 @@ rpmostree_load_connection_and_sysroot        (gchar *sysroot,
                                               GCancellable *cancellable,
                                               GDBusConnection **out_connection,
                                               RPMOSTreeSysroot **out_manager,
-                                              gboolean *out_is_peer,
                                               GError **error);
 
 gboolean
 rpmostree_load_os_proxy                      (RPMOSTreeSysroot *sysroot_proxy,
                                               gchar *opt_osname,
-                                              gboolean is_peer,
                                               GCancellable *cancellable,
                                               RPMOSTreeOS **out_os_proxy,
                                               GError **error);

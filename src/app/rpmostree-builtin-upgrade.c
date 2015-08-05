@@ -76,7 +76,6 @@ rpmostree_builtin_upgrade (int             argc,
                            GError        **error)
 {
   gboolean ret = FALSE;
-  gboolean is_peer = FALSE;
 
   GOptionContext *context = g_option_context_new ("- Perform a system upgrade");
   glnx_unref_object GDBusConnection *connection = NULL;
@@ -93,11 +92,10 @@ rpmostree_builtin_upgrade (int             argc,
                                               cancellable,
                                               &connection,
                                               &sysroot_proxy,
-                                              &is_peer,
                                               error))
     goto out;
 
-  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname, is_peer,
+  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
     goto out;
 
@@ -206,8 +204,8 @@ rpmostree_builtin_upgrade (int             argc,
   ret = TRUE;
 
 out:
-  if (is_peer)
-    rpmostree_cleanup_peer ();
+  /* Does nothing if using the message bus. */
+  rpmostree_cleanup_peer ();
 
   return ret;
 }

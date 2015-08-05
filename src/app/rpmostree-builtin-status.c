@@ -66,7 +66,6 @@ rpmostree_builtin_status (int             argc,
                           GError        **error)
 {
   gboolean ret = FALSE;
-  gboolean is_peer = FALSE;
   GOptionContext *context = g_option_context_new ("- Get the version of the booted system");
   glnx_unref_object GDBusConnection *connection = NULL;
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
@@ -94,11 +93,10 @@ rpmostree_builtin_status (int             argc,
                                               cancellable,
                                               &connection,
                                               &sysroot_proxy,
-                                              &is_peer,
                                               error))
     goto out;
 
-  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL, is_peer,
+  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,
                                 cancellable, &os_proxy, error))
     goto out;
 
@@ -254,8 +252,8 @@ rpmostree_builtin_status (int             argc,
   ret = TRUE;
 
 out:
-  if (is_peer)
-    rpmostree_cleanup_peer ();
+  /* Does nothing if using the message bus. */
+  rpmostree_cleanup_peer ();
 
 	return ret;
 }
