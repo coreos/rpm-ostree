@@ -67,7 +67,6 @@ rpmostree_builtin_status (int             argc,
 {
   gboolean ret = FALSE;
   GOptionContext *context = g_option_context_new ("- Get the version of the booted system");
-  glnx_unref_object GDBusConnection *connection = NULL;
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autoptr(GVariant) booted_deployment = NULL;
@@ -88,12 +87,11 @@ rpmostree_builtin_status (int             argc,
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
-  if (!rpmostree_load_connection_and_sysroot (opt_sysroot,
-                                              opt_force_peer,
-                                              cancellable,
-                                              &connection,
-                                              &sysroot_proxy,
-                                              error))
+  if (!rpmostree_load_sysroot (opt_sysroot,
+                               opt_force_peer,
+                               cancellable,
+                               &sysroot_proxy,
+                               error))
     goto out;
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,

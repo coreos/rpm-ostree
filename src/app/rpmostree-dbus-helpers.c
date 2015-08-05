@@ -112,23 +112,21 @@ out:
 
 
 /**
-* rpmostree_load_connection_and_sysroot
+* rpmostree_load_sysroot
 * @sysroot: sysroot path
 * @force_peer: Force a peer connection
 * @cancellable: A GCancellable
-* @out_connection: (out) Return location for connection.
 * @out_sysroot: (out) Return location for sysroot
 * @error: A pointer to a GError pointer.
 *
 * Returns: True on success
 **/
 gboolean
-rpmostree_load_connection_and_sysroot (gchar *sysroot,
-                                       gboolean force_peer,
-                                       GCancellable *cancellable,
-                                       GDBusConnection **out_connection,
-                                       RPMOSTreeSysroot **out_sysroot_proxy,
-                                       GError **error)
+rpmostree_load_sysroot (gchar *sysroot,
+                        gboolean force_peer,
+                        GCancellable *cancellable,
+                        RPMOSTreeSysroot **out_sysroot_proxy,
+                        GError **error)
 {
   gboolean ret = FALSE;
   const char *bus_name = NULL;
@@ -154,7 +152,6 @@ rpmostree_load_connection_and_sysroot (gchar *sysroot,
   if (sysroot_proxy == NULL)
     goto out;
 
-  *out_connection = g_steal_pointer (&connection);
   *out_sysroot_proxy = g_steal_pointer (&sysroot_proxy);
   ret = TRUE;
 

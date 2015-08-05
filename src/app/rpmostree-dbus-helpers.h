@@ -33,11 +33,10 @@ void
 rpmostree_cleanup_peer                       (void);
 
 gboolean
-rpmostree_load_connection_and_sysroot        (gchar *sysroot,
+rpmostree_load_sysroot                       (gchar *sysroot,
                                               gboolean force_peer,
                                               GCancellable *cancellable,
-                                              GDBusConnection **out_connection,
-                                              RPMOSTreeSysroot **out_manager,
+                                              RPMOSTreeSysroot **out_sysroot_proxy,
                                               GError **error);
 
 gboolean

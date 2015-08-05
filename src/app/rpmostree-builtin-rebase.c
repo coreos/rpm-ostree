@@ -70,20 +70,19 @@ rpmostree_builtin_rebase (int             argc,
   const char *packages[] = { NULL };
 
   GOptionContext *context = g_option_context_new ("REFSPEC - Switch to a different tree");
-  glnx_unref_object GDBusConnection *connection = NULL;
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_object_path = NULL;
+  GDBusConnection *connection;
 
   if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
     goto out;
 
-  if (!rpmostree_load_connection_and_sysroot (opt_sysroot,
-                                              opt_force_peer,
-                                              cancellable,
-                                              &connection,
-                                              &sysroot_proxy,
-                                              error))
+  if (!rpmostree_load_sysroot (opt_sysroot,
+                               opt_force_peer,
+                               cancellable,
+                               &sysroot_proxy,
+                               error))
     goto out;
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
@@ -100,6 +99,8 @@ rpmostree_builtin_rebase (int             argc,
                                       cancellable,
                                       error))
     goto out;
+
+  connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
 
   if (!rpmostree_transaction_get_response_sync (connection,
                                                 transaction_object_path,
