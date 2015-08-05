@@ -28,14 +28,10 @@
 
 #include <libglnx.h>
 
-static char *opt_sysroot = "/";
 static gboolean opt_pretty;
-static gboolean opt_force_peer;
 
 static GOptionEntry option_entries[] = {
-  { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { "pretty", 'p', 0, G_OPTION_ARG_NONE, &opt_pretty, "Display status in formatted rows", NULL },
-  { "peer", 0, 0, G_OPTION_ARG_NONE, &opt_force_peer, "Force a peer to peer connection instead of using the system message bus", NULL },
   { NULL }
 };
 
@@ -84,14 +80,13 @@ rpmostree_builtin_status (int             argc,
   guint buffer = 5; /* minimum space between end of one entry and new column */
 
 
-  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
-    goto out;
-
-  if (!rpmostree_load_sysroot (opt_sysroot,
-                               opt_force_peer,
-                               cancellable,
-                               &sysroot_proxy,
-                               error))
+  if (!rpmostree_option_context_parse (context,
+                                       option_entries,
+                                       &argc, &argv,
+                                       RPM_OSTREE_BUILTIN_FLAG_NONE,
+                                       cancellable,
+                                       &sysroot_proxy,
+                                       error))
     goto out;
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,

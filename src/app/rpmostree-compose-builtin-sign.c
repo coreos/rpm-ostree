@@ -58,7 +58,13 @@ rpmostree_compose_builtin_sign (int            argc,
   gs_unref_variant GVariant *commit_variant = NULL;
   gs_unref_bytes GBytes *commit_bytes = NULL;
   
-  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
+  if (!rpmostree_option_context_parse (context,
+                                       option_entries,
+                                       &argc, &argv,
+                                       RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                       cancellable,
+                                       NULL,
+                                       error))
     goto out;
 
   if (!(opt_repo_path && opt_key_id && opt_rev))

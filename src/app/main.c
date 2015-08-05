@@ -46,9 +46,17 @@ static RpmOstreeCommand commands[] = {
 };
 
 static gboolean opt_version;
+static gboolean opt_force_peer;
+static char *opt_sysroot;
 
 static GOptionEntry global_entries[] = {
   { "version", 0, 0, G_OPTION_ARG_NONE, &opt_version, "Print version information and exit", NULL },
+  { NULL }
+};
+
+static GOptionEntry daemon_entries[] = {
+  { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
+  { "peer", 0, 0, G_OPTION_ARG_NONE, &opt_force_peer, "Force a peer-to-peer connection instead of using the system message bus", NULL },
   { NULL }
 };
 
@@ -81,15 +89,26 @@ rpmostree_option_context_parse (GOptionContext *context,
                                 const GOptionEntry *main_entries,
                                 int *argc,
                                 char ***argv,
+                                RpmOstreeBuiltinFlags flags,
+                                GCancellable *cancellable,
+                                RPMOSTreeSysroot **out_sysroot_proxy,
                                 GError **error)
 {
+  gboolean use_daemon;
+  gboolean ret = FALSE;
+
+  use_daemon = ((flags & RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD) == 0);
+
   if (main_entries != NULL)
     g_option_context_add_main_entries (context, main_entries, NULL);
+
+  if (use_daemon)
+    g_option_context_add_main_entries (context, daemon_entries, NULL);
 
   g_option_context_add_main_entries (context, global_entries, NULL);
 
   if (!g_option_context_parse (context, argc, argv, error))
-    return FALSE;
+    goto out;
 
   if (opt_version)
     {
@@ -97,7 +116,20 @@ rpmostree_option_context_parse (GOptionContext *context,
       exit (EXIT_SUCCESS);
     }
 
-  return TRUE;
+  if (use_daemon)
+    {
+      if (!rpmostree_load_sysroot (opt_sysroot,
+                                   opt_force_peer,
+                                   cancellable,
+                                   out_sysroot_proxy,
+                                   error))
+        goto out;
+    }
+
+  ret = TRUE;
+
+out:
+  return ret;
 }
 
 void
@@ -205,7 +237,9 @@ main (int    argc,
       context = option_context_new_with_commands ();
 
       /* This will not return for some options (e.g. --version). */
-      if (rpmostree_option_context_parse (context, NULL, &argc, &argv, &error))
+      if (rpmostree_option_context_parse (context, NULL, &argc, &argv,
+                                          RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                          NULL, NULL, &error))
         {
           if (command_name == NULL)
             {

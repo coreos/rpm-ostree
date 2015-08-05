@@ -81,7 +81,13 @@ rpmostree_db_option_context_parse (GOptionContext *context,
 
   g_option_context_add_main_entries (context, global_entries, NULL);
 
-  if (!rpmostree_option_context_parse (context, main_entries, argc, argv, error))
+  if (!rpmostree_option_context_parse (context,
+                                       main_entries,
+                                       argc, argv,
+                                       RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                       cancellable,
+                                       NULL,
+                                       error))
     goto out;
 
   if (opt_repo == NULL)
@@ -166,7 +172,12 @@ rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError *
       context = rpm_option_context_new_with_commands ();
 
       /* This will not return for some options (e.g. --version). */
-      if (rpmostree_option_context_parse (context, NULL, &argc, &argv, error))
+      if (rpmostree_option_context_parse (context, NULL,
+                                          &argc, &argv,
+                                          RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                          cancellable,
+                                          NULL,
+                                          error))
         {
           if (subcommand_name == NULL)
             {

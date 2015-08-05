@@ -37,15 +37,12 @@ static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_allow_downgrade;
 static gboolean opt_check_diff;
-static gboolean opt_force_peer;
 
 static GOptionEntry option_entries[] = {
-  { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after an upgrade is prepared", NULL },
   { "allow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_allow_downgrade, "Permit deployment of chronologically older trees", NULL },
   { "check-diff", 0, 0, G_OPTION_ARG_NONE, &opt_check_diff, "Check for upgrades and print package diff only", NULL },
-  { "peer", 0, 0, G_OPTION_ARG_NONE, &opt_force_peer, "Force a peer to peer connection instead of using the system message bus", NULL },
   { NULL }
 };
 
@@ -84,14 +81,13 @@ rpmostree_builtin_upgrade (int             argc,
   g_autoptr(GVariant) default_deployment = NULL;
   GDBusConnection *connection;
 
-  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
-    goto out;
-
-  if (!rpmostree_load_sysroot (opt_sysroot,
-                               opt_force_peer,
-                               cancellable,
-                               &sysroot_proxy,
-                               error))
+  if (!rpmostree_option_context_parse (context,
+                                       option_entries,
+                                       &argc, &argv,
+                                       RPM_OSTREE_BUILTIN_FLAG_NONE,
+                                       cancellable,
+                                       &sysroot_proxy,
+                                       error))
     goto out;
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,

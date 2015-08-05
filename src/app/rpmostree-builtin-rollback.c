@@ -32,12 +32,9 @@
 
 static char *opt_sysroot = "/";
 static gboolean opt_reboot;
-static gboolean opt_force_peer;
 
 static GOptionEntry option_entries[] = {
-  { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after rollback is prepared", NULL },
-  { "peer", 0, 0, G_OPTION_ARG_NONE, &opt_force_peer, "Force a peer to peer connection instead of using the system message bus", NULL },
   { NULL }
 };
 
@@ -55,14 +52,13 @@ rpmostree_builtin_rollback (int             argc,
   g_autofree char *transaction_object_path = NULL;
   GDBusConnection *connection;
 
-  if (!rpmostree_option_context_parse (context, option_entries, &argc, &argv, error))
-    goto out;
-
-  if (!rpmostree_load_sysroot (opt_sysroot,
-                               opt_force_peer,
-                               cancellable,
-                               &sysroot_proxy,
-                               error))
+  if (!rpmostree_option_context_parse (context,
+                                       option_entries,
+                                       &argc, &argv,
+                                       RPM_OSTREE_BUILTIN_FLAG_NONE,
+                                       cancellable,
+                                       &sysroot_proxy,
+                                       error))
     goto out;
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,

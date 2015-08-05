@@ -21,8 +21,14 @@
 #pragma once
 
 #include "ostree.h"
+#include "rpmostree-dbus-helpers.h"
 
 G_BEGIN_DECLS
+
+typedef enum {
+  RPM_OSTREE_BUILTIN_FLAG_NONE = 0,
+  RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD = 1 << 0
+} RpmOstreeBuiltinFlags;
 
 typedef struct {
   const char *name;
@@ -44,6 +50,9 @@ gboolean rpmostree_option_context_parse (GOptionContext *context,
                                          const GOptionEntry *main_entries,
                                          int *argc,
                                          char ***argv,
+                                         RpmOstreeBuiltinFlags flags,
+                                         GCancellable *cancellable,
+                                         RPMOSTreeSysroot **out_sysroot_proxy,
                                          GError **error);
 
 void rpmostree_print_gpg_verify_result (OstreeGpgVerifyResult *result);
