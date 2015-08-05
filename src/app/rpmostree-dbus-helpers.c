@@ -493,11 +493,12 @@ cancelled_handler (GCancellable *cancellable,
 
 
 gboolean
-rpmostree_transaction_get_response_sync (GDBusConnection *connection,
+rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
                                          const gchar *object_path,
                                          GCancellable *cancellable,
                                          GError **error)
 {
+  GDBusConnection *connection;
   glnx_unref_object GDBusObjectManager *object_manager = NULL;
   glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
 
@@ -508,6 +509,8 @@ rpmostree_transaction_get_response_sync (GDBusConnection *connection,
   gulong property_handler = 0;
   gulong signal_handler = 0;
   gboolean success = FALSE;
+
+  connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
 
   if (g_dbus_connection_get_unique_name (connection) != NULL)
     bus_name = BUS_NAME;

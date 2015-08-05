@@ -70,7 +70,6 @@ rpmostree_builtin_rebase (int             argc,
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_object_path = NULL;
-  GDBusConnection *connection;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -96,9 +95,7 @@ rpmostree_builtin_rebase (int             argc,
                                       error))
     goto out;
 
-  connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
-
-  if (!rpmostree_transaction_get_response_sync (connection,
+  if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_object_path,
                                                 cancellable,
                                                 error))

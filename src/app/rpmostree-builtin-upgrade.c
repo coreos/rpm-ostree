@@ -79,7 +79,6 @@ rpmostree_builtin_upgrade (int             argc,
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_object_path = NULL;
   g_autoptr(GVariant) default_deployment = NULL;
-  GDBusConnection *connection;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -116,9 +115,7 @@ rpmostree_builtin_upgrade (int             argc,
         goto out;
     }
 
-  connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
-
-  if (!rpmostree_transaction_get_response_sync (connection,
+  if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_object_path,
                                                 cancellable,
                                                 error))

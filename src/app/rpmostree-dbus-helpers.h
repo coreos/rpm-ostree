@@ -47,7 +47,7 @@ rpmostree_load_os_proxy                      (RPMOSTreeSysroot *sysroot_proxy,
                                               GError **error);
 
 gboolean
-rpmostree_transaction_get_response_sync      (GDBusConnection *out_connection,
+rpmostree_transaction_get_response_sync      (RPMOSTreeSysroot *sysroot_proxy,
                                               const gchar *object_path,
                                               GCancellable *cancellable,
                                               GError **error);
