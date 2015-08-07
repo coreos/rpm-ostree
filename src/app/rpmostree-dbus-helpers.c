@@ -294,6 +294,7 @@ transaction_get_progress_line (guint64 start_time,
 typedef struct
 {
   GSConsole *console;
+  gboolean in_status_line;
   GError *error;
   GMainLoop *loop;
   gboolean complete;
@@ -303,13 +304,12 @@ typedef struct
 static TransactionProgress *
 transaction_progress_new (void)
 {
-  TransactionProgress *self = NULL;
+  TransactionProgress *self;
 
-  self = g_slice_new (TransactionProgress);
-  self->error = NULL;
-  self->console = NULL;
+  self = g_slice_new0 (TransactionProgress);
+  self->console = gs_console_get ();
   self->loop = g_main_loop_new (NULL, FALSE);
-  self->complete = FALSE;
+
   return self;
 }
 
@@ -326,8 +326,12 @@ static gboolean
 end_status_line (TransactionProgress *self)
 {
   gboolean ret = TRUE;
-  if (self->console != NULL)
-    ret = gs_console_end_status_line (self->console, NULL, NULL);
+
+  if (self->in_status_line)
+    {
+      ret = gs_console_end_status_line (self->console, NULL, NULL);
+      self->in_status_line = FALSE;
+    }
 
   return ret;
 }
@@ -335,17 +339,10 @@ end_status_line (TransactionProgress *self)
 
 static gboolean
 add_status_line (TransactionProgress *self,
-
                  const char *line)
 {
-  gboolean ret = TRUE;
-
-  if (self->console == NULL)
-    self->console = gs_console_get ();
-
-  ret = gs_console_begin_status_line (self->console, line, NULL, NULL);
-
-  return ret;
+  self->in_status_line = TRUE;
+  return gs_console_begin_status_line (self->console, line, NULL, NULL);
 }
 
 
@@ -366,21 +363,25 @@ on_transaction_progress (GDBusProxy *proxy,
                          gpointer user_data)
 {
   TransactionProgress *tp = user_data;
-  if (g_strcmp0(signal_name, "SignatureProgress") == 0)
+
+  if (g_strcmp0 (signal_name, "SignatureProgress") == 0)
     {
       g_autoptr(GVariant) sig = NULL;
       sig = g_variant_get_child_value (parameters, 0);
       rpmostree_print_signatures (g_variant_ref (sig), "  ");
       add_status_line (tp, "\n");
     }
-  if (g_strcmp0(signal_name, "Message") == 0)
+  else if (g_strcmp0 (signal_name, "Message") == 0)
     {
       g_autofree gchar *message = NULL;
 
       g_variant_get_child (parameters, 0, "s", &message);
-      add_status_line (tp, message);
+      if (tp->in_status_line)
+        add_status_line (tp, message);
+      else
+        g_print ("%s\n", message);
     }
-  else if (g_strcmp0(signal_name, "DownloadProgress") == 0)
+  else if (g_strcmp0 (signal_name, "DownloadProgress") == 0)
     {
       g_autofree gchar *line = NULL;
 
@@ -423,6 +424,10 @@ on_transaction_progress (GDBusProxy *proxy,
                                             bytes_transferred,
                                             bytes_sec);
       add_status_line (tp, line);
+    }
+  else if (g_strcmp0 (signal_name, "ProgressEnd") == 0)
+    {
+      end_status_line (tp);
     }
 }
 

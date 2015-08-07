@@ -479,6 +479,8 @@ osstub_pull_dir_thread (GTask *task,
                                              cancellable, &local_error))
     goto out;
 
+  rpmostree_transaction_emit_progress_end (data->transaction);
+
   if (!changed)
     data->success_message = g_strdup ("No upgrade available.");
 
@@ -568,6 +570,8 @@ osstub_upgrade_thread (GTask *task,
                                      progress, &changed,
                                      cancellable, &local_error))
     goto out;
+
+  rpmostree_transaction_emit_progress_end (data->transaction);
 
   if (changed)
     {

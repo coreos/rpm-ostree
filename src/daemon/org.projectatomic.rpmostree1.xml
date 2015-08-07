@@ -164,5 +164,9 @@
       <!-- The signed commit -->
     	<arg name="commit" type="s" direction="out"/>
     </signal>
+
+    <!-- Indicates progress signals are done and subsequent
+         Message signals should be output on separate lines. -->
+    <signal name="ProgressEnd"/>
   </interface>
 </node>
