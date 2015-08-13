@@ -28,13 +28,7 @@
 GType           transaction_monitor_get_type    (void) G_GNUC_CONST;
 TransactionMonitor *
                 transaction_monitor_new         (void);
-RPMOSTreeTransaction *
-                transaction_monitor_new_transaction
-                                                (TransactionMonitor *monitor,
-                                                 GDBusMethodInvocation *invocation,
-                                                 OstreeSysroot *sysroot,
-                                                 GCancellable *cancellable,
-                                                 GError **error);
-RPMOSTreeTransaction *
-                transaction_monitor_ref_active_transaction
+void            transaction_monitor_add         (TransactionMonitor *monitor,
+                                                 Transaction *transaction);
+Transaction *   transaction_monitor_ref_active_transaction
                                                 (TransactionMonitor *monitor);

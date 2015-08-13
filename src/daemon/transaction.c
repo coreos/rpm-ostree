@@ -23,6 +23,7 @@
 
 #include "transaction.h"
 #include "errors.h"
+#include "sysroot.h"
 
 struct _TransactionPrivate {
   GDBusMethodInvocation *invocation;
@@ -45,7 +46,6 @@ enum {
 };
 
 enum {
-  START,
   CANCELLED,
   FINISHED,
   OWNER_VANISHED,
@@ -61,12 +61,12 @@ static void transaction_dbus_iface_init (RPMOSTreeTransactionIface *iface);
  *     on the 2nd instance and valgrind was going crazy with invalid reads
  *     and writes.  So I'm falling back to the allegedly deprecated method
  *     and deferring further investigation. */
-G_DEFINE_TYPE_WITH_CODE (Transaction, transaction,
-                         RPMOSTREE_TYPE_TRANSACTION_SKELETON,
-                         G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
-                                                transaction_initable_iface_init)
-                         G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_TRANSACTION,
-                                                transaction_dbus_iface_init))
+G_DEFINE_ABSTRACT_TYPE_WITH_CODE (Transaction, transaction,
+                                  RPMOSTREE_TYPE_TRANSACTION_SKELETON,
+                                  G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
+                                                         transaction_initable_iface_init)
+                                  G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_TRANSACTION,
+                                                         transaction_dbus_iface_init))
 
 /* XXX This is lame but it's meant to keep it simple to
  *     transition to transaction_get_instance_private(). */
@@ -217,6 +217,58 @@ transaction_gpg_verify_result_cb (OstreeRepo *repo,
   rpmostree_transaction_emit_signature_progress (transaction,
                                                  g_variant_builder_end (&builder),
                                                  g_strdup (checksum));
+}
+
+static void
+transaction_execute_thread (GTask *task,
+                            gpointer source_object,
+                            gpointer task_data,
+                            GCancellable *cancellable)
+{
+  Transaction *self = TRANSACTION (source_object);
+  TransactionClass *class = TRANSACTION_GET_CLASS (self);
+  gboolean success = TRUE;
+  GError *local_error = NULL;
+
+  if (class->execute != NULL)
+    success = class->execute (self, cancellable, &local_error);
+
+  if (local_error != NULL)
+    g_task_return_error (task, local_error);
+  else
+    g_task_return_boolean (task, success);
+}
+
+static void
+transaction_execute_done_cb (GObject *source_object,
+                             GAsyncResult *result,
+                             gpointer user_data)
+{
+  Transaction *self = TRANSACTION (source_object);
+  TransactionPrivate *priv = transaction_get_private (self);
+  const char *message = NULL;
+  gboolean success;
+  GError *local_error = NULL;
+
+  success = g_task_propagate_boolean (G_TASK (result), &local_error);
+
+  /* Sanity check */
+  g_warn_if_fail ((success && local_error == NULL) ||
+                  (!success && local_error != NULL));
+
+  if (local_error != NULL)
+    message = local_error->message;
+
+  if (message == NULL)
+    message = "";
+
+  priv->success = success;
+  priv->message = g_strdup (message);
+
+  if (success && priv->sysroot != NULL)
+    sysroot_emit_update (sysroot_get (), priv->sysroot);
+
+  rpmostree_transaction_set_active (RPMOSTREE_TRANSACTION (self), FALSE);
 }
 
 static void
@@ -405,10 +457,16 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
     }
   else
     {
+      GTask *task;
+
       priv->started = TRUE;
 
-      /* FIXME Subclassing would be better than this. */
-      g_signal_emit (transaction, signals[START], 0);
+      task = g_task_new (transaction,
+                         priv->cancellable,
+                         transaction_execute_done_cb,
+                         NULL);
+      g_task_run_in_thread (task, transaction_execute_thread);
+      g_object_unref (task);
 
       rpmostree_transaction_complete_start (transaction, invocation);
     }
@@ -483,12 +541,6 @@ transaction_class_init (TransactionClass *class)
                                                         G_PARAM_CONSTRUCT_ONLY |
                                                         G_PARAM_STATIC_STRINGS));
 
-  signals[START] = g_signal_new ("start",
-                                 TYPE_TRANSACTION,
-                                 G_SIGNAL_RUN_LAST,
-                                 0, NULL, NULL, NULL,
-                                 G_TYPE_NONE, 0);
-
   signals[CANCELLED] = g_signal_new ("cancelled",
                                      TYPE_TRANSACTION,
                                      G_SIGNAL_RUN_LAST,
@@ -530,81 +582,42 @@ transaction_init (Transaction *self)
                                             TransactionPrivate);
 }
 
-RPMOSTreeTransaction *
-transaction_new (GDBusMethodInvocation *invocation,
-                 OstreeSysroot *sysroot,
-                 GCancellable *cancellable,
-                 GError **error)
-{
-  /* sysroot is optional */
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-
-  return g_initable_new (TYPE_TRANSACTION,
-                         cancellable, error,
-                         "invocation", invocation,
-                         "sysroot", sysroot,
-                         NULL);
-}
-
 OstreeSysroot *
-transaction_get_sysroot (RPMOSTreeTransaction *transaction)
+transaction_get_sysroot (Transaction *transaction)
 {
-  Transaction *self;
   TransactionPrivate *priv;
 
-  g_return_val_if_fail (RPMOSTREE_IS_TRANSACTION (transaction), NULL);
+  g_return_val_if_fail (IS_TRANSACTION (transaction), NULL);
 
-  self = TRANSACTION (transaction);
-  priv = transaction_get_private (self);
+  priv = transaction_get_private (transaction);
 
   return priv->sysroot;
 }
 
 void
-transaction_emit_message_printf (RPMOSTreeTransaction *transaction,
+transaction_emit_message_printf (Transaction *transaction,
                                  const char *format,
                                  ...)
 {
-  g_autofree char *message = NULL;
+  g_autofree char *formatted_message = NULL;
   va_list args;
 
-  g_return_if_fail (RPMOSTREE_IS_TRANSACTION (transaction));
+  g_return_if_fail (IS_TRANSACTION (transaction));
   g_return_if_fail (format != NULL);
 
   va_start (args, format);
-  message = g_strdup_vprintf (format, args);
+  formatted_message = g_strdup_vprintf (format, args);
   va_end (args);
 
-  rpmostree_transaction_emit_message (transaction, message);
+  rpmostree_transaction_emit_message (RPMOSTREE_TRANSACTION (transaction),
+                                      formatted_message);
 }
 
 void
-transaction_done (RPMOSTreeTransaction *transaction,
-                  gboolean success,
-                  const char *message)
-{
-  Transaction *self;
-  TransactionPrivate *priv;
-
-  g_return_if_fail (RPMOSTREE_IS_TRANSACTION (transaction));
-
-  if (message == NULL)
-    message = "";
-
-  self = TRANSACTION (transaction);
-  priv = transaction_get_private (self);
-
-  priv->success = success;
-  priv->message = g_strdup (message);
-
-  rpmostree_transaction_set_active (transaction, FALSE);
-}
-
-void
-transaction_connect_download_progress (RPMOSTreeTransaction *transaction,
+transaction_connect_download_progress (Transaction *transaction,
                                        OstreeAsyncProgress *progress)
 {
-  g_return_if_fail (RPMOSTREE_IS_TRANSACTION (transaction));
+  g_return_if_fail (IS_TRANSACTION (transaction));
   g_return_if_fail (OSTREE_IS_ASYNC_PROGRESS (progress));
 
   g_signal_connect_object (progress,
@@ -614,10 +627,10 @@ transaction_connect_download_progress (RPMOSTreeTransaction *transaction,
 }
 
 void
-transaction_connect_signature_progress (RPMOSTreeTransaction *transaction,
+transaction_connect_signature_progress (Transaction *transaction,
                                         OstreeRepo *repo)
 {
-  g_return_if_fail (RPMOSTREE_IS_TRANSACTION (transaction));
+  g_return_if_fail (IS_TRANSACTION (transaction));
   g_return_if_fail (OSTREE_REPO (repo));
 
   g_signal_connect_object (repo, "gpg-verify-result",

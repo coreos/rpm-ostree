@@ -181,25 +181,14 @@ transaction_monitor_new (void)
   return g_object_new (TYPE_TRANSACTION_MONITOR, NULL);
 }
 
-RPMOSTreeTransaction *
-transaction_monitor_new_transaction (TransactionMonitor *monitor,
-                                     GDBusMethodInvocation *invocation,
-                                     OstreeSysroot *sysroot,
-                                     GCancellable *cancellable,
-                                     GError **error)
+void
+transaction_monitor_add (TransactionMonitor *monitor,
+                         Transaction *transaction)
 {
-  RPMOSTreeTransaction *transaction;
-  const char *object_path;
   g_autofree char *child_object_path = NULL;
 
-  /* sysroot is optional */
-  g_return_val_if_fail (IS_TRANSACTION_MONITOR (monitor), NULL);
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-
-  transaction = transaction_new (invocation, sysroot, cancellable, error);
-
-  if (transaction == NULL)
-    goto out;
+  g_return_if_fail (IS_TRANSACTION_MONITOR (monitor));
+  g_return_if_fail (IS_TRANSACTION (transaction));
 
   g_signal_connect_object (transaction, "notify::active",
                            G_CALLBACK (transaction_monitor_notify_active_cb),
@@ -217,22 +206,18 @@ transaction_monitor_new_transaction (TransactionMonitor *monitor,
                            G_CALLBACK (transaction_monitor_owner_vanished_cb),
                            monitor, 0);
 
-  object_path = g_dbus_method_invocation_get_object_path (invocation);
-  child_object_path = g_build_path ("/", object_path, "Transaction", NULL);
+  child_object_path = g_build_path ("/", BASE_DBUS_PATH, "Transaction", NULL);
 
   daemon_publish (daemon_get (), child_object_path, TRUE, transaction);
 
   g_queue_push_head (monitor->transactions, g_object_ref (transaction));
   g_object_notify (G_OBJECT (monitor), "active-transaction");
-
-out:
-  return transaction;
 }
 
-RPMOSTreeTransaction *
+Transaction *
 transaction_monitor_ref_active_transaction (TransactionMonitor *monitor)
 {
-  RPMOSTreeTransaction *transaction;
+  Transaction *transaction;
 
   g_return_val_if_fail (IS_TRANSACTION_MONITOR (monitor), NULL);
 
@@ -243,7 +228,7 @@ transaction_monitor_ref_active_transaction (TransactionMonitor *monitor)
     {
       /* An "inactive" transaction is waiting to be Finish()'ed by its
        * client, but it doesn't block other transactions from starting. */
-      if (rpmostree_transaction_get_active (transaction))
+      if (rpmostree_transaction_get_active (RPMOSTREE_TRANSACTION (transaction)))
         g_object_ref (transaction);
       else
         transaction = NULL;

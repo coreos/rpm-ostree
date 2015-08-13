@@ -121,7 +121,7 @@ sysroot_stdout_ready_cb (GPollableInputStream *pollable_stream,
                          StdoutClosure *closure)
 {
   glnx_unref_object Sysroot *sysroot = NULL;
-  glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
+  glnx_unref_object Transaction *transaction = NULL;
   GMemoryInputStream *memory_stream;
   GBufferedInputStream *buffered_stream;
   char buffer[1024];
@@ -199,7 +199,7 @@ read_another_line:
        * dump it to the non-redirected standard output stream. */
       if (transaction != NULL)
         {
-          rpmostree_transaction_emit_message (transaction, line);
+          rpmostree_transaction_emit_message (RPMOSTREE_TRANSACTION (transaction), line);
         }
       else
         {
