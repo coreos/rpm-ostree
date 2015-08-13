@@ -184,6 +184,7 @@ transaction_monitor_new (void)
 RPMOSTreeTransaction *
 transaction_monitor_new_transaction (TransactionMonitor *monitor,
                                      GDBusMethodInvocation *invocation,
+                                     OstreeSysroot *sysroot,
                                      GCancellable *cancellable,
                                      GError **error)
 {
@@ -191,10 +192,11 @@ transaction_monitor_new_transaction (TransactionMonitor *monitor,
   const char *object_path;
   g_autofree char *child_object_path = NULL;
 
+  /* sysroot is optional */
   g_return_val_if_fail (IS_TRANSACTION_MONITOR (monitor), NULL);
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
 
-  transaction = transaction_new (invocation, cancellable, error);
+  transaction = transaction_new (invocation, sysroot, cancellable, error);
 
   if (transaction == NULL)
     goto out;

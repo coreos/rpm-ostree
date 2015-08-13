@@ -32,6 +32,7 @@ RPMOSTreeTransaction *
                 transaction_monitor_new_transaction
                                                 (TransactionMonitor *monitor,
                                                  GDBusMethodInvocation *invocation,
+                                                 OstreeSysroot *sysroot,
                                                  GCancellable *cancellable,
                                                  GError **error);
 RPMOSTreeTransaction *
