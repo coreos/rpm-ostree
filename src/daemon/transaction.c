@@ -24,11 +24,7 @@
 #include "transaction.h"
 #include "errors.h"
 
-typedef struct _TransactionClass TransactionClass;
-
-struct _Transaction
-{
-  RPMOSTreeTransactionSkeleton parent;
+struct _TransactionPrivate {
   GCancellable *cancellable;
 
   /* Locked for the duration of the transaction. */
@@ -38,11 +34,6 @@ struct _Transaction
   char *message;
 
   guint watch_id;
-};
-
-struct _TransactionClass
-{
-  RPMOSTreeTransactionSkeletonClass parent_class;
 };
 
 enum {
@@ -62,12 +53,24 @@ static guint signals[LAST_SIGNAL];
 static void transaction_initable_iface_init (GInitableIface *iface);
 static void transaction_dbus_iface_init (RPMOSTreeTransactionIface *iface);
 
+/* XXX I tried using G_ADD_PRIVATE here, but was getting memory corruption
+ *     on the 2nd instance and valgrind was going crazy with invalid reads
+ *     and writes.  So I'm falling back to the allegedly deprecated method
+ *     and deferring further investigation. */
 G_DEFINE_TYPE_WITH_CODE (Transaction, transaction,
                          RPMOSTREE_TYPE_TRANSACTION_SKELETON,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
                                                 transaction_initable_iface_init)
                          G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_TRANSACTION,
                                                 transaction_dbus_iface_init))
+
+/* XXX This is lame but it's meant to keep it simple to
+ *     transition to transaction_get_instance_private(). */
+static TransactionPrivate *
+transaction_get_private (Transaction *self)
+{
+  return self->priv;
+}
 
 static gboolean
 transaction_check_sender_is_owner (RPMOSTreeTransaction *transaction,
@@ -87,11 +90,12 @@ transaction_owner_vanished_cb (GDBusConnection *connection,
                                gpointer user_data)
 {
   Transaction *transaction = TRANSACTION (user_data);
+  TransactionPrivate *priv = transaction_get_private (transaction);
 
-  if (transaction->watch_id > 0)
+  if (priv->watch_id > 0)
     {
-      g_bus_unwatch_name (transaction->watch_id);
-      transaction->watch_id = 0;
+      g_bus_unwatch_name (priv->watch_id);
+      priv->watch_id = 0;
 
       /* Emit the signal AFTER unwatching the bus name, since this
        * may finalize the transaction and invalidate the watch_id. */
@@ -217,12 +221,13 @@ transaction_set_property (GObject *object,
                           const GValue *value,
                           GParamSpec *pspec)
 {
-  Transaction *transaction = TRANSACTION (object);
+  Transaction *self = TRANSACTION (object);
+  TransactionPrivate *priv = transaction_get_private (self);
 
   switch (property_id)
     {
       case PROP_SYSROOT:
-        transaction->sysroot = g_value_dup_object (value);
+        priv->sysroot = g_value_dup_object (value);
         break;
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -236,12 +241,13 @@ transaction_get_property (GObject *object,
                           GValue *value,
                           GParamSpec *pspec)
 {
-  Transaction *transaction = TRANSACTION (object);
+  Transaction *self = TRANSACTION (object);
+  TransactionPrivate *priv = transaction_get_private (self);
 
   switch (property_id)
     {
       case PROP_SYSROOT:
-        g_value_set_object (value, transaction->sysroot);
+        g_value_set_object (value, priv->sysroot);
         break;
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -252,13 +258,14 @@ transaction_get_property (GObject *object,
 static void
 transaction_dispose (GObject *object)
 {
-  Transaction *transaction = TRANSACTION (object);
+  Transaction *self = TRANSACTION (object);
+  TransactionPrivate *priv = transaction_get_private (self);
 
-  if (transaction->sysroot != NULL)
-    ostree_sysroot_unlock (transaction->sysroot);
+  if (priv->sysroot != NULL)
+    ostree_sysroot_unlock (priv->sysroot);
 
-  g_clear_object (&transaction->cancellable);
-  g_clear_object (&transaction->sysroot);
+  g_clear_object (&priv->cancellable);
+  g_clear_object (&priv->sysroot);
 
   G_OBJECT_CLASS (transaction_parent_class)->dispose (object);
 }
@@ -266,12 +273,13 @@ transaction_dispose (GObject *object)
 static void
 transaction_finalize (GObject *object)
 {
-  Transaction *transaction = TRANSACTION (object);
+  Transaction *self = TRANSACTION (object);
+  TransactionPrivate *priv = transaction_get_private (self);
 
-  g_free (transaction->message);
+  g_free (priv->message);
 
-  if (transaction->watch_id > 0)
-    g_bus_unwatch_name (transaction->watch_id);
+  if (priv->watch_id > 0)
+    g_bus_unwatch_name (priv->watch_id);
 
   G_OBJECT_CLASS (transaction_parent_class)->finalize (object);
 }
@@ -281,18 +289,18 @@ transaction_initable_init (GInitable *initable,
                            GCancellable *cancellable,
                            GError **error)
 {
-  Transaction *transaction = TRANSACTION (initable);
+  Transaction *self = TRANSACTION (initable);
+  TransactionPrivate *priv = transaction_get_private (self);
   gboolean ret = FALSE;
 
   if (G_IS_CANCELLABLE (cancellable))
-    transaction->cancellable = g_object_ref (cancellable);
+    priv->cancellable = g_object_ref (cancellable);
 
-  if (transaction->sysroot != NULL)
+  if (priv->sysroot != NULL)
     {
       gboolean lock_acquired = FALSE;
 
-      if (!ostree_sysroot_try_lock (transaction->sysroot,
-                                    &lock_acquired, error))
+      if (!ostree_sysroot_try_lock (priv->sysroot, &lock_acquired, error))
         goto out;
 
       if (!lock_acquired)
@@ -313,9 +321,10 @@ static gboolean
 transaction_handle_cancel (RPMOSTreeTransaction *transaction,
                            GDBusMethodInvocation *invocation)
 {
-  Transaction *real_transaction = TRANSACTION (transaction);
+  Transaction *self = TRANSACTION (transaction);
+  TransactionPrivate *priv = transaction_get_private (self);
 
-  if (real_transaction->cancellable == NULL)
+  if (priv->cancellable == NULL)
     return FALSE;
 
   if (!transaction_check_sender_is_owner (transaction, invocation))
@@ -327,7 +336,7 @@ transaction_handle_cancel (RPMOSTreeTransaction *transaction,
     }
   else
     {
-      g_cancellable_cancel (real_transaction->cancellable);
+      g_cancellable_cancel (priv->cancellable);
       g_signal_emit (transaction, signals[CANCELLED], 0);
       rpmostree_transaction_complete_cancel (transaction, invocation);
     }
@@ -339,7 +348,8 @@ static gboolean
 transaction_handle_finish (RPMOSTreeTransaction *transaction,
                            GDBusMethodInvocation *invocation)
 {
-  Transaction *real_transaction = TRANSACTION (transaction);
+  Transaction *self = TRANSACTION (transaction);
+  TransactionPrivate *priv = transaction_get_private (self);
 
   if (!transaction_check_sender_is_owner (transaction, invocation))
     {
@@ -359,9 +369,9 @@ transaction_handle_finish (RPMOSTreeTransaction *transaction,
     {
       g_signal_emit (transaction, signals[FINISHED], 0);
       rpmostree_transaction_complete_finish (transaction, invocation,
-                                             real_transaction->success,
-                                             real_transaction->message ?
-                                             real_transaction->message : "");
+                                             priv->success,
+                                             priv->message ?
+                                             priv->message : "");
     }
 
   return TRUE;
@@ -371,6 +381,8 @@ static void
 transaction_class_init (TransactionClass *class)
 {
   GObjectClass *object_class;
+
+  g_type_class_add_private (class, sizeof (TransactionPrivate));
 
   object_class = G_OBJECT_CLASS (class);
   object_class->set_property = transaction_set_property;
@@ -421,8 +433,11 @@ transaction_dbus_iface_init (RPMOSTreeTransactionIface *iface)
 }
 
 static void
-transaction_init (Transaction *transaction)
+transaction_init (Transaction *self)
 {
+  self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
+                                            TYPE_TRANSACTION,
+                                            TransactionPrivate);
 }
 
 RPMOSTreeTransaction *
@@ -431,7 +446,8 @@ transaction_new (GDBusMethodInvocation *invocation,
                  GCancellable *cancellable,
                  GError **error)
 {
-  Transaction *transaction;
+  Transaction *self;
+  TransactionPrivate *priv;
   GDBusConnection *connection;
   const char *method_name;
   const char *sender;
@@ -442,15 +458,15 @@ transaction_new (GDBusMethodInvocation *invocation,
   method_name = g_dbus_method_invocation_get_method_name (invocation);
   sender = g_dbus_method_invocation_get_sender (invocation);
 
-  transaction = g_initable_new (TYPE_TRANSACTION,
-                                cancellable, error,
-                                "sysroot", sysroot,
-                                "method-name", method_name,
-                                "owner", sender,
-                                "active", TRUE,
-                                NULL);
+  self = g_initable_new (TYPE_TRANSACTION,
+                         cancellable, error,
+                         "sysroot", sysroot,
+                         "method-name", method_name,
+                         "owner", sender,
+                         "active", TRUE,
+                         NULL);
 
-  if (transaction == NULL)
+  if (self == NULL)
     goto out;
 
   /* XXX Would be handy if GDBusInterfaceSkeleton had an export()
@@ -458,30 +474,34 @@ transaction_new (GDBusMethodInvocation *invocation,
    *     becomes available.  Alas, just set up the sender bus name
    *     watching here using the GDBusMethodInvocation's connection. */
 
+  priv = transaction_get_private (self);
+
   connection = g_dbus_method_invocation_get_connection (invocation);
 
-  transaction->watch_id = g_bus_watch_name_on_connection (connection,
-                                                          sender,
-                                                          G_BUS_NAME_WATCHER_FLAGS_NONE,
-                                                          NULL,
-                                                          transaction_owner_vanished_cb,
-                                                          transaction,
-                                                          NULL);
+  priv->watch_id = g_bus_watch_name_on_connection (connection,
+                                                   sender,
+                                                   G_BUS_NAME_WATCHER_FLAGS_NONE,
+                                                   NULL,
+                                                   transaction_owner_vanished_cb,
+                                                   self,
+                                                   NULL);
 
 out:
-  return (RPMOSTreeTransaction *) transaction;
+  return (RPMOSTreeTransaction *) self;
 }
 
 OstreeSysroot *
 transaction_get_sysroot (RPMOSTreeTransaction *transaction)
 {
-  Transaction *real_transaction;
+  Transaction *self;
+  TransactionPrivate *priv;
 
   g_return_val_if_fail (RPMOSTREE_IS_TRANSACTION (transaction), NULL);
 
-  real_transaction = TRANSACTION (transaction);
+  self = TRANSACTION (transaction);
+  priv = transaction_get_private (self);
 
-  return real_transaction->sysroot;
+  return priv->sysroot;
 }
 
 void
@@ -507,16 +527,19 @@ transaction_done (RPMOSTreeTransaction *transaction,
                   gboolean success,
                   const char *message)
 {
-  Transaction *real_transaction;
+  Transaction *self;
+  TransactionPrivate *priv;
 
   g_return_if_fail (RPMOSTREE_IS_TRANSACTION (transaction));
 
   if (message == NULL)
     message = "";
 
-  real_transaction = TRANSACTION (transaction);
-  real_transaction->success = success;
-  real_transaction->message = g_strdup (message);
+  self = TRANSACTION (transaction);
+  priv = transaction_get_private (self);
+
+  priv->success = success;
+  priv->message = g_strdup (message);
 
   rpmostree_transaction_set_active (transaction, FALSE);
 }

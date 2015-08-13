@@ -20,9 +20,25 @@
 
 #include "types.h"
 
-#define TYPE_TRANSACTION   (transaction_get_type ())
-#define TRANSACTION(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), TYPE_TRANSACTION, Transaction))
-#define IS_TRANSACTION(o)  (G_TYPE_CHECK_INSTANCE_TYPE ((o), TYPE_TRANSACTION))
+#define TYPE_TRANSACTION          (transaction_get_type ())
+#define TRANSACTION(o)            (G_TYPE_CHECK_INSTANCE_CAST ((o), TYPE_TRANSACTION, Transaction))
+#define TRANSACTION_CLASS(c)      (G_TYPE_CHECK_CLASS_CAST ((c), TYPE_TRANSACTION, TransactionClass))
+#define IS_TRANSACTION(o)         (G_TYPE_CHECK_INSTANCE_TYPE ((o), TYPE_TRANSACTION))
+#define TRANSACTION_GET_CLASS(o)  (G_TYPE_INSTANCE_GET_CLASS ((o), TYPE_TRANSACTION, TransactionClass))
+
+typedef struct _TransactionClass TransactionClass;
+typedef struct _TransactionPrivate TransactionPrivate;
+
+struct _Transaction
+{
+  RPMOSTreeTransactionSkeleton parent;
+  TransactionPrivate *priv;
+};
+
+struct _TransactionClass
+{
+  RPMOSTreeTransactionSkeletonClass parent_class;
+};
 
 GType           transaction_get_type            (void) G_GNUC_CONST;
 RPMOSTreeTransaction *
