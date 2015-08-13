@@ -29,7 +29,7 @@ typedef struct _TransactionClass TransactionClass;
 struct _Transaction
 {
   RPMOSTreeTransactionSkeleton parent;
-  GCancellable *method_cancellable;
+  GCancellable *cancellable;
 
   gboolean success;
   char *message;
@@ -43,8 +43,7 @@ struct _TransactionClass
 };
 
 enum {
-  PROP_0,
-  PROP_CANCELLABLE
+  PROP_0
 };
 
 enum {
@@ -56,12 +55,15 @@ enum {
 
 static guint signals[LAST_SIGNAL];
 
-static void transaction_iface_init (RPMOSTreeTransactionIface *iface);
+static void transaction_initable_iface_init (GInitableIface *iface);
+static void transaction_dbus_iface_init (RPMOSTreeTransactionIface *iface);
 
 G_DEFINE_TYPE_WITH_CODE (Transaction, transaction,
                          RPMOSTREE_TYPE_TRANSACTION_SKELETON,
+                         G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
+                                                transaction_initable_iface_init)
                          G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_TRANSACTION,
-                                                transaction_iface_init))
+                                                transaction_dbus_iface_init))
 
 static gboolean
 transaction_check_sender_is_owner (RPMOSTreeTransaction *transaction,
@@ -215,9 +217,6 @@ transaction_set_property (GObject *object,
 
   switch (property_id)
     {
-      case PROP_CANCELLABLE:
-        transaction->method_cancellable = g_value_dup_object (value);
-        break;
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
         break;
@@ -234,9 +233,6 @@ transaction_get_property (GObject *object,
 
   switch (property_id)
     {
-      case PROP_CANCELLABLE:
-        g_value_set_object (value, transaction->method_cancellable);
-        break;
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
         break;
@@ -248,7 +244,7 @@ transaction_dispose (GObject *object)
 {
   Transaction *transaction = TRANSACTION (object);
 
-  g_clear_object (&transaction->method_cancellable);
+  g_clear_object (&transaction->cancellable);
 
   G_OBJECT_CLASS (transaction_parent_class)->dispose (object);
 }
@@ -267,12 +263,25 @@ transaction_finalize (GObject *object)
 }
 
 static gboolean
+transaction_initable_init (GInitable *initable,
+                           GCancellable *cancellable,
+                           GError **error)
+{
+  Transaction *transaction = TRANSACTION (initable);
+
+  if (G_IS_CANCELLABLE (cancellable))
+    transaction->cancellable = g_object_ref (cancellable);
+
+  return TRUE;
+}
+
+static gboolean
 transaction_handle_cancel (RPMOSTreeTransaction *transaction,
                            GDBusMethodInvocation *invocation)
 {
   Transaction *real_transaction = TRANSACTION (transaction);
 
-  if (real_transaction->method_cancellable == NULL)
+  if (real_transaction->cancellable == NULL)
     return FALSE;
 
   if (!transaction_check_sender_is_owner (transaction, invocation))
@@ -284,7 +293,7 @@ transaction_handle_cancel (RPMOSTreeTransaction *transaction,
     }
   else
     {
-      g_cancellable_cancel (real_transaction->method_cancellable);
+      g_cancellable_cancel (real_transaction->cancellable);
       g_signal_emit (transaction, signals[CANCELLED], 0);
       rpmostree_transaction_complete_cancel (transaction, invocation);
     }
@@ -335,16 +344,6 @@ transaction_class_init (TransactionClass *class)
   object_class->dispose = transaction_dispose;
   object_class->finalize = transaction_finalize;
 
-  g_object_class_install_property (object_class,
-                                   PROP_CANCELLABLE,
-                                   g_param_spec_object ("cancellable",
-                                                        NULL,
-                                                        NULL,
-                                                        G_TYPE_CANCELLABLE,
-                                                        G_PARAM_READWRITE |
-                                                        G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS));
-
   signals[CANCELLED] = g_signal_new ("cancelled",
                                      TYPE_TRANSACTION,
                                      G_SIGNAL_RUN_LAST,
@@ -365,7 +364,13 @@ transaction_class_init (TransactionClass *class)
 }
 
 static void
-transaction_iface_init (RPMOSTreeTransactionIface *iface)
+transaction_initable_iface_init (GInitableIface *iface)
+{
+  iface->init = transaction_initable_init;
+}
+
+static void
+transaction_dbus_iface_init (RPMOSTreeTransactionIface *iface)
 {
   iface->handle_cancel = transaction_handle_cancel;
   iface->handle_finish = transaction_handle_finish;
@@ -378,7 +383,8 @@ transaction_init (Transaction *transaction)
 
 RPMOSTreeTransaction *
 transaction_new (GDBusMethodInvocation *invocation,
-                 GCancellable *method_cancellable)
+                 GCancellable *cancellable,
+                 GError **error)
 {
   Transaction *transaction;
   GDBusConnection *connection;
@@ -390,12 +396,15 @@ transaction_new (GDBusMethodInvocation *invocation,
   method_name = g_dbus_method_invocation_get_method_name (invocation);
   sender = g_dbus_method_invocation_get_sender (invocation);
 
-  transaction = g_object_new (TYPE_TRANSACTION,
-                              "cancellable", method_cancellable,
-                              "method-name", method_name,
-                              "owner", sender,
-                              "active", TRUE,
-                              NULL);
+  transaction = g_initable_new (TYPE_TRANSACTION,
+                                cancellable, error,
+                                "method-name", method_name,
+                                "owner", sender,
+                                "active", TRUE,
+                                NULL);
+
+  if (transaction == NULL)
+    goto out;
 
   /* XXX Would be handy if GDBusInterfaceSkeleton had an export()
    *     class method so subclasses can know when a GDBusConnection
@@ -412,7 +421,8 @@ transaction_new (GDBusMethodInvocation *invocation,
                                                           transaction,
                                                           NULL);
 
-  return RPMOSTREE_TRANSACTION (transaction);
+out:
+  return (RPMOSTreeTransaction *) transaction;
 }
 
 void

@@ -184,7 +184,8 @@ transaction_monitor_new (void)
 RPMOSTreeTransaction *
 transaction_monitor_new_transaction (TransactionMonitor *monitor,
                                      GDBusMethodInvocation *invocation,
-                                     GCancellable *method_cancellable)
+                                     GCancellable *cancellable,
+                                     GError **error)
 {
   RPMOSTreeTransaction *transaction;
   const char *object_path;
@@ -193,7 +194,10 @@ transaction_monitor_new_transaction (TransactionMonitor *monitor,
   g_return_val_if_fail (IS_TRANSACTION_MONITOR (monitor), NULL);
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
 
-  transaction = transaction_new (invocation, method_cancellable);
+  transaction = transaction_new (invocation, cancellable, error);
+
+  if (transaction == NULL)
+    goto out;
 
   g_signal_connect_object (transaction, "notify::active",
                            G_CALLBACK (transaction_monitor_notify_active_cb),
@@ -219,6 +223,7 @@ transaction_monitor_new_transaction (TransactionMonitor *monitor,
   g_queue_push_head (monitor->transactions, g_object_ref (transaction));
   g_object_notify (G_OBJECT (monitor), "active-transaction");
 
+out:
   return transaction;
 }
 

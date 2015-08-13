@@ -27,7 +27,8 @@
 GType           transaction_get_type            (void) G_GNUC_CONST;
 RPMOSTreeTransaction *
                 transaction_new                 (GDBusMethodInvocation *invocation,
-                                                 GCancellable *method_cancellable);
+                                                 GCancellable *cancellable,
+                                                 GError **error);
 void            transaction_done                (RPMOSTreeTransaction *transaction,
                                                  gboolean success,
                                                  const char *message);
