@@ -53,6 +53,7 @@ struct _TaskData {
   RPMOSTreeTransaction *transaction;
   GVariantDict *options;
   gchar *success_message;
+  gulong start_id;
 };
 
 static void osstub_iface_init (RPMOSTreeOSIface *iface);
@@ -94,6 +95,9 @@ task_result_invoke (GObject *source_object,
 static void
 task_data_free (TaskData *data)
 {
+  if (data->start_id > 0)
+    g_signal_handler_disconnect (data->transaction, data->start_id);
+
   g_clear_object (&data->transaction);
 
   g_free (data->refspec);
@@ -768,6 +772,19 @@ osstub_transaction_done_cb (GObject *source_object,
     }
 }
 
+static void
+osstub_start_pull_dir (RPMOSTreeTransaction *transaction,
+                       GTask *task)
+{
+  TaskData *task_data = g_task_get_task_data (task);
+
+  g_task_run_in_thread (task, osstub_pull_dir_thread);
+
+  /* This handler should only run once. */
+  g_signal_handler_disconnect (transaction, task_data->start_id);
+  task_data->start_id = 0;
+}
+
 static gboolean
 osstub_handle_pull_dir (RPMOSTreeOS *interface,
                         GDBusMethodInvocation *invocation,
@@ -805,11 +822,28 @@ osstub_handle_pull_dir (RPMOSTreeOS *interface,
   g_task_set_check_cancellable (task, FALSE);
   g_task_set_source_tag (task, osstub_handle_pull_dir);
   g_task_set_task_data (task, data, (GDestroyNotify) task_data_free);
-  g_task_run_in_thread (task, osstub_pull_dir_thread);
+
+  data->start_id = g_signal_connect_data (transaction, "start",
+                                          G_CALLBACK (osstub_start_pull_dir),
+                                          g_object_ref (task),
+                                          (GClosureNotify) g_object_unref, 0);
 
 out:
   respond_to_transaction_invocation (invocation, transaction, local_error);
   return TRUE;
+}
+
+static void
+osstub_start_deploy (RPMOSTreeTransaction *transaction,
+                     GTask *task)
+{
+  TaskData *task_data = g_task_get_task_data (task);
+
+  g_task_run_in_thread (task, osstub_upgrade_thread);
+
+  /* This handler should only run once. */
+  g_signal_handler_disconnect (transaction, task_data->start_id);
+  task_data->start_id = 0;
 }
 
 static gboolean
@@ -850,7 +884,11 @@ osstub_handle_deploy (RPMOSTreeOS *interface,
   g_task_set_check_cancellable (task, FALSE);
   g_task_set_source_tag (task, osstub_handle_deploy);
   g_task_set_task_data (task, data, (GDestroyNotify) task_data_free);
-  g_task_run_in_thread (task, osstub_upgrade_thread);
+
+  data->start_id = g_signal_connect_data (transaction, "start",
+                                          G_CALLBACK (osstub_start_deploy),
+                                          g_object_ref (task),
+                                          (GClosureNotify) g_object_unref, 0);
 
 out:
   respond_to_transaction_invocation (invocation, transaction, local_error);
@@ -920,6 +958,19 @@ osstub_handle_upgrade (RPMOSTreeOS *interface,
   return osstub_handle_deploy (interface, invocation, arg_options, NULL);
 }
 
+static void
+osstub_start_rollback (RPMOSTreeTransaction *transaction,
+                       GTask *task)
+{
+  TaskData *task_data = g_task_get_task_data (task);
+
+  g_task_run_in_thread (task, osstub_rollback_thread);
+
+  /* This handler should only run once. */
+  g_signal_handler_disconnect (transaction, task_data->start_id);
+  task_data->start_id = 0;
+}
+
 static gboolean
 osstub_handle_rollback (RPMOSTreeOS *interface,
                         GDBusMethodInvocation *invocation)
@@ -957,11 +1008,28 @@ osstub_handle_rollback (RPMOSTreeOS *interface,
   g_task_set_check_cancellable (task, FALSE);
   g_task_set_source_tag (task, osstub_handle_rollback);
   g_task_set_task_data (task, data, (GDestroyNotify) task_data_free);
-  g_task_run_in_thread (task, osstub_rollback_thread);
+
+  data->start_id = g_signal_connect_data (transaction, "start",
+                                          G_CALLBACK (osstub_start_rollback),
+                                          g_object_ref (task),
+                                          (GClosureNotify) g_object_unref, 0);
 
 out:
   respond_to_transaction_invocation (invocation, transaction, local_error);
   return TRUE;
+}
+
+static void
+osstub_start_clear_rollback_target (RPMOSTreeTransaction *transaction,
+                                    GTask *task)
+{
+  TaskData *task_data = g_task_get_task_data (task);
+
+  g_task_run_in_thread (task, osstub_clear_rollback_thread);
+
+  /* This handler should only run once. */
+  g_signal_handler_disconnect (transaction, task_data->start_id);
+  task_data->start_id = 0;
 }
 
 static gboolean
@@ -1001,7 +1069,11 @@ osstub_handle_clear_rollback_target (RPMOSTreeOS *interface,
   g_task_set_check_cancellable (task, FALSE);
   g_task_set_source_tag (task, osstub_handle_clear_rollback_target);
   g_task_set_task_data (task, data, (GDestroyNotify) task_data_free);
-  g_task_run_in_thread (task, osstub_clear_rollback_thread);
+
+  data->start_id = g_signal_connect_data (transaction, "start",
+                                          G_CALLBACK (osstub_start_clear_rollback_target),
+                                          g_object_ref (task),
+                                          (GClosureNotify) g_object_unref, 0);
 
 out:
   respond_to_transaction_invocation (invocation, transaction, local_error);

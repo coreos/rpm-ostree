@@ -563,10 +563,13 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
                                        G_CALLBACK (on_transaction_done),
                                        tp);
 
-  if (rpmostree_transaction_get_active (transaction))
-    g_main_loop_run (tp->loop);
-  else
-    transaction_done (transaction, tp);
+  /* Tell the server we're ready to receive signals. */
+  if (!rpmostree_transaction_call_start_sync (transaction,
+                                              cancellable,
+                                              error))
+    goto out;
+
+  g_main_loop_run (tp->loop);
 
   g_cancellable_disconnect (cancellable, cancel_handler);
 

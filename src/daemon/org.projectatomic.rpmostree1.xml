@@ -105,8 +105,10 @@
     <property name="Active" type="b" access="read"/>
 
     <!-- Yes, we can. -->
-    <method name="Cancel">
-    </method>
+    <method name="Cancel"/>
+
+    <!-- For owner to call when ready to receive signals -->
+    <method name="Start"/>
 
     <!-- For owner to call when transaction is complete -->
     <method name="Finish">

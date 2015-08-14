@@ -30,6 +30,7 @@ struct _TransactionPrivate {
   /* Locked for the duration of the transaction. */
   OstreeSysroot *sysroot;
 
+  gboolean started;
   gboolean success;
   char *message;
 
@@ -42,6 +43,7 @@ enum {
 };
 
 enum {
+  START,
   CANCELLED,
   FINISHED,
   OWNER_VANISHED,
@@ -345,6 +347,33 @@ transaction_handle_cancel (RPMOSTreeTransaction *transaction,
 }
 
 static gboolean
+transaction_handle_start (RPMOSTreeTransaction *transaction,
+                          GDBusMethodInvocation *invocation)
+{
+  Transaction *self = TRANSACTION (transaction);
+  TransactionPrivate *priv = transaction_get_private (self);
+
+  if (priv->started)
+    {
+      g_dbus_method_invocation_return_error (invocation,
+                                             RPM_OSTREED_ERROR,
+                                             RPM_OSTREED_ERROR_FAILED,
+                                             "Transaction has already started");
+    }
+  else
+    {
+      priv->started = TRUE;
+
+      /* FIXME Subclassing would be better than this. */
+      g_signal_emit (transaction, signals[START], 0);
+
+      rpmostree_transaction_complete_start (transaction, invocation);
+    }
+
+  return TRUE;
+}
+
+static gboolean
 transaction_handle_finish (RPMOSTreeTransaction *transaction,
                            GDBusMethodInvocation *invocation)
 {
@@ -400,6 +429,12 @@ transaction_class_init (TransactionClass *class)
                                                         G_PARAM_CONSTRUCT_ONLY |
                                                         G_PARAM_STATIC_STRINGS));
 
+  signals[START] = g_signal_new ("start",
+                                 TYPE_TRANSACTION,
+                                 G_SIGNAL_RUN_LAST,
+                                 0, NULL, NULL, NULL,
+                                 G_TYPE_NONE, 0);
+
   signals[CANCELLED] = g_signal_new ("cancelled",
                                      TYPE_TRANSACTION,
                                      G_SIGNAL_RUN_LAST,
@@ -429,6 +464,7 @@ static void
 transaction_dbus_iface_init (RPMOSTreeTransactionIface *iface)
 {
   iface->handle_cancel = transaction_handle_cancel;
+  iface->handle_start  = transaction_handle_start;
   iface->handle_finish = transaction_handle_finish;
 }
 
