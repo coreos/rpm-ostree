@@ -25,6 +25,7 @@
 #include "errors.h"
 
 struct _TransactionPrivate {
+  GDBusMethodInvocation *invocation;
   GCancellable *cancellable;
 
   /* Locked for the duration of the transaction. */
@@ -39,6 +40,7 @@ struct _TransactionPrivate {
 
 enum {
   PROP_0,
+  PROP_INVOCATION,
   PROP_SYSROOT
 };
 
@@ -228,6 +230,8 @@ transaction_set_property (GObject *object,
 
   switch (property_id)
     {
+      case PROP_INVOCATION:
+        priv->invocation = g_value_dup_object (value);
       case PROP_SYSROOT:
         priv->sysroot = g_value_dup_object (value);
         break;
@@ -248,6 +252,9 @@ transaction_get_property (GObject *object,
 
   switch (property_id)
     {
+      case PROP_INVOCATION:
+        g_value_set_object (value, priv->invocation);
+        break;
       case PROP_SYSROOT:
         g_value_set_object (value, priv->sysroot);
         break;
@@ -266,6 +273,7 @@ transaction_dispose (GObject *object)
   if (priv->sysroot != NULL)
     ostree_sysroot_unlock (priv->sysroot);
 
+  g_clear_object (&priv->invocation);
   g_clear_object (&priv->cancellable);
   g_clear_object (&priv->sysroot);
 
@@ -284,6 +292,41 @@ transaction_finalize (GObject *object)
     g_bus_unwatch_name (priv->watch_id);
 
   G_OBJECT_CLASS (transaction_parent_class)->finalize (object);
+}
+
+static void
+transaction_constructed (GObject *object)
+{
+  Transaction *self = TRANSACTION (object);
+  TransactionPrivate *priv = transaction_get_private (self);
+
+  G_OBJECT_CLASS (transaction_parent_class)->constructed (object);
+
+  if (priv->invocation != NULL)
+    {
+      GDBusConnection *connection;
+      const char *method_name;
+      const char *sender;
+
+      connection = g_dbus_method_invocation_get_connection (priv->invocation);
+      method_name = g_dbus_method_invocation_get_method_name (priv->invocation);
+      sender = g_dbus_method_invocation_get_sender (priv->invocation);
+
+      /* Initialize D-Bus properties. */
+      g_object_set (self,
+                    "method-name", method_name,
+                    "owner", sender,
+                    "active", TRUE,
+                    NULL);
+
+      priv->watch_id = g_bus_watch_name_on_connection (connection,
+                                                       sender,
+                                                       G_BUS_NAME_WATCHER_FLAGS_NONE,
+                                                       NULL,
+                                                       transaction_owner_vanished_cb,
+                                                       self,
+                                                       NULL);
+    }
 }
 
 static gboolean
@@ -418,6 +461,17 @@ transaction_class_init (TransactionClass *class)
   object_class->get_property = transaction_get_property;
   object_class->dispose = transaction_dispose;
   object_class->finalize = transaction_finalize;
+  object_class->constructed = transaction_constructed;
+
+  g_object_class_install_property (object_class,
+                                   PROP_INVOCATION,
+                                   g_param_spec_object ("invocation",
+                                                        "Invocation",
+                                                        "D-Bus method invocation",
+                                                        G_TYPE_DBUS_METHOD_INVOCATION,
+                                                        G_PARAM_READWRITE |
+                                                        G_PARAM_CONSTRUCT_ONLY |
+                                                        G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property (object_class,
                                    PROP_SYSROOT,
@@ -482,48 +536,14 @@ transaction_new (GDBusMethodInvocation *invocation,
                  GCancellable *cancellable,
                  GError **error)
 {
-  Transaction *self;
-  TransactionPrivate *priv;
-  GDBusConnection *connection;
-  const char *method_name;
-  const char *sender;
-
   /* sysroot is optional */
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
 
-  method_name = g_dbus_method_invocation_get_method_name (invocation);
-  sender = g_dbus_method_invocation_get_sender (invocation);
-
-  self = g_initable_new (TYPE_TRANSACTION,
+  return g_initable_new (TYPE_TRANSACTION,
                          cancellable, error,
+                         "invocation", invocation,
                          "sysroot", sysroot,
-                         "method-name", method_name,
-                         "owner", sender,
-                         "active", TRUE,
                          NULL);
-
-  if (self == NULL)
-    goto out;
-
-  /* XXX Would be handy if GDBusInterfaceSkeleton had an export()
-   *     class method so subclasses can know when a GDBusConnection
-   *     becomes available.  Alas, just set up the sender bus name
-   *     watching here using the GDBusMethodInvocation's connection. */
-
-  priv = transaction_get_private (self);
-
-  connection = g_dbus_method_invocation_get_connection (invocation);
-
-  priv->watch_id = g_bus_watch_name_on_connection (connection,
-                                                   sender,
-                                                   G_BUS_NAME_WATCHER_FLAGS_NONE,
-                                                   NULL,
-                                                   transaction_owner_vanished_cb,
-                                                   self,
-                                                   NULL);
-
-out:
-  return (RPMOSTreeTransaction *) self;
 }
 
 OstreeSysroot *
