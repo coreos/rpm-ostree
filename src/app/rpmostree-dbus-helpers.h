@@ -48,7 +48,7 @@ rpmostree_load_os_proxy                      (RPMOSTreeSysroot *sysroot_proxy,
 
 gboolean
 rpmostree_transaction_get_response_sync      (RPMOSTreeSysroot *sysroot_proxy,
-                                              const gchar *object_path,
+                                              const char *transaction_address,
                                               GCancellable *cancellable,
                                               GError **error);
 

@@ -59,15 +59,10 @@ transaction_monitor_remove_transaction (TransactionMonitor *monitor,
     {
       GList *head;
       gboolean need_notify;
-      const char *object_path;
 
       /* The head of the queue is the active transaction. */
       head = g_queue_peek_head_link (monitor->transactions);
       need_notify = (link == head);
-
-      /* XXX daemon_unpublish() could figure out the path itself. */
-      object_path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (transaction));
-      daemon_unpublish (daemon_get(), object_path, transaction);
 
       g_object_unref (link->data);
       g_queue_delete_link (monitor->transactions, link);
@@ -185,8 +180,6 @@ void
 transaction_monitor_add (TransactionMonitor *monitor,
                          Transaction *transaction)
 {
-  g_autofree char *child_object_path = NULL;
-
   g_return_if_fail (IS_TRANSACTION_MONITOR (monitor));
   g_return_if_fail (IS_TRANSACTION (transaction));
 
@@ -205,10 +198,6 @@ transaction_monitor_add (TransactionMonitor *monitor,
   g_signal_connect_object (transaction, "owner-vanished",
                            G_CALLBACK (transaction_monitor_owner_vanished_cb),
                            monitor, 0);
-
-  child_object_path = g_build_path ("/", BASE_DBUS_PATH, "Transaction", NULL);
-
-  daemon_publish (daemon_get (), child_object_path, TRUE, transaction);
 
   g_queue_push_head (monitor->transactions, g_object_ref (transaction));
   g_object_notify (G_OBJECT (monitor), "active-transaction");

@@ -32,6 +32,9 @@ struct _TransactionPrivate {
   /* Locked for the duration of the transaction. */
   OstreeSysroot *sysroot;
 
+  GDBusServer *server;
+  GDBusConnection *peer_connection;
+
   gboolean started;
   gboolean success;
   char *message;
@@ -88,13 +91,39 @@ transaction_check_sender_is_owner (RPMOSTreeTransaction *transaction,
   return (g_strcmp0 (owner, sender) == 0);
 }
 
+static gboolean
+transaction_new_connection_cb (GDBusServer *server,
+                               GDBusConnection *connection,
+                               Transaction *self)
+{
+  TransactionPrivate *priv = transaction_get_private (self);
+  GError *local_error = NULL;
+
+  if (priv->peer_connection != NULL)
+    return FALSE;
+
+  g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (self),
+                                    connection, "/", &local_error);
+
+  if (local_error != NULL)
+    {
+      g_critical ("Failed to export interface: %s", local_error->message);
+      g_clear_error (&local_error);
+      return FALSE;
+    }
+
+  priv->peer_connection = g_object_ref (connection);
+
+  return TRUE;
+}
+
 static void
 transaction_owner_vanished_cb (GDBusConnection *connection,
                                const char *name,
                                gpointer user_data)
 {
-  Transaction *transaction = TRANSACTION (user_data);
-  TransactionPrivate *priv = transaction_get_private (transaction);
+  Transaction *self = TRANSACTION (user_data);
+  TransactionPrivate *priv = transaction_get_private (self);
 
   if (priv->watch_id > 0)
     {
@@ -103,7 +132,7 @@ transaction_owner_vanished_cb (GDBusConnection *connection,
 
       /* Emit the signal AFTER unwatching the bus name, since this
        * may finalize the transaction and invalidate the watch_id. */
-      g_signal_emit (transaction, signals[OWNER_VANISHED], 0);
+      g_signal_emit (self, signals[OWNER_VANISHED], 0);
     }
 }
 
@@ -328,6 +357,8 @@ transaction_dispose (GObject *object)
   g_clear_object (&priv->invocation);
   g_clear_object (&priv->cancellable);
   g_clear_object (&priv->sysroot);
+  g_clear_object (&priv->server);
+  g_clear_object (&priv->peer_connection);
 
   G_OBJECT_CLASS (transaction_parent_class)->dispose (object);
 }
@@ -388,10 +419,31 @@ transaction_initable_init (GInitable *initable,
 {
   Transaction *self = TRANSACTION (initable);
   TransactionPrivate *priv = transaction_get_private (self);
+  g_autofree char *guid = NULL;
   gboolean ret = FALSE;
 
   if (G_IS_CANCELLABLE (cancellable))
     priv->cancellable = g_object_ref (cancellable);
+
+  /* Set up a private D-Bus server over which to emit
+   * progress and informational messages to the caller. */
+
+  guid = g_dbus_generate_guid ();
+
+  priv->server = g_dbus_server_new_sync ("unix:tmpdir=/tmp/rpm-ostree",
+                                         G_DBUS_SERVER_FLAGS_NONE,
+                                         guid,
+                                         NULL,
+                                         cancellable,
+                                         error);
+
+  if (priv->server == NULL)
+    goto out;
+
+  g_signal_connect_object (priv->server,
+                           "new-connection",
+                           G_CALLBACK (transaction_new_connection_cb),
+                           self, 0);
 
   if (priv->sysroot != NULL)
     {
@@ -407,6 +459,8 @@ transaction_initable_init (GInitable *initable,
           goto out;
         }
     }
+
+  g_dbus_server_start (priv->server);
 
   ret = TRUE;
 
@@ -592,6 +646,18 @@ transaction_get_sysroot (Transaction *transaction)
   priv = transaction_get_private (transaction);
 
   return priv->sysroot;
+}
+
+const char *
+transaction_get_client_address (Transaction *transaction)
+{
+  TransactionPrivate *priv;
+
+  g_return_val_if_fail (IS_TRANSACTION (transaction), NULL);
+
+  priv = transaction_get_private (transaction);
+
+  return g_dbus_server_get_client_address (priv->server);
 }
 
 void

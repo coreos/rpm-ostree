@@ -77,8 +77,8 @@ rpmostree_builtin_upgrade (int             argc,
   GOptionContext *context = g_option_context_new ("- Perform a system upgrade");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autofree char *transaction_object_path = NULL;
   g_autoptr(GVariant) default_deployment = NULL;
+  g_autofree char *transaction_address = NULL;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -96,7 +96,7 @@ rpmostree_builtin_upgrade (int             argc,
   if (opt_check_diff)
     {
       if (!rpmostree_os_call_download_update_rpm_diff_sync (os_proxy,
-                                                            &transaction_object_path,
+                                                            &transaction_address,
                                                             cancellable,
                                                             error))
         goto out;
@@ -109,14 +109,14 @@ rpmostree_builtin_upgrade (int             argc,
 
       if (!rpmostree_os_call_upgrade_sync (os_proxy,
                                            get_args_variant (),
-                                           &transaction_object_path,
+                                           &transaction_address,
                                            cancellable,
                                            error))
         goto out;
     }
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
-                                                transaction_object_path,
+                                                transaction_address,
                                                 cancellable,
                                                 error))
     goto out;

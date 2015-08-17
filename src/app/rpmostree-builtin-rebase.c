@@ -69,7 +69,7 @@ rpmostree_builtin_rebase (int             argc,
   GOptionContext *context = g_option_context_new ("REFSPEC - Switch to a different tree");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autofree char *transaction_object_path = NULL;
+  g_autofree char *transaction_address = NULL;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -90,13 +90,13 @@ rpmostree_builtin_rebase (int             argc,
                                       get_args_variant (),
                                       new_provided_refspec,
                                       packages,
-                                      &transaction_object_path,
+                                      &transaction_address,
                                       cancellable,
                                       error))
     goto out;
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
-                                                transaction_object_path,
+                                                transaction_address,
                                                 cancellable,
                                                 error))
     goto out;

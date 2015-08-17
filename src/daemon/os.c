@@ -405,7 +405,7 @@ osstub_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
   glnx_unref_object Transaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
-  const char *object_path;
+  const char *client_address;
   const char *osname;
   GError *local_error = NULL;
 
@@ -429,8 +429,8 @@ osstub_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
 
   transaction_monitor_add (self->transaction_monitor, transaction);
 
-  object_path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (transaction));
-  rpmostree_os_complete_download_update_rpm_diff (interface, invocation, object_path);
+  client_address = transaction_get_client_address (transaction);
+  rpmostree_os_complete_download_update_rpm_diff (interface, invocation, client_address);
 
 out:
   if (local_error != NULL)
@@ -450,7 +450,7 @@ osstub_handle_upgrade (RPMOSTreeOS *interface,
   glnx_unref_object GCancellable *cancellable = NULL;
   GVariantDict options_dict;
   gboolean opt_allow_downgrade = FALSE;
-  const char *object_path;
+  const char *client_address;
   const char *osname;
   GError *local_error = NULL;
 
@@ -486,8 +486,8 @@ osstub_handle_upgrade (RPMOSTreeOS *interface,
 
   transaction_monitor_add (self->transaction_monitor, transaction);
 
-  object_path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (transaction));
-  rpmostree_os_complete_upgrade (interface, invocation, object_path);
+  client_address = transaction_get_client_address (transaction);
+  rpmostree_os_complete_upgrade (interface, invocation, client_address);
 
 out:
   if (local_error != NULL)
@@ -504,7 +504,7 @@ osstub_handle_rollback (RPMOSTreeOS *interface,
   glnx_unref_object Transaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
-  const char *object_path;
+  const char *client_address;
   const char *osname;
   GError *local_error = NULL;
 
@@ -527,8 +527,8 @@ osstub_handle_rollback (RPMOSTreeOS *interface,
 
   transaction_monitor_add (self->transaction_monitor, transaction);
 
-  object_path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (transaction));
-  rpmostree_os_complete_rollback (interface, invocation, object_path);
+  client_address = transaction_get_client_address (transaction);
+  rpmostree_os_complete_rollback (interface, invocation, client_address);
 
 out:
   if (local_error != NULL)
@@ -545,7 +545,7 @@ osstub_handle_clear_rollback_target (RPMOSTreeOS *interface,
   glnx_unref_object Transaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
-  const char *object_path;
+  const char *client_address;
   const char *osname;
   GError *local_error = NULL;
 
@@ -568,8 +568,8 @@ osstub_handle_clear_rollback_target (RPMOSTreeOS *interface,
 
   transaction_monitor_add (self->transaction_monitor, transaction);
 
-  object_path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (transaction));
-  rpmostree_os_complete_clear_rollback_target (interface, invocation, object_path);
+  client_address = transaction_get_client_address (transaction);
+  rpmostree_os_complete_clear_rollback_target (interface, invocation, client_address);
 
 out:
   if (local_error != NULL)
@@ -592,7 +592,7 @@ osstub_handle_rebase (RPMOSTreeOS *interface,
   glnx_unref_object GCancellable *cancellable = NULL;
   GVariantDict options_dict;
   gboolean opt_skip_purge = FALSE;
-  const char *object_path;
+  const char *client_address;
   const char *osname;
   GError *local_error = NULL;
 
@@ -628,8 +628,8 @@ osstub_handle_rebase (RPMOSTreeOS *interface,
 
   transaction_monitor_add (self->transaction_monitor, transaction);
 
-  object_path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (transaction));
-  rpmostree_os_complete_rebase (interface, invocation, object_path);
+  client_address = transaction_get_client_address (transaction);
+  rpmostree_os_complete_rebase (interface, invocation, client_address);
 
 out:
   if (local_error != NULL)
@@ -671,7 +671,7 @@ osstub_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
   glnx_unref_object Transaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
-  const char *object_path;
+  const char *client_address;
   const char *osname;
   GError *local_error = NULL;
 
@@ -695,8 +695,8 @@ osstub_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
 
   transaction_monitor_add (self->transaction_monitor, transaction);
 
-  object_path = g_dbus_interface_skeleton_get_object_path (G_DBUS_INTERFACE_SKELETON (transaction));
-  rpmostree_os_complete_download_rebase_rpm_diff (interface, invocation, object_path);
+  client_address = transaction_get_client_address (transaction);
+  rpmostree_os_complete_download_rebase_rpm_diff (interface, invocation, client_address);
 
 out:
   if (local_error != NULL)

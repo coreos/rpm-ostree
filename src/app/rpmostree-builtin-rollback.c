@@ -49,7 +49,7 @@ rpmostree_builtin_rollback (int             argc,
   GOptionContext *context = g_option_context_new ("- Revert to the previously booted tree");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autofree char *transaction_object_path = NULL;
+  g_autofree char *transaction_address = NULL;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -65,13 +65,13 @@ rpmostree_builtin_rollback (int             argc,
     goto out;
 
   if (!rpmostree_os_call_rollback_sync (os_proxy,
-                                        &transaction_object_path,
+                                        &transaction_address,
                                         cancellable,
                                         error))
     goto out;
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
-                                                transaction_object_path,
+                                                transaction_address,
                                                 cancellable,
                                                 error))
     goto out;

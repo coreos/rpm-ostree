@@ -7,7 +7,7 @@
     <!-- The booted OSName -->
     <property name="Booted" type="o" access="read"/>
 
-    <property name="ActiveTransaction" type="o" access="read"/>
+    <property name="ActiveTransaction" type="s" access="read"/>
 
     <method name="CreateOSName">
       <arg type="s" name="name"/>
@@ -56,7 +56,7 @@
     </method>
 
     <method name="DownloadUpdateRpmDiff">
-      <arg type="o" name="transaction" direction="out"/>
+      <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
     <!-- Available options:
@@ -64,15 +64,15 @@
     -->
     <method name="Upgrade">
       <arg type="a{sv}" name="options" direction="in"/>
-      <arg type="o" name="transaction" direction="out"/>
+      <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
     <method name="Rollback">
-      <arg type="o" name="transaction" direction="out"/>
+      <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
     <method name="ClearRollbackTarget">
-      <arg type="o" name="transaction" direction="out"/>
+      <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
     <!-- Available options:
@@ -82,7 +82,7 @@
       <arg type="a{sv}" name="options" direction="in"/>
       <arg type="s" name="refspec"/>
       <arg type="as" name="packages"/>
-      <arg type="o" name="transaction" direction="out"/>
+      <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
     <method name="GetCachedRebaseRpmDiff">
@@ -94,7 +94,7 @@
     <method name="DownloadRebaseRpmDiff">
       <arg type="s" name="refspec"/>
       <arg type="as" name="packages"/>
-      <arg type="o" name="transaction" direction="out"/>
+      <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
   </interface>

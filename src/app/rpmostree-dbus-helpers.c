@@ -499,13 +499,14 @@ cancelled_handler (GCancellable *cancellable,
 
 gboolean
 rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
-                                         const gchar *object_path,
+                                         const char *transaction_address,
                                          GCancellable *cancellable,
                                          GError **error)
 {
   GDBusConnection *connection;
   glnx_unref_object GDBusObjectManager *object_manager = NULL;
   glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
+  g_autoptr(GDBusConnection) peer_connection = NULL;
 
   TransactionProgress *tp = transaction_progress_new ();
 
@@ -540,10 +541,19 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
                         tp);
     }
 
-  transaction = rpmostree_transaction_proxy_new_sync (connection,
+  peer_connection = g_dbus_connection_new_for_address_sync (transaction_address,
+                                                            G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
+                                                            NULL,
+                                                            cancellable,
+                                                            error);
+
+  if (peer_connection == NULL)
+    goto out;
+
+  transaction = rpmostree_transaction_proxy_new_sync (peer_connection,
                                                       G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
-                                                      bus_name,
-                                                      object_path,
+                                                      NULL,
+                                                      "/",
                                                       cancellable,
                                                       error);
   if (transaction == NULL)

@@ -27,6 +27,7 @@
 #include "deployment-utils.h"
 #include "auth.h"
 #include "errors.h"
+#include "transaction.h"
 #include "transaction-monitor.h"
 
 #include "libgsystem.h"
@@ -443,23 +444,23 @@ out:
 }
 
 static gboolean
-sysroot_transform_transaction_to_path (GBinding *binding,
-                                       const GValue *src_value,
-                                       GValue *dst_value,
-                                       gpointer user_data)
+sysroot_transform_transaction_to_address (GBinding *binding,
+                                          const GValue *src_value,
+                                          GValue *dst_value,
+                                          gpointer user_data)
 {
-  GDBusInterfaceSkeleton *transaction;
-  const char *object_path = NULL;
+  Transaction *transaction;
+  const char *client_address = NULL;
 
   transaction = g_value_get_object (src_value);
 
   if (transaction != NULL)
-    object_path = g_dbus_interface_skeleton_get_object_path (transaction);
+    client_address = transaction_get_client_address (transaction);
 
-  if (object_path == NULL)
-    object_path = "/";
+  if (client_address == NULL)
+    client_address = "";
 
-  g_value_set_string (dst_value, object_path);
+  g_value_set_string (dst_value, client_address);
 
   return TRUE;
 }
@@ -572,7 +573,7 @@ sysroot_constructed (GObject *object)
                                "active-transaction",
                                G_BINDING_DEFAULT |
                                G_BINDING_SYNC_CREATE,
-                               sysroot_transform_transaction_to_path,
+                               sysroot_transform_transaction_to_address,
                                NULL,
                                NULL,
                                NULL);
