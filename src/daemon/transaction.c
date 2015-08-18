@@ -80,18 +80,6 @@ transaction_get_private (Transaction *self)
 }
 
 static gboolean
-transaction_check_sender_is_owner (RPMOSTreeTransaction *transaction,
-                                   GDBusMethodInvocation *invocation)
-{
-  const char *sender, *owner;
-
-  owner = rpmostree_transaction_get_owner (transaction);
-  sender = g_dbus_method_invocation_get_sender (invocation);
-
-  return (g_strcmp0 (owner, sender) == 0);
-}
-
-static gboolean
 transaction_new_connection_cb (GDBusServer *server,
                                GDBusConnection *connection,
                                Transaction *self)
@@ -478,19 +466,9 @@ transaction_handle_cancel (RPMOSTreeTransaction *transaction,
   if (priv->cancellable == NULL)
     return FALSE;
 
-  if (!transaction_check_sender_is_owner (transaction, invocation))
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             RPM_OSTREED_ERROR,
-                                             RPM_OSTREED_ERROR_FAILED,
-                                             "You are not allowed to cancel this transaction");
-    }
-  else
-    {
-      g_cancellable_cancel (priv->cancellable);
-      g_signal_emit (transaction, signals[CANCELLED], 0);
-      rpmostree_transaction_complete_cancel (transaction, invocation);
-    }
+  g_cancellable_cancel (priv->cancellable);
+  g_signal_emit (transaction, signals[CANCELLED], 0);
+  rpmostree_transaction_complete_cancel (transaction, invocation);
 
   return TRUE;
 }
@@ -535,14 +513,7 @@ transaction_handle_finish (RPMOSTreeTransaction *transaction,
   Transaction *self = TRANSACTION (transaction);
   TransactionPrivate *priv = transaction_get_private (self);
 
-  if (!transaction_check_sender_is_owner (transaction, invocation))
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             RPM_OSTREED_ERROR,
-                                             RPM_OSTREED_ERROR_FAILED,
-                                             "You are not allowed to finish this transaction");
-    }
-  else if (rpmostree_transaction_get_active (transaction))
+  if (rpmostree_transaction_get_active (transaction))
     {
       g_dbus_method_invocation_return_error (invocation,
                                              RPM_OSTREED_ERROR,
