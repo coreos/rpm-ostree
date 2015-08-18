@@ -429,6 +429,24 @@ on_transaction_progress (GDBusProxy *proxy,
     {
       end_status_line (tp);
     }
+  else if (g_strcmp0 (signal_name, "Finished") == 0)
+    {
+      if (tp->error == NULL)
+        {
+          g_autofree char *error_message = NULL;
+          gboolean success = FALSE;
+
+          g_variant_get (parameters, "(bs)", &success, &error_message);
+
+          if (!success)
+            {
+              tp->error = g_dbus_error_new_for_dbus_error ("org.projectatomic.rpmostreed.Error.Failed",
+                                                           error_message);
+            }
+        }
+
+      transaction_progress_end (tp);
+    }
 }
 
 static void
@@ -443,49 +461,6 @@ on_owner_changed (GObject    *object,
   tp->error = g_dbus_error_new_for_dbus_error ("org.projectatomic.rpmostreed.Error.Failed",
                                                "Bus owner changed, aborting.");
   transaction_progress_end (tp);
-}
-
-static void
-transaction_done (RPMOSTreeTransaction *transaction,
-                  TransactionProgress *tp)
-{
-  g_autofree gchar *message = NULL;
-  gboolean success = FALSE;
-
-  /* if we are already finished don't process */
-  if (tp->complete)
-    return;
-
-  tp->complete = TRUE;
-
-  if (!tp->error)
-    {
-      if (rpmostree_transaction_call_finish_sync (transaction,
-                                                  &success, &message,
-                                                  NULL, &tp->error))
-        {
-          if (success)
-            {
-              add_status_line (tp, message);
-            }
-          else
-            {
-              tp->error = g_dbus_error_new_for_dbus_error ("org.projectatomic.rpmostreed.Error.Failed",
-                                                           message);
-            }
-        }
-    }
-
-  transaction_progress_end (tp);
-}
-
-static void
-on_transaction_done (RPMOSTreeTransaction *transaction,
-                     GParamSpec *pspec,
-                     TransactionProgress *tp)
-{
-  if (!rpmostree_transaction_get_active (transaction))
-    transaction_done (transaction, tp);
 }
 
 static void
@@ -512,7 +487,6 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
 
   const char *bus_name;
   gint cancel_handler;
-  gulong property_handler = 0;
   gulong signal_handler = 0;
   gboolean success = FALSE;
 
@@ -568,11 +542,6 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
                                      G_CALLBACK (on_transaction_progress),
                                      tp);
 
-  /* Setup finished signal handlers */
-  property_handler = g_signal_connect (transaction, "notify::active",
-                                       G_CALLBACK (on_transaction_done),
-                                       tp);
-
   /* Tell the server we're ready to receive signals. */
   if (!rpmostree_transaction_call_start_sync (transaction,
                                               cancellable,
@@ -596,9 +565,6 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
     }
 
 out:
-  if (property_handler)
-    g_signal_handler_disconnect (transaction, property_handler);
-
   if (signal_handler)
     g_signal_handler_disconnect (transaction, signal_handler);
 

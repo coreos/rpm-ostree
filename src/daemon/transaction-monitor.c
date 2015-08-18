@@ -101,8 +101,8 @@ transaction_monitor_cancelled_cb (RPMOSTreeTransaction *transaction,
 }
 
 static void
-transaction_monitor_finished_cb (RPMOSTreeTransaction *transaction,
-                                 TransactionMonitor *monitor)
+transaction_monitor_closed_cb (RPMOSTreeTransaction *transaction,
+                               TransactionMonitor *monitor)
 {
   transaction_monitor_remove_transaction (monitor, transaction);
 }
@@ -191,8 +191,8 @@ transaction_monitor_add (TransactionMonitor *monitor,
                            G_CALLBACK (transaction_monitor_cancelled_cb),
                            monitor, 0);
 
-  g_signal_connect_object (transaction, "finished",
-                           G_CALLBACK (transaction_monitor_finished_cb),
+  g_signal_connect_object (transaction, "closed",
+                           G_CALLBACK (transaction_monitor_closed_cb),
                            monitor, 0);
 
   g_signal_connect_object (transaction, "owner-vanished",

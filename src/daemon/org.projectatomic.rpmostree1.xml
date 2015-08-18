@@ -110,11 +110,10 @@
     <!-- For owner to call when ready to receive signals -->
     <method name="Start"/>
 
-    <!-- For owner to call when transaction is complete -->
-    <method name="Finish">
+    <signal name="Finished">
       <arg name="success" type="b" direction="out"/>
-      <arg name="message" type="s" direction="out"/>
-    </method>
+      <arg name="error_message" type="s" direction="out"/>
+    </signal>
 
     <!-- For miscellaneous messages. -->
     <signal name="Message">
