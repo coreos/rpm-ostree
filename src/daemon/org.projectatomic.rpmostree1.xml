@@ -7,7 +7,8 @@
     <!-- The booted OSName -->
     <property name="Booted" type="o" access="read"/>
 
-    <property name="ActiveTransaction" type="s" access="read"/>
+    <!-- The values are (method-name, sender-name) -->
+    <property name="ActiveTransaction" type="(ss)" access="read"/>
 
     <method name="CreateOSName">
       <arg type="s" name="name"/>
@@ -100,8 +101,6 @@
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.Transaction">
-    <property name="MethodName" type="s" access="read"/>
-    <property name="Owner" type="s" access="read"/>
     <property name="Active" type="b" access="read"/>
 
     <!-- Yes, we can. -->

@@ -443,23 +443,30 @@ out:
 }
 
 static gboolean
-sysroot_transform_transaction_to_address (GBinding *binding,
-                                          const GValue *src_value,
-                                          GValue *dst_value,
-                                          gpointer user_data)
+sysroot_transform_transaction_to_attrs (GBinding *binding,
+                                        const GValue *src_value,
+                                        GValue *dst_value,
+                                        gpointer user_data)
 {
   Transaction *transaction;
-  const char *client_address = NULL;
+  GVariant *variant;
+  const char *method_name = "";
+  const char *sender_name = "";
 
   transaction = g_value_get_object (src_value);
 
   if (transaction != NULL)
-    client_address = transaction_get_client_address (transaction);
+    {
+      GDBusMethodInvocation *invocation;
 
-  if (client_address == NULL)
-    client_address = "";
+      invocation = transaction_get_invocation (transaction);
+      method_name = g_dbus_method_invocation_get_method_name (invocation);
+      sender_name = g_dbus_method_invocation_get_sender (invocation);
+    }
 
-  g_value_set_string (dst_value, client_address);
+  variant = g_variant_new ("(ss)", method_name, sender_name);
+
+  g_value_set_variant (dst_value, variant);
 
   return TRUE;
 }
@@ -571,7 +578,7 @@ sysroot_constructed (GObject *object)
                                "active-transaction",
                                G_BINDING_DEFAULT |
                                G_BINDING_SYNC_CREATE,
-                               sysroot_transform_transaction_to_address,
+                               sysroot_transform_transaction_to_attrs,
                                NULL,
                                NULL,
                                NULL);

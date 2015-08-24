@@ -400,19 +400,13 @@ transaction_constructed (GObject *object)
   if (priv->invocation != NULL)
     {
       GDBusConnection *connection;
-      const char *method_name;
       const char *sender;
 
       connection = g_dbus_method_invocation_get_connection (priv->invocation);
-      method_name = g_dbus_method_invocation_get_method_name (priv->invocation);
       sender = g_dbus_method_invocation_get_sender (priv->invocation);
 
       /* Initialize D-Bus properties. */
-      g_object_set (self,
-                    "method-name", method_name,
-                    "owner", sender,
-                    "active", TRUE,
-                    NULL);
+      rpmostree_transaction_set_active (RPMOSTREE_TRANSACTION (self), TRUE);
 
       priv->watch_id = g_bus_watch_name_on_connection (connection,
                                                        sender,
@@ -622,6 +616,18 @@ transaction_get_sysroot (Transaction *transaction)
   priv = transaction_get_private (transaction);
 
   return priv->sysroot;
+}
+
+GDBusMethodInvocation *
+transaction_get_invocation (Transaction *transaction)
+{
+  TransactionPrivate *priv;
+
+  g_return_val_if_fail (IS_TRANSACTION (transaction), NULL);
+
+  priv = transaction_get_private (transaction);
+
+  return priv->invocation;
 }
 
 const char *

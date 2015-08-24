@@ -46,6 +46,8 @@ struct _TransactionClass
 
 GType           transaction_get_type            (void) G_GNUC_CONST;
 OstreeSysroot * transaction_get_sysroot         (Transaction *transaction);
+GDBusMethodInvocation *
+                transaction_get_invocation      (Transaction *transaction);
 const char *    transaction_get_client_address  (Transaction *transaction);
 void            transaction_emit_message_printf (Transaction *transaction,
                                                  const char *format,
