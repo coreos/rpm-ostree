@@ -19,26 +19,27 @@ noinst_LTLIBRARIES += librpmostreed.la
 nodist_librpmostreed_la_SOURCES = $(dbus_built_sources)
 
 librpmostreed_la_SOURCES = \
-	src/daemon/daemon.h \
-	src/daemon/daemon.c \
-	src/daemon/utils.h \
-	src/daemon/utils.c \
-	src/daemon/sysroot.h \
-	src/daemon/sysroot.c \
-	src/daemon/errors.h \
-	src/daemon/errors.c \
-	src/daemon/deployment-utils.h \
-	src/daemon/deployment-utils.c \
-	src/daemon/transaction.h \
-	src/daemon/transaction.c \
-	src/daemon/transaction-monitor.h \
-	src/daemon/transaction-monitor.c \
-	src/daemon/transaction-types.h \
-	src/daemon/transaction-types.c \
+	src/daemon/rpmostreed-types.h \
+	src/daemon/rpmostreed-daemon.h \
+	src/daemon/rpmostreed-daemon.c \
+	src/daemon/rpmostreed-utils.h \
+	src/daemon/rpmostreed-utils.c \
+	src/daemon/rpmostreed-sysroot.h \
+	src/daemon/rpmostreed-sysroot.c \
+	src/daemon/rpmostreed-errors.h \
+	src/daemon/rpmostreed-errors.c \
+	src/daemon/rpmostreed-deployment-utils.h \
+	src/daemon/rpmostreed-deployment-utils.c \
+	src/daemon/rpmostreed-transaction.h \
+	src/daemon/rpmostreed-transaction.c \
+	src/daemon/rpmostreed-transaction-monitor.h \
+	src/daemon/rpmostreed-transaction-monitor.c \
+	src/daemon/rpmostreed-transaction-types.h \
+	src/daemon/rpmostreed-transaction-types.c \
 	src/daemon/rpmostree-package-variants.h \
 	src/daemon/rpmostree-package-variants.c \
-	src/daemon/os.h \
-	src/daemon/os.c \
+	src/daemon/rpmostreed-os.h \
+	src/daemon/rpmostreed-os.c \
 	$(NULL)
 
 librpmostreed_la_CFLAGS = \

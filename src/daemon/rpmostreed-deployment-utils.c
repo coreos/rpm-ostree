@@ -18,12 +18,12 @@
 
 #include "config.h"
 
-#include "deployment-utils.h"
+#include "rpmostreed-deployment-utils.h"
 
 #include <libglnx.h>
 
 char *
-deployment_generate_id (OstreeDeployment *deployment)
+rpmostreed_deployment_generate_id (OstreeDeployment *deployment)
 {
   const char *osname;
   guint hash;
@@ -37,8 +37,8 @@ deployment_generate_id (OstreeDeployment *deployment)
 }
 
 OstreeDeployment *
-deployment_get_for_id (OstreeSysroot *sysroot,
-                       const gchar *deploy_id)
+rpmostreed_deployment_get_for_id (OstreeSysroot *sysroot,
+                                  const gchar *deploy_id)
 {
   g_autoptr(GPtrArray) deployments = NULL;
   guint i;
@@ -51,7 +51,7 @@ deployment_get_for_id (OstreeSysroot *sysroot,
 
   for (i=0; i<deployments->len; i++)
     {
-      g_autofree gchar *id = deployment_generate_id (deployments->pdata[i]);
+      g_autofree gchar *id = rpmostreed_deployment_generate_id (deployments->pdata[i]);
       if (g_strcmp0 (deploy_id, id) == 0) {
         deployment = g_object_ref (deployments->pdata[i]);
       }
@@ -62,9 +62,9 @@ out:
 }
 
 static GVariant *
-deployment_gpg_results (OstreeRepo *repo,
-                        const gchar *origin_refspec,
-                        const gchar *csum)
+rpmostreed_deployment_gpg_results (OstreeRepo *repo,
+                                   const gchar *origin_refspec,
+                                   const gchar *csum)
 {
   GError *error = NULL;
   GVariant *ret = NULL;
@@ -116,7 +116,7 @@ out:
 }
 
 char *
-deployment_get_refspec (OstreeDeployment *deployment)
+rpmostreed_deployment_get_refspec (OstreeDeployment *deployment)
 {
   GKeyFile *origin = NULL; /* owned by deployment */
   char *origin_refspec = NULL;
@@ -132,7 +132,7 @@ out:
 }
 
 GVariant *
-deployment_generate_blank_variant (void)
+rpmostreed_deployment_generate_blank_variant (void)
 {
   GVariantBuilder builder;
   g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
@@ -148,8 +148,8 @@ deployment_generate_blank_variant (void)
 }
 
 GVariant *
-deployment_generate_variant (OstreeDeployment *deployment,
-                             OstreeRepo *repo)
+rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
+                                        OstreeRepo *repo)
 {
   g_autoptr(GVariant) commit = NULL;
 
@@ -166,7 +166,7 @@ deployment_generate_variant (OstreeDeployment *deployment,
   const gchar *osname = ostree_deployment_get_osname (deployment);
   const gchar *csum = ostree_deployment_get_csum (deployment);
   gint serial = ostree_deployment_get_deployserial (deployment);
-  id = deployment_generate_id (deployment);
+  id = rpmostreed_deployment_generate_id (deployment);
 
   if (ostree_repo_load_variant (repo,
                                 OSTREE_OBJECT_TYPE_COMMIT,
@@ -186,9 +186,9 @@ deployment_generate_variant (OstreeDeployment *deployment,
     }
   g_clear_error (&error);
 
-  origin_refspec = deployment_get_refspec (deployment);
+  origin_refspec = rpmostreed_deployment_get_refspec (deployment);
   if (origin_refspec)
-    sigs = deployment_gpg_results (repo, origin_refspec, csum);
+    sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, csum);
 
   if (!sigs)
     sigs = g_variant_new ("av", NULL);
@@ -207,9 +207,9 @@ deployment_generate_variant (OstreeDeployment *deployment,
 }
 
 gint
-rollback_deployment_index (const gchar *name,
-                           OstreeSysroot *ot_sysroot,
-                           GError **error)
+rpmostreed_rollback_deployment_index (const gchar *name,
+                                      OstreeSysroot *ot_sysroot,
+                                      GError **error)
 {
   g_autoptr(GPtrArray) deployments = NULL;
   glnx_unref_object OstreeDeployment *merge_deployment = NULL;

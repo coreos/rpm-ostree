@@ -18,16 +18,16 @@
 
 #include "config.h"
 
-#include "daemon.h"
-#include "sysroot.h"
-#include "types.h"
-#include "utils.h"
+#include "rpmostreed-daemon.h"
+#include "rpmostreed-sysroot.h"
+#include "rpmostreed-types.h"
+#include "rpmostreed-utils.h"
 
 #include <libglnx.h>
 
 /**
- * SECTION:daemon
- * @title: Daemon
+ * SECTION: daemon
+ * @title: RpmostreedDaemon
  * @short_description: Main daemon object
  *
  * Object holding all global state.
@@ -38,18 +38,17 @@ enum {
   NUM_SIGNALS
 };
 
-static guint signals[NUM_SIGNALS] = { 0, };
+static guint signals[NUM_SIGNALS];
 
-typedef struct _DaemonClass DaemonClass;
+typedef struct _RpmostreedDaemonClass RpmostreedDaemonClass;
 
 /**
- * Daemon:
+ * RpmostreedDaemon:
  *
- * The #Daemon structure contains only private data and should only be
- * accessed using the provided API.
+ * The #RpmostreedDaemon structure contains only private data and should
+ * only be accessed using the provided API.
  */
-struct _Daemon
-{
+struct _RpmostreedDaemon {
   GObject parent_instance;
 
   gboolean on_message_bus;
@@ -61,20 +60,18 @@ struct _Daemon
   GMutex mutex;
   gint num_tasks;
 
-  Sysroot *sysroot;
+  RpmostreedSysroot *sysroot;
   gchar *sysroot_path;
 
   GDBusConnection *connection;
   GDBusObjectManagerServer *object_manager;
 };
 
-
-struct _DaemonClass
-{
+struct _RpmostreedDaemonClass {
   GObjectClass parent_class;
 };
 
-static Daemon *_daemon_instance;
+static RpmostreedDaemon *_daemon_instance;
 
 enum
 {
@@ -85,11 +82,11 @@ enum
   PROP_ON_MESSAGE_BUS,
 };
 
-static void daemon_initable_iface_init (GInitableIface *iface);
+static void rpmostreed_daemon_initable_iface_init (GInitableIface *iface);
 
-G_DEFINE_TYPE_WITH_CODE (Daemon, daemon, G_TYPE_OBJECT,
+G_DEFINE_TYPE_WITH_CODE (RpmostreedDaemon, rpmostreed_daemon, G_TYPE_OBJECT,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
-                                                daemon_initable_iface_init))
+                                                rpmostreed_daemon_initable_iface_init))
 
 typedef struct {
   GAsyncReadyCallback callback;
@@ -101,7 +98,7 @@ typedef struct {
 static void
 daemon_finalize (GObject *object)
 {
-  Daemon *self = DAEMON (object);
+  RpmostreedDaemon *self = RPMOSTREED_DAEMON (object);
 
   g_clear_object (&self->object_manager);
   self->object_manager = NULL;
@@ -116,7 +113,7 @@ daemon_finalize (GObject *object)
   g_mutex_clear (&self->mutex);
 
   g_free (self->sysroot_path);
-  G_OBJECT_CLASS (daemon_parent_class)->finalize (object);
+  G_OBJECT_CLASS (rpmostreed_daemon_parent_class)->finalize (object);
 
   _daemon_instance = NULL;
 }
@@ -128,7 +125,7 @@ daemon_get_property (GObject *object,
                      GValue *value,
                      GParamSpec *pspec)
 {
-  Daemon *self = DAEMON (object);
+  RpmostreedDaemon *self = RPMOSTREED_DAEMON (object);
 
   switch (prop_id)
     {
@@ -149,7 +146,7 @@ daemon_set_property (GObject *object,
                      const GValue *value,
                      GParamSpec *pspec)
 {
-  Daemon *self = DAEMON (object);
+  RpmostreedDaemon *self = RPMOSTREED_DAEMON (object);
 
   switch (prop_id)
     {
@@ -172,7 +169,7 @@ daemon_set_property (GObject *object,
 
 
 static void
-daemon_init (Daemon *self)
+rpmostreed_daemon_init (RpmostreedDaemon *self)
 {
   g_assert (_daemon_instance == NULL);
   _daemon_instance = self;
@@ -186,11 +183,11 @@ daemon_init (Daemon *self)
 }
 
 static gboolean
-daemon_initable_init (GInitable *initable,
-                      GCancellable *cancellable,
-                      GError **error)
+rpmostreed_daemon_initable_init (GInitable *initable,
+                                 GCancellable *cancellable,
+                                 GError **error)
 {
-  Daemon *self = DAEMON (initable);
+  RpmostreedDaemon *self = RPMOSTREED_DAEMON (initable);
   g_autofree gchar *path = NULL;
   gboolean ret = FALSE;
 
@@ -199,18 +196,18 @@ daemon_initable_init (GInitable *initable,
   g_dbus_object_manager_server_set_connection (self->object_manager, self->connection);
   g_debug ("exported object manager");
 
-  path = utils_generate_object_path (BASE_DBUS_PATH, "Sysroot", NULL);
-  self->sysroot = g_object_new (TYPE_SYSROOT,
+  path = rpmostreed_generate_object_path (BASE_DBUS_PATH, "Sysroot", NULL);
+  self->sysroot = g_object_new (RPMOSTREED_TYPE_SYSROOT,
                                 "sysroot-path", self->sysroot_path,
                                 NULL);
 
-  if (!sysroot_populate (sysroot_get (), error))
+  if (!rpmostreed_sysroot_populate (rpmostreed_sysroot_get (), error))
     {
       g_prefix_error (error, "Error setting up sysroot: ");
       goto out;
     }
 
-  daemon_publish (self, path, FALSE, self->sysroot);
+  rpmostreed_daemon_publish (self, path, FALSE, self->sysroot);
   g_dbus_connection_start_message_processing (self->connection);
 
   g_debug ("daemon constructed");
@@ -222,7 +219,7 @@ out:
 }
 
 static void
-daemon_class_init (DaemonClass *klass)
+rpmostreed_daemon_class_init (RpmostreedDaemonClass *klass)
 {
   GObjectClass *gobject_class;
   gobject_class = G_OBJECT_CLASS (klass);
@@ -261,12 +258,12 @@ daemon_class_init (DaemonClass *klass)
   g_object_class_install_property (gobject_class,
                                    PROP_SYSROOT_PATH,
                                    g_param_spec_string ("sysroot-path",
-                                                         "Sysroot Path",
-                                                         "Sysroot location on the filesystem",
-                                                         FALSE,
-                                                         G_PARAM_WRITABLE |
-                                                         G_PARAM_CONSTRUCT_ONLY |
-                                                         G_PARAM_STATIC_STRINGS));
+                                                        "Sysroot Path",
+                                                        "Sysroot location on the filesystem",
+                                                        FALSE,
+                                                        G_PARAM_WRITABLE |
+                                                        G_PARAM_CONSTRUCT_ONLY |
+                                                        G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property (gobject_class,
                                    PROP_ON_MESSAGE_BUS,
@@ -279,45 +276,38 @@ daemon_class_init (DaemonClass *klass)
                                                          G_PARAM_STATIC_STRINGS));
 
   signals[FINISHED] = g_signal_new ("finished",
-                                    TYPE_DAEMON,
+                                    RPMOSTREED_TYPE_DAEMON,
                                     G_SIGNAL_RUN_LAST,
-                                    0, NULL, NULL,
-                                    g_cclosure_marshal_generic,
+                                    0, NULL, NULL, NULL,
                                     G_TYPE_NONE, 0);
 }
 
 static void
-daemon_initable_iface_init (GInitableIface *iface)
+rpmostreed_daemon_initable_iface_init (GInitableIface *iface)
 {
-  iface->init = daemon_initable_init;
+  iface->init = rpmostreed_daemon_initable_init;
 }
 
 /**
- * daemon_get:
+ * rpmostreed_daemon_get:
  *
- * Returns: (transfer none): The singleton #Daemon instance
+ * Returns: (transfer none): The singleton #RpmostreedDaemon instance
  */
-Daemon *
-daemon_get (void)
+RpmostreedDaemon *
+rpmostreed_daemon_get (void)
 {
   g_assert (_daemon_instance);
   return _daemon_instance;
 }
 
-gboolean
-daemon_on_message_bus (Daemon *self)
-{
-  return self->on_message_bus;
-}
-
 void
-daemon_hold (Daemon *self)
+rpmostreed_daemon_hold (RpmostreedDaemon *self)
 {
   self->use_count++;
 }
 
 void
-daemon_release (Daemon *self)
+rpmostreed_daemon_release (RpmostreedDaemon *self)
 {
   self->use_count--;
 
@@ -326,16 +316,16 @@ daemon_release (Daemon *self)
 }
 
 void
-daemon_publish (Daemon *self,
-                const gchar *path,
-                gboolean uniquely,
-                gpointer thing)
+rpmostreed_daemon_publish (RpmostreedDaemon *self,
+                           const gchar *path,
+                           gboolean uniquely,
+                           gpointer thing)
 {
   GDBusInterface *prev = NULL;
   GDBusInterfaceInfo *info = NULL;
   GDBusObjectSkeleton *object = NULL;
 
-  g_return_if_fail (IS_DAEMON (self));
+  g_return_if_fail (RPMOSTREED_IS_DAEMON (self));
   g_return_if_fail (path != NULL);
 
   if (G_IS_DBUS_INTERFACE (thing))
@@ -379,25 +369,16 @@ daemon_publish (Daemon *self,
     g_object_unref (object);
 }
 
-GDBusInterface *
-daemon_get_interface (Daemon *self,
-                      const gchar *object_path,
-                      const gchar *interface_name)
-{
-  return g_dbus_object_manager_get_interface (G_DBUS_OBJECT_MANAGER (self->object_manager),
-                                              object_path, interface_name);
-}
-
 void
-daemon_unpublish (Daemon *self,
-                  const gchar *path,
-                  gpointer thing)
+rpmostreed_daemon_unpublish (RpmostreedDaemon *self,
+                             const gchar *path,
+                             gpointer thing)
 {
   GDBusObject *object;
   gboolean unexport = FALSE;
   GList *interfaces, *l;
 
-  g_return_if_fail (IS_DAEMON (self));
+  g_return_if_fail (RPMOSTREED_IS_DAEMON (self));
   g_return_if_fail (path != NULL);
 
   if (self->object_manager == NULL)

@@ -21,11 +21,11 @@
 
 #include <libglnx.h>
 
-#include "transaction.h"
-#include "errors.h"
-#include "sysroot.h"
+#include "rpmostreed-transaction.h"
+#include "rpmostreed-errors.h"
+#include "rpmostreed-sysroot.h"
 
-struct _TransactionPrivate {
+struct _RpmostreedTransactionPrivate {
   GDBusMethodInvocation *invocation;
   GCancellable *cancellable;
 
@@ -55,24 +55,25 @@ enum {
 
 static guint signals[LAST_SIGNAL];
 
-static void transaction_initable_iface_init (GInitableIface *iface);
-static void transaction_dbus_iface_init (RPMOSTreeTransactionIface *iface);
+static void rpmostreed_transaction_initable_iface_init (GInitableIface *iface);
+static void rpmostreed_transaction_dbus_iface_init (RPMOSTreeTransactionIface *iface);
 
 /* XXX I tried using G_ADD_PRIVATE here, but was getting memory corruption
  *     on the 2nd instance and valgrind was going crazy with invalid reads
  *     and writes.  So I'm falling back to the allegedly deprecated method
  *     and deferring further investigation. */
-G_DEFINE_ABSTRACT_TYPE_WITH_CODE (Transaction, transaction,
+G_DEFINE_ABSTRACT_TYPE_WITH_CODE (RpmostreedTransaction,
+                                  rpmostreed_transaction,
                                   RPMOSTREE_TYPE_TRANSACTION_SKELETON,
                                   G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
-                                                         transaction_initable_iface_init)
+                                                         rpmostreed_transaction_initable_iface_init)
                                   G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_TRANSACTION,
-                                                         transaction_dbus_iface_init))
+                                                         rpmostreed_transaction_dbus_iface_init))
 
 /* XXX This is lame but it's meant to keep it simple to
  *     transition to transaction_get_instance_private(). */
-static TransactionPrivate *
-transaction_get_private (Transaction *self)
+static RpmostreedTransactionPrivate *
+rpmostreed_transaction_get_private (RpmostreedTransaction *self)
 {
   return self->priv;
 }
@@ -81,7 +82,7 @@ static void
 transaction_connection_closed_cb (GDBusConnection *connection,
                                   gboolean remote_peer_vanished,
                                   GError *error,
-                                  Transaction *self)
+                                  RpmostreedTransaction *self)
 {
   g_debug ("%s (%p): Client disconnected",
            G_OBJECT_TYPE_NAME (self), self);
@@ -92,9 +93,9 @@ transaction_connection_closed_cb (GDBusConnection *connection,
 static gboolean
 transaction_new_connection_cb (GDBusServer *server,
                                GDBusConnection *connection,
-                               Transaction *self)
+                               RpmostreedTransaction *self)
 {
-  TransactionPrivate *priv = transaction_get_private (self);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
   GError *local_error = NULL;
 
   if (priv->peer_connection != NULL)
@@ -128,8 +129,8 @@ transaction_owner_vanished_cb (GDBusConnection *connection,
                                const char *name,
                                gpointer user_data)
 {
-  Transaction *self = TRANSACTION (user_data);
-  TransactionPrivate *priv = transaction_get_private (self);
+  RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (user_data);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
   if (priv->watch_id > 0)
     {
@@ -260,8 +261,8 @@ transaction_execute_thread (GTask *task,
                             gpointer task_data,
                             GCancellable *cancellable)
 {
-  Transaction *self = TRANSACTION (source_object);
-  TransactionClass *class = TRANSACTION_GET_CLASS (self);
+  RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (source_object);
+  RpmostreedTransactionClass *class = RPMOSTREED_TRANSACTION_GET_CLASS (self);
   gboolean success = TRUE;
   GError *local_error = NULL;
 
@@ -279,8 +280,8 @@ transaction_execute_done_cb (GObject *source_object,
                              GAsyncResult *result,
                              gpointer user_data)
 {
-  Transaction *self = TRANSACTION (source_object);
-  TransactionPrivate *priv = transaction_get_private (self);
+  RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (source_object);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
   const char *error_message = NULL;
   gboolean success;
   GError *local_error = NULL;
@@ -298,7 +299,7 @@ transaction_execute_done_cb (GObject *source_object,
     error_message = "";
 
   if (success && priv->sysroot != NULL)
-    sysroot_emit_update (sysroot_get (), priv->sysroot);
+    rpmostreed_sysroot_emit_update (rpmostreed_sysroot_get (), priv->sysroot);
 
   g_debug ("%s (%p): Finished%s%s%s",
            G_OBJECT_TYPE_NAME (self), self,
@@ -318,8 +319,8 @@ transaction_set_property (GObject *object,
                           const GValue *value,
                           GParamSpec *pspec)
 {
-  Transaction *self = TRANSACTION (object);
-  TransactionPrivate *priv = transaction_get_private (self);
+  RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (object);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
   switch (property_id)
     {
@@ -340,8 +341,8 @@ transaction_get_property (GObject *object,
                           GValue *value,
                           GParamSpec *pspec)
 {
-  Transaction *self = TRANSACTION (object);
-  TransactionPrivate *priv = transaction_get_private (self);
+  RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (object);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
   switch (property_id)
     {
@@ -360,8 +361,8 @@ transaction_get_property (GObject *object,
 static void
 transaction_dispose (GObject *object)
 {
-  Transaction *self = TRANSACTION (object);
-  TransactionPrivate *priv = transaction_get_private (self);
+  RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (object);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
   if (priv->sysroot != NULL)
     ostree_sysroot_unlock (priv->sysroot);
@@ -372,30 +373,30 @@ transaction_dispose (GObject *object)
   g_clear_object (&priv->server);
   g_clear_object (&priv->peer_connection);
 
-  G_OBJECT_CLASS (transaction_parent_class)->dispose (object);
+  G_OBJECT_CLASS (rpmostreed_transaction_parent_class)->dispose (object);
 }
 
 static void
 transaction_finalize (GObject *object)
 {
-  Transaction *self = TRANSACTION (object);
-  TransactionPrivate *priv = transaction_get_private (self);
+  RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (object);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
   g_debug ("%s (%p): Finalized", G_OBJECT_TYPE_NAME (self), self);
 
   if (priv->watch_id > 0)
     g_bus_unwatch_name (priv->watch_id);
 
-  G_OBJECT_CLASS (transaction_parent_class)->finalize (object);
+  G_OBJECT_CLASS (rpmostreed_transaction_parent_class)->finalize (object);
 }
 
 static void
 transaction_constructed (GObject *object)
 {
-  Transaction *self = TRANSACTION (object);
-  TransactionPrivate *priv = transaction_get_private (self);
+  RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (object);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
-  G_OBJECT_CLASS (transaction_parent_class)->constructed (object);
+  G_OBJECT_CLASS (rpmostreed_transaction_parent_class)->constructed (object);
 
   if (priv->invocation != NULL)
     {
@@ -423,8 +424,8 @@ transaction_initable_init (GInitable *initable,
                            GCancellable *cancellable,
                            GError **error)
 {
-  Transaction *self = TRANSACTION (initable);
-  TransactionPrivate *priv = transaction_get_private (self);
+  RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (initable);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
   g_autofree char *guid = NULL;
   gboolean ret = FALSE;
 
@@ -470,7 +471,7 @@ transaction_initable_init (GInitable *initable,
 
   g_debug ("%s (%p): Initialized, listening on %s",
            G_OBJECT_TYPE_NAME (self), self,
-           transaction_get_client_address (self));
+           rpmostreed_transaction_get_client_address (self));
 
   ret = TRUE;
 
@@ -482,8 +483,8 @@ static gboolean
 transaction_handle_cancel (RPMOSTreeTransaction *transaction,
                            GDBusMethodInvocation *invocation)
 {
-  Transaction *self = TRANSACTION (transaction);
-  TransactionPrivate *priv = transaction_get_private (self);
+  RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (transaction);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
   if (priv->cancellable == NULL)
     return FALSE;
@@ -501,8 +502,8 @@ static gboolean
 transaction_handle_start (RPMOSTreeTransaction *transaction,
                           GDBusMethodInvocation *invocation)
 {
-  Transaction *self = TRANSACTION (transaction);
-  TransactionPrivate *priv = transaction_get_private (self);
+  RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (transaction);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
   if (priv->started)
     {
@@ -533,11 +534,11 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
 }
 
 static void
-transaction_class_init (TransactionClass *class)
+rpmostreed_transaction_class_init (RpmostreedTransactionClass *class)
 {
   GObjectClass *object_class;
 
-  g_type_class_add_private (class, sizeof (TransactionPrivate));
+  g_type_class_add_private (class, sizeof (RpmostreedTransactionPrivate));
 
   object_class = G_OBJECT_CLASS (class);
   object_class->set_property = transaction_set_property;
@@ -567,90 +568,90 @@ transaction_class_init (TransactionClass *class)
                                                         G_PARAM_STATIC_STRINGS));
 
   signals[CANCELLED] = g_signal_new ("cancelled",
-                                     TYPE_TRANSACTION,
+                                     RPMOSTREED_TYPE_TRANSACTION,
                                      G_SIGNAL_RUN_LAST,
                                      0, NULL, NULL, NULL,
                                      G_TYPE_NONE, 0);
 
   signals[CLOSED] = g_signal_new ("closed",
-                                  TYPE_TRANSACTION,
+                                  RPMOSTREED_TYPE_TRANSACTION,
                                   G_SIGNAL_RUN_LAST,
                                   0, NULL, NULL, NULL,
                                   G_TYPE_NONE, 0);
 
   signals[OWNER_VANISHED] = g_signal_new ("owner-vanished",
-                                          TYPE_TRANSACTION,
+                                          RPMOSTREED_TYPE_TRANSACTION,
                                           G_SIGNAL_RUN_LAST,
                                           0, NULL, NULL, NULL,
                                           G_TYPE_NONE, 0);
 }
 
 static void
-transaction_initable_iface_init (GInitableIface *iface)
+rpmostreed_transaction_initable_iface_init (GInitableIface *iface)
 {
   iface->init = transaction_initable_init;
 }
 
 static void
-transaction_dbus_iface_init (RPMOSTreeTransactionIface *iface)
+rpmostreed_transaction_dbus_iface_init (RPMOSTreeTransactionIface *iface)
 {
   iface->handle_cancel = transaction_handle_cancel;
   iface->handle_start  = transaction_handle_start;
 }
 
 static void
-transaction_init (Transaction *self)
+rpmostreed_transaction_init (RpmostreedTransaction *self)
 {
   self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
-                                            TYPE_TRANSACTION,
-                                            TransactionPrivate);
+                                            RPMOSTREED_TYPE_TRANSACTION,
+                                            RpmostreedTransactionPrivate);
 }
 
 OstreeSysroot *
-transaction_get_sysroot (Transaction *transaction)
+rpmostreed_transaction_get_sysroot (RpmostreedTransaction *transaction)
 {
-  TransactionPrivate *priv;
+  RpmostreedTransactionPrivate *priv;
 
-  g_return_val_if_fail (IS_TRANSACTION (transaction), NULL);
+  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
 
-  priv = transaction_get_private (transaction);
+  priv = rpmostreed_transaction_get_private (transaction);
 
   return priv->sysroot;
 }
 
 GDBusMethodInvocation *
-transaction_get_invocation (Transaction *transaction)
+rpmostreed_transaction_get_invocation (RpmostreedTransaction *transaction)
 {
-  TransactionPrivate *priv;
+  RpmostreedTransactionPrivate *priv;
 
-  g_return_val_if_fail (IS_TRANSACTION (transaction), NULL);
+  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
 
-  priv = transaction_get_private (transaction);
+  priv = rpmostreed_transaction_get_private (transaction);
 
   return priv->invocation;
 }
 
 const char *
-transaction_get_client_address (Transaction *transaction)
+rpmostreed_transaction_get_client_address (RpmostreedTransaction *transaction)
 {
-  TransactionPrivate *priv;
+  RpmostreedTransactionPrivate *priv;
 
-  g_return_val_if_fail (IS_TRANSACTION (transaction), NULL);
+  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
 
-  priv = transaction_get_private (transaction);
+  priv = rpmostreed_transaction_get_private (transaction);
 
   return g_dbus_server_get_client_address (priv->server);
 }
 
 void
-transaction_emit_message_printf (Transaction *transaction,
-                                 const char *format,
-                                 ...)
+rpmostreed_transaction_emit_message_printf (RpmostreedTransaction *transaction,
+                                            const char *format,
+                                            ...)
 {
   g_autofree char *formatted_message = NULL;
   va_list args;
 
-  g_return_if_fail (IS_TRANSACTION (transaction));
+  g_return_if_fail (RPMOSTREED_IS_TRANSACTION (transaction));
   g_return_if_fail (format != NULL);
 
   va_start (args, format);
@@ -662,10 +663,10 @@ transaction_emit_message_printf (Transaction *transaction,
 }
 
 void
-transaction_connect_download_progress (Transaction *transaction,
-                                       OstreeAsyncProgress *progress)
+rpmostreed_transaction_connect_download_progress (RpmostreedTransaction *transaction,
+                                                  OstreeAsyncProgress *progress)
 {
-  g_return_if_fail (IS_TRANSACTION (transaction));
+  g_return_if_fail (RPMOSTREED_IS_TRANSACTION (transaction));
   g_return_if_fail (OSTREE_IS_ASYNC_PROGRESS (progress));
 
   g_signal_connect_object (progress,
@@ -675,10 +676,10 @@ transaction_connect_download_progress (Transaction *transaction,
 }
 
 void
-transaction_connect_signature_progress (Transaction *transaction,
-                                        OstreeRepo *repo)
+rpmostreed_transaction_connect_signature_progress (RpmostreedTransaction *transaction,
+                                                   OstreeRepo *repo)
 {
-  g_return_if_fail (IS_TRANSACTION (transaction));
+  g_return_if_fail (RPMOSTREED_IS_TRANSACTION (transaction));
   g_return_if_fail (OSTREE_REPO (repo));
 
   g_signal_connect_object (repo, "gpg-verify-result",

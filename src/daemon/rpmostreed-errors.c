@@ -15,9 +15,11 @@
 * along with this program; if not, write to the Free Software
 * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 */
+
 #include "config.h"
-#include "errors.h"
-#include "types.h"
+
+#include "rpmostreed-errors.h"
+#include "rpmostreed-types.h"
 
 static const GDBusErrorEntry dbus_error_entries[] =
 {

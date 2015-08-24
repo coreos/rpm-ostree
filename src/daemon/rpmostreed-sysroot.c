@@ -19,15 +19,14 @@
 #include "config.h"
 #include "ostree.h"
 
-#include "types.h"
-#include "daemon.h"
-#include "sysroot.h"
-#include "os.h"
-#include "utils.h"
-#include "deployment-utils.h"
-#include "errors.h"
-#include "transaction.h"
-#include "transaction-monitor.h"
+#include "rpmostreed-daemon.h"
+#include "rpmostreed-sysroot.h"
+#include "rpmostreed-os.h"
+#include "rpmostreed-utils.h"
+#include "rpmostreed-deployment-utils.h"
+#include "rpmostreed-errors.h"
+#include "rpmostreed-transaction.h"
+#include "rpmostreed-transaction-monitor.h"
 
 #include "libgsystem.h"
 #include <libglnx.h>
@@ -35,23 +34,22 @@
 #include <gio/gunixoutputstream.h>
 
 /**
- * SECTION:daemon
- * @title: Sysroot
+ * SECTION: sysroot
+ * @title: RpmostreedSysroot
  * @short_description: Implementation of #RPMOSTreeSysroot
  *
  * This type provides an implementation of the #RPMOSTreeSysroot interface.
  */
 
-typedef struct _SysrootClass SysrootClass;
+typedef struct _RpmostreedSysrootClass RpmostreedSysrootClass;
 
 /**
- * Sysroot:
+ * RpmostreedSysroot:
  *
- * The #Sysroot structure contains only private data and should
+ * The #RpmostreedSysroot structure contains only private data and should
  * only be accessed using the provided API.
  */
-struct _Sysroot
-{
+struct _RpmostreedSysroot {
   RPMOSTreeSysrootSkeleton parent_instance;
 
   GCancellable *cancellable;
@@ -59,7 +57,7 @@ struct _Sysroot
   gchar *sysroot_path;
 
   OstreeSysroot *ot_sysroot;
-  TransactionMonitor *transaction_monitor;
+  RpmostreedTransactionMonitor *transaction_monitor;
 
   GHashTable *os_interfaces;
   GRWLock children_lock;
@@ -71,13 +69,11 @@ struct _Sysroot
   guint stdout_source_id;
 };
 
-struct _SysrootClass
-{
+struct _RpmostreedSysrootClass {
   RPMOSTreeSysrootSkeletonClass parent_class;
 };
 
-enum
-{
+enum {
   PROP_0,
   PROP_PATH,
 };
@@ -88,16 +84,18 @@ enum {
 };
 
 static guint64 UPDATED_THROTTLE_SECONDS = 2;
-static guint sysroot_signals[NUM_SIGNALS] = { 0, };
+static guint signals[NUM_SIGNALS];
 
-static void sysroot_iface_init (RPMOSTreeSysrootIface *iface);
+static void rpmostreed_sysroot_iface_init (RPMOSTreeSysrootIface *iface);
 static gboolean _throttle_refresh (gpointer user_data);
 
-G_DEFINE_TYPE_WITH_CODE (Sysroot, sysroot, RPMOSTREE_TYPE_SYSROOT_SKELETON,
+G_DEFINE_TYPE_WITH_CODE (RpmostreedSysroot,
+                         rpmostreed_sysroot,
+                         RPMOSTREE_TYPE_SYSROOT_SKELETON,
                          G_IMPLEMENT_INTERFACE (RPMOSTREE_TYPE_SYSROOT,
-                                                sysroot_iface_init));
+                                                rpmostreed_sysroot_iface_init));
 
-static Sysroot *_sysroot_instance;
+static RpmostreedSysroot *_sysroot_instance;
 
 /* ---------------------------------------------------------------------------------------------------- */
 
@@ -120,8 +118,8 @@ static gboolean
 sysroot_stdout_ready_cb (GPollableInputStream *pollable_stream,
                          StdoutClosure *closure)
 {
-  glnx_unref_object Sysroot *sysroot = NULL;
-  glnx_unref_object Transaction *transaction = NULL;
+  glnx_unref_object RpmostreedSysroot *sysroot = NULL;
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
   GMemoryInputStream *memory_stream;
   GBufferedInputStream *buffered_stream;
   char buffer[1024];
@@ -133,7 +131,7 @@ sysroot_stdout_ready_cb (GPollableInputStream *pollable_stream,
 
   sysroot = g_weak_ref_get (&closure->sysroot);
   if (sysroot != NULL)
-    transaction = transaction_monitor_ref_active_transaction (sysroot->transaction_monitor);
+    transaction = rpmostreed_transaction_monitor_ref_active_transaction (sysroot->transaction_monitor);
 
   /* XXX Would very much like g_buffered_input_stream_fill_nonblocking().
    *     Much of this function is a clumsy and inefficient attempt to
@@ -224,7 +222,7 @@ out:
 }
 
 static gboolean
-sysroot_setup_stdout_redirect (Sysroot *self,
+sysroot_setup_stdout_redirect (RpmostreedSysroot *self,
                                GError **error)
 {
   g_autoptr(GInputStream) stream = NULL;
@@ -319,7 +317,7 @@ handle_create_osname (RPMOSTreeSysroot *object,
 
   gboolean needs_refresh = FALSE;
 
-  Sysroot *self = SYSROOT (object);
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
 
   if (!ostree_sysroot_ensure_initialized (self->ot_sysroot,
                                           self->cancellable,
@@ -380,8 +378,7 @@ handle_create_osname (RPMOSTreeSysroot *object,
         }
     }
 
-  dbus_path = utils_generate_object_path (BASE_DBUS_PATH,
-                                          osname, NULL);
+  dbus_path = rpmostreed_generate_object_path (BASE_DBUS_PATH, osname, NULL);
   g_rw_lock_reader_lock (&self->children_lock);
     needs_refresh = self->last_monitor_event == 0;
   g_rw_lock_reader_unlock (&self->children_lock);
@@ -404,7 +401,7 @@ handle_get_os (RPMOSTreeSysroot *object,
                GDBusMethodInvocation *invocation,
                const char *arg_name)
 {
-  Sysroot *self = SYSROOT (object);
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
   glnx_unref_object GDBusInterfaceSkeleton *os_interface = NULL;
 
   if (arg_name[0] == '\0')
@@ -448,7 +445,7 @@ sysroot_transform_transaction_to_attrs (GBinding *binding,
                                         GValue *dst_value,
                                         gpointer user_data)
 {
-  Transaction *transaction;
+  RpmostreedTransaction *transaction;
   GVariant *variant;
   const char *method_name = "";
   const char *sender_name = "";
@@ -459,7 +456,7 @@ sysroot_transform_transaction_to_attrs (GBinding *binding,
     {
       GDBusMethodInvocation *invocation;
 
-      invocation = transaction_get_invocation (transaction);
+      invocation = rpmostreed_transaction_get_invocation (transaction);
       method_name = g_dbus_method_invocation_get_method_name (invocation);
       sender_name = g_dbus_method_invocation_get_sender (invocation);
     }
@@ -475,7 +472,7 @@ sysroot_transform_transaction_to_attrs (GBinding *binding,
 static void
 sysroot_dispose (GObject *object)
 {
-  Sysroot *self = SYSROOT (object);
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
   GHashTableIter iter;
   gpointer value;
   gint tries;
@@ -520,13 +517,13 @@ sysroot_dispose (GObject *object)
   g_clear_object (&self->ot_sysroot);
   g_clear_object (&self->transaction_monitor);
 
-  G_OBJECT_CLASS (sysroot_parent_class)->dispose (object);
+  G_OBJECT_CLASS (rpmostreed_sysroot_parent_class)->dispose (object);
 }
 
 static void
 sysroot_finalize (GObject *object)
 {
-  Sysroot *self = SYSROOT (object);
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
   _sysroot_instance = NULL;
 
   g_free (self->sysroot_path);
@@ -541,11 +538,11 @@ sysroot_finalize (GObject *object)
   if (self->stdout_source_id > 0)
     g_source_remove (self->stdout_source_id);
 
-  G_OBJECT_CLASS (sysroot_parent_class)->finalize (object);
+  G_OBJECT_CLASS (rpmostreed_sysroot_parent_class)->finalize (object);
 }
 
 static void
-sysroot_init (Sysroot *self)
+rpmostreed_sysroot_init (RpmostreedSysroot *self)
 {
   g_assert (_sysroot_instance == NULL);
   _sysroot_instance = self;
@@ -561,13 +558,13 @@ sysroot_init (Sysroot *self)
   self->sig_changed = 0;
   self->last_monitor_event = 0;
 
-  self->transaction_monitor = transaction_monitor_new ();
+  self->transaction_monitor = rpmostreed_transaction_monitor_new ();
 }
 
 static void
 sysroot_constructed (GObject *object)
 {
-  Sysroot *self = SYSROOT (object);
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
   GError *local_error = NULL;
 
   /* TODO Integrate with PolicyKit via the "g-authorize-method" signal. */
@@ -590,7 +587,7 @@ sysroot_constructed (GObject *object)
       g_clear_error (&local_error);
     }
 
-  G_OBJECT_CLASS (sysroot_parent_class)->constructed (object);
+  G_OBJECT_CLASS (rpmostreed_sysroot_parent_class)->constructed (object);
 }
 
 static void
@@ -599,7 +596,7 @@ sysroot_set_property (GObject *object,
                       const GValue *value,
                       GParamSpec *pspec)
 {
-  Sysroot *self = SYSROOT (object);
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
 
   switch (prop_id)
     {
@@ -615,7 +612,7 @@ sysroot_set_property (GObject *object,
 
 
 static void
-sysroot_class_init (SysrootClass *klass)
+rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
 {
   GObjectClass *gobject_class;
 
@@ -628,7 +625,7 @@ sysroot_class_init (SysrootClass *klass)
   /**
    * Sysroot:sysroot_path:
    *
-   * The Sysroot path
+   * The RpmostreedSysroot path
    */
   g_object_class_install_property (gobject_class,
                                    PROP_PATH,
@@ -640,19 +637,18 @@ sysroot_class_init (SysrootClass *klass)
                                                         G_PARAM_CONSTRUCT_ONLY |
                                                         G_PARAM_STATIC_STRINGS));
 
-  sysroot_signals[UPDATED] = g_signal_new ("sysroot-updated",
-                                           TYPE_SYSROOT,
-                                           G_SIGNAL_RUN_LAST,
-                                           0, NULL, NULL,
-                                           g_cclosure_marshal_generic,
-                                           G_TYPE_NONE,
-                                           1,
-                                           OSTREE_TYPE_SYSROOT);
+  signals[UPDATED] = g_signal_new ("sysroot-updated",
+                                   RPMOSTREED_TYPE_SYSROOT,
+                                   G_SIGNAL_RUN_LAST,
+                                   0, NULL, NULL,
+                                   g_cclosure_marshal_generic,
+                                   G_TYPE_NONE, 1,
+                                   OSTREE_TYPE_SYSROOT);
 }
 
 
 static gboolean
-sysroot_populate_deployments (Sysroot *self,
+sysroot_populate_deployments (RpmostreedSysroot *self,
                               OstreeSysroot *ot_sysroot,
                               OstreeRepo *ot_repo)
 {
@@ -675,16 +671,16 @@ sysroot_populate_deployments (Sysroot *self,
   for (i=0; i<deployments->len; i++)
     {
       g_variant_builder_add_value (&builder,
-                                   deployment_generate_variant (deployments->pdata[i],
-                                                                ot_repo));
+                                   rpmostreed_deployment_generate_variant (deployments->pdata[i],
+                                                                           ot_repo));
     }
 
   booted = ostree_sysroot_get_booted_deployment (ot_sysroot);
   if (booted)
     {
       const gchar *os = ostree_deployment_get_osname (booted);
-      g_autofree gchar *path = utils_generate_object_path (BASE_DBUS_PATH,
-                                                        os, NULL);
+      g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH,
+                                                                os, NULL);
       rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path);
     }
   else
@@ -702,8 +698,8 @@ out:
 
 
 static gboolean
-sysroot_load_internals (Sysroot *self,
-                        GError **error)
+rpmostreed_sysroot_load_internals (RpmostreedSysroot *self,
+                                   GError **error)
 {
   gboolean ret = FALSE;
   glnx_unref_object OstreeRepo *ot_repo = NULL;
@@ -758,8 +754,8 @@ sysroot_load_internals (Sysroot *self,
       full_path = g_build_filename (os_path, os, NULL);
       if (g_file_test (full_path, G_FILE_TEST_IS_DIR))
         {
-          RPMOSTreeOS *obj = osstub_new (self->ot_sysroot, os,
-                                         self->transaction_monitor);
+          RPMOSTreeOS *obj = rpmostreed_os_new (self->ot_sysroot, os,
+                                                self->transaction_monitor);
           g_hash_table_insert (self->os_interfaces,
                                g_strdup (os),
                                obj);
@@ -798,9 +794,9 @@ _do_reload_data (GTask         *task,
                  GCancellable  *cancellable)
 {
   GError *error = NULL;
-  Sysroot *self = SYSROOT (object);
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
 
-  if (!sysroot_load_internals (self, &error))
+  if (!rpmostreed_sysroot_load_internals (self, &error))
     g_task_return_error (task, error);
   else
     g_task_return_boolean (task, TRUE);
@@ -814,7 +810,7 @@ _reload_callback (GObject *source_object,
                   GAsyncResult *res,
                   gpointer user_data)
 {
-    Sysroot *self = SYSROOT (user_data);
+    RpmostreedSysroot *self = RPMOSTREED_SYSROOT (user_data);
     GTask *task = G_TASK (res);
     GError *error = NULL;
 
@@ -830,7 +826,7 @@ _reload_callback (GObject *source_object,
       }
     else
       {
-        g_signal_emit (self, sysroot_signals[UPDATED], 0, self->ot_sysroot);
+        rpmostreed_sysroot_emit_update (self, self->ot_sysroot);
       }
 
     g_object_unref (task);
@@ -841,7 +837,7 @@ _reload_callback (GObject *source_object,
 static gboolean
 _throttle_refresh (gpointer user_data)
 {
-  Sysroot *self = SYSROOT (user_data);
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (user_data);
   gboolean ret = TRUE;
 
   /* Only run the update if there isn't another one pending. */
@@ -868,7 +864,7 @@ on_repo_file (GFileMonitor *monitor,
               GFileMonitorEvent event_type,
               gpointer user_data)
 {
-  Sysroot *self = SYSROOT (user_data);
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (user_data);
   if (event_type == G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED)
     {
       g_rw_lock_writer_lock (&self->children_lock);
@@ -885,7 +881,7 @@ on_repo_file (GFileMonitor *monitor,
 
 
 static void
-sysroot_iface_init (RPMOSTreeSysrootIface *iface)
+rpmostreed_sysroot_iface_init (RPMOSTreeSysrootIface *iface)
 {
   iface->handle_create_osname = handle_create_osname;
   iface->handle_get_os = handle_get_os;
@@ -893,41 +889,41 @@ sysroot_iface_init (RPMOSTreeSysrootIface *iface)
 
 
 /**
- * sysroot_emit_update:
+ * rpmostreed_sysroot_emit_update:
  *
  * Emits an sysroot-updated signal
  * requires a known up to date sysroot
  */
 void
-sysroot_emit_update (Sysroot *self,
-                     OstreeSysroot *ot_sysroot)
+rpmostreed_sysroot_emit_update (RpmostreedSysroot *self,
+                                OstreeSysroot *ot_sysroot)
 {
-  g_signal_emit (self, sysroot_signals[UPDATED], 0, ot_sysroot);
+  g_signal_emit (self, signals[UPDATED], 0, ot_sysroot);
 }
 
 /**
- * sysroot_populate :
+ * rpmostreed_sysroot_populate :
  *
  * loads internals and starts monitoring
  *
  * Returns: True on success
  */
 gboolean
-sysroot_populate (Sysroot *self,
-                  GError **error)
+rpmostreed_sysroot_populate (RpmostreedSysroot *self,
+                             GError **error)
 {
   gboolean ret = FALSE;
   glnx_unref_object OstreeRepo *ot_repo = NULL;
   g_return_val_if_fail (self != NULL, FALSE);
 
-  if (!utils_load_sysroot_and_repo (self->sysroot_path,
-                                    NULL,
-                                    &self->ot_sysroot,
-                                    &ot_repo,
-                                    error))
+  if (!rpmostreed_load_sysroot_and_repo (self->sysroot_path,
+                                         NULL,
+                                         &self->ot_sysroot,
+                                         &ot_repo,
+                                         error))
     goto out;
 
-  if (!sysroot_load_internals (self, error))
+  if (!rpmostreed_sysroot_load_internals (self, error))
     goto out;
 
   if (self->monitor == NULL)
@@ -951,25 +947,25 @@ out:
 }
 
 /**
- * sysroot_get_sysroot_path :
+ * rpomstreed_sysroot_get_sysroot_path :
  *
  * Returns: The filesystem path for sysroot.
  * Do not free owned by sysroot
  */
 gchar *
-sysroot_get_sysroot_path (Sysroot *self)
+rpmostreed_sysroot_get_sysroot_path (RpmostreedSysroot *self)
 {
   return self->sysroot_path;
 }
 
 
 /**
- * sysroot_get:
+ * rpmostreed_sysroot_get:
  *
- * Returns: (transfer none): The singleton #Sysroot instance
+ * Returns: (transfer none): The singleton #RpmostreedSysroot instance
  */
-Sysroot *
-sysroot_get (void)
+RpmostreedSysroot *
+rpmostreed_sysroot_get (void)
 {
   g_assert (_sysroot_instance);
   return _sysroot_instance;

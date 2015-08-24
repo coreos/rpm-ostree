@@ -18,25 +18,22 @@
 
 #include "config.h"
 
-#include "transaction-monitor.h"
+#include "rpmostreed-transaction-monitor.h"
 
 #include <libglnx.h>
 
-#include "daemon.h"
-#include "transaction.h"
+#include "rpmostreed-transaction.h"
 
-typedef struct _TransactionMonitorClass TransactionMonitorClass;
+typedef struct _RpmostreedTransactionMonitorClass RpmostreedTransactionMonitorClass;
 
-struct _TransactionMonitor
-{
+struct _RpmostreedTransactionMonitor {
   GObjectClass parent;
 
   /* The head of the queue is the active transaction. */
   GQueue *transactions;
 };
 
-struct _TransactionMonitorClass
-{
+struct _RpmostreedTransactionMonitorClass {
   GObjectClass parent_class;
 };
 
@@ -45,10 +42,12 @@ enum {
   PROP_ACTIVE_TRANSACTION
 };
 
-G_DEFINE_TYPE (TransactionMonitor, transaction_monitor, G_TYPE_OBJECT)
+G_DEFINE_TYPE (RpmostreedTransactionMonitor,
+               rpmostreed_transaction_monitor,
+               G_TYPE_OBJECT)
 
 static void
-transaction_monitor_remove_transaction (TransactionMonitor *monitor,
+transaction_monitor_remove_transaction (RpmostreedTransactionMonitor *monitor,
                                         RPMOSTreeTransaction *transaction)
 {
   GList *link;
@@ -78,7 +77,7 @@ transaction_monitor_remove_transaction (TransactionMonitor *monitor,
 static void
 transaction_monitor_notify_active_cb (RPMOSTreeTransaction *transaction,
                                       GParamSpec *pspec,
-                                      TransactionMonitor *monitor)
+                                      RpmostreedTransactionMonitor *monitor)
 {
   GList *head, *link;
 
@@ -95,21 +94,21 @@ transaction_monitor_notify_active_cb (RPMOSTreeTransaction *transaction,
 
 static void
 transaction_monitor_cancelled_cb (RPMOSTreeTransaction *transaction,
-                                  TransactionMonitor *monitor)
+                                  RpmostreedTransactionMonitor *monitor)
 {
   transaction_monitor_remove_transaction (monitor, transaction);
 }
 
 static void
 transaction_monitor_closed_cb (RPMOSTreeTransaction *transaction,
-                               TransactionMonitor *monitor)
+                               RpmostreedTransactionMonitor *monitor)
 {
   transaction_monitor_remove_transaction (monitor, transaction);
 }
 
 static void
 transaction_monitor_owner_vanished_cb (RPMOSTreeTransaction *transaction,
-                                       TransactionMonitor *monitor)
+                                       RpmostreedTransactionMonitor *monitor)
 {
   transaction_monitor_remove_transaction (monitor, transaction);
 }
@@ -120,13 +119,13 @@ transaction_monitor_get_property (GObject *object,
                                   GValue *value,
                                   GParamSpec *pspec)
 {
-  TransactionMonitor *monitor = TRANSACTION_MONITOR (object);
+  RpmostreedTransactionMonitor *monitor = RPMOSTREED_TRANSACTION_MONITOR (object);
   gpointer v_object;
 
   switch (property_id)
     {
       case PROP_ACTIVE_TRANSACTION:
-        v_object = transaction_monitor_ref_active_transaction (monitor);
+        v_object = rpmostreed_transaction_monitor_ref_active_transaction (monitor);
         g_value_take_object (value, v_object);
         break;
       default:
@@ -138,15 +137,15 @@ transaction_monitor_get_property (GObject *object,
 static void
 transaction_monitor_dispose (GObject *object)
 {
-  TransactionMonitor *monitor = TRANSACTION_MONITOR (object);
+  RpmostreedTransactionMonitor *monitor = RPMOSTREED_TRANSACTION_MONITOR (object);
 
   g_queue_free_full (monitor->transactions, (GDestroyNotify) g_object_unref);
 
-  G_OBJECT_CLASS (transaction_monitor_parent_class)->dispose (object);
+  G_OBJECT_CLASS (rpmostreed_transaction_monitor_parent_class)->dispose (object);
 }
 
 static void
-transaction_monitor_class_init (TransactionMonitorClass *class)
+rpmostreed_transaction_monitor_class_init (RpmostreedTransactionMonitorClass *class)
 {
   GObjectClass *object_class;
 
@@ -159,29 +158,29 @@ transaction_monitor_class_init (TransactionMonitorClass *class)
                                    g_param_spec_object ("active-transaction",
                                                         NULL,
                                                         NULL,
-                                                        TYPE_TRANSACTION,
+                                                        RPMOSTREED_TYPE_TRANSACTION,
                                                         G_PARAM_READABLE |
                                                         G_PARAM_STATIC_STRINGS));
 }
 
 static void
-transaction_monitor_init (TransactionMonitor *monitor)
+rpmostreed_transaction_monitor_init (RpmostreedTransactionMonitor *monitor)
 {
   monitor->transactions = g_queue_new ();
 }
 
-TransactionMonitor *
-transaction_monitor_new (void)
+RpmostreedTransactionMonitor *
+rpmostreed_transaction_monitor_new (void)
 {
-  return g_object_new (TYPE_TRANSACTION_MONITOR, NULL);
+  return g_object_new (RPMOSTREED_TYPE_TRANSACTION_MONITOR, NULL);
 }
 
 void
-transaction_monitor_add (TransactionMonitor *monitor,
-                         Transaction *transaction)
+rpmostreed_transaction_monitor_add (RpmostreedTransactionMonitor *monitor,
+                                    RpmostreedTransaction *transaction)
 {
-  g_return_if_fail (IS_TRANSACTION_MONITOR (monitor));
-  g_return_if_fail (IS_TRANSACTION (transaction));
+  g_return_if_fail (RPMOSTREED_IS_TRANSACTION_MONITOR (monitor));
+  g_return_if_fail (RPMOSTREED_IS_TRANSACTION (transaction));
 
   g_signal_connect_object (transaction, "notify::active",
                            G_CALLBACK (transaction_monitor_notify_active_cb),
@@ -203,12 +202,12 @@ transaction_monitor_add (TransactionMonitor *monitor,
   g_object_notify (G_OBJECT (monitor), "active-transaction");
 }
 
-Transaction *
-transaction_monitor_ref_active_transaction (TransactionMonitor *monitor)
+RpmostreedTransaction *
+rpmostreed_transaction_monitor_ref_active_transaction (RpmostreedTransactionMonitor *monitor)
 {
-  Transaction *transaction;
+  RpmostreedTransaction *transaction;
 
-  g_return_val_if_fail (IS_TRANSACTION_MONITOR (monitor), NULL);
+  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION_MONITOR (monitor), NULL);
 
   /* The head of the queue is the active transaction. */
   transaction = g_queue_peek_head (monitor->transactions);

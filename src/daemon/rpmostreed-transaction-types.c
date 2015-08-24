@@ -21,10 +21,10 @@
 
 #include <libglnx.h>
 
-#include "transaction-types.h"
-#include "transaction.h"
-#include "deployment-utils.h"
-#include "utils.h"
+#include "rpmostreed-transaction-types.h"
+#include "rpmostreed-transaction.h"
+#include "rpmostreed-deployment-utils.h"
+#include "rpmostreed-utils.h"
 
 static gboolean
 change_upgrader_refspec (OstreeSysroot *sysroot,
@@ -46,10 +46,10 @@ change_upgrader_refspec (OstreeSysroot *sysroot,
   old_refspec = g_key_file_get_string (old_origin, "origin",
                                         "refspec", NULL);
 
-  if (!refspec_parse_partial (refspec,
-                              old_refspec,
-                              &new_refspec,
-                              error))
+  if (!rpmostreed_refspec_parse_partial (refspec,
+                                         old_refspec,
+                                         &new_refspec,
+                                         error))
     goto out;
 
   if (strcmp (old_refspec, new_refspec) == 0)
@@ -80,18 +80,18 @@ out:
 /* ============================= Package Diff  ============================= */
 
 typedef struct {
-  Transaction parent;
+  RpmostreedTransaction parent;
   char *osname;
   char *refspec;
 } PackageDiffTransaction;
 
-typedef TransactionClass PackageDiffTransactionClass;
+typedef RpmostreedTransactionClass PackageDiffTransactionClass;
 
 GType package_diff_transaction_get_type (void);
 
 G_DEFINE_TYPE (PackageDiffTransaction,
                package_diff_transaction,
-               TYPE_TRANSACTION)
+               RPMOSTREED_TYPE_TRANSACTION)
 
 static void
 package_diff_transaction_finalize (GObject *object)
@@ -106,7 +106,7 @@ package_diff_transaction_finalize (GObject *object)
 }
 
 static gboolean
-package_diff_transaction_execute (Transaction *transaction,
+package_diff_transaction_execute (RpmostreedTransaction *transaction,
                                   GCancellable *cancellable,
                                   GError **error)
 {
@@ -127,7 +127,7 @@ package_diff_transaction_execute (Transaction *transaction,
   g_main_context_push_thread_default (m_context);
 
   self = (PackageDiffTransaction *) transaction;
-  sysroot = transaction_get_sysroot (transaction);
+  sysroot = rpmostreed_transaction_get_sysroot (transaction);
   upgrader = ostree_sysroot_upgrader_new_for_os (sysroot, self->osname,
                                                  cancellable, error);
   if (upgrader == NULL)
@@ -143,16 +143,16 @@ package_diff_transaction_execute (Transaction *transaction,
 
   origin_description = ostree_sysroot_upgrader_get_origin_description (upgrader);
   if (origin_description != NULL)
-    transaction_emit_message_printf (transaction,
-                                     "Updating from: %s",
-                                     origin_description);
+    rpmostreed_transaction_emit_message_printf (transaction,
+                                                "Updating from: %s",
+                                                origin_description);
 
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     goto out;
 
   progress = ostree_async_progress_new ();
-  transaction_connect_download_progress (transaction, progress);
-  transaction_connect_signature_progress (transaction, repo);
+  rpmostreed_transaction_connect_download_progress (transaction, progress);
+  rpmostreed_transaction_connect_signature_progress (transaction, repo);
   if (!ostree_sysroot_upgrader_pull_one_dir (upgrader, "/usr/share/rpm",
                                              0, 0, progress, &changed,
                                              cancellable, error))
@@ -161,7 +161,7 @@ package_diff_transaction_execute (Transaction *transaction,
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
   if (!changed)
-    transaction_emit_message_printf (transaction, "No upgrade available.");
+    rpmostreed_transaction_emit_message_printf (transaction, "No upgrade available.");
 
   ret = TRUE;
 
@@ -189,13 +189,13 @@ package_diff_transaction_init (PackageDiffTransaction *self)
 {
 }
 
-Transaction *
-transaction_new_package_diff (GDBusMethodInvocation *invocation,
-                              OstreeSysroot *sysroot,
-                              const char *osname,
-                              const char *refspec,
-                              GCancellable *cancellable,
-                              GError **error)
+RpmostreedTransaction *
+rpmostreed_transaction_new_package_diff (GDBusMethodInvocation *invocation,
+                                         OstreeSysroot *sysroot,
+                                         const char *osname,
+                                         const char *refspec,
+                                         GCancellable *cancellable,
+                                         GError **error)
 {
   PackageDiffTransaction *self;
 
@@ -215,23 +215,23 @@ transaction_new_package_diff (GDBusMethodInvocation *invocation,
       self->refspec = g_strdup (refspec);
     }
 
-  return (Transaction *) self;
+  return (RpmostreedTransaction *) self;
 }
 
 /* =============================== Rollback =============================== */
 
 typedef struct {
-  Transaction parent;
+  RpmostreedTransaction parent;
   char *osname;
 } RollbackTransaction;
 
-typedef TransactionClass RollbackTransactionClass;
+typedef RpmostreedTransactionClass RollbackTransactionClass;
 
 GType rollback_transaction_get_type (void);
 
 G_DEFINE_TYPE (RollbackTransaction,
                rollback_transaction,
-               TYPE_TRANSACTION)
+               RPMOSTREED_TYPE_TRANSACTION)
 
 static void
 rollback_transaction_finalize (GObject *object)
@@ -245,7 +245,7 @@ rollback_transaction_finalize (GObject *object)
 }
 
 static gboolean
-rollback_transaction_execute (Transaction *transaction,
+rollback_transaction_execute (RpmostreedTransaction *transaction,
                               GCancellable *cancellable,
                               GError **error)
 {
@@ -261,9 +261,9 @@ rollback_transaction_execute (Transaction *transaction,
 
   self = (RollbackTransaction *) transaction;
 
-  sysroot = transaction_get_sysroot (transaction);
+  sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-  rollback_index = rollback_deployment_index (self->osname, sysroot, error);
+  rollback_index = rpmostreed_rollback_deployment_index (self->osname, sysroot, error);
   if (rollback_index < 0)
     goto out;
 
@@ -275,10 +275,10 @@ rollback_transaction_execute (Transaction *transaction,
   deployment = old_deployments->pdata[rollback_index];
   g_ptr_array_add (new_deployments, g_object_ref (deployment));
 
-  transaction_emit_message_printf (transaction,
-                                   "Moving '%s.%d' to be first deployment",
-                                   ostree_deployment_get_csum (deployment),
-                                   ostree_deployment_get_deployserial (deployment));
+  rpmostreed_transaction_emit_message_printf (transaction,
+                                              "Moving '%s.%d' to be first deployment",
+                                              ostree_deployment_get_csum (deployment),
+                                              ostree_deployment_get_deployserial (deployment));
 
   for (i = 0; i < old_deployments->len; i++)
     {
@@ -318,12 +318,12 @@ rollback_transaction_init (RollbackTransaction *self)
 {
 }
 
-Transaction *
-transaction_new_rollback (GDBusMethodInvocation *invocation,
-                          OstreeSysroot *sysroot,
-                          const char *osname,
-                          GCancellable *cancellable,
-                          GError **error)
+RpmostreedTransaction *
+rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
+                                     OstreeSysroot *sysroot,
+                                     const char *osname,
+                                     GCancellable *cancellable,
+                                     GError **error)
 {
   RollbackTransaction *self;
 
@@ -342,23 +342,23 @@ transaction_new_rollback (GDBusMethodInvocation *invocation,
       self->osname = g_strdup (osname);
     }
 
-  return (Transaction *) self;
+  return (RpmostreedTransaction *) self;
 }
 
 /* ============================ Clear Rollback ============================ */
 
 typedef struct {
-  Transaction parent;
+  RpmostreedTransaction parent;
   char *osname;
 } ClearRollbackTransaction;
 
-typedef TransactionClass ClearRollbackTransactionClass;
+typedef RpmostreedTransactionClass ClearRollbackTransactionClass;
 
 GType clear_rollback_transaction_get_type (void);
 
 G_DEFINE_TYPE (ClearRollbackTransaction,
                clear_rollback_transaction,
-               TYPE_TRANSACTION)
+               RPMOSTREED_TYPE_TRANSACTION)
 
 static void
 clear_rollback_transaction_finalize (GObject *object)
@@ -372,7 +372,7 @@ clear_rollback_transaction_finalize (GObject *object)
 }
 
 static gboolean
-clear_rollback_transaction_execute (Transaction *transaction,
+clear_rollback_transaction_execute (RpmostreedTransaction *transaction,
                                     GCancellable *cancellable,
                                     GError **error)
 {
@@ -385,9 +385,9 @@ clear_rollback_transaction_execute (Transaction *transaction,
 
   self = (ClearRollbackTransaction *) transaction;
 
-  sysroot = transaction_get_sysroot (transaction);
+  sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-  rollback_index = rollback_deployment_index (self->osname, sysroot, error);
+  rollback_index = rpmostreed_rollback_deployment_index (self->osname, sysroot, error);
   if (rollback_index < 0)
     goto out;
 
@@ -430,12 +430,12 @@ clear_rollback_transaction_init (ClearRollbackTransaction *self)
 {
 }
 
-Transaction *
-transaction_new_clear_rollback (GDBusMethodInvocation *invocation,
-                                OstreeSysroot *sysroot,
-                                const char *osname,
-                                GCancellable *cancellable,
-                                GError **error)
+RpmostreedTransaction *
+rpmostreed_transaction_new_clear_rollback (GDBusMethodInvocation *invocation,
+                                           OstreeSysroot *sysroot,
+                                           const char *osname,
+                                           GCancellable *cancellable,
+                                           GError **error)
 {
   ClearRollbackTransaction *self;
 
@@ -454,26 +454,26 @@ transaction_new_clear_rollback (GDBusMethodInvocation *invocation,
       self->osname = g_strdup (osname);
     }
 
-  return (Transaction *) self;
+  return (RpmostreedTransaction *) self;
 }
 
 /* ================================ Upgrade ================================ */
 
 typedef struct {
-  Transaction parent;
+  RpmostreedTransaction parent;
   char *osname;
   char *refspec;
   gboolean allow_downgrade;
   gboolean skip_purge;
 } UpgradeTransaction;
 
-typedef TransactionClass UpgradeTransactionClass;
+typedef RpmostreedTransactionClass UpgradeTransactionClass;
 
 GType upgrade_transaction_get_type (void);
 
 G_DEFINE_TYPE (UpgradeTransaction,
                upgrade_transaction,
-               TYPE_TRANSACTION)
+               RPMOSTREED_TYPE_TRANSACTION)
 
 static void
 upgrade_transaction_finalize (GObject *object)
@@ -488,7 +488,7 @@ upgrade_transaction_finalize (GObject *object)
 }
 
 static gboolean
-upgrade_transaction_execute (Transaction *transaction,
+upgrade_transaction_execute (RpmostreedTransaction *transaction,
                              GCancellable *cancellable,
                              GError **error)
 {
@@ -515,7 +515,7 @@ upgrade_transaction_execute (Transaction *transaction,
 
   self = (UpgradeTransaction *) transaction;
 
-  sysroot = transaction_get_sysroot (transaction);
+  sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
   upgrader = ostree_sysroot_upgrader_new_for_os (sysroot, self->osname,
                                                  cancellable, error);
@@ -538,13 +538,13 @@ upgrade_transaction_execute (Transaction *transaction,
 
   origin_description = ostree_sysroot_upgrader_get_origin_description (upgrader);
   if (origin_description != NULL)
-    transaction_emit_message_printf (transaction,
-                                     "Updating from: %s",
-                                     origin_description);
+    rpmostreed_transaction_emit_message_printf (transaction,
+                                                "Updating from: %s",
+                                                origin_description);
 
   progress = ostree_async_progress_new ();
-  transaction_connect_download_progress (transaction, progress);
-  transaction_connect_signature_progress (transaction, repo);
+  rpmostreed_transaction_connect_download_progress (transaction, progress);
+  rpmostreed_transaction_connect_signature_progress (transaction, repo);
 
   if (!ostree_sysroot_upgrader_pull (upgrader, 0, upgrader_pull_flags,
                                      progress, &changed,
@@ -571,9 +571,9 @@ upgrade_transaction_execute (Transaction *transaction,
 
           ostree_repo_transaction_set_ref (repo, remote, ref, NULL);
 
-          transaction_emit_message_printf (transaction,
-                                           "Deleting ref '%s'",
-                                           old_refspec);
+          rpmostreed_transaction_emit_message_printf (transaction,
+                                                      "Deleting ref '%s'",
+                                                      old_refspec);
 
           if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
             goto out;
@@ -581,7 +581,7 @@ upgrade_transaction_execute (Transaction *transaction,
     }
   else
     {
-      transaction_emit_message_printf (transaction, "No upgrade available.");
+      rpmostreed_transaction_emit_message_printf (transaction, "No upgrade available.");
     }
 
   ret = TRUE;
@@ -610,15 +610,15 @@ upgrade_transaction_init (UpgradeTransaction *self)
 {
 }
 
-Transaction *
-transaction_new_upgrade (GDBusMethodInvocation *invocation,
-                         OstreeSysroot *sysroot,
-                         const char *osname,
-                         const char *refspec,
-                         gboolean allow_downgrade,
-                         gboolean skip_purge,
-                         GCancellable *cancellable,
-                         GError **error)
+RpmostreedTransaction *
+rpmostreed_transaction_new_upgrade (GDBusMethodInvocation *invocation,
+                                    OstreeSysroot *sysroot,
+                                    const char *osname,
+                                    const char *refspec,
+                                    gboolean allow_downgrade,
+                                    gboolean skip_purge,
+                                    GCancellable *cancellable,
+                                    GError **error)
 {
   UpgradeTransaction *self;
 
@@ -640,6 +640,6 @@ transaction_new_upgrade (GDBusMethodInvocation *invocation,
       self->skip_purge = skip_purge;
     }
 
-  return (Transaction *) self;
+  return (RpmostreedTransaction *) self;
 }
 

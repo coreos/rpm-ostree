@@ -17,8 +17,9 @@
  */
 
 #include "config.h"
-#include "utils.h"
-#include "errors.h"
+
+#include "rpmostreed-utils.h"
+#include "rpmostreed-errors.h"
 
 #include <libglnx.h>
 
@@ -53,7 +54,7 @@ append_to_object_path (GString *str,
 }
 
 /**
- * utils_generate_object_path:
+ * rpmostreed_generate_object_path:
  * @base: The base object path (without trailing '/').
  * @part...: UTF-8 strings.
  *
@@ -68,24 +69,24 @@ append_to_object_path (GString *str,
  * Returns: An allocated string that must be freed with g_free ().
  */
 gchar *
-utils_generate_object_path (const gchar *base,
-                            const gchar *part,
-                            ...)
+rpmostreed_generate_object_path (const gchar *base,
+                                 const gchar *part,
+                                 ...)
 {
   gchar *result;
   va_list va;
 
   va_start (va, part);
-  result = utils_generate_object_path_from_va (base, part, va);
+  result = rpmostreed_generate_object_path_from_va (base, part, va);
   va_end (va);
 
   return result;
 }
 
 gchar *
-utils_generate_object_path_from_va (const gchar *base,
-                                    const gchar *part,
-                                    va_list va)
+rpmostreed_generate_object_path_from_va (const gchar *base,
+                                         const gchar *part,
+                                         va_list va)
 {
   GString *path;
 
@@ -114,7 +115,7 @@ utils_generate_object_path_from_va (const gchar *base,
 }
 
 /**
- * utils_load_sysroot_and_repo:
+ * rpmostreed_load_sysroot_and_repo:
  * @path: The path to the sysroot.
  * @cancellable: Cancelable
  * @out_sysroot (out): The OstreeSysroot at the given path
@@ -124,11 +125,11 @@ utils_generate_object_path_from_va (const gchar *base,
  * Returns: True on success.
  */
 gboolean
-utils_load_sysroot_and_repo (gchar *path,
-                             GCancellable *cancellable,
-                             OstreeSysroot **out_sysroot,
-                             OstreeRepo **out_repo,
-                             GError **error)
+rpmostreed_load_sysroot_and_repo (const gchar *path,
+                                  GCancellable *cancellable,
+                                  OstreeSysroot **out_sysroot,
+                                  OstreeRepo **out_repo,
+                                  GError **error)
 {
   glnx_unref_object GFile *sysroot_path = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
@@ -160,7 +161,7 @@ out:
 }
 
 /**
- * refspec_parse_partial:
+ * rpmostreed_refspec_parse_partial:
  * @new_provided_refspec: The provided refspec
  * @base_refspec: The refspec string to base on.
  * @out_refspec: Pointer to the new refspec
@@ -170,13 +171,13 @@ out:
  * base_refspec argument. Errors if a full valid refspec can't
  * be derived.
  *
- * Returns: True on sucess.
+ * Returns: True on success.
  */
 gboolean
-refspec_parse_partial (const gchar *new_provided_refspec,
-                       gchar *base_refspec,
-                       gchar **out_refspec,
-                       GError **error)
+rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
+                                  gchar *base_refspec,
+                                  gchar **out_refspec,
+                                  GError **error)
 {
 
   g_autofree gchar *ref = NULL;

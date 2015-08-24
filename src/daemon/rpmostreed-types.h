@@ -18,23 +18,25 @@
 
 #pragma once
 
-#include "types.h"
-#include "ostree.h"
+#include <glib-unix.h>
+#include <gio/gio.h>
 
-#define TYPE_SYSROOT   (sysroot_get_type ())
-#define SYSROOT(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), TYPE_SYSROOT, Sysroot))
-#define IS_SYSROOT(o)  (G_TYPE_CHECK_INSTANCE_TYPE ((o), TYPE_SYSROOT))
+#include "rpm-ostreed-generated.h"
 
-#define SYSROOT_DEFAULT_PATH "/"
+#include <stdint.h>
+#include <string.h>
 
-GType             sysroot_get_type                  (void) G_GNUC_CONST;
+struct _RpmostreedDaemon;
+typedef struct _RpmostreedDaemon RpmostreedDaemon;
 
-Sysroot *         sysroot_get                       (void);
+struct _RpmostreedSysroot;
+typedef struct _RpmostreedSysroot RpmostreedSysroot;
 
-gchar *           sysroot_get_sysroot_path          (Sysroot *self);
+struct _RpmostreedOS;
+typedef struct _RpmostreedOS RpmostreedOS;
 
-gboolean          sysroot_populate                  (Sysroot *self,
-                                                     GError **error);
+struct _RpmostreedTransaction;
+typedef struct _RpmostreedTransaction RpmostreedTransaction;
 
-void              sysroot_emit_update               (Sysroot *self,
-                                                     OstreeSysroot *ot_sysroot);
+struct _RpmostreedTransactionMonitor;
+typedef struct _RpmostreedTransactionMonitor RpmostreedTransactionMonitor;

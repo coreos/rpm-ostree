@@ -16,8 +16,11 @@
 * along with this program; if not, write to the Free Software
 * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 */
+
 #include "config.h"
-#include "daemon.h"
+
+#include "rpmostreed-daemon.h"
+
 #include <glib/gi18n.h>
 #include <glib-unix.h>
 #include <gio/gio.h>
@@ -37,10 +40,10 @@ static GOptionEntry opt_entries[] =
   {NULL }
 };
 
-static Daemon *rpm_ostree_daemon = NULL;
+static RpmostreedDaemon *rpm_ostree_daemon = NULL;
 
 static void
-on_close (Daemon *daemon, gpointer data)
+on_close (RpmostreedDaemon *daemon, gpointer data)
 {
   g_main_loop_quit (loop);
 }
@@ -51,7 +54,8 @@ start_daemon (GDBusConnection *connection,
 {
   GError *local_error = NULL;
 
-  rpm_ostree_daemon = g_initable_new (TYPE_DAEMON, NULL, &local_error,
+  rpm_ostree_daemon = g_initable_new (RPMOSTREED_TYPE_DAEMON,
+                                      NULL, &local_error,
                                       "connection", connection,
                                       "sysroot-path", opt_sysroot,
                                       "on-message-bus", on_messsage_bus,
@@ -63,7 +67,7 @@ start_daemon (GDBusConnection *connection,
       g_assert_not_reached ();
     }
 
-  daemon_hold (rpm_ostree_daemon);
+  rpmostreed_daemon_hold (rpm_ostree_daemon);
 
   g_signal_connect (rpm_ostree_daemon, "finished",
                     G_CALLBACK (on_close), NULL);
@@ -102,7 +106,7 @@ on_name_lost (GDBusConnection *connection,
     }
   else
     {
-      daemon_release (rpm_ostree_daemon);
+      rpmostreed_daemon_release (rpm_ostree_daemon);
     }
 }
 

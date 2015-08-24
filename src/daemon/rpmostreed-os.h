@@ -18,14 +18,13 @@
 
 #pragma once
 
-#include "types.h"
+#include "rpmostreed-types.h"
 
-#define TYPE_OSSTUB   (osstub_get_type ())
-#define OSSTUB(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), TYPE_OSSTUB, OSStub))
-#define IS_OSSTUB(o)  (G_TYPE_CHECK_INSTANCE_TYPE ((o), TYPE_OSSTUB))
+#define RPMOSTREED_TYPE_OS   (rpmostreed_os_get_type ())
+#define RPMOSTREED_OS(o)     (G_TYPE_CHECK_INSTANCE_CAST ((o), RPMOSTREED_TYPE_OS, RpmostreedOS))
+#define RPMOSTREED_IS_OS(o)  (G_TYPE_CHECK_INSTANCE_TYPE ((o), RPMOSTREED_TYPE_OS))
 
-GType             osstub_get_type                  (void) G_GNUC_CONST;
-RPMOSTreeOS *     osstub_new                       (OstreeSysroot *sysroot,
+GType             rpmostreed_os_get_type           (void) G_GNUC_CONST;
+RPMOSTreeOS *     rpmostreed_os_new                (OstreeSysroot *sysroot,
                                                     const char *name,
-                                                    TransactionMonitor *monitor);
-OstreeSysroot *   osstub_ref_sysroot               (OSStub *self);
+                                                    RpmostreedTransactionMonitor *monitor);
