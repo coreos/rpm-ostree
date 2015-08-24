@@ -25,7 +25,6 @@
 #include "os.h"
 #include "utils.h"
 #include "deployment-utils.h"
-#include "auth.h"
 #include "errors.h"
 #include "transaction.h"
 #include "transaction-monitor.h"
@@ -564,8 +563,7 @@ sysroot_constructed (GObject *object)
   Sysroot *self = SYSROOT (object);
   GError *local_error = NULL;
 
-  g_signal_connect (RPMOSTREE_SYSROOT(self), "g-authorize-method",
-                    G_CALLBACK (auth_check_root_or_access_denied), NULL);
+  /* TODO Integrate with PolicyKit via the "g-authorize-method" signal. */
 
   g_object_bind_property_full (self->transaction_monitor,
                                "active-transaction",

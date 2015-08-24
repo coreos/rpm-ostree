@@ -27,7 +27,6 @@
 #include "rpmostree-package-variants.h"
 #include "types.h"
 #include "errors.h"
-#include "auth.h"
 #include "os.h"
 #include "utils.h"
 #include "transaction.h"
@@ -126,8 +125,8 @@ static void
 osstub_constructed (GObject *object)
 {
   OSStub *self = OSSTUB (object);
-  g_signal_connect (RPMOSTREE_OS(self), "g-authorize-method",
-    G_CALLBACK (auth_check_root_or_access_denied), NULL);
+
+  /* TODO Integrate with PolicyKit via the "g-authorize-method" signal. */
 
   self->signal_id = g_signal_connect (sysroot_get (), "sysroot-updated",
                                       G_CALLBACK (sysroot_changed), self);

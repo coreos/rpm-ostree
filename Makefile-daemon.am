@@ -27,8 +27,6 @@ librpmostreed_la_SOURCES = \
 	src/daemon/sysroot.c \
 	src/daemon/errors.h \
 	src/daemon/errors.c \
-	src/daemon/auth.h \
-	src/daemon/auth.c \
 	src/daemon/deployment-utils.h \
 	src/daemon/deployment-utils.c \
 	src/daemon/transaction.h \
