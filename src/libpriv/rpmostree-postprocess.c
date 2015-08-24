@@ -67,7 +67,7 @@ run_sync_in_root (GFile        *yumroot,
 {
   gboolean ret = FALSE;
   const char *yumroot_path = gs_file_get_path_cached (yumroot);
-  pid_t child = glnx_libcontainer_run_in_root (yumroot_path, binpath, child_argv);
+  pid_t child = glnx_libcontainer_run_chroot_private (yumroot_path, binpath, child_argv);
 
   if (child == -1)
     {
