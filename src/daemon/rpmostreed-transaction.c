@@ -35,8 +35,6 @@ struct _RpmostreedTransactionPrivate {
   GDBusServer *server;
   GDBusConnection *peer_connection;
 
-  gboolean started;
-
   guint watch_id;
 };
 
@@ -409,6 +407,10 @@ transaction_constructed (GObject *object)
       /* Initialize D-Bus properties. */
       rpmostree_transaction_set_active (RPMOSTREE_TRANSACTION (self), TRUE);
 
+      /* Watch the sender's bus name until the transaction is started.
+       * This guards against a process initiating a transaction but then
+       * terminating before calling Start().  If the bus name vanishes
+       * during this time, we abort the transaction. */
       priv->watch_id = g_bus_watch_name_on_connection (connection,
                                                        sender,
                                                        G_BUS_NAME_WATCHER_FLAGS_NONE,
@@ -505,20 +507,17 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (transaction);
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
-  if (priv->started)
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             RPM_OSTREED_ERROR,
-                                             RPM_OSTREED_ERROR_FAILED,
-                                             "Transaction has already started");
-    }
-  else
+  /* The bus name watch ID doubles as a "not-yet-started" flag.
+   * Once started the transaction proceeds independently of the
+   * initiating process whose bus name we were watching. */
+  if (priv->watch_id > 0)
     {
       GTask *task;
 
       g_debug ("%s (%p): Started", G_OBJECT_TYPE_NAME (self), self);
 
-      priv->started = TRUE;
+      g_bus_unwatch_name (priv->watch_id);
+      priv->watch_id = 0;
 
       task = g_task_new (transaction,
                          priv->cancellable,
@@ -528,6 +527,13 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
       g_object_unref (task);
 
       rpmostree_transaction_complete_start (transaction, invocation);
+    }
+  else
+    {
+      g_dbus_method_invocation_return_error (invocation,
+                                             RPM_OSTREED_ERROR,
+                                             RPM_OSTREED_ERROR_FAILED,
+                                             "Transaction has already started");
     }
 
   return TRUE;
