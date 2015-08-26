@@ -93,22 +93,8 @@ transaction_monitor_notify_active_cb (RPMOSTreeTransaction *transaction,
 }
 
 static void
-transaction_monitor_cancelled_cb (RPMOSTreeTransaction *transaction,
-                                  RpmostreedTransactionMonitor *monitor)
-{
-  transaction_monitor_remove_transaction (monitor, transaction);
-}
-
-static void
 transaction_monitor_closed_cb (RPMOSTreeTransaction *transaction,
                                RpmostreedTransactionMonitor *monitor)
-{
-  transaction_monitor_remove_transaction (monitor, transaction);
-}
-
-static void
-transaction_monitor_owner_vanished_cb (RPMOSTreeTransaction *transaction,
-                                       RpmostreedTransactionMonitor *monitor)
 {
   transaction_monitor_remove_transaction (monitor, transaction);
 }
@@ -186,16 +172,8 @@ rpmostreed_transaction_monitor_add (RpmostreedTransactionMonitor *monitor,
                            G_CALLBACK (transaction_monitor_notify_active_cb),
                            monitor, 0);
 
-  g_signal_connect_object (transaction, "cancelled",
-                           G_CALLBACK (transaction_monitor_cancelled_cb),
-                           monitor, 0);
-
   g_signal_connect_object (transaction, "closed",
                            G_CALLBACK (transaction_monitor_closed_cb),
-                           monitor, 0);
-
-  g_signal_connect_object (transaction, "owner-vanished",
-                           G_CALLBACK (transaction_monitor_owner_vanished_cb),
                            monitor, 0);
 
   g_queue_push_head (monitor->transactions, g_object_ref (transaction));
@@ -214,9 +192,9 @@ rpmostreed_transaction_monitor_ref_active_transaction (RpmostreedTransactionMoni
 
   if (transaction != NULL)
     {
-      /* An "inactive" transaction is waiting to be Finish()'ed by its
-       * client, but it doesn't block other transactions from starting. */
-      if (rpmostree_transaction_get_active (RPMOSTREE_TRANSACTION (transaction)))
+      /* An "inactive" transaction has completed its task
+       * and does not block other transactions from starting. */
+      if (rpmostreed_transaction_get_active (transaction))
         g_object_ref (transaction);
       else
         transaction = NULL;

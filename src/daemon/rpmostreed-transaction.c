@@ -33,21 +33,23 @@ struct _RpmostreedTransactionPrivate {
   OstreeSysroot *sysroot;
 
   GDBusServer *server;
-  GDBusConnection *peer_connection;
+  GHashTable *peer_connections;
+
+  /* For emitting Finished signals to late connections. */
+  GVariant *finished_params;
 
   guint watch_id;
 };
 
 enum {
   PROP_0,
+  PROP_ACTIVE,
   PROP_INVOCATION,
   PROP_SYSROOT
 };
 
 enum {
-  CANCELLED,
   CLOSED,
-  OWNER_VANISHED,
   LAST_SIGNAL
 };
 
@@ -77,15 +79,33 @@ rpmostreed_transaction_get_private (RpmostreedTransaction *self)
 }
 
 static void
+transaction_maybe_emit_closed (RpmostreedTransaction *self)
+{
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
+
+  if (rpmostreed_transaction_get_active (self))
+    return;
+
+  if (g_hash_table_size (priv->peer_connections) > 0)
+    return;
+
+  g_signal_emit (self, signals[CLOSED], 0);
+}
+
+static void
 transaction_connection_closed_cb (GDBusConnection *connection,
                                   gboolean remote_peer_vanished,
                                   GError *error,
                                   RpmostreedTransaction *self)
 {
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
+
   g_debug ("%s (%p): Client disconnected",
            G_OBJECT_TYPE_NAME (self), self);
 
-  g_signal_emit (self, signals[CLOSED], 0);
+  g_hash_table_remove (priv->peer_connections, connection);
+
+  transaction_maybe_emit_closed (self);
 }
 
 static gboolean
@@ -95,9 +115,6 @@ transaction_new_connection_cb (GDBusServer *server,
 {
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
   GError *local_error = NULL;
-
-  if (priv->peer_connection != NULL)
-    return FALSE;
 
   g_dbus_interface_skeleton_export (G_DBUS_INTERFACE_SKELETON (self),
                                     connection, "/", &local_error);
@@ -114,7 +131,7 @@ transaction_new_connection_cb (GDBusServer *server,
                            G_CALLBACK (transaction_connection_closed_cb),
                            self, 0);
 
-  priv->peer_connection = g_object_ref (connection);
+  g_hash_table_add (priv->peer_connections, g_object_ref (connection));
 
   g_debug ("%s (%p): Client connected",
            G_OBJECT_TYPE_NAME (self), self);
@@ -137,7 +154,7 @@ transaction_owner_vanished_cb (GDBusConnection *connection,
 
       /* Emit the signal AFTER unwatching the bus name, since this
        * may finalize the transaction and invalidate the watch_id. */
-      g_signal_emit (self, signals[OWNER_VANISHED], 0);
+      g_signal_emit (self, signals[CLOSED], 0);
     }
 }
 
@@ -235,9 +252,6 @@ transaction_gpg_verify_result_cb (OstreeRepo *repo,
   guint n, i;
   GVariantBuilder builder;
 
-  if (!rpmostree_transaction_get_active (transaction))
-    return;
-
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("av"));
 
   n = ostree_gpg_verify_result_count_all (result);
@@ -305,10 +319,17 @@ transaction_execute_done_cb (GObject *source_object,
            success ? "" : error_message,
            success ? "" : ")");
 
-  rpmostree_transaction_set_active (RPMOSTREE_TRANSACTION (self), FALSE);
-
   rpmostree_transaction_emit_finished (RPMOSTREE_TRANSACTION (self),
                                        success, error_message);
+
+  /* Stash the Finished signal parameters in case we need
+   * to emit the signal again on subsequent new connections. */
+  priv->finished_params = g_variant_new ("(bs)", success, error_message);
+  g_variant_ref_sink (priv->finished_params);
+
+  g_object_notify (G_OBJECT (self), "active");
+
+  transaction_maybe_emit_closed (self);
 }
 
 static void
@@ -365,11 +386,14 @@ transaction_dispose (GObject *object)
   if (priv->sysroot != NULL)
     ostree_sysroot_unlock (priv->sysroot);
 
+  g_hash_table_remove_all (priv->peer_connections);
+
   g_clear_object (&priv->invocation);
   g_clear_object (&priv->cancellable);
   g_clear_object (&priv->sysroot);
   g_clear_object (&priv->server);
-  g_clear_object (&priv->peer_connection);
+
+  g_clear_pointer (&priv->finished_params, (GDestroyNotify) g_variant_unref);
 
   G_OBJECT_CLASS (rpmostreed_transaction_parent_class)->dispose (object);
 }
@@ -384,6 +408,8 @@ transaction_finalize (GObject *object)
 
   if (priv->watch_id > 0)
     g_bus_unwatch_name (priv->watch_id);
+
+  g_hash_table_destroy (priv->peer_connections);
 
   G_OBJECT_CLASS (rpmostreed_transaction_parent_class)->finalize (object);
 }
@@ -403,9 +429,6 @@ transaction_constructed (GObject *object)
 
       connection = g_dbus_method_invocation_get_connection (priv->invocation);
       sender = g_dbus_method_invocation_get_sender (priv->invocation);
-
-      /* Initialize D-Bus properties. */
-      rpmostree_transaction_set_active (RPMOSTREE_TRANSACTION (self), TRUE);
 
       /* Watch the sender's bus name until the transaction is started.
        * This guards against a process initiating a transaction but then
@@ -488,13 +511,10 @@ transaction_handle_cancel (RPMOSTreeTransaction *transaction,
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (transaction);
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
 
-  if (priv->cancellable == NULL)
-    return FALSE;
-
   g_debug ("%s (%p): Cancelled", G_OBJECT_TYPE_NAME (self), self);
 
   g_cancellable_cancel (priv->cancellable);
-  g_signal_emit (transaction, signals[CANCELLED], 0);
+
   rpmostree_transaction_complete_cancel (transaction, invocation);
 
   return TRUE;
@@ -532,6 +552,34 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
 
   rpmostree_transaction_complete_start (transaction, invocation, started);
 
+  /* If the transaction is already finished, emit the
+   * Finished signal again but only on this connection. */
+  if (priv->finished_params != NULL)
+    {
+      GDBusConnection *connection;
+      const char *object_path;
+      const char *interface_name;
+      GError *local_error = NULL;
+
+      connection = g_dbus_method_invocation_get_connection (invocation);
+      object_path = g_dbus_method_invocation_get_object_path (invocation);
+      interface_name = g_dbus_method_invocation_get_interface_name (invocation);
+
+      g_dbus_connection_emit_signal (connection,
+                                     NULL,
+                                     object_path,
+                                     interface_name,
+                                     "Finished",
+                                     priv->finished_params,
+                                     &local_error);
+
+      if (local_error != NULL)
+        {
+          g_critical ("%s", local_error->message);
+          g_clear_error (&local_error);
+        }
+    }
+
   return TRUE;
 }
 
@@ -548,6 +596,15 @@ rpmostreed_transaction_class_init (RpmostreedTransactionClass *class)
   object_class->dispose = transaction_dispose;
   object_class->finalize = transaction_finalize;
   object_class->constructed = transaction_constructed;
+
+  g_object_class_install_property (object_class,
+                                   PROP_ACTIVE,
+                                   g_param_spec_boolean ("active",
+                                                         "Active",
+                                                         "Whether the transaction is active (unfinished)",
+                                                         TRUE,
+                                                         G_PARAM_READABLE |
+                                                         G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property (object_class,
                                    PROP_INVOCATION,
@@ -569,23 +626,11 @@ rpmostreed_transaction_class_init (RpmostreedTransactionClass *class)
                                                         G_PARAM_CONSTRUCT_ONLY |
                                                         G_PARAM_STATIC_STRINGS));
 
-  signals[CANCELLED] = g_signal_new ("cancelled",
-                                     RPMOSTREED_TYPE_TRANSACTION,
-                                     G_SIGNAL_RUN_LAST,
-                                     0, NULL, NULL, NULL,
-                                     G_TYPE_NONE, 0);
-
   signals[CLOSED] = g_signal_new ("closed",
                                   RPMOSTREED_TYPE_TRANSACTION,
                                   G_SIGNAL_RUN_LAST,
                                   0, NULL, NULL, NULL,
                                   G_TYPE_NONE, 0);
-
-  signals[OWNER_VANISHED] = g_signal_new ("owner-vanished",
-                                          RPMOSTREED_TYPE_TRANSACTION,
-                                          G_SIGNAL_RUN_LAST,
-                                          0, NULL, NULL, NULL,
-                                          G_TYPE_NONE, 0);
 }
 
 static void
@@ -607,6 +652,23 @@ rpmostreed_transaction_init (RpmostreedTransaction *self)
   self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
                                             RPMOSTREED_TYPE_TRANSACTION,
                                             RpmostreedTransactionPrivate);
+
+  self->priv->peer_connections = g_hash_table_new_full (g_direct_hash,
+                                                        g_direct_equal,
+                                                        g_object_unref,
+                                                        NULL);
+}
+
+gboolean
+rpmostreed_transaction_get_active (RpmostreedTransaction *transaction)
+{
+  RpmostreedTransactionPrivate *priv;
+
+  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), FALSE);
+
+  priv = rpmostreed_transaction_get_private (transaction);
+
+  return (priv->finished_params == NULL);
 }
 
 OstreeSysroot *
