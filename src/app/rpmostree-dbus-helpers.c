@@ -489,6 +489,7 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
   gint cancel_handler;
   gulong signal_handler = 0;
   gboolean success = FALSE;
+  gboolean just_started = FALSE;
 
   connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
 
@@ -544,9 +545,20 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
 
   /* Tell the server we're ready to receive signals. */
   if (!rpmostree_transaction_call_start_sync (transaction,
+                                              &just_started,
                                               cancellable,
                                               error))
     goto out;
+
+  /* FIXME Use the 'just_started' flag to determine whether to print
+   *       a message about reattaching to an in-progress transaction,
+   *       like:
+   *
+   *       Existing upgrade in progress, reattaching.  Control-C to cancel.
+   *
+   *       But that requires having a printable description of the
+   *       operation.  Maybe just add a string arg to this function?
+   */
 
   g_main_loop_run (tp->loop);
 

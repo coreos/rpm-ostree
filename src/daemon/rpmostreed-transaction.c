@@ -506,6 +506,7 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
 {
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (transaction);
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
+  gboolean started = FALSE;
 
   /* The bus name watch ID doubles as a "not-yet-started" flag.
    * Once started the transaction proceeds independently of the
@@ -513,6 +514,8 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
   if (priv->watch_id > 0)
     {
       GTask *task;
+
+      started = TRUE;
 
       g_debug ("%s (%p): Started", G_OBJECT_TYPE_NAME (self), self);
 
@@ -525,16 +528,9 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
                          NULL);
       g_task_run_in_thread (task, transaction_execute_thread);
       g_object_unref (task);
+    }
 
-      rpmostree_transaction_complete_start (transaction, invocation);
-    }
-  else
-    {
-      g_dbus_method_invocation_return_error (invocation,
-                                             RPM_OSTREED_ERROR,
-                                             RPM_OSTREED_ERROR_FAILED,
-                                             "Transaction has already started");
-    }
+  rpmostree_transaction_complete_start (transaction, invocation, started);
 
   return TRUE;
 }

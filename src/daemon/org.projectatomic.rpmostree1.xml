@@ -106,8 +106,13 @@
     <!-- Yes, we can. -->
     <method name="Cancel"/>
 
-    <!-- For owner to call when ready to receive signals -->
-    <method name="Start"/>
+    <!-- For a client to call when ready to receive signals.
+         The return boolean indicates whether the transaction was
+         started by this method call (true) or was already started
+         by another client (false). -->
+    <method name="Start">
+      <arg type="b" name="started" direction="out"/>
+    </method>
 
     <signal name="Finished">
       <arg name="success" type="b" direction="out"/>
