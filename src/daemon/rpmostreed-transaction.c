@@ -726,6 +726,31 @@ rpmostreed_transaction_emit_message_printf (RpmostreedTransaction *transaction,
                                       formatted_message);
 }
 
+gboolean
+rpmostreed_transaction_is_compatible (RpmostreedTransaction *transaction,
+                                      GDBusMethodInvocation *invocation)
+{
+  RpmostreedTransactionPrivate *priv;
+  const char *method_name_a;
+  const char *method_name_b;
+  GVariant *parameters_a;
+  GVariant *parameters_b;
+
+  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), FALSE);
+  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), FALSE);
+
+  priv = rpmostreed_transaction_get_private (transaction);
+
+  method_name_a = g_dbus_method_invocation_get_method_name (priv->invocation);
+  method_name_b = g_dbus_method_invocation_get_method_name (invocation);
+
+  parameters_a = g_dbus_method_invocation_get_parameters (priv->invocation);
+  parameters_b = g_dbus_method_invocation_get_parameters (invocation);
+
+  return g_str_equal (method_name_a, method_name_b) &&
+         g_variant_equal (parameters_a, parameters_b);
+}
+
 void
 rpmostreed_transaction_connect_download_progress (RpmostreedTransaction *transaction,
                                                   OstreeAsyncProgress *progress)

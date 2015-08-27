@@ -51,6 +51,8 @@ const char *    rpmostreed_transaction_get_client_address  (RpmostreedTransactio
 void            rpmostreed_transaction_emit_message_printf (RpmostreedTransaction *transaction,
                                                             const char *format,
                                                             ...) G_GNUC_PRINTF (2, 3);
+gboolean        rpmostreed_transaction_is_compatible       (RpmostreedTransaction *transaction,
+                                                            GDBusMethodInvocation *invocation);
 void            rpmostreed_transaction_connect_download_progress
                                                            (RpmostreedTransaction *transaction,
                                                             OstreeAsyncProgress *progress);

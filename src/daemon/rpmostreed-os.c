@@ -415,10 +415,19 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
-  const char *client_address;
   const char *osname;
   const char *sysroot_path;
   GError *local_error = NULL;
+
+  /* If a compatible transaction is in progress, share its bus address. */
+  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
+  if (transaction != NULL)
+    {
+      if (rpmostreed_transaction_is_compatible (transaction, invocation))
+        goto out;
+
+      g_clear_object (&transaction);
+    }
 
   cancellable = g_cancellable_new ();
 
@@ -444,12 +453,17 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
 
   rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
 
-  client_address = rpmostreed_transaction_get_client_address (transaction);
-  rpmostree_os_complete_download_update_rpm_diff (interface, invocation, client_address);
-
 out:
   if (local_error != NULL)
-    g_dbus_method_invocation_take_error (invocation, local_error);
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address;
+      client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_download_update_rpm_diff (interface, invocation, client_address);
+    }
 
   return TRUE;
 }
@@ -465,10 +479,19 @@ os_handle_upgrade (RPMOSTreeOS *interface,
   glnx_unref_object GCancellable *cancellable = NULL;
   GVariantDict options_dict;
   gboolean opt_allow_downgrade = FALSE;
-  const char *client_address;
   const char *osname;
   const char *sysroot_path;
   GError *local_error = NULL;
+
+  /* If a compatible transaction is in progress, share its bus address. */
+  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
+  if (transaction != NULL)
+    {
+      if (rpmostreed_transaction_is_compatible (transaction, invocation))
+        goto out;
+
+      g_clear_object (&transaction);
+    }
 
   cancellable = g_cancellable_new ();
 
@@ -506,12 +529,17 @@ os_handle_upgrade (RPMOSTreeOS *interface,
 
   rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
 
-  client_address = rpmostreed_transaction_get_client_address (transaction);
-  rpmostree_os_complete_upgrade (interface, invocation, client_address);
-
 out:
   if (local_error != NULL)
-    g_dbus_method_invocation_take_error (invocation, local_error);
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address;
+      client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_upgrade (interface, invocation, client_address);
+    }
 
   return TRUE;
 }
@@ -524,10 +552,19 @@ os_handle_rollback (RPMOSTreeOS *interface,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
-  const char *client_address;
   const char *osname;
   const char *sysroot_path;
   GError *local_error = NULL;
+
+  /* If a compatible transaction is in progress, share its bus address. */
+  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
+  if (transaction != NULL)
+    {
+      if (rpmostreed_transaction_is_compatible (transaction, invocation))
+        goto out;
+
+      g_clear_object (&transaction);
+    }
 
   cancellable = g_cancellable_new ();
 
@@ -552,12 +589,17 @@ os_handle_rollback (RPMOSTreeOS *interface,
 
   rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
 
-  client_address = rpmostreed_transaction_get_client_address (transaction);
-  rpmostree_os_complete_rollback (interface, invocation, client_address);
-
 out:
   if (local_error != NULL)
-    g_dbus_method_invocation_take_error (invocation, local_error);
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address;
+      client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_rollback (interface, invocation, client_address);
+    }
 
   return TRUE;
 }
@@ -570,10 +612,19 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
-  const char *client_address;
   const char *osname;
   const char *sysroot_path;
   GError *local_error = NULL;
+
+  /* If a compatible transaction is in progress, share its bus address. */
+  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
+  if (transaction != NULL)
+    {
+      if (rpmostreed_transaction_is_compatible (transaction, invocation))
+        goto out;
+
+      g_clear_object (&transaction);
+    }
 
   cancellable = g_cancellable_new ();
 
@@ -598,12 +649,17 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
 
   rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
 
-  client_address = rpmostreed_transaction_get_client_address (transaction);
-  rpmostree_os_complete_clear_rollback_target (interface, invocation, client_address);
-
 out:
   if (local_error != NULL)
-    g_dbus_method_invocation_take_error (invocation, local_error);
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address;
+      client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_clear_rollback_target (interface, invocation, client_address);
+    }
 
   return TRUE;
 }
@@ -622,10 +678,19 @@ os_handle_rebase (RPMOSTreeOS *interface,
   glnx_unref_object GCancellable *cancellable = NULL;
   GVariantDict options_dict;
   gboolean opt_skip_purge = FALSE;
-  const char *client_address;
   const char *osname;
   const char *sysroot_path;
   GError *local_error = NULL;
+
+  /* If a compatible transaction is in progress, share its bus address. */
+  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
+  if (transaction != NULL)
+    {
+      if (rpmostreed_transaction_is_compatible (transaction, invocation))
+        goto out;
+
+      g_clear_object (&transaction);
+    }
 
   cancellable = g_cancellable_new ();
 
@@ -663,12 +728,17 @@ os_handle_rebase (RPMOSTreeOS *interface,
 
   rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
 
-  client_address = rpmostreed_transaction_get_client_address (transaction);
-  rpmostree_os_complete_rebase (interface, invocation, client_address);
-
 out:
   if (local_error != NULL)
-    g_dbus_method_invocation_take_error (invocation, local_error);
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address;
+      client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_rebase (interface, invocation, client_address);
+    }
 
   return TRUE;
 }
@@ -706,10 +776,19 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
-  const char *client_address;
   const char *osname;
   const char *sysroot_path;
   GError *local_error = NULL;
+
+  /* If a compatible transaction is in progress, share its bus address. */
+  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
+  if (transaction != NULL)
+    {
+      if (rpmostreed_transaction_is_compatible (transaction, invocation))
+        goto out;
+
+      g_clear_object (&transaction);
+    }
 
   cancellable = g_cancellable_new ();
 
@@ -735,12 +814,17 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
 
   rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
 
-  client_address = rpmostreed_transaction_get_client_address (transaction);
-  rpmostree_os_complete_download_rebase_rpm_diff (interface, invocation, client_address);
-
 out:
   if (local_error != NULL)
-    g_dbus_method_invocation_take_error (invocation, local_error);
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address;
+      client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_download_rebase_rpm_diff (interface, invocation, client_address);
+    }
 
   return TRUE;
 }
