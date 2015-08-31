@@ -38,7 +38,7 @@ The %{name}-devel package includes the header files for the %{name} library.
 
 %build
 env NOCONFIGURE=1 ./autogen.sh
-%configure --disable-silent-rules --enable-gtk-doc --enable-patched-hawkey-and-libsolv --enable-usrbinatomic
+%configure --disable-silent-rules --enable-gtk-doc
 make %{?_smp_mflags}
 
 %install
@@ -47,7 +47,6 @@ find $RPM_BUILD_ROOT -name '*.la' -delete
 
 %files
 %doc COPYING README.md
-%{_bindir}/atomic
 %{_bindir}/rpm-ostree
 %{_libdir}/%{name}/
 %{_mandir}/man1/*
