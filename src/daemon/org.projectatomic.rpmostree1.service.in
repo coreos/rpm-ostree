@@ -2,3 +2,4 @@
 Name=org.projectatomic.rpmostree1
 Exec=@libexecdir@/rpm-ostreed
 User=root
+SystemdService=rpm-ostreed.service
