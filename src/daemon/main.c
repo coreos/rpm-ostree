@@ -43,12 +43,6 @@ static GOptionEntry opt_entries[] =
 static RpmostreedDaemon *rpm_ostree_daemon = NULL;
 
 static void
-on_close (RpmostreedDaemon *daemon, gpointer data)
-{
-  g_main_loop_quit (loop);
-}
-
-static void
 start_daemon (GDBusConnection *connection,
               gboolean on_messsage_bus)
 {
@@ -66,11 +60,6 @@ start_daemon (GDBusConnection *connection,
       g_error ("%s", local_error->message);
       g_assert_not_reached ();
     }
-
-  rpmostreed_daemon_hold (rpm_ostree_daemon);
-
-  g_signal_connect (rpm_ostree_daemon, "finished",
-                    G_CALLBACK (on_close), NULL);
 }
 
 static void
@@ -79,8 +68,9 @@ on_bus_acquired (GDBusConnection *connection,
                  gpointer user_data)
 {
   g_debug ("Connected to the system bus");
-}
 
+  start_daemon (connection, TRUE);
+}
 
 static void
 on_name_acquired (GDBusConnection *connection,
@@ -88,8 +78,6 @@ on_name_acquired (GDBusConnection *connection,
                   gpointer user_data)
 {
   g_debug ("Acquired the name %s on the system bus", name);
-
-  start_daemon (connection, TRUE);
 }
 
 static void
@@ -97,17 +85,6 @@ on_name_lost (GDBusConnection *connection,
               const char *name,
               gpointer user_data)
 {
-  g_critical ("Lost (or failed to acquire) the "
-              "name %s on the system bus", name);
-
-  if (rpm_ostree_daemon == NULL)
-    {
-      g_main_loop_quit (loop);
-    }
-  else
-    {
-      rpmostreed_daemon_release (rpm_ostree_daemon);
-    }
 }
 
 static void

@@ -33,13 +33,6 @@
  * Object holding all global state.
  */
 
-enum {
-  FINISHED,
-  NUM_SIGNALS
-};
-
-static guint signals[NUM_SIGNALS];
-
 typedef struct _RpmostreedDaemonClass RpmostreedDaemonClass;
 
 /**
@@ -274,12 +267,6 @@ rpmostreed_daemon_class_init (RpmostreedDaemonClass *klass)
                                                          G_PARAM_WRITABLE |
                                                          G_PARAM_CONSTRUCT_ONLY |
                                                          G_PARAM_STATIC_STRINGS));
-
-  signals[FINISHED] = g_signal_new ("finished",
-                                    RPMOSTREED_TYPE_DAEMON,
-                                    G_SIGNAL_RUN_LAST,
-                                    0, NULL, NULL, NULL,
-                                    G_TYPE_NONE, 0);
 }
 
 static void
@@ -298,21 +285,6 @@ rpmostreed_daemon_get (void)
 {
   g_assert (_daemon_instance);
   return _daemon_instance;
-}
-
-void
-rpmostreed_daemon_hold (RpmostreedDaemon *self)
-{
-  self->use_count++;
-}
-
-void
-rpmostreed_daemon_release (RpmostreedDaemon *self)
-{
-  self->use_count--;
-
-  if (self->use_count == 0)
-    g_signal_emit (self, signals[FINISHED], 0);
 }
 
 void
