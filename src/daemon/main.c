@@ -43,8 +43,7 @@ static GOptionEntry opt_entries[] =
 static RpmostreedDaemon *rpm_ostree_daemon = NULL;
 
 static void
-start_daemon (GDBusConnection *connection,
-              gboolean on_messsage_bus)
+start_daemon (GDBusConnection *connection)
 {
   GError *local_error = NULL;
 
@@ -52,7 +51,6 @@ start_daemon (GDBusConnection *connection,
                                       NULL, &local_error,
                                       "connection", connection,
                                       "sysroot-path", opt_sysroot,
-                                      "on-message-bus", on_messsage_bus,
                                       NULL);
 
   if (local_error != NULL)
@@ -69,7 +67,7 @@ on_bus_acquired (GDBusConnection *connection,
 {
   g_debug ("Connected to the system bus");
 
-  start_daemon (connection, TRUE);
+  start_daemon (connection);
 }
 
 static void
@@ -105,7 +103,7 @@ on_peer_acquired (GObject *source,
   else
     {
       g_debug ("connected to peer");
-      start_daemon (connection, FALSE);
+      start_daemon (connection);
     }
 }
 

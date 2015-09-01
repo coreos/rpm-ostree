@@ -71,8 +71,7 @@ enum
   PROP_0,
   PROP_CONNECTION,
   PROP_OBJECT_MANAGER,
-  PROP_SYSROOT_PATH,
-  PROP_ON_MESSAGE_BUS,
+  PROP_SYSROOT_PATH
 };
 
 static void rpmostreed_daemon_initable_iface_init (GInitableIface *iface);
@@ -150,9 +149,6 @@ daemon_set_property (GObject *object,
     case PROP_SYSROOT_PATH:
       g_assert (self->sysroot_path == NULL);
       self->sysroot_path = g_value_dup_string (value);
-      break;
-   case PROP_ON_MESSAGE_BUS:
-      self->on_message_bus = g_value_get_boolean (value);
       break;
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -257,16 +253,6 @@ rpmostreed_daemon_class_init (RpmostreedDaemonClass *klass)
                                                         G_PARAM_WRITABLE |
                                                         G_PARAM_CONSTRUCT_ONLY |
                                                         G_PARAM_STATIC_STRINGS));
-
-  g_object_class_install_property (gobject_class,
-                                   PROP_ON_MESSAGE_BUS,
-                                   g_param_spec_boolean ("on-message-bus",
-                                                         "On Message Bus",
-                                                         "Are we listining on the message bus",
-                                                         TRUE,
-                                                         G_PARAM_WRITABLE |
-                                                         G_PARAM_CONSTRUCT_ONLY |
-                                                         G_PARAM_STATIC_STRINGS));
 }
 
 static void
