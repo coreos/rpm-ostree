@@ -60,7 +60,20 @@ get_connection_for_path (gchar *sysroot,
     NULL
   };
 
-  if (!sysroot)
+  /* This is only intended for use by installed tests.
+   * Note that it disregards the 'sysroot' and 'force_peer' options
+   * and assumes the service activation command has been configured
+   * to use the desired system root path. */
+  if (g_getenv ("RPMOSTREE_USE_SESSION_BUS") != NULL)
+    {
+      if (sysroot != NULL)
+        g_warning ("RPMOSTREE_USE_SESSION_BUS set, ignoring --sysroot=%s", sysroot);
+
+      connection = g_bus_get_sync (G_BUS_TYPE_SESSION, cancellable, error);
+      goto out;
+    }
+
+  if (sysroot == NULL)
     sysroot = "/";
 
   if (g_strcmp0 ("/", sysroot) == 0 && force_peer == FALSE)

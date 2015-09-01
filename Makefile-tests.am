@@ -1,6 +1,7 @@
 include $(top_srcdir)/buildutil/glib-tap.mk
 
 CLEANFILES += \
+	tests/setup-session.sh \
 	tests/compose/yum/empty tests/compose/yum/repodata/repomd.xml \
 	tests/compose/test-repo.repo \
 	tests/compose/yum/repodata/*.bz2 \
@@ -31,6 +32,13 @@ installed_test_data = tests/libtest.sh \
 	tests/compose/test-repo.json \
 	tests/compose/test-repo-no-selinux-tag.json \
 	tests/compose/test-repo.repo.in \
+	$(NULL)
+
+tests/setup-session.sh: tests/setup-session.sh.in
+	cat $< | sed -e "s|[@]LIBEXECDIR[@]|$(libexecdir)|" > $@
+
+test_installed_extra_scripts = \
+	tests/setup-session.sh \
 	$(NULL)
 
 nobase_installed_test_DATA += $(shell find tests/compose/yum/ -type f) \

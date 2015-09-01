@@ -356,7 +356,17 @@ main (int argc,
 
   if (service_dbus_fd == -1)
     {
-      name_owner_id = g_bus_own_name (G_BUS_TYPE_SYSTEM,
+      GBusType bus_type;
+
+      /* To facilitate testing, use whichever message bus activated
+       * this process.  If the process was started directly, assume
+       * the system bus. */
+      if (g_getenv ("DBUS_STARTER_BUS_TYPE") != NULL)
+        bus_type = G_BUS_TYPE_STARTER;
+      else
+        bus_type = G_BUS_TYPE_SYSTEM;
+
+      name_owner_id = g_bus_own_name (bus_type,
                                       DBUS_NAME,
                                       G_BUS_NAME_OWNER_FLAGS_NONE,
                                       on_bus_acquired,

@@ -244,7 +244,7 @@ EOF
     ostree --repo=${test_tmpdir}/testos-repo fsck -q
 
     cd ${test_tmpdir}
-    mkdir sysroot
+    # sysroot dir already made by setup-session.sh
     ostree admin --sysroot=sysroot init-fs sysroot
     ostree admin --sysroot=sysroot os-init testos
 
