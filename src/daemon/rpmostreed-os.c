@@ -528,9 +528,7 @@ os_handle_upgrade (RPMOSTreeOS *interface,
   transaction = rpmostreed_transaction_new_upgrade (invocation,
                                                     ot_sysroot,
                                                     osname,
-                                                    NULL,   /* refspec */
                                                     opt_allow_downgrade,
-                                                    FALSE,  /* skip-purge */
                                                     cancellable,
                                                     &local_error);
 
@@ -730,14 +728,13 @@ os_handle_rebase (RPMOSTreeOS *interface,
 
   g_variant_dict_clear (&options_dict);
 
-  transaction = rpmostreed_transaction_new_upgrade (invocation,
-                                                    ot_sysroot,
-                                                    osname,
-                                                    arg_refspec,
-                                                    FALSE,  /* allow-downgrade */
-                                                    opt_skip_purge,
-                                                    cancellable,
-                                                    &local_error);
+  transaction = rpmostreed_transaction_new_rebase (invocation,
+                                                   ot_sysroot,
+                                                   osname,
+                                                   arg_refspec,
+                                                   opt_skip_purge,
+                                                   cancellable,
+                                                   &local_error);
 
   if (transaction == NULL)
     goto out;

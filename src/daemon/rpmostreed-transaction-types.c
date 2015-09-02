@@ -462,9 +462,7 @@ rpmostreed_transaction_new_clear_rollback (GDBusMethodInvocation *invocation,
 typedef struct {
   RpmostreedTransaction parent;
   char *osname;
-  char *refspec;
   gboolean allow_downgrade;
-  gboolean skip_purge;
 } UpgradeTransaction;
 
 typedef RpmostreedTransactionClass UpgradeTransactionClass;
@@ -482,7 +480,6 @@ upgrade_transaction_finalize (GObject *object)
 
   self = (UpgradeTransaction *) object;
   g_free (self->osname);
-  g_free (self->refspec);
 
   G_OBJECT_CLASS (upgrade_transaction_parent_class)->finalize (object);
 }
@@ -499,8 +496,6 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
   glnx_unref_object OstreeRepo *repo = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
 
-  g_autofree gchar *new_refspec = NULL;
-  g_autofree gchar *old_refspec = NULL;
   g_autofree gchar *origin_description = NULL;
 
   OstreeSysrootUpgraderPullFlags upgrader_pull_flags = 0;
@@ -525,15 +520,7 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     goto out;
 
-  if (self->refspec != NULL)
-    {
-      if (!change_upgrader_refspec (sysroot, upgrader,
-                                    self->refspec, cancellable,
-                                    &old_refspec, &new_refspec, error))
-        goto out;
-    }
-
-  if (self->allow_downgrade || new_refspec)
+  if (self->allow_downgrade)
     upgrader_pull_flags |= OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER;
 
   origin_description = ostree_sysroot_upgrader_get_origin_description (upgrader);
@@ -557,27 +544,6 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
     {
       if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
         goto out;
-
-      if (!self->skip_purge && old_refspec != NULL)
-        {
-          g_autofree gchar *remote = NULL;
-          g_autofree gchar *ref = NULL;
-
-          if (!ostree_parse_refspec (old_refspec, &remote, &ref, error))
-            goto out;
-
-          if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
-            goto out;
-
-          ostree_repo_transaction_set_ref (repo, remote, ref, NULL);
-
-          rpmostreed_transaction_emit_message_printf (transaction,
-                                                      "Deleting ref '%s'",
-                                                      old_refspec);
-
-          if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
-            goto out;
-        }
     }
   else
     {
@@ -614,9 +580,7 @@ RpmostreedTransaction *
 rpmostreed_transaction_new_upgrade (GDBusMethodInvocation *invocation,
                                     OstreeSysroot *sysroot,
                                     const char *osname,
-                                    const char *refspec,
                                     gboolean allow_downgrade,
-                                    gboolean skip_purge,
                                     GCancellable *cancellable,
                                     GError **error)
 {
@@ -635,8 +599,172 @@ rpmostreed_transaction_new_upgrade (GDBusMethodInvocation *invocation,
   if (self != NULL)
     {
       self->osname = g_strdup (osname);
-      self->refspec = g_strdup (refspec);
       self->allow_downgrade = allow_downgrade;
+    }
+
+  return (RpmostreedTransaction *) self;
+}
+
+/* ================================ Rebase ================================ */
+
+typedef struct {
+  RpmostreedTransaction parent;
+  char *osname;
+  char *refspec;
+  gboolean skip_purge;
+} RebaseTransaction;
+
+typedef RpmostreedTransactionClass RebaseTransactionClass;
+
+GType rebase_transaction_get_type (void);
+
+G_DEFINE_TYPE (RebaseTransaction,
+               rebase_transaction,
+               RPMOSTREED_TYPE_TRANSACTION)
+
+static void
+rebase_transaction_finalize (GObject *object)
+{
+  RebaseTransaction *self;
+
+  self = (RebaseTransaction *) object;
+  g_free (self->osname);
+  g_free (self->refspec);
+
+  G_OBJECT_CLASS (rebase_transaction_parent_class)->finalize (object);
+}
+
+static gboolean
+rebase_transaction_execute (RpmostreedTransaction *transaction,
+                            GCancellable *cancellable,
+                            GError **error)
+{
+  RebaseTransaction *self;
+  OstreeSysroot *sysroot;
+
+  glnx_unref_object OstreeSysrootUpgrader *upgrader = NULL;
+  glnx_unref_object OstreeRepo *repo = NULL;
+  glnx_unref_object OstreeAsyncProgress *progress = NULL;
+
+  g_autofree gchar *new_refspec = NULL;
+  g_autofree gchar *old_refspec = NULL;
+  g_autofree gchar *origin_description = NULL;
+
+  gboolean changed = FALSE;
+  gboolean ret = FALSE;
+
+  /* libostree iterates and calls quit on main loop
+   * so we need to run in our own context. */
+  GMainContext *m_context = g_main_context_new ();
+  g_main_context_push_thread_default (m_context);
+
+  self = (RebaseTransaction *) transaction;
+
+  sysroot = rpmostreed_transaction_get_sysroot (transaction);
+
+  upgrader = ostree_sysroot_upgrader_new_for_os (sysroot, self->osname,
+                                                 cancellable, error);
+  if (upgrader == NULL)
+    goto out;
+
+  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
+    goto out;
+
+  if (!change_upgrader_refspec (sysroot, upgrader,
+                                self->refspec, cancellable,
+                                &old_refspec, &new_refspec, error))
+    goto out;
+
+  progress = ostree_async_progress_new ();
+  rpmostreed_transaction_connect_download_progress (transaction, progress);
+  rpmostreed_transaction_connect_signature_progress (transaction, repo);
+
+  /* Always allow older; there's not going to be a chronological
+   * relationship necessarily. */
+  if (!ostree_sysroot_upgrader_pull (upgrader, 0,
+                                     OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER,
+                                     progress, &changed,
+                                     cancellable, error))
+    goto out;
+
+  rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+
+  if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+    goto out;
+
+  if (!self->skip_purge)
+    {
+      g_autofree gchar *remote = NULL;
+      g_autofree gchar *ref = NULL;
+
+      if (!ostree_parse_refspec (old_refspec, &remote, &ref, error))
+        goto out;
+
+      if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
+        goto out;
+
+      ostree_repo_transaction_set_ref (repo, remote, ref, NULL);
+
+      rpmostreed_transaction_emit_message_printf (transaction,
+                                                  "Deleting ref '%s'",
+                                                  old_refspec);
+
+      if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
+        goto out;
+    }
+
+  ret = TRUE;
+
+out:
+  /* Clean up context */
+  g_main_context_pop_thread_default (m_context);
+  g_main_context_unref (m_context);
+
+  return ret;
+}
+
+static void
+rebase_transaction_class_init (RebaseTransactionClass *class)
+{
+  GObjectClass *object_class;
+
+  object_class = G_OBJECT_CLASS (class);
+  object_class->finalize = rebase_transaction_finalize;
+
+  class->execute = rebase_transaction_execute;
+}
+
+static void
+rebase_transaction_init (RebaseTransaction *self)
+{
+}
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_rebase (GDBusMethodInvocation *invocation,
+                                   OstreeSysroot *sysroot,
+                                   const char *osname,
+                                   const char *refspec,
+                                   gboolean skip_purge,
+                                   GCancellable *cancellable,
+                                   GError **error)
+{
+  RebaseTransaction *self;
+
+  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
+  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+  g_return_val_if_fail (osname != NULL, NULL);
+  g_return_val_if_fail (refspec != NULL, NULL);
+
+  self = g_initable_new (rebase_transaction_get_type (),
+                         cancellable, error,
+                         "invocation", invocation,
+                         "sysroot", sysroot,
+                         NULL);
+
+  if (self != NULL)
+    {
+      self->osname = g_strdup (osname);
+      self->refspec = g_strdup (refspec);
       self->skip_purge = skip_purge;
     }
 
