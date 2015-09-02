@@ -31,8 +31,6 @@ GType               rpmostreed_sysroot_get_type         (void) G_GNUC_CONST;
 
 RpmostreedSysroot * rpmostreed_sysroot_get              (void);
 
-gchar *             rpmostreed_sysroot_get_sysroot_path (RpmostreedSysroot *self);
-
 gboolean            rpmostreed_sysroot_populate         (RpmostreedSysroot *self,
                                                          GError **error);
 

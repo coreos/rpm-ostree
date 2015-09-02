@@ -7,6 +7,9 @@
     <!-- The booted OSName -->
     <property name="Booted" type="o" access="read"/>
 
+    <!-- The system root path -->
+    <property name="Path" type="s" access="read"/>
+
     <!-- The values are (method-name, sender-name) -->
     <property name="ActiveTransaction" type="(ss)" access="read"/>
 

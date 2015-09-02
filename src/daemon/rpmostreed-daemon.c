@@ -187,7 +187,7 @@ rpmostreed_daemon_initable_init (GInitable *initable,
 
   path = rpmostreed_generate_object_path (BASE_DBUS_PATH, "Sysroot", NULL);
   self->sysroot = g_object_new (RPMOSTREED_TYPE_SYSROOT,
-                                "sysroot-path", self->sysroot_path,
+                                "path", self->sysroot_path,
                                 NULL);
 
   if (!rpmostreed_sysroot_populate (rpmostreed_sysroot_get (), error))

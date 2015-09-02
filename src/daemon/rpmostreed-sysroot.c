@@ -54,8 +54,6 @@ struct _RpmostreedSysroot {
 
   GCancellable *cancellable;
 
-  gchar *sysroot_path;
-
   OstreeSysroot *ot_sysroot;
   RpmostreedTransactionMonitor *transaction_monitor;
 
@@ -71,11 +69,6 @@ struct _RpmostreedSysroot {
 
 struct _RpmostreedSysrootClass {
   RPMOSTreeSysrootSkeletonClass parent_class;
-};
-
-enum {
-  PROP_0,
-  PROP_PATH,
 };
 
 enum {
@@ -305,12 +298,13 @@ _build_file (const char *first, ...)
 
 static gboolean
 handle_create_osname (RPMOSTreeSysroot *object,
-                     GDBusMethodInvocation *invocation,
-                     const gchar *osname)
+                      GDBusMethodInvocation *invocation,
+                      const gchar *osname)
 {
   g_autoptr(GFile) dir = NULL;
   g_autofree gchar *deploy_dir = NULL;
   g_autofree gchar *base_name = NULL;
+  const char *sysroot_path;
 
   GError *error = NULL;
   g_autofree gchar *dbus_path = NULL;
@@ -336,8 +330,8 @@ handle_create_osname (RPMOSTreeSysroot *object,
 
   /* TODO: The operations here are copied from ostree init-os
    * command, should be refactored into shared code */
-  deploy_dir = g_build_filename (self->sysroot_path,
-                                 "ostree", "deploy", osname, NULL);
+  sysroot_path = rpmostree_sysroot_get_path (object);
+  deploy_dir = g_build_filename (sysroot_path, "ostree", "deploy", osname, NULL);
 
   /* Ensure core subdirectories of /var exist, since we need them for
    * dracut generation, and the host will want them too.
@@ -526,8 +520,6 @@ sysroot_finalize (GObject *object)
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
   _sysroot_instance = NULL;
 
-  g_free (self->sysroot_path);
-
   g_hash_table_unref (self->os_interfaces);
 
   g_rw_lock_clear (&self->children_lock);
@@ -591,27 +583,6 @@ sysroot_constructed (GObject *object)
 }
 
 static void
-sysroot_set_property (GObject *object,
-                      guint prop_id,
-                      const GValue *value,
-                      GParamSpec *pspec)
-{
-  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
-
-  switch (prop_id)
-    {
-    case PROP_PATH:
-      g_assert (self->sysroot_path == NULL);
-      self->sysroot_path = g_value_dup_string (value);
-      break;
-    default:
-      G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
-      break;
-    }
-}
-
-
-static void
 rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
 {
   GObjectClass *gobject_class;
@@ -620,22 +591,6 @@ rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
   gobject_class->dispose = sysroot_dispose;
   gobject_class->finalize     = sysroot_finalize;
   gobject_class->constructed  = sysroot_constructed;
-  gobject_class->set_property = sysroot_set_property;
-
-  /**
-   * Sysroot:sysroot_path:
-   *
-   * The RpmostreedSysroot path
-   */
-  g_object_class_install_property (gobject_class,
-                                   PROP_PATH,
-                                   g_param_spec_string ("sysroot-path",
-                                                        NULL,
-                                                        NULL,
-                                                        NULL,
-                                                        G_PARAM_WRITABLE |
-                                                        G_PARAM_CONSTRUCT_ONLY |
-                                                        G_PARAM_STATIC_STRINGS));
 
   signals[UPDATED] = g_signal_new ("sysroot-updated",
                                    RPMOSTREED_TYPE_SYSROOT,
@@ -705,6 +660,7 @@ rpmostreed_sysroot_load_internals (RpmostreedSysroot *self,
   glnx_unref_object OstreeRepo *ot_repo = NULL;
   g_autoptr(GHashTable) seen = NULL;
   g_autofree gchar *os_path = NULL;
+  const char *sysroot_path;
   GDir *os_dir = NULL;
 
   GHashTableIter iter;
@@ -713,8 +669,9 @@ rpmostreed_sysroot_load_internals (RpmostreedSysroot *self,
 
   g_rw_lock_writer_lock (&self->children_lock);
 
-  os_path = g_build_filename (self->sysroot_path, "ostree",
-                              "deploy", NULL);
+  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (self));
+  os_path = g_build_filename (sysroot_path, "ostree", "deploy", NULL);
+
   seen = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   os_dir = g_dir_open (os_path, 0, error);
@@ -912,11 +869,15 @@ gboolean
 rpmostreed_sysroot_populate (RpmostreedSysroot *self,
                              GError **error)
 {
-  gboolean ret = FALSE;
   glnx_unref_object OstreeRepo *ot_repo = NULL;
+  const char *sysroot_path;
+  gboolean ret = FALSE;
+
   g_return_val_if_fail (self != NULL, FALSE);
 
-  if (!rpmostreed_load_sysroot_and_repo (self->sysroot_path,
+  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (self));
+
+  if (!rpmostreed_load_sysroot_and_repo (sysroot_path,
                                          NULL,
                                          &self->ot_sysroot,
                                          &ot_repo,
@@ -945,19 +906,6 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
 out:
   return ret;
 }
-
-/**
- * rpomstreed_sysroot_get_sysroot_path :
- *
- * Returns: The filesystem path for sysroot.
- * Do not free owned by sysroot
- */
-gchar *
-rpmostreed_sysroot_get_sysroot_path (RpmostreedSysroot *self)
-{
-  return self->sysroot_path;
-}
-
 
 /**
  * rpmostreed_sysroot_get:
