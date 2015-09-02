@@ -32,7 +32,6 @@
 #include "libgsystem.h"
 #include <libglnx.h>
 
-static char *opt_sysroot = "/";
 static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_allow_downgrade;
@@ -127,8 +126,9 @@ rpmostree_builtin_upgrade (int             argc,
       gs_unref_object OstreeSysroot *sysroot = NULL;
       gs_unref_object OstreeRepo *repo = NULL;
       gs_unref_object GFile *rpmdbdir = NULL;
-      gs_unref_object GFile *sysroot_path = NULL;
+      gs_unref_object GFile *sysroot_file = NULL;
       g_autofree char *origin_description = NULL;
+      const char *sysroot_path;
 
       _cleanup_rpmrev_ struct RpmRevisionData *rpmrev1 = NULL;
       _cleanup_rpmrev_ struct RpmRevisionData *rpmrev2 = NULL;
@@ -139,8 +139,9 @@ rpmostree_builtin_upgrade (int             argc,
       if (!rpmostree_os_get_has_cached_update_rpm_diff (os_proxy))
         goto out;
 
-      sysroot_path = g_file_new_for_path (opt_sysroot);
-      sysroot = ostree_sysroot_new (sysroot_path);
+      sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
+      sysroot_file = g_file_new_for_path (sysroot_path);
+      sysroot = ostree_sysroot_new (sysroot_file);
 
       if (!ostree_sysroot_load (sysroot, cancellable, error))
         goto out;
@@ -186,7 +187,11 @@ rpmostree_builtin_upgrade (int             argc,
         }
       else
         {
-          if (!rpmostree_print_treepkg_diff_from_sysroot_path (opt_sysroot,
+          const char *sysroot_path;
+
+          sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
+
+          if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                                cancellable,
                                                                error))
             goto out;

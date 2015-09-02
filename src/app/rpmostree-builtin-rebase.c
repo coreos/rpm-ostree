@@ -31,7 +31,6 @@
 #include "libgsystem.h"
 #include <libglnx.h>
 
-static char *opt_sysroot = "/";
 static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_skip_purge;
@@ -103,8 +102,12 @@ rpmostree_builtin_rebase (int             argc,
 
   if (!opt_reboot)
     {
+      const char *sysroot_path;
+
+      sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
+
       /* By request, doing this without dbus */
-      if (!rpmostree_print_treepkg_diff_from_sysroot_path (opt_sysroot,
+      if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
                                                            error))
         goto out;
