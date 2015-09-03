@@ -26,5 +26,6 @@
 
 GType             rpmostreed_os_get_type           (void) G_GNUC_CONST;
 RPMOSTreeOS *     rpmostreed_os_new                (OstreeSysroot *sysroot,
+                                                    OstreeRepo *repo,
                                                     const char *name,
                                                     RpmostreedTransactionMonitor *monitor);

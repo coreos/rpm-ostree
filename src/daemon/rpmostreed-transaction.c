@@ -310,8 +310,8 @@ transaction_execute_done_cb (GObject *source_object,
   if (error_message == NULL)
     error_message = "";
 
-  if (success && priv->sysroot != NULL)
-    rpmostreed_sysroot_emit_update (rpmostreed_sysroot_get (), priv->sysroot);
+  if (success)
+    rpmostreed_sysroot_emit_update (rpmostreed_sysroot_get ());
 
   g_debug ("%s (%p): Finished%s%s%s",
            G_OBJECT_TYPE_NAME (self), self,

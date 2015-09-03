@@ -40,5 +40,4 @@ gboolean            rpmostreed_sysroot_load_state       (RpmostreedSysroot *self
                                                          OstreeRepo **out_repo,
                                                          GError **error);
 
-void                rpmostreed_sysroot_emit_update      (RpmostreedSysroot *self,
-                                                         OstreeSysroot *ot_sysroot);
+void                rpmostreed_sysroot_emit_update      (RpmostreedSysroot *self);
