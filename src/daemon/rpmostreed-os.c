@@ -172,9 +172,7 @@ get_rebase_diff_variant_in_thread (GTask *task,
                                    GCancellable *cancellable)
 {
   RPMOSTreeOS *self = RPMOSTREE_OS (object);
-  RpmostreedSysroot *sysroot;
   const gchar *name;
-  const char *sysroot_path;
 
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object OstreeRepo *ot_repo = NULL;
@@ -186,14 +184,11 @@ get_rebase_diff_variant_in_thread (GTask *task,
   GError *error = NULL; /* freed when invoked */
   gchar *refspec = data_ptr; /* freed by task */
 
-  sysroot = rpmostreed_sysroot_get ();
-  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (sysroot));
-
-  if (!rpmostreed_load_sysroot_and_repo (sysroot_path,
-                                         cancellable,
-                                         &ot_sysroot,
-                                         &ot_repo,
-                                         &error))
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      &ot_repo,
+                                      &error))
     goto out;
 
   name = rpmostree_os_get_name (self);
@@ -229,9 +224,7 @@ get_upgrade_diff_variant_in_thread (GTask *task,
                                     GCancellable *cancellable)
 {
   RPMOSTreeOS *self = RPMOSTREE_OS (object);
-  RpmostreedSysroot *sysroot;
   const gchar *name;
-  const gchar *sysroot_path;
   gchar *compare_deployment = data_ptr; /* freed by task */
 
   g_autofree gchar *comp_ref = NULL;
@@ -242,14 +235,11 @@ get_upgrade_diff_variant_in_thread (GTask *task,
   GVariant *value = NULL; /* freed when invoked */
   GError *error = NULL; /* freed when invoked */
 
-  sysroot = rpmostreed_sysroot_get ();
-  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (sysroot));
-
-  if (!rpmostreed_load_sysroot_and_repo (sysroot_path,
-                                         cancellable,
-                                         &ot_sysroot,
-                                         &ot_repo,
-                                         &error))
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      &ot_repo,
+                                      &error))
     goto out;
 
   name = rpmostree_os_get_name (self);
@@ -301,10 +291,8 @@ get_deployments_diff_variant_in_thread (GTask *task,
                                         gpointer data_ptr,
                                         GCancellable *cancellable)
 {
-  RpmostreedSysroot *sysroot;
   const gchar *ref0;
   const gchar *ref1;
-  const gchar *sysroot_path;
 
   glnx_unref_object OstreeDeployment *deployment0 = NULL;
   glnx_unref_object OstreeDeployment *deployment1 = NULL;
@@ -317,14 +305,11 @@ get_deployments_diff_variant_in_thread (GTask *task,
 
   g_return_if_fail (compare_refs->len == 2);
 
-  sysroot = rpmostreed_sysroot_get ();
-  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (sysroot));
-
-  if (!rpmostreed_load_sysroot_and_repo (sysroot_path,
-                                         cancellable,
-                                         &ot_sysroot,
-                                         &ot_repo,
-                                         &error))
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      &ot_repo,
+                                      &error))
     goto out;
 
   deployment0 = rpmostreed_deployment_get_for_id (ot_sysroot, compare_refs->pdata[0]);
@@ -418,12 +403,10 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
                                     GDBusMethodInvocation *invocation)
 {
   RpmostreedOS *self = RPMOSTREED_OS (interface);
-  RpmostreedSysroot *sysroot;
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
   const char *osname;
-  const char *sysroot_path;
   GError *local_error = NULL;
 
   /* If a compatible transaction is in progress, share its bus address. */
@@ -438,13 +421,11 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
 
   cancellable = g_cancellable_new ();
 
-  sysroot = rpmostreed_sysroot_get ();
-  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (sysroot));
-
-  if (!rpmostreed_load_sysroot_and_repo (sysroot_path,
-                                         cancellable,
-                                         &ot_sysroot, NULL,
-                                         &local_error))
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
     goto out;
 
   osname = rpmostree_os_get_name (interface);
@@ -482,14 +463,12 @@ os_handle_upgrade (RPMOSTreeOS *interface,
                    GVariant *arg_options)
 {
   RpmostreedOS *self = RPMOSTREED_OS (interface);
-  RpmostreedSysroot *sysroot;
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
   GVariantDict options_dict;
   gboolean opt_allow_downgrade = FALSE;
   const char *osname;
-  const char *sysroot_path;
   GError *local_error = NULL;
 
   /* If a compatible transaction is in progress, share its bus address. */
@@ -504,13 +483,11 @@ os_handle_upgrade (RPMOSTreeOS *interface,
 
   cancellable = g_cancellable_new ();
 
-  sysroot = rpmostreed_sysroot_get ();
-  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (sysroot));
-
-  if (!rpmostreed_load_sysroot_and_repo (sysroot_path,
-                                         cancellable,
-                                         &ot_sysroot, NULL,
-                                         &local_error))
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
     goto out;
 
   osname = rpmostree_os_get_name (interface);
@@ -557,12 +534,10 @@ os_handle_rollback (RPMOSTreeOS *interface,
                     GDBusMethodInvocation *invocation)
 {
   RpmostreedOS *self = RPMOSTREED_OS (interface);
-  RpmostreedSysroot *sysroot;
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
   const char *osname;
-  const char *sysroot_path;
   GError *local_error = NULL;
 
   /* If a compatible transaction is in progress, share its bus address. */
@@ -577,13 +552,11 @@ os_handle_rollback (RPMOSTreeOS *interface,
 
   cancellable = g_cancellable_new ();
 
-  sysroot = rpmostreed_sysroot_get ();
-  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (sysroot));
-
-  if (!rpmostreed_load_sysroot_and_repo (sysroot_path,
-                                         cancellable,
-                                         &ot_sysroot, NULL,
-                                         &local_error))
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
     goto out;
 
   osname = rpmostree_os_get_name (interface);
@@ -619,12 +592,10 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
                                  GDBusMethodInvocation *invocation)
 {
   RpmostreedOS *self = RPMOSTREED_OS (interface);
-  RpmostreedSysroot *sysroot;
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
   const char *osname;
-  const char *sysroot_path;
   GError *local_error = NULL;
 
   /* If a compatible transaction is in progress, share its bus address. */
@@ -639,13 +610,11 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
 
   cancellable = g_cancellable_new ();
 
-  sysroot = rpmostreed_sysroot_get ();
-  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (sysroot));
-
-  if (!rpmostreed_load_sysroot_and_repo (sysroot_path,
-                                         cancellable,
-                                         &ot_sysroot, NULL,
-                                         &local_error))
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
     goto out;
 
   osname = rpmostree_os_get_name (interface);
@@ -685,14 +654,12 @@ os_handle_rebase (RPMOSTreeOS *interface,
 {
   /* TODO: Totally ignoring arg_packages for now */
   RpmostreedOS *self = RPMOSTREED_OS (interface);
-  RpmostreedSysroot *sysroot;
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
   GVariantDict options_dict;
   gboolean opt_skip_purge = FALSE;
   const char *osname;
-  const char *sysroot_path;
   GError *local_error = NULL;
 
   /* If a compatible transaction is in progress, share its bus address. */
@@ -707,13 +674,11 @@ os_handle_rebase (RPMOSTreeOS *interface,
 
   cancellable = g_cancellable_new ();
 
-  sysroot = rpmostreed_sysroot_get ();
-  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (sysroot));
-
-  if (!rpmostreed_load_sysroot_and_repo (sysroot_path,
-                                         cancellable,
-                                         &ot_sysroot, NULL,
-                                         &local_error))
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
     goto out;
 
   osname = rpmostree_os_get_name (interface);
@@ -786,12 +751,10 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
 {
   /* TODO: Totally ignoring arg_packages for now */
   RpmostreedOS *self = RPMOSTREED_OS (interface);
-  RpmostreedSysroot *sysroot;
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
   const char *osname;
-  const char *sysroot_path;
   GError *local_error = NULL;
 
   /* If a compatible transaction is in progress, share its bus address. */
@@ -806,13 +769,11 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
 
   cancellable = g_cancellable_new ();
 
-  sysroot = rpmostreed_sysroot_get ();
-  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (sysroot));
-
-  if (!rpmostreed_load_sysroot_and_repo (sysroot_path,
-                                         cancellable,
-                                         &ot_sysroot, NULL,
-                                         &local_error))
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
     goto out;
 
   osname = rpmostree_os_get_name (interface);

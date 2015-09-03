@@ -115,52 +115,6 @@ rpmostreed_generate_object_path_from_va (const gchar *base,
 }
 
 /**
- * rpmostreed_load_sysroot_and_repo:
- * @path: The path to the sysroot.
- * @cancellable: Cancelable
- * @out_sysroot (out): The OstreeSysroot at the given path
- * @out_repo (out): The OstreeRepo for the sysroot
- * @error (out): Error
-
- * Returns: True on success.
- */
-gboolean
-rpmostreed_load_sysroot_and_repo (const gchar *path,
-                                  GCancellable *cancellable,
-                                  OstreeSysroot **out_sysroot,
-                                  OstreeRepo **out_repo,
-                                  GError **error)
-{
-  glnx_unref_object GFile *sysroot_path = NULL;
-  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  gboolean ret = FALSE;
-
-  sysroot_path = g_file_new_for_path (path);
-  ot_sysroot = ostree_sysroot_new (sysroot_path);
-
-  if (!ostree_sysroot_load (ot_sysroot,
-                            cancellable,
-                            error))
-      goto out;
-
-  /* ostree_sysroot_get_repo now just adds a
-   * ref to its singleton */
-  if (!ostree_sysroot_get_repo (ot_sysroot,
-                                out_repo,
-                                cancellable,
-                                error))
-      goto out;
-
-  if (out_sysroot != NULL)
-    *out_sysroot = g_steal_pointer (&ot_sysroot);
-
-  ret = TRUE;
-
-out:
-  return ret;
-}
-
-/**
  * rpmostreed_refspec_parse_partial:
  * @new_provided_refspec: The provided refspec
  * @base_refspec: The refspec string to base on.

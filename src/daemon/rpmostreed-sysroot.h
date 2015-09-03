@@ -34,5 +34,11 @@ RpmostreedSysroot * rpmostreed_sysroot_get              (void);
 gboolean            rpmostreed_sysroot_populate         (RpmostreedSysroot *self,
                                                          GError **error);
 
+gboolean            rpmostreed_sysroot_load_state       (RpmostreedSysroot *self,
+                                                         GCancellable *cancellable,
+                                                         OstreeSysroot **out_sysroot,
+                                                         OstreeRepo **out_repo,
+                                                         GError **error);
+
 void                rpmostreed_sysroot_emit_update      (RpmostreedSysroot *self,
                                                          OstreeSysroot *ot_sysroot);

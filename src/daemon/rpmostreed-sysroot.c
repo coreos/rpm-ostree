@@ -870,18 +870,15 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
                              GError **error)
 {
   glnx_unref_object OstreeRepo *ot_repo = NULL;
-  const char *sysroot_path;
   gboolean ret = FALSE;
 
   g_return_val_if_fail (self != NULL, FALSE);
 
-  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (self));
-
-  if (!rpmostreed_load_sysroot_and_repo (sysroot_path,
-                                         NULL,
-                                         &self->ot_sysroot,
-                                         &ot_repo,
-                                         error))
+  if (!rpmostreed_sysroot_load_state (self,
+                                      NULL,
+                                      &self->ot_sysroot,
+                                      &ot_repo,
+                                      error))
     goto out;
 
   if (!rpmostreed_sysroot_load_internals (self, error))
@@ -900,6 +897,49 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
                                             G_CALLBACK (on_repo_file),
                                             self);
     }
+
+  ret = TRUE;
+
+out:
+  return ret;
+}
+
+gboolean
+rpmostreed_sysroot_load_state (RpmostreedSysroot *self,
+                               GCancellable *cancellable,
+                               OstreeSysroot **out_sysroot,
+                               OstreeRepo **out_repo,
+                               GError **error)
+{
+  g_autoptr(GFile) sysroot_file = NULL;
+  glnx_unref_object OstreeSysroot *sysroot = NULL;
+  glnx_unref_object OstreeRepo *repo = NULL;
+  const char *sysroot_path;
+  gboolean ret = FALSE;
+
+  g_return_val_if_fail (RPMOSTREED_IS_SYSROOT (self), FALSE);
+
+  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (self));
+  g_return_val_if_fail (sysroot_path != NULL, FALSE);
+
+  sysroot_file = g_file_new_for_path (sysroot_path);
+
+  sysroot = ostree_sysroot_new (sysroot_file);
+
+  if (!ostree_sysroot_load (sysroot, cancellable, error))
+    goto out;
+
+  /* This creates and caches an OstreeRepo instance inside OstreeSysroot.
+   * Worth doing here even if the caller doesn't want the repo reference
+   * to ensure subsequent ostree_sysroot_get_repo() calls won't fail. */
+  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
+    goto out;
+
+  if (out_sysroot != NULL)
+    *out_sysroot = g_steal_pointer (&sysroot);
+
+  if (out_repo != NULL)
+    *out_repo = g_steal_pointer (&repo);
 
   ret = TRUE;
 

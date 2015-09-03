@@ -30,12 +30,6 @@ gchar *    rpmostreed_generate_object_path_from_va (const gchar *base,
                                                     const gchar  *part,
                                                     va_list va);
 
-gboolean   rpmostreed_load_sysroot_and_repo (const gchar *path,
-                                             GCancellable *cancellable,
-                                             OstreeSysroot **out_sysroot,
-                                             OstreeRepo **out_repo,
-                                             GError **error);
-
 gboolean   rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
                                              gchar *base_refspec,
                                              gchar **out_refspec,
