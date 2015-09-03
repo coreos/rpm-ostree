@@ -129,7 +129,7 @@ os_constructed (GObject *object)
   /* TODO Integrate with PolicyKit via the "g-authorize-method" signal. */
 
   self->signal_id = g_signal_connect (rpmostreed_sysroot_get (),
-                                      "sysroot-updated",
+                                      "updated",
                                       G_CALLBACK (sysroot_changed), self);
   G_OBJECT_CLASS (rpmostreed_os_parent_class)->constructed (object);
 }

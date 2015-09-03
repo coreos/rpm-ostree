@@ -69,6 +69,10 @@ struct _RpmostreedSysroot {
 
 struct _RpmostreedSysrootClass {
   RPMOSTreeSysrootSkeletonClass parent_class;
+
+  void          (*updated)              (RpmostreedSysroot *self,
+                                         OstreeSysroot *ot_sysroot,
+                                         OstreeRepo *ot_repo);
 };
 
 enum {
@@ -470,6 +474,51 @@ sysroot_transform_transaction_to_attrs (GBinding *binding,
   return TRUE;
 }
 
+static void
+sysroot_populate_deployments (RpmostreedSysroot *self,
+                              OstreeSysroot *ot_sysroot,
+                              OstreeRepo *ot_repo)
+{
+  OstreeDeployment *booted = NULL; /* owned by sysroot */
+  g_autoptr(GPtrArray) deployments = NULL;
+
+  GVariantBuilder builder;
+  guint i;
+
+  g_debug ("loading deployments");
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ssisstsav)"));
+
+  /* Add deployment interfaces */
+  deployments = ostree_sysroot_get_deployments (ot_sysroot);
+
+  if (deployments == NULL)
+    return;
+
+  for (i=0; i<deployments->len; i++)
+    {
+      g_variant_builder_add_value (&builder,
+                                   rpmostreed_deployment_generate_variant (deployments->pdata[i],
+                                                                           ot_repo));
+    }
+
+  booted = ostree_sysroot_get_booted_deployment (ot_sysroot);
+  if (booted)
+    {
+      const gchar *os = ostree_deployment_get_osname (booted);
+      g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH,
+                                                                os, NULL);
+      rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path);
+    }
+  else
+    {
+      rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), "/");
+    }
+
+  rpmostree_sysroot_set_deployments (RPMOSTREE_SYSROOT (self),
+                                     g_variant_builder_end (&builder));
+  g_debug ("finished deployments");
+}
+
 /* ---------------------------------------------------------------------------------------------------- */
 static void
 sysroot_dispose (GObject *object)
@@ -590,6 +639,14 @@ sysroot_constructed (GObject *object)
 }
 
 static void
+sysroot_updated (RpmostreedSysroot *self,
+                 OstreeSysroot *ot_sysroot,
+                 OstreeRepo *ot_repo)
+{
+  sysroot_populate_deployments (self, ot_sysroot, ot_repo);
+}
+
+static void
 rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
 {
   GObjectClass *gobject_class;
@@ -599,66 +656,17 @@ rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
   gobject_class->finalize     = sysroot_finalize;
   gobject_class->constructed  = sysroot_constructed;
 
-  signals[UPDATED] = g_signal_new ("sysroot-updated",
+  klass->updated = sysroot_updated;
+
+  signals[UPDATED] = g_signal_new ("updated",
                                    RPMOSTREED_TYPE_SYSROOT,
                                    G_SIGNAL_RUN_LAST,
-                                   0, NULL, NULL,
-                                   g_cclosure_marshal_generic,
+                                   G_STRUCT_OFFSET (RpmostreedSysrootClass, updated),
+                                   NULL, NULL, NULL,
                                    G_TYPE_NONE, 2,
                                    OSTREE_TYPE_SYSROOT,
                                    OSTREE_TYPE_REPO);
 }
-
-
-static gboolean
-sysroot_populate_deployments (RpmostreedSysroot *self,
-                              OstreeSysroot *ot_sysroot,
-                              OstreeRepo *ot_repo)
-{
-  OstreeDeployment *booted = NULL; /* owned by sysroot */
-  g_autoptr(GPtrArray) deployments = NULL;
-
-  GVariantBuilder builder;
-  guint i;
-  gboolean ret = FALSE;
-
-  g_debug ("loading deployments");
-  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ssisstsav)"));
-
-  /* Add deployment interfaces */
-  deployments = ostree_sysroot_get_deployments (ot_sysroot);
-
-  if (deployments == NULL)
-    goto out;
-
-  for (i=0; i<deployments->len; i++)
-    {
-      g_variant_builder_add_value (&builder,
-                                   rpmostreed_deployment_generate_variant (deployments->pdata[i],
-                                                                           ot_repo));
-    }
-
-  booted = ostree_sysroot_get_booted_deployment (ot_sysroot);
-  if (booted)
-    {
-      const gchar *os = ostree_deployment_get_osname (booted);
-      g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH,
-                                                                os, NULL);
-      rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path);
-    }
-  else
-    {
-      rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), "/");
-    }
-
-  rpmostree_sysroot_set_deployments (RPMOSTREE_SYSROOT (self),
-                                     g_variant_builder_end (&builder));
-  g_debug ("finished deployments");
-
-out:
-  return ret;
-}
-
 
 static gboolean
 rpmostreed_sysroot_load_internals (RpmostreedSysroot *self,
@@ -860,7 +868,7 @@ rpmostreed_sysroot_iface_init (RPMOSTreeSysrootIface *iface)
 /**
  * rpmostreed_sysroot_emit_update:
  *
- * Emits an sysroot-updated signal
+ * Emits an updated signal
  */
 void
 rpmostreed_sysroot_emit_update (RpmostreedSysroot *self)
