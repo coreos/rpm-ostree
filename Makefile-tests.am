@@ -35,7 +35,10 @@ installed_test_data = tests/libtest.sh \
 	$(NULL)
 
 tests/setup-session.sh: tests/setup-session.sh.in
-	cat $< | sed -e "s|[@]LIBEXECDIR[@]|$(libexecdir)|" > $@
+	sed \
+          -e "s|[@]installed_testdir[@]|$(installed_testdir)|" \
+	  -e "s|[@]LIBEXECDIR[@]|$(libexecdir)|" \
+	  < $< > $@.tmp && mv $@.tmp $@
 
 test_installed_extra_scripts = \
 	tests/setup-session.sh \
@@ -53,6 +56,9 @@ installed_test_scripts = \
 test_programs = \
 	tests/jsonutil			\
 	$(NULL)
+
+installed_test_PROGRAMS += dbus-run-session
+dbus_run_session_SOURCES = tests/dbus-run-session.c
 
 check-local:
 	@echo "  *** NOTE ***"

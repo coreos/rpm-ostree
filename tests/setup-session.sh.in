@@ -57,4 +57,4 @@ EOF
 
 export RPMOSTREE_USE_SESSION_BUS=1
 
-dbus-run-session --config-file=${test_tmpdir}/session.conf $@
+exec @installed_testdir@/dbus-run-session --config-file=${test_tmpdir}/session.conf $@
