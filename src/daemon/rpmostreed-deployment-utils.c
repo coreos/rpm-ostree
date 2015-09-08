@@ -134,17 +134,11 @@ out:
 GVariant *
 rpmostreed_deployment_generate_blank_variant (void)
 {
-  GVariantBuilder builder;
-  g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
-  g_variant_builder_add (&builder, "s", "");
-  g_variant_builder_add (&builder, "s", "");
-  g_variant_builder_add (&builder, "i", -1);
-  g_variant_builder_add (&builder, "s", "");
-  g_variant_builder_add (&builder, "s", "");
-  g_variant_builder_add (&builder, "t", 0);
-  g_variant_builder_add (&builder, "s", "");
-  g_variant_builder_add_value (&builder, g_variant_new("av", NULL));
-  return g_variant_builder_end (&builder);
+  GVariantDict dict;
+
+  g_variant_dict_init (&dict, NULL);
+
+  return g_variant_dict_end (&dict);
 }
 
 GVariant *
@@ -160,7 +154,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   GVariant *sigs = NULL; /* floating variant */
   GError *error = NULL;
 
-  GVariantBuilder builder;
+  GVariantDict dict;
   guint64 timestamp = 0;
 
   const gchar *osname = ostree_deployment_get_osname (deployment);
@@ -190,20 +184,23 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   if (origin_refspec)
     sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, csum);
 
-  if (!sigs)
-    sigs = g_variant_new ("av", NULL);
+  g_variant_dict_init (&dict, NULL);
 
-  g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
-  g_variant_builder_add (&builder, "s", id);
-  g_variant_builder_add (&builder, "s", osname ? osname : "");
-  g_variant_builder_add (&builder, "i", serial);
-  g_variant_builder_add (&builder, "s", csum);
-  g_variant_builder_add (&builder, "s", version_commit ? version_commit : "");
-  g_variant_builder_add (&builder, "t", timestamp ? timestamp : 0);
-  g_variant_builder_add (&builder, "s", origin_refspec ? origin_refspec : "none");
-  g_variant_builder_add_value (&builder, sigs);
+  g_variant_dict_insert (&dict, "id", "s", id);
+  if (osname != NULL)
+    g_variant_dict_insert (&dict, "osname", "s", osname);
+  g_variant_dict_insert (&dict, "serial", "i", serial);
+  g_variant_dict_insert (&dict, "checksum", "s", csum);
+  if (version_commit != NULL)
+    g_variant_dict_insert (&dict, "version", "s", version_commit);
+  if (timestamp > 0)
+    g_variant_dict_insert (&dict, "timestamp", "t", timestamp);
+  if (origin_refspec != NULL)
+    g_variant_dict_insert (&dict, "origin", "s", origin_refspec);
+  if (sigs != NULL)
+    g_variant_dict_insert_value (&dict, "signatures", sigs);
 
-  return g_variant_builder_end (&builder);
+  return g_variant_dict_end (&dict);
 }
 
 gint

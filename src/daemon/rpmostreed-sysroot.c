@@ -486,7 +486,7 @@ sysroot_populate_deployments (RpmostreedSysroot *self,
   guint i;
 
   g_debug ("loading deployments");
-  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ssisstsav)"));
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("aa{sv}"));
 
   /* Add deployment interfaces */
   deployments = ostree_sysroot_get_deployments (ot_sysroot);
@@ -496,9 +496,10 @@ sysroot_populate_deployments (RpmostreedSysroot *self,
 
   for (i=0; i<deployments->len; i++)
     {
-      g_variant_builder_add_value (&builder,
-                                   rpmostreed_deployment_generate_variant (deployments->pdata[i],
-                                                                           ot_repo));
+      GVariant *variant;
+      variant = rpmostreed_deployment_generate_variant (deployments->pdata[i],
+                                                        ot_repo);
+      g_variant_builder_add_value (&builder, variant);
     }
 
   booted = ostree_sysroot_get_booted_deployment (ot_sysroot);

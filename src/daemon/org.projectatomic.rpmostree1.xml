@@ -3,6 +3,17 @@
 "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
 <node name="/" xmlns:doc="http://www.freedesktop.org/dbus/1.0/doc.dtd">
 
+  <!-- Deployment dictionary keys:
+       'id' (type 's')
+       'osname' (type 's')
+       'serial' (type 'i')
+       'checksum' (type 's')
+       'version' (type 's')
+       'timestamp' (type 't')
+       'origin' (type 's')
+       'signatures' (type 'av')
+  -->
+
   <interface name="org.projectatomic.rpmostree1.Sysroot">
     <!-- The booted OSName -->
     <property name="Booted" type="o" access="read"/>
@@ -23,24 +34,14 @@
       <arg name="object_path" type="o" direction="out"/>
     </method>
 
-    <!-- All deployments in boot order
-         deployment format:
-         s - Deployment id
-         s - OSName
-         i - Serial
-         s - Checksum
-         s - Version
-         t - Timestamp
-         s - Origin Refspec
-         av - Signature information
-    -->
-    <property name="Deployments" type="a(ssisstsav)" access="read"/>
+    <!-- Array of all deployments in boot order -->
+    <property name="Deployments" type="aa{sv}" access="read"/>
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.OS">
-    <property name="BootedDeployment" type="(ssisstsav)" access="read"/>
-    <property name="DefaultDeployment" type="(ssisstsav)" access="read"/>
-    <property name="RollbackDeployment" type="(ssisstsav)" access="read"/>
+    <property name="BootedDeployment" type="a{sv}" access="read"/>
+    <property name="DefaultDeployment" type="a{sv}" access="read"/>
+    <property name="RollbackDeployment" type="a{sv}" access="read"/>
     <property name="UpgradeOrigin" type="s" access="read"/>
     <property name="HasCachedUpdateRpmDiff" type="b" access="read"/>
 

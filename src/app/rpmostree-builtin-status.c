@@ -44,17 +44,6 @@ printchar (char *s, int n)
   g_print ("\n");
 }
 
-enum {
-  ID,
-  OSNAME,
-  SERIAL,
-  CHECKSUM,
-  VERSION,
-  TIMESTAMP,
-  ORIGIN,
-  SIGNATURES
-};
-
 gboolean
 rpmostree_builtin_status (int             argc,
                           char          **argv,
@@ -68,6 +57,9 @@ rpmostree_builtin_status (int             argc,
   g_autoptr(GVariant) booted_deployment = NULL;
   g_autoptr(GVariant) deployments = NULL;
   g_autoptr(GVariant) booted_signatures = NULL;
+  g_autoptr(GPtrArray) deployment_dicts = NULL;
+  GVariantIter iter;
+  GVariant *child;
   gchar *booted_id = NULL; /* borrowed */
 
   const guint CSUM_DISP_LEN = 10; /* number of checksum characters to display */
@@ -96,35 +88,51 @@ rpmostree_builtin_status (int             argc,
   booted_deployment = rpmostree_os_dup_booted_deployment (os_proxy);
   if (booted_deployment)
     {
-      g_variant_get_child (booted_deployment, ID, "&s", &booted_id);
-      booted_signatures = g_variant_get_child_value (booted_deployment, SIGNATURES);
+      GVariantDict dict;
+      g_variant_dict_init (&dict, booted_deployment);
+      booted_signatures = g_variant_dict_lookup_value (&dict, "signatures",
+                                                       G_VARIANT_TYPE ("av"));
+      g_variant_dict_clear (&dict);
     }
 
-  deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
-  if (deployments)
-    n = g_variant_n_children (deployments);
-  else
-    n = 0;
+  deployment_dicts = g_ptr_array_new_with_free_func ((GDestroyNotify) g_variant_dict_unref);
 
-  for (i = 0; i < n; i++)
+  deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
+
+  g_variant_iter_init (&iter, deployments);
+
+  while ((child = g_variant_iter_next_value (&iter)) != NULL)
     {
+      GVariantDict *dict = g_variant_dict_new (child);
+
+      /* Takes ownership of the dictionary */
+      g_ptr_array_add (deployment_dicts, dict);
+
       /* find lengths for use in column output */
       if (!opt_pretty)
         {
-          g_autoptr(GVariant) v = NULL;
           gchar *origin_refspec = NULL; /* borrowed */
           gchar *os_name = NULL; /* borrowed */
           gchar *version_string = NULL; /* borrowed */
 
-          v = g_variant_get_child_value (deployments, i);
-          g_variant_get_child (v, OSNAME, "&s", &os_name);
-          g_variant_get_child (v, VERSION, "&s", &version_string);
-          g_variant_get_child (v, ORIGIN, "&s", &origin_refspec);
+          /* osname should always be present. */
+          if (g_variant_dict_lookup (dict, "osname", "&s", &os_name))
+            max_osname_len = MAX (max_osname_len, strlen (os_name));
+          else
+            {
+              const char *id = NULL;
+              g_variant_dict_lookup (dict, "id", "&s", &id);
+              g_critical ("Deployment '%s' missing osname", id != NULL ? id : "?");
+            }
 
-          max_osname_len = MAX (max_osname_len, strlen (os_name));
-          max_refspec_len = MAX (max_refspec_len, strlen (origin_refspec));
-          max_version_len = MAX (max_version_len, strlen (version_string));
+          if (g_variant_dict_lookup (dict, "version", "&s", &version_string))
+            max_version_len = MAX (max_version_len, strlen (version_string));
+
+          if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
+            max_refspec_len = MAX (max_refspec_len, strlen (origin_refspec));
         }
+
+      g_variant_unref (child);
     }
 
   if (!opt_pretty)
@@ -142,13 +150,15 @@ rpmostree_builtin_status (int             argc,
   else
     printchar ("=", 60);
 
+  n = deployment_dicts->len;
+
   /* print entries for each deployment */
   for (i = 0; i < n; i++)
     {
+      GVariantDict *dict;
       GDateTime *timestamp = NULL;
       g_autofree char *timestamp_string = NULL;
       g_autofree gchar *truncated_csum = NULL;
-      g_autoptr(GVariant) v = NULL;
       g_autoptr(GVariant) signatures = NULL;
 
       gchar *id = NULL; /* borrowed */
@@ -161,12 +171,18 @@ rpmostree_builtin_status (int             argc,
       gint serial;
       gboolean is_booted = FALSE;
 
-      v = g_variant_get_child_value (deployments, i);
-      g_variant_get (v, "(&s&si&s&st&sav)",
-                     &id, &os_name, &serial,
-                     &checksum, &version_string,
-                     &t, &origin_refspec, NULL);
-      signatures = g_variant_get_child_value (v, SIGNATURES);
+      dict = g_ptr_array_index (deployment_dicts, i);
+
+      g_variant_dict_lookup (dict, "id", "&s", &id);
+      g_variant_dict_lookup (dict, "osname", "&s", &os_name);
+      g_variant_dict_lookup (dict, "serial", "i", &serial);
+      g_variant_dict_lookup (dict, "checksum", "s", &checksum);
+      g_variant_dict_lookup (dict, "version", "s", &version_string);
+      g_variant_dict_lookup (dict, "timestamp", "t", &t);
+      g_variant_dict_lookup (dict, "origin", "s", &origin_refspec);
+      signatures = g_variant_dict_lookup_value (dict, "signatures",
+                                                G_VARIANT_TYPE ("av"));
+
       is_booted = g_strcmp0 (booted_id, id) == 0;
 
       timestamp = g_date_time_new_from_unix_utc (t);
