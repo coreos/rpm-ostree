@@ -24,6 +24,7 @@
 #include "rpmostreed-transaction-types.h"
 #include "rpmostreed-transaction.h"
 #include "rpmostreed-deployment-utils.h"
+#include "rpmostreed-sysroot.h"
 #include "rpmostreed-utils.h"
 
 static gboolean
@@ -75,6 +76,69 @@ change_upgrader_refspec (OstreeSysroot *sysroot,
 
 out:
   return ret;
+}
+
+static gboolean
+safe_sysroot_upgrader_deploy (OstreeSysrootUpgrader *upgrader,
+                              GCancellable *cancellable,
+                              GError **error)
+{
+  RpmostreedSysroot *global_sysroot = rpmostreed_sysroot_get ();
+  gboolean success;
+
+  rpmostreed_sysroot_writer_lock (global_sysroot);
+
+  success = ostree_sysroot_upgrader_deploy (upgrader, cancellable, error);
+
+  rpmostreed_sysroot_writer_unlock (global_sysroot);
+
+  return success;
+}
+
+static gboolean
+safe_sysroot_upgrader_pull_package_diff (OstreeSysrootUpgrader *upgrader,
+                                         OstreeAsyncProgress *progress,
+                                         gboolean *out_changed,
+                                         GCancellable *cancellable,
+                                         GError **error)
+{
+  RpmostreedSysroot *global_sysroot = rpmostreed_sysroot_get ();
+  gboolean success;
+
+  rpmostreed_sysroot_writer_lock (global_sysroot);
+
+  success = ostree_sysroot_upgrader_pull_one_dir (upgrader,
+                                                  "/usr/share/rpm",
+                                                  0, 0,
+                                                  progress,
+                                                  out_changed,
+                                                  cancellable,
+                                                  error);
+
+  rpmostreed_sysroot_writer_unlock (global_sysroot);
+
+  return success;
+}
+
+static gboolean
+safe_sysroot_write_deployments (OstreeSysroot *sysroot,
+                                GPtrArray *deployments,
+                                GCancellable *cancellable,
+                                GError **error)
+{
+  RpmostreedSysroot *global_sysroot = rpmostreed_sysroot_get ();
+  gboolean success;
+
+  rpmostreed_sysroot_writer_lock (global_sysroot);
+
+  success = ostree_sysroot_write_deployments (sysroot,
+                                              deployments,
+                                              cancellable,
+                                              error);
+
+  rpmostreed_sysroot_writer_unlock (global_sysroot);
+
+  return success;
 }
 
 /* ============================= Package Diff  ============================= */
@@ -153,9 +217,9 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
   progress = ostree_async_progress_new ();
   rpmostreed_transaction_connect_download_progress (transaction, progress);
   rpmostreed_transaction_connect_signature_progress (transaction, repo);
-  if (!ostree_sysroot_upgrader_pull_one_dir (upgrader, "/usr/share/rpm",
-                                             0, 0, progress, &changed,
-                                             cancellable, error))
+
+  if (!safe_sysroot_upgrader_pull_package_diff (upgrader, progress, &changed,
+                                                cancellable, error))
     goto out;
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
@@ -291,10 +355,13 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
 
   /* if default changed write it */
   if (old_deployments->pdata[0] != new_deployments->pdata[0])
-    ostree_sysroot_write_deployments (sysroot,
-                                      new_deployments,
-                                      cancellable,
-                                      error);
+    {
+      if (!safe_sysroot_write_deployments (sysroot,
+                                           new_deployments,
+                                           cancellable,
+                                           error))
+        goto out;
+    }
 
   ret = TRUE;
 
@@ -403,10 +470,11 @@ clear_rollback_transaction_execute (RpmostreedTransaction *transaction,
 
   g_ptr_array_remove_index (deployments, rollback_index);
 
-  ostree_sysroot_write_deployments (sysroot,
-                                    deployments,
-                                    cancellable,
-                                    error);
+  if (!safe_sysroot_write_deployments (sysroot,
+                                       deployments,
+                                       cancellable,
+                                       error))
+    goto out;
 
   ret = TRUE;
 
@@ -542,7 +610,7 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
 
   if (changed)
     {
-      if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+      if (!safe_sysroot_upgrader_deploy (upgrader, cancellable, error))
         goto out;
     }
   else
@@ -689,7 +757,7 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
-  if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+  if (!safe_sysroot_upgrader_deploy (upgrader, cancellable, error))
     goto out;
 
   if (!self->skip_purge)

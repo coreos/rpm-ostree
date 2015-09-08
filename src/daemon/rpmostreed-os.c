@@ -176,6 +176,7 @@ get_rebase_diff_variant_in_thread (GTask *task,
                                    GCancellable *cancellable)
 {
   RPMOSTreeOS *self = RPMOSTREE_OS (object);
+  RpmostreedSysroot *global_sysroot;
   const gchar *name;
 
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
@@ -188,7 +189,11 @@ get_rebase_diff_variant_in_thread (GTask *task,
   GError *error = NULL; /* freed when invoked */
   gchar *refspec = data_ptr; /* freed by task */
 
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+  global_sysroot = rpmostreed_sysroot_get ();
+
+  rpmostreed_sysroot_reader_lock (global_sysroot);
+
+  if (!rpmostreed_sysroot_load_state (global_sysroot,
                                       cancellable,
                                       &ot_sysroot,
                                       &ot_repo,
@@ -218,6 +223,8 @@ get_rebase_diff_variant_in_thread (GTask *task,
                                       &error);
 
 out:
+  rpmostreed_sysroot_reader_unlock (global_sysroot);
+
   set_diff_task_result (task, value, error);
 }
 
@@ -228,6 +235,7 @@ get_upgrade_diff_variant_in_thread (GTask *task,
                                     GCancellable *cancellable)
 {
   RPMOSTreeOS *self = RPMOSTREE_OS (object);
+  RpmostreedSysroot *global_sysroot;
   const gchar *name;
   gchar *compare_deployment = data_ptr; /* freed by task */
 
@@ -239,7 +247,11 @@ get_upgrade_diff_variant_in_thread (GTask *task,
   GVariant *value = NULL; /* freed when invoked */
   GError *error = NULL; /* freed when invoked */
 
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+  global_sysroot = rpmostreed_sysroot_get ();
+
+  rpmostreed_sysroot_reader_lock (global_sysroot);
+
+  if (!rpmostreed_sysroot_load_state (global_sysroot,
                                       cancellable,
                                       &ot_sysroot,
                                       &ot_repo,
@@ -286,6 +298,8 @@ get_upgrade_diff_variant_in_thread (GTask *task,
                                       &error);
 
 out:
+  rpmostreed_sysroot_reader_unlock (global_sysroot);
+
   set_diff_task_result (task, value, error);
 }
 
@@ -295,6 +309,7 @@ get_deployments_diff_variant_in_thread (GTask *task,
                                         gpointer data_ptr,
                                         GCancellable *cancellable)
 {
+  RpmostreedSysroot *global_sysroot;
   const gchar *ref0;
   const gchar *ref1;
 
@@ -309,7 +324,11 @@ get_deployments_diff_variant_in_thread (GTask *task,
 
   g_return_if_fail (compare_refs->len == 2);
 
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+  global_sysroot = rpmostreed_sysroot_get ();
+
+  rpmostreed_sysroot_reader_lock (global_sysroot);
+
+  if (!rpmostreed_sysroot_load_state (global_sysroot,
                                       cancellable,
                                       &ot_sysroot,
                                       &ot_repo,
@@ -349,6 +368,8 @@ get_deployments_diff_variant_in_thread (GTask *task,
                                       &error);
 
 out:
+  rpmostreed_sysroot_reader_unlock (global_sysroot);
+
   set_diff_task_result (task, value, error);
 }
 

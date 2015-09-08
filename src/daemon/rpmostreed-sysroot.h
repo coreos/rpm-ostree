@@ -41,3 +41,7 @@ gboolean            rpmostreed_sysroot_load_state       (RpmostreedSysroot *self
                                                          GError **error);
 
 void                rpmostreed_sysroot_emit_update      (RpmostreedSysroot *self);
+void                rpmostreed_sysroot_reader_lock      (RpmostreedSysroot *self);
+void                rpmostreed_sysroot_reader_unlock    (RpmostreedSysroot *self);
+void                rpmostreed_sysroot_writer_lock      (RpmostreedSysroot *self);
+void                rpmostreed_sysroot_writer_unlock    (RpmostreedSysroot *self);

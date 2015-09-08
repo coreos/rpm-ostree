@@ -60,6 +60,13 @@ struct _RpmostreedSysroot {
   GHashTable *os_interfaces;
   GRWLock children_lock;
 
+  /* The OS interface's various diff methods can run concurrently with
+   * transactions, which is safe except when the transaction is writing
+   * new deployments to disk or downloading RPM package details.  The
+   * writer lock protects these critical sections so the diff methods
+   * (holding reader locks) can run safely. */
+  GRWLock method_rw_lock;
+
   GFileMonitor *monitor;
   guint sig_changed;
   guint64 last_monitor_event;
@@ -580,6 +587,7 @@ sysroot_finalize (GObject *object)
   g_hash_table_unref (self->os_interfaces);
 
   g_rw_lock_clear (&self->children_lock);
+  g_rw_lock_clear (&self->method_rw_lock);
 
   g_clear_object (&self->cancellable);
   g_clear_object (&self->monitor);
@@ -602,6 +610,7 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
   (GDestroyNotify) g_object_unref);
 
   g_rw_lock_init (&self->children_lock);
+  g_rw_lock_init (&self->method_rw_lock);
 
   self->monitor = NULL;
   self->sig_changed = 0;
@@ -1005,6 +1014,36 @@ rpmostreed_sysroot_get (void)
   return _sysroot_instance;
 }
 
+void
+rpmostreed_sysroot_reader_lock (RpmostreedSysroot *self)
+{
+  g_return_if_fail (RPMOSTREED_IS_SYSROOT (self));
 
+  g_rw_lock_reader_lock (&self->method_rw_lock);
+}
+
+void
+rpmostreed_sysroot_reader_unlock (RpmostreedSysroot *self)
+{
+  g_return_if_fail (RPMOSTREED_IS_SYSROOT (self));
+
+  g_rw_lock_reader_unlock (&self->method_rw_lock);
+}
+
+void
+rpmostreed_sysroot_writer_lock (RpmostreedSysroot *self)
+{
+  g_return_if_fail (RPMOSTREED_IS_SYSROOT (self));
+
+  g_rw_lock_writer_lock (&self->method_rw_lock);
+}
+
+void
+rpmostreed_sysroot_writer_unlock (RpmostreedSysroot *self)
+{
+  g_return_if_fail (RPMOSTREED_IS_SYSROOT (self));
+
+  g_rw_lock_writer_unlock (&self->method_rw_lock);
+}
 
 /* ---------------------------------------------------------------------------------------------------- */
