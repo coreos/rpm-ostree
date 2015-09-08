@@ -304,6 +304,6 @@ check_root_test ()
     if test "$(id -u)" != "0"; then
        echo 1>&2 "$0 can be run only as root"
        echo "1..0"
-       exit 0
+       exit 77
     fi
 }
