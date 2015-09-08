@@ -344,9 +344,6 @@ main (int argc,
       g_log_set_default_handler (on_log_handler, NULL);
     }
 
-  if (g_getenv ("PATH") == NULL)
-    g_setenv ("PATH", "/usr/bin:/bin:/usr/sbin:/sbin", TRUE);
-
   g_info ("rpm-ostreed starting");
 
   loop = g_main_loop_new (NULL, FALSE);
