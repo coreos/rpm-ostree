@@ -46,7 +46,7 @@ include $(INTROSPECTION_MAKEFILE)
 GIRS =
 TYPELIBS = $(GIRS:.gir=.typelib)
 
-include libglnx/Makefile-libglnx.am
+include libglnx/Makefile-libglnx.am.inc
 noinst_LTLIBRARIES += libglnx.la
 include Makefile-libpriv.am
 include Makefile-lib.am
