@@ -23,8 +23,6 @@ if ENABLE_GTK_DOC
 SUBDIRS += doc
 endif
 
-privdatadir=$(pkglibdir)
-
 ACLOCAL_AMFLAGS += -I m4 ${ACLOCAL_FLAGS}
 AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
 	-DLIBEXECDIR='"$(libexecdir)"' \
@@ -48,7 +46,7 @@ include $(INTROSPECTION_MAKEFILE)
 GIRS =
 TYPELIBS = $(GIRS:.gir=.typelib)
 
-include libglnx/Makefile-libglnx.am
+include libglnx/Makefile-libglnx.am.inc
 noinst_LTLIBRARIES += libglnx.la
 include Makefile-libpriv.am
 include Makefile-lib.am

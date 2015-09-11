@@ -7,16 +7,14 @@ test -n "$srcdir" || srcdir=.
 olddir=`pwd`
 cd $srcdir
 
-AUTORECONF=`which autoreconf`
-if test -z $AUTORECONF; then
-        echo "*** No autoreconf found, please intall it ***"
+if ! which autoreconf 2>/dev/null; then
+        echo "*** No autoreconf found, please install it ***"
         exit 1
 fi
 
 mkdir -p m4
 
-GTKDOCIZE=$(which gtkdocize 2>/dev/null)
-if test -z $GTKDOCIZE; then
+if ! which gtkdocize 2>/dev/null; then
         echo "You don't have gtk-doc installed, and thus won't be able to generate the documentation."
         rm -f gtk-doc.make
         cat > gtk-doc.make <<EOF
