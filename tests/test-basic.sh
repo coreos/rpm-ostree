@@ -40,7 +40,7 @@ ostree admin --sysroot=sysroot deploy --karg=root=LABEL=MOO --karg=quiet --os=te
 
 rpm-ostree status | tee OUTPUT-status.txt
 
-assert_file_has_content OUTPUT-status.txt '1.0.10'
+assert_file_has_content OUTPUT-status.txt '1\.0\.10'
 
 os_repository_new_commit
 rpm-ostree upgrade --os=testos
@@ -50,6 +50,6 @@ rpm-ostree rebase --os=testos otheros:
 
 rpm-ostree status | tee OUTPUT-status.txt
 
-assert_not_file_has_content OUTPUT-status.txt '1.0.10'
-version=$(date "+%Y%m%d.0")
+assert_not_file_has_content OUTPUT-status.txt '1\.0\.10'
+version=$(date "+%Y%m%d\.0")
 assert_file_has_content OUTPUT-status.txt $version
