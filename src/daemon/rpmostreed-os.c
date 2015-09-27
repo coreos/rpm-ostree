@@ -847,8 +847,9 @@ rpmostreed_os_load_internals (RpmostreedOS *self,
   GVariant *booted_variant = NULL;
   GVariant *default_variant = NULL;
   GVariant *rollback_variant = NULL;
-
+  GVariant *cached_update = NULL;
   gboolean has_cached_updates = FALSE;
+
   gint rollback_index;
   guint i;
 
@@ -888,18 +889,10 @@ rpmostreed_os_load_internals (RpmostreedOS *self,
   merge_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
   if (merge_deployment)
     {
-      g_autofree gchar *head = NULL;
-
-      origin_refspec = rpmostreed_deployment_get_refspec (merge_deployment);
-      if (!origin_refspec)
-        goto out;
-
-      if (!ostree_repo_resolve_rev (ot_repo, origin_refspec,
-                                   FALSE, &head, NULL))
-        goto out;
-
-      has_cached_updates = g_strcmp0 (ostree_deployment_get_csum (merge_deployment),
-                                      head) != 0;
+      cached_update = rpmostreed_commit_generate_cached_details_variant (merge_deployment,
+                                                                         ot_repo,
+                                                                         NULL);
+      has_cached_updates = cached_update != NULL;
     }
 
 out:
@@ -920,11 +913,9 @@ out:
   rpmostree_os_set_rollback_deployment (RPMOSTREE_OS (self),
                                         rollback_variant);
 
+  rpmostree_os_set_cached_update (RPMOSTREE_OS (self), cached_update);
   rpmostree_os_set_has_cached_update_rpm_diff (RPMOSTREE_OS (self),
                                                has_cached_updates);
-
-  rpmostree_os_set_upgrade_origin (RPMOSTREE_OS (self),
-                                   origin_refspec ? origin_refspec : "");
   g_dbus_interface_skeleton_flush(G_DBUS_INTERFACE_SKELETON (self));
 }
 
