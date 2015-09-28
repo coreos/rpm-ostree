@@ -154,13 +154,14 @@ rpmostreed_os_init (RpmostreedOS *self)
 
 static void
 set_diff_task_result (GTask *task,
-                      GVariant *value,
+                      GVariant *diff,
+                      GVariant *details,
                       GError *error)
 {
   if (error == NULL)
     {
       g_task_return_pointer (task,
-                             g_variant_new ("(@a(sua{sv}))", value),
+                             g_variant_new ("(@a(sua{sv})@a{sv})", diff, details),
                              NULL);
     }
   else
@@ -186,6 +187,7 @@ get_rebase_diff_variant_in_thread (GTask *task,
   g_autofree gchar *base_refspec = NULL;
 
   GVariant *value = NULL; /* freed when invoked */
+  GVariant *details = NULL; /* freed when invoked */
   GError *error = NULL; /* freed when invoked */
   gchar *refspec = data_ptr; /* freed by task */
 
@@ -221,11 +223,14 @@ get_rebase_diff_variant_in_thread (GTask *task,
                                       comp_ref,
                                       cancellable,
                                       &error);
+  details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
+                                                               ot_repo,
+                                                               comp_ref);
 
 out:
   rpmostreed_sysroot_reader_unlock (global_sysroot);
 
-  set_diff_task_result (task, value, error);
+  set_diff_task_result (task, value, details, error);
 }
 
 static void
@@ -245,6 +250,7 @@ get_upgrade_diff_variant_in_thread (GTask *task,
   glnx_unref_object OstreeDeployment *base_deployment = NULL;
 
   GVariant *value = NULL; /* freed when invoked */
+  GVariant *details = NULL; /* freed when invoked */
   GError *error = NULL; /* freed when invoked */
 
   global_sysroot = rpmostreed_sysroot_get ();
@@ -297,10 +303,14 @@ get_upgrade_diff_variant_in_thread (GTask *task,
                                       cancellable,
                                       &error);
 
+  details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
+                                                               ot_repo,
+                                                               comp_ref);
+
 out:
   rpmostreed_sysroot_reader_unlock (global_sysroot);
 
-  set_diff_task_result (task, value, error);
+  set_diff_task_result (task, value, details, error);
 }
 
 static void
@@ -369,8 +379,16 @@ get_deployments_diff_variant_in_thread (GTask *task,
 
 out:
   rpmostreed_sysroot_reader_unlock (global_sysroot);
-
-  set_diff_task_result (task, value, error);
+  if (error == NULL)
+    {
+      g_task_return_pointer (task,
+                             g_variant_new ("(@a(sua{sv}))", value),
+                             NULL);
+    }
+  else
+    {
+      g_task_return_error (task, error);
+    }
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
