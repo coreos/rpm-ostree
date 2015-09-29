@@ -461,6 +461,7 @@ sysroot_transform_transaction_to_attrs (GBinding *binding,
   RpmostreedTransaction *transaction;
   GVariant *variant;
   const char *method_name = "";
+  const char *path = "";
   const char *sender_name = "";
 
   transaction = g_value_get_object (src_value);
@@ -471,10 +472,11 @@ sysroot_transform_transaction_to_attrs (GBinding *binding,
 
       invocation = rpmostreed_transaction_get_invocation (transaction);
       method_name = g_dbus_method_invocation_get_method_name (invocation);
+      path = g_dbus_method_invocation_get_object_path (invocation);
       sender_name = g_dbus_method_invocation_get_sender (invocation);
     }
 
-  variant = g_variant_new ("(ss)", method_name, sender_name);
+  variant = g_variant_new ("(sss)", method_name, sender_name, path);
 
   g_value_set_variant (dst_value, variant);
 
