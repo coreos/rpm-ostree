@@ -141,26 +141,17 @@ rpmostreed_deployment_generate_blank_variant (void)
   return g_variant_dict_end (&dict);
 }
 
-GVariant *
-rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
-                                        OstreeRepo *repo)
+static void
+variant_add_commit_details (GVariantDict *dict,
+                            OstreeRepo *repo,
+                            const gchar *csum)
 {
   g_autoptr(GVariant) commit = NULL;
-
-  g_autofree gchar *origin_refspec = NULL;
-  g_autofree gchar *version_commit = NULL;
-  g_autofree gchar *id = NULL;
-
-  GVariant *sigs = NULL; /* floating variant */
+  g_autoptr(GVariant) metadata = NULL;
   GError *error = NULL;
 
-  GVariantDict dict;
+  g_autofree gchar *version_commit = NULL;
   guint64 timestamp = 0;
-
-  const gchar *osname = ostree_deployment_get_osname (deployment);
-  const gchar *csum = ostree_deployment_get_csum (deployment);
-  gint serial = ostree_deployment_get_deployserial (deployment);
-  id = rpmostreed_deployment_generate_id (deployment);
 
   if (ostree_repo_load_variant (repo,
                                 OSTREE_OBJECT_TYPE_COMMIT,
@@ -168,7 +159,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
                                 &commit,
                                 &error))
     {
-      g_autoptr(GVariant) metadata = NULL;
+
       timestamp = ostree_commit_get_timestamp (commit);
       metadata = g_variant_get_child_value (commit, 0);
       if (metadata != NULL)
@@ -178,7 +169,32 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
     {
       g_warning ("Error loading commit %s", error->message);
     }
+
+  if (version_commit != NULL)
+    g_variant_dict_insert (dict, "version", "s", version_commit);
+  if (timestamp > 0)
+    g_variant_dict_insert (dict, "timestamp", "t", timestamp);
+
   g_clear_error (&error);
+}
+
+GVariant *
+rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
+                                        OstreeRepo *repo)
+{
+  g_autoptr(GVariant) commit = NULL;
+
+  g_autofree gchar *origin_refspec = NULL;
+  g_autofree gchar *id = NULL;
+
+  GVariant *sigs = NULL; /* floating variant */
+
+  GVariantDict dict;
+
+  const gchar *osname = ostree_deployment_get_osname (deployment);
+  const gchar *csum = ostree_deployment_get_csum (deployment);
+  gint serial = ostree_deployment_get_deployserial (deployment);
+  id = rpmostreed_deployment_generate_id (deployment);
 
   origin_refspec = rpmostreed_deployment_get_refspec (deployment);
   if (origin_refspec)
@@ -191,16 +207,67 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
     g_variant_dict_insert (&dict, "osname", "s", osname);
   g_variant_dict_insert (&dict, "serial", "i", serial);
   g_variant_dict_insert (&dict, "checksum", "s", csum);
-  if (version_commit != NULL)
-    g_variant_dict_insert (&dict, "version", "s", version_commit);
-  if (timestamp > 0)
-    g_variant_dict_insert (&dict, "timestamp", "t", timestamp);
+
+  variant_add_commit_details (&dict, repo, csum);
   if (origin_refspec != NULL)
     g_variant_dict_insert (&dict, "origin", "s", origin_refspec);
   if (sigs != NULL)
     g_variant_dict_insert_value (&dict, "signatures", sigs);
 
   return g_variant_dict_end (&dict);
+}
+
+GVariant *
+rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
+                                                   OstreeRepo *repo,
+                                                   const gchar *refspec)
+{
+  g_autofree gchar *origin_refspec = NULL;
+  g_autofree gchar *head = NULL;
+  const gchar *osname;
+  const gchar *csum;
+
+  GVariant *sigs = NULL; /* floating variant */
+  GVariant *ret = NULL; /* floating variant */
+  GError *error = NULL;
+
+  GVariantDict dict;
+
+  osname = ostree_deployment_get_osname (deployment);
+  csum = ostree_deployment_get_csum (deployment);
+
+  if (refspec)
+    origin_refspec = g_strdup (refspec);
+  else
+    origin_refspec = rpmostreed_deployment_get_refspec (deployment);
+
+  if (!origin_refspec)
+    goto out;
+
+  if (!ostree_repo_resolve_rev (repo, origin_refspec,
+                                FALSE, &head, &error))
+    {
+      g_warning ("Error loading resolving revision: %s", error->message);
+      goto out;
+    }
+
+  if (g_strcmp0 (csum, head) == 0)
+    goto out;
+
+  sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, head);
+
+  g_variant_dict_init (&dict, NULL);
+  if (osname != NULL)
+    g_variant_dict_insert (&dict, "osname", "s", osname);
+  g_variant_dict_insert (&dict, "checksum", "s", head);
+  variant_add_commit_details (&dict, repo, head);
+  g_variant_dict_insert (&dict, "origin", "s", origin_refspec);
+  if (sigs != NULL)
+    g_variant_dict_insert_value (&dict, "signatures", sigs);
+  ret = g_variant_dict_end (&dict);
+out:
+  g_clear_error (&error);
+  return ret;
 }
 
 gint

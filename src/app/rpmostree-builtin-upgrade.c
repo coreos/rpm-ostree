@@ -128,7 +128,9 @@ rpmostree_builtin_upgrade (int             argc,
       gs_unref_object GFile *rpmdbdir = NULL;
       gs_unref_object GFile *sysroot_file = NULL;
       g_autofree char *origin_description = NULL;
+      g_autoptr(GVariant) cached_update = NULL;
       const char *sysroot_path;
+      GVariantDict upgrade_dict;
 
       _cleanup_rpmrev_ struct RpmRevisionData *rpmrev1 = NULL;
       _cleanup_rpmrev_ struct RpmRevisionData *rpmrev2 = NULL;
@@ -149,7 +151,11 @@ rpmostree_builtin_upgrade (int             argc,
       if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
         goto out;
 
-      origin_description = rpmostree_os_dup_upgrade_origin (os_proxy);
+      cached_update = rpmostree_os_dup_cached_update(os_proxy);
+      g_variant_dict_init (&upgrade_dict, cached_update);
+      if (!g_variant_dict_lookup (&upgrade_dict, "origin", "s", &origin_description))
+        goto out;
+
       if (!ostree_parse_refspec (origin_description, &remote, &ref, error))
          goto out;
 

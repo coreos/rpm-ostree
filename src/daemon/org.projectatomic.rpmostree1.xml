@@ -42,7 +42,16 @@
     <property name="BootedDeployment" type="a{sv}" access="read"/>
     <property name="DefaultDeployment" type="a{sv}" access="read"/>
     <property name="RollbackDeployment" type="a{sv}" access="read"/>
-    <property name="UpgradeOrigin" type="s" access="read"/>
+
+    <!-- CachedUpdate dictionary keys:
+       'osname' (type 's')
+       'checksum' (type 's')
+       'version' (type 's')
+       'timestamp' (type 't')
+       'origin' (type 's')
+       'signatures' (type 'av')
+    -->
+    <property name="CachedUpdate" type="a{sv}" access="read"/>
     <property name="HasCachedUpdateRpmDiff" type="b" access="read"/>
 
     <!-- NONE, DIFF, PREPARE, REBOOT -->
@@ -55,9 +64,18 @@
       <arg type="a(sua{sv})" name="result" direction="out"/>
     </method>
 
+    <!-- details dictionary keys:
+       'osname' (type 's')
+       'checksum' (type 's')
+       'version' (type 's')
+       'timestamp' (type 't')
+       'origin' (type 's')
+       'signatures' (type 'av')
+    -->
     <method name="GetCachedUpdateRpmDiff">
       <arg type="s" name="deployid"/>
       <arg type="a(sua{sv})" name="result" direction="out"/>
+      <arg type="a{sv}" name="details" direction="out"/>
     </method>
 
     <method name="DownloadUpdateRpmDiff">
@@ -90,10 +108,19 @@
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
+    <!-- details dictionary keys:
+       'osname' (type 's')
+       'checksum' (type 's')
+       'version' (type 's')
+       'timestamp' (type 't')
+       'origin' (type 's')
+       'signatures' (type 'av')
+    -->
     <method name="GetCachedRebaseRpmDiff">
       <arg type="s" name="refspec"/>
       <arg type="as" name="packages"/>
       <arg type="a(sua{sv})" name="result" direction="out"/>
+      <arg type="a{sv}" name="details" direction="out"/>
     </method>
 
     <method name="DownloadRebaseRpmDiff">
