@@ -64,6 +64,7 @@ rpmostree_builtin_rollback (int             argc,
     goto out;
 
   if (!rpmostree_os_call_rollback_sync (os_proxy,
+                                        NULL,
                                         &transaction_address,
                                         cancellable,
                                         error))

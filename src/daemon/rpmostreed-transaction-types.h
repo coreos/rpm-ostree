@@ -32,6 +32,7 @@ RpmostreedTransaction *
                 rpmostreed_transaction_new_rollback        (GDBusMethodInvocation *invocation,
                                                             OstreeSysroot *sysroot,
                                                             const char *osname,
+                                                            gboolean reboot,
                                                             GCancellable *cancellable,
                                                             GError **error);
 
@@ -39,6 +40,7 @@ RpmostreedTransaction *
                 rpmostreed_transaction_new_clear_rollback  (GDBusMethodInvocation *invocation,
                                                             OstreeSysroot *sysroot,
                                                             const char *osname,
+                                                            gboolean reboot,
                                                             GCancellable *cancellable,
                                                             GError **error);
 

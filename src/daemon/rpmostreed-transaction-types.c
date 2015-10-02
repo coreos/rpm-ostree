@@ -288,6 +288,7 @@ rpmostreed_transaction_new_package_diff (GDBusMethodInvocation *invocation,
 typedef struct {
   RpmostreedTransaction parent;
   char *osname;
+  gboolean reboot;
 } RollbackTransaction;
 
 typedef RpmostreedTransactionClass RollbackTransactionClass;
@@ -364,6 +365,13 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
         goto out;
     }
 
+  if (self->reboot)
+    {
+      gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
+                                     cancellable, error,
+                                     "systemctl", "reboot", NULL);
+    }
+
   ret = TRUE;
 
 out:
@@ -390,6 +398,7 @@ RpmostreedTransaction *
 rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
                                      OstreeSysroot *sysroot,
                                      const char *osname,
+                                     gboolean reboot,
                                      GCancellable *cancellable,
                                      GError **error)
 {
@@ -408,6 +417,7 @@ rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
   if (self != NULL)
     {
       self->osname = g_strdup (osname);
+      self->reboot = reboot;
     }
 
   return (RpmostreedTransaction *) self;
@@ -418,6 +428,7 @@ rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
 typedef struct {
   RpmostreedTransaction parent;
   char *osname;
+  gboolean reboot;
 } ClearRollbackTransaction;
 
 typedef RpmostreedTransactionClass ClearRollbackTransactionClass;
@@ -477,6 +488,13 @@ clear_rollback_transaction_execute (RpmostreedTransaction *transaction,
                                        error))
     goto out;
 
+  if (self->reboot)
+    {
+      gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
+                                     cancellable, error,
+                                     "systemctl", "reboot", NULL);
+    }
+
   ret = TRUE;
 
 out:
@@ -503,6 +521,7 @@ RpmostreedTransaction *
 rpmostreed_transaction_new_clear_rollback (GDBusMethodInvocation *invocation,
                                            OstreeSysroot *sysroot,
                                            const char *osname,
+                                           gboolean reboot,
                                            GCancellable *cancellable,
                                            GError **error)
 {
@@ -521,6 +540,7 @@ rpmostreed_transaction_new_clear_rollback (GDBusMethodInvocation *invocation,
   if (self != NULL)
     {
       self->osname = g_strdup (osname);
+      self->reboot = reboot;
     }
 
   return (RpmostreedTransaction *) self;
