@@ -511,6 +511,7 @@ os_handle_upgrade (RPMOSTreeOS *interface,
   glnx_unref_object GCancellable *cancellable = NULL;
   GVariantDict options_dict;
   gboolean opt_allow_downgrade = FALSE;
+  gboolean opt_reboot = FALSE;
   const char *osname;
   GError *local_error = NULL;
 
@@ -542,6 +543,9 @@ os_handle_upgrade (RPMOSTreeOS *interface,
   g_variant_dict_lookup (&options_dict,
                          "allow-downgrade", "b",
                          &opt_allow_downgrade);
+  g_variant_dict_lookup (&options_dict,
+                         "reboot", "b",
+                         &opt_reboot);
 
   g_variant_dict_clear (&options_dict);
 
@@ -549,6 +553,7 @@ os_handle_upgrade (RPMOSTreeOS *interface,
                                                     ot_sysroot,
                                                     osname,
                                                     opt_allow_downgrade,
+                                                    opt_reboot,
                                                     cancellable,
                                                     &local_error);
 

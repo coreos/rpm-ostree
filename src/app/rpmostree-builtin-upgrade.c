@@ -35,6 +35,7 @@
 static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_allow_downgrade;
+static gboolean opt_reboot;
 static gboolean opt_check_diff;
 
 static GOptionEntry option_entries[] = {

@@ -47,6 +47,7 @@ RpmostreedTransaction *
                                                             OstreeSysroot *sysroot,
                                                             const char *osname,
                                                             gboolean allow_downgrade,
+                                                            gboolean reboot,
                                                             GCancellable *cancellable,
                                                             GError **error);
 

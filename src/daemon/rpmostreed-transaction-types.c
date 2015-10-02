@@ -26,6 +26,7 @@
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostreed-sysroot.h"
 #include "rpmostreed-utils.h"
+#include "libgsystem.h"
 
 static gboolean
 change_upgrader_refspec (OstreeSysroot *sysroot,
@@ -531,6 +532,7 @@ typedef struct {
   RpmostreedTransaction parent;
   char *osname;
   gboolean allow_downgrade;
+  gboolean reboot;
 } UpgradeTransaction;
 
 typedef RpmostreedTransactionClass UpgradeTransactionClass;
@@ -612,6 +614,13 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
     {
       if (!safe_sysroot_upgrader_deploy (upgrader, cancellable, error))
         goto out;
+
+      if (self->reboot)
+        {
+          gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
+                                         cancellable, error,
+                                         "systemctl", "reboot", NULL);
+        }
     }
   else
     {
@@ -649,6 +658,7 @@ rpmostreed_transaction_new_upgrade (GDBusMethodInvocation *invocation,
                                     OstreeSysroot *sysroot,
                                     const char *osname,
                                     gboolean allow_downgrade,
+                                    gboolean reboot,
                                     GCancellable *cancellable,
                                     GError **error)
 {
@@ -668,6 +678,7 @@ rpmostreed_transaction_new_upgrade (GDBusMethodInvocation *invocation,
     {
       self->osname = g_strdup (osname);
       self->allow_downgrade = allow_downgrade;
+      self->reboot = reboot;
     }
 
   return (RpmostreedTransaction *) self;
