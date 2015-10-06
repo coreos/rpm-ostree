@@ -60,7 +60,7 @@ rpmostree_builtin_status (int             argc,
   g_autoptr(GPtrArray) deployment_dicts = NULL;
   GVariantIter iter;
   GVariant *child;
-  gchar *booted_id = NULL; /* borrowed */
+  g_autofree gchar *booted_id = NULL;
 
   const guint CSUM_DISP_LEN = 10; /* number of checksum characters to display */
   guint i, n;
@@ -90,6 +90,7 @@ rpmostree_builtin_status (int             argc,
     {
       GVariantDict dict;
       g_variant_dict_init (&dict, booted_deployment);
+      g_variant_dict_lookup (&dict, "id", "s", &booted_id);
       booted_signatures = g_variant_dict_lookup_value (&dict, "signatures",
                                                        G_VARIANT_TYPE ("av"));
       g_variant_dict_clear (&dict);
