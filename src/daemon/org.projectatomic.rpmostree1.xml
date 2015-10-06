@@ -84,6 +84,7 @@
 
     <!-- Available options:
          "allow-downgrade" (type 'b')
+         "reboot" (type 'b')
     -->
     <method name="Upgrade">
       <arg type="a{sv}" name="options" direction="in"/>
