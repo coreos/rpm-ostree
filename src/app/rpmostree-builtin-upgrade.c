@@ -52,6 +52,7 @@ get_args_variant (void)
 
   g_variant_dict_init (&dict, NULL);
   g_variant_dict_insert (&dict, "allow-downgrade", "b", opt_allow_downgrade);
+  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
 
   return g_variant_dict_end (&dict);
 }
@@ -192,13 +193,7 @@ rpmostree_builtin_upgrade (int             argc,
         {
           goto out;
         }
-      if (opt_reboot)
-        {
-          gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                         cancellable, error,
-                                         "systemctl", "reboot", NULL);
-        }
-      else
+      if (!opt_reboot)
         {
           const char *sysroot_path;
 
