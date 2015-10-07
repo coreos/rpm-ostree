@@ -88,6 +88,13 @@ rpmostree_builtin_upgrade (int             argc,
                                        error))
     goto out;
 
+  if (opt_check_diff && opt_reboot)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "cannot specify both --reboot and --check-diff");
+      goto out;
+    }
+
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
     goto out;
