@@ -34,3 +34,5 @@ gboolean   rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
                                              gchar *base_refspec,
                                              gchar **out_refspec,
                                              GError **error);
+void
+rpmostreed_reboot (GCancellable *cancellable, GError **error);

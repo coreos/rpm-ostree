@@ -26,7 +26,6 @@
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostreed-sysroot.h"
 #include "rpmostreed-utils.h"
-#include "libgsystem.h"
 
 static gboolean
 change_upgrader_refspec (OstreeSysroot *sysroot,
@@ -366,11 +365,7 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   if (self->reboot)
-    {
-      gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                     cancellable, error,
-                                     "systemctl", "reboot", NULL);
-    }
+    rpmostreed_reboot (cancellable, error);
 
   ret = TRUE;
 
@@ -489,11 +484,7 @@ clear_rollback_transaction_execute (RpmostreedTransaction *transaction,
     goto out;
 
   if (self->reboot)
-    {
-      gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                     cancellable, error,
-                                     "systemctl", "reboot", NULL);
-    }
+    rpmostreed_reboot (cancellable, error);
 
   ret = TRUE;
 
@@ -636,11 +627,7 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
         goto out;
 
       if (self->reboot)
-        {
-          gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                         cancellable, error,
-                                         "systemctl", "reboot", NULL);
-        }
+        rpmostreed_reboot (cancellable, error);
     }
   else
     {
