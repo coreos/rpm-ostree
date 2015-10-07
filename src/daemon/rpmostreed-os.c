@@ -732,6 +732,7 @@ os_handle_rebase (RPMOSTreeOS *interface,
   GVariantDict options_dict;
   gboolean opt_skip_purge = FALSE;
   const char *osname;
+  gboolean opt_reboot = FALSE;
   GError *local_error = NULL;
 
   /* If a compatible transaction is in progress, share its bus address. */
@@ -762,6 +763,9 @@ os_handle_rebase (RPMOSTreeOS *interface,
   g_variant_dict_lookup (&options_dict,
                          "skip-purge", "b",
                          &opt_skip_purge);
+  g_variant_dict_lookup (&options_dict,
+                         "reboot", "b",
+                         &opt_reboot);
 
   g_variant_dict_clear (&options_dict);
 
@@ -770,6 +774,7 @@ os_handle_rebase (RPMOSTreeOS *interface,
                                                    osname,
                                                    arg_refspec,
                                                    opt_skip_purge,
+                                                   opt_reboot,
                                                    cancellable,
                                                    &local_error);
 

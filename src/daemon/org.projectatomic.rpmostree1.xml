@@ -109,6 +109,7 @@
 
     <!-- Available options:
          "skip-purge" (type 'b')
+         "reboot" (type 'b')
     -->
     <method name="Rebase">
       <arg type="a{sv}" name="options" direction="in"/>

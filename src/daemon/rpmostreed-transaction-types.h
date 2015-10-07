@@ -59,5 +59,6 @@ RpmostreedTransaction *
                                                             const char *osname,
                                                             const char *refspec,
                                                             gboolean skip_purge,
+                                                            gboolean reboot,
                                                             GCancellable *cancellable,
                                                             GError **error);

@@ -698,6 +698,7 @@ typedef struct {
   char *osname;
   char *refspec;
   gboolean skip_purge;
+  gboolean reboot;
 } RebaseTransaction;
 
 typedef RpmostreedTransactionClass RebaseTransactionClass;
@@ -799,6 +800,9 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
         goto out;
     }
 
+  if (self->reboot)
+    rpmostreed_reboot (cancellable, error);
+
   ret = TRUE;
 
 out:
@@ -831,6 +835,7 @@ rpmostreed_transaction_new_rebase (GDBusMethodInvocation *invocation,
                                    const char *osname,
                                    const char *refspec,
                                    gboolean skip_purge,
+                                   gboolean reboot,
                                    GCancellable *cancellable,
                                    GError **error)
 {
@@ -852,6 +857,7 @@ rpmostreed_transaction_new_rebase (GDBusMethodInvocation *invocation,
       self->osname = g_strdup (osname);
       self->refspec = g_strdup (refspec);
       self->skip_purge = skip_purge;
+      self->reboot = reboot;
     }
 
   return (RpmostreedTransaction *) self;
