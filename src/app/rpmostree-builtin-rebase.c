@@ -49,6 +49,7 @@ get_args_variant (void)
 
   g_variant_dict_init (&dict, NULL);
   g_variant_dict_insert (&dict, "skip-purge", "b", opt_skip_purge);
+  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
 
   return g_variant_dict_end (&dict);
 }
@@ -113,12 +114,6 @@ rpmostree_builtin_rebase (int             argc,
         goto out;
 
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
-    }
-  else
-    {
-      gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                     cancellable, error,
-                                     "systemctl", "reboot", NULL);
     }
 
   ret = TRUE;

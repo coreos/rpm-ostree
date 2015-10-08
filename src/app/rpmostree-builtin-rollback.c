@@ -37,6 +37,17 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
+static GVariant *
+get_args_variant (void)
+{
+  GVariantDict dict;
+
+  g_variant_dict_init (&dict, NULL);
+  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
+
+  return g_variant_dict_end (&dict);
+}
+
 gboolean
 rpmostree_builtin_rollback (int             argc,
                             char          **argv,
@@ -64,6 +75,7 @@ rpmostree_builtin_rollback (int             argc,
     goto out;
 
   if (!rpmostree_os_call_rollback_sync (os_proxy,
+                                        get_args_variant (),
                                         &transaction_address,
                                         cancellable,
                                         error))
@@ -88,12 +100,6 @@ rpmostree_builtin_rollback (int             argc,
         goto out;
 
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
-    }
-  else
-    {
-      gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                     cancellable, error,
-                                     "systemctl", "reboot", NULL);
     }
 
   ret = TRUE;

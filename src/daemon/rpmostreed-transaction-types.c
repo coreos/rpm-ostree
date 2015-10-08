@@ -287,6 +287,7 @@ rpmostreed_transaction_new_package_diff (GDBusMethodInvocation *invocation,
 typedef struct {
   RpmostreedTransaction parent;
   char *osname;
+  gboolean reboot;
 } RollbackTransaction;
 
 typedef RpmostreedTransactionClass RollbackTransactionClass;
@@ -363,6 +364,9 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
         goto out;
     }
 
+  if (self->reboot)
+    rpmostreed_reboot (cancellable, error);
+
   ret = TRUE;
 
 out:
@@ -389,6 +393,7 @@ RpmostreedTransaction *
 rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
                                      OstreeSysroot *sysroot,
                                      const char *osname,
+                                     gboolean reboot,
                                      GCancellable *cancellable,
                                      GError **error)
 {
@@ -407,6 +412,7 @@ rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
   if (self != NULL)
     {
       self->osname = g_strdup (osname);
+      self->reboot = reboot;
     }
 
   return (RpmostreedTransaction *) self;
@@ -417,6 +423,7 @@ rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
 typedef struct {
   RpmostreedTransaction parent;
   char *osname;
+  gboolean reboot;
 } ClearRollbackTransaction;
 
 typedef RpmostreedTransactionClass ClearRollbackTransactionClass;
@@ -476,6 +483,9 @@ clear_rollback_transaction_execute (RpmostreedTransaction *transaction,
                                        error))
     goto out;
 
+  if (self->reboot)
+    rpmostreed_reboot (cancellable, error);
+
   ret = TRUE;
 
 out:
@@ -502,6 +512,7 @@ RpmostreedTransaction *
 rpmostreed_transaction_new_clear_rollback (GDBusMethodInvocation *invocation,
                                            OstreeSysroot *sysroot,
                                            const char *osname,
+                                           gboolean reboot,
                                            GCancellable *cancellable,
                                            GError **error)
 {
@@ -520,6 +531,7 @@ rpmostreed_transaction_new_clear_rollback (GDBusMethodInvocation *invocation,
   if (self != NULL)
     {
       self->osname = g_strdup (osname);
+      self->reboot = reboot;
     }
 
   return (RpmostreedTransaction *) self;
@@ -531,6 +543,7 @@ typedef struct {
   RpmostreedTransaction parent;
   char *osname;
   gboolean allow_downgrade;
+  gboolean reboot;
 } UpgradeTransaction;
 
 typedef RpmostreedTransactionClass UpgradeTransactionClass;
@@ -612,6 +625,9 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
     {
       if (!safe_sysroot_upgrader_deploy (upgrader, cancellable, error))
         goto out;
+
+      if (self->reboot)
+        rpmostreed_reboot (cancellable, error);
     }
   else
     {
@@ -649,6 +665,7 @@ rpmostreed_transaction_new_upgrade (GDBusMethodInvocation *invocation,
                                     OstreeSysroot *sysroot,
                                     const char *osname,
                                     gboolean allow_downgrade,
+                                    gboolean reboot,
                                     GCancellable *cancellable,
                                     GError **error)
 {
@@ -668,6 +685,7 @@ rpmostreed_transaction_new_upgrade (GDBusMethodInvocation *invocation,
     {
       self->osname = g_strdup (osname);
       self->allow_downgrade = allow_downgrade;
+      self->reboot = reboot;
     }
 
   return (RpmostreedTransaction *) self;
@@ -680,6 +698,7 @@ typedef struct {
   char *osname;
   char *refspec;
   gboolean skip_purge;
+  gboolean reboot;
 } RebaseTransaction;
 
 typedef RpmostreedTransactionClass RebaseTransactionClass;
@@ -781,6 +800,9 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
         goto out;
     }
 
+  if (self->reboot)
+    rpmostreed_reboot (cancellable, error);
+
   ret = TRUE;
 
 out:
@@ -813,6 +835,7 @@ rpmostreed_transaction_new_rebase (GDBusMethodInvocation *invocation,
                                    const char *osname,
                                    const char *refspec,
                                    gboolean skip_purge,
+                                   gboolean reboot,
                                    GCancellable *cancellable,
                                    GError **error)
 {
@@ -834,6 +857,7 @@ rpmostreed_transaction_new_rebase (GDBusMethodInvocation *invocation,
       self->osname = g_strdup (osname);
       self->refspec = g_strdup (refspec);
       self->skip_purge = skip_purge;
+      self->reboot = reboot;
     }
 
   return (RpmostreedTransaction *) self;

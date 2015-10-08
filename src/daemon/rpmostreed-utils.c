@@ -20,6 +20,7 @@
 
 #include "rpmostreed-utils.h"
 #include "rpmostreed-errors.h"
+#include "libgsystem.h"
 
 #include <libglnx.h>
 
@@ -214,4 +215,12 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
 
 out:
   return ret;
+}
+
+void
+rpmostreed_reboot (GCancellable *cancellable, GError **error)
+{
+  gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
+                                 cancellable, error,
+                                 "systemctl", "reboot", NULL);
 }

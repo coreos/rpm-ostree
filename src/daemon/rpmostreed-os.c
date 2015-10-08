@@ -511,6 +511,7 @@ os_handle_upgrade (RPMOSTreeOS *interface,
   glnx_unref_object GCancellable *cancellable = NULL;
   GVariantDict options_dict;
   gboolean opt_allow_downgrade = FALSE;
+  gboolean opt_reboot = FALSE;
   const char *osname;
   GError *local_error = NULL;
 
@@ -542,6 +543,9 @@ os_handle_upgrade (RPMOSTreeOS *interface,
   g_variant_dict_lookup (&options_dict,
                          "allow-downgrade", "b",
                          &opt_allow_downgrade);
+  g_variant_dict_lookup (&options_dict,
+                         "reboot", "b",
+                         &opt_reboot);
 
   g_variant_dict_clear (&options_dict);
 
@@ -549,6 +553,7 @@ os_handle_upgrade (RPMOSTreeOS *interface,
                                                     ot_sysroot,
                                                     osname,
                                                     opt_allow_downgrade,
+                                                    opt_reboot,
                                                     cancellable,
                                                     &local_error);
 
@@ -574,13 +579,16 @@ out:
 
 static gboolean
 os_handle_rollback (RPMOSTreeOS *interface,
-                    GDBusMethodInvocation *invocation)
+                    GDBusMethodInvocation *invocation,
+                    GVariant *arg_options)
 {
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
   const char *osname;
+  gboolean opt_reboot = FALSE;
+  GVariantDict options_dict;
   GError *local_error = NULL;
 
   /* If a compatible transaction is in progress, share its bus address. */
@@ -604,9 +612,18 @@ os_handle_rollback (RPMOSTreeOS *interface,
 
   osname = rpmostree_os_get_name (interface);
 
+  g_variant_dict_init (&options_dict, arg_options);
+
+  g_variant_dict_lookup (&options_dict,
+                         "reboot", "b",
+                         &opt_reboot);
+
+  g_variant_dict_clear (&options_dict);
+
   transaction = rpmostreed_transaction_new_rollback (invocation,
                                                      ot_sysroot,
                                                      osname,
+                                                     opt_reboot,
                                                      cancellable,
                                                      &local_error);
 
@@ -632,13 +649,16 @@ out:
 
 static gboolean
 os_handle_clear_rollback_target (RPMOSTreeOS *interface,
-                                 GDBusMethodInvocation *invocation)
+                                 GDBusMethodInvocation *invocation,
+                                 GVariant *arg_options)
 {
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
   const char *osname;
+  gboolean opt_reboot = FALSE;
+  GVariantDict options_dict;
   GError *local_error = NULL;
 
   /* If a compatible transaction is in progress, share its bus address. */
@@ -660,11 +680,20 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
                                       &local_error))
     goto out;
 
+  g_variant_dict_init (&options_dict, arg_options);
+
+  g_variant_dict_lookup (&options_dict,
+                         "reboot", "b",
+                         &opt_reboot);
+
+  g_variant_dict_clear (&options_dict);
+
   osname = rpmostree_os_get_name (interface);
 
   transaction = rpmostreed_transaction_new_clear_rollback (invocation,
                                                            ot_sysroot,
                                                            osname,
+                                                           opt_reboot,
                                                            cancellable,
                                                            &local_error);
 
@@ -703,6 +732,7 @@ os_handle_rebase (RPMOSTreeOS *interface,
   GVariantDict options_dict;
   gboolean opt_skip_purge = FALSE;
   const char *osname;
+  gboolean opt_reboot = FALSE;
   GError *local_error = NULL;
 
   /* If a compatible transaction is in progress, share its bus address. */
@@ -733,6 +763,9 @@ os_handle_rebase (RPMOSTreeOS *interface,
   g_variant_dict_lookup (&options_dict,
                          "skip-purge", "b",
                          &opt_skip_purge);
+  g_variant_dict_lookup (&options_dict,
+                         "reboot", "b",
+                         &opt_reboot);
 
   g_variant_dict_clear (&options_dict);
 
@@ -741,6 +774,7 @@ os_handle_rebase (RPMOSTreeOS *interface,
                                                    osname,
                                                    arg_refspec,
                                                    opt_skip_purge,
+                                                   opt_reboot,
                                                    cancellable,
                                                    &local_error);
 
