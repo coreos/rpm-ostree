@@ -224,3 +224,199 @@ rpmostreed_reboot (GCancellable *cancellable, GError **error)
                                  cancellable, error,
                                  "systemctl", "reboot", NULL);
 }
+
+/**
+ * rpmostreed_repo_pull_ancestry:
+ * @repo: Repo
+ * @refspec: Repository branch
+ * @visitor: (allow-none): Visitor function to call on each commit
+ * @visitor_data: (allow-none): User data for @visitor
+ * @progress: (allow-none): Progress
+ * @cancellable: Cancellable
+ * @error: Error
+ *
+ * Downloads an ancestry of commit objects starting from @refspec.
+ *
+ * If a @visitor function pointer is given, commit objects are downloaded
+ * in batches and the @visitor function is called for each commit object.
+ * The @visitor function can stop the recursion, such as when looking for
+ * a particular commit.
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+gboolean
+rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
+                               const char               *refspec,
+                               RpmostreedCommitVisitor   visitor,
+                               gpointer                  visitor_data,
+                               OstreeAsyncProgress      *progress,
+                               GCancellable             *cancellable,
+                               GError                  **error)
+{
+  OstreeRepoPullFlags flags;
+  GVariantDict options;
+  GVariant *refs_value;
+  const char *refs_array[] = { NULL, NULL };
+  g_autofree char *remote = NULL;
+  g_autofree char *ref = NULL;
+  g_autofree char *checksum = NULL;
+  int depth, ii;
+  gboolean ret = FALSE;
+
+  g_return_val_if_fail (OSTREE_IS_REPO (repo), FALSE);
+  g_return_val_if_fail (refspec != NULL, FALSE);
+
+  if (!ostree_parse_refspec (refspec, &remote, &ref, error))
+    goto out;
+
+  /* If no visitor function was provided then we won't be short-circuiting
+   * the recursion, so pull everything in one shot. Otherwise pull commits
+   * in increasingly large batches. */
+  depth = (visitor != NULL) ? 10 : -1;
+
+  flags = OSTREE_REPO_PULL_FLAGS_COMMIT_ONLY;
+
+  /* It's important to use the ref name instead of a checksum on the first
+   * pass because we want to search from the latest available commit on the
+   * remote server, which is not necessarily what the ref name is currently
+   * pointing at in our local repo. */
+  refs_array[0] = ref;
+
+  while (TRUE)
+    {
+      /* Floating reference, transferred to dictionary. */
+      refs_value = g_variant_new_strv ((const char * const *) refs_array, -1);
+
+      g_variant_dict_init (&options, NULL);
+      g_variant_dict_insert (&options, "depth", "i", depth);
+      g_variant_dict_insert (&options, "flags", "i", flags);
+      g_variant_dict_insert_value (&options, "refs", refs_value);
+
+      if (!ostree_repo_pull_with_options (repo, remote,
+                                          g_variant_dict_end (&options),
+                                          progress, cancellable, error))
+        goto out;
+
+      /* First pass only.  Now we can resolve the ref to a checksum. */
+      if (checksum == NULL)
+        {
+          if (!ostree_repo_resolve_rev (repo, ref, FALSE, &checksum, error))
+            goto out;
+        }
+
+      /* If depth is negative (no visitor), this loop is skipped. */
+      for (ii = 0; ii < depth && checksum != NULL; ii++)
+        {
+          g_autoptr(GVariant) commit = NULL;
+          gboolean stop = FALSE;
+
+          if (!ostree_repo_load_commit (repo, checksum, &commit, NULL, error))
+            goto out;
+
+          if (!visitor (repo, checksum, commit, visitor_data, &stop, error))
+            goto out;
+
+          g_clear_pointer (&checksum, g_free);
+
+          if (!stop)
+            checksum = ostree_commit_get_parent (commit);
+        }
+
+      /* Break if no visitor, or visitor told us to stop. */
+      if (depth < 0 || checksum == NULL)
+        break;
+
+      /* Pull the next batch of commits, twice as many. */
+      refs_array[0] = checksum;
+      depth = depth * 2;
+    }
+
+  ret = TRUE;
+
+out:
+  return ret;
+}
+
+typedef struct {
+  const char *version;
+  char *checksum;
+} VersionVisitorClosure;
+
+static gboolean
+version_visitor (OstreeRepo  *repo,
+                 const char  *checksum,
+                 GVariant    *commit,
+                 gpointer     user_data,
+                 gboolean    *out_stop,
+                 GError     **error)
+{
+  VersionVisitorClosure *closure = user_data;
+  g_autoptr(GVariant) metadict = NULL;
+  const char *version = NULL;
+
+  metadict = g_variant_get_child_value (commit, 0);
+  if (g_variant_lookup (metadict, "version", "&s", &version))
+    {
+      if (g_str_equal (version, closure->version))
+        {
+          closure->checksum = g_strdup (checksum);
+          *out_stop = TRUE;
+        }
+    }
+
+  return TRUE;
+}
+
+/**
+ * rpmostreed_repo_lookup_version:
+ * @repo: Repo
+ * @refspec: Repository branch
+ * @version: Version to look for
+ * @progress: (allow-none): Progress
+ * @cancellable: Cancellable
+ * @out_checksum: (out) (allow-none): Commit checksum, or %NULL
+ * @error: Error
+ *
+ * Tries to determine the commit checksum for @version on @refspec.
+ * This may require pulling commit objects from a remote repository.
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+gboolean
+rpmostreed_repo_lookup_version (OstreeRepo           *repo,
+                                const char           *refspec,
+                                const char           *version,
+                                OstreeAsyncProgress  *progress,
+                                GCancellable         *cancellable,
+                                char                **out_checksum,
+                                GError              **error)
+{
+  VersionVisitorClosure closure = { version, NULL };
+  gboolean ret = FALSE;
+
+  g_return_val_if_fail (OSTREE_IS_REPO (repo), FALSE);
+  g_return_val_if_fail (refspec != NULL, FALSE);
+  g_return_val_if_fail (version != NULL, FALSE);
+
+  if (!rpmostreed_repo_pull_ancestry (repo, refspec,
+                                      version_visitor, &closure,
+                                      progress, cancellable, error))
+    goto out;
+
+  if (closure.checksum == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                   "Version %s not found in %s", version, refspec);
+      goto out;
+    }
+
+  if (out_checksum != NULL)
+    *out_checksum = g_steal_pointer (&closure.checksum);
+
+  g_free (closure.checksum);
+
+  ret = TRUE;
+
+out:
+  return ret;
+}
