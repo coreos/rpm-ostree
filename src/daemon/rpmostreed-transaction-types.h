@@ -62,3 +62,12 @@ RpmostreedTransaction *
                                                             gboolean reboot,
                                                             GCancellable *cancellable,
                                                             GError **error);
+
+RpmostreedTransaction *
+               rpmostreed_transaction_new_deploy           (GDBusMethodInvocation *invocation,
+                                                            OstreeSysroot *sysroot,
+                                                            const char *osname,
+                                                            const char *revision,
+                                                            gboolean reboot,
+                                                            GCancellable *cancellable,
+                                                            GError **error);

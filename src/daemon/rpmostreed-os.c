@@ -510,6 +510,80 @@ out:
 }
 
 static gboolean
+os_handle_deploy (RPMOSTreeOS *interface,
+                  GDBusMethodInvocation *invocation,
+                  const char *arg_revision,
+                  GVariant *arg_options)
+{
+  RpmostreedOS *self = RPMOSTREED_OS (interface);
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  glnx_unref_object GCancellable *cancellable = NULL;
+  GVariantDict options_dict;
+  gboolean opt_reboot = FALSE;
+  const char *osname;
+  GError *local_error = NULL;
+
+  /* If a compatible transaction is in progress, share its bus address. */
+  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
+  if (transaction != NULL)
+    {
+      if (rpmostreed_transaction_is_compatible (transaction, invocation))
+        goto out;
+
+      g_clear_object (&transaction);
+    }
+
+  cancellable = g_cancellable_new ();
+
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
+    goto out;
+
+  osname = rpmostree_os_get_name (interface);
+
+  /* XXX Fail if option type is wrong? */
+
+  g_variant_dict_init (&options_dict, arg_options);
+
+  g_variant_dict_lookup (&options_dict,
+                         "reboot", "b",
+                         &opt_reboot);
+
+  g_variant_dict_clear (&options_dict);
+
+  transaction = rpmostreed_transaction_new_deploy (invocation,
+                                                   ot_sysroot,
+                                                   osname,
+                                                   arg_revision,
+                                                   opt_reboot,
+                                                   cancellable,
+                                                   &local_error);
+
+  if (transaction == NULL)
+    goto out;
+
+  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+
+out:
+  if (local_error != NULL)
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address;
+      client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_deploy (interface, invocation, client_address);
+    }
+
+  return TRUE;
+}
+
+static gboolean
 os_handle_upgrade (RPMOSTreeOS *interface,
                    GDBusMethodInvocation *invocation,
                    GVariant *arg_options)
@@ -986,6 +1060,7 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_get_cached_update_rpm_diff = os_handle_get_cached_update_rpm_diff;
   iface->handle_get_deployments_rpm_diff   = os_handle_get_deployments_rpm_diff;
   iface->handle_download_update_rpm_diff   = os_handle_download_update_rpm_diff;
+  iface->handle_deploy                     = os_handle_deploy;
   iface->handle_upgrade                    = os_handle_upgrade;
   iface->handle_rollback                   = os_handle_rollback;
   iface->handle_clear_rollback_target      = os_handle_clear_rollback_target;
