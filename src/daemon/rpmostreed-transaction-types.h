@@ -25,6 +25,7 @@ RpmostreedTransaction *
                                                             OstreeSysroot *sysroot,
                                                             const char *osname,
                                                             const char *refspec,
+                                                            const char *revision,
                                                             GCancellable *cancellable,
                                                             GError **error);
 

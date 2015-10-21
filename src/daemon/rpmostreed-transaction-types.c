@@ -98,6 +98,7 @@ safe_sysroot_upgrader_deploy (OstreeSysrootUpgrader *upgrader,
 static gboolean
 safe_sysroot_upgrader_pull_package_diff (OstreeSysrootUpgrader *upgrader,
                                          OstreeAsyncProgress *progress,
+                                         OstreeSysrootUpgraderPullFlags upgrader_flags,
                                          gboolean *out_changed,
                                          GCancellable *cancellable,
                                          GError **error)
@@ -109,7 +110,7 @@ safe_sysroot_upgrader_pull_package_diff (OstreeSysrootUpgrader *upgrader,
 
   success = ostree_sysroot_upgrader_pull_one_dir (upgrader,
                                                   "/usr/share/rpm",
-                                                  0, 0,
+                                                  0, upgrader_flags,
                                                   progress,
                                                   out_changed,
                                                   cancellable,
@@ -147,6 +148,7 @@ typedef struct {
   RpmostreedTransaction parent;
   char *osname;
   char *refspec;
+  char *revision;
 } PackageDiffTransaction;
 
 typedef RpmostreedTransactionClass PackageDiffTransactionClass;
@@ -165,6 +167,7 @@ package_diff_transaction_finalize (GObject *object)
   self = (PackageDiffTransaction *) object;
   g_free (self->osname);
   g_free (self->refspec);
+  g_free (self->revision);
 
   G_OBJECT_CLASS (package_diff_transaction_parent_class)->finalize (object);
 }
@@ -180,8 +183,11 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
   glnx_unref_object OstreeSysrootUpgrader *upgrader = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
+  g_autoptr(GKeyFile) origin = NULL;
   g_autofree gchar *origin_description = NULL;
 
+  OstreeSysrootUpgraderPullFlags upgrader_flags = 0;
+  gboolean upgrading = FALSE;
   gboolean changed = FALSE;
   gboolean ret = FALSE;
 
@@ -192,10 +198,20 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
 
   self = (PackageDiffTransaction *) transaction;
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
-  upgrader = ostree_sysroot_upgrader_new_for_os (sysroot, self->osname,
-                                                 cancellable, error);
+  upgrader = ostree_sysroot_upgrader_new_for_os (sysroot,
+                                                 self->osname,
+                                                 cancellable,
+                                                 error);
   if (upgrader == NULL)
     goto out;
+
+  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
+    goto out;
+
+  origin = ostree_sysroot_upgrader_dup_origin (upgrader);
+
+  /* Determine if we're upgrading before we set the refspec. */
+  upgrading = (self->refspec == NULL && self->revision == NULL);
 
   if (self->refspec != NULL)
     {
@@ -204,6 +220,70 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
                                     NULL, NULL, error))
         goto out;
     }
+  else if (origin != NULL)
+    {
+      self->refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
+      if (self->refspec == NULL)
+        {
+          g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "Could not find refspec for booted deployment");
+        }
+    }
+  else
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Booted deployment has no origin");
+      goto out;
+    }
+
+  progress = ostree_async_progress_new ();
+  rpmostreed_transaction_connect_download_progress (transaction, progress);
+  rpmostreed_transaction_connect_signature_progress (transaction, repo);
+
+  /* If revision string is not a SHA256 checksum, assume it's a version. */
+  if (self->revision != NULL)
+    {
+      g_autofree char *checksum = NULL;
+
+      upgrader_flags |= OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER;
+
+      if (ostree_validate_checksum_string (self->revision, NULL))
+        {
+          checksum = g_steal_pointer (&self->revision);
+        }
+      else
+        {
+          const char *version = self->revision;  /* for clarity */
+
+          rpmostreed_transaction_emit_message_printf (transaction,
+                                                      "Resolving version '%s'",
+                                                      version);
+
+          if (!rpmostreed_repo_lookup_version (repo,
+                                               self->refspec,
+                                               version,
+                                               progress,
+                                               cancellable,
+                                               &checksum,
+                                               error))
+            goto out;
+        }
+
+      g_key_file_set_string (origin, "origin", "override-commit", checksum);
+
+      if (!ostree_sysroot_upgrader_set_origin (upgrader, origin,
+                                               cancellable, error))
+        goto out;
+    }
+  else if (upgrading)
+    {
+      if (g_key_file_remove_key (origin, "origin", "override-commit", NULL))
+        {
+          if (!ostree_sysroot_upgrader_set_origin (upgrader, origin,
+                                                   cancellable, error))
+            goto out;
+        }
+    }
 
   origin_description = ostree_sysroot_upgrader_get_origin_description (upgrader);
   if (origin_description != NULL)
@@ -211,21 +291,22 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
                                                 "Updating from: %s",
                                                 origin_description);
 
-  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-    goto out;
-
-  progress = ostree_async_progress_new ();
-  rpmostreed_transaction_connect_download_progress (transaction, progress);
-  rpmostreed_transaction_connect_signature_progress (transaction, repo);
-
-  if (!safe_sysroot_upgrader_pull_package_diff (upgrader, progress, &changed,
+  if (!safe_sysroot_upgrader_pull_package_diff (upgrader, progress,
+                                                upgrader_flags, &changed,
                                                 cancellable, error))
     goto out;
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
   if (!changed)
-    rpmostreed_transaction_emit_message_printf (transaction, "No upgrade available.");
+    {
+      if (upgrading)
+        rpmostreed_transaction_emit_message_printf (transaction,
+                                                    "No upgrade available.");
+      else
+        rpmostreed_transaction_emit_message_printf (transaction,
+                                                    "No change.");
+    }
 
   ret = TRUE;
 
@@ -258,6 +339,7 @@ rpmostreed_transaction_new_package_diff (GDBusMethodInvocation *invocation,
                                          OstreeSysroot *sysroot,
                                          const char *osname,
                                          const char *refspec,
+                                         const char *revision,
                                          GCancellable *cancellable,
                                          GError **error)
 {
@@ -277,6 +359,7 @@ rpmostreed_transaction_new_package_diff (GDBusMethodInvocation *invocation,
     {
       self->osname = g_strdup (osname);
       self->refspec = g_strdup (refspec);
+      self->revision = g_strdup (revision);
     }
 
   return (RpmostreedTransaction *) self;

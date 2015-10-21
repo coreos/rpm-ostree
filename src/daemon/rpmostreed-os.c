@@ -325,6 +325,94 @@ out:
 }
 
 static void
+get_deploy_diff_variant_in_thread (GTask *task,
+                                   gpointer object,
+                                   gpointer user_data,
+                                   GCancellable *cancellable)
+{
+  RPMOSTreeOS *self = RPMOSTREE_OS (object);
+  RpmostreedSysroot *global_sysroot;
+  const char *revision = user_data;
+  const char *base_checksum;
+  const char *osname;
+
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  glnx_unref_object OstreeRepo *ot_repo = NULL;
+  glnx_unref_object OstreeDeployment *base_deployment = NULL;
+  g_autofree char *base_refspec = NULL;
+  g_autofree char *checksum = NULL;
+
+  GVariant *value = NULL;
+  GVariant *details = NULL;
+  GError *local_error = NULL;
+
+  global_sysroot = rpmostreed_sysroot_get ();
+
+  rpmostreed_sysroot_reader_lock (global_sysroot);
+
+  if (!rpmostreed_sysroot_load_state (global_sysroot,
+                                      cancellable,
+                                      &ot_sysroot,
+                                      &ot_repo,
+                                      &local_error))
+    goto out;
+
+  osname = rpmostree_os_get_name (self);
+  base_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, osname);
+  if (base_deployment == NULL)
+    {
+      local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
+                                 "No deployments found for os %s", osname);
+      goto out;
+    }
+
+  base_checksum = ostree_deployment_get_csum (base_deployment);
+  base_refspec = rpmostreed_deployment_get_refspec (base_deployment);
+
+  /* If revision string is not a SHA256 checksum, assume it's a version. */
+  if (ostree_validate_checksum_string (revision, NULL))
+    {
+      checksum = g_strdup (revision);
+    }
+  else
+    {
+      if (!rpmostreed_repo_lookup_cached_version (ot_repo,
+                                                  base_refspec,
+                                                  revision,
+                                                  cancellable,
+                                                  &checksum,
+                                                  &local_error))
+        goto out;
+    }
+
+  value = rpm_ostree_db_diff_variant (ot_repo,
+                                      base_checksum,
+                                      checksum,
+                                      cancellable,
+                                      &local_error);
+  if (value == NULL)
+    goto out;
+
+  details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
+                                                               ot_repo,
+                                                               NULL);
+
+out:
+  rpmostreed_sysroot_reader_unlock (global_sysroot);
+
+  if (local_error == NULL)
+    {
+      g_task_return_pointer (task,
+                             new_variant_diff_result (value, details),
+                             (GDestroyNotify) NULL);
+    }
+  else
+    {
+      g_task_return_error (task, local_error);
+    }
+}
+
+static void
 get_deployments_diff_variant_in_thread (GTask *task,
                                         gpointer object,
                                         gpointer data_ptr,
@@ -486,6 +574,7 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
                                                          ot_sysroot,
                                                          osname,
                                                          NULL,  /* refspec */
+                                                         NULL,  /* revision */
                                                          cancellable,
                                                          &local_error);
 
@@ -942,6 +1031,7 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
                                                          ot_sysroot,
                                                          osname,
                                                          arg_refspec,
+                                                         NULL,  /* revision */
                                                          cancellable,
                                                          &local_error);
 
@@ -960,6 +1050,90 @@ out:
       const char *client_address;
       client_address = rpmostreed_transaction_get_client_address (transaction);
       rpmostree_os_complete_download_rebase_rpm_diff (interface, invocation, client_address);
+    }
+
+  return TRUE;
+}
+
+static gboolean
+os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
+                                      GDBusMethodInvocation *invocation,
+                                      const char *arg_revision,
+                                      const char * const *arg_packages)
+{
+  RpmostreedOS *self = RPMOSTREED_OS (interface);
+  g_autoptr(GTask) task = NULL;
+  g_autoptr(GCancellable) cancellable = NULL;
+
+  /* XXX Ignoring arg_packages for now. */
+
+  cancellable = g_cancellable_new ();
+
+  task = g_task_new (self, cancellable, task_result_invoke, invocation);
+  g_task_set_task_data (task, g_strdup (arg_revision), g_free);
+  g_task_run_in_thread (task, get_deploy_diff_variant_in_thread);
+
+  return TRUE;
+}
+
+static gboolean
+os_handle_download_deploy_rpm_diff (RPMOSTreeOS *interface,
+                                    GDBusMethodInvocation *invocation,
+                                    const char *arg_revision,
+                                    const char * const *arg_packages)
+{
+  RpmostreedOS *self = RPMOSTREED_OS (interface);
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  g_autoptr(GCancellable) cancellable = NULL;
+  const char *osname;
+  GError *local_error = NULL;
+
+  /* XXX Ignoring arg_packages for now. */
+
+  /* If a compatible transaction is in progress, share its bus address. */
+  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
+  if (transaction != NULL)
+    {
+      if (rpmostreed_transaction_is_compatible (transaction, invocation))
+        goto out;
+
+      g_clear_object (&transaction);
+    }
+
+  cancellable = g_cancellable_new ();
+
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
+    goto out;
+
+  osname = rpmostree_os_get_name (interface);
+
+  transaction = rpmostreed_transaction_new_package_diff (invocation,
+                                                         ot_sysroot,
+                                                         osname,
+                                                         NULL, /* refspec */
+                                                         arg_revision,
+                                                         cancellable,
+                                                         &local_error);
+  if (transaction == NULL)
+    goto out;
+
+  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+
+out:
+  if (local_error != NULL)
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address;
+      client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_download_deploy_rpm_diff (interface, invocation, client_address);
     }
 
   return TRUE;
@@ -1067,6 +1241,8 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_rebase                     = os_handle_rebase;
   iface->handle_get_cached_rebase_rpm_diff = os_handle_get_cached_rebase_rpm_diff;
   iface->handle_download_rebase_rpm_diff   = os_handle_download_rebase_rpm_diff;
+  iface->handle_get_cached_deploy_rpm_diff = os_handle_get_cached_deploy_rpm_diff;
+  iface->handle_download_deploy_rpm_diff   = os_handle_download_deploy_rpm_diff;
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
