@@ -152,6 +152,29 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
+        <term><command>deploy</command></term>
+
+        <listitem>
+          <para>
+            Similar to <literal>upgrade</literal>, but download a specific
+            version of the current tree which may be newer or older than your
+            running filesystem tree.  The tree to download can be specified by
+            its SHA256 checksum, or by its "version" metadata value.
+          </para>
+
+          <para>
+            <option>--reboot</option> or <option>-r</option> to initiate a
+            reboot after the downloaded tree is prepared.
+          </para>
+
+          <para>
+            <option>--preview</option> to download only /usr/share/rpm in
+            order to preview the package changes with the current tree.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><command>compose</command></term>
 	
 	<listitem><para>Entrypoint for tree composition; most

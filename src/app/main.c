@@ -38,6 +38,7 @@ static RpmOstreeCommand commands[] = {
   { "compose", rpmostree_builtin_compose },
 #endif
   { "db", rpmostree_builtin_db },
+  { "deploy", rpmostree_builtin_deploy },
   { "rebase", rpmostree_builtin_rebase },
   { "rollback", rpmostree_builtin_rollback },
   { "status", rpmostree_builtin_status },
