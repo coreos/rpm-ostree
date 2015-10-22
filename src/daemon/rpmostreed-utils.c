@@ -420,3 +420,72 @@ rpmostreed_repo_lookup_version (OstreeRepo           *repo,
 out:
   return ret;
 }
+
+/**
+ * rpmostreed_repo_lookup_cached_version:
+ * @repo: Repo
+ * @refspec: Repository branch
+ * @version: Version to look for
+ * @cancellable: Cancellable
+ * @out_checksum: (out) (allow-none): Commit checksum, or %NULL
+ * @error: Error
+ *
+ * Similar to rpmostreed_repo_lookup_version(), except without pulling
+ * from a remote repository.  It traverses whatever commits are available
+ * locally in @repo.
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+gboolean
+rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
+                                       const char    *refspec,
+                                       const char    *version,
+                                       GCancellable  *cancellable,
+                                       char         **out_checksum,
+                                       GError       **error)
+{
+  VersionVisitorClosure closure = { version, NULL };
+  g_autofree char *checksum = NULL;
+  gboolean ret = FALSE;
+
+  g_return_val_if_fail (OSTREE_IS_REPO (repo), FALSE);
+  g_return_val_if_fail (refspec != NULL, FALSE);
+  g_return_val_if_fail (version != NULL, FALSE);
+
+  if (!ostree_repo_resolve_rev (repo, refspec, FALSE, &checksum, error))
+    goto out;
+
+  while (checksum != NULL)
+    {
+      g_autoptr(GVariant) commit = NULL;
+      gboolean stop = FALSE;
+
+      if (!ostree_repo_load_commit (repo, checksum, &commit, NULL, error))
+        goto out;
+
+      if (!version_visitor (repo, checksum, commit, &closure, &stop, error))
+        goto out;
+
+      g_clear_pointer (&checksum, g_free);
+
+      if (!stop)
+        checksum = ostree_commit_get_parent (commit);
+    }
+
+  if (closure.checksum == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                   "Version %s not cached in %s", version, refspec);
+      goto out;
+    }
+
+  if (out_checksum != NULL)
+    *out_checksum = g_steal_pointer (&closure.checksum);
+
+  g_free (closure.checksum);
+
+  ret = TRUE;
+
+out:
+  return ret;
+}
