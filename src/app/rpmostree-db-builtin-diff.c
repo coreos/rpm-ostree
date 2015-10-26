@@ -21,6 +21,7 @@
 #include "config.h"
 
 #include "rpmostree-db-builtins.h"
+#include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 
 static char *opt_format;
@@ -47,14 +48,11 @@ rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GEr
 
   if (argc != 3)
     {
-      gs_free char *help;
+      g_autofree char *message = NULL;
 
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "\"%s\" takes exactly 2 arguments", g_get_prgname ());
-
-      help = g_option_context_get_help (context, FALSE, NULL);
-      g_printerr ("%s", help);
-
+      message = g_strdup_printf ("\"%s\" takes exactly 2 arguments",
+                                 g_get_prgname ());
+      rpmostree_usage_error (context, message, error);
       goto out;
     }
 

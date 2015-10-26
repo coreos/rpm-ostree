@@ -24,6 +24,11 @@
 
 G_BEGIN_DECLS
 
+void
+rpmostree_usage_error (GOptionContext  *context,
+                       const char      *message,
+                       GError         **error);
+
 gboolean
 rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
                               GCancellable     *cancellable,

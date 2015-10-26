@@ -80,11 +80,17 @@ rpmostree_builtin_rebase (int             argc,
                                        error))
     goto out;
 
+  if (argc < 2)
+    {
+      rpmostree_usage_error (context, "REFSPEC must be specified", error);
+      goto out;
+    }
+
+  new_provided_refspec = argv[1];
+
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
     goto out;
-
-  new_provided_refspec = argv[1];
 
   if (!rpmostree_os_call_rebase_sync (os_proxy,
                                       get_args_variant (),

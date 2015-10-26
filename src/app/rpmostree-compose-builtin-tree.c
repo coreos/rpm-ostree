@@ -37,6 +37,7 @@
 #include "rpmostree-cleanup.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
+#include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 
 #include "libgsystem.h"
@@ -622,7 +623,7 @@ rpmostree_compose_builtin_tree (int             argc,
 {
   gboolean ret = FALSE;
   GError *temp_error = NULL;
-  GOptionContext *context = g_option_context_new ("- Run yum and commit the result to an OSTree repository");
+  GOptionContext *context = g_option_context_new ("TREEFILE - Run yum and commit the result to an OSTree repository");
   const char *ref;
   RpmOstreeTreeComposeContext selfdata = { NULL, };
   RpmOstreeTreeComposeContext *self = &selfdata;
@@ -659,16 +660,13 @@ rpmostree_compose_builtin_tree (int             argc,
 
   if (argc < 2)
     {
-      g_printerr ("usage: rpm-ostree compose tree TREEFILE\n");
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Option processing failed");
+      rpmostree_usage_error (context, "TREEFILE must be specified", error);
       goto out;
     }
   
   if (!opt_repo)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "--repo must be specified");
+      rpmostree_usage_error (context, "--repo must be specified", error);
       goto out;
     }
 

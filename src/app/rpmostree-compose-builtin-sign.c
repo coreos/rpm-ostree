@@ -24,6 +24,7 @@
 #include <glib-unix.h>
 
 #include "rpmostree-compose-builtins.h"
+#include "rpmostree-libbuiltin.h"
 
 #include "libgsystem.h"
 
@@ -69,8 +70,7 @@ rpmostree_compose_builtin_sign (int            argc,
 
   if (!(opt_repo_path && opt_key_id && opt_rev))
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Missing required argument");
+      rpmostree_usage_error (context, "Missing required argument", error);
       goto out;
     }
 
