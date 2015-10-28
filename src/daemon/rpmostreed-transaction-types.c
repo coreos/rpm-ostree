@@ -659,6 +659,7 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
   glnx_unref_object OstreeSysrootUpgrader *upgrader = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
+  g_autoptr(GKeyFile) origin = NULL;
 
   g_autofree gchar *origin_description = NULL;
 
@@ -683,6 +684,19 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
 
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     goto out;
+
+  origin = ostree_sysroot_upgrader_dup_origin (upgrader);
+  if (origin != NULL)
+    {
+      /* Strip any override-commit from the origin file so
+       * we always upgrade to the latest available commit. */
+      if (g_key_file_remove_key (origin, "origin", "override-commit", NULL))
+        {
+          /* XXX GCancellable parameter is not used. */
+          if (!ostree_sysroot_upgrader_set_origin (upgrader, origin, NULL, error))
+            goto out;
+        }
+    }
 
   if (self->allow_downgrade)
     upgrader_pull_flags |= OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER;
