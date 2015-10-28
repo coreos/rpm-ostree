@@ -130,61 +130,18 @@ rpmostree_builtin_upgrade (int             argc,
 
   if (opt_check_diff)
     {
-      /* yes, doing this without using dbus */
-      gs_unref_object OstreeSysroot *sysroot = NULL;
-      gs_unref_object OstreeRepo *repo = NULL;
-      gs_unref_object GFile *rpmdbdir = NULL;
-      gs_unref_object GFile *sysroot_file = NULL;
-      g_autofree char *origin_description = NULL;
-      g_autoptr(GVariant) cached_update = NULL;
-      const char *sysroot_path;
-      GVariantDict upgrade_dict;
+      g_autoptr(GVariant) result = NULL;
+      g_autoptr(GVariant) details = NULL;
 
-      _cleanup_rpmrev_ struct RpmRevisionData *rpmrev1 = NULL;
-      _cleanup_rpmrev_ struct RpmRevisionData *rpmrev2 = NULL;
-
-      gs_free char *ref = NULL; /* location of this rev */
-      gs_free char *remote = NULL;
-
-      if (!rpmostree_os_get_has_cached_update_rpm_diff (os_proxy))
+      if (!rpmostree_os_call_get_cached_update_rpm_diff_sync (os_proxy,
+                                                              "",
+                                                              &result,
+                                                              &details,
+                                                              cancellable,
+                                                              error))
         goto out;
 
-      sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-      sysroot_file = g_file_new_for_path (sysroot_path);
-      sysroot = ostree_sysroot_new (sysroot_file);
-
-      if (!ostree_sysroot_load (sysroot, cancellable, error))
-        goto out;
-
-      if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-        goto out;
-
-      cached_update = rpmostree_os_dup_cached_update(os_proxy);
-      g_variant_dict_init (&upgrade_dict, cached_update);
-      if (!g_variant_dict_lookup (&upgrade_dict, "origin", "s", &origin_description))
-        goto out;
-
-      if (!ostree_parse_refspec (origin_description, &remote, &ref, error))
-         goto out;
-
-      if (rpmReadConfigFiles (NULL, NULL))
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "rpm failed to init: %s", rpmlogMessage ());
-          goto out;
-        }
-
-      if (!(rpmrev1 = rpmrev_new (repo,
-                                  ostree_deployment_get_csum (ostree_sysroot_get_booted_deployment (sysroot)),
-                                  NULL, cancellable, error)))
-        goto out;
-
-      if (!(rpmrev2 = rpmrev_new (repo, ref,
-                                  NULL, cancellable, error)))
-        goto out;
-
-      rpmhdrs_diff_prnt_diff (rpmhdrs_diff (rpmrev_get_headers (rpmrev1),
-                                            rpmrev_get_headers (rpmrev2)));
+      rpmostree_print_package_diffs (result);
     }
   else
     {
