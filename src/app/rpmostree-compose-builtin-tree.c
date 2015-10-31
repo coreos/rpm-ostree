@@ -945,11 +945,19 @@ rpmostree_compose_builtin_tree (int             argc,
     }
 
  out:
+  /* Move back out of the workding directory to ensure unmount works */
+  (void )chdir ("/");
+
+  if (self->workdir_dfd != -1)
+    (void) close (self->workdir_dfd);
 
   if (workdir_is_tmp)
     {
       if (opt_workdir_tmpfs)
-        (void) umount (gs_file_get_path_cached (self->workdir));
+        if (umount (gs_file_get_path_cached (self->workdir)) != 0)
+          {
+            fprintf (stderr, "warning: umount failed: %m\n");
+          }
       (void) gs_shutil_rm_rf (self->workdir, NULL, NULL);
     }
   if (self)
