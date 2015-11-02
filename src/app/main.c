@@ -172,12 +172,12 @@ int
 main (int    argc,
       char **argv)
 {
-  GError *error = NULL;
   GCancellable *cancellable = g_cancellable_new ();
   RpmOstreeCommand *command;
   int in, out;
   const char *command_name = NULL;
   gs_free char *prgname = NULL;
+  GError *local_error = NULL;
 
   /* avoid gvfs (http://bugzilla.gnome.org/show_bug.cgi?id=526454) */
   g_setenv ("GIO_USE_VFS", "local", TRUE);
@@ -239,17 +239,17 @@ main (int    argc,
       /* This will not return for some options (e.g. --version). */
       if (rpmostree_option_context_parse (context, NULL, &argc, &argv,
                                           RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-                                          NULL, NULL, &error))
+                                          NULL, NULL, &local_error))
         {
           if (command_name == NULL)
             {
-              g_set_error_literal (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                                   "No command specified");
+              local_error = g_error_new_literal (G_IO_ERROR, G_IO_ERROR_FAILED,
+                                                 "No command specified");
             }
           else
             {
-              g_set_error (&error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Unknown command '%s'", command_name);
+              local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
+                                         "Unknown command '%s'", command_name);
             }
         }
 
@@ -264,11 +264,11 @@ main (int    argc,
   prgname = g_strdup_printf ("%s %s", g_get_prgname (), command_name);
   g_set_prgname (prgname);
 
-  if (!command->fn (argc, argv, cancellable, &error))
+  if (!command->fn (argc, argv, cancellable, &local_error))
     goto out;
 
  out:
-  if (error != NULL)
+  if (local_error != NULL)
     {
       int is_tty = isatty (1);
       const char *prefix = "";
@@ -278,9 +278,9 @@ main (int    argc,
           prefix = "\x1b[31m\x1b[1m"; /* red, bold */
           suffix = "\x1b[22m\x1b[0m"; /* bold off, color reset */
         }
-      g_dbus_error_strip_remote_error (error);
-      g_printerr ("%serror: %s%s\n", prefix, suffix, error->message);
-      g_error_free (error);
+      g_dbus_error_strip_remote_error (local_error);
+      g_printerr ("%serror: %s%s\n", prefix, suffix, local_error->message);
+      g_error_free (local_error);
       return 1;
     }
   return 0;
