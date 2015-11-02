@@ -141,28 +141,32 @@ rpmostree_builtin_upgrade (int             argc,
                                                               error))
         goto out;
 
-      rpmostree_print_package_diffs (result);
-    }
-  else
-    {
-      /* nothing changed */
-      if (default_deployment == NULL)
+      if (g_variant_n_children (result) == 0)
         {
+          exit_status = RPM_OSTREE_EXIT_UNCHANGED;
           goto out;
         }
-      if (!opt_reboot)
+
+      rpmostree_print_package_diffs (result);
+    }
+  else if (!opt_reboot)
+    {
+      const char *sysroot_path;
+
+      if (default_deployment == NULL)
         {
-          const char *sysroot_path;
-
-          sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-
-          if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
-                                                               cancellable,
-                                                               error))
-            goto out;
-
-          g_print ("Run \"systemctl reboot\" to start a reboot\n");
+          exit_status = RPM_OSTREE_EXIT_UNCHANGED;
+          goto out;
         }
+
+      sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
+
+      if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
+                                                           cancellable,
+                                                           error))
+        goto out;
+
+      g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
 
   exit_status = EXIT_SUCCESS;

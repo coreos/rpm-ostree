@@ -104,6 +104,12 @@ Boston, MA 02111-1307, USA.
         effect.</para>
 
         <para>
+          In addition to exit status 0 for success and 1 for error, this
+          command also uses exit status 77 to indicate that no upgrade is
+          available.
+        </para>
+
+        <para>
           <command>--reboot</command> or <command>-r </command> to initiate a reboot after upgrade is prepared.
         </para>
 
@@ -160,6 +166,12 @@ Boston, MA 02111-1307, USA.
             version of the current tree which may be newer or older than your
             running filesystem tree.  The tree to download can be specified by
             its SHA256 checksum, or by its "version" metadata value.
+          </para>
+
+          <para>
+            In addition to exit status 0 for success and 1 for error, this
+            command also uses exit status 77 to indicate that no deployment
+            change occurred.
           </para>
 
           <para>
