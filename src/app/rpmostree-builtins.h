@@ -32,7 +32,7 @@ typedef enum {
 
 typedef struct {
   const char *name;
-  gboolean (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
+  int (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
 } RpmOstreeCommand;
 
 #define BUILTINPROTO(name) gboolean rpmostree_builtin_ ## name (int argc, char **argv, GCancellable *cancellable, GError **error)

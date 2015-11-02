@@ -615,13 +615,13 @@ compose_strv_contains_prefix (gchar **strv,
 }
 
 
-gboolean
+int
 rpmostree_compose_builtin_tree (int             argc,
                                 char          **argv,
                                 GCancellable   *cancellable,
                                 GError        **error)
 {
-  gboolean ret = FALSE;
+  int exit_status = EXIT_FAILURE;
   GError *temp_error = NULL;
   GOptionContext *context = g_option_context_new ("TREEFILE - Run yum and commit the result to an OSTree repository");
   const char *ref;
@@ -760,8 +760,8 @@ rpmostree_compose_builtin_tree (int             argc,
       json_generator_set_pretty (generator, TRUE);
       json_generator_set_root (generator, treefile_rootval);
       (void) json_generator_to_stream (generator, stdout, NULL, NULL);
-      
-      ret = TRUE;
+
+      exit_status = EXIT_SUCCESS;
       goto out;
     }
 
@@ -877,7 +877,7 @@ rpmostree_compose_builtin_tree (int             argc,
     if (unmodified)
       {
         g_print ("No apparent changes since previous commit; use --force-nocache to override\n");
-        ret = TRUE;
+        exit_status = EXIT_SUCCESS;
         goto out;
       }
   }
@@ -942,6 +942,8 @@ rpmostree_compose_builtin_tree (int             argc,
         }
     }
 
+  exit_status = EXIT_SUCCESS;
+
  out:
   /* Move back out of the workding directory to ensure unmount works */
   (void )chdir ("/");
@@ -964,5 +966,6 @@ rpmostree_compose_builtin_tree (int             argc,
       g_clear_pointer (&self->serialized_treefile, g_bytes_unref);
       g_ptr_array_unref (self->treefile_context_dirs);
     }
-  return ret;
+
+  return exit_status;
 }

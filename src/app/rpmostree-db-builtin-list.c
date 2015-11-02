@@ -84,14 +84,14 @@ _builtin_db_list (OstreeRepo *repo,
   return ret;
 }
 
-gboolean
+int
 rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
+  int exit_status = EXIT_FAILURE;
   GOptionContext *context;
   gs_unref_object OstreeRepo *repo = NULL;
   gs_unref_ptrarray GPtrArray *patterns = NULL;
   gs_unref_ptrarray GPtrArray *revs = NULL;
-  gboolean success = FALSE;
   int ii;
 
   context = g_option_context_new ("[PREFIX-PKGNAME...] COMMIT... - List packages within commits");
@@ -129,11 +129,11 @@ rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GEr
   if (!_builtin_db_list (repo, revs, patterns, cancellable, error))
     goto out;
 
-  success = TRUE;
+  exit_status = EXIT_SUCCESS;
 
 out:
   g_option_context_free (context);
 
-  return success;
+  return exit_status;
 }
 

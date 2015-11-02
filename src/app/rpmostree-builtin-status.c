@@ -44,13 +44,13 @@ printchar (char *s, int n)
   g_print ("\n");
 }
 
-gboolean
+int
 rpmostree_builtin_status (int             argc,
                           char          **argv,
                           GCancellable   *cancellable,
                           GError        **error)
 {
-  gboolean ret = FALSE;
+  int exit_status = EXIT_FAILURE;
   GOptionContext *context = g_option_context_new ("- Get the version of the booted system");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
@@ -259,11 +259,11 @@ rpmostree_builtin_status (int             argc,
         }
     }
 
-  ret = TRUE;
+  exit_status = EXIT_SUCCESS;
 
 out:
   /* Does nothing if using the message bus. */
   rpmostree_cleanup_peer ();
 
-	return ret;
+  return exit_status;
 }

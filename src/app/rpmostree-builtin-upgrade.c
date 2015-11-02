@@ -66,13 +66,13 @@ default_changed_callback (GObject *object,
   g_object_get (object, pspec->name, value, NULL);
 }
 
-gboolean
+int
 rpmostree_builtin_upgrade (int             argc,
                            char          **argv,
                            GCancellable   *cancellable,
                            GError        **error)
 {
-  gboolean ret = FALSE;
+  int exit_status = EXIT_FAILURE;
 
   GOptionContext *context = g_option_context_new ("- Perform a system upgrade");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
@@ -208,11 +208,11 @@ rpmostree_builtin_upgrade (int             argc,
         }
     }
 
-  ret = TRUE;
+  exit_status = EXIT_SUCCESS;
 
 out:
   /* Does nothing if using the message bus. */
   rpmostree_cleanup_peer ();
 
-  return ret;
+  return exit_status;
 }

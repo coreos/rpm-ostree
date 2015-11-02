@@ -48,13 +48,13 @@ get_args_variant (void)
   return g_variant_dict_end (&dict);
 }
 
-gboolean
+int
 rpmostree_builtin_rollback (int             argc,
                             char          **argv,
                             GCancellable   *cancellable,
                             GError        **error)
 {
-  gboolean ret = FALSE;
+  int exit_status = EXIT_FAILURE;
 
   GOptionContext *context = g_option_context_new ("- Revert to the previously booted tree");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
@@ -102,11 +102,11 @@ rpmostree_builtin_rollback (int             argc,
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
 
-  ret = TRUE;
+  exit_status = EXIT_SUCCESS;
 
 out:
   /* Does nothing if using the message bus. */
   rpmostree_cleanup_peer ();
 
-  return ret;
+  return exit_status;
 }

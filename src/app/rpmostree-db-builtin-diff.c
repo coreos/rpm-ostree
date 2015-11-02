@@ -31,14 +31,14 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-gboolean
+int
 rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
+  int exit_status = EXIT_FAILURE;
   GOptionContext *context;
   gs_unref_object OstreeRepo *repo = NULL;
   struct RpmRevisionData *rpmrev1 = NULL;
   struct RpmRevisionData *rpmrev2 = NULL;
-  gboolean success = FALSE;
 
   context = g_option_context_new ("COMMIT COMMIT - Show package changes between two commits");
 
@@ -92,7 +92,7 @@ rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GEr
       goto out;
     }
 
-  success = TRUE;
+  exit_status = EXIT_SUCCESS;
 
 out:
   /* Free the RpmRevisionData structs explicitly *before* possibly removing
@@ -103,6 +103,6 @@ out:
 
   g_option_context_free (context);
 
-  return success;
+  return exit_status;
 }
 

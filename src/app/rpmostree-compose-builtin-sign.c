@@ -39,13 +39,13 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-gboolean
+int
 rpmostree_compose_builtin_sign (int            argc,
                                 char         **argv,
                                 GCancellable  *cancellable,
                                 GError       **error)
 {
-  gboolean ret = FALSE;
+  int exit_status = EXIT_FAILURE;
   GOptionContext *context = g_option_context_new ("- Use rpm-sign to sign an OSTree commit");
   gs_unref_object GFile *repopath = NULL;
   gs_unref_object OstreeRepo *repo = NULL;
@@ -136,11 +136,13 @@ rpmostree_compose_builtin_sign (int            argc,
   g_print ("Successfully signed OSTree commit=%s with key=%s\n",
            checksum, opt_key_id);
   
-  ret = TRUE;
+  exit_status = EXIT_SUCCESS;
+
  out:
   if (tmp_commitdata_file)
     (void) gs_file_unlink (tmp_commitdata_file, NULL, NULL);
   if (tmp_sig_file)
     (void) gs_file_unlink (tmp_sig_file, NULL, NULL);
-  return ret;
+
+  return exit_status;
 }

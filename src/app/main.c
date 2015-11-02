@@ -174,6 +174,7 @@ main (int    argc,
 {
   GCancellable *cancellable = g_cancellable_new ();
   RpmOstreeCommand *command;
+  int exit_status = EXIT_SUCCESS;
   int in, out;
   const char *command_name = NULL;
   gs_free char *prgname = NULL;
@@ -251,6 +252,7 @@ main (int    argc,
               local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
                                          "Unknown command '%s'", command_name);
             }
+          exit_status = EXIT_FAILURE;
         }
 
       help = g_option_context_get_help (context, FALSE, NULL);
@@ -264,8 +266,7 @@ main (int    argc,
   prgname = g_strdup_printf ("%s %s", g_get_prgname (), command_name);
   g_set_prgname (prgname);
 
-  if (!command->fn (argc, argv, cancellable, &local_error))
-    goto out;
+  exit_status = command->fn (argc, argv, cancellable, &local_error);
 
  out:
   if (local_error != NULL)
@@ -281,7 +282,11 @@ main (int    argc,
       g_dbus_error_strip_remote_error (local_error);
       g_printerr ("%serror: %s%s\n", prefix, suffix, local_error->message);
       g_error_free (local_error);
-      return 1;
+
+      /* Print a warning if the exit status indicates success when we
+       * actually had an error, so it gets reported and fixed quickly. */
+      g_warn_if_fail (exit_status != EXIT_SUCCESS);
     }
-  return 0;
+
+  return exit_status;
 }
