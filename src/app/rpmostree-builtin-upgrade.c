@@ -35,13 +35,17 @@
 static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_allow_downgrade;
-static gboolean opt_check_diff;
+static gboolean opt_preview;
+static gboolean opt_check;
 
+/* "check-diff" is deprecated, replaced by "preview" */
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after an upgrade is prepared", NULL },
   { "allow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_allow_downgrade, "Permit deployment of chronologically older trees", NULL },
-  { "check-diff", 0, 0, G_OPTION_ARG_NONE, &opt_check_diff, "Check for upgrades and print package diff only", NULL },
+  { "check-diff", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_preview, "Check for upgrades and print package diff only", NULL },
+  { "preview", 0, 0, G_OPTION_ARG_NONE, &opt_preview, "Just preview package differences", NULL },
+  { "check", 0, 0, G_OPTION_ARG_NONE, &opt_check, "Just check if an upgrade is available", NULL },
   { NULL }
 };
 
@@ -89,18 +93,29 @@ rpmostree_builtin_upgrade (int             argc,
                                        error))
     goto out;
 
-  if (opt_check_diff && opt_reboot)
+  if (opt_reboot && opt_preview)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "cannot specify both --reboot and --check-diff");
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Cannot specify both --reboot and --preview");
       goto out;
     }
+
+  if (opt_reboot && opt_check)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Cannot specify both --reboot and --check");
+      goto out;
+    }
+
+  /* If both --check and --preview were passed, --preview overrides. */
+  if (opt_preview)
+    opt_check = FALSE;
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
     goto out;
 
-  if (opt_check_diff)
+  if (opt_preview || opt_check)
     {
       if (!rpmostree_os_call_download_update_rpm_diff_sync (os_proxy,
                                                             &transaction_address,
@@ -128,7 +143,7 @@ rpmostree_builtin_upgrade (int             argc,
                                                 error))
     goto out;
 
-  if (opt_check_diff)
+  if (opt_preview || opt_check)
     {
       g_autoptr(GVariant) result = NULL;
       g_autoptr(GVariant) details = NULL;
@@ -147,7 +162,8 @@ rpmostree_builtin_upgrade (int             argc,
           goto out;
         }
 
-      rpmostree_print_package_diffs (result);
+      if (!opt_check)
+        rpmostree_print_package_diffs (result);
     }
   else if (!opt_reboot)
     {

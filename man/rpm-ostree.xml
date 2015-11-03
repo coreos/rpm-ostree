@@ -115,7 +115,9 @@ Boston, MA 02111-1307, USA.
 
           <para><command>--allow-downgrade</command> to permit deployment of chronologically older trees.</para>
 
-          <para><option>--check-diff</option> to download only /usr/share/rpm in order to do a package-level diff between the two versions.</para>
+          <para><option>--preview</option> to download only /usr/share/rpm in order to do a package-level diff between the two versions.</para>
+
+          <para><option>--check</option> to just check if an upgrade is available, without downloading it or performing a package-level diff.</para>
       </listitem>
       </varlistentry>
 
