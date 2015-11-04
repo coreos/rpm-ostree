@@ -33,6 +33,7 @@
 #include <unistd.h>
 #include <libglnx.h>
 #include <stdlib.h>
+#include <gio/gunixinputstream.h>
 
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
@@ -249,6 +250,66 @@ find_ensure_one_subdirectory (GFile         *d,
 }
 
 static gboolean
+dracut_supports_reproducible (GFile *root, gboolean *supported,
+                              GCancellable  *cancellable, GError **error)
+{
+  int pid, stdout[2];
+  if (pipe (stdout) < 0)
+    {
+      glnx_set_error_from_errno (error);
+      return FALSE;
+    }
+
+  pid = fork ();
+  if (pid < 0)
+    {
+      close (stdout[0]);
+      close (stdout[1]);
+      glnx_set_error_from_errno (error);
+      return FALSE;
+    }
+
+  /* Check that --reproducible is present in the --help output.  */
+  if (pid == 0)
+    {
+      int null;
+      char *child_argv[] = { "dracut", "--help", NULL };
+
+      null = open ("/dev/null", O_RDWR);
+      if (null < 0
+          || close (stdout[0]) < 0
+          || dup2 (stdout[1], 1) < 0
+          || dup2 (null, 0) < 0
+          || dup2 (null, 2) < 0)
+        _exit (1);
+
+      run_sync_in_root (root, "dracut", child_argv, NULL);
+      _exit (1);
+    }
+  else
+    {
+      gsize read = 0;
+      /* the dracut 0.43 --help output is about 8Kb, leave some room.  */
+      const gsize buffer_size = 16384;
+      g_autofree gchar *buffer = g_new (gchar, buffer_size);
+      g_autoptr(GInputStream) in = g_unix_input_stream_new (stdout[0], TRUE);
+
+      if (close (stdout[1]) < 0)
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
+
+      if (!g_input_stream_read_all (in, buffer, buffer_size, &read,
+                                    cancellable, error))
+        return FALSE;
+
+      *supported = g_strstr_len (buffer, read, "--reproducible") != NULL;
+      return TRUE;
+    }
+}
+
+static gboolean
 do_kernel_prep (GFile         *yumroot,
                 JsonObject    *treefile,
                 GCancellable  *cancellable,
@@ -340,10 +401,19 @@ do_kernel_prep (GFile         *yumroot,
   }
 
   {
+    gboolean reproducible;
     gs_unref_ptrarray GPtrArray *dracut_argv = g_ptr_array_new ();
+
+    if (!dracut_supports_reproducible (yumroot, &reproducible, cancellable, error))
+      goto out;
 
     g_ptr_array_add (dracut_argv, "dracut");
     g_ptr_array_add (dracut_argv, "-v");
+    if (reproducible)
+      {
+        g_ptr_array_add (dracut_argv, "--reproducible");
+        g_ptr_array_add (dracut_argv, "--gzip");
+      }
     g_ptr_array_add (dracut_argv, "--tmpdir=/tmp");
     g_ptr_array_add (dracut_argv, "-f");
     g_ptr_array_add (dracut_argv, "/var/tmp/initramfs.img");
