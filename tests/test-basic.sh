@@ -53,3 +53,36 @@ rpm-ostree status | tee OUTPUT-status.txt
 assert_not_file_has_content OUTPUT-status.txt '1\.0\.10'
 version=$(date "+%Y%m%d\.0")
 assert_file_has_content OUTPUT-status.txt $version
+
+# Test 'upgrade --check' w/ no upgrade
+# XXX Disabled this because source repo has no /usr/share/rpm
+#     Maybe that's too heavy a requirement to just check for an
+#     upgrade, but on the other hand this is *RPM*-ostree.
+#rpm-ostree upgrade --os=testos --check
+#test "$?" = "77" || (echo 1>&2 "Expected exit code 77, got $?"; exit 1)
+
+# Jump backward to 1.0.9
+rpm-ostree deploy --os=testos 1.0.9
+rpm-ostree status | head --lines 3 | tee OUTPUT-status.txt
+assert_file_has_content OUTPUT-status.txt '1\.0\.9'
+
+# Remember the current revision for later.
+revision=$(ostree rev-parse --repo=sysroot/ostree/repo otheros:testos/buildmaster/x86_64-runtime)
+
+# Jump forward to a locally known version.
+rpm-ostree deploy --os=testos 1.0.10
+rpm-ostree status | head --lines 3 | tee OUTPUT-status.txt
+assert_file_has_content OUTPUT-status.txt '1\.0\.10'
+
+# Jump forward to a new, locally unknown version.
+# Here we also test the "version=" argument prefix.
+os_repository_new_commit 1 1
+rpm-ostree deploy --os=testos version=$(date "+%Y%m%d.1")
+rpm-ostree status | head --lines 3 | tee OUTPUT-status.txt
+assert_file_has_content OUTPUT-status.txt $(date "+%Y%m%d\.1")
+
+# Jump backward again to 1.0.9, but this time using the
+# "revision=" argument prefix (and test case sensitivity).
+rpm-ostree deploy --os=testos REVISION=$revision
+rpm-ostree status | head --lines 3 | tee OUTPUT-status.txt
+assert_file_has_content OUTPUT-status.txt '1\.0\.9'
