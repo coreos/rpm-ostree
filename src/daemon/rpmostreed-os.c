@@ -341,6 +341,7 @@ get_deploy_diff_variant_in_thread (GTask *task,
   glnx_unref_object OstreeDeployment *base_deployment = NULL;
   g_autofree char *base_refspec = NULL;
   g_autofree char *checksum = NULL;
+  g_autofree char *version = NULL;
 
   GVariant *value = NULL;
   GVariant *details = NULL;
@@ -369,16 +370,17 @@ get_deploy_diff_variant_in_thread (GTask *task,
   base_checksum = ostree_deployment_get_csum (base_deployment);
   base_refspec = rpmostreed_deployment_get_refspec (base_deployment);
 
-  /* If revision string is not a SHA256 checksum, assume it's a version. */
-  if (ostree_validate_checksum_string (revision, NULL))
-    {
-      checksum = g_strdup (revision);
-    }
-  else
+  if (!rpmostreed_parse_revision (revision,
+                                  &checksum,
+                                  &version,
+                                  &local_error))
+    goto out;
+
+  if (version != NULL)
     {
       if (!rpmostreed_repo_lookup_cached_version (ot_repo,
                                                   base_refspec,
-                                                  revision,
+                                                  version,
                                                   cancellable,
                                                   &checksum,
                                                   &local_error))

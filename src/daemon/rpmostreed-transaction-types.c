@@ -240,21 +240,21 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
   rpmostreed_transaction_connect_download_progress (transaction, progress);
   rpmostreed_transaction_connect_signature_progress (transaction, repo);
 
-  /* If revision string is not a SHA256 checksum, assume it's a version. */
   if (self->revision != NULL)
     {
       g_autofree char *checksum = NULL;
+      g_autofree char *version = NULL;
 
       upgrader_flags |= OSTREE_SYSROOT_UPGRADER_PULL_FLAGS_ALLOW_OLDER;
 
-      if (ostree_validate_checksum_string (self->revision, NULL))
-        {
-          checksum = g_steal_pointer (&self->revision);
-        }
-      else
-        {
-          const char *version = self->revision;  /* for clarity */
+      if (!rpmostreed_parse_revision (self->revision,
+                                      &checksum,
+                                      &version,
+                                      error))
+        goto out;
 
+      if (version != NULL)
+        {
           rpmostreed_transaction_emit_message_printf (transaction,
                                                       "Resolving version '%s'",
                                                       version);
@@ -1003,6 +1003,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   g_autoptr(GKeyFile) origin = NULL;
   g_autofree char *checksum = NULL;
+  g_autofree char *version = NULL;
 
   gboolean changed = FALSE;
   gboolean ret = FALSE;
@@ -1036,22 +1037,19 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   rpmostreed_transaction_connect_download_progress (transaction, progress);
   rpmostreed_transaction_connect_signature_progress (transaction, repo);
 
-  /* If revision string is not a SHA256 checksum, assume it's a version. */
-  if (ostree_validate_checksum_string (self->revision, NULL))
-    {
-      checksum = g_steal_pointer (&self->revision);
+  if (!rpmostreed_parse_revision (self->revision,
+                                  &checksum,
+                                  &version,
+                                  error))
+    goto out;
 
-      g_key_file_set_string (origin, "origin", "override-commit", checksum);
-    }
-  else
+  if (version != NULL)
     {
-      const char *version = self->revision;  /* for clarity */
       g_autofree char *refspec = NULL;
-      g_autofree char *comment = NULL;
 
       rpmostreed_transaction_emit_message_printf (transaction,
                                                   "Resolving version '%s'",
-                                                  self->revision);
+                                                  version);
 
       refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
       if (refspec == NULL)
@@ -1069,8 +1067,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                                            &checksum,
                                            error))
         goto out;
+    }
 
-      g_key_file_set_string (origin, "origin", "override-commit", checksum);
+  g_key_file_set_string (origin, "origin", "override-commit", checksum);
+
+  if (version != NULL)
+    {
+      g_autofree char *comment = NULL;
 
       /* Add a comment with the version, to be nice. */
       comment = g_strdup_printf ("Version %s [%.10s]", version, checksum);

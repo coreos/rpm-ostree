@@ -70,3 +70,8 @@ gboolean   rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
                                                   GCancellable  *cancellable,
                                                   char         **out_checksum,
                                                   GError       **error);
+
+gboolean   rpmostreed_parse_revision (const char  *revision,
+                                      char       **out_checksum,
+                                      char       **out_version,
+                                      GError     **error);
