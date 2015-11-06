@@ -104,12 +104,20 @@ Boston, MA 02111-1307, USA.
         effect.</para>
 
         <para>
+          In addition to exit status 0 for success and 1 for error, this
+          command also uses exit status 77 to indicate that no upgrade is
+          available.
+        </para>
+
+        <para>
           <command>--reboot</command> or <command>-r </command> to initiate a reboot after upgrade is prepared.
         </para>
 
           <para><command>--allow-downgrade</command> to permit deployment of chronologically older trees.</para>
 
-          <para><option>--check-diff</option> to download only /usr/share/rpm in order to do a package-level diff between the two versions.</para>
+          <para><option>--preview</option> to download only /usr/share/rpm in order to do a package-level diff between the two versions.</para>
+
+          <para><option>--check</option> to just check if an upgrade is available, without downloading it or performing a package-level diff.</para>
       </listitem>
       </varlistentry>
 
@@ -149,6 +157,35 @@ Boston, MA 02111-1307, USA.
 	extension of <literal>upgrade</literal> which switches to a
 	newer version of the current tree.</para>
 	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><command>deploy</command></term>
+
+        <listitem>
+          <para>
+            Similar to <literal>upgrade</literal>, but download a specific
+            version of the current tree which may be newer or older than your
+            running filesystem tree.  The tree to download can be specified by
+            its SHA256 checksum, or by its "version" metadata value.
+          </para>
+
+          <para>
+            In addition to exit status 0 for success and 1 for error, this
+            command also uses exit status 77 to indicate that no deployment
+            change occurred.
+          </para>
+
+          <para>
+            <option>--reboot</option> or <option>-r</option> to initiate a
+            reboot after the downloaded tree is prepared.
+          </para>
+
+          <para>
+            <option>--preview</option> to download only /usr/share/rpm in
+            order to preview the package changes with the current tree.
+          </para>
+        </listitem>
       </varlistentry>
 
       <varlistentry>

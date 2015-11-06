@@ -225,7 +225,6 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
   g_autofree gchar *origin_refspec = NULL;
   g_autofree gchar *head = NULL;
   const gchar *osname;
-  const gchar *csum;
 
   GVariant *sigs = NULL; /* floating variant */
   GVariant *ret = NULL; /* floating variant */
@@ -234,7 +233,6 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
   GVariantDict dict;
 
   osname = ostree_deployment_get_osname (deployment);
-  csum = ostree_deployment_get_csum (deployment);
 
   if (refspec)
     origin_refspec = g_strdup (refspec);
@@ -250,9 +248,6 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
       g_warning ("Error loading resolving revision: %s", error->message);
       goto out;
     }
-
-  if (g_strcmp0 (csum, head) == 0)
-    goto out;
 
   sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, head);
 

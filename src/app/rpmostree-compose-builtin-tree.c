@@ -37,6 +37,7 @@
 #include "rpmostree-cleanup.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
+#include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 
 #include "libgsystem.h"
@@ -614,15 +615,15 @@ compose_strv_contains_prefix (gchar **strv,
 }
 
 
-gboolean
+int
 rpmostree_compose_builtin_tree (int             argc,
                                 char          **argv,
                                 GCancellable   *cancellable,
                                 GError        **error)
 {
-  gboolean ret = FALSE;
+  int exit_status = EXIT_FAILURE;
   GError *temp_error = NULL;
-  GOptionContext *context = g_option_context_new ("- Run yum and commit the result to an OSTree repository");
+  GOptionContext *context = g_option_context_new ("TREEFILE - Run yum and commit the result to an OSTree repository");
   const char *ref;
   RpmOstreeTreeComposeContext selfdata = { NULL, };
   RpmOstreeTreeComposeContext *self = &selfdata;
@@ -659,16 +660,13 @@ rpmostree_compose_builtin_tree (int             argc,
 
   if (argc < 2)
     {
-      g_printerr ("usage: rpm-ostree compose tree TREEFILE\n");
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Option processing failed");
+      rpmostree_usage_error (context, "TREEFILE must be specified", error);
       goto out;
     }
   
   if (!opt_repo)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "--repo must be specified");
+      rpmostree_usage_error (context, "--repo must be specified", error);
       goto out;
     }
 
@@ -762,8 +760,8 @@ rpmostree_compose_builtin_tree (int             argc,
       json_generator_set_pretty (generator, TRUE);
       json_generator_set_root (generator, treefile_rootval);
       (void) json_generator_to_stream (generator, stdout, NULL, NULL);
-      
-      ret = TRUE;
+
+      exit_status = EXIT_SUCCESS;
       goto out;
     }
 
@@ -879,7 +877,7 @@ rpmostree_compose_builtin_tree (int             argc,
     if (unmodified)
       {
         g_print ("No apparent changes since previous commit; use --force-nocache to override\n");
-        ret = TRUE;
+        exit_status = EXIT_SUCCESS;
         goto out;
       }
   }
@@ -944,6 +942,8 @@ rpmostree_compose_builtin_tree (int             argc,
         }
     }
 
+  exit_status = EXIT_SUCCESS;
+
  out:
   /* Move back out of the workding directory to ensure unmount works */
   (void )chdir ("/");
@@ -966,5 +966,6 @@ rpmostree_compose_builtin_tree (int             argc,
       g_clear_pointer (&self->serialized_treefile, g_bytes_unref);
       g_ptr_array_unref (self->treefile_context_dirs);
     }
-  return ret;
+
+  return exit_status;
 }

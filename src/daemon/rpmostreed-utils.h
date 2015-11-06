@@ -36,3 +36,42 @@ gboolean   rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
                                              GError **error);
 void
 rpmostreed_reboot (GCancellable *cancellable, GError **error);
+
+/* XXX These pull-ancestry and lookup-version functions should eventually
+ *     be integrated into libostree, but it's still a bit premature to do
+ *     so now.  Version integration in ostree needs more design work. */
+
+typedef gboolean (*RpmostreedCommitVisitor) (OstreeRepo  *repo,
+                                             const char  *checksum,
+                                             GVariant    *commit,
+                                             gpointer     user_data,
+                                             gboolean    *out_stop,
+                                             GError     **error);
+
+gboolean   rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
+                                          const char               *refspec,
+                                          RpmostreedCommitVisitor   visitor,
+                                          gpointer                  visitor_data,
+                                          OstreeAsyncProgress      *progress,
+                                          GCancellable             *cancellable,
+                                          GError                  **error);
+
+gboolean   rpmostreed_repo_lookup_version (OstreeRepo           *repo,
+                                           const char           *refspec,
+                                           const char           *version,
+                                           OstreeAsyncProgress  *progress,
+                                           GCancellable         *cancellable,
+                                           char                **out_checksum,
+                                           GError              **error);
+
+gboolean   rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
+                                                  const char    *refspec,
+                                                  const char    *version,
+                                                  GCancellable  *cancellable,
+                                                  char         **out_checksum,
+                                                  GError       **error);
+
+gboolean   rpmostreed_parse_revision (const char  *revision,
+                                      char       **out_checksum,
+                                      char       **out_version,
+                                      GError     **error);

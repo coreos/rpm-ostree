@@ -25,6 +25,7 @@ RpmostreedTransaction *
                                                             OstreeSysroot *sysroot,
                                                             const char *osname,
                                                             const char *refspec,
+                                                            const char *revision,
                                                             GCancellable *cancellable,
                                                             GError **error);
 
@@ -59,6 +60,15 @@ RpmostreedTransaction *
                                                             const char *osname,
                                                             const char *refspec,
                                                             gboolean skip_purge,
+                                                            gboolean reboot,
+                                                            GCancellable *cancellable,
+                                                            GError **error);
+
+RpmostreedTransaction *
+               rpmostreed_transaction_new_deploy           (GDBusMethodInvocation *invocation,
+                                                            OstreeSysroot *sysroot,
+                                                            const char *osname,
+                                                            const char *revision,
                                                             gboolean reboot,
                                                             GCancellable *cancellable,
                                                             GError **error);

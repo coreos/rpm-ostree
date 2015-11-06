@@ -25,7 +25,7 @@
 
 typedef struct {
   const char *name;
-  gboolean (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
+  int (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
 } RpmOstreeDbCommand;
 
 static RpmOstreeDbCommand rpm_subcommands[] = {
@@ -124,13 +124,13 @@ out:
   return success;
 }
 
-gboolean
+int
 rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
   RpmOstreeDbCommand *subcommand;
   const char *subcommand_name = NULL;
   gs_free char *prgname = NULL;
-  gboolean ret = FALSE;
+  int exit_status = EXIT_SUCCESS;
   int in, out;
 
   for (in = 1, out = 1; in < argc; in++, out++)
@@ -189,6 +189,7 @@ rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError *
               g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                            "Unknown \"db\" subcommand '%s'", subcommand_name);
             }
+          exit_status = EXIT_FAILURE;
         }
 
       help = g_option_context_get_help (context, FALSE, NULL);
@@ -202,11 +203,9 @@ rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError *
   prgname = g_strdup_printf ("%s %s", g_get_prgname (), subcommand_name);
   g_set_prgname (prgname);
 
-  if (!subcommand->fn (argc, argv, cancellable, error))
-    goto out;
+  exit_status = subcommand->fn (argc, argv, cancellable, error);
 
-  ret = TRUE;
  out:
-  return ret;
+  return exit_status;
 }
 

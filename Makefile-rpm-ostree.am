@@ -25,6 +25,7 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-compose-builtins.h \
 	src/app/rpmostree-builtin-upgrade.c \
 	src/app/rpmostree-builtin-rollback.c \
+	src/app/rpmostree-builtin-deploy.c \
 	src/app/rpmostree-builtin-rebase.c \
 	src/app/rpmostree-builtin-status.c \
 	src/app/rpmostree-builtin-db.c \

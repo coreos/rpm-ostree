@@ -26,6 +26,22 @@
 #include "rpmostree.h"
 #include "rpmostree-cleanup.h"
 
+void
+rpmostree_usage_error (GOptionContext  *context,
+                       const char      *message,
+                       GError         **error)
+{
+  g_autofree char *help = NULL;
+
+  g_return_if_fail (context != NULL);
+  g_return_if_fail (message != NULL);
+
+  help = g_option_context_get_help (context, TRUE, NULL);
+  g_printerr ("%s\n", help);
+
+  g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, message);
+}
+
 gboolean
 rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
                                                 GCancellable *cancellable,

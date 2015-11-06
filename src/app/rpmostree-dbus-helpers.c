@@ -619,3 +619,80 @@ rpmostree_print_signatures (GVariant *variant,
   g_print ("%s", sigs_buffer->str);
   g_string_free (sigs_buffer, TRUE);
 }
+
+static gint
+pkg_diff_variant_compare (gconstpointer a,
+                          gconstpointer b,
+                          gpointer unused)
+{
+  const char *pkg_name_a = NULL;
+  const char *pkg_name_b = NULL;
+
+  g_variant_get_child ((GVariant *) a, 0, "&s", &pkg_name_a);
+  g_variant_get_child ((GVariant *) b, 0, "&s", &pkg_name_b);
+
+  /* XXX Names should be unique since we're comparing packages
+   *     from two different trees... right? */
+
+  return g_strcmp0 (pkg_name_a, pkg_name_b);
+}
+
+static void
+pkg_diff_variant_print (GVariant *variant)
+{
+  g_autoptr(GVariant) details = NULL;
+  const char *old_name, *old_evr, *old_arch;
+  const char *new_name, *new_evr, *new_arch;
+  gboolean have_old = FALSE;
+  gboolean have_new = FALSE;
+
+  details = g_variant_get_child_value (variant, 2);
+  g_return_if_fail (details != NULL);
+
+  have_old = g_variant_lookup (details,
+                               "PreviousPackage", "(&s&s&s)",
+                               &old_name, &old_evr, &old_arch);
+
+  have_new = g_variant_lookup (details,
+                               "NewPackage", "(&s&s&s)",
+                               &new_name, &new_evr, &new_arch);
+
+  if (have_old && have_new)
+    {
+      g_print ("!%s-%s-%s\n", old_name, old_evr, old_arch);
+      g_print ("=%s-%s-%s\n", new_name, new_evr, new_arch);
+    }
+  else if (have_old)
+    {
+      g_print ("-%s-%s-%s\n", old_name, old_evr, old_arch);
+    }
+  else if (have_new)
+    {
+      g_print ("+%s-%s-%s\n", new_name, new_evr, new_arch);
+    }
+}
+
+void
+rpmostree_print_package_diffs (GVariant *variant)
+{
+  GQueue queue = G_QUEUE_INIT;
+  GVariantIter iter;
+  GVariant *child;
+
+  /* GVariant format should be a(sua{sv}) */
+
+  g_return_if_fail (variant != NULL);
+
+  g_variant_iter_init (&iter, variant);
+
+  /* Queue takes ownership of the child variant. */
+  while ((child = g_variant_iter_next_value (&iter)) != NULL)
+    g_queue_insert_sorted (&queue, child, pkg_diff_variant_compare, NULL);
+
+  while (!g_queue_is_empty (&queue))
+    {
+      child = g_queue_pop_head (&queue);
+      pkg_diff_variant_print (child);
+      g_variant_unref (child);
+    }
+}

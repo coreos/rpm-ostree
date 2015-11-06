@@ -30,7 +30,7 @@
 
 typedef struct {
   const char *name;
-  gboolean (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
+  int (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
 } RpmOstreeComposeCommand;
 
 static RpmOstreeComposeCommand compose_subcommands[] = {
@@ -63,13 +63,13 @@ compose_option_context_new_with_commands (void)
   return context;
 }
 
-gboolean
+int
 rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
-  gboolean ret = FALSE;
   RpmOstreeComposeCommand *subcommand;
   const char *subcommand_name = NULL;
   gs_free char *prgname = NULL;
+  int exit_status = EXIT_SUCCESS;
   int in, out;
 
   for (in = 1, out = 1; in < argc; in++, out++)
@@ -128,6 +128,7 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
               g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                            "Unknown compose command '%s'", subcommand_name);
             }
+          exit_status = EXIT_FAILURE;
         }
 
       help = g_option_context_get_help (context, FALSE, NULL);
@@ -141,10 +142,8 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
   prgname = g_strdup_printf ("%s %s", g_get_prgname (), subcommand_name);
   g_set_prgname (prgname);
 
-  if (!subcommand->fn (argc, argv, cancellable, error))
-    goto out;
- 
-  ret = TRUE;
+  exit_status = subcommand->fn (argc, argv, cancellable, error);
+
  out:
-  return ret;
+  return exit_status;
 }

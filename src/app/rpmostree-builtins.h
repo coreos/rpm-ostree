@@ -25,6 +25,10 @@
 
 G_BEGIN_DECLS
 
+/* Exit code for no change after pulling commits.
+ * Use alongside EXIT_SUCCESS and EXIT_FAILURE. */
+#define RPM_OSTREE_EXIT_UNCHANGED  (77)
+
 typedef enum {
   RPM_OSTREE_BUILTIN_FLAG_NONE = 0,
   RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD = 1 << 0
@@ -32,13 +36,14 @@ typedef enum {
 
 typedef struct {
   const char *name;
-  gboolean (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
+  int (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
 } RpmOstreeCommand;
 
 #define BUILTINPROTO(name) gboolean rpmostree_builtin_ ## name (int argc, char **argv, GCancellable *cancellable, GError **error)
 
 BUILTINPROTO(compose);
 BUILTINPROTO(upgrade);
+BUILTINPROTO(deploy);
 BUILTINPROTO(rebase);
 BUILTINPROTO(rollback);
 BUILTINPROTO(status);

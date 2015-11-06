@@ -21,6 +21,7 @@
 #include "config.h"
 
 #include "rpmostree-db-builtins.h"
+#include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 
 static char *opt_format;
@@ -30,14 +31,14 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-gboolean
+int
 rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
+  int exit_status = EXIT_FAILURE;
   GOptionContext *context;
   gs_unref_object OstreeRepo *repo = NULL;
   struct RpmRevisionData *rpmrev1 = NULL;
   struct RpmRevisionData *rpmrev2 = NULL;
-  gboolean success = FALSE;
 
   context = g_option_context_new ("COMMIT COMMIT - Show package changes between two commits");
 
@@ -47,14 +48,11 @@ rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GEr
 
   if (argc != 3)
     {
-      gs_free char *help;
+      g_autofree char *message = NULL;
 
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "\"%s\" takes exactly 2 arguments", g_get_prgname ());
-
-      help = g_option_context_get_help (context, FALSE, NULL);
-      g_printerr ("%s", help);
-
+      message = g_strdup_printf ("\"%s\" takes exactly 2 arguments",
+                                 g_get_prgname ());
+      rpmostree_usage_error (context, message, error);
       goto out;
     }
 
@@ -94,7 +92,7 @@ rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GEr
       goto out;
     }
 
-  success = TRUE;
+  exit_status = EXIT_SUCCESS;
 
 out:
   /* Free the RpmRevisionData structs explicitly *before* possibly removing
@@ -105,6 +103,6 @@ out:
 
   g_option_context_free (context);
 
-  return success;
+  return exit_status;
 }
 

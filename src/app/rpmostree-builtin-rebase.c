@@ -54,13 +54,13 @@ get_args_variant (void)
   return g_variant_dict_end (&dict);
 }
 
-gboolean
+int
 rpmostree_builtin_rebase (int             argc,
                           char          **argv,
                           GCancellable   *cancellable,
                           GError        **error)
 {
-  gboolean ret = FALSE;
+  int exit_status = EXIT_FAILURE;
   const char *new_provided_refspec;
 
   /* forced blank for now */
@@ -80,11 +80,17 @@ rpmostree_builtin_rebase (int             argc,
                                        error))
     goto out;
 
+  if (argc < 2)
+    {
+      rpmostree_usage_error (context, "REFSPEC must be specified", error);
+      goto out;
+    }
+
+  new_provided_refspec = argv[1];
+
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
     goto out;
-
-  new_provided_refspec = argv[1];
 
   if (!rpmostree_os_call_rebase_sync (os_proxy,
                                       get_args_variant (),
@@ -116,11 +122,11 @@ rpmostree_builtin_rebase (int             argc,
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
 
-  ret = TRUE;
+  exit_status = EXIT_SUCCESS;
 
 out:
   /* Does nothing if using the message bus. */
   rpmostree_cleanup_peer ();
 
-  return ret;
+  return exit_status;
 }

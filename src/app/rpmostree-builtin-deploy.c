@@ -1,6 +1,6 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*-
  *
- * Copyright (C) 2014 Colin Walters <walters@verbum.org>
+ * Copyright (C) 2015 Red Hat, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published
@@ -20,32 +20,25 @@
 
 #include "config.h"
 
-#include <string.h>
-#include <glib-unix.h>
-#include <gio/gio.h>
-
 #include "rpmostree-builtins.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-dbus-helpers.h"
 
-#include "libgsystem.h"
 #include <libglnx.h>
 
 static char *opt_osname;
 static gboolean opt_reboot;
-static gboolean opt_allow_downgrade;
 static gboolean opt_preview;
-static gboolean opt_check;
 
-/* "check-diff" is deprecated, replaced by "preview" */
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
-  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after an upgrade is prepared", NULL },
-  { "allow-downgrade", 0, 0, G_OPTION_ARG_NONE, &opt_allow_downgrade, "Permit deployment of chronologically older trees", NULL },
-  { "check-diff", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_preview, "Check for upgrades and print package diff only", NULL },
+  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after upgrade is prepared", NULL },
+  /* XXX As much as I dislike the inconsistency with "rpm-ostree upgrade",
+   *     calling this option --check-diff doesn't really make sense here.
+   *     A --preview option would work for both commands if we wanted to
+   *     deprecate --check-diff. */
   { "preview", 0, 0, G_OPTION_ARG_NONE, &opt_preview, "Just preview package differences", NULL },
-  { "check", 0, 0, G_OPTION_ARG_NONE, &opt_check, "Just check if an upgrade is available", NULL },
   { NULL }
 };
 
@@ -55,34 +48,35 @@ get_args_variant (void)
   GVariantDict dict;
 
   g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "allow-downgrade", "b", opt_allow_downgrade);
   g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
 
   return g_variant_dict_end (&dict);
 }
 
 static void
-default_changed_callback (GObject *object,
-                          GParamSpec *pspec,
-                          gpointer user_data)
+default_deployment_changed_cb (GObject *object,
+                               GParamSpec *pspec,
+                               GVariant **value)
 {
-  GVariant **value = user_data;
   g_object_get (object, pspec->name, value, NULL);
 }
 
 int
-rpmostree_builtin_upgrade (int             argc,
-                           char          **argv,
-                           GCancellable   *cancellable,
-                           GError        **error)
+rpmostree_builtin_deploy (int            argc,
+                          char         **argv,
+                          GCancellable  *cancellable,
+                          GError       **error)
 {
   int exit_status = EXIT_FAILURE;
-
-  GOptionContext *context = g_option_context_new ("- Perform a system upgrade");
+  GOptionContext *context;
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autoptr(GVariant) default_deployment = NULL;
   g_autofree char *transaction_address = NULL;
+  const char * const packages[] = { NULL };
+  const char *revision;
+
+  context = g_option_context_new ("REVISION - Deploy a specific commit");
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -93,31 +87,23 @@ rpmostree_builtin_upgrade (int             argc,
                                        error))
     goto out;
 
-  if (opt_reboot && opt_preview)
+  if (argc < 2)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Cannot specify both --reboot and --preview");
+      rpmostree_usage_error (context, "REVISION must be specified", error);
       goto out;
     }
 
-  if (opt_reboot && opt_check)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Cannot specify both --reboot and --check");
-      goto out;
-    }
-
-  /* If both --check and --preview were passed, --preview overrides. */
-  if (opt_preview)
-    opt_check = FALSE;
+  revision = argv[1];
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
     goto out;
 
-  if (opt_preview || opt_check)
+  if (opt_preview)
     {
-      if (!rpmostree_os_call_download_update_rpm_diff_sync (os_proxy,
+      if (!rpmostree_os_call_download_deploy_rpm_diff_sync (os_proxy,
+                                                            revision,
+                                                            packages,
                                                             &transaction_address,
                                                             cancellable,
                                                             error))
@@ -125,15 +111,17 @@ rpmostree_builtin_upgrade (int             argc,
     }
   else
     {
+      /* This will set the GVariant if the default deployment changes. */
       g_signal_connect (os_proxy, "notify::default-deployment",
-                        G_CALLBACK (default_changed_callback),
+                        G_CALLBACK (default_deployment_changed_cb),
                         &default_deployment);
 
-      if (!rpmostree_os_call_upgrade_sync (os_proxy,
-                                           get_args_variant (),
-                                           &transaction_address,
-                                           cancellable,
-                                           error))
+      if (!rpmostree_os_call_deploy_sync (os_proxy,
+                                          revision,
+                                          get_args_variant (),
+                                          &transaction_address,
+                                          cancellable,
+                                          error))
         goto out;
     }
 
@@ -143,13 +131,14 @@ rpmostree_builtin_upgrade (int             argc,
                                                 error))
     goto out;
 
-  if (opt_preview || opt_check)
+  if (opt_preview)
     {
       g_autoptr(GVariant) result = NULL;
       g_autoptr(GVariant) details = NULL;
 
-      if (!rpmostree_os_call_get_cached_update_rpm_diff_sync (os_proxy,
-                                                              "",
+      if (!rpmostree_os_call_get_cached_deploy_rpm_diff_sync (os_proxy,
+                                                              revision,
+                                                              packages,
                                                               &result,
                                                               &details,
                                                               cancellable,
@@ -162,8 +151,7 @@ rpmostree_builtin_upgrade (int             argc,
           goto out;
         }
 
-      if (!opt_check)
-        rpmostree_print_package_diffs (result);
+      rpmostree_print_package_diffs (result);
     }
   else if (!opt_reboot)
     {
