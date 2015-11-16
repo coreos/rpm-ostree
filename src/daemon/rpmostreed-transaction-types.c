@@ -878,23 +878,18 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
 
   if (!self->skip_purge)
     {
-      g_autofree gchar *remote = NULL;
-      g_autofree gchar *ref = NULL;
+      g_autofree char *remote = NULL;
+      g_autofree char *ref = NULL;
 
-      if (!ostree_parse_refspec (old_refspec, &remote, &ref, error))
-        goto out;
-
-      if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
-        goto out;
-
-      ostree_repo_transaction_set_ref (repo, remote, ref, NULL);
-
-      rpmostreed_transaction_emit_message_printf (transaction,
-                                                  "Deleting ref '%s'",
-                                                  old_refspec);
-
-      if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
-        goto out;
+      /* The actual rebase has already succeeded, so ignore errors. */
+      if (ostree_parse_refspec (old_refspec, &remote, &ref, NULL))
+        {
+          /* Note: In some cases the source origin ref may not actually
+           * exist; say the admin did a cleanup, or the OS expects post-
+           * install configuration like subscription-manager. */
+          (void) ostree_repo_set_ref_immediate (repo, remote, ref, NULL,
+                                                cancellable, NULL);
+        }
     }
 
   if (self->reboot)
