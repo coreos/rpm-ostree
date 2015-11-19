@@ -113,7 +113,7 @@ rpmostree_option_context_parse (GOptionContext *context,
 
   if (opt_version)
     {
-      g_print ("%s\n  %s\n", PACKAGE_NAME, RPM_OSTREE_FEATURES);
+      g_print ("%s\n  %s\n", PACKAGE_STRING, RPM_OSTREE_FEATURES);
       exit (EXIT_SUCCESS);
     }
 
