@@ -92,6 +92,33 @@ Boston, MA 02111-1307, USA.
 
     <variablelist>
       <varlistentry>
+        <term><command>deploy</command></term>
+
+        <listitem><para>Takes version, branch, or commit ID as an
+        argument, and creates a new deployment using it, setting it up
+        as the default for the next boot.  Unlike most other commands,
+        this will automatically fetch and traverse the origin history
+        to find the target.
+
+	By design, this has no
+        effect on your running filesystem tree.  You must reboot for
+        any changes to take effect.</para>
+
+        <para>
+          In addition to exit status 0 for success and 1 for error,
+          this command also uses exit status 77 to indicate that the
+          system is already on the specified commit.  This tristate
+          return model is intended to support idempotency-oriented
+          systems automation tools like Ansible.
+        </para>
+
+        <para> <command>--reboot</command> or <command>-r </command> to initiate a reboot after upgrade is prepared.</para>
+
+        <para><command>--preview</command> download enough metadata to inspect the RPM diff, but do not actually create a new deployment.</para>
+
+      </listitem>
+      </varlistentry>
+      <varlistentry>
         <term><command>upgrade</command></term>
 
         <listitem><para>Download the latest
