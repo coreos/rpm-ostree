@@ -354,8 +354,13 @@ static gboolean
 add_status_line (TransactionProgress *self,
                  const char *line)
 {
-  self->in_status_line = TRUE;
-  return gs_console_begin_status_line (self->console, line, NULL, NULL);
+  if (self->console)
+    {
+      self->in_status_line = TRUE;
+      return gs_console_begin_status_line (self->console, line, NULL, NULL);
+    }
+  else
+    return TRUE;
 }
 
 
