@@ -106,7 +106,7 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
   if (!subcommand->name)
     {
       GOptionContext *context;
-      gs_free char *help;
+      gs_free char *help = NULL;
 
       context = compose_option_context_new_with_commands ();
 

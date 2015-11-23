@@ -167,7 +167,7 @@ rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError *
   if (!subcommand->name)
     {
       GOptionContext *context;
-      gs_free char *help;
+      gs_free char *help = NULL;
 
       context = rpm_option_context_new_with_commands ();
 

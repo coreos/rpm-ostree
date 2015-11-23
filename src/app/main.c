@@ -234,7 +234,7 @@ main (int    argc,
   if (!command->fn)
     {
       GOptionContext *context;
-      gs_free char *help;
+      gs_free char *help = NULL;
 
       context = option_context_new_with_commands ();
 

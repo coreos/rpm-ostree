@@ -920,7 +920,7 @@ void
 rpmostree_print_transaction (HifContext   *hifctx)
 {
   guint i;
-  g_autoptr(GPtrArray) install;
+  g_autoptr(GPtrArray) install = NULL;
 
   install = hif_goal_get_packages (hif_context_get_goal (hifctx),
                                    HIF_PACKAGE_INFO_INSTALL,

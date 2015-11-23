@@ -190,7 +190,7 @@ transaction_progress_changed_cb (OstreeAsyncProgress *progress,
   GVariant *arg_content;
   GVariant *arg_transfer;
 
-  g_autofree gchar *status;
+  g_autofree gchar *status = NULL;
 
   /* If there is a status that is all we output */
   status = ostree_async_progress_get_status (progress);
