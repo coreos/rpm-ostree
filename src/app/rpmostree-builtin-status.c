@@ -157,7 +157,7 @@ rpmostree_builtin_status (int             argc,
   for (i = 0; i < n; i++)
     {
       GVariantDict *dict;
-      GDateTime *timestamp = NULL;
+      g_autoptr(GDateTime) timestamp = NULL;
       g_autofree char *timestamp_string = NULL;
       g_autofree gchar *truncated_csum = NULL;
       g_autoptr(GVariant) signatures = NULL;
@@ -168,7 +168,7 @@ rpmostree_builtin_status (int             argc,
       gchar *version_string = NULL; /* borrowed */
       gchar *checksum = NULL; /* borrowed */
 
-      gint64 t;
+      guint64 t = 0;
       gint serial;
       gboolean is_booted = FALSE;
 
@@ -187,9 +187,10 @@ rpmostree_builtin_status (int             argc,
       is_booted = g_strcmp0 (booted_id, id) == 0;
 
       timestamp = g_date_time_new_from_unix_utc (t);
-      g_assert (timestamp);
-      timestamp_string = g_date_time_format (timestamp, "%Y-%m-%d %T");
-      g_date_time_unref (timestamp);
+      if (timestamp != NULL)
+        timestamp_string = g_date_time_format (timestamp, "%Y-%m-%d %T");
+      else
+        timestamp_string = g_strdup_printf ("(invalid)");
 
       /* truncate checksum */
       truncated_csum = g_strndup (checksum, CSUM_DISP_LEN);
@@ -213,7 +214,6 @@ rpmostree_builtin_status (int             argc,
       /* print "pretty" row info */
       else
         {
-          guint n_sigs;
           guint tab = 11;
           char *title = NULL;
           if (i==0)
@@ -236,9 +236,8 @@ rpmostree_builtin_status (int             argc,
                   tab, "osname", tab, os_name,
                   tab, "refspec", tab, origin_refspec);
 
-          n_sigs = g_variant_n_children (signatures);
-          if (n_sigs > 0)
-              rpmostree_print_signatures (signatures, "  GPG: ");
+          if (signatures != NULL)
+            rpmostree_print_signatures (signatures, "  GPG: ");
 
           printchar ("=", 60);
         }
