@@ -168,7 +168,7 @@ rpmostree_builtin_status (int             argc,
       gchar *version_string = NULL; /* borrowed */
       gchar *checksum = NULL; /* borrowed */
 
-      gint64 t = 0;
+      guint64 t = 0;
       gint serial;
       gboolean is_booted = FALSE;
 
