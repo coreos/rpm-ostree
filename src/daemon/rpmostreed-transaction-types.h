@@ -77,7 +77,7 @@ RpmostreedTransaction *
                rpmostreed_transaction_new_pkg_add          (GDBusMethodInvocation *invocation,
                                                             OstreeSysroot         *sysroot,
                                                             const char            *osname,
-                                                            char                 **packages,
+                                                            const char *const     *packages,
                                                             gboolean               reboot,
                                                             GCancellable          *cancellable,
                                                             GError               **error);

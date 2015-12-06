@@ -80,10 +80,11 @@ copy_dir_contents_nonrecurse_at (int         src_dfd,
   
   while (glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, cancellable, error))
     {
+      if (dent == NULL)
+	break;
       if (!glnx_file_copy_at (dfd_iter.fd, dent->d_name, NULL, dest_dfd, dent->d_name, 0,
 			      cancellable, error))
 	{
-	  g_prefix_error (error, "While copying rpmdb: ");
 	  goto out;
 	}
     }
@@ -102,31 +103,32 @@ instroot_make_rpmdb_copy (int             dfd,
   gboolean ret = FALSE;
   const char const rpmdb_path[] = "usr/share/rpm";
   const char const rpmdb_path_tmp[] = "usr/share/rpm.tmp";
-  glnx_fd_close int copy_dfd = -1;
+  glnx_fd_close int root_dfd = -1;
+  glnx_fd_close int target_rpmdb_dfd = -1;
 
-  if (TEMP_FAILURE_RETRY (renameat (dfd, rpmdb_path, dfd, rpmdb_path_tmp)) != 0)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
-
-  if (TEMP_FAILURE_RETRY (mkdirat (dfd, rpmdb_path, 0755)) != 0)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
-
-  if (!glnx_opendirat (dfd, rpmdb_path, TRUE, &copy_dfd, error))
+  if (!glnx_opendirat (dfd, root, TRUE, &root_dfd, error))
     goto out;
 
-  { g_autofree char *root_rpmdb_tmp = g_strconcat (root, rpmdb_path_tmp, NULL);
-
-    if (!copy_dir_contents_nonrecurse_at (dfd, root_rpmdb_tmp, copy_dfd, cancellable, error))
+  if (TEMP_FAILURE_RETRY (renameat (root_dfd, rpmdb_path, root_dfd, rpmdb_path_tmp)) != 0)
+    {
+      glnx_set_error_from_errno (error);
       goto out;
+    }
 
-    if (!glnx_shutil_rm_rf_at (dfd, root_rpmdb_tmp, cancellable, error))
+  if (TEMP_FAILURE_RETRY (mkdirat (root_dfd, rpmdb_path, 0755)) != 0)
+    {
+      glnx_set_error_from_errno (error);
       goto out;
-  }
+    }
+
+  if (!glnx_opendirat (root_dfd, rpmdb_path, TRUE, &target_rpmdb_dfd, error))
+    goto out;
+
+  if (!copy_dir_contents_nonrecurse_at (root_dfd, rpmdb_path_tmp, target_rpmdb_dfd, cancellable, error))
+    goto out;
+
+  if (!glnx_shutil_rm_rf_at (root_dfd, rpmdb_path_tmp, cancellable, error))
+    goto out;
 
   ret = TRUE;
  out:
@@ -152,7 +154,10 @@ overlay_packages_in_deploydir (HifContext      *hifctx,
   gboolean ret = FALSE;
 
   if (!instroot_make_rpmdb_copy (dfd, deploydir, cancellable, error))
-    goto out;
+    {
+      g_prefix_error (error, "While copying target rpmdb: ");
+      goto out;
+    }
   
   /* --- Run transaction --- */
   { g_auto(GLnxConsoleRef) console = { 0, };
@@ -337,15 +342,18 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
     }
 
     { g_autofree char *merge_deploy_rpmdb = g_strconcat (merge_deployment_dirpath, "/usr/share/rpm", NULL);
-      glnx_fd_close int merge_deploy_rpmdb_fd = -1;
+      glnx_fd_close int tmp_deploy_rpmdb_fd = -1;
 
-      if (!glnx_opendirat (sysroot_fd, merge_deploy_rpmdb, TRUE,
-			   &merge_deploy_rpmdb_fd, error))
+      if (!glnx_opendirat (sysroot_fd, tmp_deploy_rpmdb, TRUE,
+			   &tmp_deploy_rpmdb_fd, error))
 	goto out;
 
-      if (!copy_dir_contents_nonrecurse_at (sysroot_fd, tmp_deploy, merge_deploy_rpmdb_fd,
+      if (!copy_dir_contents_nonrecurse_at (sysroot_fd, merge_deploy_rpmdb, tmp_deploy_rpmdb_fd,
 					    cancellable, error))
-	goto out;
+	{
+	  g_prefix_error (error, "While copying current rpmdb: ");
+	  goto out;
+	}
     }
 
     { g_autofree char *tmp_deploy_dirpath =
@@ -525,7 +533,7 @@ RpmostreedTransaction *
 rpmostreed_transaction_new_pkg_add (GDBusMethodInvocation *invocation,
 				    OstreeSysroot         *sysroot,
 				    const char            *osname,
-				    char                 **packages,
+				    const char * const    *packages,
 				    gboolean               reboot,
 				    GCancellable          *cancellable,
 				    GError               **error)
@@ -546,7 +554,7 @@ rpmostreed_transaction_new_pkg_add (GDBusMethodInvocation *invocation,
   if (self != NULL)
     {
       self->osname = g_strdup (osname);
-      self->packages = g_strdupv (packages);
+      self->packages = g_strdupv ((char**)packages);
       self->reboot = reboot;
     }
 
