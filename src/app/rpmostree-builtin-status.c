@@ -44,6 +44,16 @@ printchar (char *s, int n)
   g_print ("\n");
 }
 
+static char *
+format_layered_packages_plus (char **packages)
+{
+  guint len = g_strv_length (packages);
+  if (len > 0)
+    return g_strdup_printf (" (+%u)", len);
+  else
+    return g_strdup ("");
+}
+
 int
 rpmostree_builtin_status (int             argc,
                           char          **argv,
@@ -113,6 +123,7 @@ rpmostree_builtin_status (int             argc,
       if (!opt_pretty)
         {
           gchar *origin_refspec = NULL; /* borrowed */
+          gchar **origin_packages = NULL; /* borrowed */
           gchar *os_name = NULL; /* borrowed */
           gchar *version_string = NULL; /* borrowed */
 
@@ -130,7 +141,17 @@ rpmostree_builtin_status (int             argc,
             max_version_len = MAX (max_version_len, strlen (version_string));
 
           if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
-            max_refspec_len = MAX (max_refspec_len, strlen (origin_refspec));
+            {
+              if (g_variant_dict_lookup (dict, "packages", "^a&s", &origin_packages))
+                {
+                  g_autofree gchar *origin_packages_plus =
+                    format_layered_packages_plus (origin_packages);
+
+                  max_refspec_len = MAX (max_refspec_len, strlen (origin_refspec) + strlen (origin_packages_plus));
+                }
+              else
+                max_refspec_len = MAX (max_refspec_len, strlen (origin_refspec));
+            }
         }
 
       g_variant_unref (child);
@@ -164,9 +185,11 @@ rpmostree_builtin_status (int             argc,
 
       gchar *id = NULL; /* borrowed */
       gchar *origin_refspec = NULL; /* borrowed */
+      gchar **origin_packages = NULL; /* borrowed */
       gchar *os_name = NULL; /* borrowed */
       gchar *version_string = NULL; /* borrowed */
       gchar *checksum = NULL; /* borrowed */
+      g_autofree gchar *origin_refspec_description = NULL;
 
       guint64 t = 0;
       gint serial;
@@ -181,8 +204,20 @@ rpmostree_builtin_status (int             argc,
       g_variant_dict_lookup (dict, "version", "s", &version_string);
       g_variant_dict_lookup (dict, "timestamp", "t", &t);
       g_variant_dict_lookup (dict, "origin", "s", &origin_refspec);
+      g_variant_dict_lookup (dict, "packages", "^a&s", &origin_packages);
       signatures = g_variant_dict_lookup_value (dict, "signatures",
                                                 G_VARIANT_TYPE ("av"));
+
+      if (origin_packages)
+        {
+          g_autofree gchar *origin_packages_plus =
+            format_layered_packages_plus (origin_packages);
+          origin_refspec_description = g_strconcat (origin_refspec, origin_packages_plus, NULL);
+        }
+      else
+        {
+          origin_refspec_description = g_strdup (origin_refspec);
+        }
 
       is_booted = g_strcmp0 (booted_id, id) == 0;
 
@@ -208,7 +243,7 @@ rpmostree_builtin_status (int             argc,
           g_print ("%-*s%-*s%-*s\n",
                    max_id_len+buffer, truncated_csum,
                    max_osname_len+buffer, os_name,
-                   max_refspec_len+buffer, origin_refspec);
+                   max_refspec_len+buffer, origin_refspec_description);
         }
 
       /* print "pretty" row info */
@@ -216,6 +251,8 @@ rpmostree_builtin_status (int             argc,
         {
           guint tab = 11;
           char *title = NULL;
+          g_autofree char *packages_joined = g_strjoinv (" ", origin_packages);
+
           if (i==0)
             title = "DEFAULT ON BOOT";
           else if (is_booted || n <= 2)
@@ -230,11 +267,12 @@ rpmostree_builtin_status (int             argc,
           if (version_string)
             g_print ("  %-*s%-*s\n", tab, "version", tab, version_string);
 
-          g_print ("  %-*s%-*s\n  %-*s%-*s.%d\n  %-*s%-*s\n  %-*s%-*s\n",
+          g_print ("  %-*s%-*s\n  %-*s%-*s.%d\n  %-*s%-*s\n  %-*s%-*s\n  %-*s%-*s\n",
                   tab, "timestamp", tab, timestamp_string,
                   tab, "id", tab, checksum, serial,
                   tab, "osname", tab, os_name,
-                  tab, "refspec", tab, origin_refspec);
+                  tab, "refspec", tab, origin_refspec,
+                  tab, "packages", tab, packages_joined);
 
           if (signatures != NULL)
             rpmostree_print_signatures (signatures, "  GPG: ");

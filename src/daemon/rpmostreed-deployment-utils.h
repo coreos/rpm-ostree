@@ -30,6 +30,10 @@ OstreeDeployment *
 
 char *          rpmostreed_deployment_get_refspec (OstreeDeployment *deployment);
 
+void            rpmostreed_deployment_get_refspec_packages (OstreeDeployment *deployment,
+							    char            **out_refspec,
+							    char           ***out_packages);
+
 GVariant *      rpmostreed_deployment_generate_blank_variant (void);
 
 GVariant *      rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,

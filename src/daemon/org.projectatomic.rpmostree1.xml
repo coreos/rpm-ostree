@@ -12,6 +12,7 @@
        'timestamp' (type 't')
        'origin' (type 's')
        'signatures' (type 'av')
+       'packages' (type 'as')
   -->
 
   <interface name="org.projectatomic.rpmostree1.Sysroot">

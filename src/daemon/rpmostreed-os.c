@@ -984,7 +984,6 @@ os_handle_pkg_add (RPMOSTreeOS *interface,
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
   GVariantDict options_dict;
-  gboolean opt_skip_purge = FALSE;
   const char *osname;
   gboolean opt_reboot = FALSE;
   GError *local_error = NULL;

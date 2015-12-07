@@ -183,6 +183,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
   glnx_unref_object OstreeSysrootUpgrader *upgrader = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
+  glnx_unref_object OstreeDeployment *merge_deployment = NULL;
   g_autoptr(GKeyFile) origin = NULL;
   g_autofree gchar *origin_description = NULL;
 
@@ -208,6 +209,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     goto out;
 
+  merge_deployment = ostree_sysroot_get_merge_deployment (sysroot, self->osname);
   origin = ostree_sysroot_upgrader_dup_origin (upgrader);
 
   /* Determine if we're upgrading before we set the refspec. */
