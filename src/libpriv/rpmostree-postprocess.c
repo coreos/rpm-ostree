@@ -1328,13 +1328,18 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
           goto out;
         }
 
+      g_print ("Executing postprocessing script '%s'\n", bn);
+
       {
         char *child_argv[] = { binpath, NULL };
         if (!run_sync_in_root (yumroot, binpath, child_argv, error))
-          goto out;
+          {
+            g_prefix_error (error, "While executing postprocessing script '%s': ", bn);
+            goto out;
+          }
       }
-                                          
-      g_print ("Executing postprocessing script '%s'...done\n", bn);
+
+      g_print ("Finished postprocessing script '%s'\n", bn);
     }
   
   ret = TRUE;
