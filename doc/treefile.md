@@ -39,8 +39,8 @@ Treefile
    documentation. The default is true.
 
  * `packages`: Array of strings, mandatory: Set of installed packages.
-   Names prefixed with an `@` (e.g. `@core`) are taken to be the names
-   of comps groups.
+   comps groups are currently not supported due to walters having issues with libcomp:
+   https://github.com/cgwalters/fedora-atomic-work/commit/36d18b490529fec91b74ca9b464adb73ef0ab462
 
  * `units`: Array of strings, optional: Systemd units to enable by default
 
