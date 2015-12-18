@@ -25,10 +25,7 @@ Treefile
     * "both": Kernel data in /boot and /usr/lib/ostree-boot
     * "new": Kernel data in /usr/lib/ostree-boot
 
- * `bootstrap_packages`: Array of strings, mandatory: The `glibc` and
-   `nss-altfiles` packages (and ideally nothing else) must be in this
-   set; rpm-ostree will modify the `/etc/nsswitch.conf` in the target
-   root to ensure that `/usr/lib/passwd` is used.
+ * `bootstrap_packages`: Array of strings, optional: Deprecated
 
  * `etc-group-members`: Array of strings, optional: Unix groups in this
    list will be stored in `/etc/group` instead of `/usr/lib/group`.  Use
