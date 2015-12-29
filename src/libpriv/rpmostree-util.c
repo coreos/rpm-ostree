@@ -338,3 +338,38 @@ _rpmostree_util_keyfile_clone (GKeyFile *keyfile)
   g_assert (loaded);
   return ret;
 }
+
+gboolean
+_rpmostree_util_parse_origin (GKeyFile         *origin,
+                              char            **out_refspec,
+                              char           ***out_packages,
+                              GError          **error)
+{
+  gboolean ret = FALSE;
+  g_autofree char *origin_refspec = NULL;
+  g_auto(GStrv) origin_packages = NULL;
+  gboolean origin_is_bare_refspec = TRUE;
+
+  origin_refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
+  if (!origin_refspec)
+    {
+      origin_refspec = g_key_file_get_string (origin, "origin", "baserefspec", NULL);
+      origin_is_bare_refspec = FALSE;
+    }
+  if (!origin_refspec)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "No origin/refspec or origin/baserefspec in current deployment origin; cannot upgrade via rpm-ostree");
+      goto out;
+    }
+
+  *out_refspec = g_steal_pointer (&origin_refspec);
+  if (origin_is_bare_refspec)
+    *out_packages = NULL;
+  else
+    *out_packages = g_key_file_get_string_list (origin, "packages", "requested", NULL, NULL);
+
+  ret = TRUE;
+ out:
+  return ret;
+}

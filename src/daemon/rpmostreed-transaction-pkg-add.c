@@ -32,6 +32,7 @@
 #include "rpmostreed-transaction.h"
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostreed-sysroot.h"
+#include "rpmostree-sysroot-upgrader.h"
 #include "rpmostreed-utils.h"
 #include "rpmostree-hif.h"
 #include "rpmostree-rpm-util.h"
@@ -192,7 +193,7 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
   OstreeSysroot *sysroot;
   int sysroot_fd; /* Borrowed */
 
-  glnx_unref_object OstreeSysrootUpgrader *upgrader = NULL;
+  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
   glnx_unref_object OstreeDeployment *merge_deployment = NULL;
@@ -226,15 +227,15 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
 		       &merge_deployment_dirfd, error))
     goto out;
 
-  upgrader = ostree_sysroot_upgrader_new_for_os (sysroot, self->osname,
-                                                 cancellable, error);
+  upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, 0,
+					     cancellable, error);
   if (upgrader == NULL)
     goto out;
 
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     goto out;
 
-  origin = ostree_sysroot_upgrader_dup_origin (upgrader);
+  origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
   if (origin == NULL)
     {
       g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,

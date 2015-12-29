@@ -26,6 +26,8 @@ librpmostreed_la_SOURCES = \
 	src/daemon/rpmostreed-utils.c \
 	src/daemon/rpmostreed-sysroot.h \
 	src/daemon/rpmostreed-sysroot.c \
+	src/daemon/rpmostree-sysroot-upgrader.h \
+	src/daemon/rpmostree-sysroot-upgrader.c \
 	src/daemon/rpmostreed-errors.h \
 	src/daemon/rpmostreed-errors.c \
 	src/daemon/rpmostreed-deployment-utils.h \
