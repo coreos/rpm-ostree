@@ -81,8 +81,15 @@ rpmostreed_deployment_gpg_results (OstreeRepo *repo,
   if (!ostree_parse_refspec (origin_refspec, &remote, NULL, &error))
     goto out;
 
-  if (!ostree_repo_remote_get_gpg_verify (repo, remote, &gpg_verify, &error))
-    goto out;
+  if (remote)
+    {
+      if (!ostree_repo_remote_get_gpg_verify (repo, remote, &gpg_verify, &error))
+	goto out;
+    }
+  else
+    {
+      gpg_verify = FALSE;
+    }
 
   if (!gpg_verify)
     goto out;
