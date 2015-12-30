@@ -202,7 +202,6 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
   glnx_fd_close int merge_deployment_dirfd = -1;
   glnx_fd_close int tmp_deploy_rpmdb_fd = -1;
   g_autoptr(GKeyFile) origin = NULL;
-  g_autoptr(GKeyFile) new_origin = NULL;
   gs_unref_object HifContext *hifctx = NULL;
   g_autoptr(GHashTable) cur_origin_pkgrequests = g_hash_table_new (g_str_hash, g_str_equal);
   g_autoptr(GHashTable) new_pkgrequests = g_hash_table_new (g_str_hash, g_str_equal);
@@ -244,34 +243,23 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   {
-    g_autofree char *cur_origin_refspec = NULL;
-    g_autofree char *cur_origin_baserefspec = NULL;
+    const char *cur_origin_refspec =
+      rpmostree_sysroot_upgrader_get_refspec (upgrader);
+    const char *const *cur_origin_packages =
+      rpmostree_sysroot_upgrader_get_packages (upgrader);
+    const char *const*strviter;
 
-    cur_origin_refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
-    cur_origin_baserefspec = g_key_file_get_string (origin, "origin", "baserefspec", NULL);
-
-    if (!(cur_origin_refspec || cur_origin_baserefspec))
+    g_assert (cur_origin_refspec);
+    
+    for (strviter = cur_origin_packages; strviter && *strviter; strviter++)
       {
-	g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-		     "No origin/refspec or origin/baserefspec in current deployment origin");
-	goto out;
-      }
-    if (cur_origin_baserefspec)
-      {
-	gs_strfreev char **cur_origin_packages = NULL;
-	char **strviter;
-	cur_origin_packages = g_key_file_get_string_list (origin, "packages", "requested", NULL, NULL);
-	for (strviter = cur_origin_packages; strviter && *strviter; strviter++)
-	  {
-	    const char *pkg = *strviter;
-	    g_hash_table_add (cur_origin_pkgrequests, (char*)pkg);
-	    g_hash_table_add (new_pkgrequests, (char*)pkg);
-	  }
+	const char *pkg = *strviter;
+	g_hash_table_add (cur_origin_pkgrequests, (char*)pkg);
+	g_hash_table_add (new_pkgrequests, (char*)pkg);
       }
 
-    new_origin = _rpmostree_util_keyfile_clone (origin);
-    (void) g_key_file_remove_key (new_origin, "origin", "refspec", NULL);
-    g_key_file_set_value (new_origin, "origin", "baserefspec", cur_origin_baserefspec ? cur_origin_baserefspec : cur_origin_refspec);
+    (void) g_key_file_remove_key (origin, "origin", "refspec", NULL);
+    g_key_file_set_value (origin, "origin", "baserefspec", cur_origin_refspec);
   }
 
   {
@@ -446,14 +434,14 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
     while (g_hash_table_iter_next (&hashiter, &hkey, &hvalue))
       g_ptr_array_add (new_requested_pkglist, hkey);
 
-    g_key_file_set_string_list (new_origin, "packages", "requested",
+    g_key_file_set_string_list (origin, "packages", "requested",
                                 (const char*const*)new_requested_pkglist->pdata,
                                 new_requested_pkglist->len);
   }
 
   if (!ostree_sysroot_deploy_tree (sysroot, self->osname,
                                    ostree_deployment_get_csum (merge_deployment),
-                                   new_origin,
+                                   origin,
                                    merge_deployment,
                                    NULL,
                                    &new_deployment,

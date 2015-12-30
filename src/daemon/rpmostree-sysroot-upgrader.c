@@ -64,10 +64,10 @@ enum {
   PROP_FLAGS
 };
 
-static void ostree_sysroot_upgrader_initable_iface_init (GInitableIface *iface);
+static void rpmostree_sysroot_upgrader_initable_iface_init (GInitableIface *iface);
 
 G_DEFINE_TYPE_WITH_CODE (RpmOstreeSysrootUpgrader, ostree_sysroot_upgrader, G_TYPE_OBJECT,
-                         G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE, ostree_sysroot_upgrader_initable_iface_init))
+                         G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE, rpmostree_sysroot_upgrader_initable_iface_init))
 
 static gboolean
 parse_refspec (RpmOstreeSysrootUpgrader  *self,
@@ -75,7 +75,6 @@ parse_refspec (RpmOstreeSysrootUpgrader  *self,
                GError                **error)
 {
   gboolean ret = FALSE;
-  g_autofree char *origin_refspec = NULL;
   g_autofree char *unconfigured_state = NULL;
   g_autofree char *csum = NULL;
 
@@ -91,7 +90,7 @@ parse_refspec (RpmOstreeSysrootUpgrader  *self,
         }
     }
 
-  if (!_rpmostree_util_parse_origin (self->origin, &origin_refspec, &self->requested_packages, error))
+  if (!_rpmostree_util_parse_origin (self->origin, &self->origin_refspec, &self->requested_packages, error))
     goto out;
 
   csum = g_key_file_get_string (self->origin, "origin", "override-commit", NULL);
@@ -105,9 +104,9 @@ parse_refspec (RpmOstreeSysrootUpgrader  *self,
 }
 
 static gboolean
-ostree_sysroot_upgrader_initable_init (GInitable        *initable,
-                                       GCancellable     *cancellable,
-                                       GError          **error)
+rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
+                                          GCancellable     *cancellable,
+                                          GError          **error)
 {
   gboolean ret = FALSE;
   RpmOstreeSysrootUpgrader *self = (RpmOstreeSysrootUpgrader*)initable;
@@ -161,9 +160,9 @@ ostree_sysroot_upgrader_initable_init (GInitable        *initable,
 }
 
 static void
-ostree_sysroot_upgrader_initable_iface_init (GInitableIface *iface)
+rpmostree_sysroot_upgrader_initable_iface_init (GInitableIface *iface)
 {
-  iface->init = ostree_sysroot_upgrader_initable_init;
+  iface->init = rpmostree_sysroot_upgrader_initable_init;
 }
 
 static void
