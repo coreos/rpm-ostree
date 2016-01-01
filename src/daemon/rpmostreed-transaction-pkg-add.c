@@ -95,40 +95,41 @@ copy_dir_contents_nonrecurse_at (int         src_dfd,
   return ret;
 }
 
+/* Given a directory referred to by @dfd and @dirpath, ensure that
+ * physical (or reflink'd) copies of all files are done.
+ */
 static gboolean
-instroot_make_rpmdb_copy (int             dfd,
-			  const char     *root,
-                          GCancellable   *cancellable,
-                          GError        **error)
+break_hardlinks_at (int             dfd,
+		    const char     *dirpath,
+		    GCancellable   *cancellable,
+		    GError        **error)
 {
   gboolean ret = FALSE;
-  const char const rpmdb_path[] = "usr/share/rpm";
-  const char const rpmdb_path_tmp[] = "usr/share/rpm.tmp";
-  glnx_fd_close int root_dfd = -1;
-  glnx_fd_close int target_rpmdb_dfd = -1;
+  glnx_fd_close int dest_dfd = -1;
+  g_autofree char *dirpath_tmp = g_strconcat (dirpath, ".tmp", NULL);
 
-  if (!glnx_opendirat (dfd, root, TRUE, &root_dfd, error))
-    goto out;
-
-  if (TEMP_FAILURE_RETRY (renameat (root_dfd, rpmdb_path, root_dfd, rpmdb_path_tmp)) != 0)
+  if (TEMP_FAILURE_RETRY (renameat (dfd, dirpath, dfd, dirpath_tmp)) != 0)
     {
       glnx_set_error_from_errno (error);
       goto out;
     }
 
-  if (TEMP_FAILURE_RETRY (mkdirat (root_dfd, rpmdb_path, 0755)) != 0)
+  /* We're not accurately copying the mode, but in reality modes don't
+   * matter since it's all immutable anyways.
+   */
+  if (TEMP_FAILURE_RETRY (mkdirat (dfd, dirpath, 0755)) != 0)
     {
       glnx_set_error_from_errno (error);
       goto out;
     }
 
-  if (!glnx_opendirat (root_dfd, rpmdb_path, TRUE, &target_rpmdb_dfd, error))
+  if (!glnx_opendirat (dfd, dirpath, TRUE, &dest_dfd, error))
     goto out;
 
-  if (!copy_dir_contents_nonrecurse_at (root_dfd, rpmdb_path_tmp, target_rpmdb_dfd, cancellable, error))
+  if (!copy_dir_contents_nonrecurse_at (dfd, dirpath_tmp, dest_dfd, cancellable, error))
     goto out;
 
-  if (!glnx_shutil_rm_rf_at (root_dfd, rpmdb_path_tmp, cancellable, error))
+  if (!glnx_shutil_rm_rf_at (dfd, dirpath_tmp, cancellable, error))
     goto out;
 
   ret = TRUE;
@@ -154,12 +155,6 @@ overlay_packages_in_deploydir (HifContext      *hifctx,
 {
   gboolean ret = FALSE;
 
-  if (!instroot_make_rpmdb_copy (dfd, deploydir, cancellable, error))
-    {
-      g_prefix_error (error, "While copying target rpmdb: ");
-      goto out;
-    }
-  
   /* --- Run transaction --- */
   { g_auto(GLnxConsoleRef) console = { 0, };
     glnx_unref_object HifState *hifstate = hif_state_new ();
@@ -199,8 +194,13 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
   glnx_unref_object OstreeDeployment *merge_deployment = NULL;
   glnx_unref_object OstreeDeployment *new_deployment = NULL;
   g_autofree char *merge_deployment_dirpath = NULL;
+  g_autofree char *tmp_deploy_workdir_name = NULL;
+  g_autofree char *tmp_deploy_root_path = NULL;
+  g_autofree char *etc_path = NULL;
+  g_autofree char *usretc_path = NULL;
   glnx_fd_close int merge_deployment_dirfd = -1;
-  glnx_fd_close int tmp_deploy_rpmdb_fd = -1;
+  glnx_fd_close int ostree_repo_tmp_dirfd = -1;
+  glnx_fd_close int deploy_tmp_dirfd = -1;
   g_autoptr(GKeyFile) origin = NULL;
   gs_unref_object HifContext *hifctx = NULL;
   g_autoptr(GHashTable) cur_origin_pkgrequests = g_hash_table_new (g_str_hash, g_str_equal);
@@ -224,6 +224,10 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
 
   if (!glnx_opendirat (sysroot_fd, merge_deployment_dirpath, TRUE,
 		       &merge_deployment_dirfd, error))
+    goto out;
+
+  if (!glnx_opendirat (sysroot_fd, "ostree/repo/tmp", TRUE,
+		       &ostree_repo_tmp_dirfd, error))
     goto out;
 
   upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, 0,
@@ -306,49 +310,36 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
     hif_context_set_repo_dir (hifctx, reposdir);
   }
 
-  /* We have a hardcoded tmp-deploy because we have to set up librpm
-   * to point at it before creating the transaction.
-   *
-   * The flow here is to make a *copy* of the current rpmdb so that
-   * rpm knows what's installed.
-   *
-   * We'll rename it back into place before committing.
-   */
-  { 
-    g_autofree char *tmp_deploy_rpmdb = g_strconcat (tmp_deploy, "/usr/share/rpm", NULL);
+  tmp_deploy_workdir_name = g_strdup ("rpmostree-deploy-XXXXXX");
+  if (!glnx_mkdtempat (ostree_repo_tmp_dirfd, tmp_deploy_workdir_name, 0755, error))
+    goto out;
 
-    if (!glnx_shutil_rm_rf_at (sysroot_fd, tmp_deploy, cancellable, error))
+  tmp_deploy_root_path = g_strconcat (tmp_deploy_workdir_name, "root", NULL);
+
+  if (!ostree_repo_checkout_tree_at (repo, NULL, ostree_repo_tmp_dirfd, tmp_deploy_workdir_name,
+				     ostree_deployment_get_csum (merge_deployment),
+				     cancellable, error))
+    goto out;
+
+  usretc_path = g_strconcat (tmp_deploy_root_path, "usr/etc", NULL);  
+  etc_path = g_strconcat (tmp_deploy_root_path, "etc", NULL);
+
+  /* Convert usr/share/rpm into physical copies, as librpm mutates it in place */
+  { g_autofree char *rpmdb_path = g_strconcat (tmp_deploy_root_path, "usr/share/rpm", NULL);
+    if (!break_hardlinks_at (ostree_repo_tmp_dirfd, rpmdb_path, cancellable, error))
       goto out;
+  }
 
-    if (!glnx_shutil_mkdir_p_at (sysroot_fd, tmp_deploy, 0755,
-				 cancellable, error))
+  /* Temporarily rename /usr/etc to /etc so that RPMs can drop new files there */
+  if (TEMP_FAILURE_RETRY (renameat (ostree_repo_tmp_dirfd, usretc_path, ostree_repo_tmp_dirfd, etc_path)) != 0)
+    {
+      glnx_set_error_from_errno (error);
       goto out;
-
-    { 
-      if (!glnx_shutil_mkdir_p_at (sysroot_fd, tmp_deploy_rpmdb, 0755,
-				   cancellable, error))
-	goto out;
     }
 
-    { g_autofree char *merge_deploy_rpmdb = g_strconcat (merge_deployment_dirpath, "/usr/share/rpm", NULL);
-      glnx_fd_close int tmp_deploy_rpmdb_fd = -1;
-
-      if (!glnx_opendirat (sysroot_fd, tmp_deploy_rpmdb, TRUE,
-			   &tmp_deploy_rpmdb_fd, error))
-	goto out;
-
-      if (!copy_dir_contents_nonrecurse_at (sysroot_fd, merge_deploy_rpmdb, tmp_deploy_rpmdb_fd,
-					    cancellable, error))
-	{
-	  g_prefix_error (error, "While copying current rpmdb: ");
-	  goto out;
-	}
-    }
-
-    { g_autofree char *tmp_deploy_dirpath =
-	glnx_fdrel_abspath (sysroot_fd, tmp_deploy);
-      hif_context_set_install_root (hifctx, tmp_deploy_dirpath);
-    }
+  { g_autofree char *tmp_deploy_abspath =
+      glnx_fdrel_abspath (ostree_repo_tmp_dirfd, tmp_deploy_root_path);
+    hif_context_set_install_root (hifctx, tmp_deploy_abspath);
   }
 
   /* Note this path is relative to the install root */
@@ -439,54 +430,18 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
                                 new_requested_pkglist->len);
   }
 
-  if (!ostree_sysroot_deploy_tree (sysroot, self->osname,
-                                   ostree_deployment_get_csum (merge_deployment),
-                                   origin,
-                                   merge_deployment,
-                                   NULL,
-                                   &new_deployment,
-                                   cancellable, error))
+  if (!overlay_packages_in_deploydir (hifctx, sysroot_fd, tmp_deploy,
+				      cancellable, error))
     goto out;
 
-  { g_autofree char *new_deploydir = 
-      ostree_sysroot_get_deployment_dirpath (sysroot, new_deployment);
+  g_clear_object (&hifctx);
 
-    /* Now RPM may have initialized the package root...blow it away again. */
-    if (!glnx_shutil_rm_rf_at (sysroot_fd, tmp_deploy, cancellable, error))
+  /* Rename /usr/etc back to /etc */
+  if (TEMP_FAILURE_RETRY (renameat (ostree_repo_tmp_dirfd, etc_path, ostree_repo_tmp_dirfd, usretc_path)) != 0)
+    {
+      glnx_set_error_from_errno (error);
       goto out;
-    
-    if (!ostree_sysroot_deployment_set_mutable (sysroot, new_deployment, TRUE,
-                                                cancellable, error))
-      goto out;
-
-    /* Ok, now move the deploydir into the hardcoded path... */
-    if (renameat (sysroot_fd,
-		  new_deploydir,
-		  sysroot_fd,
-		  tmp_deploy) != 0)
-      {
-        glnx_set_error_from_errno (error);
-        goto out;
-      }
-
-    if (!overlay_packages_in_deploydir (hifctx, sysroot_fd, tmp_deploy,
-                                        cancellable, error))
-      goto out;
-
-    g_clear_object (&hifctx);
-
-    /* Done, move it back */
-    if (TEMP_FAILURE_RETRY (renameat (sysroot_fd, tmp_deploy,
-				      sysroot_fd, new_deploydir)) != 0)
-      {
-        glnx_set_error_from_errno (error);
-        goto out;
-      }
-
-    if (!ostree_sysroot_deployment_set_mutable (sysroot, new_deployment, FALSE,
-                                                cancellable, error))
-      goto out;
-  }
+    }
 
   if (!ostree_sysroot_simple_write_deployment (sysroot, self->osname, new_deployment,
                                                merge_deployment, 0,
@@ -497,7 +452,6 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
     rpmostreed_reboot (cancellable, error);
 
   ret = TRUE;
-
 out:
   return ret;
 }
