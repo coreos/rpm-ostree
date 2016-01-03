@@ -641,66 +641,64 @@ clean_yumdb_extraneous_files (GFile         *dir,
 }
 #endif
 
+/* SELinux uses PCRE pre-compiled regexps for binary caches, which can
+ * fail if the version of PCRE on the host differs from the version
+ * which generated the cache (in the target root).
+ *
+ * Note also this function is probably already broken in Fedora
+ * 23+ from https://bugzilla.redhat.com/show_bug.cgi?id=1265406
+ */
 static gboolean
-workaround_selinux_cross_labeling_recurse (GFile         *dir,
+workaround_selinux_cross_labeling_recurse (int            dfd,
+                                           const char    *path,
                                            GCancellable  *cancellable,
                                            GError       **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object GFileEnumerator *direnum = NULL;
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
 
-  direnum = g_file_enumerate_children (dir, "standard::name,standard::type,time::modified,time::access",
-                                       G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                       cancellable, error);
-  if (!direnum)
+  if (!glnx_dirfd_iterator_init_at (dfd, path, TRUE, &dfd_iter, error))
     goto out;
 
   while (TRUE)
     {
-      GFileInfo *file_info;
-      GFile *child;
+      struct dirent *dent = NULL;
       const char *name;
 
-      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
-                                       cancellable, error))
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
         goto out;
-      if (!file_info)
+
+      if (!dent)
         break;
 
-      name = g_file_info_get_name (file_info);
+      name = dent->d_name;
 
-      if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_DIRECTORY)
+      if (dent->d_type == DT_DIR)
         {
-          if (!workaround_selinux_cross_labeling_recurse (child, cancellable, error))
+          if (!workaround_selinux_cross_labeling_recurse (dfd_iter.fd, name, cancellable, error))
             goto out;
         }
       else if (g_str_has_suffix (name, ".bin"))
         {
+          struct stat stbuf;
           const char *lastdot;
           gs_free char *nonbin_name = NULL;
-          gs_unref_object GFile *nonbin_path = NULL;
-          guint64 mtime = g_file_info_get_attribute_uint64 (file_info, "time::modified");
-          guint64 atime = g_file_info_get_attribute_uint64 (file_info, "time::access");
-          struct utimbuf times;
+
+          if (TEMP_FAILURE_RETRY (fstatat (dfd_iter.fd, name, &stbuf, AT_SYMLINK_NOFOLLOW)) != 0)
+            {
+              glnx_set_error_from_errno (error);
+              goto out;
+            }
 
           lastdot = strrchr (name, '.');
           g_assert (lastdot);
 
           nonbin_name = g_strndup (name, lastdot - name);
-          nonbin_path = g_file_get_child (dir, nonbin_name);
 
-          times.actime = (time_t)atime;
-          times.modtime = ((time_t)mtime) + 60;
-
-          g_print ("Setting mtime of '%s' to newer than '%s'\n",
-                   gs_file_get_path_cached (nonbin_path),
-                   gs_file_get_path_cached (child));
-          if (utime (gs_file_get_path_cached (nonbin_path), &times) == -1)
+          g_print ("Setting mtime of '%s' to newer than '%s'\n", nonbin_name, name);
+          if (TEMP_FAILURE_RETRY (utimensat (dfd_iter.fd, nonbin_name, NULL, 0)) == -1)
             {
-              int errsv = errno;
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "utime(%s): %s", gs_file_get_path_cached (nonbin_path),
-                           strerror (errsv));
+              glnx_set_error_from_errno (error);
               goto out;
             }
         }
@@ -712,21 +710,41 @@ workaround_selinux_cross_labeling_recurse (GFile         *dir,
 }
 
 static gboolean
-workaround_selinux_cross_labeling (GFile         *rootfs,
-                                   GCancellable  *cancellable,
-                                   GError       **error)
+rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
+                                       const char    *path,
+                                       OstreeSePolicy **out_sepolicy,
+                                       GCancellable  *cancellable,
+                                       GError       **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object GFile *etc_selinux_dir = g_file_resolve_relative_path (rootfs, "usr/etc/selinux");
+  glnx_unref_object OstreeSePolicy *ret_sepolicy = NULL;
+  struct stat stbuf;
 
-  if (g_file_query_exists (etc_selinux_dir, NULL))
+  if (TEMP_FAILURE_RETRY (fstatat (dfd, "usr/etc/selinux", &stbuf, AT_SYMLINK_NOFOLLOW)) != 0)
     {
-      if (!workaround_selinux_cross_labeling_recurse (etc_selinux_dir,
+      if (errno != ENOENT)
+        {
+          glnx_set_error_from_errno (error);
+          goto out;
+        }
+    }
+  else
+    {
+      if (!workaround_selinux_cross_labeling_recurse (dfd, "usr/etc/selinux",
                                                       cancellable, error))
         goto out;
     }
+      
+  {
+    g_autofree char *abspath = glnx_fdrel_abspath (dfd, path);
+    glnx_unref_object GFile *rootfs = g_file_new_for_path (abspath);
+    ret_sepolicy = ostree_sepolicy_new (rootfs, cancellable, error);
+    if (!ret_sepolicy)
+      goto out;
+  }
     
   ret = TRUE;
+  *out_sepolicy = g_steal_pointer (&ret_sepolicy);
  out:
   return ret;
 }
@@ -1464,23 +1482,19 @@ rpmostree_commit (GFile         *rootfs,
   gs_unref_object GFile *root_tree = NULL;
   gs_unref_object OstreeSePolicy *sepolicy = NULL;
   gs_fd_close int rootfs_fd = -1;
+
+  if (!gs_file_open_dir_fd (rootfs, &rootfs_fd, cancellable, error))
+    goto out;
   
   /* hardcode targeted policy for now */
   if (enable_selinux)
     {
-      if (!workaround_selinux_cross_labeling (rootfs, cancellable, error))
-        goto out;
-      
-      sepolicy = ostree_sepolicy_new (rootfs, cancellable, error);
-      if (!sepolicy)
+      if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_fd, ".", &sepolicy, cancellable, error))
         goto out;
     }
 
   g_print ("Committing '%s' ...\n", gs_file_get_path_cached (rootfs));
   if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
-    goto out;
-
-  if (!gs_file_open_dir_fd (rootfs, &rootfs_fd, cancellable, error))
     goto out;
 
   mtree = ostree_mutable_tree_new ();
