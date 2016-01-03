@@ -710,12 +710,14 @@ workaround_selinux_cross_labeling_recurse (int            dfd,
 }
 
 static gboolean
-workaround_selinux_cross_labeling (int            dfd,
-                                   const char    *path,
-                                   GCancellable  *cancellable,
-                                   GError       **error)
+rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
+                                       const char    *path,
+                                       OstreeSePolicy **out_sepolicy,
+                                       GCancellable  *cancellable,
+                                       GError       **error)
 {
   gboolean ret = FALSE;
+  glnx_unref_object OstreeSePolicy *ret_sepolicy = NULL;
   struct stat stbuf;
 
   if (TEMP_FAILURE_RETRY (fstatat (dfd, "usr/etc/selinux", &stbuf, AT_SYMLINK_NOFOLLOW)) != 0)
@@ -732,8 +734,17 @@ workaround_selinux_cross_labeling (int            dfd,
                                                       cancellable, error))
         goto out;
     }
+      
+  {
+    g_autofree char *abspath = glnx_fdrel_abspath (dfd, path);
+    glnx_unref_object GFile *rootfs = g_file_new_for_path (abspath);
+    ret_sepolicy = ostree_sepolicy_new (rootfs, cancellable, error);
+    if (!ret_sepolicy)
+      goto out;
+  }
     
   ret = TRUE;
+  *out_sepolicy = g_steal_pointer (&ret_sepolicy);
  out:
   return ret;
 }
@@ -1478,11 +1489,7 @@ rpmostree_commit (GFile         *rootfs,
   /* hardcode targeted policy for now */
   if (enable_selinux)
     {
-      if (!workaround_selinux_cross_labeling (rootfs_fd, ".", cancellable, error))
-        goto out;
-      
-      sepolicy = ostree_sepolicy_new (rootfs, cancellable, error);
-      if (!sepolicy)
+      if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_fd, ".", &sepolicy, cancellable, error))
         goto out;
     }
 
