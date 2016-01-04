@@ -37,11 +37,12 @@ rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
                                      GError       **error);
 
 gboolean
-rpmostree_commit (GFile         *rootfs,
+rpmostree_commit (int            rootfs_dfd,
                   OstreeRepo    *repo,
                   const char    *refname,
                   GVariant      *metadata,
                   const char    *gpg_keyid,
                   gboolean       enable_selinux,
+                  char         **out_new_revision,
                   GCancellable  *cancellable,
                   GError       **error);
