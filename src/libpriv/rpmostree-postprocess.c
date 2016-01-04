@@ -640,52 +640,6 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
   return ret;
 }
 
-#if 0
-static gboolean
-clean_yumdb_extraneous_files (GFile         *dir,
-                              GCancellable  *cancellable,
-                              GError       **error)
-{
-  gboolean ret = FALSE;
-  gs_unref_object GFileEnumerator *direnum = NULL;
-
-  direnum = g_file_enumerate_children (dir, "standard::name,standard::type",
-                                       G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                       cancellable, error);
-  if (!direnum)
-    goto out;
-
-  while (TRUE)
-    {
-      GFileInfo *file_info;
-      GFile *child;
-
-      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
-                                       cancellable, error))
-        goto out;
-      if (!file_info)
-        break;
-
-      if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_DIRECTORY)
-        {
-          if (!clean_yumdb_extraneous_files (child, cancellable, error))
-            goto out;
-        }
-      else if (strcmp (g_file_info_get_name (file_info), "var_uuid") == 0 ||
-               strcmp (g_file_info_get_name (file_info), "from_repo_timestamp") == 0 ||
-               strcmp (g_file_info_get_name (file_info), "from_repo_revision") == 0)
-        {
-          if (!g_file_delete (child, cancellable, error))
-            goto out;
-        }
-    }
-
-  ret = TRUE;
- out:
-  return ret;
-}
-#endif
-
 /* SELinux uses PCRE pre-compiled regexps for binary caches, which can
  * fail if the version of PCRE on the host differs from the version
  * which generated the cache (in the target root).
@@ -895,24 +849,6 @@ migrate_rpm_and_yumdb (GFile          *targetroot,
   if (!gs_file_rename (legacyrpm_path, newrpm_path, cancellable, error))
     goto out;
     
-  /* Move the yum database to usr/share/yumdb; disabled for now due
-   * to bad conflict with OSTree's current
-   * one-http-request-per-file.
-   */
-#if 0
-  if (g_file_query_exists (src_yum_rpmdb_indexes, NULL))
-    {
-      g_print ("Moving %s to %s\n", gs_file_get_path_cached (src_yum_rpmdb_indexes),
-               gs_file_get_path_cached (target_yum_rpmdb_indexes));
-      if (!gs_file_rename (src_yum_rpmdb_indexes, target_yum_rpmdb_indexes,
-                           cancellable, error))
-        goto out;
-        
-      if (!clean_yumdb_extraneous_files (target_yum_rpmdb_indexes, cancellable, error))
-        goto out;
-    }
-#endif
-
   /* Remove /var/lib/yum; we don't want it here. */
   if (!gs_shutil_rm_rf (yumroot_yumlib, cancellable, error))
     goto out;
