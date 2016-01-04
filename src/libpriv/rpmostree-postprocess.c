@@ -34,6 +34,7 @@
 #include <libglnx.h>
 #include <stdlib.h>
 #include <gio/gunixinputstream.h>
+#include <gio/gunixoutputstream.h>
 
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
@@ -503,81 +504,89 @@ do_kernel_prep (GFile         *yumroot,
 }
 
 static gboolean
-convert_var_to_tmpfiles_d (GOutputStream *tmpfiles_out,
-                           GFile         *yumroot,
-                           GFile         *dir,
-                           GCancellable  *cancellable,
-                           GError       **error)
+convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
+                                   int            dfd,
+                                   GString       *prefix,
+                                   GCancellable  *cancellable,
+                                   GError       **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object GFileEnumerator *direnum = NULL;
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
   gsize bytes_written;
 
-  direnum = g_file_enumerate_children (dir, "standard::name,standard::type,unix::mode,standard::symlink-target,unix::uid,unix::gid",
-                                       G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                       cancellable, error);
-  if (!direnum)
-    {
-      g_prefix_error (error, "Enumerating /var in '%s'", gs_file_get_path_cached (dir));
-      goto out;
-    }
+  if (!glnx_dirfd_iterator_init_at (dfd, prefix->str + 1, TRUE, &dfd_iter, error))
+    goto out;
 
   while (TRUE)
     {
-      GFileInfo *file_info;
-      GFile *child;
+      struct dirent *dent = NULL;
       GString *tmpfiles_d_buf;
       gs_free char *tmpfiles_d_line = NULL;
       char filetype_c;
       gs_free char *relpath = NULL;
 
-      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
-                                       cancellable, error))
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
         goto out;
-      if (!file_info)
+
+      if (!dent)
         break;
 
-      switch (g_file_info_get_file_type (file_info))
+      switch (dent->d_type)
         {
-        case G_FILE_TYPE_DIRECTORY:
+        case DT_DIR:
           filetype_c = 'd';
           break;
-        case G_FILE_TYPE_SYMBOLIC_LINK:
+        case DT_LNK:
           filetype_c = 'L';
           break;
         default:
           g_print ("Ignoring non-directory/non-symlink '%s'\n",
-                   gs_file_get_path_cached (child));
+                   dent->d_name);
           continue;
         }
 
       tmpfiles_d_buf = g_string_new ("");
       g_string_append_c (tmpfiles_d_buf, filetype_c);
       g_string_append_c (tmpfiles_d_buf, ' ');
-
-      relpath = g_file_get_relative_path (yumroot, child);
-      g_assert (relpath);
-      
+      g_string_append (tmpfiles_d_buf, prefix->str);
       g_string_append_c (tmpfiles_d_buf, '/');
-      g_string_append (tmpfiles_d_buf, relpath);
+      g_string_append (tmpfiles_d_buf, dent->d_name);
 
       if (filetype_c == 'd')
         {
-          guint mode = g_file_info_get_attribute_uint32 (file_info, "unix::mode");
-          mode &= ~S_IFMT;
-          g_string_append_printf (tmpfiles_d_buf, " 0%02o", mode);
-          g_string_append_printf (tmpfiles_d_buf, " %d %d - -",
-                                  g_file_info_get_attribute_uint32 (file_info, "unix::uid"),
-                                  g_file_info_get_attribute_uint32 (file_info, "unix::gid"));
+          struct stat stbuf;
 
-          if (!convert_var_to_tmpfiles_d (tmpfiles_out, yumroot, child,
-                                          cancellable, error))
+          if (TEMP_FAILURE_RETRY (fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW)) != 0)
+            {
+              glnx_set_error_from_errno (error);
+              goto out;
+            }
+          
+          g_string_append_printf (tmpfiles_d_buf, " 0%02o", stbuf.st_mode & ~S_IFMT);
+          g_string_append_printf (tmpfiles_d_buf, " %d %d - -", stbuf.st_uid, stbuf.st_gid);
+
+          /* Push prefix */
+          g_string_append_c (prefix, '/');
+          g_string_append (prefix, dent->d_name);
+
+          if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, dfd, prefix,
+                                                  cancellable, error))
             goto out;
+
+          /* Pop prefix */
+          {
+            char *r = memrchr (prefix->str, '/', prefix->len);
+            g_assert (r != NULL);
+            g_string_truncate (prefix, r - prefix->str);
+          }
         }
       else
         {
+          g_autofree char *link = glnx_readlinkat_malloc (dfd_iter.fd, dent->d_name, cancellable, error);
+          if (!link)
+            goto out;
           g_string_append (tmpfiles_d_buf, " - - - - ");
-          g_string_append (tmpfiles_d_buf, g_file_info_get_symlink_target (file_info));
+          g_string_append (tmpfiles_d_buf, link);
         }
 
       g_string_append_c (tmpfiles_d_buf, '\n');
@@ -590,6 +599,42 @@ convert_var_to_tmpfiles_d (GOutputStream *tmpfiles_out,
         goto out;
     }
 
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+static gboolean
+convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
+                           int            dest_rootfs_dfd,
+                           GCancellable  *cancellable,
+                           GError       **error)
+{
+  gboolean ret = FALSE;
+  g_autoptr(GString) prefix = g_string_new ("/var");
+  glnx_fd_close int tmpfiles_fd = -1;
+
+  /* Append to an existing one for package layering */
+  if ((tmpfiles_fd = TEMP_FAILURE_RETRY (openat (dest_rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-autovar.conf",
+                                                 O_WRONLY | O_CREAT | O_APPEND | O_NOCTTY, 0644))) == -1)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
+
+  { glnx_unref_object GOutputStream *tmpfiles_out =
+      g_unix_output_stream_new (tmpfiles_fd, FALSE);
+
+    if (!tmpfiles_out)
+      goto out;
+
+    if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, src_rootfs_dfd, prefix, cancellable, error))
+      goto out;
+
+    if (!g_output_stream_close (tmpfiles_out, cancellable, error))
+      goto out;
+  }
+  
   ret = TRUE;
  out:
   return ret;
@@ -887,10 +932,16 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
                                     GError       **error)
 {
   gboolean ret = FALSE;
+  glnx_fd_close int src_rootfs_fd = -1;
+  glnx_fd_close int target_root_dfd = -1;
   gs_unref_object GFile *kernel_path = NULL;
   gs_unref_object GFile *initramfs_path = NULL;
   gs_unref_hashtable GHashTable *preserve_groups_set = NULL;
   gboolean container = FALSE;
+
+  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot), TRUE,
+                       &src_rootfs_fd, error))
+    goto out;
 
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
                                                                "container",
@@ -904,6 +955,9 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   
   g_print ("Initializing rootfs\n");
   if (!init_rootfs (targetroot, cancellable, error))
+    goto out;
+
+  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (targetroot), TRUE, &target_root_dfd, error))
     goto out;
 
   g_print ("Migrating /etc/passwd to /usr/lib/\n");
@@ -970,26 +1024,8 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   if (!migrate_rpm_and_yumdb (targetroot, yumroot, cancellable, error))
     goto out;
 
-  {
-    gs_unref_object GFile *yumroot_var = g_file_get_child (yumroot, "var");
-    gs_unref_object GFile *rpmostree_tmpfiles_path =
-      g_file_resolve_relative_path (targetroot, "usr/lib/tmpfiles.d/rpm-ostree-autovar.conf");
-    gs_unref_object GFileOutputStream *tmpfiles_out =
-      g_file_create (rpmostree_tmpfiles_path,
-                     G_FILE_CREATE_REPLACE_DESTINATION,
-                     cancellable, error);
-
-    if (!tmpfiles_out)
-      goto out;
-
-    
-    if (!convert_var_to_tmpfiles_d ((GOutputStream*)tmpfiles_out, yumroot, yumroot_var,
-                                    cancellable, error))
-      goto out;
-
-    if (!g_output_stream_close ((GOutputStream*)tmpfiles_out, cancellable, error))
-      goto out;
-  }
+  if (!convert_var_to_tmpfiles_d (src_rootfs_fd, target_root_dfd, cancellable, error))
+    goto out;
 
   /* Move boot, but rename the kernel/initramfs to have a checksum */
   if (!container)
@@ -1382,23 +1418,29 @@ rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
                                      GError       **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object GFile *rootfs_tmp = NULL;
-  gs_free char *rootfs_tmp_path = NULL;
+  gs_free char *dest_rootfs_path = NULL;
 
-  rootfs_tmp_path = g_strconcat (gs_file_get_path_cached (rootfs), ".tmp", NULL);
-  rootfs_tmp = g_file_new_for_path (rootfs_tmp_path);
+  dest_rootfs_path = g_strconcat (gs_file_get_path_cached (rootfs), ".post", NULL);
 
-  if (!gs_shutil_rm_rf (rootfs_tmp, cancellable, error))
+  if (!glnx_shutil_rm_rf_at (AT_FDCWD, dest_rootfs_path, cancellable, error))
     goto out;
 
-  if (!create_rootfs_from_yumroot_content (rootfs_tmp, rootfs, treefile,
-                                           cancellable, error))
+  {
+    gs_unref_object GFile *dest_rootfs = g_file_new_for_path (dest_rootfs_path);
+    if (!create_rootfs_from_yumroot_content (dest_rootfs, rootfs, treefile,
+                                             cancellable, error))
+      goto out;
+  }
+
+  if (!glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (rootfs), cancellable, error))
     goto out;
 
-  if (!gs_shutil_rm_rf (rootfs, cancellable, error))
-    goto out;
-  if (!gs_file_rename (rootfs_tmp, rootfs, cancellable, error))
-    goto out;
+  if (TEMP_FAILURE_RETRY (renameat (AT_FDCWD, dest_rootfs_path,
+                                    AT_FDCWD, gs_file_get_path_cached (rootfs))) != 0)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
 
   ret = TRUE;
  out:
