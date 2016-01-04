@@ -34,6 +34,7 @@
 #include <libglnx.h>
 #include <stdlib.h>
 #include <gio/gunixinputstream.h>
+#include <gio/gunixoutputstream.h>
 
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
@@ -604,16 +605,35 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
 }
 
 static gboolean
-convert_var_to_tmpfiles_d (GOutputStream *tmpfiles_out,
-                           int            rootfs_dfd,
+convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
+                           int            dest_rootfs_dfd,
                            GCancellable  *cancellable,
                            GError       **error)
 {
   gboolean ret = FALSE;
   g_autoptr(GString) prefix = g_string_new ("/var");
+  glnx_fd_close int tmpfiles_fd = -1;
 
-  if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, rootfs_dfd, prefix, cancellable, error))
-    goto out;
+  /* Append to an existing one for package layering */
+  if ((tmpfiles_fd = TEMP_FAILURE_RETRY (openat (dest_rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-autovar.conf",
+                                                 O_WRONLY | O_CREAT | O_APPEND | O_NOCTTY, 0644))) == -1)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
+
+  { glnx_unref_object GOutputStream *tmpfiles_out =
+      g_unix_output_stream_new (tmpfiles_fd, FALSE);
+
+    if (!tmpfiles_out)
+      goto out;
+
+    if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, src_rootfs_dfd, prefix, cancellable, error))
+      goto out;
+
+    if (!g_output_stream_close (tmpfiles_out, cancellable, error))
+      goto out;
+  }
   
   ret = TRUE;
  out:
@@ -907,16 +927,21 @@ migrate_rpm_and_yumdb (GFile          *targetroot,
 static gboolean 
 create_rootfs_from_yumroot_content (GFile         *targetroot,
                                     GFile         *yumroot,
-                                    int            src_rootfs_fd,
                                     JsonObject    *treefile,
                                     GCancellable  *cancellable,
                                     GError       **error)
 {
   gboolean ret = FALSE;
+  glnx_fd_close int src_rootfs_fd = -1;
+  glnx_fd_close int target_root_dfd = -1;
   gs_unref_object GFile *kernel_path = NULL;
   gs_unref_object GFile *initramfs_path = NULL;
   gs_unref_hashtable GHashTable *preserve_groups_set = NULL;
   gboolean container = FALSE;
+
+  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot), TRUE,
+                       &src_rootfs_fd, error))
+    goto out;
 
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
                                                                "container",
@@ -930,6 +955,9 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   
   g_print ("Initializing rootfs\n");
   if (!init_rootfs (targetroot, cancellable, error))
+    goto out;
+
+  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (targetroot), TRUE, &target_root_dfd, error))
     goto out;
 
   g_print ("Migrating /etc/passwd to /usr/lib/\n");
@@ -996,24 +1024,8 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   if (!migrate_rpm_and_yumdb (targetroot, yumroot, cancellable, error))
     goto out;
 
-  {
-    gs_unref_object GFile *yumroot_var = g_file_get_child (yumroot, "var");
-    gs_unref_object GFile *rpmostree_tmpfiles_path =
-      g_file_resolve_relative_path (targetroot, "usr/lib/tmpfiles.d/rpm-ostree-autovar.conf");
-    gs_unref_object GFileOutputStream *tmpfiles_out =
-      g_file_create (rpmostree_tmpfiles_path,
-                     G_FILE_CREATE_REPLACE_DESTINATION,
-                     cancellable, error);
-
-    if (!tmpfiles_out)
-      goto out;
-
-    if (!convert_var_to_tmpfiles_d ((GOutputStream*)tmpfiles_out, src_rootfs_fd, cancellable, error))
-      goto out;
-
-    if (!g_output_stream_close ((GOutputStream*)tmpfiles_out, cancellable, error))
-      goto out;
-  }
+  if (!convert_var_to_tmpfiles_d (src_rootfs_fd, target_root_dfd, cancellable, error))
+    goto out;
 
   /* Move boot, but rename the kernel/initramfs to have a checksum */
   if (!container)
@@ -1406,28 +1418,29 @@ rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
                                      GError       **error)
 {
   gboolean ret = FALSE;
-  gs_fd_close int src_rootfs_fd = -1;
-  gs_unref_object GFile *rootfs_tmp = NULL;
-  gs_free char *rootfs_tmp_path = NULL;
+  gs_free char *dest_rootfs_path = NULL;
 
-  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (rootfs), TRUE,
-                       &src_rootfs_fd, error))
+  dest_rootfs_path = g_strconcat (gs_file_get_path_cached (rootfs), ".post", NULL);
+
+  if (!glnx_shutil_rm_rf_at (AT_FDCWD, dest_rootfs_path, cancellable, error))
     goto out;
 
-  rootfs_tmp_path = g_strconcat (gs_file_get_path_cached (rootfs), ".tmp", NULL);
-  rootfs_tmp = g_file_new_for_path (rootfs_tmp_path);
+  {
+    gs_unref_object GFile *dest_rootfs = g_file_new_for_path (dest_rootfs_path);
+    if (!create_rootfs_from_yumroot_content (dest_rootfs, rootfs, treefile,
+                                             cancellable, error))
+      goto out;
+  }
 
-  if (!gs_shutil_rm_rf (rootfs_tmp, cancellable, error))
+  if (!glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (rootfs), cancellable, error))
     goto out;
 
-  if (!create_rootfs_from_yumroot_content (rootfs_tmp, rootfs, src_rootfs_fd, treefile,
-                                           cancellable, error))
-    goto out;
-
-  if (!gs_shutil_rm_rf (rootfs, cancellable, error))
-    goto out;
-  if (!gs_file_rename (rootfs_tmp, rootfs, cancellable, error))
-    goto out;
+  if (TEMP_FAILURE_RETRY (renameat (AT_FDCWD, dest_rootfs_path,
+                                    AT_FDCWD, gs_file_get_path_cached (rootfs))) != 0)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
 
   ret = TRUE;
  out:
