@@ -21,6 +21,7 @@
 #pragma once
 
 #include <ostree.h>
+#include "rpmostree-json-parsing.h"
 
 gboolean
 rpmostree_treefile_postprocessing (GFile         *rootfs,
@@ -43,6 +44,7 @@ rpmostree_commit (int            rootfs_dfd,
                   GVariant      *metadata,
                   const char    *gpg_keyid,
                   gboolean       enable_selinux,
+                  OstreeRepoDevInoCache *devino_cache,
                   char         **out_new_revision,
                   GCancellable  *cancellable,
                   GError       **error);

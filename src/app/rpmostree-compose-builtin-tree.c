@@ -872,7 +872,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
       g_print ("Committing...\n");
       
-      if (!rpmostree_commit (rootfs_fd, repo, ref, metadata, gpgkey, selinux,
+      if (!rpmostree_commit (rootfs_fd, repo, ref, metadata, gpgkey, selinux, NULL,
                              &new_revision,
                              cancellable, error))
         goto out;

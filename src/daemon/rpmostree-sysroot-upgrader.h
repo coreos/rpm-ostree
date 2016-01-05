@@ -79,8 +79,14 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader  *self,
                                    GCancellable           *cancellable,
                                    GError                **error);
 
+gboolean
+rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader  *self,
+                                   GCancellable           *cancellable,
+                                   GError                **error);
+
 gboolean rpmostree_sysroot_upgrader_set_origin_rebase (RpmOstreeSysrootUpgrader *self, const char *new_refspec, GError **error);
 void rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self, const char *override_commit);
+void rpmostree_sysroot_upgrader_set_origin_baseref_local (RpmOstreeSysrootUpgrader *self, const char *local_commit);
 
 
 G_END_DECLS

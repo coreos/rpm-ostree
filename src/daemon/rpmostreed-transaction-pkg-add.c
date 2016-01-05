@@ -35,6 +35,7 @@
 #include "rpmostree-sysroot-upgrader.h"
 #include "rpmostreed-utils.h"
 #include "rpmostree-hif.h"
+#include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
 
 typedef struct {
@@ -148,8 +149,6 @@ on_hifstate_percentage_changed (HifState   *hifstate,
 
 static gboolean
 overlay_packages_in_deploydir (HifContext      *hifctx,
-			       int              dfd,
-                               const char      *deploydir,
                                GCancellable    *cancellable,
                                GError         **error)
 {
@@ -183,11 +182,12 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
 			     GError **error)
 {
   gboolean ret = FALSE;
-  const char const tmp_deploy[] = "repo/tmp/tmp-deploy";
   PkgAddTransaction *self;
   OstreeSysroot *sysroot;
   int sysroot_fd; /* Borrowed */
+  OstreeRepoCheckoutOptions checkout_options = { 0, };
 
+  OstreeRepoDevInoCache *devino_cache = NULL;
   glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
@@ -195,9 +195,9 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
   glnx_unref_object OstreeDeployment *new_deployment = NULL;
   g_autofree char *merge_deployment_dirpath = NULL;
   g_autofree char *tmp_deploy_workdir_name = NULL;
+  gboolean tmp_deploy_workdir_created = FALSE;
   g_autofree char *tmp_deploy_root_path = NULL;
-  g_autofree char *etc_path = NULL;
-  g_autofree char *usretc_path = NULL;
+  g_autofree char *new_revision = NULL;
   glnx_fd_close int merge_deployment_dirfd = -1;
   glnx_fd_close int ostree_repo_tmp_dirfd = -1;
   glnx_fd_close int deploy_tmp_dirfd = -1;
@@ -266,6 +266,9 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
     g_key_file_set_value (origin, "origin", "baserefspec", cur_origin_refspec);
   }
 
+  if (!rpmostree_sysroot_upgrader_set_origin (upgrader, origin, cancellable, error))
+    goto out;
+
   {
     char **iter = self->packages;
     g_autoptr(RpmOstreeRefSack) rsack = NULL;
@@ -313,32 +316,34 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
   tmp_deploy_workdir_name = g_strdup ("rpmostree-deploy-XXXXXX");
   if (!glnx_mkdtempat (ostree_repo_tmp_dirfd, tmp_deploy_workdir_name, 0755, error))
     goto out;
+  tmp_deploy_workdir_created = TRUE;
 
   tmp_deploy_root_path = g_strconcat (tmp_deploy_workdir_name, "root", NULL);
 
-  if (!ostree_repo_checkout_tree_at (repo, NULL, ostree_repo_tmp_dirfd, tmp_deploy_workdir_name,
+  checkout_options.devino_to_csum_cache = ostree_repo_devino_cache_new ();
+
+  if (!ostree_repo_checkout_tree_at (repo, &checkout_options, ostree_repo_tmp_dirfd, tmp_deploy_root_path,
 				     ostree_deployment_get_csum (merge_deployment),
 				     cancellable, error))
     goto out;
 
-  usretc_path = g_strconcat (tmp_deploy_root_path, "usr/etc", NULL);  
-  etc_path = g_strconcat (tmp_deploy_root_path, "etc", NULL);
+  if (!glnx_opendirat (ostree_repo_tmp_dirfd, tmp_deploy_root_path, TRUE,
+		       &deploy_tmp_dirfd, error))
+    goto out;
 
   /* Convert usr/share/rpm into physical copies, as librpm mutates it in place */
-  { g_autofree char *rpmdb_path = g_strconcat (tmp_deploy_root_path, "usr/share/rpm", NULL);
-    if (!break_hardlinks_at (ostree_repo_tmp_dirfd, rpmdb_path, cancellable, error))
-      goto out;
-  }
+  if (!break_hardlinks_at (deploy_tmp_dirfd, "usr/share/rpm", cancellable, error))
+    goto out;
 
   /* Temporarily rename /usr/etc to /etc so that RPMs can drop new files there */
-  if (TEMP_FAILURE_RETRY (renameat (ostree_repo_tmp_dirfd, usretc_path, ostree_repo_tmp_dirfd, etc_path)) != 0)
+  if (TEMP_FAILURE_RETRY (renameat (deploy_tmp_dirfd, "usr/etc",
+				    deploy_tmp_dirfd, "etc")) != 0)
     {
       glnx_set_error_from_errno (error);
       goto out;
     }
 
-  { g_autofree char *tmp_deploy_abspath =
-      glnx_fdrel_abspath (ostree_repo_tmp_dirfd, tmp_deploy_root_path);
+  { g_autofree char *tmp_deploy_abspath = glnx_fdrel_abspath (deploy_tmp_dirfd, ".");
     hif_context_set_install_root (hifctx, tmp_deploy_abspath);
   }
 
@@ -430,22 +435,33 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
                                 new_requested_pkglist->len);
   }
 
-  if (!overlay_packages_in_deploydir (hifctx, sysroot_fd, tmp_deploy,
-				      cancellable, error))
+  if (!overlay_packages_in_deploydir (hifctx, cancellable, error))
     goto out;
 
+  /* Clear out any references to the rpmdb, etc. */
   g_clear_object (&hifctx);
 
   /* Rename /usr/etc back to /etc */
-  if (TEMP_FAILURE_RETRY (renameat (ostree_repo_tmp_dirfd, etc_path, ostree_repo_tmp_dirfd, usretc_path)) != 0)
+  if (TEMP_FAILURE_RETRY (renameat (deploy_tmp_dirfd, "etc", deploy_tmp_dirfd, "usr/etc")) != 0)
     {
       glnx_set_error_from_errno (error);
       goto out;
     }
 
-  if (!ostree_sysroot_simple_write_deployment (sysroot, self->osname, new_deployment,
-                                               merge_deployment, 0,
-                                               cancellable, error))
+  if (!rpmostree_commit (deploy_tmp_dirfd, repo, NULL, NULL, NULL, TRUE, devino_cache,
+			 &new_revision, cancellable, error))
+    goto out;
+
+  (void) close (deploy_tmp_dirfd);
+  deploy_tmp_dirfd = -1;
+  
+  if (!glnx_shutil_rm_rf_at (ostree_repo_tmp_dirfd, tmp_deploy_workdir_name, cancellable, error))
+    goto out;
+  tmp_deploy_workdir_created = FALSE;
+
+  rpmostree_sysroot_upgrader_set_origin_baseref_local (upgrader, new_revision);
+
+  if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
     goto out;
 
   if (self->reboot)
@@ -453,6 +469,10 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
 
   ret = TRUE;
 out:
+  if (tmp_deploy_workdir_created)
+    (void) glnx_shutil_rm_rf_at (ostree_repo_tmp_dirfd, tmp_deploy_workdir_name, NULL, NULL);
+  if (devino_cache)
+    ostree_repo_devino_cache_unref (devino_cache);
   return ret;
 }
 

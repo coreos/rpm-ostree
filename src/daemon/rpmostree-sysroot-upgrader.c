@@ -383,6 +383,12 @@ rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self, 
     g_key_file_remove_key (self->origin, "origin", "override_commit", NULL);
 }
 
+void
+rpmostree_sysroot_upgrader_set_origin_baseref_local (RpmOstreeSysrootUpgrader *self, const char *local_commit)
+{
+  self->new_revision = g_strdup (local_commit);
+}
+
 const char *
 rpmostree_sysroot_upgrader_get_refspec (RpmOstreeSysrootUpgrader *self)
 {

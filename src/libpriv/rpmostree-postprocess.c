@@ -694,7 +694,6 @@ workaround_selinux_cross_labeling_recurse (int            dfd,
 
           nonbin_name = g_strndup (name, lastdot - name);
 
-          g_print ("Setting mtime of '%s' to newer than '%s'\n", nonbin_name, name);
           if (TEMP_FAILURE_RETRY (utimensat (dfd_iter.fd, nonbin_name, NULL, 0)) == -1)
             {
               glnx_set_error_from_errno (error);
@@ -1449,6 +1448,7 @@ rpmostree_commit (int            rootfs_fd,
                   GVariant      *metadata,
                   const char    *gpg_keyid,
                   gboolean       enable_selinux,
+                  OstreeRepoDevInoCache *devino_cache,
                   char         **out_new_revision,
                   GCancellable  *cancellable,
                   GError       **error)
@@ -1484,8 +1484,11 @@ rpmostree_commit (int            rootfs_fd,
   if (!ostree_repo_write_mtree (repo, mtree, &root_tree, cancellable, error))
     goto out;
 
-  if (!ostree_repo_resolve_rev (repo, refname, TRUE, &parent_revision, error))
-    goto out;
+  if (refname)
+    {
+      if (!ostree_repo_resolve_rev (repo, refname, TRUE, &parent_revision, error))
+        goto out;
+    }
 
   if (!ostree_repo_write_commit (repo, parent_revision, "", "", metadata,
                                  (OstreeRepoFile*)root_tree, &new_revision,
@@ -1499,7 +1502,8 @@ rpmostree_commit (int            rootfs_fd,
         goto out;
     }
   
-  ostree_repo_transaction_set_ref (repo, NULL, refname, new_revision);
+  if (refname)
+    ostree_repo_transaction_set_ref (repo, NULL, refname, new_revision);
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
     goto out;
