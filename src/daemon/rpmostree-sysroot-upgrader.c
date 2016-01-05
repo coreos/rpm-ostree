@@ -78,7 +78,7 @@ parse_refspec (RpmOstreeSysrootUpgrader  *self,
   g_autofree char *unconfigured_state = NULL;
   g_autofree char *csum = NULL;
 
-  if ((self->flags & OSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED) == 0)
+  if ((self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED) == 0)
     {
       /* If explicit action by the OS creator is requried to upgrade, print their text as an error */
       unconfigured_state = g_key_file_get_string (self->origin, "origin", "unconfigured-state", NULL);
@@ -267,7 +267,7 @@ ostree_sysroot_upgrader_class_init (RpmOstreeSysrootUpgraderClass *klass)
   g_object_class_install_property (object_class,
                                    PROP_FLAGS,
                                    g_param_spec_flags ("flags", "", "",
-                                                       ostree_sysroot_upgrader_flags_get_type (),
+                                                       rpmostree_sysroot_upgrader_flags_get_type (),
                                                        0,
                                                        G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 }
