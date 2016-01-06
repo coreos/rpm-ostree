@@ -1478,6 +1478,8 @@ rpmostree_commit (int            rootfs_fd,
                                                   GINT_TO_POINTER (rootfs_fd));
   if (sepolicy)
     ostree_repo_commit_modifier_set_sepolicy (commit_modifier, sepolicy);
+  if (devino_cache)
+    ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
 
   if (!ostree_repo_write_dfd_to_mtree (repo, rootfs_fd, ".", mtree, commit_modifier, cancellable, error))
     goto out;

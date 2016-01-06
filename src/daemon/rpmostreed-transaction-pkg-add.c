@@ -187,7 +187,6 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
   int sysroot_fd; /* Borrowed */
   OstreeRepoCheckoutOptions checkout_options = { 0, };
 
-  OstreeRepoDevInoCache *devino_cache = NULL;
   glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
@@ -448,7 +447,8 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
       goto out;
     }
 
-  if (!rpmostree_commit (deploy_tmp_dirfd, repo, NULL, NULL, NULL, TRUE, devino_cache,
+  if (!rpmostree_commit (deploy_tmp_dirfd, repo, NULL, NULL, NULL, TRUE,
+			 checkout_options.devino_to_csum_cache,
 			 &new_revision, cancellable, error))
     goto out;
 
@@ -471,8 +471,8 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
 out:
   if (tmp_deploy_workdir_created)
     (void) glnx_shutil_rm_rf_at (ostree_repo_tmp_dirfd, tmp_deploy_workdir_name, NULL, NULL);
-  if (devino_cache)
-    ostree_repo_devino_cache_unref (devino_cache);
+  if (checkout_options.devino_to_csum_cache)
+    ostree_repo_devino_cache_unref (checkout_options.devino_to_csum_cache);
   return ret;
 }
 
