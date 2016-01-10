@@ -24,7 +24,6 @@
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
 #include <gio/gunixoutputstream.h>
-#include <rpm/rpmsq.h>
 #include <libhif.h>
 #include <libhif/hif-utils.h>
 #include <stdio.h>
@@ -33,6 +32,7 @@
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
+#include "rpmostree-hif.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-cleanup.h"
 #include "rpmostree-postprocess.h"
@@ -192,29 +192,12 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                                             NULL);
   gs_free char *ret_new_inputhash = NULL;
 
-  /* We can be control-c'd at any time */
-#if BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY
-  rpmsqSetInterruptSafety (FALSE);
-#endif
-
-  /* Apparently there's only one process-global macro context;
-   * realistically, we're going to have to refactor all of the RPM
-   * stuff to a subprocess.
-   */
-  hifctx = hif_context_new ();
-  hif_context_set_http_proxy (hifctx, opt_proxy ? opt_proxy : g_getenv ("http_proxy"));
-
+  hifctx = _rpmostree_libhif_get_default ();
   hif_context_set_install_root (hifctx, gs_file_get_path_cached (yumroot));
-
   hif_context_set_cache_dir (hifctx, cachedir);
   hif_context_set_cache_age (hifctx, G_MAXUINT);
   hif_context_set_solv_dir (hifctx, solvdir);
   hif_context_set_lock_dir (hifctx, lockdir);
-  hif_context_set_check_disk_space (hifctx, FALSE);
-  hif_context_set_check_transaction (hifctx, FALSE);
-
-  hif_context_set_yumdb_enabled (hifctx, FALSE);
-
   hif_context_set_repo_dir (hifctx, gs_file_get_path_cached (contextdir));
 
   { JsonNode *install_langs_n =
@@ -239,28 +222,21 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
       }
   }
 
-  if (!hif_context_setup (hifctx, cancellable, error))
+  if (!_rpmostree_libhif_setup (hifctx, cancellable, error))
     goto out;
-
-  /* Forcibly override rpm/librepo SIGINT handlers.  We always operate
-   * in a fully idempotent/atomic mode, and can be killed at any time.
-   */
-  signal (SIGINT, SIG_DFL);
-  signal (SIGTERM, SIG_DFL);
 
   /* Bind the json \"repos\" member to the hif state, which looks at the
    * enabled= member of the repos file.  By default we forcibly enable
    * only repos which are specified, ignoring the enabled= flag.
    */
   {
-    GPtrArray *sources;
     JsonArray *enable_repos = NULL;
     gs_unref_hashtable GHashTable *repos_to_enable =
       g_hash_table_new (g_str_hash, g_str_equal);
     guint i;
     guint n;
 
-    sources = hif_context_get_sources (hifctx);
+    _rpmostree_libhif_repos_disable_all (hifctx);
 
     if (!json_object_has_member (treedata, "repos"))
       {
@@ -277,45 +253,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
         const char *reponame = _rpmostree_jsonutil_array_require_string_element (enable_repos, i, error);
         if (!reponame)
           goto out;
-        g_hash_table_add (repos_to_enable, (char*)reponame);
-      }
-
-    for (i = 0; i < sources->len; i++)
-      {
-        HifSource *src = g_ptr_array_index (sources, i);
-        const char *id = hif_source_get_id (src);
-
-        /* Note side effect here */
-        if (g_hash_table_remove (repos_to_enable, id))
-          {
-            hif_source_set_enabled (src, HIF_SOURCE_ENABLED_PACKAGES);
-#ifdef HAVE_HIF_SOURCE_SET_REQUIRED
-            hif_source_set_required (src, TRUE);
-#endif
-          }
-        else
-          hif_source_set_enabled (src, HIF_SOURCE_ENABLED_NONE);
-      }
-    
-    /* Did we have any leftovers? */
-    if (g_hash_table_size (repos_to_enable) > 0)
-      {
-        GString *repos_str = g_string_new ("");
-        GHashTableIter hiter;
-        gpointer key, value;
-        
-        g_hash_table_iter_init (&hiter, repos_to_enable);
-        while (g_hash_table_iter_next (&hiter, &key, &value))
-          {
-            if (repos_str->len > 0)
-              g_string_append (repos_str, ", ");
-            g_string_append (repos_str, (char*) key);
-          }
-
-        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                     "Repositories specified not found: %s", repos_str->str);
-        g_string_free (repos_str, TRUE);
-        goto out;
+        if (!_rpmostree_libhif_repos_enable_by_name (hifctx, reponame, error))
+          goto out;
       }
   }
 
