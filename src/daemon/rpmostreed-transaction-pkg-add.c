@@ -305,7 +305,7 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
       }
   }
 
-  hifctx = _rpmostree_libhif_get_default ();
+  hifctx = _rpmostree_libhif_new_default ();
   {
     g_autofree char *reposdir =
       g_build_filename (merge_deployment_dirpath, "etc/yum.repos.d", NULL);
