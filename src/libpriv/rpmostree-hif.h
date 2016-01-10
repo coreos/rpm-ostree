@@ -24,7 +24,7 @@
 #include <libhif.h>
 #include <libhif/hif-utils.h>
 
-HifContext *_rpmostree_libhif_get_default (void);
+HifContext *_rpmostree_libhif_new_default (void);
 
 gboolean _rpmostree_libhif_setup (HifContext    *context,
                                   GCancellable  *cancellable,
