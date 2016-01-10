@@ -28,7 +28,7 @@
 #include "rpmostree-cleanup.h"
 
 HifContext *
-_rpmostree_libhif_get_default (void)
+_rpmostree_libhif_new_default (void)
 {
   HifContext *hifctx;
 

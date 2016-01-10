@@ -192,7 +192,9 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                                             NULL);
   gs_free char *ret_new_inputhash = NULL;
 
-  hifctx = _rpmostree_libhif_get_default ();
+  hifctx = _rpmostree_libhif_new_default ();
+  if (opt_proxy)
+    hif_context_set_http_proxy (hifctx, opt_proxy);
   hif_context_set_install_root (hifctx, gs_file_get_path_cached (yumroot));
   hif_context_set_cache_dir (hifctx, cachedir);
   hif_context_set_cache_age (hifctx, G_MAXUINT);
