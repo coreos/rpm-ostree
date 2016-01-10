@@ -43,6 +43,7 @@ static RpmOstreeCommand commands[] = {
   { "rollback", rpmostree_builtin_rollback },
   { "status", rpmostree_builtin_status },
   { "upgrade", rpmostree_builtin_upgrade },
+  { "internals", rpmostree_builtin_internals },
   { NULL }
 };
 
@@ -74,7 +75,8 @@ option_context_new_with_commands (void)
 
   while (command->name != NULL)
     {
-      g_string_append_printf (summary, "\n  %s", command->name);
+      if (strcmp (command->name, "internals") != 0)
+        g_string_append_printf (summary, "\n  %s", command->name);
       command++;
     }
 

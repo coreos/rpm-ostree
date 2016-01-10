@@ -48,6 +48,7 @@ BUILTINPROTO(rebase);
 BUILTINPROTO(rollback);
 BUILTINPROTO(status);
 BUILTINPROTO(db);
+BUILTINPROTO(internals);
 
 #undef BUILTINPROTO
 
