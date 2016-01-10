@@ -232,13 +232,14 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
    * only repos which are specified, ignoring the enabled= flag.
    */
   {
+    GPtrArray *sources;
     JsonArray *enable_repos = NULL;
     gs_unref_hashtable GHashTable *repos_to_enable =
       g_hash_table_new (g_str_hash, g_str_equal);
     guint i;
     guint n;
 
-    _rpmostree_libhif_repos_disable_all (hifctx);
+    sources = hif_context_get_sources (hifctx);
 
     if (!json_object_has_member (treedata, "repos"))
       {
@@ -862,9 +863,27 @@ rpmostree_compose_builtin_tree (int             argc,
                                                                  error))
       goto out;
 
-    if (!rpmostree_commit (yumroot, repo, ref, metadata, gpgkey, selinux,
-                           cancellable, error))
-      goto out;
+    { g_autofree char *new_revision = NULL;
+      glnx_fd_close int rootfs_fd = -1;
+
+      if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot), TRUE,
+                           &rootfs_fd, error))
+        goto out;
+
+      g_print ("Committing...\n");
+      
+      if (!rpmostree_commit (rootfs_fd, repo, ref, metadata, gpgkey, selinux, NULL,
+                             &new_revision,
+                             cancellable, error))
+        goto out;
+
+      g_print ("%s => %s\n", ref, new_revision);
+
+      if (!g_getenv ("RPM_OSTREE_PRESERVE_ROOTFS"))
+        (void) glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (yumroot), cancellable, NULL);
+      else
+        g_print ("Preserved %s\n", gs_file_get_path_cached (yumroot));
+    }
   }
 
   if (opt_touch_if_changed)

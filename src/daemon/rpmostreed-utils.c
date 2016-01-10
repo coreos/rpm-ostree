@@ -130,7 +130,7 @@ rpmostreed_generate_object_path_from_va (const gchar *base,
  */
 gboolean
 rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
-                                  gchar *base_refspec,
+                                  const gchar *base_refspec,
                                   gchar **out_refspec,
                                   GError **error)
 {

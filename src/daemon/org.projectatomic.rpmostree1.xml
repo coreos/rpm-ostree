@@ -12,6 +12,7 @@
        'timestamp' (type 't')
        'origin' (type 's')
        'signatures' (type 'av')
+       'packages' (type 'as')
   -->
 
   <interface name="org.projectatomic.rpmostree1.Sysroot">
@@ -167,6 +168,12 @@
 
     <method name="DownloadRebaseRpmDiff">
       <arg type="s" name="refspec"/>
+      <arg type="as" name="packages"/>
+      <arg type="s" name="transaction_address" direction="out"/>
+    </method>
+
+    <method name="PkgAdd">
+      <arg type="a{sv}" name="options" direction="in"/>
       <arg type="as" name="packages"/>
       <arg type="s" name="transaction_address" direction="out"/>
     </method>

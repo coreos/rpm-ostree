@@ -48,6 +48,7 @@ BUILTINPROTO(rebase);
 BUILTINPROTO(rollback);
 BUILTINPROTO(status);
 BUILTINPROTO(db);
+BUILTINPROTO(pkg_add);
 
 #undef BUILTINPROTO
 
