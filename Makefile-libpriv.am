@@ -35,6 +35,8 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-cleanup.h \
 	src/libpriv/rpmostree-rpm-util.c \
 	src/libpriv/rpmostree-rpm-util.h \
+	src/libpriv/rpmostree-unpacker.c \
+	src/libpriv/rpmostree-unpacker.h \
 	$(NULL)
 librpmostreepriv_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
 librpmostreepriv_la_LIBADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS) libglnx.la $(CAP_LIBS)

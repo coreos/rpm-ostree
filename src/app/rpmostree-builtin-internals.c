@@ -29,12 +29,15 @@ typedef struct {
 } RpmOstreeInternalsCommand;
 
 static RpmOstreeInternalsCommand internals_subcommands[] = {
+  { "unpack", rpmostree_internals_builtin_unpack },
   { NULL, NULL }
 };
 
+/*
 static GOptionEntry global_entries[] = {
   { NULL }
 };
+*/
 
 static GOptionContext *
 internals_option_context_new_with_commands (void)
