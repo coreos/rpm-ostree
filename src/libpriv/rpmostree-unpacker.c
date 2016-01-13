@@ -267,6 +267,16 @@ rpmostree_unpacker_new_at (int dfd, const char *path, RpmOstreeUnpackerFlags fla
   return ret;
 }
 
+static inline const char *
+path_relative (const char *src)
+{
+  if (src[0] == '.' && src[1] == '/')
+    src += 2;
+  while (src[0] == '/')
+    src++;
+  return src;
+}
+
 gboolean
 rpmostree_unpacker_unpack_to_dfd (RpmOstreeUnpacker *self,
                                   int                rootfs_fd,
@@ -274,31 +284,51 @@ rpmostree_unpacker_unpack_to_dfd (RpmOstreeUnpacker *self,
                                   GError           **error)
 {
   gboolean ret = FALSE;
+  g_autoptr(GHashTable) rpmfi_overrides = NULL;
+  g_autoptr(GHashTable) hardlinks =
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+  int i = 0;
+
+  /* Right now as I understand it, we need the owner user/group and
+   * possibly filesystem capabilities from the header.
+   *
+   * Otherwise we can just use the CPIO data.
+   */
+  rpmfi_overrides = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                                           (GDestroyNotify) rpmfiFree);
+  for (i = 0; rpmfiNext (self->fi) > 0; i++)
+    {
+      const char *user = rpmfiFUser (self->fi);
+      const char *group = rpmfiFGroup (self->fi);
+      const char *fcaps = rpmfiFCaps (self->fi);
+
+      if (g_str_equal (user, "root") && g_str_equal (group, "root")
+          && !(fcaps && fcaps[0]))
+        continue;
+
+      { rpmfi ficopy = rpmfiInit(self->fi, i);
+            
+        g_hash_table_insert (rpmfi_overrides, g_strdup (path_relative (rpmfiFN (self->fi))), ficopy);
+      }
+    }
       
-  while (rpmfiNext (self->fi) >= 0)
+  while (TRUE)
     {
       int r;
+      const char *fn;
       struct archive_entry *entry;
-      rpmfileAttrs fflags = rpmfiFFlags (self->fi);
-      rpm_mode_t fmode = rpmfiFMode (self->fi);
-      rpm_loff_t fsize = rpmfiFSize (self->fi);
-      const char *hardlink;
-      const char *fn = rpmfiFN (self->fi); 
-      const char *fuser = rpmfiFUser (self->fi);
-      const char *fgroup = rpmfiFGroup (self->fi);
-      const char *fcaps = rpmfiFCaps (self->fi);
-      const struct stat *archive_st;
-      g_autofree char *dname = NULL;
+      glnx_fd_close int destfd = -1;
+      mode_t fmode;
       uid_t owner_uid = 0;
       gid_t owner_gid = 0;
-      glnx_fd_close int destfd = -1;
+      const struct stat *archive_st;
+      const char *hardlink;
+      rpmfi fi = NULL;
 
       r = archive_read_next_header (self->archive, &entry);
       if (r == ARCHIVE_EOF)
         {
-          g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "Unexpected end of RPM cpio stream");
-          goto out;
+          break;
         }
       else if (r != ARCHIVE_OK)
         {
@@ -306,88 +336,67 @@ rpmostree_unpacker_unpack_to_dfd (RpmOstreeUnpacker *self,
           goto out;
         }
 
+      fn = path_relative (archive_entry_pathname (entry));
+
       archive_st = archive_entry_stat (entry);
 
-      g_print ("%s %s:%s mode=%u size=%" G_GUINT64_FORMAT " attrs=%u",
-               fn, fuser, fgroup, fmode, (guint64) fsize, fflags);
-      if (fcaps)
-        g_print (" fcaps=\"%s\"", fcaps);
-      g_print ("\n");
-
-      if (fn[0] == '/')
-        fn += 1;
-      dname = dirname (g_strdup (fn));
-
-      /* Ensure parent directories exist */
-      if (!glnx_shutil_mkdir_p_at (rootfs_fd, dname, 0755, cancellable, error))
-        goto out;
-
-      if (archive_st->st_mode != fmode)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Corrupted RPM (mode: fi=%u, archive=%u", fmode, archive_st->st_mode);
-          goto out;
-        }
-
-      if ((self->flags & RPMOSTREE_UNPACKER_FLAGS_OWNER) > 0)
-        {
-          struct passwd *pwent;
-          struct group *grent;
-          
-          pwent = getpwnam (fuser);
-          if (pwent == NULL)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Unknown user '%s'", fuser);
-              goto out;
-            }
-          owner_uid = pwent->pw_uid;
-
-          grent = getgrnam (fgroup);
-          if (grent == NULL)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Unknown group '%s'", fgroup);
-              goto out;
-            }
-          owner_gid = grent->gr_gid;
-        }
-        
       hardlink = archive_entry_hardlink (entry);
       if (hardlink)
         {
-          if (hardlink[0] == '/')
-            hardlink++;
-          if (linkat (rootfs_fd, hardlink, rootfs_fd, fn, 0) < 0)
-            {
-              glnx_set_error_from_errno (error);
-              goto out;
-            }
+          g_hash_table_insert (hardlinks, g_strdup (hardlink), g_strdup (fn));
+          continue;
         }
-      else if (S_ISDIR (fmode))
+
+      /* Don't try to mkdir parents of "" (originally /) */
+      if (fn[0])
         {
-          g_assert (fn[0] != '/');
-          if (!glnx_shutil_mkdir_p_at (rootfs_fd, fn, fmode, cancellable, error))
+          char *fn_copy = strdupa (fn); /* alloca */
+          const char *dname = dirname (fn_copy);
+
+          /* Ensure parent directories exist */
+          if (!glnx_shutil_mkdir_p_at (rootfs_fd, dname, 0755, cancellable, error))
             goto out;
+        }
+
+      fi = g_hash_table_lookup (rpmfi_overrides, fn);
+      fmode = archive_st->st_mode;
+
+      if (S_ISDIR (fmode))
+        {
+          /* Always ensure we can write and execute directories...since
+           * this content should ultimately be read-only entirely, we're
+           * just breaking things by dropping write permissions during
+           * builds.
+           */
+          fmode |= 0700;
+          /* Don't try to mkdir "" (originally /) */
+          if (fn[0])
+            {
+              g_assert (fn[0] != '/');
+              if (!glnx_shutil_mkdir_p_at (rootfs_fd, fn, fmode, cancellable, error))
+                goto out;
+            }
         }
       else if (S_ISLNK (fmode))
         {
           g_assert (fn[0] != '/');
-          if (symlinkat (rpmfiFLink (self->fi), rootfs_fd, fn) < 0)
+          if (symlinkat (archive_entry_symlink (entry), rootfs_fd, fn) < 0)
             {
               glnx_set_error_from_errno (error);
+              g_prefix_error (error, "Creating %s: ", fn);
               goto out;
             }
         }
       else if (S_ISREG (fmode))
         {
-          size_t remain = fsize;
+          size_t remain = archive_st->st_size;
 
           g_assert (fn[0] != '/');
           destfd = openat (rootfs_fd, fn, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
           if (destfd < 0)
             {
               glnx_set_error_from_errno (error);
+              g_prefix_error (error, "Creating %s: ", fn);
               goto out;
             }
 
@@ -413,39 +422,55 @@ rpmostree_unpacker_unpack_to_dfd (RpmOstreeUnpacker *self,
                 }
               remain -= size;
             }
-          if (remain > 0)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Unexpected end of RPM cpio stream reading '%s'", fn);
-              goto out;
-            }
         }
       else
         {
           g_set_error (error,
-                       G_IO_ERROR,
+                      G_IO_ERROR,
                        G_IO_ERROR_FAILED,
                        "RPM contains non-regular/non-symlink file %s",
                        fn);
           goto out;
         }
 
-      if ((self->flags & RPMOSTREE_UNPACKER_FLAGS_OWNER) > 0 &&
-          fchownat (rootfs_fd, fn, owner_uid, owner_gid, AT_SYMLINK_NOFOLLOW) < 0)
+      if (fi && (self->flags & RPMOSTREE_UNPACKER_FLAGS_OWNER) > 0)
         {
-          glnx_set_error_from_errno (error);
-          g_prefix_error (error, "fchownat: ");
-          goto out;
+          struct passwd *pwent;
+          struct group *grent;
+          
+          pwent = getpwnam (rpmfiFUser (fi));
+          if (pwent == NULL)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Unknown user '%s'", rpmfiFUser (fi));
+              goto out;
+            }
+          owner_uid = pwent->pw_uid;
+
+          grent = getgrnam (rpmfiFGroup (fi));
+          if (grent == NULL)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Unknown group '%s'", rpmfiFGroup (fi));
+              goto out;
+            }
+          owner_gid = grent->gr_gid;
+
+          if (fchownat (rootfs_fd, fn, owner_uid, owner_gid, AT_SYMLINK_NOFOLLOW) < 0)
+            {
+              glnx_set_error_from_errno (error);
+              g_prefix_error (error, "fchownat: ");
+              goto out;
+            }
         }
 
       if (S_ISREG (fmode))
         {
-          g_assert (destfd != -1);
-          
           if ((self->flags & RPMOSTREE_UNPACKER_FLAGS_SUID_FSCAPS) == 0)
             fmode &= 0777;
-          else
+          else if (fi != NULL)
             {
+              const char *fcaps = rpmfiFCaps (fi);
               if (fcaps != NULL && fcaps[0])
                 {
                   cap_t caps = cap_from_text (fcaps);
@@ -457,7 +482,7 @@ rpmostree_unpacker_unpack_to_dfd (RpmOstreeUnpacker *self,
                     }
                 }
             }
-
+      
           if (fchmod (destfd, fmode) < 0)
             {
               glnx_set_error_from_errno (error);
@@ -465,6 +490,24 @@ rpmostree_unpacker_unpack_to_dfd (RpmOstreeUnpacker *self,
             }
         }
     }
+
+  { GHashTableIter hashiter;
+    gpointer k,v;
+
+    g_hash_table_iter_init (&hashiter, hardlinks);
+
+    while (g_hash_table_iter_next (&hashiter, &k, &v))
+      {
+        const char *src = path_relative (k);
+        const char *dest = path_relative (v);
+    
+        if (linkat (rootfs_fd, src, rootfs_fd, dest, 0) < 0)
+          {
+            glnx_set_error_from_errno (error);
+            goto out;
+          }
+      }
+  }
 
   ret = TRUE;
  out:

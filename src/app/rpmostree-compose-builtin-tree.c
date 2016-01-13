@@ -274,20 +274,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   }
 
   /* --- Downloading metadata --- */
-  { g_auto(GLnxConsoleRef) console = { 0, };
-    gs_unref_object HifState *hifstate = hif_state_new ();
-
-    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                     G_CALLBACK (on_hifstate_percentage_changed), 
-                                     "Downloading metadata:");
-
-    glnx_console_lock (&console);
-
-    if (!hif_context_setup_sack (hifctx, hifstate, error))
-      goto out;
-
-    g_signal_handler_disconnect (hifstate, progress_sigid);
-  }
+  if (!_rpmostree_libhif_console_download_metadata (hifctx, cancellable, error))
+    goto out;
 
   for (strviter = packages; strviter && *strviter; strviter++)
     {
@@ -296,22 +284,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     }
 
   /* --- Resolving dependencies --- */
-  { g_auto(GLnxConsoleRef) console = { 0, };
-    gs_unref_object HifState *hifstate = hif_state_new ();
-
-    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                     G_CALLBACK (on_hifstate_percentage_changed), 
-                                     "Resolving dependencies:");
-
-    glnx_console_lock (&console);
-
-    if (!hif_transaction_depsolve (hif_context_get_transaction (hifctx),
-                                   hif_context_get_goal (hifctx),
-                                   hifstate, error))
-      goto out;
-
-    g_signal_handler_disconnect (hifstate, progress_sigid);
-  }
+  if (!_rpmostree_libhif_console_depsolve (hifctx, cancellable, error))
+    goto out;
 
   if (!compute_checksum_from_treefile_and_goal (self, hif_context_get_goal (hifctx),
                                                 &ret_new_inputhash, error))
@@ -346,21 +320,9 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   rpmostree_print_transaction (hifctx);
 
   /* --- Downloading packages --- */
-  { g_auto(GLnxConsoleRef) console = { 0, };
-    gs_unref_object HifState *hifstate = hif_state_new ();
-
-    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                     G_CALLBACK (on_hifstate_percentage_changed), 
-                                     "Downloading packages:");
-
-    glnx_console_lock (&console);
-
-    if (!hif_transaction_download (hif_context_get_transaction (hifctx), hifstate, error))
-      goto out;
-
-    g_signal_handler_disconnect (hifstate, progress_sigid);
-  }
-
+  if (!_rpmostree_libhif_console_download_content (hifctx, cancellable, error))
+    goto out;
+  
   { g_auto(GLnxConsoleRef) console = { 0, };
     gs_unref_object HifState *hifstate = hif_state_new ();
 

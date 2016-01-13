@@ -36,6 +36,7 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-dbus-helpers.c \
 	src/app/rpmostree-dbus-helpers.h \
 	src/app/rpmostree-internals-builtin-unpack.c \
+	src/app/rpmostree-internals-builtin-mkroot.c \
 	src/app/rpmostree-libbuiltin.c \
 	src/app/rpmostree-libbuiltin.h \
 	$(NULL)
