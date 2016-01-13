@@ -35,3 +35,15 @@ void _rpmostree_libhif_repos_disable_all (HifContext    *context);
 gboolean _rpmostree_libhif_repos_enable_by_name (HifContext    *context,
                                                  const char    *name,
                                                  GError       **error);
+
+gboolean _rpmostree_libhif_console_download_metadata (HifContext     *context,
+                                                      GCancellable   *cancellable,
+                                                      GError        **error);
+
+gboolean _rpmostree_libhif_console_depsolve (HifContext     *context,
+                                             GCancellable   *cancellable,
+                                             GError        **error);
+  
+gboolean _rpmostree_libhif_console_download_content (HifContext     *context,
+                                                     GCancellable   *cancellable,
+                                                     GError        **error);
