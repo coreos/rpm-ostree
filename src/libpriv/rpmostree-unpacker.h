@@ -23,6 +23,7 @@
 #include <ostree.h>
 
 #include "libglnx.h"
+#include <rpm/rpmlib.h>
 
 typedef struct RpmOstreeUnpacker RpmOstreeUnpacker;
 
@@ -36,7 +37,7 @@ typedef enum {
   RPMOSTREE_UNPACKER_FLAGS_SUID_FSCAPS = (1 << 0),
   RPMOSTREE_UNPACKER_FLAGS_OWNER = (1 << 1)
 } RpmOstreeUnpackerFlags;
-#define RPMOSTREE_UNPACKER_FLAGS_ALL = (RPMOSTREE_UNPACKER_SUID_FSCAPS | RPMOSTREE_UNPACKER_OWNER)
+#define RPMOSTREE_UNPACKER_FLAGS_ALL (RPMOSTREE_UNPACKER_FLAGS_SUID_FSCAPS | RPMOSTREE_UNPACKER_FLAGS_OWNER)
 
 RpmOstreeUnpacker *rpmostree_unpacker_new_fd (int fd, RpmOstreeUnpackerFlags flags, GError **error);
 
@@ -46,3 +47,19 @@ gboolean rpmostree_unpacker_unpack_to_dfd (RpmOstreeUnpacker *unpacker,
                                            int                dfd,
                                            GCancellable      *cancellable,
                                            GError           **error);
+
+gboolean
+rpmostree_unpacker_read_metainfo (int fd,
+                                  Header *out_header,
+                                  gsize *out_cpio_offset,
+                                  rpmfi *out_fi,
+                                  GError **error);
+
+const char *rpmostree_unpacker_get_ostree_branch (RpmOstreeUnpacker *unpacker);
+
+gboolean rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *unpacker,
+                                              OstreeRepo        *repo,
+                                              OstreeSePolicy    *sepolicy,
+                                              char             **out_commit,
+                                              GCancellable      *cancellable,
+                                              GError           **error);

@@ -66,6 +66,22 @@ _rpmostree_perror_fatal (const char *message)
   exit (1);
 }
 
+GVariant *
+_rpmostree_vardict_lookup_value_required (GVariantDict *dict,
+                                          const char *key,
+                                          const GVariantType *fmt,
+                                          GError     **error)
+{
+  GVariant *r = g_variant_dict_lookup_value (dict, key, fmt);
+  if (!r)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                   "Failed to find metadata key %s (signature %s)", key, (char*)fmt);
+      return NULL;
+    }
+  return r;
+}
+
 gboolean
 rpmostree_mkdtemp (const char   *template,
                    char        **out_tmpdir,

@@ -37,6 +37,11 @@ _rpmostree_set_prefix_error_from_errno (GError     **error,
 
 void _rpmostree_perror_fatal (const char *message) __attribute__ ((noreturn));
 
+GVariant *_rpmostree_vardict_lookup_value_required (GVariantDict *dict,
+                                                    const char *key,
+                                                    const GVariantType *fmt,
+                                                    GError     **error);
+
 gboolean rpmostree_mkdtemp (const char   *template,
                              char       **out_tmpdir,
                              int         *out_tmpdir_dfd,  /* allow-none */

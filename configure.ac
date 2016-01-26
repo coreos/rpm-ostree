@@ -63,7 +63,7 @@ AC_SEARCH_LIBS([rpmsqSetInterruptSafety], [rpmio],
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
 				     ostree-1 >= 2015.1 libgsystem >= 2015.1
-				     rpm hawkey libhif >= 0.2.0
+				     rpm hawkey libhif >= 0.2.0 librepo
 				     libarchive])
 # Hawkey ABI change in 0.5.3
 AC_MSG_CHECKING([For hawkey 0.5.3 ABI break])
