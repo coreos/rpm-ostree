@@ -44,6 +44,7 @@ static RpmOstreeCommand commands[] = {
   { "status", rpmostree_builtin_status },
   { "upgrade", rpmostree_builtin_upgrade },
   { "internals", rpmostree_builtin_internals },
+  { "container", rpmostree_builtin_container },
   { NULL }
 };
 

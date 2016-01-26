@@ -1005,7 +1005,6 @@ _rpmostree_libhif_console_assemble_commit (HifContext    *hifctx,
   gboolean ret = FALSE;
   guint progress_sigid;
   TransactionData tdata = { 0, -1 };
-  g_autofree char *root_abspath = NULL;
   g_auto(GLnxConsoleRef) console = { 0, };
   glnx_unref_object HifState *hifstate = NULL;
   rpmts ordering_ts = NULL;
@@ -1023,7 +1022,6 @@ _rpmostree_libhif_console_assemble_commit (HifContext    *hifctx,
   OstreeRepoDevInoCache *devino_cache = NULL;
   g_autofree char *workdir_path = NULL;
   g_autofree char *ret_commit_checksum = NULL;
-  const char *workdir_root;
 
   glnx_console_lock (&console);
 
@@ -1036,11 +1034,8 @@ _rpmostree_libhif_console_assemble_commit (HifContext    *hifctx,
   if (!glnx_mkdtempat (tmpdir_dfd, workdir_path, 0755, error))
     goto out;
 
-  workdir_root = glnx_strjoina (workdir_path, "/root");
-  root_abspath = glnx_fdrel_abspath (tmpdir_dfd, workdir_root);
-
   ordering_ts = rpmtsCreate ();
-  rpmtsSetRootDir (ordering_ts, root_abspath);
+  rpmtsSetRootDir (ordering_ts, hif_context_get_install_root (hifctx));
   /* First for the ordering TS, set the dbpath to relative, which will also gain
    * the root dir.
    */
@@ -1184,6 +1179,8 @@ _rpmostree_libhif_console_assemble_commit (HifContext    *hifctx,
     }
 
   glnx_console_unlock (&console);
+
+  g_clear_pointer (&ordering_ts, rpmtsFree);
 
   g_print ("Writing rpmdb...\n");
 
