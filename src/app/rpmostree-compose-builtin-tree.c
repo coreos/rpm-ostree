@@ -95,15 +95,6 @@ typedef struct {
   GBytes *serialized_treefile;
 } RpmOstreeTreeComposeContext;
 
-static int
-ptrarray_sort_compare_strings (gconstpointer ap,
-                               gconstpointer bp)
-{
-  char **asp = (gpointer)ap;
-  char **bsp = (gpointer)bp;
-  return strcmp (*asp, *bsp);
-}
-
 static gboolean
 compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
                                          HyGoal                         goal,
@@ -127,26 +118,7 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
   /* FIXME; we should also hash the post script */
 
   /* Hash in each package */
-  { _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
-    HyPackage pkg;
-    guint i;
-    gs_unref_ptrarray GPtrArray *nevras = g_ptr_array_new_with_free_func (g_free);
-
-    pkglist = hy_goal_list_installs (goal);
-
-    FOR_PACKAGELIST(pkg, pkglist, i)
-      {
-        g_ptr_array_add (nevras, hy_package_get_nevra (pkg));
-      }
-
-    g_ptr_array_sort (nevras, ptrarray_sort_compare_strings);
-    
-    for (i = 0; i < nevras->len; i++)
-      {
-        const char *nevra = nevras->pdata[i];
-        g_checksum_update (checksum, (guint8*)nevra, strlen (nevra));
-      }
-  }
+  _rpmostree_hif_add_checksum_goal (checksum, goal);
 
   ret_checksum = g_strdup (g_checksum_get_string (checksum));
 
@@ -178,8 +150,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 {
   gboolean ret = FALSE;
   guint progress_sigid;
-  char **strviter;
   GFile *contextdir = self->treefile_context_dirs->pdata[0];
+  g_auto(RpmOstreeHifInstall) hifinstall = { 0, };
   gs_unref_object HifContext *hifctx = NULL;
   gs_free char *cachedir = g_build_filename (gs_file_get_path_cached (self->workdir),
                                              "cache",
@@ -274,45 +246,14 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   }
 
   /* --- Downloading metadata --- */
-  { g_auto(GLnxConsoleRef) console = { 0, };
-    gs_unref_object HifState *hifstate = hif_state_new ();
+  if (!_rpmostree_libhif_console_download_metadata (hifctx, cancellable, error))
+    goto out;
 
-    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                     G_CALLBACK (on_hifstate_percentage_changed), 
-                                     "Downloading metadata:");
+  if (!_rpmostree_libhif_console_prepare_install (hifctx, NULL, (const char *const*)packages,
+                                                  &hifinstall, cancellable, error))
+    goto out;
 
-    glnx_console_lock (&console);
-
-    if (!hif_context_setup_sack (hifctx, hifstate, error))
-      goto out;
-
-    g_signal_handler_disconnect (hifstate, progress_sigid);
-  }
-
-  for (strviter = packages; strviter && *strviter; strviter++)
-    {
-      if (!hif_context_install (hifctx, *strviter, error))
-        goto out;
-    }
-
-  /* --- Resolving dependencies --- */
-  { g_auto(GLnxConsoleRef) console = { 0, };
-    gs_unref_object HifState *hifstate = hif_state_new ();
-
-    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                     G_CALLBACK (on_hifstate_percentage_changed), 
-                                     "Resolving dependencies:");
-
-    glnx_console_lock (&console);
-
-    if (!hif_transaction_depsolve (hif_context_get_transaction (hifctx),
-                                   hif_context_get_goal (hifctx),
-                                   hifstate, error))
-      goto out;
-
-    g_signal_handler_disconnect (hifstate, progress_sigid);
-  }
-
+  /* FIXME - just do a depsolve here before we compute download requirements */
   if (!compute_checksum_from_treefile_and_goal (self, hif_context_get_goal (hifctx),
                                                 &ret_new_inputhash, error))
     goto out;
@@ -343,24 +284,10 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
         g_print ("Previous commit found, but without rpmostree.inputhash metadata key\n");
     }
 
-  rpmostree_print_transaction (hifctx);
-
   /* --- Downloading packages --- */
-  { g_auto(GLnxConsoleRef) console = { 0, };
-    gs_unref_object HifState *hifstate = hif_state_new ();
-
-    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                     G_CALLBACK (on_hifstate_percentage_changed), 
-                                     "Downloading packages:");
-
-    glnx_console_lock (&console);
-
-    if (!hif_transaction_download (hif_context_get_transaction (hifctx), hifstate, error))
-      goto out;
-
-    g_signal_handler_disconnect (hifstate, progress_sigid);
-  }
-
+  if (!_rpmostree_libhif_console_download_rpms (hifctx, -1, &hifinstall, cancellable, error))
+    goto out;
+  
   { g_auto(GLnxConsoleRef) console = { 0, };
     gs_unref_object HifState *hifstate = hif_state_new ();
 
@@ -773,8 +700,7 @@ rpmostree_compose_builtin_tree (int             argc,
     goto out;
   g_ptr_array_add (packages, NULL);
 
-  {
-    gs_unref_object JsonGenerator *generator = json_generator_new ();
+  { gs_unref_object JsonGenerator *generator = json_generator_new ();
     char *treefile_buf = NULL;
     gsize len;
 
