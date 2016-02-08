@@ -31,7 +31,6 @@
 
 #include "rpmostree-util.h"
 #include "rpmostree-json-parsing.h"
-#include "rpmostree-cleanup.h"
 #include "rpmostree-passwd-util.h"
 
 /* FIXME: */

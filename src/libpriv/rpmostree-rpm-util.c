@@ -761,40 +761,22 @@ rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
 static gboolean
 get_sack_for_root (int               dfd,
                    const char       *path,
-                   HySack           *out_sack,
+                   HifSack         **out_sack,
                    GCancellable     *cancellable,
                    GError          **error)
 {
   gboolean ret = FALSE;
-  int rc;
-  _cleanup_hysack_ HySack sack = NULL;
+  g_autoptr(HifSack) sack = NULL;
   g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
 
   g_return_val_if_fail (out_sack != NULL, FALSE);
 
-#if BUILDOPT_HAWKEY_SACK_CREATE2
-  sack = hy_sack_create (NULL, NULL,
-                         fullpath,
-                         NULL,
-                         HY_MAKE_CACHE_DIR);
-#else
-  sack = hy_sack_create (NULL, NULL,
-                         fullpath,
-                         HY_MAKE_CACHE_DIR);
-#endif
-  if (sack == NULL)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Failed to create sack cache");
-      goto out;
-    }
+  sack = hif_sack_new ();
+  if (!hif_sack_setup (sack, HIF_SACK_LOAD_FLAG_BUILD_CACHE, error))
+    goto out;
 
-  rc = hy_sack_load_system_repo (sack, NULL, 0);
-  if (!hif_error_set_from_hawkey (rc, error))
-    {
-      g_prefix_error (error, "Failed to load system repo: ");
-      goto out;
-    }
+  if (!hif_sack_load_system_repo (sack, NULL, 0, error))
+    goto out;
 
   ret = TRUE;
   *out_sack = g_steal_pointer (&sack);
@@ -809,7 +791,7 @@ rpmostree_get_refsack_for_root (int              dfd,
                                 GError         **error)
 {
   RpmOstreeRefSack *ret = NULL;
-  HySack sack;
+  HifSack *sack;
 
   if (!get_sack_for_root (dfd, path,
                           &sack, cancellable, error))
@@ -830,7 +812,7 @@ rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
   RpmOstreeRefSack *ret = NULL;
   g_autofree char *tempdir = NULL;
   glnx_fd_close int tempdir_dfd = -1;
-  HySack hsack; 
+  HifSack *hsack; 
   
   if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref, &tempdir, &tempdir_dfd,
                                               cancellable, error))
@@ -884,14 +866,14 @@ gboolean
 rpmostree_get_pkglist_for_root (int               dfd,
                                 const char       *path,
                                 RpmOstreeRefSack **out_refsack,
-                                HyPackageList    *out_pkglist,
+                                GPtrArray        **out_pkglist,
                                 GCancellable     *cancellable,
                                 GError          **error)
 {
   gboolean ret = FALSE;
   g_autoptr(RpmOstreeRefSack) refsack = NULL;
-  _cleanup_hyquery_ HyQuery query = NULL;
-  _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+  HyQuery query = NULL;
+  g_autoptr(GPtrArray) pkglist = NULL;
   g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
 
   refsack = rpmostree_get_refsack_for_root (dfd, path, cancellable, error);
@@ -906,14 +888,16 @@ rpmostree_get_pkglist_for_root (int               dfd,
   gs_transfer_out_value (out_refsack, &refsack);
   gs_transfer_out_value (out_pkglist, &pkglist);
  out:
+  if (query)
+    hy_query_free (query);
   return ret;
 }
 
 static gint
-pkg_array_compare (HyPackage *p_pkg1,
-                   HyPackage *p_pkg2)
+pkg_array_compare (HifPackage **p_pkg1,
+                   HifPackage **p_pkg2)
 {
-  return hy_package_cmp (*p_pkg1, *p_pkg2);
+  return hif_package_cmp (*p_pkg1, *p_pkg2);
 }
 
 void
@@ -939,7 +923,7 @@ rpmostree_print_transaction (HifContext   *hifctx)
 
       for (i = 0; i < install->len; i++)
         {
-          HyPackage pkg = install->pdata[i];
+          HifPackage *pkg = install->pdata[i];
           g_print ("  %s\n", hif_package_get_nevra (pkg));
         }
     }

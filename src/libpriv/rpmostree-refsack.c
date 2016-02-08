@@ -25,10 +25,10 @@
 #include "rpmostree-rpm-util.h"
 
 RpmOstreeRefSack *
-rpmostree_refsack_new (HySack sack, int temp_base_dfd, const char *temp_path)
+rpmostree_refsack_new (HifSack *sack, int temp_base_dfd, const char *temp_path)
 {
   RpmOstreeRefSack *rsack = g_new0 (RpmOstreeRefSack, 1);
-  rsack->sack = sack;
+  rsack->sack = g_object_ref (sack);
   rsack->refcount = 1;
   rsack->temp_base_dfd = temp_base_dfd;
   rsack->temp_path = g_strdup (temp_path);
@@ -47,7 +47,7 @@ rpmostree_refsack_unref (RpmOstreeRefSack *rsack)
 {
   if (!g_atomic_int_dec_and_test (&rsack->refcount))
     return;
-  hy_sack_free (rsack->sack);
+  g_object_unref (rsack->sack);
   
   /* The sack might point to a temporarily allocated rpmdb copy, if so,
    * prune it now.

@@ -24,5 +24,5 @@
 #include "rpmostree-package.h"
 #include "rpmostree-refsack.h"
 
-RpmOstreePackage * _rpm_ostree_package_new (RpmOstreeRefSack *rsack, HyPackage hypkg);
+RpmOstreePackage * _rpm_ostree_package_new (RpmOstreeRefSack *rsack, HifPackage *hypkg);
 

@@ -21,19 +21,17 @@
 
 #pragma once
 
-#include <hawkey/package.h>
-#include <hawkey/sack.h>
-#include "rpmostree-cleanup.h"
+#include <libhif.h>
 
 typedef struct {
   volatile gint refcount;
-  HySack sack;
+  HifSack *sack;
   int temp_base_dfd;
   char *temp_path;
 } RpmOstreeRefSack;
 
 RpmOstreeRefSack *
-rpmostree_refsack_new (HySack sack, int temp_base_dfd, const char *temp_path);
+rpmostree_refsack_new (HifSack *sack, int temp_base_dfd, const char *temp_path);
 
 RpmOstreeRefSack *
 rpmostree_refsack_ref (RpmOstreeRefSack *rsack);

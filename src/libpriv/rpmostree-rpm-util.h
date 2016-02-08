@@ -24,10 +24,10 @@
 
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
+#include <libgsystem.h>
 #include "rpmostree-util.h"
 #include "rpmostree-refsack.h"
 #include "rpmostree-refts.h"
-#include "rpmostree-cleanup.h"
 
 #include "libglnx.h"
 
@@ -113,7 +113,7 @@ gboolean
 rpmostree_get_pkglist_for_root (int               dfd,
                                 const char       *path,
                                 RpmOstreeRefSack **out_refsack,
-                                HyPackageList    *out_pkglist,
+                                GPtrArray        **out_pkglist,
                                 GCancellable     *cancellable,
                                 GError          **error);
 

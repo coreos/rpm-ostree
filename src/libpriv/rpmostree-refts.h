@@ -21,9 +21,7 @@
 
 #pragma once
 
-#include <hawkey/package.h>
-#include <hawkey/sack.h>
-#include "rpmostree-cleanup.h"
+#include <libhif.h>
 
 typedef struct {
   volatile gint refcount;

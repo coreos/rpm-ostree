@@ -33,7 +33,6 @@
 #include "rpmostree-internals-builtins.h"
 #include "rpmostree-util.h"
 #include "rpmostree-hif.h"
-#include "rpmostree-cleanup.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-unpacker.h"
