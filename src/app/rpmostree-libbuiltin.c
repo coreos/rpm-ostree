@@ -24,7 +24,8 @@
 
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree.h"
-#include "rpmostree-cleanup.h"
+
+#include "libglnx.h"
 
 void
 rpmostree_usage_error (GOptionContext  *context,
@@ -47,8 +48,8 @@ rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
                                                 GCancellable *cancellable,
                                                 GError **error)
 {
-  gs_unref_object OstreeSysroot *sysroot = NULL;
-  gs_unref_object GFile *sysroot_file = NULL;
+  glnx_unref_object OstreeSysroot *sysroot = NULL;
+  glnx_unref_object GFile *sysroot_file = NULL;
   gboolean ret = FALSE;
 
   sysroot_file = g_file_new_for_path (sysroot_path);
@@ -71,7 +72,7 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
   gboolean ret = FALSE;
   OstreeDeployment *booted_deployment;
   OstreeDeployment *new_deployment;
-  gs_unref_ptrarray GPtrArray *deployments =
+  g_autoptr(GPtrArray) deployments =
     ostree_sysroot_get_deployments (sysroot);
 
   booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
@@ -81,7 +82,7 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
 
   if (booted_deployment && new_deployment != booted_deployment)
     {
-      gs_unref_object OstreeRepo *repo = NULL;
+      glnx_unref_object OstreeRepo *repo = NULL;
       const char *from_rev = ostree_deployment_get_csum (booted_deployment);
       const char *to_rev = ostree_deployment_get_csum (new_deployment);
       g_autoptr(GPtrArray) removed = NULL;

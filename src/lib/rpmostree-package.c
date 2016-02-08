@@ -41,7 +41,7 @@ struct RpmOstreePackage
 {
   GObject parent_instance;
   RpmOstreeRefSack *sack;
-  HyPackage hypkg;
+  HifPackage *hypkg;
   char *cached_nevra;
 };
 
@@ -52,7 +52,7 @@ rpm_ostree_package_finalize (GObject *object)
 {
   RpmOstreePackage *pkg = (RpmOstreePackage*)object;
   free (pkg->cached_nevra);
-  hy_package_free (pkg->hypkg);
+  g_object_unref (pkg->hypkg);
   
   /* We do internal refcounting of the sack because hawkey doesn't */
   rpmostree_refsack_unref (pkg->sack);
@@ -85,7 +85,7 @@ const char *
 rpm_ostree_package_get_nevra (RpmOstreePackage *p)
 {
   if (p->cached_nevra == NULL)
-    p->cached_nevra = hy_package_get_nevra (p->hypkg);
+    p->cached_nevra = hif_package_get_nevra (p->hypkg);
   return p->cached_nevra;
 }
 
@@ -98,7 +98,7 @@ rpm_ostree_package_get_nevra (RpmOstreePackage *p)
 const char *
 rpm_ostree_package_get_name (RpmOstreePackage *p)
 {
-  return hy_package_get_name (p->hypkg);
+  return hif_package_get_name (p->hypkg);
 }
 
 /**
@@ -110,7 +110,7 @@ rpm_ostree_package_get_name (RpmOstreePackage *p)
 const char *
 rpm_ostree_package_get_evr (RpmOstreePackage *p)
 {
-  return hy_package_get_evr (p->hypkg);
+  return hif_package_get_evr (p->hypkg);
 }
 
 /**
@@ -122,7 +122,7 @@ rpm_ostree_package_get_evr (RpmOstreePackage *p)
 const char *
 rpm_ostree_package_get_arch (RpmOstreePackage *p)
 {
-  return hy_package_get_arch (p->hypkg);
+  return hif_package_get_arch (p->hypkg);
 }
 
 /**
@@ -160,7 +160,7 @@ rpm_ostree_package_cmp (RpmOstreePackage *p1, RpmOstreePackage *p2)
 
   /* This assumes both pools (if they are different)
    * have identical configuration for epoch handling. */
-  ret = hy_sack_evr_cmp (p1->sack->sack, str1, str2);
+  ret = hif_sack_evr_cmp (p1->sack->sack, str1, str2);
 
   if (ret != 0)
     return ret;
@@ -171,10 +171,10 @@ rpm_ostree_package_cmp (RpmOstreePackage *p1, RpmOstreePackage *p2)
 }
 
 RpmOstreePackage *
-_rpm_ostree_package_new (RpmOstreeRefSack *rsack, HyPackage hypkg)
+_rpm_ostree_package_new (RpmOstreeRefSack *rsack, HifPackage *hypkg)
 {
   RpmOstreePackage *p = g_object_new (RPM_OSTREE_TYPE_PACKAGE, NULL);
   p->sack = rpmostree_refsack_ref (rsack);
-  p->hypkg = hy_package_link (hypkg);
+  p->hypkg = g_object_ref (hypkg);
   return p;
 }

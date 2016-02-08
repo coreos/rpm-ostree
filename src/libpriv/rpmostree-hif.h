@@ -74,7 +74,7 @@ void _rpmostree_hif_add_checksum_goal (GChecksum *checksum, HyGoal goal);
 char * _rpmostree_hif_checksum_goal (GChecksumType type, HyGoal goal);
 
 char *_rpmostree_get_cache_branch_header (Header hdr);
-char *_rpmostree_get_cache_branch_pkg (HyPackage pkg);
+char *_rpmostree_get_cache_branch_pkg (HifPackage *pkg);
 
 gboolean _rpmostree_libhif_repos_enable_by_name (HifContext    *context,
                                                  const char    *name,

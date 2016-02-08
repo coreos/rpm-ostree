@@ -39,7 +39,6 @@
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-rpm-util.h"
-#include "rpmostree-cleanup.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-util.h"
 
@@ -1083,30 +1082,30 @@ handle_remove_files_from_package (GFile         *yumroot,
                                   GError       **error)
 {
   gboolean ret = FALSE;
-  const char *pkg = json_array_get_string_element (removespec, 0);
+  const char *pkgname = json_array_get_string_element (removespec, 0);
   guint i, j, npackages;
   guint len = json_array_get_length (removespec);
-  HyPackage hypkg;
-  _cleanup_hyquery_ HyQuery query = NULL;
-  _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+  HyQuery query = NULL;
+  g_autoptr(GPtrArray) pkglist = NULL;
       
   query = hy_query_create (refsack->sack);
-  hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkg);
+  hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
   pkglist = hy_query_run (query);
-  npackages = hy_packagelist_count (pkglist);
+  npackages = pkglist->len;
   if (npackages == 0)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Unable to find package '%s' specified in remove-files-from", pkg);
+                   "Unable to find package '%s' specified in remove-files-from", pkgname);
       goto out;
     }
 
   for (j = 0; j < npackages; j++)
     {
-      _cleanup_hystringarray_ HyStringArray pkg_files = NULL;
+      HifPackage *pkg;
+      g_auto(GStrv) pkg_files = NULL;
 
-      hypkg = hy_packagelist_get (pkglist, 0);
-      pkg_files = hy_package_get_files (hypkg);
+      pkg = pkglist->pdata[j];
+      pkg_files = hif_package_get_files (pkg);
 
       for (i = 1; i < len; i++)
         {
@@ -1141,6 +1140,8 @@ handle_remove_files_from_package (GFile         *yumroot,
 
   ret = TRUE;
  out:
+  if (query)
+    hy_query_free (query);
   return ret;
 }
 
@@ -1276,7 +1277,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
   if (json_object_has_member (treefile, "remove-from-packages"))
     {
       g_autoptr(RpmOstreeRefSack) refsack = NULL;
-      _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+      g_autoptr(GPtrArray) pkglist = NULL;
       guint i;
 
       remove = json_object_get_array_member (treefile, "remove-from-packages");

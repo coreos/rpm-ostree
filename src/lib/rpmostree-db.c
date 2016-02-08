@@ -23,7 +23,6 @@
 #include "string.h"
 
 #include "rpmostree-db.h"
-#include "rpmostree-cleanup.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-package-priv.h"
 #include "rpmostree-refsack.h"
@@ -40,8 +39,8 @@
 static GPtrArray *
 query_all_packages_in_sack (RpmOstreeRefSack *rsack)
 {
-  _cleanup_hyquery_ HyQuery hquery = NULL;
-  _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+  HyQuery hquery = NULL;
+  g_autoptr(GPtrArray) pkglist = NULL;
   GPtrArray *result;
   int i, c;
 
@@ -51,13 +50,15 @@ query_all_packages_in_sack (RpmOstreeRefSack *rsack)
 
   result = g_ptr_array_new_with_free_func (g_object_unref);
   
-  c = hy_packagelist_count (pkglist);
+  c = pkglist->len;
   for (i = 0; i < c; i++)
     {
-      HyPackage pkg = hy_packagelist_get (pkglist, i);
+      HifPackage *pkg = pkglist->pdata[i];
       g_ptr_array_add (result, _rpm_ostree_package_new (rsack, pkg));
     }
   
+  if (hquery)
+    hy_query_free (hquery);
   return g_steal_pointer (&result);
 }
 
@@ -125,14 +126,13 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
   gboolean ret = FALSE;
   g_autoptr(RpmOstreeRefSack) orig_sack = NULL;
   g_autoptr(RpmOstreeRefSack) new_sack = NULL;
-  _cleanup_hypackagelist_ HyPackageList orig_pkglist = NULL;
-  _cleanup_hypackagelist_ HyPackageList new_pkglist = NULL;
+  g_autoptr(GPtrArray) orig_pkglist = NULL;
+  g_autoptr(GPtrArray) new_pkglist = NULL;
   g_autoptr(GPtrArray) ret_removed = g_ptr_array_new_with_free_func (g_object_unref);
   g_autoptr(GPtrArray) ret_added = g_ptr_array_new_with_free_func (g_object_unref);
   g_autoptr(GPtrArray) ret_modified_old = g_ptr_array_new_with_free_func (g_object_unref);
   g_autoptr(GPtrArray) ret_modified_new = g_ptr_array_new_with_free_func (g_object_unref);
   guint i;
-  HyPackage pkg;
 
   g_return_val_if_fail (out_removed != NULL && out_added != NULL &&
                         out_modified_old != NULL && out_modified_new != NULL, FALSE);
@@ -141,70 +141,77 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
   if (!orig_sack)
     goto out;
 
-  { _cleanup_hyquery_ HyQuery query = hy_query_create (orig_sack->sack);
+  { HyQuery query = hy_query_create (orig_sack->sack);
     hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
     orig_pkglist = hy_query_run (query);
+    hy_query_free (query);
   }
 
   new_sack = rpmostree_get_refsack_for_commit (repo, new_ref, cancellable, error);
   if (!new_sack)
     goto out;
 
-  { _cleanup_hyquery_ HyQuery query = hy_query_create (new_sack->sack);
+  { HyQuery query = hy_query_create (new_sack->sack);
     hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
     new_pkglist = hy_query_run (query);
+    hy_query_free (query);
   }
 
-  FOR_PACKAGELIST(pkg, new_pkglist, i)
+  for (i = 0; i < new_pkglist->len; i++)
     {
-      _cleanup_hyquery_ HyQuery query = NULL;
-      _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+      HifPackage *pkg = new_pkglist->pdata[i];
+      HyQuery query = NULL;
+      g_autoptr(GPtrArray) pkglist = NULL;
       guint count;
-      HyPackage oldpkg;
+      HifPackage *oldpkg;
       
       query = hy_query_create (orig_sack->sack);
-      hy_query_filter (query, HY_PKG_NAME, HY_EQ, hy_package_get_name (pkg));
-      hy_query_filter (query, HY_PKG_EVR, HY_NEQ, hy_package_get_evr (pkg));
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, hif_package_get_name (pkg));
+      hy_query_filter (query, HY_PKG_EVR, HY_NEQ, hif_package_get_evr (pkg));
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
       pkglist = hy_query_run (query);
 
-      count = hy_packagelist_count (pkglist);
+      count = pkglist->len;
       if (count > 0)
         {
           /* See comment above about transitions from N -> 1 */
-          oldpkg = hy_packagelist_get (pkglist, 0);
+          oldpkg = pkglist->pdata[0];
           
           g_ptr_array_add (ret_modified_old, _rpm_ostree_package_new (orig_sack, oldpkg));
           g_ptr_array_add (ret_modified_new, _rpm_ostree_package_new (new_sack, pkg));
         }
     }
 
-  FOR_PACKAGELIST(pkg, orig_pkglist, i)
+  for (i = 0; i < orig_pkglist->len; i++)
     {
-      _cleanup_hyquery_ HyQuery query = NULL;
-      _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+      HifPackage *pkg = new_pkglist->pdata[i];
+      HyQuery query = NULL;
+      g_autoptr(GPtrArray) pkglist = NULL;
       
       query = hy_query_create (new_sack->sack);
-      hy_query_filter (query, HY_PKG_NAME, HY_EQ, hy_package_get_name (pkg));
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, hif_package_get_name (pkg));
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
       pkglist = hy_query_run (query);
 
-      if (hy_packagelist_count (pkglist) == 0)
+      if (pkglist->len == 0)
         g_ptr_array_add (ret_removed, _rpm_ostree_package_new (orig_sack, pkg));
+      hy_query_free (query);
     }
 
-  FOR_PACKAGELIST(pkg, new_pkglist, i)
+  for (i = 0; i < new_pkglist->len; i++)
     {
-      _cleanup_hyquery_ HyQuery query = NULL;
-      _cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+      HifPackage *pkg = new_pkglist->pdata[i];
+      HyQuery query = NULL;
+      g_autoptr(GPtrArray) pkglist = NULL;
       
       query = hy_query_create (orig_sack->sack);
-      hy_query_filter (query, HY_PKG_NAME, HY_EQ, hy_package_get_name (pkg));
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, hif_package_get_name (pkg));
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
       pkglist = hy_query_run (query);
 
-      if (hy_packagelist_count (pkglist) == 0)
+      if (pkglist->len == 0)
         g_ptr_array_add (ret_added, _rpm_ostree_package_new (new_sack, pkg));
+      hy_query_free (query);
     }
 
   ret = TRUE;

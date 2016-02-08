@@ -34,7 +34,6 @@
 #include "rpmostree-util.h"
 #include "rpmostree-hif.h"
 #include "rpmostree-json-parsing.h"
-#include "rpmostree-cleanup.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-libbuiltin.h"
