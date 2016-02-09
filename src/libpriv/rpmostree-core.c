@@ -38,25 +38,82 @@
 #include "rpmostree-unpacker.h"
 
 #define RPMOSTREE_DIR_CACHE_REPOMD "repomd"
-#define RPMOSTREE_DIR_CACHE_SOLV "repomd"
+#define RPMOSTREE_DIR_CACHE_SOLV "solv"
 #define RPMOSTREE_DIR_LOCK "lock"
 
-void
-_rpmostree_reset_rpm_sighandlers (void)
+struct _RpmOstreeContext {
+  GObject parent;
+  
+  HifContext *hifctx;
+};
+
+G_DEFINE_TYPE (RpmOstreeContext, rpmostree_context, G_TYPE_OBJECT)
+
+struct _RpmOstreeInstall {
+  GObject parent;
+
+  GPtrArray *packages_requested;
+  /* Target state */
+  GPtrArray *packages_to_download;
+  guint64 n_bytes_to_fetch;
+
+  /* Current state */
+  guint n_packages_fetched;
+  guint64 n_bytes_fetched;
+};
+
+G_DEFINE_TYPE (RpmOstreeInstall, rpmostree_install, G_TYPE_OBJECT)
+
+static void
+rpmostree_context_finalize (GObject *object)
 {
-  /* Forcibly override rpm/librepo SIGINT handlers.  We always operate
-   * in a fully idempotent/atomic mode, and can be killed at any time.
-   */
-#if !BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY
-  signal (SIGINT, SIG_DFL);
-  signal (SIGTERM, SIG_DFL);
-#endif
+  RpmOstreeContext *rctx = RPMOSTREE_CONTEXT (object);
+
+  g_clear_object (&rctx->hifctx);
+
+  G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
 }
 
-HifContext *
-_rpmostree_core_new_default (void)
+static void
+rpmostree_context_class_init (RpmOstreeContextClass *klass)
 {
-  HifContext *hifctx;
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  object_class->finalize = rpmostree_context_finalize;
+}
+
+static void
+rpmostree_context_init (RpmOstreeContext *self)
+{
+}
+
+static void
+rpmostree_install_finalize (GObject *object)
+{
+  RpmOstreeInstall *self = RPMOSTREE_INSTALL (object);
+
+  g_clear_pointer (&self->packages_to_download, g_ptr_array_unref);
+  g_clear_pointer (&self->packages_requested, g_ptr_array_unref);
+
+  G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
+}
+
+static void
+rpmostree_install_class_init (RpmOstreeInstallClass *klass)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  object_class->finalize = rpmostree_install_finalize;
+}
+
+static void
+rpmostree_install_init (RpmOstreeInstall *self)
+{
+}
+
+RpmOstreeContext *
+rpmostree_context_new_system (GCancellable *cancellable,
+                               GError      **error)
+{
+  RpmOstreeContext *self = g_object_new (RPMOSTREE_TYPE_CONTEXT, NULL);
 
   /* We can always be control-c'd at any time; this is new API,
    * otherwise we keep calling _rpmostree_reset_rpm_sighandlers() in
@@ -66,128 +123,109 @@ _rpmostree_core_new_default (void)
   rpmsqSetInterruptSafety (FALSE);
 #endif
 
-  hifctx = hif_context_new ();
+  self->hifctx = hif_context_new ();
   _rpmostree_reset_rpm_sighandlers ();
-  hif_context_set_http_proxy (hifctx, g_getenv ("http_proxy"));
+  hif_context_set_http_proxy (self->hifctx, g_getenv ("http_proxy"));
 
-  hif_context_set_repo_dir (hifctx, "/etc/yum.repos.d");
-  hif_context_set_cache_age (hifctx, G_MAXUINT);
-  hif_context_set_cache_dir (hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_REPOMD);
-  hif_context_set_solv_dir (hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_SOLV);
-  hif_context_set_lock_dir (hifctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
+  hif_context_set_repo_dir (self->hifctx, "/etc/yum.repos.d");
+  hif_context_set_cache_age (self->hifctx, G_MAXUINT);
+  hif_context_set_cache_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_REPOMD);
+  hif_context_set_solv_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_SOLV);
+  hif_context_set_lock_dir (self->hifctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
 
-  hif_context_set_check_disk_space (hifctx, FALSE);
-  hif_context_set_check_transaction (hifctx, FALSE);
-  hif_context_set_yumdb_enabled (hifctx, FALSE);
-
-  return hifctx;
-}
-
-HifContext *
-_rpmostree_core_new (int rpmmd_cache_dfd,
-                       const char *installroot,
-                       const char *repos_dir,
-                       const char *const *enabled_repos,
-                       GCancellable *cancellable,
-                       GError **error)
-{
-  gboolean ret = FALSE;
-  glnx_unref_object HifContext *hifctx = _rpmostree_core_new_default ();
-
-  _rpmostree_core_set_cache_dfd (hifctx, rpmmd_cache_dfd);
-  if (repos_dir)
-    hif_context_set_repo_dir (hifctx, repos_dir);
-
-  if (installroot)
-    hif_context_set_install_root (hifctx, installroot);
+  hif_context_set_check_disk_space (self->hifctx, FALSE);
+  hif_context_set_check_transaction (self->hifctx, FALSE);
+  hif_context_set_yumdb_enabled (self->hifctx, FALSE);
 
   /* A nonsense value because repo files used as input for this tool
    * should never use it.
    */
-  hif_context_set_release_ver (hifctx, "42");
+  hif_context_set_release_ver (self->hifctx, "42");
 
-  if (!_rpmostree_core_setup (hifctx, cancellable, error))
+  return self;
+}
+
+RpmOstreeContext *
+rpmostree_context_new_unprivileged (int           userroot_dfd,
+                                     GCancellable *cancellable,
+                                     GError      **error)
+{
+  g_autoptr(RpmOstreeContext) ret = rpmostree_context_new_system (cancellable, error);
+
+  if (!ret)
     goto out;
 
-  if (enabled_repos)
+  { g_autofree char *reposdir = glnx_fdrel_abspath (userroot_dfd, "rpmmd.repos.d");
+    hif_context_set_repo_dir (ret->hifctx, reposdir);
+  }
+  { const char *cache_rpmmd = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_REPOMD);
+    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_rpmmd);
+    hif_context_set_cache_dir (ret->hifctx, cachedir);
+  }
+  { const char *cache_solv = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_SOLV);
+    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_solv);
+    hif_context_set_solv_dir (ret->hifctx, cachedir);
+  }
+  { const char *lock = glnx_strjoina ("cache/", RPMOSTREE_DIR_LOCK);
+    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, lock);
+    hif_context_set_lock_dir (ret->hifctx, lock);
+  }
+
+ out:
+  if (ret)
+    return g_steal_pointer (&ret);
+  return NULL;
+}
+
+HifContext *
+rpmostree_context_get_hif (RpmOstreeContext *self)
+{
+  return self->hifctx;
+}
+
+gboolean
+rpmostree_context_setup (RpmOstreeContext    *self,
+                          const char    *installroot,
+                          GCancellable  *cancellable,
+                          GError       **error)
+{
+  gboolean ret = FALSE;
+  GPtrArray *repos = NULL;
+  
+  hif_context_set_install_root (self->hifctx, installroot);
+
+  if (!hif_context_setup (self->hifctx, cancellable, error))
+    goto out;
+
+  repos = hif_context_get_repos (self->hifctx);
+  if (repos->len == 0)
     {
-      _rpmostree_core_repos_disable_all (hifctx);
-      
-      { const char * const *strviter = enabled_repos;
-        for (; strviter && *strviter; strviter++)
-          {
-            const char *reponame = *strviter;
-            if (!_rpmostree_core_repos_enable_by_name (hifctx, reponame, error))
-              goto out;
-          }
-      }
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "No enabled repositories");
+      goto out;
     }
 
   ret = TRUE;
  out:
-  if (ret)
-    return g_steal_pointer (&hifctx);
-  return NULL;
+  return ret;
 }
 
-void
-_rpmostree_core_set_cache_dfd (HifContext *hifctx, int dfd)
-{
-  g_autofree char *repomddir =
-    glnx_fdrel_abspath (dfd, RPMOSTREE_DIR_CACHE_REPOMD);
-  g_autofree char *solvdir =
-    glnx_fdrel_abspath (dfd, RPMOSTREE_DIR_CACHE_SOLV);
-  g_autofree char *lockdir =
-    glnx_fdrel_abspath (dfd, RPMOSTREE_DIR_LOCK);
-
-  hif_context_set_cache_dir (hifctx, repomddir);
-  hif_context_set_solv_dir (hifctx, solvdir);
-  hif_context_set_lock_dir (hifctx, lockdir);
-}
-
-gboolean
-_rpmostree_core_setup (HifContext    *context,
-                         GCancellable  *cancellable,
-                         GError       **error)
-{
-  if (!hif_context_setup (context, cancellable, error))
-    return FALSE;
-
-  return TRUE;
-}
-
-void
-_rpmostree_core_repos_disable_all (HifContext    *context)
-{
-  GPtrArray *sources;
-  guint i;
-
-  sources = hif_context_get_repos (context);
-  for (i = 0; i < sources->len; i++)
-    {
-      HifRepo *src = sources->pdata[i];
-      
-      hif_repo_set_enabled (src, HIF_REPO_ENABLED_NONE);
-    }
-}
-
-gboolean
-_rpmostree_core_repos_enable_by_name (HifContext    *context,
-                                        const char    *name,
-                                        GError       **error)
+static gboolean
+enable_one_repo (RpmOstreeContext    *context,
+                 GPtrArray           *sources,
+                 const char          *reponame,
+                 GError             **error)
 {
   gboolean ret = FALSE;
-  GPtrArray *sources;
   guint i;
   gboolean found = FALSE;
 
-  sources = hif_context_get_repos (context);
   for (i = 0; i < sources->len; i++)
     {
       HifRepo *src = sources->pdata[i];
       const char *id = hif_repo_get_id (src);
 
-      if (strcmp (name, id) != 0)
+      if (strcmp (reponame, id) != 0)
         continue;
       
       hif_repo_set_enabled (src, HIF_REPO_ENABLED_PACKAGES);
@@ -199,8 +237,37 @@ _rpmostree_core_repos_enable_by_name (HifContext    *context,
   if (!found)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Unknown rpm-md repository: %s", name);
+                   "Unknown rpm-md repository: %s", reponame);
       goto out;
+    }
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+gboolean
+rpmostree_context_repos_enable_only (RpmOstreeContext    *context,
+                                      const char    *const *enabled_repos,
+                                      GError       **error)
+{
+  gboolean ret = FALSE;
+  guint i;
+  const char *const *iter;
+  GPtrArray *sources;
+
+  sources = hif_context_get_repos (context->hifctx);
+  for (i = 0; i < sources->len; i++)
+    {
+      HifRepo *src = sources->pdata[i];
+      
+      hif_repo_set_enabled (src, HIF_REPO_ENABLED_NONE);
+    }
+
+  for (iter = enabled_repos; iter && *iter; iter++)
+    {
+      if (!enable_one_repo (context, sources, *iter, error))
+        goto out;
     }
 
   ret = TRUE;
@@ -218,9 +285,9 @@ on_hifstate_percentage_changed (HifState   *hifstate,
 }
 
 gboolean
-_rpmostree_core_download_metadata (HifContext     *hifctx,
-                                             GCancellable   *cancellable,
-                                             GError        **error)
+rpmostree_context_download_metadata (RpmOstreeContext     *self,
+                                      GCancellable   *cancellable,
+                                      GError        **error)
 {
   gboolean ret = FALSE;
   guint progress_sigid;
@@ -233,7 +300,7 @@ _rpmostree_core_download_metadata (HifContext     *hifctx,
 
   glnx_console_lock (&console);
 
-  if (!hif_context_setup_sack (hifctx, hifstate, error))
+  if (!hif_context_setup_sack (self->hifctx, hifstate, error))
     goto out;
 
   g_signal_handler_disconnect (hifstate, progress_sigid);
@@ -287,7 +354,7 @@ cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch)
 }
 
 char *
-_rpmostree_get_cache_branch_header (Header hdr)
+rpmostree_get_cache_branch_header (Header hdr)
 {
   g_autofree char *name = headerGetAsString (hdr, RPMTAG_NAME);
   g_autofree char *evr = headerGetAsString (hdr, RPMTAG_EVR);
@@ -296,7 +363,7 @@ _rpmostree_get_cache_branch_header (Header hdr)
 }
   
 char *
-_rpmostree_get_cache_branch_pkg (HifPackage *pkg)
+rpmostree_get_cache_branch_pkg (HifPackage *pkg)
 {
   return cache_branch_for_n_evr_a (hif_package_get_name (pkg),
                                    hif_package_get_evr (pkg),
@@ -358,7 +425,7 @@ get_packages_to_download (HifContext  *hifctx,
 
       if (ostreerepo)
         {
-          g_autofree char *cachebranch = _rpmostree_get_cache_branch_pkg (pkg);
+          g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
           g_autofree char *cached_rev = NULL; 
 
           if (!ostree_repo_resolve_rev (ostreerepo, cachebranch, TRUE, &cached_rev, error))
@@ -394,23 +461,25 @@ get_packages_to_download (HifContext  *hifctx,
 }
 
 gboolean
-_rpmostree_core_prepare_install (HifContext           *hifctx,
-                                           OstreeRepo           *ostreerepo,
-                                           const char *const    *pkgnames,
-                                           RpmOstreeInstall  *out_install,
-                                           GCancellable         *cancellable,
-                                           GError              **error)
+rpmostree_context_prepare_install (RpmOstreeContext    *self,
+                                    OstreeRepo           *ostreerepo,
+                                    const char *const    *pkgnames,
+                                    RpmOstreeInstall    **out_install,
+                                    GCancellable         *cancellable,
+                                    GError              **error)
 {
   gboolean ret = FALSE;
+  HifContext *hifctx = self->hifctx;
+  g_autoptr(RpmOstreeInstall) ret_install = g_object_new (RPMOSTREE_TYPE_INSTALL, NULL);
 
-  out_install->packages_requested = g_ptr_array_new_with_free_func (g_free);
+  ret_install->packages_requested = g_ptr_array_new_with_free_func (g_free);
   { const char *const*strviter = pkgnames;
     for (; strviter && *strviter; strviter++)
       {
         const char *pkgname = *strviter;
         if (!hif_context_install (hifctx, pkgname, error))
           goto out;
-        g_ptr_array_add (out_install->packages_requested, g_strdup (pkgname));
+        g_ptr_array_add (ret_install->packages_requested, g_strdup (pkgname));
       }
   }
 
@@ -424,19 +493,20 @@ _rpmostree_core_prepare_install (HifContext           *hifctx,
     }
   printf ("%s", "done\n");
 
-  if (!get_packages_to_download (hifctx, ostreerepo, &out_install->packages_to_download, error))
+  if (!get_packages_to_download (hifctx, ostreerepo, &ret_install->packages_to_download, error))
     goto out;
 
   rpmostree_print_transaction (hifctx);
-  g_print ("\n  Need to download %u packages\n", out_install->packages_to_download->len);
+  g_print ("\n  Need to download %u packages\n", ret_install->packages_to_download->len);
 
   ret = TRUE;
+  *out_install = g_steal_pointer (&ret_install);
  out:
   return ret;
 }
 
 struct GlobalDownloadState {
-  struct RpmOstreeInstall *install;
+  RpmOstreeInstall *install;
   HifState *hifstate;
   gchar *last_mirror_url;
   gchar *last_mirror_failure_message;
@@ -456,7 +526,7 @@ package_download_update_state_cb (void *user_data,
 				  gdouble now_downloaded)
 {
   struct PkgDownloadState *dlstate = user_data;
-  struct RpmOstreeInstall *install = dlstate->gdlstate->install;
+  RpmOstreeInstall *install = dlstate->gdlstate->install;
   if (!dlstate->added_total)
     {
       dlstate->added_total = TRUE;
@@ -528,7 +598,7 @@ ptrarray_sort_compare_strings (gconstpointer ap,
  * changed from a previous one efficiently.
  */
 void
-_rpmostree_hif_add_checksum_goal (GChecksum *checksum,
+rpmostree_hif_add_checksum_goal (GChecksum *checksum,
                                   HyGoal     goal)
 {
   g_autoptr(GPtrArray) pkglist = NULL;
@@ -553,10 +623,10 @@ _rpmostree_hif_add_checksum_goal (GChecksum *checksum,
 }
 
 char *
-_rpmostree_hif_checksum_goal (GChecksumType ctype, HyGoal goal)
+rpmostree_hif_checksum_goal (GChecksumType ctype, HyGoal goal)
 {
   g_autoptr(GChecksum) checksum = g_checksum_new (ctype);
-  _rpmostree_hif_add_checksum_goal (checksum, goal);
+  rpmostree_hif_add_checksum_goal (checksum, goal);
   return g_strdup (g_checksum_get_string (checksum));
 }
 
@@ -706,13 +776,14 @@ gather_source_to_packages (HifContext *hifctx,
 }
 
 gboolean
-_rpmostree_core_download_rpms (HifContext     *hifctx,
-                                         int             target_dfd,
-                                         RpmOstreeInstall *install,
-                                         GCancellable   *cancellable,
-                                         GError        **error)
+rpmostree_context_download_rpms (RpmOstreeContext     *ctx,
+                                 int             target_dfd,
+                                 RpmOstreeInstall *install,
+                                 GCancellable   *cancellable,
+                                 GError        **error)
 {
   gboolean ret = FALSE;
+  HifContext *hifctx = ctx->hifctx;
   g_auto(GLnxConsoleRef) console = { 0, };
   guint progress_sigid;
   GHashTableIter hiter;
@@ -800,13 +871,14 @@ import_one_package (OstreeRepo   *ostreerepo,
 }
 
 gboolean
-_rpmostree_core_download_import (HifContext           *hifctx,
+rpmostree_context_download_import (RpmOstreeContext *self,
                                            OstreeRepo           *ostreerepo,
                                            RpmOstreeInstall  *install,
                                            GCancellable         *cancellable,
                                            GError              **error)
 {
   gboolean ret = FALSE;
+  HifContext *hifctx = self->hifctx;
   g_auto(GLnxConsoleRef) console = { 0, };
   glnx_fd_close int pkg_tempdir_dfd = -1;
   g_autofree char *pkg_tempdir = NULL;
@@ -992,16 +1064,17 @@ set_rpm_macro_define (const char *key, const char *value)
 }
 
 gboolean
-_rpmostree_core_assemble_commit (HifContext    *hifctx,
+rpmostree_context_assemble_commit (RpmOstreeContext *ctx,
                                            int            tmpdir_dfd,
                                            OstreeRepo    *ostreerepo,
                                            const char    *name,
-                                           struct RpmOstreeInstall *install,
+                                           RpmOstreeInstall *install,
                                            char          **out_commit,
                                            GCancellable  *cancellable,
                                            GError       **error)
 {
   gboolean ret = FALSE;
+  HifContext *hifctx = ctx->hifctx;
   guint progress_sigid;
   TransactionData tdata = { 0, -1 };
   g_auto(GLnxConsoleRef) console = { 0, };
@@ -1063,7 +1136,7 @@ _rpmostree_core_assemble_commit (HifContext    *hifctx,
       {
         HifPackage *pkg = package_list->pdata[i];
         glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
-        g_autofree char *cachebranch = _rpmostree_get_cache_branch_pkg (pkg);
+        g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
         g_autofree char *cached_rev = NULL; 
         g_autoptr(GVariant) pkg_commit = NULL;
         g_autoptr(GVariant) header_variant = NULL;
@@ -1246,7 +1319,7 @@ _rpmostree_core_assemble_commit (HifContext    *hifctx,
                            "rpmostree.input-packages", g_variant_new_strv ((const char *const*)install->packages_requested->pdata,
                                                                            install->packages_requested->len));
 
-    goal_checksum = _rpmostree_hif_checksum_goal (G_CHECKSUM_SHA512, hif_context_get_goal (hifctx));
+    goal_checksum = rpmostree_hif_checksum_goal (G_CHECKSUM_SHA512, hif_context_get_goal (hifctx));
     g_variant_builder_add (&metadata_builder, "{sv}",
                            "rpmostree.nevras-sha512", g_variant_new_string (goal_checksum));
 

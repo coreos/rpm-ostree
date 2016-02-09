@@ -52,7 +52,7 @@ typedef struct {
 
   int roots_dfd;
   OstreeRepo *repo;
-  HifContext *hifctx;
+  RpmOstreeContext *ctx;
 
   int rpmmd_dfd;
 } ROContainerContext;
@@ -114,35 +114,12 @@ roc_context_prepare_for_root (ROContainerContext *rocctx,
    */
   g_autofree char *abs_instroot = glnx_fdrel_abspath (rocctx->roots_dfd, target);
   const char *abs_instroot_tmp = glnx_strjoina (abs_instroot, ".ignore");
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  gboolean have_a_repo_file = FALSE;
-  g_autofree char *reposdir = NULL;
 
-  /* Automagically use rpmmd.repos.d only if there's a .repo file in it */
-  if (!glnx_dirfd_iterator_init_at (rocctx->userroot_dfd, "rpmmd.repos.d", TRUE, &dfd_iter, error))
+  rocctx->ctx = rpmostree_context_new_unprivileged (rocctx->userroot_dfd, NULL, error);
+  if (!rocctx->ctx)
     goto out;
-  while (TRUE)
-    {
-      struct dirent *dent;
 
-      if (!glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, NULL, error))
-        goto out;
-      if (!dent)
-        break;
-
-      if (g_str_has_suffix (dent->d_name, ".repo"))
-        {
-          have_a_repo_file = TRUE;
-          break;
-        }
-    }
-
-  if (have_a_repo_file)
-    reposdir = glnx_fdrel_abspath (rocctx->userroot_dfd, "rpmmd.repos.d");
-
-  rocctx->hifctx = _rpmostree_core_new (rocctx->rpmmd_dfd, abs_instroot_tmp, reposdir,
-                                          NULL, NULL, error);
-  if (!rocctx->hifctx)
+  if (!rpmostree_context_setup (rocctx->ctx, abs_instroot_tmp, NULL, error))
     goto out;
 
   if (!glnx_shutil_rm_rf_at (AT_FDCWD, abs_instroot_tmp, NULL, error))
@@ -164,7 +141,7 @@ roc_context_deinit (ROContainerContext *rocctx)
     (void) close (rocctx->roots_dfd);
   if (rocctx->rpmmd_dfd)
     (void) close (rocctx->rpmmd_dfd);
-  g_clear_object (&rocctx->hifctx);
+  g_clear_object (&rocctx->ctx);
 }
 
 G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(ROContainerContext, roc_context_deinit)
@@ -265,7 +242,7 @@ rpmostree_container_builtin_assemble (int             argc,
   GOptionContext *context = g_option_context_new ("NAME [PKGNAME PKGNAME...]");
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
-  g_auto(RpmOstreeInstall) hifinstall = {0,};
+  g_autoptr(RpmOstreeInstall) install = {0,};
   const char *name;
   struct stat stbuf;
   g_autofree char**pkgnames = NULL;
@@ -325,17 +302,17 @@ rpmostree_container_builtin_assemble (int             argc,
     goto out;
 
   /* --- Downloading metadata --- */
-  if (!_rpmostree_core_download_metadata (rocctx->hifctx, cancellable, error))
+  if (!rpmostree_context_download_metadata (rocctx->ctx, cancellable, error))
     goto out;
 
   /* --- Resolving dependencies --- */
-  if (!_rpmostree_core_prepare_install (rocctx->hifctx, rocctx->repo, (const char*const*)pkgnames,
-                                                  &hifinstall, cancellable, error))
+  if (!rpmostree_context_prepare_install (rocctx->ctx, rocctx->repo, (const char*const*)pkgnames,
+                                           &install, cancellable, error))
     goto out;
 
   /* --- Download and import as necessary --- */
-  if (!_rpmostree_core_download_import (rocctx->hifctx, rocctx->repo, &hifinstall,
-                                                  cancellable, error))
+  if (!rpmostree_context_download_import (rocctx->ctx, rocctx->repo, install,
+                                          cancellable, error))
     goto out;
 
   { glnx_fd_close int tmpdir_dfd = -1;
@@ -343,11 +320,11 @@ rpmostree_container_builtin_assemble (int             argc,
     if (!glnx_opendirat (rocctx->userroot_dfd, "tmp", TRUE, &tmpdir_dfd, error))
       goto out;
     
-    if (!_rpmostree_core_assemble_commit (rocctx->hifctx, tmpdir_dfd,
-                                                    rocctx->repo, name,
-                                                    &hifinstall,
-                                                    &commit,
-                                                    cancellable, error))
+    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd,
+                                            rocctx->repo, name,
+                                            install,
+                                            &commit,
+                                            cancellable, error))
       goto out;
   }
 
@@ -440,7 +417,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   GOptionContext *context = g_option_context_new ("NAME");
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
-  g_auto(RpmOstreeInstall) hifinstall = {0,};
+  g_autoptr(RpmOstreeInstall) install = NULL;
   const char *name;
   const char *const*pkgnames;
   g_autofree char *commit_checksum = NULL;
@@ -499,7 +476,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
     goto out;
 
   /* --- Downloading metadata --- */
-  if (!_rpmostree_core_download_metadata (rocctx->hifctx, cancellable, error))
+  if (!rpmostree_context_download_metadata (rocctx->ctx, cancellable, error))
     goto out;
 
   { g_autoptr(GVariantDict) metadata_dict = NULL;
@@ -530,13 +507,12 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   }
       
   /* --- Resolving dependencies --- */
-  if (!_rpmostree_core_prepare_install (rocctx->hifctx, rocctx->repo,
-                                        pkgnames,
-                                        &hifinstall,
-                                        cancellable, error))
+  if (!rpmostree_context_prepare_install (rocctx->ctx, rocctx->repo,
+                                          pkgnames, &install,
+                                          cancellable, error))
     goto out;
 
-  { g_autofree char *new_goal_sha512 = _rpmostree_hif_checksum_goal (G_CHECKSUM_SHA512, hif_context_get_goal (rocctx->hifctx));
+  { g_autofree char *new_goal_sha512 = rpmostree_hif_checksum_goal (G_CHECKSUM_SHA512, hif_context_get_goal (rpmostree_context_get_hif (rocctx->ctx)));
 
     if (strcmp (new_goal_sha512, previous_goal_sha512) == 0)
       {
@@ -547,8 +523,8 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   }
 
   /* --- Download and import as necessary --- */
-  if (!_rpmostree_core_download_import (rocctx->hifctx, rocctx->repo, &hifinstall,
-                                                  cancellable, error))
+  if (!rpmostree_context_download_import (rocctx->ctx, rocctx->repo, install,
+                                          cancellable, error))
     goto out;
 
   { glnx_fd_close int tmpdir_dfd = -1;
@@ -556,11 +532,11 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
     if (!glnx_opendirat (rocctx->userroot_dfd, "tmp", TRUE, &tmpdir_dfd, error))
       goto out;
     
-    if (!_rpmostree_core_assemble_commit (rocctx->hifctx, tmpdir_dfd,
-                                          rocctx->repo, name,
-                                          &hifinstall,
-                                          &new_commit_checksum,
-                                          cancellable, error))
+    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd,
+                                            rocctx->repo, name,
+                                            install,
+                                            &new_commit_checksum,
+                                            cancellable, error))
       goto out;
   }
 

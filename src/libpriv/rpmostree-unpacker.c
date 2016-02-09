@@ -35,6 +35,7 @@
 #include <gio/gunixinputstream.h>
 #include "rpmostree-unpacker.h"
 #include "rpmostree-core.h"
+#include "rpmostree-rpm-util.h"
 #include "rpmostree-ostree-libarchive-copynpaste.h"
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
@@ -576,7 +577,7 @@ const char *
 rpmostree_unpacker_get_ostree_branch (RpmOstreeUnpacker *self)
 {
   if (!self->ostree_branch)
-    self->ostree_branch = _rpmostree_get_cache_branch_header (self->hdr);
+    self->ostree_branch = rpmostree_get_cache_branch_header (self->hdr);
 
   return self->ostree_branch;
 }
