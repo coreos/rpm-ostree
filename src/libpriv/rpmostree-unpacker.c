@@ -34,7 +34,7 @@
 #include <sys/capability.h>
 #include <gio/gunixinputstream.h>
 #include "rpmostree-unpacker.h"
-#include "rpmostree-hif.h"
+#include "rpmostree-core.h"
 #include "rpmostree-ostree-libarchive-copynpaste.h"
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
