@@ -45,6 +45,7 @@ struct _RpmOstreeContext {
   GObject parent;
   
   HifContext *hifctx;
+  OstreeRepo *ostreerepo;
 };
 
 G_DEFINE_TYPE (RpmOstreeContext, rpmostree_context, G_TYPE_OBJECT)
@@ -146,11 +147,13 @@ rpmostree_context_new_system (GCancellable *cancellable,
 }
 
 RpmOstreeContext *
+
 rpmostree_context_new_unprivileged (int           userroot_dfd,
                                      GCancellable *cancellable,
                                      GError      **error)
 {
   g_autoptr(RpmOstreeContext) ret = rpmostree_context_new_system (cancellable, error);
+  struct stat stbuf;
 
   if (!ret)
     goto out;
@@ -170,6 +173,25 @@ rpmostree_context_new_unprivileged (int           userroot_dfd,
     g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, lock);
     hif_context_set_lock_dir (ret->hifctx, lock);
   }
+
+  if (fstatat (userroot_dfd, "repo", &stbuf, 0) < 0)
+    {
+      if (errno != ENOENT)
+        {
+          glnx_set_error_from_errno (error);
+          goto out;
+        }
+    }
+  else
+    {
+      g_autofree char *repopath_str = glnx_fdrel_abspath (userroot_dfd, "repo");
+      g_autoptr(GFile) repopath = g_file_new_for_path (repopath_str);
+
+      ret->ostreerepo = ostree_repo_new (repopath);
+
+      if (!ostree_repo_open (ret->ostreerepo, cancellable, error))
+        goto out;
+    }
 
  out:
   if (ret)
@@ -462,7 +484,6 @@ get_packages_to_download (HifContext  *hifctx,
 
 gboolean
 rpmostree_context_prepare_install (RpmOstreeContext    *self,
-                                    OstreeRepo           *ostreerepo,
                                     const char *const    *pkgnames,
                                     RpmOstreeInstall    **out_install,
                                     GCancellable         *cancellable,
@@ -493,7 +514,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
     }
   printf ("%s", "done\n");
 
-  if (!get_packages_to_download (hifctx, ostreerepo, &ret_install->packages_to_download, error))
+  if (!get_packages_to_download (hifctx, self->ostreerepo, &ret_install->packages_to_download, error))
     goto out;
 
   rpmostree_print_transaction (hifctx);
@@ -872,10 +893,9 @@ import_one_package (OstreeRepo   *ostreerepo,
 
 gboolean
 rpmostree_context_download_import (RpmOstreeContext *self,
-                                           OstreeRepo           *ostreerepo,
-                                           RpmOstreeInstall  *install,
-                                           GCancellable         *cancellable,
-                                           GError              **error)
+                                   RpmOstreeInstall  *install,
+                                   GCancellable         *cancellable,
+                                   GError              **error)
 {
   gboolean ret = FALSE;
   HifContext *hifctx = self->hifctx;
@@ -886,6 +906,8 @@ rpmostree_context_download_import (RpmOstreeContext *self,
   GHashTableIter hiter;
   gpointer key, value;
   guint i;
+
+  g_return_val_if_fail (self->ostreerepo != NULL, FALSE);
 
   glnx_console_lock (&console);
 
@@ -928,7 +950,7 @@ rpmostree_context_download_import (RpmOstreeContext *self,
     for (i = 0; i < install->packages_to_download->len; i++)
       {
         HifPackage *pkg = install->packages_to_download->pdata[i];
-        if (!import_one_package (ostreerepo, pkg_tempdir_dfd, hifctx, pkg,
+        if (!import_one_package (self->ostreerepo, pkg_tempdir_dfd, hifctx, pkg,
                                  cancellable, error))
           goto out;
         hif_state_assert_done (hifstate);
@@ -1064,9 +1086,8 @@ set_rpm_macro_define (const char *key, const char *value)
 }
 
 gboolean
-rpmostree_context_assemble_commit (RpmOstreeContext *ctx,
+rpmostree_context_assemble_commit (RpmOstreeContext *self,
                                            int            tmpdir_dfd,
-                                           OstreeRepo    *ostreerepo,
                                            const char    *name,
                                            RpmOstreeInstall *install,
                                            char          **out_commit,
@@ -1074,7 +1095,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext *ctx,
                                            GError       **error)
 {
   gboolean ret = FALSE;
-  HifContext *hifctx = ctx->hifctx;
+  HifContext *hifctx = self->hifctx;
   guint progress_sigid;
   TransactionData tdata = { 0, -1 };
   g_auto(GLnxConsoleRef) console = { 0, };
@@ -1141,10 +1162,10 @@ rpmostree_context_assemble_commit (RpmOstreeContext *ctx,
         g_autoptr(GVariant) pkg_commit = NULL;
         g_autoptr(GVariant) header_variant = NULL;
 
-        if (!ostree_repo_resolve_rev (ostreerepo, cachebranch, FALSE, &cached_rev, error))
+        if (!ostree_repo_resolve_rev (self->ostreerepo, cachebranch, FALSE, &cached_rev, error))
           goto out;
 
-        if (!ostree_repo_load_variant (ostreerepo, OSTREE_OBJECT_TYPE_COMMIT, cached_rev,
+        if (!ostree_repo_load_variant (self->ostreerepo, OSTREE_OBJECT_TYPE_COMMIT, cached_rev,
                                        &pkg_commit, error))
           goto out;
 
@@ -1204,7 +1225,8 @@ rpmostree_context_assemble_commit (RpmOstreeContext *ctx,
    */
   if (filesystem_package)
     {
-      if (!ostree_checkout_package (tmpdir_dfd, workdir_path, hifctx, filesystem_package, ostreerepo, devino_cache,
+      if (!ostree_checkout_package (tmpdir_dfd, workdir_path, hifctx, filesystem_package,
+                                    self->ostreerepo, devino_cache,
                                     g_hash_table_lookup (pkg_to_ostree_commit, filesystem_package),
                                     cancellable, error))
         goto out;
@@ -1219,7 +1241,8 @@ rpmostree_context_assemble_commit (RpmOstreeContext *ctx,
       const char *tekey = rpmteKey (te);
       HifPackage *pkg = g_hash_table_lookup (nevra_to_pkg, tekey);
 
-      if (!ostree_checkout_package (tmpdir_dfd, workdir_path, hifctx, pkg, ostreerepo, devino_cache,
+      if (!ostree_checkout_package (tmpdir_dfd, workdir_path, hifctx, pkg,
+                                    self->ostreerepo, devino_cache,
                                     g_hash_table_lookup (pkg_to_ostree_commit, pkg),
                                     cancellable, error))
         goto out;
@@ -1243,7 +1266,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext *ctx,
       if (pkg == filesystem_package)
         continue;
 
-      if (!ostree_checkout_package (rootfs_fd, ".", hifctx, pkg, ostreerepo, devino_cache,
+      if (!ostree_checkout_package (rootfs_fd, ".", hifctx, pkg, self->ostreerepo, devino_cache,
                                     g_hash_table_lookup (pkg_to_ostree_commit, pkg),
                                     cancellable, error))
         goto out;
@@ -1304,7 +1327,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext *ctx,
 
   g_print ("Writing OSTree commit...\n");
 
-  if (!ostree_repo_prepare_transaction (ostreerepo, NULL, cancellable, error))
+  if (!ostree_repo_prepare_transaction (self->ostreerepo, NULL, cancellable, error))
     goto out;
 
   { glnx_unref_object OstreeMutableTree *mtree = NULL;
@@ -1327,22 +1350,22 @@ rpmostree_context_assemble_commit (RpmOstreeContext *ctx,
 
     mtree = ostree_mutable_tree_new ();
 
-    if (!ostree_repo_write_dfd_to_mtree (ostreerepo, rootfs_fd, ".", mtree,
+    if (!ostree_repo_write_dfd_to_mtree (self->ostreerepo, rootfs_fd, ".", mtree,
                                          commit_modifier, cancellable, error))
       goto out;
 
-    if (!ostree_repo_write_mtree (ostreerepo, mtree, &root, cancellable, error))
+    if (!ostree_repo_write_mtree (self->ostreerepo, mtree, &root, cancellable, error))
       goto out;
     
-    if (!ostree_repo_write_commit (ostreerepo, NULL, "", "",
+    if (!ostree_repo_write_commit (self->ostreerepo, NULL, "", "",
                                    g_variant_builder_end (&metadata_builder),
                                    OSTREE_REPO_FILE (root),
                                    &ret_commit_checksum, cancellable, error))
       goto out;
     
-    ostree_repo_transaction_set_ref (ostreerepo, NULL, name, ret_commit_checksum);
+    ostree_repo_transaction_set_ref (self->ostreerepo, NULL, name, ret_commit_checksum);
 
-    if (!ostree_repo_commit_transaction (ostreerepo, NULL, cancellable, error))
+    if (!ostree_repo_commit_transaction (self->ostreerepo, NULL, cancellable, error))
       goto out;
 
     /* FIXME memleak on error, need g_autoptr for this */
