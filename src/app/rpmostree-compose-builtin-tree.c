@@ -242,7 +242,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (!rpmostree_context_download_metadata (ctx, cancellable, error))
     goto out;
 
-  if (!rpmostree_context_prepare_install (ctx, NULL, (const char *const*)packages,
+  if (!rpmostree_context_prepare_install (ctx, (const char *const*)packages,
                                           &hifinstall, cancellable, error))
     goto out;
 

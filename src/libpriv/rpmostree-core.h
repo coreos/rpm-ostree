@@ -65,29 +65,26 @@ gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
 
 /* This API allocates an install context, use with one of the later ones */
 gboolean rpmostree_context_prepare_install (RpmOstreeContext     *self,
-                                             OstreeRepo     *repo,
-                                             const char *const *packages,
-                                             RpmOstreeInstall **out_install,
-                                             GCancellable   *cancellable,
-                                             GError        **error);
+                                            const char *const *packages,
+                                            RpmOstreeInstall **out_install,
+                                            GCancellable   *cancellable,
+                                            GError        **error);
 
 gboolean rpmostree_context_download_rpms (RpmOstreeContext     *self,
-                                        int             target_dfd,
-                                        RpmOstreeInstall *install,
-                                        GCancellable   *cancellable,
-                                        GError        **error);
+                                          int             target_dfd,
+                                          RpmOstreeInstall *install,
+                                          GCancellable   *cancellable,
+                                          GError        **error);
 
 gboolean rpmostree_context_download_import (RpmOstreeContext     *self,
-                                          OstreeRepo                 *repo,
                                           RpmOstreeInstall *install,
                                           GCancellable               *cancellable,
                                           GError                    **error);
 
 gboolean rpmostree_context_assemble_commit (RpmOstreeContext     *self,
-                                          int                         tmpdir_dfd,
-                                          OstreeRepo                 *ostreerepo,
-                                          const char                 *name,
-                                          RpmOstreeInstall           *install,
-                                          char                      **out_commit,
-                                          GCancellable               *cancellable,
-                                          GError                    **error);
+                                            int                         tmpdir_dfd,
+                                            const char                 *name,
+                                            RpmOstreeInstall           *install,
+                                            char                      **out_commit,
+                                            GCancellable               *cancellable,
+                                            GError                    **error);

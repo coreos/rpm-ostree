@@ -306,12 +306,12 @@ rpmostree_container_builtin_assemble (int             argc,
     goto out;
 
   /* --- Resolving dependencies --- */
-  if (!rpmostree_context_prepare_install (rocctx->ctx, rocctx->repo, (const char*const*)pkgnames,
+  if (!rpmostree_context_prepare_install (rocctx->ctx, (const char*const*)pkgnames,
                                            &install, cancellable, error))
     goto out;
 
   /* --- Download and import as necessary --- */
-  if (!rpmostree_context_download_import (rocctx->ctx, rocctx->repo, install,
+  if (!rpmostree_context_download_import (rocctx->ctx, install,
                                           cancellable, error))
     goto out;
 
@@ -321,7 +321,7 @@ rpmostree_container_builtin_assemble (int             argc,
       goto out;
     
     if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd,
-                                            rocctx->repo, name,
+                                            name,
                                             install,
                                             &commit,
                                             cancellable, error))
@@ -507,8 +507,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   }
       
   /* --- Resolving dependencies --- */
-  if (!rpmostree_context_prepare_install (rocctx->ctx, rocctx->repo,
-                                          pkgnames, &install,
+  if (!rpmostree_context_prepare_install (rocctx->ctx, pkgnames, &install,
                                           cancellable, error))
     goto out;
 
@@ -523,7 +522,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   }
 
   /* --- Download and import as necessary --- */
-  if (!rpmostree_context_download_import (rocctx->ctx, rocctx->repo, install,
+  if (!rpmostree_context_download_import (rocctx->ctx, install,
                                           cancellable, error))
     goto out;
 
@@ -533,7 +532,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
       goto out;
     
     if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd,
-                                            rocctx->repo, name,
+                                            name,
                                             install,
                                             &new_commit_checksum,
                                             cancellable, error))
