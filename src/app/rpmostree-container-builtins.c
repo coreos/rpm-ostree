@@ -30,7 +30,7 @@
 
 #include "rpmostree-container-builtins.h"
 #include "rpmostree-util.h"
-#include "rpmostree-hif.h"
+#include "rpmostree-core.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-unpacker.h"
@@ -140,7 +140,7 @@ roc_context_prepare_for_root (ROContainerContext *rocctx,
   if (have_a_repo_file)
     reposdir = glnx_fdrel_abspath (rocctx->userroot_dfd, "rpmmd.repos.d");
 
-  rocctx->hifctx = _rpmostree_libhif_new (rocctx->rpmmd_dfd, abs_instroot_tmp, reposdir,
+  rocctx->hifctx = _rpmostree_core_new (rocctx->rpmmd_dfd, abs_instroot_tmp, reposdir,
                                           NULL, NULL, error);
   if (!rocctx->hifctx)
     goto out;
@@ -265,7 +265,7 @@ rpmostree_container_builtin_assemble (int             argc,
   GOptionContext *context = g_option_context_new ("NAME [PKGNAME PKGNAME...]");
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
-  g_auto(RpmOstreeHifInstall) hifinstall = {0,};
+  g_auto(RpmOstreeInstall) hifinstall = {0,};
   const char *name;
   struct stat stbuf;
   g_autofree char**pkgnames = NULL;
@@ -325,16 +325,16 @@ rpmostree_container_builtin_assemble (int             argc,
     goto out;
 
   /* --- Downloading metadata --- */
-  if (!_rpmostree_libhif_console_download_metadata (rocctx->hifctx, cancellable, error))
+  if (!_rpmostree_core_download_metadata (rocctx->hifctx, cancellable, error))
     goto out;
 
   /* --- Resolving dependencies --- */
-  if (!_rpmostree_libhif_console_prepare_install (rocctx->hifctx, rocctx->repo, (const char*const*)pkgnames,
+  if (!_rpmostree_core_prepare_install (rocctx->hifctx, rocctx->repo, (const char*const*)pkgnames,
                                                   &hifinstall, cancellable, error))
     goto out;
 
   /* --- Download and import as necessary --- */
-  if (!_rpmostree_libhif_console_download_import (rocctx->hifctx, rocctx->repo, &hifinstall,
+  if (!_rpmostree_core_download_import (rocctx->hifctx, rocctx->repo, &hifinstall,
                                                   cancellable, error))
     goto out;
 
@@ -343,7 +343,7 @@ rpmostree_container_builtin_assemble (int             argc,
     if (!glnx_opendirat (rocctx->userroot_dfd, "tmp", TRUE, &tmpdir_dfd, error))
       goto out;
     
-    if (!_rpmostree_libhif_console_assemble_commit (rocctx->hifctx, tmpdir_dfd,
+    if (!_rpmostree_core_assemble_commit (rocctx->hifctx, tmpdir_dfd,
                                                     rocctx->repo, name,
                                                     &hifinstall,
                                                     &commit,
@@ -440,7 +440,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   GOptionContext *context = g_option_context_new ("NAME");
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
-  g_auto(RpmOstreeHifInstall) hifinstall = {0,};
+  g_auto(RpmOstreeInstall) hifinstall = {0,};
   const char *name;
   const char *const*pkgnames;
   g_autofree char *commit_checksum = NULL;
@@ -499,7 +499,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
     goto out;
 
   /* --- Downloading metadata --- */
-  if (!_rpmostree_libhif_console_download_metadata (rocctx->hifctx, cancellable, error))
+  if (!_rpmostree_core_download_metadata (rocctx->hifctx, cancellable, error))
     goto out;
 
   { g_autoptr(GVariantDict) metadata_dict = NULL;
@@ -530,10 +530,10 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   }
       
   /* --- Resolving dependencies --- */
-  if (!_rpmostree_libhif_console_prepare_install (rocctx->hifctx, rocctx->repo,
-                                                  pkgnames,
-                                                  &hifinstall,
-                                                  cancellable, error))
+  if (!_rpmostree_core_prepare_install (rocctx->hifctx, rocctx->repo,
+                                        pkgnames,
+                                        &hifinstall,
+                                        cancellable, error))
     goto out;
 
   { g_autofree char *new_goal_sha512 = _rpmostree_hif_checksum_goal (G_CHECKSUM_SHA512, hif_context_get_goal (rocctx->hifctx));
@@ -547,7 +547,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   }
 
   /* --- Download and import as necessary --- */
-  if (!_rpmostree_libhif_console_download_import (rocctx->hifctx, rocctx->repo, &hifinstall,
+  if (!_rpmostree_core_download_import (rocctx->hifctx, rocctx->repo, &hifinstall,
                                                   cancellable, error))
     goto out;
 
@@ -556,11 +556,11 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
     if (!glnx_opendirat (rocctx->userroot_dfd, "tmp", TRUE, &tmpdir_dfd, error))
       goto out;
     
-    if (!_rpmostree_libhif_console_assemble_commit (rocctx->hifctx, tmpdir_dfd,
-                                                    rocctx->repo, name,
-                                                    &hifinstall,
-                                                    &new_commit_checksum,
-                                                    cancellable, error))
+    if (!_rpmostree_core_assemble_commit (rocctx->hifctx, tmpdir_dfd,
+                                          rocctx->repo, name,
+                                          &hifinstall,
+                                          &new_commit_checksum,
+                                          cancellable, error))
       goto out;
   }
 

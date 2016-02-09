@@ -32,7 +32,7 @@
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
-#include "rpmostree-hif.h"
+#include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
@@ -150,7 +150,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   gboolean ret = FALSE;
   guint progress_sigid;
   GFile *contextdir = self->treefile_context_dirs->pdata[0];
-  g_auto(RpmOstreeHifInstall) hifinstall = { 0, };
+  g_auto(RpmOstreeInstall) hifinstall = { 0, };
   gs_unref_object HifContext *hifctx = NULL;
   gs_free char *cachedir = g_build_filename (gs_file_get_path_cached (self->workdir),
                                              "cache",
@@ -163,7 +163,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                                             NULL);
   gs_free char *ret_new_inputhash = NULL;
 
-  hifctx = _rpmostree_libhif_new_default ();
+  hifctx = _rpmostree_core_new_default ();
   if (opt_proxy)
     hif_context_set_http_proxy (hifctx, opt_proxy);
   hif_context_set_install_root (hifctx, gs_file_get_path_cached (yumroot));
@@ -195,7 +195,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
       }
   }
 
-  if (!_rpmostree_libhif_setup (hifctx, cancellable, error))
+  if (!_rpmostree_core_setup (hifctx, cancellable, error))
     goto out;
 
   /* Bind the json \"repos\" member to the hif state, which looks at the
@@ -209,7 +209,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     guint i;
     guint n;
 
-    _rpmostree_libhif_repos_disable_all (hifctx);
+    _rpmostree_core_repos_disable_all (hifctx);
 
     if (!json_object_has_member (treedata, "repos"))
       {
@@ -226,7 +226,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
         const char *reponame = _rpmostree_jsonutil_array_require_string_element (enable_repos, i, error);
         if (!reponame)
           goto out;
-        if (!_rpmostree_libhif_repos_enable_by_name (hifctx, reponame, error))
+        if (!_rpmostree_core_repos_enable_by_name (hifctx, reponame, error))
           goto out;
       }
   }
@@ -245,10 +245,10 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   }
 
   /* --- Downloading metadata --- */
-  if (!_rpmostree_libhif_console_download_metadata (hifctx, cancellable, error))
+  if (!_rpmostree_core_download_metadata (hifctx, cancellable, error))
     goto out;
 
-  if (!_rpmostree_libhif_console_prepare_install (hifctx, NULL, (const char *const*)packages,
+  if (!_rpmostree_core_prepare_install (hifctx, NULL, (const char *const*)packages,
                                                   &hifinstall, cancellable, error))
     goto out;
 
@@ -284,7 +284,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     }
 
   /* --- Downloading packages --- */
-  if (!_rpmostree_libhif_console_download_rpms (hifctx, -1, &hifinstall, cancellable, error))
+  if (!_rpmostree_core_download_rpms (hifctx, -1, &hifinstall, cancellable, error))
     goto out;
   
   { g_auto(GLnxConsoleRef) console = { 0, };

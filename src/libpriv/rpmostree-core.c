@@ -33,7 +33,7 @@
 #include <libhif/hif-package.h>
 #include <librepo/librepo.h>
 
-#include "rpmostree-hif.h"
+#include "rpmostree-core.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-unpacker.h"
 
@@ -54,7 +54,7 @@ _rpmostree_reset_rpm_sighandlers (void)
 }
 
 HifContext *
-_rpmostree_libhif_new_default (void)
+_rpmostree_core_new_default (void)
 {
   HifContext *hifctx;
 
@@ -84,7 +84,7 @@ _rpmostree_libhif_new_default (void)
 }
 
 HifContext *
-_rpmostree_libhif_new (int rpmmd_cache_dfd,
+_rpmostree_core_new (int rpmmd_cache_dfd,
                        const char *installroot,
                        const char *repos_dir,
                        const char *const *enabled_repos,
@@ -92,9 +92,9 @@ _rpmostree_libhif_new (int rpmmd_cache_dfd,
                        GError **error)
 {
   gboolean ret = FALSE;
-  glnx_unref_object HifContext *hifctx = _rpmostree_libhif_new_default ();
+  glnx_unref_object HifContext *hifctx = _rpmostree_core_new_default ();
 
-  _rpmostree_libhif_set_cache_dfd (hifctx, rpmmd_cache_dfd);
+  _rpmostree_core_set_cache_dfd (hifctx, rpmmd_cache_dfd);
   if (repos_dir)
     hif_context_set_repo_dir (hifctx, repos_dir);
 
@@ -106,18 +106,18 @@ _rpmostree_libhif_new (int rpmmd_cache_dfd,
    */
   hif_context_set_release_ver (hifctx, "42");
 
-  if (!_rpmostree_libhif_setup (hifctx, cancellable, error))
+  if (!_rpmostree_core_setup (hifctx, cancellable, error))
     goto out;
 
   if (enabled_repos)
     {
-      _rpmostree_libhif_repos_disable_all (hifctx);
+      _rpmostree_core_repos_disable_all (hifctx);
       
       { const char * const *strviter = enabled_repos;
         for (; strviter && *strviter; strviter++)
           {
             const char *reponame = *strviter;
-            if (!_rpmostree_libhif_repos_enable_by_name (hifctx, reponame, error))
+            if (!_rpmostree_core_repos_enable_by_name (hifctx, reponame, error))
               goto out;
           }
       }
@@ -131,7 +131,7 @@ _rpmostree_libhif_new (int rpmmd_cache_dfd,
 }
 
 void
-_rpmostree_libhif_set_cache_dfd (HifContext *hifctx, int dfd)
+_rpmostree_core_set_cache_dfd (HifContext *hifctx, int dfd)
 {
   g_autofree char *repomddir =
     glnx_fdrel_abspath (dfd, RPMOSTREE_DIR_CACHE_REPOMD);
@@ -146,7 +146,7 @@ _rpmostree_libhif_set_cache_dfd (HifContext *hifctx, int dfd)
 }
 
 gboolean
-_rpmostree_libhif_setup (HifContext    *context,
+_rpmostree_core_setup (HifContext    *context,
                          GCancellable  *cancellable,
                          GError       **error)
 {
@@ -157,7 +157,7 @@ _rpmostree_libhif_setup (HifContext    *context,
 }
 
 void
-_rpmostree_libhif_repos_disable_all (HifContext    *context)
+_rpmostree_core_repos_disable_all (HifContext    *context)
 {
   GPtrArray *sources;
   guint i;
@@ -172,7 +172,7 @@ _rpmostree_libhif_repos_disable_all (HifContext    *context)
 }
 
 gboolean
-_rpmostree_libhif_repos_enable_by_name (HifContext    *context,
+_rpmostree_core_repos_enable_by_name (HifContext    *context,
                                         const char    *name,
                                         GError       **error)
 {
@@ -218,7 +218,7 @@ on_hifstate_percentage_changed (HifState   *hifstate,
 }
 
 gboolean
-_rpmostree_libhif_console_download_metadata (HifContext     *hifctx,
+_rpmostree_core_download_metadata (HifContext     *hifctx,
                                              GCancellable   *cancellable,
                                              GError        **error)
 {
@@ -394,10 +394,10 @@ get_packages_to_download (HifContext  *hifctx,
 }
 
 gboolean
-_rpmostree_libhif_console_prepare_install (HifContext           *hifctx,
+_rpmostree_core_prepare_install (HifContext           *hifctx,
                                            OstreeRepo           *ostreerepo,
                                            const char *const    *pkgnames,
-                                           RpmOstreeHifInstall  *out_install,
+                                           RpmOstreeInstall  *out_install,
                                            GCancellable         *cancellable,
                                            GError              **error)
 {
@@ -436,7 +436,7 @@ _rpmostree_libhif_console_prepare_install (HifContext           *hifctx,
 }
 
 struct GlobalDownloadState {
-  struct RpmOstreeHifInstall *install;
+  struct RpmOstreeInstall *install;
   HifState *hifstate;
   gchar *last_mirror_url;
   gchar *last_mirror_failure_message;
@@ -456,7 +456,7 @@ package_download_update_state_cb (void *user_data,
 				  gdouble now_downloaded)
 {
   struct PkgDownloadState *dlstate = user_data;
-  struct RpmOstreeHifInstall *install = dlstate->gdlstate->install;
+  struct RpmOstreeInstall *install = dlstate->gdlstate->install;
   if (!dlstate->added_total)
     {
       dlstate->added_total = TRUE;
@@ -578,7 +578,7 @@ hif_source_checksum_hy_to_lr (int checksum_hy)
 static gboolean
 source_download_packages (HifRepo *source,
                           GPtrArray *packages,
-                          RpmOstreeHifInstall *install,
+                          RpmOstreeInstall *install,
                           int        target_dfd,
                           HifState  *state,
                           GCancellable *cancellable,
@@ -679,7 +679,7 @@ source_download_packages (HifRepo *source,
 
 static GHashTable *
 gather_source_to_packages (HifContext *hifctx,
-                           RpmOstreeHifInstall *install)
+                           RpmOstreeInstall *install)
 {
   guint i;
   g_autoptr(GHashTable) source_to_packages =
@@ -706,9 +706,9 @@ gather_source_to_packages (HifContext *hifctx,
 }
 
 gboolean
-_rpmostree_libhif_console_download_rpms (HifContext     *hifctx,
+_rpmostree_core_download_rpms (HifContext     *hifctx,
                                          int             target_dfd,
-                                         RpmOstreeHifInstall *install,
+                                         RpmOstreeInstall *install,
                                          GCancellable   *cancellable,
                                          GError        **error)
 {
@@ -800,9 +800,9 @@ import_one_package (OstreeRepo   *ostreerepo,
 }
 
 gboolean
-_rpmostree_libhif_console_download_import (HifContext           *hifctx,
+_rpmostree_core_download_import (HifContext           *hifctx,
                                            OstreeRepo           *ostreerepo,
-                                           RpmOstreeHifInstall  *install,
+                                           RpmOstreeInstall  *install,
                                            GCancellable         *cancellable,
                                            GError              **error)
 {
@@ -992,11 +992,11 @@ set_rpm_macro_define (const char *key, const char *value)
 }
 
 gboolean
-_rpmostree_libhif_console_assemble_commit (HifContext    *hifctx,
+_rpmostree_core_assemble_commit (HifContext    *hifctx,
                                            int            tmpdir_dfd,
                                            OstreeRepo    *ostreerepo,
                                            const char    *name,
-                                           struct RpmOstreeHifInstall *install,
+                                           struct RpmOstreeInstall *install,
                                            char          **out_commit,
                                            GCancellable  *cancellable,
                                            GError       **error)
