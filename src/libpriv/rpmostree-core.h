@@ -28,95 +28,66 @@
 
 #include "libglnx.h"
 
-struct RpmOstreeInstall {
-  GPtrArray *packages_requested;
-  /* Target state */
-  GPtrArray *packages_to_download;
-  guint64 n_bytes_to_fetch;
+#define RPMOSTREE_TYPE_CONTEXT (rpmostree_context_get_type ())
+G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, GObject)
 
-  /* Current state */
-  guint n_packages_fetched;
-  guint64 n_bytes_fetched;
-};
+#define RPMOSTREE_TYPE_INSTALL (rpmostree_install_get_type ())
+G_DECLARE_FINAL_TYPE (RpmOstreeInstall, rpmostree_install, RPMOSTREE, INSTALL, GObject)
 
-typedef struct RpmOstreeInstall RpmOstreeInstall;
+RpmOstreeContext *rpmostree_context_new_system (GCancellable *cancellable,
+                                                GError **error);
 
-struct RpmOstreePackageDownloadMetrics {
-  guint64 bytes;
-};
+RpmOstreeContext *rpmostree_context_new_unprivileged (int basedir_dfd,
+                                                      GCancellable *cancellable,
+                                                      GError **error);
 
-typedef struct RpmOstreePackageDownloadMetrics RpmOstreePackageDownloadMetrics;
+HifContext * rpmostree_context_get_hif (RpmOstreeContext *self);
 
-HifContext *_rpmostree_core_new_default (void);
+gboolean
+rpmostree_context_repos_enable_only (RpmOstreeContext    *context,
+                                     const char    *const *enabled_repos,
+                                     GError       **error);
 
-HifContext *_rpmostree_core_new (int rpmmd_cache_dfd,
-                                 const char *installroot,
-                                 const char *repos_dir,
-                                 const char *const *enabled_repos,
-                                 GCancellable *cancellable,
-                                 GError **error);
-
-void _rpmostree_reset_rpm_sighandlers (void);
-
-void _rpmostree_core_set_cache_dfd (HifContext *hifctx, int dfd);
-
-rpmts _rpmostree_core_ts_new (HifContext *hifctx);
-
-gboolean _rpmostree_core_setup (HifContext    *context,
+gboolean rpmostree_context_setup (RpmOstreeContext     *self,
+                                  const char    *install_root,
                                   GCancellable  *cancellable,
-                                  GError       **error);
+                                   GError       **error);
 
-void _rpmostree_core_repos_disable_all (HifContext    *context);
+void rpmostree_hif_add_checksum_goal (GChecksum *checksum, HyGoal goal);
+char * rpmostree_hif_checksum_goal (GChecksumType type, HyGoal goal);
 
-void _rpmostree_core_set_ostree_repo (HifContext *context);
+char *rpmostree_get_cache_branch_header (Header hdr);
+char *rpmostree_get_cache_branch_pkg (HifPackage *pkg);
 
-void _rpmostree_hif_add_checksum_goal (GChecksum *checksum, HyGoal goal);
-char * _rpmostree_hif_checksum_goal (GChecksumType type, HyGoal goal);
-
-char *_rpmostree_get_cache_branch_header (Header hdr);
-char *_rpmostree_get_cache_branch_pkg (HifPackage *pkg);
-
-gboolean _rpmostree_core_repos_enable_by_name (HifContext    *context,
-                                               const char    *name,
-                                               GError       **error);
-
-gboolean _rpmostree_core_download_metadata (HifContext     *context,
-                                            GCancellable   *cancellable,
-                                            GError        **error);
+gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
+                                               GCancellable      *cancellable,
+                                               GError           **error);
 
 /* This API allocates an install context, use with one of the later ones */
-gboolean _rpmostree_core_prepare_install (HifContext     *context,
-                                          OstreeRepo     *repo,
-                                          const char *const *packages,
-                                          struct RpmOstreeInstall *out_install,
-                                          GCancellable   *cancellable,
-                                          GError        **error);
+gboolean rpmostree_context_prepare_install (RpmOstreeContext     *self,
+                                             OstreeRepo     *repo,
+                                             const char *const *packages,
+                                             RpmOstreeInstall **out_install,
+                                             GCancellable   *cancellable,
+                                             GError        **error);
 
-gboolean _rpmostree_core_download_rpms (HifContext     *context,
+gboolean rpmostree_context_download_rpms (RpmOstreeContext     *self,
                                         int             target_dfd,
-                                        struct RpmOstreeInstall *install,
+                                        RpmOstreeInstall *install,
                                         GCancellable   *cancellable,
                                         GError        **error);
 
-gboolean _rpmostree_core_download_import (HifContext                 *context,
+gboolean rpmostree_context_download_import (RpmOstreeContext     *self,
                                           OstreeRepo                 *repo,
-                                          struct RpmOstreeInstall *install,
+                                          RpmOstreeInstall *install,
                                           GCancellable               *cancellable,
                                           GError                    **error);
 
-gboolean _rpmostree_core_assemble_commit (HifContext                 *context,
+gboolean rpmostree_context_assemble_commit (RpmOstreeContext     *self,
                                           int                         tmpdir_dfd,
                                           OstreeRepo                 *ostreerepo,
                                           const char                 *name,
-                                          struct RpmOstreeInstall *install,
+                                          RpmOstreeInstall           *install,
                                           char                      **out_commit,
                                           GCancellable               *cancellable,
                                           GError                    **error);
-
-static inline void
-_rpmostree_core_install_cleanup (struct RpmOstreeInstall *inst)
-{
-  g_clear_pointer (&inst->packages_requested, g_ptr_array_unref);
-  g_clear_pointer (&inst->packages_to_download, g_ptr_array_unref);
-}
-G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(RpmOstreeInstall, _rpmostree_core_install_cleanup)

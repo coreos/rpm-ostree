@@ -117,7 +117,7 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
   /* FIXME; we should also hash the post script */
 
   /* Hash in each package */
-  _rpmostree_hif_add_checksum_goal (checksum, goal);
+  rpmostree_hif_add_checksum_goal (checksum, goal);
 
   ret_checksum = g_strdup (g_checksum_get_string (checksum));
 
@@ -150,27 +150,18 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   gboolean ret = FALSE;
   guint progress_sigid;
   GFile *contextdir = self->treefile_context_dirs->pdata[0];
-  g_auto(RpmOstreeInstall) hifinstall = { 0, };
-  gs_unref_object HifContext *hifctx = NULL;
-  gs_free char *cachedir = g_build_filename (gs_file_get_path_cached (self->workdir),
-                                             "cache",
-                                             NULL);
-  gs_free char *solvdir = g_build_filename (gs_file_get_path_cached (self->workdir),
-                                            "solv",
-                                            NULL);
-  gs_free char *lockdir = g_build_filename (gs_file_get_path_cached (self->workdir),
-                                            "lock",
-                                            NULL);
+  g_autoptr(RpmOstreeInstall) hifinstall = { 0, };
+  g_autoptr(RpmOstreeContext) ctx = NULL;
+  HifContext *hifctx;
   gs_free char *ret_new_inputhash = NULL;
 
-  hifctx = _rpmostree_core_new_default ();
+  ctx = rpmostree_context_new_unprivileged (self->workdir_dfd, cancellable, error);
+  if (!ctx)
+    goto out;
+  hifctx = rpmostree_context_get_hif (ctx);
   if (opt_proxy)
     hif_context_set_http_proxy (hifctx, opt_proxy);
-  hif_context_set_install_root (hifctx, gs_file_get_path_cached (yumroot));
-  hif_context_set_cache_dir (hifctx, cachedir);
-  hif_context_set_cache_age (hifctx, G_MAXUINT);
-  hif_context_set_solv_dir (hifctx, solvdir);
-  hif_context_set_lock_dir (hifctx, lockdir);
+
   hif_context_set_repo_dir (hifctx, gs_file_get_path_cached (contextdir));
 
   { JsonNode *install_langs_n =
@@ -195,7 +186,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
       }
   }
 
-  if (!_rpmostree_core_setup (hifctx, cancellable, error))
+  if (!rpmostree_context_setup (ctx, gs_file_get_path_cached (yumroot),
+                                cancellable, error))
     goto out;
 
   /* Bind the json \"repos\" member to the hif state, which looks at the
@@ -204,12 +196,9 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
    */
   {
     JsonArray *enable_repos = NULL;
-    gs_unref_hashtable GHashTable *repos_to_enable =
-      g_hash_table_new (g_str_hash, g_str_equal);
+    g_autoptr(GPtrArray) enable_repos_strv = g_ptr_array_new ();
     guint i;
     guint n;
-
-    _rpmostree_core_repos_disable_all (hifctx);
 
     if (!json_object_has_member (treedata, "repos"))
       {
@@ -226,9 +215,14 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
         const char *reponame = _rpmostree_jsonutil_array_require_string_element (enable_repos, i, error);
         if (!reponame)
           goto out;
-        if (!_rpmostree_core_repos_enable_by_name (hifctx, reponame, error))
-          goto out;
+        g_ptr_array_add (enable_repos_strv, (char*)reponame);
       }
+    g_ptr_array_add (enable_repos_strv, NULL);
+
+    if (!rpmostree_context_repos_enable_only (ctx,
+                                              (const char *const*)enable_repos_strv->pdata,
+                                              error))
+      goto out;
   }
 
   { gboolean docs = TRUE;
@@ -245,11 +239,11 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   }
 
   /* --- Downloading metadata --- */
-  if (!_rpmostree_core_download_metadata (hifctx, cancellable, error))
+  if (!rpmostree_context_download_metadata (ctx, cancellable, error))
     goto out;
 
-  if (!_rpmostree_core_prepare_install (hifctx, NULL, (const char *const*)packages,
-                                                  &hifinstall, cancellable, error))
+  if (!rpmostree_context_prepare_install (ctx, NULL, (const char *const*)packages,
+                                          &hifinstall, cancellable, error))
     goto out;
 
   /* FIXME - just do a depsolve here before we compute download requirements */
@@ -284,7 +278,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     }
 
   /* --- Downloading packages --- */
-  if (!_rpmostree_core_download_rpms (hifctx, -1, &hifinstall, cancellable, error))
+  if (!rpmostree_context_download_rpms (ctx, -1, hifinstall, cancellable, error))
     goto out;
   
   { g_auto(GLnxConsoleRef) console = { 0, };

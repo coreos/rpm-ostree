@@ -928,3 +928,16 @@ rpmostree_print_transaction (HifContext   *hifctx)
         }
     }
 }
+
+void
+_rpmostree_reset_rpm_sighandlers (void)
+{
+  /* Forcibly override rpm/librepo SIGINT handlers.  We always operate
+   * in a fully idempotent/atomic mode, and can be killed at any time.
+   */
+#if !BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY
+  signal (SIGINT, SIG_DFL);
+  signal (SIGTERM, SIG_DFL);
+#endif
+}
+
