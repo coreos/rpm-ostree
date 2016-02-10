@@ -88,6 +88,7 @@ typedef struct {
   
   GFile *workdir;
   int workdir_dfd;
+  int cachedir_dfd;
   OstreeRepo *repo;
   char *ref;
   char *previous_checksum;
@@ -188,7 +189,20 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
   JsonArray *enable_repos = NULL;
 
-  ctx = rpmostree_context_new_unprivileged (self->workdir_dfd, cancellable, error);
+  /* TODO - uncomment this once we have SELinux working */
+#if 0
+  g_autofree char *cache_repo_pathstr = glnx_fdrel_abspath (self->cachedir_dfd, "repo");
+  g_autoptr(GFile) cache_repo_path = g_file_new_for_path (cache_repo_pathstr);
+  glnx_unref_object OstreeRepo *ostreerepo = ostree_repo_new (cache_repo_path);
+
+  if (!g_file_test (cache_repo_pathstr, G_FILE_TEST_EXISTS))
+    {
+      if (!ostree_repo_create (ostreerepo, OSTREE_REPO_MODE_BARE_USER, cancellable, error))
+        goto out;
+    }
+#endif
+
+  ctx = rpmostree_context_new_unprivileged (self->cachedir_dfd, cancellable, error);
   if (!ctx)
     goto out;
   hifctx = rpmostree_context_get_hif (ctx);
@@ -497,7 +511,6 @@ rpmostree_compose_builtin_tree (int             argc,
   JsonObject *treefile = NULL;
   gs_free char *cachekey = NULL;
   gs_free char *new_inputhash = NULL;
-  gs_unref_object GFile *cachedir = NULL;
   gs_unref_object GFile *previous_root = NULL;
   gs_free char *previous_checksum = NULL;
   gs_unref_object GFile *yumroot = NULL;
@@ -581,9 +594,11 @@ rpmostree_compose_builtin_tree (int             argc,
 
   if (opt_cachedir)
     {
-      cachedir = g_file_new_for_path (opt_cachedir);
-      if (!gs_file_ensure_directory (cachedir, FALSE, cancellable, error))
-        goto out;
+      if (!glnx_opendirat (AT_FDCWD, opt_cachedir, TRUE, &self->cachedir_dfd, error))
+        {
+          g_prefix_error (error, "Opening cachedir '%s': ", opt_cachedir);
+          goto out;
+        }
     }
 
   if (opt_metadata_strings)
