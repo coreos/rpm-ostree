@@ -18,6 +18,17 @@
 # Boston, MA 02111-1307, USA.
 
 SRCDIR=$(dirname $0)
+_cleanup_tmpdir () {
+    if test -f ${test_tmpdir}.test; then
+	rm ${test_tmpdir} -rf
+    fi
+}
+if test -z "${INSTALLEDTESTS:-}"; then
+   test_tmpdir=$(mktemp -d test.XXXXXX)
+   touch ${test_tmpdir}/.test
+   trap _cleanup_tmpdir EXIT
+   cd ${test_tmpdir}
+fi   
 test_tmpdir=$(pwd)
 
 export G_DEBUG=fatal-warnings
@@ -26,11 +37,11 @@ export TEST_GPG_KEYID="472CDAFA"
 export TEST_GPG_KEYHOME=${SRCDIR}/gpghome
 export OSTREE_GPG_HOME=${TEST_GPG_KEYHOME}/trusted
 
-if test -n "${OT_TESTS_DEBUG}"; then
+if test -n "${OT_TESTS_DEBUG:-}"; then
     set -x
 fi
 
-if test -n "$OT_TESTS_VALGRIND"; then
+if test -n "${OT_TESTS_VALGRIND:-}"; then
     CMD_PREFIX="env G_SLICE=always-malloc valgrind -q --leak-check=full --num-callers=30 --suppressions=${SRCDIR}/ostree-valgrind.supp"
 fi
 
