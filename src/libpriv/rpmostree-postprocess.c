@@ -791,73 +791,6 @@ replace_nsswitch (GFile         *target_usretc,
   return ret;
 }
 
-static gboolean
-migrate_rpm_and_yumdb (GFile          *targetroot,
-                       GFile          *yumroot,
-                       GCancellable   *cancellable,
-                       GError        **error)
-
-{
-  gboolean ret = FALSE;
-  gs_unref_object GFile *usrbin_rpm =
-    g_file_resolve_relative_path (targetroot, "usr/bin/rpm");
-  gs_unref_object GFile *legacyrpm_path =
-    g_file_resolve_relative_path (yumroot, "var/lib/rpm");
-  gs_unref_object GFile *newrpm_path =
-    g_file_resolve_relative_path (targetroot, "usr/share/rpm");
-  gs_unref_object GFile *src_yum_rpmdb_indexes =
-    g_file_resolve_relative_path (yumroot, "var/lib/yum");
-  gs_unref_object GFile *target_yum_rpmdb_indexes =
-    g_file_resolve_relative_path (targetroot, "usr/share/yumdb");
-  gs_unref_object GFile *yumroot_yumlib =
-    g_file_get_child (yumroot, "var/lib/yum");
-  gs_unref_object GFileEnumerator *direnum = NULL;
-
-  direnum = g_file_enumerate_children (legacyrpm_path, "standard::name",
-                                       G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                       cancellable, error);
-  if (!direnum)
-    goto out;
-
-  while (TRUE)
-    {
-      const char *name;
-      GFileInfo *file_info;
-      GFile *child;
-
-      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
-                                       cancellable, error))
-        goto out;
-      if (!file_info)
-        break;
-
-      name = g_file_info_get_name (file_info);
-
-      if (g_str_has_prefix (name, "__db.") ||
-          strcmp (name, ".dbenv.lock") == 0 ||
-          strcmp (name, ".rpm.lock") == 0)
-        {
-          if (!gs_file_unlink (child, cancellable, error))
-            goto out;
-        }
-    }
-
-  (void) g_file_enumerator_close (direnum, cancellable, error);
-    
-  g_print ("Placing RPM db in /usr/share/rpm\n");
-  if (!gs_file_rename (legacyrpm_path, newrpm_path, cancellable, error))
-    goto out;
-    
-  /* Remove /var/lib/yum; we don't want it here. */
-  if (!gs_shutil_rm_rf (yumroot_yumlib, cancellable, error))
-    goto out;
-
-  ret = TRUE;
- out:
-  return ret;
-}
-
-
 /* Prepare a root filesystem, taking mainly the contents of /usr from yumroot */
 static gboolean 
 create_rootfs_from_yumroot_content (GFile         *targetroot,
@@ -929,34 +862,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
       goto out;
   }
 
-  /* Except /usr/local -> ../var/usrlocal */
-  g_print ("Linking /usr/local -> ../var/usrlocal\n");
-  {
-    gs_unref_object GFile *target_usrlocal =
-      g_file_resolve_relative_path (targetroot, "usr/local");
-
-    if (!gs_shutil_rm_rf (target_usrlocal, cancellable, error))
-      goto out;
-
-    if (!g_file_make_symbolic_link (target_usrlocal, "../var/usrlocal",
-                                    cancellable, error))
-      goto out;
-  }
-
-  /* And now we take the contents of /etc and put them in /usr/etc */
-  g_print ("Moving /etc to /usr/etc\n");
-  {
-    gs_unref_object GFile *yumroot_etc =
-      g_file_get_child (yumroot, "etc");
-    gs_unref_object GFile *target_usretc =
-      g_file_resolve_relative_path (targetroot, "usr/etc");
-    
-    if (!gs_file_rename (yumroot_etc, target_usretc,
-                         cancellable, error))
-      goto out;
-  }
-
-  if (!migrate_rpm_and_yumdb (targetroot, yumroot, cancellable, error))
+  if (!rpmostree_rootfs_postprocess_common (target_root_dfd, cancellable, error))
     goto out;
 
   if (!convert_var_to_tmpfiles_d (src_rootfs_fd, target_root_dfd, cancellable, error))
@@ -1142,6 +1048,123 @@ handle_remove_files_from_package (GFile         *yumroot,
  out:
   if (query)
     hy_query_free (query);
+  return ret;
+}
+
+static gboolean
+rename_if_exists (int         dfd,
+                  const char *from,
+                  const char *to,
+                  GError    **error)
+{
+  gboolean ret = FALSE;
+  struct stat stbuf;
+
+  if (fstatat (dfd, from, &stbuf, 0) < 0)
+    {
+      if (errno != ENOENT)
+        {
+          glnx_set_error_from_errno (error);
+          goto out;
+        }
+    }
+  else
+    {
+      if (renameat (dfd, from, dfd, to) < 0)
+        {
+          /* Handle empty directory in legacy location */
+          if (errno == EEXIST)
+            {
+              if (unlinkat (dfd, from, AT_REMOVEDIR) < 0)
+                {
+                  glnx_set_error_from_errno (error);
+                  goto out;
+                }
+            }
+          else
+            {
+              glnx_set_error_from_errno (error);
+              goto out;
+            }
+        }
+    }
+
+  ret = TRUE;
+ out:
+  g_prefix_error (error, "Renaming %s -> %s: ", from, to);
+  return ret;
+}
+
+/**
+ * rpmostree_rootfs_postprocess_common:
+ *
+ * Walk over the root filesystem and perform some core conversions
+ * from RPM conventions to OSTree conventions.  For example:
+ *
+ *  - Move /etc to /usr/etc
+ *  - Symlink /usr/local -> /var/usrlocal
+ *  - Clean up RPM database leftovers and lock files
+ */
+gboolean
+rpmostree_rootfs_postprocess_common (int           rootfs_fd,
+                                     GCancellable *cancellable,
+                                     GError       **error)
+{
+  gboolean ret = FALSE;
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+
+  if (!glnx_shutil_rm_rf_at (rootfs_fd, "usr/local", cancellable, error))
+    goto out;
+
+  if (symlinkat ("../var/usrlocal", rootfs_fd, "usr/local") < 0)
+    {
+      glnx_set_error_from_errno (error);
+      g_prefix_error (error, "Creating usr/local symlink: ");
+      goto out;
+    }
+
+  if (!rename_if_exists (rootfs_fd, "etc", "usr/etc", error))
+    goto out;
+
+  if (!rename_if_exists (rootfs_fd, "var/lib/rpm", "usr/share/rpm", error))
+    goto out;
+
+  if (!glnx_dirfd_iterator_init_at (rootfs_fd, "usr/share/rpm", TRUE, &dfd_iter, error))
+    {
+      g_prefix_error (error, "Opening usr/share/rpm: ");
+      goto out;
+    }
+  
+  while (TRUE)
+    {
+      struct dirent *dent = NULL;
+      const char *name;
+
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
+        goto out;
+      if (!dent)
+        break;
+
+      if (dent->d_type != DT_REG)
+        continue;
+
+      name = dent->d_name;
+      
+      if (!(g_str_has_prefix (name, "__db.") ||
+            strcmp (name, ".dbenv.lock") == 0 ||
+            strcmp (name, ".rpm.lock") == 0))
+        continue;
+      
+      if (unlinkat (dfd_iter.fd, name, 0) < 0)
+        {
+          glnx_set_error_from_errno (error);
+          g_prefix_error (error, "Unlinking %s: ", name);
+          goto out;
+        }
+    }
+
+  ret = TRUE;
+ out:
   return ret;
 }
 

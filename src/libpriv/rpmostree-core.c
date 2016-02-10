@@ -34,6 +34,7 @@
 #include <librepo/librepo.h>
 
 #include "rpmostree-core.h"
+#include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-unpacker.h"
 
@@ -141,6 +142,17 @@ rpmostree_treespec_class_init (RpmOstreeTreespecClass *klass)
 static void
 rpmostree_treespec_init (RpmOstreeTreespec *self)
 {
+}
+
+static void
+set_rpm_macro_define (const char *key, const char *value)
+{
+  g_autofree char *buf = g_strconcat ("%define ", key, " ", value, NULL);
+  /* Calling expand with %define (ignoring the return
+   * value) is apparently the way to change the global
+   * macro context.
+   */
+  free (rpmExpand (buf, NULL));
 }
 
 RpmOstreeContext *
@@ -448,6 +460,9 @@ rpmostree_context_setup (RpmOstreeContext    *self,
 
   if (!hif_context_setup (self->hifctx, cancellable, error))
     goto out;
+
+  /* This is what we use as default. */
+  set_rpm_macro_define ("_dbpath", "/usr/share/rpm");
 
   self->spec = g_object_ref (spec);
 
@@ -1281,17 +1296,6 @@ add_to_transaction (rpmts  ts,
   return ret;
 }
 
-static void
-set_rpm_macro_define (const char *key, const char *value)
-{
-  g_autofree char *buf = g_strconcat ("%define ", key, " ", value, NULL);
-  /* Calling expand with %define (ignoring the return
-   * value) is apparently the way to change the global
-   * macro context.
-   */
-  free (rpmExpand (buf, NULL));
-}
-
 gboolean
 rpmostree_context_assemble_commit (RpmOstreeContext *self,
                                            int            tmpdir_dfd,
@@ -1529,6 +1533,9 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
     }
 
   g_print ("Writing rpmdb...done\n");
+
+  if (!rpmostree_rootfs_postprocess_common (rootfs_fd, cancellable, error))
+    goto out;
 
   g_signal_handler_disconnect (hifstate, progress_sigid);
 

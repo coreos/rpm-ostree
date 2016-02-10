@@ -21,6 +21,7 @@
 #pragma once
 
 #include <ostree.h>
+#include <json-glib/json-glib.h>
 
 gboolean
 rpmostree_treefile_postprocessing (GFile         *rootfs,
@@ -29,6 +30,11 @@ rpmostree_treefile_postprocessing (GFile         *rootfs,
                                    JsonObject    *treefile,
                                    GCancellable  *cancellable,
                                    GError       **error);
+
+gboolean
+rpmostree_rootfs_postprocess_common (int           rootfs_fd,
+                                     GCancellable *cancellable,
+                                     GError       **error);
 
 gboolean
 rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
