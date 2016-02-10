@@ -89,6 +89,7 @@ typedef struct {
   GFile *workdir;
   int workdir_dfd;
   OstreeRepo *repo;
+  char *ref;
   char *previous_checksum;
 
   GBytes *serialized_treefile;
@@ -138,6 +139,36 @@ on_hifstate_percentage_changed (HifState   *hifstate,
 }
 
 static gboolean
+set_keyfile_string_array_from_json (GKeyFile    *keyfile,
+                                    const char  *keyfile_group,
+                                    const char  *keyfile_key,
+                                    JsonArray   *a,
+                                    GError     **error)
+{
+  gboolean ret = FALSE;
+  guint len = json_array_get_length (a);
+  guint i;
+  g_autoptr(GPtrArray) instlangs_v = g_ptr_array_new ();
+  
+  for (i = 0; i < len; i++)
+    {
+      const char *elt = _rpmostree_jsonutil_array_require_string_element (a, i, error);
+
+      if (!elt)
+        goto out;
+
+      g_ptr_array_add (instlangs_v, (char*)elt);
+    }
+  
+  g_key_file_set_string_list (keyfile, keyfile_group, keyfile_key,
+                              (const char*const*)instlangs_v->pdata, instlangs_v->len);
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+static gboolean
 install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                           JsonObject      *treedata,
                           GFile           *yumroot,
@@ -154,6 +185,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   g_autoptr(RpmOstreeContext) ctx = NULL;
   HifContext *hifctx;
   gs_free char *ret_new_inputhash = NULL;
+  g_autoptr(GKeyFile) treespec = g_key_file_new ();
+  JsonArray *enable_repos = NULL;
 
   ctx = rpmostree_context_new_unprivileged (self->workdir_dfd, cancellable, error);
   if (!ctx)
@@ -164,66 +197,32 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 
   hif_context_set_repo_dir (hifctx, gs_file_get_path_cached (contextdir));
 
-  { JsonNode *install_langs_n =
-      json_object_get_member (treedata, "install-langs");
+  g_key_file_set_string (treespec, "tree", "ref", self->ref);
+  g_key_file_set_string_list (treespec, "tree", "packages", (const char *const*)packages, g_strv_length (packages));
 
-    if (install_langs_n != NULL)
-      {
-        JsonArray *instlangs_a = json_node_get_array (install_langs_n);
-        guint len = json_array_get_length (instlangs_a);
-        guint i;
-        GString *opt = g_string_new ("");
-
-        for (i = 0; i < len; i++)
-          {
-            g_string_append (opt, json_array_get_string_element (instlangs_a, i));
-            if (i < len - 1)
-              g_string_append_c (opt, ':');
-          }
-
-        hif_context_set_rpm_macro (hifctx, "_install_langs", opt->str);
-        g_string_free (opt, TRUE);
-      }
-  }
-
-  if (!rpmostree_context_setup (ctx, gs_file_get_path_cached (yumroot),
-                                cancellable, error))
-    goto out;
+  /* Some awful code to translate between JSON and GKeyFile */
+  if (json_object_has_member (treedata, "install-langs"))
+    {
+      JsonArray *a = json_object_get_array_member (treedata, "install-langs");
+      if (!set_keyfile_string_array_from_json (treespec, "tree", "install-langs", a, error))
+        goto out;
+    }
 
   /* Bind the json \"repos\" member to the hif state, which looks at the
    * enabled= member of the repos file.  By default we forcibly enable
    * only repos which are specified, ignoring the enabled= flag.
    */
-  {
-    JsonArray *enable_repos = NULL;
-    g_autoptr(GPtrArray) enable_repos_strv = g_ptr_array_new ();
-    guint i;
-    guint n;
-
-    if (!json_object_has_member (treedata, "repos"))
-      {
-        g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                             "Treefile is missing required \"repos\" member");
-        goto out;
-      }
-
-    enable_repos = json_object_get_array_member (treedata, "repos");
-    n = json_array_get_length (enable_repos);
-
-    for (i = 0; i < n; i++)
-      {
-        const char *reponame = _rpmostree_jsonutil_array_require_string_element (enable_repos, i, error);
-        if (!reponame)
-          goto out;
-        g_ptr_array_add (enable_repos_strv, (char*)reponame);
-      }
-    g_ptr_array_add (enable_repos_strv, NULL);
-
-    if (!rpmostree_context_repos_enable_only (ctx,
-                                              (const char *const*)enable_repos_strv->pdata,
-                                              error))
+  if (!json_object_has_member (treedata, "repos"))
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Treefile is missing required \"repos\" member");
       goto out;
-  }
+    }
+
+  enable_repos = json_object_get_array_member (treedata, "repos");
+
+  if (!set_keyfile_string_array_from_json (treespec, "tree", "repos", enable_repos, error))
+    goto out;
 
   { gboolean docs = TRUE;
 
@@ -234,16 +233,23 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
       goto out;
 
     if (!docs)
-      hif_transaction_set_flags (hif_context_get_transaction (hifctx),
-                                 HIF_TRANSACTION_FLAG_NODOCS);
+      g_key_file_set_boolean (treespec, "tree", "documentation", FALSE);
+  }
+
+  { g_autoptr(GError) tmp_error = NULL;
+    g_autoptr(RpmOstreeTreespec) treespec_value = rpmostree_treespec_new_from_keyfile (treespec, &tmp_error);
+    g_assert_no_error (tmp_error);
+    
+    if (!rpmostree_context_setup (ctx, gs_file_get_path_cached (yumroot), treespec_value,
+                                  cancellable, error))
+      goto out;
   }
 
   /* --- Downloading metadata --- */
   if (!rpmostree_context_download_metadata (ctx, cancellable, error))
     goto out;
 
-  if (!rpmostree_context_prepare_install (ctx, (const char *const*)packages,
-                                          &hifinstall, cancellable, error))
+  if (!rpmostree_context_prepare_install (ctx, &hifinstall, cancellable, error))
     goto out;
 
   /* FIXME - just do a depsolve here before we compute download requirements */
@@ -485,7 +491,6 @@ rpmostree_compose_builtin_tree (int             argc,
   int exit_status = EXIT_FAILURE;
   GError *temp_error = NULL;
   GOptionContext *context = g_option_context_new ("TREEFILE - Run yum and commit the result to an OSTree repository");
-  const char *ref;
   RpmOstreeTreeComposeContext selfdata = { NULL, };
   RpmOstreeTreeComposeContext *self = &selfdata;
   JsonNode *treefile_rootval = NULL;
@@ -626,17 +631,17 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
     }
 
-  ref = _rpmostree_jsonutil_object_require_string_member (treefile, "ref", error);
-  if (!ref)
+  self->ref = g_strdup (_rpmostree_jsonutil_object_require_string_member (treefile, "ref", error));
+  if (!self->ref)
     goto out;
 
-  if (!ostree_repo_read_commit (repo, ref, &previous_root, &previous_checksum,
+  if (!ostree_repo_read_commit (repo, self->ref, &previous_root, &previous_checksum,
                                 cancellable, &temp_error))
     {
       if (g_error_matches (temp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
         { 
           g_clear_error (&temp_error);
-          g_print ("No previous commit for %s\n", ref);
+          g_print ("No previous commit for %s\n", self->ref);
         }
       else
         {
@@ -781,7 +786,7 @@ rpmostree_compose_builtin_tree (int             argc,
                                                                  error))
       goto out;
 
-    if (!rpmostree_commit (yumroot, repo, ref, metadata, gpgkey, selinux,
+    if (!rpmostree_commit (yumroot, repo, self->ref, metadata, gpgkey, selinux,
                            cancellable, error))
       goto out;
   }

@@ -44,6 +44,7 @@
 struct _RpmOstreeContext {
   GObject parent;
   
+  RpmOstreeTreespec *spec;
   HifContext *hifctx;
   OstreeRepo *ostreerepo;
 };
@@ -64,6 +65,15 @@ struct _RpmOstreeInstall {
 };
 
 G_DEFINE_TYPE (RpmOstreeInstall, rpmostree_install, G_TYPE_OBJECT)
+
+struct _RpmOstreeTreespec {
+  GObject parent;
+
+  GVariant *spec;
+  GVariantDict *dict;
+};
+
+G_DEFINE_TYPE (RpmOstreeTreespec, rpmostree_treespec, G_TYPE_OBJECT)
 
 static void
 rpmostree_context_finalize (GObject *object)
@@ -95,7 +105,7 @@ rpmostree_install_finalize (GObject *object)
   g_clear_pointer (&self->packages_to_download, g_ptr_array_unref);
   g_clear_pointer (&self->packages_requested, g_ptr_array_unref);
 
-  G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
+  G_OBJECT_CLASS (rpmostree_install_parent_class)->finalize (object);
 }
 
 static void
@@ -107,6 +117,29 @@ rpmostree_install_class_init (RpmOstreeInstallClass *klass)
 
 static void
 rpmostree_install_init (RpmOstreeInstall *self)
+{
+}
+
+static void
+rpmostree_treespec_finalize (GObject *object)
+{
+  RpmOstreeTreespec *self = RPMOSTREE_TREESPEC (object);
+
+  g_clear_pointer (&self->spec, g_variant_unref);
+  g_clear_pointer (&self->dict, g_variant_dict_unref);
+
+  G_OBJECT_CLASS (rpmostree_treespec_parent_class)->finalize (object);
+}
+
+static void
+rpmostree_treespec_class_init (RpmOstreeTreespecClass *klass)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  object_class->finalize = rpmostree_treespec_finalize;
+}
+
+static void
+rpmostree_treespec_init (RpmOstreeTreespec *self)
 {
 }
 
@@ -147,7 +180,6 @@ rpmostree_context_new_system (GCancellable *cancellable,
 }
 
 RpmOstreeContext *
-
 rpmostree_context_new_unprivileged (int           userroot_dfd,
                                      GCancellable *cancellable,
                                      GError      **error)
@@ -205,31 +237,129 @@ rpmostree_context_get_hif (RpmOstreeContext *self)
   return self->hifctx;
 }
 
-gboolean
-rpmostree_context_setup (RpmOstreeContext    *self,
-                          const char    *installroot,
-                          GCancellable  *cancellable,
-                          GError       **error)
+static int
+qsort_cmpstr (const void*ap, const void *bp, gpointer data)
 {
-  gboolean ret = FALSE;
-  GPtrArray *repos = NULL;
-  
-  hif_context_set_install_root (self->hifctx, installroot);
+  const char *a = *((const char *const*) ap);
+  const char *b = *((const char *const*) bp);
+  return strcmp (a, b);
+}
 
-  if (!hif_context_setup (self->hifctx, cancellable, error))
-    goto out;
+static gboolean
+add_canonicalized_string_array (GVariantBuilder *builder,
+                                const char *key,
+                                const char *notfound_key,
+                                GKeyFile *keyfile,
+                                GError **error)
+{
+  g_auto(GStrv) input = NULL;
+  g_autoptr(GHashTable) set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  g_autofree char **sorted = NULL;
+  guint count;
+  char **iter;
+  g_autoptr(GError) temp_error = NULL;
 
-  repos = hif_context_get_repos (self->hifctx);
-  if (repos->len == 0)
+  input = g_key_file_get_string_list (keyfile, "tree", key, NULL, &temp_error);
+  if (!(input && *input))
     {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "No enabled repositories");
-      goto out;
+      if (notfound_key)
+        {
+          g_variant_builder_add (builder, "{sv}", notfound_key, g_variant_new_boolean (TRUE));
+          return TRUE;
+        }
+      else
+        {
+          g_propagate_error (error, g_steal_pointer (&temp_error));
+          return FALSE;
+        }
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  for (iter = input; iter && *iter; iter++)
+    {
+      g_autofree char *stripped = g_strdup (*iter);
+      g_strchug (g_strchomp (stripped));
+      g_hash_table_add (set, g_steal_pointer (&stripped));
+    }
+  
+  sorted = (char**)g_hash_table_get_keys_as_array (set, &count);
+  g_qsort_with_data (sorted, count, sizeof (void*), qsort_cmpstr, NULL);
+
+  g_variant_builder_add (builder, "{sv}", key,
+                         g_variant_new_strv ((const char*const*)sorted, g_strv_length (sorted)));
+  return TRUE;
+}
+
+
+RpmOstreeTreespec *
+rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
+                                     GError    **error)
+{
+  g_autoptr(RpmOstreeTreespec) ret = g_object_new (RPMOSTREE_TYPE_TREESPEC, NULL);
+  g_auto(GVariantBuilder) builder;
+
+  g_variant_builder_init (&builder, (GVariantType*)"a{sv}");
+
+  { g_autofree char *ref = g_key_file_get_string (keyfile, "tree", "ref", error);
+    if (!ref)
+      return NULL;
+    g_variant_builder_add (&builder, "{sv}", "ref", g_variant_new_string (ref));
+  }
+
+  if (!add_canonicalized_string_array (&builder, "packages", NULL, keyfile, error))
+    return FALSE;
+
+  if (!add_canonicalized_string_array (&builder, "repos", NULL, keyfile, error))
+    return FALSE;
+
+  if (!add_canonicalized_string_array (&builder, "instlangs", "instlangs-all", keyfile, error))
+    return FALSE;
+
+  { gboolean documentation = TRUE;
+    g_autofree char *value = g_key_file_get_value (keyfile, "tree", "documentation", NULL);
+
+    if (value)
+      documentation = g_key_file_get_boolean (keyfile, "tree", "documentation", NULL);
+
+    g_variant_builder_add (&builder, "{sv}", "documentation", g_variant_new_boolean (documentation));
+  }
+
+  ret->spec = g_variant_builder_end (&builder);
+  ret->dict = g_variant_dict_new (ret->spec);
+
+  return g_steal_pointer (&ret);
+}
+
+RpmOstreeTreespec *
+rpmostree_treespec_new_from_path (const char *path, GError  **error)
+{
+  g_autoptr(GKeyFile) specdata = g_key_file_new();
+  if (!g_key_file_load_from_file (specdata, path, 0, error))
+    return NULL;
+  return rpmostree_treespec_new_from_keyfile (specdata, error);
+}
+
+RpmOstreeTreespec *
+rpmostree_treespec_new (GVariant   *variant)
+{
+  g_autoptr(RpmOstreeTreespec) ret = g_object_new (RPMOSTREE_TYPE_TREESPEC, NULL);
+  ret->spec = g_variant_ref (variant);
+  ret->dict = g_variant_dict_new (ret->spec);
+  return g_steal_pointer (&ret);
+}
+
+const char *
+rpmostree_treespec_get_ref (RpmOstreeTreespec    *spec)
+{
+  const char *r;
+  g_variant_dict_lookup (spec->dict, "ref", "&s", &r);
+  g_assert (r);
+  return r;
+}
+
+GVariant *
+rpmostree_treespec_to_variant (RpmOstreeTreespec *spec)
+{
+  return g_variant_ref (spec->spec);
 }
 
 static gboolean
@@ -268,10 +398,10 @@ enable_one_repo (RpmOstreeContext    *context,
   return ret;
 }
 
-gboolean
-rpmostree_context_repos_enable_only (RpmOstreeContext    *context,
-                                      const char    *const *enabled_repos,
-                                      GError       **error)
+static gboolean
+context_repos_enable_only (RpmOstreeContext    *context,
+                           const char    *const *enabled_repos,
+                           GError       **error)
 {
   gboolean ret = FALSE;
   guint i;
@@ -296,6 +426,71 @@ rpmostree_context_repos_enable_only (RpmOstreeContext    *context,
  out:
   return ret;
 }
+gboolean
+rpmostree_context_setup (RpmOstreeContext    *self,
+                         const char    *installroot,
+                         RpmOstreeTreespec *spec,
+                         GCancellable  *cancellable,
+                         GError       **error)
+{
+  gboolean ret = FALSE;
+  GPtrArray *repos = NULL;
+  char **enabled_repos = NULL;
+  char **instlangs = NULL;
+  
+  hif_context_set_install_root (self->hifctx, installroot);
+
+  if (!hif_context_setup (self->hifctx, cancellable, error))
+    goto out;
+
+  self->spec = g_object_ref (spec);
+
+  g_assert (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos));
+  if (!context_repos_enable_only (self, (const char *const*)enabled_repos, error))
+    goto out;
+
+  repos = hif_context_get_repos (self->hifctx);
+  if (repos->len == 0)
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "No enabled repositories");
+      goto out;
+    }
+
+  if (g_variant_dict_lookup (self->spec->dict, "instlangs", "^a&s", &instlangs))
+    {
+      GString *opt = g_string_new ("");
+      char **iter;
+      gboolean first = TRUE;
+      
+      for (iter = instlangs; iter && *iter; iter++)
+        {
+          const char *v = *iter;
+          if (!first)
+            g_string_append_c (opt, ':');
+          else
+            first = FALSE;
+          g_string_append (opt, v);
+        }
+
+      hif_context_set_rpm_macro (self->hifctx, "_install_langs", opt->str);
+      g_string_free (opt, TRUE);
+    }
+
+  { gboolean docs;
+
+    g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs);
+    
+    if (!docs)
+        hif_transaction_set_flags (hif_context_get_transaction (self->hifctx),
+                                   HIF_TRANSACTION_FLAG_NODOCS);
+  }
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
 
 static void
 on_hifstate_percentage_changed (HifState   *hifstate,
@@ -484,17 +679,20 @@ get_packages_to_download (HifContext  *hifctx,
 
 gboolean
 rpmostree_context_prepare_install (RpmOstreeContext    *self,
-                                    const char *const    *pkgnames,
-                                    RpmOstreeInstall    **out_install,
-                                    GCancellable         *cancellable,
-                                    GError              **error)
+                                   RpmOstreeInstall    **out_install,
+                                   GCancellable         *cancellable,
+                                   GError              **error)
 {
   gboolean ret = FALSE;
   HifContext *hifctx = self->hifctx;
+  char **pkgnames = NULL;
   g_autoptr(RpmOstreeInstall) ret_install = g_object_new (RPMOSTREE_TYPE_INSTALL, NULL);
 
+  g_assert (g_variant_dict_lookup (self->spec->dict, "packages", "^a&s", &pkgnames));
+
   ret_install->packages_requested = g_ptr_array_new_with_free_func (g_free);
-  { const char *const*strviter = pkgnames;
+
+  { const char *const*strviter = (const char *const*)pkgnames;
     for (; strviter && *strviter; strviter++)
       {
         const char *pkgname = *strviter;
@@ -620,7 +818,7 @@ ptrarray_sort_compare_strings (gconstpointer ap,
  */
 void
 rpmostree_hif_add_checksum_goal (GChecksum *checksum,
-                                  HyGoal     goal)
+                                 HyGoal     goal)
 {
   g_autoptr(GPtrArray) pkglist = NULL;
   guint i;
@@ -644,11 +842,14 @@ rpmostree_hif_add_checksum_goal (GChecksum *checksum,
 }
 
 char *
-rpmostree_hif_checksum_goal (GChecksumType ctype, HyGoal goal)
+rpmostree_context_get_state_sha512 (RpmOstreeContext *self)
 {
-  g_autoptr(GChecksum) checksum = g_checksum_new (ctype);
-  rpmostree_hif_add_checksum_goal (checksum, goal);
-  return g_strdup (g_checksum_get_string (checksum));
+  g_autoptr(GChecksum) state_checksum = g_checksum_new (G_CHECKSUM_SHA512);
+  g_checksum_update (state_checksum, g_variant_get_data (self->spec->spec),
+                     g_variant_get_size (self->spec->spec));
+
+  rpmostree_hif_add_checksum_goal (state_checksum, hif_context_get_goal (self->hifctx));
+  return g_strdup (g_checksum_get_string (state_checksum));
 }
 
 /**
@@ -1333,18 +1534,19 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
   { glnx_unref_object OstreeMutableTree *mtree = NULL;
     g_autoptr(GFile) root = NULL;
     g_auto(GVariantBuilder) metadata_builder;
-    g_autofree char *goal_checksum = NULL;
+    g_autofree char *state_checksum = NULL;
     OstreeRepoCommitModifier *commit_modifier = ostree_repo_commit_modifier_new (OSTREE_REPO_COMMIT_MODIFIER_FLAGS_NONE, NULL, NULL, NULL);
+    g_autoptr(GVariant) spec_v = g_variant_ref_sink (rpmostree_treespec_to_variant (self->spec));
 
     g_variant_builder_init (&metadata_builder, (GVariantType*)"a{sv}");
 
-    g_variant_builder_add (&metadata_builder, "{sv}",
-                           "rpmostree.input-packages", g_variant_new_strv ((const char *const*)install->packages_requested->pdata,
-                                                                           install->packages_requested->len));
+    g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.spec", spec_v);
 
-    goal_checksum = rpmostree_hif_checksum_goal (G_CHECKSUM_SHA512, hif_context_get_goal (hifctx));
+    state_checksum = rpmostree_context_get_state_sha512 (self);
+
     g_variant_builder_add (&metadata_builder, "{sv}",
-                           "rpmostree.nevras-sha512", g_variant_new_string (goal_checksum));
+                           "rpmostree.state-sha512",
+                           g_variant_new_string (state_checksum));
 
     ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
 

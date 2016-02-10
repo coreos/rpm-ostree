@@ -31,6 +31,9 @@
 #define RPMOSTREE_TYPE_CONTEXT (rpmostree_context_get_type ())
 G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, GObject)
 
+#define RPMOSTREE_TYPE_TREESPEC (rpmostree_treespec_get_type ())
+G_DECLARE_FINAL_TYPE (RpmOstreeTreespec, rpmostree_treespec, RPMOSTREE, TREESPEC, GObject)
+
 #define RPMOSTREE_TYPE_INSTALL (rpmostree_install_get_type ())
 G_DECLARE_FINAL_TYPE (RpmOstreeInstall, rpmostree_install, RPMOSTREE, INSTALL, GObject)
 
@@ -43,18 +46,21 @@ RpmOstreeContext *rpmostree_context_new_unprivileged (int basedir_dfd,
 
 HifContext * rpmostree_context_get_hif (RpmOstreeContext *self);
 
-gboolean
-rpmostree_context_repos_enable_only (RpmOstreeContext    *context,
-                                     const char    *const *enabled_repos,
-                                     GError       **error);
+RpmOstreeTreespec *rpmostree_treespec_new_from_keyfile (GKeyFile *keyfile, GError  **error);
+RpmOstreeTreespec *rpmostree_treespec_new_from_path (const char *path, GError  **error);
+RpmOstreeTreespec *rpmostree_treespec_new (GVariant   *variant);
+
+GVariant *rpmostree_treespec_to_variant (RpmOstreeTreespec *spec);
+const char *rpmostree_treespec_get_ref (RpmOstreeTreespec *spec);
 
 gboolean rpmostree_context_setup (RpmOstreeContext     *self,
                                   const char    *install_root,
+                                  RpmOstreeTreespec *treespec,
                                   GCancellable  *cancellable,
-                                   GError       **error);
+                                  GError       **error);
 
 void rpmostree_hif_add_checksum_goal (GChecksum *checksum, HyGoal goal);
-char * rpmostree_hif_checksum_goal (GChecksumType type, HyGoal goal);
+char *rpmostree_context_get_state_sha512 (RpmOstreeContext *self);
 
 char *rpmostree_get_cache_branch_header (Header hdr);
 char *rpmostree_get_cache_branch_pkg (HifPackage *pkg);
@@ -65,7 +71,6 @@ gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
 
 /* This API allocates an install context, use with one of the later ones */
 gboolean rpmostree_context_prepare_install (RpmOstreeContext     *self,
-                                            const char *const *packages,
                                             RpmOstreeInstall **out_install,
                                             GCancellable   *cancellable,
                                             GError        **error);
