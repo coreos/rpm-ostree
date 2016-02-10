@@ -48,6 +48,7 @@ struct _RpmOstreeContext {
   RpmOstreeTreespec *spec;
   HifContext *hifctx;
   OstreeRepo *ostreerepo;
+  char *dummy_instroot_path;
 };
 
 G_DEFINE_TYPE (RpmOstreeContext, rpmostree_context, G_TYPE_OBJECT)
@@ -82,6 +83,11 @@ rpmostree_context_finalize (GObject *object)
   RpmOstreeContext *rctx = RPMOSTREE_CONTEXT (object);
 
   g_clear_object (&rctx->hifctx);
+  if (rctx->dummy_instroot_path)
+    {
+      (void) glnx_shutil_rm_rf_at (AT_FDCWD, rctx->dummy_instroot_path, NULL, NULL);
+      g_free (rctx->dummy_instroot_path);
+    }
 
   G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
 }
@@ -450,7 +456,17 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   char **enabled_repos = NULL;
   char **instlangs = NULL;
   
-  hif_context_set_install_root (self->hifctx, installroot);
+  if (installroot)
+    hif_context_set_install_root (self->hifctx, installroot);
+  else
+    {
+      glnx_fd_close int dfd = -1; /* Auto close, we just use the path */
+      if (!rpmostree_mkdtemp ("/tmp/rpmostree-dummy-instroot-XXXXXX",
+                              &self->dummy_instroot_path,
+                              &dfd, error))
+        goto out;
+      hif_context_set_install_root (self->hifctx, self->dummy_instroot_path);
+    }
 
   if (!hif_context_setup (self->hifctx, cancellable, error))
     goto out;
@@ -1340,10 +1356,10 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
   set_rpm_macro_define ("_dbpath", "/usr/share/rpm");
 
   /* Don't verify checksums here (we should have done this on ostree
-   * import).  Also, when we do run the transaction, only update the
-   * rpmdb.  Otherwise we unpacked with cpio.
+   * import).  Also, avoid updating the database or anything by
+   * flagging it as a test.  We'll do the database next.
    */
-  rpmtsSetVSFlags (ordering_ts, _RPMVSF_NOSIGNATURES | _RPMVSF_NODIGESTS | RPMTRANS_FLAG_JUSTDB);
+  rpmtsSetVSFlags (ordering_ts, _RPMVSF_NOSIGNATURES | _RPMVSF_NODIGESTS | RPMTRANS_FLAG_TEST);
 
   /* Tell librpm about each one so it can tsort them.  What we really
    * want is to do this from the rpm-md metadata so that we can fully

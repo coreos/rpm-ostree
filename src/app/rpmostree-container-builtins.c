@@ -110,21 +110,12 @@ roc_context_prepare_for_root (ROContainerContext *rocctx,
                               GError            **error)
 {
   gboolean ret = FALSE;
-  /* We don't point the install root at the existing directory because
-   * libhif tries to inspect it, which is wrong.  So basically make up
-   * a fake directory each time.
-   */
-  g_autofree char *abs_instroot = glnx_fdrel_abspath (rocctx->roots_dfd, target);
-  const char *abs_instroot_tmp = glnx_strjoina (abs_instroot, ".ignore");
 
   rocctx->ctx = rpmostree_context_new_unprivileged (rocctx->userroot_dfd, NULL, error);
   if (!rocctx->ctx)
     goto out;
 
-  if (!rpmostree_context_setup (rocctx->ctx, abs_instroot_tmp, treespec, cancellable, error))
-    goto out;
-
-  if (!glnx_shutil_rm_rf_at (AT_FDCWD, abs_instroot_tmp, cancellable, error))
+  if (!rpmostree_context_setup (rocctx->ctx, NULL, treespec, cancellable, error))
     goto out;
 
   ret = TRUE;
