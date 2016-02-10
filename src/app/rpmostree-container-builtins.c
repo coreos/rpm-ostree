@@ -105,6 +105,8 @@ roc_context_init (ROContainerContext *rocctx,
 static gboolean
 roc_context_prepare_for_root (ROContainerContext *rocctx,
                               const char         *target,
+                              RpmOstreeTreespec  *treespec,
+                              GCancellable       *cancellable,
                               GError            **error)
 {
   gboolean ret = FALSE;
@@ -119,10 +121,10 @@ roc_context_prepare_for_root (ROContainerContext *rocctx,
   if (!rocctx->ctx)
     goto out;
 
-  if (!rpmostree_context_setup (rocctx->ctx, abs_instroot_tmp, NULL, error))
+  if (!rpmostree_context_setup (rocctx->ctx, abs_instroot_tmp, treespec, cancellable, error))
     goto out;
 
-  if (!glnx_shutil_rm_rf_at (AT_FDCWD, abs_instroot_tmp, NULL, error))
+  if (!glnx_shutil_rm_rf_at (AT_FDCWD, abs_instroot_tmp, cancellable, error))
     goto out;
 
   ret = TRUE;
@@ -243,11 +245,12 @@ rpmostree_container_builtin_assemble (int             argc,
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
   g_autoptr(RpmOstreeInstall) install = {0,};
-  const char *name;
+  const char *specpath;
   struct stat stbuf;
-  g_autofree char**pkgnames = NULL;
+  const char *name;
   g_autofree char *commit = NULL;
   const char *target_rootdir;
+  g_autoptr(RpmOstreeTreespec) treespec = NULL;
   
   if (!rpmostree_option_context_parse (context,
                                        assemble_option_entries,
@@ -260,23 +263,16 @@ rpmostree_container_builtin_assemble (int             argc,
 
   if (argc < 1)
     {
-      rpmostree_usage_error (context, "NAME must be specified", error);
+      rpmostree_usage_error (context, "SPEC must be specified", error);
       goto out;
     }
 
-  name = argv[1];
-  { g_autoptr(GPtrArray) pkgnamesv = g_ptr_array_new_with_free_func (NULL);
-    if (argc == 2)
-      g_ptr_array_add (pkgnamesv, argv[1]);
-    else
-      {
-        guint i;
-        for (i = 2; i < argc; i++)
-          g_ptr_array_add (pkgnamesv, argv[i]);
-      }
-    g_ptr_array_add (pkgnamesv, NULL);
-    pkgnames = (char**)g_ptr_array_free (pkgnamesv, FALSE);
-  }
+  specpath = argv[1];
+  treespec = rpmostree_treespec_new_from_path (specpath, error);
+  if (!treespec)
+    goto out;
+
+  name = rpmostree_treespec_get_ref (treespec);
 
   if (!roc_context_init (rocctx, error))
     goto out;
@@ -298,7 +294,7 @@ rpmostree_container_builtin_assemble (int             argc,
       goto out;
     }
 
-  if (!roc_context_prepare_for_root (rocctx, target_rootdir, error))
+  if (!roc_context_prepare_for_root (rocctx, target_rootdir, treespec, cancellable, error))
     goto out;
 
   /* --- Downloading metadata --- */
@@ -306,8 +302,7 @@ rpmostree_container_builtin_assemble (int             argc,
     goto out;
 
   /* --- Resolving dependencies --- */
-  if (!rpmostree_context_prepare_install (rocctx->ctx, (const char*const*)pkgnames,
-                                           &install, cancellable, error))
+  if (!rpmostree_context_prepare_install (rocctx->ctx, &install, cancellable, error))
     goto out;
 
   /* --- Download and import as necessary --- */
@@ -419,16 +414,15 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   ROContainerContext *rocctx = &rocctx_data;
   g_autoptr(RpmOstreeInstall) install = NULL;
   const char *name;
-  const char *const*pkgnames;
   g_autofree char *commit_checksum = NULL;
   g_autofree char *new_commit_checksum = NULL;
   g_autoptr(GVariant) commit = NULL;
   g_autoptr(GVariant) metadata = NULL;
   g_autoptr(GVariant) input_packages_v = NULL;
-  g_autoptr(GVariant) input_goal_sha512_v = NULL;
+  g_autoptr(RpmOstreeTreespec) treespec = NULL;
   guint current_version;
   guint new_version;
-  g_autofree char *previous_goal_sha512 = NULL;
+  g_autofree char *previous_state_sha512 = NULL;
   const char *target_current_root;
   const char *target_new_root;
   
@@ -462,24 +456,9 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   if (!parse_app_version (target_current_root, &current_version, error))
     goto out;
 
-  new_version = current_version == 0 ? 1 : 0;
-  /* Yeah, I'm being mildly clever here indexing into the constant
-   * array which is a pointless micro-optimization avoiding
-   * g_strdup_printf().
-   */
-  if (new_version == 0)
-    target_new_root = glnx_strjoina (name, ".0");
-  else
-    target_new_root = glnx_strjoina (name, ".1");
-
-  if (!roc_context_prepare_for_root (rocctx, name, error))
-    goto out;
-
-  /* --- Downloading metadata --- */
-  if (!rpmostree_context_download_metadata (rocctx->ctx, cancellable, error))
-    goto out;
-
   { g_autoptr(GVariantDict) metadata_dict = NULL;
+    g_autoptr(GVariant) spec_v = NULL;
+    g_autoptr(GVariant) previous_sha512_v = NULL;
 
     if (!ostree_repo_resolve_rev (rocctx->repo, name, FALSE, &commit_checksum, error))
       goto out;
@@ -491,29 +470,43 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
     metadata = g_variant_get_child_value (commit, 0);
     metadata_dict = g_variant_dict_new (metadata);
 
-    input_packages_v = _rpmostree_vardict_lookup_value_required (metadata_dict, "rpmostree.input-packages",
-                                                                 (GVariantType*)"as", error);
-    if (!input_packages_v)
+    spec_v = _rpmostree_vardict_lookup_value_required (metadata_dict, "rpmostree.spec",
+                                                                 (GVariantType*)"a{sv}", error);
+    if (!spec_v)
       goto out;
 
-    pkgnames = g_variant_get_strv (input_packages_v, NULL);
+    treespec = rpmostree_treespec_new (spec_v);
 
-    input_goal_sha512_v = _rpmostree_vardict_lookup_value_required (metadata_dict, "rpmostree.nevras-sha512",
-                                                                    (GVariantType*)"s", error);
-    if (!input_goal_sha512_v)
+    previous_sha512_v = _rpmostree_vardict_lookup_value_required (metadata_dict,
+                                                                  "rpmostree.state-sha512",
+                                                                  (GVariantType*)"s", error);
+    if (!previous_sha512_v)
       goto out;
 
-    previous_goal_sha512 = g_variant_dup_string (input_goal_sha512_v, NULL);
+    previous_state_sha512 = g_variant_dup_string (previous_sha512_v, NULL);
   }
-      
+
+  new_version = current_version == 0 ? 1 : 0;
+  if (new_version == 0)
+    target_new_root = glnx_strjoina (name, ".0");
+  else
+    target_new_root = glnx_strjoina (name, ".1");
+
+  if (!roc_context_prepare_for_root (rocctx, name, treespec, cancellable, error))
+    goto out;
+
+  /* --- Downloading metadata --- */
+  if (!rpmostree_context_download_metadata (rocctx->ctx, cancellable, error))
+    goto out;
+
   /* --- Resolving dependencies --- */
-  if (!rpmostree_context_prepare_install (rocctx->ctx, pkgnames, &install,
+  if (!rpmostree_context_prepare_install (rocctx->ctx, &install,
                                           cancellable, error))
     goto out;
 
-  { g_autofree char *new_goal_sha512 = rpmostree_hif_checksum_goal (G_CHECKSUM_SHA512, hif_context_get_goal (rpmostree_context_get_hif (rocctx->ctx)));
+  { g_autofree char *new_state_sha512 = rpmostree_context_get_state_sha512 (rocctx->ctx);
 
-    if (strcmp (new_goal_sha512, previous_goal_sha512) == 0)
+    if (strcmp (new_state_sha512, previous_state_sha512) == 0)
       {
         g_print ("No changes in inputs to %s (%s)\n", name, commit_checksum);
         exit_status = EXIT_SUCCESS;
