@@ -1,5 +1,7 @@
 include $(top_srcdir)/buildutil/glib-tap.mk
 
+AM_TESTS_ENVIRONMENT = UNINSTALLEDTESTS=1 builddir=$(abs_builddir)
+
 CLEANFILES += \
 	tests/setup-session.sh \
 	tests/compose/yum/empty tests/compose/yum/repodata/repomd.xml \
@@ -56,6 +58,8 @@ installed_test_scripts = \
 test_programs = \
 	tests/jsonutil			\
 	$(NULL)
+
+test_scripts = tests/test-ucontainer.sh
 
 installed_test_PROGRAMS += dbus-run-session
 dbus_run_session_SOURCES = tests/dbus-run-session.c

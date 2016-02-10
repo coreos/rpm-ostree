@@ -267,9 +267,15 @@ add_canonicalized_string_array (GVariantBuilder *builder,
           g_variant_builder_add (builder, "{sv}", notfound_key, g_variant_new_boolean (TRUE));
           return TRUE;
         }
-      else
+      else if (temp_error)
         {
           g_propagate_error (error, g_steal_pointer (&temp_error));
+          return FALSE;
+        }
+      else
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Key %s is empty", key);
           return FALSE;
         }
     }
