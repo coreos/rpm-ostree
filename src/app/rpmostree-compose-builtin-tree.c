@@ -600,6 +600,15 @@ rpmostree_compose_builtin_tree (int             argc,
           goto out;
         }
     }
+  else
+    {
+      self->cachedir_dfd = fcntl (self->workdir_dfd, F_DUPFD_CLOEXEC, 3);
+      if (self->cachedir_dfd < 0)
+        {
+          glnx_set_error_from_errno (error);
+          goto out;
+        }
+    }
 
   if (opt_metadata_strings)
     {
