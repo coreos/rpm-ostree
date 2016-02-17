@@ -23,7 +23,7 @@ _cleanup_tmpdir () {
 	rm ${test_tmpdir} -rf
     fi
 }
-if test -z "${INSTALLEDTESTS:-}"; then
+if test -n "${UNINSTALLEDTESTS:-}"; then
    test_tmpdir=$(mktemp -d test.XXXXXX)
    touch ${test_tmpdir}/.test
    trap _cleanup_tmpdir EXIT
