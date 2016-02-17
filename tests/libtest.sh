@@ -28,6 +28,7 @@ if test -z "${INSTALLEDTESTS:-}"; then
    touch ${test_tmpdir}/.test
    trap _cleanup_tmpdir EXIT
    cd ${test_tmpdir}
+   export PATH=${builddir}:${PATH}
 fi   
 test_tmpdir=$(pwd)
 

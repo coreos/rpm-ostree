@@ -1,6 +1,6 @@
 include $(top_srcdir)/buildutil/glib-tap.mk
 
-AM_TESTS_ENVIRONMENT = INSTALLEDTESTS=""
+AM_TESTS_ENVIRONMENT = INSTALLEDTESTS="" builddir=$(abs_builddir)
 
 CLEANFILES += \
 	tests/setup-session.sh \
