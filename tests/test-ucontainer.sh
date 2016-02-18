@@ -48,7 +48,7 @@ cat >nobranch.conf <<EOF
 packages=empty
 repos=test-repo
 EOF
-if rpm-ostree container assemble nobranch.conf; then
+if rpm-ostree container assemble nobranch.conf 2>err.txt; then
     assert_not_reached "nobranch.conf"
 fi
 
@@ -58,16 +58,16 @@ ref=empty
 packages=
 repos=test-repo
 EOF
-if rpm-ostree container assemble nopackages.conf; then
+if rpm-ostree container assemble nopackages.conf 2>err.txt; then
     assert_not_reached "nopackages.conf"
 fi
 
-cat >nopackages.conf <<EOF
+cat >norepos.conf <<EOF
 [tree]
 ref=empty
 packages=empty
 EOF
-if rpm-ostree container assemble norepos.conf; then
+if rpm-ostree container assemble norepos.conf 2>err.txt; then
     assert_not_reached "norepos.conf"
 fi
 
@@ -77,7 +77,7 @@ ref=notfound
 packages=notfound
 repos=test-repo
 EOF
-if rpm-ostree container assemble notfound.conf; then
+if rpm-ostree container assemble notfound.conf 2>err.txt; then
     assert_not_reached "notfound.conf"
 fi
 
