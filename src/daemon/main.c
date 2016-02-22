@@ -55,8 +55,9 @@ start_daemon (GDBusConnection *connection)
 
   if (local_error != NULL)
     {
-      g_error ("%s", local_error->message);
-      g_assert_not_reached ();
+      g_critical ("Couldn't start daemon: %s\n", local_error->message);
+      g_error_free (local_error);
+      g_main_loop_quit (loop);
     }
 }
 
