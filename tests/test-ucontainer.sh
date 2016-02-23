@@ -25,11 +25,10 @@ echo "1..2"
 
 rpm-ostree container init
 if test -d ${SRCDIR}/compose; then
-    composedatadir=${SRCDIR}/compose
+    cp ${SRCDIR}/compose/test-repo-uninst.repo rpmmd.repos.d
 else
-    composedatadir=${SRCDIR}
+    cp ${SRCDIR}/test-repo.repo rpmmd.repos.d
 fi
-cp ${composedatadir}/test-repo.repo rpmmd.repos.d
 
 cat >empty.conf <<EOF
 [tree]
