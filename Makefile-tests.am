@@ -23,11 +23,14 @@ tests/compose/yum/repodata/repomd.xml: tests/compose/yum/empty tests/compose/yum
 tests/compose/test-repo.repo: tests/compose/test-repo.repo.in tests/compose/yum/repodata/repomd.xml
 	cat $< | sed -e "s|%WHERE%|$(installed_testdir)|" > $@
 
+tests/compose/test-repo-uninst.repo: tests/compose/test-repo.repo.in tests/compose/yum/repodata/repomd.xml Makefile
+	cat $< | sed -e "s|%WHERE%|$$(cd $(top_srcdir) && pwd)|" > $@
+
 tests_jsonutil_CPPFLAGS = -I $(srcdir)/src/libpriv
 tests_jsonutil_CFLAGS = $(PKGDEP_RPMOSTREE_CFLAGS)
 tests_jsonutil_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la
 
-tests/test-compose.sh: tests/compose/test-repo.repo
+tests/test-compose.sh: tests/compose/test-repo.repo tests/compose/test-repo-uninst.repo
 
 installed_test_data = tests/libtest.sh \
 	tests/compose/test-repo.repo \
