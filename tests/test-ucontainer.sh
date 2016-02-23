@@ -29,7 +29,13 @@ if test -d ${SRCDIR}/compose; then
 else
     composedatadir=${SRCDIR}
 fi
-cp ${composedatadir}/test-repo.repo rpmmd.repos.d
+
+REPO=test-repo
+if test -n "${UNINSTALLEDTESTS:-}"; then
+   REPO=test-repo-local
+fi
+
+cp ${composedatadir}/$REPO.repo rpmmd.repos.d
 
 cat >empty.conf <<EOF
 [tree]
