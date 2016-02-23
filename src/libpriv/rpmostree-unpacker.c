@@ -894,7 +894,7 @@ get_lead_sig_header_as_bytes (RpmOstreeUnpacker *self,
   if (bytes_remaining > 0)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Failed to read %" G_GUINT64_FORMAT " bytes of metadata",
+                   "Failed to read %" G_GSIZE_FORMAT " bytes of metadata",
                    bytes_remaining);
       goto out;
     }
