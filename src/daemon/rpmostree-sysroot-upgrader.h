@@ -24,7 +24,7 @@
 
 G_BEGIN_DECLS
 
-#define RPMOSTREE_TYPE_SYSROOT_UPGRADER ostree_sysroot_upgrader_get_type()
+#define RPMOSTREE_TYPE_SYSROOT_UPGRADER rpmostree_sysroot_upgrader_get_type()
 #define RPMOSTREE_SYSROOT_UPGRADER(obj) \
   (G_TYPE_CHECK_INSTANCE_CAST ((obj), RPMOSTREE_TYPE_SYSROOT_UPGRADER, RpmOstreeSysrootUpgrader))
 #define RPMOSTREE_IS_SYSROOT_UPGRADER(obj) \
@@ -33,9 +33,9 @@ G_BEGIN_DECLS
 typedef struct RpmOstreeSysrootUpgrader RpmOstreeSysrootUpgrader;
 
 /**
- * RpmOstreeSysrootUpgraderPullFlags:
- * @RPMOSTREE_SYSROOT_UPGRADER_PULL_FLAGS_NONE: No options
- * @RPMOSTREE_SYSROOT_UPGRADER_PULL_FLAGS_IGNORE_UNCONFIGURED: Do not error if the origin has an unconfigured-state key
+ * RpmOstreeSysrootUpgraderFlags:
+ * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_NONE: No options
+ * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED: Do not error if the origin has an unconfigured-state key
  *
  * Flags controlling operation of an #RpmOstreeSysrootUpgrader.
  */
@@ -73,11 +73,6 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
                                  gboolean               *out_changed,
                                  GCancellable           *cancellable,
                                  GError                **error);
-
-gboolean
-rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader  *self,
-                                   GCancellable           *cancellable,
-                                   GError                **error);
 
 gboolean
 rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader  *self,

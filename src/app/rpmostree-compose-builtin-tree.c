@@ -897,7 +897,7 @@ rpmostree_compose_builtin_tree (int             argc,
                              cancellable, error))
         goto out;
 
-      g_print ("%s => %s\n", ref, new_revision);
+      g_print ("%s => %s\n", self->ref, new_revision);
 
       if (!g_getenv ("RPM_OSTREE_PRESERVE_ROOTFS"))
         (void) glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (yumroot), cancellable, NULL);
