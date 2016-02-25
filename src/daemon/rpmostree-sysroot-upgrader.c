@@ -66,7 +66,7 @@ enum {
 
 static void rpmostree_sysroot_upgrader_initable_iface_init (GInitableIface *iface);
 
-G_DEFINE_TYPE_WITH_CODE (RpmOstreeSysrootUpgrader, ostree_sysroot_upgrader, G_TYPE_OBJECT,
+G_DEFINE_TYPE_WITH_CODE (RpmOstreeSysrootUpgrader, rpmostree_sysroot_upgrader, G_TYPE_OBJECT,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE, rpmostree_sysroot_upgrader_initable_iface_init))
 
 static gboolean
@@ -166,7 +166,7 @@ rpmostree_sysroot_upgrader_initable_iface_init (GInitableIface *iface)
 }
 
 static void
-ostree_sysroot_upgrader_finalize (GObject *object)
+rpmostree_sysroot_upgrader_finalize (GObject *object)
 {
   RpmOstreeSysrootUpgrader *self = RPMOSTREE_SYSROOT_UPGRADER (object);
 
@@ -180,14 +180,14 @@ ostree_sysroot_upgrader_finalize (GObject *object)
   g_strfreev (self->requested_packages);
   g_free (self->override_csum);
 
-  G_OBJECT_CLASS (ostree_sysroot_upgrader_parent_class)->finalize (object);
+  G_OBJECT_CLASS (rpmostree_sysroot_upgrader_parent_class)->finalize (object);
 }
 
 static void
-ostree_sysroot_upgrader_set_property (GObject         *object,
-                                      guint            prop_id,
-                                      const GValue    *value,
-                                      GParamSpec      *pspec)
+rpmostree_sysroot_upgrader_set_property (GObject         *object,
+                                         guint            prop_id,
+                                         const GValue    *value,
+                                         GParamSpec      *pspec)
 {
   RpmOstreeSysrootUpgrader *self = RPMOSTREE_SYSROOT_UPGRADER (object);
 
@@ -209,10 +209,10 @@ ostree_sysroot_upgrader_set_property (GObject         *object,
 }
 
 static void
-ostree_sysroot_upgrader_get_property (GObject         *object,
-                                      guint            prop_id,
-                                      GValue          *value,
-                                      GParamSpec      *pspec)
+rpmostree_sysroot_upgrader_get_property (GObject         *object,
+                                         guint            prop_id,
+                                         GValue          *value,
+                                         GParamSpec      *pspec)
 {
   RpmOstreeSysrootUpgrader *self = RPMOSTREE_SYSROOT_UPGRADER (object);
 
@@ -234,24 +234,24 @@ ostree_sysroot_upgrader_get_property (GObject         *object,
 }
 
 static void
-ostree_sysroot_upgrader_constructed (GObject *object)
+rpmostree_sysroot_upgrader_constructed (GObject *object)
 {
   RpmOstreeSysrootUpgrader *self = RPMOSTREE_SYSROOT_UPGRADER (object);
 
   g_assert (self->sysroot != NULL);
 
-  G_OBJECT_CLASS (ostree_sysroot_upgrader_parent_class)->constructed (object);
+  G_OBJECT_CLASS (rpmostree_sysroot_upgrader_parent_class)->constructed (object);
 }
 
 static void
-ostree_sysroot_upgrader_class_init (RpmOstreeSysrootUpgraderClass *klass)
+rpmostree_sysroot_upgrader_class_init (RpmOstreeSysrootUpgraderClass *klass)
 {
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
-  object_class->constructed = ostree_sysroot_upgrader_constructed;
-  object_class->get_property = ostree_sysroot_upgrader_get_property;
-  object_class->set_property = ostree_sysroot_upgrader_set_property;
-  object_class->finalize = ostree_sysroot_upgrader_finalize;
+  object_class->constructed = rpmostree_sysroot_upgrader_constructed;
+  object_class->get_property = rpmostree_sysroot_upgrader_get_property;
+  object_class->set_property = rpmostree_sysroot_upgrader_set_property;
+  object_class->finalize = rpmostree_sysroot_upgrader_finalize;
 
   g_object_class_install_property (object_class,
                                    PROP_SYSROOT,
@@ -273,7 +273,7 @@ ostree_sysroot_upgrader_class_init (RpmOstreeSysrootUpgraderClass *klass)
 }
 
 static void
-ostree_sysroot_upgrader_init (RpmOstreeSysrootUpgrader *self)
+rpmostree_sysroot_upgrader_init (RpmOstreeSysrootUpgrader *self)
 {
 }
 
@@ -320,7 +320,7 @@ rpmostree_sysroot_upgrader_dup_origin (RpmOstreeSysrootUpgrader *self)
 {
   GKeyFile *copy = NULL;
 
-  g_return_val_if_fail (OSTREE_IS_SYSROOT_UPGRADER (self), NULL);
+  g_return_val_if_fail (RPMOSTREE_IS_SYSROOT_UPGRADER (self), NULL);
 
   if (self->origin != NULL)
     {
@@ -552,8 +552,12 @@ rpmostree_sysroot_upgrader_flags_get_type (void)
   if (g_once_init_enter (&g_define_type_id__volatile))
     {
       static const GFlagsValue values[] = {
-        { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED, "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED", "ignore-unconfigured" },
-        { 0, NULL, NULL }
+        { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED,
+          "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED",
+          "ignore-unconfigured" },
+        { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER,
+          "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER",
+          "allow-older" }
       };
       GType g_define_type_id =
         g_flags_register_static (g_intern_static_string ("RpmOstreeSysrootUpgraderFlags"), values);

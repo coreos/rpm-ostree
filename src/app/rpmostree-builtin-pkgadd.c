@@ -37,10 +37,11 @@ static GOptionEntry option_entries[] = {
 };
 
 static GVariant *
-new_floating_empty_gvariant_dict (void)
+get_args_variant (void)
 {
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
+  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   return g_variant_dict_end (&dict);
 }
 
@@ -85,7 +86,7 @@ rpmostree_builtin_pkg_add (int            argc,
     goto out;
 
   if (!rpmostree_os_call_pkg_add_sync (os_proxy,
-                                       new_floating_empty_gvariant_dict (),
+                                       get_args_variant (),
                                        (const char * const*)argv_and_null->pdata,
                                        &transaction_address,
                                        cancellable,

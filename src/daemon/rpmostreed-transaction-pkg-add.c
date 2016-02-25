@@ -34,9 +34,9 @@
 #include "rpmostreed-sysroot.h"
 #include "rpmostree-sysroot-upgrader.h"
 #include "rpmostreed-utils.h"
-#include "rpmostree-hif.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-core.h"
 
 typedef struct {
   RpmostreedTransaction parent;
@@ -201,7 +201,8 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
   glnx_fd_close int ostree_repo_tmp_dirfd = -1;
   glnx_fd_close int deploy_tmp_dirfd = -1;
   g_autoptr(GKeyFile) origin = NULL;
-  gs_unref_object HifContext *hifctx = NULL;
+  HifContext *hifctx = NULL;
+  g_autoptr(RpmOstreeContext) ctx = NULL;
   g_autoptr(GHashTable) cur_origin_pkgrequests = g_hash_table_new (g_str_hash, g_str_equal);
   g_autoptr(GHashTable) new_pkgrequests = g_hash_table_new (g_str_hash, g_str_equal);
   g_autoptr(GHashTable) layer_new_packages = g_hash_table_new (g_str_hash, g_str_equal);
@@ -241,7 +242,7 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
   if (origin == NULL)
     {
       g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Booted deployment has no origin");
+                           "Merge deployment has no origin");
       goto out;
     }
 
@@ -281,8 +282,8 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
     for (; iter && *iter; iter++)
       {
 	const char *desired_pkg = *iter;
-	_cleanup_hyquery_ HyQuery query = NULL;
-	_cleanup_hypackagelist_ HyPackageList pkglist = NULL;
+        HyQuery query = NULL;
+        g_autoptr(GPtrArray) pkglist = NULL;
 	
 	if (g_hash_table_contains (cur_origin_pkgrequests, desired_pkg))
 	  {
@@ -299,13 +300,20 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
         hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
         pkglist = hy_query_run (query);
 
-	/* This one tracks whether it actually needs to be installed */
-        if (hy_packagelist_count (pkglist) == 0)
+        /* This one tracks whether it actually needs to be installed */
+        if (pkglist->len == 0)
           g_hash_table_add (layer_new_packages, (char*)desired_pkg);
+
+        if (query)
+          hy_query_free (query);
       }
   }
 
-  hifctx = _rpmostree_libhif_new_default ();
+  ctx = rpmostree_context_new_system (cancellable, error);
+  if (!ctx)
+    goto out;
+
+  hifctx = rpmostree_context_get_hif (ctx);
   {
     g_autofree char *reposdir =
       g_build_filename (merge_deployment_dirpath, "etc/yum.repos.d", NULL);
@@ -349,7 +357,7 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
   /* Note this path is relative to the install root */
   hif_context_set_rpm_macro (hifctx, "_dbpath", "/usr/share/rpm");
 
-  if (!_rpmostree_libhif_setup (hifctx, cancellable, error))
+  if (!hif_context_setup (hifctx, cancellable, error))
     goto out;
 
   if (g_hash_table_size (layer_new_packages) > 0)
@@ -366,7 +374,7 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
 
         progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                            G_CALLBACK (on_hifstate_percentage_changed), 
-                                           "Downloading: ");
+                                           "Downloading metadata: ");
 
         glnx_console_lock (&console);
 
@@ -436,9 +444,6 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
 
   if (!overlay_packages_in_deploydir (hifctx, cancellable, error))
     goto out;
-
-  /* Clear out any references to the rpmdb, etc. */
-  g_clear_object (&hifctx);
 
   /* Rename /usr/etc back to /etc */
   if (TEMP_FAILURE_RETRY (renameat (deploy_tmp_dirfd, "etc", deploy_tmp_dirfd, "usr/etc")) != 0)
@@ -511,7 +516,7 @@ rpmostreed_transaction_new_pkg_add (GDBusMethodInvocation *invocation,
   self = g_initable_new (pkg_add_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
-                         "sysroot", sysroot,
+                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
                          NULL);
 
   if (self != NULL)

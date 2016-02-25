@@ -310,8 +310,8 @@ rpmostree_container_builtin_assemble (int             argc,
 
     if (!glnx_opendirat (rocctx->userroot_dfd, "tmp", TRUE, &tmpdir_dfd, error))
       goto out;
-    
-    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd,
+
+    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd, name,
                                             &commit, cancellable, error))
       goto out;
   }
@@ -516,8 +516,8 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
 
     if (!glnx_opendirat (rocctx->userroot_dfd, "tmp", TRUE, &tmpdir_dfd, error))
       goto out;
-    
-    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd,
+
+    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd, name,
                                             &new_commit_checksum,
                                             cancellable, error))
       goto out;

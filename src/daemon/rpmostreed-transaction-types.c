@@ -39,8 +39,8 @@ change_upgrader_refspec (OstreeSysroot *sysroot,
                          GError **error)
 {
   gboolean ret = FALSE;
-  const char *current_refspec = rpmostree_sysroot_upgrader_get_refspec (upgrader);
   g_autofree gchar *new_refspec = NULL;
+  g_autofree gchar *current_refspec = g_strdup (rpmostree_sysroot_upgrader_get_refspec (upgrader));
 
   if (!rpmostreed_refspec_parse_partial (refspec,
                                          current_refspec,
@@ -54,6 +54,7 @@ change_upgrader_refspec (OstreeSysroot *sysroot,
                    "Old and new refs are equal: %s", new_refspec);
       goto out;
     }
+
 
   if (!rpmostree_sysroot_upgrader_set_origin_rebase (upgrader, new_refspec, error))
     goto out;
@@ -889,6 +890,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
+  /* Always allow older; there's not going to be a chronological
+   * relationship necessarily. */
   upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname,
 					     RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER,
 					     cancellable, error);

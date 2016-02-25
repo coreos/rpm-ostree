@@ -264,7 +264,10 @@ rpmostree_builtin_status (int             argc,
         {
           guint tab = 11;
           char *title = NULL;
-          g_autofree char *packages_joined = g_strjoinv (" ", origin_packages);
+          g_autofree char *packages_joined = NULL;
+
+          if (origin_packages && g_strv_length (origin_packages) > 0)
+              packages_joined = g_strjoinv (" ", origin_packages);
 
           if (i==0)
             title = "DEFAULT ON BOOT";
@@ -280,12 +283,14 @@ rpmostree_builtin_status (int             argc,
           if (version_string)
             g_print ("  %-*s%-*s\n", tab, "version", tab, version_string);
 
-          g_print ("  %-*s%-*s\n  %-*s%-*s.%d\n  %-*s%-*s\n  %-*s%-*s\n  %-*s%-*s\n",
+          g_print ("  %-*s%-*s\n  %-*s%-*s.%d\n  %-*s%-*s\n  %-*s%-*s\n",
                   tab, "timestamp", tab, timestamp_string,
                   tab, "id", tab, checksum, serial,
                   tab, "osname", tab, os_name,
-                  tab, "refspec", tab, origin_refspec,
-                  tab, "packages", tab, packages_joined);
+                  tab, "refspec", tab, origin_refspec);
+
+          if (packages_joined)
+            g_print ("  %-*s%-*s\n", tab, "packages", tab, packages_joined);
 
           if (signatures != NULL)
             rpmostree_print_signatures (signatures, "  GPG: ");
