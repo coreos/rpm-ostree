@@ -19,17 +19,22 @@
 
 SRCDIR=$(dirname $0)
 _cleanup_tmpdir () {
-    if test -f ${test_tmpdir}.test; then
-	rm ${test_tmpdir} -rf
+    if test -f ${test_tmpdir}/.test; then
+        rm ${test_tmpdir} -rf
     fi
 }
+
+# If we're running as a local test (i.e. through `make check`), then
+# UNINSTALLEDTESTS=1. Otherwise (i.e. as an installed test), it's undefined, in
+# which case we're already in a tmpdir.
 if test -n "${UNINSTALLEDTESTS:-}"; then
    test_tmpdir=$(mktemp -d test.XXXXXX)
    touch ${test_tmpdir}/.test
    trap _cleanup_tmpdir EXIT
    cd ${test_tmpdir}
    export PATH=${builddir}:${PATH}
-fi   
+fi
+
 test_tmpdir=$(pwd)
 
 export G_DEBUG=fatal-warnings
