@@ -17,6 +17,14 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
+# Have we already been sourced?
+if test -n "${LIBTEST_SH:-}"; then
+  # would be good to know when it happens
+  echo "INFO: Skipping subsequent sourcing of libtest.sh"
+  return
+fi
+LIBTEST_SH=1
+
 SRCDIR=$(dirname $0)
 _cleanup_tmpdir () {
     if test -f ${test_tmpdir}/.test; then
