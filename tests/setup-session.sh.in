@@ -19,12 +19,14 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-test_tmpdir=$(pwd)
+set -e
+
+. $(dirname $0)/libtest.sh
 
 exec_binary="@LIBEXECDIR@/rpm-ostreed"
 
-mkdir sysroot
-mkdir session-services
+mkdir -p sysroot
+mkdir -p session-services
 
 # Create a busconfig file with a custom <servicedir>
 cat > session.conf <<EOF

@@ -78,3 +78,12 @@ check-local:
 	@echo " To run them, rpm-ostree must be configured with --enable-installed-tests and installed"
 	@echo "  *** NOTE ***"
 	@echo "  *** NOTE ***"
+
+testenv:
+	@echo "===== ENTERING TESTENV ====="
+	test_tmpdir=$$(mktemp -d test.XXXXXX) && \
+	  cd $$test_tmpdir && \
+	  sh ../tests/setup-session.sh bash && \
+	  cd .. && \
+	  rm -rf $$test_tmpdir
+	@echo "===== LEAVING TESTENV ====="
