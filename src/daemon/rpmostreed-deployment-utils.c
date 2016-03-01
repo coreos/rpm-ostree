@@ -22,18 +22,18 @@
 
 #include <libglnx.h>
 
+/* Get a currently unique (for this host) identifier for the
+ * deployment; TODO - adding the deployment timestamp would make it
+ * persistently unique, needs API in libostree.
+ */
 char *
 rpmostreed_deployment_generate_id (OstreeDeployment *deployment)
 {
-  const char *osname;
-  guint hash;
-
   g_return_val_if_fail (OSTREE_IS_DEPLOYMENT (deployment), NULL);
-
-  osname = ostree_deployment_get_osname (deployment);
-  hash = ostree_deployment_hash (deployment);
-
-  return g_strdup_printf ("%s_%u", osname, hash);
+  return g_strdup_printf ("%s-%s.%u",
+			  ostree_deployment_get_osname (deployment),
+			  ostree_deployment_get_csum (deployment),
+			  ostree_deployment_get_deployserial (deployment));
 }
 
 OstreeDeployment *
