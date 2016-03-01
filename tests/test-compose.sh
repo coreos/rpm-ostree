@@ -35,4 +35,15 @@ ostree init --repo=repo --mode=archive-z2
 
 echo "ok setup"
 
+rpm-ostree --repo=repo compose --dry-run tree $SRCDIR/test-repo.json
+ostree --repo=repo refs >refs.txt
+assert_file_empty refs.txt
+rm refs.txt
+
+echo "ok dry run"
+
 rpm-ostree --repo=repo compose tree $SRCDIR/test-repo.json
+ostree --repo=repo refs >refs.txt
+assert_file_has_content refs.txt fedora/test
+
+echo "ok compose"

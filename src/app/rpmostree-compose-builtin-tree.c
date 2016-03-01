@@ -51,6 +51,7 @@ static char **opt_metadata_strings;
 static char *opt_repo;
 static char **opt_override_pkg_repos;
 static char *opt_touch_if_changed;
+static gboolean opt_dry_run;
 static gboolean opt_print_only;
 
 static GOptionEntry option_entries[] = {
@@ -64,6 +65,7 @@ static GOptionEntry option_entries[] = {
   { "add-override-pkg-repo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_override_pkg_repos, "Include an additional package repository from DIRECTORY", "DIRECTORY" },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if a new commit was created", "FILE" },
+  { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
   { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
   { NULL }
 };
@@ -295,6 +297,12 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
         }
       else
         g_print ("Previous commit found, but without rpmostree.inputhash metadata key\n");
+    }
+
+  if (opt_dry_run)
+    {
+      ret = TRUE;
+      goto out;
     }
 
   /* --- Downloading packages --- */
@@ -766,6 +774,12 @@ rpmostree_compose_builtin_tree (int             argc,
     if (unmodified)
       {
         g_print ("No apparent changes since previous commit; use --force-nocache to override\n");
+        exit_status = EXIT_SUCCESS;
+        goto out;
+      }
+    else if (opt_dry_run)
+      {
+        g_print ("--dry-run complete, exiting\n");
         exit_status = EXIT_SUCCESS;
         goto out;
       }
