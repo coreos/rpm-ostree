@@ -28,6 +28,12 @@
 
 #include <libglnx.h>
 
+#define HEADER_TIMESTAMP "TIMESTAMP (UTC)"
+#define HEADER_VERSION   "VERSION"
+#define HEADER_ID        "ID"
+#define HEADER_OSNAME    "OSNAME"
+#define HEADER_REFSPEC   "REFSPEC"
+
 static gboolean opt_pretty;
 
 static GOptionEntry option_entries[] = {
@@ -64,12 +70,19 @@ rpmostree_builtin_status (int             argc,
 
   const guint CSUM_DISP_LEN = 10; /* number of checksum characters to display */
   guint i, n;
+
+  /* these column maximums are known thus constant */
   guint max_timestamp_len = 19; /* length of timestamp "YYYY-MM-DD HH:MM:SS" */
   guint max_id_len = CSUM_DISP_LEN; /* length of checksum ID */
-  guint max_osname_len = 0; /* maximum length of osname - determined in code */
-  guint max_refspec_len = 0; /* maximum length of refspec - determined in code */
-  guint max_version_len = 0; /* maximum length of version - determined in code */
-  guint buffer = 5; /* minimum space between end of one entry and new column */
+
+  /* these column maximums can vary and are thus determined in code */
+  /* seed them with the header name length */
+  guint max_osname_len = strlen (HEADER_OSNAME);
+  guint max_refspec_len = strlen (HEADER_REFSPEC);
+  guint max_version_len = strlen (HEADER_VERSION);
+
+  /* minimum space between end of one entry and new column */
+  guint buffer = 5;
 
 
   if (!rpmostree_option_context_parse (context,
@@ -139,13 +152,13 @@ rpmostree_builtin_status (int             argc,
   if (!opt_pretty)
     {
       /* print column headers */
-      g_print ("  %-*s", max_timestamp_len+buffer,"TIMESTAMP (UTC)");
+      g_print ("  %-*s", max_timestamp_len+buffer, HEADER_TIMESTAMP);
       if (max_version_len)
-        g_print ("%-*s", max_version_len+buffer,"VERSION");
+        g_print ("%-*s", max_version_len+buffer, HEADER_VERSION);
       g_print ("%-*s%-*s%-*s\n",
-               max_id_len+buffer, "ID",
-               max_osname_len+buffer, "OSNAME",
-               max_refspec_len+buffer, "REFSPEC");
+               max_id_len+buffer, HEADER_ID,
+               max_osname_len+buffer, HEADER_OSNAME,
+               max_refspec_len+buffer, HEADER_REFSPEC);
     }
   /* header for "pretty" row output */
   else
