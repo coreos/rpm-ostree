@@ -490,25 +490,44 @@ sysroot_populate_deployments (RpmostreedSysroot *self,
 {
   OstreeDeployment *booted = NULL; /* owned by sysroot */
   g_autoptr(GPtrArray) deployments = NULL;
-
+  g_autoptr(GHashTable) seen_osnames = NULL;
+  GHashTableIter iter;
+  gpointer hashkey;
+  gpointer value;
   GVariantBuilder builder;
   guint i;
 
   g_debug ("loading deployments");
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("aa{sv}"));
 
+  seen_osnames = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
+
   /* Add deployment interfaces */
   deployments = ostree_sysroot_get_deployments (ot_sysroot);
 
-  if (deployments == NULL)
-    return;
-
-  for (i=0; i<deployments->len; i++)
+  for (i = 0; deployments != NULL && i < deployments->len; i++)
     {
       GVariant *variant;
-      variant = rpmostreed_deployment_generate_variant (deployments->pdata[i],
-                                                        ot_repo);
+      OstreeDeployment *deployment = deployments->pdata[i];
+      const char *deployment_os;
+      
+      variant = rpmostreed_deployment_generate_variant (deployment, ot_repo);
       g_variant_builder_add_value (&builder, variant);
+
+      deployment_os = ostree_deployment_get_osname (deployment);
+
+      /* Have we not seen this osname instance before?  If so, add it
+       * now.
+       */
+      if (!g_hash_table_contains (self->os_interfaces, deployment_os))
+	{
+	  RPMOSTreeOS *obj = rpmostreed_os_new (ot_sysroot, ot_repo,
+						deployment_os,
+                                                self->transaction_monitor);
+          g_hash_table_insert (self->os_interfaces, g_strdup (deployment_os), obj);
+	}
+      /* Owned by deployment, hash lifetime is smaller */
+      g_hash_table_add (seen_osnames, (char*)deployment_os);
     }
 
   booted = ostree_sysroot_get_booted_deployment (ot_sysroot);
@@ -522,6 +541,17 @@ sysroot_populate_deployments (RpmostreedSysroot *self,
   else
     {
       rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), "/");
+    }
+
+  /* Remove dead os paths */
+  g_hash_table_iter_init (&iter, self->os_interfaces);
+  while (g_hash_table_iter_next (&iter, &hashkey, &value))
+    {
+      if (!g_hash_table_contains (seen_osnames, hashkey))
+        {
+          g_object_run_dispose (G_OBJECT (value));
+          g_hash_table_iter_remove (&iter);
+        }
     }
 
   rpmostree_sysroot_set_deployments (RPMOSTREE_SYSROOT (self),
@@ -686,80 +716,10 @@ rpmostreed_sysroot_load_internals (RpmostreedSysroot *self,
                                    OstreeRepo *ot_repo,
                                    GError **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(GHashTable) seen = NULL;
-  g_autofree gchar *os_path = NULL;
-  const char *sysroot_path;
-  GDir *os_dir = NULL;
-
-  GHashTableIter iter;
-  gpointer hashkey;
-  gpointer value;
-
   g_rw_lock_writer_lock (&self->children_lock);
-
-  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (self));
-  os_path = g_build_filename (sysroot_path, "ostree", "deploy", NULL);
-
-  seen = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-
-  os_dir = g_dir_open (os_path, 0, error);
-  if (!os_dir)
-    goto out;
-
-  while (TRUE)
-    {
-      const gchar *os = g_dir_read_name (os_dir);
-      g_autofree gchar *full_path = NULL;
-
-      if (os == NULL) {
-        if (errno && errno != ENOENT)
-          {
-            glnx_set_error_from_errno (error);
-            goto out;
-          }
-        break;
-      }
-
-      g_hash_table_add (seen, g_strdup (os));
-      /* If we've already seen it, continue */
-      if (g_hash_table_contains (self->os_interfaces, os))
-        continue;
-
-      full_path = g_build_filename (os_path, os, NULL);
-      if (g_file_test (full_path, G_FILE_TEST_IS_DIR))
-        {
-          RPMOSTreeOS *obj = rpmostreed_os_new (ot_sysroot, ot_repo, os,
-                                                self->transaction_monitor);
-          g_hash_table_insert (self->os_interfaces,
-                               g_strdup (os),
-                               obj);
-        }
-    }
-
-  /* Remove dead os paths */
-  g_hash_table_iter_init (&iter, self->os_interfaces);
-  while (g_hash_table_iter_next (&iter, &hashkey, &value))
-    {
-      if (!g_hash_table_contains (seen, hashkey))
-        {
-          g_object_run_dispose (G_OBJECT (value));
-          g_hash_table_iter_remove (&iter);
-        }
-    }
-
-  /* update deployments */
   sysroot_populate_deployments (self, ot_sysroot, ot_repo);
-
-  ret = TRUE;
-
-out:
   g_rw_lock_writer_unlock (&self->children_lock);
-
-  if (os_dir)
-    g_dir_close (os_dir);
-
-  return ret;
+  return TRUE;
 }
 
 static void
