@@ -158,7 +158,7 @@ rpmostree_builtin_status (int             argc,
       g_print ("%-*s%-*s%-*s\n",
                max_id_len+buffer, HEADER_ID,
                max_osname_len+buffer, HEADER_OSNAME,
-               max_refspec_len+buffer, HEADER_REFSPEC);
+               max_refspec_len, HEADER_REFSPEC);
     }
   /* header for "pretty" row output */
   else
@@ -221,7 +221,7 @@ rpmostree_builtin_status (int             argc,
           g_print ("%-*s%-*s%-*s\n",
                    max_id_len+buffer, truncated_csum,
                    max_osname_len+buffer, os_name,
-                   max_refspec_len+buffer, origin_refspec);
+                   max_refspec_len, origin_refspec);
         }
 
       /* print "pretty" row info */
