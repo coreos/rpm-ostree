@@ -345,49 +345,8 @@ handle_create_osname (RPMOSTreeSysroot *object,
       goto out;
     }
 
-  /* TODO: The operations here are copied from ostree init-os
-   * command, should be refactored into shared code */
-  sysroot_path = rpmostree_sysroot_get_path (object);
-  deploy_dir = g_build_filename (sysroot_path, "ostree", "deploy", osname, NULL);
-
-  /* Ensure core subdirectories of /var exist, since we need them for
-   * dracut generation, and the host will want them too.
-   */
-  g_clear_object (&dir);
-  dir = _build_file (deploy_dir, "var", "tmp", NULL);
-  if (!gs_file_ensure_directory (dir, TRUE, self->cancellable, &error))
+  if (!ostree_sysroot_init_osname (ot_sysroot, osname, self->cancellable, error))
     goto out;
-  if (chmod (gs_file_get_path_cached (dir), 01777) < 0)
-    {
-      gs_set_error_from_errno (&error, errno);
-      goto out;
-    }
-
-  g_clear_object (&dir);
-  dir = _build_file (deploy_dir, "var", "lib", NULL);
-  if (!gs_file_ensure_directory (dir, TRUE, self->cancellable, &error))
-    goto out;
-
-  g_clear_object (&dir);
-  dir = _build_file (deploy_dir, "var", "run", NULL);
-  if (!g_file_test (gs_file_get_path_cached (dir), G_FILE_TEST_IS_SYMLINK))
-    {
-      if (symlink ("../run", gs_file_get_path_cached (dir)) < 0)
-        {
-          gs_set_error_from_errno (&error, errno);
-          goto out;
-        }
-    }
-
-  dir = _build_file (deploy_dir, "var", "lock", NULL);
-  if (!g_file_test (gs_file_get_path_cached (dir), G_FILE_TEST_IS_SYMLINK))
-    {
-      if (symlink ("../run/lock", gs_file_get_path_cached (dir)) < 0)
-        {
-          gs_set_error_from_errno (&error, errno);
-          goto out;
-        }
-    }
 
   dbus_path = rpmostreed_generate_object_path (BASE_DBUS_PATH, osname, NULL);
   g_rw_lock_reader_lock (&self->children_lock);
