@@ -314,7 +314,6 @@ handle_create_osname (RPMOSTreeSysroot *object,
 {
   g_autoptr(GFile) dir = NULL;
   g_autofree gchar *deploy_dir = NULL;
-  g_autofree gchar *base_name = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   const char *sysroot_path;
 
@@ -337,8 +336,7 @@ handle_create_osname (RPMOSTreeSysroot *object,
                                           &error))
     goto out;
 
-  base_name = g_path_get_basename (osname);
-  if (g_strcmp0 (base_name, osname) != 0)
+  if (strchr (osname, '/') != 0)
     {
       g_set_error_literal (&error,
                            RPM_OSTREED_ERROR,
