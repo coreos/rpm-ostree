@@ -299,6 +299,11 @@ transaction_execute_done_cb (GObject *source_object,
   GError *local_error = NULL;
 
   success = g_task_propagate_boolean (G_TASK (result), &local_error);
+  if (success)
+    {
+      if (!rpmostreed_sysroot_reload (rpmostreed_sysroot_get (), &local_error))
+	success = FALSE;
+    }
 
   /* Sanity check */
   g_warn_if_fail ((success && local_error == NULL) ||
@@ -309,9 +314,6 @@ transaction_execute_done_cb (GObject *source_object,
 
   if (error_message == NULL)
     error_message = "";
-
-  if (success)
-    rpmostreed_sysroot_emit_update (rpmostreed_sysroot_get ());
 
   g_debug ("%s (%p): Finished%s%s%s",
            G_OBJECT_TYPE_NAME (self), self,

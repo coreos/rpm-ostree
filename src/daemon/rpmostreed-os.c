@@ -48,9 +48,7 @@ struct _RpmostreedOSClass
 
 static void rpmostreed_os_iface_init (RPMOSTreeOSIface *iface);
 
-static void rpmostreed_os_load_internals (RpmostreedOS *self,
-                                          OstreeSysroot *ot_sysroot,
-                                          OstreeRepo *ot_repo);
+static void rpmostreed_os_load_internals (RpmostreedOS *self);
 
 G_DEFINE_TYPE_WITH_CODE (RpmostreedOS,
                          rpmostreed_os,
@@ -86,16 +84,11 @@ task_result_invoke (GObject *source_object,
 
 static void
 sysroot_changed (RpmostreedSysroot *sysroot,
-                 OstreeSysroot *ot_sysroot,
-                 OstreeRepo *ot_repo,
                  gpointer user_data)
 {
   RpmostreedOS *self = RPMOSTREED_OS (user_data);
 
-  g_return_if_fail (OSTREE_IS_SYSROOT (ot_sysroot));
-  g_return_if_fail (OSTREE_IS_REPO (ot_repo));
-
-  rpmostreed_os_load_internals (self, ot_sysroot, ot_repo);
+  rpmostreed_os_load_internals (self);
 }
 
 static void
@@ -1142,9 +1135,7 @@ out:
 }
 
 static void
-rpmostreed_os_load_internals (RpmostreedOS *self,
-                              OstreeSysroot *ot_sysroot,
-                              OstreeRepo *ot_repo)
+rpmostreed_os_load_internals (RpmostreedOS *self)
 {
   const gchar *name;
 
@@ -1153,7 +1144,8 @@ rpmostreed_os_load_internals (RpmostreedOS *self,
 
   g_autoptr(GPtrArray) deployments = NULL;
   g_autofree gchar *origin_refspec = NULL;
-
+  OstreeSysroot *ot_sysroot;
+  OstreeRepo *ot_repo;
   GError *error = NULL;
   GVariant *booted_variant = NULL;
   GVariant *default_variant = NULL;
@@ -1166,6 +1158,9 @@ rpmostreed_os_load_internals (RpmostreedOS *self,
 
   name = rpmostree_os_get_name (RPMOSTREE_OS (self));
   g_debug ("loading %s", name);
+
+  ot_sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
+  ot_repo = rpmostreed_sysroot_get_repo (rpmostreed_sysroot_get ());
 
   deployments = ostree_sysroot_get_deployments (ot_sysroot);
   if (deployments == NULL)
@@ -1269,7 +1264,7 @@ rpmostreed_os_new (OstreeSysroot *sysroot,
   /* FIXME Make this a construct-only property? */
   obj->transaction_monitor = g_object_ref (monitor);
 
-  rpmostreed_os_load_internals (obj, sysroot, repo);
+  rpmostreed_os_load_internals (obj);
   rpmostreed_daemon_publish (rpmostreed_daemon_get (), path, FALSE, obj);
 
   return RPMOSTREE_OS (obj);

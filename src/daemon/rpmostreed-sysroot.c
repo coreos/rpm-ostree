@@ -55,6 +55,7 @@ struct _RpmostreedSysroot {
   GCancellable *cancellable;
 
   OstreeSysroot *ot_sysroot;
+  OstreeRepo *repo;
   RpmostreedTransactionMonitor *transaction_monitor;
 
   GHashTable *os_interfaces;
@@ -69,17 +70,12 @@ struct _RpmostreedSysroot {
 
   GFileMonitor *monitor;
   guint sig_changed;
-  guint64 last_monitor_event;
 
   guint stdout_source_id;
 };
 
 struct _RpmostreedSysrootClass {
   RPMOSTreeSysrootSkeletonClass parent_class;
-
-  void          (*updated)              (RpmostreedSysroot *self,
-                                         OstreeSysroot *ot_sysroot,
-                                         OstreeRepo *ot_repo);
 };
 
 enum {
@@ -87,11 +83,8 @@ enum {
   NUM_SIGNALS
 };
 
-static guint64 UPDATED_THROTTLE_SECONDS = 2;
 static guint signals[NUM_SIGNALS];
-
 static void rpmostreed_sysroot_iface_init (RPMOSTreeSysrootIface *iface);
-static gboolean _throttle_refresh (gpointer user_data);
 
 G_DEFINE_TYPE_WITH_CODE (RpmostreedSysroot,
                          rpmostreed_sysroot,
@@ -284,54 +277,18 @@ out:
   return ret;
 }
 
-static GFile *
-_build_file (const char *first, ...)
-{
-  va_list args;
-  const gchar *arg;
-  g_autofree gchar *path = NULL;
-  g_autoptr(GPtrArray) parts = NULL;
-
-  va_start (args, first);
-  parts = g_ptr_array_new ();
-  arg = first;
-  while (arg != NULL)
-    {
-      g_ptr_array_add (parts, (char*)arg);
-      arg = va_arg (args, const char *);
-    }
-  va_end (args);
-
-  g_ptr_array_add (parts, NULL);
-  path = g_build_filenamev ((gchar**)parts->pdata);
-  return g_file_new_for_path (path);
-}
-
 static gboolean
 handle_create_osname (RPMOSTreeSysroot *object,
                       GDBusMethodInvocation *invocation,
                       const gchar *osname)
 {
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
   g_autoptr(GFile) dir = NULL;
   g_autofree gchar *deploy_dir = NULL;
-  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  const char *sysroot_path;
-
   GError *error = NULL;
   g_autofree gchar *dbus_path = NULL;
 
-  gboolean needs_refresh = FALSE;
-
-  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
-
-  if (!rpmostreed_sysroot_load_state (self,
-                                      self->cancellable,
-                                      &ot_sysroot,
-                                      NULL,
-                                      &error))
-    goto out;
-
-  if (!ostree_sysroot_ensure_initialized (ot_sysroot,
+  if (!ostree_sysroot_ensure_initialized (self->ot_sysroot,
                                           self->cancellable,
                                           &error))
     goto out;
@@ -345,16 +302,10 @@ handle_create_osname (RPMOSTreeSysroot *object,
       goto out;
     }
 
-  if (!ostree_sysroot_init_osname (ot_sysroot, osname, self->cancellable, error))
+  if (!ostree_sysroot_init_osname (self->ot_sysroot, osname, self->cancellable, &error))
     goto out;
 
   dbus_path = rpmostreed_generate_object_path (BASE_DBUS_PATH, osname, NULL);
-  g_rw_lock_reader_lock (&self->children_lock);
-    needs_refresh = self->last_monitor_event == 0;
-  g_rw_lock_reader_unlock (&self->children_lock);
-
-  if (needs_refresh)
-    _throttle_refresh (self);
 
   rpmostree_sysroot_complete_create_osname (RPMOSTREE_SYSROOT (self),
                                             invocation,
@@ -440,11 +391,12 @@ sysroot_transform_transaction_to_attrs (GBinding *binding,
   return TRUE;
 }
 
-static void
-sysroot_populate_deployments (RpmostreedSysroot *self,
-                              OstreeSysroot *ot_sysroot,
-                              OstreeRepo *ot_repo)
+static gboolean
+sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
+				       gboolean *out_changed,
+				       GError **error)
 {
+  gboolean ret = FALSE;
   OstreeDeployment *booted = NULL; /* owned by sysroot */
   g_autoptr(GPtrArray) deployments = NULL;
   g_autoptr(GHashTable) seen_osnames = NULL;
@@ -453,6 +405,18 @@ sysroot_populate_deployments (RpmostreedSysroot *self,
   gpointer value;
   GVariantBuilder builder;
   guint i;
+  gboolean did_change;
+
+  if (!ostree_sysroot_load_if_changed (self->ot_sysroot, &did_change, self->cancellable, error))
+    goto out;
+
+  if (!did_change)
+    {
+      ret = TRUE;
+      if (out_changed)
+	*out_changed = FALSE;
+      goto out;
+    }
 
   g_debug ("loading deployments");
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("aa{sv}"));
@@ -460,7 +424,7 @@ sysroot_populate_deployments (RpmostreedSysroot *self,
   seen_osnames = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
 
   /* Add deployment interfaces */
-  deployments = ostree_sysroot_get_deployments (ot_sysroot);
+  deployments = ostree_sysroot_get_deployments (self->ot_sysroot);
 
   for (i = 0; deployments != NULL && i < deployments->len; i++)
     {
@@ -468,7 +432,7 @@ sysroot_populate_deployments (RpmostreedSysroot *self,
       OstreeDeployment *deployment = deployments->pdata[i];
       const char *deployment_os;
       
-      variant = rpmostreed_deployment_generate_variant (deployment, ot_repo);
+      variant = rpmostreed_deployment_generate_variant (deployment, self->repo);
       g_variant_builder_add_value (&builder, variant);
 
       deployment_os = ostree_deployment_get_osname (deployment);
@@ -478,7 +442,7 @@ sysroot_populate_deployments (RpmostreedSysroot *self,
        */
       if (!g_hash_table_contains (self->os_interfaces, deployment_os))
 	{
-	  RPMOSTreeOS *obj = rpmostreed_os_new (ot_sysroot, ot_repo,
+	  RPMOSTreeOS *obj = rpmostreed_os_new (self->ot_sysroot, self->repo,
 						deployment_os,
                                                 self->transaction_monitor);
           g_hash_table_insert (self->os_interfaces, g_strdup (deployment_os), obj);
@@ -487,7 +451,7 @@ sysroot_populate_deployments (RpmostreedSysroot *self,
       g_hash_table_add (seen_osnames, (char*)deployment_os);
     }
 
-  booted = ostree_sysroot_get_booted_deployment (ot_sysroot);
+  booted = ostree_sysroot_get_booted_deployment (self->ot_sysroot);
   if (booted)
     {
       const gchar *os = ostree_deployment_get_osname (booted);
@@ -514,6 +478,12 @@ sysroot_populate_deployments (RpmostreedSysroot *self,
   rpmostree_sysroot_set_deployments (RPMOSTREE_SYSROOT (self),
                                      g_variant_builder_end (&builder));
   g_debug ("finished deployments");
+
+  ret = TRUE;
+  if (out_changed)
+    *out_changed = TRUE;
+ out:
+  return ret;
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
@@ -602,8 +572,6 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
   g_rw_lock_init (&self->method_rw_lock);
 
   self->monitor = NULL;
-  self->sig_changed = 0;
-  self->last_monitor_event = 0;
 
   self->transaction_monitor = rpmostreed_transaction_monitor_new ();
 }
@@ -638,14 +606,6 @@ sysroot_constructed (GObject *object)
 }
 
 static void
-sysroot_updated (RpmostreedSysroot *self,
-                 OstreeSysroot *ot_sysroot,
-                 OstreeRepo *ot_repo)
-{
-  sysroot_populate_deployments (self, ot_sysroot, ot_repo);
-}
-
-static void
 rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
 {
   GObjectClass *gobject_class;
@@ -655,180 +615,60 @@ rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
   gobject_class->finalize     = sysroot_finalize;
   gobject_class->constructed  = sysroot_constructed;
 
-  klass->updated = sysroot_updated;
-
   signals[UPDATED] = g_signal_new ("updated",
                                    RPMOSTREED_TYPE_SYSROOT,
                                    G_SIGNAL_RUN_LAST,
-                                   G_STRUCT_OFFSET (RpmostreedSysrootClass, updated),
+                                   0,
                                    NULL, NULL, NULL,
-                                   G_TYPE_NONE, 2,
-                                   OSTREE_TYPE_SYSROOT,
-                                   OSTREE_TYPE_REPO);
+                                   G_TYPE_NONE, 0);
 }
 
-static gboolean
-rpmostreed_sysroot_load_internals (RpmostreedSysroot *self,
-                                   OstreeSysroot *ot_sysroot,
-                                   OstreeRepo *ot_repo,
-                                   GError **error)
+gboolean
+rpmostreed_sysroot_reload (RpmostreedSysroot *self,
+			   GError **error)
 {
+  gboolean ret = FALSE;
+  gboolean did_change;
+
   g_rw_lock_writer_lock (&self->children_lock);
-  sysroot_populate_deployments (self, ot_sysroot, ot_repo);
-  g_rw_lock_writer_unlock (&self->children_lock);
-  return TRUE;
-}
 
-static void
-_do_reload_data (GTask         *task,
-                 gpointer       object,
-                 gpointer       data_ptr,
-                 GCancellable  *cancellable)
-{
-  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
-  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  glnx_unref_object OstreeRepo *ot_repo = NULL;
-  GError *local_error = NULL;
-
-  if (!rpmostreed_sysroot_load_state (self,
-                                      cancellable,
-                                      &ot_sysroot,
-                                      &ot_repo,
-                                      &local_error))
+  if (!sysroot_populate_deployments_unlocked (self, &did_change, error))
     goto out;
 
-  if (!rpmostreed_sysroot_load_internals (self,
-                                          ot_sysroot,
-                                          ot_repo,
-                                          &local_error))
-    goto out;
-
-out:
-  if (local_error != NULL)
-    g_task_return_error (task, local_error);
-  else
-    g_task_return_boolean (task, TRUE);
-}
-
-
-static void
-_reload_callback (GObject *source_object,
-                  GAsyncResult *res,
-                  gpointer user_data)
-{
-    RpmostreedSysroot *self = RPMOSTREED_SYSROOT (user_data);
-    GTask *task = G_TASK (res);
-    GError *error = NULL;
-
-    g_task_propagate_boolean (task, &error);
-    if (error)
-      {
-        /* this was valid once, make sure it is tried again
-         * TODO: should we bail at some point? */
-        g_message ("Error refreshing sysroot data: %s", error->message);
-        g_timeout_add_seconds (UPDATED_THROTTLE_SECONDS,
-                               _throttle_refresh,
-                               self);
-      }
-    else
-      {
-        rpmostreed_sysroot_emit_update (self);
-      }
-
-    g_object_unref (task);
-    g_clear_error (&error);
-}
-
-
-static gboolean
-_throttle_refresh (gpointer user_data)
-{
-  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (user_data);
-  gboolean ret = TRUE;
-
-  /* Only run the update if there isn't another one pending. */
-  g_rw_lock_writer_lock (&self->children_lock);
-  if ((g_get_monotonic_time () - self->last_monitor_event) >
-      UPDATED_THROTTLE_SECONDS * G_USEC_PER_SEC)
-    {
-      GTask *task = g_task_new (self, self->cancellable,
-                                _reload_callback, self);
-      g_task_set_return_on_cancel (task, TRUE);
-      self->last_monitor_event = 0;
-      g_task_run_in_thread (task, _do_reload_data);
-      ret = FALSE;
-    }
+  ret = TRUE;
+ out:
   g_rw_lock_writer_unlock (&self->children_lock);
-
+  if (ret && did_change)
+    g_signal_emit (self, signals[UPDATED], 0);
   return ret;
 }
 
 static void
-on_repo_file (GFileMonitor *monitor,
-              GFile *file,
-              GFile *other_file,
-              GFileMonitorEvent event_type,
-              gpointer user_data)
+on_deploy_changed (GFileMonitor *monitor,
+		   GFile *file,
+		   GFile *other_file,
+		   GFileMonitorEvent event_type,
+		   gpointer user_data)
 {
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (user_data);
+  g_autoptr(GError) error = NULL;
+  
   if (event_type == G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED)
     {
-      g_rw_lock_writer_lock (&self->children_lock);
-      if (self->last_monitor_event == 0)
-        g_timeout_add_seconds (UPDATED_THROTTLE_SECONDS,
-                               _throttle_refresh,
-                               user_data);
-
-      self->last_monitor_event = g_get_monotonic_time ();
-      g_rw_lock_writer_unlock (&self->children_lock);
+      if (!rpmostreed_sysroot_reload (self, &error))
+	goto out;
     }
+
+ out:
+  if (error)
+    g_critical ("Unable to update state: %s", error->message);
 }
-
-
 
 static void
 rpmostreed_sysroot_iface_init (RPMOSTreeSysrootIface *iface)
 {
   iface->handle_create_osname = handle_create_osname;
   iface->handle_get_os = handle_get_os;
-}
-
-
-/**
- * rpmostreed_sysroot_emit_update:
- *
- * Emits an updated signal
- */
-void
-rpmostreed_sysroot_emit_update (RpmostreedSysroot *self)
-{
-  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  glnx_unref_object OstreeRepo *ot_repo = NULL;
-  GError *local_error = NULL;
-
-  g_return_if_fail (RPMOSTREED_IS_SYSROOT (self));
-
-  /* XXX Creating an OstreeSysroot and OstreeRepo instance are each
-   *     failable, and this is a spot where creating and disposing of
-   *     them repeatedly introduces some inconvenient error handling.
-   *     Keeping persistent instances in RpmostreedSysroot would be
-   *     preferable but there's issues around keeping their internal
-   *     state up-to-date when ostree commands operate on their own. */
-
-  if (rpmostreed_sysroot_load_state (self,
-                                     NULL,
-                                     &ot_sysroot,
-                                     &ot_repo,
-                                     &local_error))
-    {
-      g_signal_emit (self, signals[UPDATED], 0, ot_sysroot, ot_repo);
-    }
-  else
-    {
-      g_return_if_fail (local_error != NULL);
-      g_critical ("Unable to update state: %s", local_error->message);
-      g_clear_error (&local_error);
-    }
 }
 
 /**
@@ -840,85 +680,75 @@ rpmostreed_sysroot_emit_update (RpmostreedSysroot *self)
  */
 gboolean
 rpmostreed_sysroot_populate (RpmostreedSysroot *self,
+			     GCancellable *cancellable,
                              GError **error)
 {
-  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  glnx_unref_object OstreeRepo *ot_repo = NULL;
   gboolean ret = FALSE;
+  g_autoptr(GFile) sysroot_file = NULL;
+  const char *sysroot_path;
 
   g_return_val_if_fail (self != NULL, FALSE);
 
-  if (!rpmostreed_sysroot_load_state (self,
-                                      NULL,
-                                      &ot_sysroot,
-                                      &ot_repo,
-                                      error))
+  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (self));
+  sysroot_file = g_file_new_for_path (sysroot_path);
+  self->ot_sysroot = ostree_sysroot_new (sysroot_file);
+
+  /* This creates and caches an OstreeRepo instance inside
+   * OstreeSysroot to ensure subsequent ostree_sysroot_get_repo()
+   * calls won't fail.
+   */
+  if (!ostree_sysroot_get_repo (self->ot_sysroot, &self->repo, cancellable, error))
     goto out;
 
-  if (!rpmostreed_sysroot_load_internals (self, ot_sysroot, ot_repo, error))
+  if (!sysroot_populate_deployments_unlocked (self, NULL, error))
     goto out;
 
   if (self->monitor == NULL)
     {
-      GFile *repo_file = ostree_repo_get_path (ot_repo); /* owned by ot_repo */
-      self->monitor = g_file_monitor (repo_file, 0, NULL, error);
+      const char *sysroot_path = gs_file_get_path_cached (ostree_sysroot_get_path (self->ot_sysroot));
+      g_autofree char *sysroot_deploy_path = g_build_filename (sysroot_path, "ostree/deploy", NULL);
+      g_autoptr(GFile) sysroot_deploy = g_file_new_for_path (sysroot_deploy_path);
+      
+      self->monitor = g_file_monitor (sysroot_deploy, 0, NULL, error);
 
       if (self->monitor == NULL)
         goto out;
 
       self->sig_changed = g_signal_connect (self->monitor,
                                             "changed",
-                                            G_CALLBACK (on_repo_file),
+                                            G_CALLBACK (on_deploy_changed),
                                             self);
     }
 
   ret = TRUE;
-
 out:
   return ret;
 }
 
 gboolean
 rpmostreed_sysroot_load_state (RpmostreedSysroot *self,
-                               GCancellable *cancellable,
-                               OstreeSysroot **out_sysroot,
-                               OstreeRepo **out_repo,
-                               GError **error)
+			       GCancellable *cancellable,
+			       OstreeSysroot **out_sysroot,
+			       OstreeRepo **out_repo,
+			       GError **error)
 {
-  g_autoptr(GFile) sysroot_file = NULL;
-  glnx_unref_object OstreeSysroot *sysroot = NULL;
-  glnx_unref_object OstreeRepo *repo = NULL;
-  const char *sysroot_path;
-  gboolean ret = FALSE;
+  if (out_sysroot)
+    *out_sysroot = g_object_ref (rpmostreed_sysroot_get_root (self));
+  if (out_repo)
+    *out_repo = g_object_ref (rpmostreed_sysroot_get_repo (self));
+  return TRUE;
+}
 
-  g_return_val_if_fail (RPMOSTREED_IS_SYSROOT (self), FALSE);
+OstreeSysroot *
+rpmostreed_sysroot_get_root (RpmostreedSysroot *self)
+{
+  return self->ot_sysroot;
+}
 
-  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (self));
-  g_return_val_if_fail (sysroot_path != NULL, FALSE);
-
-  sysroot_file = g_file_new_for_path (sysroot_path);
-
-  sysroot = ostree_sysroot_new (sysroot_file);
-
-  if (!ostree_sysroot_load (sysroot, cancellable, error))
-    goto out;
-
-  /* This creates and caches an OstreeRepo instance inside OstreeSysroot.
-   * Worth doing here even if the caller doesn't want the repo reference
-   * to ensure subsequent ostree_sysroot_get_repo() calls won't fail. */
-  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-    goto out;
-
-  if (out_sysroot != NULL)
-    *out_sysroot = g_steal_pointer (&sysroot);
-
-  if (out_repo != NULL)
-    *out_repo = g_steal_pointer (&repo);
-
-  ret = TRUE;
-
-out:
-  return ret;
+OstreeRepo *
+rpmostreed_sysroot_get_repo (RpmostreedSysroot *self)
+{
+  return self->repo;
 }
 
 /**
