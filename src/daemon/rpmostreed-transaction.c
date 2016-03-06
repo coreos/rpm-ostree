@@ -277,6 +277,14 @@ transaction_execute_thread (GTask *task,
   RpmostreedTransactionClass *class = RPMOSTREED_TRANSACTION_GET_CLASS (self);
   gboolean success = TRUE;
   GError *local_error = NULL;
+  g_autoptr(GMainContext) mctx = g_main_context_new ();
+
+  /* libostree iterates and calls quit on main loop
+   * so we need to run in our own context.  Having a different
+   * main context for worker threads should be standard practice
+   * anyways.
+   */
+  g_main_context_push_thread_default (mctx);
 
   if (class->execute != NULL)
     success = class->execute (self, cancellable, &local_error);
@@ -285,6 +293,9 @@ transaction_execute_thread (GTask *task,
     g_task_return_error (task, local_error);
   else
     g_task_return_boolean (task, success);
+
+  /* Clean up context */
+  g_main_context_pop_thread_default (mctx);
 }
 
 static void

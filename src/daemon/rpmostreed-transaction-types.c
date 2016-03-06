@@ -191,11 +191,6 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
   gboolean changed = FALSE;
   gboolean ret = FALSE;
 
-  /* libostree iterates and calls quit on main loop
-   * so we need to run in our own context. */
-  GMainContext *m_context = g_main_context_new ();
-  g_main_context_push_thread_default (m_context);
-
   self = (PackageDiffTransaction *) transaction;
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
   upgrader = ostree_sysroot_upgrader_new_for_os (sysroot,
@@ -309,12 +304,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   ret = TRUE;
-
 out:
-  /* Clean up context */
-  g_main_context_pop_thread_default (m_context);
-  g_main_context_unref (m_context);
-
   return ret;
 }
 
@@ -668,11 +658,6 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
   gboolean changed = FALSE;
   gboolean ret = FALSE;
 
-  /* libostree iterates and calls quit on main loop
-   * so we need to run in our own context. */
-  GMainContext *m_context = g_main_context_new ();
-  g_main_context_push_thread_default (m_context);
-
   self = (UpgradeTransaction *) transaction;
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
@@ -732,12 +717,7 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   ret = TRUE;
-
 out:
-  /* Clean up context */
-  g_main_context_pop_thread_default (m_context);
-  g_main_context_unref (m_context);
-
   return ret;
 }
 
@@ -837,11 +817,6 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
   gboolean changed = FALSE;
   gboolean ret = FALSE;
 
-  /* libostree iterates and calls quit on main loop
-   * so we need to run in our own context. */
-  GMainContext *m_context = g_main_context_new ();
-  g_main_context_push_thread_default (m_context);
-
   self = (RebaseTransaction *) transaction;
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
@@ -896,12 +871,7 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
     rpmostreed_reboot (cancellable, error);
 
   ret = TRUE;
-
 out:
-  /* Clean up context */
-  g_main_context_pop_thread_default (m_context);
-  g_main_context_unref (m_context);
-
   return ret;
 }
 
@@ -1003,11 +973,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   gboolean changed = FALSE;
   gboolean ret = FALSE;
 
-  /* libostree iterates and calls quit on main loop
-   * so we need to run in our own context. */
-  GMainContext *m_context = g_main_context_new ();
-  g_main_context_push_thread_default (m_context);
-
   self = (DeployTransaction *) transaction;
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
@@ -1099,12 +1064,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   ret = TRUE;
-
 out:
-  /* Clean up context */
-  g_main_context_pop_thread_default (m_context);
-  g_main_context_unref (m_context);
-
   return ret;
 }
 
