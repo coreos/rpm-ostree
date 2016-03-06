@@ -58,30 +58,6 @@ G_DEFINE_TYPE_WITH_CODE (RpmostreedOS,
 
 /* ---------------------------------------------------------------------------------------------------- */
 
-/**
-  * task_result_invoke:
-  *
-  * Completes a GTask where the user_data is
-  * an invocation and the task data or error is
-  * passed to the invocation when called back.
-  */
-static void
-task_result_invoke (GObject *source_object,
-                    GAsyncResult *res,
-                    gpointer user_data)
-{
-    GError *error = NULL;
-
-    GDBusMethodInvocation *invocation = user_data;
-
-    GVariant *result = g_task_propagate_pointer (G_TASK (res), &error);
-
-    if (error)
-      g_dbus_method_invocation_take_error (invocation, error);
-    else
-      g_dbus_method_invocation_return_value (invocation, result);
-}
-
 static void
 sysroot_changed (RpmostreedSysroot *sysroot,
                  gpointer user_data)
