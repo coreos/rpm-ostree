@@ -153,96 +153,6 @@ new_variant_diff_result (GVariant *diff,
 }
 
 static void
-get_upgrade_diff_variant_in_thread (GTask *task,
-                                    gpointer object,
-                                    gpointer data_ptr,
-                                    GCancellable *cancellable)
-{
-  RPMOSTreeOS *self = RPMOSTREE_OS (object);
-  RpmostreedSysroot *global_sysroot;
-  const gchar *name;
-  gchar *compare_deployment = data_ptr; /* freed by task */
-
-  g_autofree gchar *comp_ref = NULL;
-  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  glnx_unref_object OstreeRepo *ot_repo = NULL;
-  glnx_unref_object OstreeDeployment *base_deployment = NULL;
-
-  GVariant *value = NULL; /* freed when invoked */
-  GVariant *details = NULL; /* freed when invoked */
-  GError *local_error = NULL;
-
-  global_sysroot = rpmostreed_sysroot_get ();
-
-  rpmostreed_sysroot_reader_lock (global_sysroot);
-
-  if (!rpmostreed_sysroot_load_state (global_sysroot,
-                                      cancellable,
-                                      &ot_sysroot,
-                                      &ot_repo,
-                                      &local_error))
-    goto out;
-
-  name = rpmostree_os_get_name (self);
-  if (compare_deployment == NULL || compare_deployment[0] == '\0')
-    {
-      base_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
-      if (base_deployment == NULL)
-        {
-          local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
-                                     "No deployments found for os %s", name);
-          goto out;
-        }
-    }
-  else
-    {
-      base_deployment = rpmostreed_deployment_get_for_id (ot_sysroot, compare_deployment);
-      if (!base_deployment)
-        {
-          local_error = g_error_new (RPM_OSTREED_ERROR,
-                                     RPM_OSTREED_ERROR_FAILED,
-                                     "Invalid deployment id %s",
-                                     compare_deployment);
-          goto out;
-        }
-    }
-
-  comp_ref = rpmostreed_deployment_get_refspec (base_deployment);
-  if (!comp_ref)
-    {
-      local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
-                                 "No upgrade remote found for os %s", name);
-      goto out;
-    }
-
-  value = rpm_ostree_db_diff_variant (ot_repo,
-                                      ostree_deployment_get_csum (base_deployment),
-                                      comp_ref,
-                                      cancellable,
-                                      &local_error);
-  if (value == NULL)
-    goto out;
-
-  details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
-                                                               ot_repo,
-                                                               comp_ref);
-
-out:
-  rpmostreed_sysroot_reader_unlock (global_sysroot);
-
-  if (local_error == NULL)
-    {
-      g_task_return_pointer (task,
-                             new_variant_diff_result (value, details),
-                             (GDestroyNotify) NULL);
-    }
-  else
-    {
-      g_task_return_error (task, local_error);
-    }
-}
-
-static void
 get_deploy_diff_variant_in_thread (GTask *task,
                                    gpointer object,
                                    gpointer user_data,
@@ -442,18 +352,80 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
                                       GDBusMethodInvocation *invocation,
                                       const char *arg_deployid)
 {
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  g_autoptr(GTask) task = NULL;
+  RpmostreedSysroot *global_sysroot;
+  const gchar *name;
+  g_autofree gchar *comp_ref = NULL;
+  OstreeSysroot *ot_sysroot = NULL;
+  OstreeRepo *ot_repo = NULL;
+  glnx_unref_object OstreeDeployment *base_deployment = NULL;
+  GCancellable *cancellable = NULL;
+  GVariant *value = NULL; /* freed when invoked */
+  GVariant *details = NULL; /* freed when invoked */
+  GError *local_error = NULL;
 
-  glnx_unref_object GCancellable *cancellable = NULL;
+  global_sysroot = rpmostreed_sysroot_get ();
 
-  task = g_task_new (self, cancellable,
-                     task_result_invoke,
-                     invocation);
-  g_task_set_task_data (task,
-                        g_strdup (arg_deployid),
-                        g_free);
-  g_task_run_in_thread (task, get_upgrade_diff_variant_in_thread);
+  rpmostreed_sysroot_reader_lock (global_sysroot);
+
+  ot_sysroot = rpmostreed_sysroot_get_root (global_sysroot);
+  ot_repo = rpmostreed_sysroot_get_repo (global_sysroot);
+
+  name = rpmostree_os_get_name (interface);
+  if (arg_deployid == NULL || arg_deployid[0] == '\0')
+    {
+      base_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
+      if (base_deployment == NULL)
+        {
+          local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
+                                     "No deployments found for os %s", name);
+          goto out;
+        }
+    }
+  else
+    {
+      base_deployment = rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid);
+      if (!base_deployment)
+        {
+          local_error = g_error_new (RPM_OSTREED_ERROR,
+                                     RPM_OSTREED_ERROR_FAILED,
+                                     "Invalid deployment id %s",
+                                     arg_deployid);
+          goto out;
+        }
+    }
+
+  comp_ref = rpmostreed_deployment_get_refspec (base_deployment);
+  if (!comp_ref)
+    {
+      local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
+                                 "No upgrade remote found for os %s", name);
+      goto out;
+    }
+
+  value = rpm_ostree_db_diff_variant (ot_repo,
+                                      ostree_deployment_get_csum (base_deployment),
+                                      comp_ref,
+                                      cancellable,
+                                      &local_error);
+  if (value == NULL)
+    goto out;
+
+  details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
+                                                               ot_repo,
+                                                               comp_ref);
+
+out:
+  rpmostreed_sysroot_reader_unlock (global_sysroot);
+
+  if (local_error != NULL)
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      g_dbus_method_invocation_return_value (invocation,
+					     new_variant_diff_result (value, details));
+    }
 
   return TRUE;
 }
