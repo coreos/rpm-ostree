@@ -152,58 +152,50 @@ new_variant_diff_result (GVariant *diff,
   return g_variant_new ("(@a(sua{sv})@a{sv})", diff, details);
 }
 
-static void
-get_deployments_diff_variant_in_thread (GTask *task,
-                                        gpointer object,
-                                        gpointer data_ptr,
-                                        GCancellable *cancellable)
-{
-  RpmostreedSysroot *global_sysroot;
-  const gchar *ref0;
-  const gchar *ref1;
+/* ---------------------------------------------------------------------------------------------------- */
 
+static gboolean
+os_handle_get_deployments_rpm_diff (RPMOSTreeOS *interface,
+                                    GDBusMethodInvocation *invocation,
+                                    const char *arg_deployid0,
+                                    const char *arg_deployid1)
+{
+  glnx_unref_object GCancellable *cancellable = NULL;
+  RpmostreedSysroot *global_sysroot;
   glnx_unref_object OstreeDeployment *deployment0 = NULL;
   glnx_unref_object OstreeDeployment *deployment1 = NULL;
-  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  glnx_unref_object OstreeRepo *ot_repo = NULL;
-
+  OstreeSysroot *ot_sysroot = NULL;
+  OstreeRepo *ot_repo = NULL;
   GVariant *value = NULL; /* freed when invoked */
-  GPtrArray *compare_refs = data_ptr; /* freed by task */
   GError *local_error = NULL;
-
-  g_return_if_fail (compare_refs->len == 2);
+  const gchar *ref0;
+  const gchar *ref1;
 
   global_sysroot = rpmostreed_sysroot_get ();
 
   rpmostreed_sysroot_reader_lock (global_sysroot);
 
-  if (!rpmostreed_sysroot_load_state (global_sysroot,
-                                      cancellable,
-                                      &ot_sysroot,
-                                      &ot_repo,
-                                      &local_error))
-    goto out;
+  ot_sysroot = rpmostreed_sysroot_get_root (global_sysroot);
+  ot_repo = rpmostreed_sysroot_get_repo (global_sysroot);
 
-  deployment0 = rpmostreed_deployment_get_for_id (ot_sysroot, compare_refs->pdata[0]);
+  deployment0 = rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid0);
   if (!deployment0)
     {
-      gchar *id = compare_refs->pdata[0];
       local_error = g_error_new (RPM_OSTREED_ERROR,
                                  RPM_OSTREED_ERROR_FAILED,
                                  "Invalid deployment id %s",
-                                 id);
+                                 arg_deployid0);
       goto out;
     }
   ref0 = ostree_deployment_get_csum (deployment0);
 
-  deployment1 = rpmostreed_deployment_get_for_id (ot_sysroot, compare_refs->pdata[1]);
+  deployment1 = rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid1);
   if (!deployment1)
     {
-      gchar *id = compare_refs->pdata[1];
       local_error = g_error_new (RPM_OSTREED_ERROR,
                                  RPM_OSTREED_ERROR_FAILED,
                                  "Invalid deployment id %s",
-                                 id);
+                                 arg_deployid1);
       goto out;
     }
   ref1 = ostree_deployment_get_csum (deployment1);
@@ -216,43 +208,16 @@ get_deployments_diff_variant_in_thread (GTask *task,
 
 out:
   rpmostreed_sysroot_reader_unlock (global_sysroot);
-  if (local_error == NULL)
+
+  if (local_error != NULL)
     {
-      g_task_return_pointer (task,
-                             g_variant_new ("(@a(sua{sv}))", value),
-                             NULL);
+      g_dbus_method_invocation_take_error (invocation, local_error);
     }
   else
     {
-      g_task_return_error (task, local_error);
+      g_dbus_method_invocation_return_value (invocation,
+					     g_variant_new ("(@a(sua{sv}))", value));
     }
-}
-
-/* ---------------------------------------------------------------------------------------------------- */
-
-static gboolean
-os_handle_get_deployments_rpm_diff (RPMOSTreeOS *interface,
-                                    GDBusMethodInvocation *invocation,
-                                    const char *arg_deployid0,
-                                    const char *arg_deployid1)
-{
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  GPtrArray *compare_refs = NULL; /* freed by task */
-  g_autoptr(GTask) task = NULL;
-
-  glnx_unref_object GCancellable *cancellable = NULL;
-
-  compare_refs = g_ptr_array_new_with_free_func (g_free);
-  g_ptr_array_add (compare_refs, g_strdup (arg_deployid0));
-  g_ptr_array_add (compare_refs, g_strdup (arg_deployid1));
-
-  task = g_task_new (self, cancellable,
-                     task_result_invoke,
-                     invocation);
-  g_task_set_task_data (task,
-                        compare_refs,
-                        (GDestroyNotify) g_ptr_array_unref);
-  g_task_run_in_thread (task, get_deployments_diff_variant_in_thread);
 
   return TRUE;
 }
