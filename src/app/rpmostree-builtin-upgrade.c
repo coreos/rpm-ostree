@@ -37,6 +37,7 @@ static gboolean opt_reboot;
 static gboolean opt_allow_downgrade;
 static gboolean opt_preview;
 static gboolean opt_check;
+static gboolean opt_upgrade_unchanged_exit_77;
 
 /* "check-diff" is deprecated, replaced by "preview" */
 static GOptionEntry option_entries[] = {
@@ -46,6 +47,7 @@ static GOptionEntry option_entries[] = {
   { "check-diff", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_preview, "Check for upgrades and print package diff only", NULL },
   { "preview", 0, 0, G_OPTION_ARG_NONE, &opt_preview, "Just preview package differences", NULL },
   { "check", 0, 0, G_OPTION_ARG_NONE, &opt_check, "Just check if an upgrade is available", NULL },
+  { "upgrade-unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_upgrade_unchanged_exit_77, "If no upgrade is available, exit 77", NULL },
   { NULL }
 };
 
@@ -61,15 +63,6 @@ get_args_variant (void)
   return g_variant_dict_end (&dict);
 }
 
-static void
-default_changed_callback (GObject *object,
-                          GParamSpec *pspec,
-                          gpointer user_data)
-{
-  GVariant **value = user_data;
-  g_object_get (object, pspec->name, value, NULL);
-}
-
 int
 rpmostree_builtin_upgrade (int             argc,
                            char          **argv,
@@ -81,7 +74,8 @@ rpmostree_builtin_upgrade (int             argc,
   GOptionContext *context = g_option_context_new ("- Perform a system upgrade");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GVariant) default_deployment = NULL;
+  g_autoptr(GVariant) previous_default_deployment = NULL;
+  g_autoptr(GVariant) new_default_deployment = NULL;
   g_autofree char *transaction_address = NULL;
 
   if (!rpmostree_option_context_parse (context,
@@ -115,6 +109,8 @@ rpmostree_builtin_upgrade (int             argc,
                                 cancellable, &os_proxy, error))
     goto out;
 
+  previous_default_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+
   if (opt_preview || opt_check)
     {
       if (!rpmostree_os_call_download_update_rpm_diff_sync (os_proxy,
@@ -125,10 +121,6 @@ rpmostree_builtin_upgrade (int             argc,
     }
   else
     {
-      g_signal_connect (os_proxy, "notify::default-deployment",
-                        G_CALLBACK (default_changed_callback),
-                        &default_deployment);
-
       if (!rpmostree_os_call_upgrade_sync (os_proxy,
                                            get_args_variant (),
                                            &transaction_address,
@@ -136,6 +128,8 @@ rpmostree_builtin_upgrade (int             argc,
                                            error))
         goto out;
     }
+
+  new_default_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
@@ -168,14 +162,23 @@ rpmostree_builtin_upgrade (int             argc,
   else if (!opt_reboot)
     {
       const char *sysroot_path;
-
-      if (default_deployment == NULL)
-        {
-          exit_status = RPM_OSTREE_EXIT_UNCHANGED;
-          goto out;
-        }
+      gboolean changed;
 
       sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
+
+      if (previous_default_deployment == new_default_deployment)
+        changed = FALSE;
+      else
+        changed = g_variant_equal (previous_default_deployment, new_default_deployment); 
+
+      if (!changed)
+        {
+          if (opt_upgrade_unchanged_exit_77 && !changed)
+            exit_status = RPM_OSTREE_EXIT_UNCHANGED;
+          else
+            exit_status = EXIT_SUCCESS;
+          goto out;
+        }
 
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
