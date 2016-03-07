@@ -149,8 +149,6 @@ os_handle_get_deployments_rpm_diff (RPMOSTreeOS *interface,
 
   global_sysroot = rpmostreed_sysroot_get ();
 
-  rpmostreed_sysroot_reader_lock (global_sysroot);
-
   ot_sysroot = rpmostreed_sysroot_get_root (global_sysroot);
   ot_repo = rpmostreed_sysroot_get_repo (global_sysroot);
 
@@ -183,8 +181,6 @@ os_handle_get_deployments_rpm_diff (RPMOSTreeOS *interface,
                                       &local_error);
 
 out:
-  rpmostreed_sysroot_reader_unlock (global_sysroot);
-
   if (local_error != NULL)
     {
       g_dbus_method_invocation_take_error (invocation, local_error);
@@ -215,8 +211,6 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
   GError *local_error = NULL;
 
   global_sysroot = rpmostreed_sysroot_get ();
-
-  rpmostreed_sysroot_reader_lock (global_sysroot);
 
   ot_sysroot = rpmostreed_sysroot_get_root (global_sysroot);
   ot_repo = rpmostreed_sysroot_get_repo (global_sysroot);
@@ -266,8 +260,6 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
                                                                comp_ref);
 
 out:
-  rpmostreed_sysroot_reader_unlock (global_sysroot);
-
   if (local_error != NULL)
     {
       g_dbus_method_invocation_take_error (invocation, local_error);
@@ -735,8 +727,6 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
 
   global_sysroot = rpmostreed_sysroot_get ();
 
-  rpmostreed_sysroot_reader_lock (global_sysroot);
-
   ot_sysroot = rpmostreed_sysroot_get_root (global_sysroot);
   ot_repo = rpmostreed_sysroot_get_repo (global_sysroot);
 
@@ -769,7 +759,6 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
                                                                comp_ref);
 
 out:
-  rpmostreed_sysroot_reader_unlock (global_sysroot);
   if (local_error == NULL)
     {
       g_dbus_method_invocation_return_value (invocation, new_variant_diff_result (value, details));
@@ -851,7 +840,6 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
                                       const char *arg_revision,
                                       const char * const *arg_packages)
 {
-  RpmostreedSysroot *global_sysroot;
   const char *base_checksum;
   const char *osname;
   OstreeSysroot *ot_sysroot = NULL;
@@ -866,10 +854,6 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
   GError *local_error = NULL;
 
   /* XXX Ignoring arg_packages for now. */
-
-  global_sysroot = rpmostreed_sysroot_get ();
-
-  rpmostreed_sysroot_reader_lock (global_sysroot);
 
   ot_sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
   ot_repo = rpmostreed_sysroot_get_repo (rpmostreed_sysroot_get ());
@@ -916,8 +900,6 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
                                                                NULL);
 
 out:
-  rpmostreed_sysroot_reader_unlock (global_sysroot);
-
   if (local_error != NULL)
     {
       g_dbus_method_invocation_take_error (invocation, local_error);

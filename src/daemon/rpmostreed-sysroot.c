@@ -59,7 +59,6 @@ struct _RpmostreedSysroot {
   RpmostreedTransactionMonitor *transaction_monitor;
 
   GHashTable *os_interfaces;
-  GRWLock children_lock;
 
   /* The OS interface's various diff methods can run concurrently with
    * transactions, which is safe except when the transaction is writing
@@ -333,13 +332,9 @@ handle_get_os (RPMOSTreeSysroot *object,
       goto out;
     }
 
-  g_rw_lock_reader_lock (&self->children_lock);
-
   os_interface = g_hash_table_lookup (self->os_interfaces, arg_name);
   if (os_interface != NULL)
     g_object_ref (os_interface);
-
-  g_rw_lock_reader_unlock (&self->children_lock);
 
   if (os_interface != NULL)
     {
@@ -522,15 +517,11 @@ sysroot_dispose (GObject *object)
         }
     }
 
-  g_rw_lock_writer_lock (&self->children_lock);
-
   /* Tracked os paths are responsible to unpublish themselves */
   g_hash_table_iter_init (&iter, self->os_interfaces);
   while (g_hash_table_iter_next (&iter, NULL, &value))
     g_object_run_dispose (value);
   g_hash_table_remove_all (self->os_interfaces);
-
-  g_rw_lock_writer_unlock (&self->children_lock);
 
   g_clear_object (&self->transaction_monitor);
 
@@ -544,9 +535,6 @@ sysroot_finalize (GObject *object)
   _sysroot_instance = NULL;
 
   g_hash_table_unref (self->os_interfaces);
-
-  g_rw_lock_clear (&self->children_lock);
-  g_rw_lock_clear (&self->method_rw_lock);
 
   g_clear_object (&self->cancellable);
   g_clear_object (&self->monitor);
@@ -567,9 +555,6 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
 
   self->os_interfaces = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
   (GDestroyNotify) g_object_unref);
-
-  g_rw_lock_init (&self->children_lock);
-  g_rw_lock_init (&self->method_rw_lock);
 
   self->monitor = NULL;
 
@@ -630,14 +615,11 @@ rpmostreed_sysroot_reload (RpmostreedSysroot *self,
   gboolean ret = FALSE;
   gboolean did_change;
 
-  g_rw_lock_writer_lock (&self->children_lock);
-
   if (!sysroot_populate_deployments_unlocked (self, &did_change, error))
     goto out;
 
   ret = TRUE;
  out:
-  g_rw_lock_writer_unlock (&self->children_lock);
   if (ret && did_change)
     g_signal_emit (self, signals[UPDATED], 0);
   return ret;
@@ -762,37 +744,3 @@ rpmostreed_sysroot_get (void)
   g_assert (_sysroot_instance);
   return _sysroot_instance;
 }
-
-void
-rpmostreed_sysroot_reader_lock (RpmostreedSysroot *self)
-{
-  g_return_if_fail (RPMOSTREED_IS_SYSROOT (self));
-
-  g_rw_lock_reader_lock (&self->method_rw_lock);
-}
-
-void
-rpmostreed_sysroot_reader_unlock (RpmostreedSysroot *self)
-{
-  g_return_if_fail (RPMOSTREED_IS_SYSROOT (self));
-
-  g_rw_lock_reader_unlock (&self->method_rw_lock);
-}
-
-void
-rpmostreed_sysroot_writer_lock (RpmostreedSysroot *self)
-{
-  g_return_if_fail (RPMOSTREED_IS_SYSROOT (self));
-
-  g_rw_lock_writer_lock (&self->method_rw_lock);
-}
-
-void
-rpmostreed_sysroot_writer_unlock (RpmostreedSysroot *self)
-{
-  g_return_if_fail (RPMOSTREED_IS_SYSROOT (self));
-
-  g_rw_lock_writer_unlock (&self->method_rw_lock);
-}
-
-/* ---------------------------------------------------------------------------------------------------- */
