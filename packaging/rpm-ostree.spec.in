@@ -19,7 +19,6 @@ BuildRequires: pkgconfig(libhif)
 BuildRequires: pkgconfig(librepo)
 BuildRequires: pkgconfig(json-glib-1.0)
 BuildRequires: pkgconfig(rpm)
-BuildRequires: pkgconfig(hawkey)
 BuildRequires: libcap-devel
 
 Requires: /usr/bin/yum
