@@ -20,6 +20,7 @@
 #include "ostree.h"
 
 #include <libglnx.h>
+#include <libgsystem.h>
 
 #include "rpmostreed-transaction-types.h"
 #include "rpmostreed-transaction.h"
@@ -78,70 +79,6 @@ out:
   return ret;
 }
 
-static gboolean
-safe_sysroot_upgrader_deploy (OstreeSysrootUpgrader *upgrader,
-                              GCancellable *cancellable,
-                              GError **error)
-{
-  RpmostreedSysroot *global_sysroot = rpmostreed_sysroot_get ();
-  gboolean success;
-
-  rpmostreed_sysroot_writer_lock (global_sysroot);
-
-  success = ostree_sysroot_upgrader_deploy (upgrader, cancellable, error);
-
-  rpmostreed_sysroot_writer_unlock (global_sysroot);
-
-  return success;
-}
-
-static gboolean
-safe_sysroot_upgrader_pull_package_diff (OstreeSysrootUpgrader *upgrader,
-                                         OstreeAsyncProgress *progress,
-                                         OstreeSysrootUpgraderPullFlags upgrader_flags,
-                                         gboolean *out_changed,
-                                         GCancellable *cancellable,
-                                         GError **error)
-{
-  RpmostreedSysroot *global_sysroot = rpmostreed_sysroot_get ();
-  gboolean success;
-
-  rpmostreed_sysroot_writer_lock (global_sysroot);
-
-  success = ostree_sysroot_upgrader_pull_one_dir (upgrader,
-                                                  "/usr/share/rpm",
-                                                  0, upgrader_flags,
-                                                  progress,
-                                                  out_changed,
-                                                  cancellable,
-                                                  error);
-
-  rpmostreed_sysroot_writer_unlock (global_sysroot);
-
-  return success;
-}
-
-static gboolean
-safe_sysroot_write_deployments (OstreeSysroot *sysroot,
-                                GPtrArray *deployments,
-                                GCancellable *cancellable,
-                                GError **error)
-{
-  RpmostreedSysroot *global_sysroot = rpmostreed_sysroot_get ();
-  gboolean success;
-
-  rpmostreed_sysroot_writer_lock (global_sysroot);
-
-  success = ostree_sysroot_write_deployments (sysroot,
-                                              deployments,
-                                              cancellable,
-                                              error);
-
-  rpmostreed_sysroot_writer_unlock (global_sysroot);
-
-  return success;
-}
-
 /* ============================= Package Diff  ============================= */
 
 typedef struct {
@@ -190,11 +127,6 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
   gboolean upgrading = FALSE;
   gboolean changed = FALSE;
   gboolean ret = FALSE;
-
-  /* libostree iterates and calls quit on main loop
-   * so we need to run in our own context. */
-  GMainContext *m_context = g_main_context_new ();
-  g_main_context_push_thread_default (m_context);
 
   self = (PackageDiffTransaction *) transaction;
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
@@ -291,9 +223,13 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
                                                 "Updating from: %s",
                                                 origin_description);
 
-  if (!safe_sysroot_upgrader_pull_package_diff (upgrader, progress,
-                                                upgrader_flags, &changed,
-                                                cancellable, error))
+  if (!ostree_sysroot_upgrader_pull_one_dir (upgrader,
+					     "/usr/share/rpm",
+					     0, upgrader_flags,
+					     progress,
+					     &changed,
+					     cancellable,
+					     error))
     goto out;
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
@@ -309,12 +245,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   ret = TRUE;
-
 out:
-  /* Clean up context */
-  g_main_context_pop_thread_default (m_context);
-  g_main_context_unref (m_context);
-
   return ret;
 }
 
@@ -352,7 +283,7 @@ rpmostreed_transaction_new_package_diff (GDBusMethodInvocation *invocation,
   self = g_initable_new (package_diff_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
-                         "sysroot", sysroot,
+                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
                          NULL);
 
   if (self != NULL)
@@ -440,10 +371,10 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
   /* if default changed write it */
   if (old_deployments->pdata[0] != new_deployments->pdata[0])
     {
-      if (!safe_sysroot_write_deployments (sysroot,
-                                           new_deployments,
-                                           cancellable,
-                                           error))
+      if (!ostree_sysroot_write_deployments (sysroot,
+					     new_deployments,
+					     cancellable,
+					     error))
         goto out;
     }
 
@@ -489,7 +420,7 @@ rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
   self = g_initable_new (rollback_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
-                         "sysroot", sysroot,
+                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
                          NULL);
 
   if (self != NULL)
@@ -560,10 +491,10 @@ clear_rollback_transaction_execute (RpmostreedTransaction *transaction,
 
   g_ptr_array_remove_index (deployments, rollback_index);
 
-  if (!safe_sysroot_write_deployments (sysroot,
-                                       deployments,
-                                       cancellable,
-                                       error))
+  if (!ostree_sysroot_write_deployments (sysroot,
+					 deployments,
+					 cancellable,
+					 error))
     goto out;
 
   if (self->reboot)
@@ -608,7 +539,7 @@ rpmostreed_transaction_new_clear_rollback (GDBusMethodInvocation *invocation,
   self = g_initable_new (clear_rollback_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
-                         "sysroot", sysroot,
+                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
                          NULL);
 
   if (self != NULL)
@@ -668,11 +599,6 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
   gboolean changed = FALSE;
   gboolean ret = FALSE;
 
-  /* libostree iterates and calls quit on main loop
-   * so we need to run in our own context. */
-  GMainContext *m_context = g_main_context_new ();
-  g_main_context_push_thread_default (m_context);
-
   self = (UpgradeTransaction *) transaction;
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
@@ -720,7 +646,7 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
 
   if (changed)
     {
-      if (!safe_sysroot_upgrader_deploy (upgrader, cancellable, error))
+      if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
         goto out;
 
       if (self->reboot)
@@ -732,12 +658,7 @@ upgrade_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   ret = TRUE;
-
 out:
-  /* Clean up context */
-  g_main_context_pop_thread_default (m_context);
-  g_main_context_unref (m_context);
-
   return ret;
 }
 
@@ -775,7 +696,7 @@ rpmostreed_transaction_new_upgrade (GDBusMethodInvocation *invocation,
   self = g_initable_new (upgrade_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
-                         "sysroot", sysroot,
+                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
                          NULL);
 
   if (self != NULL)
@@ -837,11 +758,6 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
   gboolean changed = FALSE;
   gboolean ret = FALSE;
 
-  /* libostree iterates and calls quit on main loop
-   * so we need to run in our own context. */
-  GMainContext *m_context = g_main_context_new ();
-  g_main_context_push_thread_default (m_context);
-
   self = (RebaseTransaction *) transaction;
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
@@ -873,7 +789,7 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
-  if (!safe_sysroot_upgrader_deploy (upgrader, cancellable, error))
+  if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
     goto out;
 
   if (!self->skip_purge)
@@ -896,12 +812,7 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
     rpmostreed_reboot (cancellable, error);
 
   ret = TRUE;
-
 out:
-  /* Clean up context */
-  g_main_context_pop_thread_default (m_context);
-  g_main_context_unref (m_context);
-
   return ret;
 }
 
@@ -941,7 +852,7 @@ rpmostreed_transaction_new_rebase (GDBusMethodInvocation *invocation,
   self = g_initable_new (rebase_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
-                         "sysroot", sysroot,
+                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
                          NULL);
 
   if (self != NULL)
@@ -1002,11 +913,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   gboolean changed = FALSE;
   gboolean ret = FALSE;
-
-  /* libostree iterates and calls quit on main loop
-   * so we need to run in our own context. */
-  GMainContext *m_context = g_main_context_new ();
-  g_main_context_push_thread_default (m_context);
 
   self = (DeployTransaction *) transaction;
 
@@ -1087,8 +993,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   if (changed)
     {
-      if (!safe_sysroot_upgrader_deploy (upgrader, cancellable, error))
-        goto out;
+      if (!ostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+	goto out;
 
       if (self->reboot)
         rpmostreed_reboot (cancellable, error);
@@ -1099,12 +1005,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   ret = TRUE;
-
 out:
-  /* Clean up context */
-  g_main_context_pop_thread_default (m_context);
-  g_main_context_unref (m_context);
-
   return ret;
 }
 
@@ -1143,7 +1044,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   self = g_initable_new (deploy_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
-                         "sysroot", sysroot,
+                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
                          NULL);
 
   if (self != NULL)

@@ -361,6 +361,8 @@ main (int argc,
        * the system bus. */
       if (g_getenv ("DBUS_STARTER_BUS_TYPE") != NULL)
         bus_type = G_BUS_TYPE_STARTER;
+      else if (g_getenv ("RPMOSTREE_USE_SESSION_BUS") != NULL)
+        bus_type = G_BUS_TYPE_SESSION;
       else
         bus_type = G_BUS_TYPE_SYSTEM;
 

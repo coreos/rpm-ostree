@@ -190,7 +190,7 @@ rpmostreed_daemon_initable_init (GInitable *initable,
                                 "path", self->sysroot_path,
                                 NULL);
 
-  if (!rpmostreed_sysroot_populate (rpmostreed_sysroot_get (), error))
+  if (!rpmostreed_sysroot_populate (rpmostreed_sysroot_get (), cancellable, error))
     {
       g_prefix_error (error, "Error setting up sysroot: ");
       goto out;

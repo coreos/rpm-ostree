@@ -25,7 +25,9 @@ if test -n "${LIBTEST_SH:-}"; then
 fi
 LIBTEST_SH=1
 
-SRCDIR=$(dirname $0)
+if test -z "${SRCDIR:-}"; then
+    SRCDIR=$(dirname $0)
+fi
 _cleanup_tmpdir () {
     if test -f ${test_tmpdir}/.test; then
         rm ${test_tmpdir} -rf

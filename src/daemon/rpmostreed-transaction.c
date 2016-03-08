@@ -29,7 +29,11 @@ struct _RpmostreedTransactionPrivate {
   GDBusMethodInvocation *invocation;
   GCancellable *cancellable;
 
-  /* Locked for the duration of the transaction. */
+  /* For the duration of the transaction, we hold a ref to a new
+   * OstreeSysroot instance (to avoid any threading issues), and we
+   * also lock it.
+   */
+  char *sysroot_path;
   OstreeSysroot *sysroot;
 
   GDBusServer *server;
@@ -45,7 +49,7 @@ enum {
   PROP_0,
   PROP_ACTIVE,
   PROP_INVOCATION,
-  PROP_SYSROOT
+  PROP_SYSROOT_PATH
 };
 
 enum {
@@ -277,6 +281,14 @@ transaction_execute_thread (GTask *task,
   RpmostreedTransactionClass *class = RPMOSTREED_TRANSACTION_GET_CLASS (self);
   gboolean success = TRUE;
   GError *local_error = NULL;
+  g_autoptr(GMainContext) mctx = g_main_context_new ();
+
+  /* libostree iterates and calls quit on main loop
+   * so we need to run in our own context.  Having a different
+   * main context for worker threads should be standard practice
+   * anyways.
+   */
+  g_main_context_push_thread_default (mctx);
 
   if (class->execute != NULL)
     success = class->execute (self, cancellable, &local_error);
@@ -285,6 +297,9 @@ transaction_execute_thread (GTask *task,
     g_task_return_error (task, local_error);
   else
     g_task_return_boolean (task, success);
+
+  /* Clean up context */
+  g_main_context_pop_thread_default (mctx);
 }
 
 static void
@@ -299,6 +314,11 @@ transaction_execute_done_cb (GObject *source_object,
   GError *local_error = NULL;
 
   success = g_task_propagate_boolean (G_TASK (result), &local_error);
+  if (success)
+    {
+      if (!rpmostreed_sysroot_reload (rpmostreed_sysroot_get (), &local_error))
+	success = FALSE;
+    }
 
   /* Sanity check */
   g_warn_if_fail ((success && local_error == NULL) ||
@@ -309,9 +329,6 @@ transaction_execute_done_cb (GObject *source_object,
 
   if (error_message == NULL)
     error_message = "";
-
-  if (success)
-    rpmostreed_sysroot_emit_update (rpmostreed_sysroot_get ());
 
   g_debug ("%s (%p): Finished%s%s%s",
            G_OBJECT_TYPE_NAME (self), self,
@@ -345,8 +362,9 @@ transaction_set_property (GObject *object,
     {
       case PROP_INVOCATION:
         priv->invocation = g_value_dup_object (value);
-      case PROP_SYSROOT:
-        priv->sysroot = g_value_dup_object (value);
+	break;
+      case PROP_SYSROOT_PATH:
+        priv->sysroot_path = g_value_dup_string (value);
         break;
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -368,8 +386,8 @@ transaction_get_property (GObject *object,
       case PROP_INVOCATION:
         g_value_set_object (value, priv->invocation);
         break;
-      case PROP_SYSROOT:
-        g_value_set_object (value, priv->sysroot);
+      case PROP_SYSROOT_PATH:
+        g_value_set_string (value, priv->sysroot_path);
         break;
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -392,6 +410,7 @@ transaction_dispose (GObject *object)
   g_clear_object (&priv->cancellable);
   g_clear_object (&priv->sysroot);
   g_clear_object (&priv->server);
+  g_clear_pointer (&priv->sysroot_path, g_free);
 
   g_clear_pointer (&priv->finished_params, (GDestroyNotify) g_variant_unref);
 
@@ -477,9 +496,20 @@ transaction_initable_init (GInitable *initable,
                            G_CALLBACK (transaction_new_connection_cb),
                            self, 0);
 
-  if (priv->sysroot != NULL)
+  if (priv->sysroot_path != NULL)
     {
+      g_autoptr(GFile) tmp_path = g_file_new_for_path (priv->sysroot_path);
       gboolean lock_acquired = FALSE;
+
+      /* We create a *new* sysroot to avoid threading issues like data
+       * races - OstreeSysroot has no internal locking.  Efficiency
+       * could be improved with a "clone" operation to avoid reloading
+       * everything from disk.
+       */
+      priv->sysroot = ostree_sysroot_new (tmp_path);
+
+      if (!ostree_sysroot_load (priv->sysroot, cancellable, error))
+	goto out;
 
       if (!ostree_sysroot_try_lock (priv->sysroot, &lock_acquired, error))
         goto out;
@@ -617,11 +647,11 @@ rpmostreed_transaction_class_init (RpmostreedTransactionClass *class)
                                                         G_PARAM_STATIC_STRINGS));
 
   g_object_class_install_property (object_class,
-                                   PROP_SYSROOT,
-                                   g_param_spec_object ("sysroot",
-                                                        "Sysroot",
-                                                        "An OstreeSysroot instance",
-                                                        OSTREE_TYPE_SYSROOT,
+                                   PROP_SYSROOT_PATH,
+                                   g_param_spec_string ("sysroot-path",
+                                                        "Sysroot path",
+                                                        "An OstreeSysroot path",
+                                                        "",
                                                         G_PARAM_READWRITE |
                                                         G_PARAM_CONSTRUCT_ONLY |
                                                         G_PARAM_STATIC_STRINGS));
