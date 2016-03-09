@@ -1,6 +1,15 @@
 Treefile
 --------
 
+A "treefile" is a made up term for a JSON-formatted specification used
+as input to `rpm-ostree compose tree` to bind "set of RPMs with
+configuration" to "OSTree commit".
+
+It's recommended to keep them in git, and set up a CI system like
+Jenkins to operate on them as it changes.
+
+It supports the following parameters:
+
  * `ref`: string, mandatory: Holds a string which will be the name of
    the branch for the content.
 
