@@ -107,7 +107,7 @@ if test x$enable_compose_tooling != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_F
 
 AC_CONFIG_FILES([
 Makefile
-doc/Makefile
+api-doc/Makefile
 src/lib/rpm-ostree-1.pc
 ])
 AC_OUTPUT
