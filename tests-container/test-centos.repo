@@ -1,0 +1,4 @@
+[test-centos]
+name=test-centos
+baseurl=file:///var/tmp/centos/pkgblob
+gpgcheck=0
