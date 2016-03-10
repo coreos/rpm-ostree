@@ -107,5 +107,7 @@ BUILT_SOURCES = $(DOC_MAIN_SGML_FILE)
 # This includes the standard gtk-doc make rules, copied by gtkdocize.
 include $(top_srcdir)/gtk-doc.make
 
-CLEANFILES += $(BUILT_SOURCES)
+CLEANFILES += $(BUILT_SOURCES) rpmostree-overrides.txt version.xml
 EXTRA_DIST += $(DOC_MAIN_SGML_FILE).in
+
+-include $(top_srcdir)/git.mk
