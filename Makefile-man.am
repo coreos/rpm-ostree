@@ -30,3 +30,5 @@ XSLTPROC_FLAGS_MAN = \
 
 rpm-ostree.1: man/rpm-ostree.xml Makefile
 	$(AM_V_GEN) $(XSLTPROC) $(XSLTPROC_FLAGS_MAN) $<
+
+CLEANFILES += rpm-ostree.1
