@@ -306,7 +306,7 @@ transaction_get_progress_line (guint64 start_time,
 
 typedef struct
 {
-  GSConsole *console;
+  GLnxConsoleRef console;
   gboolean in_status_line;
   GError *error;
   GMainLoop *loop;
@@ -320,7 +320,6 @@ transaction_progress_new (void)
   TransactionProgress *self;
 
   self = g_slice_new0 (TransactionProgress);
-  self->console = gs_console_get ();
   self->loop = g_main_loop_new (NULL, FALSE);
 
   return self;
@@ -342,7 +341,7 @@ end_status_line (TransactionProgress *self)
 
   if (self->in_status_line)
     {
-      ret = gs_console_end_status_line (self->console, NULL, NULL);
+      glnx_console_unlock (&self->console);
       self->in_status_line = FALSE;
     }
 
@@ -354,13 +353,12 @@ static gboolean
 add_status_line (TransactionProgress *self,
                  const char *line)
 {
-  if (self->console)
+  if (self->console.is_tty)
     {
       self->in_status_line = TRUE;
-      return gs_console_begin_status_line (self->console, line, NULL, NULL);
+      glnx_console_text (line);
     }
-  else
-    return TRUE;
+  return TRUE;
 }
 
 
@@ -368,7 +366,6 @@ static void
 transaction_progress_end (TransactionProgress *self)
 {
   end_status_line (self);
-  self->console = NULL;
   g_main_loop_quit (self->loop);
 }
 
