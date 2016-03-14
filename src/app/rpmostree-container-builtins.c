@@ -263,6 +263,12 @@ rpmostree_container_builtin_assemble (int             argc,
     goto out;
 
   name = rpmostree_treespec_get_ref (treespec);
+  if (name == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Missing ref in treespec");
+      goto out;
+    }
 
   if (!roc_context_init (rocctx, error))
     goto out;
@@ -306,9 +312,7 @@ rpmostree_container_builtin_assemble (int             argc,
       goto out;
     
     if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd,
-                                            name,
-                                            &commit,
-                                            cancellable, error))
+                                            &commit, cancellable, error))
       goto out;
   }
 
@@ -514,7 +518,6 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
       goto out;
     
     if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd,
-                                            name,
                                             &new_commit_checksum,
                                             cancellable, error))
       goto out;

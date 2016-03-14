@@ -323,10 +323,11 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
 
   g_variant_builder_init (&builder, (GVariantType*)"a{sv}");
 
-  { g_autofree char *ref = g_key_file_get_string (keyfile, "tree", "ref", error);
-    if (!ref)
-      return NULL;
-    g_variant_builder_add (&builder, "{sv}", "ref", g_variant_new_string (ref));
+  /* We allow the "ref" key to be missing for cases where we don't need one.
+   * This is abusing the Treespec a bit, but oh well... */
+  { g_autofree char *ref = g_key_file_get_string (keyfile, "tree", "ref", NULL);
+    if (ref)
+      g_variant_builder_add (&builder, "{sv}", "ref", g_variant_new_string (ref));
   }
 
   if (!add_canonicalized_string_array (&builder, "packages", NULL, keyfile, error))
@@ -380,9 +381,8 @@ rpmostree_treespec_new (GVariant   *variant)
 const char *
 rpmostree_treespec_get_ref (RpmOstreeTreespec    *spec)
 {
-  const char *r;
+  const char *r = NULL;
   g_variant_dict_lookup (spec->dict, "ref", "&s", &r);
-  g_assert (r);
   return r;
 }
 
@@ -1321,7 +1321,6 @@ add_to_transaction (rpmts  ts,
 gboolean
 rpmostree_context_assemble_commit (RpmOstreeContext *self,
                                    int               tmpdir_dfd,
-                                   const char       *name,
                                    char            **out_commit,
                                    GCancellable     *cancellable,
                                    GError          **error)
@@ -1592,14 +1591,18 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
 
     if (!ostree_repo_write_mtree (self->ostreerepo, mtree, &root, cancellable, error))
       goto out;
-    
+
     if (!ostree_repo_write_commit (self->ostreerepo, NULL, "", "",
                                    g_variant_builder_end (&metadata_builder),
                                    OSTREE_REPO_FILE (root),
                                    &ret_commit_checksum, cancellable, error))
       goto out;
-    
-    ostree_repo_transaction_set_ref (self->ostreerepo, NULL, name, ret_commit_checksum);
+
+    { const char * ref = rpmostree_treespec_get_ref (self->spec);
+      if (ref != NULL)
+        ostree_repo_transaction_set_ref (self->ostreerepo, NULL, ref,
+                                         ret_commit_checksum);
+    }
 
     if (!ostree_repo_commit_transaction (self->ostreerepo, NULL, cancellable, error))
       goto out;
