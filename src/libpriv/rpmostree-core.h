@@ -59,6 +59,9 @@ gboolean rpmostree_context_setup (RpmOstreeContext     *self,
                                   GCancellable  *cancellable,
                                   GError       **error);
 
+void rpmostree_context_set_repo (RpmOstreeContext *self,
+                                 OstreeRepo *repo);
+
 void rpmostree_hif_add_checksum_goal (GChecksum *checksum, HyGoal goal);
 char *rpmostree_context_get_state_sha512 (RpmOstreeContext *self);
 

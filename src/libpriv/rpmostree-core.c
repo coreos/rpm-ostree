@@ -89,6 +89,8 @@ rpmostree_context_finalize (GObject *object)
       g_free (rctx->dummy_instroot_path);
     }
 
+  g_clear_object (&rctx->ostreerepo);
+
   G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
 }
 
@@ -163,7 +165,7 @@ set_rpm_macro_define (const char *key, const char *value)
 
 RpmOstreeContext *
 rpmostree_context_new_system (GCancellable *cancellable,
-                               GError      **error)
+                              GError      **error)
 {
   RpmOstreeContext *self = g_object_new (RPMOSTREE_TYPE_CONTEXT, NULL);
 
@@ -248,6 +250,15 @@ rpmostree_context_new_unprivileged (int           userroot_dfd,
     return g_steal_pointer (&ret);
   return NULL;
 }
+
+/* XXX: or put this in new_system() instead? */
+void
+rpmostree_context_set_repo (RpmOstreeContext *self,
+                            OstreeRepo *repo)
+{
+  g_set_object (&self->ostreerepo, repo);
+}
+
 
 HifContext *
 rpmostree_context_get_hif (RpmOstreeContext *self)
