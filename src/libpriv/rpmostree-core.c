@@ -330,13 +330,19 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   }
 
   if (!add_canonicalized_string_array (&builder, "packages", NULL, keyfile, error))
-    return FALSE;
+    return NULL;
 
-  if (!add_canonicalized_string_array (&builder, "repos", NULL, keyfile, error))
-    return FALSE;
+  /* We allow the "repo" key to be missing. This means that we rely on hif's
+   * normal behaviour (i.e. look at repos in repodir with enabled=1). */
+  { g_auto(GStrv) val = g_key_file_get_string_list (keyfile, "tree", "repos",
+                                                    NULL, NULL);
+    if (val && *val &&
+        !add_canonicalized_string_array (&builder, "repos", "", keyfile, error))
+      return NULL;
+  }
 
   if (!add_canonicalized_string_array (&builder, "instlangs", "instlangs-all", keyfile, error))
-    return FALSE;
+    return NULL;
 
   { gboolean documentation = TRUE;
     g_autofree char *value = g_key_file_get_value (keyfile, "tree", "documentation", NULL);
@@ -482,9 +488,9 @@ rpmostree_context_setup (RpmOstreeContext    *self,
 
   self->spec = g_object_ref (spec);
 
-  g_assert (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos));
-  if (!context_repos_enable_only (self, (const char *const*)enabled_repos, error))
-    goto out;
+  if (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos))
+    if (!context_repos_enable_only (self, (const char *const*)enabled_repos, error))
+      goto out;
 
   repos = hif_context_get_repos (self->hifctx);
   if (repos->len == 0)
