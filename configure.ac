@@ -79,7 +79,11 @@ m4_ifdef([GOBJECT_INTROSPECTION_CHECK], [
 ])
 AM_CONDITIONAL(BUILDOPT_INTROSPECTION, test "x$found_introspection" = xyes)
 
+m4_ifdef([GTK_DOC_CHECK], [
 GTK_DOC_CHECK([1.15], [--flavour no-tmpl])
+],[
+AM_CONDITIONAL([ENABLE_GTK_DOC],[false])
+])
 
 AC_ARG_ENABLE(installed_tests,
               AS_HELP_STRING([--enable-installed-tests],
