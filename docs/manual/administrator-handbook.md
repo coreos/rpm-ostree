@@ -1,8 +1,8 @@
 ## Administering an rpm-ostree based system
 
-At the moment, there are three primary commands to be familiar with on
-an rpm-ostree based system.  Remember that in a Project Atomic system,
-the `atomic host` command (from the
+At the moment, there are four primary commands to be familiar with on
+an `rpm-ostree` based system.  Also remember that in a Project Atomic
+system, the `atomic host` command (from the
 [Atomic command](https://github.com/projectatomic/atomic/)) is an
 alias for `rpm-ostree`.  The author tends to use the former on client
 systems, and the latter on compose servers.
@@ -31,7 +31,7 @@ By default, the `atomic upgrade` will keep at most two bootable
 ```
 This command makes use of the server-side history feature of OSTree.
 It will search the history of the current branch for a commit with the
-specified version, and deploys it.  This can be used in scripts to
+specified version, and deploy it.  This can be used in scripts to
 ensure consistent updates.  For example, if the upstream OS vendor
 provides an update online, you might not want to deploy it until
 you've tested it.  This helps ensure that when you upgrade, you are
