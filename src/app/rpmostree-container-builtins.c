@@ -104,7 +104,6 @@ roc_context_init (ROContainerContext *rocctx,
 
 static gboolean
 roc_context_prepare_for_root (ROContainerContext *rocctx,
-                              const char         *target,
                               RpmOstreeTreespec  *treespec,
                               GCancellable       *cancellable,
                               GError            **error)
@@ -285,7 +284,7 @@ rpmostree_container_builtin_assemble (int             argc,
       goto out;
     }
 
-  if (!roc_context_prepare_for_root (rocctx, target_rootdir, treespec, cancellable, error))
+  if (!roc_context_prepare_for_root (rocctx, treespec, cancellable, error))
     goto out;
 
   /* --- Downloading metadata --- */
@@ -308,7 +307,6 @@ rpmostree_container_builtin_assemble (int             argc,
     
     if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd,
                                             name,
-                                            install,
                                             &commit,
                                             cancellable, error))
       goto out;
@@ -483,7 +481,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   else
     target_new_root = glnx_strjoina (name, ".1");
 
-  if (!roc_context_prepare_for_root (rocctx, name, treespec, cancellable, error))
+  if (!roc_context_prepare_for_root (rocctx, treespec, cancellable, error))
     goto out;
 
   /* --- Downloading metadata --- */
@@ -517,7 +515,6 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
     
     if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd,
                                             name,
-                                            install,
                                             &new_commit_checksum,
                                             cancellable, error))
       goto out;
