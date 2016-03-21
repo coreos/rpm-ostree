@@ -762,8 +762,9 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-  upgrader = ostree_sysroot_upgrader_new_for_os (sysroot, self->osname,
-                                                 cancellable, error);
+  upgrader = ostree_sysroot_upgrader_new_for_os_with_flags (sysroot, self->osname,
+							    OSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED,
+							    cancellable, error);
   if (upgrader == NULL)
     goto out;
 
