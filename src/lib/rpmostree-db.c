@@ -184,7 +184,7 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
 
   for (i = 0; i < orig_pkglist->len; i++)
     {
-      HifPackage *pkg = new_pkglist->pdata[i];
+      HifPackage *pkg = orig_pkglist->pdata[i];
       HyQuery query = NULL;
       g_autoptr(GPtrArray) pkglist = NULL;
       
