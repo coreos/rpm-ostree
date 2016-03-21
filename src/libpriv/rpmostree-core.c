@@ -1320,12 +1320,11 @@ add_to_transaction (rpmts  ts,
 
 gboolean
 rpmostree_context_assemble_commit (RpmOstreeContext *self,
-                                           int            tmpdir_dfd,
-                                           const char    *name,
-                                           RpmOstreeInstall *install,
-                                           char          **out_commit,
-                                           GCancellable  *cancellable,
-                                           GError       **error)
+                                   int               tmpdir_dfd,
+                                   const char       *name,
+                                   char            **out_commit,
+                                   GCancellable     *cancellable,
+                                   GError          **error)
 {
   gboolean ret = FALSE;
   HifContext *hifctx = self->hifctx;
