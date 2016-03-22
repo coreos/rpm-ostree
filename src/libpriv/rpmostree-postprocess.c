@@ -855,10 +855,13 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   }
 
   /* We take /usr from the yum content */
-  g_print ("Moving /usr to target\n");
+  g_print ("Moving /usr and /etc to target\n");
   {
     gs_unref_object GFile *usr = g_file_get_child (yumroot, "usr");
+    gs_unref_object GFile *etc = g_file_get_child (yumroot, "etc");
     if (!move_to_dir (usr, targetroot, cancellable, error))
+      goto out;
+    if (!move_to_dir (etc, targetroot, cancellable, error))
       goto out;
   }
 
