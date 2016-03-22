@@ -39,15 +39,24 @@ a "recursive git archive" script.  There are several available online;
 [this code](https://git.gnome.org/browse/ostree/tree/packaging/Makefile.dist-packaging#n11)
 in OSTree is an example.
 
-Once you have a git clone or recursive archive, building is the
-same as almost every autotools project:
+Once you have a git clone or recursive archive, the next step is to
+install the build dependencies.  At the moment, rpm-ostree has a hard
+requirement on a bleeding edge version of
+[libhif](https://github.com/rpm-software-management/libhif/).  It also
+requires a few other libraries like
+[librepo](https://github.com/rpm-software-management/librepo).
+
+Once you have the dependencies, building is the same as every
+autotools project:
 
 ```
 env NOCONFIGURE=1 ./autogen.sh
-./configure --prefix=...
+./configure --prefix=/usr --libdir=/usr/lib64 --sysconfdir=/etc
 make
-make install DESTDIR=/path/to/dest
 ```
+
+At this point you can run some of the unit tests with `make check`.
+For more information on this, see `CONTRIBUTING.md`.
 
 More documentation
 ------------------
