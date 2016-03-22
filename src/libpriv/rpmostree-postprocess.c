@@ -1504,11 +1504,17 @@ rpmostree_commit (GFile         *rootfs,
   ostree_repo_commit_modifier_set_xattr_callback (commit_modifier,
                                                   read_xattrs_cb, NULL,
                                                   GINT_TO_POINTER (rootfs_fd));
-  if (sepolicy)
+  if (sepolicy && ostree_sepolicy_get_name (sepolicy) != NULL)
     {
       const char *policy_name = ostree_sepolicy_get_name (sepolicy);
       g_print ("Labeling with SELinux policy '%s'\n", policy_name);
       ostree_repo_commit_modifier_set_sepolicy (commit_modifier, sepolicy);
+    }
+  else if (enable_selinux)
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "SELinux enabled, but no policy found");
+      goto out;
     }
 
   if (!ostree_repo_write_directory_to_mtree (repo, rootfs, mtree, commit_modifier, cancellable, error))

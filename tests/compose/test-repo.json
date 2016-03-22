@@ -5,7 +5,7 @@
 
     "bootstrap_packages": ["empty"],
 
-    "selinux": true,
+    "selinux": false,
 
     "packages": []
 }

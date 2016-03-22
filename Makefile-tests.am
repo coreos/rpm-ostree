@@ -42,7 +42,6 @@ tests/test-ucontainer.sh: tests/compose/test-repo-local.repo
 installed_test_data = tests/libtest.sh \
 	tests/compose/test-repo.repo \
 	tests/compose/test-repo.json \
-	tests/compose/test-repo-no-selinux-tag.json \
 	tests/compose/test-repo.repo.in \
 	$(NULL)
 
@@ -61,7 +60,6 @@ nobase_installed_test_DATA += $(shell find tests/compose/yum/ -type f) \
 
 installed_test_scripts = \
 	tests/test-compose.sh			\
-	tests/test-compose-no-selinux-tag.sh		\
 	tests/test-basic.sh			\
 	$(NULL)
 
