@@ -76,7 +76,11 @@ option_context_new_with_commands (void)
 
   while (command->name != NULL)
     {
-      if (strcmp (command->name, "internals") != 0)
+      /* Internals will remain hidden always, container will possibly
+       * get promoted at some point.  For now, it's an easter egg.
+       */
+      if (!g_str_equal (command->name, "internals")
+          && !g_str_equal (command->name, "container"))
         g_string_append_printf (summary, "\n  %s", command->name);
       command++;
     }
