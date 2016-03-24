@@ -1,9 +1,0 @@
-FROM fedora:20
-RUN yum -y update
-RUN cd /etc/yum.repos.d && curl -O http://copr-fe.cloud.fedoraproject.org/coprs/walters/rpm-ostree/repo/fedora-20-i386/walters-rpm-ostree-fedora-20-i386.repo
-RUN yum -y install nss-altfiles
-RUN rm /etc/yum.repos.d/walters-rpm-ostree-fedora-20-i386.repo
-RUN sed -i -e 's,passwd:.*,\0 altfiles,' -e 's,group:.*,\0 altfiles,' /etc/nsswitch.conf
-ADD @PACKAGE@ /var/tmp/@PACKAGE@
-RUN yum -y localinstall /var/tmp/@PACKAGE@
-ENTRYPOINT ["rpm-ostree"]
