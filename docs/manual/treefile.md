@@ -34,8 +34,6 @@ It supports the following parameters:
     * "both": Kernel data in /boot and /usr/lib/ostree-boot
     * "new": Kernel data in /usr/lib/ostree-boot
 
- * `bootstrap_packages`: Array of strings, optional: Deprecated
-
  * `etc-group-members`: Array of strings, optional: Unix groups in this
    list will be stored in `/etc/group` instead of `/usr/lib/group`.  Use
    this option for groups for which humans should be a member.
@@ -50,6 +48,9 @@ It supports the following parameters:
  * `packages`: Array of strings, mandatory: Set of installed packages.
    comps groups are currently not supported due to walters having issues with libcomp:
    https://github.com/cgwalters/fedora-atomic-work/commit/36d18b490529fec91b74ca9b464adb73ef0ab462
+
+ * `bootstrap_packages`: Array of strings, optional: Deprecated; you should
+    now just include this set in the main `packages` array.
 
  * `units`: Array of strings, optional: Systemd units to enable by default
 
