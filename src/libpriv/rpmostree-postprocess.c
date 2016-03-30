@@ -1171,6 +1171,83 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   return ret;
 }
 
+/**
+ * rpmostree_copy_additional_files:
+ *
+ * Copy external files, if specified in the configuration file, from
+ * the context directory to the rootfs.
+ */
+gboolean
+rpmostree_copy_additional_files (GFile         *rootfs,
+                                 GFile         *context_directory,
+                                 JsonObject    *treefile,
+                                 GCancellable  *cancellable,
+                                 GError       **error)
+{
+  gboolean ret = FALSE;
+  JsonArray *add = NULL;
+  guint i, len;
+
+  gs_free char *dest_rootfs_path = g_strconcat (gs_file_get_path_cached (rootfs), ".post", NULL);
+  gs_unref_object GFile *targetroot = g_file_new_for_path (dest_rootfs_path);
+
+  if (json_object_has_member (treefile, "add-files"))
+    {
+      add = json_object_get_array_member (treefile, "add-files");
+      len = json_array_get_length (add);
+    }
+  else
+    {
+      ret = TRUE;
+      goto out;
+    }
+
+  for (i = 0; i < len; i++)
+    {
+      const char *src, *dest;
+
+      JsonArray *add_el = json_array_get_array_element (add, i);
+      gs_unref_object GFile *child = NULL;
+
+      if (!add_el)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Element in add-files is not an array");
+          goto out;
+        }
+
+      src = _rpmostree_jsonutil_array_require_string_element (add_el, 0, error);
+      if (!src)
+        goto out;
+
+      dest = _rpmostree_jsonutil_array_require_string_element (add_el, 1, error);
+      if (!dest)
+        goto out;
+
+      {
+        gs_unref_object GFile *srcfile = g_file_resolve_relative_path (context_directory, src);
+        const char *rootfs_path = gs_file_get_path_cached (rootfs);
+        gs_free char *destpath = g_strconcat (rootfs_path, "/", dest, NULL);
+        gs_unref_object GFile *destfile = g_file_resolve_relative_path (targetroot, destpath);
+        gs_unref_object GFile *target_tmpfilesd_parent = g_file_get_parent (destfile);
+
+        g_print ("Adding file '%s'\n", dest);
+
+        if (!gs_file_ensure_directory (target_tmpfilesd_parent, TRUE, cancellable, error))
+          goto out;
+
+        if (!g_file_copy (srcfile, destfile, 0, cancellable, NULL, NULL, error))
+          {
+            g_prefix_error (error, "Copying file '%s' into target: ", src);
+            goto out;
+          }
+      }
+    }
+  ret = TRUE;
+ out:
+  return ret;
+}
+
 gboolean
 rpmostree_treefile_postprocessing (GFile         *yumroot,
                                    GFile         *context_directory,
