@@ -51,3 +51,9 @@ rpmostree_commit (GFile         *rootfs,
                   gboolean       enable_selinux,
                   GCancellable  *cancellable,
                   GError       **error);
+gboolean
+rpmostree_copy_additional_files (GFile         *rootfs,
+                                 GFile         *context_directory,
+                                 JsonObject    *treefile,
+                                 GCancellable  *cancellable,
+                                 GError       **error);

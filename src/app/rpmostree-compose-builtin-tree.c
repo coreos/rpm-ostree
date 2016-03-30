@@ -796,6 +796,9 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!rpmostree_prepare_rootfs_for_commit (yumroot, treefile, cancellable, error))
     goto out;
 
+  if (!rpmostree_copy_additional_files (yumroot, self->treefile_context_dirs->pdata[0], treefile, cancellable, error))
+    goto out;
+
   if (!rpmostree_check_passwd (repo, yumroot, treefile_dirpath, treefile,
                                cancellable, error))
     goto out;
