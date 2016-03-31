@@ -58,6 +58,7 @@ struct _RpmOstreeInstall {
 
   GPtrArray *packages_requested;
   /* Target state */
+  guint n_packages_download_local;
   GPtrArray *packages_to_download;
   guint64 n_bytes_to_fetch;
 
@@ -653,6 +654,7 @@ static gboolean
 get_packages_to_download (HifContext  *hifctx,
                           OstreeRepo  *ostreerepo,
                           GPtrArray  **out_packages,
+                          guint       *out_n_local,
                           GError     **error)
 {
   gboolean ret = FALSE;
@@ -660,6 +662,7 @@ get_packages_to_download (HifContext  *hifctx,
   g_autoptr(GPtrArray) packages = NULL;
   g_autoptr(GPtrArray) packages_to_download = NULL;
   GPtrArray *sources = hif_context_get_repos (hifctx);
+  guint n_local = 0;
   
   packages = hif_goal_get_packages (hif_context_get_goal (hifctx),
                                     HIF_PACKAGE_INFO_INSTALL,
@@ -721,12 +724,15 @@ get_packages_to_download (HifContext  *hifctx,
           if (g_file_test (cachepath, G_FILE_TEST_EXISTS))
             continue;
         }
+      else
+        n_local++;
 
       g_ptr_array_add (packages_to_download, g_object_ref (pkg));
     }
 
   ret = TRUE;
   *out_packages = g_steal_pointer (&packages_to_download);
+  *out_n_local = n_local;
  out:
   return ret;
 }
@@ -766,11 +772,14 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
     }
   printf ("%s", "done\n");
 
-  if (!get_packages_to_download (hifctx, self->ostreerepo, &ret_install->packages_to_download, error))
+  if (!get_packages_to_download (hifctx, self->ostreerepo, &ret_install->packages_to_download,
+                                 &ret_install->n_packages_download_local,
+                                 error))
     goto out;
 
   rpmostree_print_transaction (hifctx);
-  g_print ("\n  Need to download %u packages\n", ret_install->packages_to_download->len);
+  g_print ("\n  Need to download %u packages\n",
+           ret_install->packages_to_download->len - ret_install->n_packages_download_local);
 
   ret = TRUE;
   *out_install = g_steal_pointer (&ret_install);
@@ -956,6 +965,9 @@ source_download_packages (HifRepo *source,
       g_autofree char *target_dir = NULL;
       HifPackage *pkg = packages->pdata[i];
       struct PkgDownloadState *dlstate;
+
+      if (pkg_is_local (pkg))
+        continue;
 
       if (target_dfd == -1)
         {
