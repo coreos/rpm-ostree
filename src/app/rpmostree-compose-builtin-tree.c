@@ -146,17 +146,13 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
 
           srcfile = g_file_resolve_relative_path (contextdir, src);
 
-          {
-            g_autofree guchar *ret_csum = NULL;
-            if (!ostree_checksum_file (srcfile,
-                                       OSTREE_OBJECT_TYPE_FILE,
-                                       &ret_csum,
-                                       NULL,
-                                       error))
-              goto out;
+          if (!_rpmostree_util_update_checksum_from_file (checksum,
+                                                          srcfile,
+                                                          NULL,
+                                                          error))
+            goto out;
 
-            g_checksum_update (checksum, ret_csum, 32);
-          }
+          g_checksum_update (checksum, (const guint8 *) dest, strlen (dest));
         }
 
     }
