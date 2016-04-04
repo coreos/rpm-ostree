@@ -42,6 +42,7 @@ tests/test-ucontainer.sh: tests/compose/test-repo-local.repo
 installed_test_data = tests/libtest.sh \
 	tests/compose/test-repo.repo \
 	tests/compose/test-repo.json \
+	tests/compose/test-repo-add-files.json \
 	tests/compose/test-repo.repo.in \
 	$(NULL)
 

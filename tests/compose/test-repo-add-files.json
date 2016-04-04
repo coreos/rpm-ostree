@@ -1,0 +1,11 @@
+{
+    "ref": "fedora/test",
+
+    "repos": ["test-repo"],
+
+    "selinux": false,
+
+    "packages": ["empty"],
+
+    "add-files": [["exported_file", "/exports/exported_file"]]
+}

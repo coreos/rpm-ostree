@@ -29,7 +29,7 @@ unset G_DEBUG
 
 (arch | grep -q x86_64) || { echo 1>&2 "$0 can be run only on x86_64"; echo "1..0" ; exit 77; }
 
-echo "1..1"
+echo "1..4"
 
 ostree init --repo=repo --mode=archive-z2
 
@@ -47,3 +47,32 @@ ostree --repo=repo refs >refs.txt
 assert_file_has_content refs.txt fedora/test
 
 echo "ok compose"
+
+# bring them in the current context so we can modify exported_file
+ln -s $SRCDIR/test-repo-add-files.json .
+ln -s $SRCDIR/test-repo.repo .
+
+echo hello > exported_file
+
+rpm-ostree --repo=repo compose tree --touch-if-changed=$(pwd)/touched test-repo-add-files.json
+assert_has_file touched
+old_mtime=$(stat -c %y touched)
+ostree --repo=repo ls fedora/test /exports/exported_file | grep exported > exported.txt
+
+assert_file_has_content exported.txt "/exports/exported_file"
+assert_file_has_content exported.txt "0 0"
+ostree --repo=repo rev-parse fedora/test > oldref.txt
+rpm-ostree --repo=repo compose tree --touch-if-changed=$(pwd)/touched test-repo-add-files.json
+new_mtime=$(stat -c %y touched)
+ostree --repo=repo rev-parse fedora/test > newref.txt
+assert_streq $(cat oldref.txt) $(cat newref.txt)
+assert_streq "$old_mtime" "$new_mtime"
+
+echo . >> exported_file
+rpm-ostree --repo=repo compose tree --touch-if-changed=$(pwd)/touched test-repo-add-files.json
+new_mtime=$(stat -c %y touched)
+ostree --repo=repo rev-parse fedora/test > newref.txt
+assert_not_streq $(cat oldref.txt) $(cat newref.txt)
+assert_not_streq "$old_mtime" "$new_mtime"
+
+echo "ok compose add files"
