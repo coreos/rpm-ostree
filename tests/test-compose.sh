@@ -29,7 +29,7 @@ unset G_DEBUG
 
 (arch | grep -q x86_64) || { echo 1>&2 "$0 can be run only on x86_64"; echo "1..0" ; exit 77; }
 
-echo "1..1"
+echo "1..4"
 
 ostree init --repo=repo --mode=archive-z2
 
@@ -47,3 +47,14 @@ ostree --repo=repo refs >refs.txt
 assert_file_has_content refs.txt fedora/test
 
 echo "ok compose"
+
+rpm-ostree --repo=repo compose tree $SRCDIR/test-repo-add-files.json
+ostree --repo=repo ls fedora/test /exports/exported_file | grep exported > exported.txt
+assert_file_has_content exported.txt "/exports/exported_file"
+assert_file_has_content exported.txt "0 0"
+ostree --repo=repo rev-parse fedora/test > oldref.txt
+rpm-ostree --repo=repo compose tree $SRCDIR/test-repo-add-files.json
+ostree --repo=repo rev-parse fedora/test > newref.txt
+assert_streq $(cat oldref.txt) $(cat newref.txt)
+
+echo "ok compose add files"
