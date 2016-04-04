@@ -101,6 +101,8 @@ typedef struct {
 static gboolean
 compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
                                          HyGoal                         goal,
+                                         GFile                         *contextdir,
+                                         JsonArray                     *add_files,
                                          char                        **out_checksum,
                                          GError                      **error)
 {
@@ -118,6 +120,43 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
     g_checksum_update (checksum, buf, len);
   }
 
+  if (add_files)
+    {
+      guint i, len = json_array_get_length (add_files);
+      for (i = 0; i < len; i++)
+        {
+          gs_unref_object GFile *srcfile = NULL;
+          const char *src, *dest;
+          JsonArray *add_el = json_array_get_array_element (add_files, i);
+          gs_unref_object GFile *child = NULL;
+
+          if (!add_el)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Element in add-files is not an array");
+              goto out;
+            }
+          src = _rpmostree_jsonutil_array_require_string_element (add_el, 0, error);
+          if (!src)
+            goto out;
+
+          dest = _rpmostree_jsonutil_array_require_string_element (add_el, 1, error);
+          if (!dest)
+            goto out;
+
+          srcfile = g_file_resolve_relative_path (contextdir, src);
+
+          if (!_rpmostree_util_update_checksum_from_file (checksum,
+                                                          srcfile,
+                                                          NULL,
+                                                          error))
+            goto out;
+
+          g_checksum_update (checksum, (const guint8 *) dest, strlen (dest));
+        }
+
+    }
+
   /* FIXME; we should also hash the post script */
 
   /* Hash in each package */
@@ -126,6 +165,7 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
   ret_checksum = g_strdup (g_checksum_get_string (checksum));
 
   ret = TRUE;
+ out:
   gs_transfer_out_value (out_checksum, &ret_checksum);
   if (checksum) g_checksum_free (checksum);
   return ret;
@@ -190,6 +230,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   gs_free char *ret_new_inputhash = NULL;
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
   JsonArray *enable_repos = NULL;
+  JsonArray *add_files = NULL;
 
   /* TODO - uncomment this once we have SELinux working */
 #if 0
@@ -268,8 +309,12 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (!rpmostree_context_prepare_install (ctx, &hifinstall, cancellable, error))
     goto out;
 
+  if (json_object_has_member (treedata, "add-files"))
+    add_files = json_object_get_array_member (treedata, "add-files");
+
   /* FIXME - just do a depsolve here before we compute download requirements */
   if (!compute_checksum_from_treefile_and_goal (self, hif_context_get_goal (hifctx),
+                                                contextdir, add_files,
                                                 &ret_new_inputhash, error))
     goto out;
 
