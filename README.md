@@ -1,4 +1,4 @@
-# rpm-ostree Overview
+# rpm-ostree Overview 
 
 New! See the docs online at [Read The Docs (rpm-ostree)](https://rpm-ostree.readthedocs.org/en/latest/ )
 
