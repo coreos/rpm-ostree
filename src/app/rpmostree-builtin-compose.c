@@ -128,9 +128,9 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
               g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                            "Unknown compose command '%s'", subcommand_name);
             }
-          exit_status = EXIT_FAILURE;
         }
 
+      exit_status = EXIT_FAILURE;
       help = g_option_context_get_help (context, FALSE, NULL);
       g_printerr ("%s", help);
 

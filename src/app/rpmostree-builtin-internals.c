@@ -128,9 +128,9 @@ rpmostree_builtin_internals (int argc, char **argv, GCancellable *cancellable, G
               g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                            "Unknown \"internals\" subcommand '%s'", subcommand_name);
             }
-          exit_status = EXIT_FAILURE;
         }
 
+      exit_status = EXIT_FAILURE;
       help = g_option_context_get_help (context, FALSE, NULL);
       g_printerr ("%s", help);
 
