@@ -260,11 +260,11 @@ main (int    argc,
               local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
                                          "Unknown command '%s'", command_name);
             }
-          exit_status = EXIT_FAILURE;
         }
 
       help = g_option_context_get_help (context, FALSE, NULL);
       g_printerr ("%s", help);
+      exit_status = EXIT_FAILURE;
 
       g_option_context_free (context);
 
