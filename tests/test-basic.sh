@@ -91,7 +91,6 @@ assert_file_has_content OUTPUT-status.txt '1\.0\.9'
 rpm-ostree --help | awk '/^$/ {in_commands=0} {if(in_commands==1){print $0}} /^Builtin Commands:/ {in_commands=1}' > commands
 while read command; do
     if rpm-ostree $command --n0t-3xisting-0ption >/dev/null 2>&1; then
-        echo "command $command --n0t-3xisting-0ption was successful" 1>&2;
-        exit 1
+        assert_not_reached "command $command --n0t-3xisting-0ption was successful"
     fi
 done < commands
