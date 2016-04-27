@@ -90,7 +90,12 @@ assert_file_has_content OUTPUT-status.txt '1\.0\.9'
 # Ensure it returns an error when passing a wrong option.
 rpm-ostree --help | awk '/^$/ {in_commands=0} {if(in_commands==1){print $0}} /^Builtin Commands:/ {in_commands=1}' > commands
 while read command; do
-    if rpm-ostree $command --n0t-3xisting-0ption >/dev/null 2>&1; then
+    if rpm-ostree $command --n0t-3xisting-0ption &>/dev/null; then
         assert_not_reached "command $command --n0t-3xisting-0ption was successful"
     fi
 done < commands
+
+if rpm-ostree nosuchcommand --nosuchoption 2>err.txt; then
+    assert_not_reached "Expected an error for nosuchcommand"
+fi
+assert_file_has_content err.txt 'Unknown.*command'

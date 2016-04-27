@@ -172,23 +172,21 @@ rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError *
       context = rpm_option_context_new_with_commands ();
 
       /* This will not return for some options (e.g. --version). */
-      if (rpmostree_option_context_parse (context, NULL,
-                                          &argc, &argv,
-                                          RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-                                          cancellable,
-                                          NULL,
-                                          error))
+      (void) rpmostree_option_context_parse (context, NULL,
+                                             &argc, &argv,
+                                             RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                             cancellable,
+                                             NULL,
+                                             NULL);
+      if (subcommand_name == NULL)
         {
-          if (subcommand_name == NULL)
-            {
-              g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                                   "No \"db\" subcommand specified");
-            }
-          else
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Unknown \"db\" subcommand '%s'", subcommand_name);
-            }
+          g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "No \"db\" subcommand specified");
+        }
+      else
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Unknown \"db\" subcommand '%s'", subcommand_name);
         }
 
       exit_status = EXIT_FAILURE;
