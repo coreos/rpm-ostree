@@ -246,20 +246,18 @@ main (int    argc,
       context = option_context_new_with_commands ();
 
       /* This will not return for some options (e.g. --version). */
-      if (rpmostree_option_context_parse (context, NULL, &argc, &argv,
-                                          RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-                                          NULL, NULL, &local_error))
+      (void) rpmostree_option_context_parse (context, NULL, &argc, &argv,
+                                             RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                             NULL, NULL, NULL);
+      if (command_name == NULL)
         {
-          if (command_name == NULL)
-            {
-              local_error = g_error_new_literal (G_IO_ERROR, G_IO_ERROR_FAILED,
-                                                 "No command specified");
-            }
-          else
-            {
-              local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
-                                         "Unknown command '%s'", command_name);
-            }
+          local_error = g_error_new_literal (G_IO_ERROR, G_IO_ERROR_FAILED,
+                                             "No command specified");
+        }
+      else
+        {
+          local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
+                                     "Unknown command '%s'", command_name);
         }
 
       help = g_option_context_get_help (context, FALSE, NULL);

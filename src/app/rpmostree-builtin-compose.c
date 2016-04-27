@@ -111,23 +111,21 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
       context = compose_option_context_new_with_commands ();
 
       /* This will not return for some options (e.g. --version). */
-      if (rpmostree_option_context_parse (context, NULL,
-                                          &argc, &argv,
-                                          RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-                                          cancellable,
-                                          NULL,
-                                          error))
+      (void) rpmostree_option_context_parse (context, NULL,
+                                             &argc, &argv,
+                                             RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                             cancellable,
+                                             NULL,
+                                             NULL);
+      if (subcommand_name == NULL)
         {
-          if (subcommand_name == NULL)
-            {
-              g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                                   "No command specified");
-            }
-          else
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Unknown compose command '%s'", subcommand_name);
-            }
+          g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "No command specified");
+        }
+      else
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Unknown compose command '%s'", subcommand_name);
         }
 
       exit_status = EXIT_FAILURE;
