@@ -29,6 +29,7 @@ rpmostree_check_passwd (OstreeRepo      *repo,
                         GFile           *yumroot,
                         GFile           *treefile_path,
                         JsonObject      *treedata,
+                        const char      *previous_commit,
                         GCancellable    *cancellable,
                         GError         **error);
 
@@ -37,6 +38,7 @@ rpmostree_check_groups (OstreeRepo      *repo,
                         GFile           *yumroot,
                         GFile           *treefile_path,
                         JsonObject      *treedata,
+                        const char      *previous_commit,
                         GCancellable    *cancellable,
                         GError         **error);
 
