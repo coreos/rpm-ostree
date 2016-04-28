@@ -213,6 +213,7 @@ set_keyfile_string_array_from_json (GKeyFile    *keyfile,
 
 static gboolean
 install_packages_in_root (RpmOstreeTreeComposeContext  *self,
+                          RpmOstreeContext *ctx,
                           JsonObject      *treedata,
                           GFile           *yumroot,
                           char           **packages,
@@ -225,7 +226,6 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   guint progress_sigid;
   GFile *contextdir = self->treefile_context_dirs->pdata[0];
   g_autoptr(RpmOstreeInstall) hifinstall = { 0, };
-  g_autoptr(RpmOstreeContext) ctx = NULL;
   HifContext *hifctx;
   gs_free char *ret_new_inputhash = NULL;
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
@@ -245,9 +245,6 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     }
 #endif
 
-  ctx = rpmostree_context_new_unprivileged (self->cachedir_dfd, cancellable, error);
-  if (!ctx)
-    goto out;
   hifctx = rpmostree_context_get_hif (ctx);
   if (opt_proxy)
     hif_context_set_http_proxy (hifctx, opt_proxy);
@@ -577,6 +574,8 @@ rpmostree_compose_builtin_tree (int             argc,
   gs_unref_object JsonParser *treefile_parser = NULL;
   gs_unref_variant_builder GVariantBuilder *metadata_builder = 
     g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+  g_autoptr(RpmOstreeContext) corectx = NULL;
+  g_autoptr(GHashTable) varsubsts = NULL;
   gboolean workdir_is_tmp = FALSE;
 
   self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
@@ -676,6 +675,12 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
     }
 
+  corectx = rpmostree_context_new_unprivileged (self->cachedir_dfd, cancellable, error);
+  if (!corectx)
+    goto out;
+
+  varsubsts = rpmostree_context_get_varsubsts (corectx);
+
   treefile_parser = json_parser_new ();
   if (!json_parser_load_from_file (treefile_parser,
                                    gs_file_get_path_cached (treefile_path),
@@ -708,9 +713,13 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
     }
 
-  self->ref = g_strdup (_rpmostree_jsonutil_object_require_string_member (treefile, "ref", error));
-  if (!self->ref)
-    goto out;
+  { const char *input_ref = _rpmostree_jsonutil_object_require_string_member (treefile, "ref", error);
+    if (!input_ref)
+      goto out;
+    self->ref = _rpmostree_varsubst_string (input_ref, varsubsts, error);
+    if (!self->ref)
+      goto out;
+  }
 
   if (!ostree_repo_read_commit (repo, self->ref, &previous_root, &previous_checksum,
                                 cancellable, &temp_error))
@@ -809,7 +818,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
   { gboolean unmodified = FALSE;
 
-    if (!install_packages_in_root (self, treefile, yumroot,
+    if (!install_packages_in_root (self, corectx, treefile, yumroot,
                                    (char**)packages->pdata,
                                    opt_force_nocache ? NULL : &unmodified,
                                    &new_inputhash,

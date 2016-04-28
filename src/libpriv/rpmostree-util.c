@@ -121,6 +121,70 @@ rpmostree_mkdtemp (const char   *template,
   return ret;
 }
 
+/* Given a string of the form
+ * "bla blah ${foo} blah ${bar}"
+ * and a hash table of variables, substitute the variable values.
+ */
+char *
+_rpmostree_varsubst_string (const char *instr,
+                            GHashTable *substitutions,
+                            GError **error)
+{
+  const char *s;
+  const char *p;
+  /* Acts as a reusable buffer space */
+  g_autoptr(GString) varnamebuf = g_string_new ("");
+  g_autoptr(GString) result = g_string_new ("");
+
+  s = instr;
+  while ((p = strstr (s, "${")) != NULL)
+    {
+      const char *varstart = p + 2;
+      const char *varend = strchr (varstart, '}');
+      const char *value;
+      if (!varend)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Unclosed variable reference starting at %u bytes",
+                       (guint)(p - instr));
+          return NULL;
+        }
+
+      /* Append leading bytes */
+      g_string_append_len (result, s, p - s);
+
+      /* Get a NUL-terminated copy of the variable name */
+      g_string_truncate (varnamebuf, 0);
+      g_string_append_len (varnamebuf, varstart, varend - varstart);
+
+      value = g_hash_table_lookup (substitutions, varnamebuf->str);
+      if (!value)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Unknown variable reference ${%s}",
+                       varnamebuf->str);
+          return NULL;
+        }
+      /* Append the replaced value */
+      g_string_append (result, value);
+
+      /* On to the next */
+      s = varend+1;
+    }
+
+  if (s != instr)
+    {
+      char *r;
+      g_string_append_len (result, s, p - s);
+      /* Steal the C string, NULL out the GString since we freed it */
+      r = g_string_free (result, FALSE);
+      result = NULL;
+      return r;
+    }
+  else
+    return g_strdup (instr);
+}
+
 gboolean
 _rpmostree_util_enumerate_directory_allow_noent (GFile               *dirpath,
 						 const char          *queryargs,

@@ -50,6 +50,8 @@ RpmOstreeTreespec *rpmostree_treespec_new_from_keyfile (GKeyFile *keyfile, GErro
 RpmOstreeTreespec *rpmostree_treespec_new_from_path (const char *path, GError  **error);
 RpmOstreeTreespec *rpmostree_treespec_new (GVariant   *variant);
 
+GHashTable *rpmostree_context_get_varsubsts (RpmOstreeContext *context);
+
 GVariant *rpmostree_treespec_to_variant (RpmOstreeTreespec *spec);
 const char *rpmostree_treespec_get_ref (RpmOstreeTreespec *spec);
 

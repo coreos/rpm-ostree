@@ -47,6 +47,11 @@ gboolean rpmostree_mkdtemp (const char   *template,
                              int         *out_tmpdir_dfd,  /* allow-none */
                              GError     **error);
 
+char *
+_rpmostree_varsubst_string (const char *instr,
+                            GHashTable *substitutions,
+                            GError **error);
+
 gboolean
 _rpmostree_util_enumerate_directory_allow_noent (GFile               *dirpath,
 						 const char          *queryargs,
