@@ -845,10 +845,12 @@ rpmostree_compose_builtin_tree (int             argc,
     goto out;
 
   if (!rpmostree_check_passwd (repo, yumroot, treefile_dirpath, treefile,
+                               previous_checksum,
                                cancellable, error))
     goto out;
 
   if (!rpmostree_check_groups (repo, yumroot, treefile_dirpath, treefile,
+                               previous_checksum,
                                cancellable, error))
     goto out;
 

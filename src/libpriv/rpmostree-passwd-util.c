@@ -272,13 +272,13 @@ rpmostree_check_passwd_groups (gboolean         passwd,
                                GFile           *yumroot,
                                GFile           *treefile_dirpath,
                                JsonObject      *treedata,
+                               const char      *previous_commit,
                                GCancellable    *cancellable,
                                GError         **error)
 {
   gboolean ret = FALSE;
   const char *direct = NULL;
   const char *chk_type = "previous";
-  const char *ref = NULL;
   const char *commit_filepath = passwd ? "usr/lib/passwd" : "usr/lib/group";
   const char *json_conf_name  = passwd ? "check-passwd" : "check-groups";
   const char *json_conf_ign   = passwd ? "ignore-removed-users" : "ignore-removed-groups";
@@ -401,29 +401,21 @@ rpmostree_check_passwd_groups (gboolean         passwd,
 
   if (g_str_equal (chk_type, "previous"))
     {
-      gs_unref_object GFile *root = NULL;
-      GError *tmp_error = NULL;
-
-      ref = _rpmostree_jsonutil_object_require_string_member (treedata, "ref",
-                                                              error);
-      if (!ref)
-        goto out;
-
-      if (!ostree_repo_read_commit (repo, ref, &root, NULL, NULL, &tmp_error))
+      if (previous_commit != NULL)
         {
-          if (g_error_matches (tmp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-            { /* this is kind of a hack, makes it work if it's the first commit */
-              g_clear_error (&tmp_error);
-              ret = TRUE;
-            }
-          else
-            {
-              g_propagate_error (error, tmp_error);
-            }
+          gs_unref_object GFile *root = NULL;
+          
+          if (!ostree_repo_read_commit (repo, previous_commit, &root, NULL, NULL, error))
+            goto out;
+          
+          old_path = g_file_resolve_relative_path (root, commit_filepath);
+        }
+      else
+        {
+          /* Early return */
+          ret = TRUE;
           goto out;
         }
-
-      old_path = g_file_resolve_relative_path (root, commit_filepath);
     }
 
   if (g_str_equal (chk_type, "file"))
@@ -648,11 +640,13 @@ rpmostree_check_passwd (OstreeRepo      *repo,
                         GFile           *yumroot,
                         GFile           *treefile_dirpath,
                         JsonObject      *treedata,
+                        const char      *previous_commit,
                         GCancellable    *cancellable,
                         GError         **error)
 {
   return rpmostree_check_passwd_groups (TRUE, repo, yumroot, treefile_dirpath,
-                                        treedata, cancellable, error);
+                                        treedata, previous_commit,
+                                        cancellable, error);
 }
 
 /* See "man 5 group" We just need to make sure the name and gid match,
@@ -663,11 +657,13 @@ rpmostree_check_groups (OstreeRepo      *repo,
                         GFile           *yumroot,
                         GFile           *treefile_dirpath,
                         JsonObject      *treedata,
+                        const char      *previous_commit,
                         GCancellable    *cancellable,
                         GError         **error)
 {
   return rpmostree_check_passwd_groups (TRUE, repo, yumroot, treefile_dirpath,
-                                        treedata, cancellable, error);
+                                        treedata, previous_commit,
+                                        cancellable, error);
 }
 
 static FILE *
