@@ -32,7 +32,6 @@
 #include <libhif/hif-utils.h>
 #include <libhif/hif-package.h>
 #include <librepo/librepo.h>
-#include <librepo/librepo.h>
 
 #include "rpmostree-core.h"
 #include "rpmostree-postprocess.h"
