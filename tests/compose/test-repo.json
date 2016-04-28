@@ -1,5 +1,5 @@
 {
-    "ref": "fedora/test",
+    "ref": "fedora/${basearch}/test",
 
     "repos": ["test-repo"],
 

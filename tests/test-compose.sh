@@ -27,7 +27,12 @@ check_root_test
 # Remove once it doesn't happen anymore.
 unset G_DEBUG
 
-(arch | grep -q x86_64) || { echo 1>&2 "$0 can be run only on x86_64"; echo "1..0" ; exit 77; }
+arch=$(arch)
+if ! test "${arch}" = x86_64; then
+    echo 1>&2 "$0 can be run only on x86_64"; echo "1..0" ; exit 77
+fi
+
+testref=fedora/${arch}/test
 
 echo "1..4"
 
@@ -44,7 +49,7 @@ echo "ok dry run"
 
 rpm-ostree --repo=repo compose tree $SRCDIR/test-repo.json
 ostree --repo=repo refs >refs.txt
-assert_file_has_content refs.txt fedora/test
+assert_file_has_content refs.txt ${testref}
 
 echo "ok compose"
 

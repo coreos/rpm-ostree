@@ -404,6 +404,16 @@ rpmostree_treespec_to_variant (RpmOstreeTreespec *spec)
   return g_variant_ref (spec->spec);
 }
 
+GHashTable *
+rpmostree_context_get_varsubsts (RpmOstreeContext *context)
+{
+  GHashTable *r = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+
+  g_hash_table_insert (r, g_strdup ("basearch"), g_strdup (hif_context_get_base_arch (context->hifctx)));
+
+  return r;
+}
+
 static gboolean
 enable_one_repo (RpmOstreeContext    *context,
                  GPtrArray           *sources,
