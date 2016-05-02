@@ -61,10 +61,7 @@ For more information on this, see `CONTRIBUTING.md`.
 More documentation
 ------------------
 
-New! See the docs online at [Read The Docs (OSTree)](https://ostree.readthedocs.org/en/latest/ )
-
-Some more information is available on the old wiki page:
-https://wiki.gnome.org/Projects/OSTree
+New! See the docs online at [Read The Docs (rpm-ostree)](https://rpm-ostree.readthedocs.org/en/latest/ )
 
 Contributing
 ------------

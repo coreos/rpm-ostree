@@ -35,8 +35,8 @@ on the compose server, clients get it.  If one removes a package, it's
 also removed when clients upgrade.
 
 One simple mental model for rpm-ostree is: imagine taking a set of
-packages on the server side, install them to a chroot, then doing `git
-commit` on the result.  And imagine clients just `git pull -r` from
+packages on the server side, install them to a chroot, then doing `git commit`
+on the result.  And imagine clients just `git pull -r` from
 that.  What OSTree adds to this picture is support for file uid/gid,
 extended attributes, handling of bootloader configuration, and merges
 of `/etc`.
@@ -51,7 +51,7 @@ backups such as LVM or BTRFS.
 
 ## Who should use this?
 
-Currently, rpm operates on a read-only mode on installed systems; it
+Currently, `rpm-ostree` operates on a read-only mode on installed systems; it
 is not possible to add or remove anything on the client.  If this
 matches your deployment scenario, rpm-ostree is a good choice.
 Classic examples of this are fixed purpose server farms, "corporate
