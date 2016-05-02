@@ -1,35 +1,55 @@
-## Installing and setting up a repository
+## Background on managing an OSTree repository
 
-Once you have that done, choose a build directory.  Here we'll use
-/srv/rpm-ostree.
+Before you get started, it's recommended to read (at least) these two sections
+of the OSTree manual:
 
-	# cd /srv/rpm-ostree
-	# mkdir repo
-	# ostree --repo=repo init --mode=archive-z2
+ - [buildsystem-and-repos](https://ostree.readthedocs.io/en/latest/manual/buildsystem-and-repos/)
+ - [repository-management](https://ostree.readthedocs.io/en/latest/manual/repository-management/)
+
+## Generating OSTree commits from a CentOS base
+
+First, you'll need a copy of `rpm-ostree` on your compose server.
+It's included in the package collection for Fedora, and there are
+[CentOS Core packages](http://buildlogs.centos.org/centos/7/atomic/x86_64/Packages/)
+as well as [bleeding edge CentOS builds](https://ci.centos.org/job/atomic-rdgo-centos7/).
+
+A good first thing to try would be using the
+[CentOS Atomic Host](https://github.com/CentOS/sig-atomic-buildscripts/tree/downstream)
+metadata to generate a custom host.
+
+One time setup, where we clone the git repository, then make two
+OSTree repos, one for doing builds, one for export via HTTP:
+
+```
+# mkdir /srv/centos-atomic
+# cd /srv/centos-atomic
+# git clone https://github.com/CentOS/sig-atomic-buildscripts -b downstream
+# mkdir build-repo
+# ostree --repo=build-repo init --mode=bare-user
+# mkdir repo
+# ostree --repo=repo init --mode=archive-z2
+```
 
 ## Running `rpm-ostree compose tree`
 
 This program takes as input a manifest file that describes the target
 system, and commits the result to an OSTree repository.
 
-See also: https://github.com/projectatomic/rpm-ostree-toolbox
-
 The input format is a JSON "treefile".  See examples in
 `doc/treefile-examples` as well as `doc/treefile.md`.
 
-	# rpm-ostree compose tree --repo=/srv/rpm-ostree/repo --proxy=http://127.0.0.1:8123 sometreefile.json
+```
+# rpm-ostree compose tree --repo=/srv/centos-atomic/build-repo sig-atomic-buildscripts/centos-atomic-host.json
+```
 
-All this does is use yum to download RPMs from the referenced repos,
-and commit the result to the OSTree repository, using the ref named by
-`ref`.  Note that we've specified a local caching proxy (`polipo` in
-this case) - otherwise we will download the packages for each
-treecompose.
+This will download RPMs from the referenced repos, and commit the
+result to the OSTree repository, using the ref named by `ref`.
 
-You can export `/srv/rpm-ostree/repo` via any static webserver.
+Once we have that commit, let's export it:
 
-The use of `--proxy` is not mandatory but strongly recommended - with
-this option you can avoid continually redownloading the packages every
-compose.  I personally use
-[Polipo](http://www.pps.univ-paris-diderot.fr/~jch/software/polipo/),
-but you can of course any HTTP proxy you wish.
+```
+# ostree --repo=repo pull-local build-repo centos-atomic-host/7/x86_64/standard
+```
 
+You can tell client systems to rebase to it by combining `ostree
+remote add`, and `rpm-ostree rebase` on the client side.
