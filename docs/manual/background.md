@@ -51,16 +51,22 @@ backups such as LVM or BTRFS.
 
 ## Who should use this?
 
-Currently, `rpm-ostree` operates on a read-only mode on installed systems; it
-is not possible to add or remove anything on the client.  If this
-matches your deployment scenario, rpm-ostree is a good choice.
-Classic examples of this are fixed purpose server farms, "corporate
-standard build" laptop/desktops, and embedded devices.
+Currently, `rpm-ostree` operates on a read-only mode on installed
+systems; it is not possible to add or remove anything on the client
+system's `/usr`.  If this matches your deployment scenario, rpm-ostree
+is a good choice.  Classic examples of this are fixed purpose server
+farms, "corporate standard build" laptop/desktops, and embedded
+devices.
 
 Of course, one can pair it with a dynamic application mechanism such
 as [Docker](https://www.docker.com/), and have a reliable base, with a
 flexible application tool.  This is the rationale behind
 [Project Atomic](http://www.projectatomic.io/).
+
+Container technology is flexible enough for "privileged" containers to
+affect the host.  For example, using the `atomic` command, one can
+`atomic run centos/tools` and have a flexible shell with access to
+`/host`.
 
 ## Is it worth supporting composes both on client and server?
 
