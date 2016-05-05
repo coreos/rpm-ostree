@@ -47,9 +47,14 @@ At upgrade time, the process takes the *new default* `/etc`, and adds
 your changes on top.  This means that upgrades will receive new
 default files in `/etc`, which is quite a critical feature.
 
+For more information, see
+[OSTree: Adapting](https://ostree.readthedocs.io/en/latest/manual/adapting-existing/).
+
 ## Operating system changes
 
  * The RPM database is stored in `/usr/share/rpm`, and is immutable.
- * A package [nss-altfiles](https://github.com/aperezdc/nss-altfiles) is required,
-   and the system password database is stored in `/usr/lib/passwd`.  Similar
-   for the group database.
+ * A package [nss-altfiles](https://github.com/aperezdc/nss-altfiles)
+   is required, and the system password database is stored in
+   `/usr/lib/passwd`.  Similar for the group database.  This might
+   change in the future; see
+   [this issue](https://github.com/projectatomic/rpm-ostree/issues/49).
