@@ -924,7 +924,7 @@ rpmostree_print_transaction (HifContext   *hifctx)
       for (i = 0; i < install->len; i++)
         {
           HifPackage *pkg = install->pdata[i];
-          g_print ("  %s\n", hif_package_get_nevra (pkg));
+          g_print ("  %s (%s)\n", hif_package_get_nevra (pkg), hif_package_get_reponame (pkg));
         }
     }
 }
