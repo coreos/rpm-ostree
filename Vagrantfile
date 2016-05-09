@@ -8,6 +8,7 @@
 # things will be a bit simpler.
 
 Vagrant.configure(2) do |config|
-    config.vm.box = "fedora/23-atomic-host"
-    config.vm.hostname = "fedoraah-dev"
+    config.vm.box = "centos/atomic-host"
+    config.vm.hostname = "centosah-dev"
+    config.vm.synced_folder ".", "/srv/vagrant", disabled: true
 end
