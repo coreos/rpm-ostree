@@ -32,7 +32,7 @@ GType               rpmostreed_sysroot_get_type         (void) G_GNUC_CONST;
 RpmostreedSysroot * rpmostreed_sysroot_get              (void);
 
 gboolean            rpmostreed_sysroot_populate         (RpmostreedSysroot *self,
-							 GCancellable *cancellable,
+                                                         GCancellable *cancellable,
                                                          GError **error);
 gboolean            rpmostreed_sysroot_reload           (RpmostreedSysroot *self,
                                                          GError **error);

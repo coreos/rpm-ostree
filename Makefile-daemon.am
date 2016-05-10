@@ -51,6 +51,7 @@ librpmostreed_la_CFLAGS = \
 	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
 	-I$(srcdir)/src/daemon \
 	-I$(srcdir)/src/lib \
+	-I$(srcdir)/src/libpriv \
 	-I$(libglnx_srcpath) \
 	$(NULL)
 

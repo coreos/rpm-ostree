@@ -28,6 +28,8 @@
 #include "rpmostreed-transaction.h"
 #include "rpmostreed-transaction-monitor.h"
 
+#include "rpmostree-output.h"
+
 #include "libgsystem.h"
 #include <libglnx.h>
 #include <gio/gunixinputstream.h>
@@ -274,6 +276,42 @@ out:
     stdout_closure_free (closure);
 
   return ret;
+}
+
+static void
+sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
+{
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (opaque);
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+
+  transaction =
+    rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
+
+  if (!transaction)
+    {
+      rpmostree_output_default_handler (type, data, opaque);
+      return;
+    }
+
+  switch (type)
+  {
+  case RPMOSTREE_OUTPUT_TASK_BEGIN:
+    rpmostree_transaction_emit_task_begin (RPMOSTREE_TRANSACTION (transaction),
+                                           ((RpmOstreeOutputTaskBegin*)data)->text);
+    break;
+  case RPMOSTREE_OUTPUT_TASK_END:
+    rpmostree_transaction_emit_task_end (RPMOSTREE_TRANSACTION (transaction),
+                                         ((RpmOstreeOutputTaskEnd*)data)->text);
+    break;
+  case RPMOSTREE_OUTPUT_PERCENT_PROGRESS:
+    rpmostree_transaction_emit_percent_progress (RPMOSTREE_TRANSACTION (transaction),
+                                                 ((RpmOstreeOutputPercentProgress*)data)->text,
+                                                 ((RpmOstreeOutputPercentProgress*)data)->percentage);
+    break;
+  case RPMOSTREE_OUTPUT_PERCENT_PROGRESS_END:
+    rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+    break;
+  }
 }
 
 static gboolean
@@ -542,6 +580,8 @@ sysroot_finalize (GObject *object)
   if (self->stdout_source_id > 0)
     g_source_remove (self->stdout_source_id);
 
+  rpmostree_output_set_callback (NULL, NULL);
+
   G_OBJECT_CLASS (rpmostreed_sysroot_parent_class)->finalize (object);
 }
 
@@ -559,6 +599,8 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
   self->monitor = NULL;
 
   self->transaction_monitor = rpmostreed_transaction_monitor_new ();
+
+  rpmostree_output_set_callback (sysroot_output_cb, self);
 }
 
 static void

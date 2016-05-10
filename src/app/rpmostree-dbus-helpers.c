@@ -334,31 +334,29 @@ transaction_progress_free (TransactionProgress *self)
 }
 
 
-static gboolean
+static void
 end_status_line (TransactionProgress *self)
 {
-  gboolean ret = TRUE;
-
   if (self->in_status_line)
     {
       glnx_console_unlock (&self->console);
       self->in_status_line = FALSE;
     }
-
-  return ret;
 }
 
 
-static gboolean
+static void
 add_status_line (TransactionProgress *self,
-                 const char *line)
+                 const char *line,
+                 int percentage)
 {
-  if (self->console.is_tty)
-    {
-      self->in_status_line = TRUE;
-      glnx_console_text (line);
-    }
-  return TRUE;
+  self->in_status_line = TRUE;
+  if (!self->console.locked)
+    glnx_console_lock (&self->console);
+  if (percentage < 0)
+    glnx_console_text (line);
+  else
+    glnx_console_progress_text_percent (line, percentage);
 }
 
 
@@ -384,17 +382,38 @@ on_transaction_progress (GDBusProxy *proxy,
       g_autoptr(GVariant) sig = NULL;
       sig = g_variant_get_child_value (parameters, 0);
       rpmostree_print_signatures (g_variant_ref (sig), "  ");
-      add_status_line (tp, "\n");
+      add_status_line (tp, "\n", -1);
     }
   else if (g_strcmp0 (signal_name, "Message") == 0)
     {
-      g_autofree gchar *message = NULL;
-
-      g_variant_get_child (parameters, 0, "s", &message);
+      const gchar *message = NULL;
+      g_variant_get_child (parameters, 0, "&s", &message);
       if (tp->in_status_line)
-        add_status_line (tp, message);
+        add_status_line (tp, message, -1);
       else
         g_print ("%s\n", message);
+    }
+  else if (g_strcmp0 (signal_name, "TaskBegin") == 0)
+    {
+      /* XXX: whenever libglnx implements a spinner, this would be appropriate
+       * here. */
+      const gchar *message = NULL;
+      g_variant_get_child (parameters, 0, "&s", &message);
+      g_print ("%s... ", message);
+    }
+  else if (g_strcmp0 (signal_name, "TaskEnd") == 0)
+    {
+      const gchar *message = NULL;
+      g_variant_get_child (parameters, 0, "&s", &message);
+      g_print ("%s\n", message);
+    }
+  else if (g_strcmp0 (signal_name, "PercentProgress") == 0)
+    {
+      const gchar *message = NULL;
+      guint32 percentage;
+      g_variant_get_child (parameters, 0, "&s", &message);
+      g_variant_get_child (parameters, 1, "u", &percentage);
+      add_status_line (tp, message, percentage);
     }
   else if (g_strcmp0 (signal_name, "DownloadProgress") == 0)
     {
@@ -438,7 +457,7 @@ on_transaction_progress (GDBusProxy *proxy,
                                             requested,
                                             bytes_transferred,
                                             bytes_sec);
-      add_status_line (tp, line);
+      add_status_line (tp, line, -1);
     }
   else if (g_strcmp0 (signal_name, "ProgressEnd") == 0)
     {
