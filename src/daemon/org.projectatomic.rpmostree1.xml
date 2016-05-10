@@ -191,9 +191,24 @@
       <arg name="error_message" type="s" direction="out"/>
     </signal>
 
-    <!-- For miscellaneous messages. -->
+    <!-- For miscellaneous messages; line-buffered. -->
     <signal name="Message">
       <arg name="text" type="s" direction="out"/>
+    </signal>
+
+    <!-- Tasks are notifications that work is being done. -->
+    <signal name="TaskBegin">
+      <arg name="text" type="s" direction="out"/>
+    </signal>
+
+    <signal name="TaskEnd">
+      <arg name="text" type="s" direction="out"/>
+    </signal>
+
+    <!-- Generic percentage progress. -->
+    <signal name="PercentProgress">
+      <arg name="text" type="s" direction="out"/>
+      <arg name="percentage" type="u" direction="out"/>
     </signal>
 
     <signal name="DownloadProgress">

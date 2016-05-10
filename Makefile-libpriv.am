@@ -41,6 +41,21 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/ostree-libarchive-input-stream.h \
 	src/libpriv/rpmostree-ostree-libarchive-copynpaste.c \
 	src/libpriv/rpmostree-ostree-libarchive-copynpaste.h \
+	src/libpriv/rpmostree-output.c \
+	src/libpriv/rpmostree-output.h \
 	$(NULL)
-librpmostreepriv_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
-librpmostreepriv_la_LIBADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS) libglnx.la $(CAP_LIBS)
+
+librpmostreepriv_la_CFLAGS = \
+	$(AM_CFLAGS) \
+	-I$(srcdir)/src/libpriv \
+	-I$(libglnx_srcpath) \
+	-DPKGLIBDIR=\"$(pkglibdir)\" \
+	$(PKGDEP_RPMOSTREE_CFLAGS) \
+	$(NULL)
+
+librpmostreepriv_la_LIBADD = \
+	$(AM_LDFLAGS) \
+	$(PKGDEP_RPMOSTREE_LIBS) \
+	libglnx.la \
+	$(CAP_LIBS) \
+	$(NULL)
