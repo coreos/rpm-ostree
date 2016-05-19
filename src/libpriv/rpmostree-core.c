@@ -775,7 +775,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
   printf ("%s", "Resolving dependencies: ");
   fflush (stdout);
 
-  if (!hif_goal_depsolve (hif_context_get_goal (hifctx), error))
+  if (!hif_goal_depsolve (hif_context_get_goal (hifctx), 0, error))
     {
       printf ("%s", "failed\n");
       goto out;
