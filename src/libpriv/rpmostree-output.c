@@ -72,17 +72,35 @@ rpmostree_output_set_callback (void (*cb)(RpmOstreeOutputType, void*, void*),
 }
 
 void
-rpmostree_output_task_begin (const char *text)
+rpmostree_output_task_begin (const char *format, ...)
 {
-  RpmOstreeOutputTaskBegin task = { text };
-  active_cb (RPMOSTREE_OUTPUT_TASK_BEGIN, &task, active_cb_opaque);
+  g_autofree char *final = NULL;
+  va_list args;
+
+  va_start (args, format);
+  final = g_strdup_vprintf (format, args);
+  va_end (args);
+
+  {
+    RpmOstreeOutputTaskBegin task = { final };
+    active_cb (RPMOSTREE_OUTPUT_TASK_BEGIN, &task, active_cb_opaque);
+  }
 }
 
 void
-rpmostree_output_task_end (const char *text)
+rpmostree_output_task_end (const char *format, ...)
 {
-  RpmOstreeOutputTaskEnd task = { text };
-  active_cb (RPMOSTREE_OUTPUT_TASK_END, &task, active_cb_opaque);
+  g_autofree char *final = NULL;
+  va_list args;
+
+  va_start (args, format);
+  final = g_strdup_vprintf (format, args);
+  va_end (args);
+
+  {
+    RpmOstreeOutputTaskEnd task = { final };
+    active_cb (RPMOSTREE_OUTPUT_TASK_END, &task, active_cb_opaque);
+  }
 }
 
 void
