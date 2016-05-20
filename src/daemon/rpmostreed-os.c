@@ -711,7 +711,6 @@ os_handle_pkg_add (RPMOSTreeOS *interface,
 		   GVariant *arg_options,
 		   const char * const *arg_packages)
 {
-  /* TODO: Totally ignoring arg_packages for now */
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
@@ -719,6 +718,7 @@ os_handle_pkg_add (RPMOSTreeOS *interface,
   GVariantDict options_dict;
   const char *osname;
   gboolean opt_reboot = FALSE;
+  gboolean opt_dry_run = FALSE;
   GError *local_error = NULL;
 
   /* If a compatible transaction is in progress, share its bus address. */
@@ -748,6 +748,9 @@ os_handle_pkg_add (RPMOSTreeOS *interface,
   g_variant_dict_lookup (&options_dict,
                          "reboot", "b",
                          &opt_reboot);
+  g_variant_dict_lookup (&options_dict,
+                         "dry-run", "b",
+                         &opt_dry_run);
   g_variant_dict_clear (&options_dict);
 
   transaction = rpmostreed_transaction_new_pkg_add (invocation,
@@ -755,6 +758,7 @@ os_handle_pkg_add (RPMOSTreeOS *interface,
 						    osname,
 						    arg_packages,
 						    opt_reboot,
+						    opt_dry_run,
 						    cancellable,
 						    &local_error);
 
@@ -773,6 +777,83 @@ out:
       const char *client_address;
       client_address = rpmostreed_transaction_get_client_address (transaction);
       rpmostree_os_complete_pkg_add (interface, invocation, client_address);
+    }
+
+  return TRUE;
+}
+
+static gboolean
+os_handle_pkg_delete (RPMOSTreeOS *interface,
+                      GDBusMethodInvocation *invocation,
+                      GVariant *arg_options,
+                      const char * const *arg_packages)
+{
+  RpmostreedOS *self = RPMOSTREED_OS (interface);
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  glnx_unref_object GCancellable *cancellable = NULL;
+  GVariantDict options_dict;
+  const char *osname;
+  gboolean opt_reboot = FALSE;
+  gboolean opt_dry_run = FALSE;
+  GError *local_error = NULL;
+
+  /* If a compatible transaction is in progress, share its bus address. */
+  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
+  if (transaction != NULL)
+    {
+      if (rpmostreed_transaction_is_compatible (transaction, invocation))
+        goto out;
+
+      g_clear_object (&transaction);
+    }
+
+  cancellable = g_cancellable_new ();
+
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
+    goto out;
+
+  osname = rpmostree_os_get_name (interface);
+
+  /* XXX Fail if option type is wrong? */
+
+  g_variant_dict_init (&options_dict, arg_options);
+  g_variant_dict_lookup (&options_dict,
+                         "reboot", "b",
+                         &opt_reboot);
+  g_variant_dict_lookup (&options_dict,
+                         "dry-run", "b",
+                         &opt_dry_run);
+  g_variant_dict_clear (&options_dict);
+
+  transaction = rpmostreed_transaction_new_pkg_delete (invocation,
+                                                       ot_sysroot,
+                                                       osname,
+                                                       arg_packages,
+                                                       opt_reboot,
+                                                       opt_dry_run,
+                                                       cancellable,
+                                                       &local_error);
+
+  if (transaction == NULL)
+    goto out;
+
+  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+
+out:
+  if (local_error != NULL)
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address;
+      client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_pkg_delete (interface, invocation, client_address);
     }
 
   return TRUE;
@@ -1152,6 +1233,7 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_clear_rollback_target      = os_handle_clear_rollback_target;
   iface->handle_rebase                     = os_handle_rebase;
   iface->handle_pkg_add                    = os_handle_pkg_add;
+  iface->handle_pkg_delete                 = os_handle_pkg_delete;
   iface->handle_get_cached_rebase_rpm_diff = os_handle_get_cached_rebase_rpm_diff;
   iface->handle_download_rebase_rpm_diff   = os_handle_download_rebase_rpm_diff;
   iface->handle_get_cached_deploy_rpm_diff = os_handle_get_cached_deploy_rpm_diff;

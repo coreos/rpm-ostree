@@ -44,40 +44,40 @@ typedef struct {
   char **packages;
   gboolean reboot;
   gboolean dry_run;
-} PkgAddTransaction;
+} PkgDeleteTransaction;
 
-typedef RpmostreedTransactionClass PkgAddTransactionClass;
+typedef RpmostreedTransactionClass PkgDeleteTransactionClass;
 
-GType pkg_add_transaction_get_type (void);
+GType pkg_delete_transaction_get_type (void);
 
-G_DEFINE_TYPE (PkgAddTransaction,
-               pkg_add_transaction,
+G_DEFINE_TYPE (PkgDeleteTransaction,
+               pkg_delete_transaction,
                RPMOSTREED_TYPE_TRANSACTION)
 
 static void
-pkg_add_transaction_finalize (GObject *object)
+pkg_delete_transaction_finalize (GObject *object)
 {
-  PkgAddTransaction *self;
+  PkgDeleteTransaction *self;
 
-  self = (PkgAddTransaction *) object;
+  self = (PkgDeleteTransaction *) object;
   g_free (self->osname);
   g_strfreev (self->packages);
 
-  G_OBJECT_CLASS (pkg_add_transaction_parent_class)->finalize (object);
+  G_OBJECT_CLASS (pkg_delete_transaction_parent_class)->finalize (object);
 }
 
 static gboolean
-pkg_add_transaction_execute (RpmostreedTransaction *transaction,
-			     GCancellable *cancellable,
-			     GError **error)
+pkg_delete_transaction_execute (RpmostreedTransaction *transaction,
+                                GCancellable *cancellable,
+                                GError **error)
 {
   gboolean ret = FALSE;
-  PkgAddTransaction *self = NULL;
+  PkgDeleteTransaction *self = NULL;
   OstreeSysroot *sysroot = NULL;
   glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
   int flags = RPMOSTREE_SYSROOT_UPGRADER_FLAGS_REDEPLOY;
 
-  self = (PkgAddTransaction *) transaction;
+  self = (PkgDeleteTransaction *) transaction;
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
   if (self->dry_run)
@@ -93,8 +93,8 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
       goto out;
     }
 
-  if (!rpmostree_sysroot_upgrader_add_packages (upgrader, self->packages,
-                                                cancellable, error))
+  if (!rpmostree_sysroot_upgrader_delete_packages (upgrader, self->packages,
+                                                   cancellable, error))
     goto out;
 
   if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
@@ -109,39 +109,39 @@ out:
 }
 
 static void
-pkg_add_transaction_class_init (PkgAddTransactionClass *class)
+pkg_delete_transaction_class_init (PkgDeleteTransactionClass *class)
 {
   GObjectClass *object_class;
 
   object_class = G_OBJECT_CLASS (class);
-  object_class->finalize = pkg_add_transaction_finalize;
+  object_class->finalize = pkg_delete_transaction_finalize;
 
-  class->execute = pkg_add_transaction_execute;
+  class->execute = pkg_delete_transaction_execute;
 }
 
 static void
-pkg_add_transaction_init (PkgAddTransaction *self)
+pkg_delete_transaction_init (PkgDeleteTransaction *self)
 {
 }
 
 RpmostreedTransaction *
-rpmostreed_transaction_new_pkg_add (GDBusMethodInvocation *invocation,
-				    OstreeSysroot         *sysroot,
-				    const char            *osname,
-				    const char * const    *packages,
-				    gboolean               reboot,
-				    gboolean               dry_run,
-				    GCancellable          *cancellable,
-				    GError               **error)
+rpmostreed_transaction_new_pkg_delete (GDBusMethodInvocation *invocation,
+                                       OstreeSysroot         *sysroot,
+                                       const char            *osname,
+                                       const char * const    *packages,
+                                       gboolean               reboot,
+                                       gboolean               dry_run,
+                                       GCancellable          *cancellable,
+                                       GError               **error)
 {
-  PkgAddTransaction *self;
+  PkgDeleteTransaction *self;
 
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
   g_return_val_if_fail (osname != NULL, NULL);
   g_return_val_if_fail (packages != NULL, NULL);
 
-  self = g_initable_new (pkg_add_transaction_get_type (),
+  self = g_initable_new (pkg_delete_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
                          "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),

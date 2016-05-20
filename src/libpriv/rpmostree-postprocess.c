@@ -708,7 +708,7 @@ workaround_selinux_cross_labeling_recurse (int            dfd,
   return ret;
 }
 
-static gboolean
+gboolean
 rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
                                        const char    *path,
                                        OstreeSePolicy **out_sepolicy,
