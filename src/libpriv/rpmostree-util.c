@@ -427,7 +427,6 @@ _rpmostree_util_parse_origin (GKeyFile         *origin,
 {
   gboolean ret = FALSE;
   g_autofree char *origin_refspec = NULL;
-  g_auto(GStrv) origin_packages = NULL;
   gboolean origin_is_bare_refspec = TRUE;
 
   origin_refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
@@ -443,13 +442,74 @@ _rpmostree_util_parse_origin (GKeyFile         *origin,
       goto out;
     }
 
-  *out_refspec = g_steal_pointer (&origin_refspec);
-  if (origin_is_bare_refspec)
-    *out_packages = NULL;
-  else
-    *out_packages = g_key_file_get_string_list (origin, "packages", "requested", NULL, NULL);
+  if (out_refspec)
+    *out_refspec = g_steal_pointer (&origin_refspec);
+
+  if (out_packages)
+    {
+      if (origin_is_bare_refspec)
+        *out_packages = NULL;
+      else
+        *out_packages = g_key_file_get_string_list (origin, "packages", "requested", NULL, NULL);
+    }
 
   ret = TRUE;
+ out:
+  return ret;
+}
+
+gboolean
+rpmostree_split_path_ptrarray_validate (const char *path,
+                                        GPtrArray  **out_components,
+                                        GError     **error)
+{
+  gboolean ret = FALSE;
+  g_autoptr(GPtrArray) ret_components = NULL;
+
+  if (strlen (path) > PATH_MAX)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Path '%s' is too long", path);
+      goto out;
+    }
+
+  ret_components = g_ptr_array_new_with_free_func (g_free);
+
+  do
+    {
+      const char *p = strchr (path, '/');
+      g_autofree char *component = NULL;
+
+      if (!p)
+        {
+          component = g_strdup (path);
+          path = NULL;
+        }
+      else
+        {
+          component = g_strndup (path, p - path);
+          path = p + 1;
+        }
+
+      if (!component[0])
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Invalid empty component in path '%s'", path);
+          goto out;
+        }
+      if (g_str_equal (component, ".") ||
+          g_str_equal (component, ".."))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Invalid special element '.' or '..' in path %s", path);
+          goto out;
+        }
+
+      g_ptr_array_add (ret_components, (char*)g_steal_pointer (&component));
+    } while (path && *path);
+
+  ret = TRUE;
+  *out_components = g_steal_pointer (&ret_components);
  out:
   return ret;
 }

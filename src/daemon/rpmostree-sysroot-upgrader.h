@@ -36,13 +36,18 @@ typedef struct RpmOstreeSysrootUpgrader RpmOstreeSysrootUpgrader;
  * RpmOstreeSysrootUpgraderFlags:
  * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_NONE: No options
  * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED: Do not error if the origin has an unconfigured-state key
+ * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER: Do not error if the new deployment was composed earlier than the current deployment
+ * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_REDEPLOY: Use the same revision as the current deployment
+ * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN: If layering packages, only print the transaction
  *
  * Flags controlling operation of an #RpmOstreeSysrootUpgrader.
  */
 typedef enum {
-  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_NONE = (1 << 0),
-  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED = (1 << 1),
-  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER = (1 << 2)
+  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_NONE                 = (1 << 0),
+  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED  = (1 << 1),
+  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER          = (1 << 2),
+  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_REDEPLOY             = (1 << 3),
+  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN   = (1 << 4)
 } RpmOstreeSysrootUpgraderFlags;
 
 GType rpmostree_sysroot_upgrader_get_type (void);
@@ -55,6 +60,7 @@ RpmOstreeSysrootUpgrader *rpmostree_sysroot_upgrader_new (OstreeSysroot         
                                                           GCancellable               *cancellable,
                                                           GError                    **error);
 
+OstreeDeployment* rpmostree_sysroot_upgrader_get_merge_deployment (RpmOstreeSysrootUpgrader *self);
 const char *rpmostree_sysroot_upgrader_get_refspec (RpmOstreeSysrootUpgrader *self);
 const char *const*rpmostree_sysroot_upgrader_get_packages (RpmOstreeSysrootUpgrader *self);
 
@@ -64,6 +70,25 @@ GKeyFile *rpmostree_sysroot_upgrader_get_origin (RpmOstreeSysrootUpgrader *self)
 GKeyFile *rpmostree_sysroot_upgrader_dup_origin (RpmOstreeSysrootUpgrader *self);
 gboolean rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self, GKeyFile *origin,
                                              GCancellable *cancellable, GError **error);
+
+gboolean rpmostree_sysroot_upgrader_set_origin_rebase (RpmOstreeSysrootUpgrader *self,
+                                                       const char *new_refspec,
+                                                       GError **error);
+
+void rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self,
+                                                     const char *override_commit);
+
+gboolean
+rpmostree_sysroot_upgrader_add_packages (RpmOstreeSysrootUpgrader *self,
+                                         char                    **new_packages,
+                                         GCancellable             *cancellable,
+                                         GError                  **error);
+
+gboolean
+rpmostree_sysroot_upgrader_delete_packages (RpmOstreeSysrootUpgrader *self,
+                                            char                    **packages,
+                                            GCancellable             *cancellable,
+                                            GError                  **error);
 
 gboolean
 rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
@@ -78,10 +103,5 @@ gboolean
 rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader  *self,
                                    GCancellable           *cancellable,
                                    GError                **error);
-
-gboolean rpmostree_sysroot_upgrader_set_origin_rebase (RpmOstreeSysrootUpgrader *self, const char *new_refspec, GError **error);
-void rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self, const char *override_commit);
-void rpmostree_sysroot_upgrader_set_origin_baseref_local (RpmOstreeSysrootUpgrader *self, const char *local_commit);
-
 
 G_END_DECLS

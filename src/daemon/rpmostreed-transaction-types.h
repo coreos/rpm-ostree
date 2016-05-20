@@ -79,5 +79,16 @@ RpmostreedTransaction *
                                                             const char            *osname,
                                                             const char *const     *packages,
                                                             gboolean               reboot,
+                                                            gboolean               dry_run,
+                                                            GCancellable          *cancellable,
+                                                            GError               **error);
+
+RpmostreedTransaction *
+               rpmostreed_transaction_new_pkg_delete       (GDBusMethodInvocation *invocation,
+                                                            OstreeSysroot         *sysroot,
+                                                            const char            *osname,
+                                                            const char *const     *packages,
+                                                            gboolean               reboot,
+                                                            gboolean               dry_run,
                                                             GCancellable          *cancellable,
                                                             GError               **error);

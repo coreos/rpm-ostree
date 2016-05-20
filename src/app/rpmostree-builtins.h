@@ -51,6 +51,7 @@ BUILTINPROTO(db);
 BUILTINPROTO(internals);
 BUILTINPROTO(container);
 BUILTINPROTO(pkg_add);
+BUILTINPROTO(pkg_delete);
 
 #undef BUILTINPROTO
 

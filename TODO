@@ -25,3 +25,17 @@ Autobuilder
 * Write an intelligent scheduler
   - Task with same name of newer version wait until old one is done
   - Walk infinite test matrix
+
+Package layering
+----------------
+
+* Provide a mechanism for updating packages (& pruning older versions)
+* Support pkgs which bring their own pps
+  https://github.com/projectatomic/rpm-ostree/pull/107#issuecomment-205082381
+* Support local RPMs installation (though `ostree admin unlock` makes this
+  easier now, but it's not carried over)
+* Add a way to mark commits as valid for multiple policies rather than creating
+  a new commit everytime we relabel
+* Related to the above: store the header metadata in the tree itself rather than
+  in the commit to avoid duplication across relabeling commits
+* Add a --onto option?

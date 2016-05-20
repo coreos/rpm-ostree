@@ -49,10 +49,10 @@ get_args_variant (void)
 }
 
 int
-rpmostree_builtin_pkg_add (int            argc,
-                           char         **argv,
-                           GCancellable  *cancellable,
-                           GError       **error)
+rpmostree_builtin_pkg_delete (int            argc,
+                              char         **argv,
+                              GCancellable  *cancellable,
+                              GError       **error)
 {
   int exit_status = EXIT_FAILURE;
   GOptionContext *context;
@@ -63,7 +63,7 @@ rpmostree_builtin_pkg_add (int            argc,
   int i;
   g_autoptr(GPtrArray) argv_and_null = g_ptr_array_new ();
 
-  context = g_option_context_new ("PACKAGE [PACKAGE...] - Download and install layered RPM packages");
+  context = g_option_context_new ("PACKAGE [PACKAGE...] - Remove previously layered RPM packages");
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -88,12 +88,12 @@ rpmostree_builtin_pkg_add (int            argc,
                                 cancellable, &os_proxy, error))
     goto out;
 
-  if (!rpmostree_os_call_pkg_add_sync (os_proxy,
-                                       get_args_variant (),
-                                       (const char * const*)argv_and_null->pdata,
-                                       &transaction_address,
-                                       cancellable,
-                                       error))
+  if (!rpmostree_os_call_pkg_delete_sync (os_proxy,
+                                          get_args_variant (),
+                                          (const char * const*)argv_and_null->pdata,
+                                          &transaction_address,
+                                          cancellable,
+                                          error))
     goto out;
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
@@ -108,10 +108,7 @@ rpmostree_builtin_pkg_add (int            argc,
     }
   else if (!opt_reboot)
     {
-      const char *sysroot_path;
-
-
-      sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
+      const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
 
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,

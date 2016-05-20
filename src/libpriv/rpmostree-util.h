@@ -95,3 +95,8 @@ _rpmostree_util_parse_origin (GKeyFile         *origin,
                               char            **out_refspec,
                               char           ***out_packages,
                               GError          **error);
+
+gboolean
+rpmostree_split_path_ptrarray_validate (const char *path,
+                                        GPtrArray  **out_components,
+                                        GError     **error);

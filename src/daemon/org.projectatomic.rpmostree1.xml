@@ -178,6 +178,12 @@
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
+    <method name="PkgDelete">
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="as" name="packages"/>
+      <arg type="s" name="transaction_address" direction="out"/>
+    </method>
+
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.Transaction">

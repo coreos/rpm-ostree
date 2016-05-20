@@ -85,6 +85,7 @@ GS_DEFINE_CLEANUP_FUNCTION0(struct RpmRevisionData *, _cleanup_rpmrev_free, rpmr
 gboolean
 rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
                                        const char       *ref,
+                                       const char       *template,
                                        char            **out_tempdir,
                                        int              *out_tempdir_dfd,
                                        GCancellable     *cancellable,

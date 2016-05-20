@@ -703,6 +703,7 @@ rpmrev_free (struct RpmRevisionData *ptr)
 gboolean
 rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
                                        const char       *ref,
+                                       const char       *template,
                                        char            **out_tempdir,
                                        int              *out_tempdir_dfd,
                                        GCancellable     *cancellable,
@@ -716,7 +717,7 @@ rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
 
   g_return_val_if_fail (out_tempdir != NULL, FALSE);
 
-  if (!rpmostree_mkdtemp ("/tmp/rpmostree-dbquery-XXXXXX", &tempdir, &tempdir_dfd, error))
+  if (!rpmostree_mkdtemp (template, &tempdir, &tempdir_dfd, error))
     goto out;
 
   if (!ostree_repo_resolve_rev (repo, ref, FALSE, &commit, error))
@@ -772,6 +773,8 @@ get_sack_for_root (int               dfd,
   g_return_val_if_fail (out_sack != NULL, FALSE);
 
   sack = hif_sack_new ();
+  hif_sack_set_rootdir (sack, fullpath);
+
   if (!hif_sack_setup (sack, HIF_SACK_LOAD_FLAG_BUILD_CACHE, error))
     goto out;
 
@@ -813,11 +816,13 @@ rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
   g_autofree char *tempdir = NULL;
   glnx_fd_close int tempdir_dfd = -1;
   HifSack *hsack; 
-  
-  if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref, &tempdir, &tempdir_dfd,
+
+  if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref,
+                                              "/tmp/rpmostree-dbquery-XXXXXX",
+                                              &tempdir, &tempdir_dfd,
                                               cancellable, error))
     goto out;
-  
+
   if (!get_sack_for_root (tempdir_dfd, ".",
                           &hsack, cancellable, error))
     goto out;
@@ -842,7 +847,9 @@ rpmostree_get_refts_for_commit (OstreeRepo                *repo,
   rpmts ts;
   int r;
   
-  if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref, &tempdir, NULL,
+  if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref,
+                                              "/tmp/rpmostree-dbquery-XXXXXX",
+                                              &tempdir, NULL,
                                               cancellable, error))
     goto out;
 
