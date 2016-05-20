@@ -37,10 +37,6 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-rpm-util.h \
 	src/libpriv/rpmostree-unpacker.c \
 	src/libpriv/rpmostree-unpacker.h \
-	src/libpriv/ostree-libarchive-input-stream.c \
-	src/libpriv/ostree-libarchive-input-stream.h \
-	src/libpriv/rpmostree-ostree-libarchive-copynpaste.c \
-	src/libpriv/rpmostree-ostree-libarchive-copynpaste.h \
 	src/libpriv/rpmostree-output.c \
 	src/libpriv/rpmostree-output.h \
 	$(NULL)

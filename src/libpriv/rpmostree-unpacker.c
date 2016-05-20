@@ -36,7 +36,6 @@
 #include "rpmostree-unpacker.h"
 #include "rpmostree-core.h"
 #include "rpmostree-rpm-util.h"
-#include "rpmostree-ostree-libarchive-copynpaste.h"
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
 #include <rpm/rpmfi.h>
@@ -47,6 +46,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <selinux/selinux.h>
 
 typedef GObjectClass RpmOstreeUnpackerClass;
 
@@ -59,7 +59,7 @@ struct RpmOstreeUnpacker
   Header hdr;
   rpmfi fi;
   off_t cpio_offset;
-  GHashTable *fscaps;
+  GHashTable *rpmfi_overrides;
   RpmOstreeUnpackerFlags flags;
 
   char *ostree_branch;
@@ -86,7 +86,9 @@ rpmostree_unpacker_finalize (GObject *object)
   if (self->owns_fd && self->fd != -1)
     (void) close (self->fd);
   g_free (self->ostree_branch);
-  
+
+  g_hash_table_unref (self->rpmfi_overrides);
+
   G_OBJECT_CLASS (rpmostree_unpacker_parent_class)->finalize (object);
 }
 
@@ -99,8 +101,10 @@ rpmostree_unpacker_class_init (RpmOstreeUnpackerClass *klass)
 }
 
 static void
-rpmostree_unpacker_init (RpmOstreeUnpacker *p)
+rpmostree_unpacker_init (RpmOstreeUnpacker *self)
 {
+  self->rpmfi_overrides = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                 g_free, NULL);
 }
 
 typedef int(*archive_setup_func)(struct archive *);
@@ -233,6 +237,33 @@ rpmostree_unpacker_read_metainfo (int fd,
   return ret;
 }
 
+static void
+build_rpmfi_overrides (RpmOstreeUnpacker *self)
+{
+  int i;
+
+  /* Right now as I understand it, we need the owner user/group and
+   * possibly filesystem capabilities from the header.
+   *
+   * Otherwise we can just use the CPIO data.
+   */
+  while ((i = rpmfiNext (self->fi)) >= 0)
+    {
+      const char *user = rpmfiFUser (self->fi);
+      const char *group = rpmfiFGroup (self->fi);
+      const char *fcaps = rpmfiFCaps (self->fi);
+      const char *fn = rpmfiFN (self->fi);
+
+      if (g_str_equal (user, "root") &&
+          g_str_equal (group, "root") &&
+          (fcaps == NULL || fcaps[0] == '\0'))
+        continue;
+
+      g_hash_table_insert (self->rpmfi_overrides, g_strdup (fn),
+                           GINT_TO_POINTER (i));
+    }
+}
+
 RpmOstreeUnpacker *
 rpmostree_unpacker_new_fd (int fd, RpmOstreeUnpackerFlags flags, GError **error)
 {
@@ -242,7 +273,7 @@ rpmostree_unpacker_new_fd (int fd, RpmOstreeUnpackerFlags flags, GError **error)
   struct archive *archive;
   gsize cpio_offset;
 
-  archive = rpm2cpio (fd, error);  
+  archive = rpm2cpio (fd, error);
   if (archive == NULL)
     goto out;
 
@@ -256,6 +287,8 @@ rpmostree_unpacker_new_fd (int fd, RpmOstreeUnpackerFlags flags, GError **error)
   ret->flags = flags;
   ret->hdr = g_steal_pointer (&hdr);
   ret->cpio_offset = cpio_offset;
+
+  build_rpmfi_overrides (ret);
 
  out:
   if (archive)
@@ -292,285 +325,30 @@ rpmostree_unpacker_new_at (int dfd, const char *path, RpmOstreeUnpackerFlags fla
   return ret;
 }
 
-static inline const char *
-path_relative (const char *src)
-{
-  if (src[0] == '.' && src[1] == '/')
-    src += 2;
-  while (src[0] == '/')
-    src++;
-  return src;
-}
-
-static GHashTable *
-build_rpmfi_overrides (RpmOstreeUnpacker *self)
-{
-  g_autoptr(GHashTable) rpmfi_overrides = NULL;
-  int i;
-
-  /* Right now as I understand it, we need the owner user/group and
-   * possibly filesystem capabilities from the header.
-   *
-   * Otherwise we can just use the CPIO data.
-   */
-  rpmfi_overrides = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  for (i = 0; rpmfiNext (self->fi) >= 0; i++)
-    {
-      const char *user = rpmfiFUser (self->fi);
-      const char *group = rpmfiFGroup (self->fi);
-      const char *fcaps = rpmfiFCaps (self->fi);
-
-      if (g_str_equal (user, "root") && g_str_equal (group, "root")
-          && !(fcaps && fcaps[0]))
-        continue;
-
-      g_hash_table_insert (rpmfi_overrides,
-                           g_strdup (path_relative (rpmfiFN (self->fi))),
-                           GINT_TO_POINTER (i));
-    }
-      
-  return g_steal_pointer (&rpmfi_overrides);
-}
-
 static gboolean
-next_archive_entry (struct archive *archive,
-                    struct archive_entry **out_entry,
-                    GError **error)
+get_rpmfi_override (RpmOstreeUnpacker *self,
+                    const char        *path,
+                    const char       **out_user,
+                    const char       **out_group,
+                    const char       **out_fcaps)
 {
-  int r;
+  gpointer v;
 
-  r = archive_read_next_header (archive, out_entry);
-  if (r == ARCHIVE_EOF)
-    {
-      *out_entry = NULL;
-      return TRUE;
-    }
-  else if (r != ARCHIVE_OK)
-    {
-      propagate_libarchive_error (error, archive);
-      return FALSE;
-    }
+  /* Note: we use extended here because the value might be index 0 */
+  if (!g_hash_table_lookup_extended (self->rpmfi_overrides, path, NULL, &v))
+    return FALSE;
+
+  rpmfiInit (self->fi, GPOINTER_TO_INT (v));
+  g_assert (rpmfiNext (self->fi) >= 0);
+
+  if (out_user)
+    *out_user = rpmfiFUser (self->fi);
+  if (out_group)
+    *out_group = rpmfiFGroup (self->fi);
+  if (out_fcaps)
+    *out_fcaps = rpmfiFCaps (self->fi);
 
   return TRUE;
-}
-
-gboolean
-rpmostree_unpacker_unpack_to_dfd (RpmOstreeUnpacker *self,
-                                  int                rootfs_fd,
-                                  GCancellable      *cancellable,
-                                  GError           **error)
-{
-  gboolean ret = FALSE;
-  g_autoptr(GHashTable) rpmfi_overrides = NULL;
-  g_autoptr(GHashTable) hardlinks =
-    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-
-  rpmfi_overrides = build_rpmfi_overrides (self);
-
-  while (TRUE)
-    {
-      int r;
-      const char *fn;
-      struct archive_entry *entry;
-      glnx_fd_close int destfd = -1;
-      mode_t fmode;
-      uid_t owner_uid = 0;
-      gid_t owner_gid = 0;
-      const struct stat *archive_st;
-      const char *hardlink;
-      rpmfi fi = NULL;
-
-      if (g_cancellable_set_error_if_cancelled (cancellable, error))
-        return FALSE;
-
-      if (!next_archive_entry (self->archive, &entry, error))
-        goto out;
-      if (entry == NULL)
-        break;
-
-      fn = path_relative (archive_entry_pathname (entry));
-
-      archive_st = archive_entry_stat (entry);
-
-      hardlink = archive_entry_hardlink (entry);
-      if (hardlink)
-        {
-          g_hash_table_insert (hardlinks, g_strdup (hardlink), g_strdup (fn));
-          continue;
-        }
-
-      /* Don't try to mkdir parents of "" (originally /) */
-      if (fn[0])
-        {
-          char *fn_copy = strdupa (fn); /* alloca */
-          const char *dname = dirname (fn_copy);
-
-          /* Ensure parent directories exist */
-          if (!glnx_shutil_mkdir_p_at (rootfs_fd, dname, 0755, cancellable, error))
-            goto out;
-        }
-
-      { gpointer v;
-        if (g_hash_table_lookup_extended (rpmfi_overrides, fn, NULL, &v))
-          {
-            int override_fi_idx = GPOINTER_TO_INT (v);
-            fi = self->fi;
-            rpmfiInit (self->fi, override_fi_idx);
-          }
-      }
-      fmode = archive_st->st_mode;
-
-      if (S_ISDIR (fmode))
-        {
-          /* Always ensure we can write and execute directories...since
-           * this content should ultimately be read-only entirely, we're
-           * just breaking things by dropping write permissions during
-           * builds.
-           */
-          fmode |= 0700;
-          /* Don't try to mkdir "" (originally /) */
-          if (fn[0])
-            {
-              g_assert (fn[0] != '/');
-              if (!glnx_shutil_mkdir_p_at (rootfs_fd, fn, fmode, cancellable, error))
-                goto out;
-            }
-        }
-      else if (S_ISLNK (fmode))
-        {
-          g_assert (fn[0] != '/');
-          if (symlinkat (archive_entry_symlink (entry), rootfs_fd, fn) < 0)
-            {
-              glnx_set_error_from_errno (error);
-              g_prefix_error (error, "Creating %s: ", fn);
-              goto out;
-            }
-        }
-      else if (S_ISREG (fmode))
-        {
-          size_t remain = archive_st->st_size;
-
-          g_assert (fn[0] != '/');
-          destfd = openat (rootfs_fd, fn, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600);
-          if (destfd < 0)
-            {
-              glnx_set_error_from_errno (error);
-              g_prefix_error (error, "Creating %s: ", fn);
-              goto out;
-            }
-
-          while (remain)
-            {
-              const void *buf;
-              size_t size;
-              gint64 off;
-
-              r = archive_read_data_block (self->archive, &buf, &size, &off);
-              if (r == ARCHIVE_EOF)
-                break;
-              if (r != ARCHIVE_OK)
-                {
-                  propagate_libarchive_error (error, self->archive);
-                  goto out;
-                }
-
-              if (glnx_loop_write (destfd, buf, size) < 0)
-                {
-                  glnx_set_error_from_errno (error);
-                  goto out;
-                }
-              remain -= size;
-            }
-        }
-      else
-        {
-          g_set_error (error,
-                      G_IO_ERROR,
-                       G_IO_ERROR_FAILED,
-                       "RPM contains non-regular/non-symlink file %s",
-                       fn);
-          goto out;
-        }
-
-      if (fi != NULL && (self->flags & RPMOSTREE_UNPACKER_FLAGS_OWNER) > 0)
-        {
-          struct passwd *pwent;
-          struct group *grent;
-          
-          pwent = getpwnam (rpmfiFUser (fi));
-          if (pwent == NULL)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Unknown user '%s'", rpmfiFUser (fi));
-              goto out;
-            }
-          owner_uid = pwent->pw_uid;
-
-          grent = getgrnam (rpmfiFGroup (fi));
-          if (grent == NULL)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Unknown group '%s'", rpmfiFGroup (fi));
-              goto out;
-            }
-          owner_gid = grent->gr_gid;
-
-          if (fchownat (rootfs_fd, fn, owner_uid, owner_gid, AT_SYMLINK_NOFOLLOW) < 0)
-            {
-              glnx_set_error_from_errno (error);
-              g_prefix_error (error, "fchownat: ");
-              goto out;
-            }
-        }
-
-      if (S_ISREG (fmode))
-        {
-          if ((self->flags & RPMOSTREE_UNPACKER_FLAGS_SUID_FSCAPS) == 0)
-            fmode &= 0777;
-          else if (fi != NULL)
-            {
-              const char *fcaps = rpmfiFCaps (fi);
-              if (fcaps != NULL && fcaps[0])
-                {
-                  cap_t caps = cap_from_text (fcaps);
-                  if (cap_set_fd (destfd, caps) != 0)
-                    {
-                      glnx_set_error_from_errno (error);
-                      g_prefix_error (error, "Setting capabilities: ");
-                      goto out;
-                    }
-                }
-            }
-      
-          if (fchmod (destfd, fmode) < 0)
-            {
-              glnx_set_error_from_errno (error);
-              goto out;
-            }
-        }
-    }
-
-  { GHashTableIter hashiter;
-    gpointer k,v;
-
-    g_hash_table_iter_init (&hashiter, hardlinks);
-
-    while (g_hash_table_iter_next (&hashiter, &k, &v))
-      {
-        const char *src = path_relative (k);
-        const char *dest = path_relative (v);
-    
-        if (linkat (rootfs_fd, src, rootfs_fd, dest, 0) < 0)
-          {
-            glnx_set_error_from_errno (error);
-            goto out;
-          }
-      }
-  }
-
-  ret = TRUE;
- out:
-  return ret;
 }
 
 const char *
@@ -580,281 +358,6 @@ rpmostree_unpacker_get_ostree_branch (RpmOstreeUnpacker *self)
     self->ostree_branch = rpmostree_get_cache_branch_header (self->hdr);
 
   return self->ostree_branch;
-}
-
-static gboolean
-write_directory_meta (OstreeRepo   *repo,
-                      GFileInfo    *file_info,
-                      GVariant     *xattrs,
-                      char        **out_checksum,
-                      GCancellable *cancellable,
-                      GError      **error)
-{
-  gboolean ret = FALSE;
-  g_autoptr(GVariant) dirmeta = NULL;
-  g_autofree guchar *csum = NULL;
-
-  if (g_cancellable_set_error_if_cancelled (cancellable, error))
-    return FALSE;
-
-  dirmeta = ostree_create_directory_metadata (file_info, xattrs);
-
-  if (!ostree_repo_write_metadata (repo, OSTREE_OBJECT_TYPE_DIR_META, NULL,
-                                   dirmeta, &csum, cancellable, error))
-    goto out;
-
-  ret = TRUE;
-  *out_checksum = ostree_checksum_from_bytes (csum);
- out:
-  return ret;
-}
-
-struct _cap_struct {
-    struct __user_cap_header_struct head;
-    union {
-	struct __user_cap_data_struct set;
-	__u32 flat[3];
-    } u[_LINUX_CAPABILITY_U32S_2];
-};
-/* Rewritten version of _fcaps_save from libcap, since it's not
- * exposed, and we need to generate the raw value.
- */
-static void
-cap_t_to_vfs (cap_t cap_d, struct vfs_cap_data *rawvfscap, int *out_size)
-{
-  guint32 eff_not_zero, magic;
-  guint tocopy, i;
-  
-  /* Hardcoded to 2.  There is apparently a version 3 but it just maps
-   * to 2.  I doubt another version would ever be implemented, and
-   * even if it was we'd need to be backcompatible forever.  Anyways,
-   * setuid/fcaps binaries should go away entirely.
-   */
-  magic = VFS_CAP_REVISION_2;
-  tocopy = VFS_CAP_U32_2;
-  *out_size = XATTR_CAPS_SZ_2;
-
-  for (eff_not_zero = 0, i = 0; i < tocopy; i++)
-    eff_not_zero |= cap_d->u[i].flat[CAP_EFFECTIVE];
-
-  /* Here we're also not validating that the kernel understands
-   * the capabilities.
-   */
-
-  for (i = 0; i < tocopy; i++)
-    {
-      rawvfscap->data[i].permitted
-        = GUINT32_TO_LE(cap_d->u[i].flat[CAP_PERMITTED]);
-      rawvfscap->data[i].inheritable
-        = GUINT32_TO_LE(cap_d->u[i].flat[CAP_INHERITABLE]);
-    }
-
-  if (eff_not_zero == 0)
-    rawvfscap->magic_etc = GUINT32_TO_LE(magic);
-  else
-    rawvfscap->magic_etc = GUINT32_TO_LE(magic|VFS_CAP_FLAGS_EFFECTIVE);
-}
-
-static char *
-tweak_path_for_ostree (const char *path)
-{
-  path = path_relative (path);
-  if (g_str_has_prefix (path, "etc/"))
-    return g_strconcat ("usr/", path, NULL);
-  else if (strcmp (path, "etc") == 0)
-    return g_strdup ("usr");
-  return g_strdup (path);
-}
-
-static gboolean
-import_one_libarchive_entry_to_ostree (RpmOstreeUnpacker *self,
-                                       GHashTable        *rpmfi_overrides,
-                                       OstreeRepo        *repo,
-                                       OstreeSePolicy    *sepolicy,
-                                       struct archive_entry *entry,
-                                       OstreeMutableTree *root,
-                                       const char        *default_dir_checksum,
-                                       GCancellable      *cancellable,
-                                       GError           **error)
-{
-  gboolean ret = FALSE;
-  g_autoptr(GPtrArray) pathname_parts = NULL;
-  g_autofree char *pathname = NULL;
-  glnx_unref_object OstreeMutableTree *parent = NULL;
-  const char *basename;
-  const struct stat *st;
-  g_auto(GVariantBuilder) xattr_builder;
-  rpmfi fi = NULL;
-
-  g_variant_builder_init (&xattr_builder, (GVariantType*)"a(ayay)");
-  
-  pathname = tweak_path_for_ostree (archive_entry_pathname (entry));
-  st = archive_entry_stat (entry);
-  { gpointer v;
-    if (g_hash_table_lookup_extended (rpmfi_overrides, pathname, NULL, &v))
-      {
-        int override_fi_idx = GPOINTER_TO_INT (v);
-        fi = self->fi;
-        rpmfiInit (self->fi, override_fi_idx);
-      }
-  }
-
-  if (fi != NULL)
-    {
-      const char *fcaps = rpmfiFCaps (fi);
-      if (fcaps != NULL && fcaps[0])
-        {
-          cap_t caps = cap_from_text (fcaps);
-          struct vfs_cap_data vfscap = { 0, };
-          int vfscap_size;
-          g_autoptr(GBytes) vfsbytes = NULL;
-
-          cap_t_to_vfs (caps, &vfscap, &vfscap_size);
-          vfsbytes = g_bytes_new (&vfscap, vfscap_size);
-      
-          g_variant_builder_add (&xattr_builder, "(@ay@ay)",
-                                 g_variant_new_bytestring ("security.capability"),
-                                 g_variant_new_from_bytes ((GVariantType*)"ay",
-                                                           vfsbytes,
-                                                           FALSE)); 
-        }
-    }
-
-  if (!pathname[0])
-    {
-      parent = NULL;
-      basename = NULL;
-    }
-  else
-    {
-      if (!rpmostree_split_path_ptrarray_validate (pathname, &pathname_parts, error))
-        goto out;
-
-      if (default_dir_checksum)
-        {
-          if (!ostree_mutable_tree_ensure_parent_dirs (root, pathname_parts,
-                                                       default_dir_checksum,
-                                                       &parent,
-                                                       error))
-            goto out;
-        }
-      else
-        {
-          if (!ostree_mutable_tree_walk (root, pathname_parts, 0, &parent, error))
-            goto out;
-        }
-      basename = (const char*)pathname_parts->pdata[pathname_parts->len-1];
-    }
-
-  if (archive_entry_hardlink (entry))
-    {
-      g_autofree char *hardlink = tweak_path_for_ostree (archive_entry_hardlink (entry));
-      const char *hardlink_basename;
-      g_autoptr(GPtrArray) hardlink_split_path = NULL;
-      glnx_unref_object OstreeMutableTree *hardlink_source_parent = NULL;
-      glnx_unref_object OstreeMutableTree *hardlink_source_subdir = NULL;
-      g_autofree char *hardlink_source_checksum = NULL;
-
-      g_assert (parent != NULL);
-
-      if (!rpmostree_split_path_ptrarray_validate (hardlink, &hardlink_split_path, error))
-        goto out;
-      if (hardlink_split_path->len == 0)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Invalid hardlink path %s", hardlink);
-          goto out;
-        }
-      
-      hardlink_basename = hardlink_split_path->pdata[hardlink_split_path->len - 1];
-      
-      if (!ostree_mutable_tree_walk (root, hardlink_split_path, 0, &hardlink_source_parent, error))
-        goto out;
-      
-      if (!ostree_mutable_tree_lookup (hardlink_source_parent, hardlink_basename,
-                                       &hardlink_source_checksum,
-                                       &hardlink_source_subdir,
-                                       error))
-        {
-          g_prefix_error (error, "While resolving hardlink target: ");
-          goto out;
-        }
-      
-      if (hardlink_source_subdir)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Hardlink %s refers to directory %s",
-                       pathname, hardlink);
-          goto out;
-        }
-      g_assert (hardlink_source_checksum);
-      
-      if (!ostree_mutable_tree_replace_file (parent,
-                                             basename,
-                                             hardlink_source_checksum,
-                                             error))
-        goto out;
-    }
-  else
-    {
-      g_autofree char *object_checksum = NULL;
-      g_autoptr(GFileInfo) file_info = NULL;
-      glnx_unref_object OstreeMutableTree *subdir = NULL;
-
-      file_info = _rpmostree_libarchive_to_file_info (entry);
-
-      if (S_ISDIR (st->st_mode))
-        {
-          if (!write_directory_meta (repo, file_info, NULL, &object_checksum,
-                                     cancellable, error))
-            goto out;
-
-          if (parent == NULL)
-            {
-              subdir = g_object_ref (root);
-            }
-          else
-            {
-              if (!ostree_mutable_tree_ensure_dir (parent, basename, &subdir, error))
-                goto out;
-            }
-
-          ostree_mutable_tree_set_metadata_checksum (subdir, object_checksum);
-        }
-      else if (S_ISREG (st->st_mode) || S_ISLNK (st->st_mode))
-        {
-          g_autofree guchar *object_csum = NULL;
-
-          if (parent == NULL)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Can't import file as root directory");
-              goto out;
-            }
-
-          if (!_rpmostree_import_libarchive_entry_file (repo, self->archive, entry, file_info,
-                                                        g_variant_builder_end (&xattr_builder),
-                                                        &object_csum,
-                                                        cancellable, error))
-            goto out;
-          
-          object_checksum = ostree_checksum_from_bytes (object_csum);
-          if (!ostree_mutable_tree_replace_file (parent, basename,
-                                                 object_checksum,
-                                                 error))
-            goto out;
-        }
-      else
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Unsupported file type for path '%s'", pathname);
-          goto out;
-        }
-    }
-
-  ret = TRUE;
- out:
-  return ret;
 }
 
 static gboolean
@@ -905,94 +408,263 @@ get_lead_sig_header_as_bytes (RpmOstreeUnpacker *self,
   return ret;
 }
 
-gboolean
-rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *self,
-                                     OstreeRepo        *repo,
-                                     OstreeSePolicy    *sepolicy,
-                                     char             **out_commit,
-                                     GCancellable      *cancellable,
-                                     GError           **error)
-{
-  gboolean ret = FALSE;
-  g_autoptr(GHashTable) rpmfi_overrides = NULL;
-  g_autoptr(GHashTable) hardlinks =
-    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-  g_autofree char *default_dir_checksum  = NULL;
-  g_autoptr(GFile) root = NULL;
-  glnx_unref_object OstreeMutableTree *mtree = NULL;
-  g_autoptr(GBytes) header_bytes = NULL;
-  g_autofree char *commit_checksum = NULL;
-  g_auto(GVariantBuilder) metadata_builder;
+struct _cap_struct {
+    struct __user_cap_header_struct head;
+    union {
+        struct __user_cap_data_struct set;
+        __u32 flat[3];
+    } u[_LINUX_CAPABILITY_U32S_2];
+};
 
+/* Rewritten version of _fcaps_save from libcap, since it's not
+ * exposed, and we need to generate the raw value.
+ */
+static void
+cap_t_to_vfs (cap_t cap_d, struct vfs_cap_data *rawvfscap, int *out_size)
+{
+  guint32 eff_not_zero, magic;
+  guint tocopy, i;
+
+  /* Hardcoded to 2.  There is apparently a version 3 but it just maps
+   * to 2.  I doubt another version would ever be implemented, and
+   * even if it was we'd need to be backcompatible forever.  Anyways,
+   * setuid/fcaps binaries should go away entirely.
+   */
+  magic = VFS_CAP_REVISION_2;
+  tocopy = VFS_CAP_U32_2;
+  *out_size = XATTR_CAPS_SZ_2;
+
+  for (eff_not_zero = 0, i = 0; i < tocopy; i++)
+    eff_not_zero |= cap_d->u[i].flat[CAP_EFFECTIVE];
+
+  /* Here we're also not validating that the kernel understands
+   * the capabilities.
+   */
+
+  for (i = 0; i < tocopy; i++)
+    {
+      rawvfscap->data[i].permitted
+        = GUINT32_TO_LE(cap_d->u[i].flat[CAP_PERMITTED]);
+      rawvfscap->data[i].inheritable
+        = GUINT32_TO_LE(cap_d->u[i].flat[CAP_INHERITABLE]);
+    }
+
+  if (eff_not_zero == 0)
+    rawvfscap->magic_etc = GUINT32_TO_LE(magic);
+  else
+    rawvfscap->magic_etc = GUINT32_TO_LE(magic|VFS_CAP_FLAGS_EFFECTIVE);
+}
+
+static gboolean
+build_metadata_variant (RpmOstreeUnpacker *self,
+                        OstreeSePolicy    *sepolicy,
+                        GVariant         **out_variant,
+                        GCancellable      *cancellable,
+                        GError           **error)
+{
+  g_auto(GVariantBuilder) metadata_builder;
   g_variant_builder_init (&metadata_builder, (GVariantType*)"a{sv}");
 
-  rpmfi_overrides = build_rpmfi_overrides (self);
+  /* NB: We store the full header of the RPM in the commit for two reasons:
+   * first, it holds the file security capabilities, and secondly, we'll need to
+   * provide it to librpm when it updates the rpmdb (see
+   * rpmostree_context_assemble_commit()). */
+  {
+    g_autoptr(GBytes) metadata = NULL;
 
-  g_assert (sepolicy == NULL);
-
-  /* Default directories are 0/0/0755, and right now we're ignoring
-   * SELinux.  (This might be a problem for /etc, but in practice
-   * anything with nontrivial perms should be in the packages)
-   */
-  { glnx_unref_object GFileInfo *default_dir_perms  = g_file_info_new ();
-    g_file_info_set_attribute_uint32 (default_dir_perms, "unix::uid", 0);
-    g_file_info_set_attribute_uint32 (default_dir_perms, "unix::gid", 0);
-    g_file_info_set_attribute_uint32 (default_dir_perms, "unix::mode", 0755 | S_IFDIR);
-    
-    if (!write_directory_meta (repo, default_dir_perms, NULL,
-                               &default_dir_checksum, cancellable, error))
-      goto out;
-  }
-
-  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
-    goto out;
-
-  mtree = ostree_mutable_tree_new ();
-  ostree_mutable_tree_set_metadata_checksum (mtree, default_dir_checksum);
-
-  { g_autoptr(GBytes) metadata = NULL;
-    
     if (!get_lead_sig_header_as_bytes (self, &metadata, cancellable, error))
-      goto out;
+      return FALSE;
 
     g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.metadata",
-                           g_variant_new_from_bytes ((GVariantType*)"ay", metadata, TRUE));
+                           g_variant_new_from_bytes ((GVariantType*)"ay",
+                                                     metadata, TRUE));
   }
-                                                                          
-  while (TRUE)
-    {
-      struct archive_entry *entry;
-      
-      if (!next_archive_entry (self->archive, &entry, error))
-        goto out;
-      if (entry == NULL)
-        break;
 
-      if (!import_one_libarchive_entry_to_ostree (self, rpmfi_overrides, repo,
-                                                  sepolicy, entry, mtree,
-                                                  default_dir_checksum,
-                                                  cancellable, error))
-        goto out;
+  /* The current sepolicy that was used to label the unpacked files is important
+   * to record. It will help us during future overlays to determine whether the
+   * files should be relabeled. */
+  if (sepolicy)
+    g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.sepolicy",
+                           g_variant_new_string
+                             (ostree_sepolicy_get_csum (sepolicy)));
+
+  /* let's be nice to our future selves just in case */
+  g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.unpack_version",
+                         g_variant_new_uint32 (1));
+
+  *out_variant = g_variant_builder_end (&metadata_builder);
+  return TRUE;
+}
+
+typedef struct
+{
+  RpmOstreeUnpacker  *self;
+  GError  **error;
+} cb_data;
+
+static OstreeRepoCommitFilterResult
+filter_cb (OstreeRepo         *repo,
+           const char         *path,
+           GFileInfo          *file_info,
+           gpointer            user_data)
+{
+  RpmOstreeUnpacker *self = ((cb_data*)user_data)->self;
+  GError **error = ((cb_data*)user_data)->error;
+
+  /* For now we fail if an RPM requires a file to be owned by non-root. The
+   * problem is that RPM provides strings, but ostree records uids/gids. Any
+   * mapping we choose would be specific to a certain userdb and thus not
+   * portable. To properly support this will probably require switching over to
+   * systemd-sysusers: https://github.com/projectatomic/rpm-ostree/issues/49 */
+
+  const char *user = NULL;
+  const char *group = NULL;
+
+  guint32 uid = g_file_info_get_attribute_uint32 (file_info, "unix::uid");
+  guint32 gid = g_file_info_get_attribute_uint32 (file_info, "unix::gid");
+
+  gboolean was_null = (*error == NULL);
+
+  if (*error == NULL &&
+      get_rpmfi_override (self, path, &user, &group, NULL) &&
+      (user != NULL || group != NULL))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "path \"%s\" marked as %s%s%s)",
+                   path, user, group ? ":" : "", group ?: "");
+    }
+
+  /* This should normally never happen since by design RPM doesn't use ids at
+   * all, but might as well check since it's right there. */
+  if (*error == NULL && (uid != 0 || gid != 0))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "path \"%s\" marked as %u:%u)", path, uid, gid);
+    }
+
+  if (was_null && *error != NULL)
+    g_prefix_error (error, "Non-root ownership currently unsupported");
+
+  return OSTREE_REPO_COMMIT_FILTER_ALLOW;
+}
+
+static GVariant*
+xattr_cb (OstreeRepo  *repo,
+          const char  *path,
+          GFileInfo   *file_info,
+          gpointer     user_data)
+{
+  RpmOstreeUnpacker *self = user_data;
+  const char *fcaps = NULL;
+
+  if (get_rpmfi_override (self, path, NULL, NULL, &fcaps) && fcaps != NULL)
+    {
+      g_auto(GVariantBuilder) builder;
+      cap_t caps = cap_from_text (fcaps);
+      struct vfs_cap_data vfscap = { 0, };
+      g_autoptr(GBytes) vfsbytes = NULL;
+      int vfscap_size;
+
+      cap_t_to_vfs (caps, &vfscap, &vfscap_size);
+      vfsbytes = g_bytes_new (&vfscap, vfscap_size);
+
+      g_variant_builder_init (&builder, (GVariantType*)"a(ayay)");
+      g_variant_builder_add (&builder, "(@ay@ay)",
+                             g_variant_new_bytestring ("security.capability"),
+                             g_variant_new_from_bytes ((GVariantType*)"ay",
+                                                       vfsbytes, FALSE));
+      return g_variant_ref_sink (g_variant_builder_end (&builder));
+    }
+
+  return NULL;
+}
+
+static gboolean
+import_rpm_to_repo (RpmOstreeUnpacker *self,
+                    OstreeRepo        *repo,
+                    OstreeSePolicy    *sepolicy,
+                    char             **out_csum,
+                    GCancellable      *cancellable,
+                    GError           **error)
+{
+  gboolean ret = FALSE;
+  GVariant *metadata = NULL; /* floating */
+  g_autoptr(GFile) root = NULL;
+  OstreeRepoCommitModifier *modifier = NULL;
+  OstreeRepoImportArchiveOptions opts = { 0 };
+  glnx_unref_object OstreeMutableTree *mtree = NULL;
+
+  GError *cb_error = NULL;
+  cb_data fdata = { self, &cb_error };
+
+  modifier = ostree_repo_commit_modifier_new (0, filter_cb, &fdata, NULL);
+  ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb,
+                                                  NULL, self);
+  ostree_repo_commit_modifier_set_sepolicy (modifier, sepolicy);
+
+  opts.ignore_unsupported_content = TRUE;
+  opts.autocreate_parents = TRUE;
+  opts.use_ostree_convention =
+    (self->flags & RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION);
+
+  mtree = ostree_mutable_tree_new ();
+
+  if (!ostree_repo_import_archive_to_mtree (repo, &opts, self->archive, mtree,
+                                            modifier, cancellable, error))
+    goto out;
+
+  /* check if any of the cbs set an error */
+  if (cb_error != NULL)
+    {
+      *error = cb_error;
+      goto out;
     }
 
   if (!ostree_repo_write_mtree (repo, mtree, &root, cancellable, error))
     goto out;
 
-  if (!ostree_repo_write_commit (repo, NULL, "", "",
-                                 g_variant_builder_end (&metadata_builder),
-                                 OSTREE_REPO_FILE (root),
-                                 &commit_checksum, cancellable, error))
+  if (!build_metadata_variant (self, sepolicy, &metadata, cancellable, error))
     goto out;
 
-  ostree_repo_transaction_set_ref (repo, NULL,
-                                   rpmostree_unpacker_get_ostree_branch (self),
-                                   commit_checksum);
+  if (!ostree_repo_write_commit (repo, NULL, "", "", metadata,
+                                 OSTREE_REPO_FILE (root), out_csum,
+                                 cancellable, error))
+    goto out;
+
+  ret = TRUE;
+out:
+  if (modifier)
+    ostree_repo_commit_modifier_unref (modifier);
+  return ret;
+}
+
+gboolean
+rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *self,
+                                     OstreeRepo        *repo,
+                                     OstreeSePolicy    *sepolicy,
+                                     char             **out_csum,
+                                     GCancellable      *cancellable,
+                                     GError           **error)
+{
+  gboolean ret = FALSE;
+  g_autofree char *csum = NULL;
+  const char *branch = NULL;
+
+  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
+    goto out;
+
+  if (!import_rpm_to_repo (self, repo, sepolicy, &csum, cancellable, error))
+    goto out;
+
+  branch = rpmostree_unpacker_get_ostree_branch (self);
+  ostree_repo_transaction_set_ref (repo, NULL, branch, csum);
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
     goto out;
 
+  *out_csum = g_steal_pointer (&csum);
+
   ret = TRUE;
-  *out_commit = g_steal_pointer (&commit_checksum);
  out:
   ostree_repo_abort_transaction (repo, cancellable, NULL);
   return ret;
