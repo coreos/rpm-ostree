@@ -37,37 +37,16 @@
 #include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-unpacker.h"
+#include "rpmostree-output.h"
 
 #define RPMOSTREE_DIR_CACHE_REPOMD "repomd"
 #define RPMOSTREE_DIR_CACHE_SOLV "solv"
 #define RPMOSTREE_DIR_LOCK "lock"
 
-struct _RpmOstreeContext {
-  GObject parent;
-  
-  RpmOstreeTreespec *spec;
-  HifContext *hifctx;
-  OstreeRepo *ostreerepo;
-  char *dummy_instroot_path;
-};
-
-G_DEFINE_TYPE (RpmOstreeContext, rpmostree_context, G_TYPE_OBJECT)
-
-struct _RpmOstreeInstall {
-  GObject parent;
-
-  GPtrArray *packages_requested;
-  /* Target state */
-  guint n_packages_download_local;
-  GPtrArray *packages_to_download;
-  guint64 n_bytes_to_fetch;
-
-  /* Current state */
-  guint n_packages_fetched;
-  guint64 n_bytes_fetched;
-};
-
-G_DEFINE_TYPE (RpmOstreeInstall, rpmostree_install, G_TYPE_OBJECT)
+/***********************************************************
+ *                    RpmOstreeTreespec                    *
+ ***********************************************************
+ */
 
 struct _RpmOstreeTreespec {
   GObject parent;
@@ -77,58 +56,6 @@ struct _RpmOstreeTreespec {
 };
 
 G_DEFINE_TYPE (RpmOstreeTreespec, rpmostree_treespec, G_TYPE_OBJECT)
-
-static void
-rpmostree_context_finalize (GObject *object)
-{
-  RpmOstreeContext *rctx = RPMOSTREE_CONTEXT (object);
-
-  g_clear_object (&rctx->hifctx);
-  if (rctx->dummy_instroot_path)
-    {
-      (void) glnx_shutil_rm_rf_at (AT_FDCWD, rctx->dummy_instroot_path, NULL, NULL);
-      g_free (rctx->dummy_instroot_path);
-    }
-
-  g_clear_object (&rctx->ostreerepo);
-
-  G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
-}
-
-static void
-rpmostree_context_class_init (RpmOstreeContextClass *klass)
-{
-  GObjectClass *object_class = G_OBJECT_CLASS (klass);
-  object_class->finalize = rpmostree_context_finalize;
-}
-
-static void
-rpmostree_context_init (RpmOstreeContext *self)
-{
-}
-
-static void
-rpmostree_install_finalize (GObject *object)
-{
-  RpmOstreeInstall *self = RPMOSTREE_INSTALL (object);
-
-  g_clear_pointer (&self->packages_to_download, g_ptr_array_unref);
-  g_clear_pointer (&self->packages_requested, g_ptr_array_unref);
-
-  G_OBJECT_CLASS (rpmostree_install_parent_class)->finalize (object);
-}
-
-static void
-rpmostree_install_class_init (RpmOstreeInstallClass *klass)
-{
-  GObjectClass *object_class = G_OBJECT_CLASS (klass);
-  object_class->finalize = rpmostree_install_finalize;
-}
-
-static void
-rpmostree_install_init (RpmOstreeInstall *self)
-{
-}
 
 static void
 rpmostree_treespec_finalize (GObject *object)
@@ -151,120 +78,6 @@ rpmostree_treespec_class_init (RpmOstreeTreespecClass *klass)
 static void
 rpmostree_treespec_init (RpmOstreeTreespec *self)
 {
-}
-
-static void
-set_rpm_macro_define (const char *key, const char *value)
-{
-  g_autofree char *buf = g_strconcat ("%define ", key, " ", value, NULL);
-  /* Calling expand with %define (ignoring the return
-   * value) is apparently the way to change the global
-   * macro context.
-   */
-  free (rpmExpand (buf, NULL));
-}
-
-RpmOstreeContext *
-rpmostree_context_new_system (GCancellable *cancellable,
-                              GError      **error)
-{
-  RpmOstreeContext *self = g_object_new (RPMOSTREE_TYPE_CONTEXT, NULL);
-
-  /* We can always be control-c'd at any time; this is new API,
-   * otherwise we keep calling _rpmostree_reset_rpm_sighandlers() in
-   * various places.
-   */
-#if BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY
-  rpmsqSetInterruptSafety (FALSE);
-#endif
-
-  self->hifctx = hif_context_new ();
-  _rpmostree_reset_rpm_sighandlers ();
-  hif_context_set_http_proxy (self->hifctx, g_getenv ("http_proxy"));
-
-  hif_context_set_repo_dir (self->hifctx, "/etc/yum.repos.d");
-  hif_context_set_cache_age (self->hifctx, G_MAXUINT);
-  hif_context_set_cache_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_REPOMD);
-  hif_context_set_solv_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_SOLV);
-  hif_context_set_lock_dir (self->hifctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
-
-  hif_context_set_check_disk_space (self->hifctx, FALSE);
-  hif_context_set_check_transaction (self->hifctx, FALSE);
-  hif_context_set_yumdb_enabled (self->hifctx, FALSE);
-
-  /* A nonsense value because repo files used as input for this tool
-   * should never use it.
-   */
-  hif_context_set_release_ver (self->hifctx, "42");
-
-  return self;
-}
-
-RpmOstreeContext *
-rpmostree_context_new_unprivileged (int           userroot_dfd,
-                                     GCancellable *cancellable,
-                                     GError      **error)
-{
-  g_autoptr(RpmOstreeContext) ret = rpmostree_context_new_system (cancellable, error);
-  struct stat stbuf;
-
-  if (!ret)
-    goto out;
-
-  { g_autofree char *reposdir = glnx_fdrel_abspath (userroot_dfd, "rpmmd.repos.d");
-    hif_context_set_repo_dir (ret->hifctx, reposdir);
-  }
-  { const char *cache_rpmmd = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_REPOMD);
-    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_rpmmd);
-    hif_context_set_cache_dir (ret->hifctx, cachedir);
-  }
-  { const char *cache_solv = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_SOLV);
-    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_solv);
-    hif_context_set_solv_dir (ret->hifctx, cachedir);
-  }
-  { const char *lock = glnx_strjoina ("cache/", RPMOSTREE_DIR_LOCK);
-    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, lock);
-    hif_context_set_lock_dir (ret->hifctx, lock);
-  }
-
-  if (fstatat (userroot_dfd, "repo", &stbuf, 0) < 0)
-    {
-      if (errno != ENOENT)
-        {
-          glnx_set_error_from_errno (error);
-          goto out;
-        }
-    }
-  else
-    {
-      g_autofree char *repopath_str = glnx_fdrel_abspath (userroot_dfd, "repo");
-      g_autoptr(GFile) repopath = g_file_new_for_path (repopath_str);
-
-      ret->ostreerepo = ostree_repo_new (repopath);
-
-      if (!ostree_repo_open (ret->ostreerepo, cancellable, error))
-        goto out;
-    }
-
- out:
-  if (ret)
-    return g_steal_pointer (&ret);
-  return NULL;
-}
-
-/* XXX: or put this in new_system() instead? */
-void
-rpmostree_context_set_repo (RpmOstreeContext *self,
-                            OstreeRepo *repo)
-{
-  g_set_object (&self->ostreerepo, repo);
-}
-
-
-HifContext *
-rpmostree_context_get_hif (RpmOstreeContext *self)
-{
-  return self->hifctx;
 }
 
 static int
@@ -404,6 +217,223 @@ rpmostree_treespec_to_variant (RpmOstreeTreespec *spec)
   return g_variant_ref (spec->spec);
 }
 
+/***********************************************************
+ *                    RpmOstreeInstall                     *
+ ***********************************************************
+ */
+
+struct _RpmOstreeInstall {
+  GObject parent;
+
+  GPtrArray *packages_requested;
+
+  /* Target state -- these are populated during prepare_install() */
+  GPtrArray *packages_to_download;
+  GPtrArray *packages_to_import;
+  GPtrArray *packages_to_relabel;
+
+  guint64 n_bytes_to_fetch;
+
+  /* Current state */
+  guint n_packages_fetched;
+  guint64 n_bytes_fetched;
+};
+
+G_DEFINE_TYPE (RpmOstreeInstall, rpmostree_install, G_TYPE_OBJECT)
+
+static void
+rpmostree_install_finalize (GObject *object)
+{
+  RpmOstreeInstall *self = RPMOSTREE_INSTALL (object);
+
+  g_clear_pointer (&self->packages_requested, g_ptr_array_unref);
+  g_clear_pointer (&self->packages_to_download, g_ptr_array_unref);
+  g_clear_pointer (&self->packages_to_import, g_ptr_array_unref);
+  g_clear_pointer (&self->packages_to_relabel, g_ptr_array_unref);
+
+  G_OBJECT_CLASS (rpmostree_install_parent_class)->finalize (object);
+}
+
+static void
+rpmostree_install_class_init (RpmOstreeInstallClass *klass)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  object_class->finalize = rpmostree_install_finalize;
+}
+
+static void
+rpmostree_install_init (RpmOstreeInstall *self)
+{
+}
+
+/***********************************************************
+ *                    RpmOstreeContext                     *
+ ***********************************************************
+ */
+
+struct _RpmOstreeContext {
+  GObject parent;
+  
+  RpmOstreeTreespec *spec;
+  HifContext *hifctx;
+  OstreeRepo *ostreerepo;
+  char *dummy_instroot_path;
+  OstreeSePolicy *sepolicy;
+};
+
+G_DEFINE_TYPE (RpmOstreeContext, rpmostree_context, G_TYPE_OBJECT)
+
+static void
+rpmostree_context_finalize (GObject *object)
+{
+  RpmOstreeContext *rctx = RPMOSTREE_CONTEXT (object);
+
+  g_clear_object (&rctx->hifctx);
+
+  if (rctx->dummy_instroot_path)
+    {
+      (void) glnx_shutil_rm_rf_at (AT_FDCWD, rctx->dummy_instroot_path, NULL, NULL);
+      g_free (rctx->dummy_instroot_path);
+    }
+
+  g_clear_object (&rctx->ostreerepo);
+
+  g_clear_object (&rctx->sepolicy);
+
+  G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
+}
+
+static void
+rpmostree_context_class_init (RpmOstreeContextClass *klass)
+{
+  GObjectClass *object_class = G_OBJECT_CLASS (klass);
+  object_class->finalize = rpmostree_context_finalize;
+}
+
+static void
+rpmostree_context_init (RpmOstreeContext *self)
+{
+}
+
+static void
+set_rpm_macro_define (const char *key, const char *value)
+{
+  g_autofree char *buf = g_strconcat ("%define ", key, " ", value, NULL);
+  /* Calling expand with %define (ignoring the return
+   * value) is apparently the way to change the global
+   * macro context.
+   */
+  free (rpmExpand (buf, NULL));
+}
+
+RpmOstreeContext *
+rpmostree_context_new_system (GCancellable *cancellable,
+                              GError      **error)
+{
+  RpmOstreeContext *self = g_object_new (RPMOSTREE_TYPE_CONTEXT, NULL);
+
+  /* We can always be control-c'd at any time; this is new API,
+   * otherwise we keep calling _rpmostree_reset_rpm_sighandlers() in
+   * various places.
+   */
+#if BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY
+  rpmsqSetInterruptSafety (FALSE);
+#endif
+
+  self->hifctx = hif_context_new ();
+  _rpmostree_reset_rpm_sighandlers ();
+  hif_context_set_http_proxy (self->hifctx, g_getenv ("http_proxy"));
+
+  hif_context_set_repo_dir (self->hifctx, "/etc/yum.repos.d");
+  hif_context_set_cache_age (self->hifctx, G_MAXUINT);
+  hif_context_set_cache_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_REPOMD);
+  hif_context_set_solv_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_SOLV);
+  hif_context_set_lock_dir (self->hifctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
+
+  hif_context_set_check_disk_space (self->hifctx, FALSE);
+  hif_context_set_check_transaction (self->hifctx, FALSE);
+  hif_context_set_yumdb_enabled (self->hifctx, FALSE);
+
+  return self;
+}
+
+RpmOstreeContext *
+rpmostree_context_new_unprivileged (int           userroot_dfd,
+                                     GCancellable *cancellable,
+                                     GError      **error)
+{
+  g_autoptr(RpmOstreeContext) ret = rpmostree_context_new_system (cancellable, error);
+  struct stat stbuf;
+
+  if (!ret)
+    goto out;
+
+  { g_autofree char *reposdir = glnx_fdrel_abspath (userroot_dfd, "rpmmd.repos.d");
+    hif_context_set_repo_dir (ret->hifctx, reposdir);
+  }
+  { const char *cache_rpmmd = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_REPOMD);
+    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_rpmmd);
+    hif_context_set_cache_dir (ret->hifctx, cachedir);
+  }
+  { const char *cache_solv = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_SOLV);
+    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_solv);
+    hif_context_set_solv_dir (ret->hifctx, cachedir);
+  }
+  { const char *lock = glnx_strjoina ("cache/", RPMOSTREE_DIR_LOCK);
+    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, lock);
+    hif_context_set_lock_dir (ret->hifctx, lock);
+  }
+
+  if (fstatat (userroot_dfd, "repo", &stbuf, 0) < 0)
+    {
+      if (errno != ENOENT)
+        {
+          glnx_set_error_from_errno (error);
+          goto out;
+        }
+    }
+  else
+    {
+      g_autofree char *repopath_str = glnx_fdrel_abspath (userroot_dfd, "repo");
+      g_autoptr(GFile) repopath = g_file_new_for_path (repopath_str);
+
+      ret->ostreerepo = ostree_repo_new (repopath);
+
+      if (!ostree_repo_open (ret->ostreerepo, cancellable, error))
+        goto out;
+    }
+
+ out:
+  if (ret)
+    return g_steal_pointer (&ret);
+  return NULL;
+}
+
+/* XXX: or put this in new_system() instead? */
+void
+rpmostree_context_set_repo (RpmOstreeContext *self,
+                            OstreeRepo       *repo)
+{
+  g_set_object (&self->ostreerepo, repo);
+}
+
+/* I debated making this part of the treespec. Overall, I think it makes more
+ * sense to define it outside since the policy to use depends on the context in
+ * which the RpmOstreeContext is used, not something we can always guess on our
+ * own correctly. */
+void
+rpmostree_context_set_sepolicy (RpmOstreeContext *self,
+                                OstreeSePolicy   *sepolicy)
+{
+  g_set_object (&self->sepolicy, sepolicy);
+}
+
+HifContext *
+rpmostree_context_get_hif (RpmOstreeContext *self)
+{
+  return self->hifctx;
+}
+
 GHashTable *
 rpmostree_context_get_varsubsts (RpmOstreeContext *context)
 {
@@ -414,26 +444,34 @@ rpmostree_context_get_varsubsts (RpmOstreeContext *context)
   return r;
 }
 
+static void
+require_enabled_repos (GPtrArray *sources)
+{
+  for (guint i = 0; i < sources->len; i++)
+    {
+      HifRepo *src = sources->pdata[i];
+      if (hif_repo_get_enabled (src) != HIF_REPO_ENABLED_NONE)
+        hif_repo_set_required (src, TRUE);
+    }
+}
+
 static gboolean
-enable_one_repo (RpmOstreeContext    *context,
-                 GPtrArray           *sources,
+enable_one_repo (GPtrArray           *sources,
                  const char          *reponame,
                  GError             **error)
 {
   gboolean ret = FALSE;
-  guint i;
   gboolean found = FALSE;
 
-  for (i = 0; i < sources->len; i++)
+  for (guint i = 0; i < sources->len; i++)
     {
       HifRepo *src = sources->pdata[i];
       const char *id = hif_repo_get_id (src);
 
       if (strcmp (reponame, id) != 0)
         continue;
-      
+
       hif_repo_set_enabled (src, HIF_REPO_ENABLED_PACKAGES);
-      hif_repo_set_required (src, TRUE);
       found = TRUE;
       break;
     }
@@ -464,13 +502,12 @@ context_repos_enable_only (RpmOstreeContext    *context,
   for (i = 0; i < sources->len; i++)
     {
       HifRepo *src = sources->pdata[i];
-      
       hif_repo_set_enabled (src, HIF_REPO_ENABLED_NONE);
     }
 
   for (iter = enabled_repos; iter && *iter; iter++)
     {
-      if (!enable_one_repo (context, sources, *iter, error))
+      if (!enable_one_repo (sources, *iter, error))
         goto out;
     }
 
@@ -478,9 +515,11 @@ context_repos_enable_only (RpmOstreeContext    *context,
  out:
   return ret;
 }
+
 gboolean
 rpmostree_context_setup (RpmOstreeContext    *self,
-                         const char    *installroot,
+                         const char    *install_root,
+                         const char    *source_root,
                          RpmOstreeTreespec *spec,
                          GCancellable  *cancellable,
                          GError       **error)
@@ -489,9 +528,9 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   GPtrArray *repos = NULL;
   char **enabled_repos = NULL;
   char **instlangs = NULL;
-  
-  if (installroot)
-    hif_context_set_install_root (self->hifctx, installroot);
+
+  if (install_root)
+    hif_context_set_install_root (self->hifctx, install_root);
   else
     {
       glnx_fd_close int dfd = -1; /* Auto close, we just use the path */
@@ -502,6 +541,9 @@ rpmostree_context_setup (RpmOstreeContext    *self,
       hif_context_set_install_root (self->hifctx, self->dummy_instroot_path);
     }
 
+  if (source_root)
+    hif_context_set_source_root (self->hifctx, source_root);
+
   if (!hif_context_setup (self->hifctx, cancellable, error))
     goto out;
 
@@ -510,6 +552,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
 
   self->spec = g_object_ref (spec);
 
+  /* NB: missing repo --> let hif figure it out for itself */
   if (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos))
     if (!context_repos_enable_only (self, (const char *const*)enabled_repos, error))
       goto out;
@@ -521,6 +564,8 @@ rpmostree_context_setup (RpmOstreeContext    *self,
                            "No enabled repositories");
       goto out;
     }
+
+  require_enabled_repos (repos);
 
   if (g_variant_dict_lookup (self->spec->dict, "instlangs", "^a&s", &instlangs))
     {
@@ -563,29 +608,27 @@ on_hifstate_percentage_changed (HifState   *hifstate,
                                 gpointer    user_data)
 {
   const char *text = user_data;
-  glnx_console_progress_text_percent (text, percentage);
+  rpmostree_output_percent_progress (text, percentage);
 }
 
 gboolean
-rpmostree_context_download_metadata (RpmOstreeContext     *self,
-                                      GCancellable   *cancellable,
-                                      GError        **error)
+rpmostree_context_download_metadata (RpmOstreeContext *self,
+                                     GCancellable     *cancellable,
+                                     GError          **error)
 {
   gboolean ret = FALSE;
   guint progress_sigid;
-  g_auto(GLnxConsoleRef) console = { 0, };
   gs_unref_object HifState *hifstate = hif_state_new ();
 
   progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                     G_CALLBACK (on_hifstate_percentage_changed), 
+                                     G_CALLBACK (on_hifstate_percentage_changed),
                                      "Downloading metadata:");
-
-  glnx_console_lock (&console);
 
   if (!hif_context_setup_sack (self->hifctx, hifstate, error))
     goto out;
 
   g_signal_handler_disconnect (hifstate, progress_sigid);
+  rpmostree_output_percent_progress_end ();
 
   ret = TRUE;
  out:
@@ -643,7 +686,7 @@ rpmostree_get_cache_branch_header (Header hdr)
   g_autofree char *arch = headerGetAsString (hdr, RPMTAG_ARCH);
   return cache_branch_for_n_evr_a (name, evr, arch);
 }
-  
+
 char *
 rpmostree_get_cache_branch_pkg (HifPackage *pkg)
 {
@@ -659,39 +702,173 @@ pkg_is_local (HifPackage *pkg)
   return (hif_repo_is_local (src) || 
           g_strcmp0 (hif_package_get_reponame (pkg), HY_CMDLINE_REPO_NAME) == 0);
 }
-  
+
 static gboolean
-get_packages_to_download (HifContext  *hifctx,
-                          OstreeRepo  *ostreerepo,
-                          GPtrArray  **out_packages,
-                          guint       *out_n_local,
-                          GError     **error)
+get_commit_sepolicy_csum (GVariant *commit,
+                          char    **out_csum,
+                          GError  **error)
 {
   gboolean ret = FALSE;
-  guint i;
+  g_autoptr(GVariant) meta = g_variant_get_child_value (commit, 0);
+  g_autoptr(GVariantDict) meta_dict = g_variant_dict_new (meta);
+  g_autoptr(GVariant) sepolicy_csum_variant = NULL;
+
+  sepolicy_csum_variant =
+    _rpmostree_vardict_lookup_value_required (meta_dict, "rpmostree.sepolicy",
+                                              (GVariantType*)"s", error);
+  if (!sepolicy_csum_variant)
+    goto out;
+
+  g_assert (g_variant_is_of_type (sepolicy_csum_variant,
+                                  G_VARIANT_TYPE_STRING));
+  *out_csum = g_strdup (g_variant_get_string (sepolicy_csum_variant, NULL));
+
+  ret = TRUE;
+out:
+  return ret;
+}
+
+static gboolean
+find_rev_with_sepolicy (OstreeRepo     *repo,
+                        const char     *head,
+                        OstreeSePolicy *sepolicy,
+                        gboolean        allow_noent,
+                        char          **out_rev,
+                        GError        **error)
+{
+  gboolean ret = FALSE;
+  const char *sepolicy_csum_wanted = ostree_sepolicy_get_csum (sepolicy);
+  g_autofree char *commit_rev = g_strdup (head);
+
+  /* walk up the branch until we find a matching policy */
+  while (commit_rev != NULL)
+    {
+      g_autoptr(GVariant) commit = NULL;
+      g_autofree char *sepolicy_csum = NULL;
+
+      if (!ostree_repo_load_commit (repo, commit_rev, &commit, NULL, error))
+        goto out;
+      g_assert (commit);
+
+      if (!get_commit_sepolicy_csum (commit, &sepolicy_csum, error))
+        goto out;
+
+      if (strcmp (sepolicy_csum, sepolicy_csum_wanted) == 0)
+        break;
+
+      g_free (commit_rev);
+      commit_rev = ostree_commit_get_parent (commit);
+    }
+
+  if (commit_rev == NULL && !allow_noent)
+    goto out;
+
+  *out_rev = g_steal_pointer (&commit_rev);
+
+  ret = TRUE;
+out:
+  return ret;
+}
+
+static gboolean
+pkg_is_cached (HifPackage *pkg)
+{
+  if (pkg_is_local (pkg))
+    return TRUE;
+
+  /* Right now we're not re-checksumming cached RPMs, we
+   * assume they are valid.  This is a change from the current
+   * libhif behavior, but I think it's right.  We should
+   * record validity once, then ensure it's immutable after
+   * that - which is what happens with the ostree commits
+   * above.
+   */
+  return g_file_test (hif_package_get_filename (pkg), G_FILE_TEST_EXISTS);
+}
+
+static gboolean
+find_pkg_in_ostree (OstreeRepo     *repo,
+                    HifPackage     *pkg,
+                    OstreeSePolicy *sepolicy,
+                    gboolean       *out_in_ostree,
+                    gboolean       *out_selinux_match,
+                    GError        **error)
+{
+  gboolean ret = TRUE;
+
+  *out_in_ostree = FALSE;
+  *out_selinux_match = FALSE;
+
+  if (repo != NULL)
+    {
+      g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
+      g_autofree char *cached_rev = NULL;
+
+      if (!ostree_repo_resolve_rev (repo, cachebranch, TRUE,
+                                    &cached_rev, error))
+        goto out;
+
+      if (cached_rev)
+        {
+          *out_in_ostree = TRUE;
+
+          if (sepolicy)
+            {
+              g_autofree char *cached_rev_sel = NULL;
+              if (!find_rev_with_sepolicy (repo, cached_rev, sepolicy,
+                                           TRUE, &cached_rev_sel, error))
+                goto out;
+
+              if (cached_rev_sel)
+                *out_selinux_match = TRUE;
+            }
+        }
+    }
+
+  ret = TRUE;
+out:
+  return ret;
+}
+
+/* determine of all the marked packages, which ones we'll need to download,
+ * which ones we'll need to import, and which ones we'll need to relabel */
+static gboolean
+sort_packages (HifContext       *hifctx,
+               OstreeRepo       *ostreerepo,
+               OstreeSePolicy   *sepolicy,
+               RpmOstreeInstall *install,
+               GError          **error)
+{
+  gboolean ret = FALSE;
   g_autoptr(GPtrArray) packages = NULL;
-  g_autoptr(GPtrArray) packages_to_download = NULL;
   GPtrArray *sources = hif_context_get_repos (hifctx);
-  guint n_local = 0;
-  
+
+  g_clear_pointer (&install->packages_to_download, g_ptr_array_unref);
+  install->packages_to_download
+    = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+
+  g_clear_pointer (&install->packages_to_import, g_ptr_array_unref);
+  install->packages_to_import
+    = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+
+  g_clear_pointer (&install->packages_to_relabel, g_ptr_array_unref);
+  install->packages_to_relabel
+    = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+
   packages = hif_goal_get_packages (hif_context_get_goal (hifctx),
                                     HIF_PACKAGE_INFO_INSTALL,
                                     HIF_PACKAGE_INFO_REINSTALL,
                                     HIF_PACKAGE_INFO_DOWNGRADE,
                                     HIF_PACKAGE_INFO_UPDATE,
                                     -1);
-  packages_to_download = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-  
-  for (i = 0; i < packages->len; i++)
+
+  for (guint i = 0; i < packages->len; i++)
     {
       HifPackage *pkg = packages->pdata[i];
       HifRepo *src = NULL;
-      guint j;
-
-      /* get correct package source */
 
       /* Hackily look up the source...we need a hash table */
-      for (j = 0; j < sources->len; j++)
+      for (guint j = 0; j < sources->len; j++)
         {
           HifRepo *tmpsrc = sources->pdata[j];
           if (g_strcmp0 (hif_package_get_reponame (pkg),
@@ -705,44 +882,35 @@ get_packages_to_download (HifContext  *hifctx,
       g_assert (src);
       hif_package_set_repo (pkg, src);
 
-      /* this is a local file */
+      /* NB: We're assuming here that the presence of an ostree repo means that
+       * the user intends to import the pkg vs e.g. installing it like during a
+       * treecompose. Even though in the treecompose case, an ostree repo *is*
+       * given, since it shouldn't have imported pkgs in there, the logic below
+       * will work. (So e.g. pkgs might still get added to the import array in
+       * the treecompose path, but since it will never call import(), that
+       * doesn't matter). In the future, we might want to allow the user of
+       * RpmOstreeContext to express *why* they are calling prepare_install().
+       * */
 
-      if (ostreerepo)
-        {
-          g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
-          g_autofree char *cached_rev = NULL; 
+      {
+        gboolean in_ostree = FALSE;
+        gboolean selinux_match = FALSE;
+        gboolean cached = pkg_is_cached (pkg);
 
-          if (!ostree_repo_resolve_rev (ostreerepo, cachebranch, TRUE, &cached_rev, error))
-            goto out;
+        if (!find_pkg_in_ostree (ostreerepo, pkg, sepolicy,
+                                 &in_ostree, &selinux_match, error))
+          goto out;
 
-          if (cached_rev)
-            continue;
-        }
-      else if (!pkg_is_local (pkg))
-        {
-          const char *cachepath;
-          
-          cachepath = hif_package_get_filename (pkg);
-
-          /* Right now we're not re-checksumming cached RPMs, we
-           * assume they are valid.  This is a change from the current
-           * libhif behavior, but I think it's right.  We should
-           * record validity once, then ensure it's immutable after
-           * that - which is what happens with the ostree commits
-           * above.
-           */
-          if (g_file_test (cachepath, G_FILE_TEST_EXISTS))
-            continue;
-        }
-      else
-        n_local++;
-
-      g_ptr_array_add (packages_to_download, g_object_ref (pkg));
+        if (!in_ostree && !cached)
+          g_ptr_array_add (install->packages_to_download, g_object_ref (pkg));
+        if (!in_ostree)
+          g_ptr_array_add (install->packages_to_import, g_object_ref (pkg));
+        if (in_ostree && !selinux_match)
+          g_ptr_array_add (install->packages_to_relabel, g_object_ref (pkg));
+      }
     }
 
   ret = TRUE;
-  *out_packages = g_steal_pointer (&packages_to_download);
-  *out_n_local = n_local;
  out:
   return ret;
 }
@@ -772,24 +940,21 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
       }
   }
 
-  printf ("%s", "Resolving dependencies: ");
-  fflush (stdout);
+  rpmostree_output_task_begin ("Resolving dependencies");
 
   if (!hif_goal_depsolve (hif_context_get_goal (hifctx), HIF_INSTALL, error))
     {
-      printf ("%s", "failed\n");
+      g_print ("failed\n");
       goto out;
     }
-  printf ("%s", "done\n");
 
-  if (!get_packages_to_download (hifctx, self->ostreerepo, &ret_install->packages_to_download,
-                                 &ret_install->n_packages_download_local,
-                                 error))
+  rpmostree_output_task_end ("done");
+
+  if (!sort_packages (hifctx, self->ostreerepo, self->sepolicy,
+                      ret_install, error))
     goto out;
 
   rpmostree_print_transaction (hifctx);
-  g_print ("\n  Need to download %u packages\n",
-           ret_install->packages_to_download->len - ret_install->n_packages_download_local);
 
   ret = TRUE;
   *out_install = g_steal_pointer (&ret_install);
@@ -944,7 +1109,6 @@ static gboolean
 source_download_packages (HifRepo *source,
                           GPtrArray *packages,
                           RpmOstreeInstall *install,
-                          int        target_dfd,
                           HifState  *state,
                           GCancellable *cancellable,
                           GError **error)
@@ -979,14 +1143,9 @@ source_download_packages (HifRepo *source,
       if (pkg_is_local (pkg))
         continue;
 
-      if (target_dfd == -1)
-        {
-          target_dir = g_build_filename (hif_repo_get_location (source), "/packages/", NULL);
-          if (!glnx_shutil_mkdir_p_at (AT_FDCWD, target_dir, 0755, cancellable, error))
-            goto out;
-        }
-      else
-        target_dir = glnx_fdrel_abspath (target_dfd, ".");
+      target_dir = g_build_filename (hif_repo_get_location (source), "/packages/", NULL);
+      if (!glnx_shutil_mkdir_p_at (AT_FDCWD, target_dir, 0755, cancellable, error))
+        goto out;
       
       checksum = hif_package_get_chksum (pkg, &checksum_type);
       checksum_str = hy_chksum_str (checksum, checksum_type);
@@ -1074,22 +1233,24 @@ gather_source_to_packages (HifContext *hifctx,
 }
 
 gboolean
-rpmostree_context_download_rpms (RpmOstreeContext     *ctx,
-                                 int             target_dfd,
-                                 RpmOstreeInstall *install,
-                                 GCancellable   *cancellable,
-                                 GError        **error)
+rpmostree_context_download (RpmOstreeContext *ctx,
+                            RpmOstreeInstall *install,
+                            GCancellable     *cancellable,
+                            GError          **error)
 {
   gboolean ret = FALSE;
   HifContext *hifctx = ctx->hifctx;
-  g_auto(GLnxConsoleRef) console = { 0, };
-  guint progress_sigid;
-  GHashTableIter hiter;
-  gpointer key, value;
+  int n = install->packages_to_download->len;
 
-  glnx_console_lock (&console);
+  if (n > 0)
+    g_print ("Need to download %u package%s\n", n, n > 1 ? "s" : "");
+  else
+    return TRUE;
 
-  { g_autoptr(GHashTable) source_to_packages = gather_source_to_packages (hifctx, install);
+  { guint progress_sigid;
+    GHashTableIter hiter;
+    gpointer key, value;
+    g_autoptr(GHashTable) source_to_packages = gather_source_to_packages (hifctx, install);
 
     g_hash_table_iter_init (&hiter, source_to_packages);
     while (g_hash_table_iter_next (&hiter, &key, &value))
@@ -1097,17 +1258,20 @@ rpmostree_context_download_rpms (RpmOstreeContext     *ctx,
         HifRepo *src = key;
         GPtrArray *src_packages = value;
         gs_unref_object HifState *hifstate = hif_state_new ();
-        g_autofree char *prefix = g_strconcat ("Downloading packages (", hif_repo_get_id (src), ")", NULL); 
+
+        g_autofree char *prefix
+          = g_strdup_printf ("  Downloading from %s:", hif_repo_get_id (src));
 
         progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                           G_CALLBACK (on_hifstate_percentage_changed), 
+                                           G_CALLBACK (on_hifstate_percentage_changed),
                                            prefix);
-      
-        if (!source_download_packages (src, src_packages, install, target_dfd, hifstate,
-                                       cancellable, error))
+
+        if (!source_download_packages (src, src_packages, install,
+                                       hifstate, cancellable, error))
           goto out;
 
         g_signal_handler_disconnect (hifstate, progress_sigid);
+        rpmostree_output_percent_progress_end ();
       }
   }
 
@@ -1118,47 +1282,50 @@ rpmostree_context_download_rpms (RpmOstreeContext     *ctx,
 }
 
 static gboolean
-import_one_package (OstreeRepo   *ostreerepo,
-                    int           tmpdir_dfd,
-                    HifContext   *hifctx,
-                    HifPackage *    pkg,
-                    GCancellable *cancellable,
-                    GError      **error)
+import_one_package (OstreeRepo     *ostreerepo,
+                    HifContext     *hifctx,
+                    HifPackage     *pkg,
+                    OstreeSePolicy *sepolicy,
+                    GCancellable   *cancellable,
+                    GError        **error)
 {
   gboolean ret = FALSE;
   g_autofree char *ostree_commit = NULL;
   glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
-  const char *pkg_relpath;
+  g_autofree char *pkg_path;
+  int flags = 0;
 
   if (pkg_is_local (pkg))
-    {
-      tmpdir_dfd = AT_FDCWD;
-      pkg_relpath = hif_package_get_filename (pkg);
-    }
+    pkg_path = g_strdup (hif_package_get_filename (pkg));
   else
-    pkg_relpath = glnx_basename (hif_package_get_location (pkg)); 
-   
+    {
+      g_autofree char *pkg_location = hif_package_get_location (pkg);
+      pkg_path =
+        g_build_filename (hif_repo_get_location (hif_package_get_repo (pkg)),
+                          "packages", glnx_basename (pkg_location), NULL);
+    }
+
+  flags = RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION;
+
   /* TODO - tweak the unpacker flags for containers */
-  unpacker = rpmostree_unpacker_new_at (tmpdir_dfd, pkg_relpath,
-                                        RPMOSTREE_UNPACKER_FLAGS_ALL,
-                                        error);
+  unpacker = rpmostree_unpacker_new_at (AT_FDCWD, pkg_path, flags, error);
   if (!unpacker)
     goto out;
 
-  if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostreerepo, NULL, &ostree_commit,
-                                            cancellable, error))
+  if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostreerepo, sepolicy,
+                                            &ostree_commit, cancellable, error))
     {
       g_autofree char *nevra = hif_package_get_nevra (pkg);
       g_prefix_error (error, "Unpacking %s: ", nevra);
       goto out;
     }
-   
+
   if (!pkg_is_local (pkg))
     {
-      if (TEMP_FAILURE_RETRY (unlinkat (tmpdir_dfd, pkg_relpath, 0)) < 0)
+      if (TEMP_FAILURE_RETRY (unlinkat (AT_FDCWD, pkg_path, 0)) < 0)
         {
           glnx_set_error_from_errno (error);
-          g_prefix_error (error, "Deleting %s: ", pkg_relpath);
+          g_prefix_error (error, "Deleting %s: ", pkg_path);
           goto out;
         }
     }
@@ -1169,73 +1336,40 @@ import_one_package (OstreeRepo   *ostreerepo,
 }
 
 gboolean
-rpmostree_context_download_import (RpmOstreeContext *self,
-                                   RpmOstreeInstall  *install,
-                                   GCancellable         *cancellable,
-                                   GError              **error)
+rpmostree_context_import (RpmOstreeContext *self,
+                          RpmOstreeInstall *install,
+                          GCancellable     *cancellable,
+                          GError          **error)
 {
   gboolean ret = FALSE;
   HifContext *hifctx = self->hifctx;
-  g_auto(GLnxConsoleRef) console = { 0, };
-  glnx_fd_close int pkg_tempdir_dfd = -1;
-  g_autofree char *pkg_tempdir = NULL;
   guint progress_sigid;
-  GHashTableIter hiter;
-  gpointer key, value;
-  guint i;
+  int n = install->packages_to_import->len;
+
+  if (n == 0)
+    return TRUE;
 
   g_return_val_if_fail (self->ostreerepo != NULL, FALSE);
 
-  glnx_console_lock (&console);
-
-  if (!rpmostree_mkdtemp ("/var/tmp/rpmostree-import-XXXXXX", &pkg_tempdir, &pkg_tempdir_dfd, error))
-    goto out;
-
-  { g_autoptr(GHashTable) source_to_packages = gather_source_to_packages (hifctx, install);
-    
-    g_hash_table_iter_init (&hiter, source_to_packages);
-    while (g_hash_table_iter_next (&hiter, &key, &value))
-      {
-        glnx_unref_object HifState *hifstate = hif_state_new ();
-        HifRepo *src = key;
-        GPtrArray *src_packages = value;
-        g_autofree char *prefix = g_strconcat ("Downloading from ", hif_repo_get_id (src), NULL); 
-
-        if (hif_repo_is_local (src))
-          continue;
-
-        progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                           G_CALLBACK (on_hifstate_percentage_changed), 
-                                           prefix);
-        
-        if (!source_download_packages (src, src_packages, install, pkg_tempdir_dfd, hifstate,
-                                       cancellable, error))
-          goto out;
-
-        g_signal_handler_disconnect (hifstate, progress_sigid);
-      }
-  }
-
-  { 
+  {
     glnx_unref_object HifState *hifstate = hif_state_new ();
-
-    hif_state_set_number_steps (hifstate, install->packages_to_download->len);
+    hif_state_set_number_steps (hifstate, install->packages_to_import->len);
     progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                       G_CALLBACK (on_hifstate_percentage_changed), 
-                                       "Importing packages:");
+                                       G_CALLBACK (on_hifstate_percentage_changed),
+                                       "Importing:");
 
-    for (i = 0; i < install->packages_to_download->len; i++)
+    for (guint i = 0; i < install->packages_to_import->len; i++)
       {
-        HifPackage *pkg = install->packages_to_download->pdata[i];
-        if (!import_one_package (self->ostreerepo, pkg_tempdir_dfd, hifctx, pkg,
-                                 cancellable, error))
+        HifPackage *pkg = install->packages_to_import->pdata[i];
+        if (!import_one_package (self->ostreerepo, hifctx, pkg,
+                                 self->sepolicy, cancellable, error))
           goto out;
         hif_state_assert_done (hifstate);
       }
 
     g_signal_handler_disconnect (hifstate, progress_sigid);
+    rpmostree_output_percent_progress_end ();
   }
-
 
   ret = TRUE;
  out:
@@ -1243,19 +1377,22 @@ rpmostree_context_download_import (RpmOstreeContext *self,
 }
 
 static gboolean
-ostree_checkout_package (int           dfd,
+ostree_checkout_package (OstreeRepo   *repo,
+                         HifPackage   *pkg,
+                         int           dfd,
                          const char   *path,
-                         HifContext   *hifctx,
-                         HifPackage *    pkg,
-                         OstreeRepo   *ostreerepo,
                          OstreeRepoDevInoCache *devino_cache,
-                         const char   *pkg_ostree_commit,
+                         const char   *pkg_commit,
                          GCancellable *cancellable,
                          GError      **error)
 {
   gboolean ret = FALSE;
   OstreeRepoCheckoutOptions opts = { OSTREE_REPO_CHECKOUT_MODE_USER,
                                      OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES, };
+
+  /* We want the checkout to match the repo type so that we get hardlinks. */
+  if (ostree_repo_get_mode (repo) == OSTREE_REPO_MODE_BARE)
+    opts.mode = OSTREE_REPO_CHECKOUT_MODE_NONE;
 
   opts.devino_to_csum_cache = devino_cache;
 
@@ -1264,14 +1401,530 @@ ostree_checkout_package (int           dfd,
    */
   opts.disable_fsync = TRUE;
 
-  if (!ostree_repo_checkout_tree_at (ostreerepo, &opts, dfd, path,
-                                     pkg_ostree_commit, cancellable, error))
+  if (!ostree_repo_checkout_tree_at (repo, &opts, dfd, path,
+                                     pkg_commit, cancellable, error))
     goto out;
-  
+
   ret = TRUE;
  out:
   if (error && *error)
     g_prefix_error (error, "Unpacking %s: ", hif_package_get_nevra (pkg));
+  return ret;
+}
+
+/* XXX: adapted from glnx_mkdtempat(). try to send upstream. */
+/* Searches for a free filename matching the @dst_path_tmpl template and renames
+ * @src_path to that. */
+static gboolean
+renametempat (int         src_dfd,
+              const char *src_path,
+              int         dst_dfd,
+              char       *dst_path_tmpl,
+              GError    **error)
+{
+  char *XXXXXX;
+  int count;
+  static const char letters[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  static const int NLETTERS = sizeof (letters) - 1;
+  glong value;
+  GTimeVal tv;
+  static int counter = 0;
+
+  g_return_val_if_fail (dst_path_tmpl != NULL, -1);
+
+  /* find the last occurrence of "XXXXXX" */
+  XXXXXX = g_strrstr (dst_path_tmpl, "XXXXXX");
+
+  if (!XXXXXX || strncmp (XXXXXX, "XXXXXX", 6))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Invalid temporary file template '%s'", dst_path_tmpl);
+      return FALSE;
+    }
+
+  /* Get some more or less random data.  */
+  g_get_current_time (&tv);
+  value = (tv.tv_usec ^ tv.tv_sec) + counter++;
+
+  for (count = 0; count < 100; value += 7777, ++count)
+    {
+      glong v = value;
+
+      /* Fill in the random bits.  */
+      XXXXXX[0] = letters[v % NLETTERS];
+      v /= NLETTERS;
+      XXXXXX[1] = letters[v % NLETTERS];
+      v /= NLETTERS;
+      XXXXXX[2] = letters[v % NLETTERS];
+      v /= NLETTERS;
+      XXXXXX[3] = letters[v % NLETTERS];
+      v /= NLETTERS;
+      XXXXXX[4] = letters[v % NLETTERS];
+      v /= NLETTERS;
+      XXXXXX[5] = letters[v % NLETTERS];
+
+      /* I initially wrote this function thinking I could use renameat2, which
+       * would make the operation safer and simpler, but since it was introduced
+       * in 3.15, let's just do it in two steps for now (XXX: or maybe we should
+       * #ifdef it). */
+
+      if (TEMP_FAILURE_RETRY (faccessat (dst_dfd, dst_path_tmpl, F_OK,
+                                         AT_SYMLINK_NOFOLLOW)) == 0)
+        continue; /* file exists */
+      else
+        {
+          if (errno != ENOENT)
+            {
+              /* Any other error will apply also to other names we might
+               *  try, and there are 2^32 or so of them, so give up now.
+               */
+              glnx_set_prefix_error_from_errno (error, "%s", "faccessat");
+              return FALSE;
+            }
+        }
+
+      if (TEMP_FAILURE_RETRY (renameat (src_dfd, src_path,
+                                        dst_dfd, dst_path_tmpl) != 0))
+        {
+          glnx_set_prefix_error_from_errno (error, "%s", "renameat");
+          return FALSE;
+        }
+
+      return TRUE;
+    }
+
+  g_set_error (error, G_IO_ERROR, G_IO_ERROR_EXISTS,
+               "renametempat ran out of combinations to try.");
+  return FALSE;
+}
+
+/* Given a path to a file/symlink, make a copy of it if it's a hard link. */
+/* XXX: we should probably refactor this and the next two funcs so they share
+ * more code. */
+static gboolean
+break_single_hardlink_at (int           dfd,
+                          const char   *path,
+                          GCancellable *cancellable,
+                          GError      **error)
+{
+  gboolean ret = FALSE;
+  struct stat stbuf;
+
+  if (fstatat (dfd, path, &stbuf, AT_SYMLINK_NOFOLLOW) != 0)
+    {
+      glnx_set_prefix_error_from_errno (error, "%s", "fstatat");
+      goto out;
+    }
+
+  if (!S_ISLNK (stbuf.st_mode) && !S_ISREG (stbuf.st_mode))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Unsupported type for entry '%s'", path);
+      goto out;
+    }
+
+  if (stbuf.st_nlink > 1)
+    {
+      g_autofree char *path_tmp = g_strconcat (path, ".XXXXXX", NULL);
+      if (!renametempat (dfd, path, dfd, path_tmp, error))
+        goto out;
+
+      if (!glnx_file_copy_at (dfd, path_tmp, &stbuf, dfd, path, 0,
+                              cancellable, error))
+        goto out;
+
+      if (unlinkat (dfd, path_tmp, 0) < 0)
+        {
+          glnx_set_prefix_error_from_errno (error, "%s", "unlinkat");
+          goto out;
+        }
+    }
+
+  ret = TRUE;
+out:
+  return ret;
+}
+
+static gboolean
+copy_dir_contents_nonrecurse_at (int            src_dfd,
+                                 const char    *srcpath,
+                                 int            dest_dfd,
+                                 GCancellable  *cancellable,
+                                 GError       **error)
+{
+  gboolean ret = FALSE;
+  g_auto(GLnxDirFdIterator) dfd_iter = { FALSE, };
+  struct dirent *dent = NULL;
+
+  if (!glnx_dirfd_iterator_init_at (src_dfd, srcpath, TRUE, &dfd_iter, error))
+    goto out;
+
+  while (glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, cancellable, error))
+    {
+      if (dent == NULL)
+        break;
+      if (!glnx_file_copy_at (dfd_iter.fd, dent->d_name, NULL, dest_dfd,
+                              dent->d_name, 0, cancellable, error))
+        goto out;
+    }
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+/* Given a directory referred to by @dfd and @dirpath, ensure that physical (or
+ * reflink'd) copies of all files are done. */
+static gboolean
+break_hardlinks_at (int             dfd,
+                    const char     *dirpath,
+                    GCancellable   *cancellable,
+                    GError        **error)
+{
+  gboolean ret = FALSE;
+  glnx_fd_close int dest_dfd = -1;
+  g_autofree char *dirpath_tmp = g_strconcat (dirpath, ".XXXXXX", NULL);
+
+  if (!renametempat (dfd, dirpath, dfd, dirpath_tmp, error))
+    goto out;
+
+  /* We're not accurately copying the mode, but in reality modes don't
+   * matter since it's all immutable anyways.
+   */
+  if (TEMP_FAILURE_RETRY (mkdirat (dfd, dirpath, 0755)) != 0)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
+
+  if (!glnx_opendirat (dfd, dirpath, TRUE, &dest_dfd, error))
+    goto out;
+
+  if (!copy_dir_contents_nonrecurse_at (dfd, dirpath_tmp, dest_dfd, cancellable, error))
+    goto out;
+
+  if (!glnx_shutil_rm_rf_at (dfd, dirpath_tmp, cancellable, error))
+    goto out;
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
+static const char*
+get_selinux_label (GVariant *xattrs)
+{
+  for (int i = 0; i < g_variant_n_children (xattrs); i++)
+    {
+      const char *name, *value;
+      g_variant_get_child (xattrs, i, "(^&ay^&ay)", &name, &value);
+      if (strcmp (name, "security.selinux") == 0)
+        return value;
+    }
+  return NULL;
+}
+
+static GVariant*
+set_selinux_label (GVariant   *xattrs,
+                   const char *new_label)
+{
+  GVariantBuilder builder;
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ayay)"));
+
+  /* copy all the other xattrs */
+  for (int i = 0; i < g_variant_n_children (xattrs); i++)
+    {
+      const char *name;
+      g_autoptr(GVariant) value = NULL;
+
+      g_variant_get_child (xattrs, i, "(^&ay@ay)", &name, &value);
+      if (strcmp (name, "security.selinux") != 0)
+        g_variant_builder_add (&builder, "(^ay@ay)", name, value);
+    }
+
+  /* add the label if any */
+  if (new_label != NULL)
+    g_variant_builder_add (&builder, "(^ay^ay)", "security.selinux", new_label);
+
+  return g_variant_ref_sink (g_variant_builder_end (&builder));
+}
+
+static gboolean
+relabel_dir_recurse_at (OstreeRepo        *repo,
+                        int                dfd,
+                        const char        *path,
+                        const char        *prefix,
+                        OstreeSePolicy    *sepolicy,
+                        gboolean          *out_changed,
+                        GCancellable      *cancellable,
+                        GError           **error)
+{
+  gboolean ret = FALSE;
+
+  g_auto(GLnxDirFdIterator) dfd_iter = { FALSE, };
+  struct dirent *dent = NULL;
+
+  if (!glnx_dirfd_iterator_init_at (dfd, path, FALSE, &dfd_iter, error))
+    goto out;
+
+  while (glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent,
+                                                     cancellable, error))
+    {
+      g_autofree char *fullpath = NULL;
+
+      const char *cur_label = NULL;
+      g_autofree char *new_label = NULL;
+      g_autoptr(GVariant) cur_xattrs = NULL;
+      g_autoptr(GVariant) new_xattrs = NULL;
+
+      if (dent == NULL)
+        break;
+
+      if (dent->d_type != DT_DIR &&
+          dent->d_type != DT_REG &&
+          dent->d_type != DT_LNK)
+        continue;
+
+      if (!glnx_dfd_name_get_all_xattrs (dfd_iter.fd, dent->d_name, &cur_xattrs,
+                                         cancellable, error))
+        goto out;
+
+      /* may return NULL */
+      cur_label = get_selinux_label (cur_xattrs);
+
+      /* build the new full path to use for label lookup (we can't just use
+       * glnx_fdrel_abspath() since that will just give a new /proc/self/fd/$fd
+       * on each recursion) */
+      fullpath = g_build_filename (prefix, dent->d_name, NULL);
+
+      {
+        struct stat stbuf;
+
+        if (fstatat (dfd_iter.fd, dent->d_name, &stbuf,
+                     AT_SYMLINK_NOFOLLOW) != 0)
+          {
+            glnx_set_prefix_error_from_errno (error, "%s", "fstatat");
+            goto out;
+          }
+
+        /* may be NULL */
+        if (!ostree_sepolicy_get_label (sepolicy, fullpath, stbuf.st_mode,
+                                        &new_label, cancellable, error))
+          goto out;
+      }
+
+      if (g_strcmp0 (cur_label, new_label) != 0)
+        {
+          if (dent->d_type != DT_DIR)
+            if (!break_single_hardlink_at (dfd_iter.fd, dent->d_name,
+                                           cancellable, error))
+              goto out;
+
+          new_xattrs = set_selinux_label (cur_xattrs, new_label);
+
+          if (!glnx_dfd_name_set_all_xattrs (dfd_iter.fd, dent->d_name,
+                                             new_xattrs, cancellable, error))
+            goto out;
+
+          *out_changed = TRUE;
+        }
+
+      if (dent->d_type == DT_DIR)
+        if (!relabel_dir_recurse_at (repo, dfd_iter.fd, dent->d_name, fullpath,
+                                     sepolicy, out_changed, cancellable, error))
+          goto out;
+    }
+
+  ret = TRUE;
+out:
+  return ret;
+}
+
+static gboolean
+relabel_rootfs (OstreeRepo        *repo,
+                int                dfd,
+                OstreeSePolicy    *sepolicy,
+                gboolean          *out_changed,
+                GCancellable      *cancellable,
+                GError           **error)
+{
+  /* NB: this does mean that / itself will not be labeled properly, but that
+   * doesn't matter since it will always exist during overlay */
+  return relabel_dir_recurse_at (repo, dfd, ".", "/", sepolicy,
+                                 out_changed, cancellable, error);
+}
+
+static gboolean
+relabel_one_package (OstreeRepo     *repo,
+                     HifPackage     *pkg,
+                     OstreeSePolicy *sepolicy,
+                     GCancellable   *cancellable,
+                     GError        **error)
+{
+  gboolean ret = FALSE;
+
+  g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-relabel-XXXXXX");
+  glnx_fd_close int tmprootfs_dfd = -1;
+  OstreeRepoDevInoCache *cache = NULL;
+  OstreeRepoCommitModifier *modifier = NULL;
+  g_autoptr(GFile) root = NULL;
+  g_autofree char *commit_csum = NULL;
+  g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
+  gboolean changed = FALSE;
+
+
+  /* let's just use the branch head */
+  if (!ostree_repo_resolve_rev (repo, cachebranch, FALSE,
+                                &commit_csum, error))
+    goto out;
+
+  /* create a tmprootfs in ostree tmp dir */
+  {
+    int repo_dfd = ostree_repo_get_dfd (repo); /* borrowed */
+
+    if (!glnx_mkdtempat (repo_dfd, tmprootfs, 00755, error))
+      goto out;
+
+    if (!glnx_opendirat (repo_dfd, tmprootfs, FALSE, &tmprootfs_dfd, error))
+      goto out;
+  }
+
+  /* checkout the pkg and relabel, breaking hardlinks */
+
+  cache = ostree_repo_devino_cache_new ();
+
+  if (!ostree_checkout_package (repo, pkg, tmprootfs_dfd, ".", cache,
+                                commit_csum, cancellable, error))
+    goto out;
+
+  /* This is where the magic happens. We traverse the tree and relabel stuff,
+   * making sure to break hardlinks if needed. */
+  if (!relabel_rootfs (repo, tmprootfs_dfd, sepolicy, &changed,
+                       cancellable, error))
+    goto out;
+
+  /* XXX: 'changed' now holds whether the policy change actually affected any of
+   * our labels. If it didn't, then we shouldn't have to recommit, which we do
+   * right now unconditionally. Related to the XXX below, maybe we can keep the
+   * list of compatible sepolicy csums in the tree directly under e.g.
+   * /meta/sepolicy/. Make them individual files rather than a single file so
+   * that they can more easily be GC'ed by "refcounting" each sepolicy depending
+   * on the current deployments. */
+
+  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
+    goto out;
+
+  /* write to the tree */
+  {
+    glnx_unref_object OstreeMutableTree *mtree = ostree_mutable_tree_new ();
+
+    modifier =
+      ostree_repo_commit_modifier_new (OSTREE_REPO_COMMIT_MODIFIER_FLAGS_NONE,
+                                       NULL, NULL, NULL);
+
+    ostree_repo_commit_modifier_set_devino_cache (modifier, cache);
+
+    if (!ostree_repo_write_dfd_to_mtree (repo, tmprootfs_dfd, ".", mtree,
+                                         modifier, cancellable, error))
+      goto out;
+
+    if (!ostree_repo_write_mtree (repo, mtree, &root, cancellable, error))
+      goto out;
+
+  }
+
+  /* build metadata and commit */
+  {
+    g_autoptr(GVariant) commit_var = NULL;
+    g_autoptr(GVariantDict) meta_dict = NULL;
+
+    if (!ostree_repo_load_commit (repo, commit_csum, &commit_var, NULL, error))
+      goto out;
+
+    /* let's just copy the metadata from the head and only change the
+     * rpmostree.sepolicy value */
+    {
+      g_autoptr(GVariant) meta = g_variant_get_child_value (commit_var, 0);
+      meta_dict = g_variant_dict_new (meta);
+
+      g_variant_dict_insert (meta_dict, "rpmostree.sepolicy", "s",
+                             ostree_sepolicy_get_csum (sepolicy));
+    }
+
+  /* XXX: Eventually we should find a way to make the header metadata be shared
+   * between commits. Either store it in the tree and put its checksum in the
+   * commit metadata, or just store it in the tree itself (e.g. have a contents/
+   * and a /meta/header). */
+    {
+      g_autofree char *new_commit_csum = NULL;
+      if (!ostree_repo_write_commit (repo, commit_csum, "", "",
+                                     g_variant_dict_end (meta_dict),
+                                     OSTREE_REPO_FILE (root), &new_commit_csum,
+                                     cancellable, error))
+        goto out;
+
+      ostree_repo_transaction_set_ref (repo, NULL, cachebranch,
+                                       new_commit_csum);
+    }
+  }
+
+  if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
+    goto out;
+
+  ret = TRUE;
+out:
+  if (cache)
+    ostree_repo_devino_cache_unref (cache);
+  if (modifier)
+    ostree_repo_commit_modifier_unref (modifier);
+  if (tmprootfs_dfd != -1)
+    glnx_shutil_rm_rf_at (tmprootfs_dfd, ".", cancellable, NULL);
+  return ret;
+}
+
+gboolean
+rpmostree_context_relabel (RpmOstreeContext *self,
+                           RpmOstreeInstall *install,
+                           GCancellable     *cancellable,
+                           GError          **error)
+{
+  gboolean ret = FALSE;
+  guint progress_sigid;
+  int n = install->packages_to_relabel->len;
+
+  if (n == 0)
+    return TRUE;
+
+  g_assert (self->sepolicy);
+
+  g_return_val_if_fail (self->ostreerepo != NULL, FALSE);
+
+  {
+    glnx_unref_object HifState *hifstate = hif_state_new ();
+    g_autofree char *prefix = g_strdup_printf ("Relabeling %d package%s:",
+                                               n, n>1 ? "s" : "");
+
+    hif_state_set_number_steps (hifstate, install->packages_to_relabel->len);
+    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                       G_CALLBACK (on_hifstate_percentage_changed),
+                                       prefix);
+
+    for (guint i = 0; i < install->packages_to_relabel->len; i++)
+      {
+        HifPackage *pkg = install->packages_to_relabel->pdata[i];
+        if (!relabel_one_package (self->ostreerepo, pkg, self->sepolicy,
+                                  cancellable, error))
+          goto out;
+        hif_state_assert_done (hifstate);
+      }
+
+    g_signal_handler_disconnect (hifstate, progress_sigid);
+    rpmostree_output_percent_progress_end ();
+  }
+
+  ret = TRUE;
+ out:
   return ret;
 }
 
@@ -1332,7 +1985,7 @@ add_to_transaction (rpmts  ts,
 
   if (!rpmostree_unpacker_read_metainfo (metadata_fd, &hdr, NULL, NULL, error))
     goto out;
-          
+
   r = rpmtsAddInstallElement (ts, hdr, (char*)hif_package_get_nevra (pkg), TRUE, NULL);
   if (r != 0)
     {
@@ -1351,20 +2004,33 @@ add_to_transaction (rpmts  ts,
   return ret;
 }
 
+/* FIXME: This is a copy of ot_admin_checksum_version */
+static char *
+checksum_version (GVariant *checksum)
+{
+  gs_unref_variant GVariant *metadata = NULL;
+  const char *ret = NULL;
+
+  metadata = g_variant_get_child_value (checksum, 0);
+
+  if (!g_variant_lookup (metadata, "version", "&s", &ret))
+    return NULL;
+
+  return g_strdup (ret);
+}
+
 gboolean
-rpmostree_context_assemble_commit (RpmOstreeContext *self,
-                                   int               tmpdir_dfd,
-                                   const char       *name,
-                                   char            **out_commit,
-                                   GCancellable     *cancellable,
-                                   GError          **error)
+rpmostree_context_assemble_commit (RpmOstreeContext      *self,
+                                   int                    tmprootfs_dfd,
+                                   OstreeRepoDevInoCache *devino_cache,
+                                   const char            *parent,
+                                   char                 **out_commit,
+                                   GCancellable          *cancellable,
+                                   GError               **error)
 {
   gboolean ret = FALSE;
   HifContext *hifctx = self->hifctx;
-  guint progress_sigid;
   TransactionData tdata = { 0, -1 };
-  g_auto(GLnxConsoleRef) console = { 0, };
-  glnx_unref_object HifState *hifstate = NULL;
   rpmts ordering_ts = NULL;
   rpmts rpmdb_ts = NULL;
   guint i, n_rpmts_elements;
@@ -1374,23 +2040,15 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
     g_hash_table_new_full (NULL, NULL, (GDestroyNotify)g_object_unref, (GDestroyNotify)g_free);
   HifPackage *filesystem_package = NULL;   /* It's special... */
   int r;
-  glnx_fd_close int rootfs_fd = -1;
   char *tmp_metadata_dir_path = NULL;
   glnx_fd_close int tmp_metadata_dfd = -1;
-  OstreeRepoDevInoCache *devino_cache = NULL;
-  g_autofree char *workdir_path = NULL;
   g_autofree char *ret_commit_checksum = NULL;
-
-  glnx_console_lock (&console);
+  OstreeRepoCommitModifier *commit_modifier = NULL;
 
   if (!rpmostree_mkdtemp ("/tmp/rpmostree-metadata-XXXXXX", &tmp_metadata_dir_path,
                           &tmp_metadata_dfd, error))
     goto out;
   tdata.tmp_metadata_dfd = tmp_metadata_dfd;
-
-  workdir_path = g_strdup ("rpmostree-commit-XXXXXX");
-  if (!glnx_mkdtempat (tmpdir_dfd, workdir_path, 0755, error))
-    goto out;
 
   ordering_ts = rpmtsCreate ();
   rpmtsSetRootDir (ordering_ts, hif_context_get_install_root (hifctx));
@@ -1423,12 +2081,24 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
         HifPackage *pkg = package_list->pdata[i];
         glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
         g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
-        g_autofree char *cached_rev = NULL; 
+        g_autofree char *cached_rev = NULL;
         g_autoptr(GVariant) pkg_commit = NULL;
         g_autoptr(GVariant) header_variant = NULL;
 
-        if (!ostree_repo_resolve_rev (self->ostreerepo, cachebranch, FALSE, &cached_rev, error))
-          goto out;
+        {
+          g_autofree char *branch_head_rev = NULL;
+
+          if (!ostree_repo_resolve_rev (self->ostreerepo, cachebranch, FALSE,
+                                        &branch_head_rev, error))
+            goto out;
+
+          if (self->sepolicy == NULL)
+            cached_rev = g_steal_pointer (&branch_head_rev);
+          else if (!find_rev_with_sepolicy (self->ostreerepo, branch_head_rev,
+                                            self->sepolicy, FALSE, &cached_rev,
+                                            error))
+            goto out;
+        }
 
         if (!ostree_repo_load_variant (self->ostreerepo, OSTREE_OBJECT_TYPE_COMMIT, cached_rev,
                                        &pkg_commit, error))
@@ -1467,16 +2137,14 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
   rpmtsOrder (ordering_ts);
   _rpmostree_reset_rpm_sighandlers ();
 
-  hifstate = hif_state_new ();
-  progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                     G_CALLBACK (on_hifstate_percentage_changed), 
-                                     "Unpacking:");
-
+  rpmostree_output_task_begin ("Overlaying");
 
   n_rpmts_elements = (guint)rpmtsNElements (ordering_ts);
-  hif_state_set_number_steps (hifstate, n_rpmts_elements);
 
-  devino_cache = ostree_repo_devino_cache_new ();
+  if (devino_cache == NULL)
+    devino_cache = ostree_repo_devino_cache_new ();
+  else
+    devino_cache = ostree_repo_devino_cache_ref (devino_cache);
 
   /* Okay so what's going on in Fedora with incestuous relationship
    * between the `filesystem`, `setup`, `libgcc` RPMs is actively
@@ -1490,12 +2158,12 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
    */
   if (filesystem_package)
     {
-      if (!ostree_checkout_package (tmpdir_dfd, workdir_path, hifctx, filesystem_package,
-                                    self->ostreerepo, devino_cache,
-                                    g_hash_table_lookup (pkg_to_ostree_commit, filesystem_package),
+      if (!ostree_checkout_package (self->ostreerepo, filesystem_package,
+                                    tmprootfs_dfd, ".", devino_cache,
+                                    g_hash_table_lookup (pkg_to_ostree_commit,
+                                                         filesystem_package),
                                     cancellable, error))
         goto out;
-      hif_state_assert_done (hifstate);
     }
   else
     {
@@ -1506,16 +2174,13 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
       const char *tekey = rpmteKey (te);
       HifPackage *pkg = g_hash_table_lookup (nevra_to_pkg, tekey);
 
-      if (!ostree_checkout_package (tmpdir_dfd, workdir_path, hifctx, pkg,
-                                    self->ostreerepo, devino_cache,
-                                    g_hash_table_lookup (pkg_to_ostree_commit, pkg),
+      if (!ostree_checkout_package (self->ostreerepo, pkg,
+                                    tmprootfs_dfd, ".", devino_cache,
+                                    g_hash_table_lookup (pkg_to_ostree_commit,
+                                                         pkg),
                                     cancellable, error))
         goto out;
-      hif_state_assert_done (hifstate);
     }
-
-  if (!glnx_opendirat (tmpdir_dfd, workdir_path, FALSE, &rootfs_fd, error))
-    goto out;
 
   if (filesystem_package)
     i = 0;
@@ -1531,29 +2196,41 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
       if (pkg == filesystem_package)
         continue;
 
-      if (!ostree_checkout_package (rootfs_fd, ".", hifctx, pkg, self->ostreerepo, devino_cache,
-                                    g_hash_table_lookup (pkg_to_ostree_commit, pkg),
+      if (!ostree_checkout_package (self->ostreerepo, pkg,
+                                    tmprootfs_dfd, ".", devino_cache,
+                                    g_hash_table_lookup (pkg_to_ostree_commit,
+                                                         pkg),
                                     cancellable, error))
         goto out;
-      hif_state_assert_done (hifstate);
     }
 
-  glnx_console_unlock (&console);
+  rpmostree_output_task_end ("done");
+  rpmostree_output_percent_progress_end ();
 
   g_clear_pointer (&ordering_ts, rpmtsFree);
 
-  g_print ("Writing rpmdb...\n");
+  rpmostree_output_task_begin ("Writing rpmdb");
 
-  if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/share/rpm", 0755, cancellable, error))
+  if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "usr/share/rpm", 0755,
+                               cancellable, error))
     goto out;
 
-  /* Now, we use the separate rpmdb ts which *doesn't* have a rootdir
-   * set, because if it did rpmtsRun() would try to chroot which it
-   * can't, even though we're not trying to run %post scripts now.
+  /* Now, we use the separate rpmdb ts which *doesn't* have a rootdir set,
+   * because if it did rpmtsRun() would try to chroot which it won't be able to
+   * if we're unprivileged, even though we're not trying to run %post scripts
+   * now.
    *
    * Instead, this rpmts has the dbpath as absolute.
    */
-  { g_autofree char *rpmdb_abspath = glnx_fdrel_abspath (rootfs_fd, "usr/share/rpm");
+  { g_autofree char *rpmdb_abspath = glnx_fdrel_abspath (tmprootfs_dfd,
+                                                         "usr/share/rpm");
+
+    /* if we were passed an existing tmprootfs, and that tmprootfs already has
+     * an rpmdb, we have to make sure to break its hardlinks as librpm mutates
+     * the db in place */
+    if (!break_hardlinks_at (AT_FDCWD, rpmdb_abspath, cancellable, error))
+      goto out;
+
     set_rpm_macro_define ("_dbpath", rpmdb_abspath);
   }
 
@@ -1576,7 +2253,15 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
   }
 
   rpmtsOrder (rpmdb_ts);
-  r = rpmtsRun (rpmdb_ts, NULL, 0);
+
+  /* NB: Because we're using the real root here (see above for reason why), rpm
+   * will see the read-only /usr mount and think that there isn't any disk space
+   * available for install. For now, we just tell rpm to ignore space
+   * calculations, but then we lose that nice check. What we could do is set a
+   * root dir at least if we have CAP_SYS_CHROOT, or maybe do the space req
+   * check ourselves if rpm makes that information easily accessible (doesn't
+   * look like it from a quick glance). */
+  r = rpmtsRun (rpmdb_ts, NULL, RPMPROB_FILTER_DISKSPACE);
   if (r < 0)
     {
       g_set_error (error,
@@ -1585,15 +2270,18 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
                    "Failed to update rpmdb (rpmtsRun code %d)", r);
       goto out;
     }
+  if (r > 0)
+    {
+      if (!hif_rpmts_look_for_problems (rpmdb_ts, error))
+        goto out;
+    }
 
-  g_print ("Writing rpmdb...done\n");
+  rpmostree_output_task_end ("done");
 
-  if (!rpmostree_rootfs_postprocess_common (rootfs_fd, cancellable, error))
+  if (!rpmostree_rootfs_postprocess_common (tmprootfs_dfd, cancellable, error))
     goto out;
 
-  g_signal_handler_disconnect (hifstate, progress_sigid);
-
-  g_print ("Writing OSTree commit...\n");
+  rpmostree_output_task_begin ("Writing OSTree commit");
 
   if (!ostree_repo_prepare_transaction (self->ostreerepo, NULL, cancellable, error))
     goto out;
@@ -1602,12 +2290,28 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
     g_autoptr(GFile) root = NULL;
     g_auto(GVariantBuilder) metadata_builder;
     g_autofree char *state_checksum = NULL;
-    OstreeRepoCommitModifier *commit_modifier = ostree_repo_commit_modifier_new (OSTREE_REPO_COMMIT_MODIFIER_FLAGS_NONE, NULL, NULL, NULL);
     g_autoptr(GVariant) spec_v = g_variant_ref_sink (rpmostree_treespec_to_variant (self->spec));
 
     g_variant_builder_init (&metadata_builder, (GVariantType*)"a{sv}");
 
     g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.spec", spec_v);
+
+    /* copy the version tag from the parent if present -- XXX: this behaviour
+     * should probably be adjustable from a new parameter instead */
+    if (parent != NULL)
+      {
+        g_autoptr(GVariant) commit = NULL;
+        g_autofree char *parent_version = NULL;
+
+        if (!ostree_repo_load_commit (self->ostreerepo, parent, &commit, NULL, error))
+          goto out;
+
+        parent_version = checksum_version (commit);
+
+        if (parent_version)
+          g_variant_builder_add (&metadata_builder, "{sv}", "version",
+                                 g_variant_new_string (parent_version));
+      }
 
     state_checksum = rpmostree_context_get_state_sha512 (self);
 
@@ -1615,18 +2319,23 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
                            "rpmostree.state-sha512",
                            g_variant_new_string (state_checksum));
 
+    commit_modifier =
+      ostree_repo_commit_modifier_new (OSTREE_REPO_COMMIT_MODIFIER_FLAGS_NONE,
+                                       NULL, NULL, NULL);
+
     ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
 
     mtree = ostree_mutable_tree_new ();
 
-    if (!ostree_repo_write_dfd_to_mtree (self->ostreerepo, rootfs_fd, ".", mtree,
-                                         commit_modifier, cancellable, error))
+    if (!ostree_repo_write_dfd_to_mtree (self->ostreerepo, tmprootfs_dfd, ".",
+                                         mtree, commit_modifier,
+                                         cancellable, error))
       goto out;
 
     if (!ostree_repo_write_mtree (self->ostreerepo, mtree, &root, cancellable, error))
       goto out;
 
-    if (!ostree_repo_write_commit (self->ostreerepo, NULL, "", "",
+    if (!ostree_repo_write_commit (self->ostreerepo, parent, "", "",
                                    g_variant_builder_end (&metadata_builder),
                                    OSTREE_REPO_FILE (root),
                                    &ret_commit_checksum, cancellable, error))
@@ -1640,12 +2349,9 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
 
     if (!ostree_repo_commit_transaction (self->ostreerepo, NULL, cancellable, error))
       goto out;
-
-    /* FIXME memleak on error, need g_autoptr for this */
-    ostree_repo_commit_modifier_unref (commit_modifier);
   }
 
-  g_print ("Writing OSTree commit...done\n");
+  rpmostree_output_task_end ("done");
 
   ret = TRUE;
   if (out_commit)
@@ -1659,7 +2365,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext *self,
     rpmtsFree (rpmdb_ts);
   if (tmp_metadata_dir_path)
     (void) glnx_shutil_rm_rf_at (AT_FDCWD, tmp_metadata_dir_path, cancellable, NULL);
-  if (workdir_path)
-    (void) glnx_shutil_rm_rf_at (tmpdir_dfd, workdir_path, cancellable, NULL);
+  if (commit_modifier)
+    ostree_repo_commit_modifier_unref (commit_modifier);
   return ret;
 }
