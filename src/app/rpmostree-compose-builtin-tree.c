@@ -294,7 +294,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     g_autoptr(RpmOstreeTreespec) treespec_value = rpmostree_treespec_new_from_keyfile (treespec, &tmp_error);
     g_assert_no_error (tmp_error);
     
-    if (!rpmostree_context_setup (ctx, gs_file_get_path_cached (yumroot), treespec_value,
+    if (!rpmostree_context_setup (ctx, gs_file_get_path_cached (yumroot), "/", treespec_value,
                                   cancellable, error))
       goto out;
   }
@@ -348,7 +348,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     }
 
   /* --- Downloading packages --- */
-  if (!rpmostree_context_download_rpms (ctx, -1, hifinstall, cancellable, error))
+  if (!rpmostree_context_download (ctx, hifinstall, cancellable, error))
     goto out;
   
   { g_auto(GLnxConsoleRef) console = { 0, };

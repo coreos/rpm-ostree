@@ -57,12 +57,15 @@ const char *rpmostree_treespec_get_ref (RpmOstreeTreespec *spec);
 
 gboolean rpmostree_context_setup (RpmOstreeContext     *self,
                                   const char    *install_root,
+                                  const char    *source_root,
                                   RpmOstreeTreespec *treespec,
                                   GCancellable  *cancellable,
                                   GError       **error);
 
 void rpmostree_context_set_repo (RpmOstreeContext *self,
-                                 OstreeRepo *repo);
+                                 OstreeRepo       *repo);
+void rpmostree_context_set_sepolicy (RpmOstreeContext *self,
+                                     OstreeSePolicy   *sepolicy);
 
 void rpmostree_hif_add_checksum_goal (GChecksum *checksum, HyGoal goal);
 char *rpmostree_context_get_state_sha512 (RpmOstreeContext *self);
@@ -80,20 +83,27 @@ gboolean rpmostree_context_prepare_install (RpmOstreeContext     *self,
                                             GCancellable   *cancellable,
                                             GError        **error);
 
-gboolean rpmostree_context_download_rpms (RpmOstreeContext     *self,
-                                          int             target_dfd,
-                                          RpmOstreeInstall *install,
-                                          GCancellable   *cancellable,
-                                          GError        **error);
+gboolean rpmostree_context_download (RpmOstreeContext *self,
+                                     RpmOstreeInstall *install,
+                                     GCancellable     *cancellable,
+                                     GError           **error);
 
-gboolean rpmostree_context_download_import (RpmOstreeContext     *self,
-                                          RpmOstreeInstall *install,
-                                          GCancellable               *cancellable,
-                                          GError                    **error);
+gboolean rpmostree_context_import (RpmOstreeContext *self,
+                                   RpmOstreeInstall *install,
+                                   GCancellable     *cancellable,
+                                   GError          **error);
 
-gboolean rpmostree_context_assemble_commit (RpmOstreeContext     *self,
-                                            int                   tmpdir_dfd,
-                                            const char           *name,
-                                            char                **out_commit,
-                                            GCancellable         *cancellable,
-                                            GError              **error);
+gboolean rpmostree_context_relabel (RpmOstreeContext *self,
+                                    RpmOstreeInstall *install,
+                                    GCancellable     *cancellable,
+                                    GError          **error);
+
+/* NB: tmprootfs_dfd is allowed to have pre-existing data */
+/* devino_cache can be NULL if no previous cache established */
+gboolean rpmostree_context_assemble_commit (RpmOstreeContext      *self,
+                                            int                    tmprootfs_dfd,
+                                            OstreeRepoDevInoCache *devino_cache,
+                                            const char            *parent,
+                                            char                 **out_commit,
+                                            GCancellable          *cancellable,
+                                            GError               **error);

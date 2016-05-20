@@ -114,7 +114,7 @@ roc_context_prepare_for_root (ROContainerContext *rocctx,
   if (!rocctx->ctx)
     goto out;
 
-  if (!rpmostree_context_setup (rocctx->ctx, NULL, treespec, cancellable, error))
+  if (!rpmostree_context_setup (rocctx->ctx, NULL, "/", treespec, cancellable, error))
     goto out;
 
   ret = TRUE;
@@ -301,19 +301,29 @@ rpmostree_container_builtin_assemble (int             argc,
   if (!rpmostree_context_prepare_install (rocctx->ctx, &install, cancellable, error))
     goto out;
 
-  /* --- Download and import as necessary --- */
-  if (!rpmostree_context_download_import (rocctx->ctx, install,
-                                          cancellable, error))
+  /* --- Download as necessary --- */
+  if (!rpmostree_context_download (rocctx->ctx, install, cancellable, error))
     goto out;
 
-  { glnx_fd_close int tmpdir_dfd = -1;
+  /* --- Import as necessary --- */
+  if (!rpmostree_context_import (rocctx->ctx, install, cancellable, error))
+    goto out;
 
-    if (!glnx_opendirat (rocctx->userroot_dfd, "tmp", TRUE, &tmpdir_dfd, error))
+  { g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
+    glnx_fd_close int tmprootfs_dfd = -1;
+
+    if (!glnx_mkdtempat (rocctx->userroot_dfd, tmprootfs, 0755, error))
       goto out;
 
-    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd, name,
-                                            &commit, cancellable, error))
+    if (!glnx_opendirat (rocctx->userroot_dfd, tmprootfs, TRUE,
+                         &tmprootfs_dfd, error))
       goto out;
+
+    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmprootfs_dfd, NULL,
+                                            NULL, &commit, cancellable, error))
+      goto out;
+
+    glnx_shutil_rm_rf_at (rocctx->userroot_dfd, tmprootfs, cancellable, NULL);
   }
 
   g_print ("Checking out %s @ %s...\n", name, commit);
@@ -507,20 +517,30 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
       }
   }
 
-  /* --- Download and import as necessary --- */
-  if (!rpmostree_context_download_import (rocctx->ctx, install,
-                                          cancellable, error))
+  /* --- Download as necessary --- */
+  if (!rpmostree_context_download (rocctx->ctx, install, cancellable, error))
     goto out;
 
-  { glnx_fd_close int tmpdir_dfd = -1;
+  /* --- Import as necessary --- */
+  if (!rpmostree_context_import (rocctx->ctx, install, cancellable, error))
+    goto out;
 
-    if (!glnx_opendirat (rocctx->userroot_dfd, "tmp", TRUE, &tmpdir_dfd, error))
+  { g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
+    glnx_fd_close int tmprootfs_dfd = -1;
+
+    if (!glnx_mkdtempat (rocctx->userroot_dfd, tmprootfs, 0755, error))
       goto out;
 
-    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir_dfd, name,
-                                            &new_commit_checksum,
+    if (!glnx_opendirat (rocctx->userroot_dfd, tmprootfs, TRUE,
+                         &tmprootfs_dfd, error))
+      goto out;
+
+    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmprootfs_dfd, NULL,
+                                            NULL, &new_commit_checksum,
                                             cancellable, error))
       goto out;
+
+    glnx_shutil_rm_rf_at (rocctx->userroot_dfd, tmprootfs, cancellable, NULL);
   }
 
   g_print ("Checking out %s @ %s...\n", name, new_commit_checksum);
