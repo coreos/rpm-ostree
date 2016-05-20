@@ -36,12 +36,12 @@ typedef struct {
 } RpmOstreeOutputTaskBegin;
 
 void
-rpmostree_output_task_begin (const char *text);
+rpmostree_output_task_begin (const char *format, ...) G_GNUC_PRINTF (1,2);
 
 typedef RpmOstreeOutputTaskBegin RpmOstreeOutputTaskEnd;
 
 void
-rpmostree_output_task_end (const char *text);
+rpmostree_output_task_end (const char *format, ...) G_GNUC_PRINTF (1,2);
 
 typedef struct {
   const char *text;
