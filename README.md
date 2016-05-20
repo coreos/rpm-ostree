@@ -26,6 +26,11 @@ Projects using rpm-ostree
 provide a minimal host for Docker formatted Linux containers.
 Replicating a base immutable OS, then using Docker for applications.
 
+Using rpm-ostree to build OS images/trees
+-----------------------------------------
+
+See [Compose Server](doc/compose-server.md).
+
 Building
 --------
 

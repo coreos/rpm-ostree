@@ -53,3 +53,8 @@ Once we have that commit, let's export it:
 
 You can tell client systems to rebase to it by combining `ostree
 remote add`, and `rpm-ostree rebase` on the client side.
+
+## More information
+
+https://github.com/jasonbrooks/byo-atomic
+http://www.projectatomic.io/blog/2014/08/build-your-own-atomic-centos-or-fedora/
