@@ -36,17 +36,18 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-unpacker.h"
+#include "rpmostree-postprocess.h"
 
 #include "libgsystem.h"
 
-static gboolean opt_suid_fcaps = FALSE;
-static gboolean opt_owner = FALSE;
-static gboolean opt_to_ostree_repo = FALSE;
+static gboolean opt_selinux = FALSE;
+static gboolean opt_ostree_convention = FALSE;
 
 static GOptionEntry option_entries[] = {
-  { "suid-fcaps", 0, 0, G_OPTION_ARG_NONE, &opt_suid_fcaps, "Enable setting suid/sgid and capabilities", NULL },
-  { "owner", 0, 0, G_OPTION_ARG_NONE, &opt_owner, "Enable chown", NULL },
-  { "to-ostree-repo", 0, 0, G_OPTION_ARG_NONE, &opt_to_ostree_repo, "Interpret TARGET as an OSTree repo", "REPO" },
+  { "selinux", 0, 0, G_OPTION_ARG_NONE, &opt_selinux,
+      "Enable setting SELinux labels", NULL },
+  { "ostree-convention", 0, 0, G_OPTION_ARG_NONE, &opt_ostree_convention,
+      "Change file paths following ostree conventions", NULL },
   { NULL }
 };
 
@@ -57,14 +58,15 @@ rpmostree_internals_builtin_unpack (int             argc,
                                     GError        **error)
 {
   int exit_status = EXIT_FAILURE;
-  GOptionContext *context = g_option_context_new ("ROOT RPM");
+  GOptionContext *context = g_option_context_new ("REPO RPM");
   RpmOstreeUnpackerFlags flags = 0;
   glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
   const char *target;
   const char *rpmpath;
   glnx_fd_close int rootfs_fd = -1;
   glnx_unref_object OstreeRepo *ostree_repo = NULL;
-  
+  glnx_unref_object OstreeSePolicy *sepolicy = NULL;
+
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
@@ -76,55 +78,44 @@ rpmostree_internals_builtin_unpack (int             argc,
 
   if (argc < 3)
     {
-      rpmostree_usage_error (context, "TARGET and RPM must be specified", error);
+      rpmostree_usage_error (context, "REPO and RPM must be specified", error);
       goto out;
     }
 
   target = argv[1];
   rpmpath = argv[2];
 
-  if (opt_to_ostree_repo)
-    {
-      g_autoptr(GFile) to_ostree_repo_file = g_file_new_for_path (target);
+  {
+    g_autoptr(GFile) ostree_repo_file = g_file_new_for_path (target);
 
-      ostree_repo = ostree_repo_new (to_ostree_repo_file);
-      if (!ostree_repo_open (ostree_repo, cancellable, error))
-        goto out;
-    }
-  else
-    {
-      if (!glnx_opendirat (AT_FDCWD, argv[1], TRUE, &rootfs_fd, error))
-        goto out;
-    }
+    ostree_repo = ostree_repo_new (ostree_repo_file);
+    if (!ostree_repo_open (ostree_repo, cancellable, error))
+      goto out;
+  }
 
-  /* suid implies owner too...anything else is dangerous, as we might write
-   * a setuid binary for the caller.
-   */
-  if (opt_owner || opt_suid_fcaps)
-    flags |= RPMOSTREE_UNPACKER_FLAGS_OWNER;
-  if (opt_suid_fcaps)
-    flags |= RPMOSTREE_UNPACKER_FLAGS_SUID_FSCAPS;
+  if (opt_ostree_convention)
+    flags |= RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION;
 
   unpacker = rpmostree_unpacker_new_at (AT_FDCWD, rpmpath, flags, error);
   if (!unpacker)
     goto out;
 
-  if (opt_to_ostree_repo)
-    {
-      const char *branch = rpmostree_unpacker_get_ostree_branch (unpacker);
-      g_autofree char *checksum = NULL;
+  /* just use current policy */
+  if (opt_selinux)
+    if (!rpmostree_prepare_rootfs_get_sepolicy (AT_FDCWD, "/", &sepolicy,
+                                                cancellable, error))
+      goto out;
 
-      if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostree_repo, NULL,
-                                                &checksum, cancellable, error))
-        goto out;
+  {
+    const char *branch = rpmostree_unpacker_get_ostree_branch (unpacker);
+    g_autofree char *checksum = NULL;
 
-      g_print ("Imported %s to %s -> %s\n", rpmpath, branch, checksum);
-    }
-  else
-    {
-      if (!rpmostree_unpacker_unpack_to_dfd (unpacker, rootfs_fd, cancellable, error))
-        goto out;
-    }
+    if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostree_repo, sepolicy,
+                                              &checksum, cancellable, error))
+      goto out;
+
+    g_print ("Imported %s to %s -> %s\n", rpmpath, branch, checksum);
+  }
 
   exit_status = EXIT_SUCCESS;
  out:

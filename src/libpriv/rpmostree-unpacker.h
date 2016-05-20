@@ -33,20 +33,24 @@ typedef struct RpmOstreeUnpacker RpmOstreeUnpacker;
 
 GType rpmostree_unpacker_get_type (void);
 
+/**
+ * RpmOstreeUnpackerFlags:
+ * @RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION: Move files to follow ostree convention
+ */
 typedef enum {
-  RPMOSTREE_UNPACKER_FLAGS_SUID_FSCAPS = (1 << 0),
-  RPMOSTREE_UNPACKER_FLAGS_OWNER = (1 << 1)
+  RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION =  (1 << 0)
 } RpmOstreeUnpackerFlags;
-#define RPMOSTREE_UNPACKER_FLAGS_ALL (RPMOSTREE_UNPACKER_FLAGS_SUID_FSCAPS | RPMOSTREE_UNPACKER_FLAGS_OWNER)
 
-RpmOstreeUnpacker *rpmostree_unpacker_new_fd (int fd, RpmOstreeUnpackerFlags flags, GError **error);
+RpmOstreeUnpacker*
+rpmostree_unpacker_new_fd (int fd,
+                           RpmOstreeUnpackerFlags flags,
+                           GError **error);
 
-RpmOstreeUnpacker *rpmostree_unpacker_new_at (int dfd, const char *path, RpmOstreeUnpackerFlags flags, GError **error);
-
-gboolean rpmostree_unpacker_unpack_to_dfd (RpmOstreeUnpacker *unpacker,
-                                           int                dfd,
-                                           GCancellable      *cancellable,
-                                           GError           **error);
+RpmOstreeUnpacker*
+rpmostree_unpacker_new_at (int dfd,
+                           const char *path,
+                           RpmOstreeUnpackerFlags flags,
+                           GError **error);
 
 gboolean
 rpmostree_unpacker_read_metainfo (int fd,
@@ -55,11 +59,13 @@ rpmostree_unpacker_read_metainfo (int fd,
                                   rpmfi *out_fi,
                                   GError **error);
 
-const char *rpmostree_unpacker_get_ostree_branch (RpmOstreeUnpacker *unpacker);
+const char*
+rpmostree_unpacker_get_ostree_branch (RpmOstreeUnpacker *unpacker);
 
-gboolean rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *unpacker,
-                                              OstreeRepo        *repo,
-                                              OstreeSePolicy    *sepolicy,
-                                              char             **out_commit,
-                                              GCancellable      *cancellable,
-                                              GError           **error);
+gboolean
+rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *unpacker,
+                                     OstreeRepo        *repo,
+                                     OstreeSePolicy    *sepolicy,
+                                     char             **out_commit,
+                                     GCancellable      *cancellable,
+                                     GError           **error);
