@@ -114,7 +114,7 @@ roc_context_prepare_for_root (ROContainerContext *rocctx,
   if (!rocctx->ctx)
     goto out;
 
-  if (!rpmostree_context_setup (rocctx->ctx, NULL, NULL, treespec, cancellable, error))
+  if (!rpmostree_context_setup (rocctx->ctx, NULL, "/", treespec, cancellable, error))
     goto out;
 
   ret = TRUE;
