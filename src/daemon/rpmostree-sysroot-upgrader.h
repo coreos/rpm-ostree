@@ -71,6 +71,13 @@ GKeyFile *rpmostree_sysroot_upgrader_dup_origin (RpmOstreeSysrootUpgrader *self)
 gboolean rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self, GKeyFile *origin,
                                              GCancellable *cancellable, GError **error);
 
+gboolean rpmostree_sysroot_upgrader_set_origin_rebase (RpmOstreeSysrootUpgrader *self,
+                                                       const char *new_refspec,
+                                                       GError **error);
+
+void rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self,
+                                                     const char *override_commit);
+
 gboolean
 rpmostree_sysroot_upgrader_add_packages (RpmOstreeSysrootUpgrader *self,
                                          char                    **new_packages,
@@ -96,9 +103,5 @@ gboolean
 rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader  *self,
                                    GCancellable           *cancellable,
                                    GError                **error);
-
-gboolean rpmostree_sysroot_upgrader_set_origin_rebase (RpmOstreeSysrootUpgrader *self, const char *new_refspec, GError **error);
-void rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self, const char *override_commit);
-
 
 G_END_DECLS

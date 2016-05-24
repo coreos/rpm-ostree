@@ -99,8 +99,10 @@ parse_refspec (RpmOstreeSysrootUpgrader  *self,
     }
 
   g_clear_pointer (&self->requested_packages, g_strfreev);
+  g_clear_pointer (&self->origin_refspec, g_free);
 
-  if (!_rpmostree_util_parse_origin (self->origin, &self->origin_refspec, &self->requested_packages, error))
+  if (!_rpmostree_util_parse_origin (self->origin, &self->origin_refspec,
+                                     &self->requested_packages, error))
     goto out;
 
   /* it's just easier to make it a proper empty list than to check for NULL
@@ -400,16 +402,48 @@ rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self,
   return ret;
 }
 
-gboolean
-rpmostree_sysroot_upgrader_set_origin_rebase (RpmOstreeSysrootUpgrader *self, const char *new_refspec, GError **error)
+/* updates an origin's refspec without migrating format */
+static gboolean
+origin_set_refspec (GKeyFile   *origin,
+                    const char *new_refspec,
+                    GError    **error)
 {
-  g_free (self->origin_refspec);
-  self->origin_refspec = g_strdup (new_refspec);
+  if (g_key_file_has_key (origin, "origin", "baserefspec", error))
+    {
+      g_key_file_set_value (origin, "origin", "baserefspec", new_refspec);
+      return TRUE;
+    }
+
+  if (error && *error)
+    return FALSE;
+
+  g_key_file_set_value (origin, "origin", "refspec", new_refspec);
+  return TRUE;
+}
+
+gboolean
+rpmostree_sysroot_upgrader_set_origin_rebase (RpmOstreeSysrootUpgrader *self,
+                                              const char *new_refspec,
+                                              GError **error)
+{
+  g_autoptr(GKeyFile) new_origin = rpmostree_sysroot_upgrader_dup_origin (self);
+
+  if (!origin_set_refspec (new_origin, new_refspec, error))
+    return FALSE;
+
+  g_clear_pointer (&self->origin, g_key_file_unref);
+  self->origin = g_key_file_ref (new_origin);
+
+  /* this will update self->origin_refspec */
+  if (!parse_refspec (self, NULL, error))
+    return FALSE;
+
   return TRUE;
 }
 
 void
-rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self, const char *override_commit)
+rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self,
+                                                const char *override_commit)
 {
   if (override_commit != NULL)
     g_key_file_set_string (self->origin, "origin", "override-commit", override_commit);
