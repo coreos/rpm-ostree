@@ -642,37 +642,37 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
 
     }
 
-  if (g_strcmp0 (from_revision, self->new_revision) == 0)
-    {
-      *out_changed = FALSE;
-    }
-  else
-    {
-      gboolean allow_older = (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER) > 0;
+  {
+    gboolean allow_older =
+      (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER) > 0;
+    const char *compare_rev = from_revision;
+    g_autofree char *base_rev = NULL;
+    gboolean changed = FALSE;
 
-      *out_changed = TRUE;
+    if (from_revision)
+      {
+        /* if there are pkgs layered on the from rev, then we should compare
+         * the parent instead, which is the 'base' layer */
+        if (g_strv_length (self->requested_packages) > 0)
+          {
+            if (!commit_get_parent_csum (repo, from_revision, &base_rev, error))
+              goto out;
+            g_assert (base_rev);
+            compare_rev = base_rev;
+          }
+      }
 
-      if (from_revision && !allow_older)
-        {
-          const char *compare_rev = from_revision;
-          g_autofree char *base_rev = NULL;
+    if (g_strcmp0 (compare_rev, self->new_revision) != 0)
+      changed = TRUE;
 
-          /* if there are pkgs layered on the from rev, then we should compare
-           * the parent instead, which is the 'base' layer */
-          if (g_strv_length (self->requested_packages) > 0)
-            {
-              if (!commit_get_parent_csum (repo, from_revision, &base_rev, error))
-                goto out;
-              g_assert (base_rev);
-              compare_rev = base_rev;
-            }
+    if (changed && compare_rev && !allow_older)
+      if (!ostree_sysroot_upgrader_check_timestamps (repo, compare_rev,
+                                                     self->new_revision,
+                                                     error))
+        goto out;
 
-          if (!ostree_sysroot_upgrader_check_timestamps (repo, compare_rev,
-                                                         self->new_revision,
-                                                         error))
-            goto out;
-        }
-    }
+    *out_changed = changed;
+  }
 
   ret = TRUE;
  out:
