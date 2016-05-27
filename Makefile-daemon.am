@@ -1,5 +1,3 @@
-libexec_PROGRAMS += rpm-ostreed
-
 dbus_built_sources = rpm-ostreed-generated.h rpm-ostreed-generated.c
 
 rpm-ostreed-generated.h: rpm-ostreed-generated.c
@@ -64,24 +62,6 @@ librpmostreed_la_LIBADD = \
 	$(CAP_LIBS)
 	$(NULL)
 
-rpm_ostreed_SOURCES = \
-	src/daemon/main.c \
-	$(NULL)
-
-rpm_ostreed_CFLAGS = \
-	$(AM_CFLAGS) \
-	-DPKGLIBDIR=\"$(pkglibdir)\" \
-	$(PKGDEP_RPMOSTREE_CFLAGS) \
-	-I$(srcdir)/src/daemon \
-	-I$(srcdir)/libglnx \
-	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
-	$(NULL)
-
-rpm_ostreed_LDADD = \
-	librpmostreed.la \
-	$(PKGDEP_RPMOSTREE_LIBS) \
-	$(NULL)
-
 dbusconf_DATA = $(srcdir)/src/daemon/org.projectatomic.rpmostree1.conf
 dbusconfdir = ${sysconfdir}/dbus-1/system.d
 
@@ -96,9 +76,13 @@ endif
 $(systemdunit_DATA): Makefile
 	$(SED_SUBST) $(daemon_asan_options) $@.in > $@
 
+# We keep this stub script around to have SELinux labeling work,
+# plus some backwards compatibility.
+libexec_SCRIPTS = rpm-ostreed
+rpm-ostreed: $(srcdir)/src/daemon/rpm-ostreed-stub.sh.in Makefile
+	$(SED_SUBST) $< > $@.tmp && mv $@.tmp $@
+
 install-daemon-altname-hook:
-	mv $(DESTDIR)$(libexecdir)/rpm-ostreed $(DESTDIR)$(libexecdir)/$(primaryname)d
-	ln -sf $(primaryname)d $(DESTDIR)$(libexecdir)/rpm-ostreed
 	mv $(DESTDIR)$(systemdunitdir)/rpm-ostreed.service $(DESTDIR)$(systemdunitdir)/$(primaryname)d.service
 	ln -sf $(primaryname)d.service $(DESTDIR)$(systemdunitdir)/rpm-ostreed.service
 if BUILDOPT_NEW_NAME
@@ -109,8 +93,8 @@ endif
 service_in_files = $(srcdir)/src/daemon/org.projectatomic.rpmostree1.service.in
 service_DATA     = $(service_in_files:.service.in=.service)
 servicedir       = $(dbusservicedir)
-$(service_DATA):
-	$(SED_SUBST) $@.in > $@
+%.service: %.service.in Makefile
+	$(SED_SUBST) $@.in > $@.tmp && mv $@.tmp $@
 
 EXTRA_DIST += \
 	$(dbusservice_DATA) \

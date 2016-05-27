@@ -27,6 +27,7 @@ else
     set -x
     ostree admin unlock || :
     rsync -rlv /var/roothome/sync/insttree/usr/ /usr/
-    restorecon /usr/libexec/rpm-ostreed
+    restorecon -v /usr/bin/rpm-ostree
+    restorecon -v /usr/libexec/rpm-ostreed
     systemctl restart rpm-ostreed
 fi

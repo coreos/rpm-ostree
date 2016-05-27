@@ -27,6 +27,7 @@
 G_BEGIN_DECLS
 
 gboolean rpmostree_internals_builtin_unpack (int argc, char **argv, GCancellable *cancellable, GError **error);
+gboolean rpmostree_internals_builtin_start_daemon (int argc, char **argv, GCancellable *cancellable, GError **error);
 
 G_END_DECLS
 

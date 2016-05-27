@@ -18,7 +18,7 @@ if test -z "${INSIDE_VM:-}"; then
     DESTDIR=$(pwd)/insttree
     make install DESTDIR=${DESTDIR}
     for san in a t ub; do
-        if eu-readelf -d ${DESTDIR}/usr/libexec/rpm-ostreed | grep -q "NEEDED.*lib${san}san"; then
+        if eu-readelf -d ${DESTDIR}/usr/bin/rpm-ostree | grep -q "NEEDED.*lib${san}san"; then
             echo "Installing extra sanitizier: lib${san}san"
             cp /usr/lib64/lib${san}san*.so.* ${DESTDIR}/usr/lib64
         fi
