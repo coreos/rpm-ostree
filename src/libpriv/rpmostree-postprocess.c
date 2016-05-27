@@ -1131,9 +1131,6 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   if (!rename_if_exists (rootfs_fd, "etc", "usr/etc", error))
     goto out;
 
-  if (!rename_if_exists (rootfs_fd, "var/lib/rpm", "usr/share/rpm", error))
-    goto out;
-
   if (!glnx_dirfd_iterator_init_at (rootfs_fd, "usr/share/rpm", TRUE, &dfd_iter, error))
     {
       g_prefix_error (error, "Opening usr/share/rpm: ");
@@ -1379,18 +1376,42 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
         }
     }
 
+  /* This works around a potential issue with libsolv if we go down the
+   * rpmostree_get_pkglist_for_root() path. Though rpm has been using the
+   * /usr/share/rpm location (since the RpmOstreeContext set the _dbpath macro),
+   * the /var/lib/rpm directory will still exist, but be empty. libsolv gets
+   * confused because it sees the /var/lib/rpm dir and doesn't even try the
+   * /usr/share/rpm location, and eventually dies when it tries to load the
+   * data. XXX: should probably send a patch upstream to libsolv.
+   *
+   * So we set the symlink now. This is also what we do on boot anyway for
+   * compatibility reasons using tmpfiles.
+   * */
+  {
+    gs_unref_object GFile *rpmdb =
+      g_file_resolve_relative_path (yumroot, "var/lib/rpm");
+
+    if (g_file_query_exists (rpmdb, NULL))
+      {
+        if (!gs_shutil_rm_rf (rpmdb, cancellable, error))
+          goto out;
+      }
+
+    if (!g_file_make_symbolic_link (rpmdb, "../../usr/share/rpm",
+                                    cancellable, error))
+      goto out;
+  }
+
   if (json_object_has_member (treefile, "remove-from-packages"))
     {
       g_autoptr(RpmOstreeRefSack) refsack = NULL;
-      g_autoptr(GPtrArray) pkglist = NULL;
       guint i;
 
       remove = json_object_get_array_member (treefile, "remove-from-packages");
       len = json_array_get_length (remove);
 
       if (!rpmostree_get_pkglist_for_root (AT_FDCWD, gs_file_get_path_cached (yumroot),
-                                           &refsack, &pkglist,
-                                           cancellable, error))
+                                           &refsack, NULL, cancellable, error))
         {
           g_prefix_error (error, "Reading package set: ");
           goto out;

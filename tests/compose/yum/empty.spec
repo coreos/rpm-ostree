@@ -21,6 +21,7 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 
 %install
 mkdir -p %{buildroot}/boot
+mkdir -p %{buildroot}/var/lib
 mkdir -p %{buildroot}/var/share/
 mkdir -p %{buildroot}/var/tmp/
 mkdir -p %{buildroot}/usr/sbin
@@ -46,6 +47,7 @@ touch %{buildroot}/var/tmp/initramfs.img
 rm -rf %{buildroot}
 
 %files
+/var/lib
 /var/share/*
 /boot/*
 /usr/sbin/*
