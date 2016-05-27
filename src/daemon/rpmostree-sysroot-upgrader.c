@@ -747,6 +747,7 @@ checkout_min_tree_in_tmp (OstreeRepo            *repo,
       goto out;
 
     opts.subpath = "usr/etc/selinux";
+    opts.disable_fsync = TRUE;
 
     if (!ostree_repo_checkout_tree_at (repo, &opts, tmprootfs_dfd,
                                        "usr/etc/selinux", revision,
@@ -794,6 +795,7 @@ checkout_tree_in_tmp (OstreeRepo            *repo,
   rpmostree_output_task_begin ("Checking out tree %.7s", revision);
 
   /* we actually only need this here because we use "." for path */
+  checkout_options.disable_fsync = TRUE;
   checkout_options.overwrite_mode = OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES;
   checkout_options.devino_to_csum_cache = devino_cache;
   if (!ostree_repo_checkout_tree_at (repo, &checkout_options, tmprootfs_dfd,
