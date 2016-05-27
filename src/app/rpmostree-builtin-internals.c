@@ -30,6 +30,7 @@ typedef struct {
 
 static RpmOstreeInternalsCommand internals_subcommands[] = {
   { "unpack", rpmostree_internals_builtin_unpack },
+  { "start-daemon", rpmostree_internals_builtin_start_daemon },
   { NULL, NULL }
 };
 

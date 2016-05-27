@@ -50,6 +50,7 @@ GITIGNOREFILES += build-aux/ gtk-doc.make config.h.in aclocal.m4 insttree/
 SED_SUBST = sed \
         -e 's,[@]libexecdir[@],$(libexecdir),g' \
         -e 's,[@]primaryname[@],$(primaryname),g' \
+        -e 's,[@]bindir[@],$(bindir),g' \
         $(NULL)
 
 libglnx_srcpath := $(srcdir)/libglnx

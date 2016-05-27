@@ -52,7 +52,9 @@ get_connection_for_path (gchar *sysroot,
   gboolean ret = FALSE;
 
   const gchar *args[] = {
-    "rpm-ostreed",
+    "rpm-ostree",
+    "internals",
+    "start-daemon",
     "--sysroot", sysroot,
     "--dbus-peer", buffer,
     NULL

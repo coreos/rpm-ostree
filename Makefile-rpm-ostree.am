@@ -41,6 +41,7 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-container-builtins.h \
 	src/app/rpmostree-container-builtins.c \
 	src/app/rpmostree-internals-builtin-unpack.c \
+	src/app/rpmostree-internals-builtin-start-daemon.c \
 	src/app/rpmostree-libbuiltin.c \
 	src/app/rpmostree-libbuiltin.h \
 	$(NULL)
@@ -53,8 +54,10 @@ rpm_ostree_SOURCES += \
 	$(NULL)
 endif
 
-rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/app -I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
-rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la librpmostree-1.la
+rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
+	-I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) \
+  -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
+rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la librpmostree-1.la librpmostreed.la
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/app/rpm-ostree-0-integration.conf

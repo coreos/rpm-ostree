@@ -1,33 +1,39 @@
-/*
-* Copyright (C) 2007-2010 David Zeuthen <zeuthen@gmail.com>
-* Copyright (C) 2013-2015 Red Hat, Inc.
-*
-* This program is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 2 of the License, or
-* (at your option) any later version.
-*
-* This program is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program; if not, write to the Free Software
-* Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
-*/
+/* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*-
+ *
+ * Copyright (C) 2016 Colin Walters <walters@verbum.org>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published
+ * by the Free Software Foundation; either version 2 of the licence or (at
+ * your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General
+ * Public License along with this library; if not, write to the
+ * Free Software Foundation, Inc., 59 Temple Place, Suite 330,
+ * Boston, MA 02111-1307, USA.
+ */
 
 #include "config.h"
 
-#include "rpmostreed-daemon.h"
-
-#include <glib/gi18n.h>
+#include <string.h>
 #include <glib-unix.h>
-#include <gio/gio.h>
+#include <gio/gunixoutputstream.h>
+#include <stdio.h>
+#include <libglnx.h>
+#include <glib/gi18n.h>
 #include <syslog.h>
 #include "libglnx.h"
 
-/* ---------------------------------------------------------------------------------------------------- */
+#include "rpmostree-internals-builtins.h"
+#include "rpmostree-util.h"
+#include "rpmostreed-daemon.h"
+#include "rpmostree-libbuiltin.h"
+
 static GMainLoop *loop = NULL;
 static gboolean opt_debug = FALSE;
 static char *opt_sysroot = "/";
@@ -292,38 +298,23 @@ out:
 
 
 int
-main (int argc,
-      char **argv)
+rpmostree_internals_builtin_start_daemon (int             argc,
+                                          char          **argv,
+                                          GCancellable   *cancellable,
+                                          GError        **error)
 {
-  GError *error;
-  g_autoptr(GOptionContext) opt_context = NULL;
+  int ret = 1;
+  g_autoptr(GMainLoop) loop = NULL;
+  g_autoptr(GOptionContext) opt_context = g_option_context_new ("rpm-ostreed -- rpm-ostree daemon");
   GIOChannel *channel;
   guint name_owner_id = 0;
-  gint ret;
 
-  ret = 1;
-  loop = NULL;
-
-  #if !GLIB_CHECK_VERSION(2,36,0)
-  g_type_init ();
-  #endif
-
-  /* See glib/gio/gsocket.c */
-  signal (SIGPIPE, SIG_IGN);
-
-  /* avoid gvfs and gsettings: https://bugzilla.gnome.org/show_bug.cgi?id=767183 */
-  g_assert (g_setenv ("GIO_USE_VFS", "local", TRUE));
   g_assert (g_setenv ("GSETTINGS_BACKEND", "memory", TRUE));
 
-  opt_context = g_option_context_new ("rpm-ostreed -- rpm-ostree daemon");
   g_option_context_add_main_entries (opt_context, opt_entries, NULL);
-  error = NULL;
-  if (!g_option_context_parse (opt_context, &argc, &argv, &error))
-    {
-      g_printerr ("Error parsing options: %s\n", error->message);
-      g_error_free (error);
-      goto out;
-    }
+
+  if (!g_option_context_parse (opt_context, &argc, &argv, error))
+    goto out;
 
   if (opt_debug)
     {
@@ -371,10 +362,7 @@ main (int argc,
                                       NULL, (GDestroyNotify) NULL);
     }
   else if (!connect_to_peer (service_dbus_fd))
-    {
-      ret = 1;
-      goto out;
-    }
+    goto out;
 
   g_debug ("Entering main event loop");
 
@@ -391,10 +379,5 @@ main (int argc,
   ret = 0;
 
 out:
-  if (loop != NULL)
-    g_main_loop_unref (loop);
-
-  g_info ("rpm-ostreed exiting");
-
   return ret;
 }
