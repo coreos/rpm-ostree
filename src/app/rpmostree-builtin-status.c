@@ -25,6 +25,7 @@
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-dbus-helpers.h"
+#include "libsd-locale-util.h"
 
 #include <libglnx.h>
 
@@ -246,8 +247,8 @@ rpmostree_builtin_status (int             argc,
       /* print deployment info column */
       if (!opt_pretty)
         {
-          g_print ("%c %-*s",
-                   is_booted ? '*' : ' ',
+          g_print ("%s %-*s",
+                   is_booted ? libsd_special_glyph (BLACK_CIRCLE) : " ",
                    max_timestamp_len+buffer, timestamp_string);
 
           if (max_version_len)

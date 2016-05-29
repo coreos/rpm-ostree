@@ -39,6 +39,8 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-unpacker.h \
 	src/libpriv/rpmostree-output.c \
 	src/libpriv/rpmostree-output.h \
+	src/libpriv/libsd-locale-util.c \
+	src/libpriv/libsd-locale-util.h \
 	$(NULL)
 
 librpmostreepriv_la_CFLAGS = \
