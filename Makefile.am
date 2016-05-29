@@ -33,7 +33,7 @@ AM_CFLAGS += -std=gnu99 $(WARN_CFLAGS)
 
 EXTRA_DIST += autogen.sh COPYING
 
-GITIGNOREFILES += build-aux/ gtk-doc.make config.h.in aclocal.m4
+GITIGNOREFILES += build-aux/ gtk-doc.make config.h.in aclocal.m4 .vagrant
 
 SED_SUBST = sed \
         -e 's,[@]libexecdir[@],$(libexecdir),g' \
