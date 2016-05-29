@@ -1412,96 +1412,11 @@ ostree_checkout_package (OstreeRepo   *repo,
   return ret;
 }
 
-/* XXX: adapted from glnx_mkdtempat(). try to send upstream. */
-/* Searches for a free filename matching the @dst_path_tmpl template and renames
- * @src_path to that. */
-static gboolean
-renametempat (int         src_dfd,
-              const char *src_path,
-              int         dst_dfd,
-              char       *dst_path_tmpl,
-              GError    **error)
-{
-  char *XXXXXX;
-  int count;
-  static const char letters[] =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  static const int NLETTERS = sizeof (letters) - 1;
-  glong value;
-  GTimeVal tv;
-  static int counter = 0;
-
-  g_return_val_if_fail (dst_path_tmpl != NULL, -1);
-
-  /* find the last occurrence of "XXXXXX" */
-  XXXXXX = g_strrstr (dst_path_tmpl, "XXXXXX");
-
-  if (!XXXXXX || strncmp (XXXXXX, "XXXXXX", 6))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Invalid temporary file template '%s'", dst_path_tmpl);
-      return FALSE;
-    }
-
-  /* Get some more or less random data.  */
-  g_get_current_time (&tv);
-  value = (tv.tv_usec ^ tv.tv_sec) + counter++;
-
-  for (count = 0; count < 100; value += 7777, ++count)
-    {
-      glong v = value;
-
-      /* Fill in the random bits.  */
-      XXXXXX[0] = letters[v % NLETTERS];
-      v /= NLETTERS;
-      XXXXXX[1] = letters[v % NLETTERS];
-      v /= NLETTERS;
-      XXXXXX[2] = letters[v % NLETTERS];
-      v /= NLETTERS;
-      XXXXXX[3] = letters[v % NLETTERS];
-      v /= NLETTERS;
-      XXXXXX[4] = letters[v % NLETTERS];
-      v /= NLETTERS;
-      XXXXXX[5] = letters[v % NLETTERS];
-
-      /* I initially wrote this function thinking I could use renameat2, which
-       * would make the operation safer and simpler, but since it was introduced
-       * in 3.15, let's just do it in two steps for now (XXX: or maybe we should
-       * #ifdef it). */
-
-      if (TEMP_FAILURE_RETRY (faccessat (dst_dfd, dst_path_tmpl, F_OK,
-                                         AT_SYMLINK_NOFOLLOW)) == 0)
-        continue; /* file exists */
-      else
-        {
-          if (errno != ENOENT)
-            {
-              /* Any other error will apply also to other names we might
-               *  try, and there are 2^32 or so of them, so give up now.
-               */
-              glnx_set_prefix_error_from_errno (error, "%s", "faccessat");
-              return FALSE;
-            }
-        }
-
-      if (TEMP_FAILURE_RETRY (renameat (src_dfd, src_path,
-                                        dst_dfd, dst_path_tmpl) != 0))
-        {
-          glnx_set_prefix_error_from_errno (error, "%s", "renameat");
-          return FALSE;
-        }
-
-      return TRUE;
-    }
-
-  g_set_error (error, G_IO_ERROR, G_IO_ERROR_EXISTS,
-               "renametempat ran out of combinations to try.");
-  return FALSE;
-}
-
-/* Given a path to a file/symlink, make a copy of it if it's a hard link. */
-/* XXX: we should probably refactor this and the next two funcs so they share
- * more code. */
+/* Given a path to a file/symlink, make a copy (reflink if possible)
+ * of it if it's a hard link.  We need this for two places right now:
+ *  - The RPM database
+ *  - SELinux policy "denormalization" where a label changes
+ */
 static gboolean
 break_single_hardlink_at (int           dfd,
                           const char   *path,
@@ -1526,51 +1441,45 @@ break_single_hardlink_at (int           dfd,
 
   if (stbuf.st_nlink > 1)
     {
-      g_autofree char *path_tmp = g_strconcat (path, ".XXXXXX", NULL);
-      if (!renametempat (dfd, path, dfd, path_tmp, error))
-        goto out;
+      guint count;
+      gboolean copy_success = FALSE;
+      char *path_tmp = glnx_strjoina (path, ".XXXXXX");
 
-      if (!glnx_file_copy_at (dfd, path_tmp, &stbuf, dfd, path, 0,
-                              cancellable, error))
-        goto out;
-
-      if (unlinkat (dfd, path_tmp, 0) < 0)
+      for (count = 0; count < 100; count++)
         {
-          glnx_set_prefix_error_from_errno (error, "%s", "unlinkat");
+          g_autoptr(GError) tmp_error = NULL;
+
+          glnx_gen_temp_name (path_tmp);
+
+          if (!glnx_file_copy_at (dfd, path, &stbuf, dfd, path_tmp, 0,
+                                  cancellable, &tmp_error))
+            {
+              if (g_error_matches (tmp_error, G_IO_ERROR, G_IO_ERROR_EXISTS))
+                continue;
+              g_propagate_error (error, g_steal_pointer (&tmp_error));
+              goto out;
+            }
+
+          copy_success = TRUE;
+          break;
+        }
+
+      if (!copy_success)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_EXISTS,
+                       "Exceeded limit of %u file creation attempts", count);
+          goto out;
+        }
+      
+      if (renameat (dfd, path_tmp, dfd, path) != 0)
+        {
+          glnx_set_prefix_error_from_errno (error, "Rename %s", path);
           goto out;
         }
     }
 
   ret = TRUE;
 out:
-  return ret;
-}
-
-static gboolean
-copy_dir_contents_nonrecurse_at (int            src_dfd,
-                                 const char    *srcpath,
-                                 int            dest_dfd,
-                                 GCancellable  *cancellable,
-                                 GError       **error)
-{
-  gboolean ret = FALSE;
-  g_auto(GLnxDirFdIterator) dfd_iter = { FALSE, };
-  struct dirent *dent = NULL;
-
-  if (!glnx_dirfd_iterator_init_at (src_dfd, srcpath, TRUE, &dfd_iter, error))
-    goto out;
-
-  while (glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, cancellable, error))
-    {
-      if (dent == NULL)
-        break;
-      if (!glnx_file_copy_at (dfd_iter.fd, dent->d_name, NULL, dest_dfd,
-                              dent->d_name, 0, cancellable, error))
-        goto out;
-    }
-
-  ret = TRUE;
- out:
   return ret;
 }
 
@@ -1583,29 +1492,20 @@ break_hardlinks_at (int             dfd,
                     GError        **error)
 {
   gboolean ret = FALSE;
-  glnx_fd_close int dest_dfd = -1;
-  g_autofree char *dirpath_tmp = g_strconcat (dirpath, ".XXXXXX", NULL);
+  g_auto(GLnxDirFdIterator) dfd_iter = { FALSE, };
+  struct dirent *dent = NULL;
 
-  if (!renametempat (dfd, dirpath, dfd, dirpath_tmp, error))
+  if (!glnx_dirfd_iterator_init_at (dfd, dirpath, TRUE, &dfd_iter, error))
     goto out;
 
-  /* We're not accurately copying the mode, but in reality modes don't
-   * matter since it's all immutable anyways.
-   */
-  if (TEMP_FAILURE_RETRY (mkdirat (dfd, dirpath, 0755)) != 0)
+  while (glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, cancellable, error))
     {
-      glnx_set_error_from_errno (error);
-      goto out;
+      if (dent == NULL)
+        break;
+      if (!break_single_hardlink_at (dfd_iter.fd, dent->d_name, 
+                                     cancellable, error))
+        goto out;
     }
-
-  if (!glnx_opendirat (dfd, dirpath, TRUE, &dest_dfd, error))
-    goto out;
-
-  if (!copy_dir_contents_nonrecurse_at (dfd, dirpath_tmp, dest_dfd, cancellable, error))
-    goto out;
-
-  if (!glnx_shutil_rm_rf_at (dfd, dirpath_tmp, cancellable, error))
-    goto out;
 
   ret = TRUE;
  out:
