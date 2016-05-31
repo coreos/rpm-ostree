@@ -1,6 +1,7 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*-
  *
  * Copyright (C) 2014 Anne LoVerso <anne.loverso@students.olin.edu>
+ * Copyright (C) 2016 Red Hat, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published
@@ -61,18 +62,17 @@ format_layered_packages_plus (char **packages)
     return g_strdup ("");
 }
 
-int
-rpmostree_builtin_status (int             argc,
-                          char          **argv,
-                          GCancellable   *cancellable,
-                          GError        **error)
+/* We will have an optimized path for the case where there are just
+ * two deployments, this code will be the generic fallback.
+ */
+static gboolean
+status_fallback (RPMOSTreeSysroot *sysroot_proxy,
+                 RPMOSTreeOS *os_proxy,
+                 GVariant       *deployments,
+                 GVariant       *booted_deployment,
+                 GCancellable   *cancellable,
+                 GError        **error)
 {
-  int exit_status = EXIT_FAILURE;
-  GOptionContext *context = g_option_context_new ("- Get the version of the booted system");
-  glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GVariant) booted_deployment = NULL;
-  g_autoptr(GVariant) deployments = NULL;
   g_autoptr(GVariant) booted_signatures = NULL;
   g_autoptr(GPtrArray) deployment_dicts = NULL;
   GVariantIter iter;
@@ -96,20 +96,6 @@ rpmostree_builtin_status (int             argc,
   guint buffer = 5;
 
 
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_NONE,
-                                       cancellable,
-                                       &sysroot_proxy,
-                                       error))
-    goto out;
-
-  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,
-                                cancellable, &os_proxy, error))
-    goto out;
-
-  booted_deployment = rpmostree_os_dup_booted_deployment (os_proxy);
   if (booted_deployment)
     {
       GVariantDict dict;
@@ -121,8 +107,6 @@ rpmostree_builtin_status (int             argc,
     }
 
   deployment_dicts = g_ptr_array_new_with_free_func ((GDestroyNotify) g_variant_dict_unref);
-
-  deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
 
   g_variant_iter_init (&iter, deployments);
 
@@ -315,8 +299,44 @@ rpmostree_builtin_status (int             argc,
         }
     }
 
-  exit_status = EXIT_SUCCESS;
+  return TRUE;
+}
 
+int
+rpmostree_builtin_status (int             argc,
+                          char          **argv,
+                          GCancellable   *cancellable,
+                          GError        **error)
+{
+  int exit_status = EXIT_FAILURE;
+  GOptionContext *context = g_option_context_new ("- Get the version of the booted system");
+  glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
+  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
+  g_autoptr(GVariant) booted_deployment = NULL;
+  g_autoptr(GVariant) deployments = NULL;
+
+  if (!rpmostree_option_context_parse (context,
+                                       option_entries,
+                                       &argc, &argv,
+                                       RPM_OSTREE_BUILTIN_FLAG_NONE,
+                                       cancellable,
+                                       &sysroot_proxy,
+                                       error))
+    goto out;
+
+  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,
+                                cancellable, &os_proxy, error))
+    goto out;
+
+  deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
+  booted_deployment = rpmostree_os_dup_booted_deployment (os_proxy);
+
+  if (!status_fallback (sysroot_proxy, os_proxy, deployments,
+                        booted_deployment,
+                        cancellable, error))
+    goto out;
+
+  exit_status = EXIT_SUCCESS;
 out:
   /* Does nothing if using the message bus. */
   rpmostree_cleanup_peer ();
