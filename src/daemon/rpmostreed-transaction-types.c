@@ -139,23 +139,25 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
 
   merge_deployment = ostree_sysroot_get_merge_deployment (sysroot, self->osname);
 
-  self->refspec = g_strdup (rpmostree_sysroot_upgrader_get_refspec (upgrader));
-
   /* Determine if we're upgrading before we set the refspec. */
   upgrading = (self->refspec == NULL && self->revision == NULL);
 
   if (self->refspec != NULL)
     {
       if (!change_upgrader_refspec (sysroot, upgrader,
-                                    self->refspec, cancellable,
-                                    NULL, NULL, error))
-        goto out;
+				    self->refspec, cancellable,
+				    NULL, NULL, error))
+	goto out;
     }
   else
     {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Booted deployment has no origin");
-      goto out;
+      self->refspec = g_strdup (rpmostree_sysroot_upgrader_get_refspec (upgrader));
+      if (!self->refspec)
+	{
+	  g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+			       "Booted deployment has no origin");
+	  goto out;
+	}
     }
 
   progress = ostree_async_progress_new ();
