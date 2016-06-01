@@ -71,6 +71,9 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
   GVariantIter iter;
   const char *booted_id = NULL;
   gboolean first = TRUE;
+  const int is_tty = isatty (1);
+  const char *red_bold_prefix = is_tty ? "\x1b[31m\x1b[1m" : "";
+  const char *red_bold_suffix = is_tty ? "\x1b[22m\x1b[0m" : "";
 
   if (booted_deployment)
     g_assert (g_variant_lookup (booted_deployment, "id", "&s", &booted_id));
@@ -87,6 +90,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       const gchar *os_name;
       const gchar *checksum;
       const gchar *version_string;
+      const gchar *unlocked;
       guint64 t = 0;
       int serial;
       gboolean is_booted;
@@ -130,6 +134,8 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         origin_refspec = NULL;
       if (!g_variant_dict_lookup (dict, "version", "&s", &version_string))
         version_string = NULL;
+      if (!g_variant_dict_lookup (dict, "unlocked", "&s", &unlocked))
+        unlocked = NULL;
 
       signatures = g_variant_dict_lookup_value (dict, "signatures",
                                                 G_VARIANT_TYPE ("av"));
@@ -188,6 +194,13 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         {
           g_autofree char *packages_joined = g_strjoinv (" ", (char**)origin_packages);
           print_kv ("Packages", max_key_len, packages_joined);
+        }
+      
+      if (unlocked && g_strcmp0 (unlocked, "none") != 0)
+        {
+          g_print ("%s", red_bold_prefix);
+          print_kv ("Unlocked", max_key_len, unlocked);
+          g_print ("%s", red_bold_suffix);
         }
     }
 
