@@ -243,6 +243,9 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   if (sigs != NULL)
     g_variant_dict_insert_value (&dict, "signatures", sigs);
 
+  g_variant_dict_insert (&dict, "unlocked", "s",
+			 ostree_deployment_unlocked_state_to_string (ostree_deployment_get_unlocked (deployment)));
+
   return g_variant_dict_end (&dict);
 }
 
