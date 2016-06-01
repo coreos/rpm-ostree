@@ -1060,22 +1060,27 @@ rpmostree_hif_add_checksum_goal (GChecksum *checksum,
 {
   g_autoptr(GPtrArray) pkglist = NULL;
   guint i;
-  g_autoptr(GPtrArray) nevras = g_ptr_array_new_with_free_func (g_free);
+  g_autoptr(GPtrArray) pkg_checksums = g_ptr_array_new_with_free_func (g_free);
 
   pkglist = hy_goal_list_installs (goal, NULL);
   g_assert (pkglist);
   for (i = 0; i < pkglist->len; i++)
     {
       HifPackage *pkg = pkglist->pdata[i];
-      g_ptr_array_add (nevras, hif_package_get_nevra (pkg));
+      int pkg_checksum_type;
+      const unsigned char *pkg_checksum_bytes = hif_package_get_chksum (pkg, &pkg_checksum_type);
+      g_autofree char *pkg_checksum = hy_chksum_str (pkg_checksum_bytes, pkg_checksum_type);
+      char *pkg_checksum_with_type = g_strconcat (hy_chksum_name (pkg_checksum_type), ":", pkg_checksum, NULL);
+      
+      g_ptr_array_add (pkg_checksums, pkg_checksum_with_type);
     }
 
-  g_ptr_array_sort (nevras, ptrarray_sort_compare_strings);
+  g_ptr_array_sort (pkg_checksums, ptrarray_sort_compare_strings);
     
-  for (i = 0; i < nevras->len; i++)
+  for (i = 0; i < pkg_checksums->len; i++)
     {
-      const char *nevra = nevras->pdata[i];
-      g_checksum_update (checksum, (guint8*)nevra, strlen (nevra));
+      const char *pkg_checksum = pkg_checksums->pdata[i];
+      g_checksum_update (checksum, (guint8*)pkg_checksum, strlen (pkg_checksum));
     }
 }
 
