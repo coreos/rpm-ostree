@@ -631,7 +631,8 @@ rpmostree_print_signatures (GVariant *variant,
   for (i = 0; i < n_sigs; i++)
     {
       g_autoptr(GVariant) v = NULL;
-      g_string_append_c (sigs_buffer, '\n');
+      if (i != 0)
+        g_string_append_c (sigs_buffer, '\n');
       g_variant_get_child (variant, i, "v", &v);
       ostree_gpg_verify_result_describe_variant (v, sigs_buffer, sep,
                                                  OSTREE_GPG_SIGNATURE_FORMAT_DEFAULT);
