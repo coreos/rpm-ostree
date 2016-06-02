@@ -44,12 +44,16 @@ Boston, MA 02111-1307, USA.
 
   <refnamediv>
     <refname>rpm-ostree</refname>
-    <refpurpose>Operating system upgrade and software management tool</refpurpose>
+    <refpurpose>
+      Operating system upgrade and software management tool
+    </refpurpose>
   </refnamediv>
 
   <refsynopsisdiv>
     <cmdsynopsis>
-      <command>rpm-ostree <arg choice="req">COMMAND</arg> <arg choice="opt" rep="repeat">OPTIONS</arg></command>
+      <command>rpm-ostree</command>
+      <arg choice="req">COMMAND</arg>
+      <arg choice="opt" rep="repeat">OPTIONS</arg>
     </cmdsynopsis>
   </refsynopsisdiv>
 
@@ -71,6 +75,7 @@ Boston, MA 02111-1307, USA.
       in <literal>/usr/share/rpm</literal> which is underneath a
       read-only bind mount.
     </para>
+
     <para>
       Instead of live package-by-package upgrades, the underlying
       OSTree layer replicates a complete filesystem tree from a
@@ -78,12 +83,16 @@ Boston, MA 02111-1307, USA.
       reboot.  One benefit of this is that there will always be a
       previous deployment, available for rollback.
     </para>
+
     <para>
       Note in this "pure replication" model, at present there is no
       dependency resolution on the client machines, nor any ability to
       add or remove packages.  You may however use /usr/local/bin, or
       an application mechanism such as
-      <citerefentry><refentrytitle>docker</refentrytitle><manvolnum>1</manvolnum></citerefentry>.
+      <citerefentry>
+        <refentrytitle>docker</refentrytitle>
+        <manvolnum>1</manvolnum>
+      </citerefentry>.
     </para>
   </refsect1>
 
@@ -91,99 +100,54 @@ Boston, MA 02111-1307, USA.
     <title>Commands</title>
 
     <variablelist>
+
       <varlistentry>
-        <term><command>deploy</command></term>
+        <term><command>compose</command></term>
 
-        <listitem><para>Takes version, branch, or commit ID as an
-        argument, and creates a new deployment using it, setting it up
-        as the default for the next boot.  Unlike most other commands,
-        this will automatically fetch and traverse the origin history
-        to find the target.
-
-	By design, this has no
-        effect on your running filesystem tree.  You must reboot for
-        any changes to take effect.</para>
-
-        <para>
-          In addition to exit status 0 for success and 1 for error,
-          this command also uses exit status 77 to indicate that the
-          system is already on the specified commit.  This tristate
-          return model is intended to support idempotency-oriented
-          systems automation tools like Ansible.
-        </para>
-
-        <para> <command>--reboot</command> or <command>-r </command> to initiate a reboot after upgrade is prepared.</para>
-
-        <para><command>--preview</command> download enough metadata to inspect the RPM diff, but do not actually create a new deployment.</para>
-
-      </listitem>
-      </varlistentry>
-      <varlistentry>
-        <term><command>upgrade</command></term>
-
-        <listitem><para>Download the latest
-        version of the current tree, and
-        deploy it, setting it up as the
-        default for the next boot.  By design,
-        this has no effect on your running
-        filesystem tree.  You must reboot for
-        any changes to take
-        effect.</para>
-
-        <para>
-          In addition to exit status 0 for success and 1 for error, this
-          command also uses exit status 77 to indicate that no upgrade is
-          available.
-        </para>
-
-        <para>
-          <command>--reboot</command> or <command>-r </command> to initiate a reboot after upgrade is prepared.
-        </para>
-
-          <para><command>--allow-downgrade</command> to permit deployment of chronologically older trees.</para>
-
-          <para><option>--preview</option> to download only /usr/share/rpm in order to do a package-level diff between the two versions.</para>
-
-          <para><option>--check</option> to just check if an upgrade is available, without downloading it or performing a package-level diff.</para>
-      </listitem>
+        <listitem>
+          <para>
+            Entrypoint for tree composition; most typically used on
+            servers to prepare trees for replication by client systems.
+            Currently has two subcommands, <literal>tree</literal> and
+            <literal>sign</literal>.
+          </para>
+        </listitem>
       </varlistentry>
 
       <varlistentry>
-        <term><command>rollback</command></term>
-	
-	<listitem><para>OSTree manages an
-	ordered list of bootloader entries,
-	called "deployments".  The entry at index 0 is 
-  the default bootloader entry.  Each entry has
-	a separate <filename>/etc</filename>,
-	but they all share a single
-	<filename>/var</filename>.  You can
-	use the bootloader to choose between
-	entries by pressing Tab to interrupt startup.</para>
+        <term><command>db</command></term>
 
-        <para>This command then changes the
-        default bootloader entry.  If the
-        current default is booted, then set
-        the default to the previous entry.
-        Otherwise, make the currently booted
-        tree the default.</para>
-        <para>
-          <command>--reboot</command> or <command>-r </command> to initiate a reboot after rollback is prepared.
+        <listitem>
+          <para>
+            Gives information pertaining to <literal>rpm</literal> data
+            within the file system trees within the ostree commits.
+            There are three sub-commands:
+          </para>
 
-        </para>
+          <para>
+            <command>diff</command> to see how the packages are
+            different between the trees in two commits.  The
+            <option>--format=diff</option> option uses
+            <literal>-</literal> for removed packages,
+            <literal>+</literal> for added packages, and finally
+            <literal>!</literal> for the old version of an updated
+            package, with a following <literal>=</literal> for the new
+            version.
+          </para>
 
-      </listitem>
-      </varlistentry>
+          <para>
+            <command>list</command> to see which packages are within the
+            commit(s) (works like yum list). At least one commit must be
+            specified, but more than one or a range will also work.
+          </para>
 
-      <varlistentry>
-        <term><command>rebase</command></term>
-	
-	<listitem><para>Switch to a different remote, or a different
-	tree, while preserving local state in <literal>/var</literal>
-	and configuration in <literal>/etc</literal>.  This is an
-	extension of <literal>upgrade</literal> which switches to a
-	newer version of the current tree.</para>
-	</listitem>
+          <para>
+            <command>version</command> to see the rpmdb version of the
+            packages within the commit (works like yum version
+            nogroups). At least one commit must be specified, but more
+            than one or a range will also work.
+          </para>
+        </listitem>
       </varlistentry>
 
       <varlistentry>
@@ -191,82 +155,136 @@ Boston, MA 02111-1307, USA.
 
         <listitem>
           <para>
-            Similar to <literal>upgrade</literal>, but download a specific
-            version of the current tree which may be newer or older than your
-            running filesystem tree.  The tree to download can be specified by
-            its SHA256 checksum, or by its "version" metadata value.
+            Takes version, branch, or commit ID as an argument, and
+            creates a new deployment using it, setting it up as the
+            default for the next boot.  Unlike most other commands, this
+            will automatically fetch and traverse the origin history to
+            find the target. By design, this has no effect on your
+            running filesystem tree. You must reboot for any changes to
+            take effect.
           </para>
 
           <para>
-            In addition to exit status 0 for success and 1 for error, this
-            command also uses exit status 77 to indicate that no deployment
-            change occurred.
+            In addition to exit status 0 for success and 1 for error,
+            this command also uses exit status 77 to indicate that the
+            system is already on the specified commit.  This tristate
+            return model is intended to support idempotency-oriented
+            systems automation tools like Ansible.
           </para>
 
           <para>
-            <option>--reboot</option> or <option>-r</option> to initiate a
-            reboot after the downloaded tree is prepared.
+            <command>--reboot</command> or <command>-r</command> to
+            initiate a reboot after the upgrade is prepared.
           </para>
 
           <para>
-            <option>--preview</option> to download only /usr/share/rpm in
-            order to preview the package changes with the current tree.
+            <command>--preview</command> download enough metadata to
+            inspect the RPM diff, but do not actually create a new
+            deployment.
           </para>
         </listitem>
       </varlistentry>
 
       <varlistentry>
-        <term><command>compose</command></term>
-	
-	<listitem><para>Entrypoint for tree composition; most
-	typically used on servers to prepare trees for replication by
-	client systems.  Currently has two subcommands,
-	<literal>tree</literal> and
-	<literal>sign</literal>.</para></listitem>
+        <term><command>rebase</command></term>
+
+        <listitem>
+          <para>
+            Switch to a different remote, or a different tree, while
+            preserving local state in <literal>/var</literal> and
+            configuration in <literal>/etc</literal>.  This is an
+            extension of <literal>upgrade</literal> which switches to
+            a newer version of the current tree.
+          </para>
+        </listitem>
       </varlistentry>
 
-  <varlistentry>
-      <term><command>status</command></term>
+      <varlistentry>
+        <term><command>rollback</command></term>
 
-      <listitem>
+        <listitem>
+          <para>
+            OSTree manages an ordered list of bootloader entries, called
+            "deployments".  The entry at index 0 is the default
+            bootloader entry.  Each entry has a separate
+            <filename>/etc</filename>, but they all share a single
+            <filename>/var</filename>.  You can use the bootloader to
+            choose between entries by pressing Tab to interrupt
+            startup.
+          </para>
 
-        <para>
-          Gives information pertaining to the current deployment in use.  Lists the names and refspecs of all possible deployments in order, such that the first deployment in the list is the default upon boot.  The deployment marked with * is the current booted deployment, and marking with 'r' indicates the most recent upgrade (the newest deployment version).
-      </para>
-      </listitem>
-  </varlistentry>
+          <para>
+            This command then changes the default bootloader entry.  If
+            the current default is booted, then set the default to the
+            previous entry.  Otherwise, make the currently booted tree
+            the default.
+          </para>
 
-  <varlistentry>
-      <term><command>rpm</command></term>
+          <para>
+            <command>--reboot</command> or <command>-r</command> to
+            initiate a reboot after rollback is prepared.
+          </para>
+        </listitem>
+      </varlistentry>
 
-      <listitem>
-        <para>
-          Gives information pertaining to <literal>rpm</literal> data within the file system trees within the ostree commits. There are three sub-commands:
-      </para>
+      <varlistentry>
+        <term><command>status</command></term>
 
-        <para>
-          <command>diff</command> to see how the packages are
-          different between the trees in two commits.  The
-          <option>--format=diff</option> option uses
-          <literal>-</literal> for removed packages,
-          <literal>+</literal> for added packages, and finally
-          <literal>!</literal> for the old version of an updated
-          package, with a following <literal>=</literal> for the new
-          version.
-        </para>
+        <listitem>
+          <para>
+            Gives information pertaining to the current deployment in
+            use. Lists the names and refspecs of all possible
+            deployments in order, such that the first deployment in the
+            list is the default upon boot. The deployment marked with *
+            is the current booted deployment, and marking with 'r'
+            indicates the most recent upgrade (the newest deployment
+            version).
+          </para>
+        </listitem>
+      </varlistentry>
 
-        <para>
-          <command>list</command> to see which packages are within the commit(s) (works like yum list). At least one commit must be specified, but more than one or a range will also work.
-        </para>
+      <varlistentry>
+        <term><command>upgrade</command></term>
 
-        <para>
-          <command>version</command> to see the rpmdb version of the packages within the commit (works like yum version nogroups). At least one commit must be specified, but more than one or a range will also work.
-        </para>
-      </listitem>
-  </varlistentry>
+        <listitem>
+          <para>
+            Download the latest version of the current tree, and deploy
+            it, setting it up as the default for the next boot. By
+            design, this has no effect on your running filesystem tree.
+            You must reboot for any changes to take effect.
+          </para>
+
+          <para>
+            In addition to exit status 0 for success and 1 for error,
+            this command also uses exit status 77 to indicate that no
+            upgrade is available.
+          </para>
+
+          <para>
+            <command>--reboot</command> or <command>-r</command> to
+            initiate a reboot after upgrade is prepared.
+          </para>
+
+          <para>
+            <command>--allow-downgrade</command> to permit deployment of
+            chronologically older trees.
+          </para>
+
+          <para>
+            <option>--preview</option> to download only /usr/share/rpm
+            in order to do a package-level diff between the two
+            versions.
+          </para>
+
+          <para>
+            <option>--check</option> to just check if an upgrade is
+            available, without downloading it or performing a
+            package-level diff.
+          </para>
+        </listitem>
+      </varlistentry>
 
     </variablelist>
-
   </refsect1>
 
   <refsect1>
