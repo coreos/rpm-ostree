@@ -186,6 +186,56 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
+        <term><command>pkg-add</command></term>
+
+        <listitem>
+          <para>
+            Takes one or more packages as arguments. The packages are
+            fetched from the enabled repositories in
+            <filename>/etc/yum.repos.d/</filename> and are overlayed on
+            top of a new deployment.
+          </para>
+
+          <para>
+            <command>--reboot</command> or <command>-r</command> to
+            initiate a reboot after the deployment is prepared.
+          </para>
+
+          <para>
+            <command>--dry-run</command> or <command>-n</command> to
+            exit after printing the transaction rather than downloading
+            the packages and creating a new deployment.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><command>pkg-delete</command></term>
+
+        <listitem>
+          <para>
+            Takes one or more packages as arguments. The packages are
+            removed from the set of packages that are currently
+            overlayed. The remaining packages in the set (if any) are
+            fetched from the enabled repositories in
+            <filename>/etc/yum.repos.d/</filename> and are overlayed on
+            top of a new deployment.
+          </para>
+
+          <para>
+            <command>--reboot</command> or <command>-r</command> to
+            initiate a reboot after the deployment is prepared.
+          </para>
+
+          <para>
+            <command>--dry-run</command> or <command>-n</command> to
+            exit after printing the transaction rather than downloading
+            the packages and creating a new deployment.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><command>rebase</command></term>
 
         <listitem>
