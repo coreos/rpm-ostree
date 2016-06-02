@@ -1050,9 +1050,13 @@ ptrarray_sort_compare_strings (gconstpointer ap,
   return strcmp (*asp, *bsp);
 }
 
-/* Generate a checksum from a goal in a repeatable fashion (ordered
- * hash of component NEVRAs).  This can be used to see if the goal has
- * changed from a previous one efficiently.
+/* Generate a checksum from a goal in a repeatable fashion -
+ * we checksum an ordered array of the checksums of individual
+ * packages.  We *used* to just checksum the NEVRAs but that
+ * breaks with RPM gpg signatures.
+ *
+ * This can be used to efficiently see if the goal has changed from a
+ * previous one.
  */
 void
 rpmostree_hif_add_checksum_goal (GChecksum *checksum,
