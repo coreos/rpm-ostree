@@ -1,0 +1,16 @@
+---
+- hosts: all
+  sudo: yes
+  tasks:
+    - command: ostree remote add --set=gpg-verify=false centos-atomic-continuous https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/ostree/repo/
+      args:
+        creates: /etc/ostree/remotes.d/centos-atomic-continuous.conf
+
+    - command: docker inspect rpm-ostree-builder
+      failed_when: False
+      changed_when: False
+      register: inspect
+
+    - name: build buildimg
+      command: make buildimg
+      when: inspect.rc != 0
