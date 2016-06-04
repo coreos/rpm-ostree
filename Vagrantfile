@@ -10,5 +10,11 @@
 Vagrant.configure(2) do |config|
     config.vm.box = "centos/atomic-host"
     config.vm.hostname = "centosah-dev"
-    config.vm.synced_folder ".", "/srv/vagrant", disabled: true
+
+    config.vm.provision "ansible" do |ansible|
+      ansible.playbook = "tests/vmcheck/setup.yml"
+      ansible.host_key_checking = false
+      ansible.extra_vars = { ansible_ssh_user: 'vagrant' }
+      ansible.raw_ssh_args = ['-o ControlMaster=no']
+    end
 end
