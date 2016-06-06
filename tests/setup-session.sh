@@ -23,7 +23,9 @@ set -e
 
 . $(dirname $0)/libtest.sh
 
-exec_binary="@LIBEXECDIR@/rpm-ostreed"
+# libtest.sh should have added the builddir which contains rpm-ostreed to our
+# path
+exec_binary="$(which rpm-ostreed)"
 
 mkdir -p sysroot
 mkdir -p session-services
@@ -63,4 +65,4 @@ export RPMOSTREE_USE_SESSION_BUS=1
 # easily clean up.
 export OSTREE_SYSROOT_DEBUG=mutable-deployments
 
-exec @installed_testdir@/dbus-run-session --config-file=${test_tmpdir}/session.conf $@
+exec dbus-run-session --config-file=${test_tmpdir}/session.conf $@
