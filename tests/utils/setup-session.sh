@@ -21,7 +21,7 @@
 
 set -e
 
-. $(dirname $0)/libtest.sh
+. ${commondir}/libtest.sh
 
 # libtest.sh should have added the builddir which contains rpm-ostreed to our
 # path
