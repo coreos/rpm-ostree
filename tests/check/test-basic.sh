@@ -19,7 +19,7 @@
 
 set -e
 
-. $(dirname $0)/libtest.sh
+. ${commondir}/libtest.sh
 
 ensure_dbus
 

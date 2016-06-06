@@ -19,13 +19,15 @@
 
 set -e
 
-. $(dirname $0)/libtest.sh
+. ${commondir}/libtest.sh
 
 check_root_test
 
 # Workaround a debugging message "Missing callback called fullpath" that let the test fails.
 # Remove once it doesn't happen anymore.
 unset G_DEBUG
+
+composedir=${commondir}/compose
 
 arch=$(arch)
 if ! test "${arch}" = x86_64; then
@@ -40,22 +42,22 @@ ostree init --repo=repo --mode=archive-z2
 
 echo "ok setup"
 
-rpm-ostree --repo=repo compose --dry-run tree $SRCDIR/compose/test-repo.json
+rpm-ostree --repo=repo compose --dry-run tree ${composedir}/test-repo.json
 ostree --repo=repo refs >refs.txt
 assert_file_empty refs.txt
 rm refs.txt
 
 echo "ok dry run"
 
-rpm-ostree --repo=repo compose tree $SRCDIR/compose/test-repo.json
+rpm-ostree --repo=repo compose tree ${composedir}/test-repo.json
 ostree --repo=repo refs >refs.txt
 assert_file_has_content refs.txt ${testref}
 
 echo "ok compose"
 
 # bring them in the current context so we can modify exported_file
-ln -s $SRCDIR/compose/test-repo-add-files.json .
-ln -s $SRCDIR/compose/test-repo.repo .
+ln -s ${composedir}/test-repo-add-files.json .
+ln -s ${composedir}/test-repo.repo .
 
 echo hello > exported_file
 

@@ -19,13 +19,15 @@
 
 set -euo pipefail
 
-. $(dirname $0)/libtest.sh
+. ${commondir}/libtest.sh
+
+composedir=${commondir}/compose
 
 echo "1..2"
 
 rpm-ostree container init
 
-cp ${SRCDIR}/compose/test-repo.repo rpmmd.repos.d
+cp ${composedir}/test-repo.repo rpmmd.repos.d
 
 cat >empty.conf <<EOF
 [tree]

@@ -346,6 +346,6 @@ check_root_test ()
 ensure_dbus ()
 {
     if test -z "$RPMOSTREE_USE_SESSION_BUS"; then
-        exec "$SRCDIR/setup-session.sh" "$self"
+        exec "$topsrcdir/tests/utils/setup-session.sh" "$self"
     fi
 }
