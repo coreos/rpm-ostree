@@ -59,6 +59,7 @@ Name=org.projectatomic.rpmostree1
 Exec=${exec_binary} --debug --sysroot=${test_tmpdir}/sysroot
 EOF
 
+# Tell rpm-ostree to connect to the session bus instead of system
 export RPMOSTREE_USE_SESSION_BUS=1
 
 # Don't flag deployments as immutable so that test harnesses can
