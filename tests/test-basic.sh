@@ -21,7 +21,7 @@ set -e
 
 . $(dirname $0)/libtest.sh
 
-check_root_test
+ensure_dbus
 
 echo "1..9"
 

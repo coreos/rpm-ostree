@@ -25,9 +25,12 @@ if test -n "${LIBTEST_SH:-}"; then
 fi
 LIBTEST_SH=1
 
+self="$(realpath $0)"
+
 if test -z "${SRCDIR:-}"; then
     SRCDIR=$(dirname $0)
 fi
+
 _cleanup_tmpdir () {
     if test -f ${test_tmpdir}/.test; then
         rm ${test_tmpdir} -rf
@@ -37,7 +40,7 @@ _cleanup_tmpdir () {
 # If we're running as a local test (i.e. through `make check`), then
 # UNINSTALLEDTESTS=1. Otherwise (i.e. as an installed test), it's undefined, in
 # which case we're already in a tmpdir.
-if test -n "${UNINSTALLEDTESTS:-}"; then
+if test -n "${UNINSTALLEDTESTS:-}" && ! test -f $PWD/.test; then
    test_tmpdir=$(mktemp -d test.XXXXXX)
    touch ${test_tmpdir}/.test
    trap _cleanup_tmpdir EXIT
@@ -333,8 +336,16 @@ os_repository_new_commit ()
 check_root_test ()
 {
     if test "$(id -u)" != "0"; then
-       echo 1>&2 "$0 can be run only as root"
-       echo "1..0"
-       exit 77
+       echo "1..0 # requires root"
+       # don't use 77 to signal skip. TAP driver will already know it's a skip
+       # from the 1..0 test plan (and would set as fail if exit code != 0).
+       exit 0
+    fi
+}
+
+ensure_dbus ()
+{
+    if test -z "$RPMOSTREE_USE_SESSION_BUS"; then
+        exec "$SRCDIR/setup-session.sh" "$self"
     fi
 }

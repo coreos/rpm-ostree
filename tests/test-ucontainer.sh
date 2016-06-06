@@ -24,18 +24,8 @@ set -euo pipefail
 echo "1..2"
 
 rpm-ostree container init
-if test -d ${SRCDIR}/compose; then
-    composedatadir=${SRCDIR}/compose
-else
-    composedatadir=${SRCDIR}
-fi
 
-REPO=test-repo
-if test -n "${UNINSTALLEDTESTS:-}"; then
-   REPO=test-repo-local
-fi
-
-cp ${composedatadir}/$REPO.repo rpmmd.repos.d
+cp ${SRCDIR}/compose/test-repo.repo rpmmd.repos.d
 
 cat >empty.conf <<EOF
 [tree]

@@ -3,8 +3,8 @@ include $(top_srcdir)/buildutil/glib-tap.mk
 AM_TESTS_ENVIRONMENT = UNINSTALLEDTESTS=1 builddir=$(abs_builddir)
 
 CLEANFILES += \
-	tests/setup-session.sh \
-	tests/compose/yum/empty tests/compose/yum/repodata/repomd.xml \
+	tests/compose/yum/empty \
+	tests/compose/yum/repodata/repomd.xml \
 	tests/compose/test-repo.repo \
 	tests/compose/yum/repodata/*.bz2 \
 	tests/compose/yum/repodata/*.gz \
@@ -16,16 +16,19 @@ tests/compose/yum/empty: tests/compose/yum/empty.c
 
 tests/compose/yum/repodata/repomd.xml: tests/compose/yum/empty tests/compose/yum/empty.spec
 	(cd tests/compose/yum && \
-	 rpmbuild --define "_sourcedir $(shell pwd)/tests/compose/yum" --define "_specdir $(shell pwd)/tests/compose/yum" --define "_builddir $(shell pwd)/tests/compose/yum" \
-	 	--define "_srcrpmdir $(shell pwd)/tests/compose/yum" --define "_rpmdir $(shell pwd)/tests/compose/yum" --define "_buildrootdir $(shell pwd)/tests/compose/yum/.build" \
-	 -ba empty.spec && rm *.src.rpm && createrepo_c --no-database $(shell pwd)/tests/compose/yum/)
+	 rpmbuild \
+	    --define "_sourcedir $(abs_top_srcdir)/tests/compose/yum" \
+	    --define "_specdir $(abs_top_srcdir)/tests/compose/yum" \
+	    --define "_builddir $(abs_top_srcdir)/tests/compose/yum" \
+	    --define "_srcrpmdir $(abs_top_srcdir)/tests/compose/yum" \
+	    --define "_rpmdir $(abs_top_srcdir)/tests/compose/yum" \
+	    --define "_buildrootdir $(abs_top_srcdir)/tests/compose/yum/.build" \
+	    -ba empty.spec && \
+	 rm *.src.rpm && \
+	 createrepo_c --no-database $(abs_top_srcdir)/tests/compose/yum/)
 
 tests/compose/test-repo.repo: tests/compose/test-repo.repo.in tests/compose/yum/repodata/repomd.xml
-	cat $< | sed -e "s|%WHERE%|$(installed_testdir)|" > $@
-
-# A version of the repo that points directly to the srcdir (for uninstalled tests)
-tests/compose/test-repo-local.repo: tests/compose/test-repo.repo.in tests/compose/yum/repodata/repomd.xml
-	cat $< | sed -e "s|%WHERE%|$(shell pwd)|" > $@
+	cat $< | sed -e "s|%WHERE%|$(abs_top_srcdir)|" > $@
 
 CLEANFILES += tests/compose/test-repo-local.repo \
 	tests/compose/yum/empty-1.0-1.src.rpm \
@@ -37,48 +40,27 @@ tests_jsonutil_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la
 
 tests/test-compose.sh: tests/compose/test-repo.repo
 
-tests/test-ucontainer.sh: tests/compose/test-repo-local.repo
+tests/test-ucontainer.sh: tests/compose/test-repo.repo
 
-installed_test_data = tests/libtest.sh \
-	tests/compose/test-repo.repo \
-	tests/compose/test-repo.json \
-	tests/compose/test-repo-add-files.json \
-	tests/compose/test-repo.repo.in \
-	$(NULL)
-
-tests/setup-session.sh: tests/setup-session.sh.in
-	sed \
-          -e "s|[@]installed_testdir[@]|$(installed_testdir)|" \
-	  -e "s|[@]LIBEXECDIR[@]|$(libexecdir)|" \
-	  < $< > $@.tmp && mv $@.tmp $@
-
-test_installed_extra_scripts = \
-	tests/setup-session.sh \
-	$(NULL)
-
-nobase_installed_test_DATA += $(shell find tests/compose/yum/ -type f) \
-	$(NULL)
-
-installed_test_scripts = \
-	tests/test-compose.sh			\
-	tests/test-basic.sh			\
-	$(NULL)
-
-test_programs = \
+uninstalled_test_programs = \
 	tests/jsonutil			\
 	$(NULL)
 
-test_scripts = tests/test-ucontainer.sh
+uninstalled_test_scripts = \
+	tests/test-basic.sh \
+	tests/test-compose.sh \
+	tests/test-ucontainer.sh \
+	$(NULL)
 
-installed_test_PROGRAMS += dbus-run-session
+uninstalled_test_extra_programs = dbus-run-session
+
 dbus_run_session_SOURCES = tests/dbus-run-session.c
 
 check-local:
 	@echo "  *** NOTE ***"
 	@echo "  *** NOTE ***"
 	@echo " \"make check\" only runs a subset of rpm-ostree's tests."
-	@echo " The other tests use https://live.gnome.org/GnomeGoals/InstalledTests"
-	@echo " To run them, rpm-ostree must be configured with --enable-installed-tests and installed"
+	@echo " Use \"make vmcheck\" to run remaining tests in a VM."
 	@echo "  *** NOTE ***"
 	@echo "  *** NOTE ***"
 
