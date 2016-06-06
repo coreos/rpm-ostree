@@ -964,13 +964,18 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
 
   g_print ("Adding tmpfiles-ostree-integration.conf\n");
   {
-    gs_unref_object GFile *src_pkglibdir = g_file_new_for_path (PKGLIBDIR);
+    /* This is useful if we're running in an uninstalled configuration, e.g.
+     * during tests. */
+    const char *pkglibdir_path
+      = g_getenv("RPMOSTREE_UNINSTALLED_PKGLIBDIR") ?: PKGLIBDIR;
+
+    gs_unref_object GFile *src_pkglibdir = g_file_new_for_path (pkglibdir_path);
     gs_unref_object GFile *src_tmpfilesd =
       g_file_get_child (src_pkglibdir, "tmpfiles-ostree-integration.conf");
     gs_unref_object GFile *target_tmpfilesd =
       g_file_resolve_relative_path (targetroot, "usr/lib/tmpfiles.d/tmpfiles-ostree-integration.conf");
     gs_unref_object GFile *target_tmpfilesd_parent = g_file_get_parent (target_tmpfilesd);
-    
+
     if (!gs_file_ensure_directory (target_tmpfilesd_parent, TRUE, cancellable, error))
       goto out;
 

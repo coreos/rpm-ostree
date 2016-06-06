@@ -23,9 +23,11 @@ set -e
 
 check_root_test
 
-# Workaround a debugging message "Missing callback called fullpath" that let the test fails.
-# Remove once it doesn't happen anymore.
-unset G_DEBUG
+# Let's create a temporary pkglibdir and tell rpm-ostree to use that dir
+# instead of the (non-existent) installed version
+mkdir pkglibdir
+ln -s ${topsrcdir}/src/app/tmpfiles-ostree-integration.conf pkglibdir/
+export RPMOSTREE_UNINSTALLED_PKGLIBDIR=$PWD/pkglibdir
 
 composedir=${commondir}/compose
 
