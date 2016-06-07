@@ -1,6 +1,6 @@
 ---
 - hosts: all
-  sudo: yes
+  become: yes
   tasks:
     - command: ostree remote add --set=gpg-verify=false centos-atomic-continuous https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/ostree/repo/
       args:
@@ -13,4 +13,6 @@
 
     - name: build buildimg
       command: make buildimg
+      args:
+        chdir: sync/tests/vmcheck
       when: inspect.rc != 0

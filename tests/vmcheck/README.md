@@ -6,8 +6,8 @@ One time setup:
 ```
 host$ vagrant up
 host$ vagrant ssh
-vm$ rpm-ostree rebase centos-atomic-continuous:centos-atomic-host/7/x86_64/devel/continuous
-vm$ systemctl reboot -r
+vm$ sudo rpm-ostree rebase centos-atomic-continuous:centos-atomic-host/7/x86_64/devel/continuous
+vm$ systemctl reboot
 ```
 
 Edit source code on the host system; to synchronize, use:
@@ -21,7 +21,7 @@ To build and install into the VM:
 ```
 
 host$ vagrant ssh
-vm$ cd ~/src/tests/vmcheck
+vm$ cd ~/sync/tests/vmcheck
 vm$ make build
 vm$ make install
 vm$ systemctl restart rpm-ostreed
