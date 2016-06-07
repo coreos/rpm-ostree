@@ -49,6 +49,9 @@ It supports the following parameters:
    comps groups are currently not supported due to walters having issues with libcomp:
    https://github.com/cgwalters/fedora-atomic-work/commit/36d18b490529fec91b74ca9b464adb73ef0ab462
 
+ * `packages-$basearch`: Array of strings, optional: Set of installed packages, used
+    only if $basearch matches the target architecture name.
+
  * `bootstrap_packages`: Array of strings, optional: Deprecated; you should
     now just include this set in the main `packages` array.
 
