@@ -810,6 +810,15 @@ rpmostree_compose_builtin_tree (int             argc,
     }
   if (!_rpmostree_jsonutil_append_string_array_to (treefile, "packages", packages, error))
     goto out;
+
+  { g_autofree char *thisarch_packages = g_strconcat ("packages-", dnf_context_get_base_arch (rpmostree_context_get_hif (corectx)), NULL);
+
+    if (json_object_has_member (treefile, thisarch_packages))
+      {
+        if (!_rpmostree_jsonutil_append_string_array_to (treefile, thisarch_packages, packages, error))
+          goto out;
+      }
+  }
   g_ptr_array_add (packages, NULL);
 
   { glnx_unref_object JsonGenerator *generator = json_generator_new ();
