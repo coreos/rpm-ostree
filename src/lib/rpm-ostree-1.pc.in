@@ -8,4 +8,4 @@ Description: Hybrid package/OSTree system
 Version: @VERSION@
 Requires: ostree-1
 Libs: -L${libdir} -lrpm-ostree-1
-Cflags: -I${includedir}/ostree-1
+Cflags: -I${includedir}/rpm-ostree-1
