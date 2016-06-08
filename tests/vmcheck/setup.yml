@@ -6,6 +6,10 @@
       args:
         creates: /etc/ostree/remotes.d/centos-atomic-continuous.conf
 
+    # Experimenting with this as a potential new name.
+    - name: Link nxs -> rpm-ostree
+      file: src=/usr/bin/rpm-ostree dest=/usr/local/bin/nxs owner=0 group=0 state=link
+
     - command: docker inspect rpm-ostree-builder
       failed_when: False
       changed_when: False
