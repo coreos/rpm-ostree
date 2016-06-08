@@ -449,6 +449,10 @@ rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self,
     g_key_file_set_string (self->origin, "origin", "override-commit", override_commit);
   else
     g_key_file_remove_key (self->origin, "origin", "override_commit", NULL);
+
+  /* just update self manually rather than re-parsing the whole thing */
+  g_free (self->override_csum);
+  self->override_csum = g_strdup (override_commit);
 }
 
 const char *
