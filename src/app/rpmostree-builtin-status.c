@@ -72,8 +72,10 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
   const char *booted_id = NULL;
   gboolean first = TRUE;
   const int is_tty = isatty (1);
-  const char *red_bold_prefix = is_tty ? "\x1b[31m\x1b[1m" : "";
-  const char *red_bold_suffix = is_tty ? "\x1b[22m\x1b[0m" : "";
+  const char *bold_prefix = is_tty ? "\x1b[1m" : "";
+  const char *bold_suffix = is_tty ? "\x1b[0m" : "";
+  const char *red_prefix = is_tty ? "\x1b[31m" : "";
+  const char *red_suffix = is_tty ? "\x1b[22m" : "";
 
   if (booted_deployment)
     g_assert (g_variant_lookup (booted_deployment, "id", "&s", &booted_id));
@@ -156,7 +158,9 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       g_print ("\n");
       if (version_string)
         {
-          g_autofree char *version_time = g_strdup_printf ("%s (%s)",version_string, timestamp_string);
+          g_autofree char *version_time
+            = g_strdup_printf ("%s%s%s (%s)", bold_prefix, version_string,
+                               bold_suffix, timestamp_string);
           print_kv ("Version", max_key_len, version_time);
         }
       else
@@ -198,9 +202,9 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       
       if (unlocked && g_strcmp0 (unlocked, "none") != 0)
         {
-          g_print ("%s", red_bold_prefix);
+          g_print ("%s%s", red_prefix, bold_prefix);
           print_kv ("Unlocked", max_key_len, unlocked);
-          g_print ("%s", red_bold_suffix);
+          g_print ("%s%s", bold_suffix, red_suffix);
         }
     }
 
