@@ -21,9 +21,7 @@
 #pragma once
 
 #include <gio/gio.h>
-#include <libhif.h>
-#include <libhif/hif-utils.h>
-#include <libhif/hif-package.h>
+#include <libhif/libhif.h>
 #include <ostree.h>
 
 #include "libglnx.h"
