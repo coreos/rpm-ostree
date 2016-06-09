@@ -23,8 +23,7 @@
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
 #include <rpm/rpmdb.h>
-#include <libhif.h>
-#include <libhif/hif-utils.h>
+#include <libhif/libhif.h>
 #include <libgsystem.h>
 
 #include "rpmostreed-transaction-types.h"
