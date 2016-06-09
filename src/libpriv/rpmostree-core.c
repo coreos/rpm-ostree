@@ -28,7 +28,7 @@
 #include <rpm/rpmmacro.h>
 #include <rpm/rpmts.h>
 #include <gio/gunixoutputstream.h>
-#include <libhif.h>
+#include <libhif/libhif.h>
 #include <libhif/hif-utils.h>
 #include <libhif/hif-package.h>
 #include <librepo/librepo.h>
