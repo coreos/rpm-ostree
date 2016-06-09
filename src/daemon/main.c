@@ -312,12 +312,9 @@ main (int argc,
   /* See glib/gio/gsocket.c */
   signal (SIGPIPE, SIG_IGN);
 
-  /* avoid gvfs (http://bugzilla.gnome.org/show_bug.cgi?id=526454) */
-  if (!g_setenv ("GIO_USE_VFS", "local", TRUE))
-    {
-      g_printerr ("Error setting GIO_USE_GVFS\n");
-      goto out;
-    }
+  /* avoid gvfs and gsettings: https://bugzilla.gnome.org/show_bug.cgi?id=767183 */
+  g_assert (g_setenv ("GIO_USE_VFS", "local", TRUE));
+  g_assert (g_setenv ("GSETTINGS_BACKEND", "memory", TRUE));
 
   opt_context = g_option_context_new ("rpm-ostreed -- rpm-ostree daemon");
   g_option_context_add_main_entries (opt_context, opt_entries, NULL);
