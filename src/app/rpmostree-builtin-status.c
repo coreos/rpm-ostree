@@ -24,6 +24,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <glib-unix.h>
+#include <json-glib/json-glib.h>
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-dbus-helpers.h"
@@ -32,9 +33,11 @@
 #include <libglnx.h>
 
 static gboolean opt_pretty;
+static gboolean opt_json;
 
 static GOptionEntry option_entries[] = {
   { "pretty", 'p', 0, G_OPTION_ARG_NONE, &opt_pretty, "This option is deprecated and no longer has any effect", NULL },
+  { "json", 0, 0, G_OPTION_ARG_NONE, &opt_json, "Output JSON", NULL },
   { NULL }
 };
 
@@ -240,10 +243,19 @@ rpmostree_builtin_status (int             argc,
   deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
   booted_deployment = rpmostree_os_dup_booted_deployment (os_proxy);
 
-  if (!status_generic (sysroot_proxy, os_proxy, deployments,
-                       booted_deployment,
-                       cancellable, error))
-    goto out;
+  if (opt_json)
+    {
+      gsize len;
+      g_autofree char *serialized = json_gvariant_serialize_data (deployments, &len);
+      g_print ("%s\n", serialized);
+    }
+  else
+    {
+      if (!status_generic (sysroot_proxy, os_proxy, deployments,
+                           booted_deployment,
+                           cancellable, error))
+        goto out;
+    }
 
   exit_status = EXIT_SUCCESS;
 out:
