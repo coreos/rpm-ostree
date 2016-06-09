@@ -48,7 +48,7 @@ struct _RpmostreedOSClass
 
 static void rpmostreed_os_iface_init (RPMOSTreeOSIface *iface);
 
-static void rpmostreed_os_load_internals (RpmostreedOS *self);
+static gboolean rpmostreed_os_load_internals (RpmostreedOS *self, GError **error);
 
 G_DEFINE_TYPE_WITH_CODE (RpmostreedOS,
                          rpmostreed_os,
@@ -63,8 +63,15 @@ sysroot_changed (RpmostreedSysroot *sysroot,
                  gpointer user_data)
 {
   RpmostreedOS *self = RPMOSTREED_OS (user_data);
+  g_autoptr(GError) local_error = NULL;
+  GError **error = &local_error;
 
-  rpmostreed_os_load_internals (self);
+  if (!rpmostreed_os_load_internals (self, error))
+      goto out;
+  
+ out:
+  if (local_error)
+    g_warning ("%s", local_error->message);
 }
 
 static void
@@ -257,7 +264,10 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
 
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
                                                                ot_repo,
-                                                               comp_ref);
+                                                               comp_ref,
+							       &local_error);
+  if (!details)
+    goto out;
 
 out:
   if (local_error != NULL)
@@ -910,7 +920,10 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
 
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
                                                                ot_repo,
-                                                               comp_ref);
+                                                               comp_ref,
+							       &local_error);
+  if (!details)
+    goto out;
 
 out:
   if (local_error == NULL)
@@ -1051,7 +1064,10 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
 
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
                                                                ot_repo,
-                                                               NULL);
+                                                               NULL,
+							       &local_error);
+  if (!details)
+    goto out;
 
 out:
   if (local_error != NULL)
@@ -1130,8 +1146,8 @@ out:
   return TRUE;
 }
 
-static void
-rpmostreed_os_load_internals (RpmostreedOS *self)
+static gboolean
+rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
 {
   const gchar *name;
 
@@ -1164,7 +1180,9 @@ rpmostreed_os_load_internals (RpmostreedOS *self)
       if (g_strcmp0 (ostree_deployment_get_osname (deployments->pdata[i]), name) == 0)
         {
           default_variant = rpmostreed_deployment_generate_variant (deployments->pdata[i],
-                                                                    ot_repo);
+                                                                    ot_repo, error);
+	  if (default_variant == NULL)
+	    return FALSE;
           break;
         }
     }
@@ -1173,9 +1191,9 @@ rpmostreed_os_load_internals (RpmostreedOS *self)
   if (booted && g_strcmp0 (ostree_deployment_get_osname (booted),
                            name) == 0)
     {
-      booted_variant = rpmostreed_deployment_generate_variant (booted,
-                                                               ot_repo);
-
+      booted_variant = rpmostreed_deployment_generate_variant (booted, ot_repo, error);
+      if (!booted_variant)
+	return FALSE;
     }
 
   if (deployments->len >= 2)
@@ -1184,7 +1202,9 @@ rpmostreed_os_load_internals (RpmostreedOS *self)
       if (rollback_index >= 0)
 	{
 	  rollback_variant = rpmostreed_deployment_generate_variant (deployments->pdata[rollback_index],
-								     ot_repo);
+								     ot_repo, error);
+	  if (!rollback_variant)
+	    return FALSE;
 	}
     }
 
@@ -1193,7 +1213,10 @@ rpmostreed_os_load_internals (RpmostreedOS *self)
     {
       cached_update = rpmostreed_commit_generate_cached_details_variant (merge_deployment,
                                                                          ot_repo,
-                                                                         NULL);
+                                                                         NULL,
+									 error);
+      if (!cached_update)
+	return FALSE;
       has_cached_updates = cached_update != NULL;
     }
 
@@ -1216,6 +1239,8 @@ rpmostreed_os_load_internals (RpmostreedOS *self)
   rpmostree_os_set_has_cached_update_rpm_diff (RPMOSTREE_OS (self),
                                                has_cached_updates);
   g_dbus_interface_skeleton_flush(G_DBUS_INTERFACE_SKELETON (self));
+
+  return TRUE;
 }
 
 static void
@@ -1259,7 +1284,12 @@ rpmostreed_os_new (OstreeSysroot *sysroot,
   /* FIXME Make this a construct-only property? */
   obj->transaction_monitor = g_object_ref (monitor);
 
-  rpmostreed_os_load_internals (obj);
+  /* FIXME - use GInitable */
+  { g_autoptr(GError) local_error = NULL;
+    if (!rpmostreed_os_load_internals (obj, &local_error))
+      g_warning ("%s", local_error->message);
+  }
+  
   rpmostreed_daemon_publish (rpmostreed_daemon_get (), path, FALSE, obj);
 
   return RPMOSTREE_OS (obj);

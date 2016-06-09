@@ -465,7 +465,9 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
       OstreeDeployment *deployment = deployments->pdata[i];
       const char *deployment_os;
       
-      variant = rpmostreed_deployment_generate_variant (deployment, self->repo);
+      variant = rpmostreed_deployment_generate_variant (deployment, self->repo, error);
+      if (!variant)
+	goto out;
       g_variant_builder_add_value (&builder, variant);
 
       deployment_os = ostree_deployment_get_osname (deployment);
