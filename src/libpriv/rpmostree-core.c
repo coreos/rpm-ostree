@@ -1874,6 +1874,70 @@ ts_callback (const void * h,
   return NULL;
 }
 
+typedef struct {
+    const char *desc;
+    rpmsenseFlags sense;
+    rpmTagVal tag;
+    rpmTagVal progtag;
+    rpmTagVal flagtag;
+} KnownRpmScriptKind;
+
+static const KnownRpmScriptKind known_scripts[] = {
+    { "%prein", 0,
+	RPMTAG_PREIN, RPMTAG_PREINPROG, RPMTAG_PREINFLAGS },
+    { "%preun", 0,
+	RPMTAG_PREUN, RPMTAG_PREUNPROG, RPMTAG_PREUNFLAGS },
+    { "%post", 0,
+	RPMTAG_POSTIN, RPMTAG_POSTINPROG, RPMTAG_POSTINFLAGS },
+    { "%postun", 0,
+	RPMTAG_POSTUN, RPMTAG_POSTUNPROG, RPMTAG_POSTUNFLAGS },
+    { "%pretrans", 0,
+	RPMTAG_PRETRANS, RPMTAG_PRETRANSPROG, RPMTAG_PRETRANSFLAGS },
+    { "%posttrans", 0,
+	RPMTAG_POSTTRANS, RPMTAG_POSTTRANSPROG, RPMTAG_POSTTRANSFLAGS },
+    { "%triggerprein", RPMSENSE_TRIGGERPREIN,
+	RPMTAG_TRIGGERPREIN, 0, 0 },
+    { "%triggerun", RPMSENSE_TRIGGERUN,
+	RPMTAG_TRIGGERUN, 0, 0 },
+    { "%triggerin", RPMSENSE_TRIGGERIN,
+	RPMTAG_TRIGGERIN, 0, 0 },
+    { "%triggerpostun", RPMSENSE_TRIGGERPOSTUN,
+	RPMTAG_TRIGGERPOSTUN, 0, 0 },
+    { "%verify", 0,
+	RPMTAG_VERIFYSCRIPT, RPMTAG_VERIFYSCRIPTPROG, RPMTAG_VERIFYSCRIPTFLAGS},
+};
+
+/*
+ * We aren't yet running %posts, so let's not lie and say we support
+ * it.
+ */
+static gboolean
+check_package_is_post_posts (Header      hdr,
+                             const char *name,
+                             GError    **error)
+{
+  gboolean ret = FALSE;
+  guint i;
+  
+  for (i = 0; i < G_N_ELEMENTS (known_scripts); i++)
+    {
+      rpmTagVal tagval = known_scripts[i].tag;
+      rpmTagVal progtagval = known_scripts[i].progtag;
+
+      if (headerIsEntry (hdr, tagval) || headerIsEntry (hdr, progtagval))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Package '%s' has (currently) unsupported script of type '%s'",
+                       name, known_scripts[i].desc);
+          goto out;
+        }
+    }
+
+  ret = TRUE;
+ out:
+  return ret;
+}
+
 static gboolean
 add_to_transaction (rpmts  ts,
                     HifPackage *pkg,
@@ -1892,6 +1956,9 @@ add_to_transaction (rpmts  ts,
     }
 
   if (!rpmostree_unpacker_read_metainfo (metadata_fd, &hdr, NULL, NULL, error))
+    goto out;
+
+  if (!check_package_is_post_posts (hdr, hif_package_get_nevra (pkg), error))
     goto out;
 
   r = rpmtsAddInstallElement (ts, hdr, (char*)hif_package_get_nevra (pkg), TRUE, NULL);
