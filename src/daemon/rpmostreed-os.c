@@ -1142,7 +1142,6 @@ rpmostreed_os_load_internals (RpmostreedOS *self)
   g_autofree gchar *origin_refspec = NULL;
   OstreeSysroot *ot_sysroot;
   OstreeRepo *ot_repo;
-  GError *error = NULL;
   GVariant *booted_variant = NULL;
   GVariant *default_variant = NULL;
   GVariant *rollback_variant = NULL;
@@ -1159,8 +1158,6 @@ rpmostreed_os_load_internals (RpmostreedOS *self)
   ot_repo = rpmostreed_sysroot_get_repo (rpmostreed_sysroot_get ());
 
   deployments = ostree_sysroot_get_deployments (ot_sysroot);
-  if (deployments == NULL)
-    goto out;
 
   for (i=0; i<deployments->len; i++)
     {
@@ -1181,11 +1178,14 @@ rpmostreed_os_load_internals (RpmostreedOS *self)
 
     }
 
-  rollback_index = rpmostreed_rollback_deployment_index (name, ot_sysroot, &error);
-  if (error == NULL)
+  if (deployments->len >= 2)
     {
-      rollback_variant = rpmostreed_deployment_generate_variant (deployments->pdata[rollback_index],
-                                                                 ot_repo);
+      rollback_index = rpmostreed_rollback_deployment_index (name, ot_sysroot, NULL);
+      if (rollback_index >= 0)
+	{
+	  rollback_variant = rpmostreed_deployment_generate_variant (deployments->pdata[rollback_index],
+								     ot_repo);
+	}
     }
 
   merge_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
@@ -1196,9 +1196,6 @@ rpmostreed_os_load_internals (RpmostreedOS *self)
                                                                          NULL);
       has_cached_updates = cached_update != NULL;
     }
-
-out:
-  g_clear_error (&error);
 
   if (!booted_variant)
     booted_variant = rpmostreed_deployment_generate_blank_variant ();
