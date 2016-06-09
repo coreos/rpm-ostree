@@ -1563,7 +1563,7 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
                         const char        *path,
                         const char        *prefix,
                         OstreeSePolicy    *sepolicy,
-                        gboolean          *out_changed,
+                        guint             *n_changed,
                         GCancellable      *cancellable,
                         GError           **error)
 {
@@ -1624,22 +1624,24 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
       if (g_strcmp0 (cur_label, new_label) != 0)
         {
           if (dent->d_type != DT_DIR)
-            if (!break_single_hardlink_at (dfd_iter.fd, dent->d_name,
-                                           cancellable, error))
-              goto out;
+            {
+              if (!break_single_hardlink_at (dfd_iter.fd, dent->d_name,
+                                             cancellable, error))
+                goto out;
+            }
 
           new_xattrs = set_selinux_label (cur_xattrs, new_label);
 
           if (!glnx_dfd_name_set_all_xattrs (dfd_iter.fd, dent->d_name,
                                              new_xattrs, cancellable, error))
             goto out;
-
-          *out_changed = TRUE;
+          (*n_changed)++;
         }
 
       if (dent->d_type == DT_DIR)
         if (!relabel_dir_recurse_at (repo, dfd_iter.fd, dent->d_name, fullpath,
-                                     sepolicy, out_changed, cancellable, error))
+                                     sepolicy, n_changed,
+                                     cancellable, error))
           goto out;
     }
 
@@ -1656,10 +1658,24 @@ relabel_rootfs (OstreeRepo        *repo,
                 GCancellable      *cancellable,
                 GError           **error)
 {
+  guint n_relabeled = 0;
+  gboolean ret;
+  
   /* NB: this does mean that / itself will not be labeled properly, but that
    * doesn't matter since it will always exist during overlay */
-  return relabel_dir_recurse_at (repo, dfd, ".", "/", sepolicy,
-                                 out_changed, cancellable, error);
+  ret = relabel_dir_recurse_at (repo, dfd, ".", "/", sepolicy,
+                                &n_relabeled, cancellable, error);
+  /* Print how many things changed to help debug things in the future
+   * and guide how important it is to accurately cache things.
+   */
+  if (ret)
+    {
+      *out_changed = n_relabeled > 0;
+      if (*out_changed)
+        g_print ("%u files relabeled\n", n_relabeled);
+    }
+
+  return ret;
 }
 
 static gboolean
