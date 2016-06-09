@@ -224,6 +224,12 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
     g_variant_dict_insert (&dict, "osname", "s", osname);
   g_variant_dict_insert (&dict, "serial", "i", serial);
   g_variant_dict_insert (&dict, "checksum", "s", csum);
+  if (origin_packages)
+    {
+      const char *parent = ostree_commit_get_parent (commit);
+      g_assert (parent);
+      g_variant_dict_insert (&dict, "base-checksum", "s", parent);
+    }
 
   variant_add_commit_details (&dict, commit);
   if (origin_refspec != NULL)
