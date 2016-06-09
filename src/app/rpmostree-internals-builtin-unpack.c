@@ -24,7 +24,6 @@
 #include <glib-unix.h>
 #include <gio/gunixoutputstream.h>
 #include <libhif/libhif.h>
-#include <libhif/hif-utils.h>
 #include <rpm/rpmts.h>
 #include <stdio.h>
 #include <libglnx.h>
