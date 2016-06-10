@@ -75,7 +75,8 @@ RpmostreedTransaction *
 
 typedef enum {
   RPMOSTREE_TRANSACTION_PKG_FLAG_REBOOT = (1 << 0),
-  RPMOSTREE_TRANSACTION_PKG_FLAG_DRY_RUN = (1 << 1)
+  RPMOSTREE_TRANSACTION_PKG_FLAG_DRY_RUN = (1 << 1),
+  RPMOSTREE_TRANSACTION_PKG_FLAG_NOSCRIPTS = (1 << 2)
 } RpmOstreeTransactionPkgFlags;
 
 RpmostreedTransaction *

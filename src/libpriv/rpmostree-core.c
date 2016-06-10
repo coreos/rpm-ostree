@@ -1942,6 +1942,7 @@ static gboolean
 add_to_transaction (rpmts  ts,
                     HifPackage *pkg,
                     int tmp_metadata_dfd,
+                    gboolean noscripts,
                     GError **error)
 {
   gboolean ret = FALSE;
@@ -1958,8 +1959,11 @@ add_to_transaction (rpmts  ts,
   if (!rpmostree_unpacker_read_metainfo (metadata_fd, &hdr, NULL, NULL, error))
     goto out;
 
-  if (!check_package_is_post_posts (hdr, hif_package_get_nevra (pkg), error))
-    goto out;
+  if (!noscripts)
+    {
+      if (!check_package_is_post_posts (hdr, hif_package_get_nevra (pkg), error))
+        goto out;
+    }
 
   r = rpmtsAddInstallElement (ts, hdr, (char*)hif_package_get_nevra (pkg), TRUE, NULL);
   if (r != 0)
@@ -1999,6 +2003,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                    int                    tmprootfs_dfd,
                                    OstreeRepoDevInoCache *devino_cache,
                                    const char            *parent,
+                                   gboolean               noscripts,
                                    char                 **out_commit,
                                    GCancellable          *cancellable,
                                    GError               **error)
@@ -2097,7 +2102,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                               cancellable, error))
             goto out;
 
-          if (!add_to_transaction (ordering_ts, pkg, tmp_metadata_dfd, error))
+          if (!add_to_transaction (ordering_ts, pkg, tmp_metadata_dfd, noscripts, error))
             goto out;
         }
 
@@ -2222,7 +2227,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
       {
         HifPackage *pkg = k;
 
-        if (!add_to_transaction (rpmdb_ts, pkg, tmp_metadata_dfd, error))
+        if (!add_to_transaction (rpmdb_ts, pkg, tmp_metadata_dfd, noscripts, error))
           goto out;
       }
   }

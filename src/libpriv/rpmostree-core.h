@@ -102,6 +102,7 @@ gboolean rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                             int                    tmprootfs_dfd,
                                             OstreeRepoDevInoCache *devino_cache,
                                             const char            *parent,
+                                            gboolean               noscripts,
                                             char                 **out_commit,
                                             GCancellable          *cancellable,
                                             GError               **error);
