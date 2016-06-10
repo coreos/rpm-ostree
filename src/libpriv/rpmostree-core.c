@@ -347,6 +347,7 @@ rpmostree_context_new_system (GCancellable *cancellable,
   hif_context_set_cache_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_REPOMD);
   hif_context_set_solv_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_SOLV);
   hif_context_set_lock_dir (self->hifctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
+  hif_context_set_user_agent (self->hifctx, PACKAGE_NAME "/" PACKAGE_VERSION);
 
   hif_context_set_check_disk_space (self->hifctx, FALSE);
   hif_context_set_check_transaction (self->hifctx, FALSE);
