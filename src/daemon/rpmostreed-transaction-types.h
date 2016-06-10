@@ -73,13 +73,17 @@ RpmostreedTransaction *
                                                             GCancellable *cancellable,
                                                             GError **error);
 
+typedef enum {
+  RPMOSTREE_TRANSACTION_PKG_FLAG_REBOOT = (1 << 0),
+  RPMOSTREE_TRANSACTION_PKG_FLAG_DRY_RUN = (1 << 1)
+} RpmOstreeTransactionPkgFlags;
+
 RpmostreedTransaction *
                rpmostreed_transaction_new_pkg_add          (GDBusMethodInvocation *invocation,
                                                             OstreeSysroot         *sysroot,
                                                             const char            *osname,
                                                             const char *const     *packages,
-                                                            gboolean               reboot,
-                                                            gboolean               dry_run,
+							    RpmOstreeTransactionPkgFlags flags,
                                                             GCancellable          *cancellable,
                                                             GError               **error);
 
@@ -88,7 +92,6 @@ RpmostreedTransaction *
                                                             OstreeSysroot         *sysroot,
                                                             const char            *osname,
                                                             const char *const     *packages,
-                                                            gboolean               reboot,
-                                                            gboolean               dry_run,
+							    RpmOstreeTransactionPkgFlags flags,
                                                             GCancellable          *cancellable,
                                                             GError               **error);

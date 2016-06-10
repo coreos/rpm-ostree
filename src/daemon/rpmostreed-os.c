@@ -715,6 +715,31 @@ out:
   return TRUE;
 }
 
+static RpmOstreeTransactionPkgFlags
+pkg_opts_to_flags (GVariant *options)
+{
+  gboolean v;
+  RpmOstreeTransactionPkgFlags flags = 0;
+  GVariantDict dict;
+
+  g_variant_dict_init (&dict, options);
+  
+  v = FALSE;
+  /* XXX Fail if option type is wrong? */
+  g_variant_dict_lookup (&dict, "reboot", "b", &v);
+  if (v)
+    flags |= RPMOSTREE_TRANSACTION_PKG_FLAG_REBOOT;
+
+  v = FALSE;
+  g_variant_dict_lookup (&dict, "dry-run", "b", &v);
+  if (v)
+    flags |= RPMOSTREE_TRANSACTION_PKG_FLAG_DRY_RUN;
+
+  g_variant_dict_clear (&dict);
+
+  return flags;
+}
+
 static gboolean
 os_handle_pkg_add (RPMOSTreeOS *interface,
 		   GDBusMethodInvocation *invocation,
@@ -725,10 +750,7 @@ os_handle_pkg_add (RPMOSTreeOS *interface,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
-  GVariantDict options_dict;
   const char *osname;
-  gboolean opt_reboot = FALSE;
-  gboolean opt_dry_run = FALSE;
   GError *local_error = NULL;
 
   /* If a compatible transaction is in progress, share its bus address. */
@@ -752,23 +774,11 @@ os_handle_pkg_add (RPMOSTreeOS *interface,
 
   osname = rpmostree_os_get_name (interface);
 
-  /* XXX Fail if option type is wrong? */
-
-  g_variant_dict_init (&options_dict, arg_options);
-  g_variant_dict_lookup (&options_dict,
-                         "reboot", "b",
-                         &opt_reboot);
-  g_variant_dict_lookup (&options_dict,
-                         "dry-run", "b",
-                         &opt_dry_run);
-  g_variant_dict_clear (&options_dict);
-
   transaction = rpmostreed_transaction_new_pkg_add (invocation,
 						    ot_sysroot,
 						    osname,
 						    arg_packages,
-						    opt_reboot,
-						    opt_dry_run,
+						    pkg_opts_to_flags (arg_options),
 						    cancellable,
 						    &local_error);
 
@@ -802,10 +812,7 @@ os_handle_pkg_delete (RPMOSTreeOS *interface,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   glnx_unref_object GCancellable *cancellable = NULL;
-  GVariantDict options_dict;
   const char *osname;
-  gboolean opt_reboot = FALSE;
-  gboolean opt_dry_run = FALSE;
   GError *local_error = NULL;
 
   /* If a compatible transaction is in progress, share its bus address. */
@@ -829,23 +836,11 @@ os_handle_pkg_delete (RPMOSTreeOS *interface,
 
   osname = rpmostree_os_get_name (interface);
 
-  /* XXX Fail if option type is wrong? */
-
-  g_variant_dict_init (&options_dict, arg_options);
-  g_variant_dict_lookup (&options_dict,
-                         "reboot", "b",
-                         &opt_reboot);
-  g_variant_dict_lookup (&options_dict,
-                         "dry-run", "b",
-                         &opt_dry_run);
-  g_variant_dict_clear (&options_dict);
-
   transaction = rpmostreed_transaction_new_pkg_delete (invocation,
                                                        ot_sysroot,
                                                        osname,
                                                        arg_packages,
-                                                       opt_reboot,
-                                                       opt_dry_run,
+						       pkg_opts_to_flags (arg_options),
                                                        cancellable,
                                                        &local_error);
 

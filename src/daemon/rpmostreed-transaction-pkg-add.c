@@ -41,8 +41,7 @@ typedef struct {
   RpmostreedTransaction parent;
   char *osname;
   char **packages;
-  gboolean reboot;
-  gboolean dry_run;
+  RpmOstreeTransactionPkgFlags flags;
 } PkgAddTransaction;
 
 typedef RpmostreedTransactionClass PkgAddTransactionClass;
@@ -79,7 +78,7 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
   self = (PkgAddTransaction *) transaction;
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-  if (self->dry_run)
+  if (self->flags & RPMOSTREE_TRANSACTION_PKG_FLAG_DRY_RUN)
     flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN;
 
   upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, flags,
@@ -99,7 +98,7 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
   if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
     goto out;
 
-  if (self->reboot)
+  if (self->flags & RPMOSTREE_TRANSACTION_PKG_FLAG_REBOOT)
     rpmostreed_reboot (cancellable, error);
 
   ret = TRUE;
@@ -128,8 +127,7 @@ rpmostreed_transaction_new_pkg_add (GDBusMethodInvocation *invocation,
 				    OstreeSysroot         *sysroot,
 				    const char            *osname,
 				    const char * const    *packages,
-				    gboolean               reboot,
-				    gboolean               dry_run,
+				    RpmOstreeTransactionPkgFlags flags,
 				    GCancellable          *cancellable,
 				    GError               **error)
 {
@@ -150,8 +148,7 @@ rpmostreed_transaction_new_pkg_add (GDBusMethodInvocation *invocation,
     {
       self->osname = g_strdup (osname);
       self->packages = g_strdupv ((char**)packages);
-      self->reboot = reboot;
-      self->dry_run = dry_run;
+      self->flags = flags;
     }
 
   return (RpmostreedTransaction *) self;
