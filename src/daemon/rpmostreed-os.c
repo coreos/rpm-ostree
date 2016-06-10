@@ -735,6 +735,11 @@ pkg_opts_to_flags (GVariant *options)
   if (v)
     flags |= RPMOSTREE_TRANSACTION_PKG_FLAG_DRY_RUN;
 
+  v = FALSE;
+  g_variant_dict_lookup (&dict, "noscripts", "b", &v);
+  if (v)
+    flags |= RPMOSTREE_TRANSACTION_PKG_FLAG_NOSCRIPTS;
+
   g_variant_dict_clear (&dict);
 
   return flags;
