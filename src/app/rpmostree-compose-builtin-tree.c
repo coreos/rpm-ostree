@@ -898,10 +898,6 @@ rpmostree_compose_builtin_tree (int             argc,
 
       g_print ("%s => %s\n", self->ref, new_revision);
 
-      if (!g_getenv ("RPM_OSTREE_PRESERVE_ROOTFS"))
-        (void) glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (yumroot), cancellable, NULL);
-      else
-        g_print ("Preserved %s\n", gs_file_get_path_cached (yumroot));
     }
   }
 
@@ -924,6 +920,11 @@ rpmostree_compose_builtin_tree (int             argc,
   exit_status = EXIT_SUCCESS;
 
  out:
+  /* Explicitly close this one now as it may have references to files
+   * we delete below.
+   */
+  g_clear_object (&corectx);
+  
   /* Move back out of the workding directory to ensure unmount works */
   (void )chdir ("/");
 
