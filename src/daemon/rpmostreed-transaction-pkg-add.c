@@ -81,7 +81,7 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
   if (self->flags & RPMOSTREE_TRANSACTION_PKG_FLAG_DRY_RUN)
     flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN;
   if (self->flags & RPMOSTREE_TRANSACTION_PKG_FLAG_NOSCRIPTS)
-    flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_NOSCRIPTS;
+    flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS;
 
   upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, flags,
                                              cancellable, error);

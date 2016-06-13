@@ -320,7 +320,7 @@ rpmostree_container_builtin_assemble (int             argc,
       goto out;
 
     if (!rpmostree_context_assemble_commit (rocctx->ctx, tmprootfs_dfd, NULL,
-                                            NULL, FALSE, &commit, cancellable, error))
+                                            NULL, TRUE, &commit, cancellable, error))
       goto out;
 
     glnx_shutil_rm_rf_at (rocctx->userroot_dfd, tmprootfs, cancellable, NULL);
@@ -536,8 +536,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
       goto out;
 
     if (!rpmostree_context_assemble_commit (rocctx->ctx, tmprootfs_dfd, NULL,
-                                            NULL, &new_commit_checksum,
-                                            TRUE,
+                                            NULL, TRUE, &new_commit_checksum,
                                             cancellable, error))
       goto out;
 

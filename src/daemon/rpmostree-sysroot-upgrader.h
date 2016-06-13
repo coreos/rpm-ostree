@@ -39,7 +39,7 @@ typedef struct RpmOstreeSysrootUpgrader RpmOstreeSysrootUpgrader;
  * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER: Do not error if the new deployment was composed earlier than the current deployment
  * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_REDEPLOY: Use the same revision as the current deployment
  * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN: If layering packages, only print the transaction
- * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_NOSCRIPTS: Do not run RPM scripts
+ * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS: Do not run RPM scripts
  *
  * Flags controlling operation of an #RpmOstreeSysrootUpgrader.
  */
@@ -49,7 +49,7 @@ typedef enum {
   RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER          = (1 << 2),
   RPMOSTREE_SYSROOT_UPGRADER_FLAGS_REDEPLOY             = (1 << 3),
   RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN   = (1 << 4),
-  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_NOSCRIPTS            = (1 << 5)
+  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS = (1 << 5)
 } RpmOstreeSysrootUpgraderFlags;
 
 GType rpmostree_sysroot_upgrader_get_type (void);
