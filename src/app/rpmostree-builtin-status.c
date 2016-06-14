@@ -61,6 +61,18 @@ print_kv (const char *key,
   printf ("%s: %s\n", key, value);
 }
 
+static GVariant *
+get_active_txn (RPMOSTreeSysroot *sysroot_proxy)
+{
+  GVariant* txn = rpmostree_sysroot_get_active_transaction (sysroot_proxy);
+  const char *a, *b, *c;
+  if (txn)
+    g_variant_get (txn, "(&s&s&s)", &a, &b, &c);
+  if (*a)
+    return txn;
+  return NULL;
+}
+
 /* We will have an optimized path for the case where there are just
  * two deployments, this code will be the generic fallback.
  */
@@ -80,6 +92,17 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
   const char *bold_suffix = is_tty ? "\x1b[0m" : "";
   const char *red_prefix = is_tty ? "\x1b[31m" : "";
   const char *red_suffix = is_tty ? "\x1b[22m" : "";
+  GVariant* txn = get_active_txn (sysroot_proxy);
+
+  if (txn)
+    {
+      const char *method, *sender, *path;
+      g_variant_get (txn, "(&s&s&s)", &method, &sender, &path);
+      g_print ("State: transaction: %s %s %s\n", method, sender, path);
+    }
+  else
+    g_print ("State: idle\n");
+  g_print ("\n");
 
   if (booted_deployment)
     g_assert (g_variant_lookup (booted_deployment, "id", "&s", &booted_id));
@@ -250,11 +273,19 @@ rpmostree_builtin_status (int             argc,
       glnx_unref_object JsonGenerator *generator = json_generator_new ();
       JsonNode *deployments_node = json_gvariant_serialize (deployments);
       JsonNode *json_root;
+      JsonNode *txn_node;
       glnx_unref_object GOutputStream *stdout_gio = g_unix_output_stream_new (1, FALSE);
+      GVariant *txn = get_active_txn (sysroot_proxy);
 
       json_builder_begin_object (builder);
       json_builder_set_member_name (builder, "deployments");
       json_builder_add_value (builder, deployments_node);
+      json_builder_set_member_name (builder, "transaction");
+      if (txn)
+        txn_node = json_gvariant_serialize (txn);
+      else
+        txn_node = json_node_new (JSON_NODE_NULL);
+      json_builder_add_value (builder, txn_node);
       json_builder_end_object (builder);
       json_root = json_builder_get_root (builder);
       json_generator_set_root (generator, json_root);
