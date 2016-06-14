@@ -5,6 +5,8 @@
 Vagrant.configure(2) do |config|
     config.vm.box = "centos/atomic-host"
     config.vm.hostname = "centosah-dev"
+    config.vm.define "vmcheck" do |vmcheck|
+    end
 
     config.vm.provider "libvirt" do |libvirt, override|
       libvirt.cpus = 2
