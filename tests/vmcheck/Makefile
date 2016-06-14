@@ -1,7 +1,7 @@
 all:
 	echo "Targets: buildimg build install"
 
-BUILDER_ARGS = sudo /usr/bin/docker run -ti --privileged -v /var/home:/home
+BUILDER_ARGS = sudo /usr/bin/docker run --rm -ti --privileged -v /var/home:/home
 BUILDER_IMG = rpm-ostree-builder
 
 BUILDER_RUN = $(BUILDER_ARGS) $(BUILDER_IMG)
