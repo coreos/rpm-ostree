@@ -24,6 +24,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <glib-unix.h>
+#include <gio/gunixoutputstream.h>
 #include <json-glib/json-glib.h>
 
 #include "rpmostree-builtins.h"
@@ -245,9 +246,22 @@ rpmostree_builtin_status (int             argc,
 
   if (opt_json)
     {
-      gsize len;
-      g_autofree char *serialized = json_gvariant_serialize_data (deployments, &len);
-      g_print ("%s\n", serialized);
+      glnx_unref_object JsonBuilder *builder = json_builder_new ();
+      glnx_unref_object JsonGenerator *generator = json_generator_new ();
+      JsonNode *deployments_node = json_gvariant_serialize (deployments);
+      JsonNode *json_root;
+      glnx_unref_object GOutputStream *stdout_gio = g_unix_output_stream_new (1, FALSE);
+
+      json_builder_begin_object (builder);
+      json_builder_set_member_name (builder, "deployments");
+      json_builder_add_value (builder, deployments_node);
+      json_builder_end_object (builder);
+      json_root = json_builder_get_root (builder);
+      json_generator_set_root (generator, json_root);
+      json_node_free (json_root);
+      
+      if (!json_generator_to_stream (generator, stdout_gio, NULL, error))
+        goto out;
     }
   else
     {
