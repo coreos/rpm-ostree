@@ -4,8 +4,13 @@ set -euo pipefail
 cd /ostree/repo/tmp
 umount vmcheck.ro
 
-# would be nice to use --add-metadata-string=version=$(git describe) or so here,
-# but we don't even have git!
+cmd="ostree commit -b vmcheck -s '' \
+       --tree=dir=vmcheck \
+       --link-checkout-speedup"
 
-ostree commit -b vmcheck -s '' --tree=dir=vmcheck --link-checkout-speedup
+if [ -n "${VERSION:-}" ]; then
+  cmd="$cmd --add-metadata-string=version=$VERSION"
+fi
+
+eval $cmd
 ostree admin deploy vmcheck
