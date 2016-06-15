@@ -72,7 +72,7 @@ echo "ok rebase onto newer version"
 
 # Jump backward to 1.0.9
 rpm-ostree deploy --os=testos 1.0.9
-rpm-ostree status | head --lines 3 | tee OUTPUT-status.txt
+rpm-ostree status | head --lines 5 | tee OUTPUT-status.txt
 assert_file_has_content OUTPUT-status.txt '1\.0\.9'
 echo "ok deploy older known version"
 
@@ -81,7 +81,7 @@ revision=$(ostree rev-parse --repo=sysroot/ostree/repo otheros:testos/buildmaste
 
 # Jump forward to a locally known version.
 rpm-ostree deploy --os=testos 1.0.10
-rpm-ostree status | head --lines 3 | tee OUTPUT-status.txt
+rpm-ostree status | head --lines 5 | tee OUTPUT-status.txt
 assert_file_has_content OUTPUT-status.txt '1\.0\.10'
 echo "ok deploy newer known version"
 
@@ -89,14 +89,14 @@ echo "ok deploy newer known version"
 # Here we also test the "version=" argument prefix.
 os_repository_new_commit 1 1
 rpm-ostree deploy --os=testos version=$(date "+%Y%m%d.1")
-rpm-ostree status | head --lines 3 | tee OUTPUT-status.txt
+rpm-ostree status | head --lines 5 | tee OUTPUT-status.txt
 assert_file_has_content OUTPUT-status.txt $(date "+%Y%m%d\.1")
 echo "ok deploy newer unknown version"
 
 # Jump backward again to 1.0.9, but this time using the
 # "revision=" argument prefix (and test case sensitivity).
 rpm-ostree deploy --os=testos REVISION=$revision
-rpm-ostree status | head --lines 3 | tee OUTPUT-status.txt
+rpm-ostree status | head --lines 5 | tee OUTPUT-status.txt
 assert_file_has_content OUTPUT-status.txt '1\.0\.9'
 echo "ok deploy older version by revision"
 
