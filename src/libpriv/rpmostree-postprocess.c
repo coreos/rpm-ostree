@@ -525,6 +525,7 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
       gs_free char *tmpfiles_d_line = NULL;
       char filetype_c;
       gs_free char *relpath = NULL;
+      g_autofree char *path = NULL;
 
       if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
         goto out;
@@ -546,12 +547,15 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
           continue;
         }
 
+      path = g_strconcat (prefix->str, "/", dent->d_name, NULL);
+      /* Total hack for old rpm-ostree version */
+      if (strcmp (path, "/var/lib/rpm") == 0)
+        continue;
+
       tmpfiles_d_buf = g_string_new ("");
       g_string_append_c (tmpfiles_d_buf, filetype_c);
       g_string_append_c (tmpfiles_d_buf, ' ');
-      g_string_append (tmpfiles_d_buf, prefix->str);
-      g_string_append_c (tmpfiles_d_buf, '/');
-      g_string_append (tmpfiles_d_buf, dent->d_name);
+      g_string_append (tmpfiles_d_buf, path);
 
       if (filetype_c == 'd')
         {
