@@ -179,6 +179,11 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
     }
   g_key_file_ref (self->origin);
 
+  /* Should we consider requiring --discard-hotfix here?
+   * See also `ostree admin upgrade` bits.
+   */
+  g_key_file_remove_key (self->origin, "origin", "unlocked", NULL);
+
   self->packages_to_add = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                  g_free, NULL);
   self->packages_to_delete = g_hash_table_new_full (g_str_hash, g_str_equal,
