@@ -57,7 +57,7 @@ rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/app -I$(srcdir)/src/lib -I$(src
 rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)  librpmostreepriv.la librpmostree-1.la
 
 privdatadir=$(pkglibdir)
-privdata_DATA = src/app/tmpfiles-ostree-integration.conf
+privdata_DATA = src/app/rpm-ostree-0-integration.conf
 
 if BUILDOPT_USRBINATOMIC
 INSTALL_DATA_HOOKS += install-usrbinatomic-hook

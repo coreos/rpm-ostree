@@ -26,7 +26,7 @@ check_root_test
 # Let's create a temporary pkglibdir and tell rpm-ostree to use that dir
 # instead of the (non-existent) installed version
 mkdir pkglibdir
-ln -s ${topsrcdir}/src/app/tmpfiles-ostree-integration.conf pkglibdir/
+ln -s ${topsrcdir}/src/app/rpm-ostree-0-integration.conf pkglibdir/
 export RPMOSTREE_UNINSTALLED_PKGLIBDIR=$PWD/pkglibdir
 
 composedir=${commondir}/compose
