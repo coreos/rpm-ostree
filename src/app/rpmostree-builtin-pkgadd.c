@@ -65,6 +65,7 @@ rpmostree_builtin_pkg_add (int            argc,
   g_autoptr(GVariant) default_deployment = NULL;
   g_autofree char *transaction_address = NULL;
   int i;
+  g_autoptr(GPtrArray) argv_empty = g_ptr_array_new ();
   g_autoptr(GPtrArray) argv_and_null = g_ptr_array_new ();
 
   context = g_option_context_new ("PACKAGE [PACKAGE...] - Download and install layered RPM packages");
@@ -88,16 +89,19 @@ rpmostree_builtin_pkg_add (int            argc,
     g_ptr_array_add (argv_and_null, argv[i]);
   g_ptr_array_add (argv_and_null, NULL);
 
+  g_ptr_array_add (argv_empty, NULL);
+
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
     goto out;
 
-  if (!rpmostree_os_call_pkg_add_sync (os_proxy,
-                                       get_args_variant (),
-                                       (const char * const*)argv_and_null->pdata,
-                                       &transaction_address,
-                                       cancellable,
-                                       error))
+  if (!rpmostree_os_call_pkg_change_sync (os_proxy,
+                                          get_args_variant (),
+                                          (const char * const*)argv_and_null->pdata,
+                                          (const char * const*)argv_empty->pdata,
+                                          &transaction_address,
+                                          cancellable,
+                                          error))
     goto out;
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,

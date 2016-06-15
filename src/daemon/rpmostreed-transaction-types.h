@@ -80,19 +80,11 @@ typedef enum {
 } RpmOstreeTransactionPkgFlags;
 
 RpmostreedTransaction *
-               rpmostreed_transaction_new_pkg_add          (GDBusMethodInvocation *invocation,
+               rpmostreed_transaction_new_pkg_change       (GDBusMethodInvocation *invocation,
                                                             OstreeSysroot         *sysroot,
                                                             const char            *osname,
-                                                            const char *const     *packages,
-							    RpmOstreeTransactionPkgFlags flags,
-                                                            GCancellable          *cancellable,
-                                                            GError               **error);
-
-RpmostreedTransaction *
-               rpmostreed_transaction_new_pkg_delete       (GDBusMethodInvocation *invocation,
-                                                            OstreeSysroot         *sysroot,
-                                                            const char            *osname,
-                                                            const char *const     *packages,
+                                                            const char *const     *packages_added,
+                                                            const char *const     *packages_removed,
 							    RpmOstreeTransactionPkgFlags flags,
                                                             GCancellable          *cancellable,
                                                             GError               **error);
