@@ -86,7 +86,8 @@ testenv:
 	@echo "===== ENTERING TESTENV ====="
 	test_tmpdir=$$(mktemp -d test.XXXXXX) && \
 	  cd $$test_tmpdir && \
-	  TESTENV=1 sh ../tests/utils/setup-session.sh bash && \
+	  env $(AM_TESTS_ENVIRONMENT) TESTENV=1 \
+	    sh ../tests/utils/setup-session.sh bash && \
 	  cd .. && \
 	  rm -rf $$test_tmpdir
 	@echo "===== LEAVING TESTENV ====="
