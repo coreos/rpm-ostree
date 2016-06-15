@@ -40,42 +40,44 @@
 typedef struct {
   RpmostreedTransaction parent;
   char *osname;
-  char **packages;
+  char **packages_added;
+  char **packages_removed;
   RpmOstreeTransactionPkgFlags flags;
-} PkgAddTransaction;
+} PkgChangeTransaction;
 
-typedef RpmostreedTransactionClass PkgAddTransactionClass;
+typedef RpmostreedTransactionClass PkgChangeTransactionClass;
 
-GType pkg_add_transaction_get_type (void);
+GType pkg_change_transaction_get_type (void);
 
-G_DEFINE_TYPE (PkgAddTransaction,
-               pkg_add_transaction,
+G_DEFINE_TYPE (PkgChangeTransaction,
+               pkg_change_transaction,
                RPMOSTREED_TYPE_TRANSACTION)
 
 static void
-pkg_add_transaction_finalize (GObject *object)
+pkg_change_transaction_finalize (GObject *object)
 {
-  PkgAddTransaction *self;
+  PkgChangeTransaction *self;
 
-  self = (PkgAddTransaction *) object;
+  self = (PkgChangeTransaction *) object;
   g_free (self->osname);
-  g_strfreev (self->packages);
+  g_strfreev (self->packages_added);
+  g_strfreev (self->packages_removed);
 
-  G_OBJECT_CLASS (pkg_add_transaction_parent_class)->finalize (object);
+  G_OBJECT_CLASS (pkg_change_transaction_parent_class)->finalize (object);
 }
 
 static gboolean
-pkg_add_transaction_execute (RpmostreedTransaction *transaction,
+pkg_change_transaction_execute (RpmostreedTransaction *transaction,
 			     GCancellable *cancellable,
 			     GError **error)
 {
   gboolean ret = FALSE;
-  PkgAddTransaction *self = NULL;
+  PkgChangeTransaction *self = NULL;
   OstreeSysroot *sysroot = NULL;
   glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
   int flags = RPMOSTREE_SYSROOT_UPGRADER_FLAGS_REDEPLOY;
 
-  self = (PkgAddTransaction *) transaction;
+  self = (PkgChangeTransaction *) transaction;
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
   if (self->flags & RPMOSTREE_TRANSACTION_PKG_FLAG_DRY_RUN)
@@ -93,9 +95,19 @@ pkg_add_transaction_execute (RpmostreedTransaction *transaction,
       goto out;
     }
 
-  if (!rpmostree_sysroot_upgrader_add_packages (upgrader, self->packages,
-                                                cancellable, error))
-    goto out;
+  if (self->packages_removed)
+    {
+      if (!rpmostree_sysroot_upgrader_delete_packages (upgrader, self->packages_removed,
+						       cancellable, error))
+	goto out;
+    }
+
+  if (self->packages_added)
+    {
+      if (!rpmostree_sysroot_upgrader_add_packages (upgrader, self->packages_added,
+						    cancellable, error))
+	goto out;
+    }
 
   if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
     goto out;
@@ -109,38 +121,47 @@ out:
 }
 
 static void
-pkg_add_transaction_class_init (PkgAddTransactionClass *class)
+pkg_change_transaction_class_init (PkgChangeTransactionClass *class)
 {
   GObjectClass *object_class;
 
   object_class = G_OBJECT_CLASS (class);
-  object_class->finalize = pkg_add_transaction_finalize;
+  object_class->finalize = pkg_change_transaction_finalize;
 
-  class->execute = pkg_add_transaction_execute;
+  class->execute = pkg_change_transaction_execute;
 }
 
 static void
-pkg_add_transaction_init (PkgAddTransaction *self)
+pkg_change_transaction_init (PkgChangeTransaction *self)
 {
 }
 
-RpmostreedTransaction *
-rpmostreed_transaction_new_pkg_add (GDBusMethodInvocation *invocation,
-				    OstreeSysroot         *sysroot,
-				    const char            *osname,
-				    const char * const    *packages,
-				    RpmOstreeTransactionPkgFlags flags,
-				    GCancellable          *cancellable,
-				    GError               **error)
+static char **
+strdupv_canonicalize (const char *const *strv)
 {
-  PkgAddTransaction *self;
+  if (strv && *strv)
+    return g_strdupv ((char**)strv);
+  return NULL;
+}
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_pkg_change (GDBusMethodInvocation *invocation,
+				       OstreeSysroot         *sysroot,
+				       const char            *osname,
+				       const char * const    *packages_added,
+				       const char * const    *packages_removed,
+				       RpmOstreeTransactionPkgFlags flags,
+				       GCancellable          *cancellable,
+				       GError               **error)
+{
+  PkgChangeTransaction *self;
 
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
   g_return_val_if_fail (osname != NULL, NULL);
-  g_return_val_if_fail (packages != NULL, NULL);
+  g_return_val_if_fail (packages_added != NULL || packages_removed != NULL, NULL);
 
-  self = g_initable_new (pkg_add_transaction_get_type (),
+  self = g_initable_new (pkg_change_transaction_get_type (),
                          cancellable, error,
                          "invocation", invocation,
                          "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
@@ -149,7 +170,8 @@ rpmostreed_transaction_new_pkg_add (GDBusMethodInvocation *invocation,
   if (self != NULL)
     {
       self->osname = g_strdup (osname);
-      self->packages = g_strdupv ((char**)packages);
+      self->packages_added = strdupv_canonicalize (packages_added);
+      self->packages_removed = strdupv_canonicalize (packages_removed);
       self->flags = flags;
     }
 
