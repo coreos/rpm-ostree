@@ -616,7 +616,7 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
   glnx_fd_close int tmpfiles_fd = -1;
 
   /* Append to an existing one for package layering */
-  if ((tmpfiles_fd = TEMP_FAILURE_RETRY (openat (dest_rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-autovar.conf",
+  if ((tmpfiles_fd = TEMP_FAILURE_RETRY (openat (dest_rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
                                                  O_WRONLY | O_CREAT | O_APPEND | O_NOCTTY, 0644))) == -1)
     {
       glnx_set_error_from_errno (error);
@@ -962,7 +962,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
       }
   }
 
-  g_print ("Adding tmpfiles-ostree-integration.conf\n");
+  g_print ("Adding rpm-ostree-0-integration.conf\n");
   {
     /* This is useful if we're running in an uninstalled configuration, e.g.
      * during tests. */
@@ -971,9 +971,9 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
 
     gs_unref_object GFile *src_pkglibdir = g_file_new_for_path (pkglibdir_path);
     gs_unref_object GFile *src_tmpfilesd =
-      g_file_get_child (src_pkglibdir, "tmpfiles-ostree-integration.conf");
+      g_file_get_child (src_pkglibdir, "rpm-ostree-0-integration.conf");
     gs_unref_object GFile *target_tmpfilesd =
-      g_file_resolve_relative_path (targetroot, "usr/lib/tmpfiles.d/tmpfiles-ostree-integration.conf");
+      g_file_resolve_relative_path (targetroot, "usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf");
     gs_unref_object GFile *target_tmpfilesd_parent = g_file_get_parent (target_tmpfilesd);
 
     if (!gs_file_ensure_directory (target_tmpfilesd_parent, TRUE, cancellable, error))
