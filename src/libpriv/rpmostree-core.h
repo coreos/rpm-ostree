@@ -38,6 +38,10 @@ G_DECLARE_FINAL_TYPE (RpmOstreeInstall, rpmostree_install, RPMOSTREE, INSTALL, G
 RpmOstreeContext *rpmostree_context_new_system (GCancellable *cancellable,
                                                 GError **error);
 
+RpmOstreeContext *rpmostree_context_new_compose (int basedir_dfd,
+                                                 GCancellable *cancellable,
+                                                 GError **error);
+
 RpmOstreeContext *rpmostree_context_new_unprivileged (int basedir_dfd,
                                                       GCancellable *cancellable,
                                                       GError **error);

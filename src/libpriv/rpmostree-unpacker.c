@@ -503,15 +503,15 @@ typedef struct
 } cb_data;
 
 static OstreeRepoCommitFilterResult
-filter_cb (OstreeRepo         *repo,
-           const char         *path,
-           GFileInfo          *file_info,
-           gpointer            user_data)
+compose_filter_cb (OstreeRepo         *repo,
+                   const char         *path,
+                   GFileInfo          *file_info,
+                   gpointer            user_data)
 {
   RpmOstreeUnpacker *self = ((cb_data*)user_data)->self;
   GError **error = ((cb_data*)user_data)->error;
 
-  /* For now we fail if an RPM requires a file to be owned by non-root. The
+  /* In the system case, fail if an RPM requires a file to be owned by non-root. The
    * problem is that RPM provides strings, but ostree records uids/gids. Any
    * mapping we choose would be specific to a certain userdb and thus not
    * portable. To properly support this will probably require switching over to
@@ -545,6 +545,23 @@ filter_cb (OstreeRepo         *repo,
   if (was_null && *error != NULL)
     g_prefix_error (error, "Non-root ownership currently unsupported");
 
+  return OSTREE_REPO_COMMIT_FILTER_ALLOW;
+}
+
+static OstreeRepoCommitFilterResult
+unprivileged_filter_cb (OstreeRepo         *repo,
+                        const char         *path,
+                        GFileInfo          *file_info,
+                        gpointer            user_data)
+{
+  guint32 mode = g_file_info_get_attribute_uint32 (file_info, "unix::mode");
+  /* Fedora changed the directories to not be writable by root for bad
+   * reasons, which isn't useful here since we expect people to slap a
+   * ro bind mount on top, so let's just mark as writable by user.
+   */
+  if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_DIRECTORY)
+    mode |= S_IWUSR;
+  g_file_info_set_attribute_uint32 (file_info, "unix::mode", mode);
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
 
@@ -596,8 +613,14 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
 
   GError *cb_error = NULL;
   cb_data fdata = { self, &cb_error };
+  OstreeRepoCommitFilter filter;
 
-  modifier = ostree_repo_commit_modifier_new (0, filter_cb, &fdata, NULL);
+  if ((self->flags & RPMOSTREE_UNPACKER_FLAGS_UNPRIVILEGED) > 0)
+    filter = unprivileged_filter_cb;
+  else
+    filter = compose_filter_cb;
+
+  modifier = ostree_repo_commit_modifier_new (0, filter, &fdata, NULL);
   ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb,
                                                   NULL, self);
   ostree_repo_commit_modifier_set_sepolicy (modifier, sepolicy);
