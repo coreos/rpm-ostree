@@ -674,7 +674,7 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
     }
 
-  corectx = rpmostree_context_new_unprivileged (self->cachedir_dfd, cancellable, error);
+  corectx = rpmostree_context_new_compose (self->cachedir_dfd, cancellable, error);
   if (!corectx)
     goto out;
 

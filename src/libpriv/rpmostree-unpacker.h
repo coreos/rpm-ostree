@@ -36,9 +36,11 @@ GType rpmostree_unpacker_get_type (void);
 /**
  * RpmOstreeUnpackerFlags:
  * @RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION: Move files to follow ostree convention
+ * @RPMOSTREE_UNPACKER_FLAGS_UNPRIVILEGED: Ignore file ownership and setuid modes
  */
 typedef enum {
-  RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION =  (1 << 0)
+  RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION =  (1 << 0),
+  RPMOSTREE_UNPACKER_FLAGS_UNPRIVILEGED =  (1 << 1)
 } RpmOstreeUnpackerFlags;
 
 RpmOstreeUnpacker*

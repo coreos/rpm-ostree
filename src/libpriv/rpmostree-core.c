@@ -275,6 +275,7 @@ struct _RpmOstreeContext {
   RpmOstreeTreespec *spec;
   HifContext *hifctx;
   OstreeRepo *ostreerepo;
+  gboolean unprivileged;
   char *dummy_instroot_path;
   OstreeSePolicy *sepolicy;
 };
@@ -356,16 +357,19 @@ rpmostree_context_new_system (GCancellable *cancellable,
   return self;
 }
 
-RpmOstreeContext *
-rpmostree_context_new_unprivileged (int           userroot_dfd,
-                                     GCancellable *cancellable,
-                                     GError      **error)
+static RpmOstreeContext *
+rpmostree_context_new_internal (int           userroot_dfd,
+                                gboolean      unprivileged,
+                                GCancellable *cancellable,
+                                GError      **error)
 {
   g_autoptr(RpmOstreeContext) ret = rpmostree_context_new_system (cancellable, error);
   struct stat stbuf;
 
   if (!ret)
     goto out;
+
+  ret->unprivileged = unprivileged;
 
   { g_autofree char *reposdir = glnx_fdrel_abspath (userroot_dfd, "rpmmd.repos.d");
     hif_context_set_repo_dir (ret->hifctx, reposdir);
@@ -406,6 +410,22 @@ rpmostree_context_new_unprivileged (int           userroot_dfd,
   if (ret)
     return g_steal_pointer (&ret);
   return NULL;
+}
+
+RpmOstreeContext *
+rpmostree_context_new_compose (int basedir_dfd,
+                               GCancellable *cancellable,
+                               GError **error)
+{
+  return rpmostree_context_new_internal (basedir_dfd, FALSE, cancellable, error);
+}
+
+RpmOstreeContext *
+rpmostree_context_new_unprivileged (int basedir_dfd,
+                                    GCancellable *cancellable,
+                                    GError **error)
+{
+  return rpmostree_context_new_internal (basedir_dfd, TRUE, cancellable, error);
 }
 
 /* XXX: or put this in new_system() instead? */
@@ -1290,7 +1310,7 @@ rpmostree_context_download (RpmOstreeContext *ctx,
 }
 
 static gboolean
-import_one_package (OstreeRepo     *ostreerepo,
+import_one_package (RpmOstreeContext *self,
                     HifContext     *hifctx,
                     HifPackage     *pkg,
                     OstreeSePolicy *sepolicy,
@@ -1298,6 +1318,7 @@ import_one_package (OstreeRepo     *ostreerepo,
                     GError        **error)
 {
   gboolean ret = FALSE;
+  OstreeRepo *ostreerepo = self->ostreerepo;
   g_autofree char *ostree_commit = NULL;
   glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
   g_autofree char *pkg_path;
@@ -1314,6 +1335,8 @@ import_one_package (OstreeRepo     *ostreerepo,
     }
 
   flags = RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION;
+  if (self->unprivileged)
+    flags |= RPMOSTREE_UNPACKER_FLAGS_UNPRIVILEGED;
 
   /* TODO - tweak the unpacker flags for containers */
   unpacker = rpmostree_unpacker_new_at (AT_FDCWD, pkg_path, flags, error);
@@ -1369,7 +1392,7 @@ rpmostree_context_import (RpmOstreeContext *self,
     for (guint i = 0; i < install->packages_to_import->len; i++)
       {
         HifPackage *pkg = install->packages_to_import->pdata[i];
-        if (!import_one_package (self->ostreerepo, hifctx, pkg,
+        if (!import_one_package (self, hifctx, pkg,
                                  self->sepolicy, cancellable, error))
           goto out;
         hif_state_assert_done (hifstate);
