@@ -1959,11 +1959,15 @@ add_to_transaction (rpmts  ts,
   if (!rpmostree_unpacker_read_metainfo (metadata_fd, &hdr, NULL, NULL, error))
     goto out;
 
+  /* TODO uncomment once upgrade understands this or we implement post
+     handling better */
+#if 0
   if (!noscripts)
     {
       if (!check_package_is_post_posts (hdr, hif_package_get_nevra (pkg), error))
         goto out;
     }
+#endif
 
   r = rpmtsAddInstallElement (ts, hdr, (char*)hif_package_get_nevra (pkg), TRUE, NULL);
   if (r != 0)
