@@ -63,6 +63,7 @@ AC_SEARCH_LIBS([rpmsqSetInterruptSafety], [rpmio],
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
 				     ostree-1 >= 2015.1 libgsystem >= 2015.1
+				     libsystemd
 				     rpm libhif librepo
 				     libarchive])
 save_LIBS=$LIBS
@@ -73,6 +74,11 @@ LIBS=$save_LIBS
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GLIB_TESTS
+
+AC_CHECK_TOOL(GPERF, gperf)
+AS_IF([test -z "$GPERF"],
+  AC_MSG_ERROR([*** gperf not found])
+)
 
 m4_ifdef([GOBJECT_INTROSPECTION_CHECK], [
   GOBJECT_INTROSPECTION_CHECK([1.34.0])

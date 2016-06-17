@@ -80,6 +80,8 @@ gboolean rpmostree_sysroot_upgrader_set_origin_rebase (RpmOstreeSysrootUpgrader 
 void rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self,
                                                      const char *override_commit);
 
+void rpmostree_sysroot_upgrader_set_ignore_scripts (RpmOstreeSysrootUpgrader *self,
+                                                    GHashTable* ignore_scripts);
 gboolean
 rpmostree_sysroot_upgrader_add_packages (RpmOstreeSysrootUpgrader *self,
                                          char                    **new_packages,

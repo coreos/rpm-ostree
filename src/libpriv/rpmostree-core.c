@@ -34,6 +34,7 @@
 #include "rpmostree-core.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-scripts.h"
 #include "rpmostree-unpacker.h"
 #include "rpmostree-output.h"
 
@@ -168,6 +169,9 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   if (!add_canonicalized_string_array (&builder, "instlangs", "instlangs-all", keyfile, error))
     return NULL;
 
+  if (!add_canonicalized_string_array (&builder, "ignore-scripts", "", keyfile, error))
+    return NULL;
+
   { gboolean documentation = TRUE;
     g_autofree char *value = g_key_file_get_value (keyfile, "tree", "documentation", NULL);
 
@@ -274,6 +278,7 @@ struct _RpmOstreeContext {
   
   RpmOstreeTreespec *spec;
   HifContext *hifctx;
+  GHashTable *ignore_scripts;
   OstreeRepo *ostreerepo;
   gboolean unprivileged;
   char *dummy_instroot_path;
@@ -447,6 +452,15 @@ rpmostree_context_set_sepolicy (RpmOstreeContext *self,
   g_set_object (&self->sepolicy, sepolicy);
 }
 
+void
+rpmostree_context_set_ignore_scripts (RpmOstreeContext *self,
+                                      GHashTable   *ignore_scripts)
+{
+  g_clear_pointer (&self->ignore_scripts, g_hash_table_unref);
+  if (ignore_scripts)
+    self->ignore_scripts = g_hash_table_ref (ignore_scripts);
+}
+
 HifContext *
 rpmostree_context_get_hif (RpmOstreeContext *self)
 {
@@ -613,6 +627,17 @@ rpmostree_context_setup (RpmOstreeContext    *self,
     if (!docs)
         hif_transaction_set_flags (hif_context_get_transaction (self->hifctx),
                                    HIF_TRANSACTION_FLAG_NODOCS);
+  }
+
+  { const char *const *ignore_scripts = NULL;
+    if (g_variant_dict_lookup (self->spec->dict, "ignore-scripts", "^a&s", &ignore_scripts))
+      {
+        g_autoptr(GHashTable) ignore_hash = NULL;
+
+        if (!rpmostree_script_ignore_hash_from_strv (ignore_scripts, &ignore_hash, error))
+          goto out;
+        rpmostree_context_set_ignore_scripts (self, ignore_hash);
+      }
   }
 
   ret = TRUE;
@@ -1897,102 +1922,48 @@ ts_callback (const void * h,
   return NULL;
 }
 
-typedef struct {
-    const char *desc;
-    rpmsenseFlags sense;
-    rpmTagVal tag;
-    rpmTagVal progtag;
-    rpmTagVal flagtag;
-} KnownRpmScriptKind;
-
-static const KnownRpmScriptKind known_scripts[] = {
-    { "%prein", 0,
-	RPMTAG_PREIN, RPMTAG_PREINPROG, RPMTAG_PREINFLAGS },
-    { "%preun", 0,
-	RPMTAG_PREUN, RPMTAG_PREUNPROG, RPMTAG_PREUNFLAGS },
-    { "%post", 0,
-	RPMTAG_POSTIN, RPMTAG_POSTINPROG, RPMTAG_POSTINFLAGS },
-    { "%postun", 0,
-	RPMTAG_POSTUN, RPMTAG_POSTUNPROG, RPMTAG_POSTUNFLAGS },
-    { "%pretrans", 0,
-	RPMTAG_PRETRANS, RPMTAG_PRETRANSPROG, RPMTAG_PRETRANSFLAGS },
-    { "%posttrans", 0,
-	RPMTAG_POSTTRANS, RPMTAG_POSTTRANSPROG, RPMTAG_POSTTRANSFLAGS },
-    { "%triggerprein", RPMSENSE_TRIGGERPREIN,
-	RPMTAG_TRIGGERPREIN, 0, 0 },
-    { "%triggerun", RPMSENSE_TRIGGERUN,
-	RPMTAG_TRIGGERUN, 0, 0 },
-    { "%triggerin", RPMSENSE_TRIGGERIN,
-	RPMTAG_TRIGGERIN, 0, 0 },
-    { "%triggerpostun", RPMSENSE_TRIGGERPOSTUN,
-	RPMTAG_TRIGGERPOSTUN, 0, 0 },
-    { "%verify", 0,
-	RPMTAG_VERIFYSCRIPT, RPMTAG_VERIFYSCRIPTPROG, RPMTAG_VERIFYSCRIPTFLAGS},
-};
-
-/*
- * We aren't yet running %posts, so let's not lie and say we support
- * it.
- */
-#if 0
-static gboolean
-check_package_is_post_posts (Header      hdr,
-                             const char *name,
-                             GError    **error)
+static Header
+get_header_for_package (int tmp_metadata_dfd,
+                        HifPackage *pkg,
+                        GError **error)
 {
-  gboolean ret = FALSE;
-  guint i;
-  
-  for (i = 0; i < G_N_ELEMENTS (known_scripts); i++)
-    {
-      rpmTagVal tagval = known_scripts[i].tag;
-      rpmTagVal progtagval = known_scripts[i].progtag;
-
-      if (headerIsEntry (hdr, tagval) || headerIsEntry (hdr, progtagval))
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Package '%s' has (currently) unsupported script of type '%s'",
-                       name, known_scripts[i].desc);
-          goto out;
-        }
-    }
-
-  ret = TRUE;
- out:
-  return ret;
-}
-#endif
-
-static gboolean
-add_to_transaction (rpmts  ts,
-                    HifPackage *pkg,
-                    int tmp_metadata_dfd,
-                    gboolean noscripts,
-                    GError **error)
-{
-  gboolean ret = FALSE;
-  int r;
   Header hdr = NULL;
   glnx_fd_close int metadata_fd = -1;
 
   if ((metadata_fd = openat (tmp_metadata_dfd, hif_package_get_nevra (pkg), O_RDONLY | O_CLOEXEC)) < 0)
     {
       glnx_set_error_from_errno (error);
-      goto out;
+      return NULL;
     }
 
   if (!rpmostree_unpacker_read_metainfo (metadata_fd, &hdr, NULL, NULL, error))
+    return NULL;
+
+  return hdr;
+}
+
+static gboolean
+add_to_transaction (rpmts  ts,
+                    HifPackage *pkg,
+                    int tmp_metadata_dfd,
+                    gboolean noscripts,
+                    GHashTable *ignore_scripts,
+                    GCancellable *cancellable,
+                    GError **error)
+{
+  gboolean ret = FALSE;
+  Header hdr = NULL;
+  int r;
+
+  hdr = get_header_for_package (tmp_metadata_dfd, pkg, error);
+  if (!hdr)
     goto out;
 
-  /* TODO uncomment once upgrade understands this or we implement post
-     handling better */
-#if 0
   if (!noscripts)
     {
-      if (!check_package_is_post_posts (hdr, hif_package_get_nevra (pkg), error))
+      if (!rpmostree_script_txn_validate (pkg, hdr, ignore_scripts, cancellable, error))
         goto out;
     }
-#endif
 
   r = rpmtsAddInstallElement (ts, hdr, (char*)hif_package_get_nevra (pkg), TRUE, NULL);
   if (r != 0)
@@ -2004,6 +1975,32 @@ add_to_transaction (rpmts  ts,
                    hif_package_get_filename (pkg));
       goto out;
     }
+
+  ret = TRUE;
+ out:
+  if (hdr)
+    headerFree (hdr);
+  return ret;
+}
+
+static gboolean
+run_posttrans_sync (int tmp_metadata_dfd,
+                    int rootfs_dfd,
+                    HifPackage *pkg,
+                    GHashTable *ignore_scripts,
+                    GCancellable *cancellable,
+                    GError    **error)
+{
+  gboolean ret = FALSE;
+  Header hdr;
+
+  hdr = get_header_for_package (tmp_metadata_dfd, pkg, error);
+  if (!hdr)
+    goto out;
+
+  if (!rpmostree_posttrans_run_sync (pkg, hdr, ignore_scripts, rootfs_dfd,
+                                     cancellable, error))
+    goto out;
 
   ret = TRUE;
  out:
@@ -2131,7 +2128,9 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                               cancellable, error))
             goto out;
 
-          if (!add_to_transaction (ordering_ts, pkg, tmp_metadata_dfd, noscripts, error))
+          if (!add_to_transaction (ordering_ts, pkg, tmp_metadata_dfd, noscripts,
+                                   self->ignore_scripts,
+                                   cancellable, error))
             goto out;
         }
 
@@ -2215,6 +2214,24 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
 
   rpmostree_output_task_end ("done");
 
+  if (!rpmostree_rootfs_prepare_links (tmprootfs_dfd, cancellable, error))
+    goto out;
+
+  if (!noscripts)
+    {
+      for (i = 0; i < n_rpmts_elements; i++)
+        {
+          rpmte te = rpmtsElement (ordering_ts, i);
+          const char *tekey = rpmteKey (te);
+          HifPackage *pkg = g_hash_table_lookup (nevra_to_pkg, tekey);
+
+          if (!run_posttrans_sync (tmp_metadata_dfd, tmprootfs_dfd, pkg,
+                                   self->ignore_scripts,
+                                   cancellable, error))
+            goto out;
+        }
+    }
+
   g_clear_pointer (&ordering_ts, rpmtsFree);
 
   rpmostree_output_task_begin ("Writing rpmdb");
@@ -2255,7 +2272,10 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
       {
         HifPackage *pkg = k;
 
-        if (!add_to_transaction (rpmdb_ts, pkg, tmp_metadata_dfd, noscripts, error))
+        /* Set noscripts since we already validated them above */
+        if (!add_to_transaction (rpmdb_ts, pkg, tmp_metadata_dfd, TRUE,
+                                 self->ignore_scripts,
+                                 cancellable, error))
           goto out;
       }
   }

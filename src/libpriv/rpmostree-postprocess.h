@@ -32,6 +32,16 @@ rpmostree_treefile_postprocessing (GFile         *rootfs,
                                    GError       **error);
 
 gboolean
+rpmostree_rootfs_symlink_emptydir_at (int rootfs_fd,
+                                      const char *dest,
+                                      const char *src,
+                                      GError **error);
+
+gboolean
+rpmostree_rootfs_prepare_links (int           rootfs_fd,
+                                GCancellable *cancellable,
+                                GError       **error);
+gboolean
 rpmostree_rootfs_postprocess_common (int           rootfs_fd,
                                      GCancellable *cancellable,
                                      GError       **error);

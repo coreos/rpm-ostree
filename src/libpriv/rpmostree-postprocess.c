@@ -866,6 +866,8 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
       goto out;
   }
 
+  if (!rpmostree_rootfs_prepare_links (target_root_dfd, cancellable, error))
+    goto out;
   if (!rpmostree_rootfs_postprocess_common (target_root_dfd, cancellable, error))
     goto out;
 
@@ -1104,6 +1106,87 @@ rename_if_exists (int         dfd,
   return ret;
 }
 
+gboolean
+rpmostree_rootfs_symlink_emptydir_at (int rootfs_fd,
+                                      const char *dest,
+                                      const char *src,
+                                      GError **error)
+{
+  const char *parent = dirname (strdupa (src));
+  struct stat stbuf;
+  gboolean make_symlink = TRUE;
+
+  /* For maximum compatibility, create parent directories too.  This
+   * is necessary when we're doing layering on top of a base commit,
+   * and the /var will be empty.  We should probably consider running
+   * systemd-tmpfiles to setup the temporary /var.
+   */
+  if (parent && strcmp (parent, ".") != 0)
+    {
+      if (!glnx_shutil_mkdir_p_at (rootfs_fd, parent, 0755, NULL, error))
+        return FALSE;
+    }
+
+  if (fstatat (rootfs_fd, src, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
+    {
+      if (errno != ENOENT)
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
+    }
+  else
+    {
+      if (S_ISLNK (stbuf.st_mode))
+        make_symlink = FALSE;
+      else if (S_ISDIR (stbuf.st_mode))
+        {
+          if (unlinkat (rootfs_fd, src, AT_REMOVEDIR) < 0)
+            {
+              glnx_set_prefix_error_from_errno (error, "Removing %s", src);
+              return FALSE;
+            }
+        }
+    }
+
+  if (make_symlink)
+    {
+      if (symlinkat (dest, rootfs_fd, src) < 0)
+        {
+          glnx_set_prefix_error_from_errno (error, "Symlinking %s", src);
+          return FALSE;
+        }
+    }
+  return TRUE;
+}
+
+/**
+ * rpmostree_rootfs_prepare_links:
+ *
+ * Walk over the root filesystem and perform some core conversions
+ * from RPM conventions to OSTree conventions.  For example:
+ *
+ *  - Symlink /usr/local -> /var/usrlocal
+ *  - Symlink /var/lib/alternatives -> /usr/lib/alternatives
+ */
+gboolean
+rpmostree_rootfs_prepare_links (int           rootfs_fd,
+                                GCancellable *cancellable,
+                                GError       **error)
+{
+  if (!glnx_shutil_rm_rf_at (rootfs_fd, "usr/local", cancellable, error))
+    return FALSE;
+  if (!rpmostree_rootfs_symlink_emptydir_at (rootfs_fd, "../var/usrlocal", "usr/local", error))
+    return FALSE;
+
+  if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/lib/alternatives", 0755, cancellable, error))
+    return FALSE;
+  if (!rpmostree_rootfs_symlink_emptydir_at (rootfs_fd, "../../usr/lib/alternatives", "var/lib/alternatives", error))
+    return FALSE;
+
+  return TRUE;
+}
+
 /**
  * rpmostree_rootfs_postprocess_common:
  *
@@ -1111,8 +1194,7 @@ rename_if_exists (int         dfd,
  * from RPM conventions to OSTree conventions.  For example:
  *
  *  - Move /etc to /usr/etc
- *  - Symlink /usr/local -> /var/usrlocal
- *  - Clean up RPM database leftovers and lock files
+ *  - Clean up RPM db leftovers
  */
 gboolean
 rpmostree_rootfs_postprocess_common (int           rootfs_fd,
@@ -1121,17 +1203,7 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
 {
   gboolean ret = FALSE;
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-
-  if (!glnx_shutil_rm_rf_at (rootfs_fd, "usr/local", cancellable, error))
-    goto out;
-
-  if (symlinkat ("../var/usrlocal", rootfs_fd, "usr/local") < 0)
-    {
-      glnx_set_error_from_errno (error);
-      g_prefix_error (error, "Creating usr/local symlink: ");
-      goto out;
-    }
-
+  
   if (!rename_if_exists (rootfs_fd, "etc", "usr/etc", error))
     goto out;
 
