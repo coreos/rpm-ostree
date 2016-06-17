@@ -8,3 +8,6 @@ Type=oneshot
 ExecStart=/usr/bin/autoupdate.sh
 Restrat=True
 RemainAfterExit=True
+
+[install]
+WantedBy=mylti-user.target
