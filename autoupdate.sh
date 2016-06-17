@@ -1,28 +1,20 @@
  #!/bin/bash
+ 
+ #file_Location_/usr/bin/autoupdate.sh
 
-NUM1=1
+NUM=1
 
-while [ $NUM1 -eq 1 ]; do
+while [ $NUM -eq 1 ]; do
 
-	ping -q -w 1 -c 1 `ip r | grep default | cut -d ' ' -f 3` > /dev/null && con || non
+	ping -q -w 1 -c 1 `ip r | grep default | cut -d ' ' -f 3` > /dev/null && conn || nonn
 
-	function con {
-		echo "Updating Starts"
-    sudo rpm-ostree upgrade --check
-    echo "Updating is done"
-    echo " "
-    NUM1=2
-    echo "Trying to reboot os"
-    echo " "
-    echo "Press Enter to Reboot | Press Ctrl + C to exit"
-    read RB 
-    echo "Rebooting"
-    sudo reboot
+	function conn {
+    	sudo rpm-ostree upgrade --check
+    	NUM=2
 	}
 
-	function non {
-		echo "offline"
-		sleep 2
+	function nonn {
+		sleep 60
 	}
 
 done
