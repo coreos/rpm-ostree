@@ -1,0 +1,27 @@
+%{
+#include "config.h"
+#include "rpmostree-scripts.h"
+%}
+struct RpmOstreePackageScriptHandler;
+%language=ANSI-C
+%define slot-name package_script
+%define hash-function-name rpmostree_script_gperf_hash
+%define lookup-function-name rpmostree_script_gperf_lookup
+%readonly-tables
+%omit-struct-type
+%struct-type
+%includes
+%%
+glibc.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
+coreutils.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE  /* workaround for old bug? */
+ca-certificates.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE  /* Looks like legacy... */
+filesystem.pretrans, RPMOSTREE_SCRIPT_ACTION_IGNORE
+libgcc.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
+setup.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
+pinentry.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
+fedora-release.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
+fedora-release.posttrans, RPMOSTREE_SCRIPT_ACTION_IGNORE
+bash.post, RPMOSTREE_SCRIPT_ACTION_TODO_SHELL_POSTTRANS
+glibc-common.post, RPMOSTREE_SCRIPT_ACTION_TODO_SHELL_POSTTRANS
+/* Seems to be another case of legacy workaround */
+gdb.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE

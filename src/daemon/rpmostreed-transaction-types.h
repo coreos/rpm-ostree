@@ -85,6 +85,7 @@ RpmostreedTransaction *
                                                             const char            *osname,
                                                             const char *const     *packages_added,
                                                             const char *const     *packages_removed,
+                                                            const char *const     *ignore_scripts,
 							    RpmOstreeTransactionPkgFlags flags,
                                                             GCancellable          *cancellable,
                                                             GError               **error);

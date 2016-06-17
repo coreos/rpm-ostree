@@ -35,6 +35,7 @@
 #include "rpmostreed-utils.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-scripts.h"
 #include "rpmostree-core.h"
 
 typedef struct {
@@ -42,6 +43,7 @@ typedef struct {
   char *osname;
   char **packages_added;
   char **packages_removed;
+  GHashTable *ignore_scripts;
   RpmOstreeTransactionPkgFlags flags;
 } PkgChangeTransaction;
 
@@ -62,6 +64,7 @@ pkg_change_transaction_finalize (GObject *object)
   g_free (self->osname);
   g_strfreev (self->packages_added);
   g_strfreev (self->packages_removed);
+  g_clear_pointer (&self->ignore_scripts, g_hash_table_unref);
 
   G_OBJECT_CLASS (pkg_change_transaction_parent_class)->finalize (object);
 }
@@ -94,6 +97,9 @@ pkg_change_transaction_execute (RpmostreedTransaction *transaction,
                      "Could not create sysroot upgrader");
       goto out;
     }
+
+  if (self->ignore_scripts)
+    rpmostree_sysroot_upgrader_set_ignore_scripts (upgrader, self->ignore_scripts);
 
   if (self->packages_removed)
     {
@@ -150,11 +156,12 @@ rpmostreed_transaction_new_pkg_change (GDBusMethodInvocation *invocation,
 				       const char            *osname,
 				       const char * const    *packages_added,
 				       const char * const    *packages_removed,
+				       const char * const    *ignore_scripts,
 				       RpmOstreeTransactionPkgFlags flags,
 				       GCancellable          *cancellable,
 				       GError               **error)
 {
-  PkgChangeTransaction *self;
+  glnx_unref_object PkgChangeTransaction *self = NULL;
 
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
@@ -172,8 +179,10 @@ rpmostreed_transaction_new_pkg_change (GDBusMethodInvocation *invocation,
       self->osname = g_strdup (osname);
       self->packages_added = strdupv_canonicalize (packages_added);
       self->packages_removed = strdupv_canonicalize (packages_removed);
+      if (!rpmostree_script_ignore_hash_from_strv (ignore_scripts, &self->ignore_scripts, error))
+	return NULL;
       self->flags = flags;
     }
 
-  return (RpmostreedTransaction *) self;
+  return (RpmostreedTransaction *) g_steal_pointer (&self);
 }

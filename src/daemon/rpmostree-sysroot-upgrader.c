@@ -57,6 +57,7 @@ struct RpmOstreeSysrootUpgrader {
   GKeyFile *origin;
   char *origin_refspec;
   char **requested_packages;
+  GHashTable *ignore_scripts;
   GHashTable *packages_to_add;
   GHashTable *packages_to_delete;
   char *override_csum;
@@ -458,6 +459,14 @@ rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self,
   /* just update self manually rather than re-parsing the whole thing */
   g_free (self->override_csum);
   self->override_csum = g_strdup (override_commit);
+}
+
+void
+rpmostree_sysroot_upgrader_set_ignore_scripts (RpmOstreeSysrootUpgrader *self,
+                                               GHashTable* ignore_scripts)
+{
+  g_clear_pointer (&self->ignore_scripts, g_hash_table_unref);
+  self->ignore_scripts = g_hash_table_ref (ignore_scripts);
 }
 
 const char *
@@ -1115,6 +1124,9 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   if (!rpmostree_context_setup (ctx, tmprootfs, NULL, treespec,
                                 cancellable, error))
     goto out;
+
+  if (self->ignore_scripts)
+    rpmostree_context_set_ignore_scripts (ctx, self->ignore_scripts);
 
   if (!get_pkgcache_repo (repo, &pkgcache_repo, cancellable, error))
     goto out;

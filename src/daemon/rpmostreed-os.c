@@ -715,36 +715,6 @@ out:
   return TRUE;
 }
 
-static RpmOstreeTransactionPkgFlags
-pkg_opts_to_flags (GVariant *options)
-{
-  gboolean v;
-  RpmOstreeTransactionPkgFlags flags = 0;
-  GVariantDict dict;
-
-  g_variant_dict_init (&dict, options);
-  
-  v = FALSE;
-  /* XXX Fail if option type is wrong? */
-  g_variant_dict_lookup (&dict, "reboot", "b", &v);
-  if (v)
-    flags |= RPMOSTREE_TRANSACTION_PKG_FLAG_REBOOT;
-
-  v = FALSE;
-  g_variant_dict_lookup (&dict, "dry-run", "b", &v);
-  if (v)
-    flags |= RPMOSTREE_TRANSACTION_PKG_FLAG_DRY_RUN;
-
-  v = FALSE;
-  g_variant_dict_lookup (&dict, "noscripts", "b", &v);
-  if (v)
-    flags |= RPMOSTREE_TRANSACTION_PKG_FLAG_NOSCRIPTS;
-
-  g_variant_dict_clear (&dict);
-
-  return flags;
-}
-
 static gboolean
 os_handle_pkg_change (RPMOSTreeOS *interface,
 		      GDBusMethodInvocation *invocation,
@@ -758,6 +728,10 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
   glnx_unref_object GCancellable *cancellable = NULL;
   const char *osname;
   GError *local_error = NULL;
+  gboolean v;
+  GVariantDict dict;
+  RpmOstreeTransactionPkgFlags flags = 0;
+  const char *const *ignore_scripts;
 
   /* If a compatible transaction is in progress, share its bus address. */
   transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
@@ -780,14 +754,37 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
 
   osname = rpmostree_os_get_name (interface);
 
+  g_variant_dict_init (&dict, arg_options);
+  v = FALSE;
+  /* XXX Fail if option type is wrong? */
+  g_variant_dict_lookup (&dict, "reboot", "b", &v);
+  if (v)
+    flags |= RPMOSTREE_TRANSACTION_PKG_FLAG_REBOOT;
+
+  v = FALSE;
+  g_variant_dict_lookup (&dict, "dry-run", "b", &v);
+  if (v)
+    flags |= RPMOSTREE_TRANSACTION_PKG_FLAG_DRY_RUN;
+
+  v = FALSE;
+  g_variant_dict_lookup (&dict, "noscripts", "b", &v);
+  if (v)
+    flags |= RPMOSTREE_TRANSACTION_PKG_FLAG_NOSCRIPTS;
+
+  ignore_scripts = NULL;
+  g_variant_dict_lookup (&dict, "ignore-scripts", "^a&s", (char***)&ignore_scripts);
+  
   transaction = rpmostreed_transaction_new_pkg_change (invocation,
 						       ot_sysroot,
 						       osname,
 						       arg_packages_added,
 						       arg_packages_removed,
-						       pkg_opts_to_flags (arg_options),
+						       ignore_scripts,
+						       flags,
 						       cancellable,
 						       &local_error);
+  g_variant_dict_clear (&dict);
+
 
   if (transaction == NULL)
     goto out;

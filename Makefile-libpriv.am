@@ -30,6 +30,8 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-refts.c \
 	src/libpriv/rpmostree-core.c \
 	src/libpriv/rpmostree-core.h \
+	src/libpriv/rpmostree-scripts.c \
+	src/libpriv/rpmostree-scripts.h \
 	src/libpriv/rpmostree-refsack.h \
 	src/libpriv/rpmostree-refsack.c \
 	src/libpriv/rpmostree-cleanup.h \
@@ -57,3 +59,17 @@ librpmostreepriv_la_LIBADD = \
 	libglnx.la \
 	$(CAP_LIBS) \
 	$(NULL)
+
+gperf_gperf_sources = src/libpriv/rpmostree-script-gperf.gperf
+BUILT_SOURCES += $(gperf_gperf_sources:-gperf.gperf=-gperf.c)
+CLEANFILES += $(gperf_gperf_sources:-gperf.gperf=-gperf.c)
+
+nodist_librpmostreepriv_la_SOURCES = src/libpriv/rpmostree-script-gperf.c
+
+AM_V_GPERF = $(AM_V_GPERF_$(V))
+AM_V_GPERF_ = $(AM_V_GPERF_$(AM_DEFAULT_VERBOSITY))
+AM_V_GPERF_0 = @echo "  GPERF   " $@;
+
+src/%.c: src/%.gperf Makefile
+	$(AM_V_at)$(MKDIR_P) $(dir $@)
+	$(AM_V_GPERF)$(GPERF) < $< > $@.tmp && mv $@.tmp $@
