@@ -261,6 +261,10 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 
   hif_context_set_repo_dir (hifctx, gs_file_get_path_cached (contextdir));
 
+  /* By default, retain packages in addition to metadata with --cachedir */
+  if (opt_cachedir)
+    hif_context_set_keep_cache (hifctx, TRUE);
+
   g_key_file_set_string (treespec, "tree", "ref", self->ref);
   g_key_file_set_string_list (treespec, "tree", "packages", (const char *const*)packages, g_strv_length (packages));
 
