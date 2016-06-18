@@ -248,6 +248,17 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (opt_proxy)
     hif_context_set_http_proxy (hifctx, opt_proxy);
 
+  /* Hack this here... see https://github.com/rpm-software-management/libhif/issues/53
+   * but in the future we won't be using librpm at all for unpack/scripts, so it won't
+   * matter.
+   */
+  { const char *debuglevel = getenv ("RPMOSTREE_RPM_VERBOSITY");
+    if (!debuglevel)
+      debuglevel = "info";
+    hif_context_set_rpm_verbosity (hifctx, debuglevel);
+    rpmlogSetFile(NULL);
+  }
+
   hif_context_set_repo_dir (hifctx, gs_file_get_path_cached (contextdir));
 
   g_key_file_set_string (treespec, "tree", "ref", self->ref);
