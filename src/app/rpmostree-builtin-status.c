@@ -102,7 +102,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
     }
   else
     g_print ("State: idle\n");
-  g_print ("\n");
+  g_print ("Deployments:\n");
 
   if (booted_deployment)
     g_assert (g_variant_lookup (booted_deployment, "id", "&s", &booted_id));
