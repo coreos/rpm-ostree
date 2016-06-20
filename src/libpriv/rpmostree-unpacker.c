@@ -502,6 +502,20 @@ typedef struct
   GError  **error;
 } cb_data;
 
+/* See this bug:
+ * https://bugzilla.redhat.com/show_bug.cgi?id=517575
+ */
+static void
+workaround_fedora_rpm_permissions (GFileInfo *file_info)
+{
+  if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_DIRECTORY)
+    {
+      guint32 mode = g_file_info_get_attribute_uint32 (file_info, "unix::mode");
+      mode |= S_IWUSR;
+      g_file_info_set_attribute_uint32 (file_info, "unix::mode", mode);
+    }
+}
+
 static OstreeRepoCommitFilterResult
 compose_filter_cb (OstreeRepo         *repo,
                    const char         *path,
@@ -545,6 +559,8 @@ compose_filter_cb (OstreeRepo         *repo,
   if (was_null && *error != NULL)
     g_prefix_error (error, "Non-root ownership currently unsupported");
 
+  workaround_fedora_rpm_permissions (file_info);
+
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
 
@@ -554,14 +570,7 @@ unprivileged_filter_cb (OstreeRepo         *repo,
                         GFileInfo          *file_info,
                         gpointer            user_data)
 {
-  guint32 mode = g_file_info_get_attribute_uint32 (file_info, "unix::mode");
-  /* Fedora changed the directories to not be writable by root for bad
-   * reasons, which isn't useful here since we expect people to slap a
-   * ro bind mount on top, so let's just mark as writable by user.
-   */
-  if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_DIRECTORY)
-    mode |= S_IWUSR;
-  g_file_info_set_attribute_uint32 (file_info, "unix::mode", mode);
+  workaround_fedora_rpm_permissions (file_info);
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
 
