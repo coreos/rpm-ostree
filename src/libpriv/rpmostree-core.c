@@ -1934,6 +1934,7 @@ static const KnownRpmScriptKind known_scripts[] = {
  * We aren't yet running %posts, so let's not lie and say we support
  * it.
  */
+#if 0
 static gboolean
 check_package_is_post_posts (Header      hdr,
                              const char *name,
@@ -1960,6 +1961,7 @@ check_package_is_post_posts (Header      hdr,
  out:
   return ret;
 }
+#endif
 
 static gboolean
 add_to_transaction (rpmts  ts,
