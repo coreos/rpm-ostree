@@ -11,7 +11,7 @@ buildimg:
 
 build:
 	$(BUILDER_RUN) ./autogen.sh --prefix=/usr --libdir=/usr/lib64
-	$(BUILDER_RUN) make -j 4
+	$(BUILDER_RUN) sh -c 'make clean && make -j 4'
 
 install: build
 	sudo sh checkout.sh
