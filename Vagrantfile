@@ -15,7 +15,7 @@ Vagrant.configure(2) do |config|
     end
 
     config.vm.provision "ansible" do |ansible|
-      ansible.playbook = "tests/vmcheck/setup.yml"
+      ansible.playbook = "vagrant/setup.yml"
       ansible.host_key_checking = false
       ansible.extra_vars = { ansible_ssh_user: 'vagrant' }
       ansible.raw_ssh_args = ['-o ControlMaster=no']
