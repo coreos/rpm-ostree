@@ -10,7 +10,6 @@ License: GPL+
 Group: Development/Tools
 URL: http://foo.bar.com
 BuildArch: x86_64
-BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 
 %description
 %{summary}
@@ -18,6 +17,16 @@ BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 %prep
 
 %build
+cat > empty.c << EOF
+int
+_start ()
+{
+  __asm__ __volatile__ ("mov \$1, %eax");
+  __asm__ __volatile__ ("mov \$0, %ebx\n");
+  __asm__ __volatile__ ("int \$0x80\n");
+}
+EOF
+cc -nostdlib empty.c -o empty
 
 %install
 mkdir -p %{buildroot}/boot
@@ -58,5 +67,3 @@ rm -rf %{buildroot}
 %changelog
 * Tue Mar 17 2015  Giuseppe Scrivano <gscrivan@redhat.com> 1.0-1
 - First Build
-
-EOF

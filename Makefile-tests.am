@@ -7,36 +7,47 @@ AM_TESTS_ENVIRONMENT = \
 	commondir=$(abs_top_srcdir)/tests/common
 
 CLEANFILES += \
-	tests/common/compose/yum/empty \
 	tests/common/compose/yum/repodata/repomd.xml \
 	tests/common/compose/test-repo.repo \
 	tests/common/compose/yum/repodata/*.bz2 \
 	tests/common/compose/yum/repodata/*.gz \
 	$(NULL)
 
-# Needed by the compose test
-tests/common/compose/yum/empty: tests/common/compose/yum/empty.c
-	$(CC) -nostdlib  $< -o $@
+testpackages = \
+	tests/common/compose/yum/x86_64/empty-1.0-1.x86_64.rpm \
+	tests/common/compose/yum/x86_64/foo-1.0-1.x86_64.rpm \
+	$(NULL)
 
-tests/common/compose/yum/repodata/repomd.xml: tests/common/compose/yum/empty tests/common/compose/yum/empty.spec
+# Create a rule for each testpkg with their respective spec file as dep.
+# The static pattern feature is almost a fit for this, but does not allow string
+# substitutions and wildcards in the patterns to allow rpm-filename -->
+# spec-filename without also encoding the arch, release, and rev.
+define testpkgbuild_template =
+$(1): tests/common/compose/yum/$(2).spec
 	(cd tests/common/compose/yum && \
-	 rpmbuild \
-	    --define "_sourcedir $(abs_top_srcdir)/tests/common/compose/yum" \
-	    --define "_specdir $(abs_top_srcdir)/tests/common/compose/yum" \
-	    --define "_builddir $(abs_top_srcdir)/tests/common/compose/yum" \
-	    --define "_srcrpmdir $(abs_top_srcdir)/tests/common/compose/yum" \
-	    --define "_rpmdir $(abs_top_srcdir)/tests/common/compose/yum" \
-	    --define "_buildrootdir $(abs_top_srcdir)/tests/common/compose/yum/.build" \
-	    -ba empty.spec && \
-	 rm *.src.rpm && \
-	 createrepo_c --no-database $(abs_top_srcdir)/tests/common/compose/yum/)
+	 rm -rf .build && \
+	 rpmbuild -ba $$$$(basename $$<) \
+	   --define "_sourcedir    $$$$PWD" \
+	   --define "_specdir      $$$$PWD" \
+	   --define "_builddir     $$$$PWD/.build" \
+	   --define "_srcrpmdir    $$$$PWD" \
+	   --define "_rpmdir       $$$$PWD" \
+	   --define "_buildrootdir $$$$PWD" && \
+	 rm -rf .build && \
+	 rm -f  *.src.rpm)
+endef
+
+$(foreach pkg,$(testpackages),$(eval $(call testpkgbuild_template,$(pkg),$(shell basename $(pkg) | cut -d- -f1))))
+
+tests/common/compose/yum/repodata/repomd.xml: $(testpackages)
+	(cd tests/common/compose/yum && \
+	 createrepo_c --no-database $$PWD)
 
 tests/common/compose/test-repo.repo: tests/common/compose/test-repo.repo.in tests/common/compose/yum/repodata/repomd.xml
 	cat $< | sed -e "s|%WHERE%|$(abs_top_srcdir)|" > $@
 
 CLEANFILES += \
 	tests/common/compose/test-repo-local.repo \
-	tests/common/compose/yum/empty-1.0-1.src.rpm \
 	$(NULL)
 
 tests_check_jsonutil_CPPFLAGS = -I $(srcdir)/src/libpriv
