@@ -14,22 +14,22 @@ CLEANFILES += \
 	tests/common/compose/yum/repodata/*.gz \
 	$(NULL)
 
-# Needed by the compose test
-tests/common/compose/yum/empty: tests/common/compose/yum/empty.c
-	$(CC) -nostdlib  $< -o $@
-
-tests/common/compose/yum/repodata/repomd.xml: tests/common/compose/yum/empty tests/common/compose/yum/empty.spec
+build-test-packages: tests/common/compose/yum/*.spec
 	(cd tests/common/compose/yum && \
-	 rpmbuild \
-	    --define "_sourcedir $(abs_top_srcdir)/tests/common/compose/yum" \
-	    --define "_specdir $(abs_top_srcdir)/tests/common/compose/yum" \
-	    --define "_builddir $(abs_top_srcdir)/tests/common/compose/yum" \
-	    --define "_srcrpmdir $(abs_top_srcdir)/tests/common/compose/yum" \
-	    --define "_rpmdir $(abs_top_srcdir)/tests/common/compose/yum" \
-	    --define "_buildrootdir $(abs_top_srcdir)/tests/common/compose/yum/.build" \
-	    -ba empty.spec && \
-	 rm *.src.rpm && \
-	 createrepo_c --no-database $(abs_top_srcdir)/tests/common/compose/yum/)
+	 rm -rf .build && \
+	 rpmbuild -ba $$(basename $<) \
+	   --define "_sourcedir    $$PWD" \
+	   --define "_specdir      $$PWD" \
+	   --define "_builddir     $$PWD/.build" \
+	   --define "_srcrpmdir    $$PWD" \
+	   --define "_rpmdir       $$PWD" \
+	   --define "_buildrootdir $$PWD" && \
+	 rm -rf .build && \
+	 rm -f  *.src.rpm)
+
+tests/common/compose/yum/repodata/repomd.xml: build-test-packages
+	(cd tests/common/compose/yum && \
+	 createrepo_c --no-database $$PWD)
 
 tests/common/compose/test-repo.repo: tests/common/compose/test-repo.repo.in tests/common/compose/yum/repodata/repomd.xml
 	cat $< | sed -e "s|%WHERE%|$(abs_top_srcdir)|" > $@
