@@ -37,10 +37,9 @@ _cleanup_tmpdir () {
     fi
 }
 
-# If we're running as a local test (i.e. through `make check`), then
-# UNINSTALLEDTESTS=1. Otherwise (i.e. as an installed test), it's undefined, in
-# which case we're already in a tmpdir.
-if test -n "${UNINSTALLEDTESTS:-}" && ! test -f $PWD/.test; then
+# Create a tmpdir if we're running as a local test (i.e. through `make check`)
+# or as a `vmcheck` test, which also needs some scratch space on the host.
+if ( test -n "${UNINSTALLEDTESTS:-}" || test -n "${VMTESTS:-}" ) && ! test -f $PWD/.test; then
    test_tmpdir=$(mktemp -d test.XXXXXX)
    touch ${test_tmpdir}/.test
    trap _cleanup_tmpdir EXIT
