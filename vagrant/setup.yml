@@ -2,21 +2,25 @@
 - hosts: all
   become: yes
   tasks:
-    - command: ostree remote add --set=gpg-verify=false centos-atomic-continuous https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/ostree/repo/
+    - name: add CAHC ostree remote
+      command: >
+        ostree remote add --set=gpg-verify=false centos-atomic-continuous
+        https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/ostree/repo/
       args:
         creates: /etc/ostree/remotes.d/centos-atomic-continuous.conf
 
     # Experimenting with this as a potential new name.
-    - name: Link nxs -> rpm-ostree
+    - name: link nxs -> rpm-ostree
       file: src=/usr/bin/rpm-ostree dest=/usr/local/bin/nxs owner=0 group=0 state=link
 
-    - command: docker inspect rpm-ostree-builder
+    - name: check for builder image
+      command: docker inspect rpm-ostree-builder
       failed_when: False
       changed_when: False
       register: inspect
 
-    - name: build buildimg
+    - name: build builder image
       command: make buildimg
       args:
-        chdir: sync/tests/vmcheck
+        chdir: sync/vagrant
       when: inspect.rc != 0
