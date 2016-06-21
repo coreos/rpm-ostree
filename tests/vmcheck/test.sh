@@ -7,6 +7,7 @@ echo "  ControlMaster auto" >> ssh-config
 echo "  ControlPath $PWD/ssh.sock" >> ssh-config
 echo "  ControlPersist yes" >> ssh-config
 export SSH="ssh -F $PWD/ssh-config vmcheck"
+export SCP="scp -F $PWD/ssh-config"
 
 # stand up ssh connection and sanity check that it all works
 if ! $SSH true &> /dev/null; then
