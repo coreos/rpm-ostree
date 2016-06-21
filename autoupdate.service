@@ -9,5 +9,5 @@ ExecStart=/usr/local/bin/autoupdate.sh
 Restrat=True
 RemainAfterExit=True
 
-[install]
+[Install]
 WantedBy=mylti-user.target
