@@ -70,17 +70,25 @@ check-local:
 	@echo "  *** NOTE ***"
 
 vmbuild:
-	vagrant up # provision if not already done
-	vagrant rsync
-	vagrant ssh -c "cd sync/tests/vmcheck && make install VERSION=$$(git describe)"
-	vagrant ssh -c "sudo systemctl reboot" || :
-
-vmcheck: vmbuild
-	true # start test harness here
+	@if [ -z "$(SKIP_VMBUILD)" ]; then \
+	  vagrant up && \
+	  vagrant rsync && \
+	  vagrant ssh -c "cd sync/vagrant && \
+	                  make install VERSION=$$(git describe)" && \
+	  ( vagrant ssh -c "sudo systemctl reboot" || : ) && \
+	  sleep 2; \
+	fi
 
 vmshell: vmbuild
-	sleep 3 # give time to VM to close ssh port
 	vagrant ssh
+
+# set up test environment to somewhat resemble uninstalled tests
+vmcheck: vmbuild
+	@env VMTESTS=1 \
+	    builddir="$(abs_builddir)" \
+	    topsrcdir="$(abs_top_srcdir)" \
+	    commondir="$(abs_top_srcdir)/tests/common" \
+	        sh tests/vmcheck/test.sh
 
 testenv:
 	@echo "===== ENTERING TESTENV ====="
