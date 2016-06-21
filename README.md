@@ -68,8 +68,13 @@ More documentation
 
 New! See the docs online at [Read The Docs (rpm-ostree)](https://rpm-ostree.readthedocs.org/en/latest/ )
 
+Hacking
+-------
+
+See [Hacking](HACKING.md).
+
 Contributing
 ------------
 
-See [Contributing](CONTRIBUTING.md).
+See [Contributing](docs/CONTRIBUTING.md).
 

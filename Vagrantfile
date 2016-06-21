@@ -1,6 +1,6 @@
 # vi: set ft=ruby :
 
-# See `tests/vmcheck/README.md` for more information on this.
+# See `HACKING.md` for more information on this.
 
 Vagrant.configure(2) do |config|
     config.vm.box = "centos/atomic-host"
