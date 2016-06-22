@@ -21,7 +21,7 @@ Vagrant.configure(2) do |config|
     # containers)
     config.vm.synced_folder ".", "/home/vagrant/sync", disabled: true
     config.vm.synced_folder ".", "/root/sync", type: "rsync",
-      rsync__exclude: [".git/"]
+      rsync__exclude: [".git/", "vagrant/*.tar.gz"]
 
     config.vm.provider "libvirt" do |libvirt, override|
       libvirt.cpus = 2

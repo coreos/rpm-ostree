@@ -1,5 +1,6 @@
 ---
 - hosts: all
+  gather_facts: no
   become: yes
   tasks:
     - name: add CAHC ostree remote
@@ -13,14 +14,55 @@
     - name: link nxs -> rpm-ostree
       file: src=/usr/bin/rpm-ostree dest=/usr/local/bin/nxs owner=0 group=0 state=link
 
+    # add a little bit of storage (default is 3G) or docker save complains
+    - name: resize root
+      shell: lvresize -L 4G -r /dev/atomicos/root && touch /root/.resized
+      args:
+        creates: /root/.resized
+
     - name: check for builder image
       command: docker inspect rpm-ostree-builder
       failed_when: False
       changed_when: False
       register: inspect
 
+    - name: check for local cache of builder image
+      local_action: stat path=vagrant/buildimg.tar.gz
+      register: cache
+      become: no
+
+    - set_fact:
+        # the image is available on the guest
+        on_guest: "{{ inspect.rc == 0 | bool }}"
+        # the image is available on the host
+        on_host: "{{ cache.stat.isreg is defined and cache.stat.isreg | bool }}"
+
+    # sync them up, building if necessary
+
+    # XXX: this is just a stopgap, we should also make it easy to update the
+    # container without having to rebuild it completely
+
+    - name: copy cached builder image
+      copy: src=buildimg.tar.gz dest=/tmp
+      when: not on_guest and on_host
+
+    - name: import cached builder image
+      shell: gunzip -c /tmp/buildimg.tar.gz | docker load
+      when: not on_guest and on_host
+
     - name: build builder image
       command: make buildimg
       args:
         chdir: sync/vagrant
-      when: inspect.rc != 0
+      when: not on_guest and not on_host
+
+    - name: export builder image
+      shell: docker save rpm-ostree-builder | gzip -c > /tmp/buildimg.tar.gz
+      when: not on_host
+      args:
+        creates: /tmp/buildimg.tar.gz
+
+    - name: fetch cached builder image
+      fetch: src=/tmp/buildimg.tar.gz dest=. flat=true
+      when: not on_host
+      become: no
