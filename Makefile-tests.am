@@ -7,14 +7,18 @@ AM_TESTS_ENVIRONMENT = \
 	commondir=$(abs_top_srcdir)/tests/common
 
 CLEANFILES += \
-	tests/common/compose/yum/empty \
 	tests/common/compose/yum/repodata/repomd.xml \
 	tests/common/compose/test-repo.repo \
 	tests/common/compose/yum/repodata/*.bz2 \
 	tests/common/compose/yum/repodata/*.gz \
 	$(NULL)
 
-build-test-packages: tests/common/compose/yum/*.spec
+testpackages = \
+	tests/common/compose/yum/x86_64/empty-1.0-1.x86_64.rpm \
+	tests/common/compose/yum/x86_64/foo-1.0-1.x86_64.rpm \
+	$(NULL)
+
+$(testpackages): tests/common/compose/yum/x86_64/%-1.0-1.x86_64.rpm: tests/common/compose/yum/%.spec
 	(cd tests/common/compose/yum && \
 	 rm -rf .build && \
 	 rpmbuild -ba $$(basename $<) \
@@ -27,7 +31,7 @@ build-test-packages: tests/common/compose/yum/*.spec
 	 rm -rf .build && \
 	 rm -f  *.src.rpm)
 
-tests/common/compose/yum/repodata/repomd.xml: build-test-packages
+tests/common/compose/yum/repodata/repomd.xml: $(testpackages)
 	(cd tests/common/compose/yum && \
 	 createrepo_c --no-database $$PWD)
 
@@ -36,7 +40,6 @@ tests/common/compose/test-repo.repo: tests/common/compose/test-repo.repo.in test
 
 CLEANFILES += \
 	tests/common/compose/test-repo-local.repo \
-	tests/common/compose/yum/empty-1.0-1.src.rpm \
 	$(NULL)
 
 tests_check_jsonutil_CPPFLAGS = -I $(srcdir)/src/libpriv
