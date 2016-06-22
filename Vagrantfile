@@ -8,6 +8,21 @@ Vagrant.configure(2) do |config|
     config.vm.define "vmcheck" do |vmcheck|
     end
 
+    # It's just easier to have ssh set up as root from the start so that tests
+    # don't need to sudo, which can sometimes cause issues. If we need to test
+    # any unprivileged things, we can still just sudo back into the vagrant
+    # user.
+    config.ssh.username = 'root'
+    config.ssh.password = 'vagrant'
+    config.ssh.insert_key = 'true'
+
+    # turn off the default rsync in the vagrant box and replace by one that
+    # places it directly to root (and also skip sync'ing .git and any cached
+    # containers)
+    config.vm.synced_folder ".", "/home/vagrant/sync", disabled: true
+    config.vm.synced_folder ".", "/root/sync", type: "rsync",
+      rsync__exclude: [".git/"]
+
     config.vm.provider "libvirt" do |libvirt, override|
       libvirt.cpus = 2
       libvirt.memory = 2048
@@ -17,7 +32,9 @@ Vagrant.configure(2) do |config|
     config.vm.provision "ansible" do |ansible|
       ansible.playbook = "vagrant/setup.yml"
       ansible.host_key_checking = false
-      ansible.extra_vars = { ansible_ssh_user: 'vagrant' }
+      ansible.extra_vars = { ansible_ssh_user: 'root' }
       ansible.raw_ssh_args = ['-o ControlMaster=no']
+      # for debugging the ansible playbook
+      #ansible.raw_arguments = ['-v']
     end
 end
