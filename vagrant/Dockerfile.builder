@@ -5,8 +5,5 @@ RUN yum -y install yum-plugin-priorities sudo && \
       grep gzip info make patch redhat-rpm-config rpm-build sed shadow-utils tar unzip util-linux \
       which xz python gcc \
     && yum-builddep -y rpm-ostree
-RUN groupadd -g 1000 vagrant && useradd -u 1000 -g vagrant -G wheel vagrant
-RUN echo "%wheel	ALL=(ALL)	NOPASSWD: ALL" >> /etc/sudoers
-LABEL RUN "/usr/bin/docker run --privileged -ti -v /var/home:/home -v /etc:/host/etc -v /usr:/host/usr \${IMAGE}"
-USER vagrant
-WORKDIR /home/vagrant/sync
+LABEL RUN "/usr/bin/docker run --privileged -ti -v /var/roothome:/root -v /etc:/host/etc -v /usr:/host/usr \${IMAGE}"
+WORKDIR /root/sync
