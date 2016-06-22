@@ -18,18 +18,26 @@ testpackages = \
 	tests/common/compose/yum/x86_64/foo-1.0-1.x86_64.rpm \
 	$(NULL)
 
-$(testpackages): tests/common/compose/yum/x86_64/%-1.0-1.x86_64.rpm: tests/common/compose/yum/%.spec
+# Create a rule for each testpkg with their respective spec file as dep.
+# The static pattern feature is almost a fit for this, but does not allow string
+# substitutions and wildcards in the patterns to allow rpm-filename -->
+# spec-filename without also encoding the arch, release, and rev.
+define testpkgbuild_template =
+$(1): tests/common/compose/yum/$(2).spec
 	(cd tests/common/compose/yum && \
 	 rm -rf .build && \
-	 rpmbuild -ba $$(basename $<) \
-	   --define "_sourcedir    $$PWD" \
-	   --define "_specdir      $$PWD" \
-	   --define "_builddir     $$PWD/.build" \
-	   --define "_srcrpmdir    $$PWD" \
-	   --define "_rpmdir       $$PWD" \
-	   --define "_buildrootdir $$PWD" && \
+	 rpmbuild -ba $$$$(basename $$<) \
+	   --define "_sourcedir    $$$$PWD" \
+	   --define "_specdir      $$$$PWD" \
+	   --define "_builddir     $$$$PWD/.build" \
+	   --define "_srcrpmdir    $$$$PWD" \
+	   --define "_rpmdir       $$$$PWD" \
+	   --define "_buildrootdir $$$$PWD" && \
 	 rm -rf .build && \
 	 rm -f  *.src.rpm)
+endef
+
+$(foreach pkg,$(testpackages),$(eval $(call testpkgbuild_template,$(pkg),$(shell basename $(pkg) | cut -d- -f1))))
 
 tests/common/compose/yum/repodata/repomd.xml: $(testpackages)
 	(cd tests/common/compose/yum && \
