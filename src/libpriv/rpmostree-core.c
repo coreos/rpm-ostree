@@ -2214,7 +2214,6 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
     }
 
   rpmostree_output_task_end ("done");
-  rpmostree_output_percent_progress_end ();
 
   g_clear_pointer (&ordering_ts, rpmtsFree);
 
