@@ -52,44 +52,23 @@ get_args_variant (void)
   return g_variant_dict_end (&dict);
 }
 
-int
-rpmostree_builtin_pkg_delete (int            argc,
-                              char         **argv,
-                              GCancellable  *cancellable,
-                              GError       **error)
+static int
+pkg_change (RPMOSTreeSysroot *sysroot_proxy,
+            const char *const* packages_to_add,
+            const char *const* packages_to_remove,
+            GCancellable  *cancellable,
+            GError       **error)
 {
   int exit_status = EXIT_FAILURE;
-  GOptionContext *context;
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autoptr(GVariant) default_deployment = NULL;
   g_autofree char *transaction_address = NULL;
-  int i;
-  g_autoptr(GPtrArray) argv_empty = g_ptr_array_new ();
-  g_autoptr(GPtrArray) argv_and_null = g_ptr_array_new ();
+  const char *const strv_empty[] = { NULL };
 
-  context = g_option_context_new ("PACKAGE [PACKAGE...] - Remove previously layered RPM packages");
-
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_NONE,
-                                       cancellable,
-                                       &sysroot_proxy,
-                                       error))
-    goto out;
-
-  if (argc < 2)
-    {
-      rpmostree_usage_error (context, "At least one PACKAGE must be specified", error);
-      goto out;
-    }
-
-  for (i = 1; i < argc; i++)
-    g_ptr_array_add (argv_and_null, argv[i]);
-  g_ptr_array_add (argv_and_null, NULL);
-
-  g_ptr_array_add (argv_empty, NULL);
+  if (!packages_to_add)
+    packages_to_add = strv_empty;
+  if (!packages_to_remove)
+    packages_to_remove = strv_empty;
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
@@ -97,8 +76,8 @@ rpmostree_builtin_pkg_delete (int            argc,
 
   if (!rpmostree_os_call_pkg_change_sync (os_proxy,
                                           get_args_variant (),
-                                          (const char * const*)argv_empty->pdata,
-                                          (const char * const*)argv_and_null->pdata,
+                                          packages_to_add,
+                                          packages_to_remove,
                                           &transaction_address,
                                           cancellable,
                                           error))
@@ -116,7 +95,10 @@ rpmostree_builtin_pkg_delete (int            argc,
     }
   else if (!opt_reboot)
     {
-      const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
+      const char *sysroot_path;
+
+
+      sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
 
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
@@ -133,4 +115,72 @@ out:
   rpmostree_cleanup_peer ();
 
   return exit_status;
+}
+
+int
+rpmostree_builtin_pkg_add (int            argc,
+                           char         **argv,
+                           GCancellable  *cancellable,
+                           GError       **error)
+{
+  GOptionContext *context;
+  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
+  g_autoptr(GPtrArray) packages_to_add = g_ptr_array_new ();
+
+  context = g_option_context_new ("PACKAGE [PACKAGE...] - Download and install layered RPM packages");
+
+  if (!rpmostree_option_context_parse (context,
+                                       option_entries,
+                                       &argc, &argv,
+                                       RPM_OSTREE_BUILTIN_FLAG_NONE,
+                                       cancellable,
+                                       &sysroot_proxy,
+                                       error))
+    return EXIT_FAILURE;
+
+  if (argc < 2)
+    {
+      rpmostree_usage_error (context, "At least one PACKAGE must be specified", error);
+      return EXIT_FAILURE;
+    }
+
+  for (int i = 1; i < argc; i++)
+    g_ptr_array_add (packages_to_add, argv[i]);
+  g_ptr_array_add (packages_to_add, NULL);
+
+  return pkg_change (sysroot_proxy, (const char *const*)packages_to_add->pdata, NULL, cancellable, error);
+}
+
+int
+rpmostree_builtin_pkg_remove (int            argc,
+                              char         **argv,
+                              GCancellable  *cancellable,
+                              GError       **error)
+{
+  GOptionContext *context;
+  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
+  g_autoptr(GPtrArray) packages_to_remove = g_ptr_array_new ();
+
+  context = g_option_context_new ("PACKAGE [PACKAGE...] - Remove one or more overlay packages");
+
+  if (!rpmostree_option_context_parse (context,
+                                       option_entries,
+                                       &argc, &argv,
+                                       RPM_OSTREE_BUILTIN_FLAG_NONE,
+                                       cancellable,
+                                       &sysroot_proxy,
+                                       error))
+    return EXIT_FAILURE;
+
+  if (argc < 2)
+    {
+      rpmostree_usage_error (context, "At least one PACKAGE must be specified", error);
+      return EXIT_FAILURE;
+    }
+
+  for (int i = 1; i < argc; i++)
+    g_ptr_array_add (packages_to_remove, argv[i]);
+  g_ptr_array_add (packages_to_remove, NULL);
+
+  return pkg_change (sysroot_proxy, NULL, (const char *const*)packages_to_remove->pdata, cancellable, error);
 }
