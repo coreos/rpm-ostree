@@ -214,8 +214,6 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   id = rpmostreed_deployment_generate_id (deployment);
 
   rpmostreed_deployment_get_refspec_packages (deployment, &origin_refspec, &origin_packages);
-  if (origin_refspec)
-    sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, csum);
 
   g_variant_dict_init (&dict, NULL);
 
@@ -229,7 +227,11 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
       const char *parent = ostree_commit_get_parent (commit);
       g_assert (parent);
       g_variant_dict_insert (&dict, "base-checksum", "s", parent);
+      if (origin_refspec)
+	sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, parent);
     }
+  else if (origin_refspec)
+    sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, csum);
 
   variant_add_commit_details (&dict, commit);
   if (origin_refspec != NULL)
