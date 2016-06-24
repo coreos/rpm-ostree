@@ -80,12 +80,10 @@ static gboolean
 status_generic (RPMOSTreeSysroot *sysroot_proxy,
                 RPMOSTreeOS *os_proxy,
                 GVariant       *deployments,
-                GVariant       *booted_deployment,
                 GCancellable   *cancellable,
                 GError        **error)
 {
   GVariantIter iter;
-  const char *booted_id = NULL;
   gboolean first = TRUE;
   const int is_tty = isatty (1);
   const char *bold_prefix = is_tty ? "\x1b[1m" : "";
@@ -103,9 +101,6 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
   else
     g_print ("State: idle\n");
   g_print ("Deployments:\n");
-
-  if (booted_deployment)
-    g_assert (g_variant_lookup (booted_deployment, "id", "&s", &booted_id));
 
   g_variant_iter_init (&iter, deployments);
 
@@ -174,7 +169,8 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       else
         g_print ("\n");
 
-      is_booted = g_strcmp0 (booted_id, id) == 0;
+      if (!g_variant_dict_lookup (dict, "booted", "b", &is_booted))
+        is_booted = FALSE;
 
       g_print ("%s ", is_booted ? libsd_special_glyph (BLACK_CIRCLE) : " ");
 
@@ -248,7 +244,6 @@ rpmostree_builtin_status (int             argc,
   GOptionContext *context = g_option_context_new ("- Get the version of the booted system");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GVariant) booted_deployment = NULL;
   g_autoptr(GVariant) deployments = NULL;
 
   if (!rpmostree_option_context_parse (context,
@@ -265,7 +260,6 @@ rpmostree_builtin_status (int             argc,
     goto out;
 
   deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
-  booted_deployment = rpmostree_os_dup_booted_deployment (os_proxy);
 
   if (opt_json)
     {
@@ -297,7 +291,6 @@ rpmostree_builtin_status (int             argc,
   else
     {
       if (!status_generic (sysroot_proxy, os_proxy, deployments,
-                           booted_deployment,
                            cancellable, error))
         goto out;
     }

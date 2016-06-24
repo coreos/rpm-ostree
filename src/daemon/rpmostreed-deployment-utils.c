@@ -188,6 +188,7 @@ variant_add_commit_details (GVariantDict *dict,
 
 GVariant *
 rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
+                                        const char *booted_id,
                                         OstreeRepo *repo,
 					GError **error)
 {
@@ -243,6 +244,9 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
 
   g_variant_dict_insert (&dict, "unlocked", "s",
 			 ostree_deployment_unlocked_state_to_string (ostree_deployment_get_unlocked (deployment)));
+
+  if (booted_id != NULL)
+    g_variant_dict_insert (&dict, "booted", "b", g_strcmp0 (booted_id, id) == 0);
 
   return g_variant_dict_end (&dict);
 }

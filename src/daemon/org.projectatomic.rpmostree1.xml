@@ -13,6 +13,7 @@
        'origin' (type 's')
        'signatures' (type 'av')
        'packages' (type 'as')
+       'booted' (type 'b')
   -->
 
   <interface name="org.projectatomic.rpmostree1.Sysroot">

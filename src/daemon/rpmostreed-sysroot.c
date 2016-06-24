@@ -431,6 +431,7 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
 {
   gboolean ret = FALSE;
   OstreeDeployment *booted = NULL; /* owned by sysroot */
+  g_autofree gchar *booted_id = NULL;
   g_autoptr(GPtrArray) deployments = NULL;
   g_autoptr(GHashTable) seen_osnames = NULL;
   GHashTableIter iter;
@@ -456,6 +457,21 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
 
   seen_osnames = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
 
+  /* Updated booted property */
+  booted = ostree_sysroot_get_booted_deployment (self->ot_sysroot);
+  if (booted)
+    {
+      const gchar *os = ostree_deployment_get_osname (booted);
+      g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH,
+                                                                os, NULL);
+      rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path);
+      booted_id = rpmostreed_deployment_generate_id (booted);
+    }
+  else
+    {
+      rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), "/");
+    }
+
   /* Add deployment interfaces */
   deployments = ostree_sysroot_get_deployments (self->ot_sysroot);
 
@@ -465,7 +481,7 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
       OstreeDeployment *deployment = deployments->pdata[i];
       const char *deployment_os;
       
-      variant = rpmostreed_deployment_generate_variant (deployment, self->repo, error);
+      variant = rpmostreed_deployment_generate_variant (deployment, booted_id, self->repo, error);
       if (!variant)
 	goto out;
       g_variant_builder_add_value (&builder, variant);
@@ -484,19 +500,6 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
 	}
       /* Owned by deployment, hash lifetime is smaller */
       g_hash_table_add (seen_osnames, (char*)deployment_os);
-    }
-
-  booted = ostree_sysroot_get_booted_deployment (self->ot_sysroot);
-  if (booted)
-    {
-      const gchar *os = ostree_deployment_get_osname (booted);
-      g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH,
-                                                                os, NULL);
-      rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path);
-    }
-  else
-    {
-      rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), "/");
     }
 
   /* Remove dead os paths */
