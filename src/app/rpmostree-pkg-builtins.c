@@ -38,7 +38,7 @@ static GOptionEntry option_entries[] = {
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after upgrade is prepared", NULL },
   { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction", NULL },
   { "noscripts", 0, 0, G_OPTION_ARG_NONE, &opt_no_scripts, "Do not run scripts", NULL },
-  { "ignore-script", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_ignore_script, "Ignore a script for a particular RPM", NULL },
+  { "ignore-script", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_ignore_script, "Ignore a script for given PACKAGE", "PACKAGE" },
   { NULL }
 };
 

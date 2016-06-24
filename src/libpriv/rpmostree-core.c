@@ -2273,8 +2273,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
         HifPackage *pkg = k;
 
         /* Set noscripts since we already validated them above */
-        if (!add_to_transaction (rpmdb_ts, pkg, tmp_metadata_dfd, TRUE,
-                                 self->ignore_scripts,
+        if (!add_to_transaction (rpmdb_ts, pkg, tmp_metadata_dfd, TRUE, NULL,
                                  cancellable, error))
           goto out;
       }

@@ -1125,6 +1125,9 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
                                 cancellable, error))
     goto out;
 
+  if (self->ignore_scripts)
+    rpmostree_context_set_ignore_scripts (ctx, self->ignore_scripts);
+
   if (!get_pkgcache_repo (repo, &pkgcache_repo, cancellable, error))
     goto out;
 
