@@ -9,8 +9,10 @@ echo "  ControlPersist yes" >> ssh-config
 export SSH="ssh -F $PWD/ssh-config vmcheck"
 export SCP="scp -F $PWD/ssh-config"
 
+. ${commondir}/libvm.sh
+
 # stand up ssh connection and sanity check that it all works
-if ! $SSH true &> /dev/null; then
+if ! vm_ssh_wait 10; then
   echo "ERROR: A running VM is required for 'make vmcheck'."
   exit 1
 fi
