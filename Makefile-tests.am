@@ -7,15 +7,14 @@ AM_TESTS_ENVIRONMENT = \
 	commondir=$(abs_top_srcdir)/tests/common
 
 CLEANFILES += \
-	tests/common/compose/yum/repodata/repomd.xml \
+	tests/common/compose/yum/repo \
 	tests/common/compose/test-repo.repo \
-	tests/common/compose/yum/repodata/*.bz2 \
-	tests/common/compose/yum/repodata/*.gz \
 	$(NULL)
 
 testpackages = \
-	tests/common/compose/yum/x86_64/empty-1.0-1.x86_64.rpm \
-	tests/common/compose/yum/x86_64/foo-1.0-1.x86_64.rpm \
+	tests/common/compose/yum/repo/packages/x86_64/empty-1.0-1.x86_64.rpm \
+	tests/common/compose/yum/repo/packages/x86_64/foo-1.0-1.x86_64.rpm \
+	tests/common/compose/yum/repo/packages/x86_64/bar-1.0-1.x86_64.rpm \
 	$(NULL)
 
 # Create a rule for each testpkg with their respective spec file as dep.
@@ -31,7 +30,7 @@ $(1): tests/common/compose/yum/$(2).spec
 	   --define "_specdir      $$$$PWD" \
 	   --define "_builddir     $$$$PWD/.build" \
 	   --define "_srcrpmdir    $$$$PWD" \
-	   --define "_rpmdir       $$$$PWD" \
+	   --define "_rpmdir       $$$$PWD/repo/packages" \
 	   --define "_buildrootdir $$$$PWD" && \
 	 rm -rf .build && \
 	 rm -f  *.src.rpm)
@@ -39,11 +38,12 @@ endef
 
 $(foreach pkg,$(testpackages),$(eval $(call testpkgbuild_template,$(pkg),$(shell basename $(pkg) | cut -d- -f1))))
 
-tests/common/compose/yum/repodata/repomd.xml: $(testpackages)
-	(cd tests/common/compose/yum && \
+tests/common/compose/yum/repo/repodata/repomd.xml: $(testpackages)
+	(cd tests/common/compose/yum/repo && \
 	 createrepo_c --no-database $$PWD)
 
-tests/common/compose/test-repo.repo: tests/common/compose/test-repo.repo.in tests/common/compose/yum/repodata/repomd.xml
+tests/common/compose/test-repo.repo: tests/common/compose/test-repo.repo.in \
+                                     tests/common/compose/yum/repo/repodata/repomd.xml
 	cat $< | sed -e "s|%WHERE%|$(abs_top_srcdir)|" > $@
 
 CLEANFILES += \
@@ -80,6 +80,8 @@ check-local:
 	@echo "  *** NOTE ***"
 	@echo "  *** NOTE ***"
 
+.PHONY: vmbuild vmshell vmcheck testenv
+
 vmbuild:
 	@if [ -z "$(SKIP_VMBUILD)" ]; then \
 	  vagrant up && \
@@ -94,7 +96,7 @@ vmshell: vmbuild
 	vagrant ssh
 
 # set up test environment to somewhat resemble uninstalled tests
-vmcheck: vmbuild
+vmcheck: vmbuild tests/common/compose/yum/repo/repodata/repomd.xml
 	@env VMTESTS=1 \
 	    builddir="$(abs_builddir)" \
 	    topsrcdir="$(abs_top_srcdir)" \
