@@ -33,18 +33,25 @@ vm_send() {
 }
 
 # wait until ssh is available on the vm
+# - $1    timeout in second (optional)
 vm_ssh_wait() {
-  # XXX: add timeout
-  while ! vm_cmd true &> /dev/null; do
+  timeout=${1:-0}
+  while [ $timeout -gt 0 ]; do
+    if vm_cmd true &> /dev/null; then
+      return 0
+    fi
+    timeout=$((timeout - 1))
     sleep 1
   done
+  # final check at the timeout mark
+  vm_cmd true &> /dev/null
 }
 
 # reboot the vm
 vm_reboot() {
   vm_cmd systemctl reboot || :
   sleep 2 # give time for port to go down
-  vm_ssh_wait
+  vm_ssh_wait 10
 }
 
 # check that the given files exist on the VM
