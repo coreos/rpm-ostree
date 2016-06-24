@@ -37,6 +37,7 @@ void            rpmostreed_deployment_get_refspec_packages (OstreeDeployment *de
 GVariant *      rpmostreed_deployment_generate_blank_variant (void);
 
 GVariant *      rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
+                                                        const char *booted_id,
                                                         OstreeRepo *repo,
 							GError **error);
 

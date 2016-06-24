@@ -1089,6 +1089,7 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   const gchar *name;
 
   OstreeDeployment *booted = NULL; /* owned by sysroot */
+  g_autofree gchar* booted_id = NULL;
   glnx_unref_object  OstreeDeployment *merge_deployment = NULL; /* transfered */
 
   g_autoptr(GPtrArray) deployments = NULL;
@@ -1110,13 +1111,23 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   ot_sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
   ot_repo = rpmostreed_sysroot_get_repo (rpmostreed_sysroot_get ());
 
-  deployments = ostree_sysroot_get_deployments (ot_sysroot);
+  booted = ostree_sysroot_get_booted_deployment (ot_sysroot);
+  if (booted && g_strcmp0 (ostree_deployment_get_osname (booted),
+                           name) == 0)
+    {
+      booted_variant = rpmostreed_deployment_generate_variant (booted, booted_id, ot_repo, error);
+      if (!booted_variant)
+	return FALSE;
+      booted_id = rpmostreed_deployment_generate_id (booted);
+    }
 
+  deployments = ostree_sysroot_get_deployments (ot_sysroot);
   for (i=0; i<deployments->len; i++)
     {
       if (g_strcmp0 (ostree_deployment_get_osname (deployments->pdata[i]), name) == 0)
         {
           default_variant = rpmostreed_deployment_generate_variant (deployments->pdata[i],
+                                                                    booted_id,
                                                                     ot_repo, error);
 	  if (default_variant == NULL)
 	    return FALSE;
@@ -1124,21 +1135,12 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
         }
     }
 
-  booted = ostree_sysroot_get_booted_deployment (ot_sysroot);
-  if (booted && g_strcmp0 (ostree_deployment_get_osname (booted),
-                           name) == 0)
-    {
-      booted_variant = rpmostreed_deployment_generate_variant (booted, ot_repo, error);
-      if (!booted_variant)
-	return FALSE;
-    }
-
   if (deployments->len >= 2)
     {
       rollback_index = rpmostreed_rollback_deployment_index (name, ot_sysroot, NULL);
       if (rollback_index >= 0)
 	{
-	  rollback_variant = rpmostreed_deployment_generate_variant (deployments->pdata[rollback_index],
+	  rollback_variant = rpmostreed_deployment_generate_variant (deployments->pdata[rollback_index], booted_id,
 								     ot_repo, error);
 	  if (!rollback_variant)
 	    return FALSE;
