@@ -42,12 +42,12 @@ elif vm_has_layered_packages foo; then
   assert_not_reached "foo already layered"
 fi
 
-vm_send /tmp/vmcheck ${commondir}/compose
+vm_send /tmp/vmcheck ${commondir}/compose/yum/repo
 
 cat > vmcheck.repo << EOF
 [test-repo]
 name=test-repo
-baseurl=file:///tmp/vmcheck/compose/yum
+baseurl=file:///tmp/vmcheck/repo
 EOF
 
 vm_send /etc/yum.repos.d vmcheck.repo
