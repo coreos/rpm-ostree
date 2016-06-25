@@ -1112,12 +1112,11 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   ot_repo = rpmostreed_sysroot_get_repo (rpmostreed_sysroot_get ());
 
   booted = ostree_sysroot_get_booted_deployment (ot_sysroot);
-  if (booted && g_strcmp0 (ostree_deployment_get_osname (booted),
-                           name) == 0)
+  if (booted && g_strcmp0 (ostree_deployment_get_osname (booted), name) == 0)
     {
       booted_variant = rpmostreed_deployment_generate_variant (booted, booted_id, ot_repo, error);
       if (!booted_variant)
-	return FALSE;
+        return FALSE;
       booted_id = rpmostreed_deployment_generate_id (booted);
     }
 
