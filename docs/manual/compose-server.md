@@ -56,5 +56,5 @@ remote add`, and `rpm-ostree rebase` on the client side.
 
 ## More information
 
-https://github.com/jasonbrooks/byo-atomic
-http://www.projectatomic.io/blog/2014/08/build-your-own-atomic-centos-or-fedora/
+  * [Build Your Own Atomic](https://github.com/jasonbrooks/byo-atomic)
+  * [Build Your Own Atomic Image, Updated](http://www.projectatomic.io/blog/2014/08/build-your-own-atomic-centos-or-fedora/)
