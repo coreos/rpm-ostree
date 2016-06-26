@@ -29,7 +29,7 @@ Replicating a base immutable OS, then using Docker for applications.
 Using rpm-ostree to build OS images/trees
 -----------------------------------------
 
-See [Compose Server](doc/compose-server.md).
+See [Compose Server](docs/manual/compose-server.md).
 
 Building
 --------
