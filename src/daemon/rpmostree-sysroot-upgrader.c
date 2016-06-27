@@ -437,6 +437,9 @@ rpmostree_sysroot_upgrader_set_origin_rebase (RpmOstreeSysrootUpgrader *self,
   if (!origin_set_refspec (new_origin, new_refspec, error))
     return FALSE;
 
+  /* we don't want to carry any commit overrides during a rebase */
+  g_key_file_remove_key (new_origin, "origin", "override-commit", NULL);
+
   g_clear_pointer (&self->origin, g_key_file_unref);
   self->origin = g_key_file_ref (new_origin);
 
@@ -454,7 +457,7 @@ rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self,
   if (override_commit != NULL)
     g_key_file_set_string (self->origin, "origin", "override-commit", override_commit);
   else
-    g_key_file_remove_key (self->origin, "origin", "override_commit", NULL);
+    g_key_file_remove_key (self->origin, "origin", "override-commit", NULL);
 
   /* just update self manually rather than re-parsing the whole thing */
   g_free (self->override_csum);
