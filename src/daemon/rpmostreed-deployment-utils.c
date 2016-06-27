@@ -259,7 +259,7 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
 {
   g_autoptr(GVariant) commit = NULL;
   g_autofree gchar *origin_refspec = NULL;
-  g_autofree gchar *head = NULL;
+  const gchar *head = NULL;
   const gchar *osname;
   GVariant *sigs = NULL; /* floating variant */
   GVariant *ret = NULL; /* floating variant */
@@ -275,9 +275,8 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
   if (!origin_refspec)
     goto out;
 
-  if (!ostree_repo_resolve_rev (repo, origin_refspec,
-                                FALSE, &head, error))
-    goto out;
+  head = ostree_deployment_get_csum (deployment);
+
   if (!ostree_repo_load_variant (repo,
 				 OSTREE_OBJECT_TYPE_COMMIT,
 				 head,
