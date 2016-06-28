@@ -32,8 +32,9 @@
 #include "rpmostree-builtins.h"
 
 #include "libgsystem.h"
+#include "libglnx.h"
 
-static RpmOstreeCommand commands[] = {
+static RpmOstreeCommand supported_commands[] = {
 #ifdef HAVE_COMPOSE_TOOLING
   { "compose", rpmostree_builtin_compose },
 #endif
@@ -76,7 +77,7 @@ static GOptionEntry daemon_entries[] = {
 static GOptionContext *
 option_context_new_with_commands (void)
 {
-  RpmOstreeCommand *command = commands;
+  RpmOstreeCommand *command = supported_commands;
   GOptionContext *context;
   GString *summary;
 
@@ -187,6 +188,32 @@ on_sigint (gpointer user_data)
   return FALSE;
 }
 
+static RpmOstreeCommand *
+lookup_command_of_type (RpmOstreeCommand *commands,
+                        const char *name,
+                        const char *type)
+{
+  RpmOstreeCommand *command = commands;
+  const int is_tty = isatty (1);
+  const char *bold_prefix;
+  const char *bold_suffix;
+
+  bold_prefix = is_tty ? "\x1b[1m" : "";  
+  bold_suffix = is_tty ? "\x1b[0m" : "";
+
+  while (command->name)
+    {
+      if (g_strcmp0 (name, command->name) == 0)
+        {
+          if (type)
+            g_printerr ("%snotice%s: %s is %s command and subject to change.\n",
+                        bold_prefix, bold_suffix, name, type);
+          return command;
+        }
+      command++;
+    }
+  return NULL;
+}
 
 int
 main (int    argc,
@@ -205,7 +232,7 @@ main (int    argc,
   g_set_prgname (argv[0]);
 
   setlocale (LC_ALL, "");
-
+  
   /*
    * Parse the global options. We rearrange the options as
    * necessary, in order to pass relevant options through
@@ -242,45 +269,15 @@ main (int    argc,
   if (g_strcmp0 (command_name, "rpm") == 0)
     command_name = "db";
 
-  command = commands;
-  while (command->name)
-    {
-      if (g_strcmp0 (command_name, command->name) == 0)
-        break;
-      command++;
-    }
+  command = lookup_command_of_type (supported_commands, command_name, NULL);
 
-  if (!command->fn)
-    {
-      command = preview_commands;
-      while (command->name)
-        {
-          if (g_strcmp0 (command_name, command->name) == 0)
-            {
-              g_printerr ("notice: %s is a preview command and subject to change.\n",
-                          command_name);
-              break;
-            }
-          command++;
-        }
-    }
+  if (!command)
+    command = lookup_command_of_type (preview_commands, command_name, "a preview");
 
-  if (!command->fn)
-    {
-      command = experimental_commands;
-      while (command->name)
-        {
-          if (g_strcmp0 (command_name, command->name) == 0)
-            {
-              g_printerr ("notice: %s is an experimental command and subject to change.\n",
-                          command_name);
-              break;
-            }
-          command++;
-        }
-    }
+  if (!command)
+    command = lookup_command_of_type (experimental_commands, command_name, "an experimental");
 
-  if (!command->fn)
+  if (!command)
     {
       GOptionContext *context;
       gs_free char *help = NULL;
