@@ -21,7 +21,12 @@ Vagrant.configure(2) do |config|
     # containers)
     config.vm.synced_folder ".", "/home/vagrant/sync", disabled: true
     config.vm.synced_folder ".", "/root/sync", type: "rsync",
-      rsync__exclude: [".git/", "vagrant/*.tar.gz"]
+      rsync__exclude: [".git/", "vagrant/*.tar.gz"],
+
+      # override the default args so that
+      #  (1) we don't use --delete (otherwise we will have to regen each time)
+      #  (2) we can tell rsync to skip ignored files
+      rsync__args: ["--verbose", "--archive", "-z", "--filter", ":- .gitignore"]
 
     config.vm.provider "libvirt" do |libvirt, override|
       libvirt.cpus = 2

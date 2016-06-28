@@ -38,13 +38,22 @@ container). We're hoping to improve this workflow soon.
 Hacking
 =======
 
-The `make vmbuild` command will automatically sync the
-current files to the VM, build `rpm-ostree` and install it
-into a new deployment, and finally reboot the VM to use it.
+The `make vmoverlay` command will automatically sync the
+current files to the VM, unlock the current deployment,
+build `rpm-ostree`, and install it.
+
+If you need to test on a locked deployment with the updated
+`rpm-ostree` baked into the tree, you can use the `make
+vmbuild` command, which will install `rpm-ostree` into a new
+deployment and reboot the VM to use it.
 
 For convenience, the `make vmshell` command does the same
-but additionally places you in a shell, ready to test your
-changes.
+as `make vmbuild` but additionally places you in a shell,
+ready to test your changes.
+
+Note that by default, all the commands above try to re-use
+the same configuration files to save speed. If you want to
+force a cleanup, you can use `VMCLEAN=1`.
 
 Testing
 =======
