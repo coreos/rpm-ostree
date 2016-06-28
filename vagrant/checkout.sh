@@ -5,7 +5,11 @@ set -euo pipefail
 commit=$(rpm-ostree status --json | \
   python -c '
 import sys, json;
-print json.load(sys.stdin)["deployments"][0]["checksum"]')
+deployments = json.load(sys.stdin)["deployments"]
+for deployment in deployments:
+  if deployment["booted"]:
+    print deployment["checksum"]
+    exit()')
 
 if [[ -z $commit ]] || ! ostree rev-parse $commit; then
   echo "Error while determining current commit" >&2
