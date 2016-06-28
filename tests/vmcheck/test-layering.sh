@@ -24,15 +24,6 @@ set -e
 
 set -x
 
-# XXX: this should be done by the test harness
-test_cleanup() {
-  if vm_has_packages foo; then
-    vm_cmd rpm-ostree rollback
-    vm_reboot
-  fi
-}
-trap 'test_cleanup; _cleanup_tmpdir' EXIT
-
 # make sure package foo is not already layered
 if vm_has_files /usr/bin/foo; then
   assert_not_reached "/usr/bin/foo already present"

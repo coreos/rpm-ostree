@@ -12,10 +12,22 @@ export SCP="scp -F $PWD/ssh-config"
 . ${commondir}/libvm.sh
 
 # stand up ssh connection and sanity check that it all works
-if ! vm_ssh_wait 10; then
+if ! vm_ssh_wait 20; then
   echo "ERROR: A running VM is required for 'make vmcheck'."
   exit 1
 fi
+
+unlocked_cur=$(vm_get_booted_deployment_info unlocked)
+if [[ $unlocked_cur != none ]]; then
+  echo "ERROR: VM is unlocked."
+  exit 1
+fi
+
+# remember the csum we're currently on and tag it so that ostree doesn't wipe it
+csum_orig=$(vm_get_booted_csum)
+vm_cmd ostree rev-parse $csum_orig &> /dev/null # validate
+vm_cmd ostree refs vmcheck_orig --delete
+vm_cmd ostree refs $csum_orig --create vmcheck_orig
 
 LOG=${LOG:-"$PWD/vmcheck.log"}
 echo -n '' > ${LOG}
@@ -50,6 +62,18 @@ for tf in $(find . -name 'test-*.sh' | sort); do
             echo "FAIL: $bn"
             let "failures += 1"
         fi
+    fi
+
+    # go back to the original vmcheck deployment if needed
+    csum_cur=$(vm_get_booted_csum)
+    unlocked_cur=$(vm_get_booted_deployment_info unlocked)
+    if [[ $csum_orig != $csum_cur ]] || \
+       [[ $unlocked_cur != none ]]; then
+      # redeploy under the name 'vmcheck' so that tests can never modify the
+      # vmcheck_orig ref itself (e.g. package layering)
+      vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_orig
+      vm_cmd ostree admin deploy vmcheck
+      vm_reboot
     fi
 done
 
