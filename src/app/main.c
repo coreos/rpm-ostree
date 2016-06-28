@@ -39,12 +39,20 @@ static RpmOstreeCommand commands[] = {
 #endif
   { "db", rpmostree_builtin_db },
   { "deploy", rpmostree_builtin_deploy },
-  { "pkg-add", rpmostree_builtin_pkg_add },
-  { "pkg-remove", rpmostree_builtin_pkg_remove },
   { "rebase", rpmostree_builtin_rebase },
   { "rollback", rpmostree_builtin_rollback },
   { "status", rpmostree_builtin_status },
   { "upgrade", rpmostree_builtin_upgrade },
+  { NULL }
+};
+
+static RpmOstreeCommand preview_commands[] = {
+  { "pkg-add", rpmostree_builtin_pkg_add },
+  { "pkg-remove", rpmostree_builtin_pkg_remove },
+  { NULL }
+};
+
+static RpmOstreeCommand experimental_commands[] = {
   { "internals", rpmostree_builtin_internals },
   { "container", rpmostree_builtin_container },
   { NULL }
@@ -78,12 +86,14 @@ option_context_new_with_commands (void)
 
   while (command->name != NULL)
     {
-      /* Internals will remain hidden always, container will possibly
-       * get promoted at some point.  For now, it's an easter egg.
-       */
-      if (!g_str_equal (command->name, "internals")
-          && !g_str_equal (command->name, "container"))
-        g_string_append_printf (summary, "\n  %s", command->name);
+      g_string_append_printf (summary, "\n  %s", command->name);
+      command++;
+    }
+
+  command = preview_commands;
+  while (command->name != NULL)
+    {
+      g_string_append_printf (summary, "\n  %s (preview)", command->name);
       command++;
     }
 
@@ -238,6 +248,36 @@ main (int    argc,
       if (g_strcmp0 (command_name, command->name) == 0)
         break;
       command++;
+    }
+
+  if (!command->fn)
+    {
+      command = preview_commands;
+      while (command->name)
+        {
+          if (g_strcmp0 (command_name, command->name) == 0)
+            {
+              g_printerr ("notice: %s is a preview command and subject to change.\n",
+                          command_name);
+              break;
+            }
+          command++;
+        }
+    }
+
+  if (!command->fn)
+    {
+      command = experimental_commands;
+      while (command->name)
+        {
+          if (g_strcmp0 (command_name, command->name) == 0)
+            {
+              g_printerr ("notice: %s is an experimental command and subject to change.\n",
+                          command_name);
+              break;
+            }
+          command++;
+        }
     }
 
   if (!command->fn)
