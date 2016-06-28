@@ -349,7 +349,8 @@ rpmostree_context_new_system (GCancellable *cancellable,
   hif_context_set_http_proxy (self->hifctx, g_getenv ("http_proxy"));
 
   hif_context_set_repo_dir (self->hifctx, "/etc/yum.repos.d");
-  hif_context_set_cache_age (self->hifctx, G_MAXUINT);
+  /* Operating on stale metadata is too annoying */
+  hif_context_set_cache_age (self->hifctx, 0);
   hif_context_set_cache_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_REPOMD);
   hif_context_set_solv_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_SOLV);
   hif_context_set_lock_dir (self->hifctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
