@@ -85,12 +85,21 @@ check-local:
 vmbuild:
 	@if [ -z "$(SKIP_VMBUILD)" ]; then \
 	  vagrant up && \
+	  ( [ -z "$(VMCLEAN)" ] || vagrant ssh -c "rm -rf sync" ) && \
 	  vagrant rsync && \
 	  vagrant ssh -c "cd sync/vagrant && \
 	                  make install VERSION=$$(git describe)" && \
 	  ( vagrant ssh -c "sudo systemctl reboot" || : ) && \
 	  sleep 2; \
 	fi
+
+vmoverlay:
+	vagrant up && \
+	( [ -z "$(VMCLEAN)" ] || vagrant ssh -c "rm -rf sync" ) && \
+	vagrant rsync && \
+	vagrant ssh -c "cd sync/vagrant && make ofsinstall" && \
+	vagrant ssh -c "systemctl daemon-reload && \
+	                systemctl restart rpm-ostreed"
 
 vmshell: vmbuild
 	vagrant ssh
