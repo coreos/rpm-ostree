@@ -74,15 +74,34 @@ vm_has_packages() {
   done
 }
 
+# retrieve info from the booted deployment
+# - $1   key to retrieve
+vm_get_booted_deployment_info() {
+  key=$1
+  vm_cmd rpm-ostree status --json | \
+    python -c "
+import sys, json
+deployments = json.load(sys.stdin)[\"deployments\"]
+booted = None
+for deployment in deployments:
+  if deployment[\"booted\"]:
+    booted = deployment
+    break
+if not booted:
+  print \"Failed to determine currently booted deployment\"
+  exit(1)
+if \"$key\" in booted:
+  data = booted[\"$key\"]
+  if type(data) is list:
+    print \" \".join(data)
+  else:
+    print data
+"
+}
+
 # print the layered packages
 vm_get_layered_packages() {
-  vm_cmd rpm-ostree status --json | \
-    python -c '
-import sys, json
-depl = json.load(sys.stdin)["deployments"][0]
-if "packages" in depl:
-  print " ".join(depl["packages"])
-'
+  vm_get_booted_deployment_info packages
 }
 
 # check that the packages are currently layered
@@ -94,4 +113,9 @@ vm_has_layered_packages() {
         return 1
     fi
   done
+}
+
+# retrieve the checksum of the currently booted deployment
+vm_get_booted_csum() {
+  vm_get_booted_deployment_info checksum
 }
