@@ -223,7 +223,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
     g_variant_dict_insert (&dict, "osname", "s", osname);
   g_variant_dict_insert (&dict, "serial", "i", serial);
   g_variant_dict_insert (&dict, "checksum", "s", csum);
-  if (origin_packages)
+  if (origin_packages != NULL && g_strv_length (origin_packages) > 0)
     {
       const char *parent = ostree_commit_get_parent (commit);
       g_assert (parent);
