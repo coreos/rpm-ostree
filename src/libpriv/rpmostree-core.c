@@ -2081,9 +2081,6 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
 
     package_list = hif_goal_get_packages (hif_context_get_goal (hifctx),
                                           HIF_PACKAGE_INFO_INSTALL,
-                                          HIF_PACKAGE_INFO_REINSTALL,
-                                          HIF_PACKAGE_INFO_DOWNGRADE,
-                                          HIF_PACKAGE_INFO_UPDATE,
                                           -1);
 
     for (i = 0; i < package_list->len; i++)
