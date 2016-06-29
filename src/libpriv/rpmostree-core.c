@@ -1907,7 +1907,8 @@ ts_callback (const void * h,
     {
     case RPMCALLBACK_INST_OPEN_FILE:
       {
-        const char *nevra = (char *) key;
+        HifPackage *pkg = (void*)key;
+        g_autofree char *nevra = hif_package_get_nevra (pkg);
         g_autofree char *path = glnx_fdrel_abspath (tdata->tmp_metadata_dfd, nevra);
         g_assert (tdata->current_trans_fd == NULL);
         tdata->current_trans_fd = Fopen (path, "r.ufdio");
