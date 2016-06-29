@@ -1904,7 +1904,8 @@ ts_callback (const void * h,
     {
     case RPMCALLBACK_INST_OPEN_FILE:
       {
-        const char *nevra = (char *) key;
+        HifPackage *pkg = (void*)key;
+        g_autofree char *nevra = hif_package_get_nevra (pkg);
         g_autofree char *path = glnx_fdrel_abspath (tdata->tmp_metadata_dfd, nevra);
         g_assert (tdata->current_trans_fd == NULL);
         tdata->current_trans_fd = Fopen (path, "r.ufdio");
@@ -1966,7 +1967,7 @@ add_to_transaction (rpmts  ts,
         goto out;
     }
 
-  r = rpmtsAddInstallElement (ts, hdr, (char*)hif_package_get_nevra (pkg), TRUE, NULL);
+  r = rpmtsAddInstallElement (ts, hdr, pkg, TRUE, NULL);
   if (r != 0)
     {
       g_set_error (error,
@@ -2041,8 +2042,6 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
   rpmts ordering_ts = NULL;
   rpmts rpmdb_ts = NULL;
   guint i, n_rpmts_elements;
-  g_autoptr(GHashTable) nevra_to_pkg =
-    g_hash_table_new_full (g_str_hash, g_str_equal, NULL, (GDestroyNotify)g_object_unref);
   g_autoptr(GHashTable) pkg_to_ostree_commit =
     g_hash_table_new_full (NULL, NULL, (GDestroyNotify)g_object_unref, (GDestroyNotify)g_free);
   HifPackage *filesystem_package = NULL;   /* It's special... */
@@ -2135,7 +2134,6 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
             goto out;
         }
 
-        g_hash_table_insert (nevra_to_pkg, (char*)hif_package_get_nevra (pkg), g_object_ref (pkg));
         g_hash_table_insert (pkg_to_ostree_commit, g_object_ref (pkg), g_steal_pointer (&cached_rev));
 
         if (strcmp (hif_package_get_name (pkg), "filesystem") == 0)
@@ -2180,8 +2178,9 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
        * rootfs dir.
        */
       rpmte te = rpmtsElement (ordering_ts, 0);
-      const char *tekey = rpmteKey (te);
-      HifPackage *pkg = g_hash_table_lookup (nevra_to_pkg, tekey);
+      HifPackage *pkg = (void*)rpmteKey (te);
+
+      g_assert (pkg);
 
       if (!ostree_checkout_package (self->ostreerepo, pkg,
                                     tmprootfs_dfd, ".", devino_cache,
@@ -2199,8 +2198,9 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
   for (; i < n_rpmts_elements; i++)
     {
       rpmte te = rpmtsElement (ordering_ts, i);
-      const char *tekey = rpmteKey (te);
-      HifPackage *pkg = g_hash_table_lookup (nevra_to_pkg, tekey);
+      HifPackage *pkg = (void*)rpmteKey (te);
+
+      g_assert (pkg);
 
       if (pkg == filesystem_package)
         continue;
@@ -2223,8 +2223,9 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
       for (i = 0; i < n_rpmts_elements; i++)
         {
           rpmte te = rpmtsElement (ordering_ts, i);
-          const char *tekey = rpmteKey (te);
-          HifPackage *pkg = g_hash_table_lookup (nevra_to_pkg, tekey);
+          HifPackage *pkg = (void*)rpmteKey (te);
+
+          g_assert (pkg);
 
           if (!run_posttrans_sync (tmp_metadata_dfd, tmprootfs_dfd, pkg,
                                    self->ignore_scripts,
