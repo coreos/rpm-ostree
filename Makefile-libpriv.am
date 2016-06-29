@@ -54,11 +54,13 @@ librpmostreepriv_la_CFLAGS = \
 	$(NULL)
 
 librpmostreepriv_la_LIBADD = \
-	$(AM_LDFLAGS) \
 	$(PKGDEP_RPMOSTREE_LIBS) \
 	libglnx.la \
 	$(CAP_LIBS) \
 	$(NULL)
+
+# bundled libhif
+EXTRA_librpmostreepriv_la_DEPENDENCIES = libhif.so.3
 
 gperf_gperf_sources = src/libpriv/rpmostree-script-gperf.gperf
 BUILT_SOURCES += $(gperf_gperf_sources:-gperf.gperf=-gperf.c)

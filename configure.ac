@@ -64,12 +64,11 @@ PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
 				     ostree-1 >= 2015.1 libgsystem >= 2015.1
 				     libsystemd
-				     rpm libhif librepo
+				     rpm librepo
 				     libarchive])
-save_LIBS=$LIBS
-LIBS=$PKGDEP_RPMOSTREE_LIBS
-AC_CHECK_FUNCS(hif_source_set_required)
-LIBS=$save_LIBS
+dnl bundled libhif
+PKGDEP_RPMOSTREE_CFLAGS="$PKGDEP_RPMOSTREE_CFLAGS -I $(pwd)/libhif -I $(pwd)/libhif-build"
+PKGDEP_RPMOSTREE_LIBS="$PKGDEP_RPMOSTREE_LIBS -L$(pwd)/libhif-build/libhif -lhif"
 
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
@@ -114,6 +113,30 @@ AS_IF([test x$enable_compose_tooling = xyes], [
     AC_DEFINE(HAVE_COMPOSE_TOOLING, 1, [Define if we are building compose tooling])
 ])
 if test x$enable_compose_tooling != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES +compose"; fi
+
+dnl Try to automatically determine cmake type from CFLAGS
+if $(echo $CFLAGS |grep -q -e "-O0"); then
+  cmake_args="-DCMAKE_BUILD_TYPE=Debug \
+        -DCMAKE_C_FLAGS_DEBUG:STRING='-ggdb -O0' \
+        -DCMAKE_CXX_FLAGS_DEBUG:STRING=-ggdb -O0'"
+  export cmake_args
+else
+  cmake_args=-DCMAKE_BUILD_TYPE=RelWithDebugInfo
+  export cmake_args
+fi  
+
+dnl I picked /usr/libexec/rpm-ostree just because we need an
+dnl arbitrary path - we don't actually install there.
+(set -euo pipefail; mkdir -p libhif-build && cd libhif-build &&
+ set -x && 
+ cmake \
+     -DCMAKE_INSTALL_PREFIX:PATH=/usr/libexec/rpm-ostree \
+     -DINCLUDE_INSTALL_DIR:PATH=/usr/libexec/rpm-ostree/include \
+     -DLIB_INSTALL_DIR:PATH=/usr/libexec/rpm-ostree \
+     -DSYSCONF_INSTALL_DIR:PATH=/usr/libexec/rpm-ostree/etc \
+     -DSHARE_INSTALL_PREFIX:PATH=/usr/libexec/rpm-ostree/share \
+     -DBUILD_SHARED_LIBS:BOOL=ON \
+     ${cmake_args} ../libhif)
 
 AC_CONFIG_FILES([
 Makefile
