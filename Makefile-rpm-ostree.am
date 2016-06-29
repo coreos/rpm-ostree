@@ -57,10 +57,3 @@ rpm_ostree_LDADD = $(AM_LDFLAGS) $(PKGDEP_RPMOSTREE_LIBS)  librpmostreepriv.la l
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/app/rpm-ostree-0-integration.conf
-
-if BUILDOPT_USRBINATOMIC
-INSTALL_DATA_HOOKS += install-usrbinatomic-hook
-install-usrbinatomic-hook:
-	ln -sf rpm-ostree $(DESTDIR)$(bindir)/atomic
-	ln -sf rpm-ostree.1.gz $(DESTDIR)$(mandir)/man1/atomic.1.gz
-endif

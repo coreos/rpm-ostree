@@ -97,12 +97,6 @@ AC_ARG_ENABLE(installed_tests,
               [enable_installed_tests=no])
 AM_CONDITIONAL(BUILDOPT_INSTALL_TESTS, test x$enable_installed_tests = xyes)
 
-AC_ARG_ENABLE(usrbinatomic,
-              AS_HELP_STRING([--enable-usrbinatomic],
-                             [Alias client binary as /usr/bin/atomic]),,
-              [enable_usrbinatomic=no])
-AM_CONDITIONAL(BUILDOPT_USRBINATOMIC, [test x$enable_usrbinatomic = xyes])
-
 dnl Some distributions may want to support the client tooling, but not
 dnl the server side.
 AC_ARG_ENABLE(compose-tooling,
@@ -125,7 +119,6 @@ AC_OUTPUT
 echo "
     $PACKAGE $VERSION
 
-    usrbinatomic:	$enable_usrbinatomic
     compose tooling:	$enable_compose_tooling
     gtk-doc:            $enable_gtk_doc
 "
