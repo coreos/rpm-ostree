@@ -1465,7 +1465,10 @@ ostree_checkout_package (OstreeRepo   *repo,
   ret = TRUE;
  out:
   if (error && *error)
-    g_prefix_error (error, "Unpacking %s: ", hif_package_get_nevra (pkg));
+    {
+      g_autofree char *nevra = hif_package_get_nevra (pkg);
+      g_prefix_error (error, "Unpacking %s: ", nevra);
+    }
   return ret;
 }
 
@@ -1930,8 +1933,9 @@ get_header_for_package (int tmp_metadata_dfd,
 {
   Header hdr = NULL;
   glnx_fd_close int metadata_fd = -1;
+  g_autofree char *nevra = hif_package_get_nevra (pkg);
 
-  if ((metadata_fd = openat (tmp_metadata_dfd, hif_package_get_nevra (pkg), O_RDONLY | O_CLOEXEC)) < 0)
+  if ((metadata_fd = openat (tmp_metadata_dfd, nevra, O_RDONLY | O_CLOEXEC)) < 0)
     {
       glnx_set_error_from_errno (error);
       return NULL;
@@ -2089,6 +2093,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
         g_autofree char *cached_rev = NULL;
         g_autoptr(GVariant) pkg_commit = NULL;
         g_autoptr(GVariant) header_variant = NULL;
+        g_autofree char *nevra = hif_package_get_nevra (pkg);
 
         {
           g_autofree char *branch_head_rev = NULL;
@@ -2120,7 +2125,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
               goto out;
             }
 
-          if (!glnx_file_replace_contents_at (tmp_metadata_dfd, hif_package_get_nevra (pkg),
+          if (!glnx_file_replace_contents_at (tmp_metadata_dfd, nevra,
                                               g_variant_get_data (header_variant),
                                               g_variant_get_size (header_variant),
                                               GLNX_FILE_REPLACE_NODATASYNC,
