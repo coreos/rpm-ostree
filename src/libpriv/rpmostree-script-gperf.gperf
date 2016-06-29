@@ -13,6 +13,7 @@ struct RpmOstreePackageScriptHandler;
 %includes
 %%
 glibc.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
+glibc-headers.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE /* Legacy workaround */
 coreutils.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE  /* workaround for old bug? */
 ca-certificates.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE  /* Looks like legacy... */
 filesystem.pretrans, RPMOSTREE_SCRIPT_ACTION_IGNORE
@@ -21,6 +22,10 @@ setup.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
 pinentry.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
 fedora-release.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
 fedora-release.posttrans, RPMOSTREE_SCRIPT_ACTION_IGNORE
+/* These add the vagrant group which IMO is really
+ * a libvirt-user group */
+vagrant.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
+vagrant-libvirt.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
 bash.post, RPMOSTREE_SCRIPT_ACTION_TODO_SHELL_POSTTRANS
 glibc-common.post, RPMOSTREE_SCRIPT_ACTION_TODO_SHELL_POSTTRANS
 /* Seems to be another case of legacy workaround */
