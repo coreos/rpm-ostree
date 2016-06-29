@@ -59,7 +59,6 @@ librpmostreed_la_CFLAGS = \
 	$(NULL)
 
 librpmostreed_la_LIBADD = \
-	$(AM_LDFLAGS) \
 	$(PKGDEP_RPMOSTREE_LIBS) \
 	librpmostreepriv.la \
 	librpmostree-1.la \
@@ -81,7 +80,6 @@ rpm_ostreed_CFLAGS = \
 
 rpm_ostreed_LDADD = \
 	librpmostreed.la \
-	$(AM_LDFLAGS) \
 	$(PKGDEP_RPMOSTREE_LIBS) \
 	$(NULL)
 

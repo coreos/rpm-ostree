@@ -1,3 +1,33 @@
+Raw build instructions
+----------------------
+
+First, releases are available as GPG signed git tags, and most recent
+versions support extended validation using
+[git-evtag](https://github.com/cgwalters/git-evtag).
+
+You'll need to get the submodules too: `git submodule update --init`
+
+rpm-ostree has a hard requirement on a bleeding edge version of
+[libhif](https://github.com/rpm-software-management/libhif/) - we now
+consume this as a git submodule automatically.
+
+We also require a few other libraries like
+[librepo](https://github.com/rpm-software-management/librepo).
+
+So the build process now looks like any other autotools program:
+
+```
+env NOCONFIGURE=1 ./autogen.sh
+./configure --prefix=/usr --libdir=/usr/lib64 --sysconfdir=/etc
+make
+```
+
+At this point you can run some of the unit tests with `make check`.
+For more information on this, see `CONTRIBUTING.md`.
+
+Using the Vagrant box
+=====================
+
 The easiest way to get started hacking on `rpm-ostree` is to
 use the vagrant machine. This is also the set up used for
 our integration tests.
