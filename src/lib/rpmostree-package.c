@@ -42,7 +42,6 @@ struct RpmOstreePackage
   GObject parent_instance;
   RpmOstreeRefSack *sack;
   HifPackage *hypkg;
-  char *cached_nevra;
 };
 
 G_DEFINE_TYPE(RpmOstreePackage, rpm_ostree_package, G_TYPE_OBJECT)
@@ -51,7 +50,6 @@ static void
 rpm_ostree_package_finalize (GObject *object)
 {
   RpmOstreePackage *pkg = (RpmOstreePackage*)object;
-  free (pkg->cached_nevra);
   g_object_unref (pkg->hypkg);
   
   /* We do internal refcounting of the sack because hawkey doesn't */
@@ -84,9 +82,7 @@ rpm_ostree_package_init (RpmOstreePackage *p)
 const char *
 rpm_ostree_package_get_nevra (RpmOstreePackage *p)
 {
-  if (p->cached_nevra == NULL)
-    p->cached_nevra = hif_package_get_nevra (p->hypkg);
-  return p->cached_nevra;
+  return hif_package_get_nevra (p->hypkg);
 }
 
 /**
