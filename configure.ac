@@ -67,8 +67,8 @@ PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
 				     rpm librepo
 				     libarchive])
 dnl bundled libhif
-PKGDEP_RPMOSTREE_CFLAGS="$PKGDEP_RPMOSTREE_CFLAGS -I $(pwd)/libhif -I $(pwd)/libhif-build"
-PKGDEP_RPMOSTREE_LIBS="$PKGDEP_RPMOSTREE_LIBS -L$(pwd)/libhif-build/libhif -lhif"
+PKGDEP_RPMOSTREE_CFLAGS="-I $(pwd)/libhif -I $(pwd)/libhif-build $PKGDEP_RPMOSTREE_CFLAGS"
+PKGDEP_RPMOSTREE_LIBS="-L$(pwd)/libhif-build/libhif -lhif $PKGDEP_RPMOSTREE_LIBS"
 
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
