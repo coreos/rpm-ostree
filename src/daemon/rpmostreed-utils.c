@@ -284,18 +284,22 @@ rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
 
   while (TRUE)
     {
-      /* Floating reference, transferred to dictionary. */
-      refs_value = g_variant_new_strv ((const char * const *) refs_array, -1);
+      if (remote != NULL)
+        {
+          /* Floating reference, transferred to dictionary. */
+          refs_value =
+            g_variant_new_strv ((const char * const *) refs_array, -1);
 
-      g_variant_dict_init (&options, NULL);
-      g_variant_dict_insert (&options, "depth", "i", depth);
-      g_variant_dict_insert (&options, "flags", "i", flags);
-      g_variant_dict_insert_value (&options, "refs", refs_value);
+          g_variant_dict_init (&options, NULL);
+          g_variant_dict_insert (&options, "depth", "i", depth);
+          g_variant_dict_insert (&options, "flags", "i", flags);
+          g_variant_dict_insert_value (&options, "refs", refs_value);
 
-      if (!ostree_repo_pull_with_options (repo, remote,
-                                          g_variant_dict_end (&options),
-                                          progress, cancellable, error))
-        goto out;
+          if (!ostree_repo_pull_with_options (repo, remote,
+                                              g_variant_dict_end (&options),
+                                              progress, cancellable, error))
+            goto out;
+        }
 
       /* First pass only.  Now we can resolve the ref to a checksum. */
       if (checksum == NULL)
@@ -304,26 +308,29 @@ rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
             goto out;
         }
 
-      /* If depth is negative (no visitor), this loop is skipped. */
-      for (ii = 0; ii < depth && checksum != NULL; ii++)
+      if (visitor != NULL)
         {
-          g_autoptr(GVariant) commit = NULL;
-          gboolean stop = FALSE;
+          for (ii = 0; ii < depth && checksum != NULL; ii++)
+            {
+              g_autoptr(GVariant) commit = NULL;
+              gboolean stop = FALSE;
 
-          if (!ostree_repo_load_commit (repo, checksum, &commit, NULL, error))
-            goto out;
+              if (!ostree_repo_load_commit (repo, checksum, &commit,
+                                            NULL, error))
+                goto out;
 
-          if (!visitor (repo, checksum, commit, visitor_data, &stop, error))
-            goto out;
+              if (!visitor (repo, checksum, commit, visitor_data, &stop, error))
+                goto out;
 
-          g_clear_pointer (&checksum, g_free);
+              g_clear_pointer (&checksum, g_free);
 
-          if (!stop)
-            checksum = ostree_commit_get_parent (commit);
+              if (!stop)
+                checksum = ostree_commit_get_parent (commit);
+            }
         }
 
       /* Break if no visitor, or visitor told us to stop. */
-      if (depth < 0 || checksum == NULL)
+      if (visitor == NULL || checksum == NULL)
         break;
 
       /* Pull the next batch of commits, twice as many. */
