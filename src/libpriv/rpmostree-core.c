@@ -1007,85 +1007,6 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
   return ret;
 }
 
-struct GlobalDownloadState {
-  RpmOstreeInstall *install;
-  HifState *hifstate;
-  gchar *last_mirror_url;
-  gchar *last_mirror_failure_message;
-};
-
-struct PkgDownloadState {
-  struct GlobalDownloadState *gdlstate;
-  gboolean added_total;
-  guint64 last_bytes_fetched;
-  gchar *last_mirror_url;
-  gchar *last_mirror_failure_message;
-};
-
-static int
-package_download_update_state_cb (void *user_data,
-				  gdouble total_to_download,
-				  gdouble now_downloaded)
-{
-  struct PkgDownloadState *dlstate = user_data;
-  RpmOstreeInstall *install = dlstate->gdlstate->install;
-  if (!dlstate->added_total)
-    {
-      dlstate->added_total = TRUE;
-      install->n_bytes_to_fetch += (guint64) total_to_download;
-    }
-
-  install->n_bytes_fetched += ((guint64)now_downloaded) - dlstate->last_bytes_fetched;
-  dlstate->last_bytes_fetched = ((guint64)now_downloaded);
-  return LR_CB_OK;
-}
-
-static int
-mirrorlist_failure_cb (void *user_data,
-		       const char *message,
-		       const char *url)
-{
-  struct PkgDownloadState *dlstate = user_data;
-  struct GlobalDownloadState *gdlstate = dlstate->gdlstate;
-
-  if (gdlstate->last_mirror_url)
-    goto out;
-
-  gdlstate->last_mirror_url = g_strdup (url);
-  gdlstate->last_mirror_failure_message = g_strdup (message);
- out:
-  return LR_CB_OK;
-}
-
-static inline void
-hif_state_assert_done (HifState *hifstate)
-{
-  gboolean r;
-  r = hif_state_done (hifstate, NULL);
-  g_assert (r);
-}
-
-static int
-package_download_complete_cb (void *user_data,
-                              LrTransferStatus status,
-                              const char *msg)
-{
-  struct PkgDownloadState *dlstate = user_data;
-  switch (status)
-    {
-    case LR_TRANSFER_SUCCESSFUL:
-    case LR_TRANSFER_ALREADYEXISTS:
-      dlstate->gdlstate->install->n_packages_fetched++;
-      hif_state_assert_done (dlstate->gdlstate->hifstate);
-      return LR_CB_OK;
-    case LR_TRANSFER_ERROR:
-      return LR_CB_ERROR; 
-    default:
-      g_assert_not_reached ();
-      return LR_CB_ERROR;
-    }
-}
-
 static int
 ptrarray_sort_compare_strings (gconstpointer ap,
                                gconstpointer bp)
@@ -1144,120 +1065,6 @@ rpmostree_context_get_state_sha512 (RpmOstreeContext *self)
   return g_strdup (g_checksum_get_string (state_checksum));
 }
 
-/**
- * hif_source_checksum_hy_to_lr:
- **/
-static LrChecksumType
-hif_source_checksum_hy_to_lr (int checksum_hy)
-{
-	if (checksum_hy == G_CHECKSUM_MD5)
-		return LR_CHECKSUM_MD5;
-	if (checksum_hy == G_CHECKSUM_SHA1)
-		return LR_CHECKSUM_SHA1;
-	if (checksum_hy == G_CHECKSUM_SHA256)
-		return LR_CHECKSUM_SHA256;
-	return LR_CHECKSUM_UNKNOWN;
-}
-
-static gboolean
-source_download_packages (HifRepo *source,
-                          GPtrArray *packages,
-                          RpmOstreeInstall *install,
-                          HifState  *state,
-                          GCancellable *cancellable,
-                          GError **error)
-{
-  gboolean ret = FALSE;
-  char *checksum_str = NULL;
-  const unsigned char *checksum;
-  guint i;
-  int checksum_type;
-  LrPackageTarget *target = NULL;
-  GSList *package_targets = NULL;
-  struct GlobalDownloadState gdlstate = { 0, };
-  g_autoptr(GArray) pkg_dlstates = g_array_new (FALSE, TRUE, sizeof (struct PkgDownloadState));
-  LrHandle *handle;
-  g_autoptr(GError) error_local = NULL;
-  g_autofree char *target_dir = NULL;
-
-  handle = hif_repo_get_lr_handle (source);
-
-  gdlstate.install = install;
-  gdlstate.hifstate = state;
-
-  g_array_set_size (pkg_dlstates, packages->len);
-  hif_state_set_number_steps (state, packages->len);
-
-  for (i = 0; i < packages->len; i++)
-    {
-      g_autofree char *target_dir = NULL;
-      HifPackage *pkg = packages->pdata[i];
-      struct PkgDownloadState *dlstate;
-
-      if (pkg_is_local (pkg))
-        continue;
-
-      target_dir = g_build_filename (hif_repo_get_location (source), "/packages/", NULL);
-      if (!glnx_shutil_mkdir_p_at (AT_FDCWD, target_dir, 0755, cancellable, error))
-        goto out;
-      
-      checksum = hif_package_get_chksum (pkg, &checksum_type);
-      checksum_str = hy_chksum_str (checksum, checksum_type);
-      
-      dlstate = &g_array_index (pkg_dlstates, struct PkgDownloadState, i);
-      dlstate->gdlstate = &gdlstate;
-
-      target = lr_packagetarget_new_v2 (handle,
-                                        hif_package_get_location (pkg),
-                                        target_dir,
-                                        hif_source_checksum_hy_to_lr (checksum_type),
-                                        checksum_str,
-                                        0, /* size unknown */
-                                        hif_package_get_baseurl (pkg),
-                                        TRUE,
-                                        package_download_update_state_cb,
-                                        dlstate,
-                                        package_download_complete_cb,
-                                        mirrorlist_failure_cb,
-                                        error);
-      if (target == NULL)
-        goto out;
-	
-      package_targets = g_slist_prepend (package_targets, target);
-    }
-
-  _rpmostree_reset_rpm_sighandlers ();
-
-  if (!lr_download_packages (package_targets, LR_PACKAGEDOWNLOAD_FAILFAST, &error_local))
-    {
-      if (g_error_matches (error_local,
-                           LR_PACKAGE_DOWNLOADER_ERROR,
-                           LRE_ALREADYDOWNLOADED))
-        {
-          /* ignore */
-          g_clear_error (&error_local);
-        }
-      else
-        {
-          if (gdlstate.last_mirror_failure_message)
-            {
-              g_autofree gchar *orig_message = error_local->message;
-              error_local->message = g_strconcat (orig_message, "; Last error: ", gdlstate.last_mirror_failure_message, NULL);
-            }
-          g_propagate_error (error, g_steal_pointer (&error_local));
-          goto out;
-        }
-  } 
-
-  ret = TRUE;
- out:
-  g_free (gdlstate.last_mirror_failure_message);
-  g_free (gdlstate.last_mirror_url);
-  g_slist_free_full (package_targets, (GDestroyNotify)lr_packagetarget_free);
-  g_free (checksum_str);
-  return ret;
-}
-
 static GHashTable *
 gather_source_to_packages (HifContext *hifctx,
                            RpmOstreeInstall *install)
@@ -1297,7 +1104,11 @@ rpmostree_context_download (RpmOstreeContext *ctx,
   int n = install->packages_to_download->len;
 
   if (n > 0)
-    g_print ("Need to download %u package%s\n", n, n > 1 ? "s" : "");
+    {
+      guint64 size = hif_package_array_get_download_size (install->packages_to_download);
+      g_autofree char *sizestr = g_format_size (size);
+      g_print ("Will download: %u package%s (%s)\n", n, n > 1 ? "s" : "", sizestr);
+    }
   else
     return TRUE;
 
@@ -1309,6 +1120,7 @@ rpmostree_context_download (RpmOstreeContext *ctx,
     g_hash_table_iter_init (&hiter, source_to_packages);
     while (g_hash_table_iter_next (&hiter, &key, &value))
       {
+        g_autofree char *target_dir = NULL;
         HifRepo *src = key;
         GPtrArray *src_packages = value;
         gs_unref_object HifState *hifstate = hif_state_new ();
@@ -1320,8 +1132,12 @@ rpmostree_context_download (RpmOstreeContext *ctx,
                                            G_CALLBACK (on_hifstate_percentage_changed),
                                            prefix);
 
-        if (!source_download_packages (src, src_packages, install,
-                                       hifstate, cancellable, error))
+        target_dir = g_build_filename (hif_repo_get_location (src), "/packages/", NULL);
+        if (!glnx_shutil_mkdir_p_at (AT_FDCWD, target_dir, 0755, cancellable, error))
+          goto out;
+
+        if (!hif_repo_download_packages (src, src_packages, target_dir,
+                                         hifstate, error))
           goto out;
 
         g_signal_handler_disconnect (hifstate, progress_sigid);
@@ -1390,6 +1206,14 @@ import_one_package (RpmOstreeContext *self,
   ret = TRUE;
  out:
   return ret;
+}
+
+static inline void
+hif_state_assert_done (HifState *hifstate)
+{
+  gboolean r;
+  r = hif_state_done (hifstate, NULL);
+  g_assert (r);
 }
 
 gboolean
