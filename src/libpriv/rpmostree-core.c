@@ -1188,7 +1188,7 @@ import_one_package (RpmOstreeContext *self,
   if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostreerepo, sepolicy,
                                             &ostree_commit, cancellable, error))
     {
-      g_autofree char *nevra = hif_package_get_nevra (pkg);
+      const char *nevra = hif_package_get_nevra (pkg);
       g_prefix_error (error, "Unpacking %s: ", nevra);
       goto out;
     }
@@ -1290,7 +1290,7 @@ ostree_checkout_package (OstreeRepo   *repo,
  out:
   if (error && *error)
     {
-      g_autofree char *nevra = hif_package_get_nevra (pkg);
+      const char *nevra = hif_package_get_nevra (pkg);
       g_prefix_error (error, "Unpacking %s: ", nevra);
     }
   return ret;
@@ -1732,7 +1732,7 @@ ts_callback (const void * h,
     case RPMCALLBACK_INST_OPEN_FILE:
       {
         HifPackage *pkg = (void*)key;
-        g_autofree char *nevra = hif_package_get_nevra (pkg);
+        const char *nevra = hif_package_get_nevra (pkg);
         g_autofree char *path = glnx_fdrel_abspath (tdata->tmp_metadata_dfd, nevra);
         g_assert (tdata->current_trans_fd == NULL);
         tdata->current_trans_fd = Fopen (path, "r.ufdio");
@@ -1758,7 +1758,7 @@ get_header_for_package (int tmp_metadata_dfd,
 {
   Header hdr = NULL;
   glnx_fd_close int metadata_fd = -1;
-  g_autofree char *nevra = hif_package_get_nevra (pkg);
+  const char *nevra = hif_package_get_nevra (pkg);
 
   if ((metadata_fd = openat (tmp_metadata_dfd, nevra, O_RDONLY | O_CLOEXEC)) < 0)
     {
@@ -1915,7 +1915,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
         g_autofree char *cached_rev = NULL;
         g_autoptr(GVariant) pkg_commit = NULL;
         g_autoptr(GVariant) header_variant = NULL;
-        g_autofree char *nevra = hif_package_get_nevra (pkg);
+        const char *nevra = hif_package_get_nevra (pkg);
 
         {
           g_autofree char *branch_head_rev = NULL;
