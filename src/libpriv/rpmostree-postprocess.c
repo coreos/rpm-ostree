@@ -1168,6 +1168,7 @@ rpmostree_rootfs_symlink_emptydir_at (int rootfs_fd,
  *
  *  - Symlink /usr/local -> /var/usrlocal
  *  - Symlink /var/lib/alternatives -> /usr/lib/alternatives
+ *  - Symlink /var/lib/vagrant -> /usr/lib/vagrant
  */
 gboolean
 rpmostree_rootfs_prepare_links (int           rootfs_fd,
@@ -1182,6 +1183,10 @@ rpmostree_rootfs_prepare_links (int           rootfs_fd,
   if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/lib/alternatives", 0755, cancellable, error))
     return FALSE;
   if (!rpmostree_rootfs_symlink_emptydir_at (rootfs_fd, "../../usr/lib/alternatives", "var/lib/alternatives", error))
+    return FALSE;
+  if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/lib/vagrant", 0755, cancellable, error))
+    return FALSE;
+  if (!rpmostree_rootfs_symlink_emptydir_at (rootfs_fd, "../../usr/lib/vagrant", "var/lib/vagrant", error))
     return FALSE;
 
   return TRUE;
