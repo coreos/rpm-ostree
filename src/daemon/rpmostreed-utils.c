@@ -191,13 +191,6 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
         {
           remote = g_strdup (origin_remote);
         }
-      else
-        {
-          g_set_error (error, RPM_OSTREED_ERROR,
-                       RPM_OSTREED_ERROR_INVALID_REFSPEC,
-                       "Could not determine default remote to pull.");
-          goto out;
-        }
     }
 
   if (g_strcmp0 (origin_remote, remote) == 0 &&
@@ -210,7 +203,11 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
       goto out;
     }
 
-  *out_refspec = g_strconcat (remote, ":", ref, NULL);
+  if (remote == NULL)
+      *out_refspec = g_steal_pointer (&ref);
+  else
+      *out_refspec = g_strconcat (remote, ":", ref, NULL);
+
   ret = TRUE;
 
 out:
