@@ -36,7 +36,21 @@ EOF
 
 rpm-ostree container assemble empty.conf
 assert_has_dir roots/empty.0
+test -f roots/empty/usr/etc/group
 ostree --repo=repo rev-parse empty
+
+cat >empty-docker.conf <<EOF
+[tree]
+ref=empty-docker
+packages=empty
+repos=test-repo
+flavor=docker
+EOF
+
+rpm-ostree container assemble empty-docker.conf
+assert_has_dir roots/empty-docker.0
+ostree --repo=repo rev-parse empty-docker
+test -f roots/empty-docker/etc/group
 echo "ok assemble"
 
 cat >nobranch.conf <<EOF

@@ -144,6 +144,12 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   }
 
   add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
+
+  { g_autofree char *flavor = g_key_file_get_string (keyfile, "tree", "flavor", NULL);
+    if (flavor)
+      g_variant_builder_add (&builder, "{sv}", "flavor", g_variant_new_string (flavor));
+  }
+
   /* We allow the "repo" key to be missing. This means that we rely on hif's
    * normal behaviour (i.e. look at repos in repodir with enabled=1). */
   { g_auto(GStrv) val = g_key_file_get_string_list (keyfile, "tree", "repos", NULL, NULL);
@@ -2418,6 +2424,25 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
   gboolean ret = FALSE;
   OstreeRepoCommitModifier *commit_modifier = NULL;
   g_autofree char *ret_commit_checksum = NULL;
+
+  { const char *flavor = NULL;
+
+    g_variant_dict_lookup (self->spec->dict, "flavor", "&s", &flavor);
+
+    if (flavor == NULL)
+      ;
+    else if (g_strcmp0 (flavor, "docker") == 0)
+      {
+        if (!rpmostree_rootfs_postprocess_docker (tmprootfs_dfd, cancellable, error))
+          goto out;
+      }
+    else
+      {
+        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                     "Unknown flavor '%s'", flavor);
+        goto out;
+      }
+  }
 
   rpmostree_output_task_begin ("Writing OSTree commit");
 

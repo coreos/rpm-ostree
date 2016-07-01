@@ -1185,6 +1185,24 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   return ret;
 }
 
+gboolean
+rpmostree_rootfs_postprocess_docker (int           rootfs_fd,
+                                     GCancellable *cancellable,
+                                     GError       **error)
+{
+  if (renameat (rootfs_fd, "usr/etc", rootfs_fd, "etc") < 0)
+    {
+      glnx_set_prefix_error_from_errno (error, "%s", "Renaming /usr/etc to /etc");
+      return FALSE;
+    }
+  if (renameat (rootfs_fd, "usr/share/rpm", rootfs_fd, "var/lib/rpm") < 0)
+    {
+      glnx_set_prefix_error_from_errno (error, "%s", "Renaming /usr/share/rpm to /var/lib/rpm");
+      return FALSE;
+    }
+  return TRUE;
+}
+
 /**
  * rpmostree_copy_additional_files:
  *
