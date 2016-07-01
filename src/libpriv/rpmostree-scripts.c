@@ -179,13 +179,13 @@ rpmostree_script_txn_validate (HifPackage    *package,
   return ret;
 }
 
-static gboolean
-run_script_in_bwrap_container (int rootfs_fd,
-                               const char *name,
-                               const char *scriptdesc,
-                               const char *script,
-                               GCancellable  *cancellable,
-                               GError       **error)
+gboolean
+rpmostree_run_script_container (int rootfs_fd,
+                                const char *pkg_script,
+                                const char *script,
+                                const char *const *script_argv,
+                                GCancellable  *cancellable,
+                                GError       **error)
 {
   gboolean ret = FALSE;
   int i;
@@ -193,7 +193,6 @@ run_script_in_bwrap_container (int rootfs_fd,
   int estatus;
   char *rofiles_mnt = strdupa ("/tmp/rofiles-fuse.XXXXXX");
   const char *rofiles_argv[] = { "rofiles-fuse", "./usr", rofiles_mnt, NULL};
-  const char *pkg_script = glnx_strjoina (name, ".", scriptdesc+1);
   const char *postscript_name = glnx_strjoina ("/", pkg_script);
   const char *postscript_path_container = glnx_strjoina ("/usr/", postscript_name);
   const char *postscript_path_host;
@@ -309,6 +308,9 @@ run_script_in_bwrap_container (int rootfs_fd,
     else
       g_ptr_array_add (bwrap_argv, (char*)postscript_path_container);
   }
+  for (const char *const *iter = script_argv; script_argv && *script_argv; script_argv++)
+    g_ptr_array_add (bwrap_argv, (char*)*iter);
+    
   g_ptr_array_add (bwrap_argv, NULL);
 
   if (!g_spawn_sync (NULL, (char**)bwrap_argv->pdata, NULL, bwrap_spawnflags,
@@ -346,6 +348,8 @@ rpmostree_posttrans_run_sync (HifPackage    *pkg,
                               GCancellable  *cancellable,
                               GError       **error)
 {
+  const char *pkgname = hif_package_get_name (pkg);
+
   for (guint i = 0; i < G_N_ELEMENTS (posttrans_scripts); i++)
     {
       const char *desc = posttrans_scripts[i].desc;
@@ -366,11 +370,12 @@ rpmostree_posttrans_run_sync (HifPackage    *pkg,
         {
         case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
           {
-            rpmostree_output_task_begin ("Running %s for %s...", desc, hif_package_get_name (pkg));
-            if (!run_script_in_bwrap_container (rootfs_fd, hif_package_get_name (pkg), desc, script,
-                                                cancellable, error))
+            g_autofree char *pkgscriptdesc = g_strconcat (pkgname, ".", desc+1, NULL);
+            rpmostree_output_task_begin ("Running %s for %s...", desc, pkgname);
+            if (!rpmostree_run_script_container (rootfs_fd, pkgscriptdesc, script, NULL,
+                                                 cancellable, error))
               {
-                g_prefix_error (error, "Running %s for %s: ", desc, hif_package_get_name (pkg));
+                g_prefix_error (error, "Running %s for %s: ", desc, pkgname);
                 return FALSE;
               }
             rpmostree_output_task_end ("done");
@@ -399,4 +404,46 @@ rpmostree_script_ignore_hash_from_strv (const char *const *strv,
     g_hash_table_add (ignore_scripts, g_strdup (*iter));
   *out_hash = g_steal_pointer (&ignore_scripts);
   return TRUE;
+}
+
+/* Our script needs to exclude languages, so this function turns the
+ * install langs array "foo bar baz" to "^(foo)|(bar)|(baz)".
+ */
+static char *
+instlangs_to_regexp (const char *const *instlangs)
+{
+  GString *buf = g_string_new ("^");
+  gboolean first = TRUE;
+
+  for (const char *const *iter = instlangs; iter && *iter; iter++)
+    {
+      if (first)
+        first = FALSE;
+      else
+        g_string_append_c (buf, '|');
+      g_string_append_c (buf, '(');
+      g_string_append (buf, *iter);
+      g_string_append_c (buf, ')');
+    }
+  return g_string_free (buf, FALSE);
+}
+
+gboolean
+rpmostree_run_script_localedef (int rootfs_fd,
+                                const char *const *instlangs,
+                                GCancellable  *cancellable,
+                                GError       **error)
+{
+  /* See: https://bugzilla.redhat.com/show_bug.cgi?id=1051816 */
+  static const char const post_regen_locale[] = "#!/usr/bin/bash\n"    \
+    "set -eu\n"                                             \
+    "regexp=$1\n"                                                       \
+    "localedef --list-archive | grep -a -v \"${regexp}\" | xargs localedef --delete-from-archive\n" \
+    "mv -f /usr/lib/locale/locale-archive /usr/lib/locale/locale-archive.tmpl\n" \
+    "build-locale-archive\n";
+  g_autofree char *include_regexp = instlangs_to_regexp (instlangs);
+  const char *const argv[] = { include_regexp, NULL };
+
+  return rpmostree_run_script_container (rootfs_fd, "localedef", post_regen_locale, argv,
+                                         cancellable, error);
 }

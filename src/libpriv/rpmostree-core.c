@@ -2136,6 +2136,16 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
   if (!rpmostree_rootfs_postprocess_common (tmprootfs_dfd, cancellable, error))
     goto out;
 
+  { const char *const *instlangs = NULL;
+    g_variant_dict_lookup (self->spec->dict, "instlangs", "^a&s", &instlangs);
+
+    if (instlangs && *instlangs)
+      {
+        if (!rpmostree_run_script_localedef (tmprootfs_dfd, instlangs, cancellable, error))
+          goto out;
+      }
+  }
+
   rpmostree_output_task_begin ("Writing OSTree commit");
 
   if (!ostree_repo_prepare_transaction (self->ostreerepo, NULL, cancellable, error))
