@@ -63,3 +63,17 @@ rpmostree_posttrans_run_sync (HifPackage    *pkg,
                               int            rootfs_fd,
                               GCancellable  *cancellable,
                               GError       **error);
+
+gboolean
+rpmostree_run_script_container (int rootfs_fd,
+                                const char *scriptdesc,
+                                const char *script,
+                                const char *const *argv,
+                                GCancellable  *cancellable,
+                                GError       **error);
+
+gboolean
+rpmostree_run_script_localedef (int rootfs_fd,
+                                const char *const *instlangs,
+                                GCancellable  *cancellable,
+                                GError       **error);
