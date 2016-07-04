@@ -62,6 +62,9 @@ deployment with those packages installed.
 
 Will create a new deployment with the target package removed.
 
+Note that package layering is currently in preview mode and as such may
+change interface or functionality before being declared stable.
+
 ## Filesystem layout
 
 The only writable directories are `/etc` and `/var`.  In particular,
