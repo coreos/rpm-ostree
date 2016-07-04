@@ -32,6 +32,19 @@ vm_send() {
   $SCP -r "$@" vmcheck:$dir
 }
 
+# copy the test repo to the vm
+vm_send_test_repo() {
+  vm_send /tmp/vmcheck ${commondir}/compose/yum/repo
+
+  cat > vmcheck.repo << EOF
+[test-repo]
+name=test-repo
+baseurl=file:///tmp/vmcheck/repo
+EOF
+
+  vm_send /etc/yum.repos.d vmcheck.repo
+}
+
 # wait until ssh is available on the vm
 # - $1    timeout in second (optional)
 vm_ssh_wait() {
@@ -118,4 +131,27 @@ vm_has_layered_packages() {
 # retrieve the checksum of the currently booted deployment
 vm_get_booted_csum() {
   vm_get_booted_deployment_info checksum
+}
+
+# make multiple consistency checks on a test pkg
+# - $1    package to check for
+# - $2    either "present" or "absent"
+vm_assert_layered_pkg() {
+  pkg=$1; shift
+  policy=$1; shift
+
+  set +e
+  vm_has_packages $pkg;         pkg_in_rpmdb=$?
+  vm_has_layered_packages $pkg; pkg_is_layered=$?
+  [ $pkg_in_rpmdb == 0 ] && [ $pkg_is_layered == 0 ]; pkg_present=$?
+  [ $pkg_in_rpmdb != 0 ] && [ $pkg_is_layered != 0 ]; pkg_absent=$?
+  set -e
+
+  if [ $policy == present ] && [ $pkg_present != 0 ]; then
+    assert_not_reached "pkg $pkg is not present"
+  fi
+
+  if [ $policy == absent ] && [ $pkg_absent != 0 ]; then
+    assert_not_reached "pkg $pkg is not absent"
+  fi
 }

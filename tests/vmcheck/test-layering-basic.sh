@@ -24,47 +24,33 @@ set -e
 
 set -x
 
-# make sure package foo is not already layered
-if vm_has_files /usr/bin/foo; then
-  assert_not_reached "/usr/bin/foo already present"
-elif vm_has_packages foo; then
-  assert_not_reached "foo already in rpmdb"
-elif vm_has_layered_packages foo; then
-  assert_not_reached "foo already layered"
-fi
+# SUMMARY: basic sanity check of package layering
+# METHOD:
+#     Add a package, verify that it was added, then remove it, and verify that
+#     it was removed.
 
-vm_send /tmp/vmcheck ${commondir}/compose/yum/repo
+vm_send_test_repo
 
-cat > vmcheck.repo << EOF
-[test-repo]
-name=test-repo
-baseurl=file:///tmp/vmcheck/repo
-EOF
-
-vm_send /etc/yum.repos.d vmcheck.repo
+# make sure the package is not already layered
+vm_assert_layered_pkg foo absent
 
 vm_cmd rpm-ostree pkg-add foo
 echo "ok pkg-add foo"
 
 vm_reboot
 
-if ! vm_has_files /usr/bin/foo; then
-  assert_not_reached "/usr/bin/foo not present"
-elif ! vm_has_packages foo; then
-  assert_not_reached "foo not in rpmdb"
-elif ! vm_has_layered_packages foo; then
-  assert_not_reached "foo not layered"
-fi
-echo "ok pkg foo present"
+vm_assert_layered_pkg foo present
+echo "ok pkg foo added"
 
-if ! vm_cmd foo | grep "Happy foobing!"; then
+if ! vm_cmd /usr/bin/foo | grep "Happy foobing!"; then
   assert_not_reached "foo printed wrong output"
 fi
 echo "ok correct output"
 
-vm_cmd rpm-ostree rollback
+vm_cmd rpm-ostree pkg-remove foo
+echo "ok pkg-remove foo"
+
 vm_reboot
-if vm_has_layered_packages foo; then
-  assert_not_reached "foo is still layered after rollback"
-fi
-echo "ok rollback"
+
+vm_assert_layered_pkg foo absent
+echo "ok pkg foo removed"
