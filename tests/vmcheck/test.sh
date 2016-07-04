@@ -17,6 +17,10 @@ if ! vm_ssh_wait 20; then
   exit 1
 fi
 
+# just error out if we're unlocked -- we use the current deployment as the
+# fallback between each test, so we need to be sure it's in a state that works.
+# also, the user might have forgotten that these tests are somewhat destructive
+# and thus would wipe out unlocked changes, hotfix or not.
 unlocked_cur=$(vm_get_booted_deployment_info unlocked)
 if [[ $unlocked_cur != none ]]; then
   echo "ERROR: VM is unlocked."
@@ -35,7 +39,30 @@ echo -n '' > ${LOG}
 testdir="$(dirname $(realpath $0))"
 cd $testdir
 
-failures=0
+colour_print() {
+  colour=$1; shift
+  [ ! -t 1 ] || echo -en "\e[${colour}m"
+  echo -n "$@"
+  [ ! -t 1 ] || echo -en "\e[0m"
+  echo
+}
+
+pass_print() {
+  colour_print 32 "$@" # green
+}
+
+fail_print() {
+  colour_print 31 "$@" # red
+}
+
+skip_print() {
+  colour_print 34 "$@" # blue
+}
+
+total=0
+pass=0
+fail=0
+skip=0
 for tf in $(find . -name 'test-*.sh' | sort); do
 
     if [ -n "${TESTS+ }" ]; then
@@ -46,6 +73,8 @@ for tf in $(find . -name 'test-*.sh' | sort); do
         fi
     fi
 
+    let "total += 1"
+
     bn=$(basename ${tf})
     printf "Running $bn...\n"
     printf "\n==== ${tf} ====\n" >> ${LOG}
@@ -54,13 +83,15 @@ for tf in $(find . -name 'test-*.sh' | sort); do
     if ${tf} |& tee -a ${LOG} \
             | grep -e '^ok' --line-buffered \
             | xargs -d '\n' -n 1 echo "  "; then
-        echo "PASS: $bn"
+        pass_print "PASS: $bn"
+        let "pass += 1"
     else
         if test $? = 77; then
-            echo "SKIP: $bn"
+            skip_print "SKIP: $bn"
+            let "skip += 1"
         else
-            echo "FAIL: $bn"
-            let "failures += 1"
+            fail_print "FAIL: $bn"
+            let "fail += 1"
         fi
     fi
 
@@ -71,8 +102,9 @@ for tf in $(find . -name 'test-*.sh' | sort); do
        [[ $unlocked_cur != none ]]; then
       # redeploy under the name 'vmcheck' so that tests can never modify the
       # vmcheck_orig ref itself (e.g. package layering)
-      vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_orig
-      vm_cmd ostree admin deploy vmcheck
+      echo "Restoring vmcheck commit" >> ${LOG}
+      vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_orig &>> ${LOG}
+      vm_cmd ostree admin deploy vmcheck &>> ${LOG}
       vm_reboot
     fi
 done
@@ -80,10 +112,7 @@ done
 # tear down ssh connection
 $SSH -O exit &>/dev/null
 
-if [ ${failures} -eq 0 ]; then
-    echo "All tests passed."
-else
-    echo "Test failures: ${failures}"
-    echo "See ${LOG} for more information."
-    exit 1
-fi
+[ ${fail} -eq 0 ] && printer=pass || printer=fail
+${printer}_print "TOTAL: $total PASS: $pass SKIP: $skip FAIL: $fail"
+echo "See ${LOG} for more information."
+[ ${fail} -eq 0 ]
