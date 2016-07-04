@@ -6,6 +6,12 @@ AM_TESTS_ENVIRONMENT = \
 	topsrcdir=$(abs_top_srcdir) \
 	commondir=$(abs_top_srcdir)/tests/common
 
+# we consume libhif as a submodule, but we may not have installed it yet (and we
+# don't want it to fall back to the system libhif if it's also installed)
+AM_TESTS_ENVIRONMENT += \
+	LD_LIBRARY_PATH=$(abs_builddir)/libhif-build/libhif \
+	$(NULL)
+
 CLEANFILES += \
 	tests/common/compose/yum/repo \
 	tests/common/compose/test-repo.repo \
