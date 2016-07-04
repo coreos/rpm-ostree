@@ -37,6 +37,31 @@ provides an update online, you might not want to deploy it until
 you've tested it.  This helps ensure that when you upgrade, you are
 getting exactly what you asked for.
 
+## Package layering
+
+It is possible to add more packages onto the system that are not part of
+the commit composed on the server. These additional "layered" packages
+are persistent across upgrades, rebases, and deploys (contrast with the
+ostree [unlocking](https://github.com/ostreedev/ostree/blob/master/man/ostree-admin-unlock.xml)
+mechanism). This allows you to easily enhance the base set of packages
+on only some machines, or only temporarily (rather than asking to have
+it part of the server compose and affecting every machine). For example,
+you may wish to permanently install some diagnostics tools on a test
+machine.
+
+```
+# rpm-ostree pkg-add <pkg>
+```
+
+Will download the target package, its dependencies, and create a new
+deployment with those packages installed.
+
+```
+# rpm-ostree pkg-remove <pkg>
+```
+
+Will create a new deployment with the target package removed.
+
 ## Filesystem layout
 
 The only writable directories are `/etc` and `/var`.  In particular,
