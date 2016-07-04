@@ -14,3 +14,4 @@ fi
 
 eval $cmd
 ostree admin deploy vmcheck
+sync
