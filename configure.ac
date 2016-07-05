@@ -96,6 +96,12 @@ AC_ARG_ENABLE(installed_tests,
               [enable_installed_tests=no])
 AM_CONDITIONAL(BUILDOPT_INSTALL_TESTS, test x$enable_installed_tests = xyes)
 
+AC_ARG_WITH(bubblewrap,
+              AS_HELP_STRING([--with-bubblewrap],
+                             [Path to bubblewrap binary (default: /usr/bin/bwrap)]),,
+              [with_bubblewrap=/usr/bin/bwrap])
+AC_DEFINE_UNQUOTED(WITH_BUBBLEWRAP_PATH, ["$with_bubblewrap"], [Define to bubblewrap path])
+
 dnl Some distributions may want to support the client tooling, but not
 dnl the server side.
 AC_ARG_ENABLE(compose-tooling,
@@ -143,5 +149,6 @@ echo "
     $PACKAGE $VERSION
 
     compose tooling:	$enable_compose_tooling
+    bubblewrap:         $with_bubblewrap
     gtk-doc:            $enable_gtk_doc
 "
