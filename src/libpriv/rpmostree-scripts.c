@@ -261,7 +261,7 @@ run_script_in_bwrap_container (int rootfs_fd,
     created_var_tmp = TRUE;
 
   add_const_args (bwrap_argv,
-                  "bwrap",
+                  WITH_BUBBLEWRAP_PATH,
                   "--bind", rofiles_mnt, "/usr",
                   "--dev", "/dev",
                   "--proc", "/proc",
