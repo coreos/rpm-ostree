@@ -1,12 +1,12 @@
 all:
-	echo "Targets: buildimg build install"
+	echo "Targets: buildimg build install ofsinstall check clean"
 
 BUILDER_ARGS = sudo /usr/bin/docker run --rm -ti --privileged -v /var/roothome:/root
 BUILDER_IMG = rpm-ostree-builder
 
 BUILDER_RUN = $(BUILDER_ARGS) $(BUILDER_IMG)
 
-.PHONY: dockerwait buildimg build install ofsinstall check
+.PHONY: dockerwait buildimg build install ofsinstall check clean
 
 # necessary precaution in case we're operating on a freshly
 # booted VM
