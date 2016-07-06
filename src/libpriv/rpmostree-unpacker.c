@@ -557,7 +557,7 @@ compose_filter_cb (OstreeRepo         *repo,
     }
 
   if (was_null && *error != NULL)
-    g_prefix_error (error, "Non-root ownership currently unsupported");
+    g_prefix_error (error, "Non-root ownership currently unsupported: ");
 
   workaround_fedora_rpm_permissions (file_info);
 
