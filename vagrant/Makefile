@@ -6,17 +6,35 @@ BUILDER_IMG = rpm-ostree-builder
 
 BUILDER_RUN = $(BUILDER_ARGS) $(BUILDER_IMG)
 
-buildimg:
+.PHONY: dockerwait buildimg build install ofsinstall check
+
+# necessary precaution in case we're operating on a freshly
+# booted VM
+dockerwait:
+	@echo "Waiting for docker service to start..."; \
+	timeout=10; \
+	while [ $$timeout -gt 0 ]; do \
+		if systemctl show -p SubState docker.service | grep -q =running; then \
+			exit 0; \
+		fi; \
+		timeout=$$((timeout - 1)); \
+		sleep 1; \
+	done; \
+	echo "Waited too long for docker service to start"; \
+	exit 1
+
+buildimg: dockerwait
 	sudo docker build -t $(BUILDER_IMG) -f Dockerfile.builder .
 
-build:
+build: dockerwait
 	if ! test -f ../configure; then \
 	  $(BUILDER_RUN) env NOCONFIGURE=1 ./autogen.sh; \
 	fi
 	if ! test -f ../Makefile; then \
-	  $(BUILDER_RUN) ./configure --prefix=/usr --libdir=/usr/lib64; \
+	  $(BUILDER_RUN) env CFLAGS='$(CFLAGS)' \
+	    ./configure --prefix=/usr --libdir=/usr/lib64; \
 	fi
-	$(BUILDER_RUN) sh -c make -j 4
+	$(BUILDER_RUN) make -j4 CFLAGS="$(CFLAGS)"
 
 install: build
 	sudo sh checkout.sh
@@ -30,3 +48,9 @@ ofsinstall: build
 	$(BUILDER_ARGS) -v /etc:/host/etc \
 	                -v /usr:/host/usr \
 	                $(BUILDER_IMG) sudo make install DESTDIR=/host
+
+check: build
+	$(BUILDER_RUN) make check
+
+clean:
+	$(BUILDER_RUN) make clean
