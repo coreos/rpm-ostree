@@ -19,7 +19,7 @@
 
 libhif.so.3:
 	cd libhif-build && $(MAKE)
-	ln -s libhif-build/libhif/libhif.so.3 .
+	ln -sf libhif-build/libhif/libhif.so.3 .
 CLEANFILES += libhif.so.3
 GITIGNOREFILES += libhif-build/
 
@@ -27,3 +27,8 @@ install-libhif-hook:
 	install -d -m 0755 $(DESTDIR)$(libdir)/rpm-ostree
 	install -m 0755 $$(readlink libhif.so.3) $(DESTDIR)$(libdir)/rpm-ostree
 INSTALL_DATA_HOOKS += install-libhif-hook
+
+clean-local: clean-local-hif
+.PHONY: clean-local-hif
+clean-local-hif:
+	cd libhif-build && $(MAKE) clean
