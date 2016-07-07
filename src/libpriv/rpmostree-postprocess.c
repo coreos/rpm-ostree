@@ -1012,7 +1012,7 @@ handle_remove_files_from_package (GFile         *yumroot,
   if (npackages == 0)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Unable to find package '%s' specified in remove-files-from", pkgname);
+                   "Unable to find package '%s' specified in remove-from-packages", pkgname);
       goto out;
     }
 
