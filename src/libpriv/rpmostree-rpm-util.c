@@ -772,6 +772,8 @@ get_sack_for_root (int               dfd,
   g_return_val_if_fail (out_sack != NULL, FALSE);
 
   sack = hif_sack_new ();
+  hif_sack_set_rootdir (sack, fullpath);
+
   if (!hif_sack_setup (sack, HIF_SACK_LOAD_FLAG_BUILD_CACHE, error))
     goto out;
 
