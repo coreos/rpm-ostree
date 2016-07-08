@@ -1,5 +1,5 @@
 AC_PREREQ([2.63])
-AC_INIT([rpm-ostree], [2016.3], [walters@verbum.org])
+AC_INIT([rpm-ostree], [2016.4], [walters@verbum.org])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_MACRO_DIR([buildutil])
 AC_CONFIG_AUX_DIR([build-aux])
@@ -62,7 +62,7 @@ AC_SEARCH_LIBS([rpmsqSetInterruptSafety], [rpmio],
 # Remember to update AM_CPPFLAGS in Makefile.am when bumping GIO req.
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
-				     ostree-1 >= 2015.1 libgsystem >= 2015.1
+				     ostree-1 >= 2016.7 libgsystem >= 2015.1
 				     libsystemd
 				     rpm librepo
 				     libarchive])
