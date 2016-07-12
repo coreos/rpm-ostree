@@ -5,7 +5,7 @@ New! See the docs online at [Read The Docs (rpm-ostree)](https://rpm-ostree.read
 -----
 
 rpm-ostree is a hybrid image/package system.  It uses
-[OSTree](https://wiki.gnome.org/Projects/OSTree) as an image format,
+[OSTree](https://ostree.readthedocs.io/en/latest/) as an image format,
 and uses RPM as a component model.
 
 The project aims to bring together a hybrid of image-like upgrade
@@ -39,5 +39,5 @@ See [Hacking](HACKING.md).
 Contributing
 ------------
 
-See [Contributing](docs/CONTRIBUTING.md).
+See [Contributing](CONTRIBUTING.md).
 
