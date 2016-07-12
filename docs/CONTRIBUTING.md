@@ -13,5 +13,5 @@ Use `make check` for now.
 Coding style
 ------------
 
-See the [OSTree CONTRIBUTING](https://git.gnome.org/browse/ostree/tree/docs/CONTRIBUTING.md)
+See the [OSTree CONTRIBUTING](https://ostree.readthedocs.io/en/latest/CONTRIBUTING/)
 coding style.
