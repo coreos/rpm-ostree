@@ -1281,6 +1281,8 @@ ostree_checkout_package (OstreeRepo   *repo,
    * boot-uuid/fsync gating at a higher level.
    */
   opts.disable_fsync = TRUE;
+  /* Always want hardlinks */
+  opts.no_copy_fallback = TRUE;
 
   if (!ostree_repo_checkout_tree_at (repo, &opts, dfd, path,
                                      pkg_commit, cancellable, error))
