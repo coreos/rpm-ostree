@@ -2,10 +2,17 @@
 set -euo pipefail
 
 # prepare ssh connection
-vagrant ssh-config > ssh-config
-echo "  ControlMaster auto" >> ssh-config
-echo "  ControlPath $PWD/ssh.sock" >> ssh-config
-echo "  ControlPersist yes" >> ssh-config
+
+# If there's already an ssh-config, just use that one. The user might have
+# created it for a self-provisioned machine. Otherwise, let's just assume we're
+# using vagrant and generate an ssh-config.
+if [ ! -f ssh-config ]; then
+  vagrant ssh-config > ssh-config
+  echo "  ControlMaster auto" >> ssh-config
+  echo "  ControlPath $PWD/ssh.sock" >> ssh-config
+  echo "  ControlPersist yes" >> ssh-config
+fi
+
 export SSH="ssh -F $PWD/ssh-config vmcheck"
 export SCP="scp -F $PWD/ssh-config"
 
@@ -81,7 +88,7 @@ for tf in $(find . -name 'test-*.sh' | sort); do
 
     # do some dirty piping to get some instant feedback and help debugging
     if ${tf} |& tee -a ${LOG} \
-            | grep -e '^ok' --line-buffered \
+            | grep -e '^ok ' --line-buffered \
             | xargs -d '\n' -n 1 echo "  "; then
         pass_print "PASS: $bn"
         let "pass += 1"
@@ -109,8 +116,10 @@ for tf in $(find . -name 'test-*.sh' | sort); do
     fi
 done
 
-# tear down ssh connection
-$SSH -O exit &>/dev/null
+# tear down ssh connection if needed
+if $SSH -O check &>/dev/null; then
+    $SSH -O exit &>/dev/null
+fi
 
 [ ${fail} -eq 0 ] && printer=pass || printer=fail
 ${printer}_print "TOTAL: $total PASS: $pass SKIP: $skip FAIL: $fail"
