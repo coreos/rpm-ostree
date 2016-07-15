@@ -1,9 +1,11 @@
+#include "config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <glib-unix.h>
-#include <libgsystem.h>
+#include "libglnx.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-util.h"
 
