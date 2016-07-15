@@ -663,7 +663,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 {
   gboolean ret = FALSE;
   guint progress_sigid;
-  gs_unref_object HifState *hifstate = hif_state_new ();
+  glnx_unref_object HifState *hifstate = hif_state_new ();
 
   progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                      G_CALLBACK (on_hifstate_percentage_changed),
@@ -1123,7 +1123,7 @@ rpmostree_context_download (RpmOstreeContext *ctx,
         g_autofree char *target_dir = NULL;
         HifRepo *src = key;
         GPtrArray *src_packages = value;
-        gs_unref_object HifState *hifstate = hif_state_new ();
+        glnx_unref_object HifState *hifstate = hif_state_new ();
 
         g_autofree char *prefix
           = g_strdup_printf ("  Downloading from %s:", hif_repo_get_id (src));
@@ -1845,7 +1845,7 @@ run_posttrans_sync (int tmp_metadata_dfd,
 static char *
 checksum_version (GVariant *checksum)
 {
-  gs_unref_variant GVariant *metadata = NULL;
+  g_autoptr(GVariant) metadata = NULL;
   const char *ret = NULL;
 
   metadata = g_variant_get_child_value (checksum, 0);

@@ -258,10 +258,10 @@ on_log_handler (const gchar *log_domain,
 static gboolean
 connect_to_peer (int fd)
 {
-  gs_unref_object GSocketConnection *stream = NULL;
-  gs_unref_object GSocket *socket = NULL;
+  g_autoptr(GSocketConnection) stream = NULL;
+  g_autoptr(GSocket) socket = NULL;
   GError *error = NULL;
-  gs_free gchar *guid = NULL;
+  g_autofree gchar *guid = NULL;
   gboolean ret = FALSE;
 
   socket = g_socket_new_from_fd (fd, &error);

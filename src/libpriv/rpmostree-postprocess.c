@@ -54,7 +54,7 @@ move_to_dir (GFile        *src,
              GCancellable *cancellable,
              GError      **error)
 {
-  gs_unref_object GFile *dest =
+  g_autoptr(GFile) dest =
     g_file_get_child (dest_dir, gs_file_get_basename_cached (src));
 
   return gs_file_rename (src, dest, cancellable, error);
@@ -95,7 +95,7 @@ init_rootfs (GFile         *targetroot,
              GError       **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object GFile *child = NULL;
+  g_autoptr(GFile) child = NULL;
   guint i;
   const char *toplevel_dirs[] = { "dev", "proc", "run", "sys", "var", "sysroot" };
   const Symlink symlinks[] = {
@@ -115,7 +115,7 @@ init_rootfs (GFile         *targetroot,
   
   for (i = 0; i < G_N_ELEMENTS (toplevel_dirs); i++)
     {
-      gs_unref_object GFile *dir = g_file_get_child (targetroot, toplevel_dirs[i]);
+      g_autoptr(GFile) dir = g_file_get_child (targetroot, toplevel_dirs[i]);
 
       if (!gs_file_ensure_directory (dir, TRUE,
                                      cancellable, error))
@@ -125,7 +125,7 @@ init_rootfs (GFile         *targetroot,
   for (i = 0; i < G_N_ELEMENTS (symlinks); i++)
     {
       const Symlink*linkinfo = symlinks + i;
-      gs_unref_object GFile *src =
+      g_autoptr(GFile) src =
         g_file_resolve_relative_path (targetroot, linkinfo->src);
 
       if (!g_file_make_symbolic_link (src, linkinfo->target,
@@ -146,9 +146,9 @@ find_kernel_and_initramfs_in_bootdir (GFile       *bootdir,
                                       GError     **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object GFileEnumerator *direnum = NULL;
-  gs_unref_object GFile *ret_kernel = NULL;
-  gs_unref_object GFile *ret_initramfs = NULL;
+  g_autoptr(GFileEnumerator) direnum = NULL;
+  g_autoptr(GFile) ret_kernel = NULL;
+  g_autoptr(GFile) ret_initramfs = NULL;
 
   direnum = g_file_enumerate_children (bootdir, "standard::name", 0, 
                                        cancellable, error);
@@ -212,8 +212,8 @@ find_ensure_one_subdirectory (GFile         *d,
                               GError       **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object GFileEnumerator *direnum = NULL;
-  gs_unref_object GFile *ret_subdir = NULL;
+  g_autoptr(GFileEnumerator) direnum = NULL;
+  g_autoptr(GFile) ret_subdir = NULL;
 
   direnum = g_file_enumerate_children (d, "standard::name,standard::type", 0, 
                                        cancellable, error);
@@ -316,10 +316,10 @@ do_kernel_prep (GFile         *yumroot,
                 GError       **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object GFile *bootdir = 
+  g_autoptr(GFile) bootdir = 
     g_file_get_child (yumroot, "boot");
-  gs_unref_object GFile *kernel_path = NULL;
-  gs_unref_object GFile *initramfs_path = NULL;
+  g_autoptr(GFile) kernel_path = NULL;
+  g_autoptr(GFile) initramfs_path = NULL;
   const char *boot_checksum_str = NULL;
   GChecksum *boot_checksum = NULL;
   g_autofree char *kver = NULL;
@@ -331,8 +331,8 @@ do_kernel_prep (GFile         *yumroot,
 
   if (kernel_path == NULL)
     {
-      gs_unref_object GFile *mod_dir = g_file_resolve_relative_path (yumroot, "usr/lib/modules");
-      gs_unref_object GFile *modversion_dir = NULL;
+      g_autoptr(GFile) mod_dir = g_file_resolve_relative_path (yumroot, "usr/lib/modules");
+      g_autoptr(GFile) modversion_dir = NULL;
 
       if (!find_ensure_one_subdirectory (mod_dir, &modversion_dir, cancellable, error))
         goto out;
@@ -374,7 +374,7 @@ do_kernel_prep (GFile         *yumroot,
 
   /* OSTree needs to own this */
   {
-    gs_unref_object GFile *loaderdir = g_file_get_child (bootdir, "loader");
+    g_autoptr(GFile) loaderdir = g_file_get_child (bootdir, "loader");
     if (!gs_shutil_rm_rf (loaderdir, cancellable, error))
       goto out;
   }
@@ -391,7 +391,7 @@ do_kernel_prep (GFile         *yumroot,
   g_print ("Creating empty machine-id\n");
   {
     const char *hardcoded_machine_id = "";
-    gs_unref_object GFile *machineid_path =
+    g_autoptr(GFile) machineid_path =
       g_file_resolve_relative_path (yumroot, "etc/machine-id");
     if (!g_file_replace_contents (machineid_path, hardcoded_machine_id,
                                   strlen (hardcoded_machine_id),
@@ -402,7 +402,7 @@ do_kernel_prep (GFile         *yumroot,
 
   {
     gboolean reproducible;
-    gs_unref_ptrarray GPtrArray *dracut_argv = g_ptr_array_new ();
+    g_autoptr(GPtrArray) dracut_argv = g_ptr_array_new ();
 
     if (!dracut_supports_reproducible (yumroot, &reproducible, cancellable, error))
       goto out;
@@ -454,8 +454,8 @@ do_kernel_prep (GFile         *yumroot,
     }
 
   {
-    gs_free char *initramfs_name = g_strconcat ("initramfs-", kver, ".img", NULL);
-    gs_unref_object GFile *initramfs_dest =
+    g_autofree char *initramfs_name = g_strconcat ("initramfs-", kver, ".img", NULL);
+    g_autoptr(GFile) initramfs_dest =
       g_file_get_child (bootdir, initramfs_name);
 
     if (!gs_file_rename (initramfs_path, initramfs_dest,
@@ -479,15 +479,15 @@ do_kernel_prep (GFile         *yumroot,
   boot_checksum_str = g_checksum_get_string (boot_checksum);
   
   {
-    gs_free char *new_kernel_name =
+    g_autofree char *new_kernel_name =
       g_strconcat (gs_file_get_basename_cached (kernel_path), "-",
                    boot_checksum_str, NULL);
-    gs_unref_object GFile *new_kernel_path =
+    g_autoptr(GFile) new_kernel_path =
       g_file_get_child (bootdir, new_kernel_name);
-    gs_free char *new_initramfs_name =
+    g_autofree char *new_initramfs_name =
       g_strconcat (gs_file_get_basename_cached (initramfs_path), "-",
                    boot_checksum_str, NULL);
-    gs_unref_object GFile *new_initramfs_path =
+    g_autoptr(GFile) new_initramfs_path =
       g_file_get_child (bootdir, new_initramfs_name);
 
     if (!gs_file_rename (kernel_path, new_kernel_path,
@@ -522,9 +522,9 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
     {
       struct dirent *dent = NULL;
       GString *tmpfiles_d_buf;
-      gs_free char *tmpfiles_d_line = NULL;
+      g_autofree char *tmpfiles_d_line = NULL;
       char filetype_c;
-      gs_free char *relpath = NULL;
+      g_autofree char *relpath = NULL;
 
       if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
         goto out;
@@ -682,7 +682,7 @@ workaround_selinux_cross_labeling_recurse (int            dfd,
         {
           struct stat stbuf;
           const char *lastdot;
-          gs_free char *nonbin_name = NULL;
+          g_autofree char *nonbin_name = NULL;
 
           if (TEMP_FAILURE_RETRY (fstatat (dfd_iter.fd, name, &stbuf, AT_SYMLINK_NOFOLLOW)) != 0)
             {
@@ -754,10 +754,10 @@ replace_nsswitch (GFile         *target_usretc,
                   GError       **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object GFile *nsswitch_conf =
+  g_autoptr(GFile) nsswitch_conf =
     g_file_get_child (target_usretc, "nsswitch.conf");
-  gs_free char *nsswitch_contents = NULL;
-  gs_free char *new_nsswitch_contents = NULL;
+  g_autofree char *nsswitch_contents = NULL;
+  g_autofree char *new_nsswitch_contents = NULL;
 
   static gsize regex_initialized;
   static GRegex *passwd_regex;
@@ -803,9 +803,9 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   gboolean ret = FALSE;
   glnx_fd_close int src_rootfs_fd = -1;
   glnx_fd_close int target_root_dfd = -1;
-  gs_unref_object GFile *kernel_path = NULL;
-  gs_unref_object GFile *initramfs_path = NULL;
-  gs_unref_hashtable GHashTable *preserve_groups_set = NULL;
+  g_autoptr(GFile) kernel_path = NULL;
+  g_autoptr(GFile) initramfs_path = NULL;
+  g_autoptr(GHashTable) preserve_groups_set = NULL;
   gboolean container = FALSE;
 
   if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot), TRUE,
@@ -848,7 +848,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
 
   /* NSS configuration to look at the new files */
   {
-    gs_unref_object GFile *yumroot_etc = 
+    g_autoptr(GFile) yumroot_etc = 
       g_file_resolve_relative_path (yumroot, "etc");
 
     if (!replace_nsswitch (yumroot_etc, cancellable, error))
@@ -858,8 +858,8 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   /* We take /usr from the yum content */
   g_print ("Moving /usr and /etc to target\n");
   {
-    gs_unref_object GFile *usr = g_file_get_child (yumroot, "usr");
-    gs_unref_object GFile *etc = g_file_get_child (yumroot, "etc");
+    g_autoptr(GFile) usr = g_file_get_child (yumroot, "usr");
+    g_autoptr(GFile) etc = g_file_get_child (yumroot, "etc");
     if (!move_to_dir (usr, targetroot, cancellable, error))
       goto out;
     if (!move_to_dir (etc, targetroot, cancellable, error))
@@ -877,13 +877,13 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   /* Move boot, but rename the kernel/initramfs to have a checksum */
   if (!container)
     {
-      gs_unref_object GFile *yumroot_boot =
+      g_autoptr(GFile) yumroot_boot =
         g_file_get_child (yumroot, "boot");
-      gs_unref_object GFile *target_boot =
+      g_autoptr(GFile) target_boot =
         g_file_get_child (targetroot, "boot");
-      gs_unref_object GFile *target_usrlib =
+      g_autoptr(GFile) target_usrlib =
         g_file_resolve_relative_path (targetroot, "usr/lib");
-      gs_unref_object GFile *target_usrlib_ostree_boot =
+      g_autoptr(GFile) target_usrlib_ostree_boot =
         g_file_resolve_relative_path (target_usrlib, "ostree-boot");
       RpmOstreePostprocessBootLocation boot_location =
         RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
@@ -953,7 +953,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
                                      "bin", "sbin" };
     for (i = 0; i < G_N_ELEMENTS (toplevel_links); i++)
       {
-        gs_unref_object GFile *srcpath =
+        g_autoptr(GFile) srcpath =
           g_file_get_child (yumroot, toplevel_links[i]);
 
         if (g_file_query_file_type (srcpath, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL) == G_FILE_TYPE_SYMBOLIC_LINK)
@@ -971,12 +971,12 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
     const char *pkglibdir_path
       = g_getenv("RPMOSTREE_UNINSTALLED_PKGLIBDIR") ?: PKGLIBDIR;
 
-    gs_unref_object GFile *src_pkglibdir = g_file_new_for_path (pkglibdir_path);
-    gs_unref_object GFile *src_tmpfilesd =
+    g_autoptr(GFile) src_pkglibdir = g_file_new_for_path (pkglibdir_path);
+    g_autoptr(GFile) src_tmpfilesd =
       g_file_get_child (src_pkglibdir, "rpm-ostree-0-integration.conf");
-    gs_unref_object GFile *target_tmpfilesd =
+    g_autoptr(GFile) target_tmpfilesd =
       g_file_resolve_relative_path (targetroot, "usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf");
-    gs_unref_object GFile *target_tmpfilesd_parent = g_file_get_parent (target_tmpfilesd);
+    g_autoptr(GFile) target_tmpfilesd_parent = g_file_get_parent (target_tmpfilesd);
 
     if (!gs_file_ensure_directory (target_tmpfilesd_parent, TRUE, cancellable, error))
       goto out;
@@ -1041,7 +1041,7 @@ handle_remove_files_from_package (GFile         *yumroot,
 
               if (g_regex_match (regex, file, 0, NULL))
                 {
-                  gs_unref_object GFile *child = NULL;
+                  g_autoptr(GFile) child = NULL;
               
                   if (file[0] == '/')
                     file++;
@@ -1268,8 +1268,8 @@ rpmostree_copy_additional_files (GFile         *rootfs,
   JsonArray *add = NULL;
   guint i, len;
 
-  gs_free char *dest_rootfs_path = g_strconcat (gs_file_get_path_cached (rootfs), ".post", NULL);
-  gs_unref_object GFile *targetroot = g_file_new_for_path (dest_rootfs_path);
+  g_autofree char *dest_rootfs_path = g_strconcat (gs_file_get_path_cached (rootfs), ".post", NULL);
+  g_autoptr(GFile) targetroot = g_file_new_for_path (dest_rootfs_path);
 
   if (json_object_has_member (treefile, "add-files"))
     {
@@ -1287,7 +1287,7 @@ rpmostree_copy_additional_files (GFile         *rootfs,
       const char *src, *dest;
 
       JsonArray *add_el = json_array_get_array_element (add, i);
-      gs_unref_object GFile *child = NULL;
+      g_autoptr(GFile) child = NULL;
 
       if (!add_el)
         {
@@ -1305,11 +1305,11 @@ rpmostree_copy_additional_files (GFile         *rootfs,
         goto out;
 
       {
-        gs_unref_object GFile *srcfile = g_file_resolve_relative_path (context_directory, src);
+        g_autoptr(GFile) srcfile = g_file_resolve_relative_path (context_directory, src);
         const char *rootfs_path = gs_file_get_path_cached (rootfs);
-        gs_free char *destpath = g_strconcat (rootfs_path, "/", dest, NULL);
-        gs_unref_object GFile *destfile = g_file_resolve_relative_path (targetroot, destpath);
-        gs_unref_object GFile *target_tmpfilesd_parent = g_file_get_parent (destfile);
+        g_autofree char *destpath = g_strconcat (rootfs_path, "/", dest, NULL);
+        g_autoptr(GFile) destfile = g_file_resolve_relative_path (targetroot, destpath);
+        g_autoptr(GFile) target_tmpfilesd_parent = g_file_get_parent (destfile);
 
         g_print ("Adding file '%s'\n", dest);
 
@@ -1352,7 +1352,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
     len = 0;
 
   {
-    gs_unref_object GFile *multiuser_wants_dir =
+    g_autoptr(GFile) multiuser_wants_dir =
       g_file_resolve_relative_path (yumroot, "etc/systemd/system/multi-user.target.wants");
 
     if (!gs_file_ensure_directory (multiuser_wants_dir, TRUE, cancellable, error))
@@ -1361,8 +1361,8 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
     for (i = 0; i < len; i++)
       {
         const char *unitname = _rpmostree_jsonutil_array_require_string_element (units, i, error);
-        gs_unref_object GFile *unit_link_target = NULL;
-        gs_free char *symlink_target = NULL;
+        g_autoptr(GFile) unit_link_target = NULL;
+        g_autofree char *symlink_target = NULL;
 
         if (!unitname)
           goto out;
@@ -1382,9 +1382,9 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
   }
 
   {
-    gs_unref_object GFile *target_treefile_dir_path =
+    g_autoptr(GFile) target_treefile_dir_path =
       g_file_resolve_relative_path (yumroot, "usr/share/rpm-ostree");
-    gs_unref_object GFile *target_treefile_path =
+    g_autoptr(GFile) target_treefile_path =
       g_file_get_child (target_treefile_dir_path, "treefile.json");
     const guint8 *buf;
     gsize len;
@@ -1408,9 +1408,9 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
   
   if (default_target != NULL)
     {
-      gs_unref_object GFile *default_target_path =
+      g_autoptr(GFile) default_target_path =
         g_file_resolve_relative_path (yumroot, "etc/systemd/system/default.target");
-      gs_free char *dest_default_target_path =
+      g_autofree char *dest_default_target_path =
         g_strconcat ("/usr/lib/systemd/system/", default_target, NULL);
 
       (void) gs_file_unlink (default_target_path, NULL, NULL);
@@ -1431,7 +1431,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
   for (i = 0; i < len; i++)
     {
       const char *val = _rpmostree_jsonutil_array_require_string_element (remove, i, error);
-      gs_unref_object GFile *child = NULL;
+      g_autoptr(GFile) child = NULL;
 
       if (!val)
         return FALSE;
@@ -1469,7 +1469,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
    * compatibility reasons using tmpfiles.
    * */
   {
-    gs_unref_object GFile *rpmdb =
+    g_autoptr(GFile) rpmdb =
       g_file_resolve_relative_path (yumroot, "var/lib/rpm");
 
     if (g_file_query_exists (rpmdb, NULL))
@@ -1513,11 +1513,11 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
   if (postprocess_script)
     {
       const char *yumroot_path = gs_file_get_path_cached (yumroot);
-      gs_unref_object GFile *src = g_file_resolve_relative_path (context_directory, postprocess_script);
+      g_autoptr(GFile) src = g_file_resolve_relative_path (context_directory, postprocess_script);
       const char *bn = gs_file_get_basename_cached (src);
-      gs_free char *binpath = g_strconcat ("/usr/bin/rpmostree-postprocess-", bn, NULL);
-      gs_free char *destpath = g_strconcat (yumroot_path, binpath, NULL);
-      gs_unref_object GFile *dest = g_file_new_for_path (destpath);
+      g_autofree char *binpath = g_strconcat ("/usr/bin/rpmostree-postprocess-", bn, NULL);
+      g_autofree char *destpath = g_strconcat (yumroot_path, binpath, NULL);
+      g_autoptr(GFile) dest = g_file_new_for_path (destpath);
       /* Clone all the things */
 
       if (!g_file_copy (src, dest, 0, cancellable, NULL, NULL, error))
@@ -1562,7 +1562,7 @@ rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
                                      GError       **error)
 {
   gboolean ret = FALSE;
-  gs_free char *dest_rootfs_path = NULL;
+  g_autofree char *dest_rootfs_path = NULL;
 
   dest_rootfs_path = g_strconcat (gs_file_get_path_cached (rootfs), ".post", NULL);
 
@@ -1570,7 +1570,7 @@ rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
     goto out;
 
   {
-    gs_unref_object GFile *dest_rootfs = g_file_new_for_path (dest_rootfs_path);
+    g_autoptr(GFile) dest_rootfs = g_file_new_for_path (dest_rootfs_path);
     if (!create_rootfs_from_yumroot_content (dest_rootfs, rootfs, treefile,
                                              cancellable, error))
       goto out;
@@ -1601,7 +1601,7 @@ read_xattrs_cb (OstreeRepo     *repo,
   /* Hardcoded at the moment, we're only taking file caps */
   static const char *accepted_xattrs[] = { "security.capability" };
   guint i;
-  gs_unref_variant GVariant *existing_xattrs = NULL;
+  g_autoptr(GVariant) existing_xattrs = NULL;
   gs_free_variant_iter GVariantIter *viter = NULL;
   GError *local_error = NULL;
   GError **error = &local_error;
@@ -1663,12 +1663,12 @@ rpmostree_commit (int            rootfs_fd,
                   GError       **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object OstreeMutableTree *mtree = NULL;
+  glnx_unref_object OstreeMutableTree *mtree = NULL;
   OstreeRepoCommitModifier *commit_modifier = NULL;
-  gs_free char *parent_revision = NULL;
-  gs_free char *new_revision = NULL;
-  gs_unref_object GFile *root_tree = NULL;
-  gs_unref_object OstreeSePolicy *sepolicy = NULL;
+  g_autofree char *parent_revision = NULL;
+  g_autofree char *new_revision = NULL;
+  g_autoptr(GFile) root_tree = NULL;
+  glnx_unref_object OstreeSePolicy *sepolicy = NULL;
   
   /* hardcode targeted policy for now */
   if (enable_selinux)

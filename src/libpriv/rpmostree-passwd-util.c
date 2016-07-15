@@ -72,7 +72,7 @@ dir_contains_uid_or_gid (GFile         *root,
                          GError       **error)
 {
   gboolean ret = FALSE;
-  gs_unref_object GFileInfo *file_info = NULL;
+  g_autoptr(GFileInfo) file_info = NULL;
   guint32 type;
   guint32 tid;
   gboolean found_match = FALSE;
@@ -109,8 +109,8 @@ dir_contains_uid_or_gid (GFile         *root,
   /* Now recurse for dirs. */
   if (!found_match && type == G_FILE_TYPE_DIRECTORY)
     {
-      gs_unref_object GFileEnumerator *dir_enum = NULL;
-      gs_unref_object GFileInfo *child_info = NULL;
+      g_autoptr(GFileEnumerator) dir_enum = NULL;
+      g_autoptr(GFileInfo) child_info = NULL;
 
       dir_enum = g_file_enumerate_children (root, OSTREE_GIO_FAST_QUERYINFO, 
                                             G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
@@ -282,14 +282,14 @@ rpmostree_check_passwd_groups (gboolean         passwd,
   const char *commit_filepath = passwd ? "usr/lib/passwd" : "usr/lib/group";
   const char *json_conf_name  = passwd ? "check-passwd" : "check-groups";
   const char *json_conf_ign   = passwd ? "ignore-removed-users" : "ignore-removed-groups";
-  gs_unref_object GFile *old_path = NULL;
-  gs_unref_object GFile *new_path = g_file_resolve_relative_path (yumroot, commit_filepath);
-  gs_unref_ptrarray GPtrArray *ignore_removed_ents = NULL;
+  g_autoptr(GFile) old_path = NULL;
+  g_autoptr(GFile) new_path = g_file_resolve_relative_path (yumroot, commit_filepath);
+  g_autoptr(GPtrArray) ignore_removed_ents = NULL;
   gboolean ignore_all_removed = FALSE;
-  gs_free char *old_contents = NULL;
-  gs_free char *new_contents = NULL;
-  gs_unref_ptrarray GPtrArray *old_ents = NULL;
-  gs_unref_ptrarray GPtrArray *new_ents = NULL;
+  g_autofree char *old_contents = NULL;
+  g_autofree char *new_contents = NULL;
+  g_autoptr(GPtrArray) old_ents = NULL;
+  g_autoptr(GPtrArray) new_ents = NULL;
   unsigned int oiter = 0;
   unsigned int niter = 0;
 
@@ -403,7 +403,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
     {
       if (previous_commit != NULL)
         {
-          gs_unref_object GFile *root = NULL;
+          g_autoptr(GFile) root = NULL;
           
           if (!ostree_repo_read_commit (repo, previous_commit, &root, NULL, NULL, error))
             goto out;
@@ -714,9 +714,9 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
 {
   gboolean ret = FALSE;
   const char *name = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD ? "passwd" : "group";
-  gs_free char *src_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, NULL);
-  gs_free char *etctmp_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, ".tmp", NULL);
-  gs_free char *usrdest_path = g_strconcat (gs_file_get_path_cached (rootfs), "/usr/lib/", name, NULL);
+  g_autofree char *src_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, NULL);
+  g_autofree char *etctmp_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, ".tmp", NULL);
+  g_autofree char *usrdest_path = g_strconcat (gs_file_get_path_cached (rootfs), "/usr/lib/", name, NULL);
   _cleanup_stdio_file_ FILE *src_stream = NULL;
   _cleanup_stdio_file_ FILE *etcdest_stream = NULL;
   _cleanup_stdio_file_ FILE *usrdest_stream = NULL;
@@ -829,8 +829,8 @@ target_etc_filename (GFile         *yumroot,
                      GError       **error)
 {
   FILE *ret = NULL;
-  gs_free char *etc_subpath = g_strconcat ("etc/", filename, NULL);
-  gs_free char *target_etc =
+  g_autofree char *etc_subpath = g_strconcat ("etc/", filename, NULL);
+  g_autofree char *target_etc =
     g_build_filename (gs_file_get_path_cached (yumroot), etc_subpath, NULL);
 
   ret = gfopen (target_etc, "w", cancellable, error);
@@ -946,16 +946,16 @@ concat_passwd_file (GFile           *yumroot,
 {
   gboolean ret = FALSE;
   const char *filename = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD ? "passwd" : "group";
-  gs_free char *usretc_subpath = g_strconcat ("usr/etc/", filename, NULL);
-  gs_free char *usrlib_subpath = g_strconcat ("usr/lib/", filename, NULL);
-  gs_unref_object GFile *orig_etc_content =
+  g_autofree char *usretc_subpath = g_strconcat ("usr/etc/", filename, NULL);
+  g_autofree char *usrlib_subpath = g_strconcat ("usr/lib/", filename, NULL);
+  g_autoptr(GFile) orig_etc_content =
     g_file_resolve_relative_path (previous_commit, usretc_subpath);
-  gs_unref_object GFile *orig_usrlib_content =
+  g_autoptr(GFile) orig_usrlib_content =
     g_file_resolve_relative_path (previous_commit, usrlib_subpath);
-  gs_unref_object GFileOutputStream *out = NULL;
-  gs_unref_hashtable GHashTable *seen_names =
+  g_autoptr(GFileOutputStream) out = NULL;
+  g_autoptr(GHashTable) seen_names =
     g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
-  gs_free char *contents = NULL;
+  g_autofree char *contents = NULL;
   GFile *sources[] = { orig_etc_content, orig_usrlib_content };
   guint i;
   gboolean have_etc, have_usr;
@@ -1019,9 +1019,9 @@ _data_from_json (GFile           *yumroot,
   JsonObject *chk = NULL;
   const char *chk_type = NULL;
   const char *filename = NULL;
-  gs_unref_object GFile *source = NULL;
-  gs_free char *contents = NULL;
-  gs_unref_hashtable GHashTable *seen_names =
+  g_autoptr(GFile) source = NULL;
+  g_autofree char *contents = NULL;
+  g_autoptr(GHashTable) seen_names =
     g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
   _cleanup_stdio_file_ FILE *src_stream = NULL;
   _cleanup_stdio_file_ FILE *dest_stream = NULL;
@@ -1088,7 +1088,7 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
   gboolean found_passwd_data = FALSE;
   gboolean found_groups_data = FALSE;
   gboolean perform_migrate = FALSE;
-  gs_unref_object GFile *yumroot_etc = g_file_resolve_relative_path (yumroot, "etc");
+  g_autoptr(GFile) yumroot_etc = g_file_resolve_relative_path (yumroot, "etc");
 
   /* Create /etc in the target root; FIXME - should ensure we're using
    * the right permissions from the filesystem RPM.  Doing this right

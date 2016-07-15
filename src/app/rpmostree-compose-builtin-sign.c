@@ -27,6 +27,7 @@
 #include "rpmostree-libbuiltin.h"
 
 #include "libgsystem.h"
+#include "libglnx.h"
 
 static char *opt_repo_path;
 static char *opt_key_id;
@@ -47,17 +48,17 @@ rpmostree_compose_builtin_sign (int            argc,
 {
   int exit_status = EXIT_FAILURE;
   GOptionContext *context = g_option_context_new ("- Use rpm-sign to sign an OSTree commit");
-  gs_unref_object GFile *repopath = NULL;
-  gs_unref_object OstreeRepo *repo = NULL;
-  gs_unref_object GFile *tmp_commitdata_file = NULL;
-  gs_unref_object GFileIOStream *tmp_sig_stream = NULL;
-  gs_unref_object GFile *tmp_sig_file = NULL;
-  gs_unref_object GFileIOStream *tmp_commitdata_stream = NULL;
+  g_autoptr(GFile) repopath = NULL;
+  glnx_unref_object OstreeRepo *repo = NULL;
+  g_autoptr(GFile) tmp_commitdata_file = NULL;
+  g_autoptr(GFileIOStream) tmp_sig_stream = NULL;
+  g_autoptr(GFile) tmp_sig_file = NULL;
+  g_autoptr(GFileIOStream) tmp_commitdata_stream = NULL;
   GOutputStream *tmp_commitdata_output = NULL;
-  gs_unref_object GInputStream *commit_data = NULL;
-  gs_free char *checksum = NULL;
-  gs_unref_variant GVariant *commit_variant = NULL;
-  gs_unref_bytes GBytes *commit_bytes = NULL;
+  g_autoptr(GInputStream) commit_data = NULL;
+  g_autofree char *checksum = NULL;
+  g_autoptr(GVariant) commit_variant = NULL;
+  g_autoptr(GBytes) commit_bytes = NULL;
   
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -120,7 +121,7 @@ rpmostree_compose_builtin_sign (int            argc,
   {
     char *sigcontent = NULL;
     gsize len;
-    gs_unref_bytes GBytes *sigbytes = NULL;
+    g_autoptr(GBytes) sigbytes = NULL;
 
     if (!g_file_load_contents (tmp_sig_file, cancellable, &sigcontent, &len, NULL,
                                error))

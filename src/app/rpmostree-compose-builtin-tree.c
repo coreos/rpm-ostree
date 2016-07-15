@@ -73,7 +73,7 @@ static GOptionEntry option_entries[] = {
 static char *
 checksum_version (GVariant *checksum)
 {
-  gs_unref_variant GVariant *metadata = NULL;
+  g_autoptr(GVariant) metadata = NULL;
   const char *ret = NULL;
 
   metadata = g_variant_get_child_value (checksum, 0);
@@ -106,7 +106,7 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
                                          GError                      **error)
 {
   gboolean ret = FALSE;
-  gs_free char *ret_checksum = NULL;
+  g_autofree char *ret_checksum = NULL;
   GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA256);
   
   /* Hash in the raw treefile; this means reordering the input packages
@@ -124,10 +124,10 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
       guint i, len = json_array_get_length (add_files);
       for (i = 0; i < len; i++)
         {
-          gs_unref_object GFile *srcfile = NULL;
+          g_autoptr(GFile) srcfile = NULL;
           const char *src, *dest;
           JsonArray *add_el = json_array_get_array_element (add_files, i);
-          gs_unref_object GFile *child = NULL;
+          g_autoptr(GFile) child = NULL;
 
           if (!add_el)
             {
@@ -226,7 +226,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   GFile *contextdir = self->treefile_context_dirs->pdata[0];
   g_autoptr(RpmOstreeInstall) hifinstall = { 0, };
   HifContext *hifctx;
-  gs_free char *ret_new_inputhash = NULL;
+  g_autofree char *ret_new_inputhash = NULL;
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
   JsonArray *enable_repos = NULL;
   JsonArray *add_files = NULL;
@@ -332,8 +332,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   /* Only look for previous checksum if caller has passed *out_unmodified */
   if (self->previous_checksum && out_unmodified != NULL)
     {
-      gs_unref_variant GVariant *commit_v = NULL;
-      gs_unref_variant GVariant *commit_metadata = NULL;
+      g_autoptr(GVariant) commit_v = NULL;
+      g_autoptr(GVariant) commit_metadata = NULL;
       const char *previous_inputhash = NULL;
       
       if (!ostree_repo_load_variant (self->repo, OSTREE_OBJECT_TYPE_COMMIT,
@@ -366,7 +366,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     goto out;
   
   { g_auto(GLnxConsoleRef) console = { 0, };
-    gs_unref_object HifState *hifstate = hif_state_new ();
+    glnx_unref_object HifState *hifstate = hif_state_new ();
 
     progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                      G_CALLBACK (on_hifstate_percentage_changed), 
@@ -411,7 +411,7 @@ process_includes (RpmOstreeTreeComposeContext  *self,
     }
 
   {
-    gs_unref_object GFile *parent = g_file_get_parent (treefile_path);
+    g_autoptr(GFile) parent = g_file_get_parent (treefile_path);
     gboolean existed = FALSE;
     if (self->treefile_context_dirs->len > 0)
       {
@@ -431,9 +431,9 @@ process_includes (RpmOstreeTreeComposeContext  *self,
                                           
   if (include_path)
     {
-      gs_unref_object GFile *treefile_dirpath = g_file_get_parent (treefile_path);
-      gs_unref_object GFile *parent_path = g_file_resolve_relative_path (treefile_dirpath, include_path);
-      gs_unref_object JsonParser *parent_parser = json_parser_new ();
+      g_autoptr(GFile) treefile_dirpath = g_file_get_parent (treefile_path);
+      g_autoptr(GFile) parent_path = g_file_resolve_relative_path (treefile_dirpath, include_path);
+      glnx_unref_object JsonParser *parent_parser = json_parser_new ();
       JsonNode *parent_rootval;
       JsonObject *parent_root;
       GList *members;
@@ -520,7 +520,7 @@ parse_keyvalue_strings (char             **strings,
     {
       const char *s;
       const char *eq;
-      gs_free char *key = NULL;
+      g_autofree char *key = NULL;
 
       s = *iter;
 
@@ -573,19 +573,19 @@ rpmostree_compose_builtin_tree (int             argc,
   RpmOstreeTreeComposeContext *self = &selfdata;
   JsonNode *treefile_rootval = NULL;
   JsonObject *treefile = NULL;
-  gs_free char *cachekey = NULL;
-  gs_free char *new_inputhash = NULL;
-  gs_unref_object GFile *previous_root = NULL;
-  gs_free char *previous_checksum = NULL;
-  gs_unref_object GFile *yumroot = NULL;
-  gs_unref_object GFile *yumroot_varcache = NULL;
-  gs_unref_object OstreeRepo *repo = NULL;
-  gs_unref_ptrarray GPtrArray *bootstrap_packages = NULL;
-  gs_unref_ptrarray GPtrArray *packages = NULL;
-  gs_unref_object GFile *treefile_path = NULL;
-  gs_unref_object GFile *treefile_dirpath = NULL;
-  gs_unref_object GFile *repo_path = NULL;
-  gs_unref_object JsonParser *treefile_parser = NULL;
+  g_autofree char *cachekey = NULL;
+  g_autofree char *new_inputhash = NULL;
+  g_autoptr(GFile) previous_root = NULL;
+  g_autofree char *previous_checksum = NULL;
+  g_autoptr(GFile) yumroot = NULL;
+  g_autoptr(GFile) yumroot_varcache = NULL;
+  glnx_unref_object OstreeRepo *repo = NULL;
+  g_autoptr(GPtrArray) bootstrap_packages = NULL;
+  g_autoptr(GPtrArray) packages = NULL;
+  g_autoptr(GFile) treefile_path = NULL;
+  g_autoptr(GFile) treefile_dirpath = NULL;
+  g_autoptr(GFile) repo_path = NULL;
+  glnx_unref_object JsonParser *treefile_parser = NULL;
   gs_unref_variant_builder GVariantBuilder *metadata_builder = 
     g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
   g_autoptr(RpmOstreeContext) corectx = NULL;
@@ -635,7 +635,7 @@ rpmostree_compose_builtin_tree (int             argc,
     }
   else
     {
-      gs_free char *tmpd = NULL;
+      g_autofree char *tmpd = NULL;
 
       if (!rpmostree_mkdtemp ("/var/tmp/rpm-ostree.XXXXXX", &tmpd, NULL, error))
         goto out;
@@ -716,8 +716,8 @@ rpmostree_compose_builtin_tree (int             argc,
 
   if (opt_print_only)
     {
-      gs_unref_object JsonGenerator *generator = json_generator_new ();
-      gs_unref_object GOutputStream *stdout = g_unix_output_stream_new (1, FALSE);
+      glnx_unref_object JsonGenerator *generator = json_generator_new ();
+      g_autoptr(GOutputStream) stdout = g_unix_output_stream_new (1, FALSE);
 
       json_generator_set_pretty (generator, TRUE);
       json_generator_set_root (generator, treefile_rootval);
@@ -761,9 +761,9 @@ rpmostree_compose_builtin_tree (int             argc,
   if (json_object_has_member (treefile, "automatic_version_prefix") &&
       !compose_strv_contains_prefix (opt_metadata_strings, "version="))
     {
-      gs_unref_variant GVariant *variant = NULL;
-      gs_free char *last_version = NULL;
-      gs_free char *next_version = NULL;
+      g_autoptr(GVariant) variant = NULL;
+      g_autofree char *last_version = NULL;
+      g_autofree char *next_version = NULL;
       const char *ver_prefix;
 
       ver_prefix = _rpmostree_jsonutil_object_require_string_member (treefile,
@@ -798,7 +798,7 @@ rpmostree_compose_builtin_tree (int             argc,
     goto out;
   g_ptr_array_add (packages, NULL);
 
-  { gs_unref_object JsonGenerator *generator = json_generator_new ();
+  { glnx_unref_object JsonGenerator *generator = json_generator_new ();
     char *treefile_buf = NULL;
     gsize len;
 
@@ -880,7 +880,7 @@ rpmostree_compose_builtin_tree (int             argc,
   {
     const char *gpgkey;
     gboolean selinux = TRUE;
-    gs_unref_variant GVariant *metadata = NULL;
+    g_autoptr(GVariant) metadata = NULL;
 
     g_variant_builder_add (metadata_builder, "{sv}",
                            "rpmostree.inputhash",

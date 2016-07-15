@@ -47,7 +47,7 @@ _rpmostree_set_prefix_error_from_errno (GError     **error,
                                         const char  *format,
                                         ...)
 {
-  gs_free char *formatted = NULL;
+  g_autofree char *formatted = NULL;
   va_list args;
   
   va_start (args, format);
@@ -195,7 +195,7 @@ _rpmostree_util_enumerate_directory_allow_noent (GFile               *dirpath,
 {
   gboolean ret = FALSE;
   GError *temp_error = NULL;
-  gs_unref_object GFileEnumerator *ret_direnum = NULL;
+  g_autoptr(GFileEnumerator) ret_direnum = NULL;
 
   ret_direnum = g_file_enumerate_children (dirpath, queryargs, queryflags,
                                            cancellable, &temp_error);
@@ -226,7 +226,7 @@ _rpmostree_file_load_contents_utf8_allow_noent (GFile          *path,
 {
   gboolean ret = FALSE;
   GError *temp_error = NULL;
-  gs_free char *ret_contents = NULL;
+  g_autofree char *ret_contents = NULL;
 
   ret_contents = gs_file_load_contents_utf8 (path, cancellable, &temp_error);
   if (!ret_contents)
@@ -257,7 +257,7 @@ _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
   gboolean ret = FALSE;
   gsize bytes_read;
   char buf[4096];
-  gs_unref_object GInputStream *filein = NULL;
+  g_autoptr(GInputStream) filein = NULL;
 
   filein = (GInputStream*)g_file_read (src, cancellable, error);
   if (!filein)
@@ -282,8 +282,8 @@ static char *
 ost_get_prev_commit (OstreeRepo *repo, char *checksum)
 {
   char *ret = NULL;
-  gs_unref_variant GVariant *commit = NULL;
-  gs_unref_variant GVariant *parent_csum_v = NULL;
+  g_autoptr(GVariant) commit = NULL;
+  g_autoptr(GVariant) parent_csum_v = NULL;
   GError *tmp_error = NULL;
 
   if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum,
@@ -306,9 +306,9 @@ _rpmostree_util_get_commit_hashes (OstreeRepo    *repo,
                                    GError       **error)
 {
   GPtrArray *ret = NULL;
-  gs_free char *beg_checksum = NULL;
-  gs_free char *end_checksum = NULL;
-  gs_free char *parent = NULL;
+  g_autofree char *beg_checksum = NULL;
+  g_autofree char *end_checksum = NULL;
+  g_autofree char *parent = NULL;
   char *checksum = NULL;
   gboolean worked = FALSE;
 
@@ -411,7 +411,7 @@ _rpmostree_util_keyfile_clone (GKeyFile *keyfile)
 {
   GKeyFile *ret = g_key_file_new ();
   gsize len;
-  gs_free char *data = g_key_file_to_data (keyfile, &len, NULL);
+  g_autofree char *data = g_key_file_to_data (keyfile, &len, NULL);
   gboolean loaded;
 
   loaded = g_key_file_load_from_data (ret, data, len, 0, NULL);

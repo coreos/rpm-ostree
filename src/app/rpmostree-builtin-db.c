@@ -73,7 +73,7 @@ rpmostree_db_option_context_parse (GOptionContext *context,
                                    OstreeRepo **out_repo,
                                    GCancellable *cancellable, GError **error)
 {
-  gs_unref_object OstreeRepo *repo = NULL;
+  glnx_unref_object OstreeRepo *repo = NULL;
   gboolean success = FALSE;
 
   /* Entries are listed in --help output in the order added.  We add the
@@ -92,7 +92,7 @@ rpmostree_db_option_context_parse (GOptionContext *context,
 
   if (opt_repo == NULL)
     {
-      gs_unref_object OstreeSysroot *sysroot = NULL;
+      glnx_unref_object OstreeSysroot *sysroot = NULL;
 
       sysroot = ostree_sysroot_new_default ();
       if (!ostree_sysroot_load (sysroot, cancellable, error))
@@ -103,7 +103,7 @@ rpmostree_db_option_context_parse (GOptionContext *context,
     }
   else
     {
-      gs_unref_object GFile *repo_file = g_file_new_for_path (opt_repo);
+      g_autoptr(GFile) repo_file = g_file_new_for_path (opt_repo);
 
       repo = ostree_repo_new (repo_file);
       if (!ostree_repo_open (repo, cancellable, error))
@@ -129,7 +129,7 @@ rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError *
 {
   RpmOstreeDbCommand *subcommand;
   const char *subcommand_name = NULL;
-  gs_free char *prgname = NULL;
+  g_autofree char *prgname = NULL;
   int exit_status = EXIT_SUCCESS;
   int in, out;
 
@@ -167,7 +167,7 @@ rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError *
   if (!subcommand->name)
     {
       GOptionContext *context;
-      gs_free char *help = NULL;
+      g_autofree char *help = NULL;
 
       context = rpm_option_context_new_with_commands ();
 

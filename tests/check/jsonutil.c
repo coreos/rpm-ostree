@@ -1,9 +1,11 @@
+#include "config.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include <glib-unix.h>
-#include <libgsystem.h>
+#include "libglnx.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-util.h"
 
@@ -14,7 +16,7 @@ static JsonObject *
 get_test_data (void)
 {
   GError *error = NULL;
-  gs_unref_object JsonParser *parser = json_parser_new ();
+  glnx_unref_object JsonParser *parser = json_parser_new ();
   (void)json_parser_load_from_data (parser, test_data, -1, &error);
   g_assert_no_error (error);
   return json_object_ref (json_node_get_object (json_parser_get_root (parser)));
