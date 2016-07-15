@@ -1,22 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-# prepare ssh connection
-
-# If there's already an ssh-config, just use that one. The user might have
-# created it for a self-provisioned machine. Otherwise, let's just assume we're
-# using vagrant and generate an ssh-config.
-if [ ! -f ssh-config ]; then
-  vagrant ssh-config > ssh-config
-  echo "  ControlMaster auto" >> ssh-config
-  echo "  ControlPath $PWD/ssh.sock" >> ssh-config
-  echo "  ControlPersist yes" >> ssh-config
-fi
-
-export SSH="ssh -F $PWD/ssh-config vmcheck"
-export SCP="scp -F $PWD/ssh-config"
-
 . ${commondir}/libvm.sh
+
+# create ssh-config if needed and export cmds
+vm_setup
 
 # stand up ssh connection and sanity check that it all works
 if ! vm_ssh_wait 20; then
