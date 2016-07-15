@@ -1,10 +1,14 @@
 include $(top_srcdir)/buildutil/glib-tap.mk
 
-AM_TESTS_ENVIRONMENT = \
-	UNINSTALLEDTESTS=1 \
+BASE_TESTS_ENVIRONMENT = \
 	builddir=$(abs_builddir) \
 	topsrcdir=$(abs_top_srcdir) \
 	commondir=$(abs_top_srcdir)/tests/common
+
+
+AM_TESTS_ENVIRONMENT = \
+	UNINSTALLEDTESTS=1 \
+	$(BASE_TESTS_ENVIRONMENT)
 
 # we consume libhif as a submodule, but we may not have installed it yet (and we
 # don't want it to fall back to the system libhif if it's also installed)
@@ -90,39 +94,28 @@ check-local:
 
 vmbuild:
 	@if [ -z "$(SKIP_VMBUILD)" ]; then \
-	  vagrant up && \
-	  ( [ -z "$(VMCLEAN)" ] || vagrant ssh -c "rm -rf sync" ) && \
-	  vagrant rsync && \
-	  vagrant ssh -c "cd sync/vagrant && \
-	                  make install VERSION=$$(git describe)" && \
-	  ( vagrant ssh -c "sudo systemctl reboot" || : ) && \
-	  sleep 2; \
+	  env $(BASE_TESTS_ENVIRONMENT) \
+	    tests/utils/vmbuild.sh; \
 	fi
 
 vmoverlay:
-	vagrant up && \
-	( [ -z "$(VMCLEAN)" ] || vagrant ssh -c "rm -rf sync" ) && \
-	vagrant rsync && \
-	vagrant ssh -c "cd sync/vagrant && make ofsinstall" && \
-	vagrant ssh -c "systemctl daemon-reload && \
-	                systemctl restart rpm-ostreed"
+	@env $(BASE_TESTS_ENVIRONMENT) \
+	  tests/utils/vmoverlay.sh
 
 vmshell: vmbuild
-	vagrant ssh
+	sleep 2
+	ssh -F ssh-config vmcheck
 
 # set up test environment to somewhat resemble uninstalled tests
 vmcheck: vmbuild tests/common/compose/yum/repo/repodata/repomd.xml
-	@env VMTESTS=1 \
-	    builddir="$(abs_builddir)" \
-	    topsrcdir="$(abs_top_srcdir)" \
-	    commondir="$(abs_top_srcdir)/tests/common" \
-	        sh tests/vmcheck/test.sh
+	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) \
+	   sh tests/vmcheck/test.sh
 
 testenv:
 	@echo "===== ENTERING TESTENV ====="
 	test_tmpdir=$$(mktemp -d test.XXXXXX) && \
 	  cd $$test_tmpdir && \
-	  env $(AM_TESTS_ENVIRONMENT) TESTENV=1 \
+	  env $(BASE_TESTS_ENVIRONMENT) TESTENV=1 \
 	    sh ../tests/utils/setup-session.sh bash && \
 	  cd .. && \
 	  rm -rf $$test_tmpdir
