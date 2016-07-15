@@ -1,7 +1,7 @@
 all:
 	echo "Targets: buildimg build install ofsinstall check clean"
 
-BUILDER_ARGS = sudo /usr/bin/docker run --rm -ti --privileged -v /var/roothome:/root
+BUILDER_ARGS = /usr/bin/docker run --rm --privileged -v /var/roothome:/root
 BUILDER_IMG = rpm-ostree-builder
 
 BUILDER_RUN = $(BUILDER_ARGS) $(BUILDER_IMG)
@@ -24,9 +24,9 @@ dockerwait:
 	exit 1
 
 buildimg: dockerwait
-	sudo docker build -t $(BUILDER_IMG) -f Dockerfile.builder .
+	docker build -t $(BUILDER_IMG) -f Dockerfile.builder .
 
-build: dockerwait
+build: buildimg
 	if ! test -f ../configure; then \
 	  $(BUILDER_RUN) env NOCONFIGURE=1 ./autogen.sh; \
 	fi
@@ -37,20 +37,20 @@ build: dockerwait
 	$(BUILDER_RUN) make -j4 CFLAGS="$(CFLAGS)"
 
 install: build
-	sudo sh checkout.sh
+	sh checkout.sh
 	$(BUILDER_ARGS) -v /etc:/host/etc \
 	                -v /ostree/repo/tmp/vmcheck.ro/usr:/host/usr \
-	                $(BUILDER_IMG) sudo make install DESTDIR=/host
-	sudo VERSION=$(VERSION) sh commit_and_deploy.sh
+	                $(BUILDER_IMG) make install DESTDIR=/host
+	VERSION=$(VERSION) sh commit_and_deploy.sh
 
 ofsinstall: build
 	ostree admin unlock || :
 	$(BUILDER_ARGS) -v /etc:/host/etc \
 	                -v /usr:/host/usr \
-	                $(BUILDER_IMG) sudo make install DESTDIR=/host
+	                $(BUILDER_IMG) make install DESTDIR=/host
 
 check: build
 	$(BUILDER_RUN) make check
 
-clean:
+clean: buildimg
 	$(BUILDER_RUN) make clean
