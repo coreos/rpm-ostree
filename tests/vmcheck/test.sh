@@ -91,13 +91,16 @@ for tf in $(find . -name 'test-*.sh' | sort); do
             | grep -e '^ok ' --line-buffered \
             | xargs -d '\n' -n 1 echo "  "; then
         pass_print "PASS: $bn"
+        echo "PASS" >> ${LOG}
         let "pass += 1"
     else
         if test $? = 77; then
             skip_print "SKIP: $bn"
+            echo "SKIP" >> ${LOG}
             let "skip += 1"
         else
             fail_print "FAIL: $bn"
+            echo "FAIL" >> ${LOG}
             let "fail += 1"
         fi
     fi
