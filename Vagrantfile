@@ -16,17 +16,9 @@ Vagrant.configure(2) do |config|
     config.ssh.password = 'vagrant'
     config.ssh.insert_key = 'true'
 
-    # turn off the default rsync in the vagrant box and replace by one that
-    # places it directly to root (and also skip sync'ing .git and any cached
-    # containers)
+    # turn off the default rsync in the vagrant box (the vm tooling does this
+    # for use already)
     config.vm.synced_folder ".", "/home/vagrant/sync", disabled: true
-    config.vm.synced_folder ".", "/root/sync", type: "rsync",
-      rsync__exclude: [".git/", "vagrant/*.tar.gz"],
-
-      # override the default args so that
-      #  (1) we don't use --delete (otherwise we will have to regen each time)
-      #  (2) we can tell rsync to skip ignored files
-      rsync__args: ["--verbose", "--archive", "-z", "--filter", ":- .gitignore"]
 
     config.vm.provider "libvirt" do |libvirt, override|
       libvirt.cpus = 2
