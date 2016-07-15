@@ -39,13 +39,13 @@ _builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
     {
       char *rev = revs->pdata[num];
       _cleanup_rpmrev_ struct RpmRevisionData *rpmrev = NULL;
-      gs_free char *rpmdbv = NULL;
+      g_autofree char *rpmdbv = NULL;
       char *mrev = strstr (rev, "..");
 
       if (mrev)
         {
-          gs_unref_ptrarray GPtrArray *range_revs = NULL;
-          gs_free char *revdup = g_strdup (rev);
+          g_autoptr(GPtrArray) range_revs = NULL;
+          g_autofree char *revdup = g_strdup (rev);
 
           mrev = revdup + (mrev - rev);
           *mrev = 0;
@@ -94,8 +94,8 @@ rpmostree_db_builtin_version (int argc, char **argv, GCancellable *cancellable, 
 {
   int exit_status = EXIT_FAILURE;
   GOptionContext *context;
-  gs_unref_object OstreeRepo *repo = NULL;
-  gs_unref_ptrarray GPtrArray *revs = NULL;
+  glnx_unref_object OstreeRepo *repo = NULL;
+  g_autoptr(GPtrArray) revs = NULL;
   gint ii;
 
   context = g_option_context_new ("COMMIT... - Show rpmdb version of packages within the commits");

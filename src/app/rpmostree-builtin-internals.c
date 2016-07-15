@@ -68,7 +68,7 @@ rpmostree_builtin_internals (int argc, char **argv, GCancellable *cancellable, G
 {
   RpmOstreeInternalsCommand *subcommand;
   const char *subcommand_name = NULL;
-  gs_free char *prgname = NULL;
+  g_autofree char *prgname = NULL;
   int exit_status = EXIT_SUCCESS;
   int in, out;
 
@@ -106,7 +106,7 @@ rpmostree_builtin_internals (int argc, char **argv, GCancellable *cancellable, G
   if (!subcommand->name)
     {
       GOptionContext *context;
-      gs_free char *help = NULL;
+      g_autofree char *help = NULL;
 
       context = internals_option_context_new_with_commands ();
 

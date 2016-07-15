@@ -65,7 +65,7 @@ rpmostree_builtin_container (int argc, char **argv, GCancellable *cancellable, G
 {
   RpmOstreeContainerCommand *subcommand;
   const char *subcommand_name = NULL;
-  gs_free char *prgname = NULL;
+  g_autofree char *prgname = NULL;
   int exit_status = EXIT_SUCCESS;
   int in, out;
 
@@ -103,7 +103,7 @@ rpmostree_builtin_container (int argc, char **argv, GCancellable *cancellable, G
   if (!subcommand->name)
     {
       GOptionContext *context;
-      gs_free char *help = NULL;
+      g_autofree char *help = NULL;
 
       context = container_option_context_new_with_commands ();
 

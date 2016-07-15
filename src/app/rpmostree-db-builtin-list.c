@@ -44,8 +44,8 @@ _builtin_db_list (OstreeRepo *repo,
 
       if (mrev)
         {
-          gs_unref_ptrarray GPtrArray *range_revs = NULL;
-          gs_free char *revdup = g_strdup (rev);
+          g_autoptr(GPtrArray) range_revs = NULL;
+          g_autofree char *revdup = g_strdup (rev);
 
           mrev = revdup + (mrev - rev);
           *mrev = 0;
@@ -89,9 +89,9 @@ rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GEr
 {
   int exit_status = EXIT_FAILURE;
   GOptionContext *context;
-  gs_unref_object OstreeRepo *repo = NULL;
-  gs_unref_ptrarray GPtrArray *patterns = NULL;
-  gs_unref_ptrarray GPtrArray *revs = NULL;
+  glnx_unref_object OstreeRepo *repo = NULL;
+  g_autoptr(GPtrArray) patterns = NULL;
+  g_autoptr(GPtrArray) revs = NULL;
   int ii;
 
   context = g_option_context_new ("[PREFIX-PKGNAME...] COMMIT... - List packages within commits");
@@ -112,7 +112,7 @@ rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GEr
         g_ptr_array_add (patterns, argv[ii]);
       else
         {
-          gs_free char *commit = NULL;
+          g_autofree char *commit = NULL;
 
           ostree_repo_resolve_rev (repo, argv[ii], TRUE, &commit, NULL);
 

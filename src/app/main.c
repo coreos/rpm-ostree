@@ -224,7 +224,7 @@ main (int    argc,
   int exit_status = EXIT_SUCCESS;
   int in, out;
   const char *command_name = NULL;
-  gs_free char *prgname = NULL;
+  g_autofree char *prgname = NULL;
   GError *local_error = NULL;
 
   /* avoid gvfs (http://bugzilla.gnome.org/show_bug.cgi?id=526454) */
@@ -280,7 +280,7 @@ main (int    argc,
   if (!command)
     {
       GOptionContext *context;
-      gs_free char *help = NULL;
+      g_autofree char *help = NULL;
 
       context = option_context_new_with_commands ();
 

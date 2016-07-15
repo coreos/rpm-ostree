@@ -36,7 +36,7 @@ rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GEr
 {
   int exit_status = EXIT_FAILURE;
   GOptionContext *context;
-  gs_unref_object OstreeRepo *repo = NULL;
+  glnx_unref_object OstreeRepo *repo = NULL;
   struct RpmRevisionData *rpmrev1 = NULL;
   struct RpmRevisionData *rpmrev2 = NULL;
 

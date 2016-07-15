@@ -120,7 +120,7 @@ pkg_nvr_strdup (Header h1)
 static void
 pkg_print (Header pkg)
 {
-  gs_free char *nevra = pkg_nevra_strdup (pkg);
+  g_autofree char *nevra = pkg_nevra_strdup (pkg);
   printf("%s\n", nevra);
 }
 
@@ -172,9 +172,9 @@ pat_fnmatch_match (Header pkg, const char *name,
                    gsize patprefixlen, const GPtrArray *patterns)
 {
   int num = 0;
-  gs_free char *pkg_na    = NULL;
-  gs_free char *pkg_nevra = NULL;
-  gs_free char *pkg_nvr   = NULL;
+  g_autofree char *pkg_na    = NULL;
+  g_autofree char *pkg_nevra = NULL;
+  g_autofree char *pkg_nvr   = NULL;
 
   if (!patterns)
     return TRUE;
@@ -368,14 +368,14 @@ rpmhdrs_rpmdbv (struct RpmHeaders *l1,
                 GError        **error)
 {
   GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA1);
-  gs_free char *checksum_cstr = NULL;
+  g_autofree char *checksum_cstr = NULL;
   char *ret = NULL;
   int num = 0;
 
   while (num < l1->hs->len)
     {
       Header pkg = l1->hs->pdata[num++];
-      gs_free char *envra = pkg_envra_strdup (pkg);
+      g_autofree char *envra = pkg_envra_strdup (pkg);
 
       g_checksum_update (checksum, (guint8*)envra, strlen(envra));
     }
@@ -509,7 +509,7 @@ rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff)
           while (ncnum > 0)
             {
               GDateTime *dt = NULL;
-              gs_free char *date_time_str = NULL;
+              g_autofree char *date_time_str = NULL;
 
               /* Load next new %changelog entry, starting at the newest. */
               rpmtdNext (nchanges_date);
