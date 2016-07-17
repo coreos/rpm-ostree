@@ -129,13 +129,13 @@ rpmostree_builtin_upgrade (int             argc,
         goto out;
     }
 
-  new_default_deployment = rpmostree_os_dup_default_deployment (os_proxy);
-
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
                                                 cancellable,
                                                 error))
     goto out;
+
+  new_default_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
   if (opt_preview || opt_check)
     {
@@ -169,7 +169,7 @@ rpmostree_builtin_upgrade (int             argc,
       if (previous_default_deployment == new_default_deployment)
         changed = FALSE;
       else
-        changed = g_variant_equal (previous_default_deployment, new_default_deployment); 
+        changed = !g_variant_equal (previous_default_deployment, new_default_deployment);
 
       if (!changed)
         {
