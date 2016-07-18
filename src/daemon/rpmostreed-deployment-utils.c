@@ -259,7 +259,7 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
 {
   g_autoptr(GVariant) commit = NULL;
   g_autofree gchar *origin_refspec = NULL;
-  const gchar *head = NULL;
+  g_autofree gchar *head = NULL;
   const gchar *osname;
   GVariant *sigs = NULL; /* floating variant */
   GVariantDict dict;
@@ -273,7 +273,15 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
 
   g_assert (origin_refspec);
 
-  head = ostree_deployment_get_csum (deployment);
+  /* allow_noent=TRUE since the ref may have been deleted for a
+   * rebase.
+   */
+  if (!ostree_repo_resolve_rev (repo, origin_refspec,
+                                TRUE, &head, error))
+    return NULL;
+
+  if (head == NULL)
+    head = g_strdup (ostree_deployment_get_csum (deployment));
 
   if (!ostree_repo_load_variant (repo,
 				 OSTREE_OBJECT_TYPE_COMMIT,
