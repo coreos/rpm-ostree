@@ -1149,10 +1149,13 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   merge_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
   if (merge_deployment)
     {
-      cached_update = rpmostreed_commit_generate_cached_details_variant (merge_deployment,
-                                                                         ot_repo,
-                                                                         NULL,
-									 error);
+      /* Determine whether we have a refspec to use for updates */
+      g_autofree char *refspec = rpmostreed_deployment_get_refspec (merge_deployment);
+      if (refspec != NULL)
+	cached_update = rpmostreed_commit_generate_cached_details_variant (merge_deployment,
+									   ot_repo,
+									   refspec,
+									   error);
       if (!cached_update)
 	return FALSE;
       has_cached_updates = cached_update != NULL;

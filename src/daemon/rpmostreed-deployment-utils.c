@@ -262,7 +262,6 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
   const gchar *head = NULL;
   const gchar *osname;
   GVariant *sigs = NULL; /* floating variant */
-  GVariant *ret = NULL; /* floating variant */
   GVariantDict dict;
 
   osname = ostree_deployment_get_osname (deployment);
@@ -272,8 +271,7 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
   else
     origin_refspec = rpmostreed_deployment_get_refspec (deployment);
 
-  if (!origin_refspec)
-    goto out;
+  g_assert (origin_refspec);
 
   head = ostree_deployment_get_csum (deployment);
 
@@ -294,9 +292,7 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
   g_variant_dict_insert (&dict, "origin", "s", origin_refspec);
   if (sigs != NULL)
     g_variant_dict_insert_value (&dict, "signatures", sigs);
-  ret = g_variant_dict_end (&dict);
-out:
-  return ret;
+  return g_variant_dict_end (&dict);
 }
 
 gint
