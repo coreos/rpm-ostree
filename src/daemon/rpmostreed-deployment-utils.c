@@ -64,7 +64,8 @@ out:
 static GVariant *
 rpmostreed_deployment_gpg_results (OstreeRepo *repo,
                                    const gchar *origin_refspec,
-                                   const gchar *csum)
+                                   const gchar *csum,
+				   gboolean *out_enabled)
 {
   GError *error = NULL;
   GVariant *ret = NULL;
@@ -91,6 +92,7 @@ rpmostreed_deployment_gpg_results (OstreeRepo *repo,
       gpg_verify = FALSE;
     }
 
+  *out_enabled = gpg_verify;
   if (!gpg_verify)
     goto out;
 
@@ -204,6 +206,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   const gchar *osname = ostree_deployment_get_osname (deployment);
   const gchar *csum = ostree_deployment_get_csum (deployment);
   gint serial = ostree_deployment_get_deployserial (deployment);
+  gboolean gpg_enabled;
 
   if (!ostree_repo_load_variant (repo,
 				 OSTREE_OBJECT_TYPE_COMMIT,
@@ -229,10 +232,10 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
       g_assert (parent);
       g_variant_dict_insert (&dict, "base-checksum", "s", parent);
       if (origin_refspec)
-	sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, parent);
+	sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, parent, &gpg_enabled);
     }
   else if (origin_refspec)
-    sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, csum);
+    sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, csum, &gpg_enabled);
 
   variant_add_commit_details (&dict, commit);
   if (origin_refspec != NULL)
@@ -241,6 +244,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
     g_variant_dict_insert (&dict, "packages", "^as", origin_packages);
   if (sigs != NULL)
     g_variant_dict_insert_value (&dict, "signatures", sigs);
+  g_variant_dict_insert (&dict, "gpg-enabled", "b", gpg_enabled);
 
   g_variant_dict_insert (&dict, "unlocked", "s",
 			 ostree_deployment_unlocked_state_to_string (ostree_deployment_get_unlocked (deployment)));
@@ -260,6 +264,7 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
   g_autoptr(GVariant) commit = NULL;
   g_autofree gchar *origin_refspec = NULL;
   g_autofree gchar *head = NULL;
+  gboolean gpg_enabled;
   const gchar *osname;
   GVariant *sigs = NULL; /* floating variant */
   GVariantDict dict;
@@ -290,7 +295,7 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
 				 error))
     return NULL;
 
-  sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, head);
+  sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, head, &gpg_enabled);
 
   g_variant_dict_init (&dict, NULL);
   if (osname != NULL)
@@ -300,6 +305,7 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
   g_variant_dict_insert (&dict, "origin", "s", origin_refspec);
   if (sigs != NULL)
     g_variant_dict_insert_value (&dict, "signatures", sigs);
+  g_variant_dict_insert (&dict, "gpg-enabled", "b", gpg_enabled);
   return g_variant_dict_end (&dict);
 }
 
