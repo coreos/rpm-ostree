@@ -58,6 +58,7 @@ struct _RpmostreedSysroot {
 
   OstreeSysroot *ot_sysroot;
   OstreeRepo *repo;
+  struct stat repo_last_stat;
   RpmostreedTransactionMonitor *transaction_monitor;
 
   GHashTable *os_interfaces;
@@ -439,12 +440,25 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
   gpointer value;
   GVariantBuilder builder;
   guint i;
-  gboolean did_change;
+  gboolean sysroot_changed;
+  gboolean repo_changed;
+  struct stat repo_new_stat;
 
-  if (!ostree_sysroot_load_if_changed (self->ot_sysroot, &did_change, self->cancellable, error))
+  if (!ostree_sysroot_load_if_changed (self->ot_sysroot, &sysroot_changed, self->cancellable, error))
     goto out;
 
-  if (!did_change)
+  if (fstat (ostree_repo_get_dfd (self->repo), &repo_new_stat) < 0)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
+
+  repo_changed = !(self->repo_last_stat.st_mtim.tv_sec == repo_new_stat.st_mtim.tv_sec
+		   && self->repo_last_stat.st_mtim.tv_nsec == repo_new_stat.st_mtim.tv_nsec);
+  if (repo_changed)
+    self->repo_last_stat = repo_new_stat;
+
+  if (!(sysroot_changed || repo_changed))
     {
       ret = TRUE;
       if (out_changed)
