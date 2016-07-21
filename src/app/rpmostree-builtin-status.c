@@ -115,6 +115,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       const gchar *checksum;
       const gchar *version_string;
       const gchar *unlocked;
+      gboolean gpg_enabled;
       guint64 t = 0;
       int serial;
       gboolean is_booted;
@@ -199,22 +200,28 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       print_kv ("Commit", max_key_len, checksum);
       print_kv ("OSName", max_key_len, os_name);
 
-      if (signatures)
-        {
-          guint n_sigs = g_variant_n_children (signatures);
-          g_autofree char *gpgheader = g_strdup_printf ("%u signature%s", n_sigs,
-                                                        n_sigs == 1 ? "" : "s");
-          const guint gpgpad = max_key_len+4;
-          char gpgspaces[gpgpad+1];
-          memset (gpgspaces, ' ', gpgpad);
-          gpgspaces[gpgpad] = '\0';
+      if (!g_variant_dict_lookup (dict, "gpg-enabled", "b", &gpg_enabled))
+        gpg_enabled = FALSE;
 
-          print_kv ("GPGSignature", max_key_len, gpgheader);
-          rpmostree_print_signatures (signatures, gpgspaces);
-        }
-      else
+      if (gpg_enabled)
         {
-          print_kv ("GPGSignature", max_key_len, "(unsigned)");
+          if (signatures)
+            {
+              guint n_sigs = g_variant_n_children (signatures);
+              g_autofree char *gpgheader = g_strdup_printf ("%u signature%s", n_sigs,
+                                                            n_sigs == 1 ? "" : "s");
+              const guint gpgpad = max_key_len+4;
+              char gpgspaces[gpgpad+1];
+              memset (gpgspaces, ' ', gpgpad);
+              gpgspaces[gpgpad] = '\0';
+
+              print_kv ("GPGSignature", max_key_len, gpgheader);
+              rpmostree_print_signatures (signatures, gpgspaces);
+            }
+          else
+            {
+              print_kv ("GPGSignature", max_key_len, "(unsigned)");
+            }
         }
 
       if (origin_packages)
