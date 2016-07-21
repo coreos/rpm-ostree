@@ -4,6 +4,7 @@ NUM=1
 
 function conn {
 	sudo rpm-ostree upgrade --check
+	echo "updated" > /usr/local/bin/auto_update_flag
 	NUM=2
 }
 
