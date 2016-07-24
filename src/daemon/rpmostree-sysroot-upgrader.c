@@ -1077,19 +1077,6 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   g_autoptr(GHashTable) pkgset = hashset_from_strv (self->requested_packages);
   glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
 
-  { int n = g_hash_table_size (pkgset);
-    GHashTableIter it;
-    gpointer itkey;
-
-    g_assert (n > 0);
-    g_print ("Need to overlay %d package%s onto tree %.7s:\n",
-             n, n > 1 ? "s" : "", base_rev);
-
-    g_hash_table_iter_init (&it, pkgset);
-    while (g_hash_table_iter_next (&it, &itkey, NULL))
-      g_print ("  %s\n", (char*)itkey);
-  }
-
   ctx = rpmostree_context_new_system (cancellable, error);
 
   /* point libhif to the yum.repos.d and os-release of the merge_deployment */
