@@ -301,6 +301,8 @@ rpmostree_container_builtin_assemble (int             argc,
   if (!rpmostree_context_prepare_install (rocctx->ctx, &install, cancellable, error))
     goto out;
 
+  rpmostree_print_transaction (rpmostree_context_get_hif (rocctx->ctx));
+
   /* --- Download as necessary --- */
   if (!rpmostree_context_download (rocctx->ctx, install, cancellable, error))
     goto out;
@@ -506,6 +508,8 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   if (!rpmostree_context_prepare_install (rocctx->ctx, &install,
                                           cancellable, error))
     goto out;
+
+  rpmostree_print_transaction (rpmostree_context_get_hif (rocctx->ctx));
 
   { g_autofree char *new_state_sha512 = rpmostree_context_get_state_sha512 (rocctx->ctx);
 
