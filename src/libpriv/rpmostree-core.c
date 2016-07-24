@@ -999,8 +999,6 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
                       ret_install, error))
     goto out;
 
-  rpmostree_print_transaction (hifctx);
-
   ret = TRUE;
   *out_install = g_steal_pointer (&ret_install);
  out:

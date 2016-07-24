@@ -320,6 +320,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (!rpmostree_context_prepare_install (ctx, &hifinstall, cancellable, error))
     goto out;
 
+  rpmostree_print_transaction (hifctx);
+
   if (json_object_has_member (treedata, "add-files"))
     add_files = json_object_get_array_member (treedata, "add-files");
 
