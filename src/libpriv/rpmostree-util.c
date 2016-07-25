@@ -513,3 +513,31 @@ rpmostree_split_path_ptrarray_validate (const char *path,
  out:
   return ret;
 }
+
+/* Replace every occurrence of @old in @buf with @new. */
+char *
+rpmostree_str_replace (const char  *buf,
+                       const char  *old,
+                       const char  *new)
+{
+  const char *p = buf;
+  GString *new_buf = g_string_sized_new (strlen (buf));
+
+  while (TRUE)
+    {
+      const char *found = strstr (p, old);
+
+      if (!found)
+        {
+          g_string_append (new_buf, p);
+          break;
+        }
+
+      if (found > p)
+        g_string_append_len (new_buf, p, found - p);
+      g_string_append (new_buf, new);
+      p = found + strlen (old);
+    }
+
+  return g_string_free (new_buf, FALSE);
+}

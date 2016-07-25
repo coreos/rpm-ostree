@@ -100,3 +100,8 @@ gboolean
 rpmostree_split_path_ptrarray_validate (const char *path,
                                         GPtrArray  **out_components,
                                         GError     **error);
+
+char *
+rpmostree_str_replace (const char  *buf,
+                       const char  *old,
+                       const char  *new);
