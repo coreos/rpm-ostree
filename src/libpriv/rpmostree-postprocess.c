@@ -1923,6 +1923,8 @@ rpmostree_commit (int            rootfs_fd,
 
     while (g_atomic_int_get (&tdata.done) == 0)
       g_main_context_iteration (NULL, TRUE);
+
+    glnx_console_progress_text_percent ("Committing:", 100.0);
   
     glnx_console_unlock (&console);
     
