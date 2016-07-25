@@ -1779,6 +1779,7 @@ rpmostree_commit (int            rootfs_fd,
                   GError       **error)
 {
   gboolean ret = FALSE;
+  OstreeRepoTransactionStats stats = { 0, };
   glnx_unref_object OstreeMutableTree *mtree = NULL;
   OstreeRepoCommitModifier *commit_modifier = NULL;
   g_autofree char *parent_revision = NULL;
@@ -1840,8 +1841,14 @@ rpmostree_commit (int            rootfs_fd,
   if (refname)
     ostree_repo_transaction_set_ref (repo, NULL, refname, new_revision);
 
-  if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
+  if (!ostree_repo_commit_transaction (repo, &stats, cancellable, error))
     goto out;
+
+  g_print ("Metadata Total: %u\n", stats.metadata_objects_total);
+  g_print ("Metadata Written: %u\n", stats.metadata_objects_written);
+  g_print ("Content Total: %u\n", stats.content_objects_total);
+  g_print ("Content Written: %u\n", stats.content_objects_written);
+  g_print ("Content Bytes Written: %" G_GUINT64_FORMAT "\n", stats.content_bytes_written);
 
   ret = TRUE;
   if (out_new_revision)
