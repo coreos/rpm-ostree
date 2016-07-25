@@ -593,6 +593,7 @@ rpmostree_compose_builtin_tree (int             argc,
   g_autoptr(RpmOstreeContext) corectx = NULL;
   g_autoptr(GHashTable) varsubsts = NULL;
   gboolean workdir_is_tmp = FALSE;
+  g_autofree char *next_version = NULL;
 
   self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
   
@@ -765,7 +766,6 @@ rpmostree_compose_builtin_tree (int             argc,
     {
       g_autoptr(GVariant) variant = NULL;
       g_autofree char *last_version = NULL;
-      g_autofree char *next_version = NULL;
       const char *ver_prefix;
 
       ver_prefix = _rpmostree_jsonutil_object_require_string_member (treefile,
@@ -860,7 +860,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
   if (!rpmostree_treefile_postprocessing (yumroot, self->treefile_context_dirs->pdata[0],
                                           self->serialized_treefile, treefile,
-                                          cancellable, error))
+                                          next_version, cancellable, error))
     goto out;
 
   if (!rpmostree_prepare_rootfs_for_commit (yumroot, treefile, cancellable, error))

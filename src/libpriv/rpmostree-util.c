@@ -513,3 +513,19 @@ rpmostree_split_path_ptrarray_validate (const char *path,
  out:
   return ret;
 }
+
+/* Replace every occurrence of @old in @buf with @new. */
+char *
+rpmostree_str_replace (const char  *buf,
+                       const char  *old,
+                       const char  *new,
+                       GError     **error)
+{
+  g_autofree char *literal_old = g_regex_escape_string (old, -1);
+  g_autoptr(GRegex) regex = g_regex_new (literal_old, 0, 0, error);
+
+  if (regex == NULL)
+    return NULL;
+
+  return g_regex_replace_literal (regex, buf, -1, 0, new, 0, error);
+}

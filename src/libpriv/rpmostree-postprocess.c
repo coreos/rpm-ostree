@@ -1328,11 +1328,56 @@ rpmostree_copy_additional_files (GFile         *rootfs,
   return ret;
 }
 
+static char *
+mutate_os_release (const char    *contents,
+                   const char    *base_version,
+                   const char    *next_version,
+                   GError       **error)
+{
+  g_auto(GStrv) lines = NULL;
+  GString *new_contents = g_string_sized_new (strlen (contents));
+
+  lines = g_strsplit (contents, "\n", -1);
+  for (char **it = lines; it && *it; it++)
+    {
+      const char *line = *it;
+
+      if (strlen (line) == 0)
+        continue;
+
+      if (g_str_has_prefix (line, "VERSION=") || \
+          g_str_has_prefix (line, "VERSION_ID=") || \
+          g_str_has_prefix (line, "PRETTY_NAME="))
+        {
+          g_autofree char *new_line = NULL;
+          const char *equal = strchr (line, '=');
+
+          g_string_append_len (new_contents, line, equal - line + 1);
+
+          new_line = rpmostree_str_replace (equal + 1, base_version,
+                                            next_version, error);
+          if (new_line == NULL)
+              return NULL;
+
+          g_string_append_printf (new_contents, "%s\n", new_line);
+          continue;
+        }
+
+      g_string_append_printf (new_contents, "%s\n", line);
+    }
+
+  /* add a bona fide ostree entry */
+  g_string_append_printf (new_contents, "OSTREE_VERSION=%s\n", next_version);
+
+  return g_string_free (new_contents, FALSE);
+}
+
 gboolean
 rpmostree_treefile_postprocessing (GFile         *yumroot,
                                    GFile         *context_directory,
                                    GBytes        *serialized_treefile,
                                    JsonObject    *treefile,
+                                   const char    *next_version,
                                    GCancellable  *cancellable,
                                    GError       **error)
 {
@@ -1506,10 +1551,78 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
         }
     }
 
+  {
+    const char *base_version = NULL;
+
+    if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile,
+                                                                "mutate-os-release",
+                                                                &base_version,
+                                                                error))
+      goto out;
+
+    if (base_version != NULL)
+      {
+        g_autofree char *contents = NULL;
+        g_autofree char *new_contents = NULL;
+        const char *path = NULL;
+        glnx_fd_close int rootdfd = -1;
+
+        /* let's try to find the first non-symlink */
+        const char *os_release[] = {
+          "etc/os-release",
+          "usr/lib/os-release",
+          "usr/lib/os.release.d/os-release-fedora"
+        };
+
+        if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot),
+                             TRUE, &rootdfd, error))
+          goto out;
+
+        /* fallback on just overwriting etc/os-release */
+        path = os_release[0];
+
+        for (guint i = 0; i < G_N_ELEMENTS (os_release); i++)
+          {
+            struct stat stbuf;
+
+            if (TEMP_FAILURE_RETRY (fstatat (rootdfd, os_release[i], &stbuf,
+                                             AT_SYMLINK_NOFOLLOW)) != 0)
+              {
+                glnx_set_prefix_error_from_errno (error, "fstatat(%s)",
+                                                  os_release[i]);
+                goto out;
+              }
+
+            if (S_ISREG (stbuf.st_mode))
+              {
+                path = os_release[i];
+                break;
+              }
+          }
+
+        g_print ("Mutating /%s\n", path);
+
+        contents = glnx_file_get_contents_utf8_at (rootdfd, path, NULL,
+                                                   cancellable, error);
+        if (contents == NULL)
+          goto out;
+
+        new_contents = mutate_os_release (contents, base_version,
+                                          next_version, error);
+        if (new_contents == NULL)
+          goto out;
+
+        if (!glnx_file_replace_contents_at (rootdfd, path,
+                                            (guint8*)new_contents, -1, 0,
+                                            cancellable, error))
+          goto out;
+      }
+  }
+
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "postprocess-script",
                                                               &postprocess_script, error))
     goto out;
-    
+
   if (postprocess_script)
     {
       const char *yumroot_path = gs_file_get_path_cached (yumroot);
