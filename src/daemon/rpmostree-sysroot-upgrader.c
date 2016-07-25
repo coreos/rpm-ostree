@@ -1131,10 +1131,9 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   if (!rpmostree_context_prepare_install (ctx, &install, cancellable, error))
     goto out;
 
-  /* we just printed the transaction in prepare_install() -- leave here if it's
-   * a dry run */
   if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN)
     {
+      rpmostree_print_transaction (rpmostree_context_get_hif (ctx));
       ret = TRUE;
       goto out;
     }
