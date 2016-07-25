@@ -1704,13 +1704,28 @@ rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
   return ret;
 }
 
+struct CommitThreadData {
+  volatile gint done;
+  guint n_files;
+  volatile gint n_processed;
+  OstreeRepo *repo;
+  int rootfs_fd;
+  OstreeMutableTree *mtree;
+  OstreeSePolicy *sepolicy;
+  OstreeRepoCommitModifier *commit_modifier;
+  gboolean success;
+  GCancellable *cancellable;
+  GError **error;
+};
+
 static GVariant *
 read_xattrs_cb (OstreeRepo     *repo,
                 const char     *relpath,
                 GFileInfo      *file_info,
                 gpointer        user_data)
 {
-  int rootfs_fd = GPOINTER_TO_INT (user_data);
+  struct CommitThreadData *tdata = user_data;
+  int rootfs_fd = tdata->rootfs_fd;
   /* If you have a use case for something else, file an issue */
   static const char *accepted_xattrs[] =
     { "security.capability", /* https://lwn.net/Articles/211883/ */
@@ -1741,6 +1756,9 @@ read_xattrs_cb (OstreeRepo     *repo,
         goto out;
     }
 
+  if (g_file_info_get_file_type (file_info) != G_FILE_TYPE_DIRECTORY)
+    g_atomic_int_inc (&tdata->n_processed);
+
   viter = g_variant_iter_new (existing_xattrs);
 
   while (g_variant_iter_loop (viter, "(@ay@ay)", &key, &value))
@@ -1766,6 +1784,69 @@ read_xattrs_cb (OstreeRepo     *repo,
   return g_variant_ref_sink (g_variant_builder_end (&builder));
 }
 
+static gboolean
+count_files (int dfd,
+             const char *path,
+             guint *out_n_files,
+             GCancellable *cancellable,
+             GError **error)
+{
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  
+  if (!glnx_dirfd_iterator_init_at (dfd, path, TRUE, &dfd_iter, error))
+    return FALSE;
+  
+  while (TRUE)
+    {
+      struct dirent *dent = NULL;
+
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
+        return FALSE;
+      if (!dent)
+        break;
+
+      if (dent->d_type == DT_DIR)
+        {
+          if (!count_files (dfd_iter.fd, dent->d_name, out_n_files,
+                            cancellable, error))
+            return FALSE;
+        }
+      else
+        (*out_n_files)++;
+    }
+
+  return TRUE;
+}
+
+static gpointer
+write_dfd_thread (gpointer datap)
+{
+  struct CommitThreadData *data = datap;
+
+  if (!ostree_repo_write_dfd_to_mtree (data->repo, data->rootfs_fd, ".",
+                                       data->mtree,
+                                       data->commit_modifier,
+                                       data->cancellable, data->error))
+    goto out;
+  
+  data->success = TRUE;
+ out:
+  g_atomic_int_inc (&data->done);
+  g_main_context_wakeup (NULL);
+  return NULL;
+}
+
+static gboolean
+on_progress_timeout (gpointer datap)
+{
+  struct CommitThreadData *data = datap;
+  const int n_processed = g_atomic_int_get (&data->n_processed);
+
+  glnx_console_progress_text_percent ("Committing:", (100.0*n_processed)/data->n_files);
+
+  return TRUE;
+}
+
 gboolean
 rpmostree_commit (int            rootfs_fd,
                   OstreeRepo    *repo,
@@ -1780,6 +1861,8 @@ rpmostree_commit (int            rootfs_fd,
 {
   gboolean ret = FALSE;
   OstreeRepoTransactionStats stats = { 0, };
+  guint n_files = 0;
+  struct CommitThreadData tdata = { 0, };
   glnx_unref_object OstreeMutableTree *mtree = NULL;
   OstreeRepoCommitModifier *commit_modifier = NULL;
   g_autofree char *parent_revision = NULL;
@@ -1801,7 +1884,7 @@ rpmostree_commit (int            rootfs_fd,
   commit_modifier = ostree_repo_commit_modifier_new (0, NULL, NULL, NULL);
   ostree_repo_commit_modifier_set_xattr_callback (commit_modifier,
                                                   read_xattrs_cb, NULL,
-                                                  GINT_TO_POINTER (rootfs_fd));
+                                                  &tdata);
 
   if (sepolicy && ostree_sepolicy_get_name (sepolicy) != NULL)
     ostree_repo_commit_modifier_set_sepolicy (commit_modifier, sepolicy);
@@ -1815,8 +1898,41 @@ rpmostree_commit (int            rootfs_fd,
   if (devino_cache)
     ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
 
-  if (!ostree_repo_write_dfd_to_mtree (repo, rootfs_fd, ".", mtree, commit_modifier, cancellable, error))
+  if (!count_files (rootfs_fd, ".", &n_files, cancellable, error))
     goto out;
+
+  tdata.n_files = n_files;
+  tdata.repo = repo;
+  tdata.rootfs_fd = rootfs_fd;
+  tdata.mtree = mtree;
+  tdata.sepolicy = sepolicy;
+  tdata.commit_modifier = commit_modifier;
+  tdata.error = error;
+
+  { g_autoptr(GThread) commit_thread = NULL;
+    g_auto(GLnxConsoleRef) console = { 0, };
+    g_autoptr(GSource) progress_src = NULL;
+
+    glnx_console_lock (&console);
+
+    commit_thread = g_thread_new ("commit", write_dfd_thread, &tdata);
+
+    progress_src = g_timeout_source_new_seconds (console.is_tty ? 1 : 5);
+    g_source_set_callback (progress_src, on_progress_timeout, &tdata, NULL);
+    g_source_attach (progress_src, NULL);
+
+    while (g_atomic_int_get (&tdata.done) == 0)
+      g_main_context_iteration (NULL, TRUE);
+  
+    glnx_console_unlock (&console);
+    
+    g_thread_join (commit_thread);
+    commit_thread = NULL;
+
+    if (!tdata.success)
+      goto out;
+  }
+
   if (!ostree_repo_write_mtree (repo, mtree, &root_tree, cancellable, error))
     goto out;
 

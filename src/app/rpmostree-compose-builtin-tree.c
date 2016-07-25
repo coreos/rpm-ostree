@@ -906,8 +906,6 @@ rpmostree_compose_builtin_tree (int             argc,
                            &rootfs_fd, error))
         goto out;
 
-      g_print ("Committing...\n");
-      
       if (!rpmostree_commit (rootfs_fd, repo, self->ref, metadata, gpgkey, selinux, NULL,
                              &new_revision,
                              cancellable, error))
