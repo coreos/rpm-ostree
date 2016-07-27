@@ -518,26 +518,14 @@ rpmostree_split_path_ptrarray_validate (const char *path,
 char *
 rpmostree_str_replace (const char  *buf,
                        const char  *old,
-                       const char  *new)
+                       const char  *new,
+                       GError     **error)
 {
-  const char *p = buf;
-  GString *new_buf = g_string_sized_new (strlen (buf));
+  g_autofree char *literal_old = g_regex_escape_string (old, -1);
+  g_autoptr(GRegex) regex = g_regex_new (literal_old, 0, 0, error);
 
-  while (TRUE)
-    {
-      const char *found = strstr (p, old);
+  if (regex == NULL)
+    return NULL;
 
-      if (!found)
-        {
-          g_string_append (new_buf, p);
-          break;
-        }
-
-      if (found > p)
-        g_string_append_len (new_buf, p, found - p);
-      g_string_append (new_buf, new);
-      p = found + strlen (old);
-    }
-
-  return g_string_free (new_buf, FALSE);
+  return g_regex_replace_literal (regex, buf, -1, 0, new, 0, error);
 }

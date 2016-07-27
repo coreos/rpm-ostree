@@ -1331,37 +1331,44 @@ rpmostree_copy_additional_files (GFile         *rootfs,
 static char *
 mutate_os_release (const char    *contents,
                    const char    *base_version,
-                   const char    *next_version)
+                   const char    *next_version,
+                   GError       **error)
 {
-  char **lines = NULL;
+  g_auto(GStrv) lines = NULL;
   GString *new_contents = g_string_sized_new (strlen (contents));
 
   lines = g_strsplit (contents, "\n", -1);
   for (char **it = lines; it && *it; it++)
     {
-      if (strlen (*it) == 0)
+      const char *line = *it;
+
+      if (strlen (line) == 0)
         continue;
 
-      if (g_str_has_prefix (*it, "VERSION=") || \
-          g_str_has_prefix (*it, "VERSION_ID=") || \
-          g_str_has_prefix (*it, "PRETTY_NAME="))
+      if (g_str_has_prefix (line, "VERSION=") || \
+          g_str_has_prefix (line, "VERSION_ID=") || \
+          g_str_has_prefix (line, "PRETTY_NAME="))
         {
-          g_autofree char *line = NULL;
-          const char *equal = strchr (*it, '=');
+          g_autofree char *new_line = NULL;
+          const char *equal = strchr (line, '=');
 
-          g_string_append_len (new_contents, *it, equal - *it + 1);
-          line = rpmostree_str_replace (equal + 1, base_version, next_version);
-          g_string_append_printf (new_contents, "%s\n", line);
+          g_string_append_len (new_contents, line, equal - line + 1);
+
+          new_line = rpmostree_str_replace (equal + 1, base_version,
+                                            next_version, error);
+          if (new_line == NULL)
+              return NULL;
+
+          g_string_append_printf (new_contents, "%s\n", new_line);
           continue;
         }
 
-      g_string_append_printf (new_contents, "%s\n", *it);
+      g_string_append_printf (new_contents, "%s\n", line);
     }
 
   /* add a bona fide ostree entry */
   g_string_append_printf (new_contents, "OSTREE_VERSION=%s\n", next_version);
 
-  g_strfreev (lines);
   return g_string_free (new_contents, FALSE);
 }
 
