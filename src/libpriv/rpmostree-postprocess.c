@@ -1562,31 +1562,23 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
 
     if (base_version != NULL)
       {
-        glnx_fd_close int root_dfd = -1;
         g_autofree char *contents = NULL;
         g_autofree char *new_contents = NULL;
         g_autofree char *path = NULL;
 
-        /* we need to follow all potential symlinks so that we replace the
-         * actual file, not directly create a file at /etc/os-release */
-        {
-          g_autofree char *tmp
-            = g_build_filename (gs_file_get_path_cached (yumroot),
-                                "etc/os-release", NULL);
-          path = realpath (tmp, NULL);
-          if (path == NULL)
-            {
-              glnx_set_prefix_error_from_errno (error, "%s", "realpath");
-              goto out;
-            }
-        }
+        path = rpmostree_realpath_within_rootfs (gs_file_get_path_cached (yumroot),
+                                                 "etc/os-release", cancellable,
+                                                 error);
+        if (path == NULL)
+          goto out;
 
         contents = glnx_file_get_contents_utf8_at (AT_FDCWD, path, NULL,
                                                    cancellable, error);
         if (contents == NULL)
           goto out;
 
-        new_contents = mutate_os_release (contents, base_version, next_version);
+        new_contents = mutate_os_release (contents, base_version,
+                                          next_version, error);
         if (new_contents == NULL)
           goto out;
 

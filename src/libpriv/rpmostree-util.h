@@ -106,3 +106,9 @@ rpmostree_str_replace (const char  *buf,
                        const char  *old,
                        const char  *new,
                        GError     **error);
+
+char *
+rpmostree_realpath_within_rootfs (const char    *rootfs,
+                                  const char    *path,
+                                  GCancellable  *cancellable,
+                                  GError       **error);
