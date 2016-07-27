@@ -1581,7 +1581,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
         /* fallback on just overwriting etc/os-release */
         path = os_release[0];
 
-        for (guint i = 0; i < (sizeof os_release / sizeof os_release[0]); i++)
+        for (guint i = 0; i < G_N_ELEMENTS (os_release); i++)
           {
             struct stat stbuf;
 
