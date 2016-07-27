@@ -1564,15 +1564,45 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
       {
         g_autofree char *contents = NULL;
         g_autofree char *new_contents = NULL;
-        g_autofree char *path = NULL;
+        const char *path = NULL;
+        glnx_fd_close int rootdfd = -1;
 
-        path = rpmostree_realpath_within_rootfs (gs_file_get_path_cached (yumroot),
-                                                 "etc/os-release", cancellable,
-                                                 error);
-        if (path == NULL)
+        /* let's try to find the first non-symlink */
+        const char *os_release[] = {
+          "etc/os-release",
+          "usr/lib/os-release",
+          "usr/lib/os.release.d/os-release-fedora"
+        };
+
+        if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot),
+                             TRUE, &rootdfd, error))
           goto out;
 
-        contents = glnx_file_get_contents_utf8_at (AT_FDCWD, path, NULL,
+        /* fallback on just overwriting etc/os-release */
+        path = os_release[0];
+
+        for (guint i = 0; i < (sizeof os_release / sizeof os_release[0]); i++)
+          {
+            struct stat stbuf;
+
+            if (TEMP_FAILURE_RETRY (fstatat (rootdfd, os_release[i], &stbuf,
+                                             AT_SYMLINK_NOFOLLOW)) != 0)
+              {
+                glnx_set_prefix_error_from_errno (error, "fstatat(%s)",
+                                                  os_release[i]);
+                goto out;
+              }
+
+            if (S_ISREG (stbuf.st_mode))
+              {
+                path = os_release[i];
+                break;
+              }
+          }
+
+        g_print ("Mutating /%s\n", path);
+
+        contents = glnx_file_get_contents_utf8_at (rootdfd, path, NULL,
                                                    cancellable, error);
         if (contents == NULL)
           goto out;
@@ -1582,7 +1612,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
         if (new_contents == NULL)
           goto out;
 
-        if (!glnx_file_replace_contents_at (AT_FDCWD, path,
+        if (!glnx_file_replace_contents_at (rootdfd, path,
                                             (guint8*)new_contents, -1, 0,
                                             cancellable, error))
           goto out;
