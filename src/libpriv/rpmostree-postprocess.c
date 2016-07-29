@@ -1711,8 +1711,11 @@ read_xattrs_cb (OstreeRepo     *repo,
                 gpointer        user_data)
 {
   int rootfs_fd = GPOINTER_TO_INT (user_data);
-  /* Hardcoded at the moment, we're only taking file caps */
-  static const char *accepted_xattrs[] = { "security.capability" };
+  /* If you have a use case for something else, file an issue */
+  static const char *accepted_xattrs[] =
+    { "security.capability", /* https://lwn.net/Articles/211883/ */
+      "user.pax.flags" /* https://github.com/projectatomic/rpm-ostree/issues/412 */
+    };
   guint i;
   g_autoptr(GVariant) existing_xattrs = NULL;
   gs_free_variant_iter GVariantIter *viter = NULL;
