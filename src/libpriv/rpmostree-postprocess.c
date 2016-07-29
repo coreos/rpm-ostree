@@ -1706,8 +1706,9 @@ rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
 
 struct CommitThreadData {
   volatile gint done;
-  guint n_files;
-  volatile gint n_processed;
+  off_t n_bytes;
+  off_t n_processed;
+  volatile gint percent;
   OstreeRepo *repo;
   int rootfs_fd;
   OstreeMutableTree *mtree;
@@ -1757,7 +1758,10 @@ read_xattrs_cb (OstreeRepo     *repo,
     }
 
   if (g_file_info_get_file_type (file_info) != G_FILE_TYPE_DIRECTORY)
-    g_atomic_int_inc (&tdata->n_processed);
+    {
+      tdata->n_processed += g_file_info_get_size (file_info);
+      g_atomic_int_set (&tdata->percent, (gint)((100.0*tdata->n_processed)/tdata->n_bytes));
+    }
 
   viter = g_variant_iter_new (existing_xattrs);
 
@@ -1785,11 +1789,11 @@ read_xattrs_cb (OstreeRepo     *repo,
 }
 
 static gboolean
-count_files (int dfd,
-             const char *path,
-             guint *out_n_files,
-             GCancellable *cancellable,
-             GError **error)
+count_filesizes (int dfd,
+                 const char *path,
+                 off_t *out_n_bytes,
+                 GCancellable *cancellable,
+                 GError **error)
 {
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
   
@@ -1807,12 +1811,22 @@ count_files (int dfd,
 
       if (dent->d_type == DT_DIR)
         {
-          if (!count_files (dfd_iter.fd, dent->d_name, out_n_files,
-                            cancellable, error))
+          if (!count_filesizes (dfd_iter.fd, dent->d_name, out_n_bytes,
+                                cancellable, error))
             return FALSE;
         }
       else
-        (*out_n_files)++;
+        {
+          struct stat stbuf;
+
+          if (fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW) != 0)
+            {
+              glnx_set_prefix_error_from_errno (error, "%s", "fstatat");
+              return FALSE;
+            }
+
+          (*out_n_bytes) += stbuf.st_size;
+        }
     }
 
   return TRUE;
@@ -1828,7 +1842,7 @@ write_dfd_thread (gpointer datap)
                                        data->commit_modifier,
                                        data->cancellable, data->error))
     goto out;
-  
+
   data->success = TRUE;
  out:
   g_atomic_int_inc (&data->done);
@@ -1840,9 +1854,9 @@ static gboolean
 on_progress_timeout (gpointer datap)
 {
   struct CommitThreadData *data = datap;
-  const int n_processed = g_atomic_int_get (&data->n_processed);
+  const gint percent = g_atomic_int_get (&data->percent);
 
-  glnx_console_progress_text_percent ("Committing:", (100.0*n_processed)/data->n_files);
+  glnx_console_progress_text_percent ("Committing:", percent);
 
   return TRUE;
 }
@@ -1861,7 +1875,7 @@ rpmostree_commit (int            rootfs_fd,
 {
   gboolean ret = FALSE;
   OstreeRepoTransactionStats stats = { 0, };
-  guint n_files = 0;
+  off_t n_bytes = 0;
   struct CommitThreadData tdata = { 0, };
   glnx_unref_object OstreeMutableTree *mtree = NULL;
   OstreeRepoCommitModifier *commit_modifier = NULL;
@@ -1898,10 +1912,10 @@ rpmostree_commit (int            rootfs_fd,
   if (devino_cache)
     ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
 
-  if (!count_files (rootfs_fd, ".", &n_files, cancellable, error))
+  if (!count_filesizes (rootfs_fd, ".", &n_bytes, cancellable, error))
     goto out;
 
-  tdata.n_files = n_files;
+  tdata.n_bytes = n_bytes;
   tdata.repo = repo;
   tdata.rootfs_fd = rootfs_fd;
   tdata.mtree = mtree;
