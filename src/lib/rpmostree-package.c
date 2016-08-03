@@ -41,7 +41,7 @@ struct RpmOstreePackage
 {
   GObject parent_instance;
   RpmOstreeRefSack *sack;
-  HifPackage *hypkg;
+  DnfPackage *hypkg;
 };
 
 G_DEFINE_TYPE(RpmOstreePackage, rpm_ostree_package, G_TYPE_OBJECT)
@@ -82,7 +82,7 @@ rpm_ostree_package_init (RpmOstreePackage *p)
 const char *
 rpm_ostree_package_get_nevra (RpmOstreePackage *p)
 {
-  return hif_package_get_nevra (p->hypkg);
+  return dnf_package_get_nevra (p->hypkg);
 }
 
 /**
@@ -94,7 +94,7 @@ rpm_ostree_package_get_nevra (RpmOstreePackage *p)
 const char *
 rpm_ostree_package_get_name (RpmOstreePackage *p)
 {
-  return hif_package_get_name (p->hypkg);
+  return dnf_package_get_name (p->hypkg);
 }
 
 /**
@@ -106,7 +106,7 @@ rpm_ostree_package_get_name (RpmOstreePackage *p)
 const char *
 rpm_ostree_package_get_evr (RpmOstreePackage *p)
 {
-  return hif_package_get_evr (p->hypkg);
+  return dnf_package_get_evr (p->hypkg);
 }
 
 /**
@@ -118,7 +118,7 @@ rpm_ostree_package_get_evr (RpmOstreePackage *p)
 const char *
 rpm_ostree_package_get_arch (RpmOstreePackage *p)
 {
-  return hif_package_get_arch (p->hypkg);
+  return dnf_package_get_arch (p->hypkg);
 }
 
 /**
@@ -156,7 +156,7 @@ rpm_ostree_package_cmp (RpmOstreePackage *p1, RpmOstreePackage *p2)
 
   /* This assumes both pools (if they are different)
    * have identical configuration for epoch handling. */
-  ret = hif_sack_evr_cmp (p1->sack->sack, str1, str2);
+  ret = dnf_sack_evr_cmp (p1->sack->sack, str1, str2);
 
   if (ret != 0)
     return ret;
@@ -167,7 +167,7 @@ rpm_ostree_package_cmp (RpmOstreePackage *p1, RpmOstreePackage *p2)
 }
 
 RpmOstreePackage *
-_rpm_ostree_package_new (RpmOstreeRefSack *rsack, HifPackage *hypkg)
+_rpm_ostree_package_new (RpmOstreeRefSack *rsack, DnfPackage *hypkg)
 {
   RpmOstreePackage *p = g_object_new (RPM_OSTREE_TYPE_PACKAGE, NULL);
   p->sack = rpmostree_refsack_ref (rsack);

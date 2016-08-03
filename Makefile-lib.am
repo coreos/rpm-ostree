@@ -35,8 +35,8 @@ librpmostree_1_la_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/libglnx -I$(srcdir)/src/libp
 librpmostree_1_la_LDFLAGS = $(AM_LDFLAGS) -version-number 1:0:0 -Bsymbolic-functions
 librpmostree_1_la_LIBADD =  $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la
 
-# bundled libhif
-INTROSPECTION_SCANNER_ENV = env LD_LIBRARY_PATH=$(top_builddir)/libhif-build/libhif
+# bundled libdnf
+INTROSPECTION_SCANNER_ENV = env LD_LIBRARY_PATH=$(top_builddir)/libdnf-build/libdnf
 
 if BUILDOPT_INTROSPECTION
 RpmOstree-1.0.gir: librpmostree-1.la Makefile

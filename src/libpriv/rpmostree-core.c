@@ -28,7 +28,7 @@
 #include <rpm/rpmmacro.h>
 #include <rpm/rpmts.h>
 #include <gio/gunixoutputstream.h>
-#include <libhif/libhif.h>
+#include <libdnf/libdnf.h>
 #include <librepo/librepo.h>
 
 #include "rpmostree-core.h"
@@ -277,7 +277,7 @@ struct _RpmOstreeContext {
   GObject parent;
   
   RpmOstreeTreespec *spec;
-  HifContext *hifctx;
+  DnfContext *hifctx;
   GHashTable *ignore_scripts;
   OstreeRepo *ostreerepo;
   gboolean unprivileged;
@@ -344,21 +344,21 @@ rpmostree_context_new_system (GCancellable *cancellable,
   rpmsqSetInterruptSafety (FALSE);
 #endif
 
-  self->hifctx = hif_context_new ();
+  self->hifctx = dnf_context_new ();
   _rpmostree_reset_rpm_sighandlers ();
-  hif_context_set_http_proxy (self->hifctx, g_getenv ("http_proxy"));
+  dnf_context_set_http_proxy (self->hifctx, g_getenv ("http_proxy"));
 
-  hif_context_set_repo_dir (self->hifctx, "/etc/yum.repos.d");
+  dnf_context_set_repo_dir (self->hifctx, "/etc/yum.repos.d");
   /* Operating on stale metadata is too annoying */
-  hif_context_set_cache_age (self->hifctx, 0);
-  hif_context_set_cache_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_REPOMD);
-  hif_context_set_solv_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_SOLV);
-  hif_context_set_lock_dir (self->hifctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
-  hif_context_set_user_agent (self->hifctx, PACKAGE_NAME "/" PACKAGE_VERSION);
+  dnf_context_set_cache_age (self->hifctx, 0);
+  dnf_context_set_cache_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_REPOMD);
+  dnf_context_set_solv_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_SOLV);
+  dnf_context_set_lock_dir (self->hifctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
+  dnf_context_set_user_agent (self->hifctx, PACKAGE_NAME "/" PACKAGE_VERSION);
 
-  hif_context_set_check_disk_space (self->hifctx, FALSE);
-  hif_context_set_check_transaction (self->hifctx, FALSE);
-  hif_context_set_yumdb_enabled (self->hifctx, FALSE);
+  dnf_context_set_check_disk_space (self->hifctx, FALSE);
+  dnf_context_set_check_transaction (self->hifctx, FALSE);
+  dnf_context_set_yumdb_enabled (self->hifctx, FALSE);
 
   return self;
 }
@@ -378,19 +378,19 @@ rpmostree_context_new_internal (int           userroot_dfd,
   ret->unprivileged = unprivileged;
 
   { g_autofree char *reposdir = glnx_fdrel_abspath (userroot_dfd, "rpmmd.repos.d");
-    hif_context_set_repo_dir (ret->hifctx, reposdir);
+    dnf_context_set_repo_dir (ret->hifctx, reposdir);
   }
   { const char *cache_rpmmd = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_REPOMD);
     g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_rpmmd);
-    hif_context_set_cache_dir (ret->hifctx, cachedir);
+    dnf_context_set_cache_dir (ret->hifctx, cachedir);
   }
   { const char *cache_solv = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_SOLV);
     g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_solv);
-    hif_context_set_solv_dir (ret->hifctx, cachedir);
+    dnf_context_set_solv_dir (ret->hifctx, cachedir);
   }
   { const char *lock = glnx_strjoina ("cache/", RPMOSTREE_DIR_LOCK);
     g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, lock);
-    hif_context_set_lock_dir (ret->hifctx, lock);
+    dnf_context_set_lock_dir (ret->hifctx, lock);
   }
 
   if (fstatat (userroot_dfd, "repo", &stbuf, 0) < 0)
@@ -462,7 +462,7 @@ rpmostree_context_set_ignore_scripts (RpmOstreeContext *self,
     self->ignore_scripts = g_hash_table_ref (ignore_scripts);
 }
 
-HifContext *
+DnfContext *
 rpmostree_context_get_hif (RpmOstreeContext *self)
 {
   return self->hifctx;
@@ -473,7 +473,7 @@ rpmostree_context_get_varsubsts (RpmOstreeContext *context)
 {
   GHashTable *r = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 
-  g_hash_table_insert (r, g_strdup ("basearch"), g_strdup (hif_context_get_base_arch (context->hifctx)));
+  g_hash_table_insert (r, g_strdup ("basearch"), g_strdup (dnf_context_get_base_arch (context->hifctx)));
 
   return r;
 }
@@ -483,9 +483,9 @@ require_enabled_repos (GPtrArray *sources)
 {
   for (guint i = 0; i < sources->len; i++)
     {
-      HifRepo *src = sources->pdata[i];
-      if (hif_repo_get_enabled (src) != HIF_REPO_ENABLED_NONE)
-        hif_repo_set_required (src, TRUE);
+      DnfRepo *src = sources->pdata[i];
+      if (dnf_repo_get_enabled (src) != DNF_REPO_ENABLED_NONE)
+        dnf_repo_set_required (src, TRUE);
     }
 }
 
@@ -499,13 +499,13 @@ enable_one_repo (GPtrArray           *sources,
 
   for (guint i = 0; i < sources->len; i++)
     {
-      HifRepo *src = sources->pdata[i];
-      const char *id = hif_repo_get_id (src);
+      DnfRepo *src = sources->pdata[i];
+      const char *id = dnf_repo_get_id (src);
 
       if (strcmp (reponame, id) != 0)
         continue;
 
-      hif_repo_set_enabled (src, HIF_REPO_ENABLED_PACKAGES);
+      dnf_repo_set_enabled (src, DNF_REPO_ENABLED_PACKAGES);
       found = TRUE;
       break;
     }
@@ -532,11 +532,11 @@ context_repos_enable_only (RpmOstreeContext    *context,
   const char *const *iter;
   GPtrArray *sources;
 
-  sources = hif_context_get_repos (context->hifctx);
+  sources = dnf_context_get_repos (context->hifctx);
   for (i = 0; i < sources->len; i++)
     {
-      HifRepo *src = sources->pdata[i];
-      hif_repo_set_enabled (src, HIF_REPO_ENABLED_NONE);
+      DnfRepo *src = sources->pdata[i];
+      dnf_repo_set_enabled (src, DNF_REPO_ENABLED_NONE);
     }
 
   for (iter = enabled_repos; iter && *iter; iter++)
@@ -564,7 +564,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   char **instlangs = NULL;
 
   if (install_root)
-    hif_context_set_install_root (self->hifctx, install_root);
+    dnf_context_set_install_root (self->hifctx, install_root);
   else
     {
       glnx_fd_close int dfd = -1; /* Auto close, we just use the path */
@@ -572,13 +572,13 @@ rpmostree_context_setup (RpmOstreeContext    *self,
                               &self->dummy_instroot_path,
                               &dfd, error))
         goto out;
-      hif_context_set_install_root (self->hifctx, self->dummy_instroot_path);
+      dnf_context_set_install_root (self->hifctx, self->dummy_instroot_path);
     }
 
   if (source_root)
-    hif_context_set_source_root (self->hifctx, source_root);
+    dnf_context_set_source_root (self->hifctx, source_root);
 
-  if (!hif_context_setup (self->hifctx, cancellable, error))
+  if (!dnf_context_setup (self->hifctx, cancellable, error))
     goto out;
 
   /* This is what we use as default. */
@@ -591,7 +591,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
     if (!context_repos_enable_only (self, (const char *const*)enabled_repos, error))
       goto out;
 
-  repos = hif_context_get_repos (self->hifctx);
+  repos = dnf_context_get_repos (self->hifctx);
   if (repos->len == 0)
     {
       g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -617,7 +617,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
           g_string_append (opt, v);
         }
 
-      hif_context_set_rpm_macro (self->hifctx, "_install_langs", opt->str);
+      dnf_context_set_rpm_macro (self->hifctx, "_install_langs", opt->str);
       g_string_free (opt, TRUE);
     }
 
@@ -626,8 +626,8 @@ rpmostree_context_setup (RpmOstreeContext    *self,
     g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs);
     
     if (!docs)
-        hif_transaction_set_flags (hif_context_get_transaction (self->hifctx),
-                                   HIF_TRANSACTION_FLAG_NODOCS);
+        dnf_transaction_set_flags (dnf_context_get_transaction (self->hifctx),
+                                   DNF_TRANSACTION_FLAG_NODOCS);
   }
 
   { const char *const *ignore_scripts = NULL;
@@ -648,7 +648,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
 
 
 static void
-on_hifstate_percentage_changed (HifState   *hifstate,
+on_hifstate_percentage_changed (DnfState   *hifstate,
                                 guint       percentage,
                                 gpointer    user_data)
 {
@@ -663,13 +663,13 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 {
   gboolean ret = FALSE;
   guint progress_sigid;
-  glnx_unref_object HifState *hifstate = hif_state_new ();
+  glnx_unref_object DnfState *hifstate = dnf_state_new ();
 
   progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                      G_CALLBACK (on_hifstate_percentage_changed),
                                      "Downloading metadata:");
 
-  if (!hif_context_setup_sack (self->hifctx, hifstate, error))
+  if (!dnf_context_setup_sack (self->hifctx, hifstate, error))
     goto out;
 
   g_signal_handler_disconnect (hifstate, progress_sigid);
@@ -733,19 +733,19 @@ rpmostree_get_cache_branch_header (Header hdr)
 }
 
 char *
-rpmostree_get_cache_branch_pkg (HifPackage *pkg)
+rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
 {
-  return cache_branch_for_n_evr_a (hif_package_get_name (pkg),
-                                   hif_package_get_evr (pkg),
-                                   hif_package_get_arch (pkg));
+  return cache_branch_for_n_evr_a (dnf_package_get_name (pkg),
+                                   dnf_package_get_evr (pkg),
+                                   dnf_package_get_arch (pkg));
 }
 
 static gboolean
-pkg_is_local (HifPackage *pkg)
+pkg_is_local (DnfPackage *pkg)
 {
-  HifRepo *src = hif_package_get_repo (pkg);
-  return (hif_repo_is_local (src) || 
-          g_strcmp0 (hif_package_get_reponame (pkg), HY_CMDLINE_REPO_NAME) == 0);
+  DnfRepo *src = dnf_package_get_repo (pkg);
+  return (dnf_repo_is_local (src) || 
+          g_strcmp0 (dnf_package_get_reponame (pkg), HY_CMDLINE_REPO_NAME) == 0);
 }
 
 static gboolean
@@ -816,7 +816,7 @@ out:
 }
 
 static gboolean
-pkg_is_cached (HifPackage *pkg)
+pkg_is_cached (DnfPackage *pkg)
 {
   if (pkg_is_local (pkg))
     return TRUE;
@@ -828,12 +828,12 @@ pkg_is_cached (HifPackage *pkg)
    * that - which is what happens with the ostree commits
    * above.
    */
-  return g_file_test (hif_package_get_filename (pkg), G_FILE_TEST_EXISTS);
+  return g_file_test (dnf_package_get_filename (pkg), G_FILE_TEST_EXISTS);
 }
 
 static gboolean
 find_pkg_in_ostree (OstreeRepo     *repo,
-                    HifPackage     *pkg,
+                    DnfPackage     *pkg,
                     OstreeSePolicy *sepolicy,
                     gboolean       *out_in_ostree,
                     gboolean       *out_selinux_match,
@@ -878,7 +878,7 @@ out:
 /* determine of all the marked packages, which ones we'll need to download,
  * which ones we'll need to import, and which ones we'll need to relabel */
 static gboolean
-sort_packages (HifContext       *hifctx,
+sort_packages (DnfContext       *hifctx,
                OstreeRepo       *ostreerepo,
                OstreeSePolicy   *sepolicy,
                RpmOstreeInstall *install,
@@ -886,7 +886,7 @@ sort_packages (HifContext       *hifctx,
 {
   gboolean ret = FALSE;
   g_autoptr(GPtrArray) packages = NULL;
-  GPtrArray *sources = hif_context_get_repos (hifctx);
+  GPtrArray *sources = dnf_context_get_repos (hifctx);
 
   g_clear_pointer (&install->packages_to_download, g_ptr_array_unref);
   install->packages_to_download
@@ -900,24 +900,24 @@ sort_packages (HifContext       *hifctx,
   install->packages_to_relabel
     = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
 
-  packages = hif_goal_get_packages (hif_context_get_goal (hifctx),
-                                    HIF_PACKAGE_INFO_INSTALL,
-                                    HIF_PACKAGE_INFO_REINSTALL,
-                                    HIF_PACKAGE_INFO_DOWNGRADE,
-                                    HIF_PACKAGE_INFO_UPDATE,
+  packages = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+                                    DNF_PACKAGE_INFO_INSTALL,
+                                    DNF_PACKAGE_INFO_REINSTALL,
+                                    DNF_PACKAGE_INFO_DOWNGRADE,
+                                    DNF_PACKAGE_INFO_UPDATE,
                                     -1);
 
   for (guint i = 0; i < packages->len; i++)
     {
-      HifPackage *pkg = packages->pdata[i];
-      HifRepo *src = NULL;
+      DnfPackage *pkg = packages->pdata[i];
+      DnfRepo *src = NULL;
 
       /* Hackily look up the source...we need a hash table */
       for (guint j = 0; j < sources->len; j++)
         {
-          HifRepo *tmpsrc = sources->pdata[j];
-          if (g_strcmp0 (hif_package_get_reponame (pkg),
-                         hif_repo_get_id (tmpsrc)) == 0)
+          DnfRepo *tmpsrc = sources->pdata[j];
+          if (g_strcmp0 (dnf_package_get_reponame (pkg),
+                         dnf_repo_get_id (tmpsrc)) == 0)
             {
               src = tmpsrc;
               break;
@@ -925,7 +925,7 @@ sort_packages (HifContext       *hifctx,
         }
 
       g_assert (src);
-      hif_package_set_repo (pkg, src);
+      dnf_package_set_repo (pkg, src);
 
       /* NB: We're assuming here that the presence of an ostree repo means that
        * the user intends to import the pkg vs e.g. installing it like during a
@@ -967,7 +967,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
                                    GError              **error)
 {
   gboolean ret = FALSE;
-  HifContext *hifctx = self->hifctx;
+  DnfContext *hifctx = self->hifctx;
   char **pkgnames = NULL;
   g_autoptr(RpmOstreeInstall) ret_install = g_object_new (RPMOSTREE_TYPE_INSTALL, NULL);
 
@@ -979,7 +979,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
     for (; strviter && *strviter; strviter++)
       {
         const char *pkgname = *strviter;
-        if (!hif_context_install (hifctx, pkgname, error))
+        if (!dnf_context_install (hifctx, pkgname, error))
           goto out;
         g_ptr_array_add (ret_install->packages_requested, g_strdup (pkgname));
       }
@@ -987,7 +987,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
 
   rpmostree_output_task_begin ("Resolving dependencies");
 
-  if (!hif_goal_depsolve (hif_context_get_goal (hifctx), HIF_INSTALL, error))
+  if (!dnf_goal_depsolve (dnf_context_get_goal (hifctx), DNF_INSTALL, error))
     {
       g_print ("failed\n");
       goto out;
@@ -1023,7 +1023,7 @@ ptrarray_sort_compare_strings (gconstpointer ap,
  * previous one.
  */
 void
-rpmostree_hif_add_checksum_goal (GChecksum *checksum,
+rpmostree_dnf__add_checksum_goal (GChecksum *checksum,
                                  HyGoal     goal)
 {
   g_autoptr(GPtrArray) pkglist = NULL;
@@ -1034,9 +1034,9 @@ rpmostree_hif_add_checksum_goal (GChecksum *checksum,
   g_assert (pkglist);
   for (i = 0; i < pkglist->len; i++)
     {
-      HifPackage *pkg = pkglist->pdata[i];
+      DnfPackage *pkg = pkglist->pdata[i];
       int pkg_checksum_type;
-      const unsigned char *pkg_checksum_bytes = hif_package_get_chksum (pkg, &pkg_checksum_type);
+      const unsigned char *pkg_checksum_bytes = dnf_package_get_chksum (pkg, &pkg_checksum_type);
       g_autofree char *pkg_checksum = hy_chksum_str (pkg_checksum_bytes, pkg_checksum_type);
       char *pkg_checksum_with_type = g_strconcat (hy_chksum_name (pkg_checksum_type), ":", pkg_checksum, NULL);
       
@@ -1059,12 +1059,12 @@ rpmostree_context_get_state_sha512 (RpmOstreeContext *self)
   g_checksum_update (state_checksum, g_variant_get_data (self->spec->spec),
                      g_variant_get_size (self->spec->spec));
 
-  rpmostree_hif_add_checksum_goal (state_checksum, hif_context_get_goal (self->hifctx));
+  rpmostree_dnf__add_checksum_goal (state_checksum, dnf_context_get_goal (self->hifctx));
   return g_strdup (g_checksum_get_string (state_checksum));
 }
 
 static GHashTable *
-gather_source_to_packages (HifContext *hifctx,
+gather_source_to_packages (DnfContext *hifctx,
                            RpmOstreeInstall *install)
 {
   guint i;
@@ -1073,8 +1073,8 @@ gather_source_to_packages (HifContext *hifctx,
 
   for (i = 0; i < install->packages_to_download->len; i++)
     {
-      HifPackage *pkg = install->packages_to_download->pdata[i];
-      HifRepo *src = hif_package_get_repo (pkg);
+      DnfPackage *pkg = install->packages_to_download->pdata[i];
+      DnfRepo *src = dnf_package_get_repo (pkg);
       GPtrArray *source_packages;
       
       g_assert (src);
@@ -1098,12 +1098,12 @@ rpmostree_context_download (RpmOstreeContext *ctx,
                             GError          **error)
 {
   gboolean ret = FALSE;
-  HifContext *hifctx = ctx->hifctx;
+  DnfContext *hifctx = ctx->hifctx;
   int n = install->packages_to_download->len;
 
   if (n > 0)
     {
-      guint64 size = hif_package_array_get_download_size (install->packages_to_download);
+      guint64 size = dnf_package_array_get_download_size (install->packages_to_download);
       g_autofree char *sizestr = g_format_size (size);
       g_print ("Will download: %u package%s (%s)\n", n, n > 1 ? "s" : "", sizestr);
     }
@@ -1119,22 +1119,22 @@ rpmostree_context_download (RpmOstreeContext *ctx,
     while (g_hash_table_iter_next (&hiter, &key, &value))
       {
         g_autofree char *target_dir = NULL;
-        HifRepo *src = key;
+        DnfRepo *src = key;
         GPtrArray *src_packages = value;
-        glnx_unref_object HifState *hifstate = hif_state_new ();
+        glnx_unref_object DnfState *hifstate = dnf_state_new ();
 
         g_autofree char *prefix
-          = g_strdup_printf ("  Downloading from %s:", hif_repo_get_id (src));
+          = g_strdup_printf ("  Downloading from %s:", dnf_repo_get_id (src));
 
         progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                            G_CALLBACK (on_hifstate_percentage_changed),
                                            prefix);
 
-        target_dir = g_build_filename (hif_repo_get_location (src), "/packages/", NULL);
+        target_dir = g_build_filename (dnf_repo_get_location (src), "/packages/", NULL);
         if (!glnx_shutil_mkdir_p_at (AT_FDCWD, target_dir, 0755, cancellable, error))
           goto out;
 
-        if (!hif_repo_download_packages (src, src_packages, target_dir,
+        if (!dnf_repo_download_packages (src, src_packages, target_dir,
                                          hifstate, error))
           goto out;
 
@@ -1151,8 +1151,8 @@ rpmostree_context_download (RpmOstreeContext *ctx,
 
 static gboolean
 import_one_package (RpmOstreeContext *self,
-                    HifContext     *hifctx,
-                    HifPackage     *pkg,
+                    DnfContext     *hifctx,
+                    DnfPackage     *pkg,
                     OstreeSePolicy *sepolicy,
                     GCancellable   *cancellable,
                     GError        **error)
@@ -1165,12 +1165,12 @@ import_one_package (RpmOstreeContext *self,
   int flags = 0;
 
   if (pkg_is_local (pkg))
-    pkg_path = g_strdup (hif_package_get_filename (pkg));
+    pkg_path = g_strdup (dnf_package_get_filename (pkg));
   else
     {
-      g_autofree char *pkg_location = hif_package_get_location (pkg);
+      g_autofree char *pkg_location = dnf_package_get_location (pkg);
       pkg_path =
-        g_build_filename (hif_repo_get_location (hif_package_get_repo (pkg)),
+        g_build_filename (dnf_repo_get_location (dnf_package_get_repo (pkg)),
                           "packages", glnx_basename (pkg_location), NULL);
     }
 
@@ -1186,7 +1186,7 @@ import_one_package (RpmOstreeContext *self,
   if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostreerepo, sepolicy,
                                             &ostree_commit, cancellable, error))
     {
-      const char *nevra = hif_package_get_nevra (pkg);
+      const char *nevra = dnf_package_get_nevra (pkg);
       g_prefix_error (error, "Unpacking %s: ", nevra);
       goto out;
     }
@@ -1207,10 +1207,10 @@ import_one_package (RpmOstreeContext *self,
 }
 
 static inline void
-hif_state_assert_done (HifState *hifstate)
+dnf_state_assert_done (DnfState *hifstate)
 {
   gboolean r;
-  r = hif_state_done (hifstate, NULL);
+  r = dnf_state_done (hifstate, NULL);
   g_assert (r);
 }
 
@@ -1221,7 +1221,7 @@ rpmostree_context_import (RpmOstreeContext *self,
                           GError          **error)
 {
   gboolean ret = FALSE;
-  HifContext *hifctx = self->hifctx;
+  DnfContext *hifctx = self->hifctx;
   guint progress_sigid;
   int n = install->packages_to_import->len;
 
@@ -1231,19 +1231,19 @@ rpmostree_context_import (RpmOstreeContext *self,
   g_return_val_if_fail (self->ostreerepo != NULL, FALSE);
 
   {
-    glnx_unref_object HifState *hifstate = hif_state_new ();
-    hif_state_set_number_steps (hifstate, install->packages_to_import->len);
+    glnx_unref_object DnfState *hifstate = dnf_state_new ();
+    dnf_state_set_number_steps (hifstate, install->packages_to_import->len);
     progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                        G_CALLBACK (on_hifstate_percentage_changed),
                                        "Importing:");
 
     for (guint i = 0; i < install->packages_to_import->len; i++)
       {
-        HifPackage *pkg = install->packages_to_import->pdata[i];
+        DnfPackage *pkg = install->packages_to_import->pdata[i];
         if (!import_one_package (self, hifctx, pkg,
                                  self->sepolicy, cancellable, error))
           goto out;
-        hif_state_assert_done (hifstate);
+        dnf_state_assert_done (hifstate);
       }
 
     g_signal_handler_disconnect (hifstate, progress_sigid);
@@ -1257,7 +1257,7 @@ rpmostree_context_import (RpmOstreeContext *self,
 
 static gboolean
 ostree_checkout_package (OstreeRepo   *repo,
-                         HifPackage   *pkg,
+                         DnfPackage   *pkg,
                          int           dfd,
                          const char   *path,
                          OstreeRepoDevInoCache *devino_cache,
@@ -1290,7 +1290,7 @@ ostree_checkout_package (OstreeRepo   *repo,
  out:
   if (error && *error)
     {
-      const char *nevra = hif_package_get_nevra (pkg);
+      const char *nevra = dnf_package_get_nevra (pkg);
       g_prefix_error (error, "Unpacking %s: ", nevra);
     }
   return ret;
@@ -1541,7 +1541,7 @@ relabel_rootfs (OstreeRepo        *repo,
 
 static gboolean
 relabel_one_package (OstreeRepo     *repo,
-                     HifPackage     *pkg,
+                     DnfPackage     *pkg,
                      OstreeSePolicy *sepolicy,
                      GCancellable   *cancellable,
                      GError        **error)
@@ -1685,22 +1685,22 @@ rpmostree_context_relabel (RpmOstreeContext *self,
   g_return_val_if_fail (self->ostreerepo != NULL, FALSE);
 
   {
-    glnx_unref_object HifState *hifstate = hif_state_new ();
+    glnx_unref_object DnfState *hifstate = dnf_state_new ();
     g_autofree char *prefix = g_strdup_printf ("Relabeling %d package%s:",
                                                n, n>1 ? "s" : "");
 
-    hif_state_set_number_steps (hifstate, install->packages_to_relabel->len);
+    dnf_state_set_number_steps (hifstate, install->packages_to_relabel->len);
     progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                        G_CALLBACK (on_hifstate_percentage_changed),
                                        prefix);
 
     for (guint i = 0; i < install->packages_to_relabel->len; i++)
       {
-        HifPackage *pkg = install->packages_to_relabel->pdata[i];
+        DnfPackage *pkg = install->packages_to_relabel->pdata[i];
         if (!relabel_one_package (self->ostreerepo, pkg, self->sepolicy,
                                   cancellable, error))
           goto out;
-        hif_state_assert_done (hifstate);
+        dnf_state_assert_done (hifstate);
       }
 
     g_signal_handler_disconnect (hifstate, progress_sigid);
@@ -1731,8 +1731,8 @@ ts_callback (const void * h,
     {
     case RPMCALLBACK_INST_OPEN_FILE:
       {
-        HifPackage *pkg = (void*)key;
-        const char *nevra = hif_package_get_nevra (pkg);
+        DnfPackage *pkg = (void*)key;
+        const char *nevra = dnf_package_get_nevra (pkg);
         g_autofree char *path = glnx_fdrel_abspath (tdata->tmp_metadata_dfd, nevra);
         g_assert (tdata->current_trans_fd == NULL);
         tdata->current_trans_fd = Fopen (path, "r.ufdio");
@@ -1753,12 +1753,12 @@ ts_callback (const void * h,
 
 static Header
 get_header_for_package (int tmp_metadata_dfd,
-                        HifPackage *pkg,
+                        DnfPackage *pkg,
                         GError **error)
 {
   Header hdr = NULL;
   glnx_fd_close int metadata_fd = -1;
-  const char *nevra = hif_package_get_nevra (pkg);
+  const char *nevra = dnf_package_get_nevra (pkg);
 
   if ((metadata_fd = openat (tmp_metadata_dfd, nevra, O_RDONLY | O_CLOEXEC)) < 0)
     {
@@ -1774,7 +1774,7 @@ get_header_for_package (int tmp_metadata_dfd,
 
 static gboolean
 add_to_transaction (rpmts  ts,
-                    HifPackage *pkg,
+                    DnfPackage *pkg,
                     int tmp_metadata_dfd,
                     gboolean noscripts,
                     GHashTable *ignore_scripts,
@@ -1802,7 +1802,7 @@ add_to_transaction (rpmts  ts,
                    G_IO_ERROR,
                    G_IO_ERROR_FAILED,
                    "Failed to add install element for %s",
-                   hif_package_get_filename (pkg));
+                   dnf_package_get_filename (pkg));
       goto out;
     }
 
@@ -1816,7 +1816,7 @@ add_to_transaction (rpmts  ts,
 static gboolean
 run_posttrans_sync (int tmp_metadata_dfd,
                     int rootfs_dfd,
-                    HifPackage *pkg,
+                    DnfPackage *pkg,
                     GHashTable *ignore_scripts,
                     GCancellable *cancellable,
                     GError    **error)
@@ -1865,14 +1865,14 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                    GError               **error)
 {
   gboolean ret = FALSE;
-  HifContext *hifctx = self->hifctx;
+  DnfContext *hifctx = self->hifctx;
   TransactionData tdata = { 0, -1 };
   rpmts ordering_ts = NULL;
   rpmts rpmdb_ts = NULL;
   guint i, n_rpmts_elements;
   g_autoptr(GHashTable) pkg_to_ostree_commit =
     g_hash_table_new_full (NULL, NULL, (GDestroyNotify)g_object_unref, (GDestroyNotify)g_free);
-  HifPackage *filesystem_package = NULL;   /* It's special... */
+  DnfPackage *filesystem_package = NULL;   /* It's special... */
   int r;
   char *tmp_metadata_dir_path = NULL;
   glnx_fd_close int tmp_metadata_dfd = -1;
@@ -1885,7 +1885,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
   tdata.tmp_metadata_dfd = tmp_metadata_dfd;
 
   ordering_ts = rpmtsCreate ();
-  rpmtsSetRootDir (ordering_ts, hif_context_get_install_root (hifctx));
+  rpmtsSetRootDir (ordering_ts, dnf_context_get_install_root (hifctx));
   /* First for the ordering TS, set the dbpath to relative, which will also gain
    * the root dir.
    */
@@ -1903,19 +1903,19 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
    */
   { g_autoptr(GPtrArray) package_list = NULL;
 
-    package_list = hif_goal_get_packages (hif_context_get_goal (hifctx),
-                                          HIF_PACKAGE_INFO_INSTALL,
+    package_list = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+                                          DNF_PACKAGE_INFO_INSTALL,
                                           -1);
 
     for (i = 0; i < package_list->len; i++)
       {
-        HifPackage *pkg = package_list->pdata[i];
+        DnfPackage *pkg = package_list->pdata[i];
         glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
         g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
         g_autofree char *cached_rev = NULL;
         g_autoptr(GVariant) pkg_commit = NULL;
         g_autoptr(GVariant) header_variant = NULL;
-        const char *nevra = hif_package_get_nevra (pkg);
+        const char *nevra = dnf_package_get_nevra (pkg);
 
         {
           g_autofree char *branch_head_rev = NULL;
@@ -1943,7 +1943,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                                                      (GVariantType*)"ay", error);
           if (!header_variant)
             {
-              g_prefix_error (error, "In commit %s of %s: ", cached_rev, hif_package_get_package_id (pkg));
+              g_prefix_error (error, "In commit %s of %s: ", cached_rev, dnf_package_get_package_id (pkg));
               goto out;
             }
 
@@ -1962,7 +1962,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
 
         g_hash_table_insert (pkg_to_ostree_commit, g_object_ref (pkg), g_steal_pointer (&cached_rev));
 
-        if (strcmp (hif_package_get_name (pkg), "filesystem") == 0)
+        if (strcmp (dnf_package_get_name (pkg), "filesystem") == 0)
           filesystem_package = g_object_ref (pkg);
       }
   }
@@ -2004,7 +2004,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
        * rootfs dir.
        */
       rpmte te = rpmtsElement (ordering_ts, 0);
-      HifPackage *pkg = (void*)rpmteKey (te);
+      DnfPackage *pkg = (void*)rpmteKey (te);
 
       g_assert (pkg);
 
@@ -2024,7 +2024,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
   for (; i < n_rpmts_elements; i++)
     {
       rpmte te = rpmtsElement (ordering_ts, i);
-      HifPackage *pkg = (void*)rpmteKey (te);
+      DnfPackage *pkg = (void*)rpmteKey (te);
 
       g_assert (pkg);
 
@@ -2049,7 +2049,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
       for (i = 0; i < n_rpmts_elements; i++)
         {
           rpmte te = rpmtsElement (ordering_ts, i);
-          HifPackage *pkg = (void*)rpmteKey (te);
+          DnfPackage *pkg = (void*)rpmteKey (te);
 
           g_assert (pkg);
 
@@ -2098,7 +2098,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
     g_hash_table_iter_init (&hiter, pkg_to_ostree_commit);
     while (g_hash_table_iter_next (&hiter, &k, &v))
       {
-        HifPackage *pkg = k;
+        DnfPackage *pkg = k;
 
         /* Set noscripts since we already validated them above */
         if (!add_to_transaction (rpmdb_ts, pkg, tmp_metadata_dfd, TRUE, NULL,
@@ -2127,7 +2127,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
     }
   if (r > 0)
     {
-      if (!hif_rpmts_look_for_problems (rpmdb_ts, error))
+      if (!dnf_rpmts_look_for_problems (rpmdb_ts, error))
         goto out;
     }
 

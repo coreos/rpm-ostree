@@ -53,7 +53,7 @@ query_all_packages_in_sack (RpmOstreeRefSack *rsack)
   c = pkglist->len;
   for (i = 0; i < c; i++)
     {
-      HifPackage *pkg = pkglist->pdata[i];
+      DnfPackage *pkg = pkglist->pdata[i];
       g_ptr_array_add (result, _rpm_ostree_package_new (rsack, pkg));
     }
   
@@ -159,15 +159,15 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
 
   for (i = 0; i < new_pkglist->len; i++)
     {
-      HifPackage *pkg = new_pkglist->pdata[i];
+      DnfPackage *pkg = new_pkglist->pdata[i];
       HyQuery query = NULL;
       g_autoptr(GPtrArray) pkglist = NULL;
       guint count;
-      HifPackage *oldpkg;
+      DnfPackage *oldpkg;
       
       query = hy_query_create (orig_sack->sack);
-      hy_query_filter (query, HY_PKG_NAME, HY_EQ, hif_package_get_name (pkg));
-      hy_query_filter (query, HY_PKG_EVR, HY_NEQ, hif_package_get_evr (pkg));
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, dnf_package_get_name (pkg));
+      hy_query_filter (query, HY_PKG_EVR, HY_NEQ, dnf_package_get_evr (pkg));
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
       pkglist = hy_query_run (query);
 
@@ -184,12 +184,12 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
 
   for (i = 0; i < orig_pkglist->len; i++)
     {
-      HifPackage *pkg = orig_pkglist->pdata[i];
+      DnfPackage *pkg = orig_pkglist->pdata[i];
       HyQuery query = NULL;
       g_autoptr(GPtrArray) pkglist = NULL;
       
       query = hy_query_create (new_sack->sack);
-      hy_query_filter (query, HY_PKG_NAME, HY_EQ, hif_package_get_name (pkg));
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, dnf_package_get_name (pkg));
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
       pkglist = hy_query_run (query);
 
@@ -200,12 +200,12 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
 
   for (i = 0; i < new_pkglist->len; i++)
     {
-      HifPackage *pkg = new_pkglist->pdata[i];
+      DnfPackage *pkg = new_pkglist->pdata[i];
       HyQuery query = NULL;
       g_autoptr(GPtrArray) pkglist = NULL;
       
       query = hy_query_create (orig_sack->sack);
-      hy_query_filter (query, HY_PKG_NAME, HY_EQ, hif_package_get_name (pkg));
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, dnf_package_get_name (pkg));
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
       pkglist = hy_query_run (query);
 

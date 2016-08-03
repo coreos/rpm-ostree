@@ -28,7 +28,7 @@
 #include <rpm/rpmfi.h>
 #include <rpm/rpmmacro.h>
 #include <rpm/rpmts.h>
-#include <libhif/libhif.h>
+#include <libdnf/libdnf.h>
 
 #include "libglnx.h"
 
@@ -50,14 +50,14 @@ gboolean rpmostree_script_ignore_hash_from_strv (const char *const *strv,
                                                  GError **error);
 
 gboolean
-rpmostree_script_txn_validate (HifPackage    *package,
+rpmostree_script_txn_validate (DnfPackage    *package,
                                Header         hdr,
                                GHashTable    *ignore_scripts,
                                GCancellable  *cancellable,
                                GError       **error);
 
 gboolean
-rpmostree_posttrans_run_sync (HifPackage    *pkg,
+rpmostree_posttrans_run_sync (DnfPackage    *pkg,
                               Header         hdr,
                               GHashTable    *ignore_scripts,
                               int            rootfs_fd,

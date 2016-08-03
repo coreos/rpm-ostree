@@ -17,18 +17,18 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-libhif.so.3:
-	cd libhif-build && $(MAKE)
-	ln -sf libhif-build/libhif/libhif.so.3 .
-CLEANFILES += libhif.so.3
-GITIGNOREFILES += libhif-build/
+libdnf.so.1:
+	cd libdnf-build && $(MAKE)
+	ln -sf libdnf-build/libdnf/libdnf.so.1 .
+CLEANFILES += libdnf.so.1
+GITIGNOREFILES += libdnf-build/
 
-install-libhif-hook:
+install-libdnf-hook:
 	install -d -m 0755 $(DESTDIR)$(libdir)/rpm-ostree
-	install -m 0755 $$(readlink libhif.so.3) $(DESTDIR)$(libdir)/rpm-ostree
-INSTALL_DATA_HOOKS += install-libhif-hook
+	install -m 0755 $$(readlink libdnf.so.1) $(DESTDIR)$(libdir)/rpm-ostree
+INSTALL_DATA_HOOKS += install-libdnf-hook
 
-clean-local: clean-local-hif
-.PHONY: clean-local-hif
-clean-local-hif:
-	cd libhif-build && $(MAKE) clean
+clean-local: clean-local-dnf
+.PHONY: clean-local-dnf
+clean-local-dnf:
+	cd libdnf-build && $(MAKE) clean

@@ -30,7 +30,7 @@ AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
         -DRPM_OSTREE_FEATURES='"$(RPM_OSTREE_FEATURES)"' \
 	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_40 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_40_
 AM_CFLAGS += -std=gnu99 $(WARN_CFLAGS)
-# bundled libhif
+# bundled libdnf
 AM_LDFLAGS += "-Wl,-rpath=$(libdir)/rpm-ostree"
 
 EXTRA_DIST += autogen.sh COPYING
@@ -53,7 +53,7 @@ TYPELIBS = $(GIRS:.gir=.typelib)
 include libglnx/Makefile-libglnx.am.inc
 noinst_LTLIBRARIES += libglnx.la
 include Makefile-libpriv.am
-include Makefile-hif.am
+include Makefile-libdnf.am
 include Makefile-lib.am
 include Makefile-daemon.am
 include Makefile-rpm-ostree.am

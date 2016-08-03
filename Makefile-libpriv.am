@@ -59,8 +59,8 @@ librpmostreepriv_la_LIBADD = \
 	$(CAP_LIBS) \
 	$(NULL)
 
-# bundled libhif
-EXTRA_librpmostreepriv_la_DEPENDENCIES = libhif.so.3
+# bundled libdnf
+EXTRA_librpmostreepriv_la_DEPENDENCIES = libdnf.so.1
 
 gperf_gperf_sources = src/libpriv/rpmostree-script-gperf.gperf
 BUILT_SOURCES += $(gperf_gperf_sources:-gperf.gperf=-gperf.c)

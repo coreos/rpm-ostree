@@ -66,9 +66,9 @@ PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
 				     libsystemd
 				     rpm librepo
 				     libarchive])
-dnl bundled libhif
-PKGDEP_RPMOSTREE_CFLAGS="-I $(pwd)/libhif -I $(pwd)/libhif-build $PKGDEP_RPMOSTREE_CFLAGS"
-PKGDEP_RPMOSTREE_LIBS="-L$(pwd)/libhif-build/libhif -lhif $PKGDEP_RPMOSTREE_LIBS"
+dnl bundled libdnf
+PKGDEP_RPMOSTREE_CFLAGS="-I $(pwd)/libdnf -I $(pwd)/libdnf-build $PKGDEP_RPMOSTREE_CFLAGS"
+PKGDEP_RPMOSTREE_LIBS="-L$(pwd)/libdnf-build/libdnf -ldnf $PKGDEP_RPMOSTREE_LIBS"
 
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
@@ -127,7 +127,7 @@ fi
 
 dnl I picked /usr/libexec/rpm-ostree just because we need an
 dnl arbitrary path - we don't actually install there.
-(set -euo pipefail; mkdir -p libhif-build && cd libhif-build &&
+(set -euo pipefail; mkdir -p libdnf-build && cd libdnf-build &&
  set -x && 
  cmake \
      -DCMAKE_INSTALL_PREFIX:PATH=/usr/libexec/rpm-ostree \
@@ -136,7 +136,7 @@ dnl arbitrary path - we don't actually install there.
      -DSYSCONF_INSTALL_DIR:PATH=/usr/libexec/rpm-ostree/etc \
      -DSHARE_INSTALL_PREFIX:PATH=/usr/libexec/rpm-ostree/share \
      -DBUILD_SHARED_LIBS:BOOL=ON \
-     ${cmake_args} ../libhif) || exit 1
+     ${cmake_args} ../libdnf) || exit 1
 
 AC_CONFIG_FILES([
 Makefile

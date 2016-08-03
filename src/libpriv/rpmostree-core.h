@@ -21,7 +21,7 @@
 #pragma once
 
 #include <gio/gio.h>
-#include <libhif/libhif.h>
+#include <libdnf/libdnf.h>
 #include <ostree.h>
 
 #include "libglnx.h"
@@ -46,7 +46,7 @@ RpmOstreeContext *rpmostree_context_new_unprivileged (int basedir_dfd,
                                                       GCancellable *cancellable,
                                                       GError **error);
 
-HifContext * rpmostree_context_get_hif (RpmOstreeContext *self);
+DnfContext * rpmostree_context_get_hif (RpmOstreeContext *self);
 
 RpmOstreeTreespec *rpmostree_treespec_new_from_keyfile (GKeyFile *keyfile, GError  **error);
 RpmOstreeTreespec *rpmostree_treespec_new_from_path (const char *path, GError  **error);
@@ -71,11 +71,11 @@ void rpmostree_context_set_sepolicy (RpmOstreeContext *self,
 void rpmostree_context_set_ignore_scripts (RpmOstreeContext *self,
                                            GHashTable   *ignore_scripts);
 
-void rpmostree_hif_add_checksum_goal (GChecksum *checksum, HyGoal goal);
+void rpmostree_dnf__add_checksum_goal (GChecksum *checksum, HyGoal goal);
 char *rpmostree_context_get_state_sha512 (RpmOstreeContext *self);
 
 char *rpmostree_get_cache_branch_header (Header hdr);
-char *rpmostree_get_cache_branch_pkg (HifPackage *pkg);
+char *rpmostree_get_cache_branch_pkg (DnfPackage *pkg);
 
 gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
                                                GCancellable      *cancellable,

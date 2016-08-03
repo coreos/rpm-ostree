@@ -1080,7 +1080,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   ctx = rpmostree_context_new_system (cancellable, error);
 
   /* point libhif to the yum.repos.d and os-release of the merge_deployment */
-  { HifContext *hifctx = rpmostree_context_get_hif (ctx);
+  { DnfContext *hifctx = rpmostree_context_get_hif (ctx);
     g_autofree char *sysroot_path =
       g_file_get_path (ostree_sysroot_get_path (self->sysroot));
     g_autofree char *merge_deployment_dirpath =
@@ -1090,8 +1090,8 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
       g_build_filename (sysroot_path, merge_deployment_dirpath, NULL);
     g_autofree char *reposdir = g_build_filename (merge_deployment_root,
                                                   "etc/yum.repos.d", NULL);
-    hif_context_set_repo_dir (hifctx, reposdir);
-    hif_context_set_source_root (hifctx, merge_deployment_root);
+    dnf_context_set_repo_dir (hifctx, reposdir);
+    dnf_context_set_source_root (hifctx, merge_deployment_root);
   }
 
   /* load the sepolicy to use during import */
