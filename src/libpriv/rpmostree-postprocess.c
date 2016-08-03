@@ -1018,11 +1018,11 @@ handle_remove_files_from_package (GFile         *yumroot,
 
   for (j = 0; j < npackages; j++)
     {
-      HifPackage *pkg;
+      DnfPackage *pkg;
       g_auto(GStrv) pkg_files = NULL;
 
       pkg = pkglist->pdata[j];
-      pkg_files = hif_package_get_files (pkg);
+      pkg_files = dnf_package_get_files (pkg);
 
       for (i = 1; i < len; i++)
         {

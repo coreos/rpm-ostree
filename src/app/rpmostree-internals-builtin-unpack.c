@@ -23,7 +23,7 @@
 #include <string.h>
 #include <glib-unix.h>
 #include <gio/gunixoutputstream.h>
-#include <libhif/libhif.h>
+#include <libdnf/libdnf.h>
 #include <rpm/rpmts.h>
 #include <stdio.h>
 #include <libglnx.h>

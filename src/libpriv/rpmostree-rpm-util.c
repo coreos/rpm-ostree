@@ -762,23 +762,23 @@ rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
 static gboolean
 get_sack_for_root (int               dfd,
                    const char       *path,
-                   HifSack         **out_sack,
+                   DnfSack         **out_sack,
                    GCancellable     *cancellable,
                    GError          **error)
 {
   gboolean ret = FALSE;
-  g_autoptr(HifSack) sack = NULL;
+  g_autoptr(DnfSack) sack = NULL;
   g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
 
   g_return_val_if_fail (out_sack != NULL, FALSE);
 
-  sack = hif_sack_new ();
-  hif_sack_set_rootdir (sack, fullpath);
+  sack = dnf_sack_new ();
+  dnf_sack_set_rootdir (sack, fullpath);
 
-  if (!hif_sack_setup (sack, HIF_SACK_LOAD_FLAG_BUILD_CACHE, error))
+  if (!dnf_sack_setup (sack, DNF_SACK_LOAD_FLAG_BUILD_CACHE, error))
     goto out;
 
-  if (!hif_sack_load_system_repo (sack, NULL, 0, error))
+  if (!dnf_sack_load_system_repo (sack, NULL, 0, error))
     goto out;
 
   ret = TRUE;
@@ -794,7 +794,7 @@ rpmostree_get_refsack_for_root (int              dfd,
                                 GError         **error)
 {
   RpmOstreeRefSack *ret = NULL;
-  HifSack *sack;
+  DnfSack *sack;
 
   if (!get_sack_for_root (dfd, path,
                           &sack, cancellable, error))
@@ -815,7 +815,7 @@ rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
   RpmOstreeRefSack *ret = NULL;
   g_autofree char *tempdir = NULL;
   glnx_fd_close int tempdir_dfd = -1;
-  HifSack *hsack; 
+  DnfSack *hsack; 
 
   if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref,
                                               "/tmp/rpmostree-dbquery-XXXXXX",
@@ -901,23 +901,23 @@ rpmostree_get_pkglist_for_root (int               dfd,
 }
 
 static gint
-pkg_array_compare (HifPackage **p_pkg1,
-                   HifPackage **p_pkg2)
+pkg_array_compare (DnfPackage **p_pkg1,
+                   DnfPackage **p_pkg2)
 {
-  return hif_package_cmp (*p_pkg1, *p_pkg2);
+  return dnf_package_cmp (*p_pkg1, *p_pkg2);
 }
 
 void
-rpmostree_print_transaction (HifContext   *hifctx)
+rpmostree_print_transaction (DnfContext   *hifctx)
 {
   guint i;
   g_autoptr(GPtrArray) install = NULL;
 
-  install = hif_goal_get_packages (hif_context_get_goal (hifctx),
-                                   HIF_PACKAGE_INFO_INSTALL,
-                                   HIF_PACKAGE_INFO_REINSTALL,
-                                   HIF_PACKAGE_INFO_DOWNGRADE,
-                                   HIF_PACKAGE_INFO_UPDATE,
+  install = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+                                   DNF_PACKAGE_INFO_INSTALL,
+                                   DNF_PACKAGE_INFO_REINSTALL,
+                                   DNF_PACKAGE_INFO_DOWNGRADE,
+                                   DNF_PACKAGE_INFO_UPDATE,
                                    -1);
 
   g_print ("Transaction: %u packages\n", install->len);
@@ -930,8 +930,8 @@ rpmostree_print_transaction (HifContext   *hifctx)
 
       for (i = 0; i < install->len; i++)
         {
-          HifPackage *pkg = install->pdata[i];
-          g_print ("  %s (%s)\n", hif_package_get_nevra (pkg), hif_package_get_reponame (pkg));
+          DnfPackage *pkg = install->pdata[i];
+          g_print ("  %s (%s)\n", dnf_package_get_nevra (pkg), dnf_package_get_reponame (pkg));
         }
     }
 }

@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include <libhif/libhif.h>
+#include <libdnf/libdnf.h>
 
 typedef struct {
   volatile gint refcount;

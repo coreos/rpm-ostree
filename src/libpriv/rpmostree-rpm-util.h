@@ -119,7 +119,7 @@ rpmostree_get_pkglist_for_root (int               dfd,
                                 GError          **error);
 
 void
-rpmostree_print_transaction (HifContext   *context);
+rpmostree_print_transaction (DnfContext   *context);
 
 
 void _rpmostree_reset_rpm_sighandlers (void);

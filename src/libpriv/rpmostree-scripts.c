@@ -126,11 +126,11 @@ fusermount_cleanup (const char *mountpoint)
 }
 
 static RpmOstreeScriptAction
-lookup_script_action (HifPackage *package,
+lookup_script_action (DnfPackage *package,
                       GHashTable *ignored_scripts,
                       const char *scriptdesc)
 {
-  const char *pkg_script = glnx_strjoina (hif_package_get_name (package), ".", scriptdesc+1);
+  const char *pkg_script = glnx_strjoina (dnf_package_get_name (package), ".", scriptdesc+1);
   const struct RpmOstreePackageScriptHandler *handler = rpmostree_script_gperf_lookup (pkg_script, strlen (pkg_script));
   if (ignored_scripts && g_hash_table_contains (ignored_scripts, pkg_script))
     return RPMOSTREE_SCRIPT_ACTION_IGNORE;
@@ -140,7 +140,7 @@ lookup_script_action (HifPackage *package,
 }
 
 gboolean
-rpmostree_script_txn_validate (HifPackage    *package,
+rpmostree_script_txn_validate (DnfPackage    *package,
                                Header         hdr,
                                GHashTable    *override_ignored_scripts,
                                GCancellable  *cancellable,
@@ -166,7 +166,7 @@ rpmostree_script_txn_validate (HifPackage    *package,
           {
             g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                          "Package '%s' has (currently) unsupported script of type '%s'",
-                         hif_package_get_name (package), desc);
+                         dnf_package_get_name (package), desc);
             goto out;
           }
         case RPMOSTREE_SCRIPT_ACTION_IGNORE:
@@ -339,7 +339,7 @@ run_script_in_bwrap_container (int rootfs_fd,
 }
 
 gboolean
-rpmostree_posttrans_run_sync (HifPackage    *pkg,
+rpmostree_posttrans_run_sync (DnfPackage    *pkg,
                               Header         hdr,
                               GHashTable    *ignore_scripts,
                               int            rootfs_fd,
@@ -366,11 +366,11 @@ rpmostree_posttrans_run_sync (HifPackage    *pkg,
         {
         case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
           {
-            rpmostree_output_task_begin ("Running %s for %s...", desc, hif_package_get_name (pkg));
-            if (!run_script_in_bwrap_container (rootfs_fd, hif_package_get_name (pkg), desc, script,
+            rpmostree_output_task_begin ("Running %s for %s...", desc, dnf_package_get_name (pkg));
+            if (!run_script_in_bwrap_container (rootfs_fd, dnf_package_get_name (pkg), desc, script,
                                                 cancellable, error))
               {
-                g_prefix_error (error, "Running %s for %s: ", desc, hif_package_get_name (pkg));
+                g_prefix_error (error, "Running %s for %s: ", desc, dnf_package_get_name (pkg));
                 return FALSE;
               }
             rpmostree_output_task_end ("done");

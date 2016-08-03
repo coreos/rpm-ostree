@@ -25,7 +25,7 @@
 #include "rpmostree-rpm-util.h"
 
 RpmOstreeRefSack *
-rpmostree_refsack_new (HifSack *sack, int temp_base_dfd, const char *temp_path)
+rpmostree_refsack_new (DnfSack *sack, int temp_base_dfd, const char *temp_path)
 {
   RpmOstreeRefSack *rsack = g_new0 (RpmOstreeRefSack, 1);
   rsack->sack = g_object_ref (sack);

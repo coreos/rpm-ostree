@@ -21,17 +21,17 @@
 
 #pragma once
 
-#include <libhif/libhif.h>
+#include <libdnf/libdnf.h>
 
 typedef struct {
   volatile gint refcount;
-  HifSack *sack;
+  DnfSack *sack;
   int temp_base_dfd;
   char *temp_path;
 } RpmOstreeRefSack;
 
 RpmOstreeRefSack *
-rpmostree_refsack_new (HifSack *sack, int temp_base_dfd, const char *temp_path);
+rpmostree_refsack_new (DnfSack *sack, int temp_base_dfd, const char *temp_path);
 
 RpmOstreeRefSack *
 rpmostree_refsack_ref (RpmOstreeRefSack *rsack);

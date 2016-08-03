@@ -24,7 +24,7 @@
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
 #include <gio/gunixoutputstream.h>
-#include <libhif/libhif.h>
+#include <libdnf/libdnf.h>
 #include <stdio.h>
 #include <libglnx.h>
 #include <rpm/rpmmacro.h>
@@ -159,7 +159,7 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
   /* FIXME; we should also hash the post script */
 
   /* Hash in each package */
-  rpmostree_hif_add_checksum_goal (checksum, goal);
+  rpmostree_dnf__add_checksum_goal (checksum, goal);
 
   ret_checksum = g_strdup (g_checksum_get_string (checksum));
 
@@ -172,7 +172,7 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
 
 
 static void
-on_hifstate_percentage_changed (HifState   *hifstate,
+on_hifstate_percentage_changed (DnfState   *hifstate,
                                 guint       percentage,
                                 gpointer    user_data)
 {
@@ -225,7 +225,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   guint progress_sigid;
   GFile *contextdir = self->treefile_context_dirs->pdata[0];
   g_autoptr(RpmOstreeInstall) hifinstall = { 0, };
-  HifContext *hifctx;
+  DnfContext *hifctx;
   g_autofree char *ret_new_inputhash = NULL;
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
   JsonArray *enable_repos = NULL;
@@ -246,7 +246,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 
   hifctx = rpmostree_context_get_hif (ctx);
   if (opt_proxy)
-    hif_context_set_http_proxy (hifctx, opt_proxy);
+    dnf_context_set_http_proxy (hifctx, opt_proxy);
 
   /* Hack this here... see https://github.com/rpm-software-management/libhif/issues/53
    * but in the future we won't be using librpm at all for unpack/scripts, so it won't
@@ -255,15 +255,15 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   { const char *debuglevel = getenv ("RPMOSTREE_RPM_VERBOSITY");
     if (!debuglevel)
       debuglevel = "info";
-    hif_context_set_rpm_verbosity (hifctx, debuglevel);
+    dnf_context_set_rpm_verbosity (hifctx, debuglevel);
     rpmlogSetFile(NULL);
   }
 
-  hif_context_set_repo_dir (hifctx, gs_file_get_path_cached (contextdir));
+  dnf_context_set_repo_dir (hifctx, gs_file_get_path_cached (contextdir));
 
   /* By default, retain packages in addition to metadata with --cachedir */
   if (opt_cachedir)
-    hif_context_set_keep_cache (hifctx, TRUE);
+    dnf_context_set_keep_cache (hifctx, TRUE);
 
   g_key_file_set_string (treespec, "tree", "ref", self->ref);
   g_key_file_set_string_list (treespec, "tree", "packages", (const char *const*)packages, g_strv_length (packages));
@@ -326,7 +326,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     add_files = json_object_get_array_member (treedata, "add-files");
 
   /* FIXME - just do a depsolve here before we compute download requirements */
-  if (!compute_checksum_from_treefile_and_goal (self, hif_context_get_goal (hifctx),
+  if (!compute_checksum_from_treefile_and_goal (self, dnf_context_get_goal (hifctx),
                                                 contextdir, add_files,
                                                 &ret_new_inputhash, error))
     goto out;
@@ -368,7 +368,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     goto out;
   
   { g_auto(GLnxConsoleRef) console = { 0, };
-    glnx_unref_object HifState *hifstate = hif_state_new ();
+    glnx_unref_object DnfState *hifstate = dnf_state_new ();
 
     progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                      G_CALLBACK (on_hifstate_percentage_changed), 
@@ -376,8 +376,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 
     glnx_console_lock (&console);
 
-    if (!hif_transaction_commit (hif_context_get_transaction (hifctx),
-                                 hif_context_get_goal (hifctx),
+    if (!dnf_transaction_commit (dnf_context_get_transaction (hifctx),
+                                 dnf_context_get_goal (hifctx),
                                  hifstate,
                                  error))
       goto out;
