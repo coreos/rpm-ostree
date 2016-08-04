@@ -761,18 +761,17 @@ checkout_min_tree_in_tmp (OstreeRepo            *repo,
   /* also check out sepolicy so that prepare_install() will be able to sort the
    * packages correctly */
   {
-    OstreeRepoCheckoutOptions opts = {0,};
+    OstreeRepoCheckoutAtOptions opts = {0,};
 
     if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "usr/etc", 0777,
                                  cancellable, error))
       goto out;
 
     opts.subpath = "usr/etc/selinux";
-    opts.disable_fsync = TRUE;
 
-    if (!ostree_repo_checkout_tree_at (repo, &opts, tmprootfs_dfd,
-                                       "usr/etc/selinux", revision,
-                                       cancellable, error))
+    if (!ostree_repo_checkout_at (repo, &opts, tmprootfs_dfd,
+                                  "usr/etc/selinux", revision,
+                                  cancellable, error))
       goto out;
   }
 
@@ -799,7 +798,7 @@ checkout_tree_in_tmp (OstreeRepo            *repo,
                       GError               **error)
 {
   gboolean ret = FALSE;
-  OstreeRepoCheckoutOptions checkout_options = { 0, };
+  OstreeRepoCheckoutAtOptions checkout_options = { 0, };
 
   g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
   glnx_fd_close int tmprootfs_dfd = -1;
@@ -816,11 +815,10 @@ checkout_tree_in_tmp (OstreeRepo            *repo,
   rpmostree_output_task_begin ("Checking out tree %.7s", revision);
 
   /* we actually only need this here because we use "." for path */
-  checkout_options.disable_fsync = TRUE;
   checkout_options.overwrite_mode = OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES;
   checkout_options.devino_to_csum_cache = devino_cache;
-  if (!ostree_repo_checkout_tree_at (repo, &checkout_options, tmprootfs_dfd,
-                                     ".", revision, cancellable, error))
+  if (!ostree_repo_checkout_at (repo, &checkout_options, tmprootfs_dfd,
+                                ".", revision, cancellable, error))
     goto out;
 
   rpmostree_output_task_end ("done");

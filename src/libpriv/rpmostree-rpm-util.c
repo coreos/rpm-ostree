@@ -712,7 +712,7 @@ rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
   gboolean ret = FALSE;
   g_autofree char *commit = NULL;
   g_autofree char *tempdir = NULL;
-  OstreeRepoCheckoutOptions checkout_options = { 0, };
+  OstreeRepoCheckoutAtOptions checkout_options = { 0, };
   glnx_fd_close int tempdir_dfd = -1;
 
   g_return_val_if_fail (out_tempdir != NULL, FALSE);
@@ -730,10 +730,10 @@ rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
   checkout_options.mode = OSTREE_REPO_CHECKOUT_MODE_USER;
   checkout_options.subpath = "usr/share/rpm";
 
-  if (!ostree_repo_checkout_tree_at (repo, &checkout_options,
-                                     tempdir_dfd, "usr/share/rpm",
-                                     commit, 
-                                     cancellable, error))
+  if (!ostree_repo_checkout_at (repo, &checkout_options,
+                                tempdir_dfd, "usr/share/rpm",
+                                commit, 
+                                cancellable, error))
     goto out;
 
   /* And make a compat symlink to keep rpm happy */ 
