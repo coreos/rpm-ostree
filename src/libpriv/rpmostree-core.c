@@ -1023,7 +1023,7 @@ ptrarray_sort_compare_strings (gconstpointer ap,
  * previous one.
  */
 void
-rpmostree_dnf__add_checksum_goal (GChecksum *checksum,
+rpmostree_dnf_add_checksum_goal (GChecksum *checksum,
                                  HyGoal     goal)
 {
   g_autoptr(GPtrArray) pkglist = NULL;
@@ -1059,7 +1059,7 @@ rpmostree_context_get_state_sha512 (RpmOstreeContext *self)
   g_checksum_update (state_checksum, g_variant_get_data (self->spec->spec),
                      g_variant_get_size (self->spec->spec));
 
-  rpmostree_dnf__add_checksum_goal (state_checksum, dnf_context_get_goal (self->hifctx));
+  rpmostree_dnf_add_checksum_goal (state_checksum, dnf_context_get_goal (self->hifctx));
   return g_strdup (g_checksum_get_string (state_checksum));
 }
 
