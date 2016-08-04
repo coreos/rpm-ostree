@@ -330,13 +330,8 @@ rpmostree_container_builtin_assemble (int             argc,
 
   g_print ("Checking out %s @ %s...\n", name, commit);
 
-  { OstreeRepoCheckoutOptions opts = { OSTREE_REPO_CHECKOUT_MODE_USER,
-                                       OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES, };
-
-    /* For now... to be crash safe we'd need to duplicate some of the
-     * boot-uuid/fsync gating at a higher level.
-     */
-    opts.disable_fsync = TRUE;
+  { OstreeRepoCheckoutAtOptions opts = { OSTREE_REPO_CHECKOUT_MODE_USER,
+                                         OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES, };
 
     /* Also, what we really want here is some sort of sane lifecycle
      * management with whatever is running in the root.
@@ -344,8 +339,8 @@ rpmostree_container_builtin_assemble (int             argc,
     if (!glnx_shutil_rm_rf_at (rocctx->roots_dfd, target_rootdir, cancellable, error))
       goto out;
 
-    if (!ostree_repo_checkout_tree_at (rocctx->repo, &opts, rocctx->roots_dfd, target_rootdir,
-                                       commit, cancellable, error))
+    if (!ostree_repo_checkout_at (rocctx->repo, &opts, rocctx->roots_dfd, target_rootdir,
+                                  commit, cancellable, error))
       goto out;
   }
 
@@ -549,16 +544,11 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
 
   g_print ("Checking out %s @ %s...\n", name, new_commit_checksum);
 
-  { OstreeRepoCheckoutOptions opts = { OSTREE_REPO_CHECKOUT_MODE_USER,
-                                       OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES, };
+  { OstreeRepoCheckoutAtOptions opts = { OSTREE_REPO_CHECKOUT_MODE_USER,
+                                         OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES, };
 
-    /* For now... to be crash safe we'd need to duplicate some of the
-     * boot-uuid/fsync gating at a higher level.
-     */
-    opts.disable_fsync = TRUE;
-
-    if (!ostree_repo_checkout_tree_at (rocctx->repo, &opts, rocctx->roots_dfd, target_new_root,
-                                       new_commit_checksum, cancellable, error))
+    if (!ostree_repo_checkout_at (rocctx->repo, &opts, rocctx->roots_dfd, target_new_root,
+                                  new_commit_checksum, cancellable, error))
       goto out;
   }
 

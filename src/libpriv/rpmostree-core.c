@@ -1266,8 +1266,8 @@ ostree_checkout_package (OstreeRepo   *repo,
                          GError      **error)
 {
   gboolean ret = FALSE;
-  OstreeRepoCheckoutOptions opts = { OSTREE_REPO_CHECKOUT_MODE_USER,
-                                     OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES, };
+  OstreeRepoCheckoutAtOptions opts = { OSTREE_REPO_CHECKOUT_MODE_USER,
+                                       OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES, };
 
   /* We want the checkout to match the repo type so that we get hardlinks. */
   if (ostree_repo_get_mode (repo) == OSTREE_REPO_MODE_BARE)
@@ -1275,15 +1275,11 @@ ostree_checkout_package (OstreeRepo   *repo,
 
   opts.devino_to_csum_cache = devino_cache;
 
-  /* For now... to be crash safe we'd need to duplicate some of the
-   * boot-uuid/fsync gating at a higher level.
-   */
-  opts.disable_fsync = TRUE;
   /* Always want hardlinks */
   opts.no_copy_fallback = TRUE;
 
-  if (!ostree_repo_checkout_tree_at (repo, &opts, dfd, path,
-                                     pkg_commit, cancellable, error))
+  if (!ostree_repo_checkout_at (repo, &opts, dfd, path,
+                                pkg_commit, cancellable, error))
     goto out;
 
   ret = TRUE;
