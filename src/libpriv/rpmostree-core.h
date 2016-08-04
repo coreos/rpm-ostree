@@ -71,7 +71,7 @@ void rpmostree_context_set_sepolicy (RpmOstreeContext *self,
 void rpmostree_context_set_ignore_scripts (RpmOstreeContext *self,
                                            GHashTable   *ignore_scripts);
 
-void rpmostree_dnf__add_checksum_goal (GChecksum *checksum, HyGoal goal);
+void rpmostree_dnf_add_checksum_goal (GChecksum *checksum, HyGoal goal);
 char *rpmostree_context_get_state_sha512 (RpmOstreeContext *self);
 
 char *rpmostree_get_cache_branch_header (Header hdr);
