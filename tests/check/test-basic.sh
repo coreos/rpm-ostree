@@ -45,6 +45,9 @@ ostree admin --sysroot=sysroot deploy --karg=root=LABEL=MOO --karg=quiet --os=te
 assert_status_jq '.deployments[0].version == "1.0.10"'
 echo "ok status shows right version"
 
+rpm-ostree reload
+echo "ok reload"
+
 os_repository_new_commit
 rpm-ostree upgrade --os=testos
 
