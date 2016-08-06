@@ -29,6 +29,7 @@
 #include <pwd.h>
 #include <grp.h>
 
+#include "libglnx.h"
 #include "rpmostree-util.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-passwd-util.h"
@@ -409,6 +410,11 @@ rpmostree_check_passwd_groups (gboolean         passwd,
             goto out;
           
           old_path = g_file_resolve_relative_path (root, commit_filepath);
+          /* Note this one can't be ported to glnx_file_get_contents_utf8_at() because
+           * we're loading from ostree via `OstreeRepoFile`.
+           */
+          if (!g_file_load_contents (old_path, cancellable, &old_contents, NULL, NULL, error))
+            goto out;
         }
       else
         {
@@ -417,17 +423,17 @@ rpmostree_check_passwd_groups (gboolean         passwd,
           goto out;
         }
     }
-
-  if (g_str_equal (chk_type, "file"))
+  else if (g_str_equal (chk_type, "file"))
     {
       old_path = g_file_resolve_relative_path (treefile_dirpath, direct);
+      old_contents = glnx_file_get_contents_utf8_at (AT_FDCWD, gs_file_get_path_cached (old_path), NULL,
+                                                     cancellable, error);
+      if (!old_contents)
+        goto out;
     }
 
   if (g_str_equal (chk_type, "previous") || g_str_equal (chk_type, "file"))
     {
-      old_contents = gs_file_load_contents_utf8 (old_path, cancellable, error);
-      if (!old_contents)
-        goto out;
       if (passwd)
         old_ents = data2passwdents (old_contents);
       else
@@ -440,7 +446,8 @@ rpmostree_check_passwd_groups (gboolean         passwd,
   else
     g_ptr_array_sort (old_ents, compare_group_ents);
 
-  new_contents = gs_file_load_contents_utf8 (new_path, cancellable, error);
+  new_contents = glnx_file_get_contents_utf8_at (AT_FDCWD, gs_file_get_path_cached (new_path), NULL,
+                                                 cancellable, error);
   if (!new_contents)
       goto out;
 

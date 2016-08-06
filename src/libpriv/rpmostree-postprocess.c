@@ -770,7 +770,8 @@ replace_nsswitch (GFile         *target_usretc,
       g_once_init_leave (&regex_initialized, 1);
     }
 
-  nsswitch_contents = gs_file_load_contents_utf8 (nsswitch_conf, cancellable, error);
+  nsswitch_contents = glnx_file_get_contents_utf8_at (AT_FDCWD, gs_file_get_path_cached (nsswitch_conf), NULL,
+                                                      cancellable, error);
   if (!nsswitch_contents)
     goto out;
 
