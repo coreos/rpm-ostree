@@ -26,16 +26,20 @@ fi
 AC_SUBST([dbusservicedir], [$dbusservicedir])
 AC_MSG_RESULT(dbusservicedir)
 
-changequote(,)dnl
-if test "x$GCC" = "xyes"; then
-  WARN_CFLAGS="-Wall -Wstrict-prototypes -Werror=missing-prototypes \
-		-Werror=implicit-function-declaration \
-		-Werror=pointer-arith -Werror=init-self -Werror=format=2 \
-		-Werror=format-security \
-		-Werror=missing-include-dirs -Werror=aggregate-return \
-		-Werror=declaration-after-statement"
-fi
-changequote([,])dnl
+CC_CHECK_FLAGS_APPEND([WARN_CFLAGS], [CFLAGS], [\
+        -pipe \
+        -Wall \
+	-Werror=missing-prototypes \
+	-Werror=implicit-function-declaration \
+        "-Werror=format=2 -Werror=format-security -Werror=format-nonliteral" \
+	-Werror=pointer-arith -Werror=init-self \
+        -Werror=missing-declarations \
+        -Werror=return-type \
+        -Werror=overflow \
+        -Werror=int-conversion \
+	-Werror=missing-include-dirs -Werror=aggregate-return \
+	-Werror=declaration-after-statement \
+])
 AC_SUBST(WARN_CFLAGS)
 
 # Initialize libtool
