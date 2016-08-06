@@ -44,6 +44,7 @@ typedef struct {
 
 BUILTINPROTO(compose);
 BUILTINPROTO(upgrade);
+BUILTINPROTO(reload);
 BUILTINPROTO(deploy);
 BUILTINPROTO(rebase);
 BUILTINPROTO(cleanup);

@@ -536,6 +536,25 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
   return ret;
 }
 
+static gboolean
+handle_reload_config (RPMOSTreeSysroot *object,
+                      GDBusMethodInvocation *invocation)
+{
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
+  g_autoptr(GError) local_error = NULL;
+  GError **error = &local_error;
+
+  if (!rpmostreed_sysroot_reload (self, error))
+    goto out;
+
+  rpmostree_sysroot_complete_reload_config (object, invocation);
+out:
+  if (local_error)
+    g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+
+  return TRUE;
+}
+
 /* ---------------------------------------------------------------------------------------------------- */
 static void
 sysroot_dispose (GObject *object)
@@ -676,6 +695,8 @@ rpmostreed_sysroot_reload (RpmostreedSysroot *self,
 
   if (!sysroot_populate_deployments_unlocked (self, &did_change, error))
     goto out;
+  if (!ostree_repo_reload_config (self->repo, NULL, error))
+    goto out;
 
   ret = TRUE;
  out:
@@ -710,6 +731,7 @@ rpmostreed_sysroot_iface_init (RPMOSTreeSysrootIface *iface)
 {
   iface->handle_create_osname = handle_create_osname;
   iface->handle_get_os = handle_get_os;
+  iface->handle_reload_config = handle_reload_config;
 }
 
 /**

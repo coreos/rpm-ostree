@@ -364,6 +364,19 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
+        <term><command>reload</command></term>
+
+        <listitem>
+          <para>
+            Some configuration and state data such as
+            <literal>/etc/ostree/remotes.d</literal> changes may not be
+            reflected until a daemon reload is invoked. Use this command to
+            initiate a reload.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><command>initramfs</command></term>
 
         <listitem>

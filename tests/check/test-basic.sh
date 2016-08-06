@@ -135,9 +135,7 @@ echo "ok deploy from remote with unsigned and signed commits"
 
 originpath=$(ostree admin --sysroot=sysroot --print-current-dir).origin
 echo "unconfigured-state=Access to TestOS requires ONE BILLION DOLLARS" >> ${originpath}
-pid=$(pgrep -u $(id -u) -f 'rpm-ostree.*daemon')
-test -n "${pid}" || assert_not_reached "failed to find rpm-ostree pid"
-kill -9 ${pid}
+rpm-ostree reload
 rpm-ostree status
 if rpm-ostree upgrade --os=testos 2>err.txt; then
     assert_not_reached "Upgraded from unconfigured-state"
