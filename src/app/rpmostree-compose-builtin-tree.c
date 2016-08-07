@@ -581,6 +581,7 @@ rpmostree_compose_builtin_tree (int             argc,
   g_autofree char *previous_checksum = NULL;
   g_autoptr(GFile) yumroot = NULL;
   g_autoptr(GFile) yumroot_varcache = NULL;
+  glnx_fd_close int rootfs_fd = -1;
   glnx_unref_object OstreeRepo *repo = NULL;
   g_autoptr(GPtrArray) bootstrap_packages = NULL;
   g_autoptr(GPtrArray) packages = NULL;
@@ -858,12 +859,22 @@ rpmostree_compose_builtin_tree (int             argc,
   if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
     goto out;
 
-  if (!rpmostree_treefile_postprocessing (yumroot, self->treefile_context_dirs->pdata[0],
+  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot), TRUE,
+                       &rootfs_fd, error))
+    goto out;
+
+  if (!rpmostree_treefile_postprocessing (rootfs_fd, self->treefile_context_dirs->pdata[0],
                                           self->serialized_treefile, treefile,
                                           next_version, cancellable, error))
     goto out;
 
   if (!rpmostree_prepare_rootfs_for_commit (yumroot, treefile, cancellable, error))
+    goto out;
+
+  /* Reopen since the prepare renamed */
+  (void) close (rootfs_fd);
+  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot), TRUE,
+                       &rootfs_fd, error))
     goto out;
 
   if (!rpmostree_copy_additional_files (yumroot, self->treefile_context_dirs->pdata[0], treefile, cancellable, error))
@@ -900,11 +911,6 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
 
     { g_autofree char *new_revision = NULL;
-      glnx_fd_close int rootfs_fd = -1;
-
-      if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot), TRUE,
-                           &rootfs_fd, error))
-        goto out;
 
       if (!rpmostree_commit (rootfs_fd, repo, self->ref, metadata, gpgkey, selinux, NULL,
                              &new_revision,

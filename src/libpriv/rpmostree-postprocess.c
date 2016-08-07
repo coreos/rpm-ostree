@@ -61,14 +61,13 @@ move_to_dir (GFile        *src,
 }
 
 static gboolean
-run_sync_in_root (GFile        *yumroot,
-                  const char   *binpath,
-                  char        **child_argv,
-                  GError     **error)
+run_sync_in_root_at (int           rootfs_fd,
+                     const char   *binpath,
+                     char        **child_argv,
+                     GError     **error)
 {
   gboolean ret = FALSE;
-  const char *yumroot_path = gs_file_get_path_cached (yumroot);
-  pid_t child = glnx_libcontainer_run_chroot_private (yumroot_path, binpath, child_argv);
+  pid_t child = glnx_libcontainer_run_chroot_at_private (rootfs_fd, binpath, child_argv);
 
   if (child == -1)
     {
@@ -82,6 +81,20 @@ run_sync_in_root (GFile        *yumroot,
   ret = TRUE;
  out:
   return ret;
+}
+
+static gboolean
+run_sync_in_root (GFile *path,
+                  const char   *binpath,
+                  char        **child_argv,
+                  GError     **error)
+{
+  glnx_fd_close int dfd = -1;
+  
+  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (path), TRUE, &dfd, error))
+    return FALSE;
+
+  return run_sync_in_root_at (dfd, binpath, child_argv, error);
 }
 
 typedef struct {
@@ -993,11 +1006,11 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
 }
 
 static gboolean
-handle_remove_files_from_package (GFile         *yumroot,
+handle_remove_files_from_package (int               rootfs_fd,
                                   RpmOstreeRefSack *refsack,
-                                  JsonArray     *removespec,
-                                  GCancellable  *cancellable,
-                                  GError       **error)
+                                  JsonArray        *removespec,
+                                  GCancellable     *cancellable,
+                                  GError          **error)
 {
   gboolean ret = FALSE;
   const char *pkgname = json_array_get_string_element (removespec, 0);
@@ -1042,14 +1055,11 @@ handle_remove_files_from_package (GFile         *yumroot,
 
               if (g_regex_match (regex, file, 0, NULL))
                 {
-                  g_autoptr(GFile) child = NULL;
-              
                   if (file[0] == '/')
                     file++;
               
-                  child = g_file_resolve_relative_path (yumroot, file);
                   g_print ("Deleting: %s\n", file);
-                  if (!gs_shutil_rm_rf (child, cancellable, error))
+                  if (!glnx_shutil_rm_rf_at (rootfs_fd, file, cancellable, error))
                     goto out;
                 }
             }
@@ -1374,7 +1384,7 @@ mutate_os_release (const char    *contents,
 }
 
 gboolean
-rpmostree_treefile_postprocessing (GFile         *yumroot,
+rpmostree_treefile_postprocessing (int            rootfs_fd,
                                    GFile         *context_directory,
                                    GBytes        *serialized_treefile,
                                    JsonObject    *treefile,
@@ -1398,10 +1408,13 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
     len = 0;
 
   {
-    g_autoptr(GFile) multiuser_wants_dir =
-      g_file_resolve_relative_path (yumroot, "etc/systemd/system/multi-user.target.wants");
+    glnx_fd_close int multiuser_wants_dfd = -1;
 
-    if (!gs_file_ensure_directory (multiuser_wants_dir, TRUE, cancellable, error))
+    if (!glnx_shutil_mkdir_p_at (rootfs_fd, "etc/systemd/system/multi-user.target.wants", 0755,
+                                 cancellable, error))
+      goto out;
+    if (!glnx_opendirat (rootfs_fd, "etc/systemd/system/multi-user.target.wants", TRUE,
+                         &multiuser_wants_dfd, error))
       goto out;
 
     for (i = 0; i < len; i++)
@@ -1409,42 +1422,46 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
         const char *unitname = _rpmostree_jsonutil_array_require_string_element (units, i, error);
         g_autoptr(GFile) unit_link_target = NULL;
         g_autofree char *symlink_target = NULL;
+        struct stat stbuf;
 
         if (!unitname)
           goto out;
 
         symlink_target = g_strconcat ("/usr/lib/systemd/system/", unitname, NULL);
-        unit_link_target = g_file_get_child (multiuser_wants_dir, unitname);
 
-        if (g_file_query_file_type (unit_link_target, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL) == G_FILE_TYPE_SYMBOLIC_LINK)
+        if (fstatat (multiuser_wants_dfd, unitname, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
+          {
+            if (errno != ENOENT)
+              {
+                glnx_set_error_from_errno (error);
+                goto out;
+              }
+          }
+        else
           continue;
           
         g_print ("Adding %s to multi-user.target.wants\n", unitname);
 
-        if (!g_file_make_symbolic_link (unit_link_target, symlink_target,
-                                        cancellable, error))
-          goto out;
+        if (symlinkat (symlink_target, multiuser_wants_dfd, unitname) < 0)
+          {
+            glnx_set_error_from_errno (error);
+            goto out;
+          }
       }
   }
 
   {
-    g_autoptr(GFile) target_treefile_dir_path =
-      g_file_resolve_relative_path (yumroot, "usr/share/rpm-ostree");
-    g_autoptr(GFile) target_treefile_path =
-      g_file_get_child (target_treefile_dir_path, "treefile.json");
     const guint8 *buf;
     gsize len;
 
-    if (!gs_file_ensure_directory (target_treefile_dir_path, TRUE,
-                                   cancellable, error))
+    if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/share/rpm-ostree", 0755, cancellable, error))
       goto out;
-                                     
-    g_print ("Writing '%s'\n", gs_file_get_path_cached (target_treefile_path));
+
     buf = g_bytes_get_data (serialized_treefile, &len);
     
-    if (!g_file_replace_contents (target_treefile_path, (char*)buf, len,
-                                  NULL, FALSE, G_FILE_CREATE_REPLACE_DESTINATION,
-                                    NULL, cancellable, error))
+    if (!glnx_file_replace_contents_at (rootfs_fd, "usr/share/rpm-ostree/treefile.json",
+                                        buf, len, GLNX_FILE_REPLACE_NODATASYNC,
+                                        cancellable, error))
       goto out;
   }
 
@@ -1454,16 +1471,16 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
   
   if (default_target != NULL)
     {
-      g_autoptr(GFile) default_target_path =
-        g_file_resolve_relative_path (yumroot, "etc/systemd/system/default.target");
       g_autofree char *dest_default_target_path =
         g_strconcat ("/usr/lib/systemd/system/", default_target, NULL);
 
-      (void) gs_file_unlink (default_target_path, NULL, NULL);
+      (void) unlinkat (rootfs_fd, "etc/systemd/system/default.target", 0);
         
-      if (!g_file_make_symbolic_link (default_target_path, dest_default_target_path,
-                                      cancellable, error))
-        goto out;
+      if (symlinkat (dest_default_target_path, rootfs_fd, "etc/systemd/system/default.target") < 0)
+        {
+          glnx_set_error_from_errno (error);
+          goto out;
+        }
     }
 
   if (json_object_has_member (treefile, "remove-files"))
@@ -1477,7 +1494,6 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
   for (i = 0; i < len; i++)
     {
       const char *val = _rpmostree_jsonutil_array_require_string_element (remove, i, error);
-      g_autoptr(GFile) child = NULL;
 
       if (!val)
         return FALSE;
@@ -1487,20 +1503,12 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
                        "'remove' elements must be relative");
           goto out;
         }
+      g_assert (val[0] != '/');
+      g_assert (strstr (val, "..") == NULL);
 
-      child = g_file_resolve_relative_path (yumroot, val);
-        
-      if (g_file_query_exists (child, NULL))
-        {
-          g_print ("Removing '%s'\n", val);
-          if (!gs_shutil_rm_rf (child, cancellable, error))
-            goto out;
-        }
-      else
-        {
-          g_printerr ("warning: Targeted path for remove-files does not exist: %s\n",
-                      gs_file_get_path_cached (child));
-        }
+      g_print ("Deleting: %s\n", val);
+      if (!glnx_shutil_rm_rf_at (rootfs_fd, val, cancellable, error))
+        goto out;
     }
 
   /* This works around a potential issue with libsolv if we go down the
@@ -1514,20 +1522,13 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
    * So we set the symlink now. This is also what we do on boot anyway for
    * compatibility reasons using tmpfiles.
    * */
-  {
-    g_autoptr(GFile) rpmdb =
-      g_file_resolve_relative_path (yumroot, "var/lib/rpm");
-
-    if (g_file_query_exists (rpmdb, NULL))
-      {
-        if (!gs_shutil_rm_rf (rpmdb, cancellable, error))
-          goto out;
-      }
-
-    if (!g_file_make_symbolic_link (rpmdb, "../../usr/share/rpm",
-                                    cancellable, error))
+  if (!glnx_shutil_rm_rf_at (rootfs_fd, "var/lib/rpm", cancellable, error))
+    goto out;
+  if (symlinkat ("../../usr/share/rpm", rootfs_fd, "var/lib/rpm") < 0)
+    {
+      glnx_set_error_from_errno (error);
       goto out;
-  }
+    }
 
   if (json_object_has_member (treefile, "remove-from-packages"))
     {
@@ -1537,8 +1538,8 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
       remove = json_object_get_array_member (treefile, "remove-from-packages");
       len = json_array_get_length (remove);
 
-      if (!rpmostree_get_pkglist_for_root (AT_FDCWD, gs_file_get_path_cached (yumroot),
-                                           &refsack, NULL, cancellable, error))
+      if (!rpmostree_get_pkglist_for_root (rootfs_fd, ".", &refsack, NULL,
+                                           cancellable, error))
         {
           g_prefix_error (error, "Reading package set: ");
           goto out;
@@ -1547,7 +1548,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
       for (i = 0; i < len; i++)
         {
           JsonArray *elt = json_array_get_array_element (remove, i);
-          if (!handle_remove_files_from_package (yumroot, refsack, elt, cancellable, error))
+          if (!handle_remove_files_from_package (rootfs_fd, refsack, elt, cancellable, error))
             goto out;
         }
     }
@@ -1566,7 +1567,6 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
         g_autofree char *contents = NULL;
         g_autofree char *new_contents = NULL;
         const char *path = NULL;
-        glnx_fd_close int rootdfd = -1;
 
         /* let's try to find the first non-symlink */
         const char *os_release[] = {
@@ -1575,10 +1575,6 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
           "usr/lib/os.release.d/os-release-fedora"
         };
 
-        if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot),
-                             TRUE, &rootdfd, error))
-          goto out;
-
         /* fallback on just overwriting etc/os-release */
         path = os_release[0];
 
@@ -1586,7 +1582,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
           {
             struct stat stbuf;
 
-            if (TEMP_FAILURE_RETRY (fstatat (rootdfd, os_release[i], &stbuf,
+            if (TEMP_FAILURE_RETRY (fstatat (rootfs_fd, os_release[i], &stbuf,
                                              AT_SYMLINK_NOFOLLOW)) != 0)
               {
                 glnx_set_prefix_error_from_errno (error, "fstatat(%s)",
@@ -1603,7 +1599,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
 
         g_print ("Mutating /%s\n", path);
 
-        contents = glnx_file_get_contents_utf8_at (rootdfd, path, NULL,
+        contents = glnx_file_get_contents_utf8_at (rootfs_fd, path, NULL,
                                                    cancellable, error);
         if (contents == NULL)
           goto out;
@@ -1613,7 +1609,7 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
         if (new_contents == NULL)
           goto out;
 
-        if (!glnx_file_replace_contents_at (rootdfd, path,
+        if (!glnx_file_replace_contents_at (rootfs_fd, path,
                                             (guint8*)new_contents, -1, 0,
                                             cancellable, error))
           goto out;
@@ -1626,25 +1622,21 @@ rpmostree_treefile_postprocessing (GFile         *yumroot,
 
   if (postprocess_script)
     {
-      const char *yumroot_path = gs_file_get_path_cached (yumroot);
-      g_autoptr(GFile) src = g_file_resolve_relative_path (context_directory, postprocess_script);
-      const char *bn = gs_file_get_basename_cached (src);
+      const char *bn = glnx_basename (postprocess_script);
+      g_autofree char *src = g_build_filename (gs_file_get_path_cached (context_directory), postprocess_script, NULL);
       g_autofree char *binpath = g_strconcat ("/usr/bin/rpmostree-postprocess-", bn, NULL);
-      g_autofree char *destpath = g_strconcat (yumroot_path, binpath, NULL);
-      g_autoptr(GFile) dest = g_file_new_for_path (destpath);
       /* Clone all the things */
 
-      if (!g_file_copy (src, dest, 0, cancellable, NULL, NULL, error))
-        {
-          g_prefix_error (error, "Copying postprocess-script '%s' into target: ", bn);
-          goto out;
-        }
+      /* Note we need to make binpath *not* absolute here */
+      if (!glnx_file_copy_at (AT_FDCWD, src, NULL, rootfs_fd, binpath + 1,
+                              GLNX_FILE_COPY_NOXATTRS, cancellable, error))
+        goto out;
 
       g_print ("Executing postprocessing script '%s'\n", bn);
 
       {
         char *child_argv[] = { binpath, NULL };
-        if (!run_sync_in_root (yumroot, binpath, child_argv, error))
+        if (!run_sync_in_root_at (rootfs_fd, binpath, child_argv, error))
           {
             g_prefix_error (error, "While executing postprocessing script '%s': ", bn);
             goto out;
