@@ -24,7 +24,7 @@
 #include "rpmostree-json-parsing.h"
 
 gboolean
-rpmostree_treefile_postprocessing (GFile         *rootfs,
+rpmostree_treefile_postprocessing (int            rootfs_fd,
                                    GFile         *context_directory,
                                    GBytes        *serialized_treefile,
                                    JsonObject    *treefile,
