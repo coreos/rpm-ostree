@@ -1505,6 +1505,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
       g_assert (val[0] != '/');
       g_assert (strstr (val, "..") == NULL);
 
+      g_print ("Deleting: %s\n", val);
       if (!glnx_shutil_rm_rf_at (rootfs_fd, val, cancellable, error))
         goto out;
     }
