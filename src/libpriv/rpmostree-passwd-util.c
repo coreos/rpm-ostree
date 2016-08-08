@@ -410,6 +410,9 @@ rpmostree_check_passwd_groups (gboolean         passwd,
             goto out;
           
           old_path = g_file_resolve_relative_path (root, commit_filepath);
+          /* Note this one can't be ported to glnx_file_get_contents_utf8_at() because
+           * we're loading from ostree via `OstreeRepoFile`.
+           */
           if (!g_file_load_contents (old_path, cancellable, &old_contents, NULL, NULL, error))
             goto out;
         }
