@@ -44,6 +44,7 @@ static char *opt_workdir;
 static gboolean opt_workdir_tmpfs;
 static char *opt_cachedir;
 static gboolean opt_force_nocache;
+static gboolean opt_cache_only;
 static char *opt_proxy;
 static char *opt_output_repodata_dir;
 static char **opt_metadata_strings;
@@ -60,6 +61,7 @@ static GOptionEntry option_entries[] = {
   { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
   { "force-nocache", 0, 0, G_OPTION_ARG_NONE, &opt_force_nocache, "Always create a new OSTree commit, even if nothing appears to have changed", NULL },
+  { "cache-only", 0, 0, G_OPTION_ARG_NONE, &opt_cache_only, "Assume cache is present, do not attempt to update it", NULL },
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
   { "add-override-pkg-repo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_override_pkg_repos, "Include an additional package repository from DIRECTORY", "DIRECTORY" },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
@@ -264,6 +266,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   /* By default, retain packages in addition to metadata with --cachedir */
   if (opt_cachedir)
     dnf_context_set_keep_cache (hifctx, TRUE);
+  if (opt_cache_only)
+    dnf_context_set_cache_age (hifctx, G_MAXUINT);
 
   g_key_file_set_string (treespec, "tree", "ref", self->ref);
   g_key_file_set_string_list (treespec, "tree", "packages", (const char *const*)packages, g_strv_length (packages));
