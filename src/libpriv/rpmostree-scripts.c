@@ -352,7 +352,9 @@ rpmostree_posttrans_run_sync (DnfPackage    *pkg,
       rpmTagVal tagval = posttrans_scripts[i].tag;
       rpmTagVal progtagval = posttrans_scripts[i].progtag;
       const char *script;
+      g_autofree char **args = NULL;
       RpmOstreeScriptAction action;
+      struct rpmtd_s td;
 
       if (!(headerIsEntry (hdr, tagval) || headerIsEntry (hdr, progtagval)))
         continue;
@@ -361,11 +363,22 @@ rpmostree_posttrans_run_sync (DnfPackage    *pkg,
       if (!script)
         continue;
 
+      if (headerGet (hdr, progtagval, &td, (HEADERGET_ALLOC|HEADERGET_ARGV)))
+        args = td.data;
+
       action = lookup_script_action (pkg, ignore_scripts, desc);
       switch (action)
         {
         case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
           {
+            static const char lua[] = "<lua>";
+            if (args && args[0] && strcmp (args[0], lua) == 0)
+              {
+                g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                             "Package '%s' has (currently) unsupported %s script in '%s'",
+                             dnf_package_get_name (pkg), lua, desc);
+                return FALSE;
+              }
             rpmostree_output_task_begin ("Running %s for %s...", desc, dnf_package_get_name (pkg));
             if (!run_script_in_bwrap_container (rootfs_fd, dnf_package_get_name (pkg), desc, script,
                                                 cancellable, error))
