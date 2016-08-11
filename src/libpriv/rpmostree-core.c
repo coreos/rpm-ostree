@@ -1168,7 +1168,7 @@ import_one_package (RpmOstreeContext *self,
     pkg_path = g_strdup (dnf_package_get_filename (pkg));
   else
     {
-      g_autofree char *pkg_location = dnf_package_get_location (pkg);
+      const char *pkg_location = dnf_package_get_location (pkg);
       pkg_path =
         g_build_filename (dnf_repo_get_location (dnf_package_get_repo (pkg)),
                           "packages", glnx_basename (pkg_location), NULL);
