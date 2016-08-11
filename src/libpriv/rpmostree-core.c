@@ -1448,8 +1448,7 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
   if (!glnx_dirfd_iterator_init_at (dfd, path, FALSE, &dfd_iter, error))
     goto out;
 
-  while (glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent,
-                                                     cancellable, error))
+  while (TRUE)
     {
       g_autofree char *fullpath = NULL;
 
@@ -1458,6 +1457,9 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
       g_autoptr(GVariant) cur_xattrs = NULL;
       g_autoptr(GVariant) new_xattrs = NULL;
 
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent,
+                                                       cancellable, error))
+        goto out;
       if (dent == NULL)
         break;
 
