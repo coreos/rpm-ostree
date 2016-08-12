@@ -107,3 +107,32 @@ rpmostree_run_sync_fchdir_setup (char **argv_array, GSpawnFlags flags,
 
   return TRUE;
 }
+
+/* Execute /bin/true inside a bwrap container on the host */
+gboolean
+rpmostree_bwrap_selftest (GError **error)
+{
+  glnx_fd_close int host_root_dfd = -1;
+  g_autoptr(GPtrArray) bwrap_argv = NULL;
+
+  if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &host_root_dfd, error))
+    return FALSE;
+
+  bwrap_argv = rpmostree_bwrap_base_argv_new_for_rootfs (host_root_dfd, error);
+  if (!bwrap_argv)
+    return FALSE;
+
+  rpmostree_ptrarray_append_strdup (bwrap_argv,
+                                    "--ro-bind", "usr", "/usr",
+                                    NULL);
+  g_ptr_array_add (bwrap_argv, g_strdup ("true"));
+  g_ptr_array_add (bwrap_argv, NULL);
+  if (!rpmostree_run_sync_fchdir_setup ((char**)bwrap_argv->pdata, G_SPAWN_SEARCH_PATH,
+                                        host_root_dfd, error))
+    {
+      g_prefix_error (error, "bwrap test failed, see https://github.com/projectatomic/rpm-ostree/pull/429: ");
+      return FALSE;
+    }
+
+  return TRUE;
+}
