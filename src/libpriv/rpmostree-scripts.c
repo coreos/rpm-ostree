@@ -23,6 +23,7 @@
 #include <gio/gio.h>
 #include <systemd/sd-journal.h>
 #include "rpmostree-output.h"
+#include "rpmostree-bwrap.h"
 #include <err.h>
 #include "libglnx.h"
 
@@ -72,26 +73,6 @@ static const KnownRpmScriptKind unsupported_scripts[] = {
   { "%verify", 0,
     RPMTAG_VERIFYSCRIPT, RPMTAG_VERIFYSCRIPTPROG, RPMTAG_VERIFYSCRIPTFLAGS},
 };
-
-static void
-child_setup_fchdir (gpointer user_data)
-{
-  int fd = GPOINTER_TO_INT (user_data);
-  if (fchdir (fd) < 0)
-    err (1, "fchdir");
-}
-
-static void
-add_const_args (GPtrArray *argv_array, ...)
-{
-  va_list args;
-  char *arg;
-
-  va_start (args, argv_array);
-  while ((arg = va_arg (args, char *)))
-    g_ptr_array_add (argv_array, arg);
-  va_end (args);
-}
 
 static void
 fusermount_cleanup (const char *mountpoint)
@@ -188,9 +169,6 @@ run_script_in_bwrap_container (int rootfs_fd,
                                GError       **error)
 {
   gboolean ret = FALSE;
-  int i;
-  const char *usr_links[] = {"lib", "lib32", "lib64", "bin", "sbin"};
-  int estatus;
   char *rofiles_mnt = strdupa ("/tmp/rofiles-fuse.XXXXXX");
   const char *rofiles_argv[] = { "rofiles-fuse", "./usr", rofiles_mnt, NULL};
   const char *pkg_script = glnx_strjoina (name, ".", scriptdesc+1);
@@ -200,7 +178,6 @@ run_script_in_bwrap_container (int rootfs_fd,
   gboolean mntpoint_created = FALSE;
   gboolean fuse_mounted = FALSE;
   g_autoptr(GPtrArray) bwrap_argv = g_ptr_array_new ();
-  g_autoptr(GPtrArray) bwrap_argv_mallocd = g_ptr_array_new_with_free_func (g_free);
   GSpawnFlags bwrap_spawnflags = G_SPAWN_SEARCH_PATH;
   gboolean created_var_tmp = FALSE;
 
@@ -209,11 +186,8 @@ run_script_in_bwrap_container (int rootfs_fd,
 
   mntpoint_created = TRUE;
 
-  if (!g_spawn_sync (NULL, (char**)rofiles_argv, NULL, G_SPAWN_SEARCH_PATH,
-                     child_setup_fchdir, GINT_TO_POINTER (rootfs_fd),
-                     NULL, NULL, &estatus, error))
-    goto out;
-  if (!g_spawn_check_exit_status (estatus, error))
+  if (!rpmostree_run_sync_fchdir_setup ((char**)rofiles_argv, G_SPAWN_SEARCH_PATH,
+                                        rootfs_fd, error))
     {
       g_prefix_error (error, "Executing rofiles-fuse: ");
       goto out;
@@ -260,65 +234,33 @@ run_script_in_bwrap_container (int rootfs_fd,
   else
     created_var_tmp = TRUE;
 
-  add_const_args (bwrap_argv,
-                  WITH_BUBBLEWRAP_PATH,
+  bwrap_argv = rpmostree_bwrap_base_argv_new_for_rootfs (rootfs_fd, error);
+  if (!bwrap_argv)
+    goto out;
+
+  rpmostree_ptrarray_append_strdup (bwrap_argv,
                   "--bind", rofiles_mnt, "/usr",
-                  "--dev", "/dev",
-                  "--proc", "/proc",
-                  "--dir", "/tmp",
-                  "--chdir", "/",
                   /* Scripts can see a /var with compat links like alternatives */
                   "--ro-bind", "./var", "/var",
                   /* But no need to access persistent /tmp, so make it /tmp */
                   "--bind", "/tmp", "/var/tmp",
                   /* Allow RPM scripts to change the /etc defaults */
                   "--symlink", "usr/etc", "/etc",
-                  "--ro-bind", "/sys/block", "/sys/block",
-                  "--ro-bind", "/sys/bus", "/sys/bus",
-                  "--ro-bind", "/sys/class", "/sys/class",
-                  "--ro-bind", "/sys/dev", "/sys/dev",
-                  "--ro-bind", "/sys/devices", "/sys/devices",
                   NULL);
-
-  for (i = 0; i < G_N_ELEMENTS (usr_links); i++)
-    {
-      const char *subdir = usr_links[i];
-      struct stat stbuf;
-      char *path;
-
-      if (!(fstatat (rootfs_fd, subdir, &stbuf, AT_SYMLINK_NOFOLLOW) == 0 && S_ISLNK (stbuf.st_mode)))
-        continue;
-
-      g_ptr_array_add (bwrap_argv, "--symlink");
-
-      path = g_strconcat ("usr/", subdir, NULL);
-      g_ptr_array_add (bwrap_argv_mallocd, path);
-      g_ptr_array_add (bwrap_argv, path);
-
-      path = g_strconcat ("/", subdir, NULL);
-      g_ptr_array_add (bwrap_argv_mallocd, path);
-      g_ptr_array_add (bwrap_argv, path);
-    }
 
   { const char *debugscript = getenv ("RPMOSTREE_DEBUG_SCRIPT");
     if (g_strcmp0 (debugscript, pkg_script) == 0)
       {
-        g_ptr_array_add (bwrap_argv, (char*)"/bin/bash");
+        g_ptr_array_add (bwrap_argv, g_strdup ("/bin/bash"));
         bwrap_spawnflags |= G_SPAWN_CHILD_INHERITS_STDIN;
       }
     else
-      g_ptr_array_add (bwrap_argv, (char*)postscript_path_container);
+      g_ptr_array_add (bwrap_argv, g_strdup (postscript_path_container));
   }
   g_ptr_array_add (bwrap_argv, NULL);
 
-  if (!g_spawn_sync (NULL, (char**)bwrap_argv->pdata, NULL, bwrap_spawnflags,
-                     child_setup_fchdir, GINT_TO_POINTER (rootfs_fd),
-                     NULL, NULL, &estatus, error))
-    {
-      g_prefix_error (error, "Executing bwrap: ");
-      goto out;
-    }
-  if (!g_spawn_check_exit_status (estatus, error))
+  if (!rpmostree_run_sync_fchdir_setup ((char**)bwrap_argv->pdata,
+                                        bwrap_spawnflags, rootfs_fd, error))
     {
       g_prefix_error (error, "Executing bwrap: ");
       goto out;
