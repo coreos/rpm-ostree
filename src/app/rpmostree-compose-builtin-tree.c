@@ -31,6 +31,7 @@
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
+#include "rpmostree-bwrap.h"
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-postprocess.h"
@@ -629,6 +630,11 @@ rpmostree_compose_builtin_tree (int             argc,
                    "compose tree must presently be run as uid 0 (root)");
       goto out;
     }
+  /* Test whether or not bwrap is going to work - we will fail inside e.g. a Docker
+   * container without --privileged or userns exposed.
+   */
+  if (!rpmostree_bwrap_selftest (error))
+    goto out;
 
   repo_path = g_file_new_for_path (opt_repo);
   repo = self->repo = ostree_repo_new (repo_path);
