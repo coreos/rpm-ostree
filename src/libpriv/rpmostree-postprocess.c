@@ -27,6 +27,7 @@
 #include <json-glib/json-glib.h>
 #include <stdio.h>
 #include <utime.h>
+#include <err.h>
 #include <sys/types.h>
 #include <pwd.h>
 #include <grp.h>
@@ -37,6 +38,7 @@
 #include <gio/gunixoutputstream.h>
 
 #include "rpmostree-postprocess.h"
+#include "rpmostree-bwrap.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-json-parsing.h"
@@ -66,21 +68,43 @@ run_sync_in_root_at (int           rootfs_fd,
                      char        **child_argv,
                      GError     **error)
 {
-  gboolean ret = FALSE;
-  pid_t child = glnx_libcontainer_run_chroot_at_private (rootfs_fd, binpath, child_argv);
+  const GSpawnFlags bwrap_spawnflags = G_SPAWN_SEARCH_PATH;
+  g_autoptr(GPtrArray) bwrap_argv = NULL;
 
-  if (child == -1)
+  bwrap_argv = rpmostree_bwrap_base_argv_new_for_rootfs (rootfs_fd, error);
+  if (!bwrap_argv)
+    return FALSE;
+
+  /* Bind all of the primary toplevel dirs; unlike the script case, treecompose
+   * isn't yet operating on hardlinks, so we can just bind mount things mutably.
+   */
+  rpmostree_ptrarray_append_strdup (bwrap_argv,
+                                    "--bind", "usr", "/usr",
+                                    "--bind", "var", "/var",
+                                    "--bind", "etc", "/etc",
+                                    NULL);
+
+  g_ptr_array_add (bwrap_argv, g_strdup (binpath));
+  /* https://github.com/projectatomic/bubblewrap/issues/91 */
+  { gboolean first = TRUE;
+    for (char **iter = child_argv; iter && *iter; iter++)
+      {
+        if (first)
+          first = FALSE;
+        else
+          g_ptr_array_add (bwrap_argv, g_strdup (*iter));
+      }
+  }
+  g_ptr_array_add (bwrap_argv, NULL);
+
+  if (!rpmostree_run_sync_fchdir_setup ((char**)bwrap_argv->pdata, bwrap_spawnflags,
+                                        rootfs_fd, error))
     {
-      _rpmostree_set_error_from_errno (error, errno);
-      goto out;
+      g_prefix_error (error, "Executing bwrap: ");
+      return FALSE;
     }
-  
-  if (!_rpmostree_sync_wait_on_pid (child, error))
-    goto out;
-  
-  ret = TRUE;
- out:
-  return ret;
+
+  return TRUE;
 }
 
 static gboolean
