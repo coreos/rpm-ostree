@@ -630,6 +630,10 @@ rpmostree_compose_builtin_tree (int             argc,
                    "compose tree must presently be run as uid 0 (root)");
       goto out;
     }
+
+  /* Mock->bwrap bootstrap for Fedora */
+  if (!rpmostree_bwrap_bootstrap_if_in_mock (error))
+    goto out;
   /* Test whether or not bwrap is going to work - we will fail inside e.g. a Docker
    * container without --privileged or userns exposed.
    */
