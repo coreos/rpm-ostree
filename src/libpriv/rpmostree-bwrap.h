@@ -31,4 +31,5 @@ void rpmostree_ptrarray_append_strdup (GPtrArray *argv_array, ...) G_GNUC_NULL_T
 gboolean rpmostree_run_sync_fchdir_setup (char **argv_array, GSpawnFlags flags,
                                           int rootfs_fd, GError **error);
 
+gboolean rpmostree_bwrap_bootstrap_if_in_mock (GError **error);
 gboolean rpmostree_bwrap_selftest (GError **error);
