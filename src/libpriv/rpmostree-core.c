@@ -2046,10 +2046,35 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
   if (!noscripts)
     {
       gboolean have_passwd;
+      gboolean have_systemctl;
 
       if (!rpmostree_passwd_prepare_rpm_layering (tmprootfs_dfd, &have_passwd,
                                                   cancellable, error))
         goto out;
+
+      /* Also neuter systemctl - at least glusterfs calls it
+       * in %post without disallowing errors.  Anyways,
+       */
+      if (renameat (tmprootfs_dfd, "usr/bin/systemctl",
+                    tmprootfs_dfd, "usr/bin/systemctl.rpmostreesave") < 0)
+        {
+          if (errno == ENOENT)
+            have_systemctl = FALSE;
+          else
+            {
+              glnx_set_prefix_error_from_errno (error, "%s", "Renaming usr/bin/systemctl");
+              goto out;
+            }
+        }
+      else
+        {
+          have_systemctl = TRUE;
+          if (symlinkat ("true", tmprootfs_dfd, "usr/bin/systemctl") < 0)
+            {
+              glnx_set_error_from_errno (error);
+              goto out;
+            }
+        }
 
       for (i = 0; i < n_rpmts_elements; i++)
         {
@@ -2062,6 +2087,16 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                    self->ignore_scripts,
                                    cancellable, error))
             goto out;
+        }
+
+      if (have_systemctl)
+        {
+          if (renameat (tmprootfs_dfd, "usr/bin/systemctl.rpmostreesave",
+                        tmprootfs_dfd, "usr/bin/systemctl") < 0)
+            {
+              glnx_set_error_from_errno (error);
+              goto out;
+            }
         }
 
       if (have_passwd)
