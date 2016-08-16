@@ -1161,6 +1161,33 @@ static const char *pwgrp_lock_and_backup_files[] = { ".pwd.lock", "passwd-", "gr
                                                      "shadow-", "gshadow-" };
 static const char *pwgrp_shadow_files[] = { "shadow", "gshadow" };
 
+static gboolean
+rootfs_has_usrlib_passwd (int rootfs_dfd,
+                       gboolean *out_have_passwd,
+                       GError **error)
+{
+  struct stat stbuf;
+
+  /* Does this rootfs have a usr/lib/passwd?  We might be doing a
+   * container or something else.
+   */
+  if (fstatat (rootfs_dfd, "usr/lib/passwd", &stbuf, 0) < 0)
+    {
+      if (errno == ENOENT)
+        {
+          *out_have_passwd = FALSE;
+          return TRUE;
+        }
+      else
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
+    }
+  *out_have_passwd = TRUE;
+  return TRUE;
+}
+
 /* We actually want RPM to inject to /usr/lib/passwd - we
  * accomplish this by temporarily renaming /usr/lib/passwd -> /usr/etc/passwd
  * (Which appears as /etc/passwd via our compatibility symlink in the bubblewrap
@@ -1168,6 +1195,7 @@ static const char *pwgrp_shadow_files[] = { "shadow", "gshadow" };
  */
 gboolean
 rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
+                                       gboolean          *out_have_passwd,
                                        GCancellable      *cancellable,
                                        GError           **error)
 {
@@ -1188,6 +1216,11 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
             }
         }
     }
+
+  if (!rootfs_has_usrlib_passwd (rootfs_dfd, out_have_passwd, error))
+    return FALSE;
+  if (!*out_have_passwd)
+    return TRUE;
 
   for (guint i = 0; i < G_N_ELEMENTS (usrlib_pwgrp_files); i++)
     {

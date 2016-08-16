@@ -2045,8 +2045,12 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
 
   if (!noscripts)
     {
-      if (!rpmostree_passwd_prepare_rpm_layering (tmprootfs_dfd, cancellable, error))
+      gboolean have_passwd;
+
+      if (!rpmostree_passwd_prepare_rpm_layering (tmprootfs_dfd, &have_passwd,
+                                                  cancellable, error))
         goto out;
+
       for (i = 0; i < n_rpmts_elements; i++)
         {
           rpmte te = rpmtsElement (ordering_ts, i);
@@ -2059,8 +2063,12 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                    cancellable, error))
             goto out;
         }
-      if (!rpmostree_passwd_complete_rpm_layering (tmprootfs_dfd, error))
-        goto out;
+
+      if (have_passwd)
+        {
+          if (!rpmostree_passwd_complete_rpm_layering (tmprootfs_dfd, error))
+            goto out;
+        }
     }
 
   g_clear_pointer (&ordering_ts, rpmtsFree);
