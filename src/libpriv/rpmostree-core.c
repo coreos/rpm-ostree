@@ -34,6 +34,7 @@
 #include "rpmostree-core.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-passwd-util.h"
 #include "rpmostree-scripts.h"
 #include "rpmostree-unpacker.h"
 #include "rpmostree-output.h"
@@ -2044,6 +2045,8 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
 
   if (!noscripts)
     {
+      if (!rpmostree_passwd_prepare_rpm_layering (tmprootfs_dfd, cancellable, error))
+        goto out;
       for (i = 0; i < n_rpmts_elements; i++)
         {
           rpmte te = rpmtsElement (ordering_ts, i);
@@ -2056,6 +2059,8 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                    cancellable, error))
             goto out;
         }
+      if (!rpmostree_passwd_complete_rpm_layering (tmprootfs_dfd, error))
+        goto out;
     }
 
   g_clear_pointer (&ordering_ts, rpmtsFree);

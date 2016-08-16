@@ -1154,3 +1154,106 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
  out:
   return ret;
 }
+
+static const char *usrlib_pwgrp_files[] = { "passwd", "group" };
+/* Lock/backup files that should not be in the base commit (TODO fix) */
+static const char *pwgrp_lock_and_backup_files[] = { ".pwd.lock", "passwd-", "group-",
+                                                     "shadow-", "gshadow-" };
+static const char *pwgrp_shadow_files[] = { "shadow", "gshadow" };
+
+/* We actually want RPM to inject to /usr/lib/passwd - we
+ * accomplish this by temporarily renaming /usr/lib/passwd -> /usr/etc/passwd
+ * (Which appears as /etc/passwd via our compatibility symlink in the bubblewrap
+ *  script runner)
+ */
+gboolean
+rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
+                                       GCancellable      *cancellable,
+                                       GError           **error)
+{
+  /* This may be leftover in the tree, and having it exist will mean
+   * rofiles-fuse will prevent useradd from opening it for write.
+   */
+  for (guint i = 0; i < G_N_ELEMENTS (pwgrp_lock_and_backup_files); i++)
+    {
+      const char *file = pwgrp_lock_and_backup_files[i];
+      if (unlinkat (rootfs_dfd, glnx_strjoina ("usr/etc/", file), 0) < 0)
+        {
+          if (errno == ENOENT)
+            ;
+          else
+            {
+              glnx_set_error_from_errno (error);
+              return FALSE;
+            }
+        }
+    }
+
+  for (guint i = 0; i < G_N_ELEMENTS (usrlib_pwgrp_files); i++)
+    {
+      const char *file = usrlib_pwgrp_files[i];
+
+      /* Retain the current copies in /etc as backups */
+      if (renameat (rootfs_dfd, glnx_strjoina ("usr/etc/", file),
+                    rootfs_dfd, glnx_strjoina ("usr/etc/", file, ".rpmostreesave")) < 0)
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
+      /* Copy /usr/lib/{passwd,group} -> /usr/etc (breaking hardlinks) */
+      if (!glnx_file_copy_at (rootfs_dfd, glnx_strjoina ("usr/lib/", file), NULL,
+                              rootfs_dfd, glnx_strjoina ("usr/etc/", file),
+                              0, cancellable, error))
+        return FALSE;
+    }
+
+  /* And break hardlinks for the shadow files, since we don't have
+   * them in /usr/lib right now.
+   */
+  for (guint i = 0; i < G_N_ELEMENTS (pwgrp_shadow_files); i++)
+    {
+      const char *file = pwgrp_shadow_files[i];
+      const char *src = glnx_strjoina ("usr/etc/", file);
+      const char *tmp = glnx_strjoina ("usr/etc/", file, ".tmp");
+      if (!glnx_file_copy_at (rootfs_dfd, src, NULL,
+                              rootfs_dfd, tmp, GLNX_FILE_COPY_OVERWRITE,
+                              cancellable, error))
+        return FALSE;
+      if (renameat (rootfs_dfd, tmp, rootfs_dfd, src) < 0)
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
+    }
+  
+  return TRUE;
+}
+
+gboolean
+rpmostree_passwd_complete_rpm_layering (int       rootfs_dfd,
+                                        GError  **error)
+{
+  for (guint i = 0; i < G_N_ELEMENTS (usrlib_pwgrp_files); i++)
+    {
+      const char *file = usrlib_pwgrp_files[i];
+      /* And now the inverse: /usr/etc/passwd -> /usr/lib/passwd */
+      if (renameat (rootfs_dfd, glnx_strjoina ("usr/etc/", file),
+                    rootfs_dfd, glnx_strjoina ("usr/lib/", file)) < 0)
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
+      /* /usr/etc/passwd.rpmostreesave -> /usr/etc/passwd */
+      if (renameat (rootfs_dfd, glnx_strjoina ("usr/etc/", file, ".rpmostreesave"),
+                    rootfs_dfd, glnx_strjoina ("usr/etc/", file)) < 0)
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
+    }
+  /* However, we leave the (potentially modified) shadow files in place.
+   * In actuality, nothing should change /etc/shadow or /etc/gshadow, so
+   * we'll just have to pay the (tiny) cost of re-checksumming.
+   */
+  return TRUE;
+}
