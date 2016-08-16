@@ -54,6 +54,13 @@ static const KnownRpmScriptKind ignored_scripts[] = {
 #endif
 
 static const KnownRpmScriptKind posttrans_scripts[] = {
+  /* Unless the RPM files have non-root ownership, there's
+   * no actual difference between %pre and %post.  We'll
+   * have errored out on non-root ownership when trying
+   * to import.
+   */
+  { "%prein", 0,
+    RPMTAG_PREIN, RPMTAG_PREINPROG, RPMTAG_PREINFLAGS },
   /* For now, we treat %post as equivalent to %posttrans */
   { "%post", 0,
     RPMTAG_POSTIN, RPMTAG_POSTINPROG, RPMTAG_POSTINFLAGS },
@@ -62,8 +69,6 @@ static const KnownRpmScriptKind posttrans_scripts[] = {
 };
 
 static const KnownRpmScriptKind unsupported_scripts[] = {
-  { "%prein", 0,
-    RPMTAG_PREIN, RPMTAG_PREINPROG, RPMTAG_PREINFLAGS },
   { "%pretrans", 0,
     RPMTAG_PRETRANS, RPMTAG_PRETRANSPROG, RPMTAG_PRETRANSFLAGS },
   { "%triggerprein", RPMSENSE_TRIGGERPREIN,
@@ -255,7 +260,11 @@ run_script_in_bwrap_container (int rootfs_fd,
         bwrap_spawnflags |= G_SPAWN_CHILD_INHERITS_STDIN;
       }
     else
-      g_ptr_array_add (bwrap_argv, g_strdup (postscript_path_container));
+      {
+        g_ptr_array_add (bwrap_argv, g_strdup (postscript_path_container));
+        /* http://www.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S3-RPM-INSIDE-PRE-SCRIPT */
+        g_ptr_array_add (bwrap_argv, g_strdup ("1"));
+      }
   }
   g_ptr_array_add (bwrap_argv, NULL);
 
