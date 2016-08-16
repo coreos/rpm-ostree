@@ -60,6 +60,7 @@ struct RpmOstreeUnpacker
   rpmfi fi;
   off_t cpio_offset;
   GHashTable *rpmfi_overrides;
+  GString *tmpfiles_d;
   RpmOstreeUnpackerFlags flags;
 
   char *ostree_branch;
@@ -85,6 +86,7 @@ rpmostree_unpacker_finalize (GObject *object)
     (void) rpmfiFree (self->fi);
   if (self->owns_fd && self->fd != -1)
     (void) close (self->fd);
+  g_string_free (self->tmpfiles_d, TRUE);
   g_free (self->ostree_branch);
 
   g_hash_table_unref (self->rpmfi_overrides);
@@ -105,6 +107,7 @@ rpmostree_unpacker_init (RpmOstreeUnpacker *self)
 {
   self->rpmfi_overrides = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                  g_free, NULL);
+  self->tmpfiles_d = g_string_new ("");
 }
 
 typedef int(*archive_setup_func)(struct archive *);
@@ -516,6 +519,55 @@ workaround_fedora_rpm_permissions (GFileInfo *file_info)
     }
 }
 
+static void
+append_tmpfiles_d (RpmOstreeUnpacker *self,
+                   const char *path,
+                   GFileInfo *finfo,
+                   const char *user,
+                   const char *group)
+{
+  GString *tmpfiles_d = self->tmpfiles_d;
+  const guint32 mode = g_file_info_get_attribute_uint32 (finfo, "unix::mode");
+  char filetype_c;
+
+  switch (g_file_info_get_file_type (finfo))
+    {
+    case G_FILE_TYPE_DIRECTORY:
+      filetype_c = 'd';
+      break;
+    case G_FILE_TYPE_SYMBOLIC_LINK:
+      filetype_c = 'L';
+      break;
+    default:
+      return;
+    }
+
+  g_string_append_c (tmpfiles_d, filetype_c);
+  g_string_append_c (tmpfiles_d, ' ');
+  g_string_append (tmpfiles_d, path);
+  
+  switch (g_file_info_get_file_type (finfo))
+    {
+    case G_FILE_TYPE_DIRECTORY:
+      {
+        g_string_append_printf (tmpfiles_d, " 0%02o", mode & ~S_IFMT);
+        g_string_append_printf (tmpfiles_d, " %s %s - -", user, group);
+        g_string_append_c (tmpfiles_d, '\n');
+      }
+      break;
+    case G_FILE_TYPE_SYMBOLIC_LINK:
+      {
+        const char *target = g_file_info_get_symlink_target (finfo);
+        g_string_append (tmpfiles_d, " - - - - ");
+        g_string_append (tmpfiles_d, target);
+        g_string_append_c (tmpfiles_d, '\n');
+      }
+      break;
+    default:
+      g_assert_not_reached ();
+    }
+}
+
 static OstreeRepoCommitFilterResult
 compose_filter_cb (OstreeRepo         *repo,
                    const char         *path,
@@ -543,9 +595,17 @@ compose_filter_cb (OstreeRepo         *repo,
       get_rpmfi_override (self, path, &user, &group, NULL) &&
       (user != NULL || group != NULL))
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "path \"%s\" marked as %s%s%s)",
-                   path, user, group ? ":" : "", group ?: "");
+      if (g_str_has_prefix (path, "/run/") || g_str_has_prefix (path, "/var/"))
+        {
+          append_tmpfiles_d (self, path, file_info, user, group);
+          return OSTREE_REPO_COMMIT_FILTER_SKIP;
+        }
+      else
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "path \"%s\" marked as %s%s%s)",
+                       path, user, group ? ":" : "", group ?: "");
+        }
     }
 
   /* This should normally never happen since by design RPM doesn't use ids at
@@ -619,6 +679,7 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
   OstreeRepoCommitModifier *modifier = NULL;
   OstreeRepoImportArchiveOptions opts = { 0 };
   glnx_unref_object OstreeMutableTree *mtree = NULL;
+  char *tmpdir = NULL;
 
   GError *cb_error = NULL;
   cb_data fdata = { self, &cb_error };
@@ -652,9 +713,40 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
       goto out;
     }
 
+  /* Handle any data we've accumulated data to write to tmpfiles.d.
+   * I originally tried to do this entirely in memory but things
+   * like selinux labeling only happen as callbacks out of using
+   * the input dfd/archive paths...so let's just use a tempdir. (:sadface:)
+   */
+  if (self->tmpfiles_d->len > 0)
+    {
+      glnx_fd_close int tmpdir_dfd = -1;
+      g_autofree char *pkgname = headerGetAsString (self->hdr, RPMTAG_NAME);
+
+      tmpdir = strdupa ("/tmp/rpm-ostree-import.XXXXXX");
+      if (g_mkdtemp_full (tmpdir, 0755) < 0)
+        {
+          glnx_set_error_from_errno (error);
+          goto out;
+        }
+
+      if (!glnx_opendirat (AT_FDCWD, tmpdir, TRUE, &tmpdir_dfd, error))
+        goto out;
+      if (!glnx_shutil_mkdir_p_at (tmpdir_dfd, "usr/lib/tmpfiles.d", 0755, cancellable,  error))
+        goto out;
+      if (!glnx_file_replace_contents_at (tmpdir_dfd, glnx_strjoina ("usr/lib/tmpfiles.d/", "pkg-", pkgname, ".conf"),
+                                          (guint8*)self->tmpfiles_d->str, self->tmpfiles_d->len, GLNX_FILE_REPLACE_NODATASYNC,
+                                          cancellable, error))
+        goto out;
+
+      if (!ostree_repo_write_dfd_to_mtree (repo, tmpdir_dfd, ".", mtree, modifier,
+                                           cancellable, error))
+        goto out;
+    }
+    
   if (!ostree_repo_write_mtree (repo, mtree, &root, cancellable, error))
     goto out;
-
+  
   if (!build_metadata_variant (self, sepolicy, &metadata, cancellable, error))
     goto out;
 
@@ -667,6 +759,8 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
 out:
   if (modifier)
     ostree_repo_commit_modifier_unref (modifier);
+  if (tmpdir)
+    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tmpdir, NULL, NULL);
   return ret;
 }
 
