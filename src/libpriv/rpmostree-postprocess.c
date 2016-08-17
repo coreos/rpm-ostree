@@ -1380,8 +1380,9 @@ mutate_os_release (const char    *contents,
       if (strlen (line) == 0)
         continue;
 
+      /* NB: we don't mutate VERSION_ID because some libraries expect well-known
+       * values there*/
       if (g_str_has_prefix (line, "VERSION=") || \
-          g_str_has_prefix (line, "VERSION_ID=") || \
           g_str_has_prefix (line, "PRETTY_NAME="))
         {
           g_autofree char *new_line = NULL;
