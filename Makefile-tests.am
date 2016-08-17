@@ -25,6 +25,7 @@ testpackages = \
 	tests/common/compose/yum/repo/packages/x86_64/empty-1.0-1.x86_64.rpm \
 	tests/common/compose/yum/repo/packages/x86_64/foo-1.0-1.x86_64.rpm \
 	tests/common/compose/yum/repo/packages/x86_64/bar-1.0-1.x86_64.rpm \
+	tests/common/compose/yum/repo/packages/x86_64/scriptpkg1-1.0-1.x86_64.rpm \
 	$(NULL)
 
 # Create a rule for each testpkg with their respective spec file as dep.
