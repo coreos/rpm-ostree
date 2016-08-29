@@ -1444,11 +1444,6 @@ sysroot_upgrader_cleanup (RpmOstreeSysrootUpgrader *self,
                           GCancellable             *cancellable,
                           GError                  **error)
 {
-  glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
-
-  if (!get_pkgcache_repo (repo, &pkgcache_repo, cancellable, error))
-    return FALSE;
-
   /* regenerate the baselayer refs in case we just kicked out an ancient layered
    * deployment whose base layer is not needed anymore */
   if (!generate_baselayer_refs (self, repo, cancellable, error))
@@ -1526,13 +1521,8 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   if (!ostree_sysroot_simple_write_deployment (self->sysroot, self->osname,
                                                new_deployment,
                                                self->merge_deployment,
-                                               0,
+                                               OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_NO_CLEAN,
                                                cancellable, error))
-    goto out;
-
-  /* regenerate the baselayer refs in case we just kicked out an ancient layered
-   * deployment whose base layer is not needed anymore */
-  if (!generate_baselayer_refs (self, repo, cancellable, error))
     goto out;
 
   if (!sysroot_upgrader_cleanup (self, repo, cancellable, error))
