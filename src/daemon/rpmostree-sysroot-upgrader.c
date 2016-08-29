@@ -21,6 +21,7 @@
 #include "config.h"
 
 #include <libglnx.h>
+#include <systemd/sd-journal.h>
 #include "rpmostreed-utils.h"
 #include "rpmostree-util.h"
 
@@ -31,6 +32,8 @@
 #include "rpmostree-output.h"
 
 #include "ostree-repo.h"
+
+#define RPMOSTREE_TMP_BASE_REF "rpmostree/base/tmp"
 
 /**
  * SECTION:rpmostree-sysroot-upgrader
@@ -1226,20 +1229,18 @@ out:
  * mostly to work around ostree's auto-ref cleanup. Otherwise we might get into
  * a situation where after the origin ref is updated, we lose our parent, which
  * means that users can no longer add/delete packages on that deployment. (They
- * can always just re-pull it, but let's try to be nice). */
+ * can always just re-pull it, but let's try to be nice).
+ **/
 static gboolean
 generate_baselayer_refs (RpmOstreeSysrootUpgrader *self,
+                         OstreeRepo               *repo,
                          GCancellable             *cancellable,
                          GError                  **error)
 {
   gboolean ret = FALSE;
-  glnx_unref_object OstreeRepo *repo = NULL;
   g_autoptr(GHashTable) refs = NULL;
   g_autoptr(GHashTable) bases =
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-
-  if (!ostree_sysroot_get_repo (self->sysroot, &repo, cancellable, error))
-    goto out;
 
   if (!ostree_repo_list_refs_ext (repo, "rpmostree/base", &refs,
                                   OSTREE_REPO_LIST_REFS_EXT_NONE,
@@ -1316,6 +1317,158 @@ out:
   return ret;
 }
 
+/* For all packages in the sack, generate a cached refspec and add it
+ * to @referenced_pkgs. This is necessary to implement garbage
+ * collection of layered package refs.
+ */
+static gboolean
+add_package_refs_to_set (RpmOstreeRefSack *rsack,
+                         GHashTable *referenced_pkgs,
+                         GCancellable *cancellable,
+                         GError **error)
+{
+  g_autoptr(GPtrArray) pkglist = NULL;
+  HyQuery query = hy_query_create (rsack->sack);
+  hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
+  pkglist = hy_query_run (query);
+
+  /* TODO: convert this to an iterator to avoid lots of malloc */
+
+  if (pkglist->len == 0)
+    sd_journal_print (LOG_WARNING, "Failed to find any packages in root");
+  else
+    {
+      for (guint i = 0; i < pkglist->len; i++)
+        {
+          DnfPackage *pkg = pkglist->pdata[i];
+          g_autofree char *pkgref = rpmostree_get_cache_branch_pkg (pkg);
+          g_hash_table_add (referenced_pkgs, g_steal_pointer (&pkgref));
+        }
+    }
+
+  return TRUE;
+}
+
+/* Loop over all deployments, gathering all referenced NEVRAs for
+ * layered packages.  Then delete any cached pkg refs that aren't in
+ * that set.
+ */
+static gboolean
+clean_pkgcache_orphans (RpmOstreeSysrootUpgrader *self,
+                        OstreeRepo               *repo,
+                        GCancellable             *cancellable,
+                        GError                  **error)
+{
+  glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
+  g_autoptr(GPtrArray) deployments =
+    ostree_sysroot_get_deployments (self->sysroot);
+  g_autoptr(GHashTable) current_refs = NULL;
+  g_autoptr(GHashTable) referenced_pkgs = /* cache refs of packages we want to keep */
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  GHashTableIter hiter;
+  gpointer hkey, hvalue;
+  gint n_objects_total;
+  gint n_objects_pruned;
+  guint64 freed_space;
+  guint n_freed = 0;
+
+  if (!get_pkgcache_repo (repo, &pkgcache_repo, cancellable, error))
+    return FALSE;
+
+  for (guint i = 0; i < deployments->len; i++)
+    {
+      OstreeDeployment *deployment = deployments->pdata[i];
+      GKeyFile *origin = ostree_deployment_get_origin (deployment);
+      g_auto(GStrv) packages = NULL;
+
+      if (!_rpmostree_util_parse_origin (origin, NULL, &packages, error))
+        return FALSE;
+
+      if (packages && g_strv_length (packages) > 0)
+        {
+          g_autoptr(RpmOstreeRefSack) rsack = NULL;
+          g_autofree char *deployment_dirpath = NULL;
+
+          deployment_dirpath = ostree_sysroot_get_deployment_dirpath (self->sysroot, deployment);
+
+          /* We could do this via the commit object, but it's faster
+           * to reuse the existing rpmdb checkout.
+           */
+          rsack = rpmostree_get_refsack_for_root (ostree_sysroot_get_fd (self->sysroot),
+                                                  deployment_dirpath,
+                                                  cancellable, error);
+          if (rsack == NULL)
+            return FALSE;
+
+          if (!add_package_refs_to_set (rsack, referenced_pkgs,
+                                        cancellable, error))
+            return FALSE;
+        }
+    }
+
+  if (!ostree_repo_list_refs_ext (pkgcache_repo, "rpmostree/pkg", &current_refs,
+                                  OSTREE_REPO_LIST_REFS_EXT_NONE,
+                                  cancellable, error))
+    return FALSE;
+
+  g_hash_table_iter_init (&hiter, current_refs);
+  while (g_hash_table_iter_next (&hiter, &hkey, &hvalue))
+    {
+      const char *ref = hkey;
+      if (g_hash_table_contains (referenced_pkgs, ref))
+        continue;
+
+      if (!ostree_repo_set_ref_immediate (pkgcache_repo, NULL, ref, NULL,
+                                          cancellable, error))
+        return FALSE;
+      n_freed++;
+    }
+
+  if (!ostree_repo_prune (pkgcache_repo, OSTREE_REPO_PRUNE_FLAGS_REFS_ONLY, 0,
+                          &n_objects_total, &n_objects_pruned, &freed_space,
+                          cancellable, error))
+    return FALSE;
+
+  if (n_freed > 0 || freed_space > 0)
+    {
+      char *freed_space_str = g_format_size_full (freed_space, 0);
+      g_print ("Freed %u pkgcache branches: %s\n", n_freed, freed_space_str);
+    }
+
+  return TRUE;
+}
+
+static gboolean
+sysroot_upgrader_cleanup (RpmOstreeSysrootUpgrader *self,
+                          OstreeRepo               *repo,
+                          GCancellable             *cancellable,
+                          GError                  **error)
+{
+  glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
+
+  if (!get_pkgcache_repo (repo, &pkgcache_repo, cancellable, error))
+    return FALSE;
+
+  /* regenerate the baselayer refs in case we just kicked out an ancient layered
+   * deployment whose base layer is not needed anymore */
+  if (!generate_baselayer_refs (self, repo, cancellable, error))
+    return FALSE;
+
+  /* Delete our temporary ref */
+  if (!ostree_repo_set_ref_immediate (repo, NULL, RPMOSTREE_TMP_BASE_REF,
+                                      NULL, cancellable, error))
+    return FALSE;
+
+  /* and shake it loose */
+  if (!ostree_sysroot_cleanup (self->sysroot, cancellable, error))
+    return FALSE;
+
+  if (!clean_pkgcache_orphans (self, repo, cancellable, error))
+    return FALSE;
+
+  return TRUE;
+}
+
 /**
  * rpmostree_sysroot_upgrader_deploy:
  * @self: Self
@@ -1331,8 +1484,11 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                    GError                  **error)
 {
   gboolean ret = FALSE;
-  const char *tmp_base_ref = "rpmostree/base/tmp";
   glnx_unref_object OstreeDeployment *new_deployment = NULL;
+  glnx_unref_object OstreeRepo *repo = NULL;
+
+  if (!ostree_sysroot_get_repo (self->sysroot, &repo, cancellable, error))
+    goto out;
 
   /* make sure we have a known target to deploy */
   g_assert (self->new_revision);
@@ -1362,7 +1518,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   /* Generate a temporary ref for the new deployment in case we are
    * interrupted; the base layer refs generation isn't transactional.
    */
-  if (!ostree_repo_set_ref_immediate (repo, NULL, tmp_base_ref,
+  if (!ostree_repo_set_ref_immediate (repo, NULL, RPMOSTREE_TMP_BASE_REF,
                                       ostree_deployment_get_csum (new_deployment),
                                       cancellable, error))
     goto out;
@@ -1376,18 +1532,11 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   /* regenerate the baselayer refs in case we just kicked out an ancient layered
    * deployment whose base layer is not needed anymore */
-  if (!generate_baselayer_refs (self, cancellable, error))
+  if (!generate_baselayer_refs (self, repo, cancellable, error))
     goto out;
 
-  /* Delete our temporary ref */
-  if (!ostree_repo_set_ref_immediate (repo, NULL, tmp_base_ref,
-                                      NULL, cancellable, error))
+  if (!sysroot_upgrader_cleanup (self, repo, cancellable, error))
     goto out;
-
-  /* and shake it loose */
-  if (!ostree_sysroot_cleanup (self->sysroot, cancellable, error))
-    goto out;
-
 
   ret = TRUE;
  out:

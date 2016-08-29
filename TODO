@@ -29,7 +29,7 @@ Autobuilder
 Package layering
 ----------------
 
-* Provide a mechanism for updating packages (& pruning older versions)
+* Provide a mechanism for updating packages
 * Support pkgs which bring their own pps
   https://github.com/projectatomic/rpm-ostree/pull/107#issuecomment-205082381
 * Support local RPMs installation (though `ostree admin unlock` makes this
