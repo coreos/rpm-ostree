@@ -1526,7 +1526,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   if (!ostree_sysroot_simple_write_deployment (self->sysroot, self->osname,
                                                new_deployment,
                                                self->merge_deployment,
-                                               0,
+                                               OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_NO_CLEAN,
                                                cancellable, error))
     goto out;
 
