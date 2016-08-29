@@ -1119,7 +1119,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   if (!get_pkgcache_repo (repo, &pkgcache_repo, cancellable, error))
     goto out;
 
-  rpmostree_context_set_repo (ctx, pkgcache_repo);
+  rpmostree_context_set_repos (ctx, repo, pkgcache_repo);
 
   /* --- Downloading metadata --- */
   if (!rpmostree_context_download_metadata (ctx, cancellable, error))
@@ -1151,23 +1151,6 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   /* --- Overlay packages on base layer --- */
   if (!final_assembly (self, ctx, repo, base_rev, cancellable, error))
     goto out;
-
-  /* Send the final commit to the parent repo */
-  {
-    GFile *repo_path = ostree_repo_get_path (pkgcache_repo);
-    g_autofree char *uri =
-      g_strdup_printf ("file://%s", gs_file_get_path_cached (repo_path));
-
-    GVariantBuilder builder;
-    g_variant_builder_init (&builder, G_VARIANT_TYPE ("a{sv}"));
-    g_variant_builder_add (&builder, "{s@v}", "refs", g_variant_new_variant
-      (g_variant_new_strv ((const char * const*)&self->new_revision, 1)));
-
-    if (!ostree_repo_pull_with_options (repo, uri,
-                                        g_variant_builder_end (&builder),
-                                        NULL, cancellable, error))
-      goto out;
-  }
 
   ret = TRUE;
 out:

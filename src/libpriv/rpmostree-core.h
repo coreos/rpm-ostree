@@ -64,8 +64,9 @@ gboolean rpmostree_context_setup (RpmOstreeContext     *self,
                                   GCancellable  *cancellable,
                                   GError       **error);
 
-void rpmostree_context_set_repo (RpmOstreeContext *self,
-                                 OstreeRepo       *repo);
+void rpmostree_context_set_repos (RpmOstreeContext *self,
+                                  OstreeRepo       *base_repo,
+                                  OstreeRepo       *pkgcache_repo);
 void rpmostree_context_set_sepolicy (RpmOstreeContext *self,
                                      OstreeSePolicy   *sepolicy);
 void rpmostree_context_set_ignore_scripts (RpmOstreeContext *self,

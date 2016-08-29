@@ -43,6 +43,8 @@
 #define RPMOSTREE_DIR_CACHE_SOLV "solv"
 #define RPMOSTREE_DIR_LOCK "lock"
 
+static OstreeRepo * get_pkgcache_repo (RpmOstreeContext *self);
+
 /***********************************************************
  *                    RpmOstreeTreespec                    *
  ***********************************************************
@@ -281,6 +283,7 @@ struct _RpmOstreeContext {
   DnfContext *hifctx;
   GHashTable *ignore_scripts;
   OstreeRepo *ostreerepo;
+  OstreeRepo *pkgcache_repo;
   gboolean unprivileged;
   char *dummy_instroot_path;
   OstreeSePolicy *sepolicy;
@@ -437,10 +440,18 @@ rpmostree_context_new_unprivileged (int basedir_dfd,
 
 /* XXX: or put this in new_system() instead? */
 void
-rpmostree_context_set_repo (RpmOstreeContext *self,
-                            OstreeRepo       *repo)
+rpmostree_context_set_repos (RpmOstreeContext *self,
+                             OstreeRepo       *base_repo,
+                             OstreeRepo       *pkgcache_repo)
 {
-  g_set_object (&self->ostreerepo, repo);
+  g_set_object (&self->ostreerepo, base_repo);
+  g_set_object (&self->pkgcache_repo, pkgcache_repo);
+}
+
+static OstreeRepo *
+get_pkgcache_repo (RpmOstreeContext *self)
+{
+  return self->pkgcache_repo ? self->pkgcache_repo : self->ostreerepo;
 }
 
 /* I debated making this part of the treespec. Overall, I think it makes more
@@ -996,7 +1007,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
 
   rpmostree_output_task_end ("done");
 
-  if (!sort_packages (hifctx, self->ostreerepo, self->sepolicy,
+  if (!sort_packages (hifctx, get_pkgcache_repo (self), self->sepolicy,
                       ret_install, error))
     goto out;
 
@@ -1159,7 +1170,7 @@ import_one_package (RpmOstreeContext *self,
                     GError        **error)
 {
   gboolean ret = FALSE;
-  OstreeRepo *ostreerepo = self->ostreerepo;
+  OstreeRepo *ostreerepo = get_pkgcache_repo (self);
   g_autofree char *ostree_commit = NULL;
   glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
   g_autofree char *pkg_path;
@@ -1229,7 +1240,7 @@ rpmostree_context_import (RpmOstreeContext *self,
   if (n == 0)
     return TRUE;
 
-  g_return_val_if_fail (self->ostreerepo != NULL, FALSE);
+  g_return_val_if_fail (get_pkgcache_repo (self) != NULL, FALSE);
 
   {
     glnx_unref_object DnfState *hifstate = dnf_state_new ();
@@ -1257,14 +1268,14 @@ rpmostree_context_import (RpmOstreeContext *self,
 }
 
 static gboolean
-ostree_checkout_package (OstreeRepo   *repo,
-                         DnfPackage   *pkg,
-                         int           dfd,
-                         const char   *path,
-                         OstreeRepoDevInoCache *devino_cache,
-                         const char   *pkg_commit,
-                         GCancellable *cancellable,
-                         GError      **error)
+checkout_package (OstreeRepo   *repo,
+                  DnfPackage   *pkg,
+                  int           dfd,
+                  const char   *path,
+                  OstreeRepoDevInoCache *devino_cache,
+                  const char   *pkg_commit,
+                  GCancellable *cancellable,
+                  GError      **error)
 {
   gboolean ret = FALSE;
   OstreeRepoCheckoutAtOptions opts = { OSTREE_REPO_CHECKOUT_MODE_USER,
@@ -1291,6 +1302,36 @@ ostree_checkout_package (OstreeRepo   *repo,
       g_prefix_error (error, "Unpacking %s: ", nevra);
     }
   return ret;
+}
+
+static gboolean
+checkout_package_into_root (RpmOstreeContext *self,
+                            DnfPackage   *pkg,
+                            int           dfd,
+                            const char   *path,
+                            OstreeRepoDevInoCache *devino_cache,
+                            const char   *pkg_commit,
+                            GCancellable *cancellable,
+                            GError      **error)
+{
+  OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
+
+  if (pkgcache_repo != self->ostreerepo)
+    {
+      if (!rpmostree_pull_content_only (self->ostreerepo, pkgcache_repo, pkg_commit,
+                                        cancellable, error))
+        {
+          g_prefix_error (error, "Linking cached content for %s: ", dnf_package_get_nevra (pkg));
+          return FALSE;
+        }
+    }
+
+  if (!checkout_package (pkgcache_repo, pkg, dfd, path,
+                         devino_cache, pkg_commit,
+                         cancellable, error))
+    return FALSE;
+
+  return TRUE;
 }
 
 /* Given a path to a file/symlink, make a copy (reflink if possible)
@@ -1577,8 +1618,8 @@ relabel_one_package (OstreeRepo     *repo,
 
   cache = ostree_repo_devino_cache_new ();
 
-  if (!ostree_checkout_package (repo, pkg, tmprootfs_dfd, ".", cache,
-                                commit_csum, cancellable, error))
+  if (!checkout_package (repo, pkg, tmprootfs_dfd, ".", cache,
+                         commit_csum, cancellable, error))
     goto out;
 
   /* This is where the magic happens. We traverse the tree and relabel stuff,
@@ -1675,13 +1716,14 @@ rpmostree_context_relabel (RpmOstreeContext *self,
   gboolean ret = FALSE;
   guint progress_sigid;
   int n = install->packages_to_relabel->len;
+  OstreeRepo *ostreerepo = get_pkgcache_repo (self);
 
   if (n == 0)
     return TRUE;
 
   g_assert (self->sepolicy);
 
-  g_return_val_if_fail (self->ostreerepo != NULL, FALSE);
+  g_return_val_if_fail (ostreerepo != NULL, FALSE);
 
   {
     glnx_unref_object DnfState *hifstate = dnf_state_new ();
@@ -1696,7 +1738,7 @@ rpmostree_context_relabel (RpmOstreeContext *self,
     for (guint i = 0; i < install->packages_to_relabel->len; i++)
       {
         DnfPackage *pkg = install->packages_to_relabel->pdata[i];
-        if (!relabel_one_package (self->ostreerepo, pkg, self->sepolicy,
+        if (!relabel_one_package (ostreerepo, pkg, self->sepolicy,
                                   cancellable, error))
           goto out;
         dnf_state_assert_done (hifstate);
@@ -1864,6 +1906,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                    GError               **error)
 {
   gboolean ret = FALSE;
+  OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
   DnfContext *hifctx = self->hifctx;
   TransactionData tdata = { 0, -1 };
   rpmts ordering_ts = NULL;
@@ -1919,19 +1962,19 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
         {
           g_autofree char *branch_head_rev = NULL;
 
-          if (!ostree_repo_resolve_rev (self->ostreerepo, cachebranch, FALSE,
+          if (!ostree_repo_resolve_rev (pkgcache_repo, cachebranch, FALSE,
                                         &branch_head_rev, error))
             goto out;
 
           if (self->sepolicy == NULL)
             cached_rev = g_steal_pointer (&branch_head_rev);
-          else if (!find_rev_with_sepolicy (self->ostreerepo, branch_head_rev,
+          else if (!find_rev_with_sepolicy (pkgcache_repo, branch_head_rev,
                                             self->sepolicy, FALSE, &cached_rev,
                                             error))
             goto out;
         }
 
-        if (!ostree_repo_load_variant (self->ostreerepo, OSTREE_OBJECT_TYPE_COMMIT, cached_rev,
+        if (!ostree_repo_load_variant (pkgcache_repo, OSTREE_OBJECT_TYPE_COMMIT, cached_rev,
                                        &pkg_commit, error))
           goto out;
 
@@ -1990,11 +2033,11 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
    */
   if (filesystem_package)
     {
-      if (!ostree_checkout_package (self->ostreerepo, filesystem_package,
-                                    tmprootfs_dfd, ".", devino_cache,
-                                    g_hash_table_lookup (pkg_to_ostree_commit,
-                                                         filesystem_package),
-                                    cancellable, error))
+      if (!checkout_package_into_root (self, filesystem_package,
+                                       tmprootfs_dfd, ".", devino_cache,
+                                       g_hash_table_lookup (pkg_to_ostree_commit,
+                                                            filesystem_package),
+                                       cancellable, error))
         goto out;
     }
   else
@@ -2007,11 +2050,11 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
 
       g_assert (pkg);
 
-      if (!ostree_checkout_package (self->ostreerepo, pkg,
-                                    tmprootfs_dfd, ".", devino_cache,
-                                    g_hash_table_lookup (pkg_to_ostree_commit,
-                                                         pkg),
-                                    cancellable, error))
+      if (!checkout_package_into_root (self, pkg,
+                                       tmprootfs_dfd, ".", devino_cache,
+                                       g_hash_table_lookup (pkg_to_ostree_commit,
+                                                            pkg),
+                                       cancellable, error))
         goto out;
     }
 
@@ -2030,11 +2073,11 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
       if (pkg == filesystem_package)
         continue;
 
-      if (!ostree_checkout_package (self->ostreerepo, pkg,
-                                    tmprootfs_dfd, ".", devino_cache,
-                                    g_hash_table_lookup (pkg_to_ostree_commit,
-                                                         pkg),
-                                    cancellable, error))
+      if (!checkout_package_into_root (self, pkg,
+                                       tmprootfs_dfd, ".", devino_cache,
+                                       g_hash_table_lookup (pkg_to_ostree_commit,
+                                                            pkg),
+                                       cancellable, error))
         goto out;
     }
 

@@ -530,3 +530,95 @@ rpmostree_str_replace (const char  *buf,
 
   return g_regex_replace_literal (regex, buf, -1, 0, new, 0, error);
 }
+
+static gboolean
+pull_content_only_recurse (OstreeRepo  *dest,
+                           OstreeRepo  *src,
+                           OstreeRepoCommitTraverseIter *iter,
+                           GCancellable *cancellable,
+                           GError      **error)
+{
+  gboolean done = FALSE;
+
+  while (!done)
+    {
+      OstreeRepoCommitIterResult iterres =
+        ostree_repo_commit_traverse_iter_next (iter, cancellable, error);
+
+      switch (iterres)
+        {
+        case OSTREE_REPO_COMMIT_ITER_RESULT_ERROR:
+          return FALSE;
+        case OSTREE_REPO_COMMIT_ITER_RESULT_END:
+          done = TRUE;
+          break;
+        case OSTREE_REPO_COMMIT_ITER_RESULT_FILE:
+          {
+            char *name;
+            char *checksum;
+
+            ostree_repo_commit_traverse_iter_get_file (iter, &name, &checksum);
+
+            if (!ostree_repo_import_object_from (dest, src, OSTREE_OBJECT_TYPE_FILE,
+                                                 checksum, cancellable, error))
+              return FALSE;
+          }
+          break;
+        case OSTREE_REPO_COMMIT_ITER_RESULT_DIR:
+          {
+            char *name;
+            char *content_checksum;
+            char *meta_checksum;
+            g_autoptr(GVariant) dirtree = NULL;
+            ostree_cleanup_repo_commit_traverse_iter
+              OstreeRepoCommitTraverseIter subiter = { 0, };
+
+            ostree_repo_commit_traverse_iter_get_dir (iter, &name, &content_checksum, &meta_checksum);
+
+            if (!ostree_repo_load_variant (src, OSTREE_OBJECT_TYPE_DIR_TREE,
+                                           content_checksum, &dirtree,
+                                           error))
+              return FALSE;
+
+            if (!ostree_repo_commit_traverse_iter_init_dirtree (&subiter, src, dirtree,
+                                                                OSTREE_REPO_COMMIT_TRAVERSE_FLAG_NONE,
+                                                                error))
+              return FALSE;
+
+            if (!pull_content_only_recurse (dest, src, &subiter, cancellable, error))
+              return FALSE;
+          }
+          break;
+        }
+    }
+
+  return TRUE;
+}
+
+/* Migrate only the content (.file) objects from src+src_commit into dest.
+ * Used for package layering.
+ */
+gboolean
+rpmostree_pull_content_only (OstreeRepo  *dest,
+                             OstreeRepo  *src,
+                             const char  *src_commit,
+                             GCancellable *cancellable,
+                             GError      **error)
+{
+  g_autoptr(GVariant) commitdata = NULL;
+  ostree_cleanup_repo_commit_traverse_iter
+    OstreeRepoCommitTraverseIter iter = { 0, };
+
+  if (!ostree_repo_load_commit (src, src_commit, &commitdata, NULL, error))
+    return FALSE;
+
+  if (!ostree_repo_commit_traverse_iter_init_commit (&iter, src, commitdata,
+                                                     OSTREE_REPO_COMMIT_TRAVERSE_FLAG_NONE,
+                                                     error))
+    return FALSE;
+
+  if (!pull_content_only_recurse (dest, src, &iter, cancellable, error))
+    return FALSE;
+
+  return TRUE;
+}

@@ -106,3 +106,11 @@ rpmostree_str_replace (const char  *buf,
                        const char  *old,
                        const char  *new,
                        GError     **error);
+
+
+gboolean
+rpmostree_pull_content_only (OstreeRepo  *dest,
+                             OstreeRepo  *src,
+                             const char  *src_commit,
+                             GCancellable *cancellable,
+                             GError      **error);
