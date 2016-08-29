@@ -1221,7 +1221,7 @@ out:
   return ret;
 }
 
-/* For each deployment (including the new one yet to be written), if they are
+/* For each deployment, if they are
  * layered deployments, then create a ref pointing to their bases. This is
  * mostly to work around ostree's auto-ref cleanup. Otherwise we might get into
  * a situation where after the origin ref is updated, we lose our parent, which
@@ -1229,7 +1229,6 @@ out:
  * can always just re-pull it, but let's try to be nice). */
 static gboolean
 generate_baselayer_refs (RpmOstreeSysrootUpgrader *self,
-                         OstreeDeployment         *new_deployment,
                          GCancellable             *cancellable,
                          GError                  **error)
 {
@@ -1291,18 +1290,6 @@ generate_baselayer_refs (RpmOstreeSysrootUpgrader *self,
             g_hash_table_add (bases, g_steal_pointer (&base_rev));
           }
       }
-
-    /* our new deployment, in case we're called before it's added */
-    if (g_strv_length (self->requested_packages) > 0)
-      {
-        g_autofree char *base_rev = NULL;
-
-        if (!commit_get_parent_csum (repo, self->new_revision, &base_rev, error))
-          goto out;
-        g_assert (base_rev);
-
-        g_hash_table_add (bases, g_steal_pointer (&base_rev));
-      }
   }
 
   /* create the new refs */
@@ -1344,6 +1331,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                    GError                  **error)
 {
   gboolean ret = FALSE;
+  const char *tmp_base_ref = "rpmostree/base/tmp";
   glnx_unref_object OstreeDeployment *new_deployment = NULL;
 
   /* make sure we have a known target to deploy */
@@ -1371,7 +1359,12 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                    cancellable, error))
     goto out;
 
-  if (!generate_baselayer_refs (self, new_deployment, cancellable, error))
+  /* Generate a temporary ref for the new deployment in case we are
+   * interrupted; the base layer refs generation isn't transactional.
+   */
+  if (!ostree_repo_set_ref_immediate (repo, NULL, tmp_base_ref,
+                                      ostree_deployment_get_csum (new_deployment),
+                                      cancellable, error))
     goto out;
 
   if (!ostree_sysroot_simple_write_deployment (self->sysroot, self->osname,
@@ -1383,7 +1376,12 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   /* regenerate the baselayer refs in case we just kicked out an ancient layered
    * deployment whose base layer is not needed anymore */
-  if (!generate_baselayer_refs (self, new_deployment, cancellable, error))
+  if (!generate_baselayer_refs (self, cancellable, error))
+    goto out;
+
+  /* Delete our temporary ref */
+  if (!ostree_repo_set_ref_immediate (repo, NULL, tmp_base_ref,
+                                      NULL, cancellable, error))
     goto out;
 
   /* and shake it loose */
