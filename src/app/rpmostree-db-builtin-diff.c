@@ -25,9 +25,11 @@
 #include "rpmostree-rpm-util.h"
 
 static char *opt_format;
+static gboolean opt_changelogs;
 
 static GOptionEntry option_entries[] = {
   { "format", 'F', 0, G_OPTION_ARG_STRING, &opt_format, "Output format: \"diff\" or (default) \"block\"", "FORMAT" },
+  { "changelogs", 'c', 0, G_OPTION_ARG_NONE, &opt_changelogs, "Also output RPM changelogs", NULL },
   { NULL }
 };
 
@@ -82,7 +84,8 @@ rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GEr
     }
   else if (g_str_equal (opt_format, "block"))
     {
-      rpmhdrs_diff_prnt_block (rpmhdrs_diff (rpmrev_get_headers (rpmrev1),
+      rpmhdrs_diff_prnt_block (opt_changelogs,
+                               rpmhdrs_diff (rpmrev_get_headers (rpmrev1),
                                              rpmrev_get_headers (rpmrev2)));
     }
   else
