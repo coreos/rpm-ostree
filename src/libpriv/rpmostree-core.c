@@ -1017,15 +1017,6 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
   return ret;
 }
 
-static int
-ptrarray_sort_compare_strings (gconstpointer ap,
-                               gconstpointer bp)
-{
-  char **asp = (gpointer)ap;
-  char **bsp = (gpointer)bp;
-  return strcmp (*asp, *bsp);
-}
-
 /* Generate a checksum from a goal in a repeatable fashion -
  * we checksum an ordered array of the checksums of individual
  * packages.  We *used* to just checksum the NEVRAs but that
@@ -1055,7 +1046,7 @@ rpmostree_dnf_add_checksum_goal (GChecksum *checksum,
       g_ptr_array_add (pkg_checksums, pkg_checksum_with_type);
     }
 
-  g_ptr_array_sort (pkg_checksums, ptrarray_sort_compare_strings);
+  g_ptr_array_sort (pkg_checksums, rpmostree_ptrarray_sort_compare_strings);
     
   for (i = 0; i < pkg_checksums->len; i++)
     {

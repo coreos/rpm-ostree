@@ -29,6 +29,7 @@
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-dbus-helpers.h"
+#include "rpmostree-util.h"
 #include "libsd-locale-util.h"
 
 #include <libglnx.h>
@@ -226,7 +227,13 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
 
       if (origin_packages)
         {
-          g_autofree char *packages_joined = g_strjoinv (" ", (char**)origin_packages);
+          g_autofree char *packages_joined = NULL;
+          g_autoptr(GPtrArray) origin_packages_sorted = g_ptr_array_new ();
+          for (char **iter = (char**) origin_packages; iter && *iter; iter++)
+            g_ptr_array_add (origin_packages_sorted, *iter);
+          g_ptr_array_sort (origin_packages_sorted, rpmostree_ptrarray_sort_compare_strings);
+          g_ptr_array_add (origin_packages_sorted, NULL);
+          packages_joined = g_strjoinv (" ", (char**)origin_packages_sorted->pdata);
           print_kv ("Packages", max_key_len, packages_joined);
         }
       
