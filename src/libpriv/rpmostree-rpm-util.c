@@ -429,7 +429,7 @@ _rpmhdrs_diff_cmp_end (const GPtrArray *hs1, const GPtrArray *hs2)
 }
 
 void
-rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff)
+rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
 {
   int num = 0;
 
@@ -476,6 +476,9 @@ rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff)
 
           printf (" ");
           pkg_print (hn);
+
+          if (!changelogs)
+            continue;
 
           /* Load the old %changelog entries */
           ochanges_date = &ochanges_date_s;

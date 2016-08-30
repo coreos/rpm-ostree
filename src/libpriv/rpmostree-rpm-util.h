@@ -60,7 +60,7 @@ rpmhdrs_rpmdbv (struct RpmHeaders *l1,
                 GError **error);
 
 void
-rpmhdrs_diff_prnt_block (struct RpmHeadersDiff *diff);
+rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff);
 
 void
 rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff);
