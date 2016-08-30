@@ -62,6 +62,15 @@ rpmhdrs_rpmdbv (struct RpmHeaders *l1,
 void
 rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff);
 
+/* Define cleanup functions for librpm here */
+static inline void
+rpmostree_cleanup_rpmheader (Header *h)
+{
+  if (*h)
+    headerFree (*h);
+}
+#define _cleanup_rpmheader_ __attribute__((cleanup(rpmostree_cleanup_rpmheader)))
+
 void
 rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff);
 

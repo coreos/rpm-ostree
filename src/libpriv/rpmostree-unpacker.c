@@ -179,7 +179,7 @@ rpmostree_unpacker_read_metainfo (int fd,
   rpmts ts = NULL;
   FD_t rpmfd;
   int r;
-  Header ret_header = NULL;
+  _cleanup_rpmheader_ Header ret_header = NULL;
   rpmfi ret_fi = NULL;
   gsize ret_cpio_offset;
   g_autofree char *abspath = g_strdup_printf ("/proc/self/fd/%d", fd);
@@ -233,8 +233,6 @@ rpmostree_unpacker_read_metainfo (int fd,
   if (out_cpio_offset)
     *out_cpio_offset = ret_cpio_offset;
  out:
-  if (ret_header)
-    headerFree (ret_header);
   if (rpmfd)
     (void) Fclose (rpmfd);
   return ret;
@@ -271,7 +269,7 @@ RpmOstreeUnpacker *
 rpmostree_unpacker_new_fd (int fd, RpmOstreeUnpackerFlags flags, GError **error)
 {
   RpmOstreeUnpacker *ret = NULL;
-  Header hdr = NULL;
+  _cleanup_rpmheader_ Header hdr = NULL;
   rpmfi fi = NULL;
   struct archive *archive;
   gsize cpio_offset;
@@ -296,8 +294,6 @@ rpmostree_unpacker_new_fd (int fd, RpmOstreeUnpackerFlags flags, GError **error)
  out:
   if (archive)
     archive_read_free (archive);
-  if (hdr)
-    headerFree (hdr);
   if (fi)
     rpmfiFree (fi);
   return ret;

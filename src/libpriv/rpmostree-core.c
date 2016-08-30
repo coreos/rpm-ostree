@@ -1813,18 +1813,17 @@ add_to_transaction (rpmts  ts,
                     GCancellable *cancellable,
                     GError **error)
 {
-  gboolean ret = FALSE;
-  Header hdr = NULL;
+  _cleanup_rpmheader_ Header hdr = NULL;
   int r;
 
   hdr = get_header_for_package (tmp_metadata_dfd, pkg, error);
   if (!hdr)
-    goto out;
+    return FALSE;
 
   if (!noscripts)
     {
       if (!rpmostree_script_txn_validate (pkg, hdr, ignore_scripts, cancellable, error))
-        goto out;
+        return FALSE;
     }
 
   r = rpmtsAddInstallElement (ts, hdr, pkg, TRUE, NULL);
@@ -1835,14 +1834,10 @@ add_to_transaction (rpmts  ts,
                    G_IO_ERROR_FAILED,
                    "Failed to add install element for %s",
                    dnf_package_get_filename (pkg));
-      goto out;
+      return FALSE;
     }
 
-  ret = TRUE;
- out:
-  if (hdr)
-    headerFree (hdr);
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -1853,22 +1848,17 @@ run_posttrans_sync (int tmp_metadata_dfd,
                     GCancellable *cancellable,
                     GError    **error)
 {
-  gboolean ret = FALSE;
-  Header hdr;
+  _cleanup_rpmheader_ Header hdr;
 
   hdr = get_header_for_package (tmp_metadata_dfd, pkg, error);
   if (!hdr)
-    goto out;
+    return FALSE;
 
   if (!rpmostree_posttrans_run_sync (pkg, hdr, ignore_scripts, rootfs_dfd,
                                      cancellable, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
- out:
-  if (hdr)
-    headerFree (hdr);
-  return ret;
+  return TRUE;
 }
 
 /* FIXME: This is a copy of ot_admin_checksum_version */
