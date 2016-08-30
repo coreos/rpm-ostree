@@ -37,6 +37,10 @@ _rpmostree_set_prefix_error_from_errno (GError     **error,
 
 void _rpmostree_perror_fatal (const char *message) __attribute__ ((noreturn));
 
+int
+rpmostree_ptrarray_sort_compare_strings (gconstpointer ap,
+                                         gconstpointer bp);
+
 GVariant *_rpmostree_vardict_lookup_value_required (GVariantDict *dict,
                                                     const char *key,
                                                     const GVariantType *fmt,

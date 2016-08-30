@@ -66,6 +66,15 @@ _rpmostree_perror_fatal (const char *message)
   exit (1);
 }
 
+int
+rpmostree_ptrarray_sort_compare_strings (gconstpointer ap,
+                                         gconstpointer bp)
+{
+  char **asp = (gpointer)ap;
+  char **bsp = (gpointer)bp;
+  return strcmp (*asp, *bsp);
+}
+
 GVariant *
 _rpmostree_vardict_lookup_value_required (GVariantDict *dict,
                                           const char *key,
