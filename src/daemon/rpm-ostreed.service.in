@@ -1,8 +1,8 @@
 [Unit]
 Description=RPM OSTree Manager
+ConditionPathExists=/ostree
 
 [Service]
 Type=dbus
 BusName=org.projectatomic.rpmostree1
 ExecStart=@libexecdir@/rpm-ostreed
-ConditionPathExists=/ostree
