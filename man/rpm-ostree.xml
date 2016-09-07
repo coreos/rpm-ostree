@@ -186,7 +186,7 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
-        <term><command>pkg-add</command></term>
+        <term><command>install (pkg-add)</command></term>
 
         <listitem>
           <para>
@@ -210,7 +210,7 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
-        <term><command>pkg-delete</command></term>
+        <term><command>uninstall (pkg-remove)</command></term>
 
         <listitem>
           <para>
