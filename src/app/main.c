@@ -44,10 +44,16 @@ static RpmOstreeCommand supported_commands[] = {
   { "rollback", rpmostree_builtin_rollback },
   { "status", rpmostree_builtin_status },
   { "upgrade", rpmostree_builtin_upgrade },
+  { "install", rpmostree_builtin_pkg_add },
+  { "uninstall", rpmostree_builtin_pkg_remove },
   { NULL }
 };
 
 static RpmOstreeCommand preview_commands[] = {
+  { NULL }
+};
+
+static RpmOstreeCommand legacy_alias_commands[] = {
   { "pkg-add", rpmostree_builtin_pkg_add },
   { "pkg-remove", rpmostree_builtin_pkg_remove },
   { NULL }
@@ -270,6 +276,8 @@ main (int    argc,
     command_name = "db";
 
   command = lookup_command_of_type (supported_commands, command_name, NULL);
+  if (!command)
+    command = lookup_command_of_type (legacy_alias_commands, command_name, NULL);
 
   if (!command)
     command = lookup_command_of_type (preview_commands, command_name, "a preview");
