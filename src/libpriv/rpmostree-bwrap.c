@@ -108,87 +108,6 @@ rpmostree_run_sync_fchdir_setup (char **argv_array, GSpawnFlags flags,
   return TRUE;
 }
 
-/* mock doesn't actually use a mount namespace, and hence bwrap will
- * fail to remount /.  Work around this by doing it here.  Fedora
- * runs rpm-ostree inside of mock instead of Docker or something
- * more modern.
- */
-gboolean
-rpmostree_bwrap_bootstrap_if_in_mock (GError **error)
-{
-  const char *env_ps1 = getenv ("PS1");
-  static const char *mock_mounted_paths[] = { "/proc", "/sys" };
-  static const char *findmnt_argv[] = { "findmnt", "/", NULL };
-  g_autofree char *pwd = NULL;
-  int estatus;
-
-  if (!(env_ps1 && strstr (env_ps1, "<mock-chroot>")))
-    return TRUE;
-
-  /* Okay, we detected we're inside mock.  Let's double check now
-   * whether or not / is already a mount point.  The simplest way to
-   * do this is to execute findmnt...maybe someday we'll link to libmount
-   * but this is legacy.
-   */
-  if (!g_spawn_sync (NULL, (char**)findmnt_argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL,
-                     NULL, NULL, &estatus, error))
-    {
-      g_prefix_error (error, "Executing findmnt: ");
-      return FALSE;
-    }
-  /* Did findmnt say / is a mount point?  Okay, nothing to do here. */
-  if (estatus == 0)
-    return TRUE;
-
-  pwd = getcwd (NULL, 0);
-
-  g_print ("Detected mock chroot without / as mount, enabling workaround.\n");
-  if (unshare (CLONE_NEWNS) < 0)
-    {
-      glnx_set_prefix_error_from_errno (error, "%s", "unshare(CLONE_NEWNS)");
-      return FALSE;
-    }
-  /* For reasons I don't fully understand, trying to bind mount / -> /
-   * doesn't work.  We seem to hit a check in the kernel:
-   *
-   * static int do_change_type(struct path *path, int flag)
-   * {
-   *    ...
-   * 	if (path->dentry != path->mnt->mnt_root)
-   *		return -EINVAL;
-   */
-  if (mount ("/", "/mnt", NULL, MS_MGC_VAL | MS_BIND, NULL) != 0)
-    {
-      glnx_set_prefix_error_from_errno (error, "%s", "mount(/ as bind)");
-      return FALSE;
-    }
-  /* Now take the paths that mock mounted (that we need) and move them
-   * underneath the new rootfs mount.
-   */
-  for (guint i = 0; i < G_N_ELEMENTS (mock_mounted_paths); i++)
-    {
-      const char *mockpath = mock_mounted_paths[i];
-      g_autofree char *destpath = g_strconcat ("/mnt", mockpath, NULL);
-      if (mount (mockpath, destpath, NULL, MS_MGC_VAL | MS_MOVE, NULL) != 0)
-        {
-          glnx_set_prefix_error_from_errno (error, "%s", "mount(move)");
-          return FALSE;
-        }
-    }
-  if (chroot ("/mnt") < 0)
-    {
-      glnx_set_error_from_errno (error);
-      return FALSE;
-    }
-  if (chdir (pwd) < 0)
-    {
-      glnx_set_error_from_errno (error);
-      return FALSE;
-    }
-
-  return TRUE;
-}
-
 /* Execute /bin/true inside a bwrap container on the host */
 gboolean
 rpmostree_bwrap_selftest (GError **error)
@@ -211,7 +130,7 @@ rpmostree_bwrap_selftest (GError **error)
   if (!rpmostree_run_sync_fchdir_setup ((char**)bwrap_argv->pdata, G_SPAWN_SEARCH_PATH,
                                         host_root_dfd, error))
     {
-      g_prefix_error (error, "bwrap test failed, see https://github.com/projectatomic/rpm-ostree/pull/429: ");
+      g_prefix_error (error, "bwrap test failed, see <https://github.com/projectatomic/rpm-ostree/pull/429>: ");
       return FALSE;
     }
 
