@@ -32,6 +32,7 @@
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-util.h"
 #include "rpmostree-bwrap.h"
+#include "rpmostree-scripts.h"
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-postprocess.h"
@@ -600,6 +601,12 @@ rpmostree_compose_builtin_tree (int             argc,
   g_autoptr(GHashTable) varsubsts = NULL;
   gboolean workdir_is_tmp = FALSE;
   g_autofree char *next_version = NULL;
+
+  /* Do this very early on here (before threads etc.) until we port
+   * fully to Unified...we unfortunately can't easily mainipulate the
+   * process environment librpm uses for scripts.
+   */
+  rpmostree_script_set_standard_environ ();
 
   self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
   

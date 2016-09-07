@@ -84,28 +84,46 @@ rpmostree_bwrap_base_argv_new_for_rootfs (int rootfs_fd, GError **error)
   return g_steal_pointer (&bwrap_argv);
 }
 
+struct ChildSetupData {
+  int rootfs_fd;
+  GSpawnChildSetupFunc func;
+  void *data;
+};
+
 static void
-child_setup_fchdir (gpointer user_data)
+child_setup (gpointer user_data)
 {
-  int fd = GPOINTER_TO_INT (user_data);
-  if (fchdir (fd) < 0)
+  struct ChildSetupData *cdata = user_data;
+  if (cdata->rootfs_fd != -1 && fchdir (cdata->rootfs_fd) < 0)
     err (1, "fchdir");
+  if (cdata->func)
+    cdata->func (cdata->data);
 }
 
 gboolean
-rpmostree_run_sync_fchdir_setup (char **argv_array, GSpawnFlags flags,
-                                 int rootfs_fd, GError **error)
+rpmostree_run_sync_full (char **argv_array, GSpawnFlags flags,
+                         int rootfs_fd, GSpawnChildSetupFunc func,
+                         void *user_data,
+                         GError **error)
 {
+  struct ChildSetupData cdata = { rootfs_fd, func, user_data };
   int estatus;
   
   if (!g_spawn_sync (NULL, argv_array, NULL, flags,
-                     child_setup_fchdir, GINT_TO_POINTER (rootfs_fd),
+                     child_setup, &cdata,
                      NULL, NULL, &estatus, error))
     return FALSE;
   if (!g_spawn_check_exit_status (estatus, error))
     return FALSE;
 
   return TRUE;
+}
+
+gboolean
+rpmostree_run_sync_fchdir_setup (char **argv_array, GSpawnFlags flags,
+                                 int rootfs_fd, GError **error)
+{
+  return rpmostree_run_sync_full (argv_array, flags, rootfs_fd, NULL, NULL, error);
 }
 
 /* mock doesn't actually use a mount namespace, and hence bwrap will

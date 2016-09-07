@@ -49,6 +49,8 @@ gboolean rpmostree_script_ignore_hash_from_strv (const char *const *strv,
                                                  GHashTable **out_hash,
                                                  GError **error);
 
+void rpmostree_script_set_standard_environ (void);
+
 gboolean
 rpmostree_script_txn_validate (DnfPackage    *package,
                                Header         hdr,
