@@ -165,6 +165,12 @@ rpmostree_script_txn_validate (DnfPackage    *package,
   return ret;
 }
 
+static void
+child_setup_bwrap (gpointer data)
+{
+  rpmostree_script_set_standard_environ ();
+}
+
 static gboolean
 run_script_in_bwrap_container (int rootfs_fd,
                                const char *name,
@@ -268,8 +274,9 @@ run_script_in_bwrap_container (int rootfs_fd,
   }
   g_ptr_array_add (bwrap_argv, NULL);
 
-  if (!rpmostree_run_sync_fchdir_setup ((char**)bwrap_argv->pdata,
-                                        bwrap_spawnflags, rootfs_fd, error))
+  if (!rpmostree_run_sync_full ((char**)bwrap_argv->pdata,
+                                bwrap_spawnflags, rootfs_fd,
+                                child_setup_bwrap, NULL, error))
     {
       g_prefix_error (error, "Executing bwrap: ");
       goto out;
@@ -363,4 +370,10 @@ rpmostree_script_ignore_hash_from_strv (const char *const *strv,
     g_hash_table_add (ignore_scripts, g_strdup (*iter));
   *out_hash = g_steal_pointer (&ignore_scripts);
   return TRUE;
+}
+
+void
+rpmostree_script_set_standard_environ (void)
+{
+  setenv ("KERNEL_INSTALL_NOOP", "1", 1);
 }
