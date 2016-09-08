@@ -1224,6 +1224,39 @@ out:
   return ret;
 }
 
+/* Since `ostree admin cleanup` by default prunes refs-only,depth=0,
+ * We need to hold strong references to the base commit of each
+ * deployment, to ensure that upgrades work.
+ */
+static gboolean
+get_base_commit_for_deployment (RpmOstreeSysrootUpgrader  *self,
+                                OstreeRepo                *repo,
+                                OstreeDeployment          *deployment,
+                                char                     **out_base,
+                                GError                   **error)
+{
+  GKeyFile *origin = ostree_deployment_get_origin (deployment);
+  g_auto(GStrv) packages = NULL;
+
+  if (!_rpmostree_util_parse_origin (origin, NULL, &packages, error))
+    return FALSE;
+
+  if (packages && g_strv_length (packages) > 0)
+    {
+      const char *csum = ostree_deployment_get_csum (deployment);
+      g_autofree char *base_rev = NULL;
+
+      if (!commit_get_parent_csum (repo, csum, &base_rev, error))
+        return FALSE;
+      g_assert (base_rev);
+
+      *out_base = g_steal_pointer (&base_rev);
+    }
+  else
+    *out_base = NULL;
+  return TRUE;
+}
+
 /* For each deployment, if they are
  * layered deployments, then create a ref pointing to their bases. This is
  * mostly to work around ostree's auto-ref cleanup. Otherwise we might get into
@@ -1273,23 +1306,13 @@ generate_baselayer_refs (RpmOstreeSysrootUpgrader *self,
     for (; i < deployments->len; i++)
       {
         OstreeDeployment *deployment = deployments->pdata[i];
-        GKeyFile *origin = ostree_deployment_get_origin (deployment);
-        g_auto(GStrv) packages = NULL;
+        g_autofree char *base_rev = NULL;
 
-        if (!_rpmostree_util_parse_origin (origin, NULL, &packages, error))
+        if (!get_base_commit_for_deployment (self, repo, deployment,
+                                             &base_rev, error))
           goto out;
-
-        if (packages && g_strv_length (packages) > 0)
-          {
-            const char *csum = ostree_deployment_get_csum (deployment);
-            g_autofree char *base_rev = NULL;
-
-            if (!commit_get_parent_csum (repo, csum, &base_rev, error))
-              goto out;
-            g_assert (base_rev);
-
-            g_hash_table_add (bases, g_steal_pointer (&base_rev));
-          }
+        if (base_rev)
+          g_hash_table_add (bases, g_steal_pointer (&base_rev));
       }
   }
 
@@ -1510,13 +1533,23 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                    cancellable, error))
     goto out;
 
-  /* Generate a temporary ref for the new deployment in case we are
-   * interrupted; the base layer refs generation isn't transactional.
-   */
-  if (!ostree_repo_set_ref_immediate (repo, NULL, RPMOSTREE_TMP_BASE_REF,
-                                      ostree_deployment_get_csum (new_deployment),
-                                      cancellable, error))
-    goto out;
+  {
+    g_autofree char *base_rev = NULL;
+
+    if (!get_base_commit_for_deployment (self, repo, new_deployment,
+                                         &base_rev, error))
+      goto out;
+    if (base_rev)
+      {
+        /* Generate a temporary ref for the new deployment in case we are
+         * interrupted; the base layer refs generation isn't transactional.
+         */
+        if (!ostree_repo_set_ref_immediate (repo, NULL, RPMOSTREE_TMP_BASE_REF,
+                                            base_rev,
+                                            cancellable, error))
+          goto out;
+      }
+  }
 
   if (!ostree_sysroot_simple_write_deployment (self->sysroot, self->osname,
                                                new_deployment,
