@@ -1455,7 +1455,8 @@ clean_pkgcache_orphans (RpmOstreeSysrootUpgrader *self,
   if (n_freed > 0 || freed_space > 0)
     {
       char *freed_space_str = g_format_size_full (freed_space, 0);
-      g_print ("Freed %u pkgcache branches: %s\n", n_freed, freed_space_str);
+      g_print ("Freed %u pkgcache branch%s: %s\n", n_freed,
+               n_freed > 1 ? "es" : "", freed_space_str);
     }
 
   return TRUE;
