@@ -1158,8 +1158,10 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
 static const char *usrlib_pwgrp_files[] = { "passwd", "group" };
 /* Lock/backup files that should not be in the base commit (TODO fix) */
 static const char *pwgrp_lock_and_backup_files[] = { ".pwd.lock", "passwd-", "group-",
-                                                     "shadow-", "gshadow-" };
-static const char *pwgrp_shadow_files[] = { "shadow", "gshadow" };
+                                                     "shadow-", "gshadow-",
+                                                     "subuid-", "subgid-" };
+static const char *pwgrp_shadow_files[] = { "shadow", "gshadow",
+                                            "subuid", "subgid"};
 
 static gboolean
 rootfs_has_usrlib_passwd (int rootfs_dfd,
@@ -1245,9 +1247,21 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
    */
   for (guint i = 0; i < G_N_ELEMENTS (pwgrp_shadow_files); i++)
     {
+      struct stat stbuf;
       const char *file = pwgrp_shadow_files[i];
       const char *src = glnx_strjoina ("usr/etc/", file);
       const char *tmp = glnx_strjoina ("usr/etc/", file, ".tmp");
+
+      if (fstatat (rootfs_dfd, src, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
+        {
+          if (errno != ENOENT)
+            {
+              glnx_set_error_from_errno (error);
+              return FALSE;
+            }
+          continue;
+        }
+
       if (!glnx_file_copy_at (rootfs_dfd, src, NULL,
                               rootfs_dfd, tmp, GLNX_FILE_COPY_OVERWRITE,
                               cancellable, error))
