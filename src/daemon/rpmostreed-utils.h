@@ -64,6 +64,13 @@ gboolean   rpmostreed_repo_lookup_version (OstreeRepo           *repo,
                                            char                **out_checksum,
                                            GError              **error);
 
+gboolean rpmostreed_repo_lookup_checksum (OstreeRepo           *repo,
+                                          const char           *refspec,
+                                          const char           *checksum,
+                                          OstreeAsyncProgress  *progress,
+                                          GCancellable         *cancellable,
+                                          GError              **error);
+
 gboolean   rpmostreed_repo_lookup_cached_version (OstreeRepo    *repo,
                                                   const char    *refspec,
                                                   const char    *version,
