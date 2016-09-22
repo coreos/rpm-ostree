@@ -36,7 +36,10 @@ This program takes as input a manifest file that describes the target
 system, and commits the result to an OSTree repository.
 
 The input format is a JSON "treefile".  See examples in
-`doc/treefile-examples` as well as `doc/treefile.md`.
+`api-doc/treefile-examples`. More real-world examples
+include the manifest for [Fedora Atomic](https://pagure.io/fedora-atomic/blob/master/f/fedora-atomic-docker-host.json)
+and [CentOS Atomic](https://github.com/CentOS/sig-atomic-buildscripts/blob/downstream/centos-atomic-host.json).
+
 
 ```
 # rpm-ostree compose tree --repo=/srv/centos-atomic/build-repo sig-atomic-buildscripts/centos-atomic-host.json
