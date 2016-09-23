@@ -298,8 +298,10 @@ rpmostree_builtin_status (int             argc,
       json_root = json_builder_get_root (builder);
       json_generator_set_root (generator, json_root);
       json_node_free (json_root);
-      
-      if (!json_generator_to_stream (generator, stdout_gio, NULL, error))
+
+      /* NB: watch out for the misleading API docs */
+      if (json_generator_to_stream (generator, stdout_gio, NULL, error) <= 0
+          || (error != NULL && *error != NULL))
         goto out;
     }
   else
