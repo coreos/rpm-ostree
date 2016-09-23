@@ -76,8 +76,11 @@ rpm-ostree status | head --lines 5 | tee OUTPUT-status.txt
 assert_file_has_content OUTPUT-status.txt '1\.0\.9'
 echo "ok deploy older known version"
 
-# Remember the current revision for later.
-revision=$(ostree rev-parse --repo=sysroot/ostree/repo otheros:testos/buildmaster/x86_64-runtime)
+# Remember the current revision for later. This is a really cheesy way of
+# fetching the current default deployment. It'd be easier to get it from
+# rpm-ostree status --json, but we don't mandate jq  yet.
+revision=$(ostree rev-parse --repo=sysroot/ostree/repo \
+           $(ostree refs --list --repo=sysroot/ostree/repo ostree | head -n 1))
 
 # Jump forward to a locally known version.
 rpm-ostree deploy --os=testos 1.0.10
