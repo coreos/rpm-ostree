@@ -578,7 +578,8 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
           filetype_c = 'L';
           break;
         default:
-          g_print ("Ignoring non-directory/non-symlink '%s'\n",
+          g_print ("Ignoring non-directory/non-symlink '%s/%s'\n",
+                   prefix->str,
                    dent->d_name);
           continue;
         }
@@ -654,7 +655,7 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
   glnx_fd_close int tmpfiles_fd = -1;
   /* List of files that shouldn't be in the tree */
   const char *known_state_files[] = {
-    "lib/systemd/random-seed",
+    "lib/systemd/random-seed", /* https://bugzilla.redhat.com/show_bug.cgi?id=789407 */
     "lib/systemd/catalog/database",
     "lib/plymouth/boot-duration",
   };
