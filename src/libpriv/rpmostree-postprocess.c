@@ -578,7 +578,8 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
           filetype_c = 'L';
           break;
         default:
-          g_print ("Ignoring non-directory/non-symlink '%s'\n",
+          g_print ("Ignoring non-directory/non-symlink '%s/%s'\n",
+                   prefix->str,
                    dent->d_name);
           continue;
         }
