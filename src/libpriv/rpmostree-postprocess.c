@@ -650,7 +650,37 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
 {
   gboolean ret = FALSE;
   g_autoptr(GString) prefix = g_string_new ("/var");
+  glnx_fd_close int var_dfd = -1;
   glnx_fd_close int tmpfiles_fd = -1;
+  /* List of files that shouldn't be in the tree */
+  const char *known_state_files[] = {
+    "lib/systemd/random-seed",
+    "lib/systemd/catalog/database",
+    "lib/plymouth/boot-duration",
+  };
+
+  if (!glnx_opendirat (src_rootfs_dfd, "var", TRUE, &var_dfd, error))
+    goto out;
+
+  /* Here, delete some files ahead of time to avoid emitting warnings
+   * for things that are known to be harmless.
+   */
+  for (guint i = 0; i < G_N_ELEMENTS (known_state_files); i++)
+    {
+      const char *path = known_state_files[i];
+      if (unlinkat (var_dfd, path, 0) < 0)
+        {
+          if (errno != ENOENT)
+            {
+              glnx_set_error_from_errno (error);
+              goto out;
+            }
+        }
+    }
+
+  /* Now, SELinux in Fedora >= 24: https://bugzilla.redhat.com/show_bug.cgi?id=1290659 */
+  if (!glnx_shutil_rm_rf_at (var_dfd, "lib/selinux/targeted", cancellable, error))
+    goto out;
 
   /* Append to an existing one for package layering */
   if ((tmpfiles_fd = TEMP_FAILURE_RETRY (openat (dest_rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
