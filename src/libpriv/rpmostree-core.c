@@ -786,45 +786,26 @@ out:
 }
 
 static gboolean
-find_rev_with_sepolicy (OstreeRepo     *repo,
-                        const char     *head,
-                        OstreeSePolicy *sepolicy,
-                        gboolean        allow_noent,
-                        char          **out_rev,
-                        GError        **error)
+commit_has_matching_sepolicy (OstreeRepo     *repo,
+                              const char     *head,
+                              OstreeSePolicy *sepolicy,
+                              gboolean       *out_matches,
+                              GError        **error)
 {
-  gboolean ret = FALSE;
   const char *sepolicy_csum_wanted = ostree_sepolicy_get_csum (sepolicy);
-  g_autofree char *commit_rev = g_strdup (head);
+  g_autoptr(GVariant) commit = NULL;
+  g_autofree char *sepolicy_csum = NULL;
 
-  /* walk up the branch until we find a matching policy */
-  while (commit_rev != NULL)
-    {
-      g_autoptr(GVariant) commit = NULL;
-      g_autofree char *sepolicy_csum = NULL;
+  if (!ostree_repo_load_commit (repo, head, &commit, NULL, error))
+    return FALSE;
+  g_assert (commit);
 
-      if (!ostree_repo_load_commit (repo, commit_rev, &commit, NULL, error))
-        goto out;
-      g_assert (commit);
+  if (!get_commit_sepolicy_csum (commit, &sepolicy_csum, error))
+    return FALSE;
 
-      if (!get_commit_sepolicy_csum (commit, &sepolicy_csum, error))
-        goto out;
+  *out_matches = strcmp (sepolicy_csum, sepolicy_csum_wanted) == 0;
 
-      if (strcmp (sepolicy_csum, sepolicy_csum_wanted) == 0)
-        break;
-
-      g_free (commit_rev);
-      commit_rev = ostree_commit_get_parent (commit);
-    }
-
-  if (commit_rev == NULL && !allow_noent)
-    goto out;
-
-  *out_rev = g_steal_pointer (&commit_rev);
-
-  ret = TRUE;
-out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -869,13 +850,9 @@ find_pkg_in_ostree (OstreeRepo     *repo,
 
           if (sepolicy)
             {
-              g_autofree char *cached_rev_sel = NULL;
-              if (!find_rev_with_sepolicy (repo, cached_rev, sepolicy,
-                                           TRUE, &cached_rev_sel, error))
+              if (!commit_has_matching_sepolicy (repo, cached_rev, sepolicy,
+                                                 out_selinux_match, error))
                 return FALSE;
-
-              if (cached_rev_sel)
-                *out_selinux_match = TRUE;
             }
         }
     }
@@ -1935,21 +1912,21 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
         g_autoptr(GVariant) pkg_commit = NULL;
         g_autoptr(GVariant) header_variant = NULL;
         const char *nevra = dnf_package_get_nevra (pkg);
+        gboolean sepolicy_matches;
 
-        {
-          g_autofree char *branch_head_rev = NULL;
+        if (!ostree_repo_resolve_rev (pkgcache_repo, cachebranch, FALSE,
+                                      &cached_rev, error))
+          goto out;
 
-          if (!ostree_repo_resolve_rev (pkgcache_repo, cachebranch, FALSE,
-                                        &branch_head_rev, error))
-            goto out;
-
-          if (self->sepolicy == NULL)
-            cached_rev = g_steal_pointer (&branch_head_rev);
-          else if (!find_rev_with_sepolicy (pkgcache_repo, branch_head_rev,
-                                            self->sepolicy, FALSE, &cached_rev,
-                                            error))
-            goto out;
-        }
+        if (self->sepolicy)
+          {
+            if (!commit_has_matching_sepolicy (pkgcache_repo, cached_rev,
+                                               self->sepolicy, &sepolicy_matches,
+                                               error))
+              goto out;
+            /* We already did any relabeling/reimporting above */
+            g_assert (sepolicy_matches);
+          }
 
         if (!ostree_repo_load_variant (pkgcache_repo, OSTREE_OBJECT_TYPE_COMMIT, cached_rev,
                                        &pkg_commit, error))
