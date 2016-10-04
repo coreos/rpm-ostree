@@ -1640,13 +1640,9 @@ relabel_one_package (OstreeRepo     *repo,
                              ostree_sepolicy_get_csum (sepolicy));
     }
 
-  /* XXX: Eventually we should find a way to make the header metadata be shared
-   * between commits. Either store it in the tree and put its checksum in the
-   * commit metadata, or just store it in the tree itself (e.g. have a contents/
-   * and a /meta/header). */
     {
       g_autofree char *new_commit_csum = NULL;
-      if (!ostree_repo_write_commit (repo, commit_csum, "", "",
+      if (!ostree_repo_write_commit (repo, NULL, "", "",
                                      g_variant_dict_end (meta_dict),
                                      OSTREE_REPO_FILE (root), &new_commit_csum,
                                      cancellable, error))
