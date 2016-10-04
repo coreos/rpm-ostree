@@ -851,8 +851,6 @@ find_pkg_in_ostree (OstreeRepo     *repo,
                     gboolean       *out_selinux_match,
                     GError        **error)
 {
-  gboolean ret = TRUE;
-
   *out_in_ostree = FALSE;
   *out_selinux_match = FALSE;
 
@@ -863,7 +861,7 @@ find_pkg_in_ostree (OstreeRepo     *repo,
 
       if (!ostree_repo_resolve_rev (repo, cachebranch, TRUE,
                                     &cached_rev, error))
-        goto out;
+        return FALSE;
 
       if (cached_rev)
         {
@@ -874,7 +872,7 @@ find_pkg_in_ostree (OstreeRepo     *repo,
               g_autofree char *cached_rev_sel = NULL;
               if (!find_rev_with_sepolicy (repo, cached_rev, sepolicy,
                                            TRUE, &cached_rev_sel, error))
-                goto out;
+                return FALSE;
 
               if (cached_rev_sel)
                 *out_selinux_match = TRUE;
@@ -882,9 +880,7 @@ find_pkg_in_ostree (OstreeRepo     *repo,
         }
     }
 
-  ret = TRUE;
-out:
-  return ret;
+  return TRUE;
 }
 
 /* determine of all the marked packages, which ones we'll need to download,
