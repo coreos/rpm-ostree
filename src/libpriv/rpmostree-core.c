@@ -1561,8 +1561,6 @@ relabel_one_package (OstreeRepo     *repo,
   g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
   gboolean changed = FALSE;
 
-
-  /* let's just use the branch head */
   if (!ostree_repo_resolve_rev (repo, cachebranch, FALSE,
                                 &commit_csum, error))
     goto out;
@@ -1591,14 +1589,6 @@ relabel_one_package (OstreeRepo     *repo,
   if (!relabel_rootfs (repo, tmprootfs_dfd, sepolicy, &changed,
                        cancellable, error))
     goto out;
-
-  /* XXX: 'changed' now holds whether the policy change actually affected any of
-   * our labels. If it didn't, then we shouldn't have to recommit, which we do
-   * right now unconditionally. Related to the XXX below, maybe we can keep the
-   * list of compatible sepolicy csums in the tree directly under e.g.
-   * /meta/sepolicy/. Make them individual files rather than a single file so
-   * that they can more easily be GC'ed by "refcounting" each sepolicy depending
-   * on the current deployments. */
 
   if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
     goto out;
@@ -1630,7 +1620,7 @@ relabel_one_package (OstreeRepo     *repo,
     if (!ostree_repo_load_commit (repo, commit_csum, &commit_var, NULL, error))
       goto out;
 
-    /* let's just copy the metadata from the head and only change the
+    /* let's just copy the metadata from the previous commit and only change the
      * rpmostree.sepolicy value */
     {
       g_autoptr(GVariant) meta = g_variant_get_child_value (commit_var, 0);
