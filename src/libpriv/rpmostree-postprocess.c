@@ -679,10 +679,6 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
         }
     }
 
-  /* Now, SELinux in Fedora >= 24: https://bugzilla.redhat.com/show_bug.cgi?id=1290659 */
-  if (!glnx_shutil_rm_rf_at (var_dfd, "lib/selinux/targeted", cancellable, error))
-    goto out;
-
   /* Append to an existing one for package layering */
   if ((tmpfiles_fd = TEMP_FAILURE_RETRY (openat (dest_rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
                                                  O_WRONLY | O_CREAT | O_APPEND | O_NOCTTY, 0644))) == -1)
@@ -786,8 +782,24 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
   gboolean ret = FALSE;
   glnx_unref_object OstreeSePolicy *ret_sepolicy = NULL;
   struct stat stbuf;
+  const char *policy_path;
 
-  if (TEMP_FAILURE_RETRY (fstatat (dfd, "usr/etc/selinux", &stbuf, AT_SYMLINK_NOFOLLOW)) != 0)
+  /* Handle the policy being in both /usr/etc and /etc since
+   * this function can be called at different points.
+   */
+  if (fstatat (dfd, "usr/etc", &stbuf, 0) < 0)
+    {
+      if (errno != ENOENT)
+        {
+          glnx_set_error_from_errno (error);
+          goto out;
+        }
+      policy_path = "etc/selinux";
+    }
+  else
+    policy_path = "usr/etc/selinux";
+
+  if (TEMP_FAILURE_RETRY (fstatat (dfd, policy_path, &stbuf, AT_SYMLINK_NOFOLLOW)) != 0)
     {
       if (errno != ENOENT)
         {
@@ -797,11 +809,11 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
     }
   else
     {
-      if (!workaround_selinux_cross_labeling_recurse (dfd, "usr/etc/selinux",
+      if (!workaround_selinux_cross_labeling_recurse (dfd, policy_path,
                                                       cancellable, error))
         goto out;
     }
-      
+
   {
     g_autofree char *abspath = glnx_fdrel_abspath (dfd, path);
     glnx_unref_object GFile *rootfs = g_file_new_for_path (abspath);
@@ -861,8 +873,101 @@ replace_nsswitch (GFile         *target_usretc,
   return ret;
 }
 
+/* SELinux in Fedora >= 24: https://bugzilla.redhat.com/show_bug.cgi?id=1290659 */
+static gboolean
+postprocess_selinux_policy_store_location (int rootfs_dfd,
+                                           GCancellable *cancellable,
+                                           GError **error)
+{
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  glnx_unref_object OstreeSePolicy *sepolicy = NULL;
+  const char *var_policy_location = NULL;
+  const char *etc_policy_location = NULL;
+  struct stat stbuf;
+  const char *name;
+  glnx_fd_close int etc_selinux_dfd = -1;
+
+  if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_dfd, ".", &sepolicy, cancellable, error))
+    return FALSE;
+
+  name = ostree_sepolicy_get_name (sepolicy);
+  if (!name) /* If there's no policy, shortcut here */
+    return TRUE;
+
+  var_policy_location = glnx_strjoina ("var/lib/selinux/", name);
+  if (fstatat (rootfs_dfd, var_policy_location, &stbuf, 0) != 0)
+    {
+      if (errno != ENOENT)
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
+
+      /* Okay, this is probably CentOS 7, or maybe we have a build of
+       * selinux-policy with the path moved back into /etc (or maybe it's
+       * in /usr).
+       */
+      return TRUE;
+    }
+  g_print ("SELinux policy in /var, enabling workaround\n");
+
+  { g_autofree char *orig_contents = NULL;
+    g_autofree char *contents = NULL;
+    const char *semanage_path = "etc/selinux/semanage.conf";
+
+    orig_contents = glnx_file_get_contents_utf8_at (rootfs_dfd, semanage_path, NULL,
+                                                    cancellable, error);
+    if (orig_contents == NULL)
+      {
+        g_prefix_error (error, "Opening %s: ", semanage_path);
+        return FALSE;
+      }
+
+    contents = g_strconcat (orig_contents, "\nstore-root=/etc/selinux\n", NULL);
+
+    if (!glnx_file_replace_contents_at (rootfs_dfd, semanage_path,
+                                        (guint8*)contents, -1, 0,
+                                        cancellable, error))
+      {
+        g_prefix_error (error, "Replacing %s: ", semanage_path);
+        return FALSE;
+      }
+  }
+
+  etc_policy_location = glnx_strjoina ("etc/selinux/", name);
+  if (!glnx_opendirat (rootfs_dfd, etc_policy_location, TRUE, &etc_selinux_dfd, error))
+    {
+      g_prefix_error (error, "Opening %s: ", etc_policy_location);
+      return FALSE;
+    }
+
+  if (!glnx_dirfd_iterator_init_at (rootfs_dfd, var_policy_location, TRUE, &dfd_iter, error))
+    return FALSE;
+
+  /* We take all of the contents of the directory, but not the directory itself */
+  while (TRUE)
+    {
+      struct dirent *dent = NULL;
+      const char *name;
+
+      if (!glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, cancellable, error))
+        return FALSE;
+      if (!dent)
+        break;
+
+      name = dent->d_name;
+      if (renameat (dfd_iter.fd, name, etc_selinux_dfd, name) != 0)
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
+    }
+
+  return TRUE;
+}
+
 /* Prepare a root filesystem, taking mainly the contents of /usr from yumroot */
-static gboolean 
+static gboolean
 create_rootfs_from_yumroot_content (GFile         *targetroot,
                                     GFile         *yumroot,
                                     JsonObject    *treefile,
@@ -876,6 +981,13 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   g_autoptr(GFile) initramfs_path = NULL;
   g_autoptr(GHashTable) preserve_groups_set = NULL;
   gboolean container = FALSE;
+  gboolean selinux = TRUE;
+
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
+                                                               "selinux",
+                                                               &selinux,
+                                                               error))
+    goto out;
 
   if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot), TRUE,
                        &src_rootfs_fd, error))
@@ -923,6 +1035,12 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
     if (!replace_nsswitch (yumroot_etc, cancellable, error))
       goto out;
   }
+
+  if (selinux)
+    {
+      if (!postprocess_selinux_policy_store_location (src_rootfs_fd, cancellable, error))
+        goto out;
+    }
 
   /* We take /usr from the yum content */
   g_print ("Moving /usr and /etc to target\n");
