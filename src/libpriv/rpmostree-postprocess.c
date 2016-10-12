@@ -395,7 +395,7 @@ do_kernel_prep (GFile         *yumroot,
     {
       g_print ("Removing RPM-generated '%s'\n",
                gs_file_get_path_cached (initramfs_path));
-      if (!gs_shutil_rm_rf (initramfs_path, cancellable, error))
+      if (!glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (initramfs_path), cancellable, error))
         goto out;
     }
 
@@ -412,7 +412,7 @@ do_kernel_prep (GFile         *yumroot,
   /* OSTree needs to own this */
   {
     g_autoptr(GFile) loaderdir = g_file_get_child (bootdir, "loader");
-    if (!gs_shutil_rm_rf (loaderdir, cancellable, error))
+    if (!glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (loaderdir), cancellable, error))
       goto out;
   }
 
