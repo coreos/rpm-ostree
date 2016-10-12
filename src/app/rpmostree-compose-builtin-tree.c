@@ -947,13 +947,12 @@ rpmostree_compose_builtin_tree (int             argc,
       gs_fd_close int fd = open (opt_touch_if_changed, O_CREAT|O_WRONLY|O_NOCTTY, 0644);
       if (fd == -1)
         {
-          gs_set_error_from_errno (error, errno);
-          g_prefix_error (error, "Updating '%s': ", opt_touch_if_changed);
+          glnx_set_prefix_error_from_errno (error, "Updating '%s': ", opt_touch_if_changed);
           goto out;
         }
       if (futimens (fd, NULL) == -1)
         {
-          gs_set_error_from_errno (error, errno);
+          glnx_set_error_from_errno (error);
           goto out;
         }
     }
