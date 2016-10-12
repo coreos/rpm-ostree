@@ -125,8 +125,8 @@ dir_contains_uid_or_gid (GFile         *root,
           GFileInfo *file_info;
           GFile *child;
 
-          if (!gs_file_enumerator_iterate (dir_enum, &file_info, &child,
-                                           cancellable, error))
+          if (!g_file_enumerator_iterate (dir_enum, &file_info, &child,
+                                          cancellable, error))
             goto out;
           if (!file_info)
             break;

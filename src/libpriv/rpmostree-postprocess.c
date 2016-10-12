@@ -198,8 +198,8 @@ find_kernel_and_initramfs_in_bootdir (GFile       *bootdir,
       GFileInfo *file_info;
       GFile *child;
 
-      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
-                                       cancellable, error))
+      if (!g_file_enumerator_iterate (direnum, &file_info, &child,
+                                      cancellable, error))
         goto out;
       if (!file_info)
         break;
@@ -262,8 +262,8 @@ find_ensure_one_subdirectory (GFile         *d,
       GFileInfo *file_info;
       GFile *child;
 
-      if (!gs_file_enumerator_iterate (direnum, &file_info, &child,
-                                       cancellable, error))
+      if (!g_file_enumerator_iterate (direnum, &file_info, &child,
+                                      cancellable, error))
         goto out;
       if (!file_info)
         break;
