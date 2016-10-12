@@ -1908,7 +1908,7 @@ read_xattrs_cb (OstreeRepo     *repo,
     };
   guint i;
   g_autoptr(GVariant) existing_xattrs = NULL;
-  gs_free_variant_iter GVariantIter *viter = NULL;
+  g_autoptr(GVariantIter) viter = NULL;
   GError *local_error = NULL;
   GError **error = &local_error;
   GVariant *key, *value;
