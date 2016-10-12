@@ -872,7 +872,7 @@ _rpmostree_gfile2stdio (GFile         *source,
   src_stream = fmemopen (*storage_buf, len, "r");
   if (!src_stream)
     {
-      gs_set_error_from_errno (error, errno);
+      glnx_set_error_from_errno (error);
       goto out;
     }
 
