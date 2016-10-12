@@ -109,14 +109,20 @@ rpmostree_compose_builtin_sign (int            argc,
 
   (void) g_io_stream_close ((GIOStream*)tmp_sig_stream, NULL, NULL);
                                   
-  if (!gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_NULL,
-                                      cancellable, error,
-                                      "rpm-sign",
-                                      "--key", opt_key_id,
-                                      "--detachsign", gs_file_get_path_cached (tmp_commitdata_file),
-                                      "--output", gs_file_get_path_cached (tmp_sig_file),
-                                      NULL))
-    goto out;
+
+  { const char *child_argv[] = { "rpm-sign",
+                                 "--key", opt_key_id,
+                                 "--detachsign", gs_file_get_path_cached (tmp_commitdata_file),
+                                 "--output", gs_file_get_path_cached (tmp_sig_file),
+                                 NULL };
+    int estatus;
+    
+    if (!g_spawn_sync (NULL, (char**)child_argv, NULL, G_SPAWN_SEARCH_PATH, NULL, NULL,
+                       NULL, NULL, &estatus, error))
+      goto out;
+    if (!g_spawn_check_exit_status (estatus, error))
+      goto out;
+  }
 
   {
     char *sigcontent = NULL;
