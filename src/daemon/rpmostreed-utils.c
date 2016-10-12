@@ -217,9 +217,9 @@ out:
 void
 rpmostreed_reboot (GCancellable *cancellable, GError **error)
 {
-  gs_subprocess_simple_run_sync (NULL, GS_SUBPROCESS_STREAM_DISPOSITION_INHERIT,
-                                 cancellable, error,
-                                 "systemctl", "reboot", NULL);
+  const char *child_argv[] = { "systemctl", "reboot", NULL };
+  (void) g_spawn_sync (NULL, (char**)child_argv, NULL, G_SPAWN_CHILD_INHERITS_STDIN | G_SPAWN_SEARCH_PATH,
+		       NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 /**
