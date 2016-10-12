@@ -729,6 +729,15 @@ cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch)
   GString *r = g_string_new ("rpmostree/pkg/");
   append_quoted (r, name);
   g_string_append_c (r, '/');
+  /* Work around the fact that libdnf and librpm have different handling
+   * for an explicit Epoch header of zero.  libdnf right now ignores it,
+   * but librpm will add an explicit 0:.  Since there's no good reason
+   * to have it, let's follow the lead of libdnf.
+   *
+   * https://github.com/projectatomic/rpm-ostree/issues/349
+   */
+  if (g_str_has_prefix (evr, "0:"))
+    evr += 2;
   append_quoted (r, evr);
   g_string_append_c (r, '.');
   append_quoted (r, arch);
