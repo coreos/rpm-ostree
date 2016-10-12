@@ -141,9 +141,9 @@ rpmostree_compose_builtin_sign (int            argc,
 
  out:
   if (tmp_commitdata_file)
-    (void) gs_file_unlink (tmp_commitdata_file, NULL, NULL);
+    (void) unlink (gs_file_get_path_cached (tmp_commitdata_file));
   if (tmp_sig_file)
-    (void) gs_file_unlink (tmp_sig_file, NULL, NULL);
+    (void) unlink (gs_file_get_path_cached (tmp_sig_file));
 
   return exit_status;
 }
