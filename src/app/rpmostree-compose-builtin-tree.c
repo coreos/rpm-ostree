@@ -978,7 +978,7 @@ rpmostree_compose_builtin_tree (int             argc,
           {
             fprintf (stderr, "warning: umount failed: %m\n");
           }
-      (void) gs_shutil_rm_rf (self->workdir, NULL, NULL);
+      (void) glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (self->workdir), NULL, NULL);
     }
   if (self)
     {
