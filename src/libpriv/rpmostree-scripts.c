@@ -183,7 +183,6 @@ run_script_in_bwrap_container (int rootfs_fd,
   gboolean mntpoint_created = FALSE;
   gboolean fuse_mounted = FALSE;
   g_autoptr(GPtrArray) bwrap_argv = g_ptr_array_new ();
-  GSpawnFlags bwrap_spawnflags = G_SPAWN_SEARCH_PATH;
   gboolean created_var_tmp = FALSE;
 
   if (!glnx_mkdtempat (AT_FDCWD, rofiles_mnt, 0700, error))
@@ -253,23 +252,12 @@ run_script_in_bwrap_container (int rootfs_fd,
                   "--symlink", "usr/etc", "/etc",
                   NULL);
 
-  { const char *debugscript = getenv ("RPMOSTREE_DEBUG_SCRIPT");
-    if (g_strcmp0 (debugscript, pkg_script) == 0)
-      {
-        g_ptr_array_add (bwrap_argv, g_strdup ("/bin/bash"));
-        bwrap_spawnflags |= G_SPAWN_CHILD_INHERITS_STDIN;
-      }
-    else
-      {
-        g_ptr_array_add (bwrap_argv, g_strdup (postscript_path_container));
-        /* http://www.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S3-RPM-INSIDE-PRE-SCRIPT */
-        g_ptr_array_add (bwrap_argv, g_strdup ("1"));
-      }
-  }
+  g_ptr_array_add (bwrap_argv, g_strdup (postscript_path_container));
+  /* http://www.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S3-RPM-INSIDE-PRE-SCRIPT */
+  g_ptr_array_add (bwrap_argv, g_strdup ("1"));
   g_ptr_array_add (bwrap_argv, NULL);
 
-  if (!rpmostree_run_sync_fchdir_setup ((char**)bwrap_argv->pdata,
-                                        bwrap_spawnflags, rootfs_fd, error))
+  if (!rpmostree_run_bwrap_sync ((char**)bwrap_argv->pdata, rootfs_fd, error))
     {
       g_prefix_error (error, "Executing bwrap: ");
       goto out;
