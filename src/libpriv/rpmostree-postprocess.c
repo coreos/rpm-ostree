@@ -1797,8 +1797,15 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (postprocess_script)
     {
       const char *bn = glnx_basename (postprocess_script);
-      g_autofree char *src = g_build_filename (gs_file_get_path_cached (context_directory), postprocess_script, NULL);
-      g_autofree char *binpath = g_strconcat ("/usr/bin/rpmostree-postprocess-", bn, NULL);
+      g_autofree char *src = NULL;
+      g_autofree char *binpath = NULL;
+
+      if (g_path_is_absolute (postprocess_script))
+        src = g_strdup (postprocess_script);
+      else
+        src = g_build_filename (gs_file_get_path_cached (context_directory), postprocess_script, NULL);
+
+      binpath = g_strconcat ("/usr/bin/rpmostree-postprocess-", bn, NULL);
       /* Clone all the things */
 
       /* Note we need to make binpath *not* absolute here */
