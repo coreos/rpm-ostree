@@ -108,6 +108,37 @@ rpmostree_run_sync_fchdir_setup (char **argv_array, GSpawnFlags flags,
   return TRUE;
 }
 
+gboolean
+rpmostree_run_bwrap_sync (char **argv_array, int rootfs_fd, GError **error)
+{
+  int estatus;
+  const char *current_lang = getenv ("LANG");
+
+  if (!current_lang)
+    current_lang = "C";
+
+  {
+    const char *lang_var = glnx_strjoina ("LANG=", current_lang);
+    /* This is similar to what systemd does, except:
+     *  - We drop /usr/local, since scripts shouldn't see it.
+     *  - We pull in the current process' LANG, since that's what people
+     *    have historically expected from RPM scripts.
+     */
+    const char *bwrap_env[] = {"PATH=/usr/sbin:/usr/bin",
+                               lang_var,
+                               NULL};
+
+    if (!g_spawn_sync (NULL, argv_array, (char**) bwrap_env, G_SPAWN_SEARCH_PATH,
+                       child_setup_fchdir, GINT_TO_POINTER (rootfs_fd),
+                       NULL, NULL, &estatus, error))
+      return FALSE;
+    if (!g_spawn_check_exit_status (estatus, error))
+      return FALSE;
+  }
+
+  return TRUE;
+}
+
 /* Execute /bin/true inside a bwrap container on the host */
 gboolean
 rpmostree_bwrap_selftest (GError **error)
@@ -127,8 +158,7 @@ rpmostree_bwrap_selftest (GError **error)
                                     NULL);
   g_ptr_array_add (bwrap_argv, g_strdup ("true"));
   g_ptr_array_add (bwrap_argv, NULL);
-  if (!rpmostree_run_sync_fchdir_setup ((char**)bwrap_argv->pdata, G_SPAWN_SEARCH_PATH,
-                                        host_root_dfd, error))
+  if (!rpmostree_run_bwrap_sync ((char**)bwrap_argv->pdata, host_root_dfd, error))
     {
       g_prefix_error (error, "bwrap test failed, see <https://github.com/projectatomic/rpm-ostree/pull/429>: ");
       return FALSE;

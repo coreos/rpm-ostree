@@ -68,7 +68,6 @@ run_sync_in_root_at (int           rootfs_fd,
                      char        **child_argv,
                      GError     **error)
 {
-  const GSpawnFlags bwrap_spawnflags = G_SPAWN_SEARCH_PATH;
   g_autoptr(GPtrArray) bwrap_argv = NULL;
 
   bwrap_argv = rpmostree_bwrap_base_argv_new_for_rootfs (rootfs_fd, error);
@@ -97,8 +96,7 @@ run_sync_in_root_at (int           rootfs_fd,
   }
   g_ptr_array_add (bwrap_argv, NULL);
 
-  if (!rpmostree_run_sync_fchdir_setup ((char**)bwrap_argv->pdata, bwrap_spawnflags,
-                                        rootfs_fd, error))
+  if (!rpmostree_run_bwrap_sync ((char**)bwrap_argv->pdata, rootfs_fd, error))
     {
       g_prefix_error (error, "Executing bwrap: ");
       return FALSE;
