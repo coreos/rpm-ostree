@@ -884,6 +884,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   g_autoptr(GKeyFile) origin = NULL;
   g_autofree char *checksum = NULL;
   g_autofree char *version = NULL;
+  const char *refspec = NULL;
 
   gboolean changed = FALSE;
   gboolean ret = FALSE;
@@ -921,21 +922,20 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                                   error))
     goto out;
 
+  refspec = rpmostree_sysroot_upgrader_get_refspec (upgrader);
+  if (refspec == NULL)
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Could not find refspec for booted deployment");
+      goto out;
+    }
+
   if (version != NULL)
     {
-      const char *refspec = NULL;
 
       rpmostreed_transaction_emit_message_printf (transaction,
                                                   "Resolving version '%s'",
                                                   version);
-
-      refspec = rpmostree_sysroot_upgrader_get_refspec (upgrader);
-      if (refspec == NULL)
-        {
-          g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "Could not find refspec for booted deployment");
-          goto out;
-        }
 
       if (!rpmostreed_repo_lookup_version (repo,
                                            refspec,
@@ -944,6 +944,22 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                                            cancellable,
                                            &checksum,
                                            error))
+        goto out;
+    }
+  else
+    {
+      g_assert (checksum != NULL);
+
+      rpmostreed_transaction_emit_message_printf (transaction,
+                                                  "Validating checksum '%s'",
+                                                  checksum);
+
+      if (!rpmostreed_repo_lookup_checksum (repo,
+                                            refspec,
+                                            checksum,
+                                            progress,
+                                            cancellable,
+                                            error))
         goto out;
     }
 
