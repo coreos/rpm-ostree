@@ -425,6 +425,68 @@ out:
   return ret;
 }
 
+typedef struct {
+  const char *wanted_checksum;
+  gboolean found;
+} ChecksumVisitorClosure;
+
+static gboolean
+checksum_visitor (OstreeRepo  *repo,
+                  const char  *checksum,
+                  GVariant    *commit,
+                  gpointer     user_data,
+                  gboolean    *out_stop,
+                  GError     **error)
+{
+  ChecksumVisitorClosure *closure = user_data;
+  *out_stop = closure->found = g_str_equal (checksum, closure->wanted_checksum);
+  return TRUE;
+}
+
+/**
+ * rpmostreed_repo_lookup_checksum:
+ * @repo: Repo
+ * @refspec: Repository branch
+ * @checksum: Checksum to look for
+ * @progress: (allow-none): Progress
+ * @cancellable: Cancellable
+ * @error: Error
+ *
+ * Tries to determine if the checksum given belongs on the remote and branch
+ * given by @refspec. This may require pulling commit objects from a remote
+ * repository.
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+gboolean
+rpmostreed_repo_lookup_checksum (OstreeRepo           *repo,
+                                 const char           *refspec,
+                                 const char           *checksum,
+                                 OstreeAsyncProgress  *progress,
+                                 GCancellable         *cancellable,
+                                 GError              **error)
+{
+  ChecksumVisitorClosure closure = { checksum, FALSE };
+
+  g_return_val_if_fail (OSTREE_IS_REPO (repo), FALSE);
+  g_return_val_if_fail (refspec != NULL, FALSE);
+  g_return_val_if_fail (checksum != NULL, FALSE);
+
+  if (!rpmostreed_repo_pull_ancestry (repo, refspec,
+                                      checksum_visitor, &closure,
+                                      progress, cancellable, error))
+    return FALSE;
+
+  if (!closure.found)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND,
+                   "Checksum %s not found in %s", checksum, refspec);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
 /**
  * rpmostreed_repo_lookup_cached_version:
  * @repo: Repo
