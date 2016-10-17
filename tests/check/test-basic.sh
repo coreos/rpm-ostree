@@ -23,7 +23,7 @@ set -e
 
 ensure_dbus
 
-echo "1..9"
+echo "1..10"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -99,6 +99,15 @@ rpm-ostree deploy --os=testos REVISION=$revision
 rpm-ostree status | head --lines 5 | tee OUTPUT-status.txt
 assert_file_has_content OUTPUT-status.txt '1\.0\.9'
 echo "ok deploy older version by revision"
+
+# Make a commit on a different branch and make sure that it doesn't let us
+# deploy it
+other_rev=$(ostree --repo=${test_tmpdir}/testos-repo commit -b other-branch --tree=ref=$revision)
+if rpm-ostree deploy --os=testos REVISION=$other_rev 2>OUTPUT-err; then
+    assert_not_reached "Deploying an out-of-branch commit unexpectedly succeeded."
+fi
+assert_file_has_content OUTPUT-err 'Checksum .* not found in .*'
+echo "ok error on deploying commit on other branch"
 
 # Ensure it returns an error when passing a wrong option.
 rpm-ostree --help | awk '/^$/ {in_commands=0} {if(in_commands==1){print $0}} /^Builtin Commands:/ {in_commands=1}' > commands
