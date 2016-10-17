@@ -64,6 +64,7 @@ gboolean
 rpmostree_commit (int            rootfs_dfd,
                   OstreeRepo    *repo,
                   const char    *refname,
+                  gboolean      no_update_ref,
                   GVariant      *metadata,
                   const char    *gpg_keyid,
                   gboolean       enable_selinux,
