@@ -54,6 +54,7 @@ static char **opt_override_pkg_repos;
 static char *opt_touch_if_changed;
 static gboolean opt_dry_run;
 static gboolean opt_print_only;
+static char *opt_write_commitid_to;
 
 static GOptionEntry option_entries[] = {
   { "add-metadata-string", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_strings, "Append given key and value (in string format) to metadata", "KEY=VALUE" },
@@ -69,6 +70,7 @@ static GOptionEntry option_entries[] = {
   { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if a new commit was created", "FILE" },
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
   { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
+  { "write-commitid-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_commitid_to, "File to write the composed commitid to instead of updating the ref", "FILE" },
   { NULL }
 };
 
@@ -932,7 +934,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
     { g_autofree char *new_revision = NULL;
 
-      if (!rpmostree_commit (rootfs_fd, repo, self->ref, metadata, gpgkey, selinux, NULL,
+      if (!rpmostree_commit (rootfs_fd, repo, self->ref, opt_write_commitid_to, metadata, gpgkey, selinux, NULL,
                              &new_revision,
                              cancellable, error))
         goto out;
