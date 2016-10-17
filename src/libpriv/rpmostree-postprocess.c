@@ -2039,6 +2039,7 @@ gboolean
 rpmostree_commit (int            rootfs_fd,
                   OstreeRepo    *repo,
                   const char    *refname,
+                  gboolean      no_update_ref,
                   GVariant      *metadata,
                   const char    *gpg_keyid,
                   gboolean       enable_selinux,
@@ -2144,7 +2145,7 @@ rpmostree_commit (int            rootfs_fd,
         goto out;
     }
   
-  if (refname)
+  if (refname && !no_update_ref)
     ostree_repo_transaction_set_ref (repo, NULL, refname, new_revision);
 
   if (!ostree_repo_commit_transaction (repo, &stats, cancellable, error))
