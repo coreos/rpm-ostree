@@ -739,59 +739,6 @@ out:
 }
 
 static gboolean
-checkout_min_tree_in_tmp (OstreeRepo            *repo,
-                          const char            *revision,
-                          char                 **out_tmprootfs,
-                          int                   *out_tmprootfs_dfd,
-                          GCancellable          *cancellable,
-                          GError               **error)
-{
-  gboolean ret = FALSE;
-  g_autofree char *tmprootfs = NULL;
-  glnx_fd_close int tmprootfs_dfd = -1;
-  int repo_dfd = ostree_repo_get_dfd (repo); /* borrowed */
-
-  {
-    g_autofree char *template = NULL;
-    template = glnx_fdrel_abspath (repo_dfd, "tmp/rpmostree-commit-XXXXXX");
-
-    if (!rpmostree_checkout_only_rpmdb_tempdir (repo, revision, template,
-                                                &tmprootfs, &tmprootfs_dfd,
-                                                cancellable, error))
-      goto out;
-  }
-
-  /* also check out sepolicy so that prepare_install() will be able to sort the
-   * packages correctly */
-  {
-    OstreeRepoCheckoutAtOptions opts = {0,};
-
-    if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "usr/etc", 0777,
-                                 cancellable, error))
-      goto out;
-
-    opts.subpath = "usr/etc/selinux";
-
-    if (!ostree_repo_checkout_at (repo, &opts, tmprootfs_dfd,
-                                  "usr/etc/selinux", revision,
-                                  cancellable, error))
-      goto out;
-  }
-
-  if (out_tmprootfs != NULL)
-    *out_tmprootfs = g_steal_pointer (&tmprootfs);
-
-  if (out_tmprootfs_dfd != NULL)
-    *out_tmprootfs_dfd = glnx_steal_fd (&tmprootfs_dfd);
-
-  ret = TRUE;
-out:
-  if (tmprootfs_dfd != -1)
-    glnx_shutil_rm_rf_at (AT_FDCWD, tmprootfs, cancellable, NULL);
-  return ret;
-}
-
-static gboolean
 checkout_tree_in_tmp (OstreeRepo            *repo,
                       const char            *revision,
                       OstreeRepoDevInoCache *devino_cache,
@@ -1026,44 +973,8 @@ out:
 }
 
 static gboolean
-final_assembly (RpmOstreeSysrootUpgrader *self,
-                RpmOstreeContext         *ctx,
-                OstreeRepo               *repo,
-                const char               *base_rev,
-                GCancellable             *cancellable,
-                GError                  **error)
-{
-  gboolean ret = FALSE;
-  g_autofree char *tmprootfs = NULL;
-  glnx_fd_close int tmprootfs_dfd = -1;
-  OstreeRepoDevInoCache *devino_cache = ostree_repo_devino_cache_new ();
-
-  /* Now, we create a new tmprootfs containing the *full* tree. Yes, we're
-   * wasting an already partially checked out tmprootfs, but some of that stuff
-   * is checked out in user mode, plus the dir perms are all made up. */
-  if (!checkout_tree_in_tmp (repo, base_rev, devino_cache, &tmprootfs,
-                             &tmprootfs_dfd, cancellable, error))
-    goto out;
-
-  /* --- Overlay and commit --- */
-  if (!rpmostree_context_assemble_commit (ctx, tmprootfs_dfd, devino_cache,
-                                          base_rev,
-                                          (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS) > 0,
-                                          &self->new_revision,
-                                          cancellable, error))
-    goto out;
-
-  ret = TRUE;
-out:
-  if (devino_cache)
-    ostree_repo_devino_cache_unref (devino_cache);
-  if (tmprootfs_dfd != -1)
-    glnx_shutil_rm_rf_at (AT_FDCWD, tmprootfs, cancellable, NULL);
-  return ret;
-}
-
-static gboolean
 overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
+                      OstreeRepoDevInoCache    *devino_cache,
                       const char               *tmprootfs,
                       int                       tmprootfs_dfd,
                       OstreeRepo               *repo,
@@ -1092,7 +1003,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
     g_autofree char *reposdir = g_build_filename (merge_deployment_root,
                                                   "etc/yum.repos.d", NULL);
     dnf_context_set_repo_dir (hifctx, reposdir);
-    dnf_context_set_source_root (hifctx, merge_deployment_root);
+    dnf_context_set_source_root (hifctx, tmprootfs);
   }
 
   /* load the sepolicy to use during import */
@@ -1151,8 +1062,12 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   if (!rpmostree_context_relabel (ctx, install, cancellable, error))
     goto out;
 
-  /* --- Overlay packages on base layer --- */
-  if (!final_assembly (self, ctx, repo, base_rev, cancellable, error))
+  /* --- Overlay and commit --- */
+  if (!rpmostree_context_assemble_commit (ctx, tmprootfs_dfd, devino_cache,
+                                          base_rev,
+                                          (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS) > 0,
+                                          &self->new_revision,
+                                          cancellable, error))
     goto out;
 
   ret = TRUE;
@@ -1167,6 +1082,7 @@ overlay_packages (RpmOstreeSysrootUpgrader *self,
 {
   gboolean ret = FALSE;
   glnx_unref_object OstreeRepo *repo = NULL;
+  OstreeRepoDevInoCache *devino_cache = ostree_repo_devino_cache_new ();
   g_autofree char *tmprootfs = NULL;
   glnx_fd_close int tmprootfs_dfd = -1;
   g_autofree char *base_rev = NULL;
@@ -1189,12 +1105,8 @@ overlay_packages (RpmOstreeSysrootUpgrader *self,
   else
     base_rev = g_strdup (self->new_revision);
 
-  /* create a tmprootfs in which we initially only check out the bare minimum to
-   * make libhif happy. this allows us to provide more immediate feedback to the
-   * user if e.g. resolving/downloading/etc... goes wrong without making them
-   * wait for a full tree checkout first. */
-  if (!checkout_min_tree_in_tmp (repo, base_rev, &tmprootfs, &tmprootfs_dfd,
-                                 cancellable, error))
+  if (!checkout_tree_in_tmp (repo, base_rev, devino_cache, &tmprootfs,
+                             &tmprootfs_dfd, cancellable, error))
     goto out;
 
   /* check if there are any items in requested_packages or pkgs_to_add that are
@@ -1203,22 +1115,26 @@ overlay_packages (RpmOstreeSysrootUpgrader *self,
                                     cancellable, error))
     goto out;
 
-  /* trivial case: no packages to overlay */
+  /* Now, it's possible all requested packages are in the new tree, so
+   * we have another optimization here for that case.
+   */
   if (g_strv_length (self->requested_packages) == 0)
     {
-      /* XXX: check if there's a function for this */
       g_free (self->new_revision);
       self->new_revision = g_steal_pointer (&base_rev);
     }
   else
     {
-      if (!overlay_final_pkgset (self, tmprootfs, tmprootfs_dfd, repo, base_rev,
+      if (!overlay_final_pkgset (self, devino_cache, tmprootfs, tmprootfs_dfd,
+                                 repo, base_rev,
                                  cancellable, error))
         goto out;
     }
 
   ret = TRUE;
 out:
+  if (devino_cache)
+    ostree_repo_devino_cache_unref (devino_cache);
   if (tmprootfs_dfd != -1)
     glnx_shutil_rm_rf_at (AT_FDCWD, tmprootfs, cancellable, NULL);
   return ret;
