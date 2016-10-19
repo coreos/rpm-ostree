@@ -1114,8 +1114,9 @@ overlay_packages (RpmOstreeSysrootUpgrader *self,
                                     cancellable, error))
     goto out;
 
-  /* Now, it's possible all requested packages are in the new tree, so
-   * we have another optimization here for that case.
+  /* Now, it's possible all requested packages are in the new tree (or
+   * that the user wants to stop overlaying them), so we have another
+   * optimization here for that case.
    */
   if (g_strv_length (self->requested_packages) == 0)
     {
