@@ -111,7 +111,6 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
                                          GError                      **error)
 {
   gboolean ret = FALSE;
-  g_autofree char *ret_checksum = NULL;
   GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA256);
   
   /* Hash in the raw treefile; this means reordering the input packages
@@ -166,11 +165,9 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
   /* Hash in each package */
   rpmostree_dnf_add_checksum_goal (checksum, goal);
 
-  ret_checksum = g_strdup (g_checksum_get_string (checksum));
-
   ret = TRUE;
+  *out_checksum = g_strdup (g_checksum_get_string (checksum));
  out:
-  gs_transfer_out_value (out_checksum, &ret_checksum);
   if (checksum) g_checksum_free (checksum);
   return ret;
 }
@@ -395,7 +392,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   ret = TRUE;
   if (out_unmodified)
     *out_unmodified = FALSE;
-  gs_transfer_out_value (out_new_inputhash, &ret_new_inputhash);
+  *out_new_inputhash = g_steal_pointer (&ret_new_inputhash);
  out:
   return ret;
 }

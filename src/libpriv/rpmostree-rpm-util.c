@@ -895,8 +895,10 @@ rpmostree_get_pkglist_for_root (int               dfd,
   pkglist = hy_query_run (query);
 
   ret = TRUE;
-  gs_transfer_out_value (out_refsack, &refsack);
-  gs_transfer_out_value (out_pkglist, &pkglist);
+  if (out_refsack)
+    *out_refsack = g_steal_pointer (&refsack);
+  if (out_pkglist)
+    *out_pkglist = g_steal_pointer (&pkglist);
  out:
   if (query)
     hy_query_free (query);

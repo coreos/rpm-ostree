@@ -117,7 +117,7 @@ rpmostree_db_option_context_parse (GOptionContext *context,
       goto out;
     }
 
-  gs_transfer_out_value (out_repo, &repo);
+  *out_repo = g_steal_pointer (&repo);
 
   success = TRUE;
 out:
