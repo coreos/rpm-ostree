@@ -260,32 +260,29 @@ _rpmostree_file_load_contents_utf8_allow_noent (GFile          *path,
 
 gboolean
 _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
-                                           GFile        *src,
+                                           int           dfd,
+                                           const char   *path,
                                            GCancellable *cancellable,
                                            GError      **error)
 {
-  gboolean ret = FALSE;
-  gsize bytes_read;
-  char buf[4096];
-  g_autoptr(GInputStream) filein = NULL;
+  glnx_fd_close int fd = -1;
+  g_autoptr(GMappedFile) mfile = NULL;
 
-  filein = (GInputStream*)g_file_read (src, cancellable, error);
-  if (!filein)
-    goto out;
-
-  do
+  fd = openat (dfd, path, O_RDONLY | O_CLOEXEC);
+  if (fd < 0)
     {
-      if (!g_input_stream_read_all (filein, buf, sizeof(buf), &bytes_read,
-                                    cancellable, error))
-        goto out;
-
-      g_checksum_update (checksum, (guint8*)buf, bytes_read);
+      glnx_set_error_from_errno (error);
+      return FALSE;
     }
-  while (bytes_read > 0);
 
-  ret = TRUE;
- out:
-  return ret;
+  mfile = g_mapped_file_new_from_fd (fd, FALSE, error);
+  if (!mfile)
+    return FALSE;
+
+  g_checksum_update (checksum, (guint8*)g_mapped_file_get_contents (mfile),
+                     g_mapped_file_get_length (mfile));
+
+  return TRUE;
 }
 
 static char *

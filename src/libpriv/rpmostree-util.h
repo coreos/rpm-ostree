@@ -72,7 +72,8 @@ _rpmostree_file_load_contents_utf8_allow_noent (GFile          *path,
 
 gboolean
 _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
-                                           GFile        *src,
+                                           int           rootfs_dfd,
+                                           const char   *path,
                                            GCancellable *cancellable,
                                            GError      **error);
 
