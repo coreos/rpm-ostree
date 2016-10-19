@@ -17,6 +17,13 @@
 
 include Makefile-decls.am
 
+newname = nts
+if BUILDOPT_NEW_NAME
+primaryname = $(newname)
+else
+primaryname = rpm-ostree
+endif
+
 SUBDIRS += .
 
 if ENABLE_GTK_DOC
@@ -39,6 +46,7 @@ GITIGNOREFILES += build-aux/ gtk-doc.make config.h.in aclocal.m4
 
 SED_SUBST = sed \
         -e 's,[@]libexecdir[@],$(libexecdir),g' \
+        -e 's,[@]primaryname[@],$(primaryname),g' \
         $(NULL)
 
 libglnx_srcpath := $(srcdir)/libglnx

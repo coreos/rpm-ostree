@@ -1,5 +1,5 @@
 [D-BUS Service]
 Name=org.projectatomic.rpmostree1
-Exec=@libexecdir@/rpm-ostreed
+Exec=@libexecdir@/@primaryname@d
 User=root
-SystemdService=rpm-ostreed.service
+SystemdService=@primaryname@d.service
