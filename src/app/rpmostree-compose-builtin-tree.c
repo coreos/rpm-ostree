@@ -149,7 +149,8 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
           srcfile = g_file_resolve_relative_path (contextdir, src);
 
           if (!_rpmostree_util_update_checksum_from_file (checksum,
-                                                          srcfile,
+                                                          AT_FDCWD,
+                                                          gs_file_get_path_cached (srcfile),
                                                           NULL,
                                                           error))
             goto out;

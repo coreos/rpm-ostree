@@ -105,20 +105,6 @@ run_sync_in_root_at (int           rootfs_fd,
   return TRUE;
 }
 
-static gboolean
-run_sync_in_root (GFile *path,
-                  const char   *binpath,
-                  char        **child_argv,
-                  GError     **error)
-{
-  glnx_fd_close int dfd = -1;
-  
-  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (path), TRUE, &dfd, error))
-    return FALSE;
-
-  return run_sync_in_root_at (dfd, binpath, child_argv, error);
-}
-
 typedef struct {
   const char *target;
   const char *src;
@@ -174,35 +160,49 @@ init_rootfs (GFile         *targetroot,
 }
 
 static gboolean
-find_kernel_and_initramfs_in_bootdir (GFile       *bootdir,
-                                      GFile      **out_kernel,
-                                      GFile      **out_initramfs,
+find_kernel_and_initramfs_in_bootdir (int          rootfs_dfd,
+                                      const char  *bootdir,
+                                      char       **out_kernel,
+                                      char       **out_initramfs,
                                       GCancellable *cancellable,
                                       GError     **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(GFileEnumerator) direnum = NULL;
-  g_autoptr(GFile) ret_kernel = NULL;
-  g_autoptr(GFile) ret_initramfs = NULL;
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  glnx_fd_close int dfd = -1;
+  g_autofree char* ret_kernel = NULL;
+  g_autofree char* ret_initramfs = NULL;
 
-  direnum = g_file_enumerate_children (bootdir, "standard::name", 0, 
-                                       cancellable, error);
-  if (!direnum)
-    goto out;
+  *out_kernel = *out_initramfs = NULL;
+
+  dfd = glnx_opendirat_with_errno (rootfs_dfd, bootdir, FALSE);
+  if (dfd < 0)
+    {
+      if (errno == ENOENT)
+        return TRUE;
+      else
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
+    }
+  if (!glnx_dirfd_iterator_init_take_fd (dfd, &dfd_iter, error))
+    return FALSE;
+  dfd = -1;
 
   while (TRUE)
     {
+      struct dirent *dent = NULL;
       const char *name;
-      GFileInfo *file_info;
-      GFile *child;
 
-      if (!g_file_enumerator_iterate (direnum, &file_info, &child,
-                                      cancellable, error))
-        goto out;
-      if (!file_info)
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
+        return FALSE;
+      if (!dent)
         break;
 
-      name = g_file_info_get_name (file_info);
+      if (dent->d_type != DT_REG)
+        continue;
+
+      name = dent->d_name;
 
       /* Current Fedora 23 kernel.spec installs as just vmlinuz */
       if (strcmp (name, "vmlinuz") == 0 || g_str_has_prefix (name, "vmlinuz-"))
@@ -211,29 +211,26 @@ find_kernel_and_initramfs_in_bootdir (GFile       *bootdir,
             {
               g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                            "Multiple vmlinuz- in %s",
-                           gs_file_get_path_cached (bootdir));
-              goto out;
+                           bootdir);
+              return FALSE;
             }
-          ret_kernel = g_object_ref (child);
+          ret_kernel = g_strconcat (bootdir, "/", name, NULL);
         }
       else if (g_str_has_prefix (name, "initramfs-"))
         {
           if (ret_initramfs)
             {
               g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Multiple initramfs- in %s",
-                           gs_file_get_path_cached (bootdir));
-              goto out;
+                           "Multiple initramfs- in %s", bootdir);
+              return FALSE;
             }
-          ret_initramfs = g_object_ref (child);
+          ret_initramfs = g_strconcat (bootdir, "/", name, NULL);
         }
     }
 
-  ret = TRUE;
   *out_kernel = g_steal_pointer (&ret_kernel);
   *out_initramfs = g_steal_pointer (&ret_initramfs);
- out:
-  return ret;
+  return TRUE;
 }
 
 /* Given a directory @d, find the first child that is a directory,
@@ -241,51 +238,45 @@ find_kernel_and_initramfs_in_bootdir (GFile       *bootdir,
  * return an error.
  */
 static gboolean
-find_ensure_one_subdirectory (GFile         *d,
-                              GFile        **out_subdir,
+find_ensure_one_subdirectory (int            rootfs_dfd,
+                              const char    *subpath,
+                              char         **out_subdir,
                               GCancellable  *cancellable,
                               GError       **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(GFileEnumerator) direnum = NULL;
-  g_autoptr(GFile) ret_subdir = NULL;
+  g_autofree char *ret_subdir = NULL;
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
 
-  direnum = g_file_enumerate_children (d, "standard::name,standard::type", 0, 
-                                       cancellable, error);
-  if (!direnum)
-    goto out;
+  if (!glnx_dirfd_iterator_init_at (rootfs_dfd, subpath, TRUE, &dfd_iter, error))
+    return FALSE;
 
   while (TRUE)
     {
-      GFileInfo *file_info;
-      GFile *child;
+      struct dirent *dent = NULL;
 
-      if (!g_file_enumerator_iterate (direnum, &file_info, &child,
-                                      cancellable, error))
-        goto out;
-      if (!file_info)
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
+        return FALSE;
+      if (!dent)
         break;
 
-      if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_DIRECTORY)
+      if (dent->d_type != DT_DIR)
+        continue;
+
+      if (ret_subdir)
         {
-          if (ret_subdir)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Multiple subdirectories found in: %s", gs_file_get_path_cached (d));
-              goto out;
-            }
-          ret_subdir = g_object_ref (child);
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Multiple subdirectories found in: %s", subpath);
+          return FALSE;
         }
+      ret_subdir = g_strconcat (subpath, "/", dent->d_name, NULL);
     }
 
-  ret = TRUE;
   *out_subdir = g_steal_pointer (&ret_subdir);
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
-dracut_supports_reproducible (GFile *root, gboolean *supported,
+dracut_supports_reproducible (int rootfs_dfd, gboolean *supported,
                               GCancellable  *cancellable, GError **error)
 {
   int pid, stdout[2];
@@ -318,7 +309,7 @@ dracut_supports_reproducible (GFile *root, gboolean *supported,
           || dup2 (null, 2) < 0)
         _exit (1);
 
-      run_sync_in_root (root, "dracut", child_argv, NULL);
+      run_sync_in_root_at (rootfs_dfd, "dracut", child_argv, NULL);
       _exit (1);
     }
   else
@@ -345,38 +336,38 @@ dracut_supports_reproducible (GFile *root, gboolean *supported,
 }
 
 static gboolean
-do_kernel_prep (GFile         *yumroot,
+do_kernel_prep (int            rootfs_dfd,
                 JsonObject    *treefile,
                 GCancellable  *cancellable,
                 GError       **error)
 {
   gboolean ret = FALSE;
-  g_autoptr(GFile) bootdir = 
-    g_file_get_child (yumroot, "boot");
-  g_autoptr(GFile) kernel_path = NULL;
-  g_autoptr(GFile) initramfs_path = NULL;
+  g_autofree char* kernel_path = NULL;
+  g_autofree char* initramfs_path = NULL;
   const char *boot_checksum_str = NULL;
-  GChecksum *boot_checksum = NULL;
-  g_autofree char *kver = NULL;
+  g_autoptr(GChecksum) boot_checksum = NULL;
+  const char *kver = NULL;
+  g_autofree char *bootdir = g_strdup ("boot");
 
-  if (!find_kernel_and_initramfs_in_bootdir (bootdir, &kernel_path,
-                                             &initramfs_path,
+  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
+                                             &kernel_path, &initramfs_path,
                                              cancellable, error))
     goto out;
 
   if (kernel_path == NULL)
     {
-      g_autoptr(GFile) mod_dir = g_file_resolve_relative_path (yumroot, "usr/lib/modules");
-      g_autoptr(GFile) modversion_dir = NULL;
+      g_autofree char* modversion_dir = NULL;
 
-      if (!find_ensure_one_subdirectory (mod_dir, &modversion_dir, cancellable, error))
+      if (!find_ensure_one_subdirectory (rootfs_dfd, "usr/lib/modules", &modversion_dir,
+                                         cancellable, error))
         goto out;
 
       if (modversion_dir)
         {
-          kver = g_file_get_basename (modversion_dir);
-          if (!find_kernel_and_initramfs_in_bootdir (modversion_dir, &kernel_path,
-                                                     &initramfs_path,
+          kver = glnx_basename (modversion_dir);
+          bootdir = g_steal_pointer (&modversion_dir);
+          if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
+                                                     &kernel_path, &initramfs_path,
                                                      cancellable, error))
             goto out;
         }
@@ -385,21 +376,20 @@ do_kernel_prep (GFile         *yumroot,
   if (kernel_path == NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Unable to find kernel (vmlinuz) in /boot or /usr/lib/modules");
+                   "Unable to find kernel (vmlinuz) in /boot or /usr/lib/modules (bootdir=%s)", bootdir);
       goto out;
     }
       
   if (initramfs_path)
     {
-      g_print ("Removing RPM-generated '%s'\n",
-               gs_file_get_path_cached (initramfs_path));
-      if (!glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (initramfs_path), cancellable, error))
+      g_print ("Removing RPM-generated '%s'\n", initramfs_path);
+      if (!glnx_shutil_rm_rf_at (rootfs_dfd, initramfs_path, cancellable, error))
         goto out;
     }
 
   if (!kver)
     {
-      const char *kname = gs_file_get_basename_cached (kernel_path);
+      const char *kname = glnx_basename (kernel_path);
       const char *kver_p;
 
       kver_p = strchr (kname, '-');
@@ -408,15 +398,12 @@ do_kernel_prep (GFile         *yumroot,
     }
 
   /* OSTree needs to own this */
-  {
-    g_autoptr(GFile) loaderdir = g_file_get_child (bootdir, "loader");
-    if (!glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (loaderdir), cancellable, error))
-      goto out;
-  }
+  if (!glnx_shutil_rm_rf_at (rootfs_dfd, "boot/loader", cancellable, error))
+    goto out;
 
   {
     char *child_argv[] = { "depmod", (char*)kver, NULL };
-    if (!run_sync_in_root (yumroot, "depmod", child_argv, error))
+    if (!run_sync_in_root_at (rootfs_dfd, "depmod", child_argv, error))
       goto out;
   }
 
@@ -424,22 +411,16 @@ do_kernel_prep (GFile         *yumroot,
      doesn't work when the file is missing (as of systemd-219-9.fc22) but it is
      correctly populated if the file is there.  */
   g_print ("Creating empty machine-id\n");
-  {
-    const char *hardcoded_machine_id = "";
-    g_autoptr(GFile) machineid_path =
-      g_file_resolve_relative_path (yumroot, "etc/machine-id");
-    if (!g_file_replace_contents (machineid_path, hardcoded_machine_id,
-                                  strlen (hardcoded_machine_id),
-                                  NULL, FALSE, 0, NULL,
-                                  cancellable, error))
-      goto out;
-  }
+  if (!glnx_file_replace_contents_at (rootfs_dfd, "etc/machine-id", (guint8*)"", 0,
+                                      GLNX_FILE_REPLACE_NODATASYNC,
+                                      cancellable, error))
+    goto out;
 
   {
     gboolean reproducible;
     g_autoptr(GPtrArray) dracut_argv = g_ptr_array_new ();
 
-    if (!dracut_supports_reproducible (yumroot, &reproducible, cancellable, error))
+    if (!dracut_supports_reproducible (rootfs_dfd, &reproducible, cancellable, error))
       goto out;
 
     g_ptr_array_add (dracut_argv, "dracut");
@@ -475,67 +456,52 @@ do_kernel_prep (GFile         *yumroot,
 
     g_ptr_array_add (dracut_argv, NULL);
 
-    if (!run_sync_in_root (yumroot, "dracut", (char**)dracut_argv->pdata, error))
+    if (!run_sync_in_root_at (rootfs_dfd, "dracut", (char**)dracut_argv->pdata, error))
       goto out;
   }
 
-  initramfs_path = g_file_resolve_relative_path (yumroot, "var/tmp/initramfs.img");
-  if (!g_file_query_exists (initramfs_path, NULL))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Dracut failed to generate '%s'",
-                   gs_file_get_path_cached (initramfs_path));
-      goto out;
-    }
+  { g_autofree char *initramfs_dest = g_strconcat (bootdir, "/initramfs-", kver, ".img", NULL);
 
-  {
-    g_autofree char *initramfs_name = g_strconcat ("initramfs-", kver, ".img", NULL);
-    g_autoptr(GFile) initramfs_dest =
-      g_file_get_child (bootdir, initramfs_name);
+    if (renameat (rootfs_dfd, "var/tmp/initramfs.img", rootfs_dfd, initramfs_dest) < 0)
+      {
+        glnx_set_prefix_error_from_errno (error, "Processing initramfs %s", initramfs_path);
+        goto out;
+      }
 
-    if (!gs_file_rename (initramfs_path, initramfs_dest,
-                         cancellable, error))
-      goto out;
-
-    /* Transfer ownership */
-    g_object_unref (initramfs_path);
-    initramfs_path = initramfs_dest;
-    initramfs_dest = NULL;
+    g_free (initramfs_path);
+    initramfs_path = g_steal_pointer (&initramfs_dest);
   }
 
   boot_checksum = g_checksum_new (G_CHECKSUM_SHA256);
-  if (!_rpmostree_util_update_checksum_from_file (boot_checksum, kernel_path,
+  if (!_rpmostree_util_update_checksum_from_file (boot_checksum, rootfs_dfd, kernel_path,
                                                   cancellable, error))
     goto out;
-  if (!_rpmostree_util_update_checksum_from_file (boot_checksum, initramfs_path,
+  if (!_rpmostree_util_update_checksum_from_file (boot_checksum, rootfs_dfd, initramfs_path,
                                                   cancellable, error))
     goto out;
 
   boot_checksum_str = g_checksum_get_string (boot_checksum);
   
   {
-    g_autofree char *new_kernel_name =
-      g_strconcat (gs_file_get_basename_cached (kernel_path), "-",
-                   boot_checksum_str, NULL);
-    g_autoptr(GFile) new_kernel_path =
-      g_file_get_child (bootdir, new_kernel_name);
-    g_autofree char *new_initramfs_name =
-      g_strconcat (gs_file_get_basename_cached (initramfs_path), "-",
-                   boot_checksum_str, NULL);
-    g_autoptr(GFile) new_initramfs_path =
-      g_file_get_child (bootdir, new_initramfs_name);
+    g_autofree char *new_kernel_path =
+      g_strconcat (bootdir, "/", glnx_basename (kernel_path), "-", boot_checksum_str, NULL);
+    g_autofree char *new_initramfs_path =
+      g_strconcat (bootdir, "/", glnx_basename (initramfs_path), "-", boot_checksum_str, NULL);
 
-    if (!gs_file_rename (kernel_path, new_kernel_path,
-                         cancellable, error))
-      goto out;
-    if (!gs_file_rename (initramfs_path, new_initramfs_path,
-                         cancellable, error))
-      goto out;
+    if (renameat (rootfs_dfd, kernel_path, rootfs_dfd, new_kernel_path) < 0)
+      {
+        glnx_set_error_from_errno (error);
+        goto out;
+      }
+    if (renameat (rootfs_dfd, initramfs_path, rootfs_dfd, new_initramfs_path) < 0)
+      {
+        glnx_set_error_from_errno (error);
+        goto out;
+      }
   }
 
   ret = TRUE;
  out:
-  if (boot_checksum) g_checksum_free (boot_checksum);
   return ret;
 }
 
@@ -998,7 +964,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
     goto out;
 
   g_print ("Preparing kernel\n");
-  if (!container && !do_kernel_prep (yumroot, treefile, cancellable, error))
+  if (!container && !do_kernel_prep (src_rootfs_fd, treefile, cancellable, error))
     goto out;
   
   g_print ("Initializing rootfs\n");
