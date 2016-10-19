@@ -593,7 +593,7 @@ rpmostree_compose_builtin_tree (int             argc,
   g_autoptr(GFile) treefile_dirpath = NULL;
   g_autoptr(GFile) repo_path = NULL;
   glnx_unref_object JsonParser *treefile_parser = NULL;
-  gs_unref_variant_builder GVariantBuilder *metadata_builder = 
+  g_autoptr(GVariantBuilder) metadata_builder = 
     g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
   g_autoptr(RpmOstreeContext) corectx = NULL;
   g_autoptr(GHashTable) varsubsts = NULL;
