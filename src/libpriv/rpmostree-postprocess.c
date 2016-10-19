@@ -230,8 +230,8 @@ find_kernel_and_initramfs_in_bootdir (GFile       *bootdir,
     }
 
   ret = TRUE;
-  gs_transfer_out_value (out_kernel, &ret_kernel);
-  gs_transfer_out_value (out_initramfs, &ret_initramfs);
+  *out_kernel = g_steal_pointer (&ret_kernel);
+  *out_initramfs = g_steal_pointer (&ret_initramfs);
  out:
   return ret;
 }
@@ -279,7 +279,7 @@ find_ensure_one_subdirectory (GFile         *d,
     }
 
   ret = TRUE;
-  gs_transfer_out_value (out_subdir, &ret_subdir);
+  *out_subdir = g_steal_pointer (&ret_subdir);
  out:
   return ret;
 }

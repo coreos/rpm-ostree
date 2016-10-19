@@ -222,7 +222,7 @@ _rpmostree_util_enumerate_directory_allow_noent (GFile               *dirpath,
     }
 
   ret = TRUE;
-  gs_transfer_out_value (out_direnum, &ret_direnum);
+  *out_direnum = g_steal_pointer (&ret_direnum);
  out:
   return ret;
 }
@@ -253,7 +253,7 @@ _rpmostree_file_load_contents_utf8_allow_noent (GFile          *path,
     }
 
   ret = TRUE;
-  gs_transfer_out_value (out_contents, &ret_contents);
+  *out_contents = g_steal_pointer (&ret_contents);
  out:
   return ret;
 }
