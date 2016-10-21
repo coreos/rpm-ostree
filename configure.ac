@@ -120,9 +120,7 @@ if test x$enable_compose_tooling != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_F
 
 dnl Try to automatically determine cmake type from CFLAGS
 if $(echo $CFLAGS |grep -q -e "-O0"); then
-  cmake_args="-DCMAKE_BUILD_TYPE=Debug \
-        -DCMAKE_C_FLAGS_DEBUG:STRING='-ggdb -O0' \
-        -DCMAKE_CXX_FLAGS_DEBUG:STRING=-ggdb -O0'"
+  cmake_args="-DCMAKE_BUILD_TYPE=Debug"
   export cmake_args
 else
   cmake_args=-DCMAKE_BUILD_TYPE=RelWithDebugInfo
