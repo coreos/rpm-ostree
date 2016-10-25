@@ -36,7 +36,7 @@ AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
 	-DLOCALEDIR=\"$(datadir)/locale\" \
         -DRPM_OSTREE_FEATURES='"$(RPM_OSTREE_FEATURES)"' \
 	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_40 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_40_
-AM_CFLAGS += -std=gnu99 $(WARN_CFLAGS)
+AM_CFLAGS += -std=gnu11 $(WARN_CFLAGS)
 # bundled libdnf
 AM_LDFLAGS += "-Wl,-rpath=$(libdir)/rpm-ostree"
 
