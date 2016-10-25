@@ -206,7 +206,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   const gchar *osname = ostree_deployment_get_osname (deployment);
   const gchar *csum = ostree_deployment_get_csum (deployment);
   gint serial = ostree_deployment_get_deployserial (deployment);
-  gboolean gpg_enabled;
+  gboolean gpg_enabled = FALSE;
 
   if (!ostree_repo_load_variant (repo,
 				 OSTREE_OBJECT_TYPE_COMMIT,
