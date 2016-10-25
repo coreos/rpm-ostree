@@ -74,7 +74,6 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
 {
   int exit_status = EXIT_FAILURE;
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  g_autoptr(GVariant) default_deployment = NULL;
   g_autofree char *transaction_address = NULL;
   const char *const strv_empty[] = { NULL };
 

@@ -293,7 +293,6 @@ ost_get_prev_commit (OstreeRepo *repo, char *checksum)
 {
   char *ret = NULL;
   g_autoptr(GVariant) commit = NULL;
-  g_autoptr(GVariant) parent_csum_v = NULL;
   GError *tmp_error = NULL;
 
   if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum,

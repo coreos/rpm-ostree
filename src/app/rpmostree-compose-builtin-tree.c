@@ -132,7 +132,6 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
           g_autoptr(GFile) srcfile = NULL;
           const char *src, *dest;
           JsonArray *add_el = json_array_get_array_element (add_files, i);
-          g_autoptr(GFile) child = NULL;
 
           if (!add_el)
             {
@@ -582,12 +581,10 @@ rpmostree_compose_builtin_tree (int             argc,
   RpmOstreeTreeComposeContext *self = &selfdata;
   JsonNode *treefile_rootval = NULL;
   JsonObject *treefile = NULL;
-  g_autofree char *cachekey = NULL;
   g_autofree char *new_inputhash = NULL;
   g_autoptr(GFile) previous_root = NULL;
   g_autofree char *previous_checksum = NULL;
   g_autoptr(GFile) yumroot = NULL;
-  g_autoptr(GFile) yumroot_varcache = NULL;
   glnx_fd_close int rootfs_fd = -1;
   glnx_unref_object OstreeRepo *repo = NULL;
   g_autoptr(GPtrArray) bootstrap_packages = NULL;

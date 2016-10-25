@@ -321,8 +321,6 @@ handle_create_osname (RPMOSTreeSysroot *object,
                       const gchar *osname)
 {
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
-  g_autoptr(GFile) dir = NULL;
-  g_autofree gchar *deploy_dir = NULL;
   GError *error = NULL;
   g_autofree gchar *dbus_path = NULL;
 
