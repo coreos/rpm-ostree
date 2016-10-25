@@ -111,7 +111,6 @@ dir_contains_uid_or_gid (GFile         *root,
   if (!found_match && type == G_FILE_TYPE_DIRECTORY)
     {
       g_autoptr(GFileEnumerator) dir_enum = NULL;
-      g_autoptr(GFileInfo) child_info = NULL;
 
       dir_enum = g_file_enumerate_children (root, OSTREE_GIO_FAST_QUERYINFO, 
                                             G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
@@ -959,7 +958,6 @@ concat_passwd_file (GFile           *yumroot,
     g_file_resolve_relative_path (previous_commit, usretc_subpath);
   g_autoptr(GFile) orig_usrlib_content =
     g_file_resolve_relative_path (previous_commit, usrlib_subpath);
-  g_autoptr(GFileOutputStream) out = NULL;
   g_autoptr(GHashTable) seen_names =
     g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
   g_autofree char *contents = NULL;

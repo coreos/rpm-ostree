@@ -614,7 +614,6 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
   glnx_unref_object OstreeRepo *repo = NULL;
   char *refs_to_fetch[] = { NULL, NULL };
   const char *from_revision = NULL;
-  g_autofree char *new_revision = NULL;
   g_autofree char *origin_remote = NULL;
   g_autofree char *origin_ref = NULL;
 

@@ -1093,7 +1093,6 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   glnx_unref_object  OstreeDeployment *merge_deployment = NULL; /* transfered */
 
   g_autoptr(GPtrArray) deployments = NULL;
-  g_autofree gchar *origin_refspec = NULL;
   OstreeSysroot *ot_sysroot;
   OstreeRepo *ot_repo;
   GVariant *booted_variant = NULL;

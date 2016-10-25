@@ -884,7 +884,6 @@ rpmostree_get_pkglist_for_root (int               dfd,
   g_autoptr(RpmOstreeRefSack) refsack = NULL;
   HyQuery query = NULL;
   g_autoptr(GPtrArray) pkglist = NULL;
-  g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
 
   refsack = rpmostree_get_refsack_for_root (dfd, path, cancellable, error);
   if (!refsack)

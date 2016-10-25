@@ -1901,7 +1901,6 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
     for (i = 0; i < package_list->len; i++)
       {
         DnfPackage *pkg = package_list->pdata[i];
-        glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
         g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
         g_autofree char *cached_rev = NULL;
         g_autoptr(GVariant) pkg_commit = NULL;

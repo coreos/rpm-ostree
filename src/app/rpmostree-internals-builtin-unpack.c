@@ -62,7 +62,6 @@ rpmostree_internals_builtin_unpack (int             argc,
   glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
   const char *target;
   const char *rpmpath;
-  glnx_fd_close int rootfs_fd = -1;
   glnx_unref_object OstreeRepo *ostree_repo = NULL;
   glnx_unref_object OstreeSePolicy *sepolicy = NULL;
 
