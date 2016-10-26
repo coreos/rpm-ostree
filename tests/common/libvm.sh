@@ -17,13 +17,16 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
+topsrcdir=$(cd $(dirname $0)/ && git rev-parse --show-toplevel)
+export topsrcdir
+
 # prepares the VM and library for action
 vm_setup() {
 
   # If there's already an ssh-config, just use that one. The user might have
   # created it for a self-provisioned machine. Otherwise, let's just assume
   # we're using vagrant and generate an ssh-config.
-  if [ ! -f ssh-config ]; then
+  if [ ! -s ssh-config ]; then
     vagrant ssh-config > "${topsrcdir}/ssh-config"
   fi
 

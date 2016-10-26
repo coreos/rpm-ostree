@@ -19,6 +19,7 @@
 
 set -e
 
+commondir=$(cd $(dirname $0)/../common && pwd)
 . ${commondir}/libtest.sh
 . ${commondir}/libvm.sh
 
