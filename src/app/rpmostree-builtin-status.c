@@ -68,9 +68,11 @@ get_active_txn (RPMOSTreeSysroot *sysroot_proxy)
   GVariant* txn = rpmostree_sysroot_get_active_transaction (sysroot_proxy);
   const char *a, *b, *c;
   if (txn)
-    g_variant_get (txn, "(&s&s&s)", &a, &b, &c);
-  if (*a)
-    return txn;
+    {
+      g_variant_get (txn, "(&s&s&s)", &a, &b, &c);
+      if (*a)
+        return txn;
+    }
   return NULL;
 }
 
@@ -109,7 +111,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
     {
       g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
       g_autoptr(GVariantDict) dict = NULL;
-      const gchar *const*origin_packages;
+      const gchar *const*origin_packages = NULL;
       const gchar *origin_refspec;
       const gchar *id;
       const gchar *os_name;
