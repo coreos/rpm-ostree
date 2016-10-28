@@ -518,7 +518,7 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
 
   TransactionProgress *tp = transaction_progress_new ();
 
-  const char *bus_name;
+  const char *bus_name = NULL;
   gint cancel_handler;
   gulong signal_handler = 0;
   gboolean success = FALSE;
