@@ -25,6 +25,7 @@
 #include <json-glib/json-glib.h>
 #include <gio/gunixoutputstream.h>
 #include <libdnf/libdnf.h>
+#include <sys/mount.h>
 #include <stdio.h>
 #include <libglnx.h>
 #include <rpm/rpmmacro.h>
