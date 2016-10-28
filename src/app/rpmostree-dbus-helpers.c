@@ -156,7 +156,7 @@ rpmostree_load_sysroot (gchar *sysroot,
     bus_name = BUS_NAME;
 
   sysroot_proxy = rpmostree_sysroot_proxy_new_sync (connection,
-                                                    G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
+                                                    G_DBUS_PROXY_FLAGS_NONE,
                                                     bus_name,
                                                     "/org/projectatomic/rpmostree1/Sysroot",
                                                     NULL,
@@ -559,7 +559,7 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
     goto out;
 
   transaction = rpmostree_transaction_proxy_new_sync (peer_connection,
-                                                      G_DBUS_OBJECT_MANAGER_CLIENT_FLAGS_NONE,
+                                                      G_DBUS_PROXY_FLAGS_NONE,
                                                       NULL,
                                                       "/",
                                                       cancellable,
