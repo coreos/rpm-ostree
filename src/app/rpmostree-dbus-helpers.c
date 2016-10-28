@@ -44,7 +44,6 @@ get_connection_for_path (gchar *sysroot,
                          GError **error)
 {
   glnx_unref_object GDBusConnection *connection = NULL;
-  glnx_unref_object GDBusObjectManager *om = NULL;
   glnx_unref_object GSocketConnection *stream = NULL;
   glnx_unref_object GSocket *socket = NULL;
 

@@ -418,7 +418,6 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   g_autofree char *new_commit_checksum = NULL;
   g_autoptr(GVariant) commit = NULL;
   g_autoptr(GVariant) metadata = NULL;
-  g_autoptr(GVariant) input_packages_v = NULL;
   g_autoptr(RpmOstreeTreespec) treespec = NULL;
   guint current_version;
   guint new_version;

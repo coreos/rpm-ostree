@@ -365,7 +365,6 @@ get_lead_sig_header_as_bytes (RpmOstreeUnpacker *self,
                               GError  **error)
 {
   gboolean ret = FALSE;
-  glnx_unref_object GInputStream *uin = NULL;
   g_autofree char *buf = NULL;
   char *bufp;
   size_t bytes_remaining;
