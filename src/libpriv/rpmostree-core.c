@@ -393,8 +393,8 @@ rpmostree_context_new_internal (int           userroot_dfd,
     dnf_context_set_solv_dir (ret->hifctx, cachedir);
   }
   { const char *lock = glnx_strjoina ("cache/", RPMOSTREE_DIR_LOCK);
-    g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, lock);
-    dnf_context_set_lock_dir (ret->hifctx, lock);
+    g_autofree char *lockdir = glnx_fdrel_abspath (userroot_dfd, lock);
+    dnf_context_set_lock_dir (ret->hifctx, lockdir);
   }
 
   if (fstatat (userroot_dfd, "repo", &stbuf, 0) < 0)
