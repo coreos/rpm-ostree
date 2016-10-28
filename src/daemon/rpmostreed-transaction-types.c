@@ -720,7 +720,6 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
 
   g_autofree gchar *new_refspec = NULL;
   g_autofree gchar *old_refspec = NULL;
-  g_autofree gchar *origin_description = NULL;
 
   gboolean changed = FALSE;
   gboolean ret = FALSE;

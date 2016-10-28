@@ -116,7 +116,6 @@ init_rootfs (GFile         *targetroot,
              GError       **error)
 {
   gboolean ret = FALSE;
-  g_autoptr(GFile) child = NULL;
   guint i;
   const char *toplevel_dirs[] = { "dev", "proc", "run", "sys", "var", "sysroot" };
   const Symlink symlinks[] = {
@@ -525,7 +524,6 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
       GString *tmpfiles_d_buf;
       g_autofree char *tmpfiles_d_line = NULL;
       char filetype_c;
-      g_autofree char *relpath = NULL;
 
       if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
         goto out;
@@ -941,8 +939,6 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   gboolean ret = FALSE;
   glnx_fd_close int src_rootfs_fd = -1;
   glnx_fd_close int target_root_dfd = -1;
-  g_autoptr(GFile) kernel_path = NULL;
-  g_autoptr(GFile) initramfs_path = NULL;
   g_autoptr(GHashTable) preserve_groups_set = NULL;
   gboolean container = FALSE;
   gboolean selinux = TRUE;
@@ -1435,7 +1431,6 @@ rpmostree_copy_additional_files (GFile         *rootfs,
       const char *src, *dest;
 
       JsonArray *add_el = json_array_get_array_element (add, i);
-      g_autoptr(GFile) child = NULL;
 
       if (!add_el)
         {
@@ -1558,7 +1553,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
     for (i = 0; i < len; i++)
       {
         const char *unitname = _rpmostree_jsonutil_array_require_string_element (units, i, error);
-        g_autoptr(GFile) unit_link_target = NULL;
         g_autofree char *symlink_target = NULL;
         struct stat stbuf;
 
