@@ -340,13 +340,18 @@ os_repository_new_commit ()
     cd ${test_tmpdir}
 }
 
+skip() {
+    echo "1..0 # SKIP" "$@"
+    exit 0
+}
+
 check_root_test ()
 {
     if test "$(id -u)" != "0"; then
-       echo "1..0 # requires root"
-       # don't use 77 to signal skip. TAP driver will already know it's a skip
-       # from the 1..0 test plan (and would set as fail if exit code != 0).
-       exit 0
+       skip "This test requires uid 0"
+    fi
+    if ! capsh --print | grep -q 'Bounding set.*[^a-z]cap_sys_admin'; then
+        skip "No CAP_SYS_ADMIN in bounding set"
     fi
 }
 

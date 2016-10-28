@@ -1,0 +1,61 @@
+branches:
+    - master
+    - auto
+    - try
+
+container:
+    image: projectatomic/ostree-tester
+
+packages:
+  - clang
+  - libubsan
+  - python-sphinx
+  - createrepo_c
+  - gperf
+  - rpm-build
+  - bubblewrap
+  - python-devel
+  - check-devel
+  - pkgconfig(ostree-1)
+  - pkgconfig(libgsystem)
+  - pkgconfig(librepo)
+  - pkgconfig(libsolv)
+  - pkgconfig(rpm)
+  - pkgconfig(json-glib-1.0)
+  - pkgconfig(expat)
+  - cmake
+  - gtk-doc
+
+tests:
+    - ./autogen.sh
+        --prefix=/usr
+        --libdir=/usr/lib64
+        --enable-installed-tests
+        --enable-gtk-doc
+        CFLAGS='-fsanitize=undefined'
+    - make -j2
+    - make check
+    - make install
+    - gnome-desktop-testing-runner rpm-ostree
+    - sudo --user=testuser gnome-desktop-testing-runner rpm-ostree
+
+timeout: 30m
+
+artifacts:
+    - test-suite.log
+
+---
+
+inherit: true
+
+tests:
+    - ./autogen.sh
+        --prefix=/usr
+        --libdir=/usr/lib64
+        --enable-installed-tests
+        --enable-gtk-doc CC=clang
+    - make -j2
+
+context: Clang
+
+artifacts:
