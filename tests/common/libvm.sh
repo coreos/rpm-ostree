@@ -20,11 +20,11 @@
 # prepares the VM and library for action
 vm_setup() {
 
-  # If there's already an ssh-config, just use that one. The user might have
-  # created it for a self-provisioned machine. Otherwise, let's just assume
-  # we're using vagrant and generate an ssh-config.
-  if [ ! -f ssh-config ]; then
-    vagrant ssh-config > "${topsrcdir}/ssh-config"
+  # We assume that there's already a configured ssh-config
+  # file available to tell us how to connect to the VM.
+  if [ ! -f "${topsrcdir}/ssh-config" ]; then
+    echo "ERROR: No ssh-config found."
+    exit 1
   fi
 
   local sshopts="-F ${topsrcdir}/ssh-config \
