@@ -301,7 +301,7 @@ rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
       /* First pass only.  Now we can resolve the ref to a checksum. */
       if (checksum == NULL)
         {
-          if (!ostree_repo_resolve_rev (repo, ref, FALSE, &checksum, error))
+          if (!ostree_repo_resolve_rev (repo, refspec, FALSE, &checksum, error))
             goto out;
         }
 
