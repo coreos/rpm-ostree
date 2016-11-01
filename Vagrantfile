@@ -20,8 +20,8 @@ Vagrant.configure(2) do |config|
     config.vm.synced_folder ".", "/home/vagrant/sync", disabled: true
 
     config.vm.provider "libvirt" do |libvirt, override|
-      libvirt.cpus = 2
-      libvirt.memory = 2048
+      libvirt.cpus = 1
+      libvirt.memory = 1024
       libvirt.driver = 'kvm'
     end
 
