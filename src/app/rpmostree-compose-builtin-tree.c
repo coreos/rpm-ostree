@@ -574,7 +574,7 @@ process_touch_if_changed (GError **error)
   if (!opt_touch_if_changed)
     return TRUE;
 
-  int fd = open (opt_touch_if_changed, O_CREAT|O_WRONLY|O_NOCTTY, 0644);
+  fd = open (opt_touch_if_changed, O_CREAT|O_WRONLY|O_NOCTTY, 0644);
   if (fd == -1)
     {
       glnx_set_prefix_error_from_errno (error, "Updating '%s': ", opt_touch_if_changed);
