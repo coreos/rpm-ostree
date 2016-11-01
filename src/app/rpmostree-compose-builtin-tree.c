@@ -566,6 +566,28 @@ compose_strv_contains_prefix (gchar **strv,
   return FALSE;
 }
 
+static gboolean
+process_touch_if_changed (GError **error)
+{
+  glnx_fd_close int fd = -1;
+  
+  if (!opt_touch_if_changed)
+    return TRUE;
+
+  fd = open (opt_touch_if_changed, O_CREAT|O_WRONLY|O_NOCTTY, 0644);
+  if (fd == -1)
+    {
+      glnx_set_prefix_error_from_errno (error, "Updating '%s': ", opt_touch_if_changed);
+      return FALSE;
+    }
+  if (futimens (fd, NULL) == -1)
+    {
+      glnx_set_error_from_errno (error);
+      return FALSE;
+    }
+
+  return TRUE;
+}
 
 int
 rpmostree_compose_builtin_tree (int             argc,
@@ -868,7 +890,12 @@ rpmostree_compose_builtin_tree (int             argc,
       }
     else if (opt_dry_run)
       {
-        g_print ("--dry-run complete, exiting\n");
+        g_print ("--dry-run complete");
+        if (opt_touch_if_changed)
+          g_print (", updating --touch-if-changed=%s", opt_touch_if_changed);
+        g_print ("; exiting\n");
+        if (!process_touch_if_changed (error))
+          goto out;
         exit_status = EXIT_SUCCESS;
         goto out;
       }
@@ -940,20 +967,8 @@ rpmostree_compose_builtin_tree (int             argc,
     }
   }
 
-  if (opt_touch_if_changed)
-    {
-      glnx_fd_close int fd = open (opt_touch_if_changed, O_CREAT|O_WRONLY|O_NOCTTY, 0644);
-      if (fd == -1)
-        {
-          glnx_set_prefix_error_from_errno (error, "Updating '%s': ", opt_touch_if_changed);
-          goto out;
-        }
-      if (futimens (fd, NULL) == -1)
-        {
-          glnx_set_error_from_errno (error);
-          goto out;
-        }
-    }
+  if (!process_touch_if_changed (error))
+    goto out;
 
   exit_status = EXIT_SUCCESS;
 
