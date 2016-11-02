@@ -1082,7 +1082,7 @@ _data_from_json (GFile           *yumroot,
 
 gboolean
 rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
-                                         GFile           *yumroot,
+                                         int              rootfs_dfd,
                                          GFile           *treefile_dirpath,
                                          GFile           *previous_root,
                                          JsonObject      *treedata,
@@ -1093,15 +1093,22 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
   gboolean found_passwd_data = FALSE;
   gboolean found_groups_data = FALSE;
   gboolean perform_migrate = FALSE;
-  g_autoptr(GFile) yumroot_etc = g_file_resolve_relative_path (yumroot, "etc");
+  g_autofree char *rootfs_abspath = glnx_fdrel_abspath (rootfs_dfd, ".");
+  g_autoptr(GFile) yumroot = g_file_new_for_path (rootfs_abspath);
 
   /* Create /etc in the target root; FIXME - should ensure we're using
    * the right permissions from the filesystem RPM.  Doing this right
    * is really hard because filesystem depends on setup which installs
    * the files...
    */
-  if (!gs_file_ensure_directory (yumroot_etc, TRUE, cancellable, error))
-    goto out;
+  if (mkdirat (rootfs_dfd, "etc", 0755) < 0)
+    {
+      if (errno != ENOENT)
+        {
+          glnx_set_error_from_errno (error);
+          goto out;
+        }
+    }
 
   if (!_data_from_json (yumroot, treefile_dirpath,
                         treedata, RPM_OSTREE_PASSWD_MIGRATE_PASSWD,

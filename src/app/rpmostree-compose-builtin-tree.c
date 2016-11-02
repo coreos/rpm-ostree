@@ -792,6 +792,14 @@ rpmostree_compose_builtin_tree (int             argc,
   yumroot = g_file_get_child (self->workdir, "rootfs.tmp");
   if (!glnx_shutil_rm_rf_at (self->workdir_dfd, "rootfs.tmp", cancellable, error))
     goto out;
+  if (mkdirat (self->workdir_dfd, "rootfs.tmp", 0755) < 0)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
+  if (!glnx_opendirat (self->workdir_dfd, "rootfs.tmp", TRUE,
+                       &rootfs_fd, error))
+    goto out;
 
   if (json_object_has_member (treefile, "automatic_version_prefix") &&
       !compose_strv_contains_prefix (opt_metadata_strings, "version="))
@@ -865,7 +873,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
       if (generate_from_previous)
         {
-          if (!rpmostree_generate_passwd_from_previous (repo, yumroot,
+          if (!rpmostree_generate_passwd_from_previous (repo, rootfs_fd,
                                                         treefile_dirpath,
                                                         previous_root, treefile,
                                                         cancellable, error))
@@ -902,10 +910,6 @@ rpmostree_compose_builtin_tree (int             argc,
   }
 
   if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
-    goto out;
-
-  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot), TRUE,
-                       &rootfs_fd, error))
     goto out;
 
   if (!rpmostree_treefile_postprocessing (rootfs_fd, self->treefile_context_dirs->pdata[0],
