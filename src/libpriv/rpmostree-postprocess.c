@@ -99,11 +99,10 @@ typedef struct {
 } Symlink;
 
 static gboolean
-init_rootfs (GFile         *targetroot,
+init_rootfs (int            dfd,
              GCancellable  *cancellable,
              GError       **error)
 {
-  gboolean ret = FALSE;
   guint i;
   const char *toplevel_dirs[] = { "dev", "proc", "run", "sys", "var", "sysroot" };
   const Symlink symlinks[] = {
@@ -117,33 +116,28 @@ init_rootfs (GFile         *targetroot,
     { "sysroot/tmp", "tmp" },
   };
 
-  if (!gs_file_ensure_directory (targetroot, TRUE,
-                                 cancellable, error))
-    goto out;
-  
   for (i = 0; i < G_N_ELEMENTS (toplevel_dirs); i++)
     {
-      g_autoptr(GFile) dir = g_file_get_child (targetroot, toplevel_dirs[i]);
-
-      if (!gs_file_ensure_directory (dir, TRUE,
-                                     cancellable, error))
-        goto out;
+      if (mkdirat (dfd, toplevel_dirs[i], 0755) < 0)
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
     }
 
   for (i = 0; i < G_N_ELEMENTS (symlinks); i++)
     {
       const Symlink*linkinfo = symlinks + i;
-      g_autoptr(GFile) src =
-        g_file_resolve_relative_path (targetroot, linkinfo->src);
 
-      if (!g_file_make_symbolic_link (src, linkinfo->target,
-                                      cancellable, error))
-        goto out;
+      if (symlinkat (linkinfo->target, dfd, linkinfo->src) < 0)
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+           
+        }
     }
   
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -779,13 +773,10 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
 }
 
 static gboolean
-replace_nsswitch (GFile         *target_usretc,
+replace_nsswitch (int            dfd,
                   GCancellable  *cancellable,
                   GError       **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(GFile) nsswitch_conf =
-    g_file_get_child (target_usretc, "nsswitch.conf");
   g_autofree char *nsswitch_contents = NULL;
   g_autofree char *new_nsswitch_contents = NULL;
 
@@ -800,27 +791,25 @@ replace_nsswitch (GFile         *target_usretc,
       g_once_init_leave (&regex_initialized, 1);
     }
 
-  nsswitch_contents = glnx_file_get_contents_utf8_at (AT_FDCWD, gs_file_get_path_cached (nsswitch_conf), NULL,
+  nsswitch_contents = glnx_file_get_contents_utf8_at (dfd, "etc/nsswitch.conf", NULL,
                                                       cancellable, error);
   if (!nsswitch_contents)
-    goto out;
+    return FALSE;
 
   new_nsswitch_contents = g_regex_replace (passwd_regex,
                                            nsswitch_contents, -1, 0,
                                            "\\1: files altfiles\\2",
                                            0, error);
   if (!new_nsswitch_contents)
-    goto out;
+    return FALSE;
 
-  if (!g_file_replace_contents (nsswitch_conf, new_nsswitch_contents,
-                                strlen (new_nsswitch_contents),
-                                NULL, FALSE, 0, NULL,
-                                cancellable, error))
-    goto out;
+  if (!glnx_file_replace_contents_at (dfd, "etc/nsswitch.conf",
+                                      (guint8*)new_nsswitch_contents, -1,
+                                      GLNX_FILE_REPLACE_NODATASYNC,
+                                      cancellable, error))
+    return FALSE;
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 /* SELinux in Fedora >= 24: https://bugzilla.redhat.com/show_bug.cgi?id=1290659 */
@@ -918,16 +907,18 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
 
 /* Prepare a root filesystem, taking mainly the contents of /usr from yumroot */
 static gboolean
-create_rootfs_from_yumroot_content (GFile         *targetroot,
-                                    GFile         *yumroot,
+create_rootfs_from_yumroot_content (int            target_root_dfd,
+                                    int            src_rootfs_fd,
                                     JsonObject    *treefile,
                                     GCancellable  *cancellable,
                                     GError       **error)
 {
   gboolean ret = FALSE;
-  glnx_fd_close int src_rootfs_fd = -1;
-  glnx_fd_close int target_root_dfd = -1;
   g_autoptr(GHashTable) preserve_groups_set = NULL;
+  g_autofree char *yumroot_path = glnx_fdrel_abspath (src_rootfs_fd, ".");
+  g_autoptr(GFile) yumroot = g_file_new_for_path (yumroot_path);
+  g_autofree char *targetroot_path = glnx_fdrel_abspath (target_root_dfd, ".");
+  g_autoptr(GFile) targetroot = g_file_new_for_path (targetroot_path);
   gboolean container = FALSE;
   gboolean selinux = TRUE;
 
@@ -935,10 +926,6 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
                                                                "selinux",
                                                                &selinux,
                                                                error))
-    goto out;
-
-  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot), TRUE,
-                       &src_rootfs_fd, error))
     goto out;
 
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
@@ -952,10 +939,7 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
     goto out;
   
   g_print ("Initializing rootfs\n");
-  if (!init_rootfs (targetroot, cancellable, error))
-    goto out;
-
-  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (targetroot), TRUE, &target_root_dfd, error))
+  if (!init_rootfs (target_root_dfd, cancellable, error))
     goto out;
 
   g_print ("Migrating /etc/passwd to /usr/lib/\n");
@@ -976,13 +960,8 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
     goto out;
 
   /* NSS configuration to look at the new files */
-  {
-    g_autoptr(GFile) yumroot_etc = 
-      g_file_resolve_relative_path (yumroot, "etc");
-
-    if (!replace_nsswitch (yumroot_etc, cancellable, error))
-      goto out;
-  }
+  if (!replace_nsswitch (src_rootfs_fd, cancellable, error))
+    goto out;
 
   if (selinux)
     {
@@ -1051,7 +1030,8 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
             }
         }
 
-      if (!gs_file_ensure_directory (target_usrlib, TRUE, cancellable, error))
+      if (!glnx_shutil_mkdir_p_at (target_root_dfd, "usr/lib", 0755,
+                                   cancellable, error))
         goto out;
 
       switch (boot_location)
@@ -1059,8 +1039,11 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
         case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY:
           {
             g_print ("Using boot location: legacy\n");
-            if (!gs_file_rename (yumroot_boot, target_boot, cancellable, error))
-              goto out;
+            if (renameat (src_rootfs_fd, "boot", target_root_dfd, "boot") < 0)
+              {
+                glnx_set_error_from_errno (error);
+                goto out;
+              }
           }
           break;
         case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH:
@@ -1799,39 +1782,45 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
  *  * Migrate content in /var to systemd-tmpfiles
  */
 gboolean
-rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
+rpmostree_prepare_rootfs_for_commit (int            workdir_dfd,
+                                     int           *inout_rootfs_fd,
+                                     const char    *rootfs_name,
                                      JsonObject    *treefile,
                                      GCancellable  *cancellable,
                                      GError       **error)
 {
-  gboolean ret = FALSE;
-  g_autofree char *dest_rootfs_path = NULL;
+  const char *temp_new_root = "tmp-new-rootfs";
+  glnx_fd_close int target_root_dfd = -1;
 
-  dest_rootfs_path = g_strconcat (gs_file_get_path_cached (rootfs), ".post", NULL);
-
-  if (!glnx_shutil_rm_rf_at (AT_FDCWD, dest_rootfs_path, cancellable, error))
-    goto out;
-
-  {
-    g_autoptr(GFile) dest_rootfs = g_file_new_for_path (dest_rootfs_path);
-    if (!create_rootfs_from_yumroot_content (dest_rootfs, rootfs, treefile,
-                                             cancellable, error))
-      goto out;
-  }
-
-  if (!glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (rootfs), cancellable, error))
-    goto out;
-
-  if (TEMP_FAILURE_RETRY (renameat (AT_FDCWD, dest_rootfs_path,
-                                    AT_FDCWD, gs_file_get_path_cached (rootfs))) != 0)
+  if (mkdirat (workdir_dfd, temp_new_root, 0755) < 0)
     {
       glnx_set_error_from_errno (error);
-      goto out;
+      return FALSE;
+    }
+  if (!glnx_opendirat (workdir_dfd, temp_new_root, TRUE,
+                       &target_root_dfd, error))
+    return FALSE;
+
+  if (!create_rootfs_from_yumroot_content (target_root_dfd, *inout_rootfs_fd, treefile,
+                                           cancellable, error))
+    return FALSE;
+
+  (void) close (*inout_rootfs_fd);
+
+  if (!glnx_shutil_rm_rf_at (workdir_dfd, rootfs_name, cancellable, error))
+    return FALSE;
+
+  if (TEMP_FAILURE_RETRY (renameat (workdir_dfd, temp_new_root,
+                                    workdir_dfd, rootfs_name)) != 0)
+    {
+      glnx_set_error_from_errno (error);
+      return FALSE;
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  *inout_rootfs_fd = target_root_dfd;
+  target_root_dfd = -1;  /* Transfer ownership */
+
+  return TRUE;
 }
 
 struct CommitThreadData {

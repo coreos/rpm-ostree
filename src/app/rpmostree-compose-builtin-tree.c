@@ -583,6 +583,7 @@ rpmostree_compose_builtin_tree (int             argc,
   g_autofree char *new_inputhash = NULL;
   g_autoptr(GFile) previous_root = NULL;
   g_autofree char *previous_checksum = NULL;
+  const char *rootfs_name = "rootfs.tmp";
   g_autoptr(GFile) yumroot = NULL;
   glnx_fd_close int rootfs_fd = -1;
   glnx_unref_object OstreeRepo *repo = NULL;
@@ -767,15 +768,15 @@ rpmostree_compose_builtin_tree (int             argc,
 
   self->previous_checksum = previous_checksum;
 
-  yumroot = g_file_get_child (self->workdir, "rootfs.tmp");
-  if (!glnx_shutil_rm_rf_at (self->workdir_dfd, "rootfs.tmp", cancellable, error))
+  yumroot = g_file_get_child (self->workdir, rootfs_name);
+  if (!glnx_shutil_rm_rf_at (self->workdir_dfd, rootfs_name, cancellable, error))
     goto out;
-  if (mkdirat (self->workdir_dfd, "rootfs.tmp", 0755) < 0)
+  if (mkdirat (self->workdir_dfd, rootfs_name, 0755) < 0)
     {
       glnx_set_error_from_errno (error);
       goto out;
     }
-  if (!glnx_opendirat (self->workdir_dfd, "rootfs.tmp", TRUE,
+  if (!glnx_opendirat (self->workdir_dfd, rootfs_name, TRUE,
                        &rootfs_fd, error))
     goto out;
 
@@ -890,13 +891,9 @@ rpmostree_compose_builtin_tree (int             argc,
                                           next_version, cancellable, error))
     goto out;
 
-  if (!rpmostree_prepare_rootfs_for_commit (yumroot, treefile, cancellable, error))
-    goto out;
-
-  /* Reopen since the prepare renamed */
-  (void) close (rootfs_fd);
-  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (yumroot), TRUE,
-                       &rootfs_fd, error))
+  if (!rpmostree_prepare_rootfs_for_commit (self->workdir_dfd, &rootfs_fd, rootfs_name,
+                                            treefile,
+                                            cancellable, error))
     goto out;
 
   if (!rpmostree_copy_additional_files (yumroot, self->treefile_context_dirs->pdata[0], treefile, cancellable, error))
