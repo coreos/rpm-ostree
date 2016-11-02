@@ -51,18 +51,6 @@ typedef enum {
 } RpmOstreePostprocessBootLocation;
 
 static gboolean
-move_to_dir (GFile        *src,
-             GFile        *dest_dir,
-             GCancellable *cancellable,
-             GError      **error)
-{
-  g_autoptr(GFile) dest =
-    g_file_get_child (dest_dir, gs_file_get_basename_cached (src));
-
-  return gs_file_rename (src, dest, cancellable, error);
-}
-
-static gboolean
 run_sync_in_root_at (int           rootfs_fd,
                      const char   *binpath,
                      char        **child_argv,
@@ -1005,12 +993,16 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
   /* We take /usr from the yum content */
   g_print ("Moving /usr and /etc to target\n");
   {
-    g_autoptr(GFile) usr = g_file_get_child (yumroot, "usr");
-    g_autoptr(GFile) etc = g_file_get_child (yumroot, "etc");
-    if (!move_to_dir (usr, targetroot, cancellable, error))
-      goto out;
-    if (!move_to_dir (etc, targetroot, cancellable, error))
-      goto out;
+    if (renameat (src_rootfs_fd, "usr", target_root_dfd, "usr") < 0)
+      {
+        glnx_set_error_from_errno (error);
+        goto out;
+      }
+    if (renameat (src_rootfs_fd, "etc", target_root_dfd, "etc") < 0)
+      {
+        glnx_set_error_from_errno (error);
+        goto out;
+      }
   }
 
   if (!rpmostree_rootfs_prepare_links (target_root_dfd, cancellable, error))
@@ -1100,13 +1092,19 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
                                      "bin", "sbin" };
     for (i = 0; i < G_N_ELEMENTS (toplevel_links); i++)
       {
-        g_autoptr(GFile) srcpath =
-          g_file_get_child (yumroot, toplevel_links[i]);
-
-        if (g_file_query_file_type (srcpath, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL) == G_FILE_TYPE_SYMBOLIC_LINK)
+        struct stat stbuf;
+        if (fstatat (src_rootfs_fd, toplevel_links[i], &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
           {
-            if (!move_to_dir (srcpath, targetroot, cancellable, error))
-              goto out;
+            if (errno == ENOENT)
+              continue;
+            glnx_set_error_from_errno (error);
+            goto out;
+          }
+
+        if (renameat (src_rootfs_fd, toplevel_links[i], target_root_dfd, toplevel_links[i]) < 0)
+          {
+            glnx_set_error_from_errno (error);
+            goto out;
           }
       }
   }
