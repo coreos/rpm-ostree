@@ -55,7 +55,9 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
                                        GError       **error);
 
 gboolean
-rpmostree_prepare_rootfs_for_commit (GFile         *rootfs,
+rpmostree_prepare_rootfs_for_commit (int            workdir_dfd,
+                                     int           *inout_rootfs_fd,
+                                     const char    *rootfs_name,
                                      JsonObject    *treefile,
                                      GCancellable  *cancellable,
                                      GError       **error);
