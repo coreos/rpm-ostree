@@ -1453,7 +1453,8 @@ rpmostree_copy_additional_files (GFile         *rootfs,
 
         g_print ("Adding file '%s'\n", dest);
 
-        if (!gs_file_ensure_directory (target_tmpfilesd_parent, TRUE, cancellable, error))
+        if (!glnx_shutil_mkdir_p_at (AT_FDCWD, gs_file_get_path_cached (target_tmpfilesd_parent), 0755,
+                                     cancellable, error))
           goto out;
 
         if (!g_file_copy (srcfile, destfile, 0, cancellable, NULL, NULL, error))
