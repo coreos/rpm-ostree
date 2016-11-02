@@ -1115,19 +1115,18 @@ create_rootfs_from_yumroot_content (GFile         *targetroot,
      * during tests. */
     const char *pkglibdir_path
       = g_getenv("RPMOSTREE_UNINSTALLED_PKGLIBDIR") ?: PKGLIBDIR;
+    glnx_fd_close int pkglibdir_dfd = -1;
 
-    g_autoptr(GFile) src_pkglibdir = g_file_new_for_path (pkglibdir_path);
-    g_autoptr(GFile) src_tmpfilesd =
-      g_file_get_child (src_pkglibdir, "rpm-ostree-0-integration.conf");
-    g_autoptr(GFile) target_tmpfilesd =
-      g_file_resolve_relative_path (targetroot, "usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf");
-    g_autoptr(GFile) target_tmpfilesd_parent = g_file_get_parent (target_tmpfilesd);
-
-    if (!gs_file_ensure_directory (target_tmpfilesd_parent, TRUE, cancellable, error))
+    if (!glnx_opendirat (AT_FDCWD, pkglibdir_path, TRUE, &pkglibdir_dfd, error))
+      goto out;
+    
+    if (!glnx_shutil_mkdir_p_at (target_root_dfd, "usr/lib/tmpfiles.d", 0755, cancellable, error))
       goto out;
 
-    if (!g_file_copy (src_tmpfilesd, target_tmpfilesd, 0,
-                      cancellable, NULL, NULL, error))
+    if (!glnx_file_copy_at (pkglibdir_dfd, "rpm-ostree-0-integration.conf", NULL,
+                            target_root_dfd, "usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf",
+                            GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
+                            cancellable, error))
       goto out;
   }
 
