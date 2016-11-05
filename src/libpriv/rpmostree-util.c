@@ -627,3 +627,39 @@ rpmostree_pull_content_only (OstreeRepo  *dest,
 
   return TRUE;
 }
+
+G_LOCK_DEFINE_STATIC (pathname_cache);
+
+/**
+ * rpmostree_file_get_path_cached:
+ *
+ * Like g_file_get_path(), but returns a constant copy so callers
+ * don't need to free the result.
+ */
+const char *
+rpmostree_file_get_path_cached (GFile *file)
+{
+  const char *path;
+  static GQuark _file_path_quark = 0;
+
+  if (G_UNLIKELY (_file_path_quark) == 0)
+    _file_path_quark = g_quark_from_static_string ("gsystem-file-path");
+
+  G_LOCK (pathname_cache);
+
+  path = g_object_get_qdata ((GObject*)file, _file_path_quark);
+  if (!path)
+    {
+      path = g_file_get_path (file);
+      if (path == NULL)
+        {
+          G_UNLOCK (pathname_cache);
+          return NULL;
+        }
+      g_object_set_qdata_full ((GObject*)file, _file_path_quark, (char*)path, (GDestroyNotify)g_free);
+    }
+
+  G_UNLOCK (pathname_cache);
+
+  return path;
+}
