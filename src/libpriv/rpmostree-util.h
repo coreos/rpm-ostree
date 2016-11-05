@@ -119,3 +119,12 @@ rpmostree_pull_content_only (OstreeRepo  *dest,
                              const char  *src_commit,
                              GCancellable *cancellable,
                              GError      **error);
+const char *
+rpmostree_file_get_path_cached (GFile *file);
+
+static inline
+const char *
+gs_file_get_path_cached (GFile *file)
+{
+  return rpmostree_file_get_path_cached (file);
+}
