@@ -905,6 +905,72 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
   return TRUE;
 }
 
+static gboolean
+hardlink_recurse (int                src_dfd,
+                  const char        *src_path,
+                  int                dest_dfd,
+                  const char        *dest_path,
+                  GCancellable      *cancellable,
+                  GError            **error)
+{
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  glnx_fd_close int dest_target_dfd = -1;
+
+  if (!glnx_dirfd_iterator_init_at (src_dfd, src_path, TRUE, &dfd_iter, error))
+    return FALSE;
+
+  if (!glnx_opendirat (dest_dfd, dest_path, TRUE, &dest_target_dfd, error))
+    return FALSE;
+
+  while (TRUE)
+    {
+      struct dirent *dent = NULL;
+      struct stat stbuf;
+
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
+        return FALSE;
+      if (!dent)
+        break;
+
+      if (fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
+
+      if (dent->d_type == DT_DIR)
+        {
+          mode_t perms = stbuf.st_mode & ~S_IFMT;
+
+          if (mkdirat (dest_target_dfd, dent->d_name, perms) < 0)
+            {
+              glnx_set_error_from_errno (error);
+              return FALSE;
+            }
+          if (fchmodat (dest_target_dfd, dent->d_name, perms, 0) < 0)
+            {
+              glnx_set_error_from_errno (error);
+              return FALSE;
+            }
+          if (!hardlink_recurse (dfd_iter.fd, dent->d_name,
+                                 dest_target_dfd, dent->d_name,
+                                 cancellable, error))
+            return FALSE;
+        }
+      else
+        {
+          if (linkat (dfd_iter.fd, dent->d_name,
+                      dest_target_dfd, dent->d_name, 0) < 0)
+            {
+              glnx_set_error_from_errno (error);
+              return FALSE;
+            }
+        }
+    }
+
+  return TRUE;
+}
+
 /* Prepare a root filesystem, taking mainly the contents of /usr from yumroot */
 static gboolean
 create_rootfs_from_yumroot_content (int            target_root_dfd,
@@ -917,8 +983,6 @@ create_rootfs_from_yumroot_content (int            target_root_dfd,
   g_autoptr(GHashTable) preserve_groups_set = NULL;
   g_autofree char *yumroot_path = glnx_fdrel_abspath (src_rootfs_fd, ".");
   g_autoptr(GFile) yumroot = g_file_new_for_path (yumroot_path);
-  g_autofree char *targetroot_path = glnx_fdrel_abspath (target_root_dfd, ".");
-  g_autoptr(GFile) targetroot = g_file_new_for_path (targetroot_path);
   gboolean container = FALSE;
   gboolean selinux = TRUE;
 
@@ -995,14 +1059,6 @@ create_rootfs_from_yumroot_content (int            target_root_dfd,
   /* Move boot, but rename the kernel/initramfs to have a checksum */
   if (!container)
     {
-      g_autoptr(GFile) yumroot_boot =
-        g_file_get_child (yumroot, "boot");
-      g_autoptr(GFile) target_boot =
-        g_file_get_child (targetroot, "boot");
-      g_autoptr(GFile) target_usrlib =
-        g_file_resolve_relative_path (targetroot, "usr/lib");
-      g_autoptr(GFile) target_usrlib_ostree_boot =
-        g_file_resolve_relative_path (target_usrlib, "ostree-boot");
       RpmOstreePostprocessBootLocation boot_location =
         RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
       const char *boot_location_str = NULL;
@@ -1049,19 +1105,31 @@ create_rootfs_from_yumroot_content (int            target_root_dfd,
         case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH:
           {
             g_print ("Using boot location: both\n");
-            if (!gs_file_rename (yumroot_boot, target_boot, cancellable, error))
+            if (renameat (src_rootfs_fd, "boot", target_root_dfd, "boot") < 0)
+              {
+                glnx_set_error_from_errno (error);
+                goto out;
+              }
+            if (!glnx_shutil_mkdir_p_at (target_root_dfd, "usr/lib/ostree-boot", 0755,
+                                         cancellable, error))
               goto out;
             /* Hardlink the existing content, only a little ugly as
              * we'll end up sha256'ing it twice, but oh well. */
-            if (!gs_shutil_cp_al_or_fallback (target_boot, target_usrlib_ostree_boot, cancellable, error))
+            if (!hardlink_recurse (target_root_dfd, "boot",
+                                   target_root_dfd, "usr/lib/ostree-boot",
+                                   cancellable, error))
               goto out;
           }
           break;
         case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW:
           {
             g_print ("Using boot location: new\n");
-            if (!gs_file_rename (yumroot_boot, target_usrlib_ostree_boot, cancellable, error))
-              goto out;
+            if (renameat (src_rootfs_fd, "boot",
+                          target_root_dfd, "usr/lib/ostree-boot") < 0)
+              {
+                glnx_set_error_from_errno (error);
+                goto out;
+              }
           }
           break;
         }
@@ -1866,13 +1934,13 @@ read_xattrs_cb (OstreeRepo     *repo,
 
   if (!*relpath)
     {
-      if (!gs_fd_get_all_xattrs (rootfs_fd, &existing_xattrs, NULL, error))
+      if (!glnx_fd_get_all_xattrs (rootfs_fd, &existing_xattrs, NULL, error))
         goto out;
     }
   else
     {
-      if (!gs_dfd_and_name_get_all_xattrs (rootfs_fd, relpath, &existing_xattrs,
-                                           NULL, error))
+      if (!glnx_dfd_name_get_all_xattrs (rootfs_fd, relpath, &existing_xattrs,
+                                         NULL, error))
         goto out;
     }
 
