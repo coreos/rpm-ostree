@@ -25,7 +25,7 @@
 #include <glib-unix.h>
 #include <gio/gio.h>
 #include <syslog.h>
-#include "libgsystem.h"
+#include "libglnx.h"
 
 /* ---------------------------------------------------------------------------------------------------- */
 static GMainLoop *loop = NULL;

@@ -22,6 +22,7 @@
 #include "rpmostreed-daemon.h"
 #include "rpmostreed-sysroot.h"
 #include "rpmostreed-os.h"
+#include "rpmostree-util.h"
 #include "rpmostreed-utils.h"
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostreed-errors.h"
@@ -30,8 +31,7 @@
 
 #include "rpmostree-output.h"
 
-#include "libgsystem.h"
-#include <libglnx.h>
+#include "libglnx.h"
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
 

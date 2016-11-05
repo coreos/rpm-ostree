@@ -40,7 +40,7 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 
-#include "libgsystem.h"
+#include "libglnx.h"
 
 static char *opt_workdir;
 static gboolean opt_workdir_tmpfs;

@@ -20,13 +20,13 @@
 #include "ostree.h"
 
 #include <libglnx.h>
-#include <libgsystem.h>
 
 #include "rpmostreed-transaction-types.h"
 #include "rpmostreed-transaction.h"
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostreed-sysroot.h"
 #include "rpmostree-sysroot-upgrader.h"
+#include "rpmostree-util.h"
 #include "rpmostreed-utils.h"
 
 static gboolean

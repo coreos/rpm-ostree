@@ -31,7 +31,6 @@
 
 #include "rpmostree-builtins.h"
 
-#include "libgsystem.h"
 #include "libglnx.h"
 
 static RpmOstreeCommand supported_commands[] = {

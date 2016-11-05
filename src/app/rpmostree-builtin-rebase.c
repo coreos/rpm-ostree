@@ -28,7 +28,6 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-dbus-helpers.h"
 
-#include "libgsystem.h"
 #include <libglnx.h>
 
 static char *opt_osname;

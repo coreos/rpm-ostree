@@ -25,8 +25,8 @@
 
 #include "rpmostree-compose-builtins.h"
 #include "rpmostree-libbuiltin.h"
+#include "rpmostree-util.h"
 
-#include "libgsystem.h"
 #include "libglnx.h"
 
 static char *opt_repo_path;

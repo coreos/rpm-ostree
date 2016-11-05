@@ -24,7 +24,7 @@
 #include "rpmostree-builtins.h"
 
 #include <ostree.h>
-#include <libgsystem.h>
+#include "libglnx.h"
 
 #include <glib/gi18n.h>
 

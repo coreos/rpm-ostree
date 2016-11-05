@@ -20,7 +20,7 @@
 
 #include "rpmostreed-utils.h"
 #include "rpmostreed-errors.h"
-#include "libgsystem.h"
+#include "libglnx.h"
 
 #include <libglnx.h>
 
