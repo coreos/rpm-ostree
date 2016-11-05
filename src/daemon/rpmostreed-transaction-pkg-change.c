@@ -24,7 +24,6 @@
 #include <rpm/rpmlog.h>
 #include <rpm/rpmdb.h>
 #include <libdnf/libdnf.h>
-#include <libgsystem.h>
 
 #include "rpmostreed-transaction-types.h"
 #include "rpmostreed-transaction-types.h"

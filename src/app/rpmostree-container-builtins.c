@@ -35,7 +35,7 @@
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-unpacker.h"
 
-#include "libgsystem.h"
+#include "libglnx.h"
 
 
 static GOptionEntry init_option_entries[] = {

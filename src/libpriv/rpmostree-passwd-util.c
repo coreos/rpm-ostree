@@ -38,11 +38,16 @@
 #define OSTREE_GIO_FAST_QUERYINFO ("standard::name,standard::type,standard::size,standard::is-symlink,standard::symlink-target," \
                                    "unix::device,unix::inode,unix::mode,unix::uid,unix::gid,unix::rdev")
 
-#include "libgsystem.h"
+#include "libglnx.h"
 
-GS_DEFINE_CLEANUP_FUNCTION0(FILE*, _cleanup_stdio_file, fclose);
-#define _cleanup_stdio_file_ __attribute__((cleanup(_cleanup_stdio_file)))
-
+static inline void
+cleanup_stdio_file (FILE **filep)
+{
+  FILE *f = *filep;
+  if (f)
+    fclose (f);
+}
+#define _cleanup_stdio_file_ __attribute__((cleanup(cleanup_stdio_file)))
 
 static gboolean
 ptrarray_contains_str (GPtrArray *haystack, const char *needle)

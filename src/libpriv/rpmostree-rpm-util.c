@@ -33,8 +33,14 @@
 #define OSTREE_GIO_FAST_QUERYINFO ("standard::name,standard::type,standard::size,standard::is-symlink,standard::symlink-target," \
                                    "unix::device,unix::inode,unix::mode,unix::uid,unix::gid,unix::rdev")
 
-GS_DEFINE_CLEANUP_FUNCTION0(rpmtd, _cleanup_rpmtdFreeData, rpmtdFreeData);
-#define _cleanup_rpmtddata_ __attribute__((cleanup(_cleanup_rpmtdFreeData)))
+static inline void
+cleanup_rpmtdFreeData (rpmtd *tdp)
+{
+  rpmtd td = *tdp;
+  if (td)
+    rpmtdFreeData (td);
+}
+#define _cleanup_rpmtddata_ __attribute__((cleanup(cleanup_rpmtdFreeData)))
 
 struct RpmRevisionData
 {

@@ -37,7 +37,7 @@
 #include "rpmostree-unpacker.h"
 #include "rpmostree-postprocess.h"
 
-#include "libgsystem.h"
+#include "libglnx.h"
 
 static gboolean opt_selinux = FALSE;
 static gboolean opt_ostree_convention = FALSE;

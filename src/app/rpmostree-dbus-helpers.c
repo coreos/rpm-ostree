@@ -21,7 +21,6 @@
 #include "config.h"
 
 #include "rpmostree-dbus-helpers.h"
-#include "libgsystem.h"
 #include "libglnx.h"
 #include <sys/socket.h>
 #include "glib-unix.h"

@@ -27,7 +27,6 @@
 #include <gio/gunixoutputstream.h>
 
 #include "rpmostree-util.h"
-#include "libgsystem.h"
 #include "libglnx.h"
 
 void

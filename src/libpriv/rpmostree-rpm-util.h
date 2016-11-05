@@ -24,7 +24,7 @@
 
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
-#include <libgsystem.h>
+#include "libglnx.h"
 #include "rpmostree-util.h"
 #include "rpmostree-refsack.h"
 #include "rpmostree-refts.h"
@@ -88,8 +88,15 @@ const char *rpmrev_get_commit (struct RpmRevisionData *self);
 void
 rpmrev_free (struct RpmRevisionData *ptr);
 
-GS_DEFINE_CLEANUP_FUNCTION0(struct RpmRevisionData *, _cleanup_rpmrev_free, rpmrev_free);
-#define _cleanup_rpmrev_ __attribute__((cleanup(_cleanup_rpmrev_free)))
+static inline void
+rpmostree_cleanup_rpmrev (struct RpmRevisionData **revp)
+{
+  struct RpmRevisionData *rev = *revp;
+  if (!rev)
+    return;
+  rpmrev_free (rev);
+}
+#define _cleanup_rpmrev_ __attribute__((cleanup(rpmostree_cleanup_rpmrev)))
 
 gboolean
 rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
