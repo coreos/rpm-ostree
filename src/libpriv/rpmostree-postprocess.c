@@ -1109,9 +1109,12 @@ create_rootfs_from_yumroot_content (int            target_root_dfd,
                 glnx_set_error_from_errno (error);
                 goto out;
               }
+            if (!glnx_shutil_mkdir_p_at (target_root_dfd, "usr/lib/ostree-boot", 0755,
+                                         cancellable, error))
+              goto out;
             /* Hardlink the existing content, only a little ugly as
              * we'll end up sha256'ing it twice, but oh well. */
-            if (!hardlink_recurse (src_rootfs_fd, "boot",
+            if (!hardlink_recurse (target_root_dfd, "boot",
                                    target_root_dfd, "usr/lib/ostree-boot",
                                    cancellable, error))
               goto out;
