@@ -940,12 +940,14 @@ hardlink_recurse (int                src_dfd,
 
       if (dent->d_type == DT_DIR)
         {
-          if (mkdirat (dest_target_dfd, dent->d_name, stbuf.st_mode) < 0)
+          mode_t perms = stbuf.st_mode & ~S_IFMT;
+
+          if (mkdirat (dest_target_dfd, dent->d_name, perms) < 0)
             {
               glnx_set_error_from_errno (error);
               return FALSE;
             }
-          if (fchmodat (dest_target_dfd, dent->d_name, stbuf.st_mode, AT_SYMLINK_NOFOLLOW) < 0)
+          if (fchmodat (dest_target_dfd, dent->d_name, perms, 0) < 0)
             {
               glnx_set_error_from_errno (error);
               return FALSE;
@@ -1103,8 +1105,7 @@ create_rootfs_from_yumroot_content (int            target_root_dfd,
         case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH:
           {
             g_print ("Using boot location: both\n");
-            if (renameat (src_rootfs_fd, "boot",
-                          target_root_dfd, "boot") < 0)
+            if (renameat (src_rootfs_fd, "boot", target_root_dfd, "boot") < 0)
               {
                 glnx_set_error_from_errno (error);
                 goto out;
