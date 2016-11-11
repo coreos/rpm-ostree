@@ -6,9 +6,17 @@ branches:
 container:
     image: projectatomic/ostree-tester
 
+env:
+    CFLAGS: '-fsanitize=undefined'
+
+build:
+    config-opts: >
+      --prefix=/usr
+      --libdir=/usr/lib64
+      --enable-installed-tests
+      --enable-gtk-doc
+
 packages:
-  - clang
-  - libubsan
   - python-sphinx
   - createrepo_c
   - gperf
@@ -27,15 +35,7 @@ packages:
   - gtk-doc
 
 tests:
-    - ./autogen.sh
-        --prefix=/usr
-        --libdir=/usr/lib64
-        --enable-installed-tests
-        --enable-gtk-doc
-        CFLAGS='-fsanitize=undefined'
-    - make -j2
     - make check
-    - make install
     - gnome-desktop-testing-runner rpm-ostree
     - sudo --user=testuser gnome-desktop-testing-runner rpm-ostree
 
@@ -58,4 +58,9 @@ tests:
 
 context: Clang
 
+env:
+    CC: 'clang'
+    CFLAGS: '-Werror=unused-variable'
+
+tests:
 artifacts:
