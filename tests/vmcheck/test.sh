@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
+commondir=$(cd $(dirname $0)/../common && pwd)
 . ${commondir}/libvm.sh
 
 # create ssh-config if needed and export cmds
