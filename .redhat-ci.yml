@@ -7,6 +7,7 @@ container:
     image: projectatomic/ostree-tester
 
 packages:
+  - git
   - clang
   - libubsan
   - python-sphinx
@@ -18,8 +19,11 @@ packages:
   - check-devel
   - pkgconfig(ostree-1)
   - pkgconfig(libgsystem)
+  - pkgconfig(libcap)
   - pkgconfig(librepo)
   - pkgconfig(libsolv)
+  - pkgconfig(libsystemd)
+  - pkgconfig(libarchive)
   - pkgconfig(rpm)
   - pkgconfig(json-glib-1.0)
   - pkgconfig(expat)
@@ -59,3 +63,35 @@ tests:
 context: Clang
 
 artifacts:
+
+---
+
+inherit: true
+
+host:
+  distro: fedora/24/cloud
+
+context: rhci/vmcheck
+
+env:
+  VAGRANT_DEFAULT_PROVIDER: libvirt
+  VAGRANT_BOX_URL: https://ci.centos.org/artifacts/sig-atomic/centos-continuous/images/cloud/latest/images/centos-atomic-host-7-vagrant-libvirt.box
+  VAGRANT_BOX: centos/7/atomic/continuous
+
+# We'll need to add some sugar to redhat-ci to make this
+# nicer. E.g. allow provision multiple hosts, or a host and
+# a container.
+
+tests:
+  - dnf install -y vagrant libvirt qemu-kvm vagrant-libvirt ansible libselinux-python
+  - systemctl start libvirtd virtlogd
+  - vagrant box add --name $VAGRANT_BOX $VAGRANT_BOX_URL
+  - vagrant up
+  - sh autogen.sh
+  - make gitignore # needed to have a clean rsync
+  - make vmcheck
+
+artifacts:
+  - vmcheck.log
+
+timeout: 45m
