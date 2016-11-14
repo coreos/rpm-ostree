@@ -28,17 +28,26 @@ vm_setup() {
   fi
 
   local sshopts="-F ${topsrcdir}/ssh-config \
+  	         -o User=root \
                  -o ControlMaster=auto \
                  -o ControlPath=${topsrcdir}/ssh.sock \
                  -o ControlPersist=yes"
   export SSH="ssh $sshopts vmcheck"
   export SCP="scp $sshopts"
+  if grep -q 'User.*vagrant' ${topsrcdir}/ssh-config; then
+      export using_sshfs=yes
+  else
+      export using_sshfs=no
+  fi
 }
 
 vm_rsync() {
+  if test ${using_sshfs} = yes; then
+    return
+  fi
   pushd ${topsrcdir}
   rsync -az --no-owner --no-group --filter ":- .gitignore" \
-    -e "ssh -F ssh-config" --exclude .git/ . vmcheck:/root/sync
+	  -e "ssh -F ssh-config" --exclude .git/ . vmcheck:/root/sync
   popd
 }
 
@@ -82,7 +91,8 @@ vm_ssh_wait() {
     sleep 1
   done
   # final check at the timeout mark
-  vm_cmd true &> /dev/null
+  set -x
+  vm_cmd true
 }
 
 # reboot the vm
