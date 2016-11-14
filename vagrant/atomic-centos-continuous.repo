@@ -1,4 +1,0 @@
-[atomic-centos-continuous]
-baseurl=https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/build
-gpgcheck=0
-priority=1

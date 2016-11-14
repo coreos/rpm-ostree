@@ -1,6 +1,0 @@
-{
-    "ref": "testos/x86_64/test",
-    "repos": ["test-centos"],
-    "packages": ["kernel", "systemd"],
-    "selinux": true
-}

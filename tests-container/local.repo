@@ -1,4 +1,0 @@
-[local]
-name=local
-baseurl=file:///var/tmp/repo
-gpgcheck=0

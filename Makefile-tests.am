@@ -91,24 +91,23 @@ check-local:
 	@echo "  *** NOTE ***"
 	@echo "  *** NOTE ***"
 
-.PHONY: vmbuild vmshell vmcheck testenv
+.PHONY: vmsync vmshell vmcheck testenv
 
-vmbuild:
-	@if [ -z "$(SKIP_VMBUILD)" ]; then \
-	  env $(BASE_TESTS_ENVIRONMENT) \
-	    tests/utils/vmbuild.sh; \
-	fi
+vmsync:
+	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) \
+	   sh tests/vmcheck/sync.sh
 
 vmoverlay:
-	@env $(BASE_TESTS_ENVIRONMENT) \
-	  tests/utils/vmoverlay.sh
+	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) \
+	   sh tests/vmcheck/overlay.sh
 
-vmshell: vmbuild
+
+vmshell: vmsync
 	sleep 2
 	ssh -F ssh-config vmcheck
 
 # set up test environment to somewhat resemble uninstalled tests
-vmcheck: vmbuild tests/common/compose/yum/repo/repodata/repomd.xml
+vmcheck: tests/common/compose/yum/repo/repodata/repomd.xml
 	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) \
 	   sh tests/vmcheck/test.sh
 

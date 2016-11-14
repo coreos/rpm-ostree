@@ -12,6 +12,8 @@ if ! vm_ssh_wait 20; then
   exit 1
 fi
 
+echo "VM is running."
+
 # just error out if we're unlocked -- we use the current deployment as the
 # fallback between each test, so we need to be sure it's in a state that works.
 # also, the user might have forgotten that these tests are somewhat destructive
