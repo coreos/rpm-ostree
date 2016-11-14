@@ -39,7 +39,7 @@ echo "ok pkg-add foo"
 
 vm_reboot
 
-vm_assert_layered_pkg foo present
+vm_assert_layered_pkg foo-1.0 present
 echo "ok pkg foo added"
 
 if ! vm_cmd /usr/bin/foo | grep "Happy foobing!"; then
@@ -47,7 +47,7 @@ if ! vm_cmd /usr/bin/foo | grep "Happy foobing!"; then
 fi
 echo "ok correct output"
 
-vm_cmd rpm-ostree pkg-remove foo
+vm_cmd rpm-ostree pkg-remove foo-1.0
 echo "ok pkg-remove foo"
 
 vm_reboot
