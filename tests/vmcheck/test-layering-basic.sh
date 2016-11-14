@@ -34,7 +34,7 @@ vm_send_test_repo
 # make sure the package is not already layered
 vm_assert_layered_pkg foo absent
 
-vm_cmd rpm-ostree pkg-add foo
+vm_cmd rpm-ostree pkg-add foo-1.0
 echo "ok pkg-add foo"
 
 vm_reboot
