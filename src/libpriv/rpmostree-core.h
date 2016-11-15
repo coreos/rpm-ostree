@@ -103,12 +103,18 @@ gboolean rpmostree_context_relabel (RpmOstreeContext *self,
                                     GCancellable     *cancellable,
                                     GError          **error);
 
+typedef enum {
+  RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
+  RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING
+} RpmOstreeAssembleType;
+
 /* NB: tmprootfs_dfd is allowed to have pre-existing data */
 /* devino_cache can be NULL if no previous cache established */
 gboolean rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                             int                    tmprootfs_dfd,
                                             OstreeRepoDevInoCache *devino_cache,
                                             const char            *parent,
+                                            RpmOstreeAssembleType  assemble_type,
                                             gboolean               noscripts,
                                             char                 **out_commit,
                                             GCancellable          *cancellable,

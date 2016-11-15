@@ -1064,6 +1064,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   /* --- Overlay and commit --- */
   if (!rpmostree_context_assemble_commit (ctx, tmprootfs_dfd, devino_cache,
                                           base_rev,
+                                          RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
                                           (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS) > 0,
                                           &self->new_revision,
                                           cancellable, error))
