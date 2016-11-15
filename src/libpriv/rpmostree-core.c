@@ -1849,6 +1849,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                    int                    tmprootfs_dfd,
                                    OstreeRepoDevInoCache *devino_cache,
                                    const char            *parent,
+                                   RpmOstreeAssembleType  assemble_type,
                                    gboolean               noscripts,
                                    char                 **out_commit,
                                    GCancellable          *cancellable,
@@ -2188,12 +2189,13 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
 
     g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.spec", spec_v);
 
-    /* copy the version tag from the parent if present -- XXX: this behaviour
-     * should probably be adjustable from a new parameter instead */
-    if (parent != NULL)
+    /* copy the version tag */
+    if (assemble_type == RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING)
       {
         g_autoptr(GVariant) commit = NULL;
         g_autofree char *parent_version = NULL;
+
+        g_assert (parent != NULL);
 
         if (!ostree_repo_load_commit (self->ostreerepo, parent, &commit, NULL, error))
           goto out;
@@ -2203,6 +2205,10 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
         if (parent_version)
           g_variant_builder_add (&metadata_builder, "{sv}", "version",
                                  g_variant_new_string (parent_version));
+
+        /* Flag the commit as a client layer */
+        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.clientlayer",
+                               g_variant_new_boolean (TRUE));
       }
 
     state_checksum = rpmostree_context_get_state_sha512 (self);
