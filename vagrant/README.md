@@ -28,5 +28,11 @@ Now, once you do a build inside the c7dev container, like:
 To sync over and install the built binaries:
 
 ```
-(cd vagrant && make)
+make vmsync
+```
+
+You may also want to use `vmcheck`, like this:
+
+```
+make vmoverlay && make vmcheck
 ```
