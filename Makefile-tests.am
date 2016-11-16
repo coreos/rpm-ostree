@@ -107,7 +107,7 @@ vmshell: vmsync
 	ssh -F ssh-config vmcheck
 
 # set up test environment to somewhat resemble uninstalled tests
-vmcheck: tests/common/compose/yum/repo/repodata/repomd.xml
+vmcheck: vmoverlay tests/common/compose/yum/repo/repodata/repomd.xml
 	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) \
 	   sh tests/vmcheck/test.sh
 
