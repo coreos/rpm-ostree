@@ -74,6 +74,11 @@ dnl bundled libdnf
 PKGDEP_RPMOSTREE_CFLAGS="-I $(pwd)/libdnf -I $(pwd)/libdnf-build $PKGDEP_RPMOSTREE_CFLAGS"
 PKGDEP_RPMOSTREE_LIBS="-L$(pwd)/libdnf-build/libdnf -ldnf $PKGDEP_RPMOSTREE_LIBS"
 
+save_LIBS=$LIBS
+LIBS=$PKGDEP_RPMOSTREE_LIBS
+AC_CHECK_FUNCS(ostree_repo_verify_commit_for_remote)
+LIBS=$save_LIBS
+
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GLIB_TESTS
