@@ -94,16 +94,12 @@ check-local:
 .PHONY: vmsync vmshell vmcheck testenv
 
 vmsync:
-	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) \
-	   sh tests/vmcheck/sync.sh
+	@env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh
 
 vmoverlay:
-	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) \
-	   sh tests/vmcheck/overlay.sh
-
+	@env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/overlay.sh
 
 vmshell: vmsync
-	sleep 2
 	ssh -F ssh-config vmcheck
 
 # set up test environment to somewhat resemble uninstalled tests
