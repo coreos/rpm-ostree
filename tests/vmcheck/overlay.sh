@@ -1,15 +1,21 @@
 #!/bin/bash
-set -xeuo pipefail
+set -euo pipefail
 
 # Execute this code path on the host
 if test -z "${OVERLAY_IN_VM:-}"; then
+    . ${commondir}/libvm.sh
+    set -x
+
     topdir=$(git rev-parse --show-toplevel)
     cd ${topdir}
     rm insttree -rf
     make install DESTDIR=$(pwd)/insttree
+    vm_rsync
     ssh -o User=root -F ssh-config vmcheck "env OVERLAY_IN_VM=1 ~vagrant/sync/tests/vmcheck/overlay.sh"
     exit 0
 fi
+
+set -x
 
 # And then this code path in the VM
 
