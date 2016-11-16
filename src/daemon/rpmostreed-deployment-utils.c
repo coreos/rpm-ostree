@@ -96,9 +96,7 @@ rpmostreed_deployment_gpg_results (OstreeRepo *repo,
   if (!gpg_verify)
     goto out;
 
-
-  result = ostree_repo_verify_commit_ext (repo, csum, NULL, NULL,
-                                          NULL, &error);
+  result = ostree_repo_verify_commit_for_remote (repo, csum, remote, NULL, &error);
   if (!result)
       goto out;
 
