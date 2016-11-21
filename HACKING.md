@@ -14,6 +14,8 @@ consume this as a git submodule automatically.
 We also require a few other libraries like
 [librepo](https://github.com/rpm-software-management/librepo).
 
+On Fedora, you can install those with the command `dnf builddep rpm-ostree`.
+
 So the build process now looks like any other autotools program:
 
 ```
