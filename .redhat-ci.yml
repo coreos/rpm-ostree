@@ -3,6 +3,8 @@ branches:
     - auto
     - try
 
+context: check
+
 container:
     image: projectatomic/ostree-tester
 
@@ -48,14 +50,6 @@ artifacts:
 
 inherit: true
 
-tests:
-    - ./autogen.sh
-        --prefix=/usr
-        --libdir=/usr/lib64
-        --enable-installed-tests
-        --enable-gtk-doc CC=clang
-    - make -j2
-
 context: Clang
 
 env:
@@ -64,3 +58,23 @@ env:
 
 tests:
 artifacts:
+
+---
+
+inherit: true
+
+context: vmcheck
+
+cluster:
+  hosts:
+    - name: vmcheck
+      distro: fedora/24/atomic
+  container:
+    image: projectatomic/ostree-tester
+
+tests:
+  - cp .redhat-ci.ssh-config ssh-config
+  - make vmcheck
+
+artifacts:
+  - vmcheck.log
