@@ -647,15 +647,10 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
 
   if (self->override_csum != NULL)
     {
-      if (!ostree_repo_set_ref_immediate (repo,
-                                          origin_remote,
-                                          origin_ref,
-                                          self->override_csum,
-                                          cancellable,
-                                          error))
-        goto out;
-
       self->new_revision = g_strdup (self->override_csum);
+
+      /* NB: We already pulled the latest ref during the version/csum lookup, so
+       * let's not set the ref to this new revision, which might be older. */
     }
   else
     {
