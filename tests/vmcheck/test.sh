@@ -7,7 +7,7 @@ set -euo pipefail
 vm_setup
 
 # stand up ssh connection and sanity check that it all works
-if ! vm_ssh_wait 20; then
+if ! vm_ssh_wait 30; then
   echo "ERROR: A running VM is required for 'make vmcheck'."
   exit 1
 fi

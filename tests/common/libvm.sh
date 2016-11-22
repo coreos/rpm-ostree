@@ -28,27 +28,21 @@ vm_setup() {
   fi
 
   local sshopts="-F ${topsrcdir}/ssh-config \
-  	         -o User=root \
+                 -o User=root \
                  -o ControlMaster=auto \
                  -o ControlPath=${topsrcdir}/ssh.sock \
                  -o ControlPersist=yes"
   export SSH="ssh $sshopts vmcheck"
   export SCP="scp $sshopts"
-  if grep -q 'User.*vagrant' ${topsrcdir}/ssh-config; then
-      export using_sshfs=yes
-  else
-      export using_sshfs=no
-  fi
 }
 
 vm_rsync() {
-  if test ${using_sshfs} = yes; then
-    return
+  if ! test -f .vagrant_sshfs; then
+    pushd ${topsrcdir}
+    rsync -az --no-owner --no-group --filter ":- .gitignore" \
+          -e "ssh -F ssh-config" --exclude .git/ . vmcheck:/var/roothome/sync
+    popd
   fi
-  pushd ${topsrcdir}
-  rsync -az --no-owner --no-group --filter ":- .gitignore" \
-	  -e "ssh -F ssh-config" --exclude .git/ . vmcheck:/root/sync
-  popd
 }
 
 # run command in vm
@@ -99,7 +93,7 @@ vm_ssh_wait() {
 vm_reboot() {
   vm_cmd systemctl reboot || :
   sleep 2 # give time for port to go down
-  vm_ssh_wait 10
+  vm_ssh_wait 30
 }
 
 # check that the given files exist on the VM
