@@ -91,7 +91,7 @@ check-local:
 	@echo "  *** NOTE ***"
 	@echo "  *** NOTE ***"
 
-.PHONY: vmsync vmshell vmcheck testenv
+.PHONY: vmsync vmoverlay vmshell vmcheck testenv
 
 vmsync:
 	@env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh

@@ -61,6 +61,6 @@
       register: rpmq_fuse_sshfs
       changed_when: False
       failed_when: False
-    
+
     - command: rpm-ostree install fuse-sshfs
       when: rpmq_fuse_sshfs.rc != 0
