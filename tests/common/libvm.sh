@@ -37,10 +37,10 @@ vm_setup() {
 }
 
 vm_rsync() {
-  if ! test -f .vagrant_sshfs; then
+  if ! test -f .vagrant/using_sshfs; then
     pushd ${topsrcdir}
-    rsync -az --no-owner --no-group --filter ":- .gitignore" \
-          -e "ssh -F ssh-config" --exclude .git/ . vmcheck:/var/roothome/sync
+    rsync -az --no-owner --no-group -e "ssh -F ssh-config" \
+              --exclude .git/ . vmcheck:/var/roothome/sync
     popd
   fi
 }
