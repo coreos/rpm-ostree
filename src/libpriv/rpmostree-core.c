@@ -575,6 +575,8 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   char **enabled_repos = NULL;
   char **instlangs = NULL;
 
+  self->spec = g_object_ref (spec);
+
   if (install_root)
     dnf_context_set_install_root (self->hifctx, install_root);
   else
@@ -589,29 +591,6 @@ rpmostree_context_setup (RpmOstreeContext    *self,
 
   if (source_root)
     dnf_context_set_source_root (self->hifctx, source_root);
-
-  if (!dnf_context_setup (self->hifctx, cancellable, error))
-    goto out;
-
-  /* This is what we use as default. */
-  set_rpm_macro_define ("_dbpath", "/usr/share/rpm");
-
-  self->spec = g_object_ref (spec);
-
-  /* NB: missing repo --> let hif figure it out for itself */
-  if (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos))
-    if (!context_repos_enable_only (self, (const char *const*)enabled_repos, error))
-      goto out;
-
-  repos = dnf_context_get_repos (self->hifctx);
-  if (repos->len == 0)
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "No enabled repositories");
-      goto out;
-    }
-
-  require_enabled_repos (repos);
 
   if (g_variant_dict_lookup (self->spec->dict, "instlangs", "^a&s", &instlangs))
     {
@@ -632,6 +611,27 @@ rpmostree_context_setup (RpmOstreeContext    *self,
       dnf_context_set_rpm_macro (self->hifctx, "_install_langs", opt->str);
       g_string_free (opt, TRUE);
     }
+
+  if (!dnf_context_setup (self->hifctx, cancellable, error))
+    goto out;
+
+  /* This is what we use as default. */
+  set_rpm_macro_define ("_dbpath", "/usr/share/rpm");
+
+  /* NB: missing repo --> let hif figure it out for itself */
+  if (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos))
+    if (!context_repos_enable_only (self, (const char *const*)enabled_repos, error))
+      goto out;
+
+  repos = dnf_context_get_repos (self->hifctx);
+  if (repos->len == 0)
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "No enabled repositories");
+      goto out;
+    }
+
+  require_enabled_repos (repos);
 
   { gboolean docs;
 
