@@ -277,7 +277,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (json_object_has_member (treedata, "install-langs"))
     {
       JsonArray *a = json_object_get_array_member (treedata, "install-langs");
-      if (!set_keyfile_string_array_from_json (treespec, "tree", "install-langs", a, error))
+      if (!set_keyfile_string_array_from_json (treespec, "tree", "instlangs", a, error))
         goto out;
     }
 
