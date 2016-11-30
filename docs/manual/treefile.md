@@ -41,6 +41,11 @@ It supports the following parameters:
  * `install-langs`: Array of strings, optional.  This sets the RPM
    _install_langs macro.  Set this to e.g. `["en_US", "fr_FR"]`.
 
+ * `mutate-os-release`: String, optional.  This causes rpm-ostree to
+    change the `VERSION` and `PRETTY_NAME` fields to include the ostree
+    version, and adds a specific `OSTREE_VERSION` key that can be easier
+    for processes to query than looking via ostree.
+
  * `documentation`: boolean, optional. If this is set to false it sets the RPM
    transaction flag "nodocs" which makes yum/rpm not install files marked as
    documentation. The default is true.
