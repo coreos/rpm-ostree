@@ -1899,6 +1899,13 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                           DNF_PACKAGE_INFO_INSTALL,
                                           -1);
 
+    if (package_list->len == 0)
+      {
+        g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                             "No packages in installation set");
+        goto out;
+      }
+
     for (i = 0; i < package_list->len; i++)
       {
         DnfPackage *pkg = package_list->pdata[i];
