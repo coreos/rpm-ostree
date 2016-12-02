@@ -32,8 +32,12 @@ if test -z "${SRCDIR:-}"; then
 fi
 
 _cleanup_tmpdir () {
-    if test -f ${test_tmpdir}/.test; then
-        rm ${test_tmpdir} -rf
+    if test -z "${TEST_SKIP_CLEANUP:-}"; then
+	if test -f ${test_tmpdir}/.test; then
+           rm ${test_tmpdir} -rf
+	fi
+    else
+	echo "Skipping cleanup of ${test_tmpdir}"
     fi
 }
 
@@ -44,7 +48,9 @@ if ( test -n "${UNINSTALLEDTESTS:-}" || test -n "${VMTESTS:-}" ) && ! test -f $P
    touch ${test_tmpdir}/.test
    trap _cleanup_tmpdir EXIT
    cd ${test_tmpdir}
-   export PATH=${builddir}:${PATH}
+fi
+if test -n "${UNINSTALLEDTESTS:-}"; then
+    export PATH=${builddir}:${PATH}
 fi
 
 test_tmpdir=$(pwd)

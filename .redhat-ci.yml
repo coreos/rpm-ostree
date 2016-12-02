@@ -78,3 +78,18 @@ tests:
 
 artifacts:
   - vmcheck.log
+
+---
+context: compose
+build: false
+timeout: 30m
+
+# This test case wants an "unprivileged container with bubblewrap",
+# which we don't have right now; so just provision a VM and do a
+# docker --privileged run.
+host:
+  distro: centos/7/atomic/alpha
+
+tests:
+  # Yes, we're duplicating the build dependencies *again*!  Woo!
+  - docker run --privileged -v $(pwd):/srv/code --rm projectatomic/ostree-tester /bin/sh -c 'yum -y install python-sphinx createrepo_c gperf rpm-build bubblewrap python-devel check-devel "pkgconfig(ostree-1)" "pkgconfig(libgsystem)" "pkgconfig(librepo)" "pkgconfig(libsolv)" "pkgconfig(rpm)" "pkgconfig(json-glib-1.0)" "pkgconfig(expat)" cmake gtk-doc && cd /srv/code && env NOCONFIGURE=1 ./autogen.sh && ./configure --prefix=/usr --libdir=/usr/lib64 && make && make install && ./tests/compose'
