@@ -1,0 +1,30 @@
+#!/bin/bash
+
+set -xeuo pipefail
+
+dn=$(cd $(dirname $0) && pwd)
+
+uid=$(id -u)
+test_compose_datadir=/var/tmp/rpmostree-compose-cache-${uid}
+export test_compose_datadir
+mkdir -p ${test_compose_datadir}
+datadir_owner=$(stat -c '%u' ${test_compose_datadir})
+test ${uid} = ${datadir_owner}
+
+# Pre-cache RPMs for each test, and share ostree repos between them for efficiency
+repo=${test_compose_datadir}/repo
+export repo
+ostree --repo=${repo} init --mode=archive
+repobuild=${test_compose_datadir}/repo-build
+export repobuild
+ostree --repo=${repobuild} init --mode=bare-user
+mkdir -p ${test_compose_datadir}/cache
+# Delete the default ref, since we want to use subrefs of it
+rm ${repobuild}/refs/heads/* -rf
+rpm-ostree compose --repo=${repobuild} tree --dry-run --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json
+rm ${repobuild}/refs/heads/* -rf
+
+for testname in ${dn}/compose-tests/test*.sh; do
+    ${testname}
+done
+
