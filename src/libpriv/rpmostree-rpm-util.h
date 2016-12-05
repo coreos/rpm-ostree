@@ -70,6 +70,13 @@ rpmostree_cleanup_rpmheader (Header *h)
     headerFree (*h);
 }
 #define _cleanup_rpmheader_ __attribute__((cleanup(rpmostree_cleanup_rpmheader)))
+static inline void
+rpmostree_cleanup_rpmfi (rpmfi *fi)
+{
+  if (*fi)
+    rpmfiFree (*fi);
+}
+#define _cleanup_rpmfi_ __attribute__((cleanup(rpmostree_cleanup_rpmfi)))
 
 void
 rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff);

@@ -79,6 +79,8 @@ static void
 rpmostree_unpacker_finalize (GObject *object)
 {
   RpmOstreeUnpacker *self = (RpmOstreeUnpacker*)object;
+  if (self->hdr)
+    headerFree (self->hdr);
   if (self->archive)
     archive_read_free (self->archive); 
   if (self->fi)
@@ -179,7 +181,7 @@ rpmostree_unpacker_read_metainfo (int fd,
   FD_t rpmfd;
   int r;
   _cleanup_rpmheader_ Header ret_header = NULL;
-  rpmfi ret_fi = NULL;
+  _cleanup_rpmfi_ rpmfi ret_fi = NULL;
   gsize ret_cpio_offset;
   g_autofree char *abspath = g_strdup_printf ("/proc/self/fd/%d", fd);
 
