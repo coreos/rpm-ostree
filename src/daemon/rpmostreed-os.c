@@ -1210,7 +1210,7 @@ rpmostreed_os_new (OstreeSysroot *sysroot,
                    RpmostreedTransactionMonitor *monitor)
 {
   RpmostreedOS *obj = NULL;
-  const gchar *path;
+  g_autofree char *path = NULL;
 
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
   g_return_val_if_fail (name != NULL, NULL);
