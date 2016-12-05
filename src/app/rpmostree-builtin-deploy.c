@@ -68,7 +68,7 @@ rpmostree_builtin_deploy (int            argc,
                           GError       **error)
 {
   int exit_status = EXIT_FAILURE;
-  GOptionContext *context;
+  g_autoptr(GOptionContext) context = NULL;
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autoptr(GVariant) default_deployment = NULL;

@@ -286,10 +286,8 @@ main (int    argc,
 
   if (!command)
     {
-      GOptionContext *context;
+      g_autoptr(GOptionContext) context = option_context_new_with_commands ();
       g_autofree char *help = NULL;
-
-      context = option_context_new_with_commands ();
 
       /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL, &argc, &argv,
@@ -309,8 +307,6 @@ main (int    argc,
       help = g_option_context_get_help (context, FALSE, NULL);
       g_printerr ("%s", help);
       exit_status = EXIT_FAILURE;
-
-      g_option_context_free (context);
 
       goto out;
     }

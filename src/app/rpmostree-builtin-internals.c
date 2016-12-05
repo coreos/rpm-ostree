@@ -105,10 +105,8 @@ rpmostree_builtin_internals (int argc, char **argv, GCancellable *cancellable, G
 
   if (!subcommand->name)
     {
-      GOptionContext *context;
+      g_autoptr(GOptionContext) context = internals_option_context_new_with_commands ();
       g_autofree char *help = NULL;
-
-      context = internals_option_context_new_with_commands ();
 
       /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL,
@@ -131,8 +129,6 @@ rpmostree_builtin_internals (int argc, char **argv, GCancellable *cancellable, G
       exit_status = EXIT_FAILURE;
       help = g_option_context_get_help (context, FALSE, NULL);
       g_printerr ("%s", help);
-
-      g_option_context_free (context);
 
       goto out;
     }

@@ -37,7 +37,7 @@ int
 rpmostree_db_builtin_diff (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
   int exit_status = EXIT_FAILURE;
-  GOptionContext *context;
+  g_autoptr(GOptionContext) context = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
   struct RpmRevisionData *rpmrev1 = NULL;
   struct RpmRevisionData *rpmrev2 = NULL;
@@ -103,8 +103,6 @@ out:
    * being there. */
   rpmrev_free (rpmrev1);
   rpmrev_free (rpmrev2);
-
-  g_option_context_free (context);
 
   return exit_status;
 }

@@ -296,14 +296,13 @@ main (int argc,
       char **argv)
 {
   GError *error;
-  GOptionContext *opt_context;
+  g_autoptr(GOptionContext) opt_context = NULL;
   GIOChannel *channel;
   guint name_owner_id = 0;
   gint ret;
 
   ret = 1;
   loop = NULL;
-  opt_context = NULL;
 
   #if !GLIB_CHECK_VERSION(2,36,0)
   g_type_init ();
@@ -394,9 +393,6 @@ main (int argc,
 out:
   if (loop != NULL)
     g_main_loop_unref (loop);
-
-  if (opt_context != NULL)
-    g_option_context_free (opt_context);
 
   g_info ("rpm-ostreed exiting");
 

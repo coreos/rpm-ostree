@@ -65,7 +65,7 @@ rpmostree_builtin_rebase (int             argc,
   /* forced blank for now */
   const char *packages[] = { NULL };
 
-  GOptionContext *context = g_option_context_new ("REFSPEC - Switch to a different tree");
+  g_autoptr(GOptionContext) context = g_option_context_new ("REFSPEC - Switch to a different tree");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
