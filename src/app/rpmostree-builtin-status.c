@@ -135,7 +135,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       g_assert (g_variant_dict_lookup (dict, "osname", "&s", &os_name));
       g_assert (g_variant_dict_lookup (dict, "id", "&s", &id));
       g_assert (g_variant_dict_lookup (dict, "serial", "i", &serial));
-      g_assert (g_variant_dict_lookup (dict, "checksum", "s", &checksum));
+      g_assert (g_variant_dict_lookup (dict, "checksum", "&s", &checksum));
       g_assert (g_variant_dict_lookup (dict, "timestamp", "t", &t));
       { g_autoptr(GDateTime) timestamp = g_date_time_new_from_unix_utc (t);
 
@@ -145,7 +145,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
           timestamp_string = g_strdup_printf ("(invalid timestamp)");
       }
       
-      if (g_variant_dict_lookup (dict, "origin", "s", &origin_refspec))
+      if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
         {
           if (g_variant_dict_lookup (dict, "packages", "^a&s", &origin_packages))
             {

@@ -572,8 +572,8 @@ rpmostree_context_setup (RpmOstreeContext    *self,
 {
   gboolean ret = FALSE;
   GPtrArray *repos = NULL;
-  char **enabled_repos = NULL;
-  char **instlangs = NULL;
+  g_autofree char **enabled_repos = NULL;
+  g_autofree char **instlangs = NULL;
 
   self->spec = g_object_ref (spec);
 
@@ -962,7 +962,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
 {
   gboolean ret = FALSE;
   DnfContext *hifctx = self->hifctx;
-  char **pkgnames = NULL;
+  g_autofree char **pkgnames = NULL;
   g_autoptr(RpmOstreeInstall) ret_install = g_object_new (RPMOSTREE_TYPE_INSTALL, NULL);
 
   g_assert (g_variant_dict_lookup (self->spec->dict, "packages", "^a&s", &pkgnames));
