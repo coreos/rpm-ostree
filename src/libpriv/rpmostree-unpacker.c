@@ -597,7 +597,17 @@ compose_filter_cb (OstreeRepo         *repo,
   else if (!error_was_set)
     {
       /* Now, if there's no previous error, check for unsupported state */
-      if (user != NULL || group != NULL)
+
+      /* If the RPM has file capabilities/suid but is root:root, that metadata will
+       * be in the override.  Explicitly canonicalize NULL -> "root", so
+       * we handle both cases.
+       */
+      if (user == NULL)
+        user = "root";
+      if (group == NULL)
+        group = "root";
+
+      if (!g_str_equal (user, "root") || !g_str_equal (group, "root"))
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Non-root ownership currently unsupported: path \"%s\" marked as %s%s%s)",
