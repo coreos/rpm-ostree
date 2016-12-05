@@ -75,7 +75,7 @@ rpmostreed_deployment_gpg_results (OstreeRepo *repo,
 
   guint n_sigs, i;
   gboolean gpg_verify;
-  GVariantBuilder builder;
+  g_auto(GVariantBuilder) builder;
 
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("av"));
 
