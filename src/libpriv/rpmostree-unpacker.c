@@ -583,35 +583,32 @@ compose_filter_cb (OstreeRepo         *repo,
   guint32 uid = g_file_info_get_attribute_uint32 (file_info, "unix::uid");
   guint32 gid = g_file_info_get_attribute_uint32 (file_info, "unix::gid");
 
-  gboolean was_null = (*error == NULL);
+  gboolean error_was_set = (error && *error != NULL);
 
-  if (*error == NULL &&
-      get_rpmfi_override (self, path, &user, &group, NULL) &&
-      (user != NULL || group != NULL))
+  (void) get_rpmfi_override (self, path, &user, &group, NULL);
+
+  /* First, look for non-root paths in /run and /var */
+  if ((user != NULL || group != NULL)
+      && g_str_has_prefix (path, "/run/") || g_str_has_prefix (path, "/var/"))
     {
-      if (g_str_has_prefix (path, "/run/") || g_str_has_prefix (path, "/var/"))
-        {
-          append_tmpfiles_d (self, path, file_info, user, group);
-          return OSTREE_REPO_COMMIT_FILTER_SKIP;
-        }
-      else
+      append_tmpfiles_d (self, path, file_info, user, group);
+      return OSTREE_REPO_COMMIT_FILTER_SKIP;
+    }
+  else if (!error_was_set)
+    {
+      /* Now, if there's no previous error, check for unsupported state */
+      if (user != NULL || group != NULL)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "path \"%s\" marked as %s%s%s)",
+                       "Non-root ownership currently unsupported: path \"%s\" marked as %s%s%s)",
                        path, user, group ? ":" : "", group ?: "");
         }
+      else if (uid != 0 || gid != 0)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "RPM had unexpected non-root owned path \"%s\", marked as %u:%u)", path, uid, gid);
+        }
     }
-
-  /* This should normally never happen since by design RPM doesn't use ids at
-   * all, but might as well check since it's right there. */
-  if (*error == NULL && (uid != 0 || gid != 0))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "path \"%s\" marked as %u:%u)", path, uid, gid);
-    }
-
-  if (was_null && *error != NULL)
-    g_prefix_error (error, "Non-root ownership currently unsupported: ");
 
   workaround_fedora_rpm_permissions (file_info);
 
