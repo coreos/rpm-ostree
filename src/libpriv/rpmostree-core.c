@@ -1866,7 +1866,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
     g_hash_table_new_full (NULL, NULL, (GDestroyNotify)g_object_unref, (GDestroyNotify)g_free);
   DnfPackage *filesystem_package = NULL;   /* It's special... */
   int r;
-  char *tmp_metadata_dir_path = NULL;
+  g_autofree char *tmp_metadata_dir_path = NULL;
   glnx_fd_close int tmp_metadata_dfd = -1;
   g_autofree char *ret_commit_checksum = NULL;
   OstreeRepoCommitModifier *commit_modifier = NULL;
