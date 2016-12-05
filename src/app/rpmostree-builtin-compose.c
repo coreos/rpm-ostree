@@ -105,10 +105,9 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
 
   if (!subcommand->name)
     {
-      GOptionContext *context;
+      g_autoptr(GOptionContext) context =
+        compose_option_context_new_with_commands ();
       g_autofree char *help = NULL;
-
-      context = compose_option_context_new_with_commands ();
 
       /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL,
@@ -131,8 +130,6 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
       exit_status = EXIT_FAILURE;
       help = g_option_context_get_help (context, FALSE, NULL);
       g_printerr ("%s", help);
-
-      g_option_context_free (context);
 
       goto out;
     }

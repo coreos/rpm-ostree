@@ -88,7 +88,7 @@ int
 rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
   int exit_status = EXIT_FAILURE;
-  GOptionContext *context;
+  g_autoptr(GOptionContext) context = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
   g_autoptr(GPtrArray) patterns = NULL;
   g_autoptr(GPtrArray) revs = NULL;
@@ -132,8 +132,6 @@ rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GEr
   exit_status = EXIT_SUCCESS;
 
 out:
-  g_option_context_free (context);
-
   return exit_status;
 }
 

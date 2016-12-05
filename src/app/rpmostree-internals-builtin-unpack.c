@@ -57,7 +57,7 @@ rpmostree_internals_builtin_unpack (int             argc,
                                     GError        **error)
 {
   int exit_status = EXIT_FAILURE;
-  GOptionContext *context = g_option_context_new ("REPO RPM");
+  g_autoptr(GOptionContext) context = g_option_context_new ("REPO RPM");
   RpmOstreeUnpackerFlags flags = 0;
   glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
   const char *target;

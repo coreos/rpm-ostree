@@ -147,7 +147,7 @@ rpmostree_container_builtin_init (int             argc,
   int exit_status = EXIT_FAILURE;
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
-  GOptionContext *context = g_option_context_new ("");
+  g_autoptr(GOptionContext) context = g_option_context_new ("");
   static const char* const directories[] = { "repo", "rpmmd.repos.d", "cache/rpm-md", "roots", "tmp" };
   guint i;
   
@@ -231,7 +231,7 @@ rpmostree_container_builtin_assemble (int             argc,
                                       GError        **error)
 {
   int exit_status = EXIT_FAILURE;
-  GOptionContext *context = g_option_context_new ("NAME [PKGNAME PKGNAME...]");
+  g_autoptr(GOptionContext) context = g_option_context_new ("NAME [PKGNAME PKGNAME...]");
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
   g_autoptr(RpmOstreeInstall) install = {0,};
@@ -410,7 +410,7 @@ gboolean
 rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
   int exit_status = EXIT_FAILURE;
-  GOptionContext *context = g_option_context_new ("NAME");
+  g_autoptr(GOptionContext) context = g_option_context_new ("NAME");
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
   g_autoptr(RpmOstreeInstall) install = NULL;
