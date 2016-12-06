@@ -56,6 +56,14 @@ env:
     CC: 'clang'
     CFLAGS: '-Werror=unused-variable'
 
+build:
+    config-opts: >
+      --prefix=/usr
+      --libdir=/usr/lib64
+      --enable-installed-tests
+      --enable-gtk-doc
+      --enable-new-name
+
 tests:
 artifacts:
 
