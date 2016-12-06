@@ -93,7 +93,7 @@ vm_ssh_wait() {
 vm_reboot() {
   vm_cmd systemctl reboot || :
   sleep 2 # give time for port to go down
-  vm_ssh_wait 30
+  vm_ssh_wait 60
 }
 
 # check that the given files exist on the VM
