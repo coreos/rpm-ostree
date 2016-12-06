@@ -76,6 +76,11 @@ tests:
   - cp .redhat-ci.ssh-config ssh-config
   - make vmcheck
 
+env:
+    CC: 'clang'
+    CFLAGS: '-Werror=unused-variable'
+
+tests:
 artifacts:
   - vmcheck.log
 
