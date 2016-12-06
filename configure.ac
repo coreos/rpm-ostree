@@ -35,6 +35,7 @@ CC_CHECK_FLAGS_APPEND([WARN_CFLAGS], [CFLAGS], [\
 	-Werror=pointer-arith -Werror=init-self \
         -Werror=missing-declarations \
         -Werror=return-type \
+        -Werror=parenthesis \
         -Werror=overflow \
         -Werror=int-conversion \
 	-Werror=missing-include-dirs -Werror=aggregate-return \
