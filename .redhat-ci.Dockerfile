@@ -15,4 +15,9 @@ RUN dnf install -y @buildsys-build && \
 RUN dnf install -y \
         createrepo_c \
         clang \
-        libubsan
+        libubsan \
+        sudo  \
+        gnome-desktop-testing
+
+# create an unprivileged user for testing
+RUN adduser testuser
