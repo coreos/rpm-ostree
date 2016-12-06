@@ -5,8 +5,10 @@ branches:
 
 context: check
 
+required: true
+
 container:
-    image: projectatomic/ostree-tester
+    image: projectatomic/rpm-ostree-tester
 
 env:
     CFLAGS: '-fsanitize=undefined'
@@ -18,24 +20,6 @@ build:
       --enable-installed-tests
       --enable-gtk-doc
 
-packages:
-  - python-sphinx
-  - createrepo_c
-  - gperf
-  - rpm-build
-  - bubblewrap
-  - python-devel
-  - check-devel
-  - pkgconfig(ostree-1)
-  - pkgconfig(libgsystem)
-  - pkgconfig(librepo)
-  - pkgconfig(libsolv)
-  - pkgconfig(rpm)
-  - pkgconfig(json-glib-1.0)
-  - pkgconfig(expat)
-  - cmake
-  - gtk-doc
-
 tests:
     - make check
     - gnome-desktop-testing-runner rpm-ostree
@@ -45,12 +29,15 @@ timeout: 30m
 
 artifacts:
     - test-suite.log
+    - config.log
 
 ---
 
 inherit: true
 
 context: Clang
+
+required: true
 
 env:
     CC: 'clang'
@@ -65,12 +52,14 @@ inherit: true
 
 context: vmcheck
 
+required: true
+
 cluster:
   hosts:
     - name: vmcheck
-      distro: fedora/24/atomic
+      distro: fedora/25/atomic
   container:
-    image: projectatomic/ostree-tester
+    image: projectatomic/rpm-ostree-tester
 
 tests:
   - cp .redhat-ci.ssh-config ssh-config
@@ -80,6 +69,7 @@ artifacts:
   - vmcheck.log
 
 ---
+
 context: compose
 build: false
 timeout: 30m
@@ -91,5 +81,13 @@ host:
   distro: centos/7/atomic/alpha
 
 tests:
-  # Yes, we're duplicating the build dependencies *again*!  Woo!
-  - docker run --privileged -v $(pwd):/srv/code --rm projectatomic/ostree-tester /bin/sh -c 'yum -y install python-sphinx createrepo_c gperf rpm-build bubblewrap python-devel check-devel "pkgconfig(ostree-1)" "pkgconfig(libgsystem)" "pkgconfig(librepo)" "pkgconfig(libsolv)" "pkgconfig(rpm)" "pkgconfig(json-glib-1.0)" "pkgconfig(expat)" cmake gtk-doc && cd /srv/code && env NOCONFIGURE=1 ./autogen.sh && ./configure --prefix=/usr --libdir=/usr/lib64 && make && make install && ./tests/compose'
+  - >
+      docker run --privileged -v $(pwd):/srv/code --rm
+      projectatomic/rpm-ostree-tester /bin/sh -c "
+      cd /srv/code &&
+      env NOCONFIGURE=1 ./autogen.sh &&
+      ./configure --prefix=/usr --libdir=/usr/lib64 &&
+      make &&
+      make install &&
+      ./tests/compose
+      "
