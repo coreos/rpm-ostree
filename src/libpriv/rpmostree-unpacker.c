@@ -677,7 +677,7 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
                     GError           **error)
 {
   gboolean ret = FALSE;
-  GVariant *metadata = NULL; /* floating */
+  g_autoptr(GVariant) metadata = NULL;
   g_autoptr(GFile) root = NULL;
   OstreeRepoCommitModifier *modifier = NULL;
   OstreeRepoImportArchiveOptions opts = { 0 };
@@ -752,6 +752,7 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
   
   if (!build_metadata_variant (self, sepolicy, &metadata, cancellable, error))
     goto out;
+  g_variant_ref_sink (metadata);
 
   if (!ostree_repo_write_commit (repo, NULL, "", "", metadata,
                                  OSTREE_REPO_FILE (root), out_csum,
