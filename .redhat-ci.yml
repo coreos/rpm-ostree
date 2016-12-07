@@ -52,7 +52,7 @@ inherit: true
 
 context: vmcheck
 
-required: true
+required: false
 
 cluster:
   hosts:
