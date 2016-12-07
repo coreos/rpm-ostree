@@ -296,6 +296,7 @@ rpmostree_context_finalize (GObject *object)
 {
   RpmOstreeContext *rctx = RPMOSTREE_CONTEXT (object);
 
+  g_clear_object (&rctx->spec);
   g_clear_object (&rctx->hifctx);
 
   if (rctx->dummy_instroot_path)
@@ -2240,11 +2241,13 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
     if (!ostree_repo_write_mtree (self->ostreerepo, mtree, &root, cancellable, error))
       goto out;
 
-    if (!ostree_repo_write_commit (self->ostreerepo, parent, "", "",
-                                   g_variant_builder_end (&metadata_builder),
-                                   OSTREE_REPO_FILE (root),
-                                   &ret_commit_checksum, cancellable, error))
+    { g_autoptr(GVariant) metadata = g_variant_ref_sink (g_variant_builder_end (&metadata_builder));
+      if (!ostree_repo_write_commit (self->ostreerepo, parent, "", "",
+                                     metadata,
+                                     OSTREE_REPO_FILE (root),
+                                     &ret_commit_checksum, cancellable, error))
       goto out;
+    }
 
     { const char * ref = rpmostree_treespec_get_ref (self->spec);
       if (ref != NULL)
