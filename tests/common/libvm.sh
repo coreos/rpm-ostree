@@ -75,25 +75,32 @@ EOF
 
 # wait until ssh is available on the vm
 # - $1    timeout in second (optional)
+# - $2    previous bootid (optional)
 vm_ssh_wait() {
-  timeout=${1:-0}
+  timeout=${1:-0}; shift
+  old_bootid=${1:-}; shift
   while [ $timeout -gt 0 ]; do
-    if vm_cmd true &> /dev/null; then
-      return 0
+    if bootid=$(vm_get_boot_id 2>/dev/null); then
+        if [[ $bootid != $old_bootid ]]; then
+            return 0
+        fi
     fi
     timeout=$((timeout - 1))
     sleep 1
   done
-  # final check at the timeout mark
-  set -x
-  vm_cmd true
+  false "Timed out while waiting for SSH."
+}
+
+vm_get_boot_id() {
+  vm_cmd cat /proc/sys/kernel/random/boot_id 2>/dev/null
 }
 
 # reboot the vm
 vm_reboot() {
+  vm_cmd sync
+  bootid=$(vm_get_boot_id)
   vm_cmd systemctl reboot || :
-  sleep 2 # give time for port to go down
-  vm_ssh_wait 60
+  vm_ssh_wait 120 $bootid
 }
 
 # check that the given files exist on the VM
