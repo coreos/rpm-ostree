@@ -30,6 +30,13 @@ vm_cmd ostree rev-parse $csum_orig &> /dev/null # validate
 vm_cmd ostree refs vmcheck_orig --delete
 vm_cmd ostree refs $csum_orig --create vmcheck_orig
 
+# we bring our own test repo and test packages, so let's neuter any repo that
+# comes with the distro to help speed up rpm-ostree metadata fetching since we
+# don't cache it (e.g. on Fedora, it takes *forever* to fetch metadata, which we
+# have to do dozens of times throughout the suite)
+vm_cmd mv /etc/yum.repos.d{,.bak}
+vm_cmd mkdir /etc/yum.repos.d
+
 LOG=${LOG:-"$PWD/vmcheck.log"}
 echo -n '' > ${LOG}
 
@@ -108,6 +115,10 @@ for tf in $(find . -name 'test-*.sh' | sort); do
       vm_reboot
     fi
 done
+
+# put back the original yum repos
+vm_cmd rm -rf /etc/yum.repos.d
+vm_cmd mv /etc/yum.repos.d{.bak,}
 
 # tear down ssh connection if needed
 if $SSH -O check &>/dev/null; then
