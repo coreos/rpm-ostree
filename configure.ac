@@ -26,18 +26,23 @@ fi
 AC_SUBST([dbusservicedir], [$dbusservicedir])
 AC_MSG_RESULT(dbusservicedir)
 
+dnl Keep this in sync with the version in ostree
 CC_CHECK_FLAGS_APPEND([WARN_CFLAGS], [CFLAGS], [\
         -pipe \
         -Wall \
+	-Werror=empty-body \
+	-Werror=strict-prototypes \
 	-Werror=missing-prototypes \
 	-Werror=implicit-function-declaration \
         "-Werror=format=2 -Werror=format-security -Werror=format-nonliteral" \
 	-Werror=pointer-arith -Werror=init-self \
         -Werror=missing-declarations \
         -Werror=return-type \
-        -Werror=parenthesis \
         -Werror=overflow \
         -Werror=int-conversion \
+        -Werror=parenthesis \
+        -Werror=incompatible-pointer-types \
+        -Werror=misleading-indentation \
 	-Werror=missing-include-dirs -Werror=aggregate-return \
 	-Werror=declaration-after-statement \
 ])
