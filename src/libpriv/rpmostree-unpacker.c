@@ -177,7 +177,7 @@ rpmostree_unpacker_read_metainfo (int fd,
                                   GError **error)
 {
   gboolean ret = FALSE;
-  rpmts ts = NULL;
+  _cleanup_rpmts_ rpmts ts = NULL;
   FD_t rpmfd;
   int r;
   _cleanup_rpmheader_ Header ret_header = NULL;
