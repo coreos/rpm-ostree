@@ -176,7 +176,7 @@ It supports the following parameters:
    /boot directory. This is useful if the target for the tree is some kind
    of container which does not have its own kernel.
 
- * `copy-files`: Array, optional: Copy external files to the rootfs.
+ * `add-files`: Array, optional: Copy external files to the rootfs.
 
    Each array element is an array, whose first member is the source
    file name, and the second element is the destination name.  The
