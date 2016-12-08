@@ -19,6 +19,10 @@ pysetjsonmember() {
     pyeditjson "jd['"$1"'] = $2" < ${treefile} > ${treefile}.new && mv ${treefile}{.new,}
 }
 
+pyappendjsonmember() {
+    pyeditjson "jd['"$1"'] += $2" < ${treefile} > ${treefile}.new && mv ${treefile}{.new,}
+}
+
 prepare_compose_test() {
     name=$1
     shift

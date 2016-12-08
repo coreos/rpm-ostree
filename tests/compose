@@ -1,8 +1,30 @@
 #!/bin/bash
-
-set -xeuo pipefail
+set -euo pipefail
 
 dn=$(cd $(dirname $0) && pwd)
+
+LOG=${LOG:-compose.log}
+date > ${LOG}
+
+colour_print() {
+  colour=$1; shift
+  [ ! -t 1 ] || echo -en "\e[${colour}m"
+  echo -n "$@"
+  [ ! -t 1 ] || echo -en "\e[0m"
+  echo
+}
+
+pass_print() {
+  colour_print 32 "$@" # green
+}
+
+fail_print() {
+  colour_print 31 "$@" # red
+}
+
+skip_print() {
+  colour_print 34 "$@" # blue
+}
 
 uid=$(id -u)
 test_compose_datadir=/var/tmp/rpmostree-compose-cache-${uid}
@@ -19,12 +41,55 @@ repobuild=${test_compose_datadir}/repo-build
 export repobuild
 ostree --repo=${repobuild} init --mode=bare-user
 mkdir -p ${test_compose_datadir}/cache
-# Delete the default ref, since we want to use subrefs of it
-rm ${repobuild}/refs/heads/* -rf
-rpm-ostree compose --repo=${repobuild} tree --dry-run --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json
-rm ${repobuild}/refs/heads/* -rf
 
-for testname in ${dn}/compose-tests/test*.sh; do
-    ${testname}
+echo "Preparing compose tests..." | tee -a ${LOG}
+
+# Delete the default ref, since we want to use subrefs of it
+(rm ${repobuild}/refs/heads/* -rf
+ rpm-ostree compose --repo=${repobuild} tree --dry-run --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json
+ rm ${repobuild}/refs/heads/* -rf) &>> ${LOG}
+
+total=0
+pass=0
+fail=0
+skip=0
+for tf in $(find ${dn}/compose-tests -name 'test-*.sh' | sort); do
+
+    if [ -n "${TESTS+ }" ]; then
+        tfbn=$(basename "$tf" .sh)
+        tfbn=" ${tfbn#test-} "
+        if [[ " $TESTS " != *$tfbn* ]]; then
+            continue
+        fi
+    fi
+
+    let "total += 1"
+
+    bn=$(basename ${tf})
+    printf "Running $bn...\n"
+    printf "\n\n===== ${bn} =====\n\n" >> ${LOG}
+
+    # do some dirty piping to get some instant feedback and help debugging
+    if ${tf} |& tee -a ${LOG} \
+            | grep -e '^ok ' --line-buffered \
+            | xargs -d '\n' -n 1 echo "  "; then
+        pass_print "PASS: $bn"
+        echo "PASS" >> ${LOG}
+        let "pass += 1"
+    else
+        if test $? = 77; then
+            skip_print "SKIP: $bn"
+            echo "SKIP" >> ${LOG}
+            let "skip += 1"
+        else
+            fail_print "FAIL: $bn"
+            echo "FAIL" >> ${LOG}
+            let "fail += 1"
+        fi
+    fi
 done
 
+[ ${fail} -eq 0 ] && printer=pass || printer=fail
+${printer}_print "TOTAL: $total PASS: $pass SKIP: $skip FAIL: $fail"
+echo "See ${LOG} for more information."
+[ ${fail} -eq 0 ]
