@@ -69,7 +69,7 @@ It supports the following parameters:
     case for this with Dracut is `--filesystems xfs,ext4` to ensure
     specific filesystem drivers are included.
 
- * `remove-files`: Delete these files from the generated tree
+ * `remove-files`: Array of files to delete from the generated tree.
 
  * `remove-from-packages`: Array, optional: Delete from specified packages
    files which match the provided array of regular expressions.

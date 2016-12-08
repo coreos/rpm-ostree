@@ -81,7 +81,7 @@ for tf in $(find . -name 'test-*.sh' | sort); do
 
     bn=$(basename ${tf})
     printf "Running $bn...\n"
-    printf "\n==== ${tf} ====\n" >> ${LOG}
+    printf "\n==== ${bn} ====\n" >> ${LOG}
 
     # do some dirty piping to get some instant feedback and help debugging
     if ${tf} |& tee -a ${LOG} \

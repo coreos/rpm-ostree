@@ -1,0 +1,12 @@
+Thank you for contributing to rpm-ostree.
+
+If you are adding functionality to tree composes, please add
+a corresponding test to the compose-test suite. Similarly,
+if adding a client-facing feature, consider the vmcheck
+suite. Regressions fixes are also great candidates for new
+tests.
+
+If you're not sure where or how to add tests, don't hesitate
+to ask for help from the maintainers.
+
+Cheers!
