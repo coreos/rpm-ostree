@@ -99,3 +99,6 @@ tests:
       make install &&
       ./tests/compose
       "
+
+artifacts:
+  - compose.log
