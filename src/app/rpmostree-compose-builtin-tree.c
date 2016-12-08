@@ -609,7 +609,6 @@ rpmostree_compose_builtin_tree (int             argc,
   g_autoptr(GFile) yumroot = NULL;
   glnx_fd_close int rootfs_fd = -1;
   glnx_unref_object OstreeRepo *repo = NULL;
-  g_autoptr(GPtrArray) bootstrap_packages = NULL;
   g_autoptr(GPtrArray) packages = NULL;
   g_autoptr(GFile) treefile_path = NULL;
   g_autoptr(GFile) treefile_dirpath = NULL;
@@ -829,8 +828,7 @@ rpmostree_compose_builtin_tree (int             argc,
                              g_variant_new_string (next_version));
     }
 
-  bootstrap_packages = g_ptr_array_new ();
-  packages = g_ptr_array_new ();
+  packages = g_ptr_array_new_with_free_func (g_free);
 
   if (json_object_has_member (treefile, "bootstrap_packages"))
     {
@@ -978,6 +976,8 @@ rpmostree_compose_builtin_tree (int             argc,
    * we delete below.
    */
   g_clear_object (&corectx);
+
+  g_free (self->ref);
   
   /* Move back out of the workding directory to ensure unmount works */
   (void )chdir ("/");

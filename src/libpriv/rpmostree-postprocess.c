@@ -327,7 +327,8 @@ do_kernel_prep (int            rootfs_dfd,
   g_autofree char* initramfs_path = NULL;
   const char *boot_checksum_str = NULL;
   g_autoptr(GChecksum) boot_checksum = NULL;
-  const char *kver = NULL;
+  const char *kver = NULL; /* May point to kver_owned */
+  g_autofree char *kver_owned = NULL;
   g_autofree char *bootdir = g_strdup ("boot");
 
   if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
@@ -375,7 +376,7 @@ do_kernel_prep (int            rootfs_dfd,
 
       kver_p = strchr (kname, '-');
       g_assert (kver_p);
-      kver = g_strdup (kver_p + 1);
+      kver = kver_owned = g_strdup (kver_p + 1);
     }
 
   /* OSTree needs to own this */
