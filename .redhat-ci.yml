@@ -97,6 +97,7 @@ tests:
       ./configure --prefix=/usr --libdir=/usr/lib64 &&
       make &&
       make install &&
+      dnf update -y bubblewrap &&
       ./tests/compose
       "
 
