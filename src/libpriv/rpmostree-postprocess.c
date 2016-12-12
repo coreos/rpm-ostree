@@ -415,6 +415,8 @@ do_kernel_prep (int            rootfs_dfd,
     g_ptr_array_add (dracut_argv, "--add");
     g_ptr_array_add (dracut_argv, "ostree");
     g_ptr_array_add (dracut_argv, "--tmpdir=/tmp");
+    g_ptr_array_add (dracut_argv, "--reproducible");
+    g_ptr_array_add (dracut_argv, "--gzip");
     g_ptr_array_add (dracut_argv, "-f");
     g_ptr_array_add (dracut_argv, "/var/tmp/initramfs.img");
     g_ptr_array_add (dracut_argv, (char*)kver);
