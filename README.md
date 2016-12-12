@@ -1,4 +1,4 @@
-# rpm-ostree Overview
+# rpm-ostree Overview 
 
 rpm-ostree is a hybrid image/package system.  It uses
 [OSTree](https://ostree.readthedocs.io/en/latest/) as a base image
