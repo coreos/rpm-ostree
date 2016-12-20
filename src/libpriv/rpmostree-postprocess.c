@@ -1001,7 +1001,10 @@ create_rootfs_from_yumroot_content (int            target_root_dfd,
 
   g_print ("Preparing kernel\n");
   if (!container && !do_kernel_prep (src_rootfs_fd, treefile, cancellable, error))
-    goto out;
+    {
+      g_prefix_error (error, "During kernel processing: ");
+      goto out;
+    }
   
   g_print ("Initializing rootfs\n");
   if (!init_rootfs (target_root_dfd, cancellable, error))
