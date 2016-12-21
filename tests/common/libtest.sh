@@ -341,6 +341,7 @@ os_repository_new_commit ()
     echo "content iteration ${content_iteration}" > usr/bin/content-iteration
 
     version=$(date "+%Y%m%d.${content_iteration}")
+    echo "version: $version"
 
     ostree --repo=${test_tmpdir}/testos-repo commit  --add-metadata-string "version=${version}" -b testos/buildmaster/x86_64-runtime -s "Build"
     cd ${test_tmpdir}
