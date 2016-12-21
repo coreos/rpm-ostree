@@ -59,6 +59,7 @@ RpmostreedTransaction *
                                                             OstreeSysroot *sysroot,
                                                             const char *osname,
                                                             const char *refspec,
+                                                            const char *revision,
                                                             gboolean skip_purge,
                                                             gboolean reboot,
                                                             GCancellable *cancellable,

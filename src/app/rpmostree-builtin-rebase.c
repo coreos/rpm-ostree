@@ -42,13 +42,16 @@ static GOptionEntry option_entries[] = {
 };
 
 static GVariant *
-get_args_variant (void)
+get_args_variant (const char *revision)
 {
   GVariantDict dict;
 
   g_variant_dict_init (&dict, NULL);
   g_variant_dict_insert (&dict, "skip-purge", "b", opt_skip_purge);
   g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
+
+  if (revision != NULL)
+    g_variant_dict_insert (&dict, "revision", "s", revision);
 
   return g_variant_dict_end (&dict);
 }
@@ -61,11 +64,12 @@ rpmostree_builtin_rebase (int             argc,
 {
   int exit_status = EXIT_FAILURE;
   const char *new_provided_refspec;
+  const char *revision = NULL;
 
   /* forced blank for now */
   const char *packages[] = { NULL };
 
-  g_autoptr(GOptionContext) context = g_option_context_new ("REFSPEC - Switch to a different tree");
+  g_autoptr(GOptionContext) context = g_option_context_new ("REFSPEC [REVISION] - Switch to a different tree");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
@@ -79,20 +83,23 @@ rpmostree_builtin_rebase (int             argc,
                                        error))
     goto out;
 
-  if (argc < 2)
+  if (argc < 2 || argc > 3)
     {
-      rpmostree_usage_error (context, "REFSPEC must be specified", error);
+      rpmostree_usage_error (context, "Too few or too many arguments", error);
       goto out;
     }
 
   new_provided_refspec = argv[1];
+
+  if (argc == 3)
+    revision = argv[2];
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
     goto out;
 
   if (!rpmostree_os_call_rebase_sync (os_proxy,
-                                      get_args_variant (),
+                                      get_args_variant (revision),
                                       new_provided_refspec,
                                       packages,
                                       &transaction_address,

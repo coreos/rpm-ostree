@@ -71,6 +71,82 @@ out:
   return ret;
 }
 
+static gboolean
+apply_revision_override (RpmostreedTransaction    *transaction,
+                         OstreeRepo               *repo,
+                         OstreeAsyncProgress      *progress,
+                         RpmOstreeSysrootUpgrader *upgrader,
+                         const char               *revision,
+                         GCancellable             *cancellable,
+                         GError                  **error)
+{
+  g_autoptr(GKeyFile) origin = NULL;
+  g_autofree char *checksum = NULL;
+  g_autofree char *version = NULL;
+  const char *refspec;
+
+  origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
+  if (origin == NULL)
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Booted deployment has no origin");
+      return FALSE;
+    }
+
+  if (!rpmostreed_parse_revision (revision,
+                                  &checksum,
+                                  &version,
+                                  error))
+    return FALSE;
+
+  refspec = rpmostree_sysroot_upgrader_get_refspec (upgrader);
+  if (refspec == NULL)
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Could not find refspec for booted deployment");
+        return FALSE;
+    }
+
+  if (version != NULL)
+    {
+      rpmostreed_transaction_emit_message_printf (transaction,
+                                                  "Resolving version '%s'",
+                                                  version);
+
+      if (!rpmostreed_repo_lookup_version (repo, refspec, version, progress,
+                                           cancellable, &checksum, error))
+        return FALSE;
+    }
+  else
+    {
+      g_assert (checksum != NULL);
+
+      rpmostreed_transaction_emit_message_printf (transaction,
+                                                  "Validating checksum '%s'",
+                                                  checksum);
+
+      if (!rpmostreed_repo_lookup_checksum (repo, refspec, checksum,
+                                            progress, cancellable, error))
+        return FALSE;
+    }
+
+  g_key_file_set_string (origin, "origin", "override-commit", checksum);
+
+  if (version != NULL)
+    {
+      g_autofree char *comment = NULL;
+
+      /* Add a comment with the version, to be nice. */
+      comment = g_strdup_printf ("Version %s [%.10s]", version, checksum);
+      g_key_file_set_comment (origin, "origin", "override-commit", comment, NULL);
+    }
+
+  if (!rpmostree_sysroot_upgrader_set_origin (upgrader, origin, cancellable, error))
+    return FALSE;
+
+  return TRUE;
+}
+
 /* ============================= Package Diff  ============================= */
 
 typedef struct {
@@ -682,6 +758,7 @@ typedef struct {
   RpmostreedTransaction parent;
   char *osname;
   char *refspec;
+  char *revision;
   gboolean skip_purge;
   gboolean reboot;
 } RebaseTransaction;
@@ -739,7 +816,7 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
   flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED;
 
   upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, flags,
-					     cancellable, error);
+                                             cancellable, error);
   if (upgrader == NULL)
     goto out;
 
@@ -754,6 +831,13 @@ rebase_transaction_execute (RpmostreedTransaction *transaction,
   progress = ostree_async_progress_new ();
   rpmostreed_transaction_connect_download_progress (transaction, progress);
   rpmostreed_transaction_connect_signature_progress (transaction, repo);
+
+  if (self->revision)
+    {
+      if (!apply_revision_override (transaction, repo, progress, upgrader,
+                                    self->revision, cancellable, error))
+        goto out;
+    }
 
   if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0,
 					progress, &changed,
@@ -810,6 +894,7 @@ rpmostreed_transaction_new_rebase (GDBusMethodInvocation *invocation,
                                    OstreeSysroot *sysroot,
                                    const char *osname,
                                    const char *refspec,
+                                   const char *revision,
                                    gboolean skip_purge,
                                    gboolean reboot,
                                    GCancellable *cancellable,
@@ -832,6 +917,7 @@ rpmostreed_transaction_new_rebase (GDBusMethodInvocation *invocation,
     {
       self->osname = g_strdup (osname);
       self->refspec = g_strdup (refspec);
+      self->revision = g_strdup (revision);
       self->skip_purge = skip_purge;
       self->reboot = reboot;
     }
@@ -880,11 +966,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   glnx_unref_object OstreeRepo *repo = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
 
-  g_autoptr(GKeyFile) origin = NULL;
-  g_autofree char *checksum = NULL;
-  g_autofree char *version = NULL;
-  const char *refspec = NULL;
-
   gboolean changed = FALSE;
   gboolean ret = FALSE;
 
@@ -903,77 +984,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     goto out;
 
-  origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
-  if (origin == NULL)
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Booted deployment has no origin");
-      goto out;
-    }
-
   progress = ostree_async_progress_new ();
   rpmostreed_transaction_connect_download_progress (transaction, progress);
   rpmostreed_transaction_connect_signature_progress (transaction, repo);
 
-  if (!rpmostreed_parse_revision (self->revision,
-                                  &checksum,
-                                  &version,
-                                  error))
-    goto out;
-
-  refspec = rpmostree_sysroot_upgrader_get_refspec (upgrader);
-  if (refspec == NULL)
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Could not find refspec for booted deployment");
-      goto out;
-    }
-
-  if (version != NULL)
-    {
-
-      rpmostreed_transaction_emit_message_printf (transaction,
-                                                  "Resolving version '%s'",
-                                                  version);
-
-      if (!rpmostreed_repo_lookup_version (repo,
-                                           refspec,
-                                           version,
-                                           progress,
-                                           cancellable,
-                                           &checksum,
-                                           error))
-        goto out;
-    }
-  else
-    {
-      g_assert (checksum != NULL);
-
-      rpmostreed_transaction_emit_message_printf (transaction,
-                                                  "Validating checksum '%s'",
-                                                  checksum);
-
-      if (!rpmostreed_repo_lookup_checksum (repo,
-                                            refspec,
-                                            checksum,
-                                            progress,
-                                            cancellable,
-                                            error))
-        goto out;
-    }
-
-  g_key_file_set_string (origin, "origin", "override-commit", checksum);
-
-  if (version != NULL)
-    {
-      g_autofree char *comment = NULL;
-
-      /* Add a comment with the version, to be nice. */
-      comment = g_strdup_printf ("Version %s [%.10s]", version, checksum);
-      g_key_file_set_comment (origin, "origin", "override-commit", comment, NULL);
-    }
-
-  if (!rpmostree_sysroot_upgrader_set_origin (upgrader, origin, cancellable, error))
+  if (!apply_revision_override (transaction, repo, progress, upgrader,
+                                self->revision, cancellable, error))
     goto out;
 
   if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0,

@@ -649,6 +649,7 @@ os_handle_rebase (RPMOSTreeOS *interface,
   GVariantDict options_dict;
   gboolean opt_skip_purge = FALSE;
   const char *osname;
+  const char *opt_revision = NULL;
   gboolean opt_reboot = FALSE;
   GError *local_error = NULL;
 
@@ -683,6 +684,9 @@ os_handle_rebase (RPMOSTreeOS *interface,
   g_variant_dict_lookup (&options_dict,
                          "reboot", "b",
                          &opt_reboot);
+  g_variant_dict_lookup (&options_dict,
+                         "revision", "&s",
+                         &opt_revision);
 
   g_variant_dict_clear (&options_dict);
 
@@ -690,6 +694,7 @@ os_handle_rebase (RPMOSTreeOS *interface,
                                                    ot_sysroot,
                                                    osname,
                                                    arg_refspec,
+                                                   opt_revision,
                                                    opt_skip_purge,
                                                    opt_reboot,
                                                    cancellable,

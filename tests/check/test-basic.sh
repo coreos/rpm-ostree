@@ -23,7 +23,7 @@ set -e
 
 ensure_dbus
 
-echo "1..10"
+echo "1..13"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -108,6 +108,31 @@ if rpm-ostree deploy --os=testos REVISION=$other_rev 2>OUTPUT-err; then
 fi
 assert_file_has_content OUTPUT-err 'Checksum .* not found in .*'
 echo "ok error on deploying commit on other branch"
+
+# Make sure we're currently on otheros
+rpm-ostree status | head --lines 5 | tee OUTPUT-status.txt
+assert_file_has_content OUTPUT-status.txt otheros:testos/buildmaster/x86_64-runtime
+
+os_repository_new_commit 2 2
+rpm-ostree rebase --os=testos testos:testos/buildmaster/x86_64-runtime $(date "+%Y%m%d.2")
+rpm-ostree status | head --lines 5 | tee OUTPUT-status.txt
+assert_file_has_content OUTPUT-status.txt testos
+assert_file_has_content OUTPUT-status.txt $(date "+%Y%m%d\.2")
+echo "ok rebase onto other branch at specific version"
+
+branch=testos/buildmaster/x86_64-runtime
+new_csum=$(ostree --repo=${test_tmpdir}/testos-repo commit -b $branch --tree=ref=$branch)
+rpm-ostree rebase --os=testos otheros:testos/buildmaster/x86_64-runtime $new_csum
+rpm-ostree status | head --lines 5 | tee OUTPUT-status.txt
+assert_file_has_content OUTPUT-status.txt otheros
+assert_file_has_content OUTPUT-status.txt $new_csum
+echo "ok rebase onto other branch at specific checksum"
+
+if rpm-ostree rebase --os=testos testos:testos/buildmaster/x86_64-runtime $other_rev 2>OUTPUT-err; then
+    assert_not_reached "Rebasing onto out-of-branch commit unexpectedly succeeded."
+fi
+assert_file_has_content OUTPUT-err 'Checksum .* not found in .*'
+echo "ok error on rebasing onto commit on other branch"
 
 # Ensure it returns an error when passing a wrong option.
 rpm-ostree --help | awk '/^$/ {in_commands=0} {if(in_commands==1){print $0}} /^Builtin Commands:/ {in_commands=1}' > commands
