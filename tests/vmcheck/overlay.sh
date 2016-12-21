@@ -13,8 +13,7 @@ if test -z "${INSIDE_VM:-}"; then
 
     set -x
 
-    topdir=$(git rev-parse --show-toplevel)
-    cd ${topdir}
+    cd ${topsrcdir}
     rm insttree -rf
     make install DESTDIR=$(pwd)/insttree
     vm_rsync

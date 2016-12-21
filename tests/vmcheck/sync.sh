@@ -14,8 +14,7 @@ if test -z "${INSIDE_VM:-}"; then
 
     set -x
 
-    topdir=$(git rev-parse --show-toplevel)
-    cd ${topdir}
+    cd ${topsrcdir}
     rm insttree -rf
     make install DESTDIR=$(pwd)/insttree
     vm_rsync
@@ -28,5 +27,6 @@ else
     set -x
     ostree admin unlock || :
     rsync -rv /var/roothome/sync/insttree/usr/ /usr/
+    restorecon /usr/libexec/rpm-ostreed
     systemctl restart rpm-ostreed
 fi
