@@ -14,7 +14,7 @@ Vagrant.configure(2) do |config|
 
     if Vagrant.has_plugin?('vagrant-sshfs')
       config.vm.synced_folder ".", "/var/roothome/sync", type: 'sshfs'
-      File.write('.vagrant/using_sshfs', '')
+      File.write(__dir__ + '/.vagrant/using_sshfs', '')
     end
 
     # turn off the default rsync in the vagrant box

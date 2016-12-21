@@ -4,7 +4,7 @@
   become: yes
   tasks:
     - name: generate config
-      local_action: shell vagrant ssh-config > ssh-config
+      local_action: shell vagrant ssh-config > ../ssh-config
       become: no
 
     # The test suite requires direct ssh to root.
