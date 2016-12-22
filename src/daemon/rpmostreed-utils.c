@@ -260,6 +260,10 @@ rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
   int depth, ii;
   gboolean ret = FALSE;
 
+  /* Only fetch the HEAD on the first pass. See also:
+   * https://github.com/projectatomic/rpm-ostree/pull/557 */
+  gboolean first_pass = TRUE;
+
   g_return_val_if_fail (OSTREE_IS_REPO (repo), FALSE);
   g_return_val_if_fail (refspec != NULL, FALSE);
 
@@ -288,7 +292,8 @@ rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
             g_variant_new_strv ((const char * const *) refs_array, -1);
 
           g_variant_dict_init (&options, NULL);
-          g_variant_dict_insert (&options, "depth", "i", depth);
+          if (!first_pass)
+            g_variant_dict_insert (&options, "depth", "i", depth);
           g_variant_dict_insert (&options, "flags", "i", flags);
           g_variant_dict_insert_value (&options, "refs", refs_value);
 
@@ -307,7 +312,7 @@ rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
 
       if (visitor != NULL)
         {
-          for (ii = 0; ii < depth && checksum != NULL; ii++)
+          for (ii = 0; ii < (first_pass ? 1 : depth) && checksum != NULL; ii++)
             {
               g_autoptr(GVariant) commit = NULL;
               gboolean stop = FALSE;
@@ -332,7 +337,10 @@ rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
 
       /* Pull the next batch of commits, twice as many. */
       refs_array[0] = checksum;
-      depth = depth * 2;
+
+      if (!first_pass)
+        depth = depth * 2;
+      first_pass = FALSE;
     }
 
   ret = TRUE;

@@ -3,6 +3,8 @@ set -euo pipefail
 
 dn=$(cd $(dirname $0) && pwd)
 
+export topsrcdir=$(cd $dn/.. && pwd)
+
 LOG=${LOG:-compose.log}
 date > ${LOG}
 

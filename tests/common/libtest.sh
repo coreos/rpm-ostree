@@ -28,7 +28,7 @@ LIBTEST_SH=1
 self="$(realpath $0)"
 
 if test -z "${SRCDIR:-}"; then
-    SRCDIR=$(dirname $0)
+    SRCDIR=${topsrcdir}/tests
 fi
 
 _cleanup_tmpdir () {
@@ -62,8 +62,15 @@ export G_DEBUG=fatal-warnings
 export OSTREE_SYSROOT_DEBUG=mutable-deployments
 
 export TEST_GPG_KEYID="472CDAFA"
-export TEST_GPG_KEYHOME=${SRCDIR}/gpghome
-export OSTREE_GPG_HOME=${TEST_GPG_KEYHOME}/trusted
+
+# GPG when creating signatures demands a writable
+# homedir in order to create lockfiles.  Work around
+# this by copying locally.
+echo "Copying gpghome to ${test_tmpdir}"
+cp -a "${SRCDIR}/gpghome" ${test_tmpdir}
+chmod -R u+w "${test_tmpdir}"
+export TEST_GPG_KEYHOME=${test_tmpdir}/gpghome
+export OSTREE_GPG_HOME=${test_tmpdir}/gpghome/trusted
 
 if test -n "${OT_TESTS_DEBUG:-}"; then
     set -x
