@@ -23,7 +23,7 @@ set -e
 
 ensure_dbus
 
-echo "1..13"
+echo "1..14"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -33,9 +33,12 @@ echo "ok setup"
 #       --sysroot=sysroot to rpm-ostree commands as it will result
 #       in a warning message.
 
+OSTREE="ostree --repo=sysroot/ostree/repo"
+REMOTE_OSTREE="ostree --repo=testos-repo --gpg-homedir=${test_tmpdir}/gpghome"
+
 # This initial deployment gets kicked off with some kernel arguments 
-ostree --repo=sysroot/ostree/repo remote add --set=gpg-verify=false testos file://$(pwd)/testos-repo testos/buildmaster/x86_64-runtime
-ostree --repo=sysroot/ostree/repo pull testos:testos/buildmaster/x86_64-runtime
+$OSTREE remote add --set=gpg-verify=false testos file://$(pwd)/testos-repo testos/buildmaster/x86_64-runtime
+$OSTREE pull testos:testos/buildmaster/x86_64-runtime
 ostree admin --sysroot=sysroot deploy --karg=root=LABEL=MOO --karg=quiet --os=testos testos:testos/buildmaster/x86_64-runtime
 
 rpm-ostree status | tee OUTPUT-status.txt
@@ -53,7 +56,7 @@ fi
 os_repository_new_commit
 rpm-ostree upgrade --os=testos
 
-ostree --repo=sysroot/ostree/repo remote add --set=gpg-verify=false otheros file://$(pwd)/testos-repo testos/buildmaster/x86_64-runtime
+$OSTREE remote add --set=gpg-verify=false otheros file://$(pwd)/testos-repo testos/buildmaster/x86_64-runtime
 rpm-ostree rebase --os=testos otheros:
 
 rpm-ostree status | tee OUTPUT-status.txt
@@ -77,7 +80,7 @@ assert_file_has_content OUTPUT-status.txt '1\.0\.9'
 echo "ok deploy older known version"
 
 # Remember the current revision for later.
-revision=$(ostree rev-parse --repo=sysroot/ostree/repo otheros:testos/buildmaster/x86_64-runtime)
+revision=$($OSTREE rev-parse otheros:testos/buildmaster/x86_64-runtime)
 
 # Jump forward to a locally known version.
 rpm-ostree deploy --os=testos 1.0.10
@@ -102,7 +105,7 @@ echo "ok deploy older version by revision"
 
 # Make a commit on a different branch and make sure that it doesn't let us
 # deploy it
-other_rev=$(ostree --repo=${test_tmpdir}/testos-repo commit -b other-branch --tree=ref=$revision)
+other_rev=$($REMOTE_OSTREE commit -b other-branch --tree=ref=$revision)
 if rpm-ostree deploy --os=testos REVISION=$other_rev 2>OUTPUT-err; then
     assert_not_reached "Deploying an out-of-branch commit unexpectedly succeeded."
 fi
@@ -121,8 +124,8 @@ assert_file_has_content OUTPUT-status.txt $(date "+%Y%m%d\.2")
 echo "ok rebase onto other branch at specific version"
 
 branch=testos/buildmaster/x86_64-runtime
-new_csum=$(ostree --repo=${test_tmpdir}/testos-repo commit -b $branch --tree=ref=$branch)
-rpm-ostree rebase --os=testos otheros:testos/buildmaster/x86_64-runtime $new_csum
+new_csum=$($REMOTE_OSTREE commit -b $branch --tree=ref=$branch)
+rpm-ostree rebase --os=testos otheros:$branch $new_csum
 rpm-ostree status | head --lines 5 | tee OUTPUT-status.txt
 assert_file_has_content OUTPUT-status.txt otheros
 assert_file_has_content OUTPUT-status.txt $new_csum
@@ -133,6 +136,15 @@ if rpm-ostree rebase --os=testos testos:testos/buildmaster/x86_64-runtime $other
 fi
 assert_file_has_content OUTPUT-err 'Checksum .* not found in .*'
 echo "ok error on rebasing onto commit on other branch"
+
+# Make sure that we can deploy from a remote which has gone from unsigned to
+# signed commits.
+$REMOTE_OSTREE commit -b $branch --tree=ref=$branch \
+    --gpg-sign=$TEST_GPG_KEYID --add-metadata-string version=gpg-signed
+$OSTREE remote add secureos file://$(pwd)/testos-repo
+
+rpm-ostree rebase --os=testos secureos:$branch gpg-signed
+echo "ok deploy from remote with unsigned and signed commits"
 
 # Ensure it returns an error when passing a wrong option.
 rpm-ostree --help | awk '/^$/ {in_commands=0} {if(in_commands==1){print $0}} /^Builtin Commands:/ {in_commands=1}' > commands
