@@ -28,6 +28,7 @@
 #include "rpmostree-sysroot-upgrader.h"
 #include "rpmostree-core.h"
 #include "rpmostree-origin.h"
+#include "rpmostree-kernel.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-output.h"
@@ -93,12 +94,12 @@ parse_origin_keyfile (RpmOstreeSysrootUpgrader  *self,
                       GCancellable           *cancellable,
                       GError                **error)
 {
-  RpmOstreeOriginFlags origin_flags = 0;
+  RpmOstreeOriginParseFlags origin_flags = 0;
 
   g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
 
   if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED)
-    origin_flags |= RPMOSTREE_ORIGIN_FLAGS_IGNORE_UNCONFIGURED;
+    origin_flags |= RPMOSTREE_ORIGIN_PARSE_FLAGS_IGNORE_UNCONFIGURED;
   self->origin = rpmostree_origin_parse_keyfile (origin, origin_flags, error);
   if (!self->origin)
     return FALSE;
@@ -939,6 +940,8 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   g_autoptr(RpmOstreeTreespec) treespec = NULL;
   g_autoptr(RpmOstreeInstall) install = {0,};
   g_autoptr(GHashTable) pkgset = hashset_from_strv (rpmostree_origin_get_packages (self->origin));
+  const gboolean have_packages = g_hash_table_size (pkgset) > 0 ||
+    g_hash_table_size (self->packages_to_add) > 0;
   glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
 
   ctx = rpmostree_context_new_system (cancellable, error);
@@ -995,41 +998,96 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
 
   rpmostree_context_set_repos (ctx, repo, pkgcache_repo);
 
-  /* --- Downloading metadata --- */
-  if (!rpmostree_context_download_metadata (ctx, cancellable, error))
-    goto out;
+  if (have_packages)
+    {
+      /* --- Downloading metadata --- */
+      if (!rpmostree_context_download_metadata (ctx, cancellable, error))
+        goto out;
 
-  /* --- Resolving dependencies --- */
-  if (!rpmostree_context_prepare_install (ctx, &install, cancellable, error))
-    goto out;
+      /* --- Resolving dependencies --- */
+      if (!rpmostree_context_prepare_install (ctx, &install, cancellable, error))
+        goto out;
+    }
+  else
+    rpmostree_context_set_is_empty (ctx);
 
   if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN)
     {
+      g_assert (have_packages);
       rpmostree_print_transaction (rpmostree_context_get_hif (ctx));
       ret = TRUE;
       goto out;
     }
 
-  /* --- Download as necessary --- */
-  if (!rpmostree_context_download (ctx, install, cancellable, error))
+  if (have_packages)
+    {
+      /* --- Download as necessary --- */
+      if (!rpmostree_context_download (ctx, install, cancellable, error))
+        goto out;
+
+      /* --- Import as necessary --- */
+      if (!rpmostree_context_import (ctx, install, cancellable, error))
+        goto out;
+
+      /* --- Relabel as necessary --- */
+      if (!rpmostree_context_relabel (ctx, install, cancellable, error))
+        goto out;
+
+      /* --- Overlay and commit --- */
+
+      g_clear_pointer (&self->final_revision, g_free);
+      if (!rpmostree_context_assemble_tmprootfs (ctx, tmprootfs_dfd, devino_cache,
+                                                 RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
+                                                 (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS) > 0,
+                                                 cancellable, error))
+        goto out;
+    }
+
+  if (!rpmostree_rootfs_postprocess_common (tmprootfs_dfd, cancellable, error))
     goto out;
 
-  /* --- Import as necessary --- */
-  if (!rpmostree_context_import (ctx, install, cancellable, error))
-    goto out;
+  if (rpmostree_origin_get_regenerate_initramfs (self->origin))
+    {
+      glnx_fd_close int initramfs_tmp_fd = -1;
+      g_autofree char *initramfs_tmp_path = NULL;
+      const char *bootdir;
+      const char *kver;
+      const char *kernel_path;
+      const char *initramfs_path;
+      g_autoptr(GVariant) kernel_state = NULL;
+      g_auto(GStrv) add_dracut_argv = NULL;
 
-  /* --- Relabel as necessary --- */
-  if (!rpmostree_context_relabel (ctx, install, cancellable, error))
-    goto out;
+      add_dracut_argv = rpmostree_origin_get_initramfs_args (self->origin);
 
-  /* --- Overlay and commit --- */
-  g_clear_pointer (&self->final_revision, g_free);
-  if (!rpmostree_context_assemble_commit (ctx, tmprootfs_dfd, devino_cache,
-                                          self->base_revision,
-                                          RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
-                                          (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS) > 0,
-                                          &self->final_revision,
-                                          cancellable, error))
+      rpmostree_output_task_begin ("Generating initramfs");
+
+      kernel_state = rpmostree_find_kernel (tmprootfs_dfd, cancellable, error);
+      if (!kernel_state)
+        goto out;
+      g_variant_get (kernel_state, "(&s&s&sm&s)",
+                     &kver, &bootdir,
+                     &kernel_path, &initramfs_path);
+      g_assert (initramfs_path);
+
+      if (!rpmostree_run_dracut (tmprootfs_dfd, add_dracut_argv, initramfs_path,
+                                 &initramfs_tmp_fd, &initramfs_tmp_path,
+                                 cancellable, error))
+        goto out;
+
+      if (!rpmostree_finalize_kernel (tmprootfs_dfd, bootdir, kver,
+                                      kernel_path,
+                                      initramfs_tmp_path, initramfs_tmp_fd,
+                                      cancellable, error))
+        goto out;
+
+      rpmostree_output_task_end ("done");
+    }
+
+  if (!rpmostree_context_commit_tmprootfs (ctx, tmprootfs_dfd, devino_cache,
+                                           self->base_revision,
+                                           RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
+                                           &self->final_revision,
+                                           cancellable, error))
     goto out;
 
   ret = TRUE;
@@ -1376,8 +1434,12 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   if (rpmostree_origin_is_locally_assembled (self->origin) ||
       (g_hash_table_size (self->packages_to_add) > 0) ||
       (g_hash_table_size (self->packages_to_delete) > 0))
-    if (!overlay_packages (self, cancellable, error))
-      goto out;
+    {
+      if (!overlay_packages (self, cancellable, error))
+        goto out;
+    }
+  else
+    g_clear_pointer (&self->final_revision, g_free);
 
   if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN)
     {

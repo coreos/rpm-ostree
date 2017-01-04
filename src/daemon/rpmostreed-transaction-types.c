@@ -1050,3 +1050,128 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
 
   return (RpmostreedTransaction *) self;
 }
+
+/* ================================ InitramfsState ================================ */
+
+typedef struct {
+  RpmostreedTransaction parent;
+  char *osname;
+  gboolean regenerate;
+  char **args;
+} InitramfsStateTransaction;
+
+typedef RpmostreedTransactionClass InitramfsStateTransactionClass;
+
+GType initramfs_state_transaction_get_type (void);
+
+G_DEFINE_TYPE (InitramfsStateTransaction,
+               initramfs_state_transaction,
+               RPMOSTREED_TYPE_TRANSACTION)
+
+static void
+initramfs_state_transaction_finalize (GObject *object)
+{
+  InitramfsStateTransaction *self;
+
+  self = (InitramfsStateTransaction *) object;
+  g_free (self->osname);
+  g_strfreev (self->args);
+
+  G_OBJECT_CLASS (initramfs_state_transaction_parent_class)->finalize (object);
+}
+
+static gboolean
+initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
+                            GCancellable *cancellable,
+                            GError **error)
+{
+  InitramfsStateTransaction *self;
+  OstreeSysroot *sysroot;
+  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
+  RpmOstreeOrigin *origin = NULL; /* Owned by upgrader */
+  g_autoptr(GKeyFile) new_origin = NULL;
+  g_auto(GStrv) current_initramfs_args = NULL;
+  gboolean current_regenerate;
+
+  self = (InitramfsStateTransaction *) transaction;
+
+  sysroot = rpmostreed_transaction_get_sysroot (transaction);
+
+  upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, 0,
+                                             cancellable, error);
+  if (upgrader == NULL)
+    return FALSE;
+
+  origin = rpmostree_sysroot_upgrader_get_origin (upgrader);
+  current_regenerate = rpmostree_origin_get_regenerate_initramfs (origin);
+  current_initramfs_args = rpmostree_origin_get_initramfs_args (origin);
+  /* We don't deep-compare the args right now, we assume if you were using them
+   * you want to rerun. This can be important if you edited a config file, which
+   * we can't really track without actually regenerating anyways.
+   */
+  if (current_regenerate == self->regenerate
+      && (current_initramfs_args == NULL || !*current_initramfs_args)
+      && (self->args == NULL || !*self->args))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "initramfs regeneration state is already %s",
+                   current_regenerate ? "enabled" : "disabled");
+      return FALSE;
+    }
+  new_origin = rpmostree_origin_dup_keyfile (origin);
+  rpmostree_origin_set_regenerate_initramfs (new_origin, self->regenerate, self->args);
+
+  if (!rpmostree_sysroot_upgrader_set_origin (upgrader, new_origin, cancellable, error))
+    return FALSE;
+
+  if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+static void
+initramfs_state_transaction_class_init (InitramfsStateTransactionClass *class)
+{
+  GObjectClass *object_class;
+
+  object_class = G_OBJECT_CLASS (class);
+  object_class->finalize = initramfs_state_transaction_finalize;
+
+  class->execute = initramfs_state_transaction_execute;
+}
+
+static void
+initramfs_state_transaction_init (InitramfsStateTransaction *self)
+{
+}
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_initramfs_state (GDBusMethodInvocation *invocation,
+                                            OstreeSysroot *sysroot,
+                                            const char *osname,
+                                            gboolean regenerate,
+                                            char **args,
+                                            GCancellable *cancellable,
+                                            GError **error)
+{
+  InitramfsStateTransaction *self;
+
+  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
+  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+
+  self = g_initable_new (initramfs_state_transaction_get_type (),
+                         cancellable, error,
+                         "invocation", invocation,
+                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
+                         NULL);
+
+  if (self != NULL)
+    {
+      self->osname = g_strdup (osname);
+      self->regenerate = regenerate;
+      self->args = g_strdupv (args);
+    }
+
+  return (RpmostreedTransaction *) self;
+}

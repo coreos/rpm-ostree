@@ -64,6 +64,8 @@ gboolean rpmostree_context_setup (RpmOstreeContext     *self,
                                   GCancellable  *cancellable,
                                   GError       **error);
 
+void rpmostree_context_set_is_empty (RpmOstreeContext *self);
+
 void rpmostree_context_set_repos (RpmOstreeContext *self,
                                   OstreeRepo       *base_repo,
                                   OstreeRepo       *pkgcache_repo);

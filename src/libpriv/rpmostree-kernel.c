@@ -169,13 +169,27 @@ rpmostree_find_kernel (int rootfs_dfd,
   g_autofree char* initramfs_path = NULL;
   const char *kver = NULL; /* May point to kver_owned */
   g_autofree char *kver_owned = NULL;
-  g_autofree char *bootdir = g_strdup ("boot");
+  g_autofree char *bootdir = g_strdup ("usr/lib/ostree-boot");
 
+  /* First, look in the canonical ostree directory */
   if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
                                              &kernel_path, &initramfs_path,
                                              cancellable, error))
     return NULL;
 
+  /* Next, the traditional /boot */
+  if (kernel_path == NULL)
+    {
+      g_free (bootdir);
+      bootdir = g_strdup ("boot");
+
+      if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
+                                                 &kernel_path, &initramfs_path,
+                                                 cancellable, error))
+        return NULL;
+    }
+
+  /* Finally, the newer model of having the kernel with the modules */
   if (kernel_path == NULL)
     {
       g_autofree char* modversion_dir = NULL;
@@ -282,6 +296,7 @@ dracut_child_setup (gpointer data)
 gboolean
 rpmostree_run_dracut (int     rootfs_dfd,
                       char   **argv,
+                      const char *rebuild_from_initramfs,
                       int     *out_initramfs_tmpfd,
                       char   **out_initramfs_tmppath,
                       GCancellable  *cancellable,
@@ -303,6 +318,23 @@ rpmostree_run_dracut (int     rootfs_dfd,
   glnx_fd_close int tmp_fd = -1;
   g_autofree char *tmpfile_path = NULL;
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
+  g_autoptr(GPtrArray) rebuild_argv = NULL;
+
+  g_assert (argv != NULL || rebuild_from_initramfs != NULL);
+
+  if (rebuild_from_initramfs)
+    {
+      rebuild_argv = g_ptr_array_new ();
+      g_ptr_array_add (rebuild_argv, "--rebuild");
+      g_ptr_array_add (rebuild_argv, (char*)rebuild_from_initramfs);
+      /* In this case, any args specified in argv are *additional*
+       * to the rebuild from the base.
+       */
+      for (char **iter = argv; iter && *iter; iter++)
+        g_ptr_array_add (rebuild_argv, *iter);
+      g_ptr_array_add (rebuild_argv, NULL);
+      argv = (char**)rebuild_argv->pdata;
+    }
 
   /* First tempfile is just our shell script */
   if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, "usr/bin",
@@ -324,14 +356,23 @@ rpmostree_run_dracut (int     rootfs_dfd,
   /* We need to close the writable FD now to be able to exec it */
   close (tmp_fd); tmp_fd = -1;
 
-  /* Second tempfile is the initramfs contents */
-  if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, "tmp",
+  /* Second tempfile is the initramfs contents.  Note we generate the tmpfile
+   * in . since in the current rpm-ostree design the temporary rootfs may not have tmp/
+   * as a real mountpoint.
+   */
+  if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, ".",
                                       O_RDWR | O_CLOEXEC,
                                       &tmp_fd, &tmpfile_path,
                                       error))
     goto out;
 
-  bwrap = rpmostree_bwrap_new (rootfs_dfd, RPMOSTREE_BWRAP_IMMUTABLE, error, NULL);
+  if (rebuild_from_initramfs)
+    bwrap = rpmostree_bwrap_new (rootfs_dfd, RPMOSTREE_BWRAP_IMMUTABLE, error,
+                                 "--ro-bind", "/etc", "/etc",
+                                 NULL);
+  else
+    bwrap = rpmostree_bwrap_new (rootfs_dfd, RPMOSTREE_BWRAP_IMMUTABLE, error,
+                                 NULL);
   if (!bwrap)
     return FALSE;
 
@@ -344,6 +385,9 @@ rpmostree_run_dracut (int     rootfs_dfd,
 
   if (!rpmostree_bwrap_run (bwrap, error))
     goto out;
+
+  if (rebuild_from_initramfs)
+    (void) unlinkat (rootfs_dfd, rebuild_from_initramfs, 0);
 
   ret = TRUE;
   *out_initramfs_tmpfd = tmp_fd; tmp_fd = -1;

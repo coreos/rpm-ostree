@@ -45,7 +45,7 @@ keyfile_dup (GKeyFile *kf)
 
 RpmOstreeOrigin *
 rpmostree_origin_parse_keyfile (GKeyFile         *origin,
-                                RpmOstreeOriginFlags flags,
+                                RpmOstreeOriginParseFlags flags,
                                 GError          **error)
 {
   g_autoptr(RpmOstreeOrigin) ret = NULL;
@@ -57,7 +57,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   /* NOTE hack here - see https://github.com/ostreedev/ostree/pull/343 */
   g_key_file_remove_key (ret->kf, "origin", "unlocked", NULL);
 
-  if ((flags & RPMOSTREE_ORIGIN_FLAGS_IGNORE_UNCONFIGURED) == 0)
+  if ((flags & RPMOSTREE_ORIGIN_PARSE_FLAGS_IGNORE_UNCONFIGURED) == 0)
     {
       g_autofree char *unconfigured_state = NULL;
 
@@ -116,7 +116,21 @@ gboolean
 rpmostree_origin_is_locally_assembled (RpmOstreeOrigin *origin)
 {
   g_assert (origin);
-  return g_strv_length (origin->packages) > 0;
+
+  return g_strv_length (origin->packages) > 0 ||
+    rpmostree_origin_get_regenerate_initramfs (origin);
+}
+
+gboolean
+rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin)
+{
+  return g_key_file_get_boolean (origin->kf, "rpmostree", "regenerate-initramfs", NULL);
+}
+
+char **
+rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin)
+{
+  return g_key_file_get_string_list (origin->kf, "rpmostree", "initramfs-args", NULL, NULL);
 }
 
 GKeyFile *
@@ -158,4 +172,28 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   g_free (origin->refspec);
   g_strfreev (origin->packages);
   g_free (origin);
+}
+
+void
+rpmostree_origin_set_regenerate_initramfs (GKeyFile *mutable_origin,
+                                           gboolean regenerate,
+                                           char **args)
+{
+  const char *section = "rpmostree";
+  const char *regeneratek = "regenerate-initramfs";
+  const char *argsk = "initramfs-args";
+  if (regenerate)
+    {
+      g_key_file_set_boolean (mutable_origin, section, regeneratek, TRUE);
+      if (args && *args)
+        g_key_file_set_string_list (mutable_origin, section, argsk,
+                                    (const char *const*)args, g_strv_length (args));
+      else
+        g_key_file_remove_key (mutable_origin, section, argsk, NULL);
+    }
+  else
+    {
+      g_key_file_remove_key (mutable_origin, section, regeneratek, NULL);
+      g_key_file_remove_key (mutable_origin, section, argsk, NULL);
+    }
 }
