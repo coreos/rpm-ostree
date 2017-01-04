@@ -90,38 +90,25 @@ qsort_cmpstr (const void*ap, const void *bp, gpointer data)
   return strcmp (a, b);
 }
 
-static gboolean
+static void
 add_canonicalized_string_array (GVariantBuilder *builder,
                                 const char *key,
                                 const char *notfound_key,
-                                GKeyFile *keyfile,
-                                GError **error)
+                                GKeyFile *keyfile)
 {
   g_auto(GStrv) input = NULL;
   g_autoptr(GHashTable) set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   g_autofree char **sorted = NULL;
   guint count;
   char **iter;
-  g_autoptr(GError) temp_error = NULL;
 
-  input = g_key_file_get_string_list (keyfile, "tree", key, NULL, &temp_error);
+  input = g_key_file_get_string_list (keyfile, "tree", key, NULL, NULL);
   if (!(input && *input))
     {
       if (notfound_key)
         {
           g_variant_builder_add (builder, "{sv}", notfound_key, g_variant_new_boolean (TRUE));
-          return TRUE;
-        }
-      else if (temp_error)
-        {
-          g_propagate_error (error, g_steal_pointer (&temp_error));
-          return FALSE;
-        }
-      else
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Key %s is empty", key);
-          return FALSE;
+          return;
         }
     }
 
@@ -137,7 +124,6 @@ add_canonicalized_string_array (GVariantBuilder *builder,
 
   g_variant_builder_add (builder, "{sv}", key,
                          g_variant_new_strv ((const char*const*)sorted, g_strv_length (sorted)));
-  return TRUE;
 }
 
 
@@ -157,23 +143,15 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
       g_variant_builder_add (&builder, "{sv}", "ref", g_variant_new_string (ref));
   }
 
-  if (!add_canonicalized_string_array (&builder, "packages", NULL, keyfile, error))
-    return NULL;
-
+  add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
   /* We allow the "repo" key to be missing. This means that we rely on hif's
    * normal behaviour (i.e. look at repos in repodir with enabled=1). */
-  { g_auto(GStrv) val = g_key_file_get_string_list (keyfile, "tree", "repos",
-                                                    NULL, NULL);
-    if (val && *val &&
-        !add_canonicalized_string_array (&builder, "repos", "", keyfile, error))
-      return NULL;
+  { g_auto(GStrv) val = g_key_file_get_string_list (keyfile, "tree", "repos", NULL, NULL);
+    if (val && *val)
+      add_canonicalized_string_array (&builder, "repos", NULL, keyfile);
   }
-
-  if (!add_canonicalized_string_array (&builder, "instlangs", "instlangs-all", keyfile, error))
-    return NULL;
-
-  if (!add_canonicalized_string_array (&builder, "ignore-scripts", "", keyfile, error))
-    return NULL;
+  add_canonicalized_string_array (&builder, "instlangs", "instlangs-all", keyfile);
+  add_canonicalized_string_array (&builder, "ignore-scripts", NULL, keyfile);
 
   { gboolean documentation = TRUE;
     g_autofree char *value = g_key_file_get_value (keyfile, "tree", "documentation", NULL);
@@ -280,6 +258,7 @@ struct _RpmOstreeContext {
   GObject parent;
 
   RpmOstreeTreespec *spec;
+  gboolean empty;
   DnfContext *hifctx;
   GHashTable *ignore_scripts;
   OstreeRepo *ostreerepo;
@@ -442,6 +421,14 @@ rpmostree_context_new_unprivileged (int basedir_dfd,
                                     GError **error)
 {
   return rpmostree_context_new_internal (basedir_dfd, TRUE, cancellable, error);
+}
+
+/* Use this if no packages will be installed, and we just want a "dummy" run.
+ */
+void
+rpmostree_context_set_is_empty (RpmOstreeContext *self)
+{
+  self->empty = TRUE;
 }
 
 /* XXX: or put this in new_system() instead? */
@@ -690,6 +677,8 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
   gboolean ret = FALSE;
   guint progress_sigid;
   glnx_unref_object DnfState *hifstate = dnf_state_new ();
+
+  g_assert (!self->empty);
 
   progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                      G_CALLBACK (on_hifstate_percentage_changed),
@@ -980,6 +969,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
   g_autoptr(RpmOstreeInstall) ret_install = g_object_new (RPMOSTREE_TYPE_INSTALL, NULL);
 
   g_assert (g_variant_dict_lookup (self->spec->dict, "packages", "^a&s", &pkgnames));
+  g_assert (!self->empty);
 
   ret_install->packages_requested = g_ptr_array_new_with_free_func (g_free);
 
@@ -1058,7 +1048,8 @@ rpmostree_context_get_state_sha512 (RpmOstreeContext *self)
   g_checksum_update (state_checksum, g_variant_get_data (self->spec->spec),
                      g_variant_get_size (self->spec->spec));
 
-  rpmostree_dnf_add_checksum_goal (state_checksum, dnf_context_get_goal (self->hifctx));
+  if (!self->empty)
+    rpmostree_dnf_add_checksum_goal (state_checksum, dnf_context_get_goal (self->hifctx));
   return g_strdup (g_checksum_get_string (state_checksum));
 }
 
@@ -2403,9 +2394,6 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
   rpmostree_output_task_end ("done");
 
-  if (!rpmostree_rootfs_postprocess_common (tmprootfs_dfd, cancellable, error))
-    goto out;
-
   ret = TRUE;
  out:
   if (ordering_ts)
@@ -2541,6 +2529,10 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
   if (!rpmostree_context_assemble_tmprootfs (self, tmprootfs_dfd, devino_cache,
                                              assemble_type, noscripts,
                                              cancellable, error))
+    goto out;
+
+
+  if (!rpmostree_rootfs_postprocess_common (tmprootfs_dfd, cancellable, error))
     goto out;
 
   if (!rpmostree_context_commit_tmprootfs (self, tmprootfs_dfd, devino_cache,

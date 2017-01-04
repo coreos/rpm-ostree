@@ -334,6 +334,38 @@ Boston, MA 02111-1307, USA.
         </listitem>
       </varlistentry>
 
+      <varlistentry>
+        <term><command>initramfs</command></term>
+
+        <listitem>
+          <para>
+            By default, the primary use case mode for rpm-ostree is to replicate
+            an initramfs as part of a base layer. However, some use cases
+            require locally regenerating it to add configuration or drivers. Use
+            <command>rpm-ostree initramfs</command> to inspect the current
+            status.
+          </para>
+
+          <para>
+            Use <command>--enable</command> to turn on client side initramfs
+            regeneration. A new deployment will be generated, and after reboot,
+            further upgrades will continue regenerating. You must reboot for the
+            new initramfs to take effect.
+          </para>
+
+          <para>
+            To append additional custom arguments to the initramfs program
+            (currently dracut), use <command>--arg</command>. For example,
+            <command>--arg=-I --arg=/etc/someconfigfile</command>.
+          </para>
+
+          <para>
+            The <command>--disable</command> option will disable
+            regeneration.  You must reboot for the change to take effect.
+          </para>
+        </listitem>
+      </varlistentry>
+
     </variablelist>
   </refsect1>
 

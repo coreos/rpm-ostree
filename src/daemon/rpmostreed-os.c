@@ -771,6 +771,66 @@ out:
 }
 
 static gboolean
+os_handle_set_initramfs_state (RPMOSTreeOS *interface,
+                               GDBusMethodInvocation *invocation,
+                               gboolean regenerate,
+                               const char *const*args,
+                               GVariant *arg_options)
+{
+  RpmostreedOS *self = RPMOSTREED_OS (interface);
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
+  g_autoptr(GVariantDict) dict = NULL;
+  const char *osname;
+  gboolean reboot = FALSE;
+  GError *local_error = NULL;
+
+  transaction = merge_compatible_txn (self, invocation);
+  if (transaction)
+    goto out;
+
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
+    goto out;
+
+  osname = rpmostree_os_get_name (interface);
+
+  dict = g_variant_dict_new (arg_options);
+  g_variant_dict_lookup (dict, "reboot", "b", &reboot);
+
+  transaction = rpmostreed_transaction_new_initramfs_state (invocation,
+                                                            ot_sysroot,
+                                                            osname,
+                                                            regenerate,
+                                                            (char**)args,
+                                                            reboot,
+                                                            cancellable,
+                                                            &local_error);
+  if (transaction == NULL)
+    goto out;
+
+  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+
+out:
+  if (local_error != NULL)
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address;
+      client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_pkg_change (interface, invocation, client_address);
+    }
+
+  return TRUE;
+}
+
+static gboolean
 os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
                                       GDBusMethodInvocation *invocation,
                                       const char *arg_refspec,
@@ -1154,6 +1214,7 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_clear_rollback_target      = os_handle_clear_rollback_target;
   iface->handle_rebase                     = os_handle_rebase;
   iface->handle_pkg_change                 = os_handle_pkg_change;
+  iface->handle_set_initramfs_state        = os_handle_set_initramfs_state;
   iface->handle_get_cached_rebase_rpm_diff = os_handle_get_cached_rebase_rpm_diff;
   iface->handle_download_rebase_rpm_diff   = os_handle_download_rebase_rpm_diff;
   iface->handle_get_cached_deploy_rpm_diff = os_handle_get_cached_deploy_rpm_diff;

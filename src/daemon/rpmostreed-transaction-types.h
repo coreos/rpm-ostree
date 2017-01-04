@@ -90,3 +90,12 @@ RpmostreedTransaction *
 							    RpmOstreeTransactionPkgFlags flags,
                                                             GCancellable          *cancellable,
                                                             GError               **error);
+RpmostreedTransaction *
+rpmostreed_transaction_new_initramfs_state       (GDBusMethodInvocation *invocation,
+                                                  OstreeSysroot         *sysroot,
+                                                  const char            *osname,
+                                                  gboolean               regenerate,
+                                                  char                 **args,
+                                                  gboolean               reboot,
+                                                  GCancellable          *cancellable,
+                                                  GError               **error);

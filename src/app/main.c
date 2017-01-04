@@ -43,6 +43,7 @@ static RpmOstreeCommand supported_commands[] = {
   { "rollback", rpmostree_builtin_rollback },
   { "status", rpmostree_builtin_status },
   { "upgrade", rpmostree_builtin_upgrade },
+  { "initramfs", rpmostree_builtin_initramfs },
   { "install", rpmostree_builtin_pkg_add },
   { "uninstall", rpmostree_builtin_pkg_remove },
   { NULL }

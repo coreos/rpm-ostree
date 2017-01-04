@@ -47,6 +47,7 @@ BUILTINPROTO(upgrade);
 BUILTINPROTO(deploy);
 BUILTINPROTO(rebase);
 BUILTINPROTO(rollback);
+BUILTINPROTO(initramfs);
 BUILTINPROTO(status);
 BUILTINPROTO(db);
 BUILTINPROTO(internals);

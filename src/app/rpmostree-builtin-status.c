@@ -119,6 +119,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       const gchar *version_string;
       const gchar *unlocked;
       gboolean gpg_enabled;
+      gboolean regenerate_initramfs;
       guint64 t = 0;
       int serial;
       gboolean is_booted;
@@ -165,6 +166,9 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       if (!g_variant_dict_lookup (dict, "unlocked", "&s", &unlocked))
         unlocked = NULL;
 
+      if (!g_variant_dict_lookup (dict, "regenerate-initramfs", "b", &regenerate_initramfs))
+        regenerate_initramfs = FALSE;
+
       signatures = g_variant_dict_lookup_value (dict, "signatures",
                                                 G_VARIANT_TYPE ("av"));
 
@@ -194,7 +198,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         {
           print_kv ("Timestamp", max_key_len, timestamp_string);
         }
-      if (origin_packages)
+      if (origin_packages || regenerate_initramfs)
         {
           const char *base_checksum;
           g_assert (g_variant_dict_lookup (dict, "base-checksum", "&s", &base_checksum));
@@ -238,7 +242,24 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
           packages_joined = g_strjoinv (" ", (char**)origin_packages_sorted->pdata);
           print_kv ("Packages", max_key_len, packages_joined);
         }
-      
+
+      if (regenerate_initramfs)
+        {
+          g_autoptr(GString) buf = g_string_new ("");
+          g_autofree char **initramfs_args = NULL;
+
+          g_variant_dict_lookup (dict, "initramfs-args", "^a&s", &initramfs_args);
+
+          for (char **iter = initramfs_args; iter && *iter; iter++)
+            {
+              g_string_append (buf, *iter);
+              g_string_append_c (buf, ' ');
+            }
+          if (buf->len == 0)
+            g_string_append (buf, "regenerate");
+          print_kv ("Initramfs", max_key_len, buf->str);
+        }
+
       if (unlocked && g_strcmp0 (unlocked, "none") != 0)
         {
           g_print ("%s%s", red_prefix, bold_prefix);

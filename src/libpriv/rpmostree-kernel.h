@@ -40,6 +40,7 @@ rpmostree_finalize_kernel (int rootfs_dfd,
 gboolean
 rpmostree_run_dracut (int     rootfs_dfd,
                       char   **argv,
+                      const char *rebuild_from_initramfs,
                       int     *out_initramfs_tmpfd,
                       char   **out_initramfs_tmppath,
                       GCancellable  *cancellable,
