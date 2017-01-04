@@ -283,6 +283,23 @@ out:
   return TRUE;
 }
 
+static RpmostreedTransaction *
+merge_compatible_txn (RpmostreedOS *self,
+                      GDBusMethodInvocation *invocation)
+{
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+
+  /* If a compatible transaction is in progress, share its bus address. */
+  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
+  if (transaction != NULL)
+    {
+      if (rpmostreed_transaction_is_compatible (transaction, invocation))
+        return g_steal_pointer (&transaction);
+    }
+
+  return NULL;
+}
+
 static gboolean
 os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
                                     GDBusMethodInvocation *invocation)
@@ -294,15 +311,9 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
   const char *osname;
   GError *local_error = NULL;
 
-  /* If a compatible transaction is in progress, share its bus address. */
-  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
-  if (transaction != NULL)
-    {
-      if (rpmostreed_transaction_is_compatible (transaction, invocation))
-        goto out;
-
-      g_clear_object (&transaction);
-    }
+  transaction = merge_compatible_txn (self, invocation);
+  if (transaction)
+    goto out;
 
   cancellable = g_cancellable_new ();
 
@@ -358,15 +369,9 @@ os_handle_deploy (RPMOSTreeOS *interface,
   const char *osname;
   GError *local_error = NULL;
 
-  /* If a compatible transaction is in progress, share its bus address. */
-  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
-  if (transaction != NULL)
-    {
-      if (rpmostreed_transaction_is_compatible (transaction, invocation))
-        goto out;
-
-      g_clear_object (&transaction);
-    }
+  transaction = merge_compatible_txn (self, invocation);
+  if (transaction)
+    goto out;
 
   cancellable = g_cancellable_new ();
 
@@ -432,15 +437,9 @@ os_handle_upgrade (RPMOSTreeOS *interface,
   const char *osname;
   GError *local_error = NULL;
 
-  /* If a compatible transaction is in progress, share its bus address. */
-  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
-  if (transaction != NULL)
-    {
-      if (rpmostreed_transaction_is_compatible (transaction, invocation))
-        goto out;
-
-      g_clear_object (&transaction);
-    }
+  transaction = merge_compatible_txn (self, invocation);
+  if (transaction)
+    goto out;
 
   cancellable = g_cancellable_new ();
 
@@ -508,15 +507,9 @@ os_handle_rollback (RPMOSTreeOS *interface,
   GVariantDict options_dict;
   GError *local_error = NULL;
 
-  /* If a compatible transaction is in progress, share its bus address. */
-  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
-  if (transaction != NULL)
-    {
-      if (rpmostreed_transaction_is_compatible (transaction, invocation))
-        goto out;
-
-      g_clear_object (&transaction);
-    }
+  transaction = merge_compatible_txn (self, invocation);
+  if (transaction)
+    goto out;
 
   cancellable = g_cancellable_new ();
 
@@ -578,15 +571,9 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
   GVariantDict options_dict;
   GError *local_error = NULL;
 
-  /* If a compatible transaction is in progress, share its bus address. */
-  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
-  if (transaction != NULL)
-    {
-      if (rpmostreed_transaction_is_compatible (transaction, invocation))
-        goto out;
-
-      g_clear_object (&transaction);
-    }
+  transaction = merge_compatible_txn (self, invocation);
+  if (transaction)
+    goto out;
 
   cancellable = g_cancellable_new ();
 
@@ -653,15 +640,9 @@ os_handle_rebase (RPMOSTreeOS *interface,
   gboolean opt_reboot = FALSE;
   GError *local_error = NULL;
 
-  /* If a compatible transaction is in progress, share its bus address. */
-  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
-  if (transaction != NULL)
-    {
-      if (rpmostreed_transaction_is_compatible (transaction, invocation))
-        goto out;
-
-      g_clear_object (&transaction);
-    }
+  transaction = merge_compatible_txn (self, invocation);
+  if (transaction)
+    goto out;
 
   cancellable = g_cancellable_new ();
 
@@ -738,15 +719,9 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
   RpmOstreeTransactionPkgFlags flags = 0;
   const char *const *ignore_scripts;
 
-  /* If a compatible transaction is in progress, share its bus address. */
-  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
-  if (transaction != NULL)
-    {
-      if (rpmostreed_transaction_is_compatible (transaction, invocation))
-        goto out;
-
-      g_clear_object (&transaction);
-    }
+  transaction = merge_compatible_txn (self, invocation);
+  if (transaction)
+    goto out;
 
   cancellable = g_cancellable_new ();
 
@@ -894,15 +869,9 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
   const char *osname;
   GError *local_error = NULL;
 
-  /* If a compatible transaction is in progress, share its bus address. */
-  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
-  if (transaction != NULL)
-    {
-      if (rpmostreed_transaction_is_compatible (transaction, invocation))
-        goto out;
-
-      g_clear_object (&transaction);
-    }
+  transaction = merge_compatible_txn (self, invocation);
+  if (transaction)
+    goto out;
 
   cancellable = g_cancellable_new ();
 
@@ -1040,15 +1009,9 @@ os_handle_download_deploy_rpm_diff (RPMOSTreeOS *interface,
 
   /* XXX Ignoring arg_packages for now. */
 
-  /* If a compatible transaction is in progress, share its bus address. */
-  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
-  if (transaction != NULL)
-    {
-      if (rpmostreed_transaction_is_compatible (transaction, invocation))
-        goto out;
-
-      g_clear_object (&transaction);
-    }
+  transaction = merge_compatible_txn (self, invocation);
+  if (transaction)
+    goto out;
 
   cancellable = g_cancellable_new ();
 
