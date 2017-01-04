@@ -1161,12 +1161,12 @@ get_base_commit_for_deployment (RpmOstreeSysrootUpgrader  *self,
                                 GError                   **error)
 {
   GKeyFile *origin = ostree_deployment_get_origin (deployment);
-  g_auto(GStrv) packages = NULL;
+  gboolean is_local;
 
-  if (!_rpmostree_util_parse_origin (origin, NULL, &packages, error))
+  if (!_rpmostree_origin_is_locally_assembled (origin, &is_local, error))
     return FALSE;
 
-  if (packages && g_strv_length (packages) > 0)
+  if (is_local)
     {
       const char *csum = ostree_deployment_get_csum (deployment);
       g_autofree char *base_rev = NULL;
@@ -1327,12 +1327,12 @@ clean_pkgcache_orphans (RpmOstreeSysrootUpgrader *self,
     {
       OstreeDeployment *deployment = deployments->pdata[i];
       GKeyFile *origin = ostree_deployment_get_origin (deployment);
-      g_auto(GStrv) packages = NULL;
+      gboolean is_local;
 
-      if (!_rpmostree_util_parse_origin (origin, NULL, &packages, error))
+      if (!_rpmostree_origin_is_locally_assembled (origin, &is_local, error))
         return FALSE;
 
-      if (packages && g_strv_length (packages) > 0)
+      if (is_local)
         {
           g_autoptr(RpmOstreeRefSack) rsack = NULL;
           g_autofree char *deployment_dirpath = NULL;
