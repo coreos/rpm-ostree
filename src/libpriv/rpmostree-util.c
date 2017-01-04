@@ -464,6 +464,20 @@ _rpmostree_util_parse_origin (GKeyFile         *origin,
 }
 
 gboolean
+_rpmostree_origin_is_locally_assembled (GKeyFile         *origin,
+                                        gboolean         *out_is_local,
+                                        GError          **error)
+{
+  g_auto(GStrv) pkgs = NULL;
+
+  if (!_rpmostree_util_parse_origin (origin, NULL, &pkgs, error))
+    return FALSE;
+
+  *out_is_local = (pkgs != NULL && g_strv_length (pkgs) > 0);
+  return TRUE;
+}
+
+gboolean
 rpmostree_split_path_ptrarray_validate (const char *path,
                                         GPtrArray  **out_components,
                                         GError     **error)
