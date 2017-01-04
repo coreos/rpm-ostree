@@ -112,6 +112,22 @@ typedef enum {
 
 /* NB: tmprootfs_dfd is allowed to have pre-existing data */
 /* devino_cache can be NULL if no previous cache established */
+gboolean rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
+                                               int                    tmprootfs_dfd,
+                                               OstreeRepoDevInoCache *devino_cache,
+                                               RpmOstreeAssembleType  assemble_type,
+                                               gboolean               noscripts,
+                                               GCancellable          *cancellable,
+                                               GError               **error);
+gboolean rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
+                                             int                    tmprootfs_dfd,
+                                             OstreeRepoDevInoCache *devino_cache,
+                                             const char            *parent,
+                                             RpmOstreeAssembleType  assemble_type,
+                                             char                 **out_commit,
+                                             GCancellable          *cancellable,
+                                             GError               **error);
+/* Wrapper for both of the above */
 gboolean rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                             int                    tmprootfs_dfd,
                                             OstreeRepoDevInoCache *devino_cache,
