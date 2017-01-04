@@ -2007,15 +2007,13 @@ checksum_version (GVariant *checksum)
 }
 
 gboolean
-rpmostree_context_assemble_commit (RpmOstreeContext      *self,
-                                   int                    tmprootfs_dfd,
-                                   OstreeRepoDevInoCache *devino_cache,
-                                   const char            *parent,
-                                   RpmOstreeAssembleType  assemble_type,
-                                   gboolean               noscripts,
-                                   char                 **out_commit,
-                                   GCancellable          *cancellable,
-                                   GError               **error)
+rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
+                                      int                    tmprootfs_dfd,
+                                      OstreeRepoDevInoCache *devino_cache,
+                                      RpmOstreeAssembleType  assemble_type,
+                                      gboolean               noscripts,
+                                      GCancellable          *cancellable,
+                                      GError               **error)
 {
   gboolean ret = FALSE;
   OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
@@ -2030,8 +2028,6 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
   int r;
   g_autofree char *tmp_metadata_dir_path = NULL;
   glnx_fd_close int tmp_metadata_dfd = -1;
-  g_autofree char *ret_commit_checksum = NULL;
-  OstreeRepoCommitModifier *commit_modifier = NULL;
 
   if (!rpmostree_mkdtemp ("/tmp/rpmostree-metadata-XXXXXX", &tmp_metadata_dir_path,
                           &tmp_metadata_dfd, error))
@@ -2133,11 +2129,6 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
   rpmostree_output_task_begin ("Overlaying");
 
   n_rpmts_elements = (guint)rpmtsNElements (ordering_ts);
-
-  if (devino_cache == NULL)
-    devino_cache = ostree_repo_devino_cache_new ();
-  else
-    devino_cache = ostree_repo_devino_cache_ref (devino_cache);
 
   /* Okay so what's going on in Fedora with incestuous relationship
    * between the `filesystem`, `setup`, `libgcc` RPMs is actively
@@ -2415,6 +2406,31 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
   if (!rpmostree_rootfs_postprocess_common (tmprootfs_dfd, cancellable, error))
     goto out;
 
+  ret = TRUE;
+ out:
+  if (ordering_ts)
+    rpmtsFree (ordering_ts);
+  if (rpmdb_ts)
+    rpmtsFree (rpmdb_ts);
+  if (tmp_metadata_dir_path)
+    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tmp_metadata_dir_path, cancellable, NULL);
+  return ret;
+}
+
+gboolean
+rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
+                                    int                    tmprootfs_dfd,
+                                    OstreeRepoDevInoCache *devino_cache,
+                                    const char            *parent,
+                                    RpmOstreeAssembleType  assemble_type,
+                                    char                 **out_commit,
+                                    GCancellable          *cancellable,
+                                    GError               **error)
+{
+  gboolean ret = FALSE;
+  OstreeRepoCommitModifier *commit_modifier = NULL;
+  g_autofree char *ret_commit_checksum = NULL;
+
   rpmostree_output_task_begin ("Writing OSTree commit");
 
   if (!ostree_repo_prepare_transaction (self->ostreerepo, NULL, cancellable, error))
@@ -2498,15 +2514,44 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
   if (out_commit)
     *out_commit = g_steal_pointer (&ret_commit_checksum);
  out:
-  if (devino_cache)
-    ostree_repo_devino_cache_unref (devino_cache);
-  if (ordering_ts)
-    rpmtsFree (ordering_ts);
-  if (rpmdb_ts)
-    rpmtsFree (rpmdb_ts);
-  if (tmp_metadata_dir_path)
-    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tmp_metadata_dir_path, cancellable, NULL);
   if (commit_modifier)
     ostree_repo_commit_modifier_unref (commit_modifier);
   return ret;
+}
+
+gboolean
+rpmostree_context_assemble_commit (RpmOstreeContext      *self,
+                                   int                    tmprootfs_dfd,
+                                   OstreeRepoDevInoCache *devino_cache,
+                                   const char            *parent,
+                                   RpmOstreeAssembleType  assemble_type,
+                                   gboolean               noscripts,
+                                   char                 **out_commit,
+                                   GCancellable          *cancellable,
+                                   GError               **error)
+{
+  gboolean ret = FALSE;
+
+  /* Auto-synthesize a cache if not provided */
+  if (devino_cache == NULL)
+    devino_cache = ostree_repo_devino_cache_new ();
+  else
+    devino_cache = ostree_repo_devino_cache_ref (devino_cache);
+
+  if (!rpmostree_context_assemble_tmprootfs (self, tmprootfs_dfd, devino_cache,
+                                             assemble_type, noscripts,
+                                             cancellable, error))
+    goto out;
+
+  if (!rpmostree_context_commit_tmprootfs (self, tmprootfs_dfd, devino_cache,
+                                           parent, assemble_type,
+                                           out_commit,
+                                           cancellable, error))
+    goto out;
+
+  ret = TRUE;
+ out:
+  if (devino_cache)
+    ostree_repo_devino_cache_unref (devino_cache);
+  return ret; 
 }
