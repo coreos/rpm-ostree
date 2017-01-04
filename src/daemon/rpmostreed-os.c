@@ -143,7 +143,7 @@ os_handle_get_deployments_rpm_diff (RPMOSTreeOS *interface,
                                     const char *arg_deployid0,
                                     const char *arg_deployid1)
 {
-  glnx_unref_object GCancellable *cancellable = NULL;
+  g_autoptr(GCancellable) cancellable = NULL;
   RpmostreedSysroot *global_sysroot;
   glnx_unref_object OstreeDeployment *deployment0 = NULL;
   glnx_unref_object OstreeDeployment *deployment1 = NULL;
@@ -307,15 +307,13 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  glnx_unref_object GCancellable *cancellable = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   GError *local_error = NULL;
 
   transaction = merge_compatible_txn (self, invocation);
   if (transaction)
     goto out;
-
-  cancellable = g_cancellable_new ();
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
                                       cancellable,
@@ -363,7 +361,7 @@ os_handle_deploy (RPMOSTreeOS *interface,
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  glnx_unref_object GCancellable *cancellable = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   GVariantDict options_dict;
   gboolean opt_reboot = FALSE;
   const char *osname;
@@ -372,8 +370,6 @@ os_handle_deploy (RPMOSTreeOS *interface,
   transaction = merge_compatible_txn (self, invocation);
   if (transaction)
     goto out;
-
-  cancellable = g_cancellable_new ();
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
                                       cancellable,
@@ -430,7 +426,7 @@ os_handle_upgrade (RPMOSTreeOS *interface,
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  glnx_unref_object GCancellable *cancellable = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   GVariantDict options_dict;
   gboolean opt_allow_downgrade = FALSE;
   gboolean opt_reboot = FALSE;
@@ -440,8 +436,6 @@ os_handle_upgrade (RPMOSTreeOS *interface,
   transaction = merge_compatible_txn (self, invocation);
   if (transaction)
     goto out;
-
-  cancellable = g_cancellable_new ();
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
                                       cancellable,
@@ -501,7 +495,7 @@ os_handle_rollback (RPMOSTreeOS *interface,
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  glnx_unref_object GCancellable *cancellable = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   gboolean opt_reboot = FALSE;
   GVariantDict options_dict;
@@ -510,8 +504,6 @@ os_handle_rollback (RPMOSTreeOS *interface,
   transaction = merge_compatible_txn (self, invocation);
   if (transaction)
     goto out;
-
-  cancellable = g_cancellable_new ();
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
                                       cancellable,
@@ -565,7 +557,7 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  glnx_unref_object GCancellable *cancellable = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   gboolean opt_reboot = FALSE;
   GVariantDict options_dict;
@@ -574,8 +566,6 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
   transaction = merge_compatible_txn (self, invocation);
   if (transaction)
     goto out;
-
-  cancellable = g_cancellable_new ();
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
                                       cancellable,
@@ -632,7 +622,7 @@ os_handle_rebase (RPMOSTreeOS *interface,
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  glnx_unref_object GCancellable *cancellable = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   GVariantDict options_dict;
   gboolean opt_skip_purge = FALSE;
   const char *osname;
@@ -643,8 +633,6 @@ os_handle_rebase (RPMOSTreeOS *interface,
   transaction = merge_compatible_txn (self, invocation);
   if (transaction)
     goto out;
-
-  cancellable = g_cancellable_new ();
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
                                       cancellable,
@@ -711,7 +699,7 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  glnx_unref_object GCancellable *cancellable = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   GError *local_error = NULL;
   gboolean v;
@@ -722,8 +710,6 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
   transaction = merge_compatible_txn (self, invocation);
   if (transaction)
     goto out;
-
-  cancellable = g_cancellable_new ();
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
                                       cancellable,
@@ -793,7 +779,7 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
                                       const char * const *arg_packages)
 {
   RpmostreedSysroot *global_sysroot;
-  glnx_unref_object GCancellable *cancellable = NULL;
+  g_autoptr(GCancellable) cancellable = NULL;
   OstreeSysroot *ot_sysroot = NULL;
   OstreeRepo *ot_repo = NULL;
   const gchar *name;
@@ -865,15 +851,13 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  glnx_unref_object GCancellable *cancellable = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   GError *local_error = NULL;
 
   transaction = merge_compatible_txn (self, invocation);
   if (transaction)
     goto out;
-
-  cancellable = g_cancellable_new ();
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
                                       cancellable,
@@ -926,7 +910,7 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
   g_autofree char *base_refspec = NULL;
   g_autofree char *checksum = NULL;
   g_autofree char *version = NULL;
-  GCancellable *cancellable = NULL;
+  g_autoptr(GCancellable) cancellable = NULL;
   GVariant *value = NULL;
   GVariant *details = NULL;
   GError *local_error = NULL;
@@ -1003,7 +987,7 @@ os_handle_download_deploy_rpm_diff (RPMOSTreeOS *interface,
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  g_autoptr(GCancellable) cancellable = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   GError *local_error = NULL;
 
@@ -1012,8 +996,6 @@ os_handle_download_deploy_rpm_diff (RPMOSTreeOS *interface,
   transaction = merge_compatible_txn (self, invocation);
   if (transaction)
     goto out;
-
-  cancellable = g_cancellable_new ();
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
                                       cancellable,
