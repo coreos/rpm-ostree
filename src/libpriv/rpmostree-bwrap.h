@@ -32,5 +32,9 @@ gboolean rpmostree_run_sync_fchdir_setup (char **argv_array, GSpawnFlags flags,
                                           int rootfs_fd, GError **error);
 
 gboolean rpmostree_run_bwrap_sync (char **argv_array, int rootfs_fd, GError **error);
+gboolean rpmostree_run_bwrap_sync_setup (char **argv_array, int rootfs_fd,
+                                         GSpawnChildSetupFunc func,
+                                         gpointer             data,
+                                         GError **error);
 
 gboolean rpmostree_bwrap_selftest (GError **error);

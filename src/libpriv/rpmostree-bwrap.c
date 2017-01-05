@@ -108,11 +108,34 @@ rpmostree_run_sync_fchdir_setup (char **argv_array, GSpawnFlags flags,
   return TRUE;
 }
 
+typedef struct {
+  int rootfs_fd;
+  GSpawnChildSetupFunc func;
+  gpointer data;
+} ChildSetupData;
+
+static void
+bwrap_child_setup (gpointer data)
+{
+  ChildSetupData *cdata = data;
+
+  if (fchdir (cdata->rootfs_fd) < 0)
+    err (1, "fchdir");
+
+  if (cdata->func)
+    cdata->func (cdata->data);
+}
+
 gboolean
-rpmostree_run_bwrap_sync (char **argv_array, int rootfs_fd, GError **error)
+rpmostree_run_bwrap_sync_setup (char **argv_array,
+                                int rootfs_fd,
+                                GSpawnChildSetupFunc func,
+                                gpointer             data,
+                                GError **error)
 {
   int estatus;
   const char *current_lang = getenv ("LANG");
+  ChildSetupData csetupdata = { rootfs_fd, func, data };
 
   if (!current_lang)
     current_lang = "C";
@@ -129,7 +152,7 @@ rpmostree_run_bwrap_sync (char **argv_array, int rootfs_fd, GError **error)
                                NULL};
 
     if (!g_spawn_sync (NULL, argv_array, (char**) bwrap_env, G_SPAWN_SEARCH_PATH,
-                       child_setup_fchdir, GINT_TO_POINTER (rootfs_fd),
+                       bwrap_child_setup, &csetupdata,
                        NULL, NULL, &estatus, error))
       return FALSE;
     if (!g_spawn_check_exit_status (estatus, error))
@@ -137,6 +160,12 @@ rpmostree_run_bwrap_sync (char **argv_array, int rootfs_fd, GError **error)
   }
 
   return TRUE;
+}
+
+gboolean
+rpmostree_run_bwrap_sync (char **argv_array, int rootfs_fd, GError **error)
+{
+  return rpmostree_run_bwrap_sync_setup (argv_array, rootfs_fd, NULL, NULL, error);
 }
 
 /* Execute /bin/true inside a bwrap container on the host */
