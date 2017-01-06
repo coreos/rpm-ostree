@@ -5,6 +5,9 @@ dn=$(cd $(dirname $0) && pwd)
 
 export topsrcdir=$(cd $dn/.. && pwd)
 
+# avoid refetching yum metadata everytime
+export RPMOSTREE_USE_CACHED_METADATA=1
+
 LOG=${LOG:-compose.log}
 date > ${LOG}
 
