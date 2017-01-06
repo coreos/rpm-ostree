@@ -21,7 +21,6 @@
 #include "config.h"
 
 #include <gio/gio.h>
-#include <systemd/sd-journal.h>
 #include "rpmostree-output.h"
 #include "rpmostree-bwrap.h"
 #include <err.h>
@@ -76,38 +75,6 @@ static const KnownRpmScriptKind unsupported_scripts[] = {
   { "%verify", 0,
     RPMTAG_VERIFYSCRIPT, RPMTAG_VERIFYSCRIPTPROG, RPMTAG_VERIFYSCRIPTFLAGS},
 };
-
-static void
-fusermount_cleanup (const char *mountpoint)
-{
-  g_autoptr(GError) tmp_error = NULL;
-  const char *fusermount_argv[] = { "fusermount", "-u", mountpoint, NULL};
-  int estatus;
-
-  if (!g_spawn_sync (NULL, (char**)fusermount_argv, NULL, G_SPAWN_SEARCH_PATH,
-                     NULL, NULL, NULL, NULL, &estatus, &tmp_error))
-    {
-      g_prefix_error (&tmp_error, "Executing fusermount: ");
-      goto out;
-    }
-  if (!g_spawn_check_exit_status (estatus, &tmp_error))
-    {
-      g_prefix_error (&tmp_error, "Executing fusermount: ");
-      goto out;
-    }
-
- out:
-  /* We don't want a failure to unmount to be fatal, so all we do here
-   * is log.  Though in practice what we *really* want is for the
-   * fusermount to be in the bwrap namespace, and hence tied by the
-   * kernel to the lifecycle of the container.  This would require
-   * special casing for somehow doing FUSE mounts in bwrap.  Which
-   * would be hard because NO_NEW_PRIVS turns off the setuid bits for
-   * fuse.
-   */
-  if (tmp_error)
-    sd_journal_print (LOG_WARNING, "%s", tmp_error->message);
-}
 
 static RpmOstreeScriptAction
 lookup_script_action (DnfPackage *package,
@@ -172,44 +139,27 @@ run_script_in_bwrap_container (int rootfs_fd,
                                GError       **error)
 {
   gboolean ret = FALSE;
-  char *rofiles_mnt = strdupa ("/tmp/rofiles-fuse.XXXXXX");
-  const char *rofiles_argv[] = { "rofiles-fuse", "./usr", rofiles_mnt, NULL};
   const char *pkg_script = glnx_strjoina (name, ".", scriptdesc+1);
   const char *postscript_name = glnx_strjoina ("/", pkg_script);
-  const char *postscript_path_container = glnx_strjoina ("/usr/", postscript_name);
-  const char *postscript_path_host;
-  gboolean mntpoint_created = FALSE;
-  gboolean fuse_mounted = FALSE;
-  g_autoptr(GPtrArray) bwrap_argv = g_ptr_array_new ();
+  const char *postscript_path_container = glnx_strjoina ("/usr", postscript_name);
+  const char *postscript_path_host = postscript_path_container + 1;
+  g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   gboolean created_var_tmp = FALSE;
 
-  if (!glnx_mkdtempat (AT_FDCWD, rofiles_mnt, 0700, error))
-    goto out;
-
-  mntpoint_created = TRUE;
-
-  if (!rpmostree_run_sync_fchdir_setup ((char**)rofiles_argv, G_SPAWN_SEARCH_PATH,
-                                        rootfs_fd, error))
-    {
-      g_prefix_error (error, "Executing rofiles-fuse: ");
-      goto out;
-    }
-
-  fuse_mounted = TRUE;
-
-  postscript_path_host = glnx_strjoina (rofiles_mnt, "/", postscript_name);
-
   /* TODO - Create a pipe and send this to bwrap so it's inside the
-   * tmpfs
+   * tmpfs.  Note the +1 on the path to skip the leading /.
    */
-  if (!g_file_set_contents (postscript_path_host, script, -1, error))
+  if (!glnx_file_replace_contents_at (rootfs_fd, postscript_path_host,
+                                      (guint8*)script, -1,
+                                      GLNX_FILE_REPLACE_NODATASYNC,
+                                      NULL, error))
     {
       g_prefix_error (error, "Writing script to %s: ", postscript_path_host);
       goto out;
     }
-  if (chmod (postscript_path_host, 0755) != 0)
+  if (fchmodat (rootfs_fd, postscript_path_host, 0755, 0) != 0)
     {
-      g_prefix_error (error, "chmod %s: ", postscript_path_host);
+      glnx_set_error_from_errno (error);
       goto out;
     }
 
@@ -236,40 +186,28 @@ run_script_in_bwrap_container (int rootfs_fd,
   else
     created_var_tmp = TRUE;
 
-  bwrap_argv = rpmostree_bwrap_base_argv_new_for_rootfs (rootfs_fd, error);
-  if (!bwrap_argv)
+  bwrap = rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_MUTATE_ROFILES, error,
+                               /* Scripts can see a /var with compat links like alternatives */
+                               "--ro-bind", "./var", "/var",
+                               /* But no need to access persistent /tmp, so make it /tmp */
+                               "--bind", "/tmp", "/var/tmp",
+                               /* Allow RPM scripts to change the /etc defaults */
+                               "--symlink", "usr/etc", "/etc",
+                               NULL);
+  if (!bwrap)
     goto out;
 
-  rpmostree_ptrarray_append_strdup (bwrap_argv,
-                  "--bind", rofiles_mnt, "/usr",
-                  /* Scripts can see a /var with compat links like alternatives */
-                  "--ro-bind", "./var", "/var",
-                  /* But no need to access persistent /tmp, so make it /tmp */
-                  "--bind", "/tmp", "/var/tmp",
-                  /* Allow RPM scripts to change the /etc defaults */
-                  "--symlink", "usr/etc", "/etc",
-                  NULL);
+  rpmostree_bwrap_append_child_argv (bwrap,
+                                     postscript_path_container,
+                                     /* http://www.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S3-RPM-INSIDE-PRE-SCRIPT */
+                                     "1",
+                                     NULL);
 
-  g_ptr_array_add (bwrap_argv, g_strdup (postscript_path_container));
-  /* http://www.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S3-RPM-INSIDE-PRE-SCRIPT */
-  g_ptr_array_add (bwrap_argv, g_strdup ("1"));
-  g_ptr_array_add (bwrap_argv, NULL);
-
-  if (!rpmostree_run_bwrap_sync ((char**)bwrap_argv->pdata, rootfs_fd, error))
-    {
-      g_prefix_error (error, "Executing bwrap: ");
-      goto out;
-    }
+  if (!rpmostree_bwrap_run (bwrap, error))
+    goto out;
 
   ret = TRUE;
  out:
-  if (fuse_mounted)
-    {
-      (void) unlink (postscript_path_host);
-      fusermount_cleanup (rofiles_mnt);
-    }
-  if (mntpoint_created)
-    (void) unlinkat (AT_FDCWD, rofiles_mnt, AT_REMOVEDIR);
   if (created_var_tmp)
     (void) unlinkat (rootfs_fd, "var/tmp", AT_REMOVEDIR);
   return ret;

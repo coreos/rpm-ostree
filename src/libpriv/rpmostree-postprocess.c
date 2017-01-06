@@ -58,22 +58,20 @@ run_sync_in_root_at (int           rootfs_fd,
                      gpointer      data,
                      GError     **error)
 {
-  g_autoptr(GPtrArray) bwrap_argv = NULL;
-
-  bwrap_argv = rpmostree_bwrap_base_argv_new_for_rootfs (rootfs_fd, error);
-  if (!bwrap_argv)
-    return FALSE;
+  g_autoptr(RpmOstreeBwrap) bwrap = NULL;
 
   /* Bind all of the primary toplevel dirs; unlike the script case, treecompose
    * isn't yet operating on hardlinks, so we can just bind mount things mutably.
    */
-  rpmostree_ptrarray_append_strdup (bwrap_argv,
-                                    "--bind", "usr", "/usr",
-                                    "--bind", "var", "/var",
-                                    "--bind", "etc", "/etc",
-                                    NULL);
+  bwrap = rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_MUTATE_FREELY, error,
+                               "--bind", "var", "/var",
+                               "--bind", "etc", "/etc",
+                               NULL);
+  if (!bwrap)
+    return FALSE;
 
-  g_ptr_array_add (bwrap_argv, g_strdup (binpath));
+  rpmostree_bwrap_append_child_argv (bwrap, binpath, NULL);
+
   /* https://github.com/projectatomic/bubblewrap/issues/91 */
   { gboolean first = TRUE;
     for (char **iter = child_argv; iter && *iter; iter++)
@@ -81,17 +79,15 @@ run_sync_in_root_at (int           rootfs_fd,
         if (first)
           first = FALSE;
         else
-          g_ptr_array_add (bwrap_argv, g_strdup (*iter));
+          rpmostree_bwrap_append_child_argv (bwrap, *iter, NULL);
       }
   }
-  g_ptr_array_add (bwrap_argv, NULL);
 
-  if (!rpmostree_run_bwrap_sync_setup ((char**)bwrap_argv->pdata, rootfs_fd,
-                                       setup_func, data, error))
-    {
-      g_prefix_error (error, "Executing bwrap(%s): ", child_argv[0]);
-      return FALSE;
-    }
+  if (setup_func)
+    rpmostree_bwrap_set_child_setup (bwrap, setup_func, data);
+
+  if (!rpmostree_bwrap_run (bwrap, error))
+    return FALSE;
 
   return TRUE;
 }
