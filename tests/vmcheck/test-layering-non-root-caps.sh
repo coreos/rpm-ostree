@@ -92,3 +92,4 @@ check_file /usr/bin/nrc-usergroup.sh nrcuser nrcgroup ""
 check_file /usr/bin/nrc-usergroupcaps.sh nrcuser nrcgroup "cap_net_bind_service+ep"
 check_file /var/lib/nonrootcap nrcuser nrcgroup
 check_file /run/nonrootcap nrcuser nrcgroup
+echo "ok correct user/group and fcaps"
