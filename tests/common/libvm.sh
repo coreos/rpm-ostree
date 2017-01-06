@@ -62,6 +62,7 @@ vm_send() {
 
 # copy the test repo to the vm
 vm_send_test_repo() {
+  vm_cmd rm -rf /tmp/vmcheck
   vm_send /tmp/vmcheck ${commondir}/compose/yum/repo
 
   cat > vmcheck.repo << EOF
@@ -103,8 +104,8 @@ vm_reboot() {
   vm_ssh_wait 120 $bootid
 }
 
-# check that the given files exist on the VM
-# - $@    packages to check for
+# check that the given files/dirs exist on the VM
+# - $@    files/dirs to check for
 vm_has_files() {
   for file in "$@"; do
     if ! vm_cmd test -e $file; then
