@@ -88,8 +88,12 @@ check_file /usr/bin/nrc-none.sh root root ""
 check_file /usr/bin/nrc-user.sh nrcuser root ""
 check_file /usr/bin/nrc-group.sh root nrcgroup ""
 check_file /usr/bin/nrc-caps.sh root root "cap_net_bind_service+ep"
+check_file /usr/bin/nrc-caps-setuid.sh root root "cap_net_bind_service+ep"
+vm_cmd test -u /usr/bin/nrc-caps-setuid.sh
 check_file /usr/bin/nrc-usergroup.sh nrcuser nrcgroup ""
 check_file /usr/bin/nrc-usergroupcaps.sh nrcuser nrcgroup "cap_net_bind_service+ep"
+check_file /usr/bin/nrc-usergroupcaps-setuid.sh nrcuser nrcgroup "cap_net_bind_service+ep"
+vm_cmd test -u /usr/bin/nrc-usergroupcaps-setuid.sh
 check_file /var/lib/nonrootcap nrcuser nrcgroup
 check_file /run/nonrootcap nrcuser nrcgroup
 echo "ok correct user/group and fcaps"

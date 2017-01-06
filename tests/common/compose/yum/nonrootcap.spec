@@ -23,8 +23,10 @@ cp tmp nrc-none.sh
 cp tmp nrc-user.sh
 cp tmp nrc-group.sh
 cp tmp nrc-caps.sh
+cp tmp nrc-caps-setuid.sh
 cp tmp nrc-usergroup.sh
 cp tmp nrc-usergroupcaps.sh
+cp tmp nrc-usergroupcaps-setuid.sh
 rm tmp
 
 %pre
@@ -45,8 +47,10 @@ rm -rf %{buildroot}
 %attr(-, nrcuser, -) /usr/bin/nrc-user.sh
 %attr(-, -, nrcgroup) /usr/bin/nrc-group.sh
 %caps(cap_net_bind_service=ep) /usr/bin/nrc-caps.sh
+%attr(4775, -, -) %caps(cap_net_bind_service=ep) /usr/bin/nrc-caps-setuid.sh
 %attr(-, nrcuser, nrcgroup) /usr/bin/nrc-usergroup.sh
 %attr(-, nrcuser, nrcgroup) %caps(cap_net_bind_service=ep) /usr/bin/nrc-usergroupcaps.sh
+%attr(4775, nrcuser, nrcgroup) %caps(cap_net_bind_service=ep) /usr/bin/nrc-usergroupcaps-setuid.sh
 %attr(-, nrcuser, nrcgroup) /var/lib/nonrootcap
 %attr(-, nrcuser, nrcgroup) /run/nonrootcap
 
