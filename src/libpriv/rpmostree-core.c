@@ -278,7 +278,7 @@ rpmostree_install_init (RpmOstreeInstall *self)
 
 struct _RpmOstreeContext {
   GObject parent;
-  
+
   RpmOstreeTreespec *spec;
   DnfContext *hifctx;
   GHashTable *ignore_scripts;
@@ -1311,9 +1311,10 @@ checkout_package_into_root (RpmOstreeContext *self,
 }
 
 /* Given a path to a file/symlink, make a copy (reflink if possible)
- * of it if it's a hard link.  We need this for two places right now:
+ * of it if it's a hard link.  We need this for three places right now:
  *  - The RPM database
  *  - SELinux policy "denormalization" where a label changes
+ *  - Upon applying rpmfi overrides during assembly
  */
 static gboolean
 break_single_hardlink_at (int           dfd,
@@ -1368,7 +1369,7 @@ break_single_hardlink_at (int           dfd,
                        "Exceeded limit of %u file creation attempts", count);
           goto out;
         }
-      
+
       if (renameat (dfd, path_tmp, dfd, path) != 0)
         {
           glnx_set_prefix_error_from_errno (error, "Rename %s", path);
@@ -1754,25 +1755,24 @@ ts_callback (const void * h,
   return NULL;
 }
 
-static Header
-get_header_for_package (int tmp_metadata_dfd,
-                        DnfPackage *pkg,
-                        GError **error)
+static gboolean
+get_package_metainfo (int tmp_metadata_dfd,
+                      DnfPackage *pkg,
+                      Header *out_header,
+                      rpmfi *out_fi,
+                      GError **error)
 {
-  Header hdr = NULL;
   glnx_fd_close int metadata_fd = -1;
   const char *nevra = dnf_package_get_nevra (pkg);
 
   if ((metadata_fd = openat (tmp_metadata_dfd, nevra, O_RDONLY | O_CLOEXEC)) < 0)
     {
       glnx_set_error_from_errno (error);
-      return NULL;
+      return FALSE;
     }
 
-  if (!rpmostree_unpacker_read_metainfo (metadata_fd, &hdr, NULL, NULL, error))
-    return NULL;
-
-  return hdr;
+  return rpmostree_unpacker_read_metainfo (metadata_fd, out_header, NULL,
+                                           out_fi, error);
 }
 
 static gboolean
@@ -1787,8 +1787,7 @@ add_to_transaction (rpmts  ts,
   _cleanup_rpmheader_ Header hdr = NULL;
   int r;
 
-  hdr = get_header_for_package (tmp_metadata_dfd, pkg, error);
-  if (!hdr)
+  if (!get_package_metainfo (tmp_metadata_dfd, pkg, &hdr, NULL, error))
     return FALSE;
 
   if (!noscripts)
@@ -1819,15 +1818,158 @@ run_posttrans_sync (int tmp_metadata_dfd,
                     GCancellable *cancellable,
                     GError    **error)
 {
-  _cleanup_rpmheader_ Header hdr;
+  _cleanup_rpmheader_ Header hdr = NULL;
 
-  hdr = get_header_for_package (tmp_metadata_dfd, pkg, error);
-  if (!hdr)
+  if (!get_package_metainfo (tmp_metadata_dfd, pkg, &hdr, NULL, error))
     return FALSE;
 
   if (!rpmostree_posttrans_run_sync (pkg, hdr, ignore_scripts, rootfs_dfd,
                                      cancellable, error))
     return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+run_pre_sync (int tmp_metadata_dfd,
+              int rootfs_dfd,
+              DnfPackage *pkg,
+              GHashTable *ignore_scripts,
+              GCancellable *cancellable,
+              GError    **error)
+{
+  _cleanup_rpmheader_ Header hdr = NULL;
+
+  if (!get_package_metainfo (tmp_metadata_dfd, pkg, &hdr, NULL, error))
+    return FALSE;
+
+  if (!rpmostree_pre_run_sync (pkg, hdr, ignore_scripts,
+                               rootfs_dfd, cancellable, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+apply_rpmfi_overrides (int            tmp_metadata_dfd,
+                       int            tmprootfs_dfd,
+                       DnfPackage    *pkg,
+                       GHashTable    *passwdents,
+                       GHashTable    *groupents,
+                       GCancellable  *cancellable,
+                       GError       **error)
+{
+  int i;
+  _cleanup_rpmfi_ rpmfi fi = NULL;
+
+  if (!get_package_metainfo (tmp_metadata_dfd, pkg, NULL, &fi, error))
+    return FALSE;
+
+  while ((i = rpmfiNext (fi)) >= 0)
+    {
+      const char *fn = rpmfiFN (fi);
+      const char *user = rpmfiFUser (fi) ?: "root";
+      const char *group = rpmfiFGroup (fi) ?: "root";
+      const char *fcaps = rpmfiFCaps (fi) ?: '\0';
+      rpm_mode_t mode = rpmfiFMode (fi);
+      struct stat stbuf;
+      uid_t uid = 0;
+      gid_t gid = 0;
+
+      if (g_str_equal (user, "root") &&
+          g_str_equal (group, "root"))
+        continue;
+
+      if (!S_ISREG (mode) &&
+          !S_ISDIR (mode) &&
+          !S_ISLNK (mode))
+        continue;
+
+      g_assert (fn != NULL);
+      while (fn[0] == '/')
+        fn += 1;
+
+      /* /run and /var paths have already been tranlated to tmpfiles during
+       * unpacking */
+      if (g_str_has_prefix (fn, "run/") ||
+          g_str_has_prefix (fn, "var/"))
+        continue;
+
+      if (fstatat (tmprootfs_dfd, fn, &stbuf, AT_SYMLINK_NOFOLLOW) != 0)
+        {
+          glnx_set_prefix_error_from_errno (error, "%s", "fstatat");
+          return FALSE;
+        }
+
+      if ((S_IFMT & stbuf.st_mode) != (S_IFMT & mode))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Inconsistent file type between RPM and checkout "
+                       "for file '%s' in package '%s'", fn,
+                       dnf_package_get_name (pkg));
+          return FALSE;
+        }
+
+      if (S_ISREG (mode))
+        {
+          if (!break_single_hardlink_at (tmprootfs_dfd, fn, cancellable, error))
+            return FALSE;
+        }
+
+      if ((!g_str_equal (user, "root") && !passwdents) ||
+          (!g_str_equal (group, "root") && !groupents))
+        {
+          g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "Missing passwd/group files for chown");
+          return FALSE;
+        }
+
+      if (!g_str_equal (user, "root"))
+        {
+          struct conv_passwd_ent *passwdent =
+            g_hash_table_lookup (passwdents, user);
+
+          if (!passwdent)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Could not find user '%s' in passwd file", user);
+              return FALSE;
+            }
+
+          uid = passwdent->uid;
+        }
+
+      if (!g_str_equal (group, "root"))
+        {
+          struct conv_group_ent *groupent =
+            g_hash_table_lookup (groupents, group);
+
+          if (!groupent)
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Could not find group '%s' in group file",
+                           group);
+              return FALSE;
+            }
+
+          gid = groupent->gid;
+        }
+
+      if (fchownat (tmprootfs_dfd, fn, uid, gid, AT_SYMLINK_NOFOLLOW) != 0)
+        {
+          glnx_set_prefix_error_from_errno (error, "%s", "fchownat");
+          return FALSE;
+        }
+
+      /* the chown clears away file caps, so reapply it here */
+      if (fcaps[0] != '\0')
+        {
+          g_autoptr(GVariant) xattrs = rpmostree_fcap_to_xattr_variant (fcaps);
+          if (!glnx_dfd_name_set_all_xattrs (tmprootfs_dfd, fn, xattrs,
+                                             cancellable, error))
+            return FALSE;
+        }
+    }
 
   return TRUE;
 }
@@ -1864,7 +2006,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
   TransactionData tdata = { 0, -1 };
   rpmts ordering_ts = NULL;
   rpmts rpmdb_ts = NULL;
-  guint i, n_rpmts_elements;
+  guint n_rpmts_elements;
   g_autoptr(GHashTable) pkg_to_ostree_commit =
     g_hash_table_new_full (NULL, NULL, (GDestroyNotify)g_object_unref, (GDestroyNotify)g_free);
   DnfPackage *filesystem_package = NULL;   /* It's special... */
@@ -1909,7 +2051,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
         goto out;
       }
 
-    for (i = 0; i < package_list->len; i++)
+    for (guint i = 0; i < package_list->len; i++)
       {
         DnfPackage *pkg = package_list->pdata[i];
         g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
@@ -2015,14 +2157,11 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                                             pkg),
                                        cancellable, error))
         goto out;
+
+      filesystem_package = g_object_ref (pkg);
     }
 
-  if (filesystem_package)
-    i = 0;
-  else
-    i = 1;
-
-  for (; i < n_rpmts_elements; i++)
+  for (guint i = 0; i < n_rpmts_elements; i++)
     {
       rpmte te = rpmtsElement (ordering_ts, i);
       DnfPackage *pkg = (void*)rpmteKey (te);
@@ -2049,6 +2188,16 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
     {
       gboolean have_passwd;
       gboolean have_systemctl;
+      g_autoptr(GPtrArray) passwdents_ptr = NULL;
+      g_autoptr(GPtrArray) groupents_ptr = NULL;
+
+      /* since here a hash table is more appropriate than a ptr array, we'll
+       * just populate the table from the ptrarray, rather than making
+       * data2passwdents support both outputs */
+      g_autoptr(GHashTable) passwdents = g_hash_table_new (g_str_hash,
+                                                           g_str_equal);
+      g_autoptr(GHashTable) groupents = g_hash_table_new (g_str_hash,
+                                                          g_str_equal);
 
       if (!rpmostree_passwd_prepare_rpm_layering (tmprootfs_dfd, &have_passwd,
                                                   cancellable, error))
@@ -2078,12 +2227,74 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
             }
         }
 
-      for (i = 0; i < n_rpmts_elements; i++)
+      /* We're technically deviating from RPM here by running all the %pre's
+       * beforehand, rather than each package's %pre & %post in order. Though I
+       * highly doubt this should cause any issues. The advantage of doing it
+       * this way is that we only need to read the passwd/group files once
+       * before applying the overrides, rather than after each %pre.
+       */
+      for (guint i = 0; i < n_rpmts_elements; i++)
         {
           rpmte te = rpmtsElement (ordering_ts, i);
           DnfPackage *pkg = (void*)rpmteKey (te);
 
           g_assert (pkg);
+
+          if (!run_pre_sync (tmp_metadata_dfd, tmprootfs_dfd, pkg,
+                             self->ignore_scripts,
+                             cancellable, error))
+            goto out;
+        }
+
+      if (have_passwd &&
+          faccessat (tmprootfs_dfd, "usr/etc/passwd", F_OK, 0) == 0)
+        {
+          g_autofree char *contents =
+            glnx_file_get_contents_utf8_at (tmprootfs_dfd, "usr/etc/passwd",
+                                            NULL, cancellable, error);
+          if (!contents)
+            goto out;
+
+          passwdents_ptr = rpmostree_passwd_data2passwdents (contents);
+          for (guint i = 0; i < passwdents_ptr->len; i++)
+            {
+              struct conv_passwd_ent *ent = passwdents_ptr->pdata[i];
+              g_hash_table_insert (passwdents, ent->name, ent);
+            }
+        }
+
+      if (have_passwd &&
+          faccessat (tmprootfs_dfd, "usr/etc/group", F_OK, 0) == 0)
+        {
+          g_autofree char *contents =
+            glnx_file_get_contents_utf8_at (tmprootfs_dfd, "usr/etc/group",
+                                            NULL, cancellable, error);
+          if (!contents)
+            goto out;
+
+          groupents_ptr = rpmostree_passwd_data2groupents (contents);
+          for (guint i = 0; i < groupents_ptr->len; i++)
+            {
+              struct conv_group_ent *ent = groupents_ptr->pdata[i];
+              g_hash_table_insert (groupents, ent->name, ent);
+            }
+        }
+
+      for (guint i = 0; i < n_rpmts_elements; i++)
+        {
+          rpmte te = rpmtsElement (ordering_ts, i);
+          DnfPackage *pkg = (void*)rpmteKey (te);
+
+          g_assert (pkg);
+
+          if (!apply_rpmfi_overrides (tmp_metadata_dfd, tmprootfs_dfd,
+                                      pkg, passwdents, groupents,
+                                      cancellable, error))
+            {
+              g_prefix_error (error, "While applying overrides for pkg %s: ",
+                              dnf_package_get_name (pkg));
+              goto out;
+            }
 
           if (!run_posttrans_sync (tmp_metadata_dfd, tmprootfs_dfd, pkg,
                                    self->ignore_scripts,

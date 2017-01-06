@@ -63,3 +63,11 @@ rpmostree_posttrans_run_sync (DnfPackage    *pkg,
                               int            rootfs_fd,
                               GCancellable  *cancellable,
                               GError       **error);
+
+gboolean
+rpmostree_pre_run_sync (DnfPackage    *pkg,
+                        Header         hdr,
+                        GHashTable    *ignore_scripts,
+                        int            rootfs_fd,
+                        GCancellable  *cancellable,
+                        GError       **error);

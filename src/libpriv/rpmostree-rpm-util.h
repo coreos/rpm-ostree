@@ -153,3 +153,6 @@ rpmostree_print_transaction (DnfContext   *context);
 
 
 void _rpmostree_reset_rpm_sighandlers (void);
+
+GVariant *
+rpmostree_fcap_to_xattr_variant (const char *fcap);
