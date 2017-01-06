@@ -72,3 +72,20 @@ rpmostree_passwd_prepare_rpm_layering (int       rootfs_dfd,
 gboolean
 rpmostree_passwd_complete_rpm_layering (int       rootfs_dfd,
                                         GError  **error);
+
+struct conv_passwd_ent {
+  char *name;
+  uid_t uid;
+  gid_t gid;
+};
+
+struct conv_group_ent {
+  char *name;
+  gid_t gid;
+};
+
+GPtrArray *
+rpmostree_passwd_data2passwdents (const char *data);
+
+GPtrArray *
+rpmostree_passwd_data2groupents (const char *data);
