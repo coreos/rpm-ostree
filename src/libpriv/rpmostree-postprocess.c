@@ -38,6 +38,7 @@
 #include <gio/gunixoutputstream.h>
 
 #include "rpmostree-postprocess.h"
+#include "rpmostree-kernel.h"
 #include "rpmostree-bwrap.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-rpm-util.h"
@@ -50,19 +51,17 @@ typedef enum {
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW
 } RpmOstreePostprocessBootLocation;
 
+/* This bwrap case is for treecompose which isn't isn't yet operating on
+ * hardlinks, so we just bind mount things mutably.
+ */
 static gboolean
-run_sync_in_root_at (int           rootfs_fd,
-                     const char   *binpath,
-                     char        **child_argv,
-                     GSpawnChildSetupFunc setup_func,
-                     gpointer      data,
-                     GError     **error)
+run_bwrap_mutably (int           rootfs_fd,
+                   const char   *binpath,
+                   char        **child_argv,
+                   GError     **error)
 {
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
 
-  /* Bind all of the primary toplevel dirs; unlike the script case, treecompose
-   * isn't yet operating on hardlinks, so we can just bind mount things mutably.
-   */
   bwrap = rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_MUTATE_FREELY, error,
                                "--bind", "var", "/var",
                                "--bind", "etc", "/etc",
@@ -82,9 +81,6 @@ run_sync_in_root_at (int           rootfs_fd,
           rpmostree_bwrap_append_child_argv (bwrap, *iter, NULL);
       }
   }
-
-  if (setup_func)
-    rpmostree_bwrap_set_child_setup (bwrap, setup_func, data);
 
   if (!rpmostree_bwrap_run (bwrap, error))
     return FALSE;
@@ -255,88 +251,6 @@ find_ensure_one_subdirectory (int            rootfs_dfd,
   return TRUE;
 }
 
-static void
-dracut_child_setup (gpointer data)
-{
-  int fd = GPOINTER_TO_INT (data);
-
-  /* Move the tempfile fd to 3 (and without the cloexec flag) */
-  if (dup2 (fd, 3) < 0)
-    err (1, "dup2");
-}
-
-static gboolean
-run_dracut (int     rootfs_dfd,
-            char   **argv,
-            int     *out_initramfs_tmpfd,
-            char   **out_initramfs_tmppath,
-            GCancellable  *cancellable,
-            GError **error)
-{
-  gboolean ret = FALSE;
-  /* Shell wrapper around dracut to write to the O_TMPFILE fd;
-   * at some point in the future we should add --fd X instead of -f
-   * to dracut.
-   */
-  static const char rpmostree_dracut_wrapper_path[] = "usr/bin/rpmostree-dracut-wrapper";
-  /* This also hardcodes a few arguments */
-  static const char rpmostree_dracut_wrapper[] =
-    "#!/usr/bin/bash\n"
-    "set -euo pipefail\n"
-    "extra_argv=; if (dracut --help; true) | grep -q -e --reproducible; then extra_argv=\"--reproducible --gzip\"; fi\n"
-    "dracut $extra_argv -v --add ostree --tmpdir=/tmp -f /tmp/initramfs.img \"$@\"\n"
-    "cat /tmp/initramfs.img >/proc/self/fd/3\n";
-  g_autoptr(GPtrArray) child_argv = g_ptr_array_new ();
-  glnx_fd_close int tmp_fd = -1;
-  g_autofree char *tmpfile_path = NULL;
-
-  /* First tempfile is just our shell script */
-  if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, "usr/bin",
-                                      O_RDWR | O_CLOEXEC,
-                                      &tmp_fd, &tmpfile_path,
-                                      error))
-    goto out;
-  if (glnx_loop_write (tmp_fd, rpmostree_dracut_wrapper, sizeof (rpmostree_dracut_wrapper)) < 0
-      || fchmod (tmp_fd, 0755) < 0)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
-  
-  if (!glnx_link_tmpfile_at (rootfs_dfd, GLNX_LINK_TMPFILE_NOREPLACE,
-                             tmp_fd, tmpfile_path, rootfs_dfd, rpmostree_dracut_wrapper_path,
-                             error))
-    goto out;
-  /* We need to close the writable FD now to be able to exec it */
-  close (tmp_fd); tmp_fd = -1;
-
-  /* Second tempfile is the initramfs contents */
-  if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, "tmp",
-                                      O_WRONLY | O_CLOEXEC,
-                                      &tmp_fd, &tmpfile_path,
-                                      error))
-    goto out;
-
-  /* Set up argv and run */
-  g_ptr_array_add (child_argv, (char*)glnx_basename (rpmostree_dracut_wrapper_path));
-  for (char **iter = argv; iter && *iter; iter++)
-    g_ptr_array_add (child_argv, *iter);
-  g_ptr_array_add (child_argv, NULL);
-  if (!run_sync_in_root_at (rootfs_dfd, (char*)child_argv->pdata[0], (char**)child_argv->pdata,
-                            dracut_child_setup, GINT_TO_POINTER (tmp_fd),
-                            error))
-    goto out;
-
-  ret = TRUE;
-  *out_initramfs_tmpfd = tmp_fd; tmp_fd = -1;
-  *out_initramfs_tmppath = g_steal_pointer (&tmpfile_path);
- out:
-  if (tmpfile_path != NULL)
-    (void) unlink (tmpfile_path);
-  unlinkat (rootfs_dfd, rpmostree_dracut_wrapper_path, 0);
-  return ret;
-}
-
 static gboolean
 do_kernel_prep (int            rootfs_dfd,
                 JsonObject    *treefile,
@@ -408,8 +322,7 @@ do_kernel_prep (int            rootfs_dfd,
 
   {
     char *child_argv[] = { "depmod", (char*)kver, NULL };
-    if (!run_sync_in_root_at (rootfs_dfd, "depmod", child_argv,
-                              NULL, NULL, error))
+    if (!run_bwrap_mutably (rootfs_dfd, "depmod", child_argv, error))
       goto out;
   }
 
@@ -445,9 +358,9 @@ do_kernel_prep (int            rootfs_dfd,
       }
     g_ptr_array_add (dracut_argv, NULL);
 
-    if (!run_dracut (rootfs_dfd, (char**)dracut_argv->pdata,
-                     &initramfs_tmp_fd, &initramfs_tmp_path,
-                     cancellable, error))
+    if (!rpmostree_run_dracut (rootfs_dfd, (char**)dracut_argv->pdata,
+                               &initramfs_tmp_fd, &initramfs_tmp_path,
+                               cancellable, error))
       goto out;
   }
 
@@ -1839,8 +1752,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 
       {
         char *child_argv[] = { binpath, NULL };
-        if (!run_sync_in_root_at (rootfs_fd, binpath, child_argv,
-                                  NULL, NULL, error))
+        if (!run_bwrap_mutably (rootfs_fd, binpath, child_argv, error))
           {
             g_prefix_error (error, "While executing postprocessing script '%s': ", bn);
             goto out;
