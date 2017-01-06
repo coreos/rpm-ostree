@@ -287,6 +287,7 @@ struct _RpmOstreeContext {
   gboolean unprivileged;
   char *dummy_instroot_path;
   OstreeSePolicy *sepolicy;
+  char *passwd_dir;
 };
 
 G_DEFINE_TYPE (RpmOstreeContext, rpmostree_context, G_TYPE_OBJECT)
@@ -302,12 +303,14 @@ rpmostree_context_finalize (GObject *object)
   if (rctx->dummy_instroot_path)
     {
       (void) glnx_shutil_rm_rf_at (AT_FDCWD, rctx->dummy_instroot_path, NULL, NULL);
-      g_free (rctx->dummy_instroot_path);
+      g_clear_pointer (&rctx->dummy_instroot_path, g_free);
     }
 
   g_clear_object (&rctx->ostreerepo);
 
   g_clear_object (&rctx->sepolicy);
+
+  g_clear_pointer (&rctx->passwd_dir, g_free);
 
   G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
 }
@@ -466,6 +469,14 @@ rpmostree_context_set_sepolicy (RpmOstreeContext *self,
                                 OstreeSePolicy   *sepolicy)
 {
   g_set_object (&self->sepolicy, sepolicy);
+}
+
+void
+rpmostree_context_set_passwd_dir (RpmOstreeContext *self,
+                                  const char *passwd_dir)
+{
+  g_clear_pointer (&self->passwd_dir, g_free);
+  self->passwd_dir = g_strdup (passwd_dir);
 }
 
 void
@@ -2205,8 +2216,11 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
       g_autoptr(GHashTable) groupents = g_hash_table_new (g_str_hash,
                                                           g_str_equal);
 
-      if (!rpmostree_passwd_prepare_rpm_layering (tmprootfs_dfd, &have_passwd,
-                                                  cancellable, error))
+      if (!rpmostree_passwd_prepare_rpm_layering (tmprootfs_dfd,
+                                                  self->passwd_dir,
+                                                  &have_passwd,
+                                                  cancellable,
+                                                  error))
         goto out;
 
       /* Also neuter systemctl - at least glusterfs calls it

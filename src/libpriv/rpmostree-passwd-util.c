@@ -1194,10 +1194,13 @@ rootfs_has_usrlib_passwd (int rootfs_dfd,
 /* We actually want RPM to inject to /usr/lib/passwd - we
  * accomplish this by temporarily renaming /usr/lib/passwd -> /usr/etc/passwd
  * (Which appears as /etc/passwd via our compatibility symlink in the bubblewrap
- *  script runner)
+ *  script runner). We also copy the merge deployment's /etc/passwd to
+ *  /usr/lib/passwd, so that %pre scripts are aware of newly added system users
+ *  not in the tree's /usr/lib/passwd (through nss-altfiles in the container).
  */
 gboolean
 rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
+                                       const char        *merge_passwd_dir,
                                        gboolean          *out_have_passwd,
                                        GCancellable      *cancellable,
                                        GError           **error)
@@ -1228,19 +1231,35 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
   for (guint i = 0; i < G_N_ELEMENTS (usrlib_pwgrp_files); i++)
     {
       const char *file = usrlib_pwgrp_files[i];
+      const char *usrlibfile = glnx_strjoina ("usr/lib/", file);
+      const char *usretcfile = glnx_strjoina ("usr/etc/", file);
+      const char *usrlibfiletmp = glnx_strjoina ("usr/lib/", file, ".tmp");
 
       /* Retain the current copies in /etc as backups */
-      if (renameat (rootfs_dfd, glnx_strjoina ("usr/etc/", file),
-                    rootfs_dfd, glnx_strjoina ("usr/etc/", file, ".rpmostreesave")) < 0)
+      if (renameat (rootfs_dfd, usretcfile, rootfs_dfd,
+                    glnx_strjoina (usretcfile, ".rpmostreesave")) < 0)
         {
           glnx_set_error_from_errno (error);
           return FALSE;
         }
+
       /* Copy /usr/lib/{passwd,group} -> /usr/etc (breaking hardlinks) */
-      if (!glnx_file_copy_at (rootfs_dfd, glnx_strjoina ("usr/lib/", file), NULL,
-                              rootfs_dfd, glnx_strjoina ("usr/etc/", file),
-                              0, cancellable, error))
+      if (!glnx_file_copy_at (rootfs_dfd, usrlibfile, NULL,
+                              rootfs_dfd, usretcfile, 0, cancellable, error))
         return FALSE;
+
+      /* Copy the merge's passwd/group to usr/lib (breaking hardlinks) */
+      if (!glnx_file_copy_at (AT_FDCWD,
+                              glnx_strjoina (merge_passwd_dir, "/", file), NULL,
+                              rootfs_dfd, usrlibfiletmp,
+                              GLNX_FILE_COPY_OVERWRITE, cancellable, error))
+        return FALSE;
+
+      if (renameat (rootfs_dfd, usrlibfiletmp, rootfs_dfd, usrlibfile) < 0)
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
     }
 
   /* And break hardlinks for the shadow files, since we don't have

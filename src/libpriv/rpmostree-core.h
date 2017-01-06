@@ -69,6 +69,8 @@ void rpmostree_context_set_repos (RpmOstreeContext *self,
                                   OstreeRepo       *pkgcache_repo);
 void rpmostree_context_set_sepolicy (RpmOstreeContext *self,
                                      OstreeSePolicy   *sepolicy);
+void rpmostree_context_set_passwd_dir (RpmOstreeContext *self,
+                                       const char *passwd_dir);
 void rpmostree_context_set_ignore_scripts (RpmOstreeContext *self,
                                            GHashTable   *ignore_scripts);
 
