@@ -1892,15 +1892,14 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
         continue;
 
       if (!S_ISREG (mode) &&
-          !S_ISDIR (mode) &&
-          !S_ISLNK (mode))
+          !S_ISDIR (mode))
         continue;
 
       g_assert (fn != NULL);
-      while (fn[0] == '/')
-        fn += 1;
+      fn += strspn (fn, "/");
+      g_assert (fn[0]);
 
-      /* /run and /var paths have already been tranlated to tmpfiles during
+      /* /run and /var paths have already been translated to tmpfiles during
        * unpacking */
       if (g_str_has_prefix (fn, "run/") ||
           g_str_has_prefix (fn, "var/"))
@@ -1979,6 +1978,14 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
           if (!glnx_dfd_name_set_all_xattrs (tmprootfs_dfd, fn, xattrs,
                                              cancellable, error))
             return FALSE;
+        }
+
+      /* also reapply chmod in case it was setuid */
+      if ((stbuf.st_mode & S_ISUID) &&
+          fchmodat (tmprootfs_dfd, fn, stbuf.st_mode, 0) != 0)
+        {
+          glnx_set_prefix_error_from_errno (error, "%s", "fchmodat");
+          return FALSE;
         }
     }
 
