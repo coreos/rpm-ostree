@@ -53,14 +53,12 @@ static const KnownRpmScriptKind ignored_scripts[] = {
 };
 #endif
 
-static const KnownRpmScriptKind posttrans_scripts[] = {
-  /* Unless the RPM files have non-root ownership, there's
-   * no actual difference between %pre and %post.  We'll
-   * have errored out on non-root ownership when trying
-   * to import.
-   */
+static const KnownRpmScriptKind pre_scripts[] = {
   { "%prein", 0,
     RPMTAG_PREIN, RPMTAG_PREINPROG, RPMTAG_PREINFLAGS },
+};
+
+static const KnownRpmScriptKind posttrans_scripts[] = {
   /* For now, we treat %post as equivalent to %posttrans */
   { "%post", 0,
     RPMTAG_POSTIN, RPMTAG_POSTINPROG, RPMTAG_POSTINFLAGS },
@@ -277,6 +275,61 @@ run_script_in_bwrap_container (int rootfs_fd,
   return ret;
 }
 
+static gboolean
+run_known_rpm_script (const KnownRpmScriptKind *rpmscript,
+                      DnfPackage    *pkg,
+                      Header         hdr,
+                      GHashTable    *ignore_scripts,
+                      int            rootfs_fd,
+                      GCancellable  *cancellable,
+                      GError       **error)
+{
+  const char *desc = rpmscript->desc;
+  rpmTagVal tagval = rpmscript->tag;
+  rpmTagVal progtagval = rpmscript->progtag;
+  const char *script;
+  g_autofree char **args = NULL;
+  RpmOstreeScriptAction action;
+  struct rpmtd_s td;
+
+  if (!(headerIsEntry (hdr, tagval) || headerIsEntry (hdr, progtagval)))
+    return TRUE;
+
+  script = headerGetString (hdr, tagval);
+  if (!script)
+    return TRUE;
+
+  if (headerGet (hdr, progtagval, &td, (HEADERGET_ALLOC|HEADERGET_ARGV)))
+    args = td.data;
+
+  action = lookup_script_action (pkg, ignore_scripts, desc);
+  switch (action)
+    {
+    case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
+      {
+        static const char lua[] = "<lua>";
+        if (args && args[0] && strcmp (args[0], lua) == 0)
+          {
+            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                         "Package '%s' has (currently) unsupported %s script in '%s'",
+                         dnf_package_get_name (pkg), lua, desc);
+            return FALSE;
+          }
+        if (!run_script_in_bwrap_container (rootfs_fd, dnf_package_get_name (pkg), desc, script,
+                                            cancellable, error))
+          {
+            g_prefix_error (error, "Running %s for %s: ", desc, dnf_package_get_name (pkg));
+            return FALSE;
+          }
+        break;
+      }
+    case RPMOSTREE_SCRIPT_ACTION_IGNORE:
+      return TRUE;
+    }
+
+  return TRUE;
+}
+
 gboolean
 rpmostree_posttrans_run_sync (DnfPackage    *pkg,
                               Header         hdr,
@@ -287,49 +340,27 @@ rpmostree_posttrans_run_sync (DnfPackage    *pkg,
 {
   for (guint i = 0; i < G_N_ELEMENTS (posttrans_scripts); i++)
     {
-      const char *desc = posttrans_scripts[i].desc;
-      rpmTagVal tagval = posttrans_scripts[i].tag;
-      rpmTagVal progtagval = posttrans_scripts[i].progtag;
-      const char *script;
-      g_autofree char **args = NULL;
-      RpmOstreeScriptAction action;
-      struct rpmtd_s td;
+      if (!run_known_rpm_script (&posttrans_scripts[i], pkg, hdr, ignore_scripts,
+                                 rootfs_fd, cancellable, error))
+        return FALSE;
+    }
 
-      if (!(headerIsEntry (hdr, tagval) || headerIsEntry (hdr, progtagval)))
-        continue;
-      
-      script = headerGetString (hdr, tagval);
-      if (!script)
-        continue;
+  return TRUE;
+}
 
-      if (headerGet (hdr, progtagval, &td, (HEADERGET_ALLOC|HEADERGET_ARGV)))
-        args = td.data;
-
-      action = lookup_script_action (pkg, ignore_scripts, desc);
-      switch (action)
-        {
-        case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
-          {
-            static const char lua[] = "<lua>";
-            if (args && args[0] && strcmp (args[0], lua) == 0)
-              {
-                g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                             "Package '%s' has (currently) unsupported %s script in '%s'",
-                             dnf_package_get_name (pkg), lua, desc);
-                return FALSE;
-              }
-            rpmostree_output_task_begin ("Running %s for %s...", desc, dnf_package_get_name (pkg));
-            if (!run_script_in_bwrap_container (rootfs_fd, dnf_package_get_name (pkg), desc, script,
-                                                cancellable, error))
-              {
-                g_prefix_error (error, "Running %s for %s: ", desc, dnf_package_get_name (pkg));
-                return FALSE;
-              }
-            rpmostree_output_task_end ("done");
-          }
-        case RPMOSTREE_SCRIPT_ACTION_IGNORE:
-          continue;
-        }
+gboolean
+rpmostree_pre_run_sync (DnfPackage    *pkg,
+                        Header         hdr,
+                        GHashTable    *ignore_scripts,
+                        int            rootfs_fd,
+                        GCancellable  *cancellable,
+                        GError       **error)
+{
+  for (guint i = 0; i < G_N_ELEMENTS (pre_scripts); i++)
+    {
+      if (!run_known_rpm_script (&pre_scripts[i], pkg, hdr, ignore_scripts,
+                                 rootfs_fd, cancellable, error))
+        return FALSE;
     }
 
   return TRUE;

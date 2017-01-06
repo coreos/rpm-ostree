@@ -31,7 +31,6 @@
 
 #include <pwd.h>
 #include <grp.h>
-#include <sys/capability.h>
 #include <gio/gunixinputstream.h>
 #include "rpmostree-unpacker.h"
 #include "rpmostree-core.h"
@@ -256,8 +255,8 @@ build_rpmfi_overrides (RpmOstreeUnpacker *self)
       const char *fcaps = rpmfiFCaps (self->fi);
       const char *fn = rpmfiFN (self->fi);
 
-      if (g_str_equal (user, "root") &&
-          g_str_equal (group, "root") &&
+      if ((user == NULL || g_str_equal (user, "root")) &&
+          (user == NULL || g_str_equal (group, "root")) &&
           (fcaps == NULL || fcaps[0] == '\0'))
         continue;
 
@@ -325,7 +324,7 @@ rpmostree_unpacker_new_at (int dfd, const char *path, RpmOstreeUnpackerFlags fla
   return ret;
 }
 
-static gboolean
+static void
 get_rpmfi_override (RpmOstreeUnpacker *self,
                     const char        *path,
                     const char       **out_user,
@@ -336,7 +335,7 @@ get_rpmfi_override (RpmOstreeUnpacker *self,
 
   /* Note: we use extended here because the value might be index 0 */
   if (!g_hash_table_lookup_extended (self->rpmfi_overrides, path, NULL, &v))
-    return FALSE;
+    return;
 
   rpmfiInit (self->fi, GPOINTER_TO_INT (v));
   g_assert (rpmfiNext (self->fi) >= 0);
@@ -347,8 +346,6 @@ get_rpmfi_override (RpmOstreeUnpacker *self,
     *out_group = rpmfiFGroup (self->fi);
   if (out_fcaps)
     *out_fcaps = rpmfiFCaps (self->fi);
-
-  return TRUE;
 }
 
 const char *
@@ -405,53 +402,6 @@ get_lead_sig_header_as_bytes (RpmOstreeUnpacker *self,
   *out_metadata = g_bytes_new_take (g_steal_pointer (&buf), self->cpio_offset);
  out:
   return ret;
-}
-
-struct _cap_struct {
-    struct __user_cap_header_struct head;
-    union {
-        struct __user_cap_data_struct set;
-        __u32 flat[3];
-    } u[_LINUX_CAPABILITY_U32S_2];
-};
-
-/* Rewritten version of _fcaps_save from libcap, since it's not
- * exposed, and we need to generate the raw value.
- */
-static void
-cap_t_to_vfs (cap_t cap_d, struct vfs_cap_data *rawvfscap, int *out_size)
-{
-  guint32 eff_not_zero, magic;
-  guint tocopy, i;
-
-  /* Hardcoded to 2.  There is apparently a version 3 but it just maps
-   * to 2.  I doubt another version would ever be implemented, and
-   * even if it was we'd need to be backcompatible forever.  Anyways,
-   * setuid/fcaps binaries should go away entirely.
-   */
-  magic = VFS_CAP_REVISION_2;
-  tocopy = VFS_CAP_U32_2;
-  *out_size = XATTR_CAPS_SZ_2;
-
-  for (eff_not_zero = 0, i = 0; i < tocopy; i++)
-    eff_not_zero |= cap_d->u[i].flat[CAP_EFFECTIVE];
-
-  /* Here we're also not validating that the kernel understands
-   * the capabilities.
-   */
-
-  for (i = 0; i < tocopy; i++)
-    {
-      rawvfscap->data[i].permitted
-        = GUINT32_TO_LE(cap_d->u[i].flat[CAP_PERMITTED]);
-      rawvfscap->data[i].inheritable
-        = GUINT32_TO_LE(cap_d->u[i].flat[CAP_INHERITABLE]);
-    }
-
-  if (eff_not_zero == 0)
-    rawvfscap->magic_etc = GUINT32_TO_LE(magic);
-  else
-    rawvfscap->magic_etc = GUINT32_TO_LE(magic|VFS_CAP_FLAGS_EFFECTIVE);
 }
 
 static gboolean
@@ -573,12 +523,6 @@ compose_filter_cb (OstreeRepo         *repo,
   RpmOstreeUnpacker *self = ((cb_data*)user_data)->self;
   GError **error = ((cb_data*)user_data)->error;
 
-  /* In the system case, fail if an RPM requires a file to be owned by non-root. The
-   * problem is that RPM provides strings, but ostree records uids/gids. Any
-   * mapping we choose would be specific to a certain userdb and thus not
-   * portable. To properly support this will probably require switching over to
-   * systemd-sysusers: https://github.com/projectatomic/rpm-ostree/issues/49 */
-
   const char *user = NULL;
   const char *group = NULL;
 
@@ -587,7 +531,7 @@ compose_filter_cb (OstreeRepo         *repo,
 
   gboolean error_was_set = (error && *error != NULL);
 
-  (void) get_rpmfi_override (self, path, &user, &group, NULL);
+  get_rpmfi_override (self, path, &user, &group, NULL);
 
   /* First, look for non-root paths in /run and /var */
   if ((user != NULL || group != NULL) &&
@@ -598,24 +542,8 @@ compose_filter_cb (OstreeRepo         *repo,
     }
   else if (!error_was_set)
     {
-      /* Now, if there's no previous error, check for unsupported state */
-
-      /* If the RPM has file capabilities/suid but is root:root, that metadata will
-       * be in the override.  Explicitly canonicalize NULL -> "root", so
-       * we handle both cases.
-       */
-      if (user == NULL)
-        user = "root";
-      if (group == NULL)
-        group = "root";
-
-      if (!g_str_equal (user, "root") || !g_str_equal (group, "root"))
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Non-root ownership currently unsupported: path \"%s\" marked as %s%s%s)",
-                       path, user, group ? ":" : "", group ?: "");
-        }
-      else if (uid != 0 || gid != 0)
+      /* sanity check that RPM isn't using CPIO id fields */
+      if (uid != 0 || gid != 0)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "RPM had unexpected non-root owned path \"%s\", marked as %u:%u)", path, uid, gid);
@@ -646,24 +574,10 @@ xattr_cb (OstreeRepo  *repo,
   RpmOstreeUnpacker *self = user_data;
   const char *fcaps = NULL;
 
-  if (get_rpmfi_override (self, path, NULL, NULL, &fcaps) && fcaps != NULL)
-    {
-      g_auto(GVariantBuilder) builder;
-      cap_t caps = cap_from_text (fcaps);
-      struct vfs_cap_data vfscap = { 0, };
-      g_autoptr(GBytes) vfsbytes = NULL;
-      int vfscap_size;
+  get_rpmfi_override (self, path, NULL, NULL, &fcaps);
 
-      cap_t_to_vfs (caps, &vfscap, &vfscap_size);
-      vfsbytes = g_bytes_new (&vfscap, vfscap_size);
-
-      g_variant_builder_init (&builder, (GVariantType*)"a(ayay)");
-      g_variant_builder_add (&builder, "(@ay@ay)",
-                             g_variant_new_bytestring ("security.capability"),
-                             g_variant_new_from_bytes ((GVariantType*)"ay",
-                                                       vfsbytes, FALSE));
-      return g_variant_ref_sink (g_variant_builder_end (&builder));
-    }
+  if (fcaps != NULL && fcaps[0] != '\0')
+    return rpmostree_fcap_to_xattr_variant (fcaps);
 
   return NULL;
 }
