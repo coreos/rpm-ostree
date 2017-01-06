@@ -1980,9 +1980,8 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
             return FALSE;
         }
 
-      /* also reapply chmod in case it was setuid */
-      if ((stbuf.st_mode & S_ISUID) &&
-          fchmodat (tmprootfs_dfd, fn, stbuf.st_mode, 0) != 0)
+      /* also reapply chmod since e.g. at least the setuid gets taken off */
+      if (fchmodat (tmprootfs_dfd, fn, stbuf.st_mode, 0) != 0)
         {
           glnx_set_prefix_error_from_errno (error, "%s", "fchmodat");
           return FALSE;
