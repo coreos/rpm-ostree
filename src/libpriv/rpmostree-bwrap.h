@@ -24,17 +24,32 @@
 
 #include "libglnx.h"
 
-GPtrArray *rpmostree_bwrap_base_argv_new_for_rootfs (int rootfs, GError **error);
+typedef enum {
+  RPMOSTREE_BWRAP_IMMUTABLE = 0,
+  RPMOSTREE_BWRAP_MUTATE_ROFILES,
+  RPMOSTREE_BWRAP_MUTATE_FREELY
+} RpmOstreeBwrapMutability;
 
+typedef struct RpmOstreeBwrap RpmOstreeBwrap;
+RpmOstreeBwrap *rpmostree_bwrap_ref (RpmOstreeBwrap *bwrap);
+void rpmostree_bwrap_unref (RpmOstreeBwrap *bwrap);
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeBwrap, rpmostree_bwrap_unref)
+
+/* TODO - move this utility elsewhere */
 void rpmostree_ptrarray_append_strdup (GPtrArray *argv_array, ...) G_GNUC_NULL_TERMINATED;
 
-gboolean rpmostree_run_sync_fchdir_setup (char **argv_array, GSpawnFlags flags,
-                                          int rootfs_fd, GError **error);
+RpmOstreeBwrap *rpmostree_bwrap_new (int rootfs,
+                                     RpmOstreeBwrapMutability mutable,
+                                     GError **error,
+                                     ...) G_GNUC_NULL_TERMINATED;
 
-gboolean rpmostree_run_bwrap_sync (char **argv_array, int rootfs_fd, GError **error);
-gboolean rpmostree_run_bwrap_sync_setup (char **argv_array, int rootfs_fd,
-                                         GSpawnChildSetupFunc func,
-                                         gpointer             data,
-                                         GError **error);
+void rpmostree_bwrap_append_bwrap_argv (RpmOstreeBwrap *bwrap, ...) G_GNUC_NULL_TERMINATED;
+void rpmostree_bwrap_append_child_argv (RpmOstreeBwrap *bwrap, ...) G_GNUC_NULL_TERMINATED;
+
+void rpmostree_bwrap_set_child_setup (RpmOstreeBwrap *bwrap,
+                                      GSpawnChildSetupFunc func,
+                                      gpointer             data);
+
+gboolean rpmostree_bwrap_run (RpmOstreeBwrap *bwrap, GError **error);
 
 gboolean rpmostree_bwrap_selftest (GError **error);

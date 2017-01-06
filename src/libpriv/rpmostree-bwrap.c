@@ -22,6 +22,8 @@
 #include "rpmostree-bwrap.h"
 
 #include <err.h>
+#include <stdio.h>
+#include <systemd/sd-journal.h>
 
 void
 rpmostree_ptrarray_append_strdup (GPtrArray *argv_array, ...)
@@ -35,30 +37,180 @@ rpmostree_ptrarray_append_strdup (GPtrArray *argv_array, ...)
   va_end (args);
 }
 
-GPtrArray *
-rpmostree_bwrap_base_argv_new_for_rootfs (int rootfs_fd, GError **error)
+struct RpmOstreeBwrap {
+  guint refcount;
+
+  gboolean executed;
+
+  int rootfs_fd;
+
+  GPtrArray *argv;
+  const char *child_argv0;
+  char *rofiles_mnt;
+
+  GSpawnChildSetupFunc child_setup_func;
+  gpointer child_setup_data;
+};
+
+RpmOstreeBwrap *
+rpmostree_bwrap_ref (RpmOstreeBwrap *bwrap)
 {
-  g_autoptr(GPtrArray) bwrap_argv = g_ptr_array_new_with_free_func (g_free);
+  bwrap->refcount++;
+  return bwrap;
+}
+
+void
+rpmostree_bwrap_unref (RpmOstreeBwrap *bwrap)
+{
+  bwrap->refcount--;
+  if (bwrap->refcount > 0)
+    return;
+
+  if (bwrap->rofiles_mnt)
+    {
+      g_autoptr(GError) tmp_error = NULL;
+      const char *fusermount_argv[] = { "fusermount", "-u", bwrap->rofiles_mnt, NULL};
+      int estatus;
+
+      if (!g_spawn_sync (NULL, (char**)fusermount_argv, NULL, G_SPAWN_SEARCH_PATH,
+                         NULL, NULL, NULL, NULL, &estatus, &tmp_error))
+        {
+          g_prefix_error (&tmp_error, "Executing fusermount: ");
+          goto out;
+        }
+      if (!g_spawn_check_exit_status (estatus, &tmp_error))
+        {
+          g_prefix_error (&tmp_error, "Executing fusermount: ");
+          goto out;
+        }
+
+      (void) unlinkat (AT_FDCWD, bwrap->rofiles_mnt, AT_REMOVEDIR);
+    out:
+      /* We don't want a failure to unmount to be fatal, so all we do here
+       * is log.  Though in practice what we *really* want is for the
+       * fusermount to be in the bwrap namespace, and hence tied by the
+       * kernel to the lifecycle of the container.  This would require
+       * special casing for somehow doing FUSE mounts in bwrap.  Which
+       * would be hard because NO_NEW_PRIVS turns off the setuid bits for
+       * fuse.
+       */
+      if (tmp_error)
+        sd_journal_print (LOG_WARNING, "%s", tmp_error->message);
+    }
+
+  g_ptr_array_unref (bwrap->argv);
+  g_free (bwrap->rofiles_mnt);
+  g_free (bwrap);
+}
+
+void
+rpmostree_bwrap_append_bwrap_argv (RpmOstreeBwrap *bwrap, ...)
+{
+  va_list args;
+  char *arg;
+
+  g_assert (!bwrap->executed);
+
+  va_start (args, bwrap);
+  while ((arg = va_arg (args, char *)))
+    g_ptr_array_add (bwrap->argv, g_strdup (arg));
+  va_end (args);
+}
+
+void
+rpmostree_bwrap_append_child_argv (RpmOstreeBwrap *bwrap, ...)
+{
+  va_list args;
+  char *arg;
+
+  g_assert (!bwrap->executed);
+
+  va_start (args, bwrap);
+  while ((arg = va_arg (args, char *)))
+    {
+      char *v = g_strdup (arg);
+      g_ptr_array_add (bwrap->argv, v);
+      /* Stash argv0 for error messages */
+      if (!bwrap->child_argv0)
+        bwrap->child_argv0 = v;
+    }
+  va_end (args);
+}
+
+static void
+child_setup_fchdir (gpointer user_data)
+{
+  int fd = GPOINTER_TO_INT (user_data);
+  if (fchdir (fd) < 0)
+    err (1, "fchdir");
+}
+
+static gboolean
+setup_rofiles_usr (RpmOstreeBwrap *bwrap,
+                   GError **error)
+{
+  gboolean ret = FALSE;
+  int estatus;
+  const char *rofiles_argv[] = { "rofiles-fuse", "./usr", NULL, NULL};
+  gboolean mntpoint_created = FALSE;
+
+  bwrap->rofiles_mnt = g_strdup ("/tmp/rofiles-fuse.XXXXXX");
+  rofiles_argv[2] = bwrap->rofiles_mnt;
+
+  if (!glnx_mkdtempat (AT_FDCWD, bwrap->rofiles_mnt, 0700, error))
+    goto out;
+  mntpoint_created = TRUE;
+
+  if (!g_spawn_sync (NULL, (char**)rofiles_argv, NULL, G_SPAWN_SEARCH_PATH,
+                     child_setup_fchdir, GINT_TO_POINTER (bwrap->rootfs_fd),
+                     NULL, NULL, &estatus, error))
+    goto out;
+  if (!g_spawn_check_exit_status (estatus, error))
+    goto out;
+
+  rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", bwrap->rofiles_mnt, "/usr", NULL);
+
+  ret = TRUE;
+ out:
+  if (!ret && mntpoint_created)
+    (void) unlinkat (AT_FDCWD, bwrap->rofiles_mnt, AT_REMOVEDIR);
+  return ret;
+}
+
+RpmOstreeBwrap *
+rpmostree_bwrap_new (int rootfs_fd,
+                     RpmOstreeBwrapMutability mutable,
+                     GError **error,
+                     ...)
+{
+  va_list args;
+  RpmOstreeBwrap *retval = NULL;
+  g_autoptr(RpmOstreeBwrap) ret = g_new0 (RpmOstreeBwrap, 1);
   static const char *usr_links[] = {"lib", "lib32", "lib64", "bin", "sbin"};
 
-  rpmostree_ptrarray_append_strdup (bwrap_argv,
-                                    WITH_BUBBLEWRAP_PATH,
-                                    "--dev", "/dev",
-                                    "--proc", "/proc",
-                                    "--dir", "/tmp",
-                                    "--chdir", "/",
-                                    "--ro-bind", "/sys/block", "/sys/block",
-                                    "--ro-bind", "/sys/bus", "/sys/bus",
-                                    "--ro-bind", "/sys/class", "/sys/class",
-                                    "--ro-bind", "/sys/dev", "/sys/dev",
-                                    "--ro-bind", "/sys/devices", "/sys/devices",
-                                    NULL);
+  ret->refcount = 1;
+  ret->rootfs_fd = rootfs_fd;
+  ret->argv = g_ptr_array_new_with_free_func (g_free);
+
+  rpmostree_bwrap_append_bwrap_argv (ret,
+                                     WITH_BUBBLEWRAP_PATH,
+                                     "--dev", "/dev",
+                                     "--proc", "/proc",
+                                     "--dir", "/tmp",
+                                     "--chdir", "/",
+                                     "--ro-bind", "/sys/block", "/sys/block",
+                                     "--ro-bind", "/sys/bus", "/sys/bus",
+                                     "--ro-bind", "/sys/class", "/sys/class",
+                                     "--ro-bind", "/sys/dev", "/sys/dev",
+                                     "--ro-bind", "/sys/devices", "/sys/devices",
+                                     NULL);
 
   for (guint i = 0; i < G_N_ELEMENTS (usr_links); i++)
     {
       const char *subdir = usr_links[i];
       struct stat stbuf;
-      char *path;
+      g_autofree char *srcpath = NULL;
+      g_autofree char *destpath = NULL;
 
       if (fstatat (rootfs_fd, subdir, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
         {
@@ -72,70 +224,68 @@ rpmostree_bwrap_base_argv_new_for_rootfs (int rootfs_fd, GError **error)
       else if (!S_ISLNK (stbuf.st_mode))
         continue;
 
-      g_ptr_array_add (bwrap_argv, g_strdup ("--symlink"));
-
-      path = g_strconcat ("usr/", subdir, NULL);
-      g_ptr_array_add (bwrap_argv, path);
-
-      path = g_strconcat ("/", subdir, NULL);
-      g_ptr_array_add (bwrap_argv, path);
+      srcpath = g_strconcat ("usr/", subdir, NULL);
+      destpath = g_strconcat ("/", subdir, NULL);
+      rpmostree_bwrap_append_bwrap_argv (ret, "--symlink", srcpath, destpath, NULL);
     }
 
-  return g_steal_pointer (&bwrap_argv);
+  switch (mutable)
+    {
+    case RPMOSTREE_BWRAP_IMMUTABLE:
+      rpmostree_bwrap_append_bwrap_argv (ret, "--ro-bind", "usr", "/usr", NULL);
+      break;
+    case RPMOSTREE_BWRAP_MUTATE_ROFILES:
+      if (!setup_rofiles_usr (ret, error))
+        goto out;
+      break;
+    case RPMOSTREE_BWRAP_MUTATE_FREELY:
+      rpmostree_bwrap_append_bwrap_argv (ret, "--bind", "usr", "/usr", NULL);
+      break;
+    }
+
+  { const char *arg;
+    va_start (args, error);
+    while ((arg = va_arg (args, char *)))
+      g_ptr_array_add (ret->argv, g_strdup (arg));
+    va_end (args);
+  }
+
+  retval = g_steal_pointer (&ret);
+ out:
+  return retval;
 }
-
-static void
-child_setup_fchdir (gpointer user_data)
-{
-  int fd = GPOINTER_TO_INT (user_data);
-  if (fchdir (fd) < 0)
-    err (1, "fchdir");
-}
-
-gboolean
-rpmostree_run_sync_fchdir_setup (char **argv_array, GSpawnFlags flags,
-                                 int rootfs_fd, GError **error)
-{
-  int estatus;
-  
-  if (!g_spawn_sync (NULL, argv_array, NULL, flags,
-                     child_setup_fchdir, GINT_TO_POINTER (rootfs_fd),
-                     NULL, NULL, &estatus, error))
-    return FALSE;
-  if (!g_spawn_check_exit_status (estatus, error))
-    return FALSE;
-
-  return TRUE;
-}
-
-typedef struct {
-  int rootfs_fd;
-  GSpawnChildSetupFunc func;
-  gpointer data;
-} ChildSetupData;
 
 static void
 bwrap_child_setup (gpointer data)
 {
-  ChildSetupData *cdata = data;
+  RpmOstreeBwrap *bwrap = data;
 
-  if (fchdir (cdata->rootfs_fd) < 0)
+  if (fchdir (bwrap->rootfs_fd) < 0)
     err (1, "fchdir");
 
-  if (cdata->func)
-    cdata->func (cdata->data);
+  if (bwrap->child_setup_func)
+    bwrap->child_setup_func (bwrap->child_setup_data);
+}
+
+void
+rpmostree_bwrap_set_child_setup (RpmOstreeBwrap *bwrap,
+                                 GSpawnChildSetupFunc func,
+                                 gpointer             data)
+{
+  g_assert (!bwrap->executed);
+  bwrap->child_setup_func = func;
+  bwrap->child_setup_data = data;
 }
 
 gboolean
-rpmostree_run_bwrap_sync_setup (char **argv_array,
-                                int rootfs_fd,
-                                GSpawnChildSetupFunc func,
-                                gpointer             data,
-                                GError **error)
+rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
+                     GError **error)
 {
   int estatus;
   const char *current_lang = getenv ("LANG");
-  ChildSetupData csetupdata = { rootfs_fd, func, data };
+
+  g_assert (!bwrap->executed);
+  bwrap->executed = TRUE;
 
   if (!current_lang)
     current_lang = "C";
@@ -151,21 +301,24 @@ rpmostree_run_bwrap_sync_setup (char **argv_array,
                                lang_var,
                                NULL};
 
-    if (!g_spawn_sync (NULL, argv_array, (char**) bwrap_env, G_SPAWN_SEARCH_PATH,
-                       bwrap_child_setup, &csetupdata,
+    /* Add the final NULL */
+    g_ptr_array_add (bwrap->argv, NULL);
+
+    if (!g_spawn_sync (NULL, (char**)bwrap->argv->pdata, (char**) bwrap_env, G_SPAWN_SEARCH_PATH,
+                       bwrap_child_setup, bwrap,
                        NULL, NULL, &estatus, error))
-      return FALSE;
+      {
+        g_prefix_error (error, "Executing bwrap(%s): ", bwrap->child_argv0);
+        return FALSE;
+      }
     if (!g_spawn_check_exit_status (estatus, error))
-      return FALSE;
+      {
+        g_prefix_error (error, "Executing bwrap(%s): ", bwrap->child_argv0);
+        return FALSE;
+      }
   }
 
   return TRUE;
-}
-
-gboolean
-rpmostree_run_bwrap_sync (char **argv_array, int rootfs_fd, GError **error)
-{
-  return rpmostree_run_bwrap_sync_setup (argv_array, rootfs_fd, NULL, NULL, error);
 }
 
 /* Execute /bin/true inside a bwrap container on the host */
@@ -173,21 +326,18 @@ gboolean
 rpmostree_bwrap_selftest (GError **error)
 {
   glnx_fd_close int host_root_dfd = -1;
-  g_autoptr(GPtrArray) bwrap_argv = NULL;
+  g_autoptr(RpmOstreeBwrap) bwrap = NULL;
 
   if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &host_root_dfd, error))
     return FALSE;
 
-  bwrap_argv = rpmostree_bwrap_base_argv_new_for_rootfs (host_root_dfd, error);
-  if (!bwrap_argv)
+  bwrap = rpmostree_bwrap_new (host_root_dfd, RPMOSTREE_BWRAP_IMMUTABLE, error, NULL);
+  if (!bwrap)
     return FALSE;
 
-  rpmostree_ptrarray_append_strdup (bwrap_argv,
-                                    "--ro-bind", "usr", "/usr",
-                                    NULL);
-  g_ptr_array_add (bwrap_argv, g_strdup ("true"));
-  g_ptr_array_add (bwrap_argv, NULL);
-  if (!rpmostree_run_bwrap_sync ((char**)bwrap_argv->pdata, host_root_dfd, error))
+  rpmostree_bwrap_append_child_argv (bwrap, "true", NULL);
+
+  if (!rpmostree_bwrap_run (bwrap, error))
     {
       g_prefix_error (error, "bwrap test failed, see <https://github.com/projectatomic/rpm-ostree/pull/429>: ");
       return FALSE;
