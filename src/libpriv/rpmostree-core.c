@@ -354,8 +354,10 @@ rpmostree_context_new_system (GCancellable *cancellable,
   dnf_context_set_http_proxy (self->hifctx, g_getenv ("http_proxy"));
 
   dnf_context_set_repo_dir (self->hifctx, "/etc/yum.repos.d");
-  /* Operating on stale metadata is too annoying */
-  dnf_context_set_cache_age (self->hifctx, 0);
+  /* Operating on stale metadata is too annoying -- but provide a way to
+   * override this for testing. */
+  if (g_getenv("RPMOSTREE_USE_CACHED_METADATA") == NULL)
+      dnf_context_set_cache_age (self->hifctx, 0);
   dnf_context_set_cache_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_REPOMD);
   dnf_context_set_solv_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_SOLV);
   dnf_context_set_lock_dir (self->hifctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);

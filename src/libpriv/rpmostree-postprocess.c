@@ -1542,7 +1542,7 @@ mutate_os_release (const char    *contents,
         continue;
 
       /* NB: we don't mutate VERSION_ID because some libraries expect well-known
-       * values there*/
+       * values there */
       if (g_str_has_prefix (line, "VERSION=") || \
           g_str_has_prefix (line, "PRETTY_NAME="))
         {
