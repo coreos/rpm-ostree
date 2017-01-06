@@ -172,13 +172,6 @@ dir_contains_gid (GFile           *yumroot,
                                   out_found_match, cancellable, error);
 }
 
-struct conv_passwd_ent
-{
-  char *name;
-  uid_t uid;
-  gid_t gid;
-};
-
 static void
 conv_passwd_ent_free (void *vptr)
 {
@@ -188,12 +181,14 @@ conv_passwd_ent_free (void *vptr)
   g_free (ptr);
 }
 
-static GPtrArray *
-data2passwdents (const char *data)
+GPtrArray *
+rpmostree_passwd_data2passwdents (const char *data)
 {
   struct passwd *ent = NULL;
   _cleanup_stdio_file_ FILE *mf = NULL;
   GPtrArray *ret = g_ptr_array_new_with_free_func (conv_passwd_ent_free);
+
+  g_return_val_if_fail (data != NULL, NULL);
 
   mf = fmemopen ((void *)data, strlen (data), "r");
 
@@ -221,12 +216,6 @@ compare_passwd_ents (gconstpointer a, gconstpointer b)
   return strcmp ((*sa)->name, (*sb)->name);
 }
 
-struct conv_group_ent
-{
-  char *name;
-  gid_t gid;
-};
-
 static void
 conv_group_ent_free (void *vptr)
 {
@@ -236,15 +225,17 @@ conv_group_ent_free (void *vptr)
   g_free (ptr);
 }
 
-static GPtrArray *
-data2groupents (const char *data)
+GPtrArray *
+rpmostree_passwd_data2groupents (const char *data)
 {
   struct group *ent = NULL;
   _cleanup_stdio_file_ FILE *mf = NULL;
   GPtrArray *ret = g_ptr_array_new_with_free_func (conv_group_ent_free);
-  
+
+  g_return_val_if_fail (data != NULL, NULL);
+
   mf = fmemopen ((void *)data, strlen (data), "r");
-  
+
   while ((ent = fgetgrent (mf)))
     {
       struct conv_group_ent *convent = g_new (struct conv_group_ent, 1);
@@ -439,9 +430,9 @@ rpmostree_check_passwd_groups (gboolean         passwd,
   if (g_str_equal (chk_type, "previous") || g_str_equal (chk_type, "file"))
     {
       if (passwd)
-        old_ents = data2passwdents (old_contents);
+        old_ents = rpmostree_passwd_data2passwdents (old_contents);
       else
-        old_ents = data2groupents (old_contents);
+        old_ents = rpmostree_passwd_data2groupents (old_contents);
     }
   g_assert (old_ents);
 
@@ -467,12 +458,12 @@ rpmostree_check_passwd_groups (gboolean         passwd,
 
   if (passwd)
     {
-      new_ents = data2passwdents (new_contents);
+      new_ents = rpmostree_passwd_data2passwdents (new_contents);
       g_ptr_array_sort (new_ents, compare_passwd_ents);
     }
   else
     {
-      new_ents = data2groupents (new_contents);
+      new_ents = rpmostree_passwd_data2groupents (new_contents);
       g_ptr_array_sort (new_ents, compare_group_ents);
     }
 
