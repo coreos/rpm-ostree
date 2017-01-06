@@ -97,7 +97,9 @@ vmsync:
 	@env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh
 
 vmoverlay:
-	@env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/overlay.sh
+	@if [ -z "$(SKIP_VMOVERLAY)" ]; then \
+	  env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/overlay.sh; \
+	fi
 
 vmshell: vmsync
 	ssh -F ssh-config vmcheck
