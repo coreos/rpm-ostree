@@ -86,7 +86,7 @@ timeout: 30m
 # which we don't have right now; so just provision a VM and do a
 # docker --privileged run.
 host:
-  distro: centos/7/atomic/alpha
+  distro: fedora/25/atomic
 
 tests:
   - >
