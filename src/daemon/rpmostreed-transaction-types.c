@@ -198,7 +198,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
 
   self = (PackageDiffTransaction *) transaction;
 
-  if (self->revision != NULL || self->refspec == NULL)
+  if (self->revision != NULL || self->refspec != NULL)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
