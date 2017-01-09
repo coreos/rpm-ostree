@@ -80,11 +80,18 @@ EOF
 vm_ssh_wait() {
   timeout=${1:-0}; shift
   old_bootid=${1:-}; shift
+  if ! vm_cmd true; then
+     echo "Failed to log into VM, retrying with debug:"
+     $SSH -o LogLevel=debug true || true
+  fi
   while [ $timeout -gt 0 ]; do
     if bootid=$(vm_get_boot_id 2>/dev/null); then
         if [[ $bootid != $old_bootid ]]; then
             return 0
         fi
+    fi
+    if test $(($timeout % 5)) == 0; then
+        echo "Still failed to log into VM, retrying for $timeout seconds"
     fi
     timeout=$((timeout - 1))
     sleep 1
@@ -93,13 +100,13 @@ vm_ssh_wait() {
 }
 
 vm_get_boot_id() {
-  vm_cmd cat /proc/sys/kernel/random/boot_id 2>/dev/null
+  vm_cmd cat /proc/sys/kernel/random/boot_id
 }
 
 # reboot the vm
 vm_reboot() {
   vm_cmd sync
-  bootid=$(vm_get_boot_id)
+  bootid=$(vm_get_boot_id 2>/dev/null)
   vm_cmd systemctl reboot || :
   vm_ssh_wait 120 $bootid
 }
