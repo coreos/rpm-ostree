@@ -38,6 +38,7 @@ vm_cmd mv /etc/yum.repos.d{,.bak}
 vm_cmd mkdir /etc/yum.repos.d
 
 LOG=${LOG:-"$PWD/vmcheck.log"}
+origdir=$(pwd)
 echo -n '' > ${LOG}
 
 testdir="$(dirname $(realpath $0))"
@@ -114,11 +115,25 @@ for tf in $(find . -name 'test-*.sh' | sort); do
       vm_cmd ostree admin deploy vmcheck &>> ${LOG}
       vm_reboot
     fi
+
 done
 
 # put back the original yum repos
 vm_cmd rm -rf /etc/yum.repos.d
 vm_cmd mv /etc/yum.repos.d{.bak,}
+
+# Gather post-failure system logs if necessary
+ALL_LOGS=$LOG
+if [ ${fail} -ne 0 ]; then
+    ALL_LOGS="$ALL_LOGS vmcheck-journal.txt"
+    vmcheck_journal=${origdir}/vmcheck-journal.txt
+    if ! vm_ssh_wait 30; then
+        echo "WARNING: Failed to wait for final reboot" > ${vmcheck_journal}
+    else
+        echo "Saving vmcheck-journal.txt"
+        vm_cmd 'journalctl --no-pager || true' > ${vmcheck_journal}
+    fi
+fi
 
 # tear down ssh connection if needed
 if $SSH -O check &>/dev/null; then
@@ -127,5 +142,5 @@ fi
 
 [ ${fail} -eq 0 ] && printer=pass || printer=fail
 ${printer}_print "TOTAL: $total PASS: $pass SKIP: $skip FAIL: $fail"
-echo "See ${LOG} for more information."
+echo "See ${ALL_LOGS} for more information."
 [ ${fail} -eq 0 ]
