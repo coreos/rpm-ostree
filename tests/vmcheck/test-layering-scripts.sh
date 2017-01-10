@@ -42,3 +42,8 @@ echo "ok pkg scriptpkg1 added"
 # let's check that the group was successfully added
 vm_cmd getent group scriptpkg1
 echo "ok group scriptpkg1 active"
+
+# And now, things that should fail
+if vm_cmd rpm-ostree install test-post-rofiles-violation; then
+    assert_not_reached "installed test-post-rofiles-violation!"
+fi
