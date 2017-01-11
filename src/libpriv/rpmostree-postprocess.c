@@ -136,184 +136,35 @@ init_rootfs (int            dfd,
 }
 
 static gboolean
-find_kernel_and_initramfs_in_bootdir (int          rootfs_dfd,
-                                      const char  *bootdir,
-                                      char       **out_kernel,
-                                      char       **out_initramfs,
-                                      GCancellable *cancellable,
-                                      GError     **error)
-{
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  glnx_fd_close int dfd = -1;
-  g_autofree char* ret_kernel = NULL;
-  g_autofree char* ret_initramfs = NULL;
-
-  *out_kernel = *out_initramfs = NULL;
-
-  dfd = glnx_opendirat_with_errno (rootfs_dfd, bootdir, FALSE);
-  if (dfd < 0)
-    {
-      if (errno == ENOENT)
-        return TRUE;
-      else
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
-    }
-  if (!glnx_dirfd_iterator_init_take_fd (dfd, &dfd_iter, error))
-    return FALSE;
-  dfd = -1;
-
-  while (TRUE)
-    {
-      struct dirent *dent = NULL;
-      const char *name;
-
-      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
-        return FALSE;
-      if (!dent)
-        break;
-
-      if (dent->d_type != DT_REG)
-        continue;
-
-      name = dent->d_name;
-
-      /* Current Fedora 23 kernel.spec installs as just vmlinuz */
-      if (strcmp (name, "vmlinuz") == 0 || g_str_has_prefix (name, "vmlinuz-"))
-        {
-          if (ret_kernel)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Multiple vmlinuz- in %s",
-                           bootdir);
-              return FALSE;
-            }
-          ret_kernel = g_strconcat (bootdir, "/", name, NULL);
-        }
-      else if (g_str_has_prefix (name, "initramfs-"))
-        {
-          if (ret_initramfs)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Multiple initramfs- in %s", bootdir);
-              return FALSE;
-            }
-          ret_initramfs = g_strconcat (bootdir, "/", name, NULL);
-        }
-    }
-
-  *out_kernel = g_steal_pointer (&ret_kernel);
-  *out_initramfs = g_steal_pointer (&ret_initramfs);
-  return TRUE;
-}
-
-/* Given a directory @d, find the first child that is a directory,
- * returning it in @out_subdir.  If there are multiple directories,
- * return an error.
- */
-static gboolean
-find_ensure_one_subdirectory (int            rootfs_dfd,
-                              const char    *subpath,
-                              char         **out_subdir,
-                              GCancellable  *cancellable,
-                              GError       **error)
-{
-  g_autofree char *ret_subdir = NULL;
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-
-  if (!glnx_dirfd_iterator_init_at (rootfs_dfd, subpath, TRUE, &dfd_iter, error))
-    return FALSE;
-
-  while (TRUE)
-    {
-      struct dirent *dent = NULL;
-
-      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
-        return FALSE;
-      if (!dent)
-        break;
-
-      if (dent->d_type != DT_DIR)
-        continue;
-
-      if (ret_subdir)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Multiple subdirectories found in: %s", subpath);
-          return FALSE;
-        }
-      ret_subdir = g_strconcat (subpath, "/", dent->d_name, NULL);
-    }
-
-  *out_subdir = g_steal_pointer (&ret_subdir);
-  return TRUE;
-}
-
-static gboolean
 do_kernel_prep (int            rootfs_dfd,
                 JsonObject    *treefile,
                 GCancellable  *cancellable,
                 GError       **error)
 {
   gboolean ret = FALSE;
-  g_autofree char* kernel_path = NULL;
-  g_autofree char* initramfs_path = NULL;
+  g_autoptr(GVariant) kernelstate = NULL;
+  const char* kernel_path;
+  const char* initramfs_path;
+  const char *kver;
+  const char *bootdir;
   const char *boot_checksum_str = NULL;
   g_autoptr(GChecksum) boot_checksum = NULL;
-  const char *kver = NULL; /* May point to kver_owned */
-  g_autofree char *kver_owned = NULL;
-  g_autofree char *bootdir = g_strdup ("boot");
   glnx_fd_close int initramfs_tmp_fd = -1;
   g_autofree char *initramfs_tmp_path = NULL;
+  g_autofree char *initramfs_staged_path = NULL;
 
-  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
-                                             &kernel_path, &initramfs_path,
-                                             cancellable, error))
+  kernelstate = rpmostree_find_kernel (rootfs_dfd, cancellable, error);
+  if (!kernelstate)
     goto out;
+  g_variant_get (kernelstate, "(&s&s&sm&s)",
+                 &kver, &bootdir,
+                 &kernel_path, &initramfs_path);
 
-  if (kernel_path == NULL)
-    {
-      g_autofree char* modversion_dir = NULL;
-
-      if (!find_ensure_one_subdirectory (rootfs_dfd, "usr/lib/modules", &modversion_dir,
-                                         cancellable, error))
-        goto out;
-
-      if (modversion_dir)
-        {
-          kver = glnx_basename (modversion_dir);
-          bootdir = g_steal_pointer (&modversion_dir);
-          if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
-                                                     &kernel_path, &initramfs_path,
-                                                     cancellable, error))
-            goto out;
-        }
-    }
-
-  if (kernel_path == NULL)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Unable to find kernel (vmlinuz) in /boot or /usr/lib/modules (bootdir=%s)", bootdir);
-      goto out;
-    }
-      
   if (initramfs_path)
     {
       g_print ("Removing RPM-generated '%s'\n", initramfs_path);
       if (!glnx_shutil_rm_rf_at (rootfs_dfd, initramfs_path, cancellable, error))
         goto out;
-    }
-
-  if (!kver)
-    {
-      const char *kname = glnx_basename (kernel_path);
-      const char *kver_p;
-
-      kver_p = strchr (kname, '-');
-      g_assert (kver_p);
-      kver = kver_owned = g_strdup (kver_p + 1);
     }
 
   /* OSTree needs to own this */
@@ -364,23 +215,19 @@ do_kernel_prep (int            rootfs_dfd,
       goto out;
   }
 
-  { g_autofree char *initramfs_dest = g_strconcat (bootdir, "/initramfs-", kver, ".img", NULL);
+  initramfs_staged_path = g_strconcat (bootdir, "/initramfs-", kver, ".img", NULL);
 
-    if (!glnx_link_tmpfile_at (rootfs_dfd, GLNX_LINK_TMPFILE_NOREPLACE,
-                               initramfs_tmp_fd, initramfs_tmp_path,
-                               rootfs_dfd, initramfs_dest,
-                               error))
-      goto out;
-
-    g_free (initramfs_path);
-    initramfs_path = g_steal_pointer (&initramfs_dest);
-  }
+  if (!glnx_link_tmpfile_at (rootfs_dfd, GLNX_LINK_TMPFILE_NOREPLACE,
+                             initramfs_tmp_fd, initramfs_tmp_path,
+                             rootfs_dfd, initramfs_staged_path,
+                             error))
+    goto out;
 
   boot_checksum = g_checksum_new (G_CHECKSUM_SHA256);
   if (!_rpmostree_util_update_checksum_from_file (boot_checksum, rootfs_dfd, kernel_path,
                                                   cancellable, error))
     goto out;
-  if (!_rpmostree_util_update_checksum_from_file (boot_checksum, rootfs_dfd, initramfs_path,
+  if (!_rpmostree_util_update_checksum_from_file (boot_checksum, rootfs_dfd, initramfs_staged_path,
                                                   cancellable, error))
     goto out;
 
@@ -390,7 +237,7 @@ do_kernel_prep (int            rootfs_dfd,
     g_autofree char *new_kernel_path =
       g_strconcat (bootdir, "/", glnx_basename (kernel_path), "-", boot_checksum_str, NULL);
     g_autofree char *new_initramfs_path =
-      g_strconcat (bootdir, "/", glnx_basename (initramfs_path), "-", boot_checksum_str, NULL);
+      g_strconcat (bootdir, "/", glnx_basename (initramfs_staged_path), "-", boot_checksum_str, NULL);
 
     if (renameat (rootfs_dfd, kernel_path, rootfs_dfd, new_kernel_path) < 0)
       {

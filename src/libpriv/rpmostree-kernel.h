@@ -22,6 +22,11 @@
 
 #include <ostree.h>
 
+GVariant *
+rpmostree_find_kernel (int rootfs_dfd,
+                       GCancellable *cancellable,
+                       GError **error);
+
 gboolean
 rpmostree_run_dracut (int     rootfs_dfd,
                       char   **argv,
