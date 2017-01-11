@@ -19,6 +19,8 @@
 #include "config.h"
 
 #include "rpmostreed-deployment-utils.h"
+#include "rpmostree-origin.h"
+#include "rpmostree-util.h"
 
 #include <libglnx.h>
 
@@ -126,41 +128,6 @@ out:
   return ret;
 }
 
-char *
-rpmostreed_deployment_get_refspec (OstreeDeployment *deployment)
-{
-  char *origin_refspec = NULL;
-  rpmostreed_deployment_get_refspec_packages (deployment, &origin_refspec, NULL);
-  return origin_refspec;
-}
-
-void
-rpmostreed_deployment_get_refspec_packages (OstreeDeployment *deployment,
-					    char            **out_refspec,
-					    char           ***out_packages)
-{
-  GKeyFile *origin = NULL; /* owned by deployment */
-  gsize len;
-
-  g_return_if_fail (out_refspec != NULL);
-
-  origin = ostree_deployment_get_origin (deployment);
-
-  if (!origin)
-    {
-      *out_refspec = NULL;
-      *out_packages = NULL;
-      return;
-    }
-
-  *out_refspec = g_key_file_get_string (origin, "origin", "refspec", NULL);
-  if (!*out_refspec)
-    *out_refspec = g_key_file_get_string (origin, "origin", "baserefspec", NULL);
-
-  if (out_packages)
-    *out_packages = g_key_file_get_string_list (origin, "packages", "requested", &len, NULL);
-}
-
 GVariant *
 rpmostreed_deployment_generate_blank_variant (void)
 {
@@ -197,8 +164,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
 					GError **error)
 {
   g_autoptr(GVariant) commit = NULL;
-  g_autofree gchar *origin_refspec = NULL;
-  g_auto(GStrv) origin_packages = NULL;
+  g_autoptr(RpmOstreeOrigin) origin = NULL;
   g_autofree gchar *id = NULL;
 
   GVariant *sigs = NULL; /* floating variant */
@@ -219,7 +185,9 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   
   id = rpmostreed_deployment_generate_id (deployment);
 
-  rpmostreed_deployment_get_refspec_packages (deployment, &origin_refspec, &origin_packages);
+  origin = rpmostree_origin_parse_deployment (deployment, error);
+  if (!origin)
+    return NULL;
 
   g_variant_dict_init (&dict, NULL);
 
@@ -228,22 +196,22 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
     g_variant_dict_insert (&dict, "osname", "s", osname);
   g_variant_dict_insert (&dict, "serial", "i", serial);
   g_variant_dict_insert (&dict, "checksum", "s", csum);
-  if (origin_packages != NULL && g_strv_length (origin_packages) > 0)
+  if (rpmostree_origin_is_locally_assembled (origin))
     {
       const char *parent = ostree_commit_get_parent (commit);
       g_assert (parent);
       g_variant_dict_insert (&dict, "base-checksum", "s", parent);
-      if (origin_refspec)
-	sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, parent, &gpg_enabled);
+      sigs = rpmostreed_deployment_gpg_results (repo, rpmostree_origin_get_refspec (origin),
+                                                parent, &gpg_enabled);
     }
-  else if (origin_refspec)
-    sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, csum, &gpg_enabled);
+  else
+    sigs = rpmostreed_deployment_gpg_results (repo, rpmostree_origin_get_refspec (origin),
+                                              csum, &gpg_enabled);
 
   variant_add_commit_details (&dict, commit);
-  if (origin_refspec != NULL)
-    g_variant_dict_insert (&dict, "origin", "s", origin_refspec);
-  if (origin_packages != NULL)
-    g_variant_dict_insert (&dict, "packages", "^as", origin_packages);
+  g_variant_dict_insert (&dict, "origin", "s", rpmostree_origin_get_refspec (origin));
+  if (rpmostree_origin_get_packages (origin) != NULL)
+    g_variant_dict_insert (&dict, "packages", "^as", rpmostree_origin_get_packages (origin));
   if (sigs != NULL)
     g_variant_dict_insert_value (&dict, "signatures", sigs);
   g_variant_dict_insert (&dict, "gpg-enabled", "b", gpg_enabled);
@@ -276,7 +244,14 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
   if (refspec)
     origin_refspec = g_strdup (refspec);
   else
-    origin_refspec = rpmostreed_deployment_get_refspec (deployment);
+    {
+      g_autoptr(RpmOstreeOrigin) origin = NULL;
+  
+      origin = rpmostree_origin_parse_deployment (deployment, error);
+      if (!origin)
+        return NULL;
+      origin_refspec = g_strdup (rpmostree_origin_get_refspec (origin));
+    }
 
   g_assert (origin_refspec);
 

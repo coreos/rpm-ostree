@@ -26,8 +26,10 @@
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostree-package-variants.h"
 #include "rpmostreed-errors.h"
+#include "rpmostree-origin.h"
 #include "rpmostreed-os.h"
 #include "rpmostreed-utils.h"
+#include "rpmostree-util.h"
 #include "rpmostreed-transaction.h"
 #include "rpmostreed-transaction-monitor.h"
 #include "rpmostreed-transaction-types.h"
@@ -208,7 +210,7 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
 {
   RpmostreedSysroot *global_sysroot;
   const gchar *name;
-  g_autofree gchar *comp_ref = NULL;
+  g_autoptr(RpmOstreeOrigin) origin = NULL;
   OstreeSysroot *ot_sysroot = NULL;
   OstreeRepo *ot_repo = NULL;
   glnx_unref_object OstreeDeployment *base_deployment = NULL;
@@ -246,17 +248,13 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
         }
     }
 
-  comp_ref = rpmostreed_deployment_get_refspec (base_deployment);
-  if (!comp_ref)
-    {
-      local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
-                                 "No upgrade remote found for os %s", name);
-      goto out;
-    }
+  origin = rpmostree_origin_parse_deployment (base_deployment, &local_error);
+  if (!origin)
+    goto out;
 
   value = rpm_ostree_db_diff_variant (ot_repo,
                                       ostree_deployment_get_csum (base_deployment),
-                                      comp_ref,
+                                      rpmostree_origin_get_refspec (origin),
                                       cancellable,
                                       &local_error);
   if (value == NULL)
@@ -264,7 +262,7 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
 
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
                                                                ot_repo,
-                                                               comp_ref,
+                                                               rpmostree_origin_get_refspec (origin),
 							       &local_error);
   if (!details)
     goto out;
@@ -784,8 +782,8 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
   OstreeRepo *ot_repo = NULL;
   const gchar *name;
   glnx_unref_object OstreeDeployment *base_deployment = NULL;
+  g_autoptr(RpmOstreeOrigin) origin = NULL;
   g_autofree gchar *comp_ref = NULL;
-  g_autofree gchar *base_refspec = NULL;
   GError *local_error = NULL;
   GVariant *value = NULL; /* freed when invoked */
   GVariant *details = NULL; /* freed when invoked */
@@ -806,9 +804,12 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
       goto out;
     }
 
-  base_refspec = rpmostreed_deployment_get_refspec (base_deployment);
+  origin = rpmostree_origin_parse_deployment (base_deployment, &local_error);
+  if (!origin)
+    goto out;
+
   if (!rpmostreed_refspec_parse_partial (arg_refspec,
-                                         base_refspec,
+                                         rpmostree_origin_get_refspec (origin),
                                          &comp_ref,
                                          &local_error))
     goto out;
@@ -907,13 +908,14 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
   OstreeSysroot *ot_sysroot = NULL;
   OstreeRepo *ot_repo = NULL;
   glnx_unref_object OstreeDeployment *base_deployment = NULL;
-  g_autofree char *base_refspec = NULL;
+  g_autoptr(RpmOstreeOrigin) origin = NULL;
   g_autofree char *checksum = NULL;
   g_autofree char *version = NULL;
   g_autoptr(GCancellable) cancellable = NULL;
   GVariant *value = NULL;
   GVariant *details = NULL;
   GError *local_error = NULL;
+  GError **error = &local_error;
 
   /* XXX Ignoring arg_packages for now. */
 
@@ -929,8 +931,11 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
       goto out;
     }
 
+  origin = rpmostree_origin_parse_deployment (base_deployment, error);
+  if (!origin)
+    goto out;
+ 
   base_checksum = ostree_deployment_get_csum (base_deployment);
-  base_refspec = rpmostreed_deployment_get_refspec (base_deployment);
 
   if (!rpmostreed_parse_revision (arg_revision,
                                   &checksum,
@@ -941,7 +946,7 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
   if (version != NULL)
     {
       if (!rpmostreed_repo_lookup_cached_version (ot_repo,
-                                                  base_refspec,
+                                                  rpmostree_origin_get_refspec (origin),
                                                   version,
                                                   cancellable,
                                                   &checksum,
@@ -1098,17 +1103,21 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   merge_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
   if (merge_deployment)
     {
-      /* Determine whether we have a refspec to use for updates */
-      g_autofree char *refspec = rpmostreed_deployment_get_refspec (merge_deployment);
-      if (refspec != NULL)
-	cached_update = rpmostreed_commit_generate_cached_details_variant (merge_deployment,
-									   ot_repo,
-									   refspec,
-									   error);
-      if (!cached_update)
-	return FALSE;
-      has_cached_updates = cached_update != NULL;
-    }
+      g_autoptr(RpmOstreeOrigin) origin = NULL;
+
+      /* Don't fail here for unknown origin types */
+      origin = rpmostree_origin_parse_deployment (merge_deployment, NULL);
+      if (origin)
+        {
+          cached_update = rpmostreed_commit_generate_cached_details_variant (merge_deployment,
+                                                                             ot_repo,
+                                                                             rpmostree_origin_get_refspec (origin),
+                                                                             error);
+          if (!cached_update)
+            return FALSE;
+          has_cached_updates = cached_update != NULL;
+        }
+   }
 
   if (!booted_variant)
     booted_variant = rpmostreed_deployment_generate_blank_variant ();
