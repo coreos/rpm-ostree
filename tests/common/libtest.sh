@@ -54,6 +54,7 @@ if test -n "${UNINSTALLEDTESTS:-}"; then
 fi
 
 test_tmpdir=$(pwd)
+echo "Using tmpdir ${test_tmpdir}"
 
 export G_DEBUG=fatal-warnings
 
