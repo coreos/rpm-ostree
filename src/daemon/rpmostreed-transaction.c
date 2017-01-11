@@ -20,6 +20,7 @@
 #include "ostree.h"
 
 #include <libglnx.h>
+#include <systemd/sd-journal.h>
 
 #include "rpmostreed-transaction.h"
 #include "rpmostreed-errors.h"
@@ -278,6 +279,7 @@ transaction_execute_thread (GTask *task,
                             GCancellable *cancellable)
 {
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (source_object);
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
   RpmostreedTransactionClass *class = RPMOSTREED_TRANSACTION_GET_CLASS (self);
   gboolean success = TRUE;
   GError *local_error = NULL;
@@ -294,7 +296,15 @@ transaction_execute_thread (GTask *task,
     success = class->execute (self, cancellable, &local_error);
 
   if (local_error != NULL)
-    g_task_return_error (task, local_error);
+    {
+      /* Also log to journal in addition to the client, so it's recorded
+       * consistently.
+       */
+      sd_journal_print (LOG_ERR, "Txn %s failed: %s",
+                        g_dbus_method_invocation_get_object_path (priv->invocation),
+                        local_error->message);
+      g_task_return_error (task, local_error);
+    }
   else
     g_task_return_boolean (task, success);
 
