@@ -215,6 +215,60 @@ rpmostree_find_kernel (int rootfs_dfd,
   return g_variant_ref_sink (g_variant_new ("(sssms)", kver, bootdir, kernel_path, initramfs_path));
 }
 
+/* Given a kernel path and a temporary initramfs, compute their checksum and put
+ * them in their final locations.
+ */
+gboolean
+rpmostree_finalize_kernel (int rootfs_dfd,
+                           const char *bootdir,
+                           const char *kver,
+                           const char *kernel_path,
+                           const char *initramfs_tmp_path,
+                           int         initramfs_tmp_fd,
+                           GCancellable *cancellable,
+                           GError **error)
+{
+  g_autoptr(GChecksum) boot_checksum = NULL;
+  g_autofree char *kernel_final_path = NULL;
+  g_autofree char *initramfs_final_path = NULL;
+  const char *boot_checksum_str = NULL;
+
+  /* Now, calculate the combined sha256sum of the two. We checksum the initramfs
+   * from the tmpfile fd (via mmap()) to avoid writing it to disk in another
+   * temporary location.
+   */
+  boot_checksum = g_checksum_new (G_CHECKSUM_SHA256);
+  if (!_rpmostree_util_update_checksum_from_file (boot_checksum, rootfs_dfd, kernel_path,
+                                                  cancellable, error))
+    return FALSE;
+
+  { g_autoptr(GMappedFile) mfile = g_mapped_file_new_from_fd (initramfs_tmp_fd, FALSE, error);
+    if (!mfile)
+      return FALSE;
+    g_checksum_update (boot_checksum, (guint8*)g_mapped_file_get_contents (mfile),
+                       g_mapped_file_get_length (mfile));
+  }
+  boot_checksum_str = g_checksum_get_string (boot_checksum);
+
+  kernel_final_path = g_strconcat (bootdir, "/", glnx_basename (kernel_path), "-", boot_checksum_str, NULL);
+  initramfs_final_path = g_strconcat (bootdir, "/", "initramfs-", kver, ".img-", boot_checksum_str, NULL);
+
+  /* Put the kernel in the final location */
+  if (renameat (rootfs_dfd, kernel_path, rootfs_dfd, kernel_final_path) < 0)
+    {
+      glnx_set_error_from_errno (error);
+      return FALSE;
+    }
+  /* Link the initramfs directly to its final destination */
+  if (!glnx_link_tmpfile_at (rootfs_dfd, GLNX_LINK_TMPFILE_NOREPLACE,
+                             initramfs_tmp_fd, initramfs_tmp_path,
+                             rootfs_dfd, initramfs_final_path,
+                             error))
+    return FALSE;
+
+  return TRUE;
+}
+
 static void
 dracut_child_setup (gpointer data)
 {

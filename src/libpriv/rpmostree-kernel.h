@@ -28,6 +28,16 @@ rpmostree_find_kernel (int rootfs_dfd,
                        GError **error);
 
 gboolean
+rpmostree_finalize_kernel (int rootfs_dfd,
+                           const char *bootdir,
+                           const char *kver,
+                           const char *kernel_path,
+                           const char *initramfs_tmp_path,
+                           int         initramfs_tmp_fd, /* consumed */
+                           GCancellable *cancellable,
+                           GError **error);
+
+gboolean
 rpmostree_run_dracut (int     rootfs_dfd,
                       char   **argv,
                       int     *out_initramfs_tmpfd,
