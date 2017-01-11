@@ -272,7 +272,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
 
   /* Second tempfile is the initramfs contents */
   if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, "tmp",
-                                      O_WRONLY | O_CLOEXEC,
+                                      O_RDWR | O_CLOEXEC,
                                       &tmp_fd, &tmpfile_path,
                                       error))
     goto out;
