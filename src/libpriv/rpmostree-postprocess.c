@@ -151,7 +151,8 @@ do_kernel_prep (int            rootfs_dfd,
   g_autoptr(GChecksum) boot_checksum = NULL;
   glnx_fd_close int initramfs_tmp_fd = -1;
   g_autofree char *initramfs_tmp_path = NULL;
-  g_autofree char *initramfs_staged_path = NULL;
+  g_autofree char *kernel_final_path = NULL;
+  g_autofree char *initramfs_final_path = NULL;
 
   kernelstate = rpmostree_find_kernel (rootfs_dfd, cancellable, error);
   if (!kernelstate)
@@ -215,41 +216,37 @@ do_kernel_prep (int            rootfs_dfd,
       goto out;
   }
 
-  initramfs_staged_path = g_strconcat (bootdir, "/initramfs-", kver, ".img", NULL);
-
-  if (!glnx_link_tmpfile_at (rootfs_dfd, GLNX_LINK_TMPFILE_NOREPLACE,
-                             initramfs_tmp_fd, initramfs_tmp_path,
-                             rootfs_dfd, initramfs_staged_path,
-                             error))
-    goto out;
-
+  /* Now, calculate the combined sha256sum of the two. We checksum the initramfs
+   * from the tmpfile fd (via mmap()) to avoid writing it to disk in another
+   * temporary location.
+   */
   boot_checksum = g_checksum_new (G_CHECKSUM_SHA256);
   if (!_rpmostree_util_update_checksum_from_file (boot_checksum, rootfs_dfd, kernel_path,
                                                   cancellable, error))
     goto out;
-  if (!_rpmostree_util_update_checksum_from_file (boot_checksum, rootfs_dfd, initramfs_staged_path,
-                                                  cancellable, error))
-    goto out;
-
-  boot_checksum_str = g_checksum_get_string (boot_checksum);
-  
-  {
-    g_autofree char *new_kernel_path =
-      g_strconcat (bootdir, "/", glnx_basename (kernel_path), "-", boot_checksum_str, NULL);
-    g_autofree char *new_initramfs_path =
-      g_strconcat (bootdir, "/", glnx_basename (initramfs_staged_path), "-", boot_checksum_str, NULL);
-
-    if (renameat (rootfs_dfd, kernel_path, rootfs_dfd, new_kernel_path) < 0)
-      {
-        glnx_set_error_from_errno (error);
-        goto out;
-      }
-    if (renameat (rootfs_dfd, initramfs_path, rootfs_dfd, new_initramfs_path) < 0)
-      {
-        glnx_set_error_from_errno (error);
-        goto out;
-      }
+  { g_autoptr(GMappedFile) mfile = g_mapped_file_new_from_fd (initramfs_tmp_fd, FALSE, error);
+    if (!mfile)
+      goto out;
+    g_checksum_update (boot_checksum, (guint8*)g_mapped_file_get_contents (mfile),
+                       g_mapped_file_get_length (mfile));
   }
+  boot_checksum_str = g_checksum_get_string (boot_checksum);
+
+  kernel_final_path = g_strconcat (bootdir, "/", glnx_basename (kernel_path), "-", boot_checksum_str, NULL);
+  initramfs_final_path = g_strconcat (bootdir, "/", "initramfs-", kver, ".img-", boot_checksum_str, NULL);
+
+  /* Put the kernel in the final location */
+  if (renameat (rootfs_dfd, kernel_path, rootfs_dfd, kernel_final_path) < 0)
+    {
+      glnx_set_error_from_errno (error);
+      goto out;
+    }
+  /* Link the initramfs directly to its final destination */
+  if (!glnx_link_tmpfile_at (rootfs_dfd, GLNX_LINK_TMPFILE_NOREPLACE,
+                             initramfs_tmp_fd, initramfs_tmp_path,
+                             rootfs_dfd, initramfs_final_path,
+                             error))
+    goto out;
 
   ret = TRUE;
  out:
