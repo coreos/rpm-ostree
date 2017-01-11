@@ -27,6 +27,7 @@
 
 #include "rpmostree-sysroot-upgrader.h"
 #include "rpmostree-core.h"
+#include "rpmostree-origin.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-output.h"
@@ -57,13 +58,10 @@ struct RpmOstreeSysrootUpgrader {
   RpmOstreeSysrootUpgraderFlags flags;
 
   OstreeDeployment *merge_deployment;
-  GKeyFile *origin;
-  char *origin_refspec;
-  char **requested_packages;
+  RpmOstreeOrigin *origin;
   GHashTable *ignore_scripts;
   GHashTable *packages_to_add;
   GHashTable *packages_to_delete;
-  char *override_csum;
 
   char *new_revision;
 };
@@ -82,46 +80,40 @@ G_DEFINE_TYPE_WITH_CODE (RpmOstreeSysrootUpgrader, rpmostree_sysroot_upgrader, G
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE, rpmostree_sysroot_upgrader_initable_iface_init))
 
 static gboolean
-parse_refspec (RpmOstreeSysrootUpgrader  *self,
-               GCancellable           *cancellable,
-               GError                **error)
+parse_origin_keyfile (RpmOstreeSysrootUpgrader  *self,
+                      GKeyFile                  *origin,
+                      GCancellable           *cancellable,
+                      GError                **error)
 {
-  gboolean ret = FALSE;
-  g_autofree char *unconfigured_state = NULL;
-  g_autofree char *csum = NULL;
+  RpmOstreeOriginFlags origin_flags = 0;
 
-  if ((self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED) == 0)
+  g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
+
+  if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED)
+    origin_flags |= RPMOSTREE_ORIGIN_FLAGS_IGNORE_UNCONFIGURED;
+  self->origin = rpmostree_origin_parse_keyfile (origin, origin_flags, error);
+  if (!self->origin)
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+parse_origin_deployment (RpmOstreeSysrootUpgrader *self,
+                         OstreeDeployment         *deployment,
+                         GCancellable           *cancellable,
+                         GError                **error)
+{
+  GKeyFile *origin = ostree_deployment_get_origin (deployment);
+  if (!origin)
     {
-      /* If explicit action by the OS creator is requried to upgrade, print their text as an error */
-      unconfigured_state = g_key_file_get_string (self->origin, "origin", "unconfigured-state", NULL);
-      if (unconfigured_state)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "origin unconfigured-state: %s", unconfigured_state);
-          goto out;
-        }
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "No origin known for deployment %s.%d",
+                   ostree_deployment_get_csum (deployment),
+                   ostree_deployment_get_deployserial (deployment));
+      return FALSE;
     }
-
-  g_clear_pointer (&self->requested_packages, g_strfreev);
-  g_clear_pointer (&self->origin_refspec, g_free);
-
-  if (!_rpmostree_util_parse_origin (self->origin, &self->origin_refspec,
-                                     &self->requested_packages, error))
-    goto out;
-
-  /* it's just easier to make it a proper empty list than to check for NULL
-   * everytime */
-  if (self->requested_packages == NULL)
-    self->requested_packages = g_new0 (gchar *, 1);
-
-  csum = g_key_file_get_string (self->origin, "origin", "override-commit", NULL);
-  if (csum != NULL && !ostree_validate_checksum_string (csum, error))
-    goto out;
-  self->override_csum = g_steal_pointer (&csum);
-
-  ret = TRUE;
- out:
-  return ret;
+  return parse_origin_keyfile (self, origin, cancellable, error);
 }
 
 static gboolean
@@ -165,36 +157,16 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
     self->new_revision =
       g_strdup (ostree_deployment_get_csum (self->merge_deployment));
 
-  self->origin = NULL;
-  {
-    GKeyFile *original_origin = /* I just had to use that name */
-      ostree_deployment_get_origin (self->merge_deployment);
-    if (original_origin)
-      self->origin = _rpmostree_util_keyfile_clone (original_origin);
-  }
-
-  if (!self->origin)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "No origin known for deployment %s.%d",
-                   ostree_deployment_get_csum (self->merge_deployment),
-                   ostree_deployment_get_deployserial (self->merge_deployment));
-      goto out;
-    }
-  g_key_file_ref (self->origin);
-
   /* Should we consider requiring --discard-hotfix here?
    * See also `ostree admin upgrade` bits.
    */
-  g_key_file_remove_key (self->origin, "origin", "unlocked", NULL);
+  if (!parse_origin_deployment (self, self->merge_deployment, cancellable, error))
+    goto out;
 
   self->packages_to_add = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                  g_free, NULL);
   self->packages_to_delete = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                     g_free, NULL);
-
-  if (!parse_refspec (self, cancellable, error))
-    goto out;
 
   ret = TRUE;
  out:
@@ -216,13 +188,9 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   g_free (self->osname);
 
   g_clear_object (&self->merge_deployment);
-  if (self->origin)
-    g_key_file_unref (self->origin);
-  g_free (self->origin_refspec);
-  g_strfreev (self->requested_packages);
+  g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
   g_hash_table_unref (self->packages_to_add);
   g_hash_table_unref (self->packages_to_delete);
-  g_free (self->override_csum);
   g_free (self->new_revision);
 
   G_OBJECT_CLASS (rpmostree_sysroot_upgrader_parent_class)->finalize (object);
@@ -348,37 +316,10 @@ rpmostree_sysroot_upgrader_new (OstreeSysroot              *sysroot,
  *
  * Returns: (transfer none): The origin file, or %NULL if unknown
  */
-GKeyFile *
+RpmOstreeOrigin *
 rpmostree_sysroot_upgrader_get_origin (RpmOstreeSysrootUpgrader *self)
 {
   return self->origin;
-}
-
-/**
- * ostree_sysroot_upgrader_dup_origin:
- * @self: Sysroot
- *
- * Returns: (transfer full): A copy of the origin file, or %NULL if unknown
- */
-GKeyFile *
-rpmostree_sysroot_upgrader_dup_origin (RpmOstreeSysrootUpgrader *self)
-{
-  GKeyFile *copy = NULL;
-
-  g_return_val_if_fail (RPMOSTREE_IS_SYSROOT_UPGRADER (self), NULL);
-
-  if (self->origin != NULL)
-    {
-      g_autofree char *data = NULL;
-      gsize length = 0;
-
-      copy = g_key_file_new ();
-      data = g_key_file_to_data (self->origin, &length, NULL);
-      g_key_file_load_from_data (copy, data, length,
-                                 G_KEY_FILE_KEEP_COMMENTS, NULL);
-    }
-
-  return copy;
 }
 
 /**
@@ -398,11 +339,10 @@ rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self,
 {
   gboolean ret = FALSE;
 
-  g_clear_pointer (&self->origin, g_key_file_unref);
+  g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
   if (origin)
     {
-      self->origin = g_key_file_ref (origin);
-      if (!parse_refspec (self, cancellable, error))
+      if (!parse_origin_keyfile (self, origin, cancellable, error))
         goto out;
     }
 
@@ -435,7 +375,7 @@ rpmostree_sysroot_upgrader_set_origin_rebase (RpmOstreeSysrootUpgrader *self,
                                               const char *new_refspec,
                                               GError **error)
 {
-  g_autoptr(GKeyFile) new_origin = rpmostree_sysroot_upgrader_dup_origin (self);
+  g_autoptr(GKeyFile) new_origin = rpmostree_origin_dup_keyfile (self->origin);
 
   if (!origin_set_refspec (new_origin, new_refspec, error))
     return FALSE;
@@ -443,11 +383,7 @@ rpmostree_sysroot_upgrader_set_origin_rebase (RpmOstreeSysrootUpgrader *self,
   /* we don't want to carry any commit overrides during a rebase */
   g_key_file_remove_key (new_origin, "origin", "override-commit", NULL);
 
-  g_clear_pointer (&self->origin, g_key_file_unref);
-  self->origin = g_key_file_ref (new_origin);
-
-  /* this will update self->origin_refspec */
-  if (!parse_refspec (self, NULL, error))
+  if (!parse_origin_keyfile (self, new_origin, NULL, error))
     return FALSE;
 
   return TRUE;
@@ -457,14 +393,15 @@ void
 rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self,
                                                 const char *override_commit)
 {
-  if (override_commit != NULL)
-    g_key_file_set_string (self->origin, "origin", "override-commit", override_commit);
-  else
-    g_key_file_remove_key (self->origin, "origin", "override-commit", NULL);
+  g_autoptr(GKeyFile) new_origin = rpmostree_origin_dup_keyfile (self->origin);
 
-  /* just update self manually rather than re-parsing the whole thing */
-  g_free (self->override_csum);
-  self->override_csum = g_strdup (override_commit);
+  if (override_commit != NULL)
+    g_key_file_set_string (new_origin, "origin", "override-commit", override_commit);
+  else
+    g_key_file_remove_key (new_origin, "origin", "override-commit", NULL);
+
+  if (!parse_origin_keyfile (self, new_origin, NULL, NULL))
+    g_assert_not_reached ();
 }
 
 void
@@ -478,13 +415,13 @@ rpmostree_sysroot_upgrader_set_ignore_scripts (RpmOstreeSysrootUpgrader *self,
 const char *
 rpmostree_sysroot_upgrader_get_refspec (RpmOstreeSysrootUpgrader *self)
 {
-  return self->origin_refspec;
+  return rpmostree_origin_get_refspec (self->origin);
 }
 
 const char *const*
 rpmostree_sysroot_upgrader_get_packages (RpmOstreeSysrootUpgrader *self)
 {
-  return (const char * const *)self->requested_packages;
+  return rpmostree_origin_get_packages (self->origin);
 }
 
 OstreeDeployment*
@@ -506,11 +443,11 @@ rpmostree_sysroot_upgrader_get_origin_description (RpmOstreeSysrootUpgrader *sel
 }
 
 static GHashTable*
-hashset_from_strv (char **strv)
+hashset_from_strv (const char *const*strv)
 {
   GHashTable *ht = g_hash_table_new_full (g_str_hash, g_str_equal,
                                           g_free, NULL);
-  for (char **it = strv; it && *it; it++)
+  for (char **it = (char**)strv; it && *it; it++)
     g_hash_table_add (ht, g_strdup (*it));
   return ht;
 }
@@ -532,7 +469,7 @@ rpmostree_sysroot_upgrader_add_packages (RpmOstreeSysrootUpgrader *self,
 {
   gboolean ret = FALSE;
   g_autoptr(GHashTable) requested_packages =
-    hashset_from_strv (self->requested_packages);
+    hashset_from_strv (rpmostree_origin_get_packages (self->origin));
 
   for (char **it = packages; it && *it; it++)
     {
@@ -567,7 +504,7 @@ rpmostree_sysroot_upgrader_delete_packages (RpmOstreeSysrootUpgrader *self,
 {
   gboolean ret = FALSE;
   g_autoptr(GHashTable) requested_packages =
-    hashset_from_strv (self->requested_packages);
+    hashset_from_strv (rpmostree_origin_get_packages (self->origin));
 
   for (char **it = packages; it && *it; it++)
     {
@@ -617,14 +554,14 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
   g_autofree char *origin_remote = NULL;
   g_autofree char *origin_ref = NULL;
 
-  if (!ostree_parse_refspec (self->origin_refspec,
+  if (!ostree_parse_refspec (rpmostree_origin_get_refspec (self->origin),
                              &origin_remote, 
                              &origin_ref,
                              error))
     goto out;
 
-  if (self->override_csum != NULL)
-    refs_to_fetch[0] = self->override_csum;
+  if (rpmostree_origin_get_override_commit (self->origin) != NULL)
+    refs_to_fetch[0] = (char*)rpmostree_origin_get_override_commit (self->origin);
   else
     refs_to_fetch[0] = origin_ref;
 
@@ -645,24 +582,23 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
         ostree_async_progress_finish (progress);
     }
 
-  if (self->override_csum != NULL)
+  if (rpmostree_origin_get_override_commit (self->origin) != NULL)
     {
       if (!ostree_repo_set_ref_immediate (repo,
                                           origin_remote,
                                           origin_ref,
-                                          self->override_csum,
+                                          rpmostree_origin_get_override_commit (self->origin),
                                           cancellable,
                                           error))
         goto out;
 
-      self->new_revision = g_strdup (self->override_csum);
+      self->new_revision = g_strdup (rpmostree_origin_get_override_commit (self->origin));
     }
   else
     {
-      if (!ostree_repo_resolve_rev (repo, self->origin_refspec, FALSE,
+      if (!ostree_repo_resolve_rev (repo, rpmostree_origin_get_refspec (self->origin), FALSE,
                                     &self->new_revision, error))
         goto out;
-
     }
 
   {
@@ -676,7 +612,7 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
       {
         /* if there are pkgs layered on the from rev, then we should compare
          * the parent instead, which is the 'base' layer */
-        if (g_strv_length (self->requested_packages) > 0)
+        if (rpmostree_origin_is_locally_assembled (self->origin))
           {
             if (!commit_get_parent_csum (repo, from_revision, &base_rev, error))
               goto out;
@@ -710,16 +646,17 @@ update_requested_packages (RpmOstreeSysrootUpgrader *self,
                            GError                  **error)
 {
   gboolean ret = FALSE;
+  g_autoptr(GKeyFile) new_origin = rpmostree_origin_dup_keyfile (self->origin);
   glnx_free char **pkgv =
     (char**) g_hash_table_get_keys_as_array (pkgset, NULL);
 
-  g_key_file_set_string_list (self->origin, "packages", "requested",
+  g_key_file_set_string_list (new_origin, "packages", "requested",
                               (const char* const*) pkgv, g_strv_length(pkgv));
 
   /* migrate to baserefspec model if necessary */
-  g_key_file_set_value (self->origin, "origin", "baserefspec",
-                        self->origin_refspec);
-  if (!g_key_file_remove_key (self->origin, "origin", "refspec", error))
+  g_key_file_set_value (new_origin, "origin", "baserefspec",
+                        rpmostree_origin_get_refspec (self->origin));
+  if (!g_key_file_remove_key (new_origin, "origin", "refspec", error))
     {
       if (g_error_matches (*error, G_KEY_FILE_ERROR,
                            G_KEY_FILE_ERROR_KEY_NOT_FOUND))
@@ -727,9 +664,8 @@ update_requested_packages (RpmOstreeSysrootUpgrader *self,
       else
         goto out;
     }
-
-  /* reread spec file --> this will update the current requested_packages */
-  if (!parse_refspec (self, cancellable, error))
+  g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
+  if (!parse_origin_keyfile (self, new_origin, cancellable, error))
     goto out;
 
   ret = TRUE;
@@ -886,7 +822,8 @@ finalize_requested_packages (RpmOstreeSysrootUpgrader *self,
                              GError                  **error)
 {
   gboolean ret = FALSE;
-  g_autoptr(GHashTable) pkgset = hashset_from_strv (self->requested_packages);
+  g_autoptr(GHashTable) pkgset =
+    hashset_from_strv (rpmostree_origin_get_packages (self->origin));
 
   /* remove packages_to_delete from the set */
   { GHashTableIter it;
@@ -985,7 +922,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   g_autoptr(RpmOstreeContext) ctx = NULL;
   g_autoptr(RpmOstreeTreespec) treespec = NULL;
   g_autoptr(RpmOstreeInstall) install = {0,};
-  g_autoptr(GHashTable) pkgset = hashset_from_strv (self->requested_packages);
+  g_autoptr(GHashTable) pkgset = hashset_from_strv (rpmostree_origin_get_packages (self->origin));
   glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
 
   ctx = rpmostree_context_new_system (cancellable, error);
@@ -1104,7 +1041,7 @@ overlay_packages (RpmOstreeSysrootUpgrader *self,
    * redeploying and there's already stuff layered down, in which case, it's the
    * parent commit */
   if ((self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_REDEPLOY) &&
-      (g_strv_length (self->requested_packages) > 0))
+      rpmostree_origin_is_locally_assembled (self->origin))
     {
       if (!commit_get_parent_csum (repo, self->new_revision, &base_rev, error))
         goto out;
@@ -1127,7 +1064,7 @@ overlay_packages (RpmOstreeSysrootUpgrader *self,
    * that the user wants to stop overlaying them), so we have another
    * optimization here for that case.
    */
-  if (g_strv_length (self->requested_packages) == 0)
+  if (!rpmostree_origin_is_locally_assembled (self->origin))
     {
       g_free (self->new_revision);
       self->new_revision = g_steal_pointer (&base_rev);
@@ -1160,13 +1097,13 @@ get_base_commit_for_deployment (RpmOstreeSysrootUpgrader  *self,
                                 char                     **out_base,
                                 GError                   **error)
 {
-  GKeyFile *origin = ostree_deployment_get_origin (deployment);
-  gboolean is_local;
+  g_autoptr(RpmOstreeOrigin) origin = NULL;
 
-  if (!_rpmostree_origin_is_locally_assembled (origin, &is_local, error))
+  origin = rpmostree_origin_parse_deployment (deployment, error);
+  if (!origin)
     return FALSE;
 
-  if (is_local)
+  if (rpmostree_origin_is_locally_assembled (origin))
     {
       const char *csum = ostree_deployment_get_csum (deployment);
       g_autofree char *base_rev = NULL;
@@ -1326,13 +1263,13 @@ clean_pkgcache_orphans (RpmOstreeSysrootUpgrader *self,
   for (guint i = 0; i < deployments->len; i++)
     {
       OstreeDeployment *deployment = deployments->pdata[i];
-      GKeyFile *origin = ostree_deployment_get_origin (deployment);
-      gboolean is_local;
+      g_autoptr(RpmOstreeOrigin) origin = NULL;
 
-      if (!_rpmostree_origin_is_locally_assembled (origin, &is_local, error))
+      origin = rpmostree_origin_parse_deployment (deployment, error);
+      if (!origin)
         return FALSE;
 
-      if (is_local)
+      if (rpmostree_origin_is_locally_assembled (origin))
         {
           g_autoptr(RpmOstreeRefSack) rsack = NULL;
           g_autofree char *deployment_dirpath = NULL;
@@ -1438,7 +1375,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   g_assert (self->new_revision);
 
   /* any packages requested for overlay? */
-  if ((g_strv_length (self->requested_packages) > 0) ||
+  if (rpmostree_origin_is_locally_assembled (self->origin) ||
       (g_hash_table_size (self->packages_to_add) > 0) ||
       (g_hash_table_size (self->packages_to_delete) > 0))
     if (!overlay_packages (self, cancellable, error))
@@ -1452,7 +1389,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   if (!ostree_sysroot_deploy_tree (self->sysroot, self->osname,
                                    self->new_revision,
-                                   self->origin,
+                                   rpmostree_origin_get_keyfile (self->origin),
                                    self->merge_deployment,
                                    NULL,
                                    &new_deployment,

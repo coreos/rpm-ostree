@@ -80,18 +80,12 @@ apply_revision_override (RpmostreedTransaction    *transaction,
                          GCancellable             *cancellable,
                          GError                  **error)
 {
-  g_autoptr(GKeyFile) origin = NULL;
+  RpmOstreeOrigin *origin = rpmostree_sysroot_upgrader_get_origin (upgrader);
+  g_autoptr(GKeyFile) new_origin = NULL;
   g_autofree char *checksum = NULL;
   g_autofree char *version = NULL;
-  const char *refspec;
 
-  origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
-  if (origin == NULL)
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Booted deployment has no origin");
-      return FALSE;
-    }
+  new_origin = rpmostree_origin_dup_keyfile (origin);
 
   if (!rpmostreed_parse_revision (revision,
                                   &checksum,
@@ -99,21 +93,14 @@ apply_revision_override (RpmostreedTransaction    *transaction,
                                   error))
     return FALSE;
 
-  refspec = rpmostree_sysroot_upgrader_get_refspec (upgrader);
-  if (refspec == NULL)
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Could not find refspec for booted deployment");
-        return FALSE;
-    }
-
   if (version != NULL)
     {
       rpmostreed_transaction_emit_message_printf (transaction,
                                                   "Resolving version '%s'",
                                                   version);
 
-      if (!rpmostreed_repo_lookup_version (repo, refspec, version, progress,
+      if (!rpmostreed_repo_lookup_version (repo, rpmostree_origin_get_refspec (origin),
+                                           version, progress,
                                            cancellable, &checksum, error))
         return FALSE;
     }
@@ -125,12 +112,12 @@ apply_revision_override (RpmostreedTransaction    *transaction,
                                                   "Validating checksum '%s'",
                                                   checksum);
 
-      if (!rpmostreed_repo_lookup_checksum (repo, refspec, checksum,
-                                            progress, cancellable, error))
+      if (!rpmostreed_repo_lookup_checksum (repo, rpmostree_origin_get_refspec (origin),
+                                            checksum, progress, cancellable, error))
         return FALSE;
     }
 
-  g_key_file_set_string (origin, "origin", "override-commit", checksum);
+  g_key_file_set_string (new_origin, "origin", "override-commit", checksum);
 
   if (version != NULL)
     {
@@ -138,10 +125,10 @@ apply_revision_override (RpmostreedTransaction    *transaction,
 
       /* Add a comment with the version, to be nice. */
       comment = g_strdup_printf ("Version %s [%.10s]", version, checksum);
-      g_key_file_set_comment (origin, "origin", "override-commit", comment, NULL);
+      g_key_file_set_comment (new_origin, "origin", "override-commit", comment, NULL);
     }
 
-  if (!rpmostree_sysroot_upgrader_set_origin (upgrader, origin, cancellable, error))
+  if (!rpmostree_sysroot_upgrader_set_origin (upgrader, new_origin, cancellable, error))
     return FALSE;
 
   return TRUE;

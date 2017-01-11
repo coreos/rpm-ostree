@@ -21,6 +21,7 @@
 #pragma once
 
 #include <ostree.h>
+#include "rpmostree-origin.h"
 
 G_BEGIN_DECLS
 
@@ -68,8 +69,7 @@ const char *const*rpmostree_sysroot_upgrader_get_packages (RpmOstreeSysrootUpgra
 
 char * rpmostree_sysroot_upgrader_get_origin_description (RpmOstreeSysrootUpgrader *self);
 
-GKeyFile *rpmostree_sysroot_upgrader_get_origin (RpmOstreeSysrootUpgrader *self);
-GKeyFile *rpmostree_sysroot_upgrader_dup_origin (RpmOstreeSysrootUpgrader *self);
+RpmOstreeOrigin *rpmostree_sysroot_upgrader_get_origin (RpmOstreeSysrootUpgrader *self);
 gboolean rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self, GKeyFile *origin,
                                              GCancellable *cancellable, GError **error);
 

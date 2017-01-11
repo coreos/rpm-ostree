@@ -96,17 +96,6 @@ GKeyFile *
 _rpmostree_util_keyfile_clone (GKeyFile *keyfile);
 
 gboolean
-_rpmostree_util_parse_origin (GKeyFile         *origin,
-                              char            **out_refspec,
-                              char           ***out_packages,
-                              GError          **error);
-
-gboolean
-_rpmostree_origin_is_locally_assembled (GKeyFile         *origin,
-                                        gboolean         *out_is_local,
-                                        GError          **error);
-
-gboolean
 rpmostree_split_path_ptrarray_validate (const char *path,
                                         GPtrArray  **out_components,
                                         GError     **error);
