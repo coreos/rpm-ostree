@@ -68,12 +68,14 @@ total=0
 pass=0
 fail=0
 skip=0
+notrun=0
 for tf in $(find . -name 'test-*.sh' | sort); do
 
     if [ -n "${TESTS+ }" ]; then
         tfbn=$(basename "$tf" .sh)
         tfbn=" ${tfbn#test-} "
         if [[ " $TESTS " != *$tfbn* ]]; then
+            let "notrun += 1"
             continue
         fi
     fi
@@ -142,5 +144,8 @@ fi
 
 [ ${fail} -eq 0 ] && printer=pass || printer=fail
 ${printer}_print "TOTAL: $total PASS: $pass SKIP: $skip FAIL: $fail"
+if test ${notrun} -gt 0; then
+    echo "NOTICE: Skipped ${notrun} tests not matching \"${TESTS}\""
+fi
 echo "See ${ALL_LOGS} for more information."
 [ ${fail} -eq 0 ]
