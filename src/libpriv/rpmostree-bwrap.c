@@ -203,6 +203,15 @@ rpmostree_bwrap_new (int rootfs_fd,
                                      "--ro-bind", "/sys/class", "/sys/class",
                                      "--ro-bind", "/sys/dev", "/sys/dev",
                                      "--ro-bind", "/sys/devices", "/sys/devices",
+                                     /* Here we do all namespaces except the user one.
+                                      * Down the line we want to do a userns too I think,
+                                      * but it may need some mapping work.
+                                      */
+                                     "--unshare-pid",
+                                     "--unshare-net",
+                                     "--unshare-uts",
+                                     "--unshare-ipc",
+                                     "--unshare-cgroup-try",
                                      NULL);
 
   for (guint i = 0; i < G_N_ELEMENTS (usr_links); i++)
