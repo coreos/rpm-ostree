@@ -626,7 +626,7 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                       RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
                                        cancellable,
                                        NULL,
                                        error))
@@ -641,13 +641,6 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!opt_repo)
     {
       rpmostree_usage_error (context, "--repo must be specified", error);
-      goto out;
-    }
-
-  if (getuid () != 0)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "compose tree must presently be run as uid 0 (root)");
       goto out;
     }
 
