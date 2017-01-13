@@ -125,6 +125,14 @@ rpmostree_option_context_parse (GOptionContext *context,
 
   use_daemon = ((flags & RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD) == 0);
 
+  if ((flags & RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT) > 0
+      && getuid () != 0)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "This command requires root privileges");
+      goto out;
+    }
+
   if (main_entries != NULL)
     g_option_context_add_main_entries (context, main_entries, NULL);
 

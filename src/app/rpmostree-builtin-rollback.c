@@ -63,7 +63,7 @@ rpmostree_builtin_rollback (int             argc,
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_NONE,
+                                       RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
                                        cancellable,
                                        &sysroot_proxy,
                                        error))
