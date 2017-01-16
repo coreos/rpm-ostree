@@ -20,6 +20,7 @@
 set -e
 
 . ${commondir}/libtest.sh
+export RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK=yes
 
 ensure_dbus
 
