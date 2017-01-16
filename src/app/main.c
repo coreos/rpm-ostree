@@ -126,7 +126,8 @@ rpmostree_option_context_parse (GOptionContext *context,
   use_daemon = ((flags & RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD) == 0);
 
   if ((flags & RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT) > 0
-      && getuid () != 0)
+      && getuid () != 0
+      && getenv ("RPMOSTREE_SUPRESS_REQUIRES_ROOT_CHECK") == NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "This command requires root privileges");
