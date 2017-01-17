@@ -36,6 +36,12 @@
 
 #define RPMOSTREE_TMP_BASE_REF "rpmostree/base/tmp"
 
+static gboolean
+commit_get_parent_csum (OstreeRepo  *repo,
+                        const char  *child,
+                        char       **out_csum,
+                        GError     **error);
+
 /**
  * SECTION:rpmostree-sysroot-upgrader
  * @title: Simple upgrade class
@@ -58,12 +64,14 @@ struct RpmOstreeSysrootUpgrader {
   RpmOstreeSysrootUpgraderFlags flags;
 
   OstreeDeployment *merge_deployment;
+  RpmOstreeOrigin *original_origin;
   RpmOstreeOrigin *origin;
   GHashTable *ignore_scripts;
   GHashTable *packages_to_add;
   GHashTable *packages_to_delete;
 
-  char *new_revision;
+  char *base_revision; /* Non-layered replicated commit */
+  char *final_revision; /* Computed by layering; if NULL, only using base_revision */
 };
 
 enum {
@@ -125,6 +133,7 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
   RpmOstreeSysrootUpgrader *self = (RpmOstreeSysrootUpgrader*)initable;
   OstreeDeployment *booted_deployment =
     ostree_sysroot_get_booted_deployment (self->sysroot);
+  glnx_unref_object OstreeRepo *repo = NULL;
 
   if (booted_deployment == NULL && self->osname == NULL)
     {
@@ -145,6 +154,9 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
       goto out;
     }
 
+  if (!ostree_sysroot_get_repo (self->sysroot, &repo, cancellable, error))
+    goto out;
+
   self->merge_deployment = ostree_sysroot_get_merge_deployment (self->sysroot, self->osname); 
   if (self->merge_deployment == NULL)
     {
@@ -153,15 +165,29 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
       goto out;
     }
 
-  if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_REDEPLOY)
-    self->new_revision =
-      g_strdup (ostree_deployment_get_csum (self->merge_deployment));
-
   /* Should we consider requiring --discard-hotfix here?
    * See also `ostree admin upgrade` bits.
    */
   if (!parse_origin_deployment (self, self->merge_deployment, cancellable, error))
     goto out;
+  /* Retain the "original origin", since we may need to make determinations
+   * based on the *old* state as compared to the new one.
+   */
+  self->original_origin = rpmostree_origin_ref (self->origin);
+
+  /* Now, load starting base/final checksums.  We may end up changing
+   * one or both if we upgrade.  But we also want to support redeploying
+   * without changing them.
+   */
+  if (rpmostree_origin_is_locally_assembled (self->original_origin))
+    {
+      self->final_revision = g_strdup (ostree_deployment_get_csum (self->merge_deployment));
+      if (!commit_get_parent_csum (repo, self->final_revision, &self->base_revision, error))
+        goto out;
+      g_assert (self->base_revision);
+    }
+  else
+    self->base_revision = g_strdup (ostree_deployment_get_csum (self->merge_deployment));
 
   self->packages_to_add = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                  g_free, NULL);
@@ -188,10 +214,12 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   g_free (self->osname);
 
   g_clear_object (&self->merge_deployment);
+  g_clear_pointer (&self->original_origin, (GDestroyNotify)rpmostree_origin_unref);
   g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
   g_hash_table_unref (self->packages_to_add);
   g_hash_table_unref (self->packages_to_delete);
-  g_free (self->new_revision);
+  g_free (self->base_revision);
+  g_free (self->final_revision);
 
   G_OBJECT_CLASS (rpmostree_sysroot_upgrader_parent_class)->finalize (object);
 }
@@ -550,7 +578,7 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
   gboolean ret = FALSE;
   glnx_unref_object OstreeRepo *repo = NULL;
   char *refs_to_fetch[] = { NULL, NULL };
-  const char *from_revision = NULL;
+  g_autofree char *new_base_revision = NULL;
   g_autofree char *origin_remote = NULL;
   g_autofree char *origin_ref = NULL;
 
@@ -569,8 +597,6 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
     goto out;
 
   g_assert (self->merge_deployment);
-  from_revision = ostree_deployment_get_csum (self->merge_deployment);
-
   if (origin_remote)
     {
       if (!ostree_repo_pull_one_dir (repo, origin_remote, dir_to_pull, refs_to_fetch,
@@ -592,43 +618,35 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
                                           error))
         goto out;
 
-      self->new_revision = g_strdup (rpmostree_origin_get_override_commit (self->origin));
+      new_base_revision = g_strdup (rpmostree_origin_get_override_commit (self->origin));
     }
   else
     {
       if (!ostree_repo_resolve_rev (repo, rpmostree_origin_get_refspec (self->origin), FALSE,
-                                    &self->new_revision, error))
+                                    &new_base_revision, error))
         goto out;
     }
 
   {
     gboolean allow_older =
       (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER) > 0;
-    const char *compare_rev = from_revision;
-    g_autofree char *base_rev = NULL;
     gboolean changed = FALSE;
 
-    if (from_revision)
+    if (strcmp (new_base_revision, self->base_revision) != 0)
       {
-        /* if there are pkgs layered on the from rev, then we should compare
-         * the parent instead, which is the 'base' layer */
-        if (rpmostree_origin_is_locally_assembled (self->origin))
+        changed = TRUE;
+
+        if (!allow_older)
           {
-            if (!commit_get_parent_csum (repo, from_revision, &base_rev, error))
+            if (!ostree_sysroot_upgrader_check_timestamps (repo, self->base_revision,
+                                                           new_base_revision,
+                                                           error))
               goto out;
-            g_assert (base_rev);
-            compare_rev = base_rev;
           }
+
+        g_free (self->base_revision);
+        self->base_revision = g_steal_pointer (&new_base_revision);
       }
-
-    if (g_strcmp0 (compare_rev, self->new_revision) != 0)
-      changed = TRUE;
-
-    if (changed && compare_rev && !allow_older)
-      if (!ostree_sysroot_upgrader_check_timestamps (repo, compare_rev,
-                                                     self->new_revision,
-                                                     error))
-        goto out;
 
     *out_changed = changed;
   }
@@ -816,7 +834,6 @@ pkg_find_cb (GHashTableIter *it,
 static gboolean
 finalize_requested_packages (RpmOstreeSysrootUpgrader *self,
                              OstreeRepo               *repo,
-                             const char               *base_rev,
                              int                       tmprootfs_dfd,
                              GCancellable             *cancellable,
                              GError                  **error)
@@ -914,7 +931,6 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
                       const char               *tmprootfs,
                       int                       tmprootfs_dfd,
                       OstreeRepo               *repo,
-                      const char               *base_rev,
                       GCancellable             *cancellable,
                       GError                  **error)
 {
@@ -1007,11 +1023,12 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
     goto out;
 
   /* --- Overlay and commit --- */
+  g_clear_pointer (&self->final_revision, g_free);
   if (!rpmostree_context_assemble_commit (ctx, tmprootfs_dfd, devino_cache,
-                                          base_rev,
+                                          self->base_revision,
                                           RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
                                           (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS) > 0,
-                                          &self->new_revision,
+                                          &self->final_revision,
                                           cancellable, error))
     goto out;
 
@@ -1030,33 +1047,17 @@ overlay_packages (RpmOstreeSysrootUpgrader *self,
   OstreeRepoDevInoCache *devino_cache = ostree_repo_devino_cache_new ();
   g_autofree char *tmprootfs = NULL;
   glnx_fd_close int tmprootfs_dfd = -1;
-  g_autofree char *base_rev = NULL;
 
   if (!ostree_sysroot_get_repo (self->sysroot, &repo, cancellable, error))
     goto out;
 
-  /* determine the base commit on which to layer stuff */
-
-  /* the only case in which new_revision isn't a "base" commit is if we're
-   * redeploying and there's already stuff layered down, in which case, it's the
-   * parent commit */
-  if ((self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_REDEPLOY) &&
-      rpmostree_origin_is_locally_assembled (self->origin))
-    {
-      if (!commit_get_parent_csum (repo, self->new_revision, &base_rev, error))
-        goto out;
-      g_assert (base_rev);
-    }
-  else
-    base_rev = g_strdup (self->new_revision);
-
-  if (!checkout_tree_in_tmp (repo, base_rev, devino_cache, &tmprootfs,
+  if (!checkout_tree_in_tmp (repo, self->base_revision, devino_cache, &tmprootfs,
                              &tmprootfs_dfd, cancellable, error))
     goto out;
 
   /* check if there are any items in requested_packages or pkgs_to_add that are
    * already installed in base_rev */
-  if (!finalize_requested_packages (self, repo, base_rev, tmprootfs_dfd,
+  if (!finalize_requested_packages (self, repo, tmprootfs_dfd,
                                     cancellable, error))
     goto out;
 
@@ -1066,14 +1067,12 @@ overlay_packages (RpmOstreeSysrootUpgrader *self,
    */
   if (!rpmostree_origin_is_locally_assembled (self->origin))
     {
-      g_free (self->new_revision);
-      self->new_revision = g_steal_pointer (&base_rev);
+      g_clear_pointer (&self->final_revision, g_free);
     }
   else
     {
       if (!overlay_final_pkgset (self, devino_cache, tmprootfs, tmprootfs_dfd,
-                                 repo, base_rev,
-                                 cancellable, error))
+                                 repo, cancellable, error))
         goto out;
     }
 
@@ -1367,12 +1366,11 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   gboolean ret = FALSE;
   glnx_unref_object OstreeDeployment *new_deployment = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
+  const char *target_revision;
 
   if (!ostree_sysroot_get_repo (self->sysroot, &repo, cancellable, error))
     goto out;
 
-  /* make sure we have a known target to deploy */
-  g_assert (self->new_revision);
 
   /* any packages requested for overlay? */
   if (rpmostree_origin_is_locally_assembled (self->origin) ||
@@ -1387,8 +1385,12 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
       goto out;
     }
 
+  /* make sure we have a known target to deploy */
+  target_revision = self->final_revision ?: self->base_revision;
+  g_assert (target_revision);
+
   if (!ostree_sysroot_deploy_tree (self->sysroot, self->osname,
-                                   self->new_revision,
+                                   target_revision,
                                    rpmostree_origin_get_keyfile (self->origin),
                                    self->merge_deployment,
                                    NULL,
@@ -1396,23 +1398,16 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                    cancellable, error))
     goto out;
 
-  {
-    g_autofree char *base_rev = NULL;
-
-    if (!get_base_commit_for_deployment (self, repo, new_deployment,
-                                         &base_rev, error))
-      goto out;
-    if (base_rev)
-      {
-        /* Generate a temporary ref for the new deployment in case we are
-         * interrupted; the base layer refs generation isn't transactional.
-         */
-        if (!ostree_repo_set_ref_immediate (repo, NULL, RPMOSTREE_TMP_BASE_REF,
-                                            base_rev,
-                                            cancellable, error))
-          goto out;
-      }
-  }
+  if (self->final_revision)
+    {
+      /* Generate a temporary ref for the new deployment in case we are
+       * interrupted; the base layer refs generation isn't transactional.
+       */
+      if (!ostree_repo_set_ref_immediate (repo, NULL, RPMOSTREE_TMP_BASE_REF,
+                                          self->base_revision,
+                                          cancellable, error))
+        goto out;
+    }
 
   if (!ostree_sysroot_simple_write_deployment (self->sysroot, self->osname,
                                                new_deployment,
@@ -1443,9 +1438,6 @@ rpmostree_sysroot_upgrader_flags_get_type (void)
         { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER,
           "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER",
           "allow-older" },
-        { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_REDEPLOY,
-          "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_REDEPLOY",
-          "redeploy" },
         { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN,
           "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN",
           "pkgoverlay-dry-run" }
