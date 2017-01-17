@@ -49,10 +49,8 @@ echo "ok status shows right version"
 
 rpm-ostree status --json > status.json
 json-glib-format status.json
-if test -x /usr/bin/jq; then
-    jq '.deployments[0].version' < status.json > version.txt
-    assert_file_has_content version.txt '1\.0\.10'
-fi
+jq '.deployments[0].version' < status.json > version.txt
+assert_file_has_content version.txt '1\.0\.10'
 
 os_repository_new_commit
 rpm-ostree upgrade --os=testos

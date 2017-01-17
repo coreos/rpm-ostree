@@ -27,6 +27,12 @@ LIBTEST_SH=1
 
 self="$(realpath $0)"
 
+for bin in jq; do
+    if ! command -v $bin >/dev/null; then
+        (echo ${bin} is required to execute tests 1>&2; exit 1)
+    fi
+done
+
 if test -z "${SRCDIR:-}"; then
     SRCDIR=${topsrcdir}/tests
 fi
