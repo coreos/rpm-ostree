@@ -15,6 +15,9 @@ AM_TESTS_ENVIRONMENT = \
 AM_TESTS_ENVIRONMENT += \
 	LD_LIBRARY_PATH=$(abs_builddir)/libdnf-build/libdnf \
 	$(NULL)
+if BUILDOPT_ASAN
+AM_TESTS_ENVIRONMENT += ASAN_OPTIONS=detect_leaks=false
+endif
 
 CLEANFILES += \
 	tests/common/compose/yum/repo \

@@ -48,6 +48,15 @@ CC_CHECK_FLAGS_APPEND([WARN_CFLAGS], [CFLAGS], [\
 ])
 AC_SUBST(WARN_CFLAGS)
 
+AC_MSG_CHECKING([for -fsanitize=address in CFLAGS])
+if echo $CFLAGS | grep -q -e -fsanitize=address; then
+AC_MSG_RESULT([yes])
+using_asan=yes
+else
+AC_MSG_RESULT([no])
+fi
+AM_CONDITIONAL(BUILDOPT_ASAN, [test x$using_asan = xyes])
+
 # Initialize libtool
 LT_PREREQ([2.2.4])
 LT_INIT([disable-static])
