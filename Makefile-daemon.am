@@ -92,7 +92,7 @@ systemdunitdir       = $(prefix)/lib/systemd/system/
 if BUILDOPT_ASAN
 daemon_asan_options = -e s,@SYSTEMD_ENVIRON\@,Environment=ASAN_OPTIONS=detect_leaks=false,
 else
-daemon_asan_options = -e ,@SYSTEMD_ENVIRON\@,d
+daemon_asan_options = -e /@SYSTEMD_ENVIRON\@/d
 endif
 $(systemdunit_DATA): Makefile
 	$(SED_SUBST) $(daemon_asan_options) $@.in > $@
