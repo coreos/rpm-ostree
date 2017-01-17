@@ -141,7 +141,7 @@ assert_file_empty() {
     if test -s "$1"; then
         sed -e 's/^/# /' < "$1" >&2
         echo 1>&2 "File '$1' is not empty"
-        exit
+        exit 1
     fi
 }
 
