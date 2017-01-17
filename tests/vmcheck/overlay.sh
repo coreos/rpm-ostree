@@ -15,7 +15,14 @@ if test -z "${INSIDE_VM:-}"; then
 
     cd ${topsrcdir}
     rm insttree -rf
-    make install DESTDIR=$(pwd)/insttree
+    DESTDIR=$(pwd)/insttree
+    make install DESTDIR=${DESTDIR}
+    for san in a t ub; do
+        if eu-readelf -d ${DESTDIR}/usr/libexec/rpm-ostreed | grep -q "NEEDED.*lib${san}san"; then
+            echo "Installing extra sanitizier: lib${san}san"
+            cp /usr/lib64/lib${san}san*.so.* ${DESTDIR}/usr/lib64
+        fi
+    done
     vm_rsync
 
     $SSH "env INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh"
