@@ -25,6 +25,7 @@
 #include "rpmostree-origin.h"
 
 struct RpmOstreeOrigin {
+  guint refcount;
   GKeyFile *kf;
   char *refspec;
   char **packages;
@@ -50,6 +51,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   g_autoptr(RpmOstreeOrigin) ret = NULL;
 
   ret = g_new0 (RpmOstreeOrigin, 1);
+  ret->refcount = 1;
   ret->kf = keyfile_dup (origin);
 
   /* NOTE hack here - see https://github.com/ostreedev/ostree/pull/343 */
@@ -113,6 +115,7 @@ rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin)
 gboolean
 rpmostree_origin_is_locally_assembled (RpmOstreeOrigin *origin)
 {
+  g_assert (origin);
   return g_strv_length (origin->packages) > 0;
 }
 
@@ -136,9 +139,21 @@ rpmostree_origin_get_string (RpmOstreeOrigin *origin,
   return g_key_file_get_string (origin->kf, section, value, NULL);
 }
 
+RpmOstreeOrigin*
+rpmostree_origin_ref (RpmOstreeOrigin *origin)
+{
+  g_assert (origin);
+  origin->refcount++;
+  return origin;
+}
+
 void
 rpmostree_origin_unref (RpmOstreeOrigin *origin)
 {
+  g_assert_cmpint (origin->refcount, >, 0);
+  origin->refcount--;
+  if (origin->refcount > 0)
+    return;
   g_key_file_unref (origin->kf);
   g_free (origin->refspec);
   g_strfreev (origin->packages);

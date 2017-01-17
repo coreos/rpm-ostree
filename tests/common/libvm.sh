@@ -192,10 +192,12 @@ vm_assert_layered_pkg() {
   set -e
 
   if [ $policy == present ] && [ $pkg_present != 0 ]; then
+    vm_cmd rpm-ostree status
     assert_not_reached "pkg $pkg is not present"
   fi
 
   if [ $policy == absent ] && [ $pkg_absent != 0 ]; then
+    vm_cmd rpm-ostree status
     assert_not_reached "pkg $pkg is not absent"
   fi
 }

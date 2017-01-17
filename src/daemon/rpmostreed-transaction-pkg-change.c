@@ -77,7 +77,7 @@ pkg_change_transaction_execute (RpmostreedTransaction *transaction,
   PkgChangeTransaction *self = NULL;
   OstreeSysroot *sysroot = NULL;
   glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
-  int flags = RPMOSTREE_SYSROOT_UPGRADER_FLAGS_REDEPLOY;
+  int flags = 0;
 
   self = (PkgChangeTransaction *) transaction;
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
