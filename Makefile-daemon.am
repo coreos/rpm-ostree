@@ -89,8 +89,13 @@ dbusconfdir = ${sysconfdir}/dbus-1/system.d
 systemdunit_in_files = $(srcdir)/src/daemon/rpm-ostreed.service.in
 systemdunit_DATA     = $(systemdunit_in_files:.service.in=.service)
 systemdunitdir       = $(prefix)/lib/systemd/system/
-$(systemdunit_DATA):
-	$(SED_SUBST) $@.in > $@
+if BUILDOPT_ASAN
+daemon_asan_options = -e s,@SYSTEMD_ENVIRON\@,Environment=ASAN_OPTIONS=detect_leaks=false,
+else
+daemon_asan_options = -e /@SYSTEMD_ENVIRON\@/d
+endif
+$(systemdunit_DATA): Makefile
+	$(SED_SUBST) $(daemon_asan_options) $@.in > $@
 
 install-daemon-altname-hook:
 	mv $(DESTDIR)$(libexecdir)/rpm-ostreed $(DESTDIR)$(libexecdir)/$(primaryname)d

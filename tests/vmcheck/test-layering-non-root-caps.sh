@@ -31,7 +31,7 @@ vm_send_test_repo
 # make sure the package is not already layered
 vm_assert_layered_pkg nonrootcap absent
 
-vm_cmd rpm-ostree install nonrootcap
+vm_rpmostree install nonrootcap
 echo "ok install nonrootcap"
 
 vm_reboot

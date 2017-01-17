@@ -35,7 +35,7 @@ vm_send_test_repo
 # make sure the package is not already layered
 vm_assert_layered_pkg foo absent
 
-vm_cmd rpm-ostree pkg-add foo
+vm_rpmostree pkg-add foo
 echo "ok pkg-add foo"
 
 vm_reboot
@@ -55,7 +55,7 @@ reboot_and_assert_base() {
 
 # let's synthesize an upgrade
 commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
-vm_cmd rpm-ostree upgrade
+vm_rpmostree upgrade
 reboot_and_assert_base $commit
 echo "ok upgrade"
 
@@ -66,7 +66,7 @@ echo "ok pkg foo relayered on upgrade"
 
 commit=$(vm_cmd ostree commit -b vmcheck \
            --tree=ref=vmcheck --add-metadata-string=version=my-commit)
-vm_cmd rpm-ostree deploy my-commit
+vm_rpmostree deploy my-commit
 reboot_and_assert_base $commit
 echo "ok deploy"
 
@@ -76,7 +76,7 @@ echo "ok pkg foo relayered on deploy"
 # REBASE
 
 commit=$(vm_cmd ostree commit -b rebase_test --tree=ref=vmcheck)
-vm_cmd rpm-ostree rebase rebase_test
+vm_rpmostree rebase rebase_test
 reboot_and_assert_base $commit
 echo "ok rebase"
 

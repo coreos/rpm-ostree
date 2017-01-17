@@ -39,7 +39,7 @@ vm_send_test_repo
 # make sure the package is not already layered
 vm_assert_layered_pkg foo absent
 
-vm_cmd rpm-ostree pkg-add foo
+vm_rpmostree pkg-add foo
 echo "ok pkg-add foo"
 
 vm_reboot
@@ -52,7 +52,7 @@ echo "ok pkg foo added"
 csum=$(vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_booted_csum))
 
 # check that upgrading to it will elide the layered pkg from the origin
-vm_cmd rpm-ostree upgrade | tee out.txt
+vm_rpmostree upgrade | tee out.txt
 assert_file_has_content out.txt "'foo' .* will no longer be layered"
 echo "ok layered pkg foo elision msg"
 
@@ -69,46 +69,46 @@ elif vm_has_layered_packages foo; then
 fi
 echo "ok layered pkg foo elision"
 
-if vm_cmd rpm-ostree pkg-add foo; then
+if vm_rpmostree pkg-add foo; then
   assert_not_reached "pkg-add foo succeeded even though it's already in rpmdb"
 fi
 echo "ok can't layer pkg already in base"
 
-if vm_cmd rpm-ostree pkg-add bar; then
+if vm_rpmostree pkg-add bar; then
   assert_not_reached "pkg-add bar succeeded but it conflicts with foo in base"
 fi
 echo "ok can't layer conflicting pkg in base"
 
 # let's go back to that first depl in which foo is really layered
-vm_cmd rpm-ostree rollback
+vm_rpmostree rollback
 vm_reboot
 vm_assert_layered_pkg foo present
 
-if vm_cmd rpm-ostree pkg-add foo; then
+if vm_rpmostree pkg-add foo; then
   assert_not_reached "pkg-add foo succeeded even though it's already layered"
 fi
 echo "ok can't layer pkg already layered"
 
-if vm_cmd rpm-ostree pkg-add bar; then
+if vm_rpmostree pkg-add bar; then
   assert_not_reached "pkg-add bar succeeded but it conflicts with layered foo"
 fi
 echo "ok can't layer conflicting pkg already layered"
 
 # let's go back to the original depl without anything
 # XXX: this would be simpler if we had an --onto here
-vm_cmd rpm-ostree pkg-remove foo
+vm_rpmostree pkg-remove foo
 vm_reboot
 vm_assert_layered_pkg foo absent
 echo "ok pkg-remove foo"
 
-vm_cmd rpm-ostree pkg-add bar
+vm_rpmostree pkg-add bar
 vm_reboot
 vm_assert_layered_pkg bar present
 echo "ok pkg-add bar"
 
 # now let's try to do an upgrade -- the latest commit there is still the one we
 # created at the beginning of this test, containing foo in the base
-if vm_cmd rpm-ostree upgrade; then
+if vm_rpmostree upgrade; then
   assert_not_reached "upgrade succeeded but new base has conflicting pkg foo"
 fi
 echo "ok can't upgrade with conflicting layered pkg"

@@ -40,7 +40,7 @@ if vm_cmd "runuser -u bin rpm-ostree pkg-add foo-1.0"; then
     assert_not_reached "Was able to install a package as non-root!"
 fi
 
-vm_cmd rpm-ostree pkg-add foo-1.0
+vm_rpmostree pkg-add foo-1.0
 echo "ok pkg-add foo"
 
 vm_reboot
@@ -53,7 +53,7 @@ if ! vm_cmd /usr/bin/foo | grep "Happy foobing!"; then
 fi
 echo "ok correct output"
 
-vm_cmd rpm-ostree pkg-remove foo-1.0
+vm_rpmostree pkg-remove foo-1.0
 echo "ok pkg-remove foo"
 
 vm_reboot

@@ -51,6 +51,12 @@ vm_cmd() {
   $SSH "$@"
 }
 
+# run rpm-ostree in vm
+# - $@    args
+vm_rpmostree() {
+    $SSH env ASAN_OPTIONS=detect_leaks=false rpm-ostree "$@"
+}
+
 # copy files to a directory in the vm
 # - $1    target directory
 # - $2..  files & dirs to copy
@@ -135,7 +141,7 @@ vm_has_packages() {
 # - $1   key to retrieve
 vm_get_booted_deployment_info() {
   key=$1
-  vm_cmd rpm-ostree status --json | \
+  vm_rpmostree status --json | \
     python -c "
 import sys, json
 deployments = json.load(sys.stdin)[\"deployments\"]

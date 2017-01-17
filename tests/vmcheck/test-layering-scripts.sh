@@ -31,7 +31,7 @@ vm_send_test_repo
 # make sure the package is not already layered
 vm_assert_layered_pkg scriptpkg1 absent
 
-vm_cmd rpm-ostree pkg-add scriptpkg1
+vm_rpmostree pkg-add scriptpkg1
 echo "ok pkg-add scriptpkg1"
 
 vm_reboot
@@ -44,6 +44,6 @@ vm_cmd getent group scriptpkg1
 echo "ok group scriptpkg1 active"
 
 # And now, things that should fail
-if vm_cmd rpm-ostree install test-post-rofiles-violation; then
+if vm_rpmostree install test-post-rofiles-violation; then
     assert_not_reached "installed test-post-rofiles-violation!"
 fi
