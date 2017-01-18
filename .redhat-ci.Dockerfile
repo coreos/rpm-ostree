@@ -14,6 +14,7 @@ RUN dnf install -y @buildsys-build && \
 
 RUN dnf install -y \
         createrepo_c \
+        /usr/bin/jq \
         clang \
         libubsan \
         sudo  \
