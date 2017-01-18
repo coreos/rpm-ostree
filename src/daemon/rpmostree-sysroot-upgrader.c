@@ -638,8 +638,8 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
 
         if (!allow_older)
           {
-            if (!ostree_sysroot_upgrader_check_timestamps (repo, new_base_revision,
-                                                           self->base_revision,
+            if (!ostree_sysroot_upgrader_check_timestamps (repo, self->base_revision,
+                                                           new_base_revision,
                                                            error))
               goto out;
           }
