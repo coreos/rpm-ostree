@@ -26,7 +26,7 @@ else
     # then do this in the VM
     set -x
     ostree admin unlock || :
-    rsync -rv /var/roothome/sync/insttree/usr/ /usr/
+    rsync -rlv /var/roothome/sync/insttree/usr/ /usr/
     restorecon /usr/libexec/rpm-ostreed
     systemctl restart rpm-ostreed
 fi
