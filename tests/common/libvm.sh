@@ -93,6 +93,9 @@ vm_ssh_wait() {
   while [ $timeout -gt 0 ]; do
     if bootid=$(vm_get_boot_id 2>/dev/null); then
         if [[ $bootid != $old_bootid ]]; then
+            # Display some info per boot
+            vm_rpmostree status
+            vm_rpmostree --version
             return 0
         fi
     fi
