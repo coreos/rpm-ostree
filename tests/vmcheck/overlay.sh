@@ -51,7 +51,7 @@ fi
 cd /ostree/repo/tmp
 rm vmcheck -rf
 ostree checkout $commit vmcheck --fsync=0
-rsync -rv /var/roothome/sync/insttree/usr/ vmcheck/usr/
+rsync -rlv /var/roothome/sync/insttree/usr/ vmcheck/usr/
 ostree refs --delete vmcheck || true
 ostree commit -b vmcheck -s '' --tree=dir=vmcheck --link-checkout-speedup
 ostree admin deploy vmcheck
