@@ -40,18 +40,18 @@ assert_jq() {
 vm_send_test_repo
 base=$(vm_get_booted_csum)
 
-vm_cmd rpm-ostree initramfs > initramfs.txt
+vm_rpmostree initramfs > initramfs.txt
 assert_file_has_content initramfs.txt "Initramfs regeneration.*disabled"
 echo "ok initramfs status"
 
-if vm_cmd rpm-ostree initramfs --disable 2>err.txt; then
+if vm_rpmostree initramfs --disable 2>err.txt; then
     assert_not_reached "Unexpectedly succeeded at disabling"
 fi
 assert_file_has_content err.txt "already.*disabled"
 echo "ok initramfs state"
 
-vm_cmd rpm-ostree initramfs --enable
-vm_cmd rpm-ostree status --json > status.json
+vm_rpmostree initramfs --enable
+vm_rpmostree status --json > status.json
 assert_jq '.deployments[1].booted' status.json
 assert_jq '.deployments[0]["regenerate-initramfs"]' status.json
 assert_jq '.deployments[1]["regenerate-initramfs"]|not' status.json
@@ -59,23 +59,23 @@ assert_jq '.deployments[1]["regenerate-initramfs"]|not' status.json
 vm_reboot
 
 assert_not_streq $base $(vm_get_booted_csum)
-vm_cmd rpm-ostree status --json > status.json
+vm_rpmostree status --json > status.json
 assert_jq '.deployments[0].booted' status.json
 assert_jq '.deployments[0]["regenerate-initramfs"]' status.json
 assert_jq '.deployments[0]["initramfs-args"]|length == 0' status.json
 assert_jq '.deployments[1]["regenerate-initramfs"]|not' status.json
 assert_jq '.deployments[1]["initramfs-args"]|not' status.json
 
-if vm_cmd rpm-ostree initramfs --enable 2>err.txt; then
+if vm_rpmostree initramfs --enable 2>err.txt; then
     assert_not_reached "Unexpectedly succeeded at enabling"
 fi
 assert_file_has_content err.txt "already.*enabled"
 echo "ok initramfs enabled"
 
-vm_cmd rpm-ostree initramfs --disable
+vm_rpmostree initramfs --disable
 vm_reboot
 
-vm_cmd rpm-ostree status --json > status.json
+vm_rpmostree status --json > status.json
 assert_jq '.deployments[0].booted' status.json
 assert_jq '.deployments[0]["regenerate-initramfs"]|not' status.json
 assert_jq '.deployments[1]["regenerate-initramfs"]' status.json
@@ -85,9 +85,9 @@ echo "ok initramfs disabled"
 
 for file in first second; do
     vm_cmd touch /etc/rpmostree-initramfs-testing-$file
-    vm_cmd rpm-ostree initramfs --enable --arg="-I" --arg="/etc/rpmostree-initramfs-testing-$file"
+    vm_rpmostree initramfs --enable --arg="-I" --arg="/etc/rpmostree-initramfs-testing-$file"
     vm_reboot
-    vm_cmd rpm-ostree status --json > status.json
+    vm_rpmostree status --json > status.json
     assert_jq '.deployments[0].booted' status.json
     assert_jq '.deployments[0]["regenerate-initramfs"]' status.json
     assert_jq '.deployments[0]["initramfs-args"]|index("-I") == 0' status.json
@@ -99,7 +99,7 @@ for file in first second; do
     assert_file_has_content lsinitrd.txt /etc/rpmostree-initramfs-testing-${file}
 done
 
-vm_cmd rpm-ostree initramfs --disable
+vm_rpmostree initramfs --disable
 
 initramfs=$(vm_cmd grep ^initrd /boot/loader/entries/ostree-fedora-atomic-0.conf | sed -e 's,initrd ,/boot/,')
 test -n "${initramfs}"
