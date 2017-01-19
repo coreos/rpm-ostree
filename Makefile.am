@@ -30,11 +30,14 @@ if ENABLE_GTK_DOC
 SUBDIRS += api-doc
 endif
 
+RPM_OSTREE_GITREV=$(shell if command -v git >/dev/null 2>&1 && test -d $(srcdir)/.git; then git describe --abbrev=42 --tags --always HEAD; fi)
+
 ACLOCAL_AMFLAGS += -I m4 ${ACLOCAL_FLAGS}
 AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
 	-DLIBEXECDIR='"$(libexecdir)"' \
 	-DLOCALEDIR=\"$(datadir)/locale\" \
         -DRPM_OSTREE_FEATURES='"$(RPM_OSTREE_FEATURES)"' \
+	-DRPM_OSTREE_GITREV='"$(RPM_OSTREE_GITREV)"' \
 	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_40 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_40_
 AM_CFLAGS += -std=gnu11 $(WARN_CFLAGS)
 # bundled libdnf
