@@ -503,6 +503,14 @@ cancelled_handler (GCancellable *cancellable,
   rpmostree_transaction_call_cancel_sync (transaction, NULL, NULL);
 }
 
+static gboolean
+on_sigint (gpointer user_data)
+{
+  GCancellable *cancellable = user_data;
+  g_printerr ("Caught SIGINT, cancelling transaction\n");
+  g_cancellable_cancel (cancellable);
+  return TRUE;
+}
 
 gboolean
 rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
@@ -510,6 +518,7 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
                                          GCancellable *cancellable,
                                          GError **error)
 {
+  guint sigintid = 0;
   GDBusConnection *connection;
   glnx_unref_object GDBusObjectManager *object_manager = NULL;
   glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
@@ -566,6 +575,8 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
   if (transaction == NULL)
     goto out;
 
+  sigintid = g_unix_signal_add (SIGINT, on_sigint, cancellable);
+
   /* setup cancel handler */
   cancel_handler = g_cancellable_connect (cancellable,
                                           G_CALLBACK (cancelled_handler),
@@ -609,6 +620,8 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
     }
 
 out:
+  if (sigintid)
+    g_source_remove (sigintid);
   if (signal_handler)
     g_signal_handler_disconnect (transaction, signal_handler);
 

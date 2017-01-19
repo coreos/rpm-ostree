@@ -193,15 +193,6 @@ rpmostree_print_gpg_verify_result (OstreeGpgVerifyResult *result)
 }
 
 
-static gboolean
-on_sigint (gpointer user_data)
-{
-  GCancellable *cancellable = user_data;
-  g_debug ("Caught signal. Canceling");
-  g_cancellable_cancel (cancellable);
-  return FALSE;
-}
-
 static RpmOstreeCommand *
 lookup_command_of_type (RpmOstreeCommand *commands,
                         const char *name,
@@ -274,10 +265,6 @@ main (int    argc,
     }
 
   argc = out;
-
-  g_unix_signal_add (SIGINT, on_sigint, cancellable);
-  g_unix_signal_add (SIGTERM, on_sigint, cancellable);
-  g_unix_signal_add (SIGHUP, on_sigint, cancellable);
 
   /* Keep the "rpm" command working for backward-compatibility. */
   if (g_strcmp0 (command_name, "rpm") == 0)
