@@ -940,8 +940,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   g_autoptr(RpmOstreeTreespec) treespec = NULL;
   g_autoptr(RpmOstreeInstall) install = {0,};
   g_autoptr(GHashTable) pkgset = hashset_from_strv (rpmostree_origin_get_packages (self->origin));
-  const gboolean have_packages = g_hash_table_size (pkgset) > 0 ||
-    g_hash_table_size (self->packages_to_add) > 0;
+  const gboolean have_packages = g_hash_table_size (pkgset) > 0;
   glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
 
   ctx = rpmostree_context_new_system (cancellable, error);
