@@ -61,12 +61,6 @@ AM_CONDITIONAL(BUILDOPT_ASAN, [test x$using_asan = xyes])
 LT_PREREQ([2.2.4])
 LT_INIT([disable-static])
 
-gitrev=$(bash -c 'if command -v git >/dev/null 2>&1 && test -d '${srcdir}'/.git; then git describe --abbrev=42 --tags --always HEAD; fi')
-if test -n "${gitrev}"; then
-   RPM_OSTREE_GITREV=${gitrev}
-fi
-AC_SUBST([RPM_OSTREE_GITREV])
-
 RPM_OSTREE_FEATURES=""
 AC_SUBST([RPM_OSTREE_FEATURES])
 
@@ -180,7 +174,7 @@ src/lib/rpm-ostree-1.pc
 AC_OUTPUT
 
 echo "
-    $PACKAGE $VERSION ${RPM_OSTREE_GITREV}
+    $PACKAGE $VERSION
 
     nts name:	        $enable_new_name
     compose tooling:	$enable_compose_tooling
