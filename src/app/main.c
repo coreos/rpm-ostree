@@ -126,15 +126,6 @@ rpmostree_option_context_parse (GOptionContext *context,
 
   use_daemon = ((flags & RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD) == 0);
 
-  if ((flags & RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT) > 0
-      && getuid () != 0
-      && getenv ("RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK") == NULL)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "This command requires root privileges");
-      goto out;
-    }
-
   if (main_entries != NULL)
     g_option_context_add_main_entries (context, main_entries, NULL);
 
@@ -153,6 +144,15 @@ rpmostree_option_context_parse (GOptionContext *context,
         g_print (", git %s", RPM_OSTREE_GITREV);
       g_print ("\n %s\n", RPM_OSTREE_FEATURES);
       exit (EXIT_SUCCESS);
+    }
+
+  if ((flags & RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT) > 0
+      && getuid () != 0
+      && getenv ("RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK") == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "This command requires root privileges");
+      goto out;
     }
 
   if (use_daemon)
