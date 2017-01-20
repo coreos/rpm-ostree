@@ -112,12 +112,17 @@ vm_get_boot_id() {
   vm_cmd cat /proc/sys/kernel/random/boot_id
 }
 
+# Run a command in the VM that will cause a reboot
+vm_reboot_cmd() {
+    vm_cmd sync
+    bootid=$(vm_get_boot_id 2>/dev/null)
+    vm_cmd $@ || :
+    vm_ssh_wait 120 $bootid
+}
+
 # reboot the vm
 vm_reboot() {
-  vm_cmd sync
-  bootid=$(vm_get_boot_id 2>/dev/null)
-  vm_cmd systemctl reboot || :
-  vm_ssh_wait 120 $bootid
+  vm_reboot_cmd systemctl reboot
 }
 
 # check that the given files/dirs exist on the VM

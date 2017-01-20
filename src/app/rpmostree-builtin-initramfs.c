@@ -32,13 +32,26 @@
 static gboolean opt_enable;
 static gboolean opt_disable;
 static char **opt_add_arg;
+static gboolean opt_reboot;
 
 static GOptionEntry option_entries[] = {
   { "enable", 0, 0, G_OPTION_ARG_NONE, &opt_enable, "Enable regenerating initramfs locally", NULL },
   { "arg", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_add_arg, "Append ARG to the dracut arguments", "ARG" },
   { "disable", 0, 0, G_OPTION_ARG_NONE, &opt_disable, "Disable regenerating initramfs locally", NULL },
+  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL },
   { NULL }
 };
+
+static GVariant *
+get_args_variant (void)
+{
+  GVariantDict dict;
+
+  g_variant_dict_init (&dict, NULL);
+  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
+
+  return g_variant_dict_end (&dict);
+}
 
 int
 rpmostree_builtin_initramfs (int             argc,
@@ -51,7 +64,6 @@ rpmostree_builtin_initramfs (int             argc,
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
-  g_autoptr(GVariantBuilder) opts_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -70,6 +82,13 @@ rpmostree_builtin_initramfs (int             argc,
     {
       GVariantIter iter;
       g_autoptr(GVariant) deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
+
+      if (opt_reboot)
+        {
+          g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "--reboot must be used with --enable or --disable");
+          goto out;
+        }
 
       g_variant_iter_init (&iter, deployments);
 
@@ -128,7 +147,7 @@ rpmostree_builtin_initramfs (int             argc,
       if (!rpmostree_os_call_set_initramfs_state_sync (os_proxy,
                                                        opt_enable,
                                                        (const char *const*)opt_add_arg,
-                                                       g_variant_builder_end (opts_builder),
+                                                       get_args_variant (),
                                                        &transaction_address,
                                                        cancellable,
                                                        error))

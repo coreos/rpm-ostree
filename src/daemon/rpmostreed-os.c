@@ -781,7 +781,9 @@ os_handle_set_initramfs_state (RPMOSTreeOS *interface,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
+  g_autoptr(GVariantDict) dict = NULL;
   const char *osname;
+  gboolean reboot = FALSE;
   GError *local_error = NULL;
 
   transaction = merge_compatible_txn (self, invocation);
@@ -797,11 +799,15 @@ os_handle_set_initramfs_state (RPMOSTreeOS *interface,
 
   osname = rpmostree_os_get_name (interface);
 
+  dict = g_variant_dict_new (arg_options);
+  g_variant_dict_lookup (dict, "reboot", "b", &reboot);
+
   transaction = rpmostreed_transaction_new_initramfs_state (invocation,
                                                             ot_sysroot,
                                                             osname,
                                                             regenerate,
                                                             (char**)args,
+                                                            reboot,
                                                             cancellable,
                                                             &local_error);
   if (transaction == NULL)

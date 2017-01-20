@@ -96,5 +96,6 @@ rpmostreed_transaction_new_initramfs_state       (GDBusMethodInvocation *invocat
                                                   const char            *osname,
                                                   gboolean               regenerate,
                                                   char                 **args,
+                                                  gboolean               reboot,
                                                   GCancellable          *cancellable,
                                                   GError               **error);

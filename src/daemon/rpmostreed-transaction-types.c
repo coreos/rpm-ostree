@@ -1058,6 +1058,7 @@ typedef struct {
   char *osname;
   gboolean regenerate;
   char **args;
+  gboolean reboot;
 } InitramfsStateTransaction;
 
 typedef RpmostreedTransactionClass InitramfsStateTransactionClass;
@@ -1127,6 +1128,9 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
   if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
     return FALSE;
 
+  if (self->reboot)
+    rpmostreed_reboot (cancellable, error);
+
   return TRUE;
 }
 
@@ -1152,6 +1156,7 @@ rpmostreed_transaction_new_initramfs_state (GDBusMethodInvocation *invocation,
                                             const char *osname,
                                             gboolean regenerate,
                                             char **args,
+                                            gboolean reboot,
                                             GCancellable *cancellable,
                                             GError **error)
 {
@@ -1171,6 +1176,7 @@ rpmostreed_transaction_new_initramfs_state (GDBusMethodInvocation *invocation,
       self->osname = g_strdup (osname);
       self->regenerate = regenerate;
       self->args = g_strdupv (args);
+      self->reboot = reboot;
     }
 
   return (RpmostreedTransaction *) self;
