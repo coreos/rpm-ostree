@@ -77,6 +77,8 @@ artifacts:
   - vmcheck.log
   - vmcheck-journal.txt
 
+timeout: 1h
+
 ---
 
 context: compose
