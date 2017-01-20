@@ -1,7 +1,7 @@
 [fedora-25]
 name=Fedora 25 (devel) - $basearch
 failovermethod=priority
-baseurl=https://dl.fedoraproject.org/pub/fedora/linux/development/25/Everything/$basearch/os/
+baseurl=https://dl.fedoraproject.org/pub/fedora/linux/releases/25/Everything/$basearch/os/
 enabled=1
 gpgcheck=0
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-25-$basearch
