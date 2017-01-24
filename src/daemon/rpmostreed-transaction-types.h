@@ -46,15 +46,6 @@ RpmostreedTransaction *
                                                             GError **error);
 
 RpmostreedTransaction *
-                rpmostreed_transaction_new_upgrade         (GDBusMethodInvocation *invocation,
-                                                            OstreeSysroot *sysroot,
-                                                            const char *osname,
-                                                            gboolean allow_downgrade,
-                                                            gboolean reboot,
-                                                            GCancellable *cancellable,
-                                                            GError **error);
-
-RpmostreedTransaction *
                 rpmostreed_transaction_new_rebase          (GDBusMethodInvocation *invocation,
                                                             OstreeSysroot *sysroot,
                                                             const char *osname,
@@ -69,6 +60,7 @@ RpmostreedTransaction *
                rpmostreed_transaction_new_deploy           (GDBusMethodInvocation *invocation,
                                                             OstreeSysroot *sysroot,
                                                             const char *osname,
+                                                            gboolean allow_downgrade,
                                                             const char *revision,
                                                             gboolean reboot,
                                                             GCancellable *cancellable,

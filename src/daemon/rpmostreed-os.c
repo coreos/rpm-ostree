@@ -391,6 +391,7 @@ os_handle_deploy (RPMOSTreeOS *interface,
   transaction = rpmostreed_transaction_new_deploy (invocation,
                                                    ot_sysroot,
                                                    osname,
+                                                   TRUE,
                                                    arg_revision,
                                                    opt_reboot,
                                                    cancellable,
@@ -457,13 +458,10 @@ os_handle_upgrade (RPMOSTreeOS *interface,
 
   g_variant_dict_clear (&options_dict);
 
-  transaction = rpmostreed_transaction_new_upgrade (invocation,
-                                                    ot_sysroot,
-                                                    osname,
-                                                    opt_allow_downgrade,
-                                                    opt_reboot,
-                                                    cancellable,
-                                                    &local_error);
+  transaction = rpmostreed_transaction_new_deploy (invocation, ot_sysroot, osname,
+                                                   opt_allow_downgrade, NULL,
+                                                   opt_reboot,
+                                                   cancellable, &local_error);
 
   if (transaction == NULL)
     goto out;
