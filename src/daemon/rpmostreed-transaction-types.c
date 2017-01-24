@@ -595,187 +595,16 @@ rpmostreed_transaction_new_clear_rollback (GDBusMethodInvocation *invocation,
   return (RpmostreedTransaction *) self;
 }
 
-/* ================================ Rebase ================================ */
-
-typedef struct {
-  RpmostreedTransaction parent;
-  char *osname;
-  char *refspec;
-  char *revision;
-  gboolean skip_purge;
-  gboolean reboot;
-} RebaseTransaction;
-
-typedef RpmostreedTransactionClass RebaseTransactionClass;
-
-GType rebase_transaction_get_type (void);
-
-G_DEFINE_TYPE (RebaseTransaction,
-               rebase_transaction,
-               RPMOSTREED_TYPE_TRANSACTION)
-
-static void
-rebase_transaction_finalize (GObject *object)
-{
-  RebaseTransaction *self;
-
-  self = (RebaseTransaction *) object;
-  g_free (self->osname);
-  g_free (self->refspec);
-
-  G_OBJECT_CLASS (rebase_transaction_parent_class)->finalize (object);
-}
-
-static gboolean
-rebase_transaction_execute (RpmostreedTransaction *transaction,
-                            GCancellable *cancellable,
-                            GError **error)
-{
-  RebaseTransaction *self;
-  OstreeSysroot *sysroot;
-
-  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
-  glnx_unref_object OstreeRepo *repo = NULL;
-  glnx_unref_object OstreeAsyncProgress *progress = NULL;
-
-  g_autofree gchar *new_refspec = NULL;
-  g_autofree gchar *old_refspec = NULL;
-
-  gboolean changed = FALSE;
-  gboolean ret = FALSE;
-
-  RpmOstreeSysrootUpgraderFlags flags = 0;
-
-  self = (RebaseTransaction *) transaction;
-
-  sysroot = rpmostreed_transaction_get_sysroot (transaction);
-
-  /* Always allow older; there's not going to be a chronological
-   * relationship necessarily. */
-  flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
-
-  /* We should be able to switch to a different tree even if the current origin
-   * is unconfigured */
-  flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED;
-
-  upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, flags,
-                                             cancellable, error);
-  if (upgrader == NULL)
-    goto out;
-
-  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-    goto out;
-
-  if (!change_upgrader_refspec (sysroot, upgrader,
-                                self->refspec, cancellable,
-                                &old_refspec, &new_refspec, error))
-    goto out;
-
-  progress = ostree_async_progress_new ();
-  rpmostreed_transaction_connect_download_progress (transaction, progress);
-  rpmostreed_transaction_connect_signature_progress (transaction, repo);
-
-  if (self->revision)
-    {
-      if (!apply_revision_override (transaction, repo, progress, upgrader,
-                                    self->revision, cancellable, error))
-        goto out;
-    }
-
-  if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0,
-					progress, &changed,
-					cancellable, error))
-    goto out;
-
-  rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
-
-  if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
-    goto out;
-
-  if (!self->skip_purge)
-    {
-      g_autofree char *remote = NULL;
-      g_autofree char *ref = NULL;
-
-      /* The actual rebase has already succeeded, so ignore errors. */
-      if (ostree_parse_refspec (old_refspec, &remote, &ref, NULL))
-        {
-          /* Note: In some cases the source origin ref may not actually
-           * exist; say the admin did a cleanup, or the OS expects post-
-           * install configuration like subscription-manager. */
-          (void) ostree_repo_set_ref_immediate (repo, remote, ref, NULL,
-                                                cancellable, NULL);
-        }
-    }
-
-  if (self->reboot)
-    rpmostreed_reboot (cancellable, error);
-
-  ret = TRUE;
-out:
-  return ret;
-}
-
-static void
-rebase_transaction_class_init (RebaseTransactionClass *class)
-{
-  GObjectClass *object_class;
-
-  object_class = G_OBJECT_CLASS (class);
-  object_class->finalize = rebase_transaction_finalize;
-
-  class->execute = rebase_transaction_execute;
-}
-
-static void
-rebase_transaction_init (RebaseTransaction *self)
-{
-}
-
-RpmostreedTransaction *
-rpmostreed_transaction_new_rebase (GDBusMethodInvocation *invocation,
-                                   OstreeSysroot *sysroot,
-                                   const char *osname,
-                                   const char *refspec,
-                                   const char *revision,
-                                   gboolean skip_purge,
-                                   gboolean reboot,
-                                   GCancellable *cancellable,
-                                   GError **error)
-{
-  RebaseTransaction *self;
-
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
-  g_return_val_if_fail (osname != NULL, NULL);
-  g_return_val_if_fail (refspec != NULL, NULL);
-
-  self = g_initable_new (rebase_transaction_get_type (),
-                         cancellable, error,
-                         "invocation", invocation,
-                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
-                         NULL);
-
-  if (self != NULL)
-    {
-      self->osname = g_strdup (osname);
-      self->refspec = g_strdup (refspec);
-      self->revision = g_strdup (revision);
-      self->skip_purge = skip_purge;
-      self->reboot = reboot;
-    }
-
-  return (RpmostreedTransaction *) self;
-}
-
-/* ================================ Upgrade/Deploy ================================ */
+/* ================================ Upgrade/Deploy/Rebase ================================ */
 
 typedef struct {
   RpmostreedTransaction parent;
   gboolean allow_downgrade; /* Always TRUE for rebase */
   char *osname;
+  char *refspec; /* NULL for non-rebases */
   char *revision; /* NULL for upgrade */
   gboolean reboot;
+  gboolean skip_purge;
 } DeployTransaction;
 
 typedef RpmostreedTransactionClass DeployTransactionClass;
@@ -793,6 +622,7 @@ deploy_transaction_finalize (GObject *object)
 
   self = (DeployTransaction *) object;
   g_free (self->osname);
+  g_free (self->refspec);
   g_free (self->revision);
 
   G_OBJECT_CLASS (deploy_transaction_parent_class)->finalize (object);
@@ -805,11 +635,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 {
   DeployTransaction *self;
   OstreeSysroot *sysroot;
-
   glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
-
+  g_autofree gchar *new_refspec = NULL;
+  g_autofree gchar *old_refspec = NULL;
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   gboolean changed = FALSE;
   gboolean ret = FALSE;
@@ -821,11 +651,26 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   if (self->allow_downgrade)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
 
+  if (self->refspec)
+    {
+      /* When rebasing, we should be able to switch to a different tree even if
+       * the current origin is unconfigured */
+      upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED;
+    }
+
   upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname,
                                              upgrader_flags,
                                              cancellable, error);
   if (upgrader == NULL)
     goto out;
+
+  if (self->refspec)
+    {
+      if (!change_upgrader_refspec (sysroot, upgrader,
+                                    self->refspec, cancellable,
+                                    &old_refspec, &new_refspec, error))
+        goto out;
+    }
 
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     goto out;
@@ -847,10 +692,28 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
-  if (changed)
+  /* TODO - better logic for "changed" based on deployments */
+  if (changed || self->refspec)
     {
       if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
         goto out;
+
+      /* Are we rebasing?  May want to delete the previous ref */
+      if (self->refspec && !self->skip_purge)
+        {
+          g_autofree char *remote = NULL;
+          g_autofree char *ref = NULL;
+
+          /* The actual rebase has already succeeded, so ignore errors. */
+          if (ostree_parse_refspec (old_refspec, &remote, &ref, NULL))
+            {
+              /* Note: In some cases the source origin ref may not actually
+               * exist; say the admin did a cleanup, or the OS expects post-
+               * install configuration like subscription-manager. */
+              (void) ostree_repo_set_ref_immediate (repo, remote, ref, NULL,
+                                                    cancellable, NULL);
+            }
+        }
 
       if (self->reboot)
         rpmostreed_reboot (cancellable, error);
@@ -889,7 +752,9 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    OstreeSysroot *sysroot,
                                    const char *osname,
                                    gboolean allow_downgrade,
+                                   const char *refspec,
                                    const char *revision,
+                                   gboolean skip_purge,
                                    gboolean reboot,
                                    GCancellable *cancellable,
                                    GError **error)
@@ -910,8 +775,10 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
     {
       self->osname = g_strdup (osname);
       self->allow_downgrade = allow_downgrade;
+      self->refspec = g_strdup (refspec);
       self->revision = g_strdup (revision);
       self->reboot = reboot;
+      self->skip_purge = skip_purge;
     }
 
   return (RpmostreedTransaction *) self;
