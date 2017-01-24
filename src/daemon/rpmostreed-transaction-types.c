@@ -595,150 +595,6 @@ rpmostreed_transaction_new_clear_rollback (GDBusMethodInvocation *invocation,
   return (RpmostreedTransaction *) self;
 }
 
-/* ================================ Upgrade ================================ */
-
-typedef struct {
-  RpmostreedTransaction parent;
-  char *osname;
-  gboolean allow_downgrade;
-  gboolean reboot;
-} UpgradeTransaction;
-
-typedef RpmostreedTransactionClass UpgradeTransactionClass;
-
-GType upgrade_transaction_get_type (void);
-
-G_DEFINE_TYPE (UpgradeTransaction,
-               upgrade_transaction,
-               RPMOSTREED_TYPE_TRANSACTION)
-
-static void
-upgrade_transaction_finalize (GObject *object)
-{
-  UpgradeTransaction *self;
-
-  self = (UpgradeTransaction *) object;
-  g_free (self->osname);
-
-  G_OBJECT_CLASS (upgrade_transaction_parent_class)->finalize (object);
-}
-
-static gboolean
-upgrade_transaction_execute (RpmostreedTransaction *transaction,
-                             GCancellable *cancellable,
-                             GError **error)
-{
-  gboolean ret = FALSE;
-  UpgradeTransaction *self;
-  OstreeSysroot *sysroot;
-
-  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
-  glnx_unref_object OstreeRepo *repo = NULL;
-  glnx_unref_object OstreeAsyncProgress *progress = NULL;
-  g_autofree gchar *origin_description = NULL;
-
-  RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
-  gboolean changed = FALSE;
-
-  self = (UpgradeTransaction *) transaction;
-
-  sysroot = rpmostreed_transaction_get_sysroot (transaction);
-
-  if (self->allow_downgrade)
-    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
-
-  upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags,
-					     cancellable, error);
-  if (upgrader == NULL)
-    goto out;
-
-  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-    goto out;
-
-  rpmostree_sysroot_upgrader_set_origin_override (upgrader, NULL);
-
-  origin_description = rpmostree_sysroot_upgrader_get_origin_description (upgrader);
-  if (origin_description != NULL)
-    rpmostreed_transaction_emit_message_printf (transaction,
-                                                "Updating from: %s",
-                                                origin_description);
-
-  progress = ostree_async_progress_new ();
-  rpmostreed_transaction_connect_download_progress (transaction, progress);
-  rpmostreed_transaction_connect_signature_progress (transaction, repo);
-
-  if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0,
-					progress, &changed,
-					cancellable, error))
-    goto out;
-
-  rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
-
-  if (changed)
-    {
-      if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
-        goto out;
-
-      if (self->reboot)
-        rpmostreed_reboot (cancellable, error);
-    }
-  else
-    {
-      rpmostreed_transaction_emit_message_printf (transaction, "No upgrade available.");
-    }
-
-  ret = TRUE;
-out:
-  return ret;
-}
-
-static void
-upgrade_transaction_class_init (UpgradeTransactionClass *class)
-{
-  GObjectClass *object_class;
-
-  object_class = G_OBJECT_CLASS (class);
-  object_class->finalize = upgrade_transaction_finalize;
-
-  class->execute = upgrade_transaction_execute;
-}
-
-static void
-upgrade_transaction_init (UpgradeTransaction *self)
-{
-}
-
-RpmostreedTransaction *
-rpmostreed_transaction_new_upgrade (GDBusMethodInvocation *invocation,
-                                    OstreeSysroot *sysroot,
-                                    const char *osname,
-                                    gboolean allow_downgrade,
-                                    gboolean reboot,
-                                    GCancellable *cancellable,
-                                    GError **error)
-{
-  UpgradeTransaction *self;
-
-  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
-  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
-  g_return_val_if_fail (osname != NULL, NULL);
-
-  self = g_initable_new (upgrade_transaction_get_type (),
-                         cancellable, error,
-                         "invocation", invocation,
-                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
-                         NULL);
-
-  if (self != NULL)
-    {
-      self->osname = g_strdup (osname);
-      self->allow_downgrade = allow_downgrade;
-      self->reboot = reboot;
-    }
-
-  return (RpmostreedTransaction *) self;
-}
-
 /* ================================ Rebase ================================ */
 
 typedef struct {
@@ -912,12 +768,13 @@ rpmostreed_transaction_new_rebase (GDBusMethodInvocation *invocation,
   return (RpmostreedTransaction *) self;
 }
 
-/* ================================ Deploy ================================ */
+/* ================================ Upgrade/Deploy ================================ */
 
 typedef struct {
   RpmostreedTransaction parent;
+  gboolean allow_downgrade; /* Always TRUE for rebase */
   char *osname;
-  char *revision;
+  char *revision; /* NULL for upgrade */
   gboolean reboot;
 } DeployTransaction;
 
@@ -953,6 +810,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   glnx_unref_object OstreeRepo *repo = NULL;
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
 
+  RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   gboolean changed = FALSE;
   gboolean ret = FALSE;
 
@@ -960,11 +818,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-  /* Always allow older; there's not going to be a chronological
-   * relationship necessarily. */
+  if (self->allow_downgrade)
+    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
+
   upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname,
-					     RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER,
-					     cancellable, error);
+                                             upgrader_flags,
+                                             cancellable, error);
   if (upgrader == NULL)
     goto out;
 
@@ -975,12 +834,15 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   rpmostreed_transaction_connect_download_progress (transaction, progress);
   rpmostreed_transaction_connect_signature_progress (transaction, repo);
 
-  if (!apply_revision_override (transaction, repo, progress, upgrader,
-                                self->revision, cancellable, error))
-    goto out;
+  if (self->revision)
+    {
+      if (!apply_revision_override (transaction, repo, progress, upgrader,
+                                    self->revision, cancellable, error))
+        goto out;
+    }
 
   if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0,
-					progress, &changed, cancellable, error))
+                                        progress, &changed, cancellable, error))
     goto out;
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
@@ -988,14 +850,17 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   if (changed)
     {
       if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
-	goto out;
+        goto out;
 
       if (self->reboot)
         rpmostreed_reboot (cancellable, error);
     }
   else
     {
-      rpmostreed_transaction_emit_message_printf (transaction, "No change.");
+      if (!self->revision)
+        rpmostreed_transaction_emit_message_printf (transaction, "No upgrade available.");
+      else
+        rpmostreed_transaction_emit_message_printf (transaction, "No change.");
     }
 
   ret = TRUE;
@@ -1023,6 +888,7 @@ RpmostreedTransaction *
 rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    OstreeSysroot *sysroot,
                                    const char *osname,
+                                   gboolean allow_downgrade,
                                    const char *revision,
                                    gboolean reboot,
                                    GCancellable *cancellable,
@@ -1033,7 +899,6 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
   g_return_val_if_fail (osname != NULL, NULL);
-  g_return_val_if_fail (revision != NULL, NULL);
 
   self = g_initable_new (deploy_transaction_get_type (),
                          cancellable, error,
@@ -1044,6 +909,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   if (self != NULL)
     {
       self->osname = g_strdup (osname);
+      self->allow_downgrade = allow_downgrade;
       self->revision = g_strdup (revision);
       self->reboot = reboot;
     }
