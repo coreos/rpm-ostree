@@ -71,6 +71,11 @@ struct RpmOstreeSysrootUpgrader {
   GHashTable *packages_to_add;
   GHashTable *packages_to_delete;
 
+  /* Used during tree construction */
+  OstreeRepoDevInoCache *devino_cache;
+  int tmprootfs_dfd;
+  char *tmprootfs;
+
   char *base_revision; /* Non-layered replicated commit */
   char *final_revision; /* Computed by layering; if NULL, only using base_revision */
 };
@@ -211,6 +216,15 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
 {
   RpmOstreeSysrootUpgrader *self = RPMOSTREE_SYSROOT_UPGRADER (object);
 
+  if (self->tmprootfs_dfd != -1)
+    {
+      (void)glnx_shutil_rm_rf_at (AT_FDCWD, self->tmprootfs, NULL, NULL);
+      (void)close (self->tmprootfs_dfd);
+    }
+  g_free (self->tmprootfs);
+
+  g_clear_pointer (&self->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
+
   g_clear_object (&self->sysroot);
   g_free (self->osname);
 
@@ -317,6 +331,7 @@ rpmostree_sysroot_upgrader_class_init (RpmOstreeSysrootUpgraderClass *klass)
 static void
 rpmostree_sysroot_upgrader_init (RpmOstreeSysrootUpgrader *self)
 {
+  self->tmprootfs_dfd = -1;
 }
 
 
@@ -693,51 +708,43 @@ out:
 }
 
 static gboolean
-checkout_tree_in_tmp (OstreeRepo            *repo,
-                      const char            *revision,
-                      OstreeRepoDevInoCache *devino_cache,
-                      char                 **out_tmprootfs,
-                      int                   *out_tmprootfs_dfd,
-                      GCancellable          *cancellable,
-                      GError               **error)
+checkout_base_tree (RpmOstreeSysrootUpgrader *self,
+                    OstreeRepo            *repo,
+                    GCancellable          *cancellable,
+                    GError               **error)
 {
-  gboolean ret = FALSE;
   OstreeRepoCheckoutAtOptions checkout_options = { 0, };
-
-  g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
-  glnx_fd_close int tmprootfs_dfd = -1;
-
   int repo_dfd = ostree_repo_get_dfd (repo); /* borrowed */
+  g_autofree char *tmprootfs = NULL;
 
-  if (!glnx_mkdtempat (repo_dfd, tmprootfs, 00755, error))
-    goto out;
+  g_assert (!self->tmprootfs);
+  g_assert_cmpint (self->tmprootfs_dfd, ==, -1);
 
-  if (!glnx_opendirat (repo_dfd, tmprootfs, FALSE, &tmprootfs_dfd, error))
-    goto out;
+  tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
+
+
+  if (!glnx_mkdtempat (repo_dfd, self->tmprootfs, 00755, error))
+    return FALSE;
+
+  /* Now we'll delete it on cleanup */
+  self->tmprootfs = g_steal_pointer (&tmprootfs);
+
+  if (!glnx_opendirat (repo_dfd, self->tmprootfs, FALSE, &self->tmprootfs_dfd, error))
+    return FALSE;
 
   /* let's give the user some feedback so they don't think we're blocked */
-  rpmostree_output_task_begin ("Checking out tree %.7s", revision);
+  rpmostree_output_task_begin ("Checking out tree %.7s", self->base_revision);
 
   /* we actually only need this here because we use "." for path */
   checkout_options.overwrite_mode = OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES;
-  checkout_options.devino_to_csum_cache = devino_cache;
-  if (!ostree_repo_checkout_at (repo, &checkout_options, tmprootfs_dfd,
-                                ".", revision, cancellable, error))
-    goto out;
+  checkout_options.devino_to_csum_cache = self->devino_cache;
+  if (!ostree_repo_checkout_at (repo, &checkout_options, self->tmprootfs_dfd,
+                                ".", self->base_revision, cancellable, error))
+    return FALSE;
 
   rpmostree_output_task_end ("done");
 
-  if (out_tmprootfs != NULL)
-    *out_tmprootfs = glnx_fdrel_abspath (repo_dfd, tmprootfs);
-
-  if (out_tmprootfs_dfd != NULL)
-    *out_tmprootfs_dfd = glnx_steal_fd (&tmprootfs_dfd);
-
-  ret = TRUE;
-out:
-  if (tmprootfs_dfd != -1)
-    glnx_shutil_rm_rf_at (AT_FDCWD, tmprootfs, cancellable, NULL);
-  return ret;
+  return TRUE;
 }
 
 /* XXX: This is ugly, but the alternative is to de-couple RpmOstreeTreespec from
@@ -835,7 +842,6 @@ pkg_find_cb (GHashTableIter *it,
 static gboolean
 finalize_requested_packages (RpmOstreeSysrootUpgrader *self,
                              OstreeRepo               *repo,
-                             int                       tmprootfs_dfd,
                              GCancellable             *cancellable,
                              GError                  **error)
 {
@@ -859,7 +865,7 @@ finalize_requested_packages (RpmOstreeSysrootUpgrader *self,
       g_hash_table_add (pkgset, g_strdup (itkey));
   }
 
-  if (!find_pkgs_in_rpmdb (tmprootfs_dfd, pkgset, pkg_find_cb,
+  if (!find_pkgs_in_rpmdb (self->tmprootfs_dfd, pkgset, pkg_find_cb,
                            cancellable, self, error))
     goto out;
 
@@ -928,9 +934,6 @@ out:
 
 static gboolean
 overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
-                      OstreeRepoDevInoCache    *devino_cache,
-                      const char               *tmprootfs,
-                      int                       tmprootfs_dfd,
                       OstreeRepo               *repo,
                       GCancellable             *cancellable,
                       GError                  **error)
@@ -962,7 +965,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
 
     /* point libhif to the yum.repos.d and os-release of the merge deployment */
     dnf_context_set_repo_dir (hifctx, reposdir);
-    dnf_context_set_source_root (hifctx, tmprootfs);
+    dnf_context_set_source_root (hifctx, self->tmprootfs);
 
     /* point the core to the passwd & group of the merge deployment */
     rpmostree_context_set_passwd_dir (ctx, passwddir);
@@ -971,7 +974,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   /* load the sepolicy to use during import */
   {
     glnx_unref_object OstreeSePolicy *sepolicy = NULL;
-    if (!rpmostree_prepare_rootfs_get_sepolicy (tmprootfs_dfd, ".", &sepolicy,
+    if (!rpmostree_prepare_rootfs_get_sepolicy (self->tmprootfs_dfd, ".", &sepolicy,
                                                 cancellable, error))
       goto out;
 
@@ -985,7 +988,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   if (treespec == NULL)
     goto out;
 
-  if (!rpmostree_context_setup (ctx, tmprootfs, NULL, treespec,
+  if (!rpmostree_context_setup (ctx, self->tmprootfs, NULL, treespec,
                                 cancellable, error))
     goto out;
 
@@ -1035,14 +1038,14 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
       /* --- Overlay and commit --- */
 
       g_clear_pointer (&self->final_revision, g_free);
-      if (!rpmostree_context_assemble_tmprootfs (ctx, tmprootfs_dfd, devino_cache,
+      if (!rpmostree_context_assemble_tmprootfs (ctx, self->tmprootfs_dfd, self->devino_cache,
                                                  RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
                                                  (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS) > 0,
                                                  cancellable, error))
         goto out;
     }
 
-  if (!rpmostree_rootfs_postprocess_common (tmprootfs_dfd, cancellable, error))
+  if (!rpmostree_rootfs_postprocess_common (self->tmprootfs_dfd, cancellable, error))
     goto out;
 
   if (rpmostree_origin_get_regenerate_initramfs (self->origin))
@@ -1060,7 +1063,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
 
       rpmostree_output_task_begin ("Generating initramfs");
 
-      kernel_state = rpmostree_find_kernel (tmprootfs_dfd, cancellable, error);
+      kernel_state = rpmostree_find_kernel (self->tmprootfs_dfd, cancellable, error);
       if (!kernel_state)
         goto out;
       g_variant_get (kernel_state, "(&s&s&sm&s)",
@@ -1068,12 +1071,12 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
                      &kernel_path, &initramfs_path);
       g_assert (initramfs_path);
 
-      if (!rpmostree_run_dracut (tmprootfs_dfd, add_dracut_argv, initramfs_path,
+      if (!rpmostree_run_dracut (self->tmprootfs_dfd, add_dracut_argv, initramfs_path,
                                  &initramfs_tmp_fd, &initramfs_tmp_path,
                                  cancellable, error))
         goto out;
 
-      if (!rpmostree_finalize_kernel (tmprootfs_dfd, bootdir, kver,
+      if (!rpmostree_finalize_kernel (self->tmprootfs_dfd, bootdir, kver,
                                       kernel_path,
                                       initramfs_tmp_path, initramfs_tmp_fd,
                                       cancellable, error))
@@ -1082,7 +1085,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
       rpmostree_output_task_end ("done");
     }
 
-  if (!rpmostree_context_commit_tmprootfs (ctx, tmprootfs_dfd, devino_cache,
+  if (!rpmostree_context_commit_tmprootfs (ctx, self->tmprootfs_dfd, self->devino_cache,
                                            self->base_revision,
                                            RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
                                            &self->final_revision,
@@ -1099,24 +1102,20 @@ overlay_packages (RpmOstreeSysrootUpgrader *self,
                   GCancellable             *cancellable,
                   GError                  **error)
 {
-  gboolean ret = FALSE;
   glnx_unref_object OstreeRepo *repo = NULL;
-  OstreeRepoDevInoCache *devino_cache = ostree_repo_devino_cache_new ();
-  g_autofree char *tmprootfs = NULL;
-  glnx_fd_close int tmprootfs_dfd = -1;
+
+  self->devino_cache = ostree_repo_devino_cache_new ();
 
   if (!ostree_sysroot_get_repo (self->sysroot, &repo, cancellable, error))
-    goto out;
+    return FALSE;
 
-  if (!checkout_tree_in_tmp (repo, self->base_revision, devino_cache, &tmprootfs,
-                             &tmprootfs_dfd, cancellable, error))
-    goto out;
+  if (!checkout_base_tree (self, repo, cancellable, error))
+    return FALSE;
 
   /* check if there are any items in requested_packages or pkgs_to_add that are
    * already installed in base_rev */
-  if (!finalize_requested_packages (self, repo, tmprootfs_dfd,
-                                    cancellable, error))
-    goto out;
+  if (!finalize_requested_packages (self, repo, cancellable, error))
+    return FALSE;
 
   /* Now, it's possible all requested packages are in the new tree (or
    * that the user wants to stop overlaying them), so we have another
@@ -1128,18 +1127,11 @@ overlay_packages (RpmOstreeSysrootUpgrader *self,
     }
   else
     {
-      if (!overlay_final_pkgset (self, devino_cache, tmprootfs, tmprootfs_dfd,
-                                 repo, cancellable, error))
-        goto out;
+      if (!overlay_final_pkgset (self, repo, cancellable, error))
+        return FALSE;
     }
 
-  ret = TRUE;
-out:
-  if (devino_cache)
-    ostree_repo_devino_cache_unref (devino_cache);
-  if (tmprootfs_dfd != -1)
-    glnx_shutil_rm_rf_at (AT_FDCWD, tmprootfs, cancellable, NULL);
-  return ret;
+  return TRUE;
 }
 
 /* Since `ostree admin cleanup` by default prunes refs-only,depth=0,
