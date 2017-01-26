@@ -603,6 +603,8 @@ typedef struct {
   char *osname;
   char *refspec; /* NULL for non-rebases */
   char *revision; /* NULL for upgrade */
+  char **packages_added;
+  char **packages_removed;
 } DeployTransaction;
 
 typedef RpmostreedTransactionClass DeployTransactionClass;
@@ -622,6 +624,8 @@ deploy_transaction_finalize (GObject *object)
   g_free (self->osname);
   g_free (self->refspec);
   g_free (self->revision);
+  g_strfreev (self->packages_added);
+  g_strfreev (self->packages_removed);
 
   G_OBJECT_CLASS (deploy_transaction_parent_class)->finalize (object);
 }
@@ -648,6 +652,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
+  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN)
+    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN;
+  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NOSCRIPTS)
+    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS;
 
   if (self->refspec)
     {
@@ -684,11 +692,33 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         goto out;
     }
 
-  if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0,
-                                        progress, &changed, cancellable, error))
-    goto out;
+  /* Mainly for the `install` command */
+  if (!(self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE))
+    {
+      if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0,
+                                            progress, &changed, cancellable, error))
+        goto out;
+    }
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+
+  if (self->packages_removed)
+    {
+      if (!rpmostree_sysroot_upgrader_delete_packages (upgrader, self->packages_removed,
+                                                       cancellable, error))
+        goto out;
+
+      changed = TRUE;
+    }
+
+  if (self->packages_added)
+    {
+      if (!rpmostree_sysroot_upgrader_add_packages (upgrader, self->packages_added,
+                                                    cancellable, error))
+        goto out;
+
+      changed = TRUE;
+    }
 
   /* TODO - better logic for "changed" based on deployments */
   if (changed || self->refspec)
@@ -745,6 +775,14 @@ deploy_transaction_init (DeployTransaction *self)
 {
 }
 
+static char **
+strdupv_canonicalize (const char *const *strv)
+{
+  if (strv && *strv)
+    return g_strdupv ((char**)strv);
+  return NULL;
+}
+
 RpmostreedTransaction *
 rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    OstreeSysroot *sysroot,
@@ -752,6 +790,8 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    const char *osname,
                                    const char *refspec,
                                    const char *revision,
+                                   const char *const *packages_added,
+                                   const char *const *packages_removed,
                                    GCancellable *cancellable,
                                    GError **error)
 {
@@ -773,6 +813,8 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
       self->flags = flags;
       self->refspec = g_strdup (refspec);
       self->revision = g_strdup (revision);
+      self->packages_added = strdupv_canonicalize (packages_added);
+      self->packages_removed = strdupv_canonicalize (packages_removed);
     }
 
   return (RpmostreedTransaction *) self;
