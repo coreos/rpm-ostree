@@ -350,6 +350,39 @@ out:
   return TRUE;
 }
 
+static RpmOstreeTransactionDeployFlags
+deploy_flags_from_options (GVariant *options,
+                           RpmOstreeTransactionDeployFlags defaults)
+{
+  RpmOstreeTransactionDeployFlags ret = defaults;
+  GVariantDict options_dict;
+  gboolean opt_reboot = FALSE;
+  gboolean opt_skip_purge = FALSE;
+  gboolean opt_allow_downgrade = FALSE;
+
+  g_variant_dict_init (&options_dict, options);
+
+  g_variant_dict_lookup (&options_dict,
+                         "allow-downgrade", "b",
+                         &opt_allow_downgrade);
+  if (opt_allow_downgrade)
+    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE;
+  g_variant_dict_lookup (&options_dict,
+                         "reboot", "b",
+                         &opt_reboot);
+  if (opt_reboot)
+    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_REBOOT;
+  g_variant_dict_lookup (&options_dict,
+                         "skip-purge", "b",
+                         &opt_skip_purge);
+  if (opt_skip_purge)
+    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_SKIP_PURGE;
+
+  g_variant_dict_clear (&options_dict);
+
+  return ret;
+}
+
 static gboolean
 os_handle_deploy (RPMOSTreeOS *interface,
                   GDBusMethodInvocation *invocation,
@@ -360,8 +393,6 @@ os_handle_deploy (RPMOSTreeOS *interface,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
-  GVariantDict options_dict;
-  gboolean opt_reboot = FALSE;
   const char *osname;
   GError *local_error = NULL;
 
@@ -378,22 +409,11 @@ os_handle_deploy (RPMOSTreeOS *interface,
 
   osname = rpmostree_os_get_name (interface);
 
-  /* XXX Fail if option type is wrong? */
-
-  g_variant_dict_init (&options_dict, arg_options);
-
-  g_variant_dict_lookup (&options_dict,
-                         "reboot", "b",
-                         &opt_reboot);
-
-  g_variant_dict_clear (&options_dict);
-
   transaction = rpmostreed_transaction_new_deploy (invocation,
                                                    ot_sysroot,
-                                                   osname,
-                                                   TRUE,
-                                                   NULL, arg_revision,
-                                                   FALSE, opt_reboot,
+                                                   deploy_flags_from_options (arg_options,
+                                                      RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE),
+                                                   osname, NULL, arg_revision,
                                                    cancellable,
                                                    &local_error);
 
@@ -426,9 +446,6 @@ os_handle_upgrade (RPMOSTreeOS *interface,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
-  GVariantDict options_dict;
-  gboolean opt_allow_downgrade = FALSE;
-  gboolean opt_reboot = FALSE;
   const char *osname;
   GError *local_error = NULL;
 
@@ -445,22 +462,9 @@ os_handle_upgrade (RPMOSTreeOS *interface,
 
   osname = rpmostree_os_get_name (interface);
 
-  /* XXX Fail if option type is wrong? */
-
-  g_variant_dict_init (&options_dict, arg_options);
-
-  g_variant_dict_lookup (&options_dict,
-                         "allow-downgrade", "b",
-                         &opt_allow_downgrade);
-  g_variant_dict_lookup (&options_dict,
-                         "reboot", "b",
-                         &opt_reboot);
-
-  g_variant_dict_clear (&options_dict);
-
-  transaction = rpmostreed_transaction_new_deploy (invocation, ot_sysroot, osname,
-                                                   opt_allow_downgrade, NULL, NULL,
-                                                   FALSE, opt_reboot,
+  transaction = rpmostreed_transaction_new_deploy (invocation, ot_sysroot,
+                                                   deploy_flags_from_options (arg_options, 0),
+                                                   osname, NULL, NULL,
                                                    cancellable, &local_error);
 
   if (transaction == NULL)
@@ -620,10 +624,8 @@ os_handle_rebase (RPMOSTreeOS *interface,
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   GVariantDict options_dict;
-  gboolean opt_skip_purge = FALSE;
   const char *osname;
   const char *opt_revision = NULL;
-  gboolean opt_reboot = FALSE;
   GError *local_error = NULL;
 
   transaction = merge_compatible_txn (self, invocation);
@@ -639,29 +641,19 @@ os_handle_rebase (RPMOSTreeOS *interface,
 
   osname = rpmostree_os_get_name (interface);
 
-  /* XXX Fail if option type is wrong? */
-
   g_variant_dict_init (&options_dict, arg_options);
-
-  g_variant_dict_lookup (&options_dict,
-                         "skip-purge", "b",
-                         &opt_skip_purge);
-  g_variant_dict_lookup (&options_dict,
-                         "reboot", "b",
-                         &opt_reboot);
   g_variant_dict_lookup (&options_dict,
                          "revision", "&s",
                          &opt_revision);
-
   g_variant_dict_clear (&options_dict);
 
   transaction = rpmostreed_transaction_new_deploy (invocation,
                                                    ot_sysroot,
-                                                   osname, TRUE,
+                                                   deploy_flags_from_options (arg_options,
+                                                      RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE),
+                                                   osname,
                                                    arg_refspec,
                                                    opt_revision,
-                                                   opt_skip_purge,
-                                                   opt_reboot,
                                                    cancellable,
                                                    &local_error);
 

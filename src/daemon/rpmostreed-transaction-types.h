@@ -45,15 +45,20 @@ RpmostreedTransaction *
                                                             GCancellable *cancellable,
                                                             GError **error);
 
+typedef enum {
+  RPMOSTREE_TRANSACTION_DEPLOY_FLAG_REBOOT = (1 << 0),
+  RPMOSTREE_TRANSACTION_DEPLOY_FLAG_SKIP_PURGE = (1 << 1),
+  RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE = (1 << 2),
+} RpmOstreeTransactionDeployFlags;
+
+
 RpmostreedTransaction *
                rpmostreed_transaction_new_deploy           (GDBusMethodInvocation *invocation,
                                                             OstreeSysroot *sysroot,
+                                                            RpmOstreeTransactionDeployFlags flags,
                                                             const char *osname,
-                                                            gboolean allow_downgrade,
                                                             const char *refspec,
                                                             const char *revision,
-                                                            gboolean skip_purge,
-                                                            gboolean reboot,
                                                             GCancellable *cancellable,
                                                             GError **error);
 

@@ -599,12 +599,10 @@ rpmostreed_transaction_new_clear_rollback (GDBusMethodInvocation *invocation,
 
 typedef struct {
   RpmostreedTransaction parent;
-  gboolean allow_downgrade; /* Always TRUE for rebase */
+  RpmOstreeTransactionDeployFlags flags;
   char *osname;
   char *refspec; /* NULL for non-rebases */
   char *revision; /* NULL for upgrade */
-  gboolean reboot;
-  gboolean skip_purge;
 } DeployTransaction;
 
 typedef RpmostreedTransactionClass DeployTransactionClass;
@@ -648,7 +646,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-  if (self->allow_downgrade)
+  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
 
   if (self->refspec)
@@ -699,7 +697,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         goto out;
 
       /* Are we rebasing?  May want to delete the previous ref */
-      if (self->refspec && !self->skip_purge)
+      if (self->refspec && !(self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_SKIP_PURGE))
         {
           g_autofree char *remote = NULL;
           g_autofree char *ref = NULL;
@@ -715,7 +713,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             }
         }
 
-      if (self->reboot)
+      if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_REBOOT)
         rpmostreed_reboot (cancellable, error);
     }
   else
@@ -750,12 +748,10 @@ deploy_transaction_init (DeployTransaction *self)
 RpmostreedTransaction *
 rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    OstreeSysroot *sysroot,
+                                   RpmOstreeTransactionDeployFlags flags,
                                    const char *osname,
-                                   gboolean allow_downgrade,
                                    const char *refspec,
                                    const char *revision,
-                                   gboolean skip_purge,
-                                   gboolean reboot,
                                    GCancellable *cancellable,
                                    GError **error)
 {
@@ -774,11 +770,9 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   if (self != NULL)
     {
       self->osname = g_strdup (osname);
-      self->allow_downgrade = allow_downgrade;
+      self->flags = flags;
       self->refspec = g_strdup (refspec);
       self->revision = g_strdup (revision);
-      self->reboot = reboot;
-      self->skip_purge = skip_purge;
     }
 
   return (RpmostreedTransaction *) self;
