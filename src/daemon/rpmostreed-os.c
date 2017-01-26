@@ -359,6 +359,8 @@ deploy_flags_from_options (GVariant *options,
   gboolean opt_reboot = FALSE;
   gboolean opt_skip_purge = FALSE;
   gboolean opt_allow_downgrade = FALSE;
+  gboolean opt_dry_run = FALSE;
+  gboolean opt_noscripts = FALSE;
 
   g_variant_dict_init (&options_dict, options);
 
@@ -377,6 +379,16 @@ deploy_flags_from_options (GVariant *options,
                          &opt_skip_purge);
   if (opt_skip_purge)
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_SKIP_PURGE;
+
+  g_variant_dict_lookup (&options_dict, "dry-run", "b",
+                         &opt_dry_run);
+  if (opt_dry_run)
+    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN;
+
+  g_variant_dict_lookup (&options_dict, "noscripts", "b",
+                         &opt_noscripts);
+  if (opt_noscripts)
+    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NOSCRIPTS;
 
   g_variant_dict_clear (&options_dict);
 
@@ -413,7 +425,7 @@ os_handle_deploy (RPMOSTreeOS *interface,
                                                    ot_sysroot,
                                                    deploy_flags_from_options (arg_options,
                                                       RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE),
-                                                   osname, NULL, arg_revision,
+                                                   osname, NULL, arg_revision, NULL, NULL,
                                                    cancellable,
                                                    &local_error);
 
@@ -464,7 +476,7 @@ os_handle_upgrade (RPMOSTreeOS *interface,
 
   transaction = rpmostreed_transaction_new_deploy (invocation, ot_sysroot,
                                                    deploy_flags_from_options (arg_options, 0),
-                                                   osname, NULL, NULL,
+                                                   osname, NULL, NULL, NULL, NULL,
                                                    cancellable, &local_error);
 
   if (transaction == NULL)
@@ -651,9 +663,8 @@ os_handle_rebase (RPMOSTreeOS *interface,
                                                    ot_sysroot,
                                                    deploy_flags_from_options (arg_options,
                                                       RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE),
-                                                   osname,
-                                                   arg_refspec,
-                                                   opt_revision,
+                                                   osname, arg_refspec, opt_revision,
+                                                   NULL, NULL,
                                                    cancellable,
                                                    &local_error);
 
@@ -690,10 +701,6 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   GError *local_error = NULL;
-  gboolean v;
-  GVariantDict dict;
-  RpmOstreeTransactionPkgFlags flags = 0;
-  const char *const *ignore_scripts;
 
   transaction = merge_compatible_txn (self, invocation);
   if (transaction)
@@ -708,38 +715,17 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
 
   osname = rpmostree_os_get_name (interface);
 
-  g_variant_dict_init (&dict, arg_options);
-  v = FALSE;
-  /* XXX Fail if option type is wrong? */
-  g_variant_dict_lookup (&dict, "reboot", "b", &v);
-  if (v)
-    flags |= RPMOSTREE_TRANSACTION_PKG_FLAG_REBOOT;
-
-  v = FALSE;
-  g_variant_dict_lookup (&dict, "dry-run", "b", &v);
-  if (v)
-    flags |= RPMOSTREE_TRANSACTION_PKG_FLAG_DRY_RUN;
-
-  v = FALSE;
-  g_variant_dict_lookup (&dict, "noscripts", "b", &v);
-  if (v)
-    flags |= RPMOSTREE_TRANSACTION_PKG_FLAG_NOSCRIPTS;
-
-  ignore_scripts = NULL;
-  g_variant_dict_lookup (&dict, "ignore-scripts", "^a&s", (char***)&ignore_scripts);
-  
-  transaction = rpmostreed_transaction_new_pkg_change (invocation,
-						       ot_sysroot,
-						       osname,
-						       arg_packages_added,
-						       arg_packages_removed,
-						       ignore_scripts,
-						       flags,
-						       cancellable,
-						       &local_error);
-  g_variant_dict_clear (&dict);
-
-
+  /* By default, pkgchange does not pull the base; we will likley
+   * add an option in the future.
+   */
+  transaction = rpmostreed_transaction_new_deploy (invocation,
+                                                   ot_sysroot,
+                                                   deploy_flags_from_options (arg_options,
+                                                     RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE),
+                                                   osname, NULL, NULL,
+                                                   arg_packages_added,
+                                                   arg_packages_removed,
+                                                   cancellable, &local_error);
   if (transaction == NULL)
     goto out;
 

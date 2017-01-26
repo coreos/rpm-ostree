@@ -49,6 +49,9 @@ typedef enum {
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_REBOOT = (1 << 0),
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_SKIP_PURGE = (1 << 1),
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE = (1 << 2),
+  RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE = (1 << 4),
+  RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN = (1 << 5),
+  RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NOSCRIPTS = (1 << 6)
 } RpmOstreeTransactionDeployFlags;
 
 
@@ -59,25 +62,11 @@ RpmostreedTransaction *
                                                             const char *osname,
                                                             const char *refspec,
                                                             const char *revision,
+                                                            const char *const *packages_added,
+                                                            const char *const *packages_removed,
                                                             GCancellable *cancellable,
                                                             GError **error);
 
-typedef enum {
-  RPMOSTREE_TRANSACTION_PKG_FLAG_REBOOT = (1 << 0),
-  RPMOSTREE_TRANSACTION_PKG_FLAG_DRY_RUN = (1 << 1),
-  RPMOSTREE_TRANSACTION_PKG_FLAG_NOSCRIPTS = (1 << 2)
-} RpmOstreeTransactionPkgFlags;
-
-RpmostreedTransaction *
-               rpmostreed_transaction_new_pkg_change       (GDBusMethodInvocation *invocation,
-                                                            OstreeSysroot         *sysroot,
-                                                            const char            *osname,
-                                                            const char *const     *packages_added,
-                                                            const char *const     *packages_removed,
-                                                            const char *const     *ignore_scripts,
-							    RpmOstreeTransactionPkgFlags flags,
-                                                            GCancellable          *cancellable,
-                                                            GError               **error);
 RpmostreedTransaction *
 rpmostreed_transaction_new_initramfs_state       (GDBusMethodInvocation *invocation,
                                                   OstreeSysroot         *sysroot,
