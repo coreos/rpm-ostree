@@ -716,7 +716,7 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
   g_assert (!self->tmprootfs);
   g_assert_cmpint (self->tmprootfs_dfd, ==, -1);
 
-  tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
+  tmprootfs = g_strdup ("/sysroot/ostree/repo/tmp/rpmostree-commit-XXXXXX");
 
   if (!glnx_mkdtempat (repo_dfd, tmprootfs, 00755, error))
     return FALSE;
