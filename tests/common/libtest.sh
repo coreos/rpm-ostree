@@ -382,3 +382,16 @@ ensure_dbus ()
         exec "$topsrcdir/tests/utils/setup-session.sh" "$self"
     fi
 }
+
+# Assert that @expression is true in @jsonfile
+assert_status_jq() {
+    vm_rpmostree status --json > status.json
+
+    for expression in "$@"; do
+        if ! jq -e "${expression}" >/dev/null < status.json; then
+            jq . < status.json | sed -e 's/^/# /' >&2
+            echo 1>&2 "${expression} failed to match in status.json"
+            exit 1
+        fi
+    done
+}
