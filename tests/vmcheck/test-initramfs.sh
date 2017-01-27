@@ -26,17 +26,6 @@ set -x
 
 # SUMMARY: Tests for the `initramfs` functionality
 
-assert_jq() {
-    expression=$1
-    jsonfile=$2
-
-    if ! jq -e "${expression}" >/dev/null < $jsonfile; then
-        jq . < $jsonfile | sed -e 's/^/# /' >&2
-        echo 1>&2 "${expression} failed to match in $jsonfile"
-        exit 1
-    fi
-}
-
 vm_send_test_repo
 base=$(vm_get_booted_csum)
 
@@ -55,20 +44,19 @@ assert_file_has_content err.txt "reboot.*used with.*enable"
 echo "ok initramfs state"
 
 vm_rpmostree initramfs --enable
-vm_rpmostree status --json > status.json
-assert_jq '.deployments[1].booted' status.json
-assert_jq '.deployments[0]["regenerate-initramfs"]' status.json
-assert_jq '.deployments[1]["regenerate-initramfs"]|not' status.json
+assert_status_jq \
+  '.deployments[1].booted' \
+  '.deployments[0]["regenerate-initramfs"]' \
+  '.deployments[1]["regenerate-initramfs"]|not'
 
 vm_reboot
 
 assert_not_streq $base $(vm_get_booted_csum)
-vm_rpmostree status --json > status.json
-assert_jq '.deployments[0].booted' status.json
-assert_jq '.deployments[0]["regenerate-initramfs"]' status.json
-assert_jq '.deployments[0]["initramfs-args"]|length == 0' status.json
-assert_jq '.deployments[1]["regenerate-initramfs"]|not' status.json
-assert_jq '.deployments[1]["initramfs-args"]|not' status.json
+assert_status_jq  '.deployments[0].booted' \
+                  '.deployments[0]["regenerate-initramfs"]' \
+                  '.deployments[0]["initramfs-args"]|length == 0' \
+                  '.deployments[1]["regenerate-initramfs"]|not' \
+                  '.deployments[1]["initramfs-args"]|not'
 
 if vm_rpmostree initramfs --enable 2>err.txt; then
     assert_not_reached "Unexpectedly succeeded at enabling"
@@ -78,24 +66,21 @@ echo "ok initramfs enabled"
 
 vm_rpmostree initramfs --disable
 vm_reboot
-vm_rpmostree status --json > status.json
-assert_jq '.deployments[0].booted' status.json
-assert_jq '.deployments[0]["regenerate-initramfs"]|not' status.json
-assert_jq '.deployments[1]["regenerate-initramfs"]' status.json
+assert_status_jq '.deployments[0].booted' \
+                 '.deployments[0]["regenerate-initramfs"]|not' \
+                 '.deployments[1]["regenerate-initramfs"]'
 
 echo "ok initramfs disabled"
 
 vm_reboot_cmd rpm-ostree initramfs --enable --reboot
-vm_rpmostree status --json > status.json
-assert_jq '.deployments[0].booted' status.json
-assert_jq '.deployments[0]["regenerate-initramfs"]' status.json
-assert_jq '.deployments[1]["regenerate-initramfs"]|not' status.json
+assert_status_jq '.deployments[0].booted' \
+                 '.deployments[0]["regenerate-initramfs"]' \
+                 '.deployments[1]["regenerate-initramfs"]|not'
 
 vm_reboot_cmd rpm-ostree initramfs --disable --reboot
-vm_rpmostree status --json > status.json
-assert_jq '.deployments[0].booted' status.json
-assert_jq '.deployments[0]["regenerate-initramfs"]|not' status.json
-assert_jq '.deployments[1]["regenerate-initramfs"]' status.json
+assert_status_jq '.deployments[0].booted' \
+                 '.deployments[0]["regenerate-initramfs"]|not' \
+                 '.deployments[1]["regenerate-initramfs"]'
 
 echo "ok initramfs enable disable reboot"
 
@@ -104,12 +89,12 @@ for file in first second; do
     vm_cmd touch /etc/rpmostree-initramfs-testing-$file
     vm_rpmostree initramfs --enable --arg="-I" --arg="/etc/rpmostree-initramfs-testing-$file"
     vm_reboot
-    vm_rpmostree status --json > status.json
-    assert_jq '.deployments[0].booted' status.json
-    assert_jq '.deployments[0]["regenerate-initramfs"]' status.json
-    assert_jq '.deployments[0]["initramfs-args"]|index("-I") == 0' status.json
-    assert_jq '.deployments[0]["initramfs-args"]|index("/etc/rpmostree-initramfs-testing-'${file}'") == 1' status.json
-    assert_jq '.deployments[0]["initramfs-args"]|length == 2' status.json
+    assert_status_jq \
+        '.deployments[0].booted' \
+        '.deployments[0]["regenerate-initramfs"]' \
+        '.deployments[0]["initramfs-args"]|index("-I") == 0' \
+        '.deployments[0]["initramfs-args"]|index("/etc/rpmostree-initramfs-testing-'${file}'") == 1' \
+        '.deployments[0]["initramfs-args"]|length == 2'
     initramfs=$(vm_cmd grep ^initrd /boot/loader/entries/ostree-fedora-atomic-0.conf | sed -e 's,initrd ,/boot/,')
     test -n "${initramfs}"
     vm_cmd lsinitrd $initramfs > lsinitrd.txt

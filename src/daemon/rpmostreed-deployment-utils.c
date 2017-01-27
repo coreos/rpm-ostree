@@ -140,7 +140,8 @@ rpmostreed_deployment_generate_blank_variant (void)
 
 static void
 variant_add_commit_details (GVariantDict *dict,
-			    GVariant     *commit)
+                            const char *prefix,
+                            GVariant     *commit)
 {
   g_autoptr(GVariant) metadata = NULL;
   g_autofree gchar *version_commit = NULL;
@@ -152,9 +153,11 @@ variant_add_commit_details (GVariantDict *dict,
     g_variant_lookup (metadata, "version", "s", &version_commit);
 
   if (version_commit != NULL)
-    g_variant_dict_insert (dict, "version", "s", version_commit);
+    g_variant_dict_insert (dict, glnx_strjoina (prefix ?: "", "version"),
+                           "s", version_commit);
   if (timestamp > 0)
-    g_variant_dict_insert (dict, "timestamp", "t", timestamp);
+    g_variant_dict_insert (dict, glnx_strjoina (prefix ?: "", "timestamp"),
+                           "t", timestamp);
 }
 
 GVariant *
@@ -166,11 +169,14 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   g_autoptr(GVariant) commit = NULL;
   g_autoptr(RpmOstreeOrigin) origin = NULL;
   g_autofree gchar *id = NULL;
+  const char *base_checksum;
 
   GVariant *sigs = NULL; /* floating variant */
 
   GVariantDict dict;
 
+  const char *refspec;
+  g_autofree char *pending_base_commitrev = NULL;
   const gchar *osname = ostree_deployment_get_osname (deployment);
   const gchar *csum = ostree_deployment_get_csum (deployment);
   gint serial = ostree_deployment_get_deployserial (deployment);
@@ -189,6 +195,8 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   if (!origin)
     return NULL;
 
+  refspec = rpmostree_origin_get_refspec (origin);
+
   g_variant_dict_init (&dict, NULL);
 
   g_variant_dict_insert (&dict, "id", "s", id);
@@ -198,18 +206,38 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   g_variant_dict_insert (&dict, "checksum", "s", csum);
   if (rpmostree_origin_is_locally_assembled (origin))
     {
-      const char *parent = ostree_commit_get_parent (commit);
-      g_assert (parent);
-      g_variant_dict_insert (&dict, "base-checksum", "s", parent);
-      sigs = rpmostreed_deployment_gpg_results (repo, rpmostree_origin_get_refspec (origin),
-                                                parent, &gpg_enabled);
+      base_checksum = ostree_commit_get_parent (commit);
+      g_assert (base_checksum);
+      g_variant_dict_insert (&dict, "base-checksum", "s", base_checksum);
+      sigs = rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &gpg_enabled);
     }
   else
-    sigs = rpmostreed_deployment_gpg_results (repo, rpmostree_origin_get_refspec (origin),
-                                              csum, &gpg_enabled);
+    {
+      base_checksum = csum;
+      sigs = rpmostreed_deployment_gpg_results (repo, refspec, csum, &gpg_enabled);
+    }
+  variant_add_commit_details (&dict, NULL, commit);
 
-  variant_add_commit_details (&dict, commit);
-  g_variant_dict_insert (&dict, "origin", "s", rpmostree_origin_get_refspec (origin));
+  if (!ostree_repo_resolve_rev (repo, refspec, TRUE,
+                                &pending_base_commitrev, error))
+    return NULL;
+
+  if (pending_base_commitrev && strcmp (pending_base_commitrev, base_checksum) != 0)
+    {
+      g_autoptr(GVariant) pending_base_commit = NULL;
+
+      if (!ostree_repo_load_variant (repo,
+                                     OSTREE_OBJECT_TYPE_COMMIT,
+                                     pending_base_commitrev,
+                                     &pending_base_commit,
+                                     error))
+        return NULL;
+  
+      g_variant_dict_insert (&dict, "pending-base-checksum", "s", pending_base_commitrev);
+      variant_add_commit_details (&dict, "pending-base-", pending_base_commit);
+    }
+
+  g_variant_dict_insert (&dict, "origin", "s", refspec);
   if (rpmostree_origin_get_packages (origin) != NULL)
     g_variant_dict_insert (&dict, "packages", "^as", rpmostree_origin_get_packages (origin));
   if (sigs != NULL)
@@ -285,7 +313,7 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
   if (osname != NULL)
     g_variant_dict_insert (&dict, "osname", "s", osname);
   g_variant_dict_insert (&dict, "checksum", "s", head);
-  variant_add_commit_details (&dict, commit);
+  variant_add_commit_details (&dict, NULL, commit);
   g_variant_dict_insert (&dict, "origin", "s", origin_refspec);
   if (sigs != NULL)
     g_variant_dict_insert_value (&dict, "signatures", sigs);

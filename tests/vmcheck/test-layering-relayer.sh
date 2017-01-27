@@ -53,10 +53,18 @@ reboot_and_assert_base() {
 
 # UPGRADE
 
+assert_status_jq '.deployments[0]["base-checksum"]' \
+                 '.deployments[0]["pending-base-checksum"]|not'
 # let's synthesize an upgrade
 commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
 vm_rpmostree upgrade
+assert_status_jq '.deployments[1]["base-checksum"]' \
+                 '.deployments[1]["pending-base-checksum"]'
+vm_rpmostree status --json > status.json
 reboot_and_assert_base $commit
+assert_status_jq '.deployments[0]["base-checksum"]' \
+                 '.deployments[0]["pending-base-checksum"]|not' \
+                 '.deployments[1]["pending-base-checksum"]'
 echo "ok upgrade"
 
 vm_assert_layered_pkg foo present

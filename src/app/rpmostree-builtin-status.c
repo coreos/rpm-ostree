@@ -111,6 +111,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
     {
       g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
       g_autoptr(GVariantDict) dict = NULL;
+      gboolean is_locally_assembled;
       const gchar *const*origin_packages = NULL;
       const gchar *origin_refspec;
       const gchar *id;
@@ -123,7 +124,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       guint64 t = 0;
       int serial;
       gboolean is_booted;
-      const guint max_key_len = strlen ("GPGSignature");
+      const guint max_key_len = strlen ("PendingBaseVersion");
       g_autoptr(GVariant) signatures = NULL;
       g_autofree char *timestamp_string = NULL;
 
@@ -198,13 +199,46 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         {
           print_kv ("Timestamp", max_key_len, timestamp_string);
         }
-      if (origin_packages || regenerate_initramfs)
+      is_locally_assembled = origin_packages || regenerate_initramfs;
+      if (is_locally_assembled)
         {
           const char *base_checksum;
           g_assert (g_variant_dict_lookup (dict, "base-checksum", "&s", &base_checksum));
           print_kv ("BaseCommit", max_key_len, base_checksum);
         }
       print_kv ("Commit", max_key_len, checksum);
+
+      /* Pending state, but only for the booted comit */
+      if (is_booted)
+        {
+          const gchar *pending_checksum = NULL;
+          const gchar *pending_version = NULL;
+
+          if (g_variant_dict_lookup (dict, "pending-base-checksum", "&s", &pending_checksum))
+            {
+              g_autofree char *version_time = NULL;
+              print_kv (is_locally_assembled ? "PendingBaseCommit" : "PendingCommit",
+                        max_key_len, pending_checksum);
+              g_assert (g_variant_dict_lookup (dict, "pending-base-timestamp", "t", &t));
+              g_variant_dict_lookup (dict, "pending-base-version", "&s", &pending_version);
+
+              if (pending_version)
+                {
+                  g_autoptr(GDateTime) timestamp = g_date_time_new_from_unix_utc (t);
+                  g_autofree char *version_time = NULL;
+
+                  if (timestamp != NULL)
+                    timestamp_string = g_date_time_format (timestamp, "%Y-%m-%d %T");
+                  else
+                    timestamp_string = g_strdup_printf ("(invalid timestamp)");
+
+                  version_time = g_strdup_printf ("%s (%s)", pending_version, timestamp_string);
+                  print_kv (is_locally_assembled ? "PendingBaseVersion" : "PendingVersion",
+                            max_key_len, version_time);
+                }
+            }
+        }
+
       print_kv ("OSName", max_key_len, os_name);
 
       if (!g_variant_dict_lookup (dict, "gpg-enabled", "b", &gpg_enabled))
