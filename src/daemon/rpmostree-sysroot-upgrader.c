@@ -718,8 +718,7 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
 
   tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
 
-
-  if (!glnx_mkdtempat (repo_dfd, self->tmprootfs, 00755, error))
+  if (!glnx_mkdtempat (repo_dfd, tmprootfs, 00755, error))
     return FALSE;
 
   /* Now we'll delete it on cleanup */
