@@ -43,6 +43,14 @@ RpmOstreeBwrap *rpmostree_bwrap_new (int rootfs,
                                      GError **error,
                                      ...) G_GNUC_NULL_TERMINATED;
 
+RpmOstreeBwrap *rpmostree_bwrap_new_host (GError **error, ...) G_GNUC_NULL_TERMINATED;
+
+gboolean rpmostree_bwrap_bind_rofiles (RpmOstreeBwrap *bwrap,
+                                       int         src_dfd,
+                                       const char *src,
+                                       const char *dest,
+                                       GError **error);
+
 void rpmostree_bwrap_append_bwrap_argv (RpmOstreeBwrap *bwrap, ...) G_GNUC_NULL_TERMINATED;
 void rpmostree_bwrap_append_child_argv (RpmOstreeBwrap *bwrap, ...) G_GNUC_NULL_TERMINATED;
 

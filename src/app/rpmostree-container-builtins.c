@@ -30,6 +30,7 @@
 
 #include "rpmostree-container-builtins.h"
 #include "rpmostree-util.h"
+#include "rpmostree-bwrap.h"
 #include "rpmostree-core.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
@@ -42,7 +43,12 @@ static GOptionEntry init_option_entries[] = {
   { NULL }
 };
 
+static char *opt_postprocess_from_host;
+static gboolean opt_postprocess_networking;
+
 static GOptionEntry assemble_option_entries[] = {
+  { "postprocess-from-host", 0, 0, G_OPTION_ARG_STRING, &opt_postprocess_from_host, "Execute SCRIPT in a container with target mounted at /target-rootfs", "SCRIPT" },
+  { "postprocess-networking", 0, 0, G_OPTION_ARG_NONE, &opt_postprocess_networking, "Enable networking (Share network namespace in container)", NULL },
   { NULL }
 };
 
@@ -53,6 +59,11 @@ typedef struct {
   int roots_dfd;
   OstreeRepo *repo;
   RpmOstreeContext *ctx;
+
+  int tmprootfs_dfd;
+  char *tmprootfs;
+
+  OstreeRepoDevInoCache *devino_cache;
 
   int rpmmd_dfd;
 } ROContainerContext;
@@ -73,6 +84,9 @@ roc_context_init_core (ROContainerContext *rocctx,
     g_autoptr(GFile) repo_path = g_file_new_for_path (repo_pathstr);
     rocctx->repo = ostree_repo_new (repo_path);
   }
+
+  rocctx->devino_cache = ostree_repo_devino_cache_new ();
+  rocctx->tmprootfs_dfd = -1;
 
   ret = TRUE;
  out:
@@ -133,6 +147,8 @@ roc_context_deinit (ROContainerContext *rocctx)
     (void) close (rocctx->roots_dfd);
   if (rocctx->rpmmd_dfd)
     (void) close (rocctx->rpmmd_dfd);
+  if (rocctx->devino_cache)
+    ostree_repo_devino_cache_unref (rocctx->devino_cache);
   g_clear_object (&rocctx->ctx);
 }
 
@@ -224,17 +240,154 @@ symlink_at_replace (const char    *oldpath,
   return ret;
 }
 
+static gboolean
+prepare_assemble_import (ROContainerContext *rocctx,
+                         RpmOstreeTreespec  *treespec,
+                         GCancellable       *cancellable,
+                         GError            **error)
+{
+  g_autoptr(RpmOstreeInstall) install = {0,};
+
+  if (!roc_context_prepare_for_root (rocctx, treespec, cancellable, error))
+    return FALSE;
+
+  /* --- Downloading metadata --- */
+  if (!rpmostree_context_download_metadata (rocctx->ctx, cancellable, error))
+    return FALSE;
+
+  /* --- Resolving dependencies --- */
+  if (!rpmostree_context_prepare_install (rocctx->ctx, &install, cancellable, error))
+    return FALSE;
+
+  rpmostree_print_transaction (rpmostree_context_get_hif (rocctx->ctx));
+
+  /* --- Download as necessary --- */
+  if (!rpmostree_context_download (rocctx->ctx, install, cancellable, error))
+    return FALSE;
+
+  /* --- Import as necessary --- */
+  if (!rpmostree_context_import (rocctx->ctx, install, cancellable, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+open_tmprootfs (ROContainerContext *rocctx,
+                GError **error)
+{
+  g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
+
+  if (!glnx_mkdtempat (rocctx->userroot_dfd, tmprootfs, 0755, error))
+    return FALSE;
+
+  rocctx->tmprootfs = g_steal_pointer (&tmprootfs);
+
+  if (!glnx_opendirat (rocctx->userroot_dfd, rocctx->tmprootfs, TRUE,
+                       &rocctx->tmprootfs_dfd, error))
+    return FALSE;
+
+  return TRUE;
+}
+
 int
-rpmostree_container_builtin_assemble (int             argc,
-                                      char          **argv,
-                                      GCancellable   *cancellable,
-                                      GError        **error)
+rpmostree_container_builtin_assemble_export (int             argc,
+                                             char          **argv,
+                                             GCancellable   *cancellable,
+                                             GError        **error)
 {
   int exit_status = EXIT_FAILURE;
-  g_autoptr(GOptionContext) context = g_option_context_new ("NAME [PKGNAME PKGNAME...]");
+  g_autoptr(GOptionContext) context = g_option_context_new ("TREESPEC");
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
-  g_autoptr(RpmOstreeInstall) install = {0,};
+  const char *specpath;
+  const char *name;
+  g_autofree char *commit = NULL;
+  g_autoptr(RpmOstreeTreespec) treespec = NULL;
+
+  if (!rpmostree_option_context_parse (context,
+                                       assemble_option_entries,
+                                       &argc, &argv,
+                                       RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                       cancellable,
+                                       NULL,
+                                       error))
+    goto out;
+
+  if (argc < 1)
+    {
+      rpmostree_usage_error (context, "TREESPEC must be specified", error);
+      goto out;
+    }
+
+  specpath = argv[1];
+  treespec = rpmostree_treespec_new_from_path (specpath, error);
+  if (!treespec)
+    goto out;
+
+  name = rpmostree_treespec_get_ref (treespec);
+  if (name == NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Missing ref in treespec");
+      goto out;
+    }
+
+  if (!roc_context_init (rocctx, error))
+    goto out;
+
+  if (!prepare_assemble_import (rocctx, treespec, cancellable, error))
+    goto out;
+
+  if (!open_tmprootfs (rocctx, error))
+    goto out;
+
+  if (!rpmostree_context_assemble_tmprootfs (rocctx->ctx, rocctx->tmprootfs_dfd,
+                                             rocctx->devino_cache,
+                                             RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
+                                             FALSE, cancellable, error))
+    goto out;
+
+  if (opt_postprocess_from_host)
+    {
+      g_autoptr(RpmOstreeBwrap) bwrap = rpmostree_bwrap_new_host (error, NULL);
+      if (!opt_postprocess_networking)
+        rpmostree_bwrap_append_bwrap_argv (bwrap, "--unshare-net", NULL);
+
+      rpmostree_bwrap_append_bwrap_argv (bwrap, "--tmpfs", "/tmp", NULL);
+      if (!rpmostree_bwrap_bind_rofiles (bwrap, rocctx->tmprootfs_dfd, ".", "/tmp/target-rootfs", error))
+        goto out;
+
+      rpmostree_bwrap_append_child_argv (bwrap, opt_postprocess_from_host, NULL);
+
+      if (!rpmostree_bwrap_run (bwrap, error))
+        goto out;
+    }
+
+  if (!rpmostree_context_commit_tmprootfs (rocctx->ctx, rocctx->tmprootfs_dfd,
+                                           rocctx->devino_cache,
+                                           NULL,
+                                           RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
+                                           &commit, cancellable, error))
+    goto out;
+
+  exit_status = EXIT_SUCCESS;
+ out:
+  if (rocctx->tmprootfs)
+    (void) glnx_shutil_rm_rf_at (rocctx->userroot_dfd, rocctx->tmprootfs, NULL, NULL);
+  return exit_status;
+}
+
+int
+rpmostree_container_builtin_assemble_checkout (int             argc,
+                                               char          **argv,
+                                               GCancellable   *cancellable,
+                                               GError        **error)
+{
+  int exit_status = EXIT_FAILURE;
+  g_autoptr(GOptionContext) context = g_option_context_new ("TREESPEC");
+  g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
+  ROContainerContext *rocctx = &rocctx_data;
   const char *specpath;
   struct stat stbuf;
   const char *name;
@@ -253,7 +406,7 @@ rpmostree_container_builtin_assemble (int             argc,
 
   if (argc < 1)
     {
-      rpmostree_usage_error (context, "SPEC must be specified", error);
+      rpmostree_usage_error (context, "TREESPEC must be specified", error);
       goto out;
     }
 
@@ -290,44 +443,20 @@ rpmostree_container_builtin_assemble (int             argc,
       goto out;
     }
 
-  if (!roc_context_prepare_for_root (rocctx, treespec, cancellable, error))
+  if (!prepare_assemble_import (rocctx, treespec, cancellable, error))
     goto out;
 
-  /* --- Downloading metadata --- */
-  if (!rpmostree_context_download_metadata (rocctx->ctx, cancellable, error))
+  if (!open_tmprootfs (rocctx, error))
     goto out;
 
-  /* --- Resolving dependencies --- */
-  if (!rpmostree_context_prepare_install (rocctx->ctx, &install, cancellable, error))
+  if (!rpmostree_context_assemble_commit (rocctx->ctx, rocctx->tmprootfs_dfd, NULL,
+                                          NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
+                                          FALSE, &commit, cancellable, error))
     goto out;
 
-  rpmostree_print_transaction (rpmostree_context_get_hif (rocctx->ctx));
-
-  /* --- Download as necessary --- */
-  if (!rpmostree_context_download (rocctx->ctx, install, cancellable, error))
-    goto out;
-
-  /* --- Import as necessary --- */
-  if (!rpmostree_context_import (rocctx->ctx, install, cancellable, error))
-    goto out;
-
-  { g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
-    glnx_fd_close int tmprootfs_dfd = -1;
-
-    if (!glnx_mkdtempat (rocctx->userroot_dfd, tmprootfs, 0755, error))
-      goto out;
-
-    if (!glnx_opendirat (rocctx->userroot_dfd, tmprootfs, TRUE,
-                         &tmprootfs_dfd, error))
-      goto out;
-
-    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmprootfs_dfd, NULL,
-                                            NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
-                                            FALSE, &commit, cancellable, error))
-      goto out;
-
-    glnx_shutil_rm_rf_at (rocctx->userroot_dfd, tmprootfs, cancellable, NULL);
-  }
+  (void) close (glnx_steal_fd (&rocctx->tmprootfs_dfd));
+  glnx_shutil_rm_rf_at (rocctx->userroot_dfd, rocctx->tmprootfs, cancellable, NULL);
+  g_free (g_steal_pointer (&rocctx->tmprootfs));
 
   g_print ("Checking out %s @ %s...\n", name, commit);
 
@@ -355,6 +484,10 @@ rpmostree_container_builtin_assemble (int             argc,
 
   exit_status = EXIT_SUCCESS;
  out:
+  if (rocctx->tmprootfs_dfd != -1)
+    (void) close (glnx_steal_fd (&rocctx->tmprootfs_dfd));
+  if (rocctx->tmprootfs)
+    (void) glnx_shutil_rm_rf_at (rocctx->userroot_dfd, rocctx->tmprootfs, NULL, NULL);
   return exit_status;
 }
 

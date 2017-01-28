@@ -42,7 +42,9 @@ struct RpmOstreeBwrap {
 
   gboolean executed;
 
+  gboolean is_host_fs;
   int rootfs_fd;
+  int rofiles_fuse_dfd;
 
   GPtrArray *argv;
   const char *child_argv0;
@@ -145,14 +147,18 @@ child_setup_fchdir (gpointer user_data)
     err (1, "fchdir");
 }
 
-static gboolean
-setup_rofiles_usr (RpmOstreeBwrap *bwrap,
-                   GError **error)
+gboolean
+rpmostree_bwrap_bind_rofiles (RpmOstreeBwrap *bwrap,
+                              int         src_dfd,
+                              const char *src,
+                              const char *dest,
+                              GError **error)
 {
   gboolean ret = FALSE;
   int estatus;
-  const char *rofiles_argv[] = { "rofiles-fuse", "./usr", NULL, NULL};
+  const char *rofiles_argv[] = { "rofiles-fuse", src, NULL, NULL};
   gboolean mntpoint_created = FALSE;
+  glnx_fd_close int src_fd = -1;
 
   bwrap->rofiles_mnt = g_strdup ("/tmp/rofiles-fuse.XXXXXX");
   rofiles_argv[2] = bwrap->rofiles_mnt;
@@ -161,14 +167,17 @@ setup_rofiles_usr (RpmOstreeBwrap *bwrap,
     goto out;
   mntpoint_created = TRUE;
 
+  if (!glnx_opendirat (src_dfd, src, TRUE, &src_fd, error))
+    goto out;
+
   if (!g_spawn_sync (NULL, (char**)rofiles_argv, NULL, G_SPAWN_SEARCH_PATH,
-                     child_setup_fchdir, GINT_TO_POINTER (bwrap->rootfs_fd),
+                     child_setup_fchdir, GINT_TO_POINTER (src_fd),
                      NULL, NULL, &estatus, error))
     goto out;
   if (!g_spawn_check_exit_status (estatus, error))
     goto out;
 
-  rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", bwrap->rofiles_mnt, "/usr", NULL);
+  rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", bwrap->rofiles_mnt, dest, NULL);
 
   ret = TRUE;
  out:
@@ -244,7 +253,7 @@ rpmostree_bwrap_new (int rootfs_fd,
       rpmostree_bwrap_append_bwrap_argv (ret, "--ro-bind", "usr", "/usr", NULL);
       break;
     case RPMOSTREE_BWRAP_MUTATE_ROFILES:
-      if (!setup_rofiles_usr (ret, error))
+      if (!rpmostree_bwrap_bind_rofiles (ret, ret->rootfs_fd, "usr", "/usr", error))
         goto out;
       break;
     case RPMOSTREE_BWRAP_MUTATE_FREELY:
@@ -264,12 +273,53 @@ rpmostree_bwrap_new (int rootfs_fd,
   return retval;
 }
 
+RpmOstreeBwrap *
+rpmostree_bwrap_new_host (GError **error,
+                          ...)
+{
+  va_list args;
+  g_autoptr(RpmOstreeBwrap) ret = g_new0 (RpmOstreeBwrap, 1);
+
+  ret->refcount = 1;
+  ret->is_host_fs = TRUE;
+  ret->argv = g_ptr_array_new_with_free_func (g_free);
+
+  rpmostree_bwrap_append_bwrap_argv (ret,
+                                     WITH_BUBBLEWRAP_PATH,
+                                     "--bind", "/", "/",
+                                     /* Here we do most namespaces except the user one.
+                                      * Down the line we want to do a userns too I think,
+                                      * but it may need some mapping work.
+                                      *
+                                      * We also don't unshare the netns yet.
+                                      */
+                                     "--unshare-pid",
+                                     "--unshare-uts",
+                                     "--unshare-ipc",
+                                     "--unshare-cgroup-try",
+                                     NULL);
+
+  { const char *arg;
+    va_start (args, error);
+    while ((arg = va_arg (args, char *)))
+      g_ptr_array_add (ret->argv, g_strdup (arg));
+    va_end (args);
+  }
+
+  return g_steal_pointer (&ret);
+}
+
 static void
 bwrap_child_setup (gpointer data)
 {
   RpmOstreeBwrap *bwrap = data;
 
-  if (fchdir (bwrap->rootfs_fd) < 0)
+  if (bwrap->is_host_fs)
+    {
+      if (chdir ("/") < 0)
+        err (1, "chdir");
+    }
+  else if (fchdir (bwrap->rootfs_fd) < 0)
     err (1, "fchdir");
 
   if (bwrap->child_setup_func)

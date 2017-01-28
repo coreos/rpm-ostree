@@ -19,9 +19,10 @@
 
 set -euo pipefail
 
+selfdir=$(dirname $0)
 . ${commondir}/libtest.sh
 
-echo "1..2"
+echo "1..4"
 
 rpm-ostree container init
 
@@ -34,7 +35,7 @@ packages=empty
 repos=test-repo
 EOF
 
-rpm-ostree container assemble empty.conf
+rpm-ostree container assemble-checkout empty.conf
 assert_has_dir roots/empty.0
 test -f roots/empty/usr/etc/group
 ostree --repo=repo rev-parse empty
@@ -47,18 +48,30 @@ repos=test-repo
 flavor=docker
 EOF
 
-rpm-ostree container assemble empty-docker.conf
+rpm-ostree container assemble-checkout empty-docker.conf
 assert_has_dir roots/empty-docker.0
 ostree --repo=repo rev-parse empty-docker
 test -f roots/empty-docker/etc/group
 echo "ok assemble"
+
+ostree --repo=repo refs --delete empty-docker
+rpm-ostree container assemble-export empty-docker.conf
+ostree --repo=repo rev-parse empty-docker
+echo "ok assemble-export basic"
+
+ostree --repo=repo refs --delete empty-docker
+rpm-ostree container assemble-export --postprocess-from-host=${selfdir}/postprocess.sh empty-docker.conf
+ostree --repo=repo checkout -U empty-docker empty-docker-co
+assert_file_has_content empty-docker-co/foo foo
+rm empty-docker-co -rf
+echo "ok assemble-export postprocess"
 
 cat >nobranch.conf <<EOF
 [tree]
 packages=empty
 repos=test-repo
 EOF
-if rpm-ostree container assemble nobranch.conf 2>err.txt; then
+if rpm-ostree container assemble-checkout nobranch.conf 2>err.txt; then
     assert_not_reached "nobranch.conf"
 fi
 
@@ -68,7 +81,7 @@ ref=empty
 packages=
 repos=test-repo
 EOF
-if rpm-ostree container assemble nopackages.conf 2>err.txt; then
+if rpm-ostree container assemble-checkout nopackages.conf 2>err.txt; then
     assert_not_reached "nopackages.conf"
 fi
 
@@ -77,7 +90,7 @@ cat >norepos.conf <<EOF
 ref=empty
 packages=empty
 EOF
-if rpm-ostree container assemble norepos.conf 2>err.txt; then
+if rpm-ostree container assemble-checkout norepos.conf 2>err.txt; then
     assert_not_reached "norepos.conf"
 fi
 
@@ -87,7 +100,7 @@ ref=notfound
 packages=notfound
 repos=test-repo
 EOF
-if rpm-ostree container assemble notfound.conf 2>err.txt; then
+if rpm-ostree container assemble-checkout notfound.conf 2>err.txt; then
     assert_not_reached "notfound.conf"
 fi
 

@@ -30,7 +30,8 @@ typedef struct {
 
 static RpmOstreeContainerCommand container_subcommands[] = {
   { "init", rpmostree_container_builtin_init },
-  { "assemble", rpmostree_container_builtin_assemble },
+  { "assemble-checkout", rpmostree_container_builtin_assemble_checkout },
+  { "assemble-export", rpmostree_container_builtin_assemble_export },
   /* { "start", rpmostree_container_builtin_start }, */
   { "upgrade", rpmostree_container_builtin_upgrade },
   { NULL, NULL }
