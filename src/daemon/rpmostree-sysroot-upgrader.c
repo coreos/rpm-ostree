@@ -716,7 +716,7 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
   g_assert (!self->tmprootfs);
   g_assert_cmpint (self->tmprootfs_dfd, ==, -1);
 
-  tmprootfs = g_strdup ("/sysroot/ostree/repo/tmp/rpmostree-commit-XXXXXX");
+  tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
 
   if (!glnx_mkdtempat (repo_dfd, tmprootfs, 00755, error))
     return FALSE;
@@ -936,6 +936,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   g_autoptr(RpmOstreeTreespec) treespec = NULL;
   g_autoptr(RpmOstreeInstall) install = {0,};
   g_autoptr(GHashTable) pkgset = hashset_from_strv (rpmostree_origin_get_packages (self->origin));
+  g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
   const gboolean have_packages = g_hash_table_size (pkgset) > 0;
   glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
 
@@ -958,7 +959,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
 
     /* point libhif to the yum.repos.d and os-release of the merge deployment */
     dnf_context_set_repo_dir (hifctx, reposdir);
-    dnf_context_set_source_root (hifctx, self->tmprootfs);
+    dnf_context_set_source_root (hifctx, tmprootfs_abspath);
 
     /* point the core to the passwd & group of the merge deployment */
     rpmostree_context_set_passwd_dir (ctx, passwddir);
@@ -981,7 +982,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   if (treespec == NULL)
     goto out;
 
-  if (!rpmostree_context_setup (ctx, self->tmprootfs, NULL, treespec,
+  if (!rpmostree_context_setup (ctx, tmprootfs_abspath, NULL, treespec,
                                 cancellable, error))
     goto out;
 
