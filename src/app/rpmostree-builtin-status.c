@@ -216,7 +216,6 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
 
           if (g_variant_dict_lookup (dict, "pending-base-checksum", "&s", &pending_checksum))
             {
-              g_autofree char *version_time = NULL;
               print_kv (is_locally_assembled ? "PendingBaseCommit" : "PendingCommit",
                         max_key_len, pending_checksum);
               g_assert (g_variant_dict_lookup (dict, "pending-base-timestamp", "t", &t));
