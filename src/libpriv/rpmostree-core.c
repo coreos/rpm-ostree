@@ -200,6 +200,48 @@ rpmostree_treespec_to_variant (RpmOstreeTreespec *spec)
   return g_variant_ref (spec->spec);
 }
 
+/* Given an input string for specifying a package, what should we do with it? */
+RpmOstreePkgspecKind
+rpmostree_pkgspec_classify (const char *specstr, GError **error)
+{
+  if (g_str_has_prefix (pkgspec, PKGSPEC_KIND_PATH_STR))
+    {
+      const char *peeled = rpmostree_pkgspec_peel (pkgspec);
+      if (*peeled != '/')
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Invalid package specification %s, file path must begin with /", pkgspec);
+          return FALSE;
+        }
+      return RPMOSTREE_PKGSPEC_KIND_LOCAL;
+    }
+  else if (g_str_has_prefix (pkgspec, RPMOSTREE_PKGSPEC_KIND_IMPORTED_STR))
+    {
+      return RPMOSTREE_PKGSPEC_KIND_IMPORTED;
+    }
+  else if (strchr (pkgspec, '/') != NULL)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Invalid package specification %s", pkgspec);
+      return RPMOSTREE_PKGSPEC_KIND_INVALID;
+    }
+  return RPMOSTREE_PKGSPEC_KIND_REMOTE;
+}
+
+/* Return the package part of a spec, aborting if it's invalid */
+const char *
+rpmostree_pkgspec_peel (const char *specst)
+{
+  if (g_str_has_prefix (pkgspec, RPMOSTREE_PKGSPEC_KIND_LOCAL_STR))
+    return pkgspec + strlen (RPMOSTREE_PKGSPEC_KIND_LOCAL_STR);
+  if (g_str_has_prefix (pkgspec, RPMOSTREE_PKGSPEC_KIND_IMPORTED_STR))
+    return pkgspec + strlen (RPMOSTREE_PKGSPEC_KIND_IMPORTED);
+  else if (strchr (pkgspec, '/') != NULL)
+    g_assert_not_reached ();
+
+ return pkgspec;
+}
+
 /***********************************************************
  *                    RpmOstreeInstall                     *
  ***********************************************************
@@ -211,6 +253,7 @@ struct _RpmOstreeInstall {
   GPtrArray *packages_requested;
 
   /* Target state -- these are populated during prepare_install() */
+  GPtrArray *packages_local_reused_from_import;
   GPtrArray *packages_to_download;
   GPtrArray *packages_to_import;
   GPtrArray *packages_to_relabel;
@@ -233,6 +276,7 @@ rpmostree_install_finalize (GObject *object)
   g_clear_pointer (&self->packages_to_download, g_ptr_array_unref);
   g_clear_pointer (&self->packages_to_import, g_ptr_array_unref);
   g_clear_pointer (&self->packages_to_relabel, g_ptr_array_unref);
+  g_clear_pointer (&self->packages_local_reused_from_import, g_ptr_array_unref);
 
   G_OBJECT_CLASS (rpmostree_install_parent_class)->finalize (object);
 }
@@ -764,6 +808,12 @@ rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
                                    dnf_package_get_arch (pkg));
 }
 
+char *
+rpmostree_get_cache_branch_imported (const char *pkgname)
+{
+  return g_strconcat ("rpmostree/importedpkg/", pkgname);
+}
+
 static gboolean
 pkg_is_local (DnfPackage *pkg)
 {
@@ -973,12 +1023,35 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
 
   ret_install->packages_requested = g_ptr_array_new_with_free_func (g_free);
 
+  ret_install->packages_local_reused_from_import
+    = g_ptr_array_new_with_free_func ((GDestroyNotify)g_free);
+
   { const char *const*strviter = (const char *const*)pkgnames;
     for (; strviter && *strviter; strviter++)
       {
-        const char *pkgname = *strviter;
-        if (!dnf_context_install (hifctx, pkgname, error))
-          goto out;
+        const char *pkgspec = *strviter;
+        RpmOstreePkgspecKind kind = rpmostree_pkgspec_classify (pkgspec);
+        const char *peeled = rpmostree_pkgspec_peel (pkgspec);
+
+        switch (kind)
+          {
+          case RPMOSTREE_PKGSPEC_KIND_INVALID:
+            g_assert_not_reached ();
+          case RPMOSTREE_PKGSPEC_KIND_PATH:
+          case RPMOSTREE_PKGSPEC_KIND_REMOTE:
+            if (!dnf_context_install (hifctx, peeled, error))
+              goto out;
+            break;
+          case RPMOSTREE_PKGSPEC_KIND_IMPORTED:
+            /* FIXME, In this case, libdnf doesn't know how to install from ostree;
+             * what we need to do is parse out the Header again and feed
+             * it back.  Right now we're ignoring dependencies/conflicts for
+             * locally installed packages.
+             */
+            g_ptr_array_add (ret_install->packages_local_reused_from_import, g_strdup (peeled));
+            break;
+          }
+        /* FIXME - not using this? */
         g_ptr_array_add (ret_install->packages_requested, g_strdup (pkgname));
       }
   }
@@ -2176,6 +2249,57 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                                             pkg),
                                        cancellable, error))
         goto out;
+    }
+  for (guint i = 0; i < self->packages_local_reused_from_import->len; i++)
+    {
+      const char *localpkg_name = self->packages_local_reused_from_import->pdata[i];
+      g_autofree char *ref = rpmostree_get_cache_branch_imported (localpkg_name);
+      g_autofree char *cached_rev = NULL;
+      g_autoptr(GVariant) pkg_commit = NULL;
+      g_autoptr(GVariant) header_variant = NULL;
+      const char *nevra = dnf_package_get_nevra (pkg);
+      gboolean sepolicy_matches;
+
+      if (!ostree_repo_resolve_rev (pkgcache_repo, ref, FALSE,
+                                    &cached_rev, error))
+        goto out;
+
+      if (self->sepolicy)
+        {
+          if (!commit_has_matching_sepolicy (pkgcache_repo, cached_rev,
+                                             self->sepolicy, &sepolicy_matches,
+                                             error))
+            goto out;
+          /* FIXME - relabeling */
+          g_assert (sepolicy_matches);
+        }
+
+      if (!ostree_repo_load_variant (pkgcache_repo, OSTREE_OBJECT_TYPE_COMMIT,
+                                     cached_rev, &pkg_commit, error))
+        goto out;
+
+      { g_autoptr(GVariant) pkg_meta = g_variant_get_child_value (pkg_commit, 0);
+        g_autoptr(GVariantDict) pkg_meta_dict = g_variant_dict_new (pkg_meta);
+
+        header_variant = _rpmostree_vardict_lookup_value_required (pkg_meta_dict, "rpmostree.metadata",
+                                                                   (GVariantType*)"ay", error);
+        if (!header_variant)
+          {
+            g_prefix_error (error, "In commit %s of %s: ", cached_rev, ref);
+            goto out;
+          }
+
+        if (!glnx_file_replace_contents_at (tmp_metadata_dfd, localpkg_name,
+                                            g_variant_get_data (header_variant),
+                                            g_variant_get_size (header_variant),
+                                            GLNX_FILE_REPLACE_NODATASYNC,
+                                            cancellable, error))
+          goto out;
+
+        if (!add_to_transaction (ordering_ts, pkg, tmp_metadata_dfd, noscripts,
+                                 self->ignore_scripts,
+                                 cancellable, error))
+          goto out;
     }
 
   rpmostree_output_task_end ("done");
