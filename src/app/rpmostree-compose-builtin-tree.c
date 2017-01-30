@@ -25,6 +25,7 @@
 #include <json-glib/json-glib.h>
 #include <gio/gunixoutputstream.h>
 #include <libdnf/libdnf.h>
+#include <libdnf/dnf-repo.h>
 #include <sys/mount.h>
 #include <stdio.h>
 #include <libglnx.h>
@@ -322,6 +323,27 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (!rpmostree_context_download_metadata (ctx, cancellable, error))
     goto out;
 
+  { GPtrArray *repos = dnf_context_get_repos (rpmostree_context_get_hif (ctx));
+
+    g_print ("rpm-md repository versions:\n");
+    for (guint i = 0; i < repos->len; i++)
+      {
+        DnfRepo *repo = repos->pdata[i];
+        if (dnf_repo_get_enabled (repo))
+          {
+            g_autoptr(GDateTime) ts = g_date_time_new_from_unix_utc (dnf_repo_get_timestamp_generated (repo));
+            g_autofree char *formatted = g_date_time_format (ts, "%Y-%m-%d %T");
+            g_print ("  %s: generated=%s\n",
+                     dnf_repo_get_id (repo),
+                     formatted);
+          }
+        else
+          {
+            g_print ("  %s (not enabled in treefile)\n", dnf_repo_get_id (repo));
+          }
+      }
+    g_print ("\n");
+  }
   if (!rpmostree_context_prepare_install (ctx, &hifinstall, cancellable, error))
     goto out;
 
