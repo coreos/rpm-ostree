@@ -34,7 +34,7 @@ prepare_compose_test() {
 }
 
 runcompose() {
-    rpm-ostree compose --repo=${repobuild} tree --cache-only --cachedir=${test_compose_datadir}/cache ${treefile}
+    rpm-ostree compose --repo=${repobuild} tree --cache-only --cachedir=${test_compose_datadir}/cache ${treefile} "$@"
     ostree --repo=${repo} pull-local ${repobuild}
 }
 
