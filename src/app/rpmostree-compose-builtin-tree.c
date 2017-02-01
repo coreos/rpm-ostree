@@ -518,6 +518,7 @@ process_includes (RpmOstreeTreeComposeContext  *self,
 static gboolean
 parse_keyvalue_strings (char             **strings,
                         GVariantBuilder   *builder,
+                        char             **out_version,
                         GError           **error)
 {
   gboolean ret = FALSE;
@@ -538,8 +539,15 @@ parse_keyvalue_strings (char             **strings,
                        "Missing '=' in KEY=VALUE metadata '%s'", s);
           goto out;
         }
-          
+
       key = g_strndup (s, eq - s);
+
+      if (g_str_equal (key, "version"))
+        {
+          g_free (*out_version);
+          *out_version = g_strdup (eq + 1);
+        }
+
       g_variant_builder_add (builder, "{sv}", key,
                              g_variant_new_string (eq + 1));
     }
@@ -547,23 +555,6 @@ parse_keyvalue_strings (char             **strings,
   ret = TRUE;
  out:
   return ret;
-}
-
-static gboolean
-compose_strv_contains_prefix (gchar **strv,
-                              const gchar  *prefix)
-{
-  if (!strv)
-    return FALSE;
-
-  while (*strv)
-    {
-      if (g_str_has_prefix (*strv, prefix))
-        return TRUE;
-      ++strv;
-    }
-
-  return FALSE;
 }
 
 static gboolean
@@ -706,8 +697,8 @@ rpmostree_compose_builtin_tree (int             argc,
 
   if (opt_metadata_strings)
     {
-      if (!parse_keyvalue_strings (opt_metadata_strings,
-                                   metadata_builder, error))
+      if (!parse_keyvalue_strings (opt_metadata_strings, metadata_builder,
+                                   &next_version, error))
         goto out;
     }
 
@@ -795,7 +786,8 @@ rpmostree_compose_builtin_tree (int             argc,
     goto out;
 
   if (json_object_has_member (treefile, "automatic_version_prefix") &&
-      !compose_strv_contains_prefix (opt_metadata_strings, "version="))
+      /* let --add-metadata-string=version=... take precedence */
+      (next_version == NULL))
     {
       g_autoptr(GVariant) variant = NULL;
       g_autofree char *last_version = NULL;
