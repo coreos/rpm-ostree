@@ -1485,7 +1485,11 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
                                                                 error))
       goto out;
 
-    if (base_version != NULL)
+    if (base_version != NULL && next_version == NULL)
+      {
+        g_print ("Ignoring mutate-os-release: no commit version specified.");
+      }
+    else if (base_version != NULL)
       {
         g_autofree char *contents = NULL;
         g_autofree char *new_contents = NULL;
