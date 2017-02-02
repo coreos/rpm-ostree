@@ -1152,7 +1152,10 @@ import_one_package (RpmOstreeContext *self,
   g_autofree char *ostree_commit = NULL;
   glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
   g_autofree char *pkg_path;
+  DnfRepo *pkg_repo;
   int flags = 0;
+
+  pkg_repo = dnf_package_get_repo (pkg);
 
   if (pkg_is_local (pkg))
     pkg_path = g_strdup (dnf_package_get_filename (pkg));
@@ -1160,9 +1163,13 @@ import_one_package (RpmOstreeContext *self,
     {
       const char *pkg_location = dnf_package_get_location (pkg);
       pkg_path =
-        g_build_filename (dnf_repo_get_location (dnf_package_get_repo (pkg)),
+        g_build_filename (dnf_repo_get_location (pkg_repo),
                           "packages", glnx_basename (pkg_location), NULL);
     }
+
+  /* Verify signatures if enabled */
+  if (!dnf_transaction_gpgcheck_package (dnf_context_get_transaction (hifctx), pkg, error))
+    goto out;
 
   flags = RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION;
   if (self->unprivileged)
@@ -1219,6 +1226,9 @@ rpmostree_context_import (RpmOstreeContext *self,
     return TRUE;
 
   g_return_val_if_fail (get_pkgcache_repo (self) != NULL, FALSE);
+
+  if (!dnf_transaction_import_keys (dnf_context_get_transaction (hifctx), error))
+    goto out;
 
   {
     glnx_unref_object DnfState *hifstate = dnf_state_new ();

@@ -51,6 +51,11 @@ vm_cmd() {
   $SSH "$@"
 }
 
+# Delete anything which we might change between runs
+vm_clean_caches() {
+    vm_cmd rm /ostree/repo/extensions/rpmostree/pkgcache/refs/heads/* -rf
+}
+
 # run rpm-ostree in vm
 # - $@    args
 vm_rpmostree() {
@@ -68,6 +73,7 @@ vm_send() {
 
 # copy the test repo to the vm
 vm_send_test_repo() {
+  gpgcheck=${1:-0}
   vm_cmd rm -rf /tmp/vmcheck
   vm_send /tmp/vmcheck ${commondir}/compose/yum/repo
 
@@ -76,6 +82,16 @@ vm_send_test_repo() {
 name=test-repo
 baseurl=file:///tmp/vmcheck/repo
 EOF
+
+  if [ $gpgcheck -eq 1 ]; then
+      cat >> vmcheck.repo <<EOF
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-25-primary
+EOF
+  else
+      echo "Enabling vmcheck.repo without GPG"
+      echo 'gpgcheck=0' >> vmcheck.repo
+  fi
 
   vm_send /etc/yum.repos.d vmcheck.repo
 }
