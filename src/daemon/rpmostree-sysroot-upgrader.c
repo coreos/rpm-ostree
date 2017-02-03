@@ -712,7 +712,6 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
 {
   OstreeRepoCheckoutAtOptions checkout_options = { 0, };
   int repo_dfd = ostree_repo_get_dfd (self->repo); /* borrowed */
-  g_autofree char *tmprootfs = NULL;
 
   g_assert (!self->tmprootfs);
   g_assert_cmpint (self->tmprootfs_dfd, ==, -1);
