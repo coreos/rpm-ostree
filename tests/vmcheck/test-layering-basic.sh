@@ -53,6 +53,12 @@ if ! vm_cmd /usr/bin/foo | grep "Happy foobing!"; then
 fi
 echo "ok correct output"
 
+# check that root is a shared mount
+# https://bugzilla.redhat.com/show_bug.cgi?id=1318547
+if ! vm_cmd "findmnt / -no PROPAGATION" | grep shared; then
+    assert_not_reached "root is not mounted shared"
+fi
+
 vm_rpmostree pkg-remove foo-1.0
 echo "ok pkg-remove foo"
 
