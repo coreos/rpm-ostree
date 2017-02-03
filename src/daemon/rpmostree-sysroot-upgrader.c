@@ -36,6 +36,7 @@
 #include "ostree-repo.h"
 
 #define RPMOSTREE_TMP_BASE_REF "rpmostree/base/tmp"
+#define RPMOSTREE_TMP_ROOTFS_DIR "extensions/rpmostree/commit"
 
 static gboolean
 commit_get_parent_csum (OstreeRepo  *repo,
@@ -711,30 +712,35 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
 {
   OstreeRepoCheckoutAtOptions checkout_options = { 0, };
   int repo_dfd = ostree_repo_get_dfd (self->repo); /* borrowed */
-  g_autofree char *tmprootfs = NULL;
 
   g_assert (!self->tmprootfs);
   g_assert_cmpint (self->tmprootfs_dfd, ==, -1);
 
-  tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
-
-  if (!glnx_mkdtempat (repo_dfd, tmprootfs, 00755, error))
-    return FALSE;
-
-  /* Now we'll delete it on cleanup */
-  self->tmprootfs = g_steal_pointer (&tmprootfs);
-
-  if (!glnx_opendirat (repo_dfd, self->tmprootfs, FALSE, &self->tmprootfs_dfd, error))
-    return FALSE;
-
   /* let's give the user some feedback so they don't think we're blocked */
   rpmostree_output_task_begin ("Checking out tree %.7s", self->base_revision);
 
-  /* we actually only need this here because we use "." for path */
-  checkout_options.overwrite_mode = OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES;
+  if (!glnx_shutil_mkdir_p_at (repo_dfd,
+                               dirname (strdupa (RPMOSTREE_TMP_ROOTFS_DIR)),
+                               0755, cancellable, error))
+    return FALSE;
+
+  /* delete dir in case a previous run didn't finish successfully */
+  if (!glnx_shutil_rm_rf_at (repo_dfd, RPMOSTREE_TMP_ROOTFS_DIR,
+                             cancellable, error))
+    return FALSE;
+
+  /* NB: we let ostree create the dir for us so that the root dir has the
+   * correct xattrs (e.g. selinux label) */
   checkout_options.devino_to_csum_cache = self->devino_cache;
-  if (!ostree_repo_checkout_at (self->repo, &checkout_options, self->tmprootfs_dfd,
-                                ".", self->base_revision, cancellable, error))
+  if (!ostree_repo_checkout_at (self->repo, &checkout_options,
+                                repo_dfd, RPMOSTREE_TMP_ROOTFS_DIR,
+                                self->base_revision, cancellable, error))
+    return FALSE;
+
+  /* Now we'll delete it on cleanup */
+  self->tmprootfs = glnx_fdrel_abspath (repo_dfd, RPMOSTREE_TMP_ROOTFS_DIR);
+
+  if (!glnx_opendirat (repo_dfd, self->tmprootfs, FALSE, &self->tmprootfs_dfd, error))
     return FALSE;
 
   rpmostree_output_task_end ("done");
