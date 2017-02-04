@@ -719,6 +719,11 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
   /* let's give the user some feedback so they don't think we're blocked */
   rpmostree_output_task_begin ("Checking out tree %.7s", self->base_revision);
 
+  if (!glnx_shutil_mkdir_p_at (repo_dfd,
+                               dirname (strdupa (RPMOSTREE_TMP_ROOTFS_DIR)),
+                               0755, cancellable, error))
+    return FALSE;
+
   /* delete dir in case a previous run didn't finish successfully */
   if (!glnx_shutil_rm_rf_at (repo_dfd, RPMOSTREE_TMP_ROOTFS_DIR,
                              cancellable, error))
