@@ -209,13 +209,12 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
       base_checksum = ostree_commit_get_parent (commit);
       g_assert (base_checksum);
       g_variant_dict_insert (&dict, "base-checksum", "s", base_checksum);
-      sigs = rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &gpg_enabled);
     }
   else
     {
       base_checksum = csum;
-      sigs = rpmostreed_deployment_gpg_results (repo, refspec, csum, &gpg_enabled);
     }
+  sigs = rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &gpg_enabled);
   variant_add_commit_details (&dict, NULL, commit);
 
   if (!ostree_repo_resolve_rev (repo, refspec, TRUE,

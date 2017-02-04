@@ -124,6 +124,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       guint64 t = 0;
       int serial;
       gboolean is_booted;
+      const gboolean was_first = first;
       const guint max_key_len = strlen ("PendingBaseVersion");
       g_autoptr(GVariant) signatures = NULL;
       g_autofree char *timestamp_string = NULL;
@@ -208,8 +209,11 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         }
       print_kv ("Commit", max_key_len, checksum);
 
-      /* Pending state, but only for the booted comit */
-      if (is_booted)
+      /* Show any difference between the baseref vs head, but only for the
+         booted commit, and only if there isn't a pending deployment. Otherwise
+         it's either unnecessary or too noisy.
+      */
+      if (is_booted && was_first)
         {
           const gchar *pending_checksum = NULL;
           const gchar *pending_version = NULL;
