@@ -26,6 +26,7 @@
 #include <libglnx.h>
 #include <systemd/sd-journal.h>
 #include <systemd/sd-daemon.h>
+#include <stdio.h>
 
 /**
  * SECTION: daemon
@@ -70,6 +71,7 @@ enum
 };
 
 static void rpmostreed_daemon_initable_iface_init (GInitableIface *iface);
+static void render_systemd_status (RpmostreedDaemon *self);
 
 G_DEFINE_TYPE_WITH_CODE (RpmostreedDaemon, rpmostreed_daemon, G_TYPE_OBJECT,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
@@ -159,6 +161,15 @@ rpmostreed_daemon_init (RpmostreedDaemon *self)
   self->bus_clients = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 }
 
+static void
+on_active_txn_changed (GObject *object,
+                       GParamSpec *pspec,
+                       gpointer user_data)
+{
+  RpmostreedDaemon *self = user_data;
+  render_systemd_status (self);
+}
+
 static gboolean
 rpmostreed_daemon_initable_init (GInitable *initable,
                                  GCancellable *cancellable,
@@ -183,6 +194,9 @@ rpmostreed_daemon_initable_init (GInitable *initable,
       g_prefix_error (error, "Error setting up sysroot: ");
       goto out;
     }
+
+  g_signal_connect (rpmostreed_sysroot_get (), "notify::active-transaction",
+                    G_CALLBACK (on_active_txn_changed), self);
 
   rpmostreed_daemon_publish (self, path, FALSE, self->sysroot);
   g_dbus_connection_start_message_processing (self->connection);
@@ -293,7 +307,24 @@ on_name_owner_changed (GDBusConnection  *connection,
 static void
 render_systemd_status (RpmostreedDaemon *self)
 {
-  sd_notifyf (0, "STATUS=%u clients", g_hash_table_size (self->bus_clients));
+  g_autoptr(GVariant) active_txn = NULL;
+  gboolean have_active_txn = FALSE;
+  const char *method, *sender, *path;
+
+  g_object_get (rpmostreed_sysroot_get (), "active-transaction", &active_txn, NULL);
+
+  if (active_txn)
+    {
+      g_variant_get (active_txn, "(&s&s&s)", &method, &sender, &path);
+      if (*method)
+        have_active_txn = TRUE;
+    }
+
+  if (have_active_txn)
+    sd_notifyf (0, "STATUS=clients=%u; txn=%s %s %s", g_hash_table_size (self->bus_clients),
+                method, sender, path);
+  else
+    sd_notifyf (0, "STATUS=clients=%u; idle", g_hash_table_size (self->bus_clients));
 }
 
 void
