@@ -383,15 +383,18 @@ ensure_dbus ()
     fi
 }
 
-# Assert that @expression is true in @jsonfile
-assert_status_jq() {
-    vm_rpmostree status --json > status.json
-
+assert_status_file_jq() {
+    status_file=$1; shift
     for expression in "$@"; do
-        if ! jq -e "${expression}" >/dev/null < status.json; then
-            jq . < status.json | sed -e 's/^/# /' >&2
-            echo 1>&2 "${expression} failed to match in status.json"
+        if ! jq -e "${expression}" >/dev/null < $status_file; then
+            jq . < $status_file | sed -e 's/^/# /' >&2
+            echo 1>&2 "${expression} failed to match in $status_file"
             exit 1
         fi
     done
+}
+
+assert_status_jq() {
+    rpm-ostree status --json > status.json
+    assert_status_file_jq status.json "$@"
 }

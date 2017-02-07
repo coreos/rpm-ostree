@@ -44,7 +44,7 @@ assert_file_has_content err.txt "reboot.*used with.*enable"
 echo "ok initramfs state"
 
 vm_rpmostree initramfs --enable
-assert_status_jq \
+vm_assert_status_jq \
   '.deployments[1].booted' \
   '.deployments[0]["regenerate-initramfs"]' \
   '.deployments[1]["regenerate-initramfs"]|not'
@@ -52,11 +52,12 @@ assert_status_jq \
 vm_reboot
 
 assert_not_streq $base $(vm_get_booted_csum)
-assert_status_jq  '.deployments[0].booted' \
-                  '.deployments[0]["regenerate-initramfs"]' \
-                  '.deployments[0]["initramfs-args"]|length == 0' \
-                  '.deployments[1]["regenerate-initramfs"]|not' \
-                  '.deployments[1]["initramfs-args"]|not'
+vm_assert_status_jq \
+  '.deployments[0].booted' \
+  '.deployments[0]["regenerate-initramfs"]' \
+  '.deployments[0]["initramfs-args"]|length == 0' \
+  '.deployments[1]["regenerate-initramfs"]|not' \
+  '.deployments[1]["initramfs-args"]|not'
 
 if vm_rpmostree initramfs --enable 2>err.txt; then
     assert_not_reached "Unexpectedly succeeded at enabling"
@@ -66,21 +67,24 @@ echo "ok initramfs enabled"
 
 vm_rpmostree initramfs --disable
 vm_reboot
-assert_status_jq '.deployments[0].booted' \
-                 '.deployments[0]["regenerate-initramfs"]|not' \
-                 '.deployments[1]["regenerate-initramfs"]'
+vm_assert_status_jq \
+  '.deployments[0].booted' \
+  '.deployments[0]["regenerate-initramfs"]|not' \
+  '.deployments[1]["regenerate-initramfs"]'
 
 echo "ok initramfs disabled"
 
 vm_reboot_cmd rpm-ostree initramfs --enable --reboot
-assert_status_jq '.deployments[0].booted' \
-                 '.deployments[0]["regenerate-initramfs"]' \
-                 '.deployments[1]["regenerate-initramfs"]|not'
+vm_assert_status_jq \
+  '.deployments[0].booted' \
+  '.deployments[0]["regenerate-initramfs"]' \
+  '.deployments[1]["regenerate-initramfs"]|not'
 
 vm_reboot_cmd rpm-ostree initramfs --disable --reboot
-assert_status_jq '.deployments[0].booted' \
-                 '.deployments[0]["regenerate-initramfs"]|not' \
-                 '.deployments[1]["regenerate-initramfs"]'
+vm_assert_status_jq \
+  '.deployments[0].booted' \
+  '.deployments[0]["regenerate-initramfs"]|not' \
+  '.deployments[1]["regenerate-initramfs"]'
 
 echo "ok initramfs enable disable reboot"
 
@@ -89,7 +93,7 @@ for file in first second; do
     vm_cmd touch /etc/rpmostree-initramfs-testing-$file
     vm_rpmostree initramfs --enable --arg="-I" --arg="/etc/rpmostree-initramfs-testing-$file"
     vm_reboot
-    assert_status_jq \
+    vm_assert_status_jq \
         '.deployments[0].booted' \
         '.deployments[0]["regenerate-initramfs"]' \
         '.deployments[0]["initramfs-args"]|index("-I") == 0' \
