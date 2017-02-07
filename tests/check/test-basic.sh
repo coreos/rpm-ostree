@@ -24,7 +24,7 @@ export RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK=yes
 
 ensure_dbus
 
-echo "1..14"
+echo "1..15"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -110,6 +110,13 @@ if rpm-ostree deploy --os=testos REVISION=$other_rev 2>OUTPUT-err; then
 fi
 assert_file_has_content OUTPUT-err 'Checksum .* not found in .*'
 echo "ok error on deploying commit on other branch"
+
+# Make sure we can do an upgrade after a deploy
+os_repository_new_commit 2 3
+rpm-ostree upgrade --os=testos
+rpm-ostree status | head --lines 5 | tee OUTPUT-status.txt
+assert_file_has_content OUTPUT-status.txt $(date "+%Y%m%d\.3")
+echo "ok upgrade after deploy"
 
 # Make sure we're currently on otheros
 rpm-ostree status | head --lines 5 | tee OUTPUT-status.txt

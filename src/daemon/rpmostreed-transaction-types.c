@@ -691,6 +691,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                                     self->revision, cancellable, error))
         goto out;
     }
+  else
+    {
+      rpmostree_sysroot_upgrader_set_origin_override (upgrader, NULL);
+    }
 
   /* Mainly for the `install` command */
   if (!(self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE))
