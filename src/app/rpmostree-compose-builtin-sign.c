@@ -75,6 +75,9 @@ rpmostree_compose_builtin_sign (int            argc,
       goto out;
     }
 
+  g_printerr ("This command is deprecated in favor of using `ostree gpg-sign`,\n"
+              "or a custom signing command written with the OSTree API.\n");
+
   repopath = g_file_new_for_path (opt_repo_path);
   repo = ostree_repo_new (repopath);
   if (!ostree_repo_open (repo, cancellable, error))
