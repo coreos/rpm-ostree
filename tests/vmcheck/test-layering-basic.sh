@@ -33,8 +33,9 @@ vm_send_test_repo
 
 # make sure the package is not already layered
 vm_assert_layered_pkg foo absent
-assert_status_jq '.deployments[0]["base-checksum"]|not' \
-                 '.deployments[0]["pending-base-checksum"]|not'
+vm_assert_status_jq \
+  '.deployments[0]["base-checksum"]|not' \
+  '.deployments[0]["pending-base-checksum"]|not'
 
 # Be sure an unprivileged user exists
 vm_cmd getent passwd bin
@@ -46,8 +47,9 @@ vm_rpmostree pkg-add foo-1.0
 echo "ok pkg-add foo"
 
 vm_reboot
-assert_status_jq '.deployments[0]["base-checksum"]' \
-                 '.deployments[0]["pending-base-checksum"]|not'
+vm_assert_status_jq \
+  '.deployments[0]["base-checksum"]' \
+  '.deployments[0]["pending-base-checksum"]|not'
 
 vm_assert_layered_pkg foo-1.0 present
 echo "ok pkg foo added"

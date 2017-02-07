@@ -215,3 +215,8 @@ vm_assert_layered_pkg() {
     assert_not_reached "pkg $pkg is not absent"
   fi
 }
+
+vm_assert_status_jq() {
+    vm_rpmostree status --json > status.json
+    assert_status_file_jq status.json "$@"
+}
