@@ -35,7 +35,6 @@ typedef struct {
 
 static RpmOstreeComposeCommand compose_subcommands[] = {
   { "tree", rpmostree_compose_builtin_tree },
-  { "sign", rpmostree_compose_builtin_sign },
   { NULL, NULL }
 };
 
