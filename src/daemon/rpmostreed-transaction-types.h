@@ -76,3 +76,18 @@ rpmostreed_transaction_new_initramfs_state       (GDBusMethodInvocation *invocat
                                                   gboolean               reboot,
                                                   GCancellable          *cancellable,
                                                   GError               **error);
+
+typedef enum {
+  RPMOSTREE_TRANSACTION_CLEANUP_BASE = (1 << 0),
+  RPMOSTREE_TRANSACTION_CLEANUP_PENDING_DEPLOY = (1 << 1),
+  RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY = (1 << 2),
+  RPMOSTREE_TRANSACTION_CLEANUP_REPOMD = (1 << 3),
+} RpmOstreeTransactionCleanupFlags;
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_cleanup       (GDBusMethodInvocation *invocation,
+                                          OstreeSysroot         *sysroot,
+                                          const char            *osname,
+                                          RpmOstreeTransactionCleanupFlags flags,
+                                          GCancellable          *cancellable,
+                                          GError               **error);

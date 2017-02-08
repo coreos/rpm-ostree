@@ -27,6 +27,7 @@
 #include "rpmostreed-sysroot.h"
 #include "rpmostree-sysroot-upgrader.h"
 #include "rpmostree-util.h"
+#include "rpmostree-core.h"
 #include "rpmostreed-utils.h"
 
 static gboolean
@@ -953,4 +954,214 @@ rpmostreed_transaction_new_initramfs_state (GDBusMethodInvocation *invocation,
     }
 
   return (RpmostreedTransaction *) self;
+}
+
+/* ================================ Cleanup ================================ */
+
+typedef struct {
+  RpmostreedTransaction parent;
+  char *osname;
+  RpmOstreeTransactionCleanupFlags flags;
+} CleanupTransaction;
+
+typedef RpmostreedTransactionClass CleanupTransactionClass;
+
+GType cleanup_transaction_get_type (void);
+
+G_DEFINE_TYPE (CleanupTransaction,
+               cleanup_transaction,
+               RPMOSTREED_TYPE_TRANSACTION)
+
+static void
+cleanup_transaction_finalize (GObject *object)
+{
+  CleanupTransaction *self;
+
+  self = (CleanupTransaction *) object;
+  g_free (self->osname);
+
+  G_OBJECT_CLASS (cleanup_transaction_parent_class)->finalize (object);
+}
+
+static gboolean
+remove_directory_content_if_exists (int dfd,
+                                    const char *path,
+                                    GCancellable *cancellable,
+                                    GError **error)
+{
+  glnx_fd_close int fd = -1;
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+
+  fd = glnx_opendirat_with_errno (dfd, path, TRUE);
+  if (fd < 0)
+    {
+      if (errno != ENOENT)
+        {
+          glnx_set_error_from_errno (error);
+          return FALSE;
+        }
+    }
+  else
+    {
+      if (!glnx_dirfd_iterator_init_take_fd (fd, &dfd_iter, error))
+        return FALSE;
+      fd = -1;
+
+      while (TRUE)
+        {
+          struct dirent *dent = NULL;
+
+          if (!glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, cancellable, error))
+            return FALSE;
+          if (dent == NULL)
+            break;
+
+          if (!glnx_shutil_rm_rf_at (dfd_iter.fd, dent->d_name, cancellable, error))
+            return FALSE;
+        }
+    }
+  return TRUE;
+}
+
+/* This is a bit like ostree_sysroot_simple_write_deployment() */
+static GPtrArray *
+get_filtered_deployments (OstreeSysroot     *sysroot,
+                          const char        *osname,
+                          gboolean cleanup_pending,
+                          gboolean cleanup_rollback)
+{
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
+  g_autoptr(GPtrArray) new_deployments = g_ptr_array_new_with_free_func (g_object_unref);
+  OstreeDeployment *booted_deployment = NULL;
+  gboolean found_booted = FALSE;
+
+  booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
+
+  for (guint i = 0; i < deployments->len; i++)
+    {
+      OstreeDeployment *deployment = deployments->pdata[i];
+
+      /* Is this deployment booted?  If so, note we're past the booted,
+       * and ensure it's added. */
+      if (booted_deployment != NULL &&
+          ostree_deployment_equal (deployment, booted_deployment))
+        {
+          found_booted = TRUE;
+          g_ptr_array_add (new_deployments, g_object_ref (deployment));
+          continue;
+        }
+
+      /* Is this deployment for a different osname?  Keep it. */
+      if (strcmp (ostree_deployment_get_osname (deployment), osname) != 0)
+        {
+          g_ptr_array_add (new_deployments, g_object_ref (deployment));
+          continue;
+        }
+
+      /* Now, we may skip this deployment, i.e. GC it. */
+      if (!found_booted && cleanup_pending)
+        continue;
+
+      if (found_booted && cleanup_rollback)
+        continue;
+
+      /* Otherwise, add it */
+      g_ptr_array_add (new_deployments, g_object_ref (deployment));
+    }
+
+  if (new_deployments->len == deployments->len)
+    return NULL;
+  return g_steal_pointer (&new_deployments);
+}
+
+static gboolean
+cleanup_transaction_execute (RpmostreedTransaction *transaction,
+                             GCancellable *cancellable,
+                             GError **error)
+{
+  CleanupTransaction *self = (CleanupTransaction *) transaction;
+  OstreeSysroot *sysroot;
+  glnx_unref_object OstreeRepo *repo = NULL;
+  const gboolean cleanup_pending = (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_PENDING_DEPLOY) > 0;
+  const gboolean cleanup_rollback = (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY) > 0;
+
+  sysroot = rpmostreed_transaction_get_sysroot (transaction);
+  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
+    return FALSE;
+
+  if (cleanup_pending || cleanup_rollback)
+    {
+      g_autoptr(GPtrArray) new_deployments = get_filtered_deployments (sysroot, self->osname,
+                                                                       cleanup_pending,
+                                                                       cleanup_rollback);
+      if (new_deployments)
+        {
+          /* TODO - expose the skip cleanup flag in libostree, use it here */
+          if (!ostree_sysroot_write_deployments (sysroot, new_deployments, cancellable, error))
+            return FALSE;
+          /* And ensure we fall through to base cleanup */
+          self->flags |= RPMOSTREE_TRANSACTION_CLEANUP_BASE;
+        }
+      else
+        {
+          g_print ("Deployments unchanged.\n");
+        }
+    }
+  if (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_BASE)
+    {
+      if (!rpmostree_sysroot_upgrader_cleanup (sysroot, repo, cancellable, error))
+        return FALSE;
+    }
+  if (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_REPOMD)
+    {
+      if (!remove_directory_content_if_exists (AT_FDCWD, RPMOSTREE_CORE_CACHEDIR, cancellable, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+static void
+cleanup_transaction_class_init (CleanupTransactionClass *class)
+{
+  GObjectClass *object_class;
+
+  object_class = G_OBJECT_CLASS (class);
+  object_class->finalize = cleanup_transaction_finalize;
+
+  class->execute = cleanup_transaction_execute;
+}
+
+static void
+cleanup_transaction_init (CleanupTransaction *self)
+{
+}
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_cleanup (GDBusMethodInvocation *invocation,
+                                    OstreeSysroot         *sysroot,
+                                    const char            *osname,
+                                    RpmOstreeTransactionCleanupFlags flags,
+                                    GCancellable          *cancellable,
+                                    GError               **error)
+{
+  CleanupTransaction *self;
+
+  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
+  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+
+  self = g_initable_new (cleanup_transaction_get_type (),
+                         cancellable, error,
+                         "invocation", invocation,
+                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
+                         NULL);
+
+  if (self != NULL)
+    {
+      self->osname = g_strdup (osname);
+      self->flags = flags;
+    }
+
+  return (RpmostreedTransaction *) self;
+
 }

@@ -335,6 +335,35 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
+        <term><command>cleanup</command></term>
+
+        <listitem>
+          <para>
+            Commands such as <command>upgrade</command> create new deployments,
+            which affect the next boot, and take up additional storage space. In
+            some cases, you may want to undo and clean up these operations. This
+            command supports both removing additional deployments such as the
+            "pending" deployment (the next boot) as well as the default rollback
+            deployment. Use <option>-p/--pending</option> to remove the pending
+            deployment, and <option>-r/--rollback</option> to remove the
+            rollback.
+          </para>
+
+          <para>
+            The <option>-b/--base</option> option does not affect finished
+            deployments, but will clean up any transient allocated space that
+            may result from interrupted operations. If you want to free up disk
+            space safely, use this option first.
+          </para>
+
+          <para>
+            The <option>-m/--repomd</option> option cleans up cached RPM
+            repodata and any partially downloaded (but not imported) packages.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><command>initramfs</command></term>
 
         <listitem>

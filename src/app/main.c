@@ -37,6 +37,7 @@ static RpmOstreeCommand supported_commands[] = {
 #ifdef HAVE_COMPOSE_TOOLING
   { "compose", rpmostree_builtin_compose },
 #endif
+  { "cleanup", rpmostree_builtin_cleanup },
   { "db", rpmostree_builtin_db },
   { "deploy", rpmostree_builtin_deploy },
   { "rebase", rpmostree_builtin_rebase },

@@ -77,3 +77,16 @@ vm_reboot
 
 vm_assert_layered_pkg foo absent
 echo "ok pkg foo removed"
+
+vm_rpmostree cleanup -b
+vm_assert_status_jq '.deployments|length == 2'
+echo "ok baseline cleanup"
+vm_rpmostree cleanup -r
+vm_assert_status_jq '.deployments|length == 1'
+vm_rpmostree cleanup -pr
+vm_assert_status_jq '.deployments|length == 1'
+vm_rpmostree pkg-add foo-1.0
+vm_assert_status_jq '.deployments|length == 2'
+vm_rpmostree cleanup -pr
+vm_assert_status_jq '.deployments|length == 1'
+echo "ok cleanup"
