@@ -807,6 +807,78 @@ out:
 }
 
 static gboolean
+os_handle_cleanup (RPMOSTreeOS *interface,
+                   GDBusMethodInvocation *invocation,
+                   const char *const*args)
+{
+  RpmostreedOS *self = RPMOSTREED_OS (interface);
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
+  RpmOstreeTransactionCleanupFlags flags = 0;
+  const char *osname;
+  GError *local_error = NULL;
+
+  transaction = merge_compatible_txn (self, invocation);
+  if (transaction)
+    goto out;
+
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
+    goto out;
+
+  osname = rpmostree_os_get_name (interface);
+
+  for (char **iter = (char**) args; iter && *iter; iter++)
+    {
+      const char *v = *iter;
+      if (strcmp (v, "base") == 0)
+        flags |= RPMOSTREE_TRANSACTION_CLEANUP_BASE;
+      else if (strcmp (v, "pending-deploy") == 0)
+        flags |= RPMOSTREE_TRANSACTION_CLEANUP_PENDING_DEPLOY;
+      else if (strcmp (v, "rollback-deploy") == 0)
+        flags |= RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY;
+      else if (strcmp (v, "repomd") == 0)
+        flags |= RPMOSTREE_TRANSACTION_CLEANUP_REPOMD;
+      else
+        {
+          g_set_error (&local_error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Invalid cleanup type: %s", v);
+          goto out;
+        }
+    }
+
+
+  transaction = rpmostreed_transaction_new_cleanup (invocation,
+                                                    ot_sysroot,
+                                                    osname,
+                                                    flags,
+                                                    cancellable,
+                                                    &local_error);
+  if (transaction == NULL)
+    goto out;
+
+  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+
+out:
+  if (local_error != NULL)
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address;
+      client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_pkg_change (interface, invocation, client_address);
+    }
+
+  return TRUE;
+}
+
+static gboolean
 os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
                                       GDBusMethodInvocation *invocation,
                                       const char *arg_refspec,
@@ -1191,6 +1263,7 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_rebase                     = os_handle_rebase;
   iface->handle_pkg_change                 = os_handle_pkg_change;
   iface->handle_set_initramfs_state        = os_handle_set_initramfs_state;
+  iface->handle_cleanup                    = os_handle_cleanup;
   iface->handle_get_cached_rebase_rpm_diff = os_handle_get_cached_rebase_rpm_diff;
   iface->handle_download_rebase_rpm_diff   = os_handle_download_rebase_rpm_diff;
   iface->handle_get_cached_deploy_rpm_diff = os_handle_get_cached_deploy_rpm_diff;

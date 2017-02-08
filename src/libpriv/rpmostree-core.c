@@ -340,8 +340,8 @@ rpmostree_context_new_system (GCancellable *cancellable,
    * override this for testing. */
   if (g_getenv("RPMOSTREE_USE_CACHED_METADATA") == NULL)
       dnf_context_set_cache_age (self->hifctx, 0);
-  dnf_context_set_cache_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_REPOMD);
-  dnf_context_set_solv_dir (self->hifctx, "/var/cache/rpm-ostree/" RPMOSTREE_DIR_CACHE_SOLV);
+  dnf_context_set_cache_dir (self->hifctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_REPOMD);
+  dnf_context_set_solv_dir (self->hifctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_SOLV);
   dnf_context_set_lock_dir (self->hifctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
   dnf_context_set_user_agent (self->hifctx, PACKAGE_NAME "/" PACKAGE_VERSION);
 

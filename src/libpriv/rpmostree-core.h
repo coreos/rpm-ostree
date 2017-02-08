@@ -26,6 +26,8 @@
 
 #include "libglnx.h"
 
+#define RPMOSTREE_CORE_CACHEDIR "/var/cache/rpm-ostree/"
+
 #define RPMOSTREE_TYPE_CONTEXT (rpmostree_context_get_type ())
 G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, GObject)
 
