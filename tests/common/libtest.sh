@@ -245,15 +245,6 @@ setup_os_boot_uboot() {
     ln -s loader/uEnv.txt sysroot/boot/uEnv.txt
 }
 
-assert_json_field_in_status() {
-    rpm-ostree status --json > raw-json.txt
-    if ! jq $1 < raw-json.txt | grep -q -e "$2"; then
-        sed -e 's/^/# /' < raw-json.txt >&2
-        echo 1>&2 "status json field '$1' doesn't match '$2'"
-        exit 1
-    fi
-}
-
 setup_os_repository () {
     mode=$1
     bootmode=$2
