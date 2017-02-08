@@ -44,6 +44,11 @@ if vm_cmd "runuser -u bin rpm-ostree pkg-add foo-1.0"; then
 fi
 
 vm_rpmostree pkg-add foo-1.0
+vm_cmd ostree --repo=/sysroot/ostree/repo/extensions/rpmostree/pkgcache refs |grep /foo/> refs.txt
+pkgref=$(head -1 refs.txt)
+vm_cmd ostree --repo=/sysroot/ostree/repo/extensions/rpmostree/pkgcache show --print-metadata-key rpmostree.repo ${pkgref} >refdata.txt
+assert_file_has_content refdata.txt 'id.*test-repo'
+rm -f refs.txt refdata.txt
 echo "ok pkg-add foo"
 
 vm_reboot

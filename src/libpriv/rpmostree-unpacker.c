@@ -60,6 +60,7 @@ struct RpmOstreeUnpacker
   GHashTable *rpmfi_overrides;
   GString *tmpfiles_d;
   RpmOstreeUnpackerFlags flags;
+  DnfPackage *pkg;
 
   char *ostree_branch;
 };
@@ -265,8 +266,22 @@ build_rpmfi_overrides (RpmOstreeUnpacker *self)
     }
 }
 
+/*
+ * rpmostree_unpacker_new_fd:
+ * @fd: Fd
+ * @pkg: (optional): Package reference, used for metadata
+ * @flags: flags
+ * @error: error
+ *
+ * Create a new unpacker instance.  The @pkg argument, if
+ * specified, will be inspected and metadata such as the
+ * origin repo will be added to the final commit.
+ */
 RpmOstreeUnpacker *
-rpmostree_unpacker_new_fd (int fd, RpmOstreeUnpackerFlags flags, GError **error)
+rpmostree_unpacker_new_fd (int fd,
+                           DnfPackage *pkg,
+                           RpmOstreeUnpackerFlags flags,
+                           GError **error)
 {
   RpmOstreeUnpacker *ret = NULL;
   _cleanup_rpmheader_ Header hdr = NULL;
@@ -288,6 +303,7 @@ rpmostree_unpacker_new_fd (int fd, RpmOstreeUnpackerFlags flags, GError **error)
   ret->flags = flags;
   ret->hdr = g_steal_pointer (&hdr);
   ret->cpio_offset = cpio_offset;
+  ret->pkg = pkg ? g_object_ref (pkg) : NULL;
 
   build_rpmfi_overrides (ret);
 
@@ -299,8 +315,23 @@ rpmostree_unpacker_new_fd (int fd, RpmOstreeUnpackerFlags flags, GError **error)
   return ret;
 }
 
+/*
+ * rpmostree_unpacker_new_at:
+ * @dfd: Fd
+ * @path: Path
+ * @pkg: (optional): Package reference, used for metadata
+ * @flags: flags
+ * @error: error
+ *
+ * Create a new unpacker instance.  The @pkg argument, if
+ * specified, will be inspected and metadata such as the
+ * origin repo will be added to the final commit.
+ */
 RpmOstreeUnpacker *
-rpmostree_unpacker_new_at (int dfd, const char *path, RpmOstreeUnpackerFlags flags, GError **error)
+rpmostree_unpacker_new_at (int dfd, const char *path,
+                           DnfPackage *pkg,
+                           RpmOstreeUnpackerFlags flags,
+                           GError **error)
 {
   RpmOstreeUnpacker *ret = NULL;
   glnx_fd_close int fd = -1;
@@ -313,7 +344,7 @@ rpmostree_unpacker_new_at (int dfd, const char *path, RpmOstreeUnpackerFlags fla
       goto out;
     }
 
-  ret = rpmostree_unpacker_new_fd (fd, flags, error);
+  ret = rpmostree_unpacker_new_fd (fd, pkg, flags, error);
   if (ret == NULL)
     goto out;
 
@@ -404,6 +435,21 @@ get_lead_sig_header_as_bytes (RpmOstreeUnpacker *self,
   return ret;
 }
 
+static GVariant *
+repo_metadata_to_variant (DnfRepo *repo)
+{
+  g_auto(GVariantBuilder) builder;
+  g_variant_builder_init (&builder, (GVariantType*)"a{sv}");
+
+  /* For now, just the id...in the future maybe we'll add more, but this is
+   * enough to provide useful semantics.
+   */
+  g_variant_builder_add (&builder, "{sv}",
+                         "id", g_variant_new_string (dnf_repo_get_id (repo)));
+
+  return g_variant_builder_end (&builder);
+}
+
 static gboolean
 build_metadata_variant (RpmOstreeUnpacker *self,
                         OstreeSePolicy    *sepolicy,
@@ -440,6 +486,21 @@ build_metadata_variant (RpmOstreeUnpacker *self,
   /* let's be nice to our future selves just in case */
   g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.unpack_version",
                          g_variant_new_uint32 (1));
+  /* Originally we just had unpack_version = 1, let's add a minor version for
+   * compatible increments.
+   */
+  g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.unpack_minor_version",
+                         g_variant_new_uint32 (1));
+
+  if (self->pkg)
+    {
+      DnfRepo *repo = dnf_package_get_repo (self->pkg);
+      if (repo)
+        {
+          g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.repo",
+                                 repo_metadata_to_variant (repo));
+        }
+    }
 
   *out_variant = g_variant_builder_end (&metadata_builder);
   return TRUE;

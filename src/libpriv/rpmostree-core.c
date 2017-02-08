@@ -1169,7 +1169,7 @@ import_one_package (RpmOstreeContext *self,
     flags |= RPMOSTREE_UNPACKER_FLAGS_UNPRIVILEGED;
 
   /* TODO - tweak the unpacker flags for containers */
-  unpacker = rpmostree_unpacker_new_at (AT_FDCWD, pkg_path, flags, error);
+  unpacker = rpmostree_unpacker_new_at (AT_FDCWD, pkg_path, pkg, flags, error);
   if (!unpacker)
     goto out;
 
