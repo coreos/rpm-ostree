@@ -103,7 +103,6 @@ assert_status_jq '.deployments[0].version == "'$(date "+%Y%m%d.3")'"'
 echo "ok upgrade after deploy"
 
 # Make sure we're currently on otheros
-assert_json_field_in_status '.deployments[0].origin' 'otheros:*'
 assert_status_jq '.deployments[0].origin|startswith("otheros:")'
 
 os_repository_new_commit 2 2
