@@ -322,6 +322,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     goto out;
 
   { GPtrArray *repos = dnf_context_get_repos (rpmostree_context_get_hif (ctx));
+    g_autoptr(GString) disabled = g_string_new ("");
 
     g_print ("rpm-md repository versions:\n");
     for (guint i = 0; i < repos->len; i++)
@@ -331,16 +332,18 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
           {
             g_autoptr(GDateTime) ts = g_date_time_new_from_unix_utc (dnf_repo_get_timestamp_generated (repo));
             g_autofree char *formatted = g_date_time_format (ts, "%Y-%m-%d %T");
-            g_print ("  %s: generated=%s\n",
+            g_print ("  %s: packages=%u generated=%s\n",
                      dnf_repo_get_id (repo),
+                     dnf_repo_get_n_solvables (repo),
                      formatted);
           }
         else
           {
-            g_print ("  %s (not enabled in treefile)\n", dnf_repo_get_id (repo));
+            g_string_append (disabled, dnf_repo_get_id (repo));
+            g_string_append_c (disabled, ' ');
           }
       }
-    g_print ("\n");
+    g_print ("Disabled repositories: %s\n", disabled->str);
   }
   if (!rpmostree_context_prepare_install (ctx, &hifinstall, cancellable, error))
     goto out;
