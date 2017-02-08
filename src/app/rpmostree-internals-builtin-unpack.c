@@ -94,7 +94,7 @@ rpmostree_internals_builtin_unpack (int             argc,
   if (opt_ostree_convention)
     flags |= RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION;
 
-  unpacker = rpmostree_unpacker_new_at (AT_FDCWD, rpmpath, flags, error);
+  unpacker = rpmostree_unpacker_new_at (AT_FDCWD, rpmpath, NULL, flags, error);
   if (!unpacker)
     goto out;
 

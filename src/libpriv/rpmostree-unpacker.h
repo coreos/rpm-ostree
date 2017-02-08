@@ -24,6 +24,7 @@
 
 #include "libglnx.h"
 #include <rpm/rpmlib.h>
+#include <libdnf/libdnf.h>
 
 typedef struct RpmOstreeUnpacker RpmOstreeUnpacker;
 
@@ -45,12 +46,14 @@ typedef enum {
 
 RpmOstreeUnpacker*
 rpmostree_unpacker_new_fd (int fd,
+                           DnfPackage *pkg,
                            RpmOstreeUnpackerFlags flags,
                            GError **error);
 
 RpmOstreeUnpacker*
 rpmostree_unpacker_new_at (int dfd,
                            const char *path,
+                           DnfPackage *pkg, /* for metadata */
                            RpmOstreeUnpackerFlags flags,
                            GError **error);
 
