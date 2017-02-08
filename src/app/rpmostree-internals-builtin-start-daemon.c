@@ -304,7 +304,6 @@ rpmostree_internals_builtin_start_daemon (int             argc,
                                           GError        **error)
 {
   int ret = 1;
-  g_autoptr(GMainLoop) loop = NULL;
   g_autoptr(GOptionContext) opt_context = g_option_context_new ("rpm-ostreed -- rpm-ostree daemon");
   GIOChannel *channel;
   guint name_owner_id = 0;
@@ -379,5 +378,10 @@ rpmostree_internals_builtin_start_daemon (int             argc,
   ret = 0;
 
 out:
+  if (loop != NULL)
+    g_main_loop_unref (loop);
+
+  g_info ("rpm-ostreed exiting");
+
   return ret;
 }
