@@ -66,7 +66,8 @@ struct RpmOstreeSysrootUpgrader {
   char *osname;
   RpmOstreeSysrootUpgraderFlags flags;
 
-  OstreeDeployment *merge_deployment;
+  OstreeDeployment *cfg_merge_deployment;
+  OstreeDeployment *origin_merge_deployment;
   RpmOstreeOrigin *original_origin;
   RpmOstreeOrigin *origin;
   GHashTable *ignore_scripts;
@@ -132,6 +133,31 @@ parse_origin_deployment (RpmOstreeSysrootUpgrader *self,
   return parse_origin_keyfile (self, origin, cancellable, error);
 }
 
+/* This is like ostree_sysroot_get_merge_deployment() except we explicitly
+ * ignore the magical "booted" behavior. For rpm-ostree we're trying something
+ * different now where we are a bit more stateful and pick up changes from the
+ * pending root. This allows users to chain operations together naturally.
+ */
+static OstreeDeployment *
+get_origin_merge_deployment (OstreeSysroot     *self,
+                             const char        *osname)
+{
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (self);
+  guint i;
+
+  for (i = 0; i < deployments->len; i++)
+    {
+      OstreeDeployment *deployment = deployments->pdata[i];
+
+      if (strcmp (ostree_deployment_get_osname (deployment), osname) != 0)
+        continue;
+
+      return g_object_ref (deployment);
+  }
+
+  return NULL;
+}
+
 static gboolean
 rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
                                           GCancellable     *cancellable,
@@ -164,8 +190,9 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
   if (!ostree_sysroot_get_repo (self->sysroot, &self->repo, cancellable, error))
     goto out;
 
-  self->merge_deployment = ostree_sysroot_get_merge_deployment (self->sysroot, self->osname); 
-  if (self->merge_deployment == NULL)
+  self->cfg_merge_deployment = ostree_sysroot_get_merge_deployment (self->sysroot, self->osname);
+  self->origin_merge_deployment = get_origin_merge_deployment (self->sysroot, self->osname);
+  if (self->cfg_merge_deployment == NULL || self->origin_merge_deployment == NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "No previous deployment for OS '%s'", self->osname);
@@ -175,7 +202,7 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
   /* Should we consider requiring --discard-hotfix here?
    * See also `ostree admin upgrade` bits.
    */
-  if (!parse_origin_deployment (self, self->merge_deployment, cancellable, error))
+  if (!parse_origin_deployment (self, self->origin_merge_deployment, cancellable, error))
     goto out;
   /* Retain the "original origin", since we may need to make determinations
    * based on the *old* state as compared to the new one.
@@ -188,13 +215,13 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
    */
   if (rpmostree_origin_is_locally_assembled (self->original_origin))
     {
-      self->final_revision = g_strdup (ostree_deployment_get_csum (self->merge_deployment));
+      self->final_revision = g_strdup (ostree_deployment_get_csum (self->origin_merge_deployment));
       if (!commit_get_parent_csum (self->repo, self->final_revision, &self->base_revision, error))
         goto out;
       g_assert (self->base_revision);
     }
   else
-    self->base_revision = g_strdup (ostree_deployment_get_csum (self->merge_deployment));
+    self->base_revision = g_strdup (ostree_deployment_get_csum (self->origin_merge_deployment));
 
   self->packages_to_add = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                  g_free, NULL);
@@ -230,7 +257,8 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   g_clear_object (&self->repo);
   g_free (self->osname);
 
-  g_clear_object (&self->merge_deployment);
+  g_clear_object (&self->cfg_merge_deployment);
+  g_clear_object (&self->origin_merge_deployment);
   g_clear_pointer (&self->original_origin, (GDestroyNotify)rpmostree_origin_unref);
   g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
   g_hash_table_unref (self->packages_to_add);
@@ -473,7 +501,7 @@ rpmostree_sysroot_upgrader_get_packages (RpmOstreeSysrootUpgrader *self)
 OstreeDeployment*
 rpmostree_sysroot_upgrader_get_merge_deployment (RpmOstreeSysrootUpgrader *self)
 {
-  return self->merge_deployment;
+  return self->origin_merge_deployment;
 }
 
 /**
@@ -610,7 +638,7 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
   else
     refs_to_fetch[0] = origin_ref;
 
-  g_assert (self->merge_deployment);
+  g_assert (self->origin_merge_deployment);
   if (origin_remote)
     {
       if (!ostree_repo_pull_one_dir (self->repo, origin_remote, dir_to_pull, refs_to_fetch,
@@ -955,7 +983,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
       g_file_get_path (ostree_sysroot_get_path (self->sysroot));
     g_autofree char *merge_deployment_dirpath =
       ostree_sysroot_get_deployment_dirpath (self->sysroot,
-                                             self->merge_deployment);
+                                             self->cfg_merge_deployment);
     g_autofree char *merge_deployment_root =
       g_build_filename (sysroot_path, merge_deployment_dirpath, NULL);
     g_autofree char *reposdir = g_build_filename (merge_deployment_root,
@@ -1431,7 +1459,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   if (!ostree_sysroot_deploy_tree (self->sysroot, self->osname,
                                    target_revision,
                                    rpmostree_origin_get_keyfile (self->origin),
-                                   self->merge_deployment,
+                                   self->cfg_merge_deployment,
                                    NULL,
                                    &new_deployment,
                                    cancellable, error))
@@ -1450,7 +1478,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   if (!ostree_sysroot_simple_write_deployment (self->sysroot, self->osname,
                                                new_deployment,
-                                               self->merge_deployment,
+                                               self->cfg_merge_deployment,
                                                OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_NO_CLEAN,
                                                cancellable, error))
     goto out;

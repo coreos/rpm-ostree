@@ -87,9 +87,30 @@ echo "ok pkg foo relayered on deploy"
 # REBASE
 
 commit=$(vm_cmd ostree commit -b rebase_test --tree=ref=vmcheck)
-vm_rpmostree rebase rebase_test
+vm_rpmostree rebase --skip-purge rebase_test
 reboot_and_assert_base $commit
 echo "ok rebase"
 
 vm_assert_layered_pkg foo present
 echo "ok pkg foo relayered on rebase"
+
+# rollup: install/deploy/uninstall
+
+vm_assert_status_jq ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
+                 '.deployments[0]["packages"]|index("foo") >= 0' \
+                 '.deployments[0]["packages"]|index("nonrootcap")|not'
+vm_rpmostree install nonrootcap
+vm_assert_status_jq ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
+                 '.deployments[0]["packages"]|index("foo") >= 0' \
+                 '.deployments[0]["packages"]|index("nonrootcap") >= 0'
+commit=$(vm_cmd ostree commit -b vmcheck \
+                --tree=ref=vmcheck --add-metadata-string=version=my-commit2)
+vm_rpmostree rebase ${commit}
+vm_assert_status_jq ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
+                 '.deployments[0]["packages"]|index("foo") >= 0' \
+                 '.deployments[0]["packages"]|index("nonrootcap") >= 0'
+vm_rpmostree uninstall foo
+vm_assert_status_jq ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
+                 '.deployments[0]["packages"]|index("foo")|not' \
+                 '.deployments[0]["packages"]|index("nonrootcap") >= 0'
+echo "ok rollup"
