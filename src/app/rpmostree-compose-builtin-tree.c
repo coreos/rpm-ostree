@@ -52,7 +52,6 @@ static char *opt_proxy;
 static char *opt_output_repodata_dir;
 static char **opt_metadata_strings;
 static char *opt_repo;
-static char **opt_override_pkg_repos;
 static char *opt_touch_if_changed;
 static gboolean opt_dry_run;
 static gboolean opt_print_only;
@@ -67,7 +66,6 @@ static GOptionEntry option_entries[] = {
   { "force-nocache", 0, 0, G_OPTION_ARG_NONE, &opt_force_nocache, "Always create a new OSTree commit, even if nothing appears to have changed", NULL },
   { "cache-only", 0, 0, G_OPTION_ARG_NONE, &opt_cache_only, "Assume cache is present, do not attempt to update it", NULL },
   { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
-  { "add-override-pkg-repo", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_override_pkg_repos, "Include an additional package repository from DIRECTORY", "DIRECTORY" },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if a new commit was created", "FILE" },
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
