@@ -608,7 +608,7 @@ rpmostree_compose_builtin_tree (int             argc,
 {
   int exit_status = EXIT_FAILURE;
   GError *temp_error = NULL;
-  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE - Run yum and commit the result to an OSTree repository");
+  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE - Install packages and commit the result to an OSTree repository");
   RpmOstreeTreeComposeContext selfdata = { NULL, };
   RpmOstreeTreeComposeContext *self = &selfdata;
   JsonNode *treefile_rootval = NULL;
