@@ -984,11 +984,13 @@ rpmostree_compose_builtin_tree (int             argc,
 
   g_free (self->ref);
   
-  /* Move back out of the workding directory to ensure unmount works */
+  /* Move back out of the workding directory and close all fds pointing
+   * to it ensure unmount works */
   (void )chdir ("/");
-
   if (self->workdir_dfd != -1)
     (void) close (self->workdir_dfd);
+  if (rootfs_fd != -1)
+    (void) close (rootfs_fd);
 
   if (workdir_is_tmp)
     {
