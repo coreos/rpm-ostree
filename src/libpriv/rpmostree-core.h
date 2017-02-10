@@ -26,6 +26,15 @@
 
 #include "libglnx.h"
 
+typedef enum {
+  RPMOSTREE_PKGSPEC_KIND_REMOTE, /* Download from rpm-md repos */
+#define RPMOSTREE_PKGSPEC_KIND_PATH_STR "path/"
+  RPMOSTREE_PKGSPEC_KIND_PATH, /* From a local file */
+#define RPMOSTREE_PKGSPEC_KIND_IMPORTED_STR "local/"
+  RPMOSTREE_PKGSPEC_KIND_IMPORTED, /* Already imported */
+  RPMOSTREE_PKGSPEC_KIND_INVALID, /* I'm sorry Dave, I can't do that. */
+} RpmOstreePkgspecKind;
+
 #define RPMOSTREE_TYPE_CONTEXT (rpmostree_context_get_type ())
 G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, GObject)
 
@@ -56,6 +65,9 @@ GHashTable *rpmostree_context_get_varsubsts (RpmOstreeContext *context);
 
 GVariant *rpmostree_treespec_to_variant (RpmOstreeTreespec *spec);
 const char *rpmostree_treespec_get_ref (RpmOstreeTreespec *spec);
+
+RpmOstreePkgspecKind rpmostree_pkgspec_classify (const char *specstr, GError **error);
+const char *rpmostree_pkgspec_peel (const char *specstr);
 
 gboolean rpmostree_context_setup (RpmOstreeContext     *self,
                                   const char    *install_root,

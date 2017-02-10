@@ -73,6 +73,7 @@ struct RpmOstreeSysrootUpgrader {
   GHashTable *ignore_scripts;
   GHashTable *packages_to_add;
   GHashTable *packages_to_delete;
+  GHashTable *local_packages_to_name; /* Map<string filename, string rpmname> */
 
   /* Used during tree construction */
   OstreeRepoDevInoCache *devino_cache;
@@ -227,6 +228,8 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
                                                  g_free, NULL);
   self->packages_to_delete = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                     g_free, NULL);
+  self->local_packages_to_name = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                        g_free, g_free);
 
   ret = TRUE;
  out:
@@ -263,6 +266,7 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
   g_hash_table_unref (self->packages_to_add);
   g_hash_table_unref (self->packages_to_delete);
+  g_hash_table_unref (self->local_packages_to_name);
   g_free (self->base_revision);
   g_free (self->final_revision);
 
@@ -541,24 +545,54 @@ rpmostree_sysroot_upgrader_add_packages (RpmOstreeSysrootUpgrader *self,
                                          GCancellable             *cancellable,
                                          GError                  **error)
 {
-  gboolean ret = FALSE;
   g_autoptr(GHashTable) requested_packages =
     hashset_from_strv (rpmostree_origin_get_packages (self->origin));
 
   for (char **it = packages; it && *it; it++)
     {
-      if (g_hash_table_contains (requested_packages, *it))
+      const char *pkgspec = *it;
+      RpmOstreePkgspecKind kind = rpmostree_pkgspec_classify (pkgspec, error);
+
+      switch (kind)
         {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Package '%s' is already requested", *it);
-          goto out;
+        case RPMOSTREE_PKGSPEC_KIND_INVALID:
+          return FALSE;
+        case RPMOSTREE_PKGSPEC_KIND_REMOTE:
+        case RPMOSTREE_PKGSPEC_KIND_IMPORTED:
+          if (g_hash_table_contains (requested_packages, pkgspec))
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Package '%s' is already requested", pkgspec);
+              return FALSE;
+            }
+          g_hash_table_add (self->packages_to_add, g_strdup (pkgspec));
+          break;
+        case RPMOSTREE_PKGSPEC_KIND_PATH:
+          {
+            const char *real_pkgname = NULL;
+            const char *path = NULL;
+            g_autofree char *abs_path = NULL;
+            glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
+            _cleanup_rpmheader_ Header hdr = NULL;
+
+            path = rpmostree_pkgspec_peel (pkgspec);
+            unpacker = rpmostree_unpacker_new_at (AT_FDCWD, path,
+                                                  RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION,
+                                                  error);
+            if (!unpacker)
+              return FALSE;
+            if (!rpmostree_unpacker_read_metainfo (unpacker, &hdr, NULL, NULL, error))
+              return FALSE;
+
+            real_pkgname = headerGetString (hdr, RPMTAG_NAME);
+            g_hash_table_add (self->packages_to_add, g_strdup (pkgspec));
+            g_hash_table_add (self->local_packages_to_name, g_strdup (pkgspec), g_strdup (real_pkgname));
+            break;
+          }
         }
-      g_hash_table_add (self->packages_to_add, g_strdup (*it));
     }
 
-  ret = TRUE;
-out:
-  return ret;
+  return TRUE;
 }
 
 /**
@@ -576,24 +610,28 @@ rpmostree_sysroot_upgrader_delete_packages (RpmOstreeSysrootUpgrader *self,
                                             GCancellable             *cancellable,
                                             GError                  **error)
 {
-  gboolean ret = FALSE;
   g_autoptr(GHashTable) requested_packages =
     hashset_from_strv (rpmostree_origin_get_packages (self->origin));
 
   for (char **it = packages; it && *it; it++)
     {
-      if (!g_hash_table_contains (requested_packages, *it))
+      const char *pkgspec = *it;
+      RpmOstreePkgspecKind kind = rpmostree_pkgspec_classify (pkgspec, error);
+
+      if (kind == RPMOSTREE_PKGSPEC_KIND_INVALID)
+        return FALSE;
+
+      /* Here we handle both local/remote the same way */
+      if (!g_hash_table_contains (requested_packages, pkgspec))
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Package '%s' is not currently requested", *it);
-          goto out;
+                       "Package '%s' is not currently requested", pkgspec);
+          return FALSE;
         }
-      g_hash_table_add (self->packages_to_delete, g_strdup (*it));
+      g_hash_table_add (self->packages_to_delete, g_strdup (pkgspec));
     }
 
-  ret = TRUE;
-out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -709,9 +747,35 @@ update_requested_packages (RpmOstreeSysrootUpgrader *self,
   g_autoptr(GKeyFile) new_origin = rpmostree_origin_dup_keyfile (self->origin);
   glnx_free char **pkgv =
     (char**) g_hash_table_get_keys_as_array (pkgset, NULL);
+  char **iter;
+  g_autoptr(GPtrArray) origin_pkgspecs = g_ptr_array_new_with_free_func (g_free);
 
+  for (iter = pkgv; iter && *iter; iter++)
+    {
+      const char *pkgspec = *iter;
+      RpmOstreePkgspecKind kind = rpmostree_pkgspec_classify (pkgspec, NULL);
+      switch (kind)
+        {
+        case RPMOSTREE_PKGSPEC_KIND_INVALID:
+          g_assert_not_reached ();
+          break;
+        case RPMOSTREE_PKGSPEC_KIND_REMOTE:
+        case RPMOSTREE_PKGSPEC_KIND_IMPORTED:
+          g_ptr_array_add (origin_pkgspecs, g_strdup (pkgspec));
+          break;
+        case RPMOSTREE_PKGSPEC_KIND_LOCAL:
+          /* Remap local//path/to/local-foo.rpm -> local/foo */
+          const char *name = g_hash_table_lookup (self->local_packages_to_name, pkgspec);
+          g_autofree char *canonicalized = NULL;
+          g_assert (name);
+          canonicalized = g_strconcat (RPMOSTREE_PKGSPEC_KIND_LOCAL_STR, name);
+          g_ptr_array_add (origin_pkgspecs, g_steal_pointer (&canonicalized));
+          break;
+        }
+    }
   g_key_file_set_string_list (new_origin, "packages", "requested",
-                              (const char* const*) pkgv, g_strv_length(pkgv));
+                              (const char* const*) origin_pkgspecs->pdata,
+                              origin_pkgspecs->len);
 
   /* migrate to baserefspec model if necessary */
   g_key_file_set_value (new_origin, "origin", "baserefspec",
@@ -824,15 +888,22 @@ find_pkgs_in_rpmdb (int rootfs_dfd, GHashTable *pkgs,
   g_hash_table_iter_init (&it, pkgs);
   while (g_hash_table_iter_next (&it, &itkey, NULL))
     {
+      const char *pkgspec = itkey;
+      const char *pkgspec_peeled = rpmostree_pkgspec_peel (pkgspec);
       g_autoptr(GPtrArray) pkglist = NULL;
       HyQuery query = hy_query_create (rsack->sack);
+
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
-      hy_query_filter (query, HY_PKG_NAME, HY_EQ, itkey);
+      /* FIXME - this doesn't understand anything other than
+       * package names, e.g. selectors like foo-1.0, as well
+       * as local file paths.
+       */
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgspec_peeled);
       pkglist = hy_query_run (query);
 
       /* did we find the package? */
       if (pkglist->len != 0)
-        if (!callback (&it, itkey, error, opaque))
+        if (!callback (&it, pkgspec, error, opaque))
           goto out;
     }
 
