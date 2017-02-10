@@ -89,6 +89,7 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
       g_autoptr(GPtrArray) added = NULL;
       g_autoptr(GPtrArray) modified_old = NULL;
       g_autoptr(GPtrArray) modified_new = NULL;
+      gboolean first;
       guint i;
 
       if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
@@ -99,18 +100,44 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
                                cancellable, error))
         goto out;
 
-      if (modified_old->len > 0)
-        g_print ("Changed:\n");
+      g_assert (modified_old->len == modified_new->len);
 
+      first = TRUE;
       for (i = 0; i < modified_old->len; i++)
         {
           RpmOstreePackage *oldpkg = modified_old->pdata[i];
-          RpmOstreePackage *newpkg;
+          RpmOstreePackage *newpkg = modified_new->pdata[i];
           const char *name = rpm_ostree_package_get_name (oldpkg);
 
-          g_assert_cmpuint (i, <, modified_new->len);
+          if (rpm_ostree_package_cmp (oldpkg, newpkg) > 0)
+            continue;
 
-          newpkg = modified_new->pdata[i];
+          if (first)
+            {
+              g_print ("Upgraded:\n");
+              first = FALSE;
+            }
+
+          g_print ("  %s %s -> %s\n", name,
+                   rpm_ostree_package_get_evr (oldpkg),
+                   rpm_ostree_package_get_evr (newpkg));
+        }
+
+      first = TRUE;
+      for (i = 0; i < modified_old->len; i++)
+        {
+          RpmOstreePackage *oldpkg = modified_old->pdata[i];
+          RpmOstreePackage *newpkg = modified_new->pdata[i];
+          const char *name = rpm_ostree_package_get_name (oldpkg);
+
+          if (rpm_ostree_package_cmp (oldpkg, newpkg) < 0)
+            continue;
+
+          if (first)
+            {
+              g_print ("Downgraded:\n");
+              first = FALSE;
+            }
 
           g_print ("  %s %s -> %s\n", name,
                    rpm_ostree_package_get_evr (oldpkg),

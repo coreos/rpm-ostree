@@ -22,6 +22,7 @@
 
 #include "rpmostree-rpm-util.h"
 
+#include <inttypes.h>
 #include <fnmatch.h>
 #include <sys/ioctl.h>
 #include <sys/capability.h>
@@ -60,7 +61,8 @@ header_name_cmp (Header h1, Header h2)
   return cmp;
 }
 
-/* generate pkg nevra/etc. strings from Header objects */
+/* keep this one to be backwards compatible with previously
+ * generated checksums */
 static char *
 pkg_envra_strdup (Header h1)
 {
@@ -83,52 +85,91 @@ pkg_envra_strdup (Header h1)
   return envra;
 }
 
+typedef enum {
+  PKG_NEVRA_FLAGS_NAME = (1 << 0),
+  PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE = (1 << 1),
+  PKG_NEVRA_FLAGS_VERSION_RELEASE = (1 << 2),
+  PKG_NEVRA_FLAGS_ARCH = (1 << 3)
+} PkgNevraFlags;
+
 static char *
-pkg_nevra_strdup (Header h1)
+pkg_custom_nevra_strdup (Header h1, PkgNevraFlags flags)
 {
   const char*    name = headerGetString (h1, RPMTAG_NAME);
   uint64_t      epoch = headerGetNumber (h1, RPMTAG_EPOCH);
   const char* version = headerGetString (h1, RPMTAG_VERSION);
   const char* release = headerGetString (h1, RPMTAG_RELEASE);
   const char*    arch = headerGetString (h1, RPMTAG_ARCH);
-  char *nevra = NULL;
+  GString *nevra = g_string_new ("");
 
-  if (!epoch)
-    nevra = g_strdup_printf ("%s-%s-%s.%s", name, version, release, arch);
-  else
+  if (flags & PKG_NEVRA_FLAGS_NAME)
+    g_string_append (nevra, name);
+
+  if (flags & (PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
+               PKG_NEVRA_FLAGS_VERSION_RELEASE))
     {
-      unsigned long long ullepoch = epoch;
-      nevra = g_strdup_printf ("%s-%llu:%s-%s.%s", name,
-                               ullepoch, version, release, arch);
+      if (nevra->len)
+        g_string_append_c (nevra, '-');
+
+      if ((flags & PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE) && (epoch > 0))
+        g_string_append_printf (nevra, "%" PRIu64 ":", epoch);
+
+      g_string_append_printf (nevra, "%s-%s", version, release);
     }
 
-  return nevra;
+  if (flags & PKG_NEVRA_FLAGS_ARCH)
+    {
+      if (nevra->len)
+        g_string_append_c (nevra, '.');
+      g_string_append (nevra, arch);
+    }
+
+  return g_string_free (nevra, FALSE);
+}
+
+static char *
+pkg_nevra_strdup (Header h1)
+{
+  return pkg_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_NAME |
+                                      PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
+                                      PKG_NEVRA_FLAGS_ARCH);
 }
 
 static char *
 pkg_na_strdup (Header h1)
 {
-  const char*    name = headerGetString (h1, RPMTAG_NAME);
-  const char*    arch = headerGetString (h1, RPMTAG_ARCH);
-
-  return g_strdup_printf ("%s.%s", name, arch);
+  return pkg_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_NAME |
+                                      PKG_NEVRA_FLAGS_ARCH);
 }
 
 static char *
 pkg_nvr_strdup (Header h1)
 {
-  const char*    name = headerGetString (h1, RPMTAG_NAME);
-  const char* version = headerGetString (h1, RPMTAG_VERSION);
-  const char* release = headerGetString (h1, RPMTAG_RELEASE);
+  return pkg_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_NAME |
+                                      PKG_NEVRA_FLAGS_VERSION_RELEASE);
+}
 
-  return g_strdup_printf ("%s-%s-%s", name, version, release);
+static char *
+pkg_evra_strdup (Header h1)
+{
+  return pkg_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
+                                      PKG_NEVRA_FLAGS_ARCH);
 }
 
 static void
 pkg_print (Header pkg)
 {
   g_autofree char *nevra = pkg_nevra_strdup (pkg);
-  printf("%s\n", nevra);
+  g_print ("%s\n", nevra);
+}
+
+static void
+pkg_print_changed (Header opkg, Header npkg)
+{
+  const char *name = headerGetString (opkg, RPMTAG_NAME);
+  g_autofree char *old_evra = pkg_evra_strdup (opkg);
+  g_autofree char *new_evra = pkg_evra_strdup (npkg);
+  g_print ("%s %s -> %s\n", name, old_evra, new_evra);
 }
 
 #define CASENCMP_EQ(x, y, n) (g_ascii_strncasecmp (x, y, n) == 0)
@@ -481,8 +522,8 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
               g_print ("Upgraded:\n");
             }
 
-          printf (" ");
-          pkg_print (hn);
+          g_print ("  ");
+          pkg_print_changed (ho, hn);
 
           if (!changelogs)
             continue;
@@ -566,8 +607,8 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
               g_print ("Downgraded:\n");
             }
 
-          printf (" ");
-          pkg_print (hn);
+          printf ("  ");
+          pkg_print_changed (ho, hn);
         }
     }
 
@@ -579,7 +620,7 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
         {
           Header hd = diff->hs_del->pdata[num];
 
-          printf (" ");
+          printf ("  ");
           pkg_print (hd);
         }
     }
@@ -592,7 +633,7 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
         {
           Header ha = diff->hs_add->pdata[num];
 
-          printf (" ");
+          printf ("  ");
           pkg_print (ha);
         }
     }
