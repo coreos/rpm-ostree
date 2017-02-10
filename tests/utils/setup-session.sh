@@ -56,7 +56,7 @@ EOF
 cat > session-services/rpmostree.service <<EOF
 [D-BUS Service]
 Name=org.projectatomic.rpmostree1
-Exec=${exec_binary} internals start-daemon --debug --sysroot=${test_tmpdir}/sysroot
+Exec=${exec_binary} start-daemon --debug --sysroot=${test_tmpdir}/sysroot
 EOF
 
 # Tell rpm-ostree to connect to the session bus instead of system

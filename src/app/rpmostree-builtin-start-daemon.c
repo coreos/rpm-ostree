@@ -298,13 +298,13 @@ out:
 
 
 int
-rpmostree_internals_builtin_start_daemon (int             argc,
-                                          char          **argv,
-                                          GCancellable   *cancellable,
-                                          GError        **error)
+rpmostree_builtin_start_daemon (int             argc,
+                                char          **argv,
+                                GCancellable   *cancellable,
+                                GError        **error)
 {
   int ret = 1;
-  g_autoptr(GOptionContext) opt_context = g_option_context_new ("rpm-ostreed -- rpm-ostree daemon");
+  g_autoptr(GOptionContext) opt_context = g_option_context_new (" - start the daemon process");
   GIOChannel *channel;
   guint name_owner_id = 0;
 

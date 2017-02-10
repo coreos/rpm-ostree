@@ -65,6 +65,11 @@ static RpmOstreeCommand experimental_commands[] = {
   { NULL }
 };
 
+static RpmOstreeCommand hidden_commands[] = {
+  { "start-daemon", rpmostree_builtin_start_daemon },
+  { NULL }
+};
+
 static gboolean opt_version;
 static gboolean opt_force_peer;
 static char *opt_sysroot;
@@ -283,6 +288,9 @@ main (int    argc,
 
   if (!command)
     command = lookup_command_of_type (experimental_commands, command_name, "an experimental");
+
+  if (!command)
+    command = lookup_command_of_type (hidden_commands, command_name, NULL);
 
   if (!command)
     {

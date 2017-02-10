@@ -54,6 +54,7 @@ BUILTINPROTO(internals);
 BUILTINPROTO(container);
 BUILTINPROTO(pkg_add);
 BUILTINPROTO(pkg_remove);
+BUILTINPROTO(start_daemon);
 
 #undef BUILTINPROTO
 

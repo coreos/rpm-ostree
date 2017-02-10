@@ -1,5 +1,5 @@
 [D-BUS Service]
 Name=org.projectatomic.rpmostree1
-Exec=@bindir@/rpm-ostree internals start-daemon
+Exec=@bindir@/rpm-ostree start-daemon
 User=root
 SystemdService=@primaryname@d.service
