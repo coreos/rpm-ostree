@@ -53,7 +53,6 @@ get_connection_for_path (gchar *sysroot,
 
   const gchar *args[] = {
     "rpm-ostree",
-    "internals",
     "start-daemon",
     "--sysroot", sysroot,
     "--dbus-peer", buffer,

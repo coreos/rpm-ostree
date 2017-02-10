@@ -1,2 +1,2 @@
 #!/bin/sh
-exec @bindir@/rpm-ostree internals start-daemon "$@"
+exec @bindir@/rpm-ostree start-daemon "$@"
