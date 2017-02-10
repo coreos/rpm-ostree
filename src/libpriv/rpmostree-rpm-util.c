@@ -65,44 +65,44 @@ static char *
 pkg_envra_strdup (Header h1)
 {
   const char*    name = headerGetString (h1, RPMTAG_NAME);
-  uint64_t      epoch = headerGetNumber (h1, RPMTAG_EPOCH);
+  char*         epoch = headerGetAsString (h1, RPMTAG_EPOCH);
   const char* version = headerGetString (h1, RPMTAG_VERSION);
   const char* release = headerGetString (h1, RPMTAG_RELEASE);
   const char*    arch = headerGetString (h1, RPMTAG_ARCH);
-  char *envra = NULL;
+  GString *envra = g_string_sized_new (64);
 
-  if (!epoch)
-    envra = g_strdup_printf ("%s-%s-%s.%s", name, version, release, arch);
-  else
+  if (epoch != NULL)
     {
-      unsigned long long ullepoch = epoch;
-      envra = g_strdup_printf ("%llu:%s-%s-%s.%s", ullepoch, name,
-                               version, release, arch);
+      g_string_append_printf (envra, "%s:", epoch);
+      free (epoch);  /* allocated with malloc(), not g_malloc() */
     }
 
-  return envra;
+  g_string_append_printf (envra, "%s-%s-%s.%s", name, version, release, arch);
+
+  return g_string_free (envra, FALSE);
 }
 
 static char *
 pkg_nevra_strdup (Header h1)
 {
   const char*    name = headerGetString (h1, RPMTAG_NAME);
-  uint64_t      epoch = headerGetNumber (h1, RPMTAG_EPOCH);
+  char*         epoch = headerGetAsString (h1, RPMTAG_EPOCH);
   const char* version = headerGetString (h1, RPMTAG_VERSION);
   const char* release = headerGetString (h1, RPMTAG_RELEASE);
   const char*    arch = headerGetString (h1, RPMTAG_ARCH);
-  char *nevra = NULL;
+  GString *nevra = g_string_sized_new (64);
 
-  if (!epoch)
-    nevra = g_strdup_printf ("%s-%s-%s.%s", name, version, release, arch);
-  else
+  g_string_append_printf (nevra, "%s-", name);
+
+  if (epoch != NULL)
     {
-      unsigned long long ullepoch = epoch;
-      nevra = g_strdup_printf ("%s-%llu:%s-%s.%s", name,
-                               ullepoch, version, release, arch);
+      g_string_append_printf (nevra, "%s:", epoch);
+      free (epoch);  /* allocated with malloc(), not g_malloc() */
     }
 
-  return nevra;
+  g_string_append_printf (nevra, "%s-%s.%s", version, release, arch);
+
+  return g_string_free (nevra, FALSE);
 }
 
 static char *
