@@ -38,7 +38,7 @@ static gboolean opt_repomd;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
-  { "base", 'b', 0, G_OPTION_ARG_NONE, &opt_base, "Clear all cached/pending state except pending/rollback and repodata", NULL },
+  { "base", 'b', 0, G_OPTION_ARG_NONE, &opt_base, "Clear temporary files; will leave deployments unchanged", NULL },
   { "pending", 'p', 0, G_OPTION_ARG_NONE, &opt_pending, "Remove pending deployment", NULL },
   { "rollback", 'r', 0, G_OPTION_ARG_NONE, &opt_rollback, "Remove rollback deployment", NULL },
   { "repomd", 'm', 0, G_OPTION_ARG_NONE, &opt_repomd, "Delete cached rpm repo metadata", NULL },
