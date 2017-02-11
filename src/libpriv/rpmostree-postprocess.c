@@ -492,9 +492,28 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
     }
   else
     {
-      if (!workaround_selinux_cross_labeling_recurse (dfd, policy_path,
-                                                      cancellable, error))
-        goto out;
+      /* Skip the timestamp hack if we can't write to the target; this may occur
+       * when using the booted rootfs.
+       */
+      if (faccessat (dfd, policy_path, W_OK, 0) < 0)
+        {
+          if (errno == EROFS)
+            ;
+          else
+            {
+              glnx_set_error_from_errno (error);
+              goto out;
+            }
+        }
+      else
+        {
+          if (!workaround_selinux_cross_labeling_recurse (dfd, policy_path,
+                                                          cancellable, error))
+            {
+              g_prefix_error (error, "SELinux cross labeling: ");
+              goto out;
+            }
+        }
     }
 
   {
@@ -502,7 +521,10 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
     glnx_unref_object GFile *rootfs = g_file_new_for_path (abspath);
     ret_sepolicy = ostree_sepolicy_new (rootfs, cancellable, error);
     if (!ret_sepolicy)
-      goto out;
+      {
+        g_prefix_error (error, "sepolicy_new: ");
+        goto out;
+      }
   }
     
   ret = TRUE;
