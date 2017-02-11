@@ -1173,8 +1173,6 @@ overlay_packages (RpmOstreeSysrootUpgrader *self,
         booted_base_checksum = g_strdup (ostree_deployment_get_csum (booted_deployment));
     }
 
-  fprintf (stderr, "booteddep %p base %s booted %s\n", booted_deployment, self->base_revision, booted_base_checksum);
-
   /* If the booted base is the same as our target, reuse that. This avoids
    * paying the price of doing the checkout as the very first thing; we may not
    * need it if the operation would result in an error for example.
