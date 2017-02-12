@@ -45,7 +45,7 @@ AM_LDFLAGS += "-Wl,-rpath=$(libdir)/rpm-ostree"
 
 EXTRA_DIST += autogen.sh COPYING
 
-GITIGNOREFILES += build-aux/ gtk-doc.make config.h.in aclocal.m4 insttree/
+GITIGNOREFILES += build-aux/ gtk-doc.make config.h.in aclocal.m4 insttree/ rpm-ostreed
 
 SED_SUBST = sed \
         -e 's,[@]libexecdir[@],$(libexecdir),g' \
