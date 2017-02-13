@@ -51,7 +51,9 @@ if ! vm_has_files /usr/bin/nrc-none.sh \
                   /usr/bin/nrc-usergroup.sh \
                   /usr/bin/nrc-usergroupcaps.sh \
                   /var/lib/nonrootcap \
-                  /run/nonrootcap; then
+                  /run/nonrootcap \
+                  /var/lib/nonrootcap-rootowned \
+                  /run/nonrootcap-rootowned; then
   assert_not_reached "not all files were layered"
 fi
 echo "ok all files layered"
@@ -96,4 +98,6 @@ check_file /usr/bin/nrc-usergroupcaps-setuid.sh nrcuser nrcgroup "cap_net_bind_s
 vm_cmd test -u /usr/bin/nrc-usergroupcaps-setuid.sh
 check_file /var/lib/nonrootcap nrcuser nrcgroup
 check_file /run/nonrootcap nrcuser nrcgroup
+check_file /var/lib/nonrootcap-rootowned root root
+check_file /run/nonrootcap-rootowned root root
 echo "ok correct user/group and fcaps"
