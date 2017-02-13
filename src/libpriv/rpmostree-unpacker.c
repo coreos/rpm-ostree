@@ -609,6 +609,17 @@ compose_filter_cb (OstreeRepo         *repo,
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "RPM had unexpected non-root owned path \"%s\", marked as %u:%u)", path, uid, gid);
+          return OSTREE_REPO_COMMIT_FILTER_SKIP;
+        }
+      /* And ensure the RPM installs into supported paths */
+      else if (!(g_str_has_prefix (path, "/usr/") || g_str_has_prefix (path, "/bin/") ||
+                 g_str_has_prefix (path, "/sbin/") || g_str_has_prefix (path, "/lib/") ||
+                 g_str_has_prefix (path, "/lib64/")))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Unsupported path: %s; See %s",
+                       path, "https://github.com/projectatomic/rpm-ostree/issues/233");
+          return OSTREE_REPO_COMMIT_FILTER_SKIP;
         }
     }
 
