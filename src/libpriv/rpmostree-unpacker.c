@@ -721,6 +721,13 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
       if (!ostree_repo_write_dfd_to_mtree (repo, tmpdir_dfd, ".", mtree, modifier,
                                            cancellable, error))
         goto out;
+
+      /* check if any of the cbs set an error */
+      if (cb_error != NULL)
+        {
+          *error = cb_error;
+          goto out;
+        }
     }
     
   if (!ostree_repo_write_mtree (repo, mtree, &root, cancellable, error))
