@@ -43,6 +43,14 @@ if vm_cmd "runuser -u bin rpm-ostree pkg-add foo-1.0"; then
     assert_not_reached "Was able to install a package as non-root!"
 fi
 
+# Be sure an unprivileged user exists
+if vm_rpmostree install test-opt-1.0 2>err.txt; then
+    assert_not_reached "Was able to install a package in /opt"
+fi
+assert_file_has_content err.txt "See https://github.com/projectatomic/rpm-ostree/issues/233"
+
+echo "ok failed to install in opt"
+
 vm_rpmostree pkg-add foo-1.0
 vm_cmd ostree --repo=/sysroot/ostree/repo/extensions/rpmostree/pkgcache refs |grep /foo/> refs.txt
 pkgref=$(head -1 refs.txt)
