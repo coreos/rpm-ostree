@@ -38,6 +38,8 @@ mkdir -p %{buildroot}/usr/bin
 install *.sh %{buildroot}/usr/bin
 mkdir -p %{buildroot}/var/lib/nonrootcap
 mkdir -p %{buildroot}/run/nonrootcap
+mkdir -p %{buildroot}/var/lib/nonrootcap-rootowned
+mkdir -p %{buildroot}/run/nonrootcap-rootowned
 
 %clean
 rm -rf %{buildroot}
@@ -53,6 +55,8 @@ rm -rf %{buildroot}
 %attr(4775, nrcuser, nrcgroup) %caps(cap_net_bind_service=ep) /usr/bin/nrc-usergroupcaps-setuid.sh
 %attr(-, nrcuser, nrcgroup) /var/lib/nonrootcap
 %attr(-, nrcuser, nrcgroup) /run/nonrootcap
+/var/lib/nonrootcap-rootowned
+/run/nonrootcap-rootowned
 
 %changelog
 * Wed Jan 05 2017 Jonathan Lebon <jlebon@redhat.com> 1.0-1

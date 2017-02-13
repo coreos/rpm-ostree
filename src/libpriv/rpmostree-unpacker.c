@@ -594,11 +594,12 @@ compose_filter_cb (OstreeRepo         *repo,
 
   get_rpmfi_override (self, path, &user, &group, NULL);
 
-  /* First, look for non-root paths in /run and /var */
-  if ((user != NULL || group != NULL) &&
-      (g_str_has_prefix (path, "/run/") || g_str_has_prefix (path, "/var/")))
+  /* convert /run and /var entries to tmpfiles.d */
+  if (g_str_has_prefix (path, "/run/") ||
+      g_str_has_prefix (path, "/var/"))
     {
-      append_tmpfiles_d (self, path, file_info, user, group);
+      append_tmpfiles_d (self, path, file_info,
+                         user ?: "root", group ?: "root");
       return OSTREE_REPO_COMMIT_FILTER_SKIP;
     }
   else if (!error_was_set)
