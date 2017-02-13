@@ -594,7 +594,7 @@ compose_filter_cb (OstreeRepo         *repo,
 
   get_rpmfi_override (self, path, &user, &group, NULL);
 
-  /* convert /run and /var entries to tpmfiles.d */
+  /* convert /run and /var entries to tmpfiles.d */
   if (g_str_has_prefix (path, "/run/") ||
       g_str_has_prefix (path, "/var/"))
     {
