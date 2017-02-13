@@ -575,6 +575,23 @@ append_tmpfiles_d (RpmOstreeUnpacker *self,
     }
 }
 
+/* When we do a unified core, we'll likely need to add /boot to pick up
+ * kernels here at least.  This is intended short term to address
+ * https://github.com/projectatomic/rpm-ostree/issues/233
+ */
+static gboolean
+path_is_ostree_compliant (const char *path)
+{
+  g_assert (*path == '/');
+  path++;
+  return (*path == '\0' ||
+          g_str_equal (path, "usr")   || g_str_has_prefix (path, "usr/")  ||
+          g_str_equal (path, "bin")   || g_str_has_prefix (path, "bin/")  ||
+          g_str_equal (path, "sbin")  || g_str_has_prefix (path, "sbin/") ||
+          g_str_equal (path, "lib")   || g_str_has_prefix (path, "lib/")  ||
+          g_str_equal (path, "lib64") || g_str_has_prefix (path, "lib64/"));
+}
+
 static OstreeRepoCommitFilterResult
 compose_filter_cb (OstreeRepo         *repo,
                    const char         *path,
@@ -612,9 +629,7 @@ compose_filter_cb (OstreeRepo         *repo,
           return OSTREE_REPO_COMMIT_FILTER_SKIP;
         }
       /* And ensure the RPM installs into supported paths */
-      else if (!(g_str_has_prefix (path, "/usr/") || g_str_has_prefix (path, "/bin/") ||
-                 g_str_has_prefix (path, "/sbin/") || g_str_has_prefix (path, "/lib/") ||
-                 g_str_has_prefix (path, "/lib64/")))
+      else if (!path_is_ostree_compliant (path))
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Unsupported path: %s; See %s",
