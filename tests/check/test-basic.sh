@@ -24,7 +24,7 @@ export RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK=yes
 
 ensure_dbus
 
-echo "1..15"
+echo "1..16"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -132,6 +132,18 @@ $OSTREE remote add secureos file://$(pwd)/testos-repo
 
 rpm-ostree rebase --os=testos secureos:$branch gpg-signed
 echo "ok deploy from remote with unsigned and signed commits"
+
+originpath=$(ostree admin --sysroot=sysroot --print-current-dir).origin
+echo "unconfigured-state=Access to TestOS requires ONE BILLION DOLLARS" >> ${originpath}
+pid=$(pgrep -u $(id -u) -f 'rpm-ostree.*daemon')
+test -n "${pid}" || assert_not_reached "failed to find rpm-ostree pid"
+kill -9 ${pid}
+rpm-ostree status
+if rpm-ostree upgrade --os=testos 2>err.txt; then
+    assert_not_reached "Upgraded from unconfigured-state"
+fi
+assert_file_has_content err.txt 'ONE BILLION DOLLARS'
+echo "ok unconfigured status"
 
 # Ensure it returns an error when passing a wrong option.
 rpm-ostree --help | awk '/^$/ {in_commands=0} {if(in_commands==1){print $0}} /^Builtin Commands:/ {in_commands=1}' > commands

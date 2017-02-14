@@ -1335,7 +1335,8 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
       OstreeDeployment *deployment = deployments->pdata[i];
       g_autoptr(RpmOstreeOrigin) origin = NULL;
 
-      origin = rpmostree_origin_parse_deployment (deployment, error);
+      origin = rpmostree_origin_parse_deployment_ex (deployment, RPMOSTREE_ORIGIN_PARSE_FLAGS_IGNORE_UNCONFIGURED,
+                                                     error);
       if (!origin)
         return FALSE;
 
