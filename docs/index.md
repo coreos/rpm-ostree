@@ -1,12 +1,16 @@
-# What is rpm-ostree?
+# What is nts? (formerly rpm-ostree)
 
-rpm-ostree is a hybrid image/package system.  It uses
-[OSTree](https://ostree.readthedocs.io/en/latest/) as a base image
-format, and accepts RPM on both the client and server side, sharing
-code with the [dnf](https://en.wikipedia.org/wiki/DNF_(software)) project;
-specifically [libhif](https://github.com/rpm-software-management/libhif).
+`nts` is a hybrid image/package system, designed for the Fedora/CentOS
+ecosystem. It was formerly known as `rpm-ostree`. `nts` builds on top of two
+shared libraries, [libOSTree](https://ostree.readthedocs.io/en/latest/) for
+image-like atomic
+upgrades, [libdnf](https://github.com/rpm-software-management/libdnf) for
+package management.
 
-# Getting started
+NOTE: In much of the rest of this documentation, we will refer to `rpm-ostree`;
+it's expected that the naming transition will occur slowly over time.
+
+# Getting it
 
 If you want to try the system as a user, we recommend
 [Project Atomic](http://www.projectatomic.io/). If you are
@@ -15,20 +19,19 @@ interested in assembling your own systems, see
 
 # Why would I want to use it?
 
-One major feature rpm-ostree has over traditional package management
-is atomic upgrade/rollback.  It supports a model where an OS vendor
-(such as [CentOS](https://www.centos.org/) or
-[Fedora](https://getfedora.org/) can provide pre-assembled "base OS
-images", and client systems can replicate those, and possibly layer on
-additional packages.
+Unlike traditional package managers, `nts` defaults to using
+an atomic upgrade model from a pre-assembled tree.  Client systems
+replicate this from a server, and *no package management* is
+performed on the client side.  For example, we do not download the
+yum/dnf repodata, and no dependency resolution is performed.
 
-rpm-ostree is a core part of the [Project Atomic](http://www.projectatomic.io/)
-effort, which uses rpm-ostree to provide a minimal host for
-Docker formatted Linux containers.
+However, one can use `nts install` to dynamically layer on additional
+packages on the client side.  This ends up with a hybrid blend
+between traditional image systems, and package management.
 
-We expect most users will be interested in rpm-ostree on the client
-side, using it to replicate a base system, and possibly layer on
-additional packages, and use containers for applications.
+Of course, for Project Atomic, the focus of Atomic Host is on
+installing applications in containers, but we believe package
+layering is an essential bridge.
 
 # Why not implement these changes in an existing package manager?
 

@@ -1,5 +1,5 @@
 AC_PREREQ([2.63])
-AC_INIT([rpm-ostree], [2017.1], [walters@verbum.org])
+AC_INIT([nts], [2017.1], [walters@verbum.org])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_MACRO_DIR([buildutil])
 AC_CONFIG_AUX_DIR([build-aux])
@@ -123,7 +123,7 @@ AM_CONDITIONAL(BUILDOPT_INSTALL_TESTS, test x$enable_installed_tests = xyes)
 AC_ARG_ENABLE(new-name,
               AS_HELP_STRING([--enable-new-name],
                              [Install additionally as nts (default: no)]),,
-              [enable_new_name=no])
+              [enable_new_name=yes])
 AM_CONDITIONAL(BUILDOPT_NEW_NAME, test x$enable_new_name = xyes)
 
 AC_ARG_WITH(bubblewrap,
