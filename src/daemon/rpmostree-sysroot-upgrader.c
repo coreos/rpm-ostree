@@ -261,8 +261,8 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   g_clear_object (&self->origin_merge_deployment);
   g_clear_pointer (&self->original_origin, (GDestroyNotify)rpmostree_origin_unref);
   g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
-  g_hash_table_unref (self->packages_to_add);
-  g_hash_table_unref (self->packages_to_delete);
+  g_clear_pointer (&self->packages_to_add, (GDestroyNotify)g_hash_table_unref);
+  g_clear_pointer (&self->packages_to_delete, (GDestroyNotify)g_hash_table_unref);
   g_free (self->base_revision);
   g_free (self->final_revision);
 
