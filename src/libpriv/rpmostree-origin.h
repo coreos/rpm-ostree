@@ -90,6 +90,17 @@ rpmostree_origin_get_keyfile (RpmOstreeOrigin *origin);
 GKeyFile *
 rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin);
 
-void rpmostree_origin_set_regenerate_initramfs (GKeyFile *mutable_origin,
-                                                gboolean regenerate,
-                                                char **args);
+void
+rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
+                                           gboolean regenerate,
+                                           char **args);
+
+void
+rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin,
+                                      const char      *checksum,
+                                      const char      *version);
+
+gboolean
+rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
+                             const char      *new_refspec,
+                             GError         **error);

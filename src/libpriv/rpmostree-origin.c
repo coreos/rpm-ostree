@@ -134,12 +134,6 @@ rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin)
 }
 
 GKeyFile *
-rpmostree_origin_get_keyfile (RpmOstreeOrigin *origin)
-{
-  return origin->kf;
-}
-
-GKeyFile *
 rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin)
 {
   return keyfile_dup (origin->kf);
@@ -175,25 +169,88 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
 }
 
 void
-rpmostree_origin_set_regenerate_initramfs (GKeyFile *mutable_origin,
+rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
                                            gboolean regenerate,
                                            char **args)
 {
   const char *section = "rpmostree";
   const char *regeneratek = "regenerate-initramfs";
   const char *argsk = "initramfs-args";
+
   if (regenerate)
     {
-      g_key_file_set_boolean (mutable_origin, section, regeneratek, TRUE);
+      g_key_file_set_boolean (origin->kf, section, regeneratek, TRUE);
       if (args && *args)
-        g_key_file_set_string_list (mutable_origin, section, argsk,
+        g_key_file_set_string_list (origin->kf, section, argsk,
                                     (const char *const*)args, g_strv_length (args));
       else
-        g_key_file_remove_key (mutable_origin, section, argsk, NULL);
+        g_key_file_remove_key (origin->kf, section, argsk, NULL);
     }
   else
     {
-      g_key_file_remove_key (mutable_origin, section, regeneratek, NULL);
-      g_key_file_remove_key (mutable_origin, section, argsk, NULL);
+      g_key_file_remove_key (origin->kf, section, regeneratek, NULL);
+      g_key_file_remove_key (origin->kf, section, argsk, NULL);
     }
+}
+
+void
+rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin,
+                                      const char      *checksum,
+                                      const char      *version)
+{
+  if (checksum != NULL)
+    {
+      g_key_file_set_string (origin->kf, "origin", "override-commit", checksum);
+
+      /* Add a comment with the version, to be nice. */
+      if (version != NULL)
+        {
+          g_autofree char *comment =
+            g_strdup_printf ("Version %s [%.10s]", version, checksum);
+          g_key_file_set_comment (origin->kf, "origin", "override-commit", comment, NULL);
+        }
+    }
+  else
+    {
+      g_key_file_remove_key (origin->kf, "origin", "override-commit", NULL);
+    }
+
+  g_free (origin->override_commit);
+  origin->override_commit = g_strdup (checksum);
+}
+
+/* updates an origin's refspec without migrating format */
+static gboolean
+origin_set_refspec (GKeyFile   *origin,
+                    const char *new_refspec,
+                    GError    **error)
+{
+  if (g_key_file_has_key (origin, "origin", "baserefspec", error))
+    {
+      g_key_file_set_value (origin, "origin", "baserefspec", new_refspec);
+      return TRUE;
+    }
+
+  if (error && *error)
+    return FALSE;
+
+  g_key_file_set_value (origin, "origin", "refspec", new_refspec);
+  return TRUE;
+}
+
+gboolean
+rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
+                             const char      *new_refspec,
+                             GError         **error)
+{
+  if (!origin_set_refspec (origin->kf, new_refspec, error))
+    return FALSE;
+
+  /* we don't want to carry any commit overrides during a rebase */
+  rpmostree_origin_set_override_commit (origin, NULL, NULL);
+
+  g_free (origin->refspec);
+  origin->refspec = g_strdup (new_refspec);
+
+  return TRUE;
 }
