@@ -508,9 +508,6 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
           uint64_t    ochange_date = 0;
           const char *ochange_name = NULL;
           const char *ochange_text = NULL;
-          uint64_t    nchange_date = 0;
-          const char *nchange_name = NULL;
-          const char *nchange_text = NULL;
 
           g_assert (!header_name_cmp (ho, hn));
           if (rpmVersionCompare (ho, hn) > 0)
@@ -559,6 +556,9 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
 
           while (ncnum > 0)
             {
+              uint64_t    nchange_date = 0;
+              const char *nchange_name = NULL;
+              const char *nchange_text = NULL;
               GDateTime *dt = NULL;
               g_autofree char *date_time_str = NULL;
 
