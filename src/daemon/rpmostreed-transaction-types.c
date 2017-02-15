@@ -230,32 +230,9 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
 
   if (self->revision != NULL)
     {
-      g_autofree char *checksum = NULL;
-      g_autofree char *version = NULL;
-
-      if (!rpmostreed_parse_revision (self->revision,
-                                      &checksum,
-                                      &version,
-                                      error))
+      if (!apply_revision_override (transaction, repo, progress, upgrader,
+                                    self->revision, cancellable, error))
         goto out;
-
-      if (version != NULL)
-        {
-          rpmostreed_transaction_emit_message_printf (transaction,
-                                                      "Resolving version '%s'",
-                                                      version);
-
-          if (!rpmostreed_repo_lookup_version (repo,
-                                               self->refspec,
-                                               version,
-                                               progress,
-                                               cancellable,
-                                               &checksum,
-                                               error))
-            goto out;
-        }
-
-      rpmostree_sysroot_upgrader_set_origin_override (upgrader, checksum);
     }
   else if (upgrading)
     {
