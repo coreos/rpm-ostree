@@ -62,21 +62,14 @@ RpmOstreeSysrootUpgrader *rpmostree_sysroot_upgrader_new (OstreeSysroot         
                                                           GError                    **error);
 
 OstreeDeployment* rpmostree_sysroot_upgrader_get_merge_deployment (RpmOstreeSysrootUpgrader *self);
-const char *rpmostree_sysroot_upgrader_get_refspec (RpmOstreeSysrootUpgrader *self);
 const char *const*rpmostree_sysroot_upgrader_get_packages (RpmOstreeSysrootUpgrader *self);
 
-char * rpmostree_sysroot_upgrader_get_origin_description (RpmOstreeSysrootUpgrader *self);
+RpmOstreeOrigin *
+rpmostree_sysroot_upgrader_dup_origin (RpmOstreeSysrootUpgrader *self);
 
-RpmOstreeOrigin *rpmostree_sysroot_upgrader_get_origin (RpmOstreeSysrootUpgrader *self);
-gboolean rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self, GKeyFile *origin,
-                                             GCancellable *cancellable, GError **error);
-
-gboolean rpmostree_sysroot_upgrader_set_origin_rebase (RpmOstreeSysrootUpgrader *self,
-                                                       const char *new_refspec,
-                                                       GError **error);
-
-void rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self,
-                                                     const char *override_commit);
+void
+rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self,
+                                       RpmOstreeOrigin *origin);
 
 gboolean
 rpmostree_sysroot_upgrader_add_packages (RpmOstreeSysrootUpgrader *self,

@@ -68,7 +68,6 @@ struct RpmOstreeSysrootUpgrader {
 
   OstreeDeployment *cfg_merge_deployment;
   OstreeDeployment *origin_merge_deployment;
-  RpmOstreeOrigin *original_origin;
   RpmOstreeOrigin *origin;
   GHashTable *packages_to_add;
   GHashTable *packages_to_delete;
@@ -203,16 +202,12 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
    */
   if (!parse_origin_deployment (self, self->origin_merge_deployment, cancellable, error))
     goto out;
-  /* Retain the "original origin", since we may need to make determinations
-   * based on the *old* state as compared to the new one.
-   */
-  self->original_origin = rpmostree_origin_ref (self->origin);
 
   /* Now, load starting base/final checksums.  We may end up changing
    * one or both if we upgrade.  But we also want to support redeploying
    * without changing them.
    */
-  if (rpmostree_origin_is_locally_assembled (self->original_origin))
+  if (rpmostree_origin_is_locally_assembled (self->origin))
     {
       self->final_revision = g_strdup (ostree_deployment_get_csum (self->origin_merge_deployment));
       if (!commit_get_parent_csum (self->repo, self->final_revision, &self->base_revision, error))
@@ -258,7 +253,6 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
 
   g_clear_object (&self->cfg_merge_deployment);
   g_clear_object (&self->origin_merge_deployment);
-  g_clear_pointer (&self->original_origin, (GDestroyNotify)rpmostree_origin_unref);
   g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
   g_clear_pointer (&self->packages_to_add, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&self->packages_to_delete, (GDestroyNotify)g_hash_table_unref);
@@ -383,104 +377,18 @@ rpmostree_sysroot_upgrader_new (OstreeSysroot              *sysroot,
                          "sysroot", sysroot, "osname", osname, "flags", flags, NULL);
 }
 
-/**
- * rpmostree_sysroot_upgrader_get_origin:
- * @self: Sysroot
- *
- * Returns: (transfer none): The origin file, or %NULL if unknown
- */
 RpmOstreeOrigin *
-rpmostree_sysroot_upgrader_get_origin (RpmOstreeSysrootUpgrader *self)
+rpmostree_sysroot_upgrader_dup_origin (RpmOstreeSysrootUpgrader *self)
 {
-  return self->origin;
-}
-
-/**
- * ostree_sysroot_upgrader_set_origin:
- * @self: Sysroot
- * @origin: (allow-none): The new origin
- * @cancellable: Cancellable
- * @error: Error
- *
- * Replace the origin with @origin.
- */
-gboolean
-rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self,
-                                       GKeyFile              *origin,
-                                       GCancellable          *cancellable,
-                                       GError               **error)
-{
-  gboolean ret = FALSE;
-
-  g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
-  if (origin)
-    {
-      if (!parse_origin_keyfile (self, origin, cancellable, error))
-        goto out;
-    }
-
-  ret = TRUE;
- out:
-  return ret;
-}
-
-/* updates an origin's refspec without migrating format */
-static gboolean
-origin_set_refspec (GKeyFile   *origin,
-                    const char *new_refspec,
-                    GError    **error)
-{
-  if (g_key_file_has_key (origin, "origin", "baserefspec", error))
-    {
-      g_key_file_set_value (origin, "origin", "baserefspec", new_refspec);
-      return TRUE;
-    }
-
-  if (error && *error)
-    return FALSE;
-
-  g_key_file_set_value (origin, "origin", "refspec", new_refspec);
-  return TRUE;
-}
-
-gboolean
-rpmostree_sysroot_upgrader_set_origin_rebase (RpmOstreeSysrootUpgrader *self,
-                                              const char *new_refspec,
-                                              GError **error)
-{
-  g_autoptr(GKeyFile) new_origin = rpmostree_origin_dup_keyfile (self->origin);
-
-  if (!origin_set_refspec (new_origin, new_refspec, error))
-    return FALSE;
-
-  /* we don't want to carry any commit overrides during a rebase */
-  g_key_file_remove_key (new_origin, "origin", "override-commit", NULL);
-
-  if (!parse_origin_keyfile (self, new_origin, NULL, error))
-    return FALSE;
-
-  return TRUE;
+  return rpmostree_origin_dup (self->origin);
 }
 
 void
-rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self,
-                                                const char *override_commit)
+rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self,
+                                       RpmOstreeOrigin          *new_origin)
 {
-  g_autoptr(GKeyFile) new_origin = rpmostree_origin_dup_keyfile (self->origin);
-
-  if (override_commit != NULL)
-    g_key_file_set_string (new_origin, "origin", "override-commit", override_commit);
-  else
-    g_key_file_remove_key (new_origin, "origin", "override-commit", NULL);
-
-  if (!parse_origin_keyfile (self, new_origin, NULL, NULL))
-    g_assert_not_reached ();
-}
-
-const char *
-rpmostree_sysroot_upgrader_get_refspec (RpmOstreeSysrootUpgrader *self)
-{
-  return rpmostree_origin_get_refspec (self->origin);
+  rpmostree_origin_unref (self->origin);
+  self->origin = rpmostree_origin_dup (new_origin);
 }
 
 const char *const*
@@ -493,18 +401,6 @@ OstreeDeployment*
 rpmostree_sysroot_upgrader_get_merge_deployment (RpmOstreeSysrootUpgrader *self)
 {
   return self->origin_merge_deployment;
-}
-
-/**
- * rpmostree_sysroot_upgrader_get_origin_description:
- * @self: Upgrader
- *
- * Returns: A one-line descriptive summary of the origin, or %NULL if unknown
- */
-char *
-rpmostree_sysroot_upgrader_get_origin_description (RpmOstreeSysrootUpgrader *self)
-{
-  return g_strdup (rpmostree_sysroot_upgrader_get_refspec (self));
 }
 
 static GHashTable*
@@ -1114,9 +1010,9 @@ out:
 }
 
 static gboolean
-overlay_packages (RpmOstreeSysrootUpgrader *self,
-                  GCancellable             *cancellable,
-                  GError                  **error)
+do_local_assembly (RpmOstreeSysrootUpgrader *self,
+                   GCancellable             *cancellable,
+                   GError                  **error)
 {
   self->devino_cache = ostree_repo_devino_cache_new ();
 
@@ -1436,13 +1332,14 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   gboolean ret = FALSE;
   glnx_unref_object OstreeDeployment *new_deployment = NULL;
   const char *target_revision;
+  g_autoptr(GKeyFile) origin = NULL;
 
   /* any packages requested for overlay? */
   if (rpmostree_origin_is_locally_assembled (self->origin) ||
       (g_hash_table_size (self->packages_to_add) > 0) ||
       (g_hash_table_size (self->packages_to_delete) > 0))
     {
-      if (!overlay_packages (self, cancellable, error))
+      if (!do_local_assembly (self, cancellable, error))
         goto out;
     }
   else
@@ -1458,9 +1355,9 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   target_revision = self->final_revision ?: self->base_revision;
   g_assert (target_revision);
 
+  origin = rpmostree_origin_dup_keyfile (self->origin);
   if (!ostree_sysroot_deploy_tree (self->sysroot, self->osname,
-                                   target_revision,
-                                   rpmostree_origin_get_keyfile (self->origin),
+                                   target_revision, origin,
                                    self->cfg_merge_deployment,
                                    NULL,
                                    &new_deployment,
