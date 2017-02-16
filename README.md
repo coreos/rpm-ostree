@@ -3,7 +3,7 @@
 rpm-ostree is a hybrid image/package system.  It uses
 [OSTree](https://ostree.readthedocs.io/en/latest/) as a base image
 format, and supports RPM on both the client and server side using
-[libhif](https://github.com/rpm-software-management/libhif).
+[libdnf](https://github.com/rpm-software-management/libdnf).
 
 For more information, see the online manual: [Read The Docs (rpm-ostree)](https://rpm-ostree.readthedocs.org/en/latest/)
 
