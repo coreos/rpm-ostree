@@ -100,15 +100,21 @@ parse_origin_keyfile (RpmOstreeSysrootUpgrader  *self,
                       GCancellable           *cancellable,
                       GError                **error)
 {
-  RpmOstreeOriginParseFlags origin_flags = 0;
-
   g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
 
-  if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED)
-    origin_flags |= RPMOSTREE_ORIGIN_PARSE_FLAGS_IGNORE_UNCONFIGURED;
-  self->origin = rpmostree_origin_parse_keyfile (origin, origin_flags, error);
+  self->origin = rpmostree_origin_parse_keyfile (origin, error);
   if (!self->origin)
     return FALSE;
+
+  if (rpmostree_origin_get_unconfigured_state (self->origin) &&
+      !(self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED))
+    {
+      /* explicit action is required OS creator to upgrade, print their text as an error */
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "origin unconfigured-state: %s",
+                   rpmostree_origin_get_unconfigured_state (self->origin));
+      return FALSE;
+    }
 
   return TRUE;
 }
@@ -1219,8 +1225,7 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
       OstreeDeployment *deployment = deployments->pdata[i];
       g_autoptr(RpmOstreeOrigin) origin = NULL;
 
-      origin = rpmostree_origin_parse_deployment_ex (deployment, RPMOSTREE_ORIGIN_PARSE_FLAGS_IGNORE_UNCONFIGURED,
-                                                     error);
+      origin = rpmostree_origin_parse_deployment (deployment, error);
       if (!origin)
         return FALSE;
 

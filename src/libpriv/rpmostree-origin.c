@@ -30,6 +30,7 @@ struct RpmOstreeOrigin {
   char *refspec;
   char **packages;
   char *override_commit;
+  char *unconfigured_state;
 };
 
 static GKeyFile *
@@ -45,7 +46,6 @@ keyfile_dup (GKeyFile *kf)
 
 RpmOstreeOrigin *
 rpmostree_origin_parse_keyfile (GKeyFile         *origin,
-                                RpmOstreeOriginParseFlags flags,
                                 GError          **error)
 {
   g_autoptr(RpmOstreeOrigin) ret = NULL;
@@ -57,19 +57,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   /* NOTE hack here - see https://github.com/ostreedev/ostree/pull/343 */
   g_key_file_remove_key (ret->kf, "origin", "unlocked", NULL);
 
-  if ((flags & RPMOSTREE_ORIGIN_PARSE_FLAGS_IGNORE_UNCONFIGURED) == 0)
-    {
-      g_autofree char *unconfigured_state = NULL;
-
-      /* If explicit action by the OS creator is requried to upgrade, print their text as an error */
-      unconfigured_state = g_key_file_get_string (origin, "origin", "unconfigured-state", NULL);
-      if (unconfigured_state)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "origin unconfigured-state: %s", unconfigured_state);
-          return NULL;
-        }
-    }
+  ret->unconfigured_state = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
 
   ret->refspec = g_key_file_get_string (ret->kf, "origin", "refspec", NULL);
   if (!ret->refspec)
@@ -170,6 +158,7 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
     return;
   g_key_file_unref (origin->kf);
   g_free (origin->refspec);
+  g_free (origin->unconfigured_state);
   g_strfreev (origin->packages);
   g_free (origin);
 }
@@ -259,4 +248,10 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
   origin->refspec = g_strdup (new_refspec);
 
   return TRUE;
+}
+
+const char*
+rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
+{
+  return origin->unconfigured_state;
 }

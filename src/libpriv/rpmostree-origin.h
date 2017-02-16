@@ -27,20 +27,14 @@ RpmOstreeOrigin *rpmostree_origin_ref (RpmOstreeOrigin *origin);
 void rpmostree_origin_unref (RpmOstreeOrigin *origin);
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeOrigin, rpmostree_origin_unref)
 
-typedef enum {
-  RPMOSTREE_ORIGIN_PARSE_FLAGS_IGNORE_UNCONFIGURED = (1 << 0)
-} RpmOstreeOriginParseFlags;
-
 RpmOstreeOrigin *
 rpmostree_origin_parse_keyfile (GKeyFile *keyfile,
-                                RpmOstreeOriginParseFlags flags,
                                 GError **error);
 
 static inline
 RpmOstreeOrigin *
-rpmostree_origin_parse_deployment_ex (OstreeDeployment *deployment,
-                                      RpmOstreeOriginParseFlags flags,
-                                      GError **error)
+rpmostree_origin_parse_deployment (OstreeDeployment *deployment,
+                                   GError **error)
 {
   GKeyFile *origin = ostree_deployment_get_origin (deployment);
   if (!origin)
@@ -51,15 +45,7 @@ rpmostree_origin_parse_deployment_ex (OstreeDeployment *deployment,
                    ostree_deployment_get_deployserial (deployment));
       return NULL;
     }
-  return rpmostree_origin_parse_keyfile (origin, flags, error);
-}
-
-static inline
-RpmOstreeOrigin *
-rpmostree_origin_parse_deployment (OstreeDeployment *deployment,
-                                   GError **error)
-{
-  return rpmostree_origin_parse_deployment_ex (deployment, 0, error);
+  return rpmostree_origin_parse_keyfile (origin, error);
 }
 
 RpmOstreeOrigin *
@@ -105,3 +91,6 @@ gboolean
 rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
                              const char      *new_refspec,
                              GError         **error);
+
+const char *
+rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin);

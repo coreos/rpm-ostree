@@ -1214,8 +1214,7 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
       g_autoptr(RpmOstreeOrigin) origin = NULL;
 
       /* Don't fail here for unknown origin types */
-      origin = rpmostree_origin_parse_deployment_ex (merge_deployment, RPMOSTREE_ORIGIN_PARSE_FLAGS_IGNORE_UNCONFIGURED,
-                                                     NULL);
+      origin = rpmostree_origin_parse_deployment (merge_deployment, NULL);
       if (origin)
         {
           cached_update = rpmostreed_commit_generate_cached_details_variant (merge_deployment,
