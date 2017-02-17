@@ -43,7 +43,7 @@ struct RpmOstreePackageScriptHandler {
   RpmOstreeScriptAction action;
 };
 
-const struct RpmOstreePackageScriptHandler* rpmostree_script_gperf_lookup(const char *key, unsigned length);
+const struct RpmOstreePackageScriptHandler* rpmostree_script_gperf_lookup(const char *key, GPERF_LEN_TYPE length);
 
 gboolean rpmostree_script_ignore_hash_from_strv (const char *const *strv,
                                                  GHashTable **out_hash,
