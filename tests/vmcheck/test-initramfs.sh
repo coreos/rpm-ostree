@@ -89,6 +89,8 @@ vm_assert_status_jq \
 echo "ok initramfs enable disable reboot"
 
 assert_streq $base $(vm_get_booted_csum)
+osname=$(vm_get_booted_deployment_info osname)
+
 for file in first second; do
     vm_cmd touch /etc/rpmostree-initramfs-testing-$file
     vm_rpmostree initramfs --enable --arg="-I" --arg="/etc/rpmostree-initramfs-testing-$file"
@@ -99,7 +101,7 @@ for file in first second; do
         '.deployments[0]["initramfs-args"]|index("-I") == 0' \
         '.deployments[0]["initramfs-args"]|index("/etc/rpmostree-initramfs-testing-'${file}'") == 1' \
         '.deployments[0]["initramfs-args"]|length == 2'
-    initramfs=$(vm_cmd grep ^initrd /boot/loader/entries/ostree-fedora-atomic-0.conf | sed -e 's,initrd ,/boot/,')
+    initramfs=$(vm_cmd grep ^initrd /boot/loader/entries/ostree-$osname-0.conf | sed -e 's,initrd ,/boot/,')
     test -n "${initramfs}"
     vm_cmd lsinitrd $initramfs > lsinitrd.txt
     assert_file_has_content lsinitrd.txt /etc/rpmostree-initramfs-testing-${file}
@@ -107,7 +109,7 @@ done
 
 vm_rpmostree initramfs --disable
 
-initramfs=$(vm_cmd grep ^initrd /boot/loader/entries/ostree-fedora-atomic-0.conf | sed -e 's,initrd ,/boot/,')
+initramfs=$(vm_cmd grep ^initrd /boot/loader/entries/ostree-$osname-0.conf | sed -e 's,initrd ,/boot/,')
 test -n "${initramfs}"
 vm_cmd lsinitrd $initramfs > lsinitrd.txt
 assert_not_file_has_content lsinitrd.txt /etc/rpmostree-initramfs-testing
