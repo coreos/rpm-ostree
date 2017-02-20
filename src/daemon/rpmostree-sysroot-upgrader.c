@@ -70,7 +70,6 @@ struct RpmOstreeSysrootUpgrader {
   OstreeDeployment *origin_merge_deployment;
   RpmOstreeOrigin *original_origin;
   RpmOstreeOrigin *origin;
-  GHashTable *ignore_scripts;
   GHashTable *packages_to_add;
   GHashTable *packages_to_delete;
 
@@ -476,14 +475,6 @@ rpmostree_sysroot_upgrader_set_origin_override (RpmOstreeSysrootUpgrader *self,
 
   if (!parse_origin_keyfile (self, new_origin, NULL, NULL))
     g_assert_not_reached ();
-}
-
-void
-rpmostree_sysroot_upgrader_set_ignore_scripts (RpmOstreeSysrootUpgrader *self,
-                                               GHashTable* ignore_scripts)
-{
-  g_clear_pointer (&self->ignore_scripts, g_hash_table_unref);
-  self->ignore_scripts = g_hash_table_ref (ignore_scripts);
 }
 
 const char *
@@ -1019,9 +1010,6 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   if (!rpmostree_context_setup (ctx, tmprootfs_abspath, NULL, treespec,
                                 cancellable, error))
     goto out;
-
-  if (self->ignore_scripts)
-    rpmostree_context_set_ignore_scripts (ctx, self->ignore_scripts);
 
   if (!get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
     goto out;
