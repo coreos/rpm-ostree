@@ -51,7 +51,7 @@ typedef enum {
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW
 } RpmOstreePostprocessBootLocation;
 
-/* This bwrap case is for treecompose which isn't isn't yet operating on
+/* This bwrap case is for treecompose which isn't yet operating on
  * hardlinks, so we just bind mount things mutably.
  */
 static gboolean
