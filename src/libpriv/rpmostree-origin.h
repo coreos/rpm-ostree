@@ -48,6 +48,9 @@ rpmostree_origin_parse_deployment (OstreeDeployment *deployment,
   return rpmostree_origin_parse_keyfile (origin, error);
 }
 
+RpmOstreeOrigin *
+rpmostree_origin_dup (RpmOstreeOrigin *origin);
+
 gboolean
 rpmostree_origin_is_locally_assembled (RpmOstreeOrigin *origin);
 
@@ -71,8 +74,6 @@ rpmostree_origin_get_string (RpmOstreeOrigin *origin,
                              const char *section,
                              const char *value);
 
-GKeyFile *
-rpmostree_origin_get_keyfile (RpmOstreeOrigin *origin);
 GKeyFile *
 rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin);
 

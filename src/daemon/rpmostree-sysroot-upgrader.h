@@ -64,9 +64,12 @@ RpmOstreeSysrootUpgrader *rpmostree_sysroot_upgrader_new (OstreeSysroot         
 OstreeDeployment* rpmostree_sysroot_upgrader_get_merge_deployment (RpmOstreeSysrootUpgrader *self);
 const char *const*rpmostree_sysroot_upgrader_get_packages (RpmOstreeSysrootUpgrader *self);
 
-char * rpmostree_sysroot_upgrader_get_origin_description (RpmOstreeSysrootUpgrader *self);
+RpmOstreeOrigin *
+rpmostree_sysroot_upgrader_dup_origin (RpmOstreeSysrootUpgrader *self);
 
-RpmOstreeOrigin *rpmostree_sysroot_upgrader_get_origin (RpmOstreeSysrootUpgrader *self);
+void
+rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self,
+                                       RpmOstreeOrigin *origin);
 
 gboolean
 rpmostree_sysroot_upgrader_add_packages (RpmOstreeSysrootUpgrader *self,

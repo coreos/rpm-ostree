@@ -162,8 +162,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
   glnx_unref_object OstreeAsyncProgress *progress = NULL;
   glnx_unref_object OstreeRepo *repo = NULL;
   glnx_unref_object OstreeDeployment *merge_deployment = NULL;
-  g_autofree gchar *origin_description = NULL;
-  RpmOstreeOrigin *origin = NULL;
+  g_autoptr(RpmOstreeOrigin) origin = NULL;
 
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   gboolean upgrading = FALSE;
@@ -184,7 +183,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
   if (upgrader == NULL)
     goto out;
 
-  origin = rpmostree_sysroot_upgrader_get_origin (upgrader);
+  origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
 
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     goto out;
@@ -215,6 +214,8 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
     {
       rpmostree_origin_set_override_commit (origin, NULL, NULL);
     }
+
+  rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 
   rpmostreed_transaction_emit_message_printf (transaction,
                                               "Updating from: %s",
@@ -598,7 +599,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   gboolean changed = FALSE;
   gboolean ret = FALSE;
-  RpmOstreeOrigin *origin = NULL;
+  g_autoptr(RpmOstreeOrigin) origin = NULL;
 
   self = (DeployTransaction *) transaction;
 
@@ -624,7 +625,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   if (upgrader == NULL)
     goto out;
 
-  origin = rpmostree_sysroot_upgrader_get_origin (upgrader);
+  origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
 
   if (self->refspec)
     {
@@ -650,6 +651,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     {
       rpmostree_origin_set_override_commit (origin, NULL, NULL);
     }
+  rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 
   /* Mainly for the `install` command */
   if (!(self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE))
@@ -817,8 +819,7 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
   InitramfsStateTransaction *self;
   OstreeSysroot *sysroot;
   glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
-  RpmOstreeOrigin *origin = NULL; /* Owned by upgrader */
-  g_autoptr(GKeyFile) new_origin = NULL;
+  g_autoptr(RpmOstreeOrigin) origin = NULL;
   g_auto(GStrv) current_initramfs_args = NULL;
   gboolean current_regenerate;
 
@@ -831,7 +832,7 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
   if (upgrader == NULL)
     return FALSE;
 
-  origin = rpmostree_sysroot_upgrader_get_origin (upgrader);
+  origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
   current_regenerate = rpmostree_origin_get_regenerate_initramfs (origin);
   current_initramfs_args = rpmostree_origin_get_initramfs_args (origin);
   /* We don't deep-compare the args right now, we assume if you were using them
@@ -849,6 +850,7 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   rpmostree_origin_set_regenerate_initramfs (origin, self->regenerate, self->args);
+  rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 
   if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
     return FALSE;

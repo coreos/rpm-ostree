@@ -383,16 +383,18 @@ rpmostree_sysroot_upgrader_new (OstreeSysroot              *sysroot,
                          "sysroot", sysroot, "osname", osname, "flags", flags, NULL);
 }
 
-/**
- * rpmostree_sysroot_upgrader_get_origin:
- * @self: Sysroot
- *
- * Returns: (transfer none): The origin file, or %NULL if unknown
- */
 RpmOstreeOrigin *
-rpmostree_sysroot_upgrader_get_origin (RpmOstreeSysrootUpgrader *self)
+rpmostree_sysroot_upgrader_dup_origin (RpmOstreeSysrootUpgrader *self)
 {
-  return self->origin;
+  return rpmostree_origin_dup (self->origin);
+}
+
+void
+rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self,
+                                       RpmOstreeOrigin          *new_origin)
+{
+  rpmostree_origin_unref (self->origin);
+  self->origin = rpmostree_origin_dup (new_origin);
 }
 
 const char *const*

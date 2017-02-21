@@ -82,6 +82,12 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   return g_steal_pointer (&ret);
 }
 
+RpmOstreeOrigin *
+rpmostree_origin_dup (RpmOstreeOrigin *origin)
+{
+  return rpmostree_origin_parse_keyfile (origin->kf, NULL);
+}
+
 const char *
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
 {
