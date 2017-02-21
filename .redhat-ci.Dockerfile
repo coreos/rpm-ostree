@@ -13,6 +13,7 @@ RUN dnf install -y @buildsys-build && \
 # These are test-only reqs
 
 RUN dnf install -y \
+        ostree \
         createrepo_c \
         /usr/bin/jq \
         clang \
