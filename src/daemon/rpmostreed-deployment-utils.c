@@ -191,7 +191,8 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   
   id = rpmostreed_deployment_generate_id (deployment);
 
-  origin = rpmostree_origin_parse_deployment (deployment, error);
+  origin = rpmostree_origin_parse_deployment_ex (deployment, RPMOSTREE_ORIGIN_PARSE_FLAGS_IGNORE_UNCONFIGURED,
+                                                 error);
   if (!origin)
     return NULL;
 
@@ -281,7 +282,8 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
     {
       g_autoptr(RpmOstreeOrigin) origin = NULL;
   
-      origin = rpmostree_origin_parse_deployment (deployment, error);
+      origin = rpmostree_origin_parse_deployment_ex (deployment, RPMOSTREE_ORIGIN_PARSE_FLAGS_IGNORE_UNCONFIGURED,
+                                                     error);
       if (!origin)
         return NULL;
       origin_refspec = g_strdup (rpmostree_origin_get_refspec (origin));
