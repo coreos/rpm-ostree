@@ -679,7 +679,7 @@ gfopen (const char       *path,
   ret = fopen (path, mode);
   if (!ret)
     {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "fopen(%s): ", path);
+      glnx_set_prefix_error_from_errno (error, "fopen(%s)", path);
       return NULL;
     }
   return ret;
@@ -692,7 +692,7 @@ gfflush (FILE         *f,
 {
   if (fflush (f) != 0)
     {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "fflush: ");
+      glnx_set_prefix_error_from_errno (error, "%s", "fflush");
       return FALSE;
     }
   return TRUE;
@@ -754,7 +754,7 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
         {
           if (errno != 0 && errno != ENOENT)
             {
-              _rpmostree_set_prefix_error_from_errno (error, errno, "fgetpwent: ");
+              glnx_set_prefix_error_from_errno (error, "%s", "fgetpwent");
               goto out;
             }
           else
@@ -802,7 +802,7 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
 
       if (r == -1)
         {
-          _rpmostree_set_prefix_error_from_errno (error, errno, "putpwent: ");
+          glnx_set_prefix_error_from_errno (error, "%s", "putpwent");
           goto out;
         }
     }
@@ -814,8 +814,8 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
 
   if (rename (etctmp_path, src_path) != 0)
     {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "rename(%s, %s): ",
-                                              etctmp_path, src_path);
+      glnx_set_prefix_error_from_errno (error, "rename(%s, %s)",
+                                        etctmp_path, src_path);
       goto out;
     }
 
@@ -905,7 +905,7 @@ concat_entries (FILE    *src_stream,
         {
           if (errno != 0 && errno != ENOENT)
             {
-              _rpmostree_set_prefix_error_from_errno (error, errno, "fgetpwent: ");
+              glnx_set_prefix_error_from_errno (error, "%s", "fgetpwent");
               goto out;
             }
           else
@@ -929,7 +929,7 @@ concat_entries (FILE    *src_stream,
 
       if (r == -1)
         {
-          _rpmostree_set_prefix_error_from_errno (error, errno, "putpwent: ");
+          glnx_set_prefix_error_from_errno (error, "%s", "putpwent");
           goto out;
         }
     }
