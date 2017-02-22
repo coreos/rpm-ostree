@@ -20,7 +20,12 @@ EOF
 chmod a+x scriptpkg1
 
 %pre
+# Test our /etc/passwd handling
 groupadd -r scriptpkg1
+
+%posttrans
+# Firewalld; https://github.com/projectatomic/rpm-ostree/issues/638
+. /etc/os-release || :
 
 %install
 mkdir -p %{buildroot}/usr/bin

@@ -192,7 +192,7 @@ run_script_in_bwrap_container (int rootfs_fd,
                                /* But no need to access persistent /tmp, so make it /tmp */
                                "--bind", "/tmp", "/var/tmp",
                                /* Allow RPM scripts to change the /etc defaults */
-                               "--symlink", "usr/etc", "/etc",
+                               "--bind", "/usr/etc", "/etc",
                                NULL);
   if (!bwrap)
     goto out;
