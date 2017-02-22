@@ -578,6 +578,8 @@ rpmostree_context_setup (RpmOstreeContext    *self,
 
   self->spec = g_object_ref (spec);
 
+  self->spec = g_object_ref (spec);
+
   if (install_root)
     dnf_context_set_install_root (self->hifctx, install_root);
   else
