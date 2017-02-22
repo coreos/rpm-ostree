@@ -25,18 +25,6 @@
 #include <sys/wait.h>
 #include <ostree.h>
 
-void
-_rpmostree_set_error_from_errno (GError    **error,
-                                 gint        errsv);
-
-void
-_rpmostree_set_prefix_error_from_errno (GError     **error,
-                                        gint         errsv,
-                                        const char  *format,
-                                        ...) G_GNUC_PRINTF (3,4);
-
-void _rpmostree_perror_fatal (const char *message) __attribute__ ((noreturn));
-
 int
 rpmostree_ptrarray_sort_compare_strings (gconstpointer ap,
                                          gconstpointer bp);

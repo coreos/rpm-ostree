@@ -686,8 +686,7 @@ rpmostree_compose_builtin_tree (int             argc,
         {
           if (mount ("tmpfs", tmpd, "tmpfs", 0, (const void*)"mode=755") != 0)
             {
-              _rpmostree_set_prefix_error_from_errno (error, errno,
-                                                      "mount(tmpfs): ");
+              glnx_set_prefix_error_from_errno (error, "%s", "mount(tmpfs)");
               goto out;
             }
         }

@@ -29,42 +29,6 @@
 #include "rpmostree-util.h"
 #include "libglnx.h"
 
-void
-_rpmostree_set_error_from_errno (GError    **error,
-                                 gint        errsv)
-{
-  g_set_error_literal (error,
-                       G_IO_ERROR,
-                       g_io_error_from_errno (errsv),
-                       g_strerror (errsv));
-  errno = errsv;
-}
-
-void
-_rpmostree_set_prefix_error_from_errno (GError     **error,
-                                        gint         errsv,
-                                        const char  *format,
-                                        ...)
-{
-  g_autofree char *formatted = NULL;
-  va_list args;
-  
-  va_start (args, format);
-  formatted = g_strdup_vprintf (format, args);
-  va_end (args);
-  
-  _rpmostree_set_error_from_errno (error, errsv);
-  g_prefix_error (error, "%s", formatted);
-  errno = errsv;
-}
-
-void
-_rpmostree_perror_fatal (const char *message)
-{
-  perror (message);
-  exit (1);
-}
-
 int
 rpmostree_ptrarray_sort_compare_strings (gconstpointer ap,
                                          gconstpointer bp)
@@ -376,7 +340,7 @@ _rpmostree_sync_wait_on_pid (pid_t          pid,
 
   if (r == -1)
     {
-      _rpmostree_set_prefix_error_from_errno (error, errno, "waitpid: ");
+      glnx_set_prefix_error_from_errno (error, "%s", "waitpid");
       goto out;
     }
 
