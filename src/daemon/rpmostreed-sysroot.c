@@ -693,7 +693,7 @@ rpmostreed_sysroot_reload (RpmostreedSysroot *self,
 
   if (!sysroot_populate_deployments_unlocked (self, &did_change, error))
     goto out;
-  if (!ostree_repo_reload_remote_config (self->repo, NULL, error))
+  if (!ostree_repo_reload_config (self->repo, NULL, error))
     goto out;
 
   ret = TRUE;
