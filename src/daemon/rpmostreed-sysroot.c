@@ -546,8 +546,10 @@ handle_reload_config (RPMOSTreeSysroot *object,
 
   if (!rpmostreed_sysroot_reload (self, error))
     goto out;
+
+  rpmostree_sysroot_complete_reload_config (object, invocation);
 out:
-  if (error)
+  if (local_error)
     g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
 
   return TRUE;

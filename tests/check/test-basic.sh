@@ -24,7 +24,7 @@ export RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK=yes
 
 ensure_dbus
 
-echo "1..16"
+echo "1..17"
 
 setup_os_repository "archive-z2" "syslinux"
 
