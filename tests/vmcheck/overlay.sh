@@ -59,8 +59,9 @@ for url in https://kojipkgs.fedoraproject.org//packages/ostree/2017.2/3.fc25/x86
 done
 rpm -Uvh --force *.rpm
 for x in *.rpm; do
-    rpm2cpio $x | (cd vmcheck & cpio -div)
+    rpm2cpio $x | (cd vmcheck && cpio -div)
 done
+rm vmcheck/etc -rf
 rm -f *.rpm
 # ✀✀✀ END hack for https://github.com/projectatomic/rpm-ostree/pull/642 ✀✀✀
 ostree refs --delete vmcheck || true
