@@ -52,6 +52,9 @@ cd /ostree/repo/tmp
 rm vmcheck -rf
 ostree checkout $commit vmcheck --fsync=0
 rsync -rlv /var/roothome/sync/insttree/usr/ vmcheck/usr/
+for url in https://kojipkgs.fedoraproject.org//packages/ostree/2017.2/3.fc25/x86_64/ostree-{,libs-,grub2-}2017.2-3.fc25.x86_64.rpm; do
+    curl -sSL $url | (cd vmcheck && rpm2cpio | cpio -div)
+done
 ostree refs --delete vmcheck || true
 ostree commit -b vmcheck -s '' --tree=dir=vmcheck --link-checkout-speedup
 ostree admin deploy vmcheck
