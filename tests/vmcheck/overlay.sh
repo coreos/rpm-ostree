@@ -52,9 +52,17 @@ cd /ostree/repo/tmp
 rm vmcheck -rf
 ostree checkout $commit vmcheck --fsync=0
 rsync -rlv /var/roothome/sync/insttree/usr/ vmcheck/usr/
+# ✀✀✀ BEGIN hack for https://github.com/projectatomic/rpm-ostree/pull/642 ✀✀✀
+ostree admin unlock || true
 for url in https://kojipkgs.fedoraproject.org//packages/ostree/2017.2/3.fc25/x86_64/ostree-{,libs-,grub2-}2017.2-3.fc25.x86_64.rpm; do
-    curl -sSL $url | (cd vmcheck && rpm2cpio | cpio -div)
+    curl -sSL -O $url
 done
+rpm -Uvh --force *.rpm
+for x in *.rpm; do
+    rpm2cpio $x | (cd vmcheck & cpio -div)
+done
+rm -f *.rpm
+# ✀✀✀ END hack for https://github.com/projectatomic/rpm-ostree/pull/642 ✀✀✀
 ostree refs --delete vmcheck || true
 ostree commit -b vmcheck -s '' --tree=dir=vmcheck --link-checkout-speedup
 ostree admin deploy vmcheck
