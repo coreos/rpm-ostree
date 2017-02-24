@@ -43,6 +43,11 @@ commit_get_parent_csum (OstreeRepo  *repo,
                         const char  *child,
                         char       **out_csum,
                         GError     **error);
+static gboolean
+get_base_commit_for_deployment (OstreeRepo                *repo,
+                                OstreeDeployment          *deployment,
+                                char                     **out_base,
+                                GError                   **error);
 
 /**
  * SECTION:rpmostree-sysroot-upgrader
@@ -74,6 +79,7 @@ struct RpmOstreeSysrootUpgrader {
 
   /* Used during tree construction */
   OstreeRepoDevInoCache *devino_cache;
+  int overlay_rootfs_dfd;
   int tmprootfs_dfd;
   char *tmprootfs;
 
@@ -244,6 +250,10 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
 {
   RpmOstreeSysrootUpgrader *self = RPMOSTREE_SYSROOT_UPGRADER (object);
 
+  /* The overlay_rootfs_dfd may just be an alias for tmprootfs_dfd */
+  if (self->overlay_rootfs_dfd != -1 &&
+      self->overlay_rootfs_dfd != self->tmprootfs_dfd)
+    (void) close (self->overlay_rootfs_dfd);
   if (self->tmprootfs_dfd != -1)
     {
       (void)glnx_shutil_rm_rf_at (AT_FDCWD, self->tmprootfs, NULL, NULL);
@@ -361,6 +371,7 @@ static void
 rpmostree_sysroot_upgrader_init (RpmOstreeSysrootUpgrader *self)
 {
   self->tmprootfs_dfd = -1;
+  self->overlay_rootfs_dfd = -1;
 }
 
 
@@ -786,7 +797,7 @@ finalize_requested_packages (RpmOstreeSysrootUpgrader *self,
       g_hash_table_add (pkgset, g_strdup (itkey));
   }
 
-  if (!find_pkgs_in_rpmdb (self->tmprootfs_dfd, pkgset, pkg_find_cb,
+  if (!find_pkgs_in_rpmdb (self->overlay_rootfs_dfd, pkgset, pkg_find_cb,
                            cancellable, self, error))
     goto out;
 
@@ -863,7 +874,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   g_autoptr(RpmOstreeTreespec) treespec = NULL;
   g_autoptr(RpmOstreeInstall) install = {0,};
   g_autoptr(GHashTable) pkgset = hashset_from_strv (rpmostree_origin_get_packages (self->origin));
-  g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
+  g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->overlay_rootfs_dfd, ".");
   const gboolean have_packages = g_hash_table_size (pkgset) > 0;
   glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
 
@@ -895,9 +906,16 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
   /* load the sepolicy to use during import */
   {
     glnx_unref_object OstreeSePolicy *sepolicy = NULL;
-    if (!rpmostree_prepare_rootfs_get_sepolicy (self->tmprootfs_dfd, ".", &sepolicy,
+    /* FIXME - at this point the overlay rootfs should be read-only, but this
+     * function may mutate files in /etc.  We should see if we can drop the cross-labeling
+     * hack.
+     */
+    if (!rpmostree_prepare_rootfs_get_sepolicy (self->overlay_rootfs_dfd, ".", &sepolicy,
                                                 cancellable, error))
-      goto out;
+      {
+        g_prefix_error (error, "Loading sepolicy: ");
+        goto out;
+      }
 
     rpmostree_context_set_sepolicy (ctx, sepolicy);
   }
@@ -911,7 +929,10 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
 
   if (!rpmostree_context_setup (ctx, tmprootfs_abspath, NULL, treespec,
                                 cancellable, error))
-    goto out;
+    {
+      g_prefix_error (error, "Initializing context: ");
+      goto out;
+    }
 
   if (!get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
     goto out;
@@ -953,7 +974,14 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
       if (!rpmostree_context_relabel (ctx, install, cancellable, error))
         goto out;
 
-      /* --- Overlay and commit --- */
+      /* --- Overlay and commit ---
+       * We may have not allocated a tmprootfs yet; do so now if necessary.
+       */
+      if (self->tmprootfs_dfd == -1)
+        {
+          if (!checkout_base_tree (self, cancellable, error))
+            goto out;
+        }
 
       g_clear_pointer (&self->final_revision, g_free);
       if (!rpmostree_context_assemble_tmprootfs (ctx, self->tmprootfs_dfd, self->devino_cache,
@@ -1020,10 +1048,36 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
                    GCancellable             *cancellable,
                    GError                  **error)
 {
+  OstreeDeployment *booted_deployment;
+  g_autofree char *booted_base_checksum = NULL;
   self->devino_cache = ostree_repo_devino_cache_new ();
 
-  if (!checkout_base_tree (self, cancellable, error))
-    return FALSE;
+  g_assert_cmpint (self->overlay_rootfs_dfd, ==, -1);
+
+  booted_deployment = ostree_sysroot_get_booted_deployment (self->sysroot);
+  if (booted_deployment)
+    {
+      if (!get_base_commit_for_deployment (self->repo, booted_deployment, &booted_base_checksum, error))
+        return FALSE;
+      if (!booted_base_checksum)
+        booted_base_checksum = g_strdup (ostree_deployment_get_csum (booted_deployment));
+    }
+
+  /* If the booted base is the same as our target, reuse that. This avoids
+   * paying the price of doing the checkout as the very first thing; we may not
+   * need it if the operation would result in an error for example.
+   */
+  if (booted_base_checksum && strcmp (booted_base_checksum, self->base_revision) == 0)
+    {
+      if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &self->overlay_rootfs_dfd, error))
+        return FALSE;
+    }
+  else
+    {
+      if (!checkout_base_tree (self, cancellable, error))
+        return FALSE;
+      self->overlay_rootfs_dfd = self->tmprootfs_dfd;
+    }
 
   /* check if there are any items in requested_packages or pkgs_to_add that are
    * already installed in base_rev */
