@@ -63,7 +63,7 @@ rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin);
 gboolean
 rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin);
 
-char **
+const char *const*
 rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin);
 
 char *

@@ -820,7 +820,7 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
   OstreeSysroot *sysroot;
   glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
   g_autoptr(RpmOstreeOrigin) origin = NULL;
-  g_auto(GStrv) current_initramfs_args = NULL;
+  const char *const* current_initramfs_args = NULL;
   gboolean current_regenerate;
 
   self = (InitramfsStateTransaction *) transaction;
@@ -835,6 +835,7 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
   origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
   current_regenerate = rpmostree_origin_get_regenerate_initramfs (origin);
   current_initramfs_args = rpmostree_origin_get_initramfs_args (origin);
+
   /* We don't deep-compare the args right now, we assume if you were using them
    * you want to rerun. This can be important if you edited a config file, which
    * we can't really track without actually regenerating anyways.

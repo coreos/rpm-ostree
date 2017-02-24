@@ -965,7 +965,7 @@ overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
       const char *kernel_path;
       const char *initramfs_path;
       g_autoptr(GVariant) kernel_state = NULL;
-      g_auto(GStrv) add_dracut_argv = NULL;
+      const char *const* add_dracut_argv = NULL;
 
       add_dracut_argv = rpmostree_origin_get_initramfs_args (self->origin);
 
