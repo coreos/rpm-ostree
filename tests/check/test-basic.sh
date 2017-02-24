@@ -24,7 +24,7 @@ export RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK=yes
 
 ensure_dbus
 
-echo "1..17"
+echo "1..16"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -44,9 +44,6 @@ ostree admin --sysroot=sysroot deploy --karg=root=LABEL=MOO --karg=quiet --os=te
 
 assert_status_jq '.deployments[0].version == "1.0.10"'
 echo "ok status shows right version"
-
-rpm-ostree reload
-echo "ok reload"
 
 os_repository_new_commit
 rpm-ostree upgrade --os=testos
@@ -138,9 +135,7 @@ echo "ok deploy from remote with unsigned and signed commits"
 
 originpath=$(ostree admin --sysroot=sysroot --print-current-dir).origin
 echo "unconfigured-state=Access to TestOS requires ONE BILLION DOLLARS" >> ${originpath}
-pid=$(pgrep -u $(id -u) -f 'rpm-ostree.*daemon')
-test -n "${pid}" || assert_not_reached "failed to find rpm-ostree pid"
-kill -9 ${pid}
+rpm-ostree reload
 rpm-ostree status
 if rpm-ostree upgrade --os=testos 2>err.txt; then
     assert_not_reached "Upgraded from unconfigured-state"
