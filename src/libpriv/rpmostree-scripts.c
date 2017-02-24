@@ -186,11 +186,16 @@ run_script_in_bwrap_container (int rootfs_fd,
   else
     created_var_tmp = TRUE;
 
+  /* ⚠⚠⚠ If you change this, also update scripts/bwrap-script-shell.sh ⚠⚠⚠ */
+
+  /* We just did a ro bind mount over /var above. However we want a writable
+   * var/tmp, so we need to tmpfs mount on top of it. See also
+   * https://github.com/projectatomic/bubblewrap/issues/182
+   */
   bwrap = rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_MUTATE_ROFILES, error,
                                /* Scripts can see a /var with compat links like alternatives */
                                "--ro-bind", "./var", "/var",
-                               /* But no need to access persistent /tmp, so make it /tmp */
-                               "--bind", "/tmp", "/var/tmp",
+                               "--tmpfs", "/var/tmp",
                                /* Allow RPM scripts to change the /etc defaults; note we use bind
                                 * to ensure symlinks work, see https://github.com/projectatomic/rpm-ostree/pull/640 */
                                "--bind", "./usr/etc", "/etc",
