@@ -939,7 +939,7 @@ handle_remove_files_from_package (int               rootfs_fd,
   const char *pkgname = json_array_get_string_element (removespec, 0);
   guint i, j, npackages;
   guint len = json_array_get_length (removespec);
-  HyQuery query = NULL;
+  hy_autoquery HyQuery query = NULL;
   g_autoptr(GPtrArray) pkglist = NULL;
       
   query = hy_query_create (refsack->sack);
@@ -991,8 +991,6 @@ handle_remove_files_from_package (int               rootfs_fd,
 
   ret = TRUE;
  out:
-  if (query)
-    hy_query_free (query);
   return ret;
 }
 

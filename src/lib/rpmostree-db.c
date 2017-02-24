@@ -39,7 +39,7 @@
 static GPtrArray *
 query_all_packages_in_sack (RpmOstreeRefSack *rsack)
 {
-  HyQuery hquery = NULL;
+  hy_autoquery HyQuery hquery = NULL;
   g_autoptr(GPtrArray) pkglist = NULL;
   GPtrArray *result;
   int i, c;
@@ -57,8 +57,6 @@ query_all_packages_in_sack (RpmOstreeRefSack *rsack)
       g_ptr_array_add (result, _rpm_ostree_package_new (rsack, pkg));
     }
   
-  if (hquery)
-    hy_query_free (hquery);
   return g_steal_pointer (&result);
 }
 
@@ -141,26 +139,24 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
   if (!orig_sack)
     goto out;
 
-  { HyQuery query = hy_query_create (orig_sack->sack);
+  { hy_autoquery HyQuery query = hy_query_create (orig_sack->sack);
     hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
     orig_pkglist = hy_query_run (query);
-    hy_query_free (query);
   }
 
   new_sack = rpmostree_get_refsack_for_commit (repo, new_ref, cancellable, error);
   if (!new_sack)
     goto out;
 
-  { HyQuery query = hy_query_create (new_sack->sack);
+  { hy_autoquery HyQuery query = hy_query_create (new_sack->sack);
     hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
     new_pkglist = hy_query_run (query);
-    hy_query_free (query);
   }
 
   for (i = 0; i < new_pkglist->len; i++)
     {
       DnfPackage *pkg = new_pkglist->pdata[i];
-      HyQuery query = NULL;
+      hy_autoquery HyQuery query = NULL;
       g_autoptr(GPtrArray) pkglist = NULL;
       guint count;
       DnfPackage *oldpkg;
@@ -185,7 +181,7 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
   for (i = 0; i < orig_pkglist->len; i++)
     {
       DnfPackage *pkg = orig_pkglist->pdata[i];
-      HyQuery query = NULL;
+      hy_autoquery HyQuery query = NULL;
       g_autoptr(GPtrArray) pkglist = NULL;
       
       query = hy_query_create (new_sack->sack);
@@ -195,13 +191,12 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
 
       if (pkglist->len == 0)
         g_ptr_array_add (ret_removed, _rpm_ostree_package_new (orig_sack, pkg));
-      hy_query_free (query);
     }
 
   for (i = 0; i < new_pkglist->len; i++)
     {
       DnfPackage *pkg = new_pkglist->pdata[i];
-      HyQuery query = NULL;
+      hy_autoquery HyQuery query = NULL;
       g_autoptr(GPtrArray) pkglist = NULL;
       
       query = hy_query_create (orig_sack->sack);
@@ -211,7 +206,6 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
 
       if (pkglist->len == 0)
         g_ptr_array_add (ret_added, _rpm_ostree_package_new (new_sack, pkg));
-      hy_query_free (query);
     }
 
   ret = TRUE;
