@@ -27,6 +27,7 @@
 #include <gio/gunixoutputstream.h>
 
 #include "rpmostree-util.h"
+#include "rpmostree-origin.h"
 #include "libglnx.h"
 
 int
@@ -586,4 +587,66 @@ rpmostree_file_get_path_cached (GFile *file)
   G_UNLOCK (pathname_cache);
 
   return path;
+}
+
+gboolean
+rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
+                                       OstreeDeployment  *deployment,
+                                       gboolean          *out_is_layered,
+                                       char             **out_base_layer,
+                                       char            ***out_layered_pkgs,
+                                       GError           **error)
+{
+  g_autoptr(GVariant) commit = NULL;
+  g_autoptr(GVariant) metadata = NULL;
+  g_autoptr(GVariantDict) dict = NULL;
+  g_auto(GStrv) layered_pkgs = NULL;
+  const char *csum = ostree_deployment_get_csum (deployment);
+  gboolean is_layered = FALSE;
+  g_autofree char *base_layer = NULL;
+
+  if (!ostree_repo_load_commit (repo, csum, &commit, NULL, error))
+    return FALSE;
+
+  metadata = g_variant_get_child_value (commit, 0);
+  dict = g_variant_dict_new (metadata);
+
+  /* More recent versions have an explicit clientlayer attribute (which
+   * realistically will always be TRUE). For older versions, we just
+   * rely on the treespec being present. */
+  if (!g_variant_dict_lookup (dict, "rpmostree.clientlayer", "b", &is_layered))
+    is_layered = g_variant_dict_contains (dict, "rpmostree.spec");
+
+  /* only fetch base if we have to */
+  if (is_layered && out_base_layer != NULL)
+    {
+      base_layer = ostree_commit_get_parent (commit);
+      g_assert (base_layer);
+    }
+
+  /* only fetch the pkgs if we have to */
+  if (is_layered && out_layered_pkgs != NULL)
+    {
+      g_autoptr(GVariant) treespec_v = NULL;
+      g_autoptr(GVariantDict) treespec = NULL;
+
+       /* there should always be a treespec */
+      treespec_v = g_variant_dict_lookup_value (dict, "rpmostree.spec",
+                                                G_VARIANT_TYPE ("a{sv}"));
+      g_assert (treespec_v);
+
+      /* there should always be a packages entry, even if empty */
+      treespec = g_variant_dict_new (treespec_v);
+      g_assert (g_variant_dict_lookup (treespec, "packages", "^as",
+                                       &layered_pkgs));
+    }
+
+  if (out_is_layered != NULL)
+    *out_is_layered = is_layered;
+  if (out_base_layer != NULL)
+    *out_base_layer = g_steal_pointer (&base_layer);
+  if (out_layered_pkgs != NULL)
+    *out_layered_pkgs = g_steal_pointer (&layered_pkgs);
+
+  return TRUE;
 }

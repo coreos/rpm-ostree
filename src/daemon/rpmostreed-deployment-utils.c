@@ -164,7 +164,7 @@ GVariant *
 rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
                                         const char *booted_id,
                                         OstreeRepo *repo,
-					GError **error)
+                                        GError **error)
 {
   g_autoptr(GVariant) commit = NULL;
   g_autoptr(RpmOstreeOrigin) origin = NULL;
@@ -181,6 +181,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   const gchar *csum = ostree_deployment_get_csum (deployment);
   gint serial = ostree_deployment_get_deployserial (deployment);
   gboolean gpg_enabled = FALSE;
+  gboolean is_layered = FALSE;
 
   if (!ostree_repo_load_variant (repo,
 				 OSTREE_OBJECT_TYPE_COMMIT,
@@ -204,16 +205,16 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
     g_variant_dict_insert (&dict, "osname", "s", osname);
   g_variant_dict_insert (&dict, "serial", "i", serial);
   g_variant_dict_insert (&dict, "checksum", "s", csum);
-  if (rpmostree_origin_is_locally_assembled (origin))
-    {
-      base_checksum = ostree_commit_get_parent (commit);
-      g_assert (base_checksum);
-      g_variant_dict_insert (&dict, "base-checksum", "s", base_checksum);
-    }
+
+  if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered,
+                                              &base_checksum, NULL, error))
+    return NULL;
+
+  if (is_layered)
+    g_variant_dict_insert (&dict, "base-checksum", "s", base_checksum);
   else
-    {
-      base_checksum = g_strdup (csum);
-    }
+    base_checksum = g_strdup (csum);
+
   sigs = rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &gpg_enabled);
   variant_add_commit_details (&dict, NULL, commit);
 

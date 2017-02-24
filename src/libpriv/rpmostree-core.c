@@ -2434,7 +2434,6 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
 
     g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.spec", spec_v);
 
-    /* copy the version tag */
     if (assemble_type == RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING)
       {
         g_autoptr(GVariant) commit = NULL;
@@ -2447,6 +2446,7 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
 
         parent_version = checksum_version (commit);
 
+        /* copy the version tag */
         if (parent_version)
           g_variant_builder_add (&metadata_builder, "{sv}", "version",
                                  g_variant_new_string (parent_version));
@@ -2454,6 +2454,11 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
         /* Flag the commit as a client layer */
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.clientlayer",
                                g_variant_new_boolean (TRUE));
+
+        /* be nice to our future selves */
+        g_variant_builder_add (&metadata_builder, "{sv}",
+                               "rpmostree.clientlayer_version",
+                               g_variant_new_uint32 (0));
       }
 
     state_checksum = rpmostree_context_get_state_sha512 (self);
