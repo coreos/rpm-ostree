@@ -38,12 +38,6 @@
 #define RPMOSTREE_TMP_BASE_REF "rpmostree/base/tmp"
 #define RPMOSTREE_TMP_ROOTFS_DIR "extensions/rpmostree/commit"
 
-static gboolean
-commit_get_parent_csum (OstreeRepo  *repo,
-                        const char  *child,
-                        char       **out_csum,
-                        GError     **error);
-
 /**
  * SECTION:rpmostree-sysroot-upgrader
  * @title: Simple upgrade class
@@ -171,6 +165,8 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
   RpmOstreeSysrootUpgrader *self = (RpmOstreeSysrootUpgrader*)initable;
   OstreeDeployment *booted_deployment =
     ostree_sysroot_get_booted_deployment (self->sysroot);
+  const char *merge_deployment_csum = NULL;
+  gboolean is_layered;
 
   if (booted_deployment == NULL && self->osname == NULL)
     {
@@ -209,19 +205,26 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
   if (!parse_origin_deployment (self, self->origin_merge_deployment, cancellable, error))
     goto out;
 
+  merge_deployment_csum =
+    ostree_deployment_get_csum (self->origin_merge_deployment);
+
   /* Now, load starting base/final checksums.  We may end up changing
    * one or both if we upgrade.  But we also want to support redeploying
    * without changing them.
    */
-  if (rpmostree_origin_is_locally_assembled (self->origin))
-    {
-      self->final_revision = g_strdup (ostree_deployment_get_csum (self->origin_merge_deployment));
-      if (!commit_get_parent_csum (self->repo, self->final_revision, &self->base_revision, error))
-        goto out;
-      g_assert (self->base_revision);
-    }
+  if (!rpmostree_deployment_get_layered_info (self->repo,
+                                              self->origin_merge_deployment,
+                                              &is_layered, &self->base_revision,
+                                              NULL, error))
+    goto out;
+
+  if (is_layered)
+    /* base layer is already populated above */
+    self->final_revision = g_strdup (merge_deployment_csum);
   else
-    self->base_revision = g_strdup (ostree_deployment_get_csum (self->origin_merge_deployment));
+    self->base_revision = g_strdup (merge_deployment_csum);
+
+  g_assert (self->base_revision);
 
   self->packages_to_add = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                  g_free, NULL);
@@ -487,19 +490,6 @@ rpmostree_sysroot_upgrader_delete_packages (RpmOstreeSysrootUpgrader *self,
   ret = TRUE;
 out:
   return ret;
-}
-
-static gboolean
-commit_get_parent_csum (OstreeRepo  *repo,
-                        const char  *child,
-                        char       **out_csum,
-                        GError     **error)
-{
-  g_autoptr(GVariant) commit = NULL;
-  if (!ostree_repo_load_commit (repo, child, &commit, NULL, error))
-    return FALSE;
-  *out_csum = ostree_commit_get_parent (commit);
-  return TRUE;
 }
 
 /*
@@ -1034,7 +1024,8 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
    * that the user wants to stop overlaying them), so we have another
    * optimization here for that case.
    */
-  if (!rpmostree_origin_is_locally_assembled (self->origin))
+  if (!rpmostree_origin_get_regenerate_initramfs (self->origin) &&
+      g_strv_length ((char**)rpmostree_origin_get_packages (self->origin)) == 0)
     {
       g_clear_pointer (&self->final_revision, g_free);
     }
@@ -1047,44 +1038,12 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
   return TRUE;
 }
 
-/* Since `ostree admin cleanup` by default prunes refs-only,depth=0,
- * We need to hold strong references to the base commit of each
- * deployment, to ensure that upgrades work.
- */
-static gboolean
-get_base_commit_for_deployment (OstreeRepo                *repo,
-                                OstreeDeployment          *deployment,
-                                char                     **out_base,
-                                GError                   **error)
-{
-  g_autoptr(RpmOstreeOrigin) origin = NULL;
-
-  origin = rpmostree_origin_parse_deployment (deployment, error);
-  if (!origin)
-    return FALSE;
-
-  if (rpmostree_origin_is_locally_assembled (origin))
-    {
-      const char *csum = ostree_deployment_get_csum (deployment);
-      g_autofree char *base_rev = NULL;
-
-      if (!commit_get_parent_csum (repo, csum, &base_rev, error))
-        return FALSE;
-      g_assert (base_rev);
-
-      *out_base = g_steal_pointer (&base_rev);
-    }
-  else
-    *out_base = NULL;
-  return TRUE;
-}
-
-/* For each deployment, if they are
- * layered deployments, then create a ref pointing to their bases. This is
- * mostly to work around ostree's auto-ref cleanup. Otherwise we might get into
- * a situation where after the origin ref is updated, we lose our parent, which
- * means that users can no longer add/delete packages on that deployment. (They
- * can always just re-pull it, but let's try to be nice).
+/* For each deployment, if they are layered deployments, then create a ref
+ * pointing to their bases. This is mostly to work around ostree's auto-ref
+ * cleanup. Otherwise we might get into a situation where after the origin ref
+ * is updated, we lose our parent, which means that users can no longer
+ * add/delete packages on that deployment. (They can always just re-pull it, but
+ * let's try to be nice).
  **/
 static gboolean
 generate_baselayer_refs (OstreeSysroot            *sysroot,
@@ -1130,9 +1089,10 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
         OstreeDeployment *deployment = deployments->pdata[i];
         g_autofree char *base_rev = NULL;
 
-        if (!get_base_commit_for_deployment (repo, deployment,
-                                             &base_rev, error))
+        if (!rpmostree_deployment_get_layered_info (repo, deployment, NULL,
+                                                    &base_rev, NULL, error))
           goto out;
+
         if (base_rev)
           g_hash_table_add (bases, g_steal_pointer (&base_rev));
       }
@@ -1223,13 +1183,13 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
   for (guint i = 0; i < deployments->len; i++)
     {
       OstreeDeployment *deployment = deployments->pdata[i];
-      g_autoptr(RpmOstreeOrigin) origin = NULL;
+      gboolean is_layered;
 
-      origin = rpmostree_origin_parse_deployment (deployment, error);
-      if (!origin)
+      if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered,
+                                                  NULL, NULL, error))
         return FALSE;
 
-      if (rpmostree_origin_is_locally_assembled (origin))
+      if (is_layered)
         {
           g_autoptr(RpmOstreeRefSack) rsack = NULL;
           g_autofree char *deployment_dirpath = NULL;
@@ -1339,8 +1299,8 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   const char *target_revision;
   g_autoptr(GKeyFile) origin = NULL;
 
-  /* any packages requested for overlay? */
-  if (rpmostree_origin_is_locally_assembled (self->origin) ||
+  if (rpmostree_origin_get_regenerate_initramfs (self->origin) ||
+      g_strv_length ((gchar**)rpmostree_origin_get_packages (self->origin)) > 0 ||
       (g_hash_table_size (self->packages_to_add) > 0) ||
       (g_hash_table_size (self->packages_to_delete) > 0))
     {

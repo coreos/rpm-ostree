@@ -107,15 +107,6 @@ rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin)
 }
 
 gboolean
-rpmostree_origin_is_locally_assembled (RpmOstreeOrigin *origin)
-{
-  g_assert (origin);
-
-  return g_strv_length (origin->packages) > 0 ||
-    rpmostree_origin_get_regenerate_initramfs (origin);
-}
-
-gboolean
 rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin)
 {
   return g_key_file_get_boolean (origin->kf, "rpmostree", "regenerate-initramfs", NULL);

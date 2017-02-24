@@ -110,3 +110,11 @@ gs_file_get_path_cached (GFile *file)
 {
   return rpmostree_file_get_path_cached (file);
 }
+
+gboolean
+rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
+                                       OstreeDeployment  *deployment,
+                                       gboolean          *out_is_layered,
+                                       char             **out_base_layer,
+                                       char            ***out_layered_pkgs,
+                                       GError           **error);

@@ -51,9 +51,6 @@ rpmostree_origin_parse_deployment (OstreeDeployment *deployment,
 RpmOstreeOrigin *
 rpmostree_origin_dup (RpmOstreeOrigin *origin);
 
-gboolean
-rpmostree_origin_is_locally_assembled (RpmOstreeOrigin *origin);
-
 const char *
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin);
 
