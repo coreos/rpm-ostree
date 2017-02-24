@@ -31,6 +31,8 @@ vm_send_test_repo
 # make sure the package is not already layered
 vm_assert_layered_pkg scriptpkg1 absent
 
+# See scriptpkg1.spec
+vm_cmd touch /tmp/file-in-host-tmp-not-for-scripts
 vm_rpmostree pkg-add scriptpkg1
 echo "ok pkg-add scriptpkg1"
 

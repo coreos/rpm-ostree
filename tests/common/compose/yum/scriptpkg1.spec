@@ -26,6 +26,10 @@ groupadd -r scriptpkg1
 %posttrans
 # Firewalld; https://github.com/projectatomic/rpm-ostree/issues/638
 . /etc/os-release || :
+# See https://github.com/projectatomic/rpm-ostree/pull/647
+for path in /tmp /var/tmp; do
+    if test -f ${path}/file-in-host-tmp-not-for-scripts; then echo "found file from host /tmp"; exit 1; fi
+done
 
 %install
 mkdir -p %{buildroot}/usr/bin

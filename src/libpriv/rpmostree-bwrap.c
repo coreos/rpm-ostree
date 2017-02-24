@@ -192,6 +192,7 @@ rpmostree_bwrap_new (int rootfs_fd,
   ret->rootfs_fd = rootfs_fd;
   ret->argv = g_ptr_array_new_with_free_func (g_free);
 
+  /* ⚠⚠⚠ If you change this, also update scripts/bwrap-script-shell.sh ⚠⚠⚠ */
   rpmostree_bwrap_append_bwrap_argv (ret,
                                      WITH_BUBBLEWRAP_PATH,
                                      "--dev", "/dev",
