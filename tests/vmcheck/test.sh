@@ -115,7 +115,7 @@ for tf in $(find . -name 'test-*.sh' | sort); do
       echo "Restoring vmcheck commit" >> ${LOG}
       vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_orig &>> ${LOG}
       vm_cmd ostree admin deploy vmcheck &>> ${LOG}
-      vm_reboot
+      vm_reboot &>> ${LOG}
     fi
 
 done
