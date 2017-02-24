@@ -54,7 +54,7 @@ rpmostree_origin_dup (RpmOstreeOrigin *origin);
 const char *
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin);
 
-const char *const*
+GHashTable *
 rpmostree_origin_get_packages (RpmOstreeOrigin *origin);
 
 const char *
@@ -65,6 +65,9 @@ rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin);
 
 const char *const*
 rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin);
+
+const char *
+rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin);
 
 char *
 rpmostree_origin_get_string (RpmOstreeOrigin *origin,
@@ -89,5 +92,14 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
                              const char      *new_refspec,
                              GError         **error);
 
-const char *
-rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin);
+gboolean
+rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
+                               char             **packages,
+                               GCancellable      *cancellable,
+                               GError           **error);
+
+gboolean
+rpmostree_origin_delete_packages (RpmOstreeOrigin  *origin,
+                                  char            **packages,
+                                  GCancellable     *cancellable,
+                                  GError          **error);

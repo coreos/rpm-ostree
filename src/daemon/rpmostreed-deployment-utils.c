@@ -182,6 +182,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   gint serial = ostree_deployment_get_deployserial (deployment);
   gboolean gpg_enabled = FALSE;
   gboolean is_layered = FALSE;
+  g_auto(GStrv) layered_pkgs = NULL;
 
   if (!ostree_repo_load_variant (repo,
 				 OSTREE_OBJECT_TYPE_COMMIT,
@@ -207,7 +208,8 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   g_variant_dict_insert (&dict, "checksum", "s", csum);
 
   if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered,
-                                              &base_checksum, NULL, error))
+                                              &base_checksum, &layered_pkgs,
+                                              error))
     return NULL;
 
   if (is_layered)
@@ -232,14 +234,22 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
                                      &pending_base_commit,
                                      error))
         return NULL;
-  
+
       g_variant_dict_insert (&dict, "pending-base-checksum", "s", pending_base_commitrev);
       variant_add_commit_details (&dict, "pending-base-", pending_base_commit);
     }
 
   g_variant_dict_insert (&dict, "origin", "s", refspec);
-  if (rpmostree_origin_get_packages (origin) != NULL)
-    g_variant_dict_insert (&dict, "packages", "^as", rpmostree_origin_get_packages (origin));
+  if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
+    {
+      glnx_free char **pkgs =
+        (char**)g_hash_table_get_keys_as_array (rpmostree_origin_get_packages (origin), NULL);
+      g_variant_dict_insert (&dict, "requested-packages", "^as", pkgs);
+    }
+
+  if (is_layered && g_strv_length (layered_pkgs) > 0)
+    g_variant_dict_insert (&dict, "packages", "^as", layered_pkgs);
+
   if (sigs != NULL)
     g_variant_dict_insert_value (&dict, "signatures", sigs);
   g_variant_dict_insert (&dict, "gpg-enabled", "b", gpg_enabled);
@@ -281,7 +291,7 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
   else
     {
       g_autoptr(RpmOstreeOrigin) origin = NULL;
-  
+
       origin = rpmostree_origin_parse_deployment (deployment, error);
       if (!origin)
         return NULL;

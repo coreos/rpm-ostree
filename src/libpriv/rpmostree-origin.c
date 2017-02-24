@@ -22,6 +22,7 @@
 
 #include "string.h"
 
+#include <libglnx.h>
 #include "rpmostree-origin.h"
 
 struct RpmOstreeOrigin {
@@ -34,7 +35,7 @@ struct RpmOstreeOrigin {
   char *cached_override_commit;
   char *cached_unconfigured_state;
   char **cached_initramfs_args;
-  char **cached_packages;
+  GHashTable *cached_packages;
 };
 
 static GKeyFile *
@@ -58,6 +59,9 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   ret->refcount = 1;
   ret->kf = keyfile_dup (origin);
 
+  ret->cached_packages = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                g_free, NULL);
+
   /* NOTE hack here - see https://github.com/ostreedev/ostree/pull/343 */
   g_key_file_remove_key (ret->kf, "origin", "unlocked", NULL);
 
@@ -66,6 +70,8 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   ret->cached_refspec = g_key_file_get_string (ret->kf, "origin", "refspec", NULL);
   if (!ret->cached_refspec)
     {
+      g_auto(GStrv) packages = NULL;
+
       ret->cached_refspec = g_key_file_get_string (ret->kf, "origin", "baserefspec", NULL);
       if (!ret->cached_refspec)
         {
@@ -74,12 +80,10 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
           return NULL;
         }
 
-      ret->cached_packages = g_key_file_get_string_list (ret->kf, "packages", "requested", NULL, NULL);
+      packages = g_key_file_get_string_list (ret->kf, "packages", "requested", NULL, NULL);
+      for (char **it = packages; it && *it; it++)
+        g_hash_table_add (ret->cached_packages, g_strdup (*it));
     }
-
-  /* Canonicalize NULL to an empty list for sanity */
-  if (!ret->cached_packages)
-    ret->cached_packages = g_new0 (char*, 1);
 
   ret->cached_override_commit =
     g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
@@ -102,10 +106,10 @@ rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
   return origin->cached_refspec;
 }
 
-const char *const*
+GHashTable *
 rpmostree_origin_get_packages (RpmOstreeOrigin *origin)
 {
-  return (const char * const*)origin->cached_packages;
+  return origin->cached_packages;
 }
 
 const char *
@@ -165,8 +169,8 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   g_key_file_unref (origin->kf);
   g_free (origin->cached_refspec);
   g_free (origin->cached_unconfigured_state);
-  g_strfreev (origin->cached_packages);
   g_strfreev (origin->cached_initramfs_args);
+  g_clear_pointer (&origin->cached_packages, g_hash_table_unref);
   g_free (origin);
 }
 
@@ -262,6 +266,81 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
 
   g_free (origin->cached_refspec);
   origin->cached_refspec = g_strdup (new_refspec);
+
+  return TRUE;
+}
+
+static void
+update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin)
+{
+  /* we're abusing a bit the concept of cache here, though
+   * it's just easier to go from cache to origin */
+  glnx_free char **pkgv =
+    (char**) g_hash_table_get_keys_as_array (origin->cached_packages, NULL);
+  g_key_file_set_string_list (origin->kf, "packages", "requested",
+                              (const char *const*)pkgv, g_strv_length (pkgv));
+
+  if (g_hash_table_size (origin->cached_packages) > 0)
+  {
+    /* migrate to baserefspec model */
+    g_key_file_set_value (origin->kf, "origin", "baserefspec",
+                          origin->cached_refspec);
+    g_key_file_remove_key (origin->kf, "origin", "refspec", NULL);
+  }
+}
+
+gboolean
+rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
+                               char             **packages,
+                               GCancellable      *cancellable,
+                               GError           **error)
+{
+  gboolean changed = FALSE;
+
+  for (char **it = packages; it && *it; it++)
+    {
+      /* The list of packages is really a list of provides, so string equality
+       * is a bit weird here. Multiple provides can resolve to the same package
+       * and we allow that. But still, let's make sure that silly users don't
+       * request the exact string. */
+      if (g_hash_table_contains (origin->cached_packages, *it))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Package/capability '%s' is already requested", *it);
+          return FALSE;
+        }
+      g_hash_table_add (origin->cached_packages, g_strdup (*it));
+      changed = TRUE;
+    }
+
+  if (changed)
+    update_keyfile_pkgs_from_cache (origin);
+
+  return TRUE;
+}
+
+gboolean
+rpmostree_origin_delete_packages (RpmOstreeOrigin  *origin,
+                                  char            **packages,
+                                  GCancellable     *cancellable,
+                                  GError          **error)
+{
+  gboolean changed = FALSE;
+
+  for (char **it = packages; it && *it; it++)
+    {
+      if (!g_hash_table_contains (origin->cached_packages, *it))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Package/capability '%s' is not currently requested", *it);
+          return FALSE;
+        }
+      g_hash_table_remove (origin->cached_packages, *it);
+      changed = TRUE;
+    }
+
+  if (changed)
+    update_keyfile_pkgs_from_cache (origin);
 
   return TRUE;
 }

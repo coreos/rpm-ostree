@@ -76,6 +76,25 @@ get_active_txn (RPMOSTreeSysroot *sysroot_proxy)
   return NULL;
 }
 
+static void
+print_packages (const char *k, guint max_key_len, const char *const* pkgs)
+{
+  g_autofree char *packages_joined = NULL;
+  g_autoptr(GPtrArray) packages_sorted =
+    g_ptr_array_new_with_free_func (g_free);
+  for (char **iter = (char**) pkgs; iter && *iter; iter++)
+    {
+      if (strchr (*iter, ' ') != NULL)
+        g_ptr_array_add (packages_sorted, g_strdup_printf ("'%s'", *iter));
+      else
+        g_ptr_array_add (packages_sorted, g_strdup (*iter));
+    }
+  g_ptr_array_sort (packages_sorted, rpmostree_ptrarray_sort_compare_strings);
+  g_ptr_array_add (packages_sorted, NULL);
+  packages_joined = g_strjoinv (" ", (char**)packages_sorted->pdata);
+  print_kv (k, max_key_len, packages_joined);
+}
+
 /* We will have an optimized path for the case where there are just
  * two deployments, this code will be the generic fallback.
  */
@@ -111,8 +130,9 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
     {
       g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
       g_autoptr(GVariantDict) dict = NULL;
-      gboolean is_locally_assembled;
-      const gchar *const*origin_packages = NULL;
+      gboolean is_locally_assembled = FALSE;
+      glnx_free const gchar **origin_packages = NULL;
+      glnx_free const gchar **origin_requested_packages = NULL;
       const gchar *origin_refspec;
       const gchar *id;
       const gchar *os_name;
@@ -147,18 +167,28 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         else
           timestamp_string = g_strdup_printf ("(invalid timestamp)");
       }
-      
+
       if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
         {
-          if (g_variant_dict_lookup (dict, "packages", "^a&s", &origin_packages))
+          if (g_variant_dict_lookup (dict, "packages", "^a&s",
+                                     &origin_packages))
             {
               /* Canonicalize length 0 strv to NULL */
               if (!*origin_packages)
-                origin_packages = NULL;
+                {
+                  g_free (origin_packages);
+                  origin_packages = NULL;
+                }
             }
-          else
+          if (g_variant_dict_lookup (dict, "requested-packages", "^a&s",
+                                     &origin_requested_packages))
             {
-              origin_packages = NULL;
+              /* Canonicalize length 0 strv to NULL */
+              if (!*origin_requested_packages)
+                {
+                  g_free (origin_requested_packages);
+                  origin_requested_packages = NULL;
+                }
             }
         }
       else
@@ -189,6 +219,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       else
         g_print ("%s", checksum);
       g_print ("\n");
+
       if (version_string)
         {
           g_autofree char *version_time
@@ -200,12 +231,13 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         {
           print_kv ("Timestamp", max_key_len, timestamp_string);
         }
-      is_locally_assembled = origin_packages || regenerate_initramfs;
-      if (is_locally_assembled)
+
+      if (g_variant_dict_contains (dict, "base-checksum"))
         {
           const char *base_checksum;
           g_assert (g_variant_dict_lookup (dict, "base-checksum", "&s", &base_checksum));
           print_kv ("BaseCommit", max_key_len, base_checksum);
+          is_locally_assembled = TRUE;
         }
       print_kv ("Commit", max_key_len, checksum);
 
@@ -268,17 +300,10 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
             }
         }
 
+      if (origin_requested_packages)
+        print_packages ("RequestedPackages", max_key_len, origin_requested_packages);
       if (origin_packages)
-        {
-          g_autofree char *packages_joined = NULL;
-          g_autoptr(GPtrArray) origin_packages_sorted = g_ptr_array_new ();
-          for (char **iter = (char**) origin_packages; iter && *iter; iter++)
-            g_ptr_array_add (origin_packages_sorted, *iter);
-          g_ptr_array_sort (origin_packages_sorted, rpmostree_ptrarray_sort_compare_strings);
-          g_ptr_array_add (origin_packages_sorted, NULL);
-          packages_joined = g_strjoinv (" ", (char**)origin_packages_sorted->pdata);
-          print_kv ("Packages", max_key_len, packages_joined);
-        }
+        print_packages ("LayeredPackages", max_key_len, origin_packages);
 
       if (regenerate_initramfs)
         {

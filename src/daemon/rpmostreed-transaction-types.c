@@ -651,35 +651,43 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     {
       rpmostree_origin_set_override_commit (origin, NULL, NULL);
     }
-  rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
-
-  /* Mainly for the `install` command */
-  if (!(self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE))
-    {
-      if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0,
-                                            progress, &changed, cancellable, error))
-        goto out;
-    }
-
-  rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
   if (self->packages_removed)
     {
-      if (!rpmostree_sysroot_upgrader_delete_packages (upgrader, self->packages_removed,
-                                                       cancellable, error))
+      if (!rpmostree_origin_delete_packages (origin, self->packages_removed,
+                                             cancellable, error))
         goto out;
 
+      /* in reality, there may not be any new layer required (if e.g. we're
+       * removing a duplicate provides), though the origin has changed so we
+       * need to create a new depl */
       changed = TRUE;
     }
 
   if (self->packages_added)
     {
-      if (!rpmostree_sysroot_upgrader_add_packages (upgrader, self->packages_added,
-                                                    cancellable, error))
+      if (!rpmostree_origin_add_packages (origin, self->packages_added,
+                                          cancellable, error))
         goto out;
 
       changed = TRUE;
     }
+
+  rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
+
+  /* Mainly for the `install` command */
+  if (!(self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE))
+    {
+      gboolean base_changed;
+
+      if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0, progress,
+                                            &base_changed, cancellable, error))
+        goto out;
+
+      changed = changed || base_changed;
+    }
+
+  rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
   /* TODO - better logic for "changed" based on deployments */
   if (changed || self->refspec)
