@@ -169,7 +169,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   g_autoptr(GVariant) commit = NULL;
   g_autoptr(RpmOstreeOrigin) origin = NULL;
   g_autofree gchar *id = NULL;
-  const char *base_checksum;
+  g_autofree char *base_checksum = NULL;
 
   GVariant *sigs = NULL; /* floating variant */
 
@@ -212,7 +212,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
     }
   else
     {
-      base_checksum = csum;
+      base_checksum = g_strdup (csum);
     }
   sigs = rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &gpg_enabled);
   variant_add_commit_details (&dict, NULL, commit);
