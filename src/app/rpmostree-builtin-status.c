@@ -76,6 +76,46 @@ get_active_txn (RPMOSTreeSysroot *sysroot_proxy)
   return NULL;
 }
 
+static void
+print_packages (const char *k, guint max_key_len,
+                const char *const* pkgs,
+                const char *const* omit_pkgs)
+{
+  g_autofree char *packages_joined = NULL;
+  g_autoptr(GPtrArray) packages_sorted =
+    g_ptr_array_new_with_free_func (g_free);
+
+  static gsize regex_initialized;
+  static GRegex *safe_chars_regex;
+
+  if (g_once_init_enter (&regex_initialized))
+    {
+      safe_chars_regex = g_regex_new ("^[[:alnum:]-._]+$", 0, 0, NULL);
+      g_assert (safe_chars_regex);
+      g_once_init_leave (&regex_initialized, 1);
+    }
+
+  for (char **iter = (char**) pkgs; iter && *iter; iter++)
+    {
+      if (omit_pkgs != NULL && g_strv_contains (omit_pkgs, *iter))
+        continue;
+
+      /* don't quote if it just has common pkgname/shell-safe chars */
+      if (g_regex_match (safe_chars_regex, *iter, 0, 0))
+        g_ptr_array_add (packages_sorted, g_strdup (*iter));
+      else
+        g_ptr_array_add (packages_sorted, g_shell_quote (*iter));
+    }
+
+  if (packages_sorted->len > 0)
+    {
+      g_ptr_array_sort (packages_sorted, rpmostree_ptrarray_sort_compare_strings);
+      g_ptr_array_add (packages_sorted, NULL);
+      packages_joined = g_strjoinv (" ", (char**)packages_sorted->pdata);
+      print_kv (k, max_key_len, packages_joined);
+    }
+}
+
 /* We will have an optimized path for the case where there are just
  * two deployments, this code will be the generic fallback.
  */
@@ -111,8 +151,9 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
     {
       g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
       g_autoptr(GVariantDict) dict = NULL;
-      gboolean is_locally_assembled;
-      const gchar *const*origin_packages = NULL;
+      gboolean is_locally_assembled = FALSE;
+      g_autofree const gchar **origin_packages = NULL;
+      g_autofree const gchar **origin_requested_packages = NULL;
       const gchar *origin_refspec;
       const gchar *id;
       const gchar *os_name;
@@ -147,18 +188,28 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         else
           timestamp_string = g_strdup_printf ("(invalid timestamp)");
       }
-      
+
       if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
         {
-          if (g_variant_dict_lookup (dict, "packages", "^a&s", &origin_packages))
+          if (g_variant_dict_lookup (dict, "packages", "^a&s",
+                                     &origin_packages))
             {
               /* Canonicalize length 0 strv to NULL */
               if (!*origin_packages)
-                origin_packages = NULL;
+                {
+                  g_free (origin_packages);
+                  origin_packages = NULL;
+                }
             }
-          else
+          if (g_variant_dict_lookup (dict, "requested-packages", "^a&s",
+                                     &origin_requested_packages))
             {
-              origin_packages = NULL;
+              /* Canonicalize length 0 strv to NULL */
+              if (!*origin_requested_packages)
+                {
+                  g_free (origin_requested_packages);
+                  origin_requested_packages = NULL;
+                }
             }
         }
       else
@@ -189,6 +240,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       else
         g_print ("%s", checksum);
       g_print ("\n");
+
       if (version_string)
         {
           g_autofree char *version_time
@@ -200,12 +252,13 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         {
           print_kv ("Timestamp", max_key_len, timestamp_string);
         }
-      is_locally_assembled = origin_packages || regenerate_initramfs;
-      if (is_locally_assembled)
+
+      if (g_variant_dict_contains (dict, "base-checksum"))
         {
           const char *base_checksum;
           g_assert (g_variant_dict_lookup (dict, "base-checksum", "&s", &base_checksum));
           print_kv ("BaseCommit", max_key_len, base_checksum);
+          is_locally_assembled = TRUE;
         }
       print_kv ("Commit", max_key_len, checksum);
 
@@ -268,17 +321,14 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
             }
         }
 
+      /* let's be nice and only print requested - layered, rather than repeating
+       * the ones in layered twice */
+      if (origin_requested_packages)
+        print_packages ("RequestedPackages", max_key_len,
+                        origin_requested_packages, origin_packages);
       if (origin_packages)
-        {
-          g_autofree char *packages_joined = NULL;
-          g_autoptr(GPtrArray) origin_packages_sorted = g_ptr_array_new ();
-          for (char **iter = (char**) origin_packages; iter && *iter; iter++)
-            g_ptr_array_add (origin_packages_sorted, *iter);
-          g_ptr_array_sort (origin_packages_sorted, rpmostree_ptrarray_sort_compare_strings);
-          g_ptr_array_add (origin_packages_sorted, NULL);
-          packages_joined = g_strjoinv (" ", (char**)origin_packages_sorted->pdata);
-          print_kv ("Packages", max_key_len, packages_joined);
-        }
+        print_packages ("LayeredPackages", max_key_len,
+                        origin_packages, NULL);
 
       if (regenerate_initramfs)
         {

@@ -118,7 +118,7 @@ add_canonicalized_string_array (GVariantBuilder *builder,
       g_strchug (g_strchomp (stripped));
       g_hash_table_add (set, g_steal_pointer (&stripped));
     }
-  
+
   sorted = (char**)g_hash_table_get_keys_as_array (set, &count);
   g_qsort_with_data (sorted, count, sizeof (void*), qsort_cmpstr, NULL);
 

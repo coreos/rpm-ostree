@@ -63,8 +63,6 @@ struct RpmOstreeSysrootUpgrader {
   OstreeDeployment *cfg_merge_deployment;
   OstreeDeployment *origin_merge_deployment;
   RpmOstreeOrigin *origin;
-  GHashTable *packages_to_add;
-  GHashTable *packages_to_delete;
 
   /* Used during tree construction */
   OstreeRepoDevInoCache *devino_cache;
@@ -89,14 +87,12 @@ G_DEFINE_TYPE_WITH_CODE (RpmOstreeSysrootUpgrader, rpmostree_sysroot_upgrader, G
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE, rpmostree_sysroot_upgrader_initable_iface_init))
 
 static gboolean
-parse_origin_keyfile (RpmOstreeSysrootUpgrader  *self,
-                      GKeyFile                  *origin,
-                      GCancellable           *cancellable,
-                      GError                **error)
+parse_origin_deployment (RpmOstreeSysrootUpgrader *self,
+                         OstreeDeployment         *deployment,
+                         GCancellable           *cancellable,
+                         GError                **error)
 {
-  g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
-
-  self->origin = rpmostree_origin_parse_keyfile (origin, error);
+  self->origin = rpmostree_origin_parse_deployment (deployment, error);
   if (!self->origin)
     return FALSE;
 
@@ -111,24 +107,6 @@ parse_origin_keyfile (RpmOstreeSysrootUpgrader  *self,
     }
 
   return TRUE;
-}
-
-static gboolean
-parse_origin_deployment (RpmOstreeSysrootUpgrader *self,
-                         OstreeDeployment         *deployment,
-                         GCancellable           *cancellable,
-                         GError                **error)
-{
-  GKeyFile *origin = ostree_deployment_get_origin (deployment);
-  if (!origin)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "No origin known for deployment %s.%d",
-                   ostree_deployment_get_csum (deployment),
-                   ostree_deployment_get_deployserial (deployment));
-      return FALSE;
-    }
-  return parse_origin_keyfile (self, origin, cancellable, error);
 }
 
 /* This is like ostree_sysroot_get_merge_deployment() except we explicitly
@@ -226,11 +204,6 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
 
   g_assert (self->base_revision);
 
-  self->packages_to_add = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                 g_free, NULL);
-  self->packages_to_delete = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                    g_free, NULL);
-
   ret = TRUE;
  out:
   return ret;
@@ -263,8 +236,6 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   g_clear_object (&self->cfg_merge_deployment);
   g_clear_object (&self->origin_merge_deployment);
   g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
-  g_clear_pointer (&self->packages_to_add, (GDestroyNotify)g_hash_table_unref);
-  g_clear_pointer (&self->packages_to_delete, (GDestroyNotify)g_hash_table_unref);
   g_free (self->base_revision);
   g_free (self->final_revision);
 
@@ -400,96 +371,10 @@ rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self,
   self->origin = rpmostree_origin_dup (new_origin);
 }
 
-const char *const*
-rpmostree_sysroot_upgrader_get_packages (RpmOstreeSysrootUpgrader *self)
-{
-  return rpmostree_origin_get_packages (self->origin);
-}
-
 OstreeDeployment*
 rpmostree_sysroot_upgrader_get_merge_deployment (RpmOstreeSysrootUpgrader *self)
 {
   return self->origin_merge_deployment;
-}
-
-static GHashTable*
-hashset_from_strv (const char *const*strv)
-{
-  GHashTable *ht = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                          g_free, NULL);
-  for (char **it = (char**)strv; it && *it; it++)
-    g_hash_table_add (ht, g_strdup (*it));
-  return ht;
-}
-
-/**
- * rpmostree_sysroot_upgrader_add_packages:
- * @self: Self
- * @packages: Packages to add
- * @cancellable: Cancellable
- * @error: Error
- *
- * Check that the @packages are not already requested and mark them for overlay.
- * */
-gboolean
-rpmostree_sysroot_upgrader_add_packages (RpmOstreeSysrootUpgrader *self,
-                                         char                    **packages,
-                                         GCancellable             *cancellable,
-                                         GError                  **error)
-{
-  gboolean ret = FALSE;
-  g_autoptr(GHashTable) requested_packages =
-    hashset_from_strv (rpmostree_origin_get_packages (self->origin));
-
-  for (char **it = packages; it && *it; it++)
-    {
-      if (g_hash_table_contains (requested_packages, *it))
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Package '%s' is already requested", *it);
-          goto out;
-        }
-      g_hash_table_add (self->packages_to_add, g_strdup (*it));
-    }
-
-  ret = TRUE;
-out:
-  return ret;
-}
-
-/**
- * rpmostree_sysroot_upgrader_delete_packages:
- * @self: Self
- * @packages: Packages to delete
- * @cancellable: Cancellable
- * @error: Error
- *
- * Check that the @packages were requested and remove them from overlay.
- */
-gboolean
-rpmostree_sysroot_upgrader_delete_packages (RpmOstreeSysrootUpgrader *self,
-                                            char                    **packages,
-                                            GCancellable             *cancellable,
-                                            GError                  **error)
-{
-  gboolean ret = FALSE;
-  g_autoptr(GHashTable) requested_packages =
-    hashset_from_strv (rpmostree_origin_get_packages (self->origin));
-
-  for (char **it = packages; it && *it; it++)
-    {
-      if (!g_hash_table_contains (requested_packages, *it))
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Package '%s' is not currently requested", *it);
-          goto out;
-        }
-      g_hash_table_add (self->packages_to_delete, g_strdup (*it));
-    }
-
-  ret = TRUE;
-out:
-  return ret;
 }
 
 /*
@@ -581,41 +466,6 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
   return ret;
 }
 
-/* update the origin with the new packages */
-static gboolean
-update_requested_packages (RpmOstreeSysrootUpgrader *self,
-                           GHashTable               *pkgset,
-                           GCancellable             *cancellable,
-                           GError                  **error)
-{
-  gboolean ret = FALSE;
-  g_autoptr(GKeyFile) new_origin = rpmostree_origin_dup_keyfile (self->origin);
-  glnx_free char **pkgv =
-    (char**) g_hash_table_get_keys_as_array (pkgset, NULL);
-
-  g_key_file_set_string_list (new_origin, "packages", "requested",
-                              (const char* const*) pkgv, g_strv_length(pkgv));
-
-  /* migrate to baserefspec model if necessary */
-  g_key_file_set_value (new_origin, "origin", "baserefspec",
-                        rpmostree_origin_get_refspec (self->origin));
-  if (!g_key_file_remove_key (new_origin, "origin", "refspec", error))
-    {
-      if (g_error_matches (*error, G_KEY_FILE_ERROR,
-                           G_KEY_FILE_ERROR_KEY_NOT_FOUND))
-        g_clear_error (error);
-      else
-        goto out;
-    }
-  g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
-  if (!parse_origin_keyfile (self, new_origin, cancellable, error))
-    goto out;
-
-  ret = TRUE;
-out:
-  return ret;
-}
-
 static gboolean
 checkout_base_tree (RpmOstreeSysrootUpgrader *self,
                     GCancellable          *cancellable,
@@ -669,7 +519,7 @@ generate_treespec (GHashTable *packages)
   g_autoptr(RpmOstreeTreespec) ret = NULL;
   g_autoptr(GError) tmp_error = NULL;
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
-  glnx_free char **pkgv = /* NB: don't use g_strv_free() -- the keys belong to the table */
+  g_autofree char **pkgv =
     (char**) g_hash_table_get_keys_as_array (packages, NULL);
 
   g_key_file_set_string_list (treespec, "tree", "packages",
@@ -681,111 +531,53 @@ generate_treespec (GHashTable *packages)
   return g_steal_pointer (&ret);
 }
 
-/* Given a rootfs containing an rpmdb and a list of packages, calls back for
- * each pkg given found in the db. */
-/* XXX: move to a utility file? */
+/* Go through rpmdb and jot down the missing pkgs from the given set. Really, we
+ * don't *have* to do this: we could just give everything to libdnf and let it
+ * figure out what is already installed. The advantage of doing it ourselves is
+ * that we can optimize for the case where no packages are missing and we don't
+ * have to fetch metadata. Another advantage is that we can make sure that the
+ * embedded treespec only contains the provides we *actually* layer, which is
+ * needed for displaying to the user (though we could fetch that info from
+ * libdnf after resolution).
+ * */
 static gboolean
-find_pkgs_in_rpmdb (int rootfs_dfd, GHashTable *pkgs,
-                    gboolean (*callback) (GHashTableIter *it,
-                                          const char *pkg,
-                                          GError **error,
-                                          gpointer opaque),
-                    GCancellable *cancellable,
-                    gpointer opaque,
-                    GError **error)
+find_missing_pkgs_in_rpmdb (int            rootfs_dfd,
+                            GHashTable    *pkgset,
+                            GHashTable   **out_missing_pkgs,
+                            GCancellable  *cancellable,
+                            GError       **error)
 {
-  gboolean ret = FALSE;
   GHashTableIter it;
   gpointer itkey;
   g_autoptr(RpmOstreeRefSack) rsack = NULL;
+  g_autoptr(GHashTable) missing_pkgs =
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   rsack = rpmostree_get_refsack_for_root (rootfs_dfd, ".", cancellable, error);
   if (rsack == NULL)
-    goto out;
+    return FALSE;
 
-  /* search for each package */
-  g_hash_table_iter_init (&it, pkgs);
+  /* check for each package if we have a provides or a path match */
+  g_hash_table_iter_init (&it, pkgset);
   while (g_hash_table_iter_next (&it, &itkey, NULL))
     {
-      g_autoptr(GPtrArray) pkglist = NULL;
-      hy_autoquery HyQuery query = hy_query_create (rsack->sack);
-      hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
-      hy_query_filter (query, HY_PKG_NAME, HY_EQ, itkey);
-      pkglist = hy_query_run (query);
+      /* mimic dnf_context_install() */
+      g_autoptr(GPtrArray) matches = NULL;
+      HySelector selector = NULL;
+      HySubject subject = NULL;
 
-      /* did we find the package? */
-      if (pkglist->len != 0)
-        if (!callback (&it, itkey, error, opaque))
-          goto out;
+      subject = hy_subject_create (itkey);
+      selector = hy_subject_get_best_selector (subject, rsack->sack);
+      matches = hy_selector_matches (selector);
+      if (matches->len == 0)
+        g_hash_table_add (missing_pkgs, g_strdup (itkey));
+
+      hy_selector_free (selector);
+      hy_subject_free (subject);
     }
 
-  ret = TRUE;
-out:
-  return ret;
-}
-
-static gboolean
-pkg_find_cb (GHashTableIter *it,
-             const char *pkg,
-             GError **error,
-             gpointer opaque)
-{
-  RpmOstreeSysrootUpgrader *self = RPMOSTREE_SYSROOT_UPGRADER (opaque);
-
-  /* did the user explicitly request this package during this session? */
-  if (g_hash_table_contains (self->packages_to_add, pkg))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "package '%s' is already in the deployment", pkg);
-      return FALSE;
-    }
-
-  g_print ("Note: package '%s' is already in the deployment; "
-           "it will no longer be layered.\n", pkg);
-
-  g_hash_table_iter_remove (it);
-
+  *out_missing_pkgs = g_steal_pointer (&missing_pkgs);
   return TRUE;
-}
-
-/* Do a partial checkout of the rpmdb, and given requested_packages and
- * packages_to_add and packages_to_delete, update requested_packages to reflect
- * the final set of packages to actually overlay. */
-static gboolean
-finalize_requested_packages (RpmOstreeSysrootUpgrader *self,
-                             GCancellable             *cancellable,
-                             GError                  **error)
-{
-  gboolean ret = FALSE;
-  g_autoptr(GHashTable) pkgset =
-    hashset_from_strv (rpmostree_origin_get_packages (self->origin));
-
-  /* remove packages_to_delete from the set */
-  { GHashTableIter it;
-    gpointer itkey;
-    g_hash_table_iter_init (&it, self->packages_to_delete);
-    while (g_hash_table_iter_next (&it, &itkey, NULL))
-      g_hash_table_remove (pkgset, g_strdup (itkey));
-  }
-
-  /* add packages_to_add to the set */
-  { GHashTableIter it;
-    gpointer itkey;
-    g_hash_table_iter_init (&it, self->packages_to_add);
-    while (g_hash_table_iter_next (&it, &itkey, NULL))
-      g_hash_table_add (pkgset, g_strdup (itkey));
-  }
-
-  if (!find_pkgs_in_rpmdb (self->tmprootfs_dfd, pkgset, pkg_find_cb,
-                           cancellable, self, error))
-    goto out;
-
-  if (!update_requested_packages (self, pkgset, cancellable, error))
-    goto out;
-
-  ret = TRUE;
-out:
-  return ret;
 }
 
 static gboolean
@@ -844,15 +636,15 @@ out:
 }
 
 static gboolean
-overlay_final_pkgset (RpmOstreeSysrootUpgrader *self,
-                      GCancellable             *cancellable,
-                      GError                  **error)
+do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
+                         GHashTable               *pkgset,
+                         GCancellable             *cancellable,
+                         GError                  **error)
 {
   gboolean ret = FALSE;
   g_autoptr(RpmOstreeContext) ctx = NULL;
   g_autoptr(RpmOstreeTreespec) treespec = NULL;
   g_autoptr(RpmOstreeInstall) install = {0,};
-  g_autoptr(GHashTable) pkgset = hashset_from_strv (rpmostree_origin_get_packages (self->origin));
   g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
   const gboolean have_packages = g_hash_table_size (pkgset) > 0;
   glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
@@ -1010,28 +802,35 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
                    GCancellable             *cancellable,
                    GError                  **error)
 {
+  g_autoptr(GHashTable) final_pkgset = NULL;
+
   self->devino_cache = ostree_repo_devino_cache_new ();
 
   if (!checkout_base_tree (self, cancellable, error))
     return FALSE;
 
-  /* check if there are any items in requested_packages or pkgs_to_add that are
-   * already installed in base_rev */
-  if (!finalize_requested_packages (self, cancellable, error))
+  /* if we're layering packages, let's get the *actual* list of
+   * packages/provides we'll need to layer */
+  if (!find_missing_pkgs_in_rpmdb (self->tmprootfs_dfd,
+                                   rpmostree_origin_get_packages (self->origin),
+                                   &final_pkgset, cancellable, error))
     return FALSE;
 
-  /* Now, it's possible all requested packages are in the new tree (or
-   * that the user wants to stop overlaying them), so we have another
-   * optimization here for that case.
+  /* Now, it's possible all requested packages are in the new tree, so we have
+   * another optimization here for that case. This is a bit tricky: assuming we
+   * came here from an 'rpm-ostree install', this might mean that we redeploy
+   * the exact same base layer, with the only difference being the origin file.
+   * We could down the line experiment with optimizing this by just updating the
+   * merge deployment's origin.
    */
-  if (!rpmostree_origin_get_regenerate_initramfs (self->origin) &&
-      g_strv_length ((char**)rpmostree_origin_get_packages (self->origin)) == 0)
+  if (g_hash_table_size (final_pkgset) == 0 &&
+      !rpmostree_origin_get_regenerate_initramfs (self->origin))
     {
       g_clear_pointer (&self->final_revision, g_free);
     }
   else
     {
-      if (!overlay_final_pkgset (self, cancellable, error))
+      if (!do_final_local_assembly (self, final_pkgset, cancellable, error))
         return FALSE;
     }
 
@@ -1299,10 +1098,9 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   const char *target_revision;
   g_autoptr(GKeyFile) origin = NULL;
 
+  /* might this need local assembly? */
   if (rpmostree_origin_get_regenerate_initramfs (self->origin) ||
-      g_strv_length ((gchar**)rpmostree_origin_get_packages (self->origin)) > 0 ||
-      (g_hash_table_size (self->packages_to_add) > 0) ||
-      (g_hash_table_size (self->packages_to_delete) > 0))
+      g_hash_table_size (rpmostree_origin_get_packages (self->origin)) > 0)
     {
       if (!do_local_assembly (self, cancellable, error))
         goto out;
@@ -1312,6 +1110,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN)
     {
+      /* we already printed the transaction in do_final_local_assembly() */
       ret = TRUE;
       goto out;
     }
