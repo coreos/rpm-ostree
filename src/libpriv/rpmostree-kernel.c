@@ -295,7 +295,7 @@ dracut_child_setup (gpointer data)
 
 gboolean
 rpmostree_run_dracut (int     rootfs_dfd,
-                      char   **argv,
+                      const char *const* argv,
                       const char *rebuild_from_initramfs,
                       int     *out_initramfs_tmpfd,
                       char   **out_initramfs_tmppath,
@@ -327,13 +327,14 @@ rpmostree_run_dracut (int     rootfs_dfd,
       rebuild_argv = g_ptr_array_new ();
       g_ptr_array_add (rebuild_argv, "--rebuild");
       g_ptr_array_add (rebuild_argv, (char*)rebuild_from_initramfs);
+
       /* In this case, any args specified in argv are *additional*
        * to the rebuild from the base.
        */
-      for (char **iter = argv; iter && *iter; iter++)
+      for (char **iter = (char**)argv; iter && *iter; iter++)
         g_ptr_array_add (rebuild_argv, *iter);
       g_ptr_array_add (rebuild_argv, NULL);
-      argv = (char**)rebuild_argv->pdata;
+      argv = (const char *const*)rebuild_argv->pdata;
     }
 
   /* First tempfile is just our shell script */
@@ -378,7 +379,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
 
   /* Set up argv and run */
   rpmostree_bwrap_append_child_argv (bwrap, (char*)glnx_basename (rpmostree_dracut_wrapper_path), NULL);
-  for (char **iter = argv; iter && *iter; iter++)
+  for (char **iter = (char**)argv; iter && *iter; iter++)
     rpmostree_bwrap_append_child_argv (bwrap, *iter, NULL);
 
   rpmostree_bwrap_set_child_setup (bwrap, dracut_child_setup, GINT_TO_POINTER (tmp_fd));

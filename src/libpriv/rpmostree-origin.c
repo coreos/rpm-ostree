@@ -26,11 +26,15 @@
 
 struct RpmOstreeOrigin {
   guint refcount;
+
+  /* this is the single source of truth */
   GKeyFile *kf;
-  char *refspec;
-  char **packages;
-  char *override_commit;
-  char *unconfigured_state;
+
+  char *cached_refspec;
+  char *cached_override_commit;
+  char *cached_unconfigured_state;
+  char **cached_initramfs_args;
+  char **cached_packages;
 };
 
 static GKeyFile *
@@ -57,27 +61,31 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   /* NOTE hack here - see https://github.com/ostreedev/ostree/pull/343 */
   g_key_file_remove_key (ret->kf, "origin", "unlocked", NULL);
 
-  ret->unconfigured_state = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
+  ret->cached_unconfigured_state = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
 
-  ret->refspec = g_key_file_get_string (ret->kf, "origin", "refspec", NULL);
-  if (!ret->refspec)
+  ret->cached_refspec = g_key_file_get_string (ret->kf, "origin", "refspec", NULL);
+  if (!ret->cached_refspec)
     {
-      ret->refspec = g_key_file_get_string (ret->kf, "origin", "baserefspec", NULL);
-      if (!ret->refspec)
+      ret->cached_refspec = g_key_file_get_string (ret->kf, "origin", "baserefspec", NULL);
+      if (!ret->cached_refspec)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "No origin/refspec or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree");
           return NULL;
         }
 
-      ret->packages = g_key_file_get_string_list (ret->kf, "packages", "requested", NULL, NULL);
+      ret->cached_packages = g_key_file_get_string_list (ret->kf, "packages", "requested", NULL, NULL);
     }
 
   /* Canonicalize NULL to an empty list for sanity */
-  if (!ret->packages)
-    ret->packages = g_new0 (char*, 1);
+  if (!ret->cached_packages)
+    ret->cached_packages = g_new0 (char*, 1);
 
-  ret->override_commit = g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
+  ret->cached_override_commit =
+    g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
+
+  ret->cached_initramfs_args =
+    g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-args", NULL, NULL);
 
   return g_steal_pointer (&ret);
 }
@@ -91,19 +99,19 @@ rpmostree_origin_dup (RpmOstreeOrigin *origin)
 const char *
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
 {
-  return origin->refspec;
+  return origin->cached_refspec;
 }
 
 const char *const*
 rpmostree_origin_get_packages (RpmOstreeOrigin *origin)
 {
-  return (const char * const*)origin->packages;
+  return (const char * const*)origin->cached_packages;
 }
 
 const char *
 rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin)
 {
-  return origin->override_commit;
+  return origin->cached_override_commit;
 }
 
 gboolean
@@ -112,10 +120,16 @@ rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin)
   return g_key_file_get_boolean (origin->kf, "rpmostree", "regenerate-initramfs", NULL);
 }
 
-char **
+const char *const*
 rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin)
 {
-  return g_key_file_get_string_list (origin->kf, "rpmostree", "initramfs-args", NULL, NULL);
+  return (const char * const*)origin->cached_initramfs_args;
+}
+
+const char*
+rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
+{
+  return origin->cached_unconfigured_state;
 }
 
 GKeyFile *
@@ -143,14 +157,16 @@ rpmostree_origin_ref (RpmOstreeOrigin *origin)
 void
 rpmostree_origin_unref (RpmOstreeOrigin *origin)
 {
+  g_assert (origin);
   g_assert_cmpint (origin->refcount, >, 0);
   origin->refcount--;
   if (origin->refcount > 0)
     return;
   g_key_file_unref (origin->kf);
-  g_free (origin->refspec);
-  g_free (origin->unconfigured_state);
-  g_strfreev (origin->packages);
+  g_free (origin->cached_refspec);
+  g_free (origin->cached_unconfigured_state);
+  g_strfreev (origin->cached_packages);
+  g_strfreev (origin->cached_initramfs_args);
   g_free (origin);
 }
 
@@ -163,12 +179,17 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
   const char *regeneratek = "regenerate-initramfs";
   const char *argsk = "initramfs-args";
 
+  g_strfreev (origin->cached_initramfs_args);
+
   if (regenerate)
     {
       g_key_file_set_boolean (origin->kf, section, regeneratek, TRUE);
       if (args && *args)
-        g_key_file_set_string_list (origin->kf, section, argsk,
-                                    (const char *const*)args, g_strv_length (args));
+        {
+          g_key_file_set_string_list (origin->kf, section, argsk,
+                                      (const char *const*)args,
+                                      g_strv_length (args));
+        }
       else
         g_key_file_remove_key (origin->kf, section, argsk, NULL);
     }
@@ -177,6 +198,10 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
       g_key_file_remove_key (origin->kf, section, regeneratek, NULL);
       g_key_file_remove_key (origin->kf, section, argsk, NULL);
     }
+
+  origin->cached_initramfs_args =
+    g_key_file_get_string_list (origin->kf, "rpmostree", "initramfs-args",
+                                NULL, NULL);
 }
 
 void
@@ -201,8 +226,8 @@ rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin,
       g_key_file_remove_key (origin->kf, "origin", "override-commit", NULL);
     }
 
-  g_free (origin->override_commit);
-  origin->override_commit = g_strdup (checksum);
+  g_free (origin->cached_override_commit);
+  origin->cached_override_commit = g_strdup (checksum);
 }
 
 /* updates an origin's refspec without migrating format */
@@ -235,14 +260,8 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
   /* we don't want to carry any commit overrides during a rebase */
   rpmostree_origin_set_override_commit (origin, NULL, NULL);
 
-  g_free (origin->refspec);
-  origin->refspec = g_strdup (new_refspec);
+  g_free (origin->cached_refspec);
+  origin->cached_refspec = g_strdup (new_refspec);
 
   return TRUE;
-}
-
-const char*
-rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
-{
-  return origin->unconfigured_state;
 }

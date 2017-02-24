@@ -206,7 +206,8 @@ do_kernel_prep (int            rootfs_dfd,
       }
     g_ptr_array_add (dracut_argv, NULL);
 
-    if (!rpmostree_run_dracut (rootfs_dfd, (char**)dracut_argv->pdata, NULL,
+    if (!rpmostree_run_dracut (rootfs_dfd,
+                               (const char *const*)dracut_argv->pdata, NULL,
                                &initramfs_tmp_fd, &initramfs_tmp_path,
                                cancellable, error))
       goto out;
