@@ -27,9 +27,11 @@ set -x
 # SUMMARY: check that package layering respects rpmdb
 # METHOD:
 #     - test that during a relayer (e.g. upgrade), if a previously layered pkg
-#       is now part of the base layer, then we gently drop the pkg as layered
-#     - test that layering a pkg that's already in the base layer fails
-#     - test that layering a pkg that's already layered fails
+#       is now part of the base layer, then we stop layering but still keep it
+#       in the origin
+#     - test that layering a pkg that's already in the base layer works
+#     - test that layering a pkg that's already layered fails (string match)
+#     - test that layering a different provides that's already layered works
 #     - test that layering a new pkg that conflicts with a layered pkg fails
 #     - test that layering a new pkg that conflicts with a base pkg fails
 #     - test that relayering on a base with a conflicting package fails
@@ -38,9 +40,10 @@ vm_send_test_repo
 
 # make sure the package is not already layered
 vm_assert_layered_pkg foo absent
+csum_without_foo=$(vm_get_booted_csum) # needed for later
 
-vm_rpmostree pkg-add foo
-echo "ok pkg-add foo"
+vm_rpmostree install foo
+echo "ok install foo"
 
 vm_reboot
 
@@ -49,40 +52,35 @@ echo "ok pkg foo added"
 
 # let's synthesize an upgrade in which the commit we're upgrading to has foo as
 # part of its base, so we recommit our current (non-base) layer to the branch
-csum=$(vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_booted_csum))
+csum_with_foo=$(vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_booted_csum))
 
-# check that upgrading to it will elide the layered pkg from the origin
-vm_rpmostree upgrade | tee out.txt
-assert_file_has_content out.txt "'foo' .* will no longer be layered"
-echo "ok layered pkg foo elision msg"
+# check that upgrading to it will make the package dormant
 
+vm_rpmostree upgrade
 vm_reboot
-new_csum=$(vm_get_booted_csum)
-if [[ $new_csum != $csum ]]; then
-  assert_not_reached "new csum does not refer to expected csum $csum"
+if [[ $(vm_get_booted_csum) != $csum_with_foo ]]; then
+  assert_not_reached "new csum does not refer to expected csum $csum_with_foo"
 fi
 
-if ! vm_has_packages foo; then
-  assert_not_reached "pkg foo is not in rpmdb"
-elif vm_has_layered_packages foo; then
-  assert_not_reached "pkg foo is layered"
+if ! vm_has_dormant_packages foo; then
+  assert_not_reached "pkg foo is not dormant"
 fi
-echo "ok layered pkg foo elision"
 
-if vm_rpmostree pkg-add foo; then
-  assert_not_reached "pkg-add foo succeeded even though it's already in rpmdb"
-fi
-echo "ok can't layer pkg already in base"
+echo "ok layered to dormant"
 
 if vm_rpmostree pkg-add bar; then
   assert_not_reached "pkg-add bar succeeded but it conflicts with foo in base"
 fi
-echo "ok can't layer conflicting pkg in base"
+echo "ok can't layer conflicting pkg (dormant)"
 
-# let's go back to that first depl in which foo is really layered
-vm_rpmostree rollback
+# now check that upgrading to a new base layer that drops foo relayers it
+
+vm_cmd ostree commit -b vmcheck --tree=ref=$csum_without_foo
+vm_rpmostree upgrade
 vm_reboot
+
 vm_assert_layered_pkg foo present
+echo "ok dormant to layered"
 
 if vm_rpmostree pkg-add foo; then
   assert_not_reached "pkg-add foo succeeded even though it's already layered"
@@ -92,22 +90,34 @@ echo "ok can't layer pkg already layered"
 if vm_rpmostree pkg-add bar; then
   assert_not_reached "pkg-add bar succeeded but it conflicts with layered foo"
 fi
-echo "ok can't layer conflicting pkg already layered"
+echo "ok can't layer conflicting pkg (layered)"
 
-# let's go back to the original depl without anything
-# XXX: this would be simpler if we had an --onto here
+# ok, now let's go back to the depl where foo is in the layer
+vm_rpmostree rollback
 vm_rpmostree pkg-remove foo
 vm_reboot
-vm_assert_layered_pkg foo absent
+
+if vm_has_requested_packages foo; then
+  assert_not_reached "foo is still in the origin"
+fi
 echo "ok pkg-remove foo"
 
+if vm_rpmostree pkg-add bar; then
+  assert_not_reached "pkg-add bar succeeded but it conflicts with foo in base"
+fi
+echo "ok can't layer conflicting pkg (base)"
+
+# ok, now go back to a base layer without foo and add bar
+vm_cmd ostree commit -b vmcheck --tree=ref=$csum_without_foo
+vm_rpmostree upgrade
 vm_rpmostree pkg-add bar
 vm_reboot
+
 vm_assert_layered_pkg bar present
 echo "ok pkg-add bar"
 
-# now let's try to do an upgrade -- the latest commit there is still the one we
-# created at the beginning of this test, containing foo in the base
+# now let's try to do an upgrade to a base layer which *has* foo
+vm_cmd ostree commit -b vmcheck --tree=ref=$csum_with_foo
 if vm_rpmostree upgrade; then
   assert_not_reached "upgrade succeeded but new base has conflicting pkg foo"
 fi
