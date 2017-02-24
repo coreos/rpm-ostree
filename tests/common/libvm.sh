@@ -177,6 +177,11 @@ vm_get_layered_packages() {
   vm_get_booted_deployment_info packages
 }
 
+# print the requested packages
+vm_get_requested_packages() {
+  vm_get_booted_deployment_info requested-packages
+}
+
 # check that the packages are currently layered
 # - $@    packages to check for
 vm_has_layered_packages() {
@@ -186,6 +191,22 @@ vm_has_layered_packages() {
         return 1
     fi
   done
+}
+
+# check that the packages are currently requested
+# - $@    packages to check for
+vm_has_requested_packages() {
+  pkgs=$(vm_get_requested_packages)
+  for pkg in "$@"; do
+    if [[ " $pkgs " != *$pkg* ]]; then
+        return 1
+    fi
+  done
+}
+
+vm_has_dormant_packages() {
+  vm_has_requested_packages "$@" && \
+    ! vm_has_layered_packages "$@"
 }
 
 # retrieve the checksum of the currently booted deployment
@@ -203,8 +224,13 @@ vm_assert_layered_pkg() {
   set +e
   vm_has_packages $pkg;         pkg_in_rpmdb=$?
   vm_has_layered_packages $pkg; pkg_is_layered=$?
-  [ $pkg_in_rpmdb == 0 ] && [ $pkg_is_layered == 0 ]; pkg_present=$?
-  [ $pkg_in_rpmdb != 0 ] && [ $pkg_is_layered != 0 ]; pkg_absent=$?
+  vm_has_requested_packages $pkg; pkg_is_requested=$?
+  [ $pkg_in_rpmdb == 0 ] && \
+  [ $pkg_is_layered == 0 ] && \
+  [ $pkg_is_requested == 0 ]; pkg_present=$?
+  [ $pkg_in_rpmdb != 0 ] && \
+  [ $pkg_is_layered != 0 ] && \
+  [ $pkg_is_requested != 0 ]; pkg_absent=$?
   set -e
 
   if [ $policy == present ] && [ $pkg_present != 0 ]; then
