@@ -930,7 +930,7 @@ rpmostree_get_pkglist_for_root (int               dfd,
 {
   gboolean ret = FALSE;
   g_autoptr(RpmOstreeRefSack) refsack = NULL;
-  HyQuery query = NULL;
+  hy_autoquery HyQuery query = NULL;
   g_autoptr(GPtrArray) pkglist = NULL;
 
   refsack = rpmostree_get_refsack_for_root (dfd, path, cancellable, error);
@@ -947,8 +947,6 @@ rpmostree_get_pkglist_for_root (int               dfd,
   if (out_pkglist)
     *out_pkglist = g_steal_pointer (&pkglist);
  out:
-  if (query)
-    hy_query_free (query);
   return ret;
 }
 

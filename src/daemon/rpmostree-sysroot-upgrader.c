@@ -718,7 +718,7 @@ find_pkgs_in_rpmdb (int rootfs_dfd, GHashTable *pkgs,
   while (g_hash_table_iter_next (&it, &itkey, NULL))
     {
       g_autoptr(GPtrArray) pkglist = NULL;
-      HyQuery query = hy_query_create (rsack->sack);
+      hy_autoquery HyQuery query = hy_query_create (rsack->sack);
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
       hy_query_filter (query, HY_PKG_NAME, HY_EQ, itkey);
       pkglist = hy_query_run (query);
@@ -1173,7 +1173,7 @@ add_package_refs_to_set (RpmOstreeRefSack *rsack,
                          GError **error)
 {
   g_autoptr(GPtrArray) pkglist = NULL;
-  HyQuery query = hy_query_create (rsack->sack);
+  hy_autoquery HyQuery query = hy_query_create (rsack->sack);
   hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
   pkglist = hy_query_run (query);
 
