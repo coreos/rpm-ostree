@@ -40,7 +40,9 @@ vm_send_test_repo
 
 # make sure the package is not already layered
 vm_assert_layered_pkg foo absent
-csum_without_foo=$(vm_get_booted_csum) # needed for later
+
+# remember this current commit for later
+vm_cmd ostree refs $(vm_get_booted_csum) --create vmcheck_tmp/without_foo
 
 vm_rpmostree install foo
 echo "ok install foo"
@@ -52,7 +54,10 @@ echo "ok pkg foo added"
 
 # let's synthesize an upgrade in which the commit we're upgrading to has foo as
 # part of its base, so we recommit our current (non-base) layer to the branch
-csum_with_foo=$(vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_booted_csum))
+
+# remember it for later
+vm_cmd ostree refs $(vm_get_booted_csum) --create vmcheck_tmp/with_foo
+csum_with_foo=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo)
 
 # check that upgrading to it will make the package dormant
 
@@ -75,7 +80,7 @@ echo "ok can't layer conflicting pkg (dormant)"
 
 # now check that upgrading to a new base layer that drops foo relayers it
 
-vm_cmd ostree commit -b vmcheck --tree=ref=$csum_without_foo
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo
 vm_rpmostree upgrade
 vm_reboot
 
@@ -108,7 +113,7 @@ fi
 echo "ok can't layer conflicting pkg (base)"
 
 # ok, now go back to a base layer without foo and add bar
-vm_cmd ostree commit -b vmcheck --tree=ref=$csum_without_foo
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo
 vm_rpmostree upgrade
 vm_rpmostree pkg-add bar
 vm_reboot
@@ -117,7 +122,7 @@ vm_assert_layered_pkg bar present
 echo "ok pkg-add bar"
 
 # now let's try to do an upgrade to a base layer which *has* foo
-vm_cmd ostree commit -b vmcheck --tree=ref=$csum_with_foo
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo
 if vm_rpmostree upgrade; then
   assert_not_reached "upgrade succeeded but new base has conflicting pkg foo"
 fi

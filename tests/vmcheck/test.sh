@@ -30,6 +30,9 @@ vm_cmd ostree rev-parse $csum_orig &> /dev/null # validate
 vm_cmd ostree refs vmcheck_orig --delete
 vm_cmd ostree refs $csum_orig --create vmcheck_orig
 
+# delete whatever tmp refs the previous testsuite runs may have created
+vm_cmd ostree refs vmcheck_tmp --delete
+
 # we bring our own test repo and test packages, so let's neuter any repo that
 # comes with the distro to help speed up rpm-ostree metadata fetching since we
 # don't cache it (e.g. on Fedora, it takes *forever* to fetch metadata, which we
@@ -114,6 +117,7 @@ for tf in $(find . -name 'test-*.sh' | sort); do
       # vmcheck_orig ref itself (e.g. package layering)
       echo "Restoring vmcheck commit" >> ${LOG}
       vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_orig &>> ${LOG}
+      vm_cmd ostree refs vmcheck_tmp --delete # delete refs created by test
       vm_cmd ostree admin deploy vmcheck &>> ${LOG}
       vm_reboot &>> ${LOG}
     fi
