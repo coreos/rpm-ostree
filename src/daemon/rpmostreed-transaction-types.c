@@ -660,7 +660,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       /* in reality, there may not be any new layer required (if e.g. we're
        * removing a duplicate provides), though the origin has changed so we
-       * need to create a new depl */
+       * need to create a new deployment */
       changed = TRUE;
     }
 

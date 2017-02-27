@@ -77,22 +77,32 @@ get_active_txn (RPMOSTreeSysroot *sysroot_proxy)
 }
 
 static void
-print_packages (const char *k, guint max_key_len, const char *const* pkgs)
+print_packages (const char *k, guint max_key_len,
+                const char *const* pkgs,
+                const char *const* omit_pkgs)
 {
   g_autofree char *packages_joined = NULL;
   g_autoptr(GPtrArray) packages_sorted =
     g_ptr_array_new_with_free_func (g_free);
   for (char **iter = (char**) pkgs; iter && *iter; iter++)
     {
-      if (strchr (*iter, ' ') != NULL)
-        g_ptr_array_add (packages_sorted, g_strdup_printf ("'%s'", *iter));
-      else
+      if (omit_pkgs != NULL && g_strv_contains (omit_pkgs, *iter))
+        continue;
+
+      /* don't quote if it just has common pkgname/shell-safe chars */
+      if (g_regex_match_simple ("^[[:alnum:]-._]+$", *iter, 0, 0))
         g_ptr_array_add (packages_sorted, g_strdup (*iter));
+      else
+        g_ptr_array_add (packages_sorted, g_shell_quote (*iter));
     }
-  g_ptr_array_sort (packages_sorted, rpmostree_ptrarray_sort_compare_strings);
-  g_ptr_array_add (packages_sorted, NULL);
-  packages_joined = g_strjoinv (" ", (char**)packages_sorted->pdata);
-  print_kv (k, max_key_len, packages_joined);
+
+  if (packages_sorted->len > 0)
+    {
+      g_ptr_array_sort (packages_sorted, rpmostree_ptrarray_sort_compare_strings);
+      g_ptr_array_add (packages_sorted, NULL);
+      packages_joined = g_strjoinv (" ", (char**)packages_sorted->pdata);
+      print_kv (k, max_key_len, packages_joined);
+    }
 }
 
 /* We will have an optimized path for the case where there are just
@@ -131,8 +141,8 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
       g_autoptr(GVariantDict) dict = NULL;
       gboolean is_locally_assembled = FALSE;
-      glnx_free const gchar **origin_packages = NULL;
-      glnx_free const gchar **origin_requested_packages = NULL;
+      g_autofree const gchar **origin_packages = NULL;
+      g_autofree const gchar **origin_requested_packages = NULL;
       const gchar *origin_refspec;
       const gchar *id;
       const gchar *os_name;
@@ -300,10 +310,14 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
             }
         }
 
+      /* let's be nice and only print requested - layered, rather than repeating
+       * the ones in layered twice */
       if (origin_requested_packages)
-        print_packages ("RequestedPackages", max_key_len, origin_requested_packages);
+        print_packages ("RequestedPackages", max_key_len,
+                        origin_requested_packages, origin_packages);
       if (origin_packages)
-        print_packages ("LayeredPackages", max_key_len, origin_packages);
+        print_packages ("LayeredPackages", max_key_len,
+                        origin_packages, NULL);
 
       if (regenerate_initramfs)
         {

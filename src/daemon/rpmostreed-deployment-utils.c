@@ -242,7 +242,7 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
   g_variant_dict_insert (&dict, "origin", "s", refspec);
   if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
     {
-      glnx_free char **pkgs =
+      g_autofree char **pkgs =
         (char**)g_hash_table_get_keys_as_array (rpmostree_origin_get_packages (origin), NULL);
       g_variant_dict_insert (&dict, "requested-packages", "^as", pkgs);
     }

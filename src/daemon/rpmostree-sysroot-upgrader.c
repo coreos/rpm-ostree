@@ -519,7 +519,7 @@ generate_treespec (GHashTable *packages)
   g_autoptr(RpmOstreeTreespec) ret = NULL;
   g_autoptr(GError) tmp_error = NULL;
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
-  glnx_free char **pkgv = /* NB: don't use g_strv_free() -- the keys belong to the table */
+  g_autofree char **pkgv =
     (char**) g_hash_table_get_keys_as_array (packages, NULL);
 
   g_key_file_set_string_list (treespec, "tree", "packages",

@@ -22,7 +22,6 @@
 
 #include "string.h"
 
-#include <libglnx.h>
 #include "rpmostree-origin.h"
 
 struct RpmOstreeOrigin {
@@ -82,7 +81,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
 
       packages = g_key_file_get_string_list (ret->kf, "packages", "requested", NULL, NULL);
       for (char **it = packages; it && *it; it++)
-        g_hash_table_add (ret->cached_packages, g_strdup (*it));
+        g_hash_table_add (ret->cached_packages, g_steal_pointer (it));
     }
 
   ret->cached_override_commit =
@@ -275,7 +274,7 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin)
 {
   /* we're abusing a bit the concept of cache here, though
    * it's just easier to go from cache to origin */
-  glnx_free char **pkgv =
+  g_autofree char **pkgv =
     (char**) g_hash_table_get_keys_as_array (origin->cached_packages, NULL);
   g_key_file_set_string_list (origin->kf, "packages", "requested",
                               (const char *const*)pkgv, g_strv_length (pkgv));
