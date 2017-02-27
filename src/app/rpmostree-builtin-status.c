@@ -84,13 +84,24 @@ print_packages (const char *k, guint max_key_len,
   g_autofree char *packages_joined = NULL;
   g_autoptr(GPtrArray) packages_sorted =
     g_ptr_array_new_with_free_func (g_free);
+
+  static gsize regex_initialized;
+  static GRegex *safe_chars_regex;
+
+  if (g_once_init_enter (&regex_initialized))
+    {
+      safe_chars_regex = g_regex_new ("^[[:alnum:]-._]+$", 0, 0, NULL);
+      g_assert (safe_chars_regex);
+      g_once_init_leave (&regex_initialized, 1);
+    }
+
   for (char **iter = (char**) pkgs; iter && *iter; iter++)
     {
       if (omit_pkgs != NULL && g_strv_contains (omit_pkgs, *iter))
         continue;
 
       /* don't quote if it just has common pkgname/shell-safe chars */
-      if (g_regex_match_simple ("^[[:alnum:]-._]+$", *iter, 0, 0))
+      if (g_regex_match (safe_chars_regex, *iter, 0, 0))
         g_ptr_array_add (packages_sorted, g_strdup (*iter));
       else
         g_ptr_array_add (packages_sorted, g_shell_quote (*iter));
