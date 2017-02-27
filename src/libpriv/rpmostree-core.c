@@ -2458,7 +2458,7 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
         /* be nice to our future selves */
         g_variant_builder_add (&metadata_builder, "{sv}",
                                "rpmostree.clientlayer_version",
-                               g_variant_new_uint32 (1));
+                               g_variant_new_uint32 (0));
       }
 
     state_checksum = rpmostree_context_get_state_sha512 (self);
