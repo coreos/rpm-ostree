@@ -33,7 +33,7 @@ struct RpmOstreeOrigin {
   char *cached_refspec;
   char *cached_override_commit;
   char *cached_unconfigured_state;
-  GPtrArray *cached_initramfs_args;
+  char **cached_initramfs_args;
   char **cached_packages;
 };
 
@@ -58,8 +58,6 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   ret->refcount = 1;
   ret->kf = keyfile_dup (origin);
 
-  ret->cached_initramfs_args = g_ptr_array_new_with_free_func (g_free);
-
   /* NOTE hack here - see https://github.com/ostreedev/ostree/pull/343 */
   g_key_file_remove_key (ret->kf, "origin", "unlocked", NULL);
 
@@ -83,15 +81,11 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   if (!ret->cached_packages)
     ret->cached_packages = g_new0 (char*, 1);
 
-  ret->cached_override_commit = g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
+  ret->cached_override_commit =
+    g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
 
-  {
-    g_auto(GStrv) initramfs_args =
-      g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-args", NULL, NULL);
-    for (char **it = initramfs_args; it && *it; it++)
-      g_ptr_array_add (ret->cached_initramfs_args, g_strdup (*it));
-    g_ptr_array_add (ret->cached_initramfs_args, NULL);
-  }
+  ret->cached_initramfs_args =
+    g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-args", NULL, NULL);
 
   return g_steal_pointer (&ret);
 }
@@ -129,7 +123,7 @@ rpmostree_origin_get_regenerate_initramfs (RpmOstreeOrigin *origin)
 const char *const*
 rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin)
 {
-  return (const char * const*)origin->cached_initramfs_args->pdata;
+  return (const char * const*)origin->cached_initramfs_args;
 }
 
 const char*
@@ -172,7 +166,7 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   g_free (origin->cached_refspec);
   g_free (origin->cached_unconfigured_state);
   g_strfreev (origin->cached_packages);
-  g_clear_pointer (&origin->cached_initramfs_args, g_ptr_array_unref);
+  g_strfreev (origin->cached_initramfs_args);
   g_free (origin);
 }
 
@@ -185,8 +179,7 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
   const char *regeneratek = "regenerate-initramfs";
   const char *argsk = "initramfs-args";
 
-  g_ptr_array_unref (origin->cached_initramfs_args);
-  origin->cached_initramfs_args = g_ptr_array_new_with_free_func (g_free);
+  g_strfreev (origin->cached_initramfs_args);
 
   if (regenerate)
     {
@@ -194,9 +187,8 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
       if (args && *args)
         {
           g_key_file_set_string_list (origin->kf, section, argsk,
-                                      (const char *const*)args, g_strv_length (args));
-          for (char **it = args; it && *it; it++)
-            g_ptr_array_add (origin->cached_initramfs_args, g_strdup (*it));
+                                      (const char *const*)args,
+                                      g_strv_length (args));
         }
       else
         g_key_file_remove_key (origin->kf, section, argsk, NULL);
@@ -207,7 +199,9 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
       g_key_file_remove_key (origin->kf, section, argsk, NULL);
     }
 
-  g_ptr_array_add (origin->cached_initramfs_args, NULL);
+  origin->cached_initramfs_args =
+    g_key_file_get_string_list (origin->kf, "rpmostree", "initramfs-args",
+                                NULL, NULL);
 }
 
 void
