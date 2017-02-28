@@ -2463,7 +2463,7 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
           }
         else
           {
-            const char *const* p = { NULL };
+            const char *const p[] = { NULL };
             g_variant_builder_add (&metadata_builder, "{sv}",
                                    "rpmostree.packages",
                                    g_variant_new_strv (p, -1));
