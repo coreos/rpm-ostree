@@ -5,6 +5,7 @@ ConditionPathExists=/ostree
 [Service]
 Type=dbus
 BusName=org.projectatomic.rpmostree1
+Environment=RPMOSTREE_SUPPRESS_EXPERIMENTAL_WARNING=1
 @SYSTEMD_ENVIRON@
 ExecStart=@bindir@/rpm-ostree start-daemon
 ExecReload=@libexecdir@/@primaryname@ reload

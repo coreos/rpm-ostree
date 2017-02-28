@@ -221,7 +221,7 @@ lookup_command_of_type (RpmOstreeCommand *commands,
     {
       if (g_strcmp0 (name, command->name) == 0)
         {
-          if (type)
+          if (type && g_getenv ("RPMOSTREE_SUPPRESS_EXPERIMENTAL_WARNING") == NULL)
             g_printerr ("%snotice%s: %s is %s command and subject to change.\n",
                         bold_prefix, bold_suffix, name, type);
           return command;
