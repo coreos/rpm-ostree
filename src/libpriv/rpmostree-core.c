@@ -2428,11 +2428,8 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
     g_autoptr(GFile) root = NULL;
     g_auto(GVariantBuilder) metadata_builder;
     g_autofree char *state_checksum = NULL;
-    g_autoptr(GVariant) spec_v = g_variant_ref_sink (rpmostree_treespec_to_variant (self->spec));
 
     g_variant_builder_init (&metadata_builder, (GVariantType*)"a{sv}");
-
-    g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.spec", spec_v);
 
     if (assemble_type == RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING)
       {
@@ -2455,11 +2452,44 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.clientlayer",
                                g_variant_new_boolean (TRUE));
 
+        if (!self->empty)
+          {
+            g_autoptr(GVariant) pkgs =
+              g_variant_dict_lookup_value (self->spec->dict, "packages",
+                                           G_VARIANT_TYPE ("as"));
+            g_assert (pkgs);
+            g_variant_builder_add (&metadata_builder, "{sv}",
+                                   "rpmostree.packages", pkgs);
+          }
+        else
+          {
+            const char *const p[] = { NULL };
+            g_variant_builder_add (&metadata_builder, "{sv}",
+                                   "rpmostree.packages",
+                                   g_variant_new_strv (p, -1));
+          }
+
         /* be nice to our future selves */
         g_variant_builder_add (&metadata_builder, "{sv}",
                                "rpmostree.clientlayer_version",
-                               g_variant_new_uint32 (0));
+                               g_variant_new_uint32 (1));
       }
+    else if (assemble_type == RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE)
+      {
+        g_autoptr(GVariant) spec_v =
+          g_variant_ref_sink (rpmostree_treespec_to_variant (self->spec));
+
+        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.spec",
+                              spec_v);
+
+        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.serverbase",
+                               g_variant_new_uint32 (1));
+      }
+    else
+      {
+        g_assert_not_reached ();
+      }
+
 
     state_checksum = rpmostree_context_get_state_sha512 (self);
 
