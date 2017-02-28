@@ -280,12 +280,12 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin)
                               (const char *const*)pkgv, g_strv_length (pkgv));
 
   if (g_hash_table_size (origin->cached_packages) > 0)
-  {
-    /* migrate to baserefspec model */
-    g_key_file_set_value (origin->kf, "origin", "baserefspec",
-                          origin->cached_refspec);
-    g_key_file_remove_key (origin->kf, "origin", "refspec", NULL);
-  }
+    {
+      /* migrate to baserefspec model */
+      g_key_file_set_value (origin->kf, "origin", "baserefspec",
+                            origin->cached_refspec);
+      g_key_file_remove_key (origin->kf, "origin", "refspec", NULL);
+    }
 }
 
 gboolean
