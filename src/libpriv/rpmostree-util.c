@@ -604,6 +604,7 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
   const char *csum = ostree_deployment_get_csum (deployment);
   gboolean is_layered = FALSE;
   g_autofree char *base_layer = NULL;
+  guint clientlayer_version = 0;
 
   if (!ostree_repo_load_commit (repo, csum, &commit, NULL, error))
     return FALSE;
@@ -617,6 +618,9 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
   if (!g_variant_dict_lookup (dict, "rpmostree.clientlayer", "b", &is_layered))
     is_layered = g_variant_dict_contains (dict, "rpmostree.spec");
 
+  g_variant_dict_lookup (dict, "rpmostree.clientlayer_version", "u",
+                         &clientlayer_version);
+
   /* only fetch base if we have to */
   if (is_layered && out_base_layer != NULL)
     {
@@ -627,18 +631,29 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
   /* only fetch the pkgs if we have to */
   if (is_layered && out_layered_pkgs != NULL)
     {
-      g_autoptr(GVariant) treespec_v = NULL;
-      g_autoptr(GVariantDict) treespec = NULL;
+      /* starting from v1, we no longer embed a treespec in client layers */
+      if (clientlayer_version > 0)
+        {
+          g_assert (g_variant_dict_lookup (dict, "rpmostree.packages", "^as",
+                                           &layered_pkgs));
+        }
+      else
+        {
+          g_autoptr(GVariant) treespec_v = NULL;
+          g_autoptr(GVariantDict) treespec = NULL;
 
-       /* there should always be a treespec */
-      treespec_v = g_variant_dict_lookup_value (dict, "rpmostree.spec",
-                                                G_VARIANT_TYPE ("a{sv}"));
-      g_assert (treespec_v);
+          g_assert (g_variant_dict_contains (dict, "rpmostree.spec"));
 
-      /* there should always be a packages entry, even if empty */
-      treespec = g_variant_dict_new (treespec_v);
-      g_assert (g_variant_dict_lookup (treespec, "packages", "^as",
-                                       &layered_pkgs));
+           /* there should always be a treespec */
+          treespec_v = g_variant_dict_lookup_value (dict, "rpmostree.spec",
+                                                    G_VARIANT_TYPE ("a{sv}"));
+          g_assert (treespec_v);
+
+          /* there should always be a packages entry, even if empty */
+          treespec = g_variant_dict_new (treespec_v);
+          g_assert (g_variant_dict_lookup (treespec, "packages", "^as",
+                                           &layered_pkgs));
+        }
     }
 
   if (out_is_layered != NULL)
