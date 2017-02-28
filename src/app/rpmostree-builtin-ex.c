@@ -25,6 +25,8 @@
 #include "rpmostree-rpm-util.h"
 
 static RpmOstreeCommand ex_subcommands[] = {
+  { "livefs", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_ex_builtin_livefs },
   { "unpack", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     rpmostree_ex_builtin_unpack },
   { "container", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,

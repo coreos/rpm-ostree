@@ -21,6 +21,8 @@
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostree-origin.h"
 #include "rpmostree-util.h"
+#include "rpmostree-sysroot-core.h"
+#include "rpmostreed-utils.h"
 
 #include <libglnx.h>
 
@@ -179,6 +181,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   gint serial = ostree_deployment_get_deployserial (deployment);
   gboolean gpg_enabled = FALSE;
   gboolean is_layered = FALSE;
+  g_autofree char *live_inprogress = NULL;
+  g_autofree char *live_replaced = NULL;
   g_auto(GStrv) layered_pkgs = NULL;
 
   if (!ostree_repo_load_variant (repo,
@@ -247,6 +251,16 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
       g_variant_dict_insert (&dict, "pending-base-checksum", "s", pending_base_commitrev);
       variant_add_commit_details (&dict, "pending-base-", pending_base_commit);
     }
+
+  if (!rpmostree_syscore_deployment_get_live (sysroot, deployment, -1,
+                                              &live_inprogress, &live_replaced,
+                                              error))
+    return NULL;
+
+  if (live_inprogress)
+    g_variant_dict_insert (&dict, "live-inprogress", "s", live_inprogress);
+  if (live_replaced)
+    g_variant_dict_insert (&dict, "live-replaced", "s", live_replaced);
 
   g_variant_dict_insert (&dict, "origin", "s", refspec);
 

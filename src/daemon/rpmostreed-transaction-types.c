@@ -28,6 +28,7 @@
 #include "rpmostree-sysroot-upgrader.h"
 #include "rpmostree-sysroot-core.h"
 #include "rpmostree-util.h"
+#include "rpmostree-output.h"
 #include "rpmostree-core.h"
 #include "rpmostree-unpacker.h"
 #include "rpmostreed-utils.h"
@@ -982,6 +983,7 @@ cleanup_transaction_execute (RpmostreedTransaction *transaction,
         rpmostree_syscore_filter_deployments (sysroot, self->osname,
                                               cleanup_pending,
                                               cleanup_rollback);
+
       if (new_deployments)
         {
           OstreeSysrootWriteDeploymentsOpts write_opts = { .do_postclean = FALSE };

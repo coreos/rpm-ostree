@@ -72,6 +72,11 @@ rpmostree_origin_get_initramfs_args (RpmOstreeOrigin *origin);
 const char *
 rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin);
 
+void
+rpmostree_origin_get_live_state (RpmOstreeOrigin *origin,
+                                 char           **out_inprogress,
+                                 char           **out_live);
+
 char *
 rpmostree_origin_get_string (RpmOstreeOrigin *origin,
                              const char *section,
@@ -107,3 +112,8 @@ rpmostree_origin_delete_packages (RpmOstreeOrigin  *origin,
                                   char            **packages,
                                   GCancellable     *cancellable,
                                   GError          **error);
+
+void
+rpmostree_origin_set_live_state (RpmOstreeOrigin *origin,
+                                 const char      *inprogress,
+                                 const char      *live);

@@ -156,6 +156,17 @@ rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
   return origin->cached_unconfigured_state;
 }
 
+void
+rpmostree_origin_get_live_state (RpmOstreeOrigin *origin,
+                                 char           **out_inprogress,
+                                 char           **out_live)
+{
+  if (out_inprogress)
+    *out_inprogress = g_key_file_get_string (origin->kf, "rpmostree-ex-live", "inprogress", NULL);
+  if (out_live)
+    *out_live = g_key_file_get_string (origin->kf, "rpmostree-ex-live", "commit", NULL);
+}
+
 GKeyFile *
 rpmostree_origin_dup_keyfile (RpmOstreeOrigin *origin)
 {
@@ -289,6 +300,33 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
   origin->cached_refspec = g_strdup (new_refspec);
 
   return TRUE;
+}
+
+/* Like g_key_file_set_string(), but remove the key if @value is NULL */
+static void
+set_or_unset_str (GKeyFile *kf,
+                  const char *group,
+                  const char *key,
+                  const char *value)
+{
+  if (!value)
+    (void) g_key_file_remove_key (kf, group, key, NULL);
+  else
+    (void) g_key_file_set_string (kf, group, key, value);
+}
+
+void
+rpmostree_origin_set_live_state (RpmOstreeOrigin *origin,
+                                 const char      *inprogress,
+                                 const char      *live)
+{
+  if (!inprogress && !live)
+    (void) g_key_file_remove_group (origin->kf, "rpmostree-ex-live", NULL);
+  else
+    {
+      set_or_unset_str (origin->kf, "rpmostree-ex-live", "inprogress", inprogress);
+      set_or_unset_str (origin->kf, "rpmostree-ex-live", "commit", live);
+    }
 }
 
 static void

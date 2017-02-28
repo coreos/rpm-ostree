@@ -26,6 +26,7 @@
 #include "rpmostree-util.h"
 
 #include "rpmostree-sysroot-upgrader.h"
+#include "rpmostree-sysroot-core.h"
 #include "rpmostree-core.h"
 #include "rpmostree-origin.h"
 #include "rpmostree-kernel.h"
@@ -333,7 +334,8 @@ GPtrArray *
 rpmostree_syscore_add_deployment (OstreeSysroot      *sysroot,
                                   OstreeDeployment   *new_deployment,
                                   OstreeDeployment   *merge_deployment,
-                                  gboolean            pushing_rollback)
+                                  gboolean            pushing_rollback,
+                                  GError            **error)
 {
   OstreeDeployment *booted_deployment = NULL;
   g_autoptr(GPtrArray) deployments = NULL;
@@ -343,6 +345,7 @@ rpmostree_syscore_add_deployment (OstreeSysroot      *sysroot,
   gboolean added_new = FALSE;
   /* Keep track of whether we're looking at a deployment before or after the booted */
   gboolean before_booted = TRUE;
+  gboolean booted_is_live = FALSE;
 
   deployments = ostree_sysroot_get_deployments (sysroot);
   booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
@@ -363,14 +366,23 @@ rpmostree_syscore_add_deployment (OstreeSysroot      *sysroot,
       const gboolean is_last = (i == (deployments->len - 1));
 
       if (is_booted)
-        before_booted = FALSE;
+        {
+          before_booted = FALSE;
+          if (!rpmostree_syscore_deployment_is_live (sysroot, deployment, -1,
+                                                     &booted_is_live, error))
+            return NULL;
+        }
 
       /* Retain deployment if:
        *   - The deployment is for another osname
        *   - We're pushing a rollback and this is a pending deployment
        *   - It's the merge or booted deployment
+       *   - The booted deployment is live, this is a rollback
        */
-      if (!osname_matches || (pushing_rollback && before_booted) || is_merge_or_booted)
+      if (!osname_matches
+          || (pushing_rollback && before_booted)
+          || is_merge_or_booted
+          || (!before_booted && booted_is_live))
         g_ptr_array_add (new_deployments, g_object_ref (deployment));
 
       /* Insert new rollback right after the booted */
@@ -508,5 +520,43 @@ rpmostree_syscore_write_deployments (OstreeSysroot           *sysroot,
   if (!rpmostree_syscore_cleanup (sysroot, repo, cancellable, error))
     return FALSE;
 
+  return TRUE;
+}
+
+/* Load the checksums that describe the "livefs" state of the given
+ * deployment.
+ */
+gboolean
+rpmostree_syscore_deployment_get_live (OstreeSysroot    *sysroot,
+                                       OstreeDeployment *deployment,
+                                       int               deployment_dfd,
+                                       char            **out_inprogress_checksum,
+                                       char            **out_livereplaced_checksum,
+                                       GError          **error)
+{
+  g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
+  if (!origin)
+    return FALSE;
+  rpmostree_origin_get_live_state (origin, out_inprogress_checksum, out_livereplaced_checksum);
+  return TRUE;
+}
+
+/* Set @out_is_live to %TRUE if the deployment is live-modified */
+gboolean
+rpmostree_syscore_deployment_is_live (OstreeSysroot    *sysroot,
+                                      OstreeDeployment *deployment,
+                                      int               deployment_dfd,
+                                      gboolean         *out_is_live,
+                                      GError          **error)
+{
+  g_autofree char *inprogress_checksum = NULL;
+  g_autofree char *livereplaced_checksum = NULL;
+
+  if (!rpmostree_syscore_deployment_get_live (sysroot, deployment, deployment_dfd,
+                                              &inprogress_checksum, &livereplaced_checksum,
+                                              error))
+    return FALSE;
+
+  *out_is_live = (inprogress_checksum != NULL || livereplaced_checksum != NULL);
   return TRUE;
 }

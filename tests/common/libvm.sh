@@ -59,6 +59,16 @@ vm_cmd() {
   $SSH "$@"
 }
 
+# Copy argument (usually shell script) to VM, execute it there
+vm_cmdfile() {
+    bin=$1
+    chmod a+x ${bin}
+    bn=$(basename ${bin})
+    $SCP $1 $VM:/root/${bn}
+    $SSH /root/${bn}
+}
+
+
 # Delete anything which we might change between runs
 vm_clean_caches() {
     vm_cmd rm /ostree/repo/extensions/rpmostree/pkgcache/refs/heads/* -rf

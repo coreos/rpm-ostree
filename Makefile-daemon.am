@@ -44,6 +44,7 @@ librpmostreed_la_SOURCES = \
 	src/daemon/rpmostreed-transaction-monitor.c \
 	src/daemon/rpmostreed-transaction-types.h \
 	src/daemon/rpmostreed-transaction-types.c \
+	src/daemon/rpmostreed-transaction-livefs.c \
 	src/daemon/rpmostree-package-variants.h \
 	src/daemon/rpmostree-package-variants.c \
 	src/daemon/rpmostreed-os.h \
@@ -56,6 +57,7 @@ librpmostreed_la_CFLAGS = \
 	$(AM_CFLAGS) \
 	$(PKGDEP_RPMOSTREE_CFLAGS) \
 	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
+	-D_RPMOSTREE_EXTERN= \
 	-I$(srcdir)/src/daemon \
 	-I$(srcdir)/src/lib \
 	-I$(srcdir)/src/libpriv \

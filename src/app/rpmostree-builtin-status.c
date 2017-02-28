@@ -153,6 +153,29 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
   const char *red_suffix = is_tty ? "\x1b[22m" : "";
   GVariant* txn = get_active_txn (sysroot_proxy);
 
+  /* First, gather global state */
+  gboolean have_any_live_overlay = FALSE;
+  g_variant_iter_init (&iter, deployments);
+  while (TRUE)
+    {
+      g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
+
+      if (!child)
+        break;
+
+      g_autoptr(GVariantDict) dict = g_variant_dict_new (child);
+
+      const gchar *live_inprogress;
+      if (!g_variant_dict_lookup (dict, "live-inprogress", "&s", &live_inprogress))
+        live_inprogress = NULL;
+      const gchar *live_replaced;
+      if (!g_variant_dict_lookup (dict, "live-replaced", "&s", &live_replaced))
+        live_replaced = NULL;
+      const gboolean have_live_changes = live_inprogress || live_replaced;
+
+      have_any_live_overlay = have_any_live_overlay || have_live_changes;
+    }
+
   if (txn)
     {
       const char *method, *sender, *path;
@@ -179,13 +202,16 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       const gchar *checksum;
       const gchar *version_string;
       const gchar *unlocked;
+      const gchar *live_inprogress;
+      const gchar *live_replaced;
       gboolean gpg_enabled;
       gboolean regenerate_initramfs;
       guint64 t = 0;
       int serial;
       gboolean is_booted;
       const gboolean was_first = first;
-      const guint max_key_len = strlen ("PendingBaseVersion");
+      /* Add the long keys here */
+      const guint max_key_len = MAX (strlen ("PendingBaseVersion"), strlen ("InterruptedLiveCommit"));
       g_autoptr(GVariant) signatures = NULL;
       g_autofree char *timestamp_string = NULL;
 
@@ -267,10 +293,45 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
           print_kv ("Timestamp", max_key_len, timestamp_string);
         }
 
+      if (!g_variant_dict_lookup (dict, "live-inprogress", "&s", &live_inprogress))
+        live_inprogress = NULL;
+      if (!g_variant_dict_lookup (dict, "live-replaced", "&s", &live_replaced))
+        live_replaced = NULL;
+      const gboolean have_live_changes = live_inprogress || live_replaced;
+
       if (is_locally_assembled)
-        print_kv ("BaseCommit", max_key_len, base_checksum);
-      if (opt_verbose || !is_locally_assembled)
-        print_kv ("Commit", max_key_len, checksum);
+        {
+          if (have_live_changes)
+            print_kv ("BootedBaseCommit", max_key_len, base_checksum);
+          else
+            print_kv ("BaseCommit", max_key_len, base_checksum);
+          if (opt_verbose || have_any_live_overlay)
+            print_kv ("Commit", max_key_len, checksum);
+        }
+      else
+        {
+          if (have_live_changes)
+            print_kv ("BootedCommit", max_key_len, checksum);
+          if (!have_live_changes || opt_verbose)
+            print_kv ("Commit", max_key_len, checksum);
+        }
+
+      if (live_inprogress)
+        {
+          if (is_booted)
+            g_print ("%s%s", red_prefix, bold_prefix);
+          print_kv ("InterruptedLiveCommit", max_key_len, live_inprogress);
+          if (is_booted)
+            g_print ("%s%s", bold_suffix, red_suffix);
+        }
+      if (live_replaced)
+        {
+          if (is_booted)
+            g_print ("%s%s", red_prefix, bold_prefix);
+          print_kv ("LiveCommit", max_key_len, live_replaced);
+          if (is_booted)
+            g_print ("%s%s", bold_suffix, red_suffix);
+        }
 
       /* Show any difference between the baseref vs head, but only for the
          booted commit, and only if there isn't a pending deployment. Otherwise
