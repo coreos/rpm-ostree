@@ -26,7 +26,14 @@
 
 G_BEGIN_DECLS
 
-gboolean rpmostree_ex_builtin_unpack (int argc, char **argv, RpmOstreeCommandInvocation *invocation, GCancellable *cancellable, GError **error);
+#define BUILTINPROTO(name) gboolean rpmostree_ex_builtin_ ## name (int argc, char **argv, \
+                                                                   RpmOstreeCommandInvocation *invocation, \
+                                                                   GCancellable *cancellable, GError **error)
+
+BUILTINPROTO(unpack);
+BUILTINPROTO(livefs);
+
+#undef BUILTINPROTO
 
 G_END_DECLS
 

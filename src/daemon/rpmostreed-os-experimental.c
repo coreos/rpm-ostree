@@ -57,6 +57,23 @@ G_DEFINE_TYPE_WITH_CODE (RpmostreedOSExperimental,
                                                 rpmostreed_osexperimental_iface_init)
                          );
 
+static RpmostreedTransaction *
+merge_compatible_txn (RpmostreedOSExperimental *self,
+                      GDBusMethodInvocation *invocation)
+{
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+
+  /* If a compatible transaction is in progress, share its bus address. */
+  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
+  if (transaction != NULL)
+    {
+      if (rpmostreed_transaction_is_compatible (transaction, invocation))
+        return g_steal_pointer (&transaction);
+    }
+
+  return NULL;
+}
+
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
@@ -119,11 +136,76 @@ osexperimental_handle_moo (RPMOSTreeOSExperimental *interface,
   rpmostree_osexperimental_complete_moo (interface, invocation, result);
   return TRUE;
 }
+static RpmOstreeTransactionLiveFsFlags
+livefs_flags_from_options (GVariant *options)
+{
+  RpmOstreeTransactionLiveFsFlags ret = 0;
+  GVariantDict options_dict;
+  gboolean opt = FALSE;
+
+  g_variant_dict_init (&options_dict, options);
+  if (g_variant_dict_lookup (&options_dict, "dry-run", "b", &opt) && opt)
+    ret |= RPMOSTREE_TRANSACTION_LIVEFS_FLAG_DRY_RUN;
+  if (g_variant_dict_lookup (&options_dict, "replace", "b", &opt) && opt)
+    ret |= RPMOSTREE_TRANSACTION_LIVEFS_FLAG_REPLACE;
+
+  g_variant_dict_clear (&options_dict);
+
+  return ret;
+}
+
+static gboolean
+osexperimental_handle_live_fs (RPMOSTreeOSExperimental *interface,
+                               GDBusMethodInvocation *invocation,
+                               GVariant *arg_options)
+{
+  RpmostreedOSExperimental *self = RPMOSTREED_OSEXPERIMENTAL (interface);
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
+  GError *local_error = NULL;
+
+  transaction = merge_compatible_txn (self, invocation);
+  if (transaction)
+    goto out;
+
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
+    goto out;
+
+  transaction = rpmostreed_transaction_new_livefs (invocation,
+                                                   ot_sysroot,
+                                                   livefs_flags_from_options (arg_options),
+                                                   cancellable,
+                                                   &local_error);
+  if (transaction == NULL)
+    goto out;
+
+  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+
+out:
+  if (local_error != NULL)
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address;
+      client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_osexperimental_complete_live_fs (interface, invocation, client_address);
+    }
+
+  return TRUE;
+}
 
 static void
 rpmostreed_osexperimental_iface_init (RPMOSTreeOSExperimentalIface *iface)
 {
   iface->handle_moo = osexperimental_handle_moo;
+  iface->handle_live_fs = osexperimental_handle_live_fs;
 }
 
 /* ---------------------------------------------------------------------------------------------------- */

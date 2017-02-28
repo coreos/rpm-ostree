@@ -94,3 +94,15 @@ rpmostreed_transaction_new_cleanup       (GDBusMethodInvocation *invocation,
                                           RpmOstreeTransactionCleanupFlags flags,
                                           GCancellable          *cancellable,
                                           GError               **error);
+
+typedef enum {
+  RPMOSTREE_TRANSACTION_LIVEFS_FLAG_DRY_RUN = (1 << 0),
+  RPMOSTREE_TRANSACTION_LIVEFS_FLAG_REPLACE = (1 << 1),
+} RpmOstreeTransactionLiveFsFlags;
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_livefs (GDBusMethodInvocation *invocation,
+                                   OstreeSysroot         *sysroot,
+                                   RpmOstreeTransactionLiveFsFlags flags,
+                                   GCancellable          *cancellable,
+                                   GError               **error);

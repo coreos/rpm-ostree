@@ -21,6 +21,8 @@
 #include "rpmostreed-utils.h"
 #include "rpmostreed-errors.h"
 #include "libglnx.h"
+#include <systemd/sd-journal.h>
+#include <stdint.h>
 
 #include <libglnx.h>
 

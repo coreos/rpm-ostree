@@ -264,6 +264,11 @@
       <arg type="s" name="result" direction="out"/>
     </method>
 
+    <method name="LiveFs">
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="s" name="transaction_address" direction="out"/>
+    </method>
+
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.Transaction">

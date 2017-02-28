@@ -106,6 +106,11 @@ parse_origin_deployment (RpmOstreeSysrootUpgrader *self,
       return FALSE;
     }
 
+  /* A bit hacky; here we clean out the live state which is deployment specific.
+   * We don't expect users of the upgrader to want the live state.
+   */
+  rpmostree_origin_set_live_state (self->origin, NULL, NULL);
+
   return TRUE;
 }
 
@@ -910,7 +915,9 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   g_autoptr(GPtrArray) new_deployments =
     rpmostree_syscore_add_deployment (self->sysroot, new_deployment,
-                                      self->cfg_merge_deployment, FALSE);
+                                      self->cfg_merge_deployment, FALSE, error);
+  if (!new_deployments)
+    return FALSE;
   if (!rpmostree_syscore_write_deployments (self->sysroot, self->repo, new_deployments,
                                             cancellable, error))
     return FALSE;

@@ -37,10 +37,29 @@ OstreeDeployment *rpmostree_syscore_get_origin_merge_deployment (OstreeSysroot *
 
 gboolean rpmostree_syscore_bump_mtime (OstreeSysroot *self, GError **error);
 
+
+
+#define RPMOSTREE_LIVE_INPROGRESS_XATTR "user.rpmostree-live-inprogress"
+#define RPMOSTREE_LIVE_REPLACED_XATTR "user.rpmostree-live-replaced"
+
+gboolean rpmostree_syscore_deployment_get_live (OstreeSysroot   *sysroot,
+                                                OstreeDeployment *deployment,
+                                                int               deployment_dfd,
+                                                char            **out_inprogress_checksum,
+                                                char            **out_livereplaced_checksum,
+                                                GError          **error);
+
+gboolean rpmostree_syscore_deployment_is_live (OstreeSysroot   *sysroot,
+                                               OstreeDeployment *deployment,
+                                               int               deployment_dfd,
+                                               gboolean         *out_is_live,
+                                               GError          **error);
+
 GPtrArray *rpmostree_syscore_add_deployment (OstreeSysroot      *sysroot,
                                              OstreeDeployment   *new_deployment,
                                              OstreeDeployment   *merge_deployment,
-                                             gboolean            pushing_rollback);
+                                             gboolean            pushing_rollback,
+                                             GError            **error);
 
 void rpmostree_syscore_query_deployments (OstreeSysroot      *sysroot,
                                           const char         *osname,
