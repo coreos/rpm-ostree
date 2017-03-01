@@ -2483,10 +2483,6 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
                               spec_v);
 
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.serverbase",
-                               g_variant_new_boolean (TRUE));
-
-        g_variant_builder_add (&metadata_builder, "{sv}",
-                               "rpmostree.serverbase_version",
                                g_variant_new_uint32 (1));
       }
     else
