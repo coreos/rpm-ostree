@@ -285,6 +285,7 @@ rpmostree_context_finalize (GObject *object)
       g_clear_pointer (&rctx->dummy_instroot_path, g_free);
     }
 
+  g_clear_object (&rctx->pkgcache_repo);
   g_clear_object (&rctx->ostreerepo);
 
   g_clear_object (&rctx->sepolicy);
