@@ -147,6 +147,8 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   }
 
   add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
+  add_canonicalized_string_array (&builder, "cached-packages", NULL, keyfile);
+
   /* We allow the "repo" key to be missing. This means that we rely on hif's
    * normal behaviour (i.e. look at repos in repodir with enabled=1). */
   { g_auto(GStrv) val = g_key_file_get_string_list (keyfile, "tree", "repos", NULL, NULL);
@@ -270,6 +272,9 @@ struct _RpmOstreeContext {
   char *dummy_instroot_path;
   OstreeSePolicy *sepolicy;
   char *passwd_dir;
+
+  char *metadata_dir_path;
+  int metadata_dir_fd;
 };
 
 G_DEFINE_TYPE (RpmOstreeContext, rpmostree_context, G_TYPE_OBJECT)
@@ -295,6 +300,17 @@ rpmostree_context_finalize (GObject *object)
 
   g_clear_pointer (&rctx->passwd_dir, g_free);
 
+  g_clear_pointer (&rctx->metadata_dir_path, g_free);
+
+  if (rctx->metadata_dir_path)
+    {
+      (void) glnx_shutil_rm_rf_at (AT_FDCWD, rctx->metadata_dir_path, NULL, NULL);
+      g_clear_pointer (&rctx->metadata_dir_path, g_free);
+    }
+
+  if (rctx->metadata_dir_fd != -1)
+    close (rctx->metadata_dir_fd);
+
   G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
 }
 
@@ -308,6 +324,7 @@ rpmostree_context_class_init (RpmOstreeContextClass *klass)
 static void
 rpmostree_context_init (RpmOstreeContext *self)
 {
+  self->metadata_dir_fd = -1;
 }
 
 static void
@@ -673,6 +690,225 @@ on_hifstate_percentage_changed (DnfState   *hifstate,
   rpmostree_output_percent_progress (text, percentage);
 }
 
+static gboolean
+get_commit_metadata_string (GVariant    *commit,
+                            const char  *key,
+                            char       **out_str,
+                            GError     **error)
+{
+  g_autoptr(GVariant) meta = g_variant_get_child_value (commit, 0);
+  g_autoptr(GVariantDict) meta_dict = g_variant_dict_new (meta);
+  g_autoptr(GVariant) str_variant = NULL;
+
+  str_variant =
+    _rpmostree_vardict_lookup_value_required (meta_dict, key,
+                                              G_VARIANT_TYPE_STRING, error);
+  if (!str_variant)
+    return FALSE;
+
+  g_assert (g_variant_is_of_type (str_variant, G_VARIANT_TYPE_STRING));
+  *out_str = g_strdup (g_variant_get_string (str_variant, NULL));
+  return TRUE;
+}
+
+static gboolean
+get_commit_sepolicy_csum (GVariant *commit,
+                          char    **out_csum,
+                          GError  **error)
+{
+  return get_commit_metadata_string (commit, "rpmostree.sepolicy",
+                                     out_csum, error);
+}
+
+static gboolean
+get_commit_header_sha256 (GVariant *commit,
+                          char    **out_csum,
+                          GError  **error)
+{
+  return get_commit_metadata_string (commit, "rpmostree.metadata_sha256",
+                                     out_csum, error);
+}
+
+static gboolean
+checkout_pkg_metadata (RpmOstreeContext *self,
+                       const char       *nevra,
+                       GVariant         *header,
+                       GCancellable     *cancellable,
+                       GError          **error)
+{
+  g_autofree char *path = NULL;
+  struct stat stbuf;
+
+  if (self->metadata_dir_path == NULL)
+    {
+      if (!rpmostree_mkdtemp ("/tmp/rpmostree-metadata-XXXXXX",
+                              &self->metadata_dir_path,
+                              &self->metadata_dir_fd,
+                              error))
+        return FALSE;
+    }
+
+  /* give it a .rpm extension so we can fool the libdnf stack */
+  path = g_strdup_printf ("%s.rpm", nevra);
+
+  /* we may have already written the header out for this one */
+  if (fstatat (self->metadata_dir_fd, path, &stbuf, 0) == 0)
+    return TRUE;
+
+  if (errno != ENOENT)
+    {
+      glnx_set_error_from_errno (error);
+      return FALSE;
+    }
+
+  return glnx_file_replace_contents_at (self->metadata_dir_fd, path,
+                                        g_variant_get_data (header),
+                                        g_variant_get_size (header),
+                                        GLNX_FILE_REPLACE_NODATASYNC,
+                                        cancellable, error);
+}
+
+static gboolean
+get_header_variant (OstreeRepo       *repo,
+                    const char       *cachebranch,
+                    GVariant        **out_header,
+                    GCancellable     *cancellable,
+                    GError          **error)
+{
+  g_autofree char *cached_rev = NULL;
+  g_autoptr(GVariant) pkg_commit = NULL;
+  g_autoptr(GVariant) pkg_meta = NULL;
+  g_autoptr(GVariantDict) pkg_meta_dict = NULL;
+  g_autoptr(GVariant) header = NULL;
+
+  if (!ostree_repo_resolve_rev (repo, cachebranch, FALSE,
+                                &cached_rev, error))
+    return FALSE;
+
+  if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
+                                 cached_rev, &pkg_commit, error))
+    return FALSE;
+
+  pkg_meta = g_variant_get_child_value (pkg_commit, 0);
+  pkg_meta_dict = g_variant_dict_new (pkg_meta);
+
+  header = _rpmostree_vardict_lookup_value_required (pkg_meta_dict,
+                                                     "rpmostree.metadata",
+                                                     (GVariantType*)"ay",
+                                                     error);
+  if (!header)
+    {
+      g_autofree char *nevra = rpmostree_cache_branch_to_nevra (cachebranch);
+      g_prefix_error (error, "In commit %s of %s: ", cached_rev, nevra);
+      return FALSE;
+    }
+
+  *out_header = g_steal_pointer (&header);
+  return TRUE;
+}
+
+static gboolean
+checkout_pkg_metadata_by_dnfpkg (RpmOstreeContext *self,
+                                 DnfPackage       *pkg,
+                                 GCancellable     *cancellable,
+                                 GError          **error)
+{
+  const char *nevra = dnf_package_get_nevra (pkg);
+  g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
+  OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
+  g_autoptr(GVariant) header = NULL;
+
+  if (!get_header_variant (pkgcache_repo, cachebranch, &header,
+                           cancellable, error))
+    return FALSE;
+
+  return checkout_pkg_metadata (self, nevra, header, cancellable, error);
+}
+
+gboolean
+rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
+                                    const char    *nevra,
+                                    const char    *expected_sha256,
+                                    GVariant     **out_header,
+                                    GCancellable  *cancellable,
+                                    GError       **error)
+{
+  g_autoptr(GVariant) header = NULL;
+  g_autoptr(GHashTable) refs = NULL;
+  GHashTableIter it;
+  gpointer k;
+
+  /* there's no safe way to convert a nevra string to its
+   * cache branch, so let's just do a dumb lookup */
+
+  if (!ostree_repo_list_refs_ext (pkgcache, "rpmostree/pkg", &refs,
+                                  OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable,
+                                  error))
+    return FALSE;
+
+  g_hash_table_iter_init (&it, refs);
+  while (g_hash_table_iter_next (&it, &k, NULL))
+    {
+      const char *ref = k;
+      g_autofree char *cache_nevra = rpmostree_cache_branch_to_nevra (ref);
+
+      if (!g_str_equal (nevra, cache_nevra))
+        continue;
+
+      if (expected_sha256 != NULL)
+        {
+          g_autofree char *commit_csum = NULL;
+          g_autoptr(GVariant) commit = NULL;
+          g_autofree char *actual_sha256 = NULL;
+
+          if (!ostree_repo_resolve_rev (pkgcache, ref, TRUE,
+                                        &commit_csum, error))
+            return FALSE;
+
+          if (!ostree_repo_load_commit (pkgcache, commit_csum,
+                                        &commit, NULL, error))
+            return FALSE;
+
+          if (!get_commit_header_sha256 (commit, &actual_sha256, error))
+            return FALSE;
+
+          if (!g_str_equal (expected_sha256, actual_sha256))
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Checksum mismatch for package %s", nevra);
+              return FALSE;
+            }
+        }
+
+      if (!get_header_variant (pkgcache, ref, &header, cancellable, error))
+        return FALSE;
+
+      *out_header = g_steal_pointer (&header);
+      return TRUE;
+    }
+
+  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+               "Failed to find cached pkg for %s", nevra);
+  return FALSE;
+}
+
+static gboolean
+checkout_pkg_metadata_by_nevra (RpmOstreeContext *self,
+                                const char       *nevra,
+                                const char       *sha256,
+                                GCancellable     *cancellable,
+                                GError          **error)
+{
+  g_autoptr(GVariant) header = NULL;
+
+  if (!rpmostree_pkgcache_find_pkg_header (self->pkgcache_repo, nevra, sha256,
+                                           &header, cancellable, error))
+    return FALSE;
+
+  return checkout_pkg_metadata (self, nevra, header,
+                                cancellable, error);
+}
+
 gboolean
 rpmostree_context_download_metadata (RpmOstreeContext *self,
                                      GCancellable     *cancellable,
@@ -771,34 +1007,9 @@ rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
 static gboolean
 pkg_is_local (DnfPackage *pkg)
 {
-  DnfRepo *src = dnf_package_get_repo (pkg);
-  return (dnf_repo_is_local (src) || 
-          g_strcmp0 (dnf_package_get_reponame (pkg), HY_CMDLINE_REPO_NAME) == 0);
-}
-
-static gboolean
-get_commit_sepolicy_csum (GVariant *commit,
-                          char    **out_csum,
-                          GError  **error)
-{
-  gboolean ret = FALSE;
-  g_autoptr(GVariant) meta = g_variant_get_child_value (commit, 0);
-  g_autoptr(GVariantDict) meta_dict = g_variant_dict_new (meta);
-  g_autoptr(GVariant) sepolicy_csum_variant = NULL;
-
-  sepolicy_csum_variant =
-    _rpmostree_vardict_lookup_value_required (meta_dict, "rpmostree.sepolicy",
-                                              (GVariantType*)"s", error);
-  if (!sepolicy_csum_variant)
-    goto out;
-
-  g_assert (g_variant_is_of_type (sepolicy_csum_variant,
-                                  G_VARIANT_TYPE_STRING));
-  *out_csum = g_strdup (g_variant_get_string (sepolicy_csum_variant, NULL));
-
-  ret = TRUE;
-out:
-  return ret;
+  const char *reponame = dnf_package_get_reponame (pkg);
+  return (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) == 0 ||
+          dnf_repo_is_local (dnf_package_get_repo (pkg)));
 }
 
 static gboolean
@@ -902,31 +1113,31 @@ sort_packages (DnfContext       *hifctx,
     = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
 
   packages = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
-                                    DNF_PACKAGE_INFO_INSTALL,
-                                    DNF_PACKAGE_INFO_REINSTALL,
-                                    DNF_PACKAGE_INFO_DOWNGRADE,
-                                    DNF_PACKAGE_INFO_UPDATE,
-                                    -1);
+                                    DNF_PACKAGE_INFO_INSTALL, -1);
 
   for (guint i = 0; i < packages->len; i++)
     {
       DnfPackage *pkg = packages->pdata[i];
-      DnfRepo *src = NULL;
+      const char *reponame = dnf_package_get_reponame (pkg);
+      gboolean is_locally_cached =
+        (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) == 0);
 
-      /* Hackily look up the source...we need a hash table */
-      for (guint j = 0; j < sources->len; j++)
+      /* make sure all the non-cached pkgs have their repos set */
+      if (!is_locally_cached)
         {
-          DnfRepo *tmpsrc = sources->pdata[j];
-          if (g_strcmp0 (dnf_package_get_reponame (pkg),
-                         dnf_repo_get_id (tmpsrc)) == 0)
-            {
-              src = tmpsrc;
-              break;
-            }
-        }
+          DnfRepo *src = NULL;
 
-      g_assert (src);
-      dnf_package_set_repo (pkg, src);
+          /* Hackily look up the source...we need a hash table */
+          for (guint j = 0; j < sources->len && !src; j++)
+            {
+              DnfRepo *tmpsrc = sources->pdata[j];
+              if (g_strcmp0 (reponame, dnf_repo_get_id (tmpsrc)) == 0)
+                src = tmpsrc;
+            }
+
+          g_assert (src);
+          dnf_package_set_repo (pkg, src);
+        }
 
       /* NB: We're assuming here that the presence of an ostree repo means that
        * the user intends to import the pkg vs e.g. installing it like during a
@@ -947,6 +1158,9 @@ sort_packages (DnfContext       *hifctx,
                                  &in_ostree, &selinux_match, error))
           goto out;
 
+        if (is_locally_cached)
+          g_assert (in_ostree);
+
         if (!in_ostree && !cached)
           g_ptr_array_add (install->packages_to_download, g_object_ref (pkg));
         if (!in_ostree)
@@ -961,6 +1175,84 @@ sort_packages (DnfContext       *hifctx,
   return ret;
 }
 
+static char *
+join_package_list (const char *prefix, char **pkgs, int len)
+{
+  GString *ret = g_string_new (prefix);
+
+  if (len < 0)
+    len = g_strv_length (pkgs);
+
+  gboolean first = TRUE;
+  for (guint i = 0; i < len; i++)
+    {
+      if (!first)
+        g_string_append (ret, ", ");
+      g_string_append (ret, pkgs[i]);
+      first = FALSE;
+    }
+
+  return g_string_free (ret, FALSE);
+}
+
+static gboolean
+check_goal_solution (HyGoal    goal,
+                     GError  **error)
+{
+  g_autoptr(GPtrArray) packages = NULL;
+
+  /* Now we need to make sure that none of the pkgs in the base are marked for
+   * removal. The issue is that marking a package for DNF_INSTALL could
+   * uninstall a base pkg if it's an update or obsoletes it. There doesn't seem
+   * to be a way to tell libsolv to never touch pkgs in the base layer, so we
+   * just inspect its solution in retrospect. libdnf has the concept of
+   * protected packages, but it still allows updating protected packages. */
+
+  packages = dnf_goal_get_packages (goal,
+                                    DNF_PACKAGE_INFO_REMOVE,
+                                    DNF_PACKAGE_INFO_OBSOLETE,
+                                    -1);
+  if (packages->len > 0)
+    {
+      g_autofree char *msg = join_package_list (
+          "The following base packages would be removed: ",
+          (char**)packages->pdata, packages->len);
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, msg);
+      return FALSE;
+    }
+
+  g_ptr_array_unref (packages);
+
+  packages = dnf_goal_get_packages (goal,
+                                    DNF_PACKAGE_INFO_REINSTALL,
+                                    DNF_PACKAGE_INFO_UPDATE,
+                                    DNF_PACKAGE_INFO_DOWNGRADE,
+                                    -1);
+  if (packages->len > 0)
+    {
+      g_autoptr(GHashTable) nevras = g_hash_table_new (g_str_hash, g_str_equal);
+      g_autofree char **keys = NULL;
+
+      for (guint i = 0; i < packages->len; i++)
+        {
+          DnfPackage *pkg = packages->pdata[i];
+          g_autoptr(GPtrArray) old =
+            hy_goal_list_obsoleted_by_package (goal, pkg);
+          for (guint j = 0; j < old->len; j++)
+            g_hash_table_add (nevras,
+                              (gpointer)dnf_package_get_nevra (old->pdata[j]));
+        }
+
+      keys = (char**)g_hash_table_get_keys_as_array (nevras, NULL);
+      g_autofree char *msg = join_package_list (
+          "The following base packages would be replaced: ", keys, -1);
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, msg);
+      return FALSE;
+    }
+
+  return TRUE;
+}
+
 gboolean
 rpmostree_context_prepare_install (RpmOstreeContext    *self,
                                    RpmOstreeInstall    **out_install,
@@ -970,12 +1262,48 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
   gboolean ret = FALSE;
   DnfContext *hifctx = self->hifctx;
   g_autofree char **pkgnames = NULL;
+  g_autofree char **cached_pkgnames = NULL;
+  DnfSack *sack = dnf_context_get_sack (hifctx);
+  HyGoal goal = dnf_context_get_goal (hifctx);
+
   g_autoptr(RpmOstreeInstall) ret_install = g_object_new (RPMOSTREE_TYPE_INSTALL, NULL);
 
   g_assert (g_variant_dict_lookup (self->spec->dict, "packages", "^a&s", &pkgnames));
+  g_assert (g_variant_dict_lookup (self->spec->dict, "cached-packages", "^a&s", &cached_pkgnames));
   g_assert (!self->empty);
 
   ret_install->packages_requested = g_ptr_array_new_with_free_func (g_free);
+
+  for (char **it = cached_pkgnames; it && *it; it++)
+    {
+      const char *nevra = *it;
+      DnfPackage *pkg = NULL;
+      g_autofree char *path = NULL;
+      g_autofree char *sha256 = NULL;
+
+      if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
+        goto out;
+
+      if (!checkout_pkg_metadata_by_nevra (self, nevra, sha256,
+                                           cancellable, error))
+        goto out;
+
+      /* This is the great lie: we make libdnf et al. think that they're
+       * dealing with a full RPM, all while crossing our fingers that they
+       * don't try to look past the header. Ideally, it would be best if
+       * libdnf could learn to treat the pkgcache repo as another DnfRepo.
+       * */
+      path = g_strdup_printf ("%s/%s.rpm", self->metadata_dir_path, nevra);
+      pkg = dnf_sack_add_cmdline_package (sack, path);
+      if (!pkg)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Failed to add local pkg %s to sack", nevra);
+          goto out;
+        }
+
+      hy_goal_install (goal, pkg);
+    }
 
   { const char *const*strviter = (const char *const*)pkgnames;
     for (; strviter && *strviter; strviter++)
@@ -989,7 +1317,8 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
 
   rpmostree_output_task_begin ("Resolving dependencies");
 
-  if (!dnf_goal_depsolve (dnf_context_get_goal (hifctx), DNF_INSTALL, error))
+  if (!dnf_goal_depsolve (goal, DNF_INSTALL, error) ||
+      !check_goal_solution (goal, error))
     {
       g_print ("failed\n");
       goto out;
@@ -1014,10 +1343,14 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
  *
  * This can be used to efficiently see if the goal has changed from a
  * previous one.
+ *
+ * It can also handle goals in which only dummy header-only pkgs are
+ * available. In such cases, it uses the ostree checksum of the pkg
+ * instead.
  */
 void
-rpmostree_dnf_add_checksum_goal (GChecksum *checksum,
-                                 HyGoal     goal)
+rpmostree_dnf_add_checksum_goal (GChecksum   *checksum,
+                                 HyGoal       goal)
 {
   g_autoptr(GPtrArray) pkglist = NULL;
   guint i;
@@ -1032,13 +1365,13 @@ rpmostree_dnf_add_checksum_goal (GChecksum *checksum,
       const unsigned char *pkg_checksum_bytes = dnf_package_get_chksum (pkg, &pkg_checksum_type);
       g_autofree char *pkg_checksum = hy_chksum_str (pkg_checksum_bytes, pkg_checksum_type);
       char *pkg_checksum_with_type = g_strconcat (hy_chksum_name (pkg_checksum_type), ":", pkg_checksum, NULL);
-      
+
       g_ptr_array_add (pkg_checksums, pkg_checksum_with_type);
     }
 
   g_ptr_array_sort (pkg_checksums, rpmostree_ptrarray_sort_compare_strings);
-    
-  for (i = 0; i < pkg_checksums->len; i++)
+
+  for (guint i = 0; i < pkg_checksums->len; i++)
     {
       const char *pkg_checksum = pkg_checksums->pdata[i];
       g_checksum_update (checksum, (guint8*)pkg_checksum, strlen (pkg_checksum));
@@ -1157,6 +1490,7 @@ import_one_package (RpmOstreeContext *self,
   glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
   g_autofree char *pkg_path;
   DnfRepo *pkg_repo;
+
   int flags = 0;
 
   pkg_repo = dnf_package_get_repo (pkg);
@@ -1752,8 +2086,11 @@ ts_callback (const void * h,
     case RPMCALLBACK_INST_OPEN_FILE:
       {
         DnfPackage *pkg = (void*)key;
-        const char *nevra = dnf_package_get_nevra (pkg);
-        g_autofree char *path = glnx_fdrel_abspath (tdata->tmp_metadata_dfd, nevra);
+        /* just bypass fdrel_abspath here since we know the dfd is not ATCWD and
+         * it saves us an allocation */
+        g_autofree char *path = g_strdup_printf ("/proc/self/fd/%d/%s.rpm",
+                                                 tdata->tmp_metadata_dfd,
+                                                 dnf_package_get_nevra (pkg));
         g_assert (tdata->current_trans_fd == NULL);
         tdata->current_trans_fd = Fopen (path, "r.ufdio");
         return tdata->current_trans_fd;
@@ -1773,15 +2110,14 @@ ts_callback (const void * h,
 
 static gboolean
 get_package_metainfo (int tmp_metadata_dfd,
-                      DnfPackage *pkg,
+                      const char *path,
                       Header *out_header,
                       rpmfi *out_fi,
                       GError **error)
 {
   glnx_fd_close int metadata_fd = -1;
-  const char *nevra = dnf_package_get_nevra (pkg);
 
-  if ((metadata_fd = openat (tmp_metadata_dfd, nevra, O_RDONLY | O_CLOEXEC)) < 0)
+  if ((metadata_fd = openat (tmp_metadata_dfd, path, O_RDONLY | O_CLOEXEC)) < 0)
     {
       glnx_set_error_from_errno (error);
       return FALSE;
@@ -1789,6 +2125,12 @@ get_package_metainfo (int tmp_metadata_dfd,
 
   return rpmostree_unpacker_read_metainfo (metadata_fd, out_header, NULL,
                                            out_fi, error);
+}
+
+static char *
+get_package_relpath (DnfPackage *pkg)
+{
+  return g_strdup_printf ("%s.rpm", dnf_package_get_nevra (pkg));
 }
 
 static gboolean
@@ -1801,9 +2143,10 @@ add_to_transaction (rpmts  ts,
                     GError **error)
 {
   _cleanup_rpmheader_ Header hdr = NULL;
+  g_autofree char *path = get_package_relpath (pkg);
   int r;
 
-  if (!get_package_metainfo (tmp_metadata_dfd, pkg, &hdr, NULL, error))
+  if (!get_package_metainfo (tmp_metadata_dfd, path, &hdr, NULL, error))
     return FALSE;
 
   if (!noscripts)
@@ -1835,8 +2178,9 @@ run_posttrans_sync (int tmp_metadata_dfd,
                     GError    **error)
 {
   _cleanup_rpmheader_ Header hdr = NULL;
+  g_autofree char *path = get_package_relpath (pkg);
 
-  if (!get_package_metainfo (tmp_metadata_dfd, pkg, &hdr, NULL, error))
+  if (!get_package_metainfo (tmp_metadata_dfd, path, &hdr, NULL, error))
     return FALSE;
 
   if (!rpmostree_posttrans_run_sync (pkg, hdr, ignore_scripts, rootfs_dfd,
@@ -1855,8 +2199,9 @@ run_pre_sync (int tmp_metadata_dfd,
               GError    **error)
 {
   _cleanup_rpmheader_ Header hdr = NULL;
+  g_autofree char *path = get_package_relpath (pkg);
 
-  if (!get_package_metainfo (tmp_metadata_dfd, pkg, &hdr, NULL, error))
+  if (!get_package_metainfo (tmp_metadata_dfd, path, &hdr, NULL, error))
     return FALSE;
 
   if (!rpmostree_pre_run_sync (pkg, hdr, ignore_scripts,
@@ -1877,8 +2222,9 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
 {
   int i;
   _cleanup_rpmfi_ rpmfi fi = NULL;
+  g_autofree char *path = get_package_relpath (pkg);
 
-  if (!get_package_metainfo (tmp_metadata_dfd, pkg, NULL, &fi, error))
+  if (!get_package_metainfo (tmp_metadata_dfd, path, NULL, &fi, error))
     return FALSE;
 
   while ((i = rpmfiNext (fi)) >= 0)
@@ -2031,13 +2377,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
     g_hash_table_new_full (NULL, NULL, (GDestroyNotify)g_object_unref, (GDestroyNotify)g_free);
   DnfPackage *filesystem_package = NULL;   /* It's special... */
   int r;
-  g_autofree char *tmp_metadata_dir_path = NULL;
-  glnx_fd_close int tmp_metadata_dfd = -1;
 
-  if (!rpmostree_mkdtemp ("/tmp/rpmostree-metadata-XXXXXX", &tmp_metadata_dir_path,
-                          &tmp_metadata_dfd, error))
-    goto out;
-  tdata.tmp_metadata_dfd = tmp_metadata_dfd;
 
   ordering_ts = rpmtsCreate ();
   rpmtsSetRootDir (ordering_ts, dnf_context_get_install_root (hifctx));
@@ -2074,9 +2414,6 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
         DnfPackage *pkg = package_list->pdata[i];
         g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
         g_autofree char *cached_rev = NULL;
-        g_autoptr(GVariant) pkg_commit = NULL;
-        g_autoptr(GVariant) header_variant = NULL;
-        const char *nevra = dnf_package_get_nevra (pkg);
         gboolean sepolicy_matches;
 
         if (!ostree_repo_resolve_rev (pkgcache_repo, cachebranch, FALSE,
@@ -2089,37 +2426,18 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                                self->sepolicy, &sepolicy_matches,
                                                error))
               goto out;
+
             /* We already did any relabeling/reimporting above */
             g_assert (sepolicy_matches);
           }
 
-        if (!ostree_repo_load_variant (pkgcache_repo, OSTREE_OBJECT_TYPE_COMMIT, cached_rev,
-                                       &pkg_commit, error))
+        if (!checkout_pkg_metadata_by_dnfpkg (self, pkg, cancellable, error))
           goto out;
 
-        { g_autoptr(GVariant) pkg_meta = g_variant_get_child_value (pkg_commit, 0);
-          g_autoptr(GVariantDict) pkg_meta_dict = g_variant_dict_new (pkg_meta);
-
-          header_variant = _rpmostree_vardict_lookup_value_required (pkg_meta_dict, "rpmostree.metadata",
-                                                                     (GVariantType*)"ay", error);
-          if (!header_variant)
-            {
-              g_prefix_error (error, "In commit %s of %s: ", cached_rev, dnf_package_get_package_id (pkg));
-              goto out;
-            }
-
-          if (!glnx_file_replace_contents_at (tmp_metadata_dfd, nevra,
-                                              g_variant_get_data (header_variant),
-                                              g_variant_get_size (header_variant),
-                                              GLNX_FILE_REPLACE_NODATASYNC,
-                                              cancellable, error))
-            goto out;
-
-          if (!add_to_transaction (ordering_ts, pkg, tmp_metadata_dfd, noscripts,
-                                   self->ignore_scripts,
-                                   cancellable, error))
-            goto out;
-        }
+        if (!add_to_transaction (ordering_ts, pkg, self->metadata_dir_fd,
+                                 noscripts, self->ignore_scripts,
+                                 cancellable, error))
+          goto out;
 
         g_hash_table_insert (pkg_to_ostree_commit, g_object_ref (pkg), g_steal_pointer (&cached_rev));
 
@@ -2256,7 +2574,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
           g_assert (pkg);
 
-          if (!run_pre_sync (tmp_metadata_dfd, tmprootfs_dfd, pkg,
+          if (!run_pre_sync (self->metadata_dir_fd, tmprootfs_dfd, pkg,
                              self->ignore_scripts,
                              cancellable, error))
             goto out;
@@ -2303,7 +2621,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
           g_assert (pkg);
 
-          if (!apply_rpmfi_overrides (tmp_metadata_dfd, tmprootfs_dfd,
+          if (!apply_rpmfi_overrides (self->metadata_dir_fd, tmprootfs_dfd,
                                       pkg, passwdents, groupents,
                                       cancellable, error))
             {
@@ -2312,7 +2630,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
               goto out;
             }
 
-          if (!run_posttrans_sync (tmp_metadata_dfd, tmprootfs_dfd, pkg,
+          if (!run_posttrans_sync (self->metadata_dir_fd, tmprootfs_dfd, pkg,
                                    self->ignore_scripts,
                                    cancellable, error))
             goto out;
@@ -2365,18 +2683,20 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
   rpmdb_ts = rpmtsCreate ();
   rpmtsSetVSFlags (rpmdb_ts, _RPMVSF_NOSIGNATURES | _RPMVSF_NODIGESTS);
   rpmtsSetFlags (rpmdb_ts, RPMTRANS_FLAG_JUSTDB);
+
+  tdata.tmp_metadata_dfd = self->metadata_dir_fd;
   rpmtsSetNotifyCallback (rpmdb_ts, ts_callback, &tdata);
 
-  { gpointer k,v;
+  { gpointer k;
     GHashTableIter hiter;
 
     g_hash_table_iter_init (&hiter, pkg_to_ostree_commit);
-    while (g_hash_table_iter_next (&hiter, &k, &v))
+    while (g_hash_table_iter_next (&hiter, &k, NULL))
       {
         DnfPackage *pkg = k;
 
         /* Set noscripts since we already validated them above */
-        if (!add_to_transaction (rpmdb_ts, pkg, tmp_metadata_dfd, TRUE, NULL,
+        if (!add_to_transaction (rpmdb_ts, pkg, self->metadata_dir_fd, TRUE, NULL,
                                  cancellable, error))
           goto out;
       }
@@ -2414,8 +2734,6 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
     rpmtsFree (ordering_ts);
   if (rpmdb_ts)
     rpmtsFree (rpmdb_ts);
-  if (tmp_metadata_dir_path)
-    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tmp_metadata_dir_path, cancellable, NULL);
   return ret;
 }
 
@@ -2503,7 +2821,6 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
       {
         g_assert_not_reached ();
       }
-
 
     state_checksum = rpmostree_context_get_state_sha512 (self);
 
