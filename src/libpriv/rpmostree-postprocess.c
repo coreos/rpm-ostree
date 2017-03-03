@@ -505,7 +505,7 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
     if (!ret_sepolicy)
       goto out;
   }
-    
+
   ret = TRUE;
   *out_sepolicy = g_steal_pointer (&ret_sepolicy);
  out:

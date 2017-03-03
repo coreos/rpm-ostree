@@ -74,3 +74,6 @@ rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *unpacker,
                                      char             **out_commit,
                                      GCancellable      *cancellable,
                                      GError           **error);
+
+const char *
+rpmostree_unpacker_get_header_sha256 (RpmOstreeUnpacker *self);

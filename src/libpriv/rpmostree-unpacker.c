@@ -61,6 +61,7 @@ struct RpmOstreeUnpacker
   GString *tmpfiles_d;
   RpmOstreeUnpackerFlags flags;
   DnfPackage *pkg;
+  char *hdr_sha256;
 
   char *ostree_branch;
 };
@@ -91,6 +92,8 @@ rpmostree_unpacker_finalize (GObject *object)
   g_free (self->ostree_branch);
 
   g_hash_table_unref (self->rpmfi_overrides);
+
+  g_free (self->hdr_sha256);
 
   G_OBJECT_CLASS (rpmostree_unpacker_parent_class)->finalize (object);
 }
@@ -457,6 +460,7 @@ build_metadata_variant (RpmOstreeUnpacker *self,
                         GCancellable      *cancellable,
                         GError           **error)
 {
+  g_autoptr(GChecksum) pkg_checksum = g_checksum_new (G_CHECKSUM_SHA256);
   g_auto(GVariantBuilder) metadata_builder;
   g_variant_builder_init (&metadata_builder, (GVariantType*)"a{sv}");
 
@@ -473,6 +477,17 @@ build_metadata_variant (RpmOstreeUnpacker *self,
     g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.metadata",
                            g_variant_new_from_bytes ((GVariantType*)"ay",
                                                      metadata, TRUE));
+
+    /* NB: the header also includes checksums for every entry in the (cut-off)
+     * archive, so there's no need to also bring that in */
+    g_checksum_update (pkg_checksum, g_bytes_get_data (metadata, NULL),
+                                     g_bytes_get_size (metadata));
+
+    self->hdr_sha256 = g_strdup (g_checksum_get_string (pkg_checksum));
+
+    g_variant_builder_add (&metadata_builder, "{sv}",
+                           "rpmostree.metadata_sha256",
+                           g_variant_new_string (self->hdr_sha256));
   }
 
   /* The current sepolicy that was used to label the unpacked files is important
@@ -486,11 +501,12 @@ build_metadata_variant (RpmOstreeUnpacker *self,
   /* let's be nice to our future selves just in case */
   g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.unpack_version",
                          g_variant_new_uint32 (1));
+
   /* Originally we just had unpack_version = 1, let's add a minor version for
    * compatible increments.
    */
   g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.unpack_minor_version",
-                         g_variant_new_uint32 (1));
+                         g_variant_new_uint32 (2));
 
   if (self->pkg)
     {
@@ -685,6 +701,7 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
   OstreeRepoImportArchiveOptions opts = { 0 };
   glnx_unref_object OstreeMutableTree *mtree = NULL;
   char *tmpdir = NULL;
+  guint64 buildtime = 0;
 
   GError *cb_error = NULL;
   cb_data fdata = { self, &cb_error };
@@ -763,9 +780,15 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
     goto out;
   g_variant_ref_sink (metadata);
 
-  if (!ostree_repo_write_commit (repo, NULL, "", "", metadata,
-                                 OSTREE_REPO_FILE (root), out_csum,
-                                 cancellable, error))
+  /* Use the build timestamp for the commit: this ensures that committing the
+   * same RPM always yields the same checksum, which is a useful property to
+   * have (barring changes in the unpacker, in which case we wouldn't want the
+   * same checksum anyway). */
+  buildtime = headerGetNumber (self->hdr, RPMTAG_BUILDTIME);
+
+  if (!ostree_repo_write_commit_with_time (repo, NULL, "", "", metadata,
+                                           OSTREE_REPO_FILE (root), buildtime,
+                                           out_csum, cancellable, error))
     goto out;
 
   ret = TRUE;
@@ -801,7 +824,8 @@ rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *self,
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
     goto out;
 
-  *out_csum = g_steal_pointer (&csum);
+  if (out_csum)
+    *out_csum = g_steal_pointer (&csum);
 
   ret = TRUE;
  out:
@@ -809,3 +833,8 @@ rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *self,
   return ret;
 }
 
+const char *
+rpmostree_unpacker_get_header_sha256 (RpmOstreeUnpacker *self)
+{
+  return self->hdr_sha256;
+}

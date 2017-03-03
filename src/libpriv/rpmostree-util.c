@@ -660,3 +660,69 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
 
   return TRUE;
 }
+
+gboolean
+rpmostree_decompose_sha256_nevra (const char **nevra, /* gets incremented */
+                                  char       **out_sha256,
+                                  GError     **error)
+{
+  const char *sha256_nevra = *nevra;
+  g_autofree char *sha256 = NULL;
+
+  if (strlen (sha256_nevra) < 66 || /* 64 + ":" + at least 1 char for nevra */
+      sha256_nevra[64] != ':')
+    return FALSE;
+
+  sha256 = g_strndup (sha256_nevra, 64);
+  if (!ostree_validate_checksum_string (sha256, error))
+    return FALSE;
+
+  *nevra += 65;
+  if (out_sha256)
+    *out_sha256 = g_steal_pointer (&sha256);
+
+  return TRUE;
+}
+
+/* translates cachebranch back to nevra */
+char *
+rpmostree_cache_branch_to_nevra (const char *cachebranch)
+{
+  GString *r = g_string_new ("");
+  const char *p;
+
+  g_assert (g_str_has_prefix (cachebranch, "rpmostree/pkg/"));
+  cachebranch += strlen ("rpmostree/pkg/");
+
+  for (p = cachebranch; *p; p++)
+    {
+      char c = *p;
+
+      if (c != '_')
+        {
+          if (c == '/')
+            g_string_append_c (r, '-');
+          else
+            g_string_append_c (r, c);
+          continue;
+        }
+
+      p++;
+      c = *p;
+
+      if (c == '_')
+        {
+          g_string_append_c (r, c);
+          continue;
+        }
+
+      if (!*p || !*(p+1))
+        break;
+
+      const char h[3] = { *p, *(p+1) };
+      g_string_append_c (r, g_ascii_strtoull (h, NULL, 16));
+      p++;
+    }
+
+  return g_string_free (r, FALSE);
+}

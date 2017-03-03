@@ -118,3 +118,11 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        char             **out_base_layer,
                                        char            ***out_layered_pkgs,
                                        GError           **error);
+
+gboolean
+rpmostree_decompose_sha256_nevra (const char **nevra,
+                                  char       **sha256,
+                                  GError     **error);
+
+char *
+rpmostree_cache_branch_to_nevra (const char *cachebranch);

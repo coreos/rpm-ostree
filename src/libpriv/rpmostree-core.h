@@ -84,6 +84,14 @@ char *rpmostree_context_get_state_sha512 (RpmOstreeContext *self);
 char *rpmostree_get_cache_branch_header (Header hdr);
 char *rpmostree_get_cache_branch_pkg (DnfPackage *pkg);
 
+gboolean
+rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
+                                    const char    *nevra,
+                                    const char    *expected_sha256,
+                                    GVariant     **out_header,
+                                    GCancellable  *cancellable,
+                                    GError       **error);
+
 gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
                                                GCancellable      *cancellable,
                                                GError           **error);
