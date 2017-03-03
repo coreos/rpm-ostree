@@ -137,7 +137,8 @@ rpmostree_builtin_pkg_add (int            argc,
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GPtrArray) packages_to_add = g_ptr_array_new ();
+  g_autoptr(GPtrArray) packages_to_add =
+    g_ptr_array_new_with_free_func (g_free);
 
   context = g_option_context_new ("PACKAGE [PACKAGE...] - Download and install layered RPM packages");
 
@@ -157,7 +158,37 @@ rpmostree_builtin_pkg_add (int            argc,
     }
 
   for (int i = 1; i < argc; i++)
-    g_ptr_array_add (packages_to_add, argv[i]);
+    {
+      const char *pkgspec = argv[i];
+      g_autofree char *abspath = NULL;
+
+      if (!g_str_has_suffix (pkgspec, ".rpm") || /* repo install */
+           g_str_has_prefix (pkgspec, "/"))      /* local install */
+        {
+          g_ptr_array_add (packages_to_add, g_strdup (pkgspec));
+          continue;
+        }
+
+      /* OK, it's a relative path, we need to check that it
+       * exists and canonicalize it for the daemon. */
+
+      if (access (pkgspec, R_OK) != 0)
+        {
+          glnx_set_prefix_error_from_errno (error,
+                                            "can't read package '%s': ",
+                                            pkgspec);
+          return EXIT_FAILURE;
+        }
+
+      abspath = realpath (pkgspec, NULL);
+      if (abspath == NULL)
+        {
+          glnx_set_prefix_error_from_errno (error, "%s", "realpath");
+          return EXIT_FAILURE;
+        }
+
+      g_ptr_array_add (packages_to_add, g_steal_pointer (&abspath));
+    }
   g_ptr_array_add (packages_to_add, NULL);
 
   return pkg_change (sysroot_proxy, (const char *const*)packages_to_add->pdata, NULL, cancellable, error);

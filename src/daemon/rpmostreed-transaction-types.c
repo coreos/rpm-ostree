@@ -28,6 +28,7 @@
 #include "rpmostree-sysroot-upgrader.h"
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
+#include "rpmostree-unpacker.h"
 #include "rpmostreed-utils.h"
 
 static gboolean
@@ -585,6 +586,61 @@ deploy_transaction_finalize (GObject *object)
 }
 
 static gboolean
+is_local_rpm_file (const char *pkgspec)
+{
+  g_assert (pkgspec);
+  return pkgspec[0] == '/' && g_str_has_suffix (pkgspec, ".rpm");
+}
+
+static gboolean
+import_local_rpm (OstreeRepo    *parent,
+                  const char    *rpm,
+                  char         **sha256_nevra,
+                  GCancellable  *cancellable,
+                  GError       **error)
+{
+  glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
+  glnx_unref_object OstreeSePolicy *policy = NULL;
+  glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
+  g_autofree char *nevra = NULL;
+
+  /* It might seem risky to rely on the cache as the source of truth for local
+   * RPMs. However, the core will never re-import the same NEVRA if it's already
+   * present. To be safe, we do also record the SHA-256 of the RPM header in the
+   * origin. We don't record the checksum of the branch itself, because it may
+   * need relabeling and that's OK.
+   * */
+
+  if (!rpmostree_get_pkgcache_repo (parent, &pkgcache_repo, cancellable, error))
+    return FALSE;
+
+  /* let's just use the current sepolicy -- we'll just relabel it if the new
+   * base turns out to have a different one */
+  {
+    glnx_unref_object GFile *root = g_file_new_for_path ("/");
+    policy = ostree_sepolicy_new (root, cancellable, error);
+    if (policy == NULL)
+      return FALSE;
+  }
+
+  unpacker = rpmostree_unpacker_new_at (AT_FDCWD, rpm, NULL,
+                                        RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION,
+                                        error);
+  if (unpacker == NULL)
+    return FALSE;
+
+  if (!rpmostree_unpacker_unpack_to_ostree (unpacker, pkgcache_repo, policy,
+                                            NULL, cancellable, error))
+    return FALSE;
+
+  nevra = rpmostree_unpacker_get_nevra (unpacker);
+  *sha256_nevra = g_strconcat (rpmostree_unpacker_get_header_sha256 (unpacker),
+                               ":", nevra, NULL);
+
+  return TRUE;
+}
+
+static gboolean
 deploy_transaction_execute (RpmostreedTransaction *transaction,
                             GCancellable *cancellable,
                             GError **error)
@@ -666,9 +722,46 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   if (self->packages_added)
     {
-      if (!rpmostree_origin_add_packages (origin, self->packages_added,
-                                          cancellable, error))
-        goto out;
+      g_autoptr(GHashTable) pkgs =
+        g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+      g_autoptr(GHashTable) local_pkgs =
+        g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
+      for (char **it = self->packages_added; it && *it; it++)
+        {
+          if (is_local_rpm_file (*it))
+            {
+              g_autofree char *sha256_nevra = NULL;
+
+              if (!import_local_rpm (repo, *it, &sha256_nevra,
+                                     cancellable, error))
+                goto out;
+
+              g_hash_table_add (local_pkgs, g_steal_pointer (&sha256_nevra));
+            }
+          else
+            {
+              g_hash_table_add (pkgs, g_strdup (*it));
+            }
+        }
+
+      if (g_hash_table_size (pkgs) > 0)
+        {
+          g_autofree char **keys =
+            (char **)g_hash_table_get_keys_as_array (pkgs, NULL);
+          if (!rpmostree_origin_add_packages (origin, keys, FALSE,
+                                              cancellable, error))
+            goto out;
+        }
+
+      if (g_hash_table_size (local_pkgs) > 0)
+        {
+          g_autofree char **keys =
+            (char**)g_hash_table_get_keys_as_array (local_pkgs, NULL);
+          if (!rpmostree_origin_add_packages (origin, keys, TRUE,
+                                              cancellable, error))
+            goto out;
+        }
 
       changed = TRUE;
     }

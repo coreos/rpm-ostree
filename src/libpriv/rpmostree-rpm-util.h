@@ -156,3 +156,13 @@ void _rpmostree_reset_rpm_sighandlers (void);
 
 GVariant *
 rpmostree_fcap_to_xattr_variant (const char *fcap);
+
+typedef enum {
+  PKG_NEVRA_FLAGS_NAME = (1 << 0),
+  PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE = (1 << 1),
+  PKG_NEVRA_FLAGS_VERSION_RELEASE = (1 << 2),
+  PKG_NEVRA_FLAGS_ARCH = (1 << 3)
+} RpmOstreePkgNevraFlags;
+
+char *
+rpmostree_pkg_custom_nevra_strdup (Header h, RpmOstreePkgNevraFlags flags);

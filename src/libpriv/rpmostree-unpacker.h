@@ -75,5 +75,8 @@ rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *unpacker,
                                      GCancellable      *cancellable,
                                      GError           **error);
 
+char *
+rpmostree_unpacker_get_nevra (RpmOstreeUnpacker *self);
+
 const char *
 rpmostree_unpacker_get_header_sha256 (RpmOstreeUnpacker *self);

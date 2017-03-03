@@ -833,6 +833,17 @@ rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *self,
   return ret;
 }
 
+char *
+rpmostree_unpacker_get_nevra (RpmOstreeUnpacker *self)
+{
+  if (self->hdr == NULL)
+    return NULL;
+  return rpmostree_pkg_custom_nevra_strdup (self->hdr,
+                                            PKG_NEVRA_FLAGS_NAME |
+                                            PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
+                                            PKG_NEVRA_FLAGS_ARCH);
+}
+
 const char *
 rpmostree_unpacker_get_header_sha256 (RpmOstreeUnpacker *self)
 {

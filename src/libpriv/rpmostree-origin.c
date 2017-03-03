@@ -23,6 +23,7 @@
 #include "string.h"
 
 #include "rpmostree-origin.h"
+#include "rpmostree-util.h"
 
 struct RpmOstreeOrigin {
   guint refcount;
@@ -35,6 +36,7 @@ struct RpmOstreeOrigin {
   char *cached_unconfigured_state;
   char **cached_initramfs_args;
   GHashTable *cached_packages;
+  GHashTable *cached_local_packages;
 };
 
 static GKeyFile *
@@ -60,6 +62,8 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
 
   ret->cached_packages = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                 g_free, NULL);
+  ret->cached_local_packages = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                      g_free, g_free);
 
   /* NOTE hack here - see https://github.com/ostreedev/ostree/pull/343 */
   g_key_file_remove_key (ret->kf, "origin", "unlocked", NULL);
@@ -82,6 +86,24 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
       packages = g_key_file_get_string_list (ret->kf, "packages", "requested", NULL, NULL);
       for (char **it = packages; it && *it; it++)
         g_hash_table_add (ret->cached_packages, g_steal_pointer (it));
+
+      g_strfreev (packages);
+      packages = g_key_file_get_string_list (ret->kf, "packages", "requested-local", NULL, NULL);
+      for (char **it = packages; it && *it; it++)
+        {
+          const char *nevra = *it;
+          g_autofree char *sha256 = NULL;
+
+          if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Invalid SHA-256 NEVRA string: %s", nevra);
+              return FALSE;
+            }
+
+          g_hash_table_replace (ret->cached_local_packages,
+                                g_strdup (nevra), g_steal_pointer (&sha256));
+        }
     }
 
   ret->cached_override_commit =
@@ -109,6 +131,12 @@ GHashTable *
 rpmostree_origin_get_packages (RpmOstreeOrigin *origin)
 {
   return origin->cached_packages;
+}
+
+GHashTable *
+rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin)
+{
+  return origin->cached_local_packages;
 }
 
 const char *
@@ -170,6 +198,7 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   g_free (origin->cached_unconfigured_state);
   g_strfreev (origin->cached_initramfs_args);
   g_clear_pointer (&origin->cached_packages, g_hash_table_unref);
+  g_clear_pointer (&origin->cached_local_packages, g_hash_table_unref);
   g_free (origin);
 }
 
@@ -270,16 +299,41 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
 }
 
 static void
-update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin)
+update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin,
+                                gboolean         local)
 {
+  GHashTable *pkgs = local ? origin->cached_local_packages
+                           : origin->cached_packages;
+
   /* we're abusing a bit the concept of cache here, though
    * it's just easier to go from cache to origin */
-  g_autofree char **pkgv =
-    (char**) g_hash_table_get_keys_as_array (origin->cached_packages, NULL);
-  g_key_file_set_string_list (origin->kf, "packages", "requested",
-                              (const char *const*)pkgv, g_strv_length (pkgv));
 
-  if (g_hash_table_size (origin->cached_packages) > 0)
+  if (local)
+    {
+      GHashTableIter it;
+      gpointer k, v;
+
+      g_autoptr(GPtrArray) sha256_nevra =
+        g_ptr_array_new_with_free_func (g_free);
+
+      g_hash_table_iter_init (&it, origin->cached_local_packages);
+      while (g_hash_table_iter_next (&it, &k, &v))
+        g_ptr_array_add (sha256_nevra, g_strconcat (v, ":", k, NULL));
+
+      g_key_file_set_string_list (origin->kf, "packages", "requested-local",
+                                  (const char *const*)sha256_nevra->pdata,
+                                  sha256_nevra->len);
+    }
+  else
+    {
+      g_autofree char **pkgv =
+        (char**)g_hash_table_get_keys_as_array (pkgs, NULL);
+      g_key_file_set_string_list (origin->kf, "packages", "requested",
+                                  (const char *const*)pkgv,
+                                  g_strv_length (pkgv));
+    }
+
+  if (g_hash_table_size (pkgs) > 0)
     {
       /* migrate to baserefspec model */
       g_key_file_set_value (origin->kf, "origin", "baserefspec",
@@ -291,6 +345,7 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin)
 gboolean
 rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
                                char             **packages,
+                               gboolean           local,
                                GCancellable      *cancellable,
                                GError           **error)
 {
@@ -298,22 +353,56 @@ rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
 
   for (char **it = packages; it && *it; it++)
     {
+      gboolean requested, requested_local;
+      const char *pkg = *it;
+      g_autofree char *sha256 = NULL;
+
+      if (local)
+        {
+          if (!rpmostree_decompose_sha256_nevra (&pkg, &sha256, error))
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Invalid SHA-256 NEVRA string: %s", pkg);
+              return FALSE;
+            }
+        }
+
+      requested = g_hash_table_contains (origin->cached_packages, pkg);
+      requested_local = g_hash_table_contains (origin->cached_local_packages, pkg);
+
       /* The list of packages is really a list of provides, so string equality
        * is a bit weird here. Multiple provides can resolve to the same package
        * and we allow that. But still, let's make sure that silly users don't
        * request the exact string. */
-      if (g_hash_table_contains (origin->cached_packages, *it))
+
+      /* Also note that we check in *both* the requested and the requested-local
+       * list: requested-local pkgs are treated like requested pkgs in the core.
+       * The only "magical" thing about them is that requested-local pkgs are
+       * specifically looked for in the pkgcache. Additionally, making sure the
+       * strings are unique allow `rpm-ostree uninstall` to know exactly what
+       * the user means. */
+
+      if (requested || requested_local)
         {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Package/capability '%s' is already requested", *it);
+          if (requested)
+            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                         "Package/capability '%s' is already requested", pkg);
+          else
+            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                         "Package '%s' is already layered", pkg);
           return FALSE;
         }
-      g_hash_table_add (origin->cached_packages, g_strdup (*it));
+
+      if (local)
+        g_hash_table_insert (origin->cached_local_packages,
+                             g_strdup (pkg), g_steal_pointer (&sha256));
+      else
+        g_hash_table_add (origin->cached_packages, g_strdup (pkg));
       changed = TRUE;
     }
 
   if (changed)
-    update_keyfile_pkgs_from_cache (origin);
+    update_keyfile_pkgs_from_cache (origin, local);
 
   return TRUE;
 }
@@ -325,21 +414,32 @@ rpmostree_origin_delete_packages (RpmOstreeOrigin  *origin,
                                   GError          **error)
 {
   gboolean changed = FALSE;
+  gboolean local_changed = FALSE;
 
   for (char **it = packages; it && *it; it++)
     {
-      if (!g_hash_table_contains (origin->cached_packages, *it))
+      if (g_hash_table_contains (origin->cached_local_packages, *it))
+        {
+          g_hash_table_remove (origin->cached_local_packages, *it);
+          local_changed = TRUE;
+        }
+      else if (g_hash_table_contains (origin->cached_packages, *it))
+        {
+          g_hash_table_remove (origin->cached_packages, *it);
+          changed = TRUE;
+        }
+      else
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Package/capability '%s' is not currently requested", *it);
           return FALSE;
         }
-      g_hash_table_remove (origin->cached_packages, *it);
-      changed = TRUE;
     }
 
   if (changed)
-    update_keyfile_pkgs_from_cache (origin);
+    update_keyfile_pkgs_from_cache (origin, FALSE);
+  if (local_changed)
+    update_keyfile_pkgs_from_cache (origin, TRUE);
 
   return TRUE;
 }
