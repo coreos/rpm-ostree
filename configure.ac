@@ -81,18 +81,13 @@ AC_SEARCH_LIBS([rpmsqSetInterruptSafety], [rpmio],
 # Remember to update AM_CPPFLAGS in Makefile.am when bumping GIO req.
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
-				     ostree-1 >= 2016.7
+				     ostree-1 >= 2017.2
 				     libsystemd
 				     rpm librepo
 				     libarchive])
 dnl bundled libdnf
 PKGDEP_RPMOSTREE_CFLAGS="-I $(pwd)/libdnf -I $(pwd)/libdnf-build $PKGDEP_RPMOSTREE_CFLAGS"
 PKGDEP_RPMOSTREE_LIBS="-L$(pwd)/libdnf-build/libdnf -ldnf $PKGDEP_RPMOSTREE_LIBS"
-
-save_LIBS=$LIBS
-LIBS=$PKGDEP_RPMOSTREE_LIBS
-AC_CHECK_FUNCS(ostree_repo_verify_commit_for_remote)
-LIBS=$save_LIBS
 
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
