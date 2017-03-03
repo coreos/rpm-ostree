@@ -57,6 +57,9 @@ rpmostree_origin_get_refspec (RpmOstreeOrigin *origin);
 GHashTable *
 rpmostree_origin_get_packages (RpmOstreeOrigin *origin);
 
+GHashTable *
+rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin);
+
 const char *
 rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin);
 
@@ -95,6 +98,7 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
 gboolean
 rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
                                char             **packages,
+                               gboolean           local,
                                GCancellable      *cancellable,
                                GError           **error);
 

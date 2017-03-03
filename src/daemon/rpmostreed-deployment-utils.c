@@ -241,6 +241,10 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
     (char**)g_hash_table_get_keys_as_array (rpmostree_origin_get_packages (origin), NULL);
   g_variant_dict_insert (&dict, "requested-packages", "^as", requested_pkgs);
 
+  g_autofree char **pkgs =
+    (char**)g_hash_table_get_keys_as_array (rpmostree_origin_get_local_packages (origin), NULL);
+  g_variant_dict_insert (&dict, "requested-local-packages", "^as", pkgs);
+
   if (is_layered && g_strv_length (layered_pkgs) > 0)
     g_variant_dict_insert (&dict, "packages", "^as", layered_pkgs);
   else

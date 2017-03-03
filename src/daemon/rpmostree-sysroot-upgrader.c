@@ -514,21 +514,58 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
  * assembled commit metadata. Probably assemble_commit() should live somewhere
  * else, maybe directly in `container-builtins.c`. */
 static RpmOstreeTreespec *
-generate_treespec (GHashTable *packages)
+generate_treespec (GHashTable *packages,
+                   GHashTable *local_packages)
 {
   g_autoptr(RpmOstreeTreespec) ret = NULL;
   g_autoptr(GError) tmp_error = NULL;
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
-  g_autofree char **pkgv =
-    (char**) g_hash_table_get_keys_as_array (packages, NULL);
 
-  g_key_file_set_string_list (treespec, "tree", "packages",
-                              (const char* const*) pkgv, g_strv_length(pkgv));
+  { g_autofree char **pkgv =
+    (char**) g_hash_table_get_keys_as_array (packages, NULL);
+    g_key_file_set_string_list (treespec, "tree", "packages",
+                                (const char* const*) pkgv,
+                                g_strv_length (pkgv));
+  }
+
+  { GHashTableIter it;
+    gpointer k, v;
+
+    g_autoptr(GPtrArray) sha256_nevra =
+      g_ptr_array_new_with_free_func (g_free);
+
+    g_hash_table_iter_init (&it, local_packages);
+    while (g_hash_table_iter_next (&it, &k, &v))
+      g_ptr_array_add (sha256_nevra, g_strconcat (v, ":", k, NULL));
+
+    g_key_file_set_string_list (treespec, "tree", "cached-packages",
+                                (const char* const*)sha256_nevra->pdata,
+                                sha256_nevra->len);
+  }
 
   ret = rpmostree_treespec_new_from_keyfile (treespec, &tmp_error);
   g_assert_no_error (tmp_error);
 
   return g_steal_pointer (&ret);
+}
+
+static gboolean
+sack_has_subject (DnfSack    *sack,
+                  const char *pattern)
+{
+  /* mimic dnf_context_install() */
+  g_autoptr(GPtrArray) matches = NULL;
+  HySelector selector = NULL;
+  HySubject subject = NULL;
+
+  subject = hy_subject_create (pattern);
+  selector = hy_subject_get_best_selector (subject, sack);
+  matches = hy_selector_matches (selector);
+
+  hy_selector_free (selector);
+  hy_subject_free (subject);
+
+  return matches->len > 0;
 }
 
 /* Go through rpmdb and jot down the missing pkgs from the given set. Really, we
@@ -542,96 +579,89 @@ generate_treespec (GHashTable *packages)
  * */
 static gboolean
 find_missing_pkgs_in_rpmdb (int            rootfs_dfd,
-                            GHashTable    *pkgset,
+                            OstreeRepo    *repo,
+                            GHashTable    *pkgs,
+                            GHashTable    *local_pkgs,
                             GHashTable   **out_missing_pkgs,
                             GCancellable  *cancellable,
                             GError       **error)
 {
+  gboolean ret = FALSE;
   GHashTableIter it;
-  gpointer itkey;
+  gpointer itkey, itval;
   g_autoptr(RpmOstreeRefSack) rsack = NULL;
   g_autoptr(GHashTable) missing_pkgs =
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  g_autofree char *metadata_tmp_path = NULL;
 
   rsack = rpmostree_get_refsack_for_root (rootfs_dfd, ".", cancellable, error);
   if (rsack == NULL)
-    return FALSE;
+    goto out;
+
+  /* Add the local pkgs as if they were installed: since they're unconditionally
+   * layered, we treat them as part of the base wrt regular requested pkgs. E.g.
+   * you can have foo-1.0-1.x86_64 layered, and foo or /usr/bin/foo as dormant.
+   * */
+  if (g_hash_table_size (local_pkgs) > 0)
+    {
+      glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
+
+      if (!rpmostree_mkdtemp ("/tmp/rpmostree-metadata-XXXXXX",
+                              &metadata_tmp_path, NULL, error))
+        goto out;
+
+      if (!rpmostree_get_pkgcache_repo (repo, &pkgcache_repo,
+                                        cancellable, error))
+        goto out;
+
+      g_hash_table_iter_init (&it, local_pkgs);
+      while (g_hash_table_iter_next (&it, &itkey, &itval))
+        {
+          const char *nevra = itkey;
+          g_autoptr(GVariant) header = NULL;
+          g_autofree char *path =
+            g_strdup_printf ("%s/%s.rpm", metadata_tmp_path, nevra);
+
+          if (!rpmostree_pkgcache_find_pkg_header (pkgcache_repo, nevra, itval,
+                                                   &header, cancellable, error))
+            goto out;
+
+          if (!glnx_file_replace_contents_at (AT_FDCWD, path,
+                                              g_variant_get_data (header),
+                                              g_variant_get_size (header),
+                                              GLNX_FILE_REPLACE_NODATASYNC,
+                                              cancellable, error))
+            goto out;
+
+          /* Also check if that exact NEVRA is already in the root (if the pkg
+           * exists, but is a different EVR, depsolve will catch that). In the
+           * future, we'll allow packages to replace base pkgs. */
+          if (sack_has_subject (rsack->sack, nevra))
+            {
+              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "Package '%s' is already in the base", nevra);
+              goto out;
+            }
+
+          dnf_sack_add_cmdline_package (rsack->sack, path);
+        }
+    }
 
   /* check for each package if we have a provides or a path match */
-  g_hash_table_iter_init (&it, pkgset);
+  g_hash_table_iter_init (&it, pkgs);
   while (g_hash_table_iter_next (&it, &itkey, NULL))
     {
-      /* mimic dnf_context_install() */
-      g_autoptr(GPtrArray) matches = NULL;
-      HySelector selector = NULL;
-      HySubject subject = NULL;
-
-      subject = hy_subject_create (itkey);
-      selector = hy_subject_get_best_selector (subject, rsack->sack);
-      matches = hy_selector_matches (selector);
-      if (matches->len == 0)
+      if (!sack_has_subject (rsack->sack, itkey))
         g_hash_table_add (missing_pkgs, g_strdup (itkey));
-
-      hy_selector_free (selector);
-      hy_subject_free (subject);
     }
 
   *out_missing_pkgs = g_steal_pointer (&missing_pkgs);
   return TRUE;
-}
-
-static gboolean
-get_pkgcache_repo (OstreeRepo   *parent,
-                   OstreeRepo  **out_pkgcache,
-                   GCancellable *cancellable,
-                   GError      **error)
-{
-  gboolean ret = FALSE;
-  glnx_unref_object OstreeRepo *pkgcache = NULL;
-  g_autoptr(GFile) pkgcache_path = NULL;
-
-  /* get the GFile to it */
-  {
-    int parent_dfd = ostree_repo_get_dfd (parent); /* borrowed */
-    g_autofree char *pkgcache_path_s =
-      glnx_fdrel_abspath (parent_dfd, "extensions/rpmostree/pkgcache");
-    pkgcache_path = g_file_new_for_path (pkgcache_path_s);
-  }
-
-  pkgcache = ostree_repo_new (pkgcache_path);
-
-  if (!g_file_query_exists (pkgcache_path, cancellable))
-    {
-      g_autoptr(GKeyFile) config = NULL;
-      GFile *parent_path = ostree_repo_get_path (parent);
-
-      if (!g_file_make_directory_with_parents (pkgcache_path,
-                                               cancellable, error))
-        goto out;
-
-      if (!ostree_repo_create (pkgcache, OSTREE_REPO_MODE_BARE,
-                               cancellable, error))
-        goto out;
-
-      config = ostree_repo_copy_config (pkgcache);
-      g_key_file_set_string (config, "core", "parent",
-                             gs_file_get_path_cached (parent_path));
-      ostree_repo_write_config (pkgcache, config, error);
-
-      /* yuck... ostree already opened the repo when we did create, but that was
-       * before we had the parent repo set in its config. there's no way to
-       * "reload" the config, so let's just tear down and recreate for now */
-      g_clear_object (&pkgcache);
-      pkgcache = ostree_repo_new (pkgcache_path);
-    }
-
-  if (!ostree_repo_open (pkgcache, cancellable, error))
-    goto out;
-
-  *out_pkgcache = g_steal_pointer (&pkgcache);
 
   ret = TRUE;
 out:
+  if (metadata_tmp_path)
+    glnx_shutil_rm_rf_at (AT_FDCWD, metadata_tmp_path, cancellable, error);
   return ret;
 }
 
@@ -646,8 +676,10 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
   g_autoptr(RpmOstreeTreespec) treespec = NULL;
   g_autoptr(RpmOstreeInstall) install = {0,};
   g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
-  const gboolean have_packages = g_hash_table_size (pkgset) > 0;
   glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
+  GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
+  const gboolean have_packages = g_hash_table_size (pkgset) > 0 ||
+                                 g_hash_table_size (local_pkgs) > 0;
 
   ctx = rpmostree_context_new_system (cancellable, error);
 
@@ -687,7 +719,7 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
   /* NB: We're pretty much using the defaults for the other treespec values like
    * instlang and docs since it would be hard to expose the cli for them because
    * they wouldn't affect just the new pkgs, but even previously added ones. */
-  treespec = generate_treespec (pkgset);
+  treespec = generate_treespec (pkgset, local_pkgs);
   if (treespec == NULL)
     goto out;
 
@@ -695,7 +727,8 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
                                 cancellable, error))
     goto out;
 
-  if (!get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
+  if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo,
+                                    cancellable, error))
     goto out;
 
   rpmostree_context_set_repos (ctx, self->repo, pkgcache_repo);
@@ -802,7 +835,9 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
                    GCancellable             *cancellable,
                    GError                  **error)
 {
-  g_autoptr(GHashTable) final_pkgset = NULL;
+  GHashTable *pkgs = rpmostree_origin_get_packages (self->origin);
+  GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
+  g_autoptr(GHashTable) final_pkgs = NULL; /* subset of pkgs */
 
   self->devino_cache = ostree_repo_devino_cache_new ();
 
@@ -811,10 +846,11 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
 
   /* if we're layering packages, let's get the *actual* list of
    * packages/provides we'll need to layer */
-  if (!find_missing_pkgs_in_rpmdb (self->tmprootfs_dfd,
-                                   rpmostree_origin_get_packages (self->origin),
-                                   &final_pkgset, cancellable, error))
+  if (!find_missing_pkgs_in_rpmdb (self->tmprootfs_dfd, self->repo, pkgs,
+                                   local_pkgs, &final_pkgs, cancellable,
+                                   error))
     return FALSE;
+
 
   /* Now, it's possible all requested packages are in the new tree, so we have
    * another optimization here for that case. This is a bit tricky: assuming we
@@ -823,14 +859,15 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
    * We could down the line experiment with optimizing this by just updating the
    * merge deployment's origin.
    */
-  if (g_hash_table_size (final_pkgset) == 0 &&
+  if (g_hash_table_size (local_pkgs) == 0 &&
+      g_hash_table_size (final_pkgs) == 0 &&
       !rpmostree_origin_get_regenerate_initramfs (self->origin))
     {
       g_clear_pointer (&self->final_revision, g_free);
     }
   else
     {
-      if (!do_final_local_assembly (self, final_pkgset, cancellable, error))
+      if (!do_final_local_assembly (self, final_pkgs, cancellable, error))
         return FALSE;
     }
 
@@ -976,7 +1013,7 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
   guint64 freed_space;
   guint n_freed = 0;
 
-  if (!get_pkgcache_repo (repo, &pkgcache_repo, cancellable, error))
+  if (!rpmostree_get_pkgcache_repo (repo, &pkgcache_repo, cancellable, error))
     return FALSE;
 
   for (guint i = 0; i < deployments->len; i++)
@@ -1100,7 +1137,8 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   /* might this need local assembly? */
   if (rpmostree_origin_get_regenerate_initramfs (self->origin) ||
-      g_hash_table_size (rpmostree_origin_get_packages (self->origin)) > 0)
+      g_hash_table_size (rpmostree_origin_get_packages (self->origin)) > 0 ||
+      g_hash_table_size (rpmostree_origin_get_local_packages (self->origin)) > 0)
     {
       if (!do_local_assembly (self, cancellable, error))
         goto out;

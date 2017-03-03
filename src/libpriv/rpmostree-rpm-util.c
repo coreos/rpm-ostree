@@ -85,21 +85,14 @@ pkg_envra_strdup (Header h1)
   return envra;
 }
 
-typedef enum {
-  PKG_NEVRA_FLAGS_NAME = (1 << 0),
-  PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE = (1 << 1),
-  PKG_NEVRA_FLAGS_VERSION_RELEASE = (1 << 2),
-  PKG_NEVRA_FLAGS_ARCH = (1 << 3)
-} PkgNevraFlags;
-
-static char *
-pkg_custom_nevra_strdup (Header h1, PkgNevraFlags flags)
+char *
+rpmostree_pkg_custom_nevra_strdup (Header h, RpmOstreePkgNevraFlags flags)
 {
-  const char*    name = headerGetString (h1, RPMTAG_NAME);
-  uint64_t      epoch = headerGetNumber (h1, RPMTAG_EPOCH);
-  const char* version = headerGetString (h1, RPMTAG_VERSION);
-  const char* release = headerGetString (h1, RPMTAG_RELEASE);
-  const char*    arch = headerGetString (h1, RPMTAG_ARCH);
+  const char*    name = headerGetString (h, RPMTAG_NAME);
+  uint64_t      epoch = headerGetNumber (h, RPMTAG_EPOCH);
+  const char* version = headerGetString (h, RPMTAG_VERSION);
+  const char* release = headerGetString (h, RPMTAG_RELEASE);
+  const char*    arch = headerGetString (h, RPMTAG_ARCH);
   GString *nevra = g_string_new ("");
 
   if (flags & PKG_NEVRA_FLAGS_NAME)
@@ -130,30 +123,30 @@ pkg_custom_nevra_strdup (Header h1, PkgNevraFlags flags)
 static char *
 pkg_nevra_strdup (Header h1)
 {
-  return pkg_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_NAME |
-                                      PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
-                                      PKG_NEVRA_FLAGS_ARCH);
+  return rpmostree_pkg_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_NAME |
+                                                PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
+                                                PKG_NEVRA_FLAGS_ARCH);
 }
 
 static char *
 pkg_na_strdup (Header h1)
 {
-  return pkg_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_NAME |
-                                      PKG_NEVRA_FLAGS_ARCH);
+  return rpmostree_pkg_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_NAME |
+                                                PKG_NEVRA_FLAGS_ARCH);
 }
 
 static char *
 pkg_nvr_strdup (Header h1)
 {
-  return pkg_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_NAME |
-                                      PKG_NEVRA_FLAGS_VERSION_RELEASE);
+  return rpmostree_pkg_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_NAME |
+                                                PKG_NEVRA_FLAGS_VERSION_RELEASE);
 }
 
 static char *
 pkg_evra_strdup (Header h1)
 {
-  return pkg_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
-                                      PKG_NEVRA_FLAGS_ARCH);
+  return rpmostree_pkg_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
+                                                PKG_NEVRA_FLAGS_ARCH);
 }
 
 static void

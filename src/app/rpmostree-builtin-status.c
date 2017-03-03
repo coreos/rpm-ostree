@@ -116,6 +116,22 @@ print_packages (const char *k, guint max_key_len,
     }
 }
 
+static const gchar**
+lookup_array_and_canonicalize (GVariantDict *dict,
+                               const char   *key)
+{
+  g_autofree const gchar **ret = NULL;
+
+  if (g_variant_dict_lookup (dict, key, "^a&s", &ret))
+    {
+      /* Canonicalize length 0 strv to NULL */
+      if (!*ret)
+        g_clear_pointer (&ret, g_free);
+    }
+
+  return g_steal_pointer (&ret);
+}
+
 /* We will have an optimized path for the case where there are just
  * two deployments, this code will be the generic fallback.
  */
@@ -154,6 +170,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       gboolean is_locally_assembled = FALSE;
       g_autofree const gchar **origin_packages = NULL;
       g_autofree const gchar **origin_requested_packages = NULL;
+      g_autofree const gchar **origin_requested_local_packages = NULL;
       const gchar *origin_refspec;
       const gchar *id;
       const gchar *os_name;
@@ -173,7 +190,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       if (child == NULL)
         break;
 
-      dict = g_variant_dict_new (child);      
+      dict = g_variant_dict_new (child);
 
       /* osname should always be present. */
       g_assert (g_variant_dict_lookup (dict, "osname", "&s", &os_name));
@@ -191,26 +208,12 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
 
       if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
         {
-          if (g_variant_dict_lookup (dict, "packages", "^a&s",
-                                     &origin_packages))
-            {
-              /* Canonicalize length 0 strv to NULL */
-              if (!*origin_packages)
-                {
-                  g_free (origin_packages);
-                  origin_packages = NULL;
-                }
-            }
-          if (g_variant_dict_lookup (dict, "requested-packages", "^a&s",
-                                     &origin_requested_packages))
-            {
-              /* Canonicalize length 0 strv to NULL */
-              if (!*origin_requested_packages)
-                {
-                  g_free (origin_requested_packages);
-                  origin_requested_packages = NULL;
-                }
-            }
+          origin_packages =
+            lookup_array_and_canonicalize (dict, "packages");
+          origin_requested_packages =
+            lookup_array_and_canonicalize (dict, "requested-packages");
+          origin_requested_local_packages =
+            lookup_array_and_canonicalize (dict, "requested-local-packages");
         }
       else
         origin_refspec = NULL;
@@ -326,9 +329,14 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       if (origin_requested_packages)
         print_packages ("RequestedPackages", max_key_len,
                         origin_requested_packages, origin_packages);
+
       if (origin_packages)
         print_packages ("LayeredPackages", max_key_len,
                         origin_packages, NULL);
+
+      if (origin_requested_local_packages)
+        print_packages ("LocalPackages", max_key_len,
+                        origin_requested_local_packages, NULL);
 
       if (regenerate_initramfs)
         {
