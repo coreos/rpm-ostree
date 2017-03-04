@@ -1004,6 +1004,13 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
   return ret;
 }
 
+static gint
+pkg_array_compare (DnfPackage **p_pkg1,
+                   DnfPackage **p_pkg2)
+{
+  return dnf_package_cmp (*p_pkg1, *p_pkg2);
+}
+
 /* Generate a checksum from a goal in a repeatable fashion -
  * we checksum an ordered array of the checksums of individual
  * packages.  We *used* to just checksum the NEVRAs but that
@@ -1022,6 +1029,7 @@ rpmostree_dnf_add_checksum_goal (GChecksum *checksum,
 
   pkglist = hy_goal_list_installs (goal, NULL);
   g_assert (pkglist);
+  g_ptr_array_sort (pkglist, (GCompareFunc)pkg_array_compare);
   for (i = 0; i < pkglist->len; i++)
     {
       DnfPackage *pkg = pkglist->pdata[i];
