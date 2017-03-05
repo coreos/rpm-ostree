@@ -24,6 +24,7 @@
 #include <glib-unix.h>
 #include <gio/gunixoutputstream.h>
 #include <systemd/sd-daemon.h>
+#include <systemd/sd-journal.h>
 #include <stdio.h>
 #include <libglnx.h>
 #include <glib/gi18n.h>
@@ -35,7 +36,14 @@
 #include "rpmostreed-daemon.h"
 #include "rpmostree-libbuiltin.h"
 
-static GMainLoop *loop = NULL;
+typedef enum {
+  APPSTATE_STARTING, /* Before the ♫♫♫ maaaain event ♫♫♫ */
+  APPSTATE_RUNNING, /* Main event loop */
+  APPSTATE_FLUSHING, /* We should release our bus name, and wait for it to be released */
+  APPSTATE_EXITING, /* About to exit() */
+} AppState;
+
+static AppState appstate = APPSTATE_STARTING;
 static gboolean opt_debug = FALSE;
 static char *opt_sysroot = "/";
 static gint service_dbus_fd = -1;
@@ -50,32 +58,36 @@ static GOptionEntry opt_entries[] =
 static RpmostreedDaemon *rpm_ostree_daemon = NULL;
 
 static void
-start_daemon (GDBusConnection *connection)
+state_transition (AppState state)
 {
-  GError *local_error = NULL;
-
-  rpm_ostree_daemon = g_initable_new (RPMOSTREED_TYPE_DAEMON,
-                                      NULL, &local_error,
-                                      "connection", connection,
-                                      "sysroot-path", opt_sysroot,
-                                      NULL);
-
-  if (local_error != NULL)
-    {
-      g_critical ("Couldn't start daemon: %s\n", local_error->message);
-      g_error_free (local_error);
-      g_main_loop_quit (loop);
-    }
+  g_assert_cmpint (state, >, appstate);
+  appstate = state;
+  g_main_context_wakeup (NULL);
 }
 
 static void
-on_bus_acquired (GDBusConnection *connection,
-                 const char *name,
-                 gpointer user_data)
+state_transition_fatal_err (GError *error)
 {
-  g_debug ("Connected to the system bus");
+  sd_journal_print (LOG_ERR, "%s", error->message);
+  state_transition (APPSTATE_FLUSHING);
+}
 
-  start_daemon (connection);
+static gboolean
+start_daemon (GDBusConnection *connection,
+              GError         **error)
+{
+  rpm_ostree_daemon = g_initable_new (RPMOSTREED_TYPE_DAEMON,
+                                      NULL, error,
+                                      "connection", connection,
+                                      "sysroot-path", opt_sysroot,
+                                      NULL);
+  if (!rpm_ostree_daemon)
+    {
+      g_prefix_error (error,  "Couldn't start daemon: ");
+      return FALSE;
+    }
+
+  return TRUE;
 }
 
 static void
@@ -83,7 +95,6 @@ on_name_acquired (GDBusConnection *connection,
                   const char *name,
                   gpointer user_data)
 {
-  g_debug ("Acquired the name %s on the system bus", name);
 }
 
 static void
@@ -94,36 +105,40 @@ on_name_lost (GDBusConnection *connection,
 }
 
 static void
+on_bus_name_released (GDBusConnection     *connection,
+                      GAsyncResult        *result,
+                      void                *user_data)
+{
+  state_transition (APPSTATE_EXITING);
+}
+
+static void
 on_peer_acquired (GObject *source,
                   GAsyncResult *result,
                   gpointer user_data)
 {
-  GDBusConnection *connection;
-  GError *error = NULL;
+  g_autoptr(GDBusConnection) connection = NULL;
+  g_autoptr(GError) error = NULL;
 
   connection = g_dbus_connection_new_finish (result, &error);
-  if (error != NULL)
-    {
-      g_warning ("Couldn't connect to peer: %s", error->message);
-      g_main_loop_quit (loop);
-      g_error_free (error);
-    }
-  else
-    {
-      g_debug ("connected to peer");
-      start_daemon (connection);
-    }
+  if (!connection)
+    goto out;
+
+  if (!start_daemon (connection, &error))
+    goto out;
+
+ out:
+  if (error)
+    state_transition_fatal_err (error);
 }
 
 
 static gboolean
 on_sigint (gpointer user_data)
 {
-  g_info ("Caught signal. Initiating shutdown");
-  g_main_loop_quit (loop);
+  state_transition (APPSTATE_FLUSHING);
   return FALSE;
 }
-
 
 static gboolean
 on_stdin_close (GIOChannel *channel,
@@ -131,8 +146,8 @@ on_stdin_close (GIOChannel *channel,
                 gpointer data)
 {
   /* Nowhere to log */
-  syslog (LOG_INFO, "%s", "output closed");
-  g_main_loop_quit (loop);
+  sd_journal_print (LOG_INFO, "%s", "output closed");
+  state_transition (APPSTATE_FLUSHING);
   return FALSE;
 }
 
@@ -143,7 +158,7 @@ on_log_debug (const gchar *log_domain,
              const gchar *message,
              gpointer user_data)
 {
-  GString *string;
+  g_autoptr(GString) string = NULL;
   const gchar *progname;
   const gchar *level;
 
@@ -177,8 +192,6 @@ on_log_debug (const gchar *log_domain,
   g_string_append_printf (string, "%s: %s", level, message);
 
   g_printerr ("%s\n", string->str);
-
-  g_string_free (string, TRUE);
 }
 
 
@@ -263,38 +276,25 @@ on_log_handler (const gchar *log_domain,
 
 
 static gboolean
-connect_to_peer (int fd)
+connect_to_peer (int fd, GError **error)
 {
   g_autoptr(GSocketConnection) stream = NULL;
   g_autoptr(GSocket) socket = NULL;
-  GError *error = NULL;
   g_autofree gchar *guid = NULL;
-  gboolean ret = FALSE;
 
-  socket = g_socket_new_from_fd (fd, &error);
-  if (error != NULL)
-    {
-      g_warning ("Couldn't create socket: %s", error->message);
-      goto out;
-    }
+  socket = g_socket_new_from_fd (fd, error);
+  if (!socket)
+    return FALSE;
 
   stream = g_socket_connection_factory_create_connection (socket);
-  if (!stream)
-    {
-      g_warning ("Couldn't create socket stream");
-      goto out;
-    }
+  g_assert_nonnull (stream);
 
   guid = g_dbus_generate_guid ();
   g_dbus_connection_new (G_IO_STREAM (stream), guid,
                          G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_SERVER |
                          G_DBUS_CONNECTION_FLAGS_DELAY_MESSAGE_PROCESSING,
                          NULL, NULL, on_peer_acquired, NULL);
-  ret = TRUE;
-
-out:
-  g_clear_error (&error);
-  return ret;
+  return TRUE;
 }
 
 
@@ -307,8 +307,10 @@ rpmostree_builtin_start_daemon (int             argc,
   int ret = 1;
   g_autoptr(GOptionContext) opt_context = g_option_context_new (" - start the daemon process");
   GIOChannel *channel;
-  guint name_owner_id = 0;
+  g_autoptr(GMainContext) mainctx = g_main_context_default ();
+  g_autoptr(GDBusConnection) bus = NULL;
 
+  /* There's not really a "root dconf" right now */
   g_assert (g_setenv ("GSETTINGS_BACKEND", "memory", TRUE));
 
   g_option_context_add_main_entries (opt_context, opt_entries, NULL);
@@ -332,10 +334,6 @@ rpmostree_builtin_start_daemon (int             argc,
       g_log_set_default_handler (on_log_handler, NULL);
     }
 
-  g_info ("rpm-ostreed starting");
-
-  loop = g_main_loop_new (NULL, FALSE);
-
   g_unix_signal_add (SIGINT, on_sigint, NULL);
   g_unix_signal_add (SIGTERM, on_sigint, NULL);
 
@@ -353,38 +351,50 @@ rpmostree_builtin_start_daemon (int             argc,
       else
         bus_type = G_BUS_TYPE_SYSTEM;
 
-      name_owner_id = g_bus_own_name (bus_type,
-                                      DBUS_NAME,
-                                      G_BUS_NAME_OWNER_FLAGS_NONE,
-                                      on_bus_acquired,
-                                      on_name_acquired,
-                                      on_name_lost,
-                                      NULL, (GDestroyNotify) NULL);
+      /* Get an explicit ref to the bus so we can use it later */
+      bus = g_bus_get_sync (bus_type, NULL, error);
+      if (!bus)
+        goto out;
+      if (!start_daemon (bus, error))
+        goto out;
+      (void) g_bus_own_name_on_connection (bus, DBUS_NAME, G_BUS_NAME_OWNER_FLAGS_NONE,
+                                           on_name_acquired, on_name_lost,
+                                           NULL, NULL);
     }
-  else if (!connect_to_peer (service_dbus_fd))
+  else if (!connect_to_peer (service_dbus_fd, error))
     goto out;
 
+  state_transition (APPSTATE_RUNNING);
+
   g_debug ("Entering main event loop");
+  while (appstate == APPSTATE_RUNNING)
+    g_main_context_iteration (mainctx, TRUE);
 
-  g_main_loop_run (loop);
-
-  sd_notify (FALSE, "STOPPING=1");
-
-  if (name_owner_id > 0)
+  if (bus)
     {
-      g_bus_unown_name (name_owner_id);
-      name_owner_id = 0;
+      /* We first tell systemd we're stopping, so it knows to activate a new instance
+       * and avoid sending any more traffic our way.
+       * After that, release the name via API directly so we can wait for the result.
+       * More info:
+       *  https://lists.freedesktop.org/archives/dbus/2015-May/016671.html
+       *  https://github.com/cgwalters/test-exit-on-idle
+       */
+      sd_notify (FALSE, "STOPPING=1");
+      g_dbus_connection_call (bus,
+                              "org.freedesktop.DBus", "/org/freedesktop/DBus",
+                              "org.freedesktop.DBus", "ReleaseName",
+                              g_variant_new ("(s)", DBUS_NAME),
+                              G_VARIANT_TYPE ("(u)"),
+                              G_DBUS_CALL_FLAGS_NONE,
+                              -1, NULL,
+                              (GAsyncReadyCallback)on_bus_name_released, NULL);
     }
 
-  g_clear_object (&rpm_ostree_daemon);
+  /* Waiting 🛌 for the name to be released */
+  while (appstate == APPSTATE_FLUSHING)
+    g_main_context_iteration (mainctx, TRUE);
 
   ret = 0;
-
 out:
-  if (loop != NULL)
-    g_main_loop_unref (loop);
-
-  g_info ("rpm-ostreed exiting");
-
   return ret;
 }
