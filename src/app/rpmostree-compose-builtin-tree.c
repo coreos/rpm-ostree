@@ -51,6 +51,7 @@ static gboolean opt_cache_only;
 static char *opt_proxy;
 static char *opt_output_repodata_dir;
 static char **opt_metadata_strings;
+static char *opt_metadata_json;
 static char *opt_repo;
 static char *opt_touch_if_changed;
 static gboolean opt_dry_run;
@@ -59,6 +60,7 @@ static char *opt_write_commitid_to;
 
 static GOptionEntry option_entries[] = {
   { "add-metadata-string", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_strings, "Append given key and value (in string format) to metadata", "KEY=VALUE" },
+  { "add-metadata-from-json", 0, 0, G_OPTION_ARG_STRING, &opt_metadata_json, "Parse the given JSON file as object, convert to GVariant, append to OSTree commit", "JSON" },
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
   { "workdir-tmpfs", 0, 0, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
   { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
@@ -703,6 +705,33 @@ rpmostree_compose_builtin_tree (int             argc,
           glnx_set_error_from_errno (error);
           goto out;
         }
+    }
+
+  if (opt_metadata_json)
+    {
+      glnx_unref_object JsonParser *jparser = json_parser_new ();
+      JsonNode *metarootval = NULL; /* unowned */
+      g_autoptr(GVariant) jsonmetav = NULL;
+      GVariantIter viter;
+
+      if (!json_parser_load_from_file (jparser, opt_metadata_json, error))
+        goto out;
+
+      metarootval = json_parser_get_root (jparser);
+
+      jsonmetav = json_gvariant_deserialize (metarootval, "a{sv}", error);
+      if (!jsonmetav)
+        {
+          g_prefix_error (error, "Parsing %s: ", opt_metadata_json);
+          goto out;
+        }
+
+      g_variant_iter_init (&viter, jsonmetav);
+      { char *key;
+        GVariant *value;
+        while (g_variant_iter_loop (&viter, "{sv}", &key, &value))
+          g_hash_table_replace (metadata_hash, g_strdup (key), g_variant_ref (value));
+      }
     }
 
   if (opt_metadata_strings)
