@@ -25,6 +25,7 @@
 
 #include <libglnx.h>
 #include <systemd/sd-journal.h>
+#include <systemd/sd-daemon.h>
 
 /**
  * SECTION: daemon
@@ -289,6 +290,12 @@ on_name_owner_changed (GDBusConnection  *connection,
     rpmostreed_daemon_remove_client (self, name);
 }
 
+static void
+render_systemd_status (RpmostreedDaemon *self)
+{
+  sd_notifyf (0, "STATUS=%u clients", g_hash_table_size (self->bus_clients));
+}
+
 void
 rpmostreed_daemon_add_client (RpmostreedDaemon *self,
                               const char       *client)
@@ -308,6 +315,7 @@ rpmostreed_daemon_add_client (RpmostreedDaemon *self,
 
   g_hash_table_add (self->bus_clients, g_strdup (client));
   sd_journal_print (LOG_INFO, "Client %s added; new total=%u", client, g_hash_table_size (self->bus_clients));
+  render_systemd_status (self);
 }
 
 void
@@ -318,6 +326,7 @@ rpmostreed_daemon_remove_client (RpmostreedDaemon *self,
     return;
   g_hash_table_remove (self->bus_clients, client);
   sd_journal_print (LOG_INFO, "Client %s vanished; remaining=%u", client, g_hash_table_size (self->bus_clients));
+  render_systemd_status (self);
 }
 
 void
