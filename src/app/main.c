@@ -146,10 +146,18 @@ rpmostree_option_context_parse (GOptionContext *context,
 
   if (opt_version)
     {
-      g_print ("%s", PACKAGE_STRING);
+      /* This should now be YAML, like `docker version`, so it's both nice to read
+       * possible to parse.  The canonical implementation of this is in
+       * ostree/ot-main.c.
+       */
+      g_auto(GStrv) features = g_strsplit (RPM_OSTREE_FEATURES, " ", -1);
+      g_print ("%s:\n", PACKAGE_NAME);
+      g_print (" Version: %s\n", PACKAGE_VERSION);
       if (strlen (RPM_OSTREE_GITREV) > 0)
-        g_print (", git %s", RPM_OSTREE_GITREV);
-      g_print ("\n %s\n", RPM_OSTREE_FEATURES);
+        g_print (" Git: %s\n", RPM_OSTREE_GITREV);
+      g_print (" Features:\n");
+      for (char **iter = features; iter && *iter; iter++)
+        g_print ("  - %s\n", *iter);
       exit (EXIT_SUCCESS);
     }
 

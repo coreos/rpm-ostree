@@ -24,7 +24,7 @@ export RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK=yes
 
 ensure_dbus
 
-echo "1..16"
+echo "1..17"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -36,6 +36,10 @@ echo "ok setup"
 
 OSTREE="ostree --repo=sysroot/ostree/repo"
 REMOTE_OSTREE="ostree --repo=testos-repo --gpg-homedir=${test_tmpdir}/gpghome"
+
+rpm-ostree --version > version.yaml
+python -c 'import yaml; v=yaml.safe_load(open("version.yaml")); assert("Version" in v["rpm-ostree"])'
+echo "ok yaml version"
 
 # This initial deployment gets kicked off with some kernel arguments 
 $OSTREE remote add --set=gpg-verify=false testos file://$(pwd)/testos-repo testos/buildmaster/x86_64-runtime

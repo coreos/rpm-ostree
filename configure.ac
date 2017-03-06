@@ -156,7 +156,7 @@ AM_CONDITIONAL(BUILDOPT_COMPOSE_TOOLING, [test x$enable_compose_tooling = xyes])
 AS_IF([test x$enable_compose_tooling = xyes], [
     AC_DEFINE(HAVE_COMPOSE_TOOLING, 1, [Define if we are building compose tooling])
 ])
-if test x$enable_compose_tooling != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES +compose"; fi
+if test x$enable_compose_tooling != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES compose"; fi
 
 dnl Try to automatically determine cmake type from CFLAGS
 if $(echo $CFLAGS |grep -q -e "-O0"); then
