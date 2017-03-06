@@ -5,8 +5,27 @@ set -xeuo pipefail
 dn=$(cd $(dirname $0) && pwd)
 . ${dn}/libcomposetest.sh
 
-prepare_run_compose "basic"
+prepare_compose_test "basic"
+# Test metadata json with objects, arrays, numbers
+cat > metadata.json <<EOF
+{
+  "exampleos.gitrepo": {
+     "rev": "97ec21c614689e533d294cdae464df607b526ab9",
+     "src": "https://gitlab.com/exampleos/custom-atomic-host"
+  },
+  "exampleos.tests": ["smoketested", "e2e"]
+}
+EOF
+runcompose --add-metadata-from-json metadata.json
+ostree --repo=${repobuild} ls -R ${treeref} /usr/lib/ostree-boot > bootls.txt
 echo "ok compose"
+
+ostree --repo=${repobuild} show --print-metadata-key exampleos.gitrepo ${treeref} > meta.txt
+assert_file_has_content meta.txt 'rev.*97ec21c614689e533d294cdae464df607b526ab9'
+assert_file_has_content meta.txt 'src.*https://gitlab.com/exampleos/custom-atomic-host'
+ostree --repo=${repobuild} show --print-metadata-key exampleos.tests ${treeref} > meta.txt
+assert_file_has_content meta.txt 'smoketested.*e2e'
+echo "ok metadata"
 
 ostree --repo=${repobuild} ls -R ${treeref} /usr/lib/ostree-boot > bootls.txt
 assert_file_has_content bootls.txt vmlinuz
