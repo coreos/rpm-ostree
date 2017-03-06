@@ -23,6 +23,7 @@
 #include <string.h>
 #include <glib-unix.h>
 #include <gio/gunixoutputstream.h>
+#include <systemd/sd-daemon.h>
 #include <stdio.h>
 #include <libglnx.h>
 #include <glib/gi18n.h>
@@ -366,6 +367,8 @@ rpmostree_builtin_start_daemon (int             argc,
   g_debug ("Entering main event loop");
 
   g_main_loop_run (loop);
+
+  sd_notify (FALSE, "STOPPING=1");
 
   if (name_owner_id > 0)
     {
