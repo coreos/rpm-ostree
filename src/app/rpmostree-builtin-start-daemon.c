@@ -23,7 +23,6 @@
 #include <string.h>
 #include <glib-unix.h>
 #include <gio/gunixoutputstream.h>
-#include <systemd/sd-daemon.h>
 #include <systemd/sd-journal.h>
 #include <systemd/sd-daemon.h>
 #include <stdio.h>
@@ -138,6 +137,7 @@ static gboolean
 on_sigint (gpointer user_data)
 {
   state_transition (APPSTATE_FLUSHING);
+  sd_notify (FALSE, "STATUS=Received shutdown signal, preparing to terminate");
   return FALSE;
 }
 
