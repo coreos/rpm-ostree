@@ -394,17 +394,14 @@ rpmostree_split_path_ptrarray_validate (const char *path,
                                         GPtrArray  **out_components,
                                         GError     **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(GPtrArray) ret_components = NULL;
-
   if (strlen (path) > PATH_MAX)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Path '%s' is too long", path);
-      goto out;
+      return FALSE;
     }
 
-  ret_components = g_ptr_array_new_with_free_func (g_free);
+  g_autoptr(GPtrArray) ret_components = g_ptr_array_new_with_free_func (g_free);
 
   do
     {
@@ -426,23 +423,21 @@ rpmostree_split_path_ptrarray_validate (const char *path,
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Invalid empty component in path '%s'", path);
-          goto out;
+          return FALSE;
         }
       if (g_str_equal (component, ".") ||
           g_str_equal (component, ".."))
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Invalid special element '.' or '..' in path %s", path);
-          goto out;
+          return FALSE;
         }
 
       g_ptr_array_add (ret_components, (char*)g_steal_pointer (&component));
     } while (path && *path);
 
-  ret = TRUE;
   *out_components = g_steal_pointer (&ret_components);
- out:
-  return ret;
+  return TRUE;
 }
 
 /* Replace every occurrence of @old in @buf with @new. */
