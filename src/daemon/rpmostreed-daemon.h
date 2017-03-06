@@ -29,6 +29,8 @@
 
 GType              rpmostreed_daemon_get_type       (void) G_GNUC_CONST;
 RpmostreedDaemon * rpmostreed_daemon_get            (void);
+void               rpmostreed_daemon_add_client     (RpmostreedDaemon *self, const char *client);
+void               rpmostreed_daemon_remove_client  (RpmostreedDaemon *self, const char *client);
 void               rpmostreed_daemon_publish        (RpmostreedDaemon *self,
                                                      const gchar *path,
                                                      gboolean uniquely,

@@ -144,6 +144,8 @@ rpmostree_load_sysroot (gchar *sysroot,
   const char *bus_name = NULL;
   glnx_unref_object GDBusConnection *connection = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
+  g_autoptr(GVariantBuilder) options_builder =
+    g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
 
   if (!get_connection_for_path (sysroot,
                                 force_peer,
@@ -162,6 +164,12 @@ rpmostree_load_sysroot (gchar *sysroot,
                                                     NULL,
                                                     error);
   if (sysroot_proxy == NULL)
+    goto out;
+
+  /* This tells the daemon not to auto-exit as long as we are alive */
+  if (!rpmostree_sysroot_call_register_client_sync (sysroot_proxy,
+                                                    g_variant_builder_end (options_builder),
+                                                    cancellable, error))
     goto out;
 
   *out_sysroot_proxy = g_steal_pointer (&sysroot_proxy);
