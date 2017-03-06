@@ -44,15 +44,6 @@ typedef struct _RpmostreedDaemonClass RpmostreedDaemonClass;
 struct _RpmostreedDaemon {
   GObject parent_instance;
 
-  gboolean on_message_bus;
-  guint use_count;
-
-  gint64 last_message;
-  guint ticker_id;
-
-  GMutex mutex;
-  gint num_tasks;
-
   RpmostreedSysroot *sysroot;
   gchar *sysroot_path;
 
@@ -98,11 +89,6 @@ daemon_finalize (GObject *object)
   g_clear_object (&self->sysroot);
 
   g_object_unref (self->connection);
-
-  if (self->ticker_id > 0)
-    g_source_remove (self->ticker_id);
-
-  g_mutex_clear (&self->mutex);
 
   g_free (self->sysroot_path);
   G_OBJECT_CLASS (rpmostreed_daemon_parent_class)->finalize (object);
@@ -163,12 +149,8 @@ rpmostreed_daemon_init (RpmostreedDaemon *self)
   g_assert (_daemon_instance == NULL);
   _daemon_instance = self;
 
-  self->num_tasks = 0;
-  self->last_message = g_get_monotonic_time ();
   self->sysroot_path = NULL;
   self->sysroot = NULL;
-
-  g_mutex_init (&self->mutex);
 }
 
 static gboolean
