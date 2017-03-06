@@ -28,6 +28,7 @@
 #include <rpm/rpmmacro.h>
 #include <rpm/rpmts.h>
 #include <gio/gunixoutputstream.h>
+#include <systemd/sd-journal.h>
 #include <libdnf/libdnf.h>
 #include <librepo/librepo.h>
 
@@ -38,6 +39,8 @@
 #include "rpmostree-scripts.h"
 #include "rpmostree-unpacker.h"
 #include "rpmostree-output.h"
+
+#define RPMOSTREE_MESSAGE_COMMIT_STATS SD_ID128_MAKE(e6,37,2e,38,41,21,42,a9,bc,13,b6,32,b3,f8,93,44)
 
 #define RPMOSTREE_DIR_CACHE_REPOMD "repomd"
 #define RPMOSTREE_DIR_CACHE_SOLV "solv"
@@ -2538,8 +2541,39 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
                                          ret_commit_checksum);
     }
 
-    if (!ostree_repo_commit_transaction (self->ostreerepo, NULL, cancellable, error))
-      goto out;
+    { OstreeRepoTransactionStats stats;
+      g_autofree char *bytes_written_formatted = NULL;
+
+      if (!ostree_repo_commit_transaction (self->ostreerepo, &stats, cancellable, error))
+        goto out;
+
+      bytes_written_formatted = g_format_size (stats.content_bytes_written);
+
+      /* TODO: abstract a variant of this into libglnx which does
+       *
+       * if (journal)
+       *   journal_send ()
+       * else
+       *   print ()
+       *
+       * Or possibly:
+       *
+       * if (journal)
+       *   journal_send ()
+       * if (!journal || getppid () != 1)
+       *   print ()
+       *
+       * https://github.com/projectatomic/rpm-ostree/pull/661
+       */
+      sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_COMMIT_STATS),
+                       "MESSAGE=Wrote commit: %s; New objects: meta:%u content:%u totaling %s)",
+                       ret_commit_checksum, stats.metadata_objects_written,
+                       stats.content_objects_written, bytes_written_formatted,
+                       "OSTREE_METADATA_OBJECTS_WRITTEN=%u", stats.metadata_objects_written,
+                       "OSTREE_CONTENT_OBJECTS_WRITTEN=%u", stats.content_objects_written,
+                       "OSTREE_CONTENT_BYTES_WRITTEN=%" G_GUINT64_FORMAT, stats.content_bytes_written,
+                       NULL);
+    }
   }
 
   rpmostree_output_task_end ("done");
