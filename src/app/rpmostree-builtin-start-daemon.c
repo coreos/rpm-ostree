@@ -25,6 +25,7 @@
 #include <gio/gunixoutputstream.h>
 #include <systemd/sd-daemon.h>
 #include <systemd/sd-journal.h>
+#include <systemd/sd-daemon.h>
 #include <stdio.h>
 #include <libglnx.h>
 #include <glib/gi18n.h>

@@ -537,6 +537,35 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
 }
 
 static gboolean
+handle_register_client (RPMOSTreeSysroot *object,
+                        GDBusMethodInvocation *invocation)
+{
+  const char *sender;
+  sender = g_dbus_method_invocation_get_sender (invocation);
+  g_assert (sender);
+
+  rpmostreed_daemon_add_client (rpmostreed_daemon_get (), sender);
+  rpmostree_sysroot_complete_register_client (object, invocation);
+
+  return TRUE;
+}
+
+static gboolean
+handle_unregister_client (RPMOSTreeSysroot *object,
+                          GDBusMethodInvocation *invocation)
+{
+  const char *sender;
+
+  sender = g_dbus_method_invocation_get_sender (invocation);
+  g_assert (sender);
+
+  rpmostreed_daemon_remove_client (rpmostreed_daemon_get (), sender);
+  rpmostree_sysroot_complete_unregister_client (object, invocation);
+
+  return TRUE;
+}
+
+static gboolean
 handle_reload_config (RPMOSTreeSysroot *object,
                       GDBusMethodInvocation *invocation)
 {
@@ -731,6 +760,8 @@ rpmostreed_sysroot_iface_init (RPMOSTreeSysrootIface *iface)
 {
   iface->handle_create_osname = handle_create_osname;
   iface->handle_get_os = handle_get_os;
+  iface->handle_register_client = handle_register_client;
+  iface->handle_unregister_client = handle_unregister_client;
   iface->handle_reload_config = handle_reload_config;
 }
 

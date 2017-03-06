@@ -164,6 +164,10 @@ rpmostree_load_sysroot (gchar *sysroot,
   if (sysroot_proxy == NULL)
     goto out;
 
+  /* This tells the daemon not to auto-exit as long as we are alive */
+  if (!rpmostree_sysroot_call_register_client_sync (sysroot_proxy, cancellable, error))
+    goto out;
+
   *out_sysroot_proxy = g_steal_pointer (&sysroot_proxy);
   ret = TRUE;
 

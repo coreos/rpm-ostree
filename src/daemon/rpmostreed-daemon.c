@@ -24,6 +24,7 @@
 #include "rpmostreed-utils.h"
 
 #include <libglnx.h>
+#include <systemd/sd-journal.h>
 
 /**
  * SECTION: daemon
@@ -43,6 +44,8 @@ typedef struct _RpmostreedDaemonClass RpmostreedDaemonClass;
  */
 struct _RpmostreedDaemon {
   GObject parent_instance;
+
+  GHashTable *bus_clients;
 
   RpmostreedSysroot *sysroot;
   gchar *sysroot_path;
@@ -89,6 +92,7 @@ daemon_finalize (GObject *object)
   g_clear_object (&self->sysroot);
 
   g_object_unref (self->connection);
+  g_hash_table_unref (self->bus_clients);
 
   g_free (self->sysroot_path);
   G_OBJECT_CLASS (rpmostreed_daemon_parent_class)->finalize (object);
@@ -151,6 +155,7 @@ rpmostreed_daemon_init (RpmostreedDaemon *self)
 
   self->sysroot_path = NULL;
   self->sysroot = NULL;
+  self->bus_clients = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 }
 
 static gboolean
@@ -253,6 +258,66 @@ rpmostreed_daemon_get (void)
 {
   g_assert (_daemon_instance);
   return _daemon_instance;
+}
+
+static void
+on_name_owner_changed (GDBusConnection  *connection,
+                       const gchar      *sender_name,
+                       const gchar      *object_path,
+                       const gchar      *interface_name,
+                       const gchar      *signal_name,
+                       GVariant         *parameters,
+                       gpointer          user_data)
+{
+  RpmostreedDaemon *self = user_data;
+  const char *name;
+  const char *old_owner;
+  gboolean has_old_owner;
+  const char *new_owner;
+  gboolean has_new_owner;
+
+  if (g_strcmp0 (object_path, "/org/freedesktop/DBus") != 0 ||
+      g_strcmp0 (interface_name, "org.freedesktop.DBus") != 0 ||
+      g_strcmp0 (sender_name, "org.freedesktop.DBus") != 0)
+    return;
+
+  g_variant_get (parameters, "(&s&s&s)", &name, &old_owner, &new_owner);
+
+  has_old_owner = old_owner && *old_owner;
+  has_new_owner = new_owner && *new_owner;
+  if (has_old_owner && !has_new_owner)
+    rpmostreed_daemon_remove_client (self, name);
+}
+
+void
+rpmostreed_daemon_add_client (RpmostreedDaemon *self,
+                              const char       *client)
+{
+  if (g_hash_table_lookup (self->bus_clients, client))
+    return;
+  g_dbus_connection_signal_subscribe (self->connection,
+                                      "org.freedesktop.DBus",
+                                      "org.freedesktop.DBus",
+                                      "NameOwnerChanged",
+                                      "/org/freedesktop/DBus",
+                                      client,
+                                      G_DBUS_SIGNAL_FLAGS_NONE,
+                                      on_name_owner_changed,
+                                      g_object_ref (self),
+                                      g_object_unref);
+
+  g_hash_table_add (self->bus_clients, g_strdup (client));
+  sd_journal_print (LOG_INFO, "Client %s added; new total=%u", client, g_hash_table_size (self->bus_clients));
+}
+
+void
+rpmostreed_daemon_remove_client (RpmostreedDaemon *self,
+                                 const char       *client)
+{
+  if (!g_hash_table_lookup (self->bus_clients, client))
+    return;
+  g_hash_table_remove (self->bus_clients, client);
+  sd_journal_print (LOG_INFO, "Client %s vanished; remaining=%u", client, g_hash_table_size (self->bus_clients));
 }
 
 void

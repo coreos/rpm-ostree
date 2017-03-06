@@ -26,6 +26,17 @@
     <!-- The values are (method-name, sender-name) -->
     <property name="ActiveTransaction" type="(sss)" access="read"/>
 
+    <!-- (Currently) optional method to denote the client plans
+         to either invoke methods on the daemon, or monitor status.
+         If no clients are registered, the daemon may exit. -->
+    <method name="RegisterClient">
+    </method>
+
+    <!-- You must call this if your process is no longer interested in talking to
+         rpm-ostree, but will remain connected to the bus. -->
+    <method name="UnregisterClient">
+    </method>
+
     <method name="ReloadConfig">
     </method>
 
