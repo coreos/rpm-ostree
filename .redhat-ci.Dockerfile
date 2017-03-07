@@ -11,13 +11,17 @@ RUN dnf install -y @buildsys-build && \
     rpm -e rpm-ostree
 
 # These are test-only reqs
-
 RUN dnf install -y \
         ostree \
         createrepo_c \
         /usr/bin/jq \
+        PyYAML \
         clang \
         libubsan \
+        libasan \
+        libtsan \
+        elfutils \
+        fuse \
         sudo  \
         gnome-desktop-testing
 
