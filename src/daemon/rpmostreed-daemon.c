@@ -371,6 +371,7 @@ void
 rpmostreed_daemon_run_until_idle_exit (RpmostreedDaemon *self)
 {
   self->running = TRUE;
+  render_systemd_status (self);
   while (self->running)
     g_main_context_iteration (NULL, TRUE);
 }
