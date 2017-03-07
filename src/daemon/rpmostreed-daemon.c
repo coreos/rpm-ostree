@@ -49,6 +49,7 @@ struct _RpmostreedDaemon {
 
   GHashTable *bus_clients;
 
+  gboolean running;
   RpmostreedSysroot *sysroot;
   gchar *sysroot_path;
 
@@ -358,6 +359,21 @@ rpmostreed_daemon_remove_client (RpmostreedDaemon *self,
   g_hash_table_remove (self->bus_clients, client);
   sd_journal_print (LOG_INFO, "Client %s vanished; remaining=%u", client, g_hash_table_size (self->bus_clients));
   render_systemd_status (self);
+}
+
+void
+rpmostreed_daemon_exit_now (RpmostreedDaemon *self)
+{
+  self->running = FALSE;
+}
+
+void
+rpmostreed_daemon_run_until_idle_exit (RpmostreedDaemon *self)
+{
+  self->running = TRUE;
+  render_systemd_status (self);
+  while (self->running)
+    g_main_context_iteration (NULL, TRUE);
 }
 
 void
