@@ -62,6 +62,8 @@ state_transition (AppState state)
 {
   g_assert_cmpint (state, >, appstate);
   appstate = state;
+  if (state > APPSTATE_RUNNING && rpm_ostree_daemon)
+    rpmostreed_daemon_exit_now (rpm_ostree_daemon);
   g_main_context_wakeup (NULL);
 }
 
@@ -368,8 +370,7 @@ rpmostree_builtin_start_daemon (int             argc,
   state_transition (APPSTATE_RUNNING);
 
   g_debug ("Entering main event loop");
-  while (appstate == APPSTATE_RUNNING)
-    g_main_context_iteration (mainctx, TRUE);
+  rpmostreed_daemon_run_until_idle_exit (rpm_ostree_daemon);
 
   if (bus)
     {
