@@ -1,31 +1,67 @@
-Summary: Commit RPMs to an OSTree repository
+Summary: Hybrid image/package system
 Name: rpm-ostree
-Version: 2014.1
+Version: 2017.3
 Release: 1%{?dist}
 #VCS: https://github.com/cgwalters/rpm-ostree
 # This tarball is generated via "make -f Makefile.dist-packaging dist-snapshot"
 Source0: rpm-ostree-%{version}.tar.xz
 License: LGPLv2+
-URL: https://github.com/cgwalters/rpm-ostree
+URL: https://github.com/projectatomic/rpm-ostree
 # We always run autogen.sh
-BuildRequires: autoconf automake libtool
+BuildRequires: autoconf automake libtool git
 # For docs
+BuildRequires: chrpath
 BuildRequires: gtk-doc
+BuildRequires: gperf
 BuildRequires: gnome-common
-BuildRequires: pkgconfig(ostree-1)
-BuildRequires: pkgconfig(libgsystem)
-BuildRequires: pkgconfig(libarchive)
-BuildRequires: pkgconfig(libhif)
-BuildRequires: pkgconfig(librepo)
+BuildRequires: gobject-introspection
+# Core requirements
+BuildRequires: pkgconfig(ostree-1) >= 2017.2
 BuildRequires: pkgconfig(json-glib-1.0)
 BuildRequires: pkgconfig(rpm)
+BuildRequires: pkgconfig(libarchive)
+BuildRequires: pkgconfig(libsystemd)
 BuildRequires: libcap-devel
+BuildRequires: libattr-devel
 
-Requires: /usr/bin/yum
+# We currently interact directly with librepo
+BuildRequires: pkgconfig(librepo)
+
+# libdnf bundling
+# We're using RPATH to pick up our bundled version
+%global __requires_exclude ^libdnf[.]so[.].*$
+
+BuildRequires: cmake
+BuildRequires: pkgconfig(expat)
+BuildRequires: pkgconfig(check)
+BuildRequires: python-devel
+BuildRequires: python-sphinx
+%if (0%{?rhel} != 0 && 0%{?rhel} <= 7)
+BuildRequires: libsolv-devel
+%else
+BuildRequires: pkgconfig(libsolv)
+%endif
+
+# In CentOS7/RHEL the package is client-only right now, but we can do both
+%if 0%{?rhel} != 0 && 0%{?rhel} <= 7
+Provides: rpm-ostree-client
+%endif
+
+# For now...see https://github.com/projectatomic/rpm-ostree/pull/637
+# and https://github.com/fedora-infra/fedmsg-atomic-composer/pull/17
+# etc.  We'll drop this dependency at some point in the future when
+# rpm-ostree wraps more of ostree (such as `ostree admin unlock` etc.)
+Requires: ostree
+Requires: bubblewrap
+Requires: fuse
 
 %description
-This tool takes a set of packages, and commits them to an OSTree
-repository.  At the moment, it is intended for use on build servers.
+rpm-ostree is a hybrid image/package system.  It supports
+"composing" packages on a build server into an OSTree repository,
+which can then be replicated by client systems with atomic upgrades.
+Additionally, unlike many "pure" image systems, with rpm-ostree
+each client system can layer on additional packages, providing
+a "best of both worlds" approach.
 
 %package devel
 Summary: Development headers for %{name}
@@ -36,7 +72,7 @@ Requires: %{name} = %{version}-%{release}
 The %{name}-devel package includes the header files for the %{name} library.
 
 %prep
-%setup -q -n %{name}-%{version}
+%autosetup -Sgit -n %{name}-%{version}
 
 %build
 env NOCONFIGURE=1 ./autogen.sh
@@ -47,27 +83,48 @@ make %{?_smp_mflags}
 make install DESTDIR=$RPM_BUILD_ROOT INSTALL="install -p -c"
 find $RPM_BUILD_ROOT -name '*.la' -delete
 
-%files
+# I try to do continuous delivery via rpmdistro-gitoverlay while
+# reusing the existing spec files.  Currently RPM only supports
+# mandatory file entries.  What this is doing is making each file
+# entry optional - if it exists it will be picked up.  That
+# way the same spec file works more easily across multiple versions where e.g. an
+# older version might not have a systemd unit file.
+cat > autofiles.py <<EOF
+#!/usr/bin/python
+import os,sys,glob
+os.chdir(os.environ['RPM_BUILD_ROOT'])
+for line in sys.argv[1:]:
+    if line == '':
+        break
+    if line[0] != '/':
+        sys.stdout.write(line + '\n')
+    else:
+        files = glob.glob(line[1:])
+        if len(files) > 0:
+            sys.stderr.write('{0} matched {1} files\n'.format(line, len(files)))
+            sys.stdout.write(line + '\n')
+        else:
+            sys.stderr.write('{0} did not match any files\n'.format(line))
+EOF
+python autofiles.py > files \
+  '%{_bindir}/*' \
+  '%{_libdir}/%{name}' \
+  '%{_libdir}/*.so.*' \
+  '%{_mandir}/man*/*' \
+  '%{_libdir}/girepository-1.0/*.typelib' \
+  '%{_sysconfdir}/dbus-1/system.d/*' \
+  '%{_prefix}/lib/systemd/system/*' \
+  '%{_libexecdir}/rpm-ostree*' \
+  '%{_datadir}/dbus-1/system-services'
+python autofiles.py > files.devel \
+  '%{_libdir}/lib*.so' \
+  '%{_includedir}/*' \
+  '%{_libdir}/pkgconfig/*' \
+  '%{_datadir}/gtk-doc/html/*' \
+  '%{_datadir}/gir-1.0/*-1.0.gir'
+
+%files -f files
 %doc COPYING README.md
-%{_bindir}/rpm-ostree
-%{_libdir}/%{name}/
-%{_mandir}/man1/*
-%{_libdir}/*.so.1*
-%{_libdir}/girepository-1.0/*.typelib
-%{_libexecdir}/rpm-ostreed
-%{_datadir}/dbus-1/system-services/org.projectatomic.rpmostree1.service
-%{_prefix}/lib/systemd/system/rpm-ostreed.service
-%{_sysconfdir}/dbus-1/system.d/org.projectatomic.rpmostree1.conf
 
-%files devel
-%{_libdir}/lib*.so
-%{_includedir}/*
-%{_libdir}/pkgconfig/*
-%dir %{_datadir}/gtk-doc/html/*
-%{_datadir}/gtk-doc/html/*
-%{_datadir}/gir-1.0/*-1.0.gir
-
-%changelog
-* Fri Mar 07 2014 Colin Walters <walters@verbum.org> - 2014.5-1
-- Initial package
+%files devel -f files.devel
 
