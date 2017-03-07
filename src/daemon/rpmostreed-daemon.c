@@ -29,6 +29,8 @@
 #include <stdio.h>
 
 #define RPMOSTREE_MESSAGE_TRANSACTION_STARTED SD_ID128_MAKE(d5,be,a3,7a,8f,c8,4f,f5,9d,bc,fd,79,17,7b,7d,f8)
+/* I picked this arbitrarily */
+#define IDLE_EXIT_TIMEOUT_SECONDS 10
 
 /**
  * SECTION: daemon
@@ -53,6 +55,8 @@ struct _RpmostreedDaemon {
 
   gboolean running;
   GDBusProxy *bus_proxy;
+  GSource *idle_exit_source;
+  guint rerender_status_id;
   RpmostreedSysroot *sysroot;
   gchar *sysroot_path;
 
@@ -75,7 +79,7 @@ enum
 };
 
 static void rpmostreed_daemon_initable_iface_init (GInitableIface *iface);
-static void render_systemd_status (RpmostreedDaemon *self);
+static void update_status (RpmostreedDaemon *self);
 
 G_DEFINE_TYPE_WITH_CODE (RpmostreedDaemon, rpmostreed_daemon, G_TYPE_OBJECT,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
@@ -127,6 +131,9 @@ daemon_finalize (GObject *object)
 
   g_object_unref (self->connection);
   g_hash_table_unref (self->bus_clients);
+  g_clear_pointer (&self->idle_exit_source, (GDestroyNotify)g_source_unref);
+  if (self->rerender_status_id > 0)
+    g_source_remove (self->rerender_status_id);
 
   g_free (self->sysroot_path);
   G_OBJECT_CLASS (rpmostreed_daemon_parent_class)->finalize (object);
@@ -221,7 +228,7 @@ on_active_txn_changed (GObject *object,
         }
     }
 
-  render_systemd_status (self);
+  update_status (self);
 }
 
 static gboolean
@@ -365,12 +372,39 @@ on_name_owner_changed (GDBusConnection  *connection,
     rpmostreed_daemon_remove_client (self, name);
 }
 
+static gboolean
+idle_update_status (void *data)
+{
+  RpmostreedDaemon *self = data;
+
+  update_status (self);
+
+  return TRUE;
+}
+
+
+static gboolean
+on_idle_exit (void *data)
+{
+  RpmostreedDaemon *self = data;
+
+  g_clear_pointer (&self->idle_exit_source, (GDestroyNotify)g_source_unref);
+
+  sd_notifyf (0, "STOPPING=1\nSTATUS=Exiting due to idle");
+  self->running = FALSE;
+  g_main_context_wakeup (NULL);
+
+  return FALSE;
+}
+
 static void
-render_systemd_status (RpmostreedDaemon *self)
+update_status (RpmostreedDaemon *self)
 {
   g_autoptr(GVariant) active_txn = NULL;
   gboolean have_active_txn = FALSE;
   const char *method, *sender, *path;
+  const guint n_clients = g_hash_table_size (self->bus_clients);
+  gboolean currently_idle;
 
   g_object_get (rpmostreed_sysroot_get (), "active-transaction", &active_txn, NULL);
 
@@ -381,13 +415,49 @@ render_systemd_status (RpmostreedDaemon *self)
         have_active_txn = TRUE;
     }
 
+  currently_idle = !have_active_txn && n_clients == 0;
+
+  if (currently_idle && !self->idle_exit_source)
+    {
+      /* I think adding some randomness is a good idea, to mitigate
+       * pathological cases where someone is talking to us at the same
+       * frequency as our exit timer. */
+      const guint idle_exit_secs = IDLE_EXIT_TIMEOUT_SECONDS + g_random_int_range (0, 5);
+      self->idle_exit_source = g_timeout_source_new_seconds (idle_exit_secs);
+      g_source_set_callback (self->idle_exit_source, on_idle_exit, self, NULL);
+      g_source_attach (self->idle_exit_source, NULL);
+      /* This source ensures we update the systemd status to show admins
+       * when we may auto-exit.
+       */
+      self->rerender_status_id = g_timeout_add_seconds (1, idle_update_status, self);
+      sd_journal_print (LOG_INFO, "In idle state; will auto-exit in %u seconds", idle_exit_secs);
+    }
+  else if (!currently_idle && self->idle_exit_source)
+    {
+      g_source_destroy (self->idle_exit_source);
+      g_clear_pointer (&self->idle_exit_source, (GDestroyNotify)g_source_unref);
+      g_source_remove (self->rerender_status_id);
+    }
+
   if (have_active_txn)
     {
       sd_notifyf (0, "STATUS=clients=%u; txn=%s caller=%s path=%s", g_hash_table_size (self->bus_clients),
                   method, sender, path);
     }
+  else if (n_clients > 0)
+    sd_notifyf (0, "STATUS=clients=%u; idle", n_clients);
   else
-    sd_notifyf (0, "STATUS=clients=%u; idle", g_hash_table_size (self->bus_clients));
+    {
+      guint64 readytime = g_source_get_ready_time (self->idle_exit_source);
+      guint64 curtime = g_source_get_time (self->idle_exit_source);
+      guint64 timeout_micros = readytime - curtime;
+      if (timeout_micros < 0)
+        timeout_micros = 0;
+
+      g_assert (currently_idle && self->idle_exit_source);
+      sd_notifyf (0, "STATUS=clients=%u; idle exit in %" G_GUINT64_FORMAT " seconds", n_clients,
+                  timeout_micros / G_USEC_PER_SEC);
+    }
 }
 
 gboolean
@@ -439,7 +509,7 @@ rpmostreed_daemon_add_client (RpmostreedDaemon *self,
   g_hash_table_insert (self->bus_clients, (char*)clientdata->address, clientdata);
   g_autofree char *clientstr = rpmostree_client_to_string (clientdata);
   sd_journal_print (LOG_INFO, "%s added; new total=%u", clientstr, g_hash_table_size (self->bus_clients));
-  render_systemd_status (self);
+  update_status (self);
 }
 
 /* Returns a string representing the state of the bus name @client.
@@ -468,8 +538,9 @@ rpmostreed_daemon_remove_client (RpmostreedDaemon *self,
   g_dbus_connection_signal_unsubscribe (self->connection, clientdata->name_watch_id);
   g_autofree char *clientstr = rpmostree_client_to_string (clientdata);
   g_hash_table_remove (self->bus_clients, client);
-  sd_journal_print (LOG_INFO, "%s vanished; remaining=%u", clientstr, g_hash_table_size (self->bus_clients));
-  render_systemd_status (self);
+  const guint remaining = g_hash_table_size (self->bus_clients);
+  sd_journal_print (LOG_INFO, "%s vanished; remaining=%u", clientstr, remaining);
+  update_status (self);
 }
 
 void
@@ -482,7 +553,7 @@ void
 rpmostreed_daemon_run_until_idle_exit (RpmostreedDaemon *self)
 {
   self->running = TRUE;
-  render_systemd_status (self);
+  update_status (self);
   while (self->running)
     g_main_context_iteration (NULL, TRUE);
 }
