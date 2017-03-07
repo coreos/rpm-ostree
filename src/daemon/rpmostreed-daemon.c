@@ -28,6 +28,8 @@
 #include <systemd/sd-daemon.h>
 #include <stdio.h>
 
+#define RPMOSTREE_MESSAGE_TRANSACTION_STARTED SD_ID128_MAKE(d5,be,a3,7a,8f,c8,4f,f5,9d,bc,fd,79,17,7b,7d,f8)
+
 /**
  * SECTION: daemon
  * @title: RpmostreedDaemon
@@ -162,12 +164,37 @@ rpmostreed_daemon_init (RpmostreedDaemon *self)
   self->bus_clients = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 }
 
+static char *
+render_txn (const char *method,
+            const char *sender,
+            const char *path)
+{
+  return g_strdup_printf ("%s %s %s", method, sender, path);
+}
+
 static void
 on_active_txn_changed (GObject *object,
                        GParamSpec *pspec,
                        gpointer user_data)
 {
   RpmostreedDaemon *self = user_data;
+  g_autoptr(GVariant) active_txn = NULL;
+  const char *method, *sender, *path;
+
+  g_object_get (rpmostreed_sysroot_get (), "active-transaction", &active_txn, NULL);
+
+  if (active_txn)
+    {
+      g_variant_get (active_txn, "(&s&s&s)", &method, &sender, &path);
+      if (*method)
+        {
+          g_autofree char *txn_str = render_txn (method, sender, path);
+          sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_TRANSACTION_STARTED),
+                           "MESSAGE=Initiated txn: %s", txn_str,
+                           NULL);
+        }
+    }
+
   render_systemd_status (self);
 }
 
@@ -322,8 +349,10 @@ render_systemd_status (RpmostreedDaemon *self)
     }
 
   if (have_active_txn)
-    sd_notifyf (0, "STATUS=clients=%u; txn=%s %s %s", g_hash_table_size (self->bus_clients),
-                method, sender, path);
+    {
+      g_autofree char *txn_str = render_txn (method, sender, path);
+      sd_notifyf (0, "STATUS=clients=%u; txn=%s", g_hash_table_size (self->bus_clients), txn_str);
+    }
   else
     sd_notifyf (0, "STATUS=clients=%u; idle", g_hash_table_size (self->bus_clients));
 }
