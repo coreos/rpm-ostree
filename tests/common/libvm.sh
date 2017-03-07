@@ -163,29 +163,41 @@ vm_has_packages() {
   done
 }
 
-# retrieve info from the booted deployment
-# - $1   key to retrieve
-vm_get_booted_deployment_info() {
-  key=$1
+# retrieve info from a deployment
+# - $1   index of deployment (or -1 for booted)
+# - $2   key to retrieve
+vm_get_deployment_info() {
+  idx=$1
+  key=$2
   vm_rpmostree status --json | \
     python -c "
 import sys, json
 deployments = json.load(sys.stdin)[\"deployments\"]
-booted = None
-for deployment in deployments:
-  if deployment[\"booted\"]:
-    booted = deployment
-    break
-if not booted:
+idx = $idx
+if idx < 0:
+  for i, depl in enumerate(deployments):
+    if depl[\"booted\"]:
+      idx = i
+if idx < 0:
   print \"Failed to determine currently booted deployment\"
   exit(1)
-if \"$key\" in booted:
-  data = booted[\"$key\"]
+if idx >= len(deployments):
+  print \"Deployment index $idx is out of range\"
+  exit(1)
+depl = deployments[idx]
+if \"$key\" in depl:
+  data = depl[\"$key\"]
   if type(data) is list:
     print \" \".join(data)
   else:
     print data
 "
+}
+
+# retrieve info from the booted deployment
+# - $1   key to retrieve
+vm_get_booted_deployment_info() {
+  vm_get_deployment_info -1 $1
 }
 
 # print the layered packages
@@ -196,6 +208,10 @@ vm_get_layered_packages() {
 # print the requested packages
 vm_get_requested_packages() {
   vm_get_booted_deployment_info requested-packages
+}
+
+vm_get_local_packages() {
+  vm_get_booted_deployment_info requested-local-packages
 }
 
 # check that the packages are currently layered
@@ -213,6 +229,15 @@ vm_has_layered_packages() {
 # - $@    packages to check for
 vm_has_requested_packages() {
   pkgs=$(vm_get_requested_packages)
+  for pkg in "$@"; do
+    if [[ " $pkgs " != *$pkg* ]]; then
+        return 1
+    fi
+  done
+}
+
+vm_has_local_packages() {
+  pkgs=$(vm_get_local_packages)
   for pkg in "$@"; do
     if [[ " $pkgs " != *$pkg* ]]; then
         return 1
@@ -240,12 +265,15 @@ vm_assert_layered_pkg() {
   set +e
   vm_has_packages $pkg;         pkg_in_rpmdb=$?
   vm_has_layered_packages $pkg; pkg_is_layered=$?
+  vm_has_local_packages $pkg;   pkg_is_layered_local=$?
   vm_has_requested_packages $pkg; pkg_is_requested=$?
   [ $pkg_in_rpmdb == 0 ] && \
-  [ $pkg_is_layered == 0 ] && \
-  [ $pkg_is_requested == 0 ]; pkg_present=$?
+  ( ( [ $pkg_is_layered == 0 ] &&
+      [ $pkg_is_requested == 0 ] ) ||
+    [ $pkg_is_layered_local == 0 ] ); pkg_present=$?
   [ $pkg_in_rpmdb != 0 ] && \
   [ $pkg_is_layered != 0 ] && \
+  [ $pkg_is_layered_local != 0 ] && \
   [ $pkg_is_requested != 0 ]; pkg_absent=$?
   set -e
 
