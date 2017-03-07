@@ -360,10 +360,17 @@ rpmostree_builtin_start_daemon (int             argc,
        * and avoid sending any more traffic our way.
        * After that, release the name via API directly so we can wait for the result.
        * More info:
+       *  https://github.com/projectatomic/rpm-ostree/pull/606
        *  https://lists.freedesktop.org/archives/dbus/2015-May/016671.html
        *  https://github.com/cgwalters/test-exit-on-idle
        */
       sd_notify (FALSE, "STOPPING=1");
+      /* The rpmostreed_daemon_run_until_idle_exit() path won't actually set
+       * FLUSHING right now, let's just forcibly do so if it hasn't been done
+       * already.
+       */
+      if (appstate < APPSTATE_FLUSHING)
+        state_transition (APPSTATE_FLUSHING);
       g_dbus_connection_call (bus,
                               "org.freedesktop.DBus", "/org/freedesktop/DBus",
                               "org.freedesktop.DBus", "ReleaseName",
