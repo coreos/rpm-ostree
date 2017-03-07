@@ -95,6 +95,7 @@ echo "ok pkg foo removed"
 vm_rpmostree cleanup -b
 vm_assert_status_jq '.deployments|length == 2'
 echo "ok baseline cleanup"
+
 vm_rpmostree cleanup -r
 vm_assert_status_jq '.deployments|length == 1'
 vm_rpmostree cleanup -pr
