@@ -28,13 +28,21 @@
 
     <!-- (Currently) optional method to denote the client plans
          to either invoke methods on the daemon, or monitor status.
-         If no clients are registered, the daemon may exit. -->
+         If no clients are registered, the daemon may exit.
+
+         No options are currently defined.
+    -->
     <method name="RegisterClient">
+      <arg type="a{sv}" name="options" direction="in"/>
     </method>
 
     <!-- You must call this if your process is no longer interested in talking to
-         rpm-ostree, but will remain connected to the bus. -->
+         rpm-ostree, but will remain connected to the bus.
+
+         No options are currently defined.
+    -->
     <method name="UnregisterClient">
+      <arg type="a{sv}" name="options" direction="in"/>
     </method>
 
     <method name="ReloadConfig">

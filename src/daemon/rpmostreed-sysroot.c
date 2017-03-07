@@ -538,7 +538,8 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
 
 static gboolean
 handle_register_client (RPMOSTreeSysroot *object,
-                        GDBusMethodInvocation *invocation)
+                        GDBusMethodInvocation *invocation,
+                        GVariant *arg_options)
 {
   const char *sender;
   sender = g_dbus_method_invocation_get_sender (invocation);
@@ -552,7 +553,8 @@ handle_register_client (RPMOSTreeSysroot *object,
 
 static gboolean
 handle_unregister_client (RPMOSTreeSysroot *object,
-                          GDBusMethodInvocation *invocation)
+                          GDBusMethodInvocation *invocation,
+                          GVariant *arg_options)
 {
   const char *sender;
 
