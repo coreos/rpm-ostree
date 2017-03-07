@@ -13,7 +13,6 @@ BuildRequires: autoconf automake libtool
 BuildRequires: gtk-doc
 BuildRequires: gnome-common
 BuildRequires: pkgconfig(ostree-1)
-BuildRequires: pkgconfig(libgsystem)
 BuildRequires: pkgconfig(libarchive)
 BuildRequires: pkgconfig(libhif)
 BuildRequires: pkgconfig(librepo)
