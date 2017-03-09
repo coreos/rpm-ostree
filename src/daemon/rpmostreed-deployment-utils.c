@@ -236,15 +236,18 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
     }
 
   g_variant_dict_insert (&dict, "origin", "s", refspec);
-  if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
-    {
-      g_autofree char **pkgs =
-        (char**)g_hash_table_get_keys_as_array (rpmostree_origin_get_packages (origin), NULL);
-      g_variant_dict_insert (&dict, "requested-packages", "^as", pkgs);
-    }
+
+  g_autofree char **requested_pkgs =
+    (char**)g_hash_table_get_keys_as_array (rpmostree_origin_get_packages (origin), NULL);
+  g_variant_dict_insert (&dict, "requested-packages", "^as", requested_pkgs);
 
   if (is_layered && g_strv_length (layered_pkgs) > 0)
     g_variant_dict_insert (&dict, "packages", "^as", layered_pkgs);
+  else
+    {
+      const char *const p[] = { NULL };
+      g_variant_dict_insert (&dict, "packages", "^as", p);
+    }
 
   if (sigs != NULL)
     g_variant_dict_insert_value (&dict, "signatures", sigs);
