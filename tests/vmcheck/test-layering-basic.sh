@@ -37,6 +37,12 @@ vm_assert_status_jq \
   '.deployments[0]["base-checksum"]|not' \
   '.deployments[0]["pending-base-checksum"]|not'
 
+# make sure that package-related entries are always present,
+# even when they're empty
+vm_assert_status_jq \
+  '.deployments[0]["packages"]' \
+  '.deployments[0]["requested-packages"]'
+
 # Be sure an unprivileged user exists
 vm_cmd getent passwd bin
 if vm_cmd "runuser -u bin rpm-ostree pkg-add foo-1.0"; then
