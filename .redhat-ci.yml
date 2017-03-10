@@ -64,17 +64,20 @@ required: true
 
 cluster:
   hosts:
-    - name: vmcheck
+    - name: vmcheck1
+      distro: fedora/25/atomic
+    - name: vmcheck2
+      distro: fedora/25/atomic
+    - name: vmcheck3
       distro: fedora/25/atomic
   container:
     image: projectatomic/rpm-ostree-tester
 
 tests:
-  - make vmcheck
+  - make vmcheck HOSTS="vmcheck1 vmcheck2 vmcheck3"
 
 artifacts:
-  - vmcheck.log
-  - vmcheck-journal.txt
+  - vmcheck
 
 # We really need to work on getting this down:
 # https://github.com/projectatomic/rpm-ostree/issues/662
