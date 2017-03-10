@@ -177,6 +177,22 @@ setup_rofiles_usr (RpmOstreeBwrap *bwrap,
   return ret;
 }
 
+/* nspawn by default doesn't give us CAP_NET_ADMIN; see
+ * https://pagure.io/releng/issue/6602#comment-71214
+ * https://pagure.io/koji/pull-request/344#comment-21060
+ *
+ * Theoretically we should do capable(CAP_NET_ADMIN)
+ * but that's a lot of ugly code, and the only known
+ * place we hit this right now is nspawn.  Plus
+ * we want to use userns down the line anyways where
+ * we'll regain CAP_NET_ADMIN.
+ */
+static gboolean
+running_in_nspawn (void)
+{
+  return g_strcmp0 (getenv ("container"), "systemd-nspawn") == 0;
+}
+
 RpmOstreeBwrap *
 rpmostree_bwrap_new (int rootfs_fd,
                      RpmOstreeBwrapMutability mutable,
@@ -209,11 +225,13 @@ rpmostree_bwrap_new (int rootfs_fd,
                                       * but it may need some mapping work.
                                       */
                                      "--unshare-pid",
-                                     "--unshare-net",
                                      "--unshare-uts",
                                      "--unshare-ipc",
                                      "--unshare-cgroup-try",
                                      NULL);
+
+  if (!running_in_nspawn ())
+    rpmostree_bwrap_append_bwrap_argv (ret, "--unshare-net", NULL);
 
   for (guint i = 0; i < G_N_ELEMENTS (usr_links); i++)
     {
