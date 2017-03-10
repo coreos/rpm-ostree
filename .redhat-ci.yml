@@ -70,7 +70,6 @@ cluster:
     image: projectatomic/rpm-ostree-tester
 
 tests:
-  - cp .redhat-ci.ssh-config ssh-config
   - make vmcheck
 
 artifacts:
