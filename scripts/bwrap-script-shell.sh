@@ -6,9 +6,13 @@ shift
 cd ${rootfs}
 # ⚠⚠⚠ If you change this, also update src/libpriv/rpmostree-scripts.c ⚠⚠⚠
 BWRAP_ARGV="--dev /dev --proc /proc --dir /tmp --chdir / \
-     --unshare-pid --unshare-net --unshare-uts \
+     --unshare-pid --unshare-uts \
      --unshare-ipc --unshare-cgroup-try \
 "
+if ! test "${container:-}" = "systemd-nspawn"; then
+    BWRAP_ARGV="$BWRAP_ARGV --unshare-net"
+fi
+
 for src in /sys/{block,bus,class,dev}; do
     BWRAP_ARGV="$BWRAP_ARGV --ro-bind $src $src"
 done
