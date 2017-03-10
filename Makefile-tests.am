@@ -107,9 +107,14 @@ check-local:
 vmsync:
 	@env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh
 
+HOSTS := "vmcheck"
+
 vmoverlay:
 	@if [ -z "$(SKIP_VMOVERLAY)" ]; then \
-	  env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/overlay.sh; \
+	  rm -rf $(abs_top_srcdir)/insttree; \
+	  echo -n "$(HOSTS)" | xargs -P 0 -n 1 -d ' ' -I {} \
+	    env $(BASE_TESTS_ENVIRONMENT) VM={} \
+	      ./tests/vmcheck/overlay.sh; \
 	fi
 
 vmshell: vmsync
@@ -117,8 +122,8 @@ vmshell: vmsync
 
 # set up test environment to somewhat resemble uninstalled tests
 vmcheck: vmoverlay tests/common/compose/yum/repo/repodata/repomd.xml
-	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) \
-	   sh tests/vmcheck/test.sh
+	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) PYTHONUNBUFFERED=1 \
+	  tests/vmcheck/multitest.py $(HOSTS)
 
 testenv:
 	@echo "===== ENTERING TESTENV ====="
