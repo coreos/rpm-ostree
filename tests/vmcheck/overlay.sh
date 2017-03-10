@@ -14,15 +14,23 @@ if test -z "${INSIDE_VM:-}"; then
     set -x
 
     cd ${topsrcdir}
-    rm insttree -rf
-    DESTDIR=$(pwd)/insttree
-    make install DESTDIR=${DESTDIR}
-    for san in a t ub; do
-        if eu-readelf -d ${DESTDIR}/usr/bin/rpm-ostree | grep -q "NEEDED.*lib${san}san"; then
-            echo "Installing extra sanitizier: lib${san}san"
-            cp /usr/lib64/lib${san}san*.so.* ${DESTDIR}/usr/lib64
-        fi
-    done
+
+    # Use a lock in case we're called in parallel (make install might fail).
+    # Plus, we can just share the same install tree, and sharing is caring!
+    flock insttree.lock sh -ec \
+      '[ ! -d insttree ] || exit 0
+       DESTDIR=$(pwd)/insttree
+       make install DESTDIR=${DESTDIR}
+       for san in a t ub; do
+         if eu-readelf -d ${DESTDIR}/usr/bin/rpm-ostree | \
+              grep -q \"NEEDED.*lib${san}san\"; then
+           echo \"Installing extra sanitizier: lib${san}san\"
+           cp /usr/lib64/lib${san}san*.so.* ${DESTDIR}/usr/lib64
+         fi
+       done
+       touch ${DESTDIR}/.completed'
+    [ -f insttree/.completed ]
+
     vm_rsync
 
     $SSH "env INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh"

@@ -1,4 +1,0 @@
-Host vmcheck
-     UserKnownHostsFile /dev/null
-     StrictHostKeyChecking no
-     PasswordAuthentication no

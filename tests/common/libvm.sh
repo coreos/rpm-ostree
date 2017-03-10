@@ -20,27 +20,31 @@
 # prepares the VM and library for action
 vm_setup() {
 
-  # We assume that there's already a configured ssh-config
-  # file available to tell us how to connect to the VM.
-  if [ ! -f "${topsrcdir}/ssh-config" ]; then
-    echo "ERROR: No ssh-config found."
-    exit 1
+  export VM=${VM:-vmcheck}
+  local sshopts="-o User=root \
+                 -o ControlMaster=auto \
+                 -o ControlPath=${topsrcdir}/ssh-$VM.sock \
+                 -o ControlPersist=yes"
+
+  # If we're provided with an ssh-config, make sure we tell
+  # ssh to pick it up.
+  if [ -f "${topsrcdir}/ssh-config" ]; then
+    sshopts="$sshopts -F ${topsrcdir}/ssh-config"
   fi
 
-  local sshopts="-F ${topsrcdir}/ssh-config \
-                 -o User=root \
-                 -o ControlMaster=auto \
-                 -o ControlPath=${topsrcdir}/ssh.sock \
-                 -o ControlPersist=yes"
-  export SSH="ssh $sshopts vmcheck"
+  export SSH="ssh $sshopts $VM"
   export SCP="scp $sshopts"
 }
 
 vm_rsync() {
   if ! test -f .vagrant/using_sshfs; then
     pushd ${topsrcdir}
-    rsync -az --no-owner --no-group -e "ssh -o User=root -F ssh-config" \
-              --exclude .git/ . vmcheck:/var/roothome/sync
+    rsyncopts="ssh -o User=root"
+    if [ -f ssh-config ]; then
+      rsyncopts="$rsync_opts -F ssh-config"
+    fi
+    rsync -az --no-owner --no-group -e "$rsyncopts" \
+              --exclude .git/ . $VM:/var/roothome/sync
     popd
   fi
 }
@@ -68,7 +72,7 @@ vm_rpmostree() {
 vm_send() {
   dir=$1; shift
   vm_cmd mkdir -p $dir
-  $SCP -r "$@" vmcheck:$dir
+  $SCP -r "$@" $VM:$dir
 }
 
 # copy the test repo to the vm

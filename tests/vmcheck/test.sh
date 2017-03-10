@@ -3,6 +3,16 @@ set -euo pipefail
 
 . ${commondir}/libvm.sh
 
+LOG=${LOG:-vmcheck.log}
+LOG=$(realpath $LOG)
+
+# NB: allow JOURNAL_LOG to be empty, which means we never
+# fetch it
+JOURNAL_LOG=${JOURNAL_LOG-vmcheck-journal.txt}
+if [ -n "$JOURNAL_LOG" ]; then
+  JOURNAL_LOG=$(realpath $JOURNAL_LOG)
+fi
+
 # create ssh-config if needed and export cmds
 vm_setup
 
@@ -40,7 +50,6 @@ vm_cmd ostree refs vmcheck_tmp --delete
 vm_cmd mv /etc/yum.repos.d{,.bak}
 vm_cmd mkdir /etc/yum.repos.d
 
-LOG=${LOG:-"$PWD/vmcheck.log"}
 origdir=$(pwd)
 echo -n '' > ${LOG}
 
@@ -88,6 +97,7 @@ for tf in $(find . -name 'test-*.sh' | sort); do
     bn=$(basename ${tf})
     printf "Running $bn...\n"
     printf "\n==== ${bn} ====\n" >> ${LOG}
+    vm_cmd logger "vmcheck: running $bn..."
 
     # do some dirty piping to get some instant feedback and help debugging
     if ${tf} |& tee -a ${LOG} \
@@ -107,6 +117,8 @@ for tf in $(find . -name 'test-*.sh' | sort); do
             let "fail += 1"
         fi
     fi
+
+    vm_cmd logger "vmcheck: finished $bn..."
 
     # go back to the original vmcheck deployment if needed
     csum_cur=$(vm_get_booted_csum)
@@ -130,15 +142,9 @@ vm_cmd mv /etc/yum.repos.d{.bak,}
 
 # Gather post-failure system logs if necessary
 ALL_LOGS=$LOG
-if [ ${fail} -ne 0 ]; then
-    ALL_LOGS="$ALL_LOGS vmcheck-journal.txt"
-    vmcheck_journal=${origdir}/vmcheck-journal.txt
-    if ! vm_ssh_wait 30; then
-        echo "WARNING: Failed to wait for final reboot" > ${vmcheck_journal}
-    else
-        echo "Saving vmcheck-journal.txt"
-        vm_cmd 'journalctl --no-pager || true' > ${vmcheck_journal}
-    fi
+if [ ${fail} -ne 0 ] && [ -n "$JOURNAL_LOG" ]; then
+    ./fetch-journal.sh
+    ALL_LOGS="$ALL_LOGS $JOURNAL_LOG"
 fi
 
 # tear down ssh connection if needed
