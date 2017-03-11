@@ -42,8 +42,12 @@ change_origin_refspec (OstreeSysroot *sysroot,
 {
   gboolean ret = FALSE;
   g_autofree gchar *new_refspec = NULL;
+  g_autofree gchar *new_remote = NULL;
+  g_autofree gchar *new_branch = NULL;
   g_autofree gchar *current_refspec =
     g_strdup (rpmostree_origin_get_refspec (origin));
+  g_autofree gchar *current_remote = NULL;
+  g_autofree gchar *current_branch = NULL;
 
   if (!rpmostreed_refspec_parse_partial (refspec,
                                          current_refspec,
@@ -58,9 +62,19 @@ change_origin_refspec (OstreeSysroot *sysroot,
       goto out;
     }
 
-
   if (!rpmostree_origin_set_rebase (origin, new_refspec, error))
     goto out;
+
+  g_assert (ostree_parse_refspec (current_refspec, &current_remote, &current_branch, NULL));
+  g_assert (ostree_parse_refspec (new_refspec, &new_remote, &new_branch, NULL));
+
+  /* This version is a bit magical, so let's explain it.
+     https://github.com/projectatomic/rpm-ostree/issues/569 */
+  const gboolean switching_only_remote =
+    g_strcmp0 (new_remote, current_remote) != 0 &&
+    g_strcmp0 (new_branch, current_branch) == 0;
+  if (switching_only_remote && new_remote != NULL)
+    g_print ("Rebasing to %s:%s\n", new_remote, current_branch);
 
   if (out_new_refspec != NULL)
     *out_new_refspec = g_steal_pointer (&new_refspec);
