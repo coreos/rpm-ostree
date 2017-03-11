@@ -14,18 +14,23 @@ if test -z "${INSIDE_VM:-}"; then
     set -x
 
     cd ${topsrcdir}
-    rm insttree-$VM -rf
-    DESTDIR=$(pwd)/insttree-$VM
-    make install DESTDIR=${DESTDIR}
-    for san in a t ub; do
-        if eu-readelf -d ${DESTDIR}/usr/bin/rpm-ostree | grep -q "NEEDED.*lib${san}san"; then
-            echo "Installing extra sanitizier: lib${san}san"
-            cp /usr/lib64/lib${san}san*.so.* ${DESTDIR}/usr/lib64
-        fi
-    done
+
+    # Use a lock in case we're called in parallel (make install might fail).
+    # Plus, we can just share the same install tree, and sharing is caring!
+    flock insttree.lock sh -c \
+      '[ ! -d insttree ] || exit 0
+       DESTDIR=$(pwd)/insttree
+       make install DESTDIR=${DESTDIR}
+       for san in a t ub; do
+         if eu-readelf -d ${DESTDIR}/usr/bin/rpm-ostree | \
+              grep -q \"NEEDED.*lib${san}san\"; then
+           echo \"Installing extra sanitizier: lib${san}san\"
+           cp /usr/lib64/lib${san}san*.so.* ${DESTDIR}/usr/lib64
+         fi
+       done'
     vm_rsync
 
-    $SSH "env INSIDE_VM=1 VM=$VM /var/roothome/sync/tests/vmcheck/overlay.sh"
+    $SSH "env INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh"
     vm_reboot
     exit 0
 fi
@@ -51,7 +56,7 @@ fi
 cd /ostree/repo/tmp
 rm vmcheck -rf
 ostree checkout $commit vmcheck --fsync=0
-rsync -rlv /var/roothome/sync/insttree-$VM/usr/ vmcheck/usr/
+rsync -rlv /var/roothome/sync/insttree/usr/ vmcheck/usr/
 # ✀✀✀ BEGIN hack for https://github.com/projectatomic/rpm-ostree/pull/642 ✀✀✀
 ostree admin unlock || true
 for url in https://kojipkgs.fedoraproject.org//packages/ostree/2017.2/3.fc25/x86_64/ostree-{,libs-,grub2-}2017.2-3.fc25.x86_64.rpm; do
