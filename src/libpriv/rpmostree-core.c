@@ -2258,7 +2258,7 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
 
       if (fstatat (tmprootfs_dfd, fn, &stbuf, AT_SYMLINK_NOFOLLOW) != 0)
         {
-          glnx_set_prefix_error_from_errno (error, "%s", "fstatat");
+          glnx_set_prefix_error_from_errno (error, "fstatat: %s", fn);
           return FALSE;
         }
 
@@ -2318,7 +2318,7 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
 
       if (fchownat (tmprootfs_dfd, fn, uid, gid, AT_SYMLINK_NOFOLLOW) != 0)
         {
-          glnx_set_prefix_error_from_errno (error, "%s", "fchownat");
+          glnx_set_prefix_error_from_errno (error, "fchownat: %s", fn);
           return FALSE;
         }
 
@@ -2334,7 +2334,7 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
       /* also reapply chmod since e.g. at least the setuid gets taken off */
       if (fchmodat (tmprootfs_dfd, fn, stbuf.st_mode, 0) != 0)
         {
-          glnx_set_prefix_error_from_errno (error, "%s", "fchmodat");
+          glnx_set_prefix_error_from_errno (error, "fchmodat: %s", fn);
           return FALSE;
         }
     }
