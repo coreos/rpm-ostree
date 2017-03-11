@@ -111,6 +111,7 @@ HOSTS := "vmcheck"
 
 vmoverlay:
 	@if [ -z "$(SKIP_VMOVERLAY)" ]; then \
+	  rm -rf $(abs_top_srcdir)/insttree
 	  echo -n "$(HOSTS)" | xargs -P 0 -n 1 -d ' ' -I {} \
 	    env $(BASE_TESTS_ENVIRONMENT) VM={} \
 	      ./tests/vmcheck/overlay.sh; \
