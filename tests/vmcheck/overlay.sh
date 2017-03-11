@@ -17,7 +17,7 @@ if test -z "${INSIDE_VM:-}"; then
 
     # Use a lock in case we're called in parallel (make install might fail).
     # Plus, we can just share the same install tree, and sharing is caring!
-    flock insttree.lock sh -c \
+    flock insttree.lock sh -ec \
       '[ ! -d insttree ] || exit 0
        DESTDIR=$(pwd)/insttree
        make install DESTDIR=${DESTDIR}
@@ -27,7 +27,10 @@ if test -z "${INSIDE_VM:-}"; then
            echo \"Installing extra sanitizier: lib${san}san\"
            cp /usr/lib64/lib${san}san*.so.* ${DESTDIR}/usr/lib64
          fi
-       done'
+       done
+       touch ${DESTDIR}/.completed'
+    [ -f insttree/.completed ]
+
     vm_rsync
 
     $SSH "env INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh"
