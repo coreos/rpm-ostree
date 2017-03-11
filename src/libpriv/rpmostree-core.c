@@ -2230,6 +2230,7 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
   while ((i = rpmfiNext (fi)) >= 0)
     {
       const char *fn = rpmfiFN (fi);
+      g_autofree char *modified_fn = NULL;  /* May be used to override fn */
       const char *user = rpmfiFUser (fi) ?: "root";
       const char *group = rpmfiFGroup (fi) ?: "root";
       const char *fcaps = rpmfiFCaps (fi) ?: '\0';
@@ -2255,6 +2256,11 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
       if (g_str_has_prefix (fn, "run/") ||
           g_str_has_prefix (fn, "var/"))
         continue;
+      else if (g_str_has_prefix (fn, "etc/"))
+        {
+          /* The tree uses usr/etc */
+          fn = modified_fn = g_strconcat ("usr/", fn, NULL);
+        }
 
       if (fstatat (tmprootfs_dfd, fn, &stbuf, AT_SYMLINK_NOFOLLOW) != 0)
         {
