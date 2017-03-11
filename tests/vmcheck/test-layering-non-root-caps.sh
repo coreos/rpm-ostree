@@ -45,6 +45,7 @@ vm_cmd getent group nrcgroup
 echo "ok user and group added"
 
 if ! vm_has_files /usr/bin/nrc-none.sh \
+                  /etc/nrc.conf \
                   /usr/bin/nrc-user.sh \
                   /usr/bin/nrc-group.sh \
                   /usr/bin/nrc-caps.sh \
@@ -100,4 +101,5 @@ check_file /var/lib/nonrootcap nrcuser nrcgroup
 check_file /run/nonrootcap nrcuser nrcgroup
 check_file /var/lib/nonrootcap-rootowned root root
 check_file /run/nonrootcap-rootowned root root
+check_file /etc/nrc.conf nrcuser root
 echo "ok correct user/group and fcaps"
