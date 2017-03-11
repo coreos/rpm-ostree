@@ -107,15 +107,13 @@ check-local:
 vmsync:
 	@env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh
 
+HOSTS := "vmcheck"
+
 vmoverlay:
 	@if [ -z "$(SKIP_VMOVERLAY)" ]; then \
-	  if [ -n "$(HOSTS)" ]; then \
-	    echo -n "$(HOSTS)" | xargs -P 0 -n 1 -d ' ' -I {} \
-	      env $(BASE_TESTS_ENVIRONMENT) VM={} PYTHONUNBUFFERED=1 \
-	        ./tests/vmcheck/overlay.sh; \
-	  else \
-	    env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/overlay.sh; \
-	  fi \
+	  echo -n "$(HOSTS)" | xargs -P 0 -n 1 -d ' ' -I {} \
+	    env $(BASE_TESTS_ENVIRONMENT) VM={} \
+	      ./tests/vmcheck/overlay.sh; \
 	fi
 
 vmshell: vmsync
@@ -123,15 +121,8 @@ vmshell: vmsync
 
 # set up test environment to somewhat resemble uninstalled tests
 vmcheck: vmoverlay tests/common/compose/yum/repo/repodata/repomd.xml
-	@if [ -z "$(HOSTS)" ]; then \
-	  echo "running test.sh"; \
-	  env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) \
-	    sh tests/vmcheck/test.sh; \
-	else \
-	  echo "running multitest.py"; \
-	  env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) \
-	    tests/vmcheck/multitest.py $(HOSTS); \
-	fi
+	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) PYTHONUNBUFFERED=1 \
+	  tests/vmcheck/multitest.py $(HOSTS)
 
 testenv:
 	@echo "===== ENTERING TESTENV ====="

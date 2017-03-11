@@ -76,7 +76,7 @@ class Host:
 
     def flush(self):
         if not self._p:
-            return
+            return 0
         rc = self._p.wait()
 
         # just merge the two files
