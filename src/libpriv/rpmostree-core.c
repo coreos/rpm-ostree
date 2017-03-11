@@ -2288,6 +2288,7 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
           return FALSE;
         }
 
+      /* TODO - this is broken since https://github.com/ostreedev/ostree/pull/521 */
       if (S_ISREG (mode))
         {
           if (!break_single_hardlink_at (tmprootfs_dfd, fn, cancellable, error))
@@ -2349,10 +2350,13 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
         }
 
       /* also reapply chmod since e.g. at least the setuid gets taken off */
-      if (fchmodat (tmprootfs_dfd, fn, stbuf.st_mode, 0) != 0)
+      if (S_ISREG (stbuf.st_mode))
         {
-          glnx_set_prefix_error_from_errno (error, "fchmodat: %s", fn);
-          return FALSE;
+          if (fchmodat (tmprootfs_dfd, fn, stbuf.st_mode, 0) != 0)
+            {
+              glnx_set_prefix_error_from_errno (error, "fchmodat: %s", fn);
+              return FALSE;
+            }
         }
     }
 
