@@ -240,11 +240,16 @@ Boston, MA 02111-1307, USA.
 
         <listitem>
           <para>
-            Switch to a different remote, or a different tree, while
-            preserving local state in <literal>/var</literal> and
-            configuration in <literal>/etc</literal>.  This is an
-            extension of <literal>upgrade</literal> which switches to
-            a newer version of the current tree.
+            Switch to a different branch (possibly using a new remote),
+            while preserving all of the state that <command>upgrade</command>
+            does, such as <literal>/etc</literal> changes, any layered RPM
+            packages, etc.
+          </para>
+          <para>
+            The full syntax is <literal>rebase REMOTENAME:BRANCHNAME</literal>.
+            It is also possible to specify just <literal>BRANCHNAME</literal>,
+            reusing the same remote, as well as using <literal>REMOTENAME:</literal>,
+            which will use the same branch on a different remote.
           </para>
         </listitem>
       </varlistentry>
