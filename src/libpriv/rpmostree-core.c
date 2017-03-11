@@ -2222,6 +2222,7 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
 {
   int i;
   _cleanup_rpmfi_ rpmfi fi = NULL;
+  gboolean emitted_nonusr_warning = FALSE;
   g_autofree char *path = get_package_relpath (pkg);
 
   if (!get_package_metainfo (tmp_metadata_dfd, path, NULL, &fi, error))
@@ -2260,6 +2261,16 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
         {
           /* The tree uses usr/etc */
           fn = modified_fn = g_strconcat ("usr/", fn, NULL);
+        }
+      else if (!g_str_has_prefix (fn, "usr/"))
+        {
+          /* TODO: query whether Fedora has anything in this category we care about */
+          if (!emitted_nonusr_warning)
+            {
+              sd_journal_print (LOG_WARNING, "Ignoring rpm mode for non-/usr content: %s", fn);
+              emitted_nonusr_warning = TRUE;
+            }
+          continue;
         }
 
       if (fstatat (tmprootfs_dfd, fn, &stbuf, AT_SYMLINK_NOFOLLOW) != 0)
