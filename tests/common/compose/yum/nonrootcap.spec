@@ -1,4 +1,4 @@
-Summary: An app that uses has non-root files and caps
+Summary: An app that has non-root files and caps
 Name: nonrootcap
 Version: 1.0
 Release: 1

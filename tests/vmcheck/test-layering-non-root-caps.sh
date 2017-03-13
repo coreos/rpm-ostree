@@ -101,4 +101,5 @@ check_file /var/lib/nonrootcap nrcuser nrcgroup
 check_file /run/nonrootcap nrcuser nrcgroup
 check_file /var/lib/nonrootcap-rootowned root root
 check_file /run/nonrootcap-rootowned root root
+check_file /etc/nrc.conf nrcuser root
 echo "ok correct user/group and fcaps"
