@@ -539,19 +539,16 @@ process_includes (RpmOstreeTreeComposeContext  *self,
 }
 
 static gboolean
-parse_keyvalue_strings (char             **strings,
-                        GVariantBuilder   *builder,
-                        char             **out_version,
-                        GError           **error)
+parse_metadata_keyvalue_strings (char             **strings,
+                                 GHashTable        *metadata_hash,
+                                 GError           **error)
 {
-  gboolean ret = FALSE;
   char **iter;
 
   for (iter = strings; *iter; iter++)
     {
       const char *s;
       const char *eq;
-      g_autofree char *key = NULL;
 
       s = *iter;
 
@@ -560,24 +557,14 @@ parse_keyvalue_strings (char             **strings,
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Missing '=' in KEY=VALUE metadata '%s'", s);
-          goto out;
+          return FALSE;
         }
 
-      key = g_strndup (s, eq - s);
-
-      if (g_str_equal (key, "version"))
-        {
-          g_free (*out_version);
-          *out_version = g_strdup (eq + 1);
-        }
-
-      g_variant_builder_add (builder, "{sv}", key,
-                             g_variant_new_string (eq + 1));
+      g_hash_table_insert (metadata_hash, g_strndup (s, eq - s),
+                           g_variant_ref_sink (g_variant_new_string (eq + 1)));
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -628,12 +615,13 @@ rpmostree_compose_builtin_tree (int             argc,
   g_autoptr(GFile) treefile_dirpath = NULL;
   g_autoptr(GFile) repo_path = NULL;
   glnx_unref_object JsonParser *treefile_parser = NULL;
-  g_autoptr(GVariantBuilder) metadata_builder = 
-    g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+  g_autoptr(GHashTable) metadata_hash = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_variant_unref);
   g_autoptr(RpmOstreeContext) corectx = NULL;
   g_autoptr(GHashTable) varsubsts = NULL;
   gboolean workdir_is_tmp = FALSE;
   g_autofree char *next_version = NULL;
+  g_autofree char *new_revision = NULL;
+  g_autoptr(GVariant) metadata = NULL;
 
   self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
   
@@ -719,8 +707,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
   if (opt_metadata_strings)
     {
-      if (!parse_keyvalue_strings (opt_metadata_strings, metadata_builder,
-                                   &next_version, error))
+      if (!parse_metadata_keyvalue_strings (opt_metadata_strings, metadata_hash, error))
         goto out;
     }
 
@@ -809,7 +796,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
   if (json_object_has_member (treefile, "automatic_version_prefix") &&
       /* let --add-metadata-string=version=... take precedence */
-      (next_version == NULL))
+      !g_hash_table_contains (metadata_hash, "version"))
     {
       g_autoptr(GVariant) variant = NULL;
       g_autofree char *last_version = NULL;
@@ -831,8 +818,17 @@ rpmostree_compose_builtin_tree (int             argc,
         }
 
       next_version = _rpmostree_util_next_version (ver_prefix, last_version);
-      g_variant_builder_add (metadata_builder, "{sv}", "version",
-                             g_variant_new_string (next_version));
+      g_hash_table_insert (metadata_hash, g_strdup ("version"),
+                           g_variant_ref_sink (g_variant_new_string (next_version)));
+    }
+  else
+    {
+      GVariant *v = g_hash_table_lookup (metadata_hash, "version");
+      if (v)
+        {
+          g_assert (g_variant_is_of_type (v, G_VARIANT_TYPE_STRING));
+          next_version = g_variant_dup_string (v, NULL);
+        }
     }
 
   packages = g_ptr_array_new_with_free_func (g_free);
@@ -941,37 +937,39 @@ rpmostree_compose_builtin_tree (int             argc,
                                cancellable, error))
     goto out;
 
-  {
-    const char *gpgkey;
-    gboolean selinux = TRUE;
-    g_autoptr(GVariant) metadata = NULL;
+  /* Insert our input hash */
+  g_hash_table_replace (metadata_hash, g_strdup ("rpmostree.inputhash"),
+                        g_variant_ref_sink (g_variant_new_string (new_inputhash)));
 
-    g_variant_builder_add (metadata_builder, "{sv}",
-                           "rpmostree.inputhash",
-                           g_variant_new_string (new_inputhash));
+  const char *gpgkey = NULL;
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
+    goto out;
 
+  gboolean selinux = TRUE;
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile, "selinux", &selinux, error))
+    goto out;
+
+  /* Convert metadata hash to GVariant */
+  { g_autoptr(GVariantBuilder) metadata_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+    gpointer key, value;
+    GHashTableIter viter;
+
+    g_hash_table_iter_init (&viter, metadata_hash);
+    while (g_hash_table_iter_next (&viter, &key, &value))
+      {
+        const char *strkey = key;
+        GVariant *v = value;
+        g_variant_builder_add (metadata_builder, "{sv}", strkey, v);
+      }
     metadata = g_variant_ref_sink (g_variant_builder_end (metadata_builder));
-
-    if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
-      goto out;
-
-    if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
-                                                                 "selinux",
-                                                                 &selinux,
-                                                                 error))
-      goto out;
-
-    { g_autofree char *new_revision = NULL;
-
-      if (!rpmostree_commit (rootfs_fd, repo, self->ref, opt_write_commitid_to, metadata, gpgkey, selinux, NULL,
-                             &new_revision,
-                             cancellable, error))
-        goto out;
-
-      g_print ("%s => %s\n", self->ref, new_revision);
-
-    }
   }
+
+  if (!rpmostree_commit (rootfs_fd, repo, self->ref, opt_write_commitid_to, metadata, gpgkey, selinux, NULL,
+                         &new_revision,
+                         cancellable, error))
+    goto out;
+
+  g_print ("%s => %s\n", self->ref, new_revision);
 
   if (!process_touch_if_changed (error))
     goto out;
