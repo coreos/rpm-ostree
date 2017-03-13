@@ -45,6 +45,7 @@ vm_cmd getent group nrcgroup
 echo "ok user and group added"
 
 if ! vm_has_files /usr/bin/nrc-none.sh \
+                  /etc/nrc.conf \
                   /usr/bin/nrc-user.sh \
                   /usr/bin/nrc-group.sh \
                   /usr/bin/nrc-caps.sh \
