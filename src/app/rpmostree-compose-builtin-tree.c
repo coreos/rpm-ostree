@@ -961,7 +961,19 @@ rpmostree_compose_builtin_tree (int             argc,
         GVariant *v = value;
         g_variant_builder_add (metadata_builder, "{sv}", strkey, v);
       }
+
     metadata = g_variant_ref_sink (g_variant_builder_end (metadata_builder));
+    /* Canonicalize to big endian, like OSTree does. Without this, any numbers
+     * we place in the metadata will be unreadable since clients won't know
+     * their endianness.
+     */
+    if (G_BYTE_ORDER != G_BIG_ENDIAN)
+      {
+        GVariant *swapped = g_variant_byteswap (metadata);
+        GVariant *orig = metadata;
+        metadata = swapped;
+        g_variant_unref (orig);
+      }
   }
 
   if (!rpmostree_commit (rootfs_fd, repo, self->ref, opt_write_commitid_to, metadata, gpgkey, selinux, NULL,
