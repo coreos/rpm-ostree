@@ -19,6 +19,7 @@ echo "Hello!"
 EOF
 
 chmod a+x tmp
+echo nrc.conf > nrc.conf
 cp tmp nrc-none.sh
 cp tmp nrc-user.sh
 cp tmp nrc-group.sh
@@ -34,6 +35,7 @@ groupadd -r nrcgroup
 useradd -r nrcuser -g nrcgroup -s /sbin/nologin
 
 %install
+install -D nrc.conf %{buildroot}/etc/nrc.conf
 mkdir -p %{buildroot}/usr/bin
 install *.sh %{buildroot}/usr/bin
 mkdir -p %{buildroot}/var/lib/nonrootcap
@@ -46,6 +48,7 @@ rm -rf %{buildroot}
 
 %files
 /usr/bin/nrc-none.sh
+%attr(-, nrcuser, -) /etc/nrc.conf
 %attr(-, nrcuser, -) /usr/bin/nrc-user.sh
 %attr(-, -, nrcgroup) /usr/bin/nrc-group.sh
 %caps(cap_net_bind_service=ep) /usr/bin/nrc-caps.sh
