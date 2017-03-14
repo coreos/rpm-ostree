@@ -730,7 +730,7 @@ rpmostree_compose_builtin_tree (int             argc,
       { char *key;
         GVariant *value;
         while (g_variant_iter_loop (&viter, "{sv}", &key, &value))
-          g_hash_table_replace (metadata_hash, g_strdup (key), g_variant_ref (value);
+          g_hash_table_replace (metadata_hash, g_strdup (key), g_variant_ref (value));
       }
     }
 
