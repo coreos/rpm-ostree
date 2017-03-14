@@ -941,7 +941,7 @@ rpmostree_compose_builtin_tree (int             argc,
   g_hash_table_replace (metadata_hash, g_strdup ("rpmostree.inputhash"),
                         g_variant_ref_sink (g_variant_new_string (new_inputhash)));
 
-  const char *gpgkey;
+  const char *gpgkey = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
     goto out;
 
