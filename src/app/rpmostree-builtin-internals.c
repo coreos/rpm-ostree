@@ -23,12 +23,7 @@
 #include "rpmostree-internals-builtins.h"
 #include "rpmostree-rpm-util.h"
 
-typedef struct {
-  const char *name;
-  int (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
-} RpmOstreeInternalsCommand;
-
-static RpmOstreeInternalsCommand internals_subcommands[] = {
+static RpmOstreeCommand internals_subcommands[] = {
   { "unpack", rpmostree_internals_builtin_unpack },
   { NULL, NULL }
 };
@@ -42,7 +37,7 @@ static GOptionEntry global_entries[] = {
 static GOptionContext *
 internals_option_context_new_with_commands (void)
 {
-  RpmOstreeInternalsCommand *command = internals_subcommands;
+  RpmOstreeCommand *command = internals_subcommands;
   GOptionContext *context;
   GString *summary;
 
@@ -66,7 +61,7 @@ internals_option_context_new_with_commands (void)
 int
 rpmostree_builtin_internals (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
-  RpmOstreeInternalsCommand *subcommand;
+  RpmOstreeCommand *subcommand;
   const char *subcommand_name = NULL;
   g_autofree char *prgname = NULL;
   int exit_status = EXIT_SUCCESS;

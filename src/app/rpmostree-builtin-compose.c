@@ -28,12 +28,7 @@
 
 #include <glib/gi18n.h>
 
-typedef struct {
-  const char *name;
-  int (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
-} RpmOstreeComposeCommand;
-
-static RpmOstreeComposeCommand compose_subcommands[] = {
+static RpmOstreeCommand compose_subcommands[] = {
   { "tree", rpmostree_compose_builtin_tree },
   { NULL, NULL }
 };
@@ -41,7 +36,7 @@ static RpmOstreeComposeCommand compose_subcommands[] = {
 static GOptionContext *
 compose_option_context_new_with_commands (void)
 {
-  RpmOstreeComposeCommand *command = compose_subcommands;
+  RpmOstreeCommand *command = compose_subcommands;
   GOptionContext *context;
   GString *summary;
 
@@ -65,7 +60,7 @@ compose_option_context_new_with_commands (void)
 int
 rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
-  RpmOstreeComposeCommand *subcommand;
+  RpmOstreeCommand *subcommand;
   const char *subcommand_name = NULL;
   g_autofree char *prgname = NULL;
   int exit_status = EXIT_SUCCESS;

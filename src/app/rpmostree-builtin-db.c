@@ -23,12 +23,7 @@
 #include "rpmostree-db-builtins.h"
 #include "rpmostree-rpm-util.h"
 
-typedef struct {
-  const char *name;
-  int (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
-} RpmOstreeDbCommand;
-
-static RpmOstreeDbCommand rpm_subcommands[] = {
+static RpmOstreeCommand rpm_subcommands[] = {
   { "diff", rpmostree_db_builtin_diff },
   { "list", rpmostree_db_builtin_list },
   { "version", rpmostree_db_builtin_version },
@@ -45,7 +40,7 @@ static GOptionEntry global_entries[] = {
 static GOptionContext *
 rpm_option_context_new_with_commands (void)
 {
-  RpmOstreeDbCommand *command = rpm_subcommands;
+  RpmOstreeCommand *command = rpm_subcommands;
   GOptionContext *context;
   GString *summary;
 
@@ -127,7 +122,7 @@ out:
 int
 rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
-  RpmOstreeDbCommand *subcommand;
+  RpmOstreeCommand *subcommand;
   const char *subcommand_name = NULL;
   g_autofree char *prgname = NULL;
   int exit_status = EXIT_SUCCESS;

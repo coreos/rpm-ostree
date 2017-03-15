@@ -23,12 +23,7 @@
 #include "rpmostree-container-builtins.h"
 #include "rpmostree-rpm-util.h"
 
-typedef struct {
-  const char *name;
-  int (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
-} RpmOstreeContainerCommand;
-
-static RpmOstreeContainerCommand container_subcommands[] = {
+static RpmOstreeCommand container_subcommands[] = {
   { "init", rpmostree_container_builtin_init },
   { "assemble", rpmostree_container_builtin_assemble },
   /* { "start", rpmostree_container_builtin_start }, */
@@ -39,7 +34,7 @@ static RpmOstreeContainerCommand container_subcommands[] = {
 static GOptionContext *
 container_option_context_new_with_commands (void)
 {
-  RpmOstreeContainerCommand *command = container_subcommands;
+  RpmOstreeCommand *command = container_subcommands;
   GOptionContext *context;
   GString *summary;
 
@@ -63,7 +58,7 @@ container_option_context_new_with_commands (void)
 int
 rpmostree_builtin_container (int argc, char **argv, GCancellable *cancellable, GError **error)
 {
-  RpmOstreeContainerCommand *subcommand;
+  RpmOstreeCommand *subcommand;
   const char *subcommand_name = NULL;
   g_autofree char *prgname = NULL;
   int exit_status = EXIT_SUCCESS;
