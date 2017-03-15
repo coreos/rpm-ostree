@@ -63,10 +63,6 @@ static RpmOstreeCommand supported_commands[] = {
   { NULL }
 };
 
-static RpmOstreeCommand preview_commands[] = {
-  { NULL }
-};
-
 static RpmOstreeCommand legacy_alias_commands[] = {
   { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     rpmostree_builtin_pkg_add },
@@ -118,13 +114,6 @@ option_context_new_with_commands (void)
   while (command->name != NULL)
     {
       g_string_append_printf (summary, "\n  %s", command->name);
-      command++;
-    }
-
-  command = preview_commands;
-  while (command->name != NULL)
-    {
-      g_string_append_printf (summary, "\n  %s (preview)", command->name);
       command++;
     }
 
@@ -320,9 +309,6 @@ main (int    argc,
   command = lookup_command_of_type (supported_commands, command_name, NULL);
   if (!command)
     command = lookup_command_of_type (legacy_alias_commands, command_name, NULL);
-
-  if (!command)
-    command = lookup_command_of_type (preview_commands, command_name, "a preview");
 
   if (!command)
     command = lookup_command_of_type (experimental_commands, command_name, "an experimental");
