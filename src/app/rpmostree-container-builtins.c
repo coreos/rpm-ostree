@@ -141,6 +141,7 @@ G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(ROContainerContext, roc_context_deinit)
 int
 rpmostree_container_builtin_init (int             argc,
                                   char          **argv,
+                                  RpmOstreeCommandInvocation *invocation,
                                   GCancellable   *cancellable,
                                   GError        **error)
 {
@@ -154,7 +155,7 @@ rpmostree_container_builtin_init (int             argc,
   if (!rpmostree_option_context_parse (context,
                                        init_option_entries,
                                        &argc, &argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                       invocation,
                                        cancellable,
                                        NULL,
                                        error))
@@ -227,6 +228,7 @@ symlink_at_replace (const char    *oldpath,
 int
 rpmostree_container_builtin_assemble (int             argc,
                                       char          **argv,
+                                      RpmOstreeCommandInvocation *invocation,
                                       GCancellable   *cancellable,
                                       GError        **error)
 {
@@ -245,7 +247,7 @@ rpmostree_container_builtin_assemble (int             argc,
   if (!rpmostree_option_context_parse (context,
                                        assemble_option_entries,
                                        &argc, &argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                       invocation,
                                        cancellable,
                                        NULL,
                                        error))
@@ -407,7 +409,9 @@ parse_app_version (const char *name,
 }
 
 gboolean
-rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancellable, GError **error)
+rpmostree_container_builtin_upgrade (int argc, char **argv,
+                                     RpmOstreeCommandInvocation *invocation,
+                                     GCancellable *cancellable, GError **error)
 {
   int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = g_option_context_new ("NAME");
@@ -429,7 +433,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv, GCancellable *cancel
   if (!rpmostree_option_context_parse (context,
                                        assemble_option_entries,
                                        &argc, &argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                       invocation,
                                        cancellable,
                                        NULL,
                                        error))

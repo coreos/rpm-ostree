@@ -85,7 +85,9 @@ _builtin_db_list (OstreeRepo *repo,
 }
 
 int
-rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GError **error)
+rpmostree_db_builtin_list (int argc, char **argv,
+                           RpmOstreeCommandInvocation *invocation,
+                           GCancellable *cancellable, GError **error)
 {
   int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = NULL;
@@ -96,8 +98,8 @@ rpmostree_db_builtin_list (int argc, char **argv, GCancellable *cancellable, GEr
 
   context = g_option_context_new ("[PREFIX-PKGNAME...] COMMIT... - List packages within commits");
 
-  if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv, &repo,
-                                          cancellable, error))
+  if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv, invocation,
+                                          &repo, cancellable, error))
     goto out;
 
   /* Iterate over all arguments. When we see the first argument which

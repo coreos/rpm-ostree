@@ -29,8 +29,9 @@
 #include <glib/gi18n.h>
 
 static RpmOstreeCommand compose_subcommands[] = {
-  { "tree", rpmostree_compose_builtin_tree },
-  { NULL, NULL }
+  { "tree", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_compose_builtin_tree },
+  { NULL, 0, NULL }
 };
 
 static GOptionContext *
@@ -58,7 +59,9 @@ compose_option_context_new_with_commands (void)
 }
 
 int
-rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GError **error)
+rpmostree_builtin_compose (int argc, char **argv,
+                           RpmOstreeCommandInvocation *invocation,
+                           GCancellable *cancellable, GError **error)
 {
   RpmOstreeCommand *subcommand;
   const char *subcommand_name = NULL;
@@ -84,7 +87,7 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
       /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL,
                                              &argc, &argv,
-                                             RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                             invocation,
                                              cancellable,
                                              NULL,
                                              NULL);
@@ -109,7 +112,9 @@ rpmostree_builtin_compose (int argc, char **argv, GCancellable *cancellable, GEr
   prgname = g_strdup_printf ("%s %s", g_get_prgname (), subcommand_name);
   g_set_prgname (prgname);
 
-  exit_status = subcommand->fn (argc, argv, cancellable, error);
+  { RpmOstreeCommandInvocation sub_invocation = { .command = subcommand };
+    exit_status = subcommand->fn (argc, argv, &sub_invocation, cancellable, error);
+  }
 
  out:
   return exit_status;

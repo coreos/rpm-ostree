@@ -24,8 +24,9 @@
 #include "rpmostree-rpm-util.h"
 
 static RpmOstreeCommand internals_subcommands[] = {
-  { "unpack", rpmostree_internals_builtin_unpack },
-  { NULL, NULL }
+  { "unpack", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    rpmostree_internals_builtin_unpack },
+  { NULL, 0, NULL }
 };
 
 /*
@@ -59,7 +60,9 @@ internals_option_context_new_with_commands (void)
 }
 
 int
-rpmostree_builtin_internals (int argc, char **argv, GCancellable *cancellable, GError **error)
+rpmostree_builtin_internals (int argc, char **argv,
+                             RpmOstreeCommandInvocation *invocation,
+                             GCancellable *cancellable, GError **error)
 {
   RpmOstreeCommand *subcommand;
   const char *subcommand_name = NULL;
@@ -84,7 +87,7 @@ rpmostree_builtin_internals (int argc, char **argv, GCancellable *cancellable, G
       /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL,
                                              &argc, &argv,
-                                             RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                             invocation,
                                              cancellable,
                                              NULL,
                                              NULL);
@@ -109,7 +112,9 @@ rpmostree_builtin_internals (int argc, char **argv, GCancellable *cancellable, G
   prgname = g_strdup_printf ("%s %s", g_get_prgname (), subcommand_name);
   g_set_prgname (prgname);
 
-  exit_status = subcommand->fn (argc, argv, cancellable, error);
+  { RpmOstreeCommandInvocation sub_invocation = { .command = subcommand };
+    exit_status = subcommand->fn (argc, argv, &sub_invocation, cancellable, error);
+  }
 
  out:
   return exit_status;

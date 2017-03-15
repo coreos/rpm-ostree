@@ -26,7 +26,7 @@
 
 G_BEGIN_DECLS
 
-gboolean rpmostree_compose_builtin_tree (int argc, char **argv, GCancellable *cancellable, GError **error);
+gboolean rpmostree_compose_builtin_tree (int argc, char **argv, RpmOstreeCommandInvocation *invocation, GCancellable *cancellable, GError **error);
 
 G_END_DECLS
 

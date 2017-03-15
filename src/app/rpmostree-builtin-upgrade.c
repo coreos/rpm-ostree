@@ -65,6 +65,7 @@ get_args_variant (void)
 int
 rpmostree_builtin_upgrade (int             argc,
                            char          **argv,
+                           RpmOstreeCommandInvocation *invocation,
                            GCancellable   *cancellable,
                            GError        **error)
 {
@@ -79,7 +80,7 @@ rpmostree_builtin_upgrade (int             argc,
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+                                       invocation,
                                        cancellable,
                                        &sysroot_proxy,
                                        error))

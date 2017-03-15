@@ -35,12 +35,26 @@ typedef enum {
   RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT = 1 << 1,
 } RpmOstreeBuiltinFlags;
 
-typedef struct {
-  const char *name;
-  int (*fn) (int argc, char **argv, GCancellable *cancellable, GError **error);
-} RpmOstreeCommand;
+typedef struct RpmOstreeCommand RpmOstreeCommand;
+typedef struct RpmOstreeCommandInvocation RpmOstreeCommandInvocation;
 
-#define BUILTINPROTO(name) gboolean rpmostree_builtin_ ## name (int argc, char **argv, GCancellable *cancellable, GError **error)
+struct RpmOstreeCommand {
+  const char *name;
+  RpmOstreeBuiltinFlags flags;
+  int (*fn) (int argc, char **argv, RpmOstreeCommandInvocation *invocation, GCancellable *cancellable, GError **error);
+};
+
+/* Currently, this has just the command (which is mostly there for the
+ * name/flags), but in the future if we want to add something new we won't need
+ * to touch every prototype.
+ */
+struct RpmOstreeCommandInvocation {
+  RpmOstreeCommand *command;
+};
+
+#define BUILTINPROTO(name) gboolean rpmostree_builtin_ ## name (int argc, char **argv, \
+                                                                RpmOstreeCommandInvocation *invocation, \
+                                                                GCancellable *cancellable, GError **error)
 
 BUILTINPROTO(compose);
 BUILTINPROTO(upgrade);
@@ -67,7 +81,7 @@ gboolean rpmostree_option_context_parse (GOptionContext *context,
                                          const GOptionEntry *main_entries,
                                          int *argc,
                                          char ***argv,
-                                         RpmOstreeBuiltinFlags flags,
+                                         RpmOstreeCommandInvocation *invocation,
                                          GCancellable *cancellable,
                                          RPMOSTreeSysroot **out_sysroot_proxy,
                                          GError **error);

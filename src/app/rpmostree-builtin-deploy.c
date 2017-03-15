@@ -64,6 +64,7 @@ default_deployment_changed_cb (GObject *object,
 int
 rpmostree_builtin_deploy (int            argc,
                           char         **argv,
+                          RpmOstreeCommandInvocation *invocation,
                           GCancellable  *cancellable,
                           GError       **error)
 {
@@ -81,7 +82,7 @@ rpmostree_builtin_deploy (int            argc,
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+                                       invocation,
                                        cancellable,
                                        &sysroot_proxy,
                                        error))
