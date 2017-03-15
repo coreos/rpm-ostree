@@ -90,7 +90,9 @@ _builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
 }
 
 int
-rpmostree_db_builtin_version (int argc, char **argv, GCancellable *cancellable, GError **error)
+rpmostree_db_builtin_version (int argc, char **argv,
+                              RpmOstreeCommandInvocation *invocation,
+                              GCancellable *cancellable, GError **error)
 {
   int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = NULL;
@@ -100,7 +102,7 @@ rpmostree_db_builtin_version (int argc, char **argv, GCancellable *cancellable, 
 
   context = g_option_context_new ("COMMIT... - Show rpmdb version of packages within the commits");
 
-  if (!rpmostree_db_option_context_parse (context, db_version_entries, &argc, &argv, &repo,
+  if (!rpmostree_db_option_context_parse (context, db_version_entries, &argc, &argv, invocation, &repo,
                                           cancellable, error))
     goto out;
 

@@ -35,19 +35,31 @@
 
 static RpmOstreeCommand supported_commands[] = {
 #ifdef HAVE_COMPOSE_TOOLING
-  { "compose", rpmostree_builtin_compose },
+  { "compose", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_builtin_compose },
 #endif
-  { "cleanup", rpmostree_builtin_cleanup },
-  { "db", rpmostree_builtin_db },
-  { "deploy", rpmostree_builtin_deploy },
-  { "rebase", rpmostree_builtin_rebase },
-  { "rollback", rpmostree_builtin_rollback },
-  { "status", rpmostree_builtin_status },
-  { "upgrade", rpmostree_builtin_upgrade },
-  { "reload", rpmostree_builtin_reload },
-  { "initramfs", rpmostree_builtin_initramfs },
-  { "install", rpmostree_builtin_pkg_add },
-  { "uninstall", rpmostree_builtin_pkg_remove },
+  { "cleanup", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_builtin_cleanup },
+  { "db", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    rpmostree_builtin_db },
+  { "deploy", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_builtin_deploy },
+  { "rebase", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_builtin_rebase },
+  { "rollback", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_builtin_rollback },
+  { "status", 0,
+    rpmostree_builtin_status },
+  { "upgrade", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_builtin_upgrade },
+  { "reload", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_builtin_reload },
+  { "initramfs", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_builtin_initramfs },
+  { "install", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_builtin_pkg_add },
+  { "uninstall", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_builtin_pkg_remove },
   { NULL }
 };
 
@@ -56,19 +68,24 @@ static RpmOstreeCommand preview_commands[] = {
 };
 
 static RpmOstreeCommand legacy_alias_commands[] = {
-  { "pkg-add", rpmostree_builtin_pkg_add },
-  { "pkg-remove", rpmostree_builtin_pkg_remove },
+  { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_builtin_pkg_add },
+  { "pkg-remove", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_builtin_pkg_remove },
   { NULL }
 };
 
 static RpmOstreeCommand experimental_commands[] = {
-  { "internals", rpmostree_builtin_internals },
-  { "container", rpmostree_builtin_container },
+  { "internals", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    rpmostree_builtin_internals },
+  { "container", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    rpmostree_builtin_container },
   { NULL }
 };
 
 static RpmOstreeCommand hidden_commands[] = {
-  { "start-daemon", rpmostree_builtin_start_daemon },
+  { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    rpmostree_builtin_start_daemon },
   { NULL }
 };
 
@@ -123,15 +140,15 @@ rpmostree_option_context_parse (GOptionContext *context,
                                 const GOptionEntry *main_entries,
                                 int *argc,
                                 char ***argv,
-                                RpmOstreeBuiltinFlags flags,
+                                RpmOstreeCommandInvocation *invocation,
                                 GCancellable *cancellable,
                                 RPMOSTreeSysroot **out_sysroot_proxy,
                                 GError **error)
 {
-  gboolean use_daemon;
   gboolean ret = FALSE;
-
-  use_daemon = ((flags & RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD) == 0);
+  /* with --version there's no command, don't require a daemon for it */
+  const RpmOstreeBuiltinFlags flags = invocation ? invocation->command->flags : RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD;
+  gboolean use_daemon = ((flags & RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD) == 0);
 
   if (main_entries != NULL)
     g_option_context_add_main_entries (context, main_entries, NULL);
@@ -320,8 +337,7 @@ main (int    argc,
 
       /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL, &argc, &argv,
-                                             RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-                                             NULL, NULL, NULL);
+                                             NULL, NULL, NULL, NULL);
       if (command_name == NULL)
         {
           local_error = g_error_new_literal (G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -343,7 +359,9 @@ main (int    argc,
   prgname = g_strdup_printf ("%s %s", g_get_prgname (), command_name);
   g_set_prgname (prgname);
 
-  exit_status = command->fn (argc, argv, cancellable, &local_error);
+  { RpmOstreeCommandInvocation invocation = { .command = command };
+    exit_status = command->fn (argc, argv, &invocation, cancellable, &local_error);
+  }
 
  out:
   if (local_error != NULL)

@@ -24,10 +24,13 @@
 #include "rpmostree-rpm-util.h"
 
 static RpmOstreeCommand rpm_subcommands[] = {
-  { "diff", rpmostree_db_builtin_diff },
-  { "list", rpmostree_db_builtin_list },
-  { "version", rpmostree_db_builtin_version },
-  { NULL, NULL }
+  { "diff", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    rpmostree_db_builtin_diff },
+  { "list", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    rpmostree_db_builtin_list },
+  { "version", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    rpmostree_db_builtin_version },
+  { NULL, 0, NULL }
 };
 
 static char *opt_repo;
@@ -65,6 +68,7 @@ gboolean
 rpmostree_db_option_context_parse (GOptionContext *context,
                                    const GOptionEntry *main_entries,
                                    int *argc, char ***argv,
+                                   RpmOstreeCommandInvocation *invocation,
                                    OstreeRepo **out_repo,
                                    GCancellable *cancellable, GError **error)
 {
@@ -79,7 +83,7 @@ rpmostree_db_option_context_parse (GOptionContext *context,
   if (!rpmostree_option_context_parse (context,
                                        main_entries,
                                        argc, argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                       invocation,
                                        cancellable,
                                        NULL,
                                        error))
@@ -120,7 +124,9 @@ out:
 }
 
 int
-rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError **error)
+rpmostree_builtin_db (int argc, char **argv,
+                      RpmOstreeCommandInvocation *invocation,
+                      GCancellable *cancellable, GError **error)
 {
   RpmOstreeCommand *subcommand;
   const char *subcommand_name = NULL;
@@ -146,7 +152,7 @@ rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError *
       /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL,
                                              &argc, &argv,
-                                             RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                             invocation,
                                              cancellable,
                                              NULL,
                                              NULL);
@@ -171,7 +177,9 @@ rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError *
   prgname = g_strdup_printf ("%s %s", g_get_prgname (), subcommand_name);
   g_set_prgname (prgname);
 
-  exit_status = subcommand->fn (argc, argv, cancellable, error);
+  { RpmOstreeCommandInvocation sub_invocation = { .command = subcommand };
+    exit_status = subcommand->fn (argc, argv, &sub_invocation, cancellable, error);
+  }
 
  out:
   return exit_status;

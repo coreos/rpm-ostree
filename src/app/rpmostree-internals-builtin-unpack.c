@@ -53,6 +53,7 @@ static GOptionEntry option_entries[] = {
 int
 rpmostree_internals_builtin_unpack (int             argc,
                                     char          **argv,
+                                    RpmOstreeCommandInvocation *invocation,
                                     GCancellable   *cancellable,
                                     GError        **error)
 {
@@ -68,7 +69,7 @@ rpmostree_internals_builtin_unpack (int             argc,
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+                                       invocation,
                                        cancellable,
                                        NULL,
                                        error))

@@ -304,6 +304,7 @@ connect_to_peer (int fd, GError **error)
 int
 rpmostree_builtin_start_daemon (int             argc,
                                 char          **argv,
+                                RpmOstreeCommandInvocation *invocation,
                                 GCancellable   *cancellable,
                                 GError        **error)
 {

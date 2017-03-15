@@ -595,6 +595,7 @@ process_touch_if_changed (GError **error)
 int
 rpmostree_compose_builtin_tree (int             argc,
                                 char          **argv,
+                                RpmOstreeCommandInvocation *invocation,
                                 GCancellable   *cancellable,
                                 GError        **error)
 {
@@ -630,7 +631,7 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+                                       invocation,
                                        cancellable,
                                        NULL,
                                        error))

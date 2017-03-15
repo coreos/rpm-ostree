@@ -59,6 +59,7 @@ get_args_variant (const char *revision)
 int
 rpmostree_builtin_rebase (int             argc,
                           char          **argv,
+                          RpmOstreeCommandInvocation *invocation,
                           GCancellable   *cancellable,
                           GError        **error)
 {
@@ -77,7 +78,7 @@ rpmostree_builtin_rebase (int             argc,
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_NONE,
+                                       invocation,
                                        cancellable,
                                        &sysroot_proxy,
                                        error))

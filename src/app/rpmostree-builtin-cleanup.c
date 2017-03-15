@@ -47,9 +47,10 @@ static GOptionEntry option_entries[] = {
 
 int
 rpmostree_builtin_cleanup (int             argc,
-                          char          **argv,
-                          GCancellable   *cancellable,
-                          GError        **error)
+                           char          **argv,
+                           RpmOstreeCommandInvocation *invocation,
+                           GCancellable   *cancellable,
+                           GError        **error)
 {
   int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = g_option_context_new ("- Clear cached/pending data");
@@ -61,7 +62,7 @@ rpmostree_builtin_cleanup (int             argc,
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
-                                       RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+                                       invocation,
                                        cancellable,
                                        &sysroot_proxy,
                                        error))
