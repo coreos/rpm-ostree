@@ -239,6 +239,39 @@ lookup_command_of_type (RpmOstreeCommand *commands,
   return NULL;
 }
 
+const char *
+rpmostree_subcommand_parse (int *inout_argc,
+                            char **inout_argv)
+{
+  const int argc = *inout_argc;
+  const char *command_name = NULL;
+  int in, out;
+
+  for (in = 1, out = 1; in < argc; in++, out++)
+    {
+      /* The non-option is the command, take it out of the arguments */
+      if (inout_argv[in][0] != '-')
+        {
+          if (command_name == NULL)
+            {
+              command_name = inout_argv[in];
+              out--;
+              continue;
+            }
+        }
+
+      else if (g_str_equal (inout_argv[in], "--"))
+        {
+          break;
+        }
+
+      inout_argv[out] = inout_argv[in];
+    }
+
+  *inout_argc = out;
+  return command_name;
+}
+
 int
 main (int    argc,
       char **argv)
@@ -246,7 +279,6 @@ main (int    argc,
   GCancellable *cancellable = g_cancellable_new ();
   RpmOstreeCommand *command;
   int exit_status = EXIT_SUCCESS;
-  int in, out;
   const char *command_name = NULL;
   g_autofree char *prgname = NULL;
   GError *local_error = NULL;
@@ -256,34 +288,13 @@ main (int    argc,
   g_set_prgname (argv[0]);
 
   setlocale (LC_ALL, "");
-  
+
   /*
    * Parse the global options. We rearrange the options as
    * necessary, in order to pass relevant options through
    * to the commands, but also have them take effect globally.
    */
-  for (in = 1, out = 1; in < argc; in++, out++)
-    {
-      /* The non-option is the command, take it out of the arguments */
-      if (argv[in][0] != '-')
-        {
-          if (command_name == NULL)
-            {
-              command_name = argv[in];
-              out--;
-              continue;
-            }
-        }
-
-      else if (g_str_equal (argv[in], "--"))
-        {
-          break;
-        }
-
-      argv[out] = argv[in];
-    }
-
-  argc = out;
+  command_name = rpmostree_subcommand_parse (&argc, argv);
 
   /* Keep the "rpm" command working for backward-compatibility. */
   if (g_strcmp0 (command_name, "rpm") == 0)
