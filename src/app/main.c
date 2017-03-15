@@ -33,7 +33,7 @@
 
 #include "libglnx.h"
 
-static RpmOstreeCommand supported_commands[] = {
+static RpmOstreeCommand commands[] = {
 #ifdef HAVE_COMPOSE_TOOLING
   { "compose", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     rpmostree_builtin_compose },
@@ -60,27 +60,19 @@ static RpmOstreeCommand supported_commands[] = {
     rpmostree_builtin_pkg_add },
   { "uninstall", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     rpmostree_builtin_pkg_remove },
-  { NULL }
-};
-
-static RpmOstreeCommand legacy_alias_commands[] = {
-  { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  /* Legacy aliases */
+  { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_pkg_add },
-  { "pkg-remove", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "pkg-remove", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_pkg_remove },
-  { NULL }
-};
-
-static RpmOstreeCommand experimental_commands[] = {
-  { "internals", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+  /* Experimental */
+  { "internals", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_EXPERIMENTAL,
     rpmostree_builtin_internals },
-  { "container", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+  { "container", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_EXPERIMENTAL,
     rpmostree_builtin_container },
-  { NULL }
-};
-
-static RpmOstreeCommand hidden_commands[] = {
-  { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  /* Hidden */
+  { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
+                   RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_start_daemon },
   { NULL }
 };
@@ -103,7 +95,7 @@ static GOptionEntry daemon_entries[] = {
 static GOptionContext *
 option_context_new_with_commands (void)
 {
-  RpmOstreeCommand *command = supported_commands;
+  RpmOstreeCommand *command = commands;
   GOptionContext *context;
   GString *summary;
 
@@ -113,7 +105,10 @@ option_context_new_with_commands (void)
 
   while (command->name != NULL)
     {
-      g_string_append_printf (summary, "\n  %s", command->name);
+      gboolean is_hidden = (command->flags & RPM_OSTREE_BUILTIN_FLAG_HIDDEN) > 0;
+      gboolean is_experimental = (command->flags & RPM_OSTREE_BUILTIN_FLAG_EXPERIMENTAL) > 0;
+      if (!(is_hidden || is_experimental))
+        g_string_append_printf (summary, "\n  %s", command->name);
       command++;
     }
 
@@ -219,27 +214,14 @@ rpmostree_print_gpg_verify_result (OstreeGpgVerifyResult *result)
 
 
 static RpmOstreeCommand *
-lookup_command_of_type (RpmOstreeCommand *commands,
-                        const char *name,
-                        const char *type)
+lookup_command (const char *name)
 {
   RpmOstreeCommand *command = commands;
-  const int is_tty = isatty (1);
-  const char *bold_prefix;
-  const char *bold_suffix;
-
-  bold_prefix = is_tty ? "\x1b[1m" : "";  
-  bold_suffix = is_tty ? "\x1b[0m" : "";
 
   while (command->name)
     {
       if (g_strcmp0 (name, command->name) == 0)
-        {
-          if (type)
-            g_printerr ("%snotice%s: %s is %s command and subject to change.\n",
-                        bold_prefix, bold_suffix, name, type);
-          return command;
-        }
+        return command;
       command++;
     }
   return NULL;
@@ -247,11 +229,24 @@ lookup_command_of_type (RpmOstreeCommand *commands,
 
 const char *
 rpmostree_subcommand_parse (int *inout_argc,
-                            char **inout_argv)
+                            char **inout_argv,
+                            RpmOstreeCommandInvocation *invocation)
 {
   const int argc = *inout_argc;
   const char *command_name = NULL;
   int in, out;
+
+  if (invocation && (invocation->command->flags & RPM_OSTREE_BUILTIN_FLAG_EXPERIMENTAL) > 0)
+    {
+      const int is_tty = isatty (1);
+      const char *bold_prefix = is_tty ? "\x1b[1m" : "";
+      const char *bold_suffix = is_tty ? "\x1b[0m" : "";
+
+      g_assert (invocation);
+
+      g_printerr ("%snotice%s: %s is an experimental command and subject to change.\n",
+                  bold_prefix, bold_suffix, invocation->command->name);
+    }
 
   for (in = 1, out = 1; in < argc; in++, out++)
     {
@@ -300,21 +295,13 @@ main (int    argc,
    * necessary, in order to pass relevant options through
    * to the commands, but also have them take effect globally.
    */
-  command_name = rpmostree_subcommand_parse (&argc, argv);
+  command_name = rpmostree_subcommand_parse (&argc, argv, NULL);
 
   /* Keep the "rpm" command working for backward-compatibility. */
   if (g_strcmp0 (command_name, "rpm") == 0)
     command_name = "db";
 
-  command = lookup_command_of_type (supported_commands, command_name, NULL);
-  if (!command)
-    command = lookup_command_of_type (legacy_alias_commands, command_name, NULL);
-
-  if (!command)
-    command = lookup_command_of_type (experimental_commands, command_name, "an experimental");
-
-  if (!command)
-    command = lookup_command_of_type (hidden_commands, command_name, NULL);
+  command = lookup_command (command_name);
 
   if (!command)
     {

@@ -29,7 +29,7 @@
 #include <glib/gi18n.h>
 
 static RpmOstreeCommand compose_subcommands[] = {
-  { "tree", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "tree", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     rpmostree_compose_builtin_tree },
   { NULL, 0, NULL }
 };
@@ -68,7 +68,7 @@ rpmostree_builtin_compose (int argc, char **argv,
   g_autofree char *prgname = NULL;
   int exit_status = EXIT_SUCCESS;
 
-  subcommand_name = rpmostree_subcommand_parse (&argc, argv);
+  subcommand_name = rpmostree_subcommand_parse (&argc, argv, invocation);
 
   subcommand = compose_subcommands;
   while (subcommand->name)

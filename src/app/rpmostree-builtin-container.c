@@ -66,8 +66,7 @@ rpmostree_builtin_container (int argc, char **argv, RpmOstreeCommandInvocation *
   g_autofree char *prgname = NULL;
   int exit_status = EXIT_SUCCESS;
 
-  subcommand_name = rpmostree_subcommand_parse (&argc, argv);
-
+  subcommand_name = rpmostree_subcommand_parse (&argc, argv, invocation);
   subcommand = container_subcommands;
   while (subcommand->name)
     {
@@ -82,13 +81,13 @@ rpmostree_builtin_container (int argc, char **argv, RpmOstreeCommandInvocation *
         container_option_context_new_with_commands ();
       g_autofree char *help = NULL;
 
-      /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL,
                                              &argc, &argv,
                                              invocation,
                                              cancellable,
                                              NULL,
                                              NULL);
+
       if (subcommand_name == NULL)
         {
           g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
