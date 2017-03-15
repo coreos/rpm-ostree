@@ -133,7 +133,7 @@ rpmostree_builtin_db (int argc, char **argv,
   g_autofree char *prgname = NULL;
   int exit_status = EXIT_SUCCESS;
 
-  subcommand_name = rpmostree_subcommand_parse (&argc, argv);
+  subcommand_name = rpmostree_subcommand_parse (&argc, argv, invocation);
 
   subcommand = rpm_subcommands;
   while (subcommand->name)

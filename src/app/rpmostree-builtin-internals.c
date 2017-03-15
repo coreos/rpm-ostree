@@ -69,8 +69,7 @@ rpmostree_builtin_internals (int argc, char **argv,
   g_autofree char *prgname = NULL;
   int exit_status = EXIT_SUCCESS;
 
-  subcommand_name = rpmostree_subcommand_parse (&argc, argv);
-
+  subcommand_name = rpmostree_subcommand_parse (&argc, argv, invocation);
   subcommand = internals_subcommands;
   while (subcommand->name)
     {
@@ -84,13 +83,13 @@ rpmostree_builtin_internals (int argc, char **argv,
       g_autoptr(GOptionContext) context = internals_option_context_new_with_commands ();
       g_autofree char *help = NULL;
 
-      /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL,
                                              &argc, &argv,
                                              invocation,
                                              cancellable,
                                              NULL,
                                              NULL);
+
       if (subcommand_name == NULL)
         {
           g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,

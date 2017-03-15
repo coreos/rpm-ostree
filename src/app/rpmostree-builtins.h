@@ -33,6 +33,8 @@ typedef enum {
   RPM_OSTREE_BUILTIN_FLAG_NONE = 0,
   RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD = 1 << 0,
   RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT = 1 << 1,
+  RPM_OSTREE_BUILTIN_FLAG_EXPERIMENTAL = 1 << 2,
+  RPM_OSTREE_BUILTIN_FLAG_HIDDEN = 1 << 3,
 } RpmOstreeBuiltinFlags;
 
 typedef struct RpmOstreeCommand RpmOstreeCommand;
@@ -75,7 +77,8 @@ BUILTINPROTO(start_daemon);
 #undef BUILTINPROTO
 
 const char *rpmostree_subcommand_parse (int *inout_argc,
-                                        char **inout_argv);
+                                        char **inout_argv,
+                                        RpmOstreeCommandInvocation *invocation);
 
 gboolean rpmostree_option_context_parse (GOptionContext *context,
                                          const GOptionEntry *main_entries,
