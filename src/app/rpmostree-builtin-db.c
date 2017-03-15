@@ -126,30 +126,8 @@ rpmostree_builtin_db (int argc, char **argv, GCancellable *cancellable, GError *
   const char *subcommand_name = NULL;
   g_autofree char *prgname = NULL;
   int exit_status = EXIT_SUCCESS;
-  int in, out;
 
-  for (in = 1, out = 1; in < argc; in++, out++)
-    {
-      /* The non-option is the command, take it out of the arguments */
-      if (argv[in][0] != '-')
-        {
-          if (subcommand_name == NULL)
-            {
-              subcommand_name = argv[in];
-              out--;
-              continue;
-            }
-        }
-
-      else if (g_str_equal (argv[in], "--"))
-        {
-          break;
-        }
-
-      argv[out] = argv[in];
-    }
-
-  argc = out;
+  subcommand_name = rpmostree_subcommand_parse (&argc, argv);
 
   subcommand = rpm_subcommands;
   while (subcommand->name)

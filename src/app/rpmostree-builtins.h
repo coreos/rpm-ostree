@@ -60,6 +60,9 @@ BUILTINPROTO(start_daemon);
 
 #undef BUILTINPROTO
 
+const char *rpmostree_subcommand_parse (int *inout_argc,
+                                        char **inout_argv);
+
 gboolean rpmostree_option_context_parse (GOptionContext *context,
                                          const GOptionEntry *main_entries,
                                          int *argc,
