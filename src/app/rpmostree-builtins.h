@@ -73,6 +73,7 @@ BUILTINPROTO(container);
 BUILTINPROTO(pkg_add);
 BUILTINPROTO(pkg_remove);
 BUILTINPROTO(start_daemon);
+BUILTINPROTO(ex);
 
 #undef BUILTINPROTO
 

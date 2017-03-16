@@ -66,8 +66,8 @@ static RpmOstreeCommand commands[] = {
   { "pkg-remove", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_pkg_remove },
   /* Experimental */
-  { "internals", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_EXPERIMENTAL,
-    rpmostree_builtin_internals },
+  { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_EXPERIMENTAL,
+    rpmostree_builtin_ex },
   { "container", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_EXPERIMENTAL,
     rpmostree_builtin_container },
   /* Hidden */

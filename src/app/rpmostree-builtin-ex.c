@@ -20,12 +20,12 @@
 
 #include "config.h"
 
-#include "rpmostree-internals-builtins.h"
+#include "rpmostree-ex-builtins.h"
 #include "rpmostree-rpm-util.h"
 
-static RpmOstreeCommand internals_subcommands[] = {
+static RpmOstreeCommand ex_subcommands[] = {
   { "unpack", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    rpmostree_internals_builtin_unpack },
+    rpmostree_ex_builtin_unpack },
   { NULL, 0, NULL }
 };
 
@@ -36,15 +36,15 @@ static GOptionEntry global_entries[] = {
 */
 
 static GOptionContext *
-internals_option_context_new_with_commands (void)
+ex_option_context_new_with_commands (void)
 {
-  RpmOstreeCommand *command = internals_subcommands;
+  RpmOstreeCommand *command = ex_subcommands;
   GOptionContext *context;
   GString *summary;
 
   context = g_option_context_new ("COMMAND");
 
-  summary = g_string_new ("Builtin \"internals\" Commands:");
+  summary = g_string_new ("Builtin \"ex\" Commands:");
 
   while (command->name != NULL)
     {
@@ -60,9 +60,9 @@ internals_option_context_new_with_commands (void)
 }
 
 int
-rpmostree_builtin_internals (int argc, char **argv,
-                             RpmOstreeCommandInvocation *invocation,
-                             GCancellable *cancellable, GError **error)
+rpmostree_builtin_ex (int argc, char **argv,
+                      RpmOstreeCommandInvocation *invocation,
+                      GCancellable *cancellable, GError **error)
 {
   RpmOstreeCommand *subcommand;
   const char *subcommand_name = NULL;
@@ -70,7 +70,7 @@ rpmostree_builtin_internals (int argc, char **argv,
   int exit_status = EXIT_SUCCESS;
 
   subcommand_name = rpmostree_subcommand_parse (&argc, argv, invocation);
-  subcommand = internals_subcommands;
+  subcommand = ex_subcommands;
   while (subcommand->name)
     {
       if (g_strcmp0 (subcommand_name, subcommand->name) == 0)
@@ -93,12 +93,12 @@ rpmostree_builtin_internals (int argc, char **argv,
       if (subcommand_name == NULL)
         {
           g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "No \"internals\" subcommand specified");
+                               "No \"ex\" subcommand specified");
         }
       else
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Unknown \"internals\" subcommand '%s'", subcommand_name);
+                       "Unknown \"ex\" subcommand '%s'", subcommand_name);
         }
 
       exit_status = EXIT_FAILURE;

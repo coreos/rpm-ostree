@@ -31,7 +31,7 @@
 #include <syslog.h>
 #include "libglnx.h"
 
-#include "rpmostree-internals-builtins.h"
+#include "rpmostree-builtins.h"
 #include "rpmostree-util.h"
 #include "rpmostreed-daemon.h"
 #include "rpmostree-libbuiltin.h"
