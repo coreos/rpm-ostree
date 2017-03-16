@@ -32,7 +32,7 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-builtin-initramfs.c \
 	src/app/rpmostree-pkg-builtins.c \
 	src/app/rpmostree-builtin-status.c \
-	src/app/rpmostree-builtin-internals.c \
+	src/app/rpmostree-builtin-ex.c \
 	src/app/rpmostree-builtin-container.c \
 	src/app/rpmostree-builtin-db.c \
 	src/app/rpmostree-builtin-start-daemon.c \
@@ -43,7 +43,7 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-dbus-helpers.h \
 	src/app/rpmostree-container-builtins.h \
 	src/app/rpmostree-container-builtins.c \
-	src/app/rpmostree-internals-builtin-unpack.c \
+	src/app/rpmostree-ex-builtin-unpack.c \
 	src/app/rpmostree-libbuiltin.c \
 	src/app/rpmostree-libbuiltin.h \
 	$(NULL)

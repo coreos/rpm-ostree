@@ -29,7 +29,7 @@
 #include <libglnx.h>
 #include <rpm/rpmmacro.h>
 
-#include "rpmostree-internals-builtins.h"
+#include "rpmostree-ex-builtins.h"
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
 #include "rpmostree-libbuiltin.h"
@@ -51,11 +51,11 @@ static GOptionEntry option_entries[] = {
 };
 
 int
-rpmostree_internals_builtin_unpack (int             argc,
-                                    char          **argv,
-                                    RpmOstreeCommandInvocation *invocation,
-                                    GCancellable   *cancellable,
-                                    GError        **error)
+rpmostree_ex_builtin_unpack (int             argc,
+                             char          **argv,
+                             RpmOstreeCommandInvocation *invocation,
+                             GCancellable   *cancellable,
+                             GError        **error)
 {
   int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = g_option_context_new ("REPO RPM");
