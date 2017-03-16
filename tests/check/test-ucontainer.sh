@@ -23,7 +23,7 @@ set -euo pipefail
 
 echo "1..2"
 
-rpm-ostree container init
+rpm-ostree ex container init
 
 cp ${commondir}/compose/test-repo.repo rpmmd.repos.d
 
@@ -34,7 +34,7 @@ packages=empty
 repos=test-repo
 EOF
 
-rpm-ostree container assemble empty.conf
+rpm-ostree ex container assemble empty.conf
 assert_has_dir roots/empty.0
 ostree --repo=repo rev-parse empty
 echo "ok assemble"
@@ -44,7 +44,7 @@ cat >nobranch.conf <<EOF
 packages=empty
 repos=test-repo
 EOF
-if rpm-ostree container assemble nobranch.conf 2>err.txt; then
+if rpm-ostree ex container assemble nobranch.conf 2>err.txt; then
     assert_not_reached "nobranch.conf"
 fi
 
@@ -54,7 +54,7 @@ ref=empty
 packages=
 repos=test-repo
 EOF
-if rpm-ostree container assemble nopackages.conf 2>err.txt; then
+if rpm-ostree ex container assemble nopackages.conf 2>err.txt; then
     assert_not_reached "nopackages.conf"
 fi
 
@@ -63,7 +63,7 @@ cat >norepos.conf <<EOF
 ref=empty
 packages=empty
 EOF
-if rpm-ostree container assemble norepos.conf 2>err.txt; then
+if rpm-ostree ex container assemble norepos.conf 2>err.txt; then
     assert_not_reached "norepos.conf"
 fi
 
@@ -73,7 +73,7 @@ ref=notfound
 packages=notfound
 repos=test-repo
 EOF
-if rpm-ostree container assemble notfound.conf 2>err.txt; then
+if rpm-ostree ex container assemble notfound.conf 2>err.txt; then
     assert_not_reached "notfound.conf"
 fi
 

@@ -21,11 +21,14 @@
 #include "config.h"
 
 #include "rpmostree-ex-builtins.h"
+#include "rpmostree-container-builtins.h"
 #include "rpmostree-rpm-util.h"
 
 static RpmOstreeCommand ex_subcommands[] = {
   { "unpack", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     rpmostree_ex_builtin_unpack },
+  { "container", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    rpmostree_builtin_container },
   { NULL, 0, NULL }
 };
 

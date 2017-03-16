@@ -68,8 +68,6 @@ static RpmOstreeCommand commands[] = {
   /* Experimental */
   { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_EXPERIMENTAL,
     rpmostree_builtin_ex },
-  { "container", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_EXPERIMENTAL,
-    rpmostree_builtin_container },
   /* Hidden */
   { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
                    RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
