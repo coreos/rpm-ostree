@@ -83,7 +83,7 @@ rpmostree_builtin_ex (int argc, char **argv,
 
   if (!subcommand->name)
     {
-      g_autoptr(GOptionContext) context = internals_option_context_new_with_commands ();
+      g_autoptr(GOptionContext) context = ex_option_context_new_with_commands ();
       g_autofree char *help = NULL;
 
       (void) rpmostree_option_context_parse (context, NULL,
