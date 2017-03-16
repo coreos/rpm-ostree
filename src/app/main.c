@@ -65,8 +65,7 @@ static RpmOstreeCommand commands[] = {
     rpmostree_builtin_pkg_add },
   { "pkg-remove", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_pkg_remove },
-  /* Experimental */
-  { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_EXPERIMENTAL,
+  { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_ex },
   /* Hidden */
   { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
@@ -104,8 +103,7 @@ option_context_new_with_commands (void)
   while (command->name != NULL)
     {
       gboolean is_hidden = (command->flags & RPM_OSTREE_BUILTIN_FLAG_HIDDEN) > 0;
-      gboolean is_experimental = (command->flags & RPM_OSTREE_BUILTIN_FLAG_EXPERIMENTAL) > 0;
-      if (!(is_hidden || is_experimental))
+      if (!is_hidden)
         g_string_append_printf (summary, "\n  %s", command->name);
       command++;
     }
@@ -233,18 +231,6 @@ rpmostree_subcommand_parse (int *inout_argc,
   const int argc = *inout_argc;
   const char *command_name = NULL;
   int in, out;
-
-  if (invocation && (invocation->command->flags & RPM_OSTREE_BUILTIN_FLAG_EXPERIMENTAL) > 0)
-    {
-      const int is_tty = isatty (1);
-      const char *bold_prefix = is_tty ? "\x1b[1m" : "";
-      const char *bold_suffix = is_tty ? "\x1b[0m" : "";
-
-      g_assert (invocation);
-
-      g_printerr ("%snotice%s: %s is an experimental command and subject to change.\n",
-                  bold_prefix, bold_suffix, invocation->command->name);
-    }
 
   for (in = 1, out = 1; in < argc; in++, out++)
     {
