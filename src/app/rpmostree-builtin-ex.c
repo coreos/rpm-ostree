@@ -111,10 +111,18 @@ rpmostree_builtin_ex (int argc, char **argv,
       goto out;
     }
 
+
   prgname = g_strdup_printf ("%s %s", g_get_prgname (), subcommand_name);
   g_set_prgname (prgname);
 
-  { RpmOstreeCommandInvocation sub_invocation = { .command = subcommand };
+  { const int is_tty = isatty (1);
+    const char *bold_prefix = is_tty ? "\x1b[1m" : "";
+    const char *bold_suffix = is_tty ? "\x1b[0m" : "";
+
+    g_printerr ("%snotice%s: \"%s\" is an experimental command and subject to change.\n",
+                bold_prefix, bold_suffix, subcommand->name);
+
+    RpmOstreeCommandInvocation sub_invocation = { .command = subcommand };
     exit_status = subcommand->fn (argc, argv, &sub_invocation, cancellable, error);
   }
 
