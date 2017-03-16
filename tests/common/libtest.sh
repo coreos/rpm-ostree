@@ -189,6 +189,19 @@ setup_test_repository () {
     cd $oldpwd
 }
 
+run_temp_webserver() {
+    env PYTHONUNBUFFERED=1 setsid python -m SimpleHTTPServer 0 >${test_tmpdir}/httpd-output &
+    for x in $(seq 50); do
+        sed -e 's,Serving HTTP on 0.0.0.0 port \([0-9]*\) \.\.\.,\1,' < ${test_tmpdir}/httpd-output > ${test_tmpdir}/httpd-port
+        if ! cmp ${test_tmpdir}/httpd-output ${test_tmpdir}/httpd-port 1>/dev/null; then
+            break
+        fi
+        sleep 0.1
+    done
+    port=$(cat ${test_tmpdir}/httpd-port)
+    echo "http://127.0.0.1:${port}" > ${test_tmpdir}/httpd-address
+}
+
 setup_fake_remote_repo1() {
     mode=$1
     args=$2
@@ -218,9 +231,7 @@ setup_fake_remote_repo1() {
     mkdir ${test_tmpdir}/httpd
     cd httpd
     ln -s ${test_tmpdir}/ostree-srv ostree
-    ostree trivial-httpd --autoexit --daemonize -p ${test_tmpdir}/httpd-port $args
-    port=$(cat ${test_tmpdir}/httpd-port)
-    echo "http://127.0.0.1:${port}" > ${test_tmpdir}/httpd-address
+    run_temp_webserver
     cd ${oldpwd} 
 
     export OSTREE="ostree --repo=repo"
@@ -322,9 +333,7 @@ EOF
     mkdir ${test_tmpdir}/httpd
     cd httpd
     ln -s ${test_tmpdir} ostree
-    ostree trivial-httpd --autoexit --daemonize -p ${test_tmpdir}/httpd-port $args
-    port=$(cat ${test_tmpdir}/httpd-port)
-    echo "http://127.0.0.1:${port}" > ${test_tmpdir}/httpd-address
+    run_temp_webserver
     cd ${oldpwd} 
 }
 
