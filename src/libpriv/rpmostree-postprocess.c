@@ -512,34 +512,91 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
   return ret;
 }
 
+static char *
+replace_nsswitch_string (const char *buf,
+                         GError    **error)
+{
+  gboolean is_passwd;
+  gboolean is_group;
+
+  is_passwd = g_str_has_prefix (buf, "passwd:");
+  is_group = g_str_has_prefix (buf, "group:");
+
+  if (!(is_passwd || is_group))
+    return g_strdup (buf);
+
+  const char *colon = strchr (buf, ':');
+  g_assert (colon);
+
+  g_autoptr(GString) retbuf = g_string_new ("");
+  /* Insert the prefix */
+  g_string_append_len (retbuf, buf, (colon - buf) + 1);
+
+  /* Now parse the elements and try to insert `altfiles`
+   * after `files`.
+   */
+  g_auto(GStrv) elts = g_strsplit_set (colon + 1, " \t", -1);
+  gboolean inserted = FALSE;
+  for (char **iter = elts; iter && *iter; iter++)
+    {
+      const char *v = *iter;
+      if (!*v)
+        continue;
+      /* Already have altfiles?  We're done */
+      if (strcmp (v, "altfiles") == 0)
+        return g_strdup (buf);
+      /* We prefer `files altfiles` */
+      else if (!inserted && strcmp (v, "files") == 0)
+        {
+          g_string_append (retbuf, " files altfiles");
+          inserted = TRUE;
+        }
+      else
+        {
+          g_string_append_c (retbuf, ' ');
+          g_string_append (retbuf, v);
+        }
+    }
+  /* Last ditch effort if we didn't find `files` */
+  if (!inserted)
+    g_string_append (retbuf, " altfiles");
+  return g_string_free (g_steal_pointer (&retbuf), FALSE);
+}
+
+char *
+rpmostree_postprocess_replace_nsswitch (const char *buf,
+                                        GError    **error)
+{
+  g_autoptr(GString) new_buf = g_string_new ("");
+
+  g_auto(GStrv) lines = g_strsplit (buf, "\n", -1);
+  for (char **iter = lines; iter && *iter; iter++)
+    {
+      const char *line = *iter;
+      g_autofree char *replaced_line = replace_nsswitch_string (line, error);
+      if (!replaced_line)
+        return NULL;
+      g_string_append (new_buf, replaced_line);
+      if (*(iter+1))
+        g_string_append_c (new_buf, '\n');
+    }
+  return g_string_free (g_steal_pointer (&new_buf), FALSE);
+}
+
+
 static gboolean
 replace_nsswitch (int            dfd,
                   GCancellable  *cancellable,
                   GError       **error)
 {
-  g_autofree char *nsswitch_contents = NULL;
-  g_autofree char *new_nsswitch_contents = NULL;
-
-  static gsize regex_initialized;
-  static GRegex *passwd_regex;
-
-  if (g_once_init_enter (&regex_initialized))
-    {
-      passwd_regex = g_regex_new ("^(passwd|group):\\s+files(.*)$",
-                                  G_REGEX_MULTILINE, 0, NULL);
-      g_assert (passwd_regex);
-      g_once_init_leave (&regex_initialized, 1);
-    }
-
-  nsswitch_contents = glnx_file_get_contents_utf8_at (dfd, "etc/nsswitch.conf", NULL,
-                                                      cancellable, error);
+  g_autofree char *nsswitch_contents =
+    glnx_file_get_contents_utf8_at (dfd, "etc/nsswitch.conf", NULL,
+                                    cancellable, error);
   if (!nsswitch_contents)
     return FALSE;
 
-  new_nsswitch_contents = g_regex_replace (passwd_regex,
-                                           nsswitch_contents, -1, 0,
-                                           "\\1: files altfiles\\2",
-                                           0, error);
+  g_autofree char *new_nsswitch_contents =
+    rpmostree_postprocess_replace_nsswitch (nsswitch_contents, error);
   if (!new_nsswitch_contents)
     return FALSE;
 

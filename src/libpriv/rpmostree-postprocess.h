@@ -23,6 +23,11 @@
 #include <ostree.h>
 #include "rpmostree-json-parsing.h"
 
+/* "public" for unit tests */
+char *
+rpmostree_postprocess_replace_nsswitch (const char *buf,
+                                        GError    **error);
+
 gboolean
 rpmostree_treefile_postprocessing (int            rootfs_fd,
                                    GFile         *context_directory,
