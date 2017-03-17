@@ -2244,10 +2244,6 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
           g_str_equal (group, "root"))
         continue;
 
-      if (!S_ISREG (mode) &&
-          !S_ISDIR (mode))
-        continue;
-
       g_assert (fn != NULL);
       fn += strspn (fn, "/");
       g_assert (fn[0]);
@@ -2288,8 +2284,7 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
           return FALSE;
         }
 
-      /* TODO - this is broken since https://github.com/ostreedev/ostree/pull/521 */
-      if (S_ISREG (mode))
+      if (!S_ISDIR (stbuf.st_mode))
         {
           if (!break_single_hardlink_at (tmprootfs_dfd, fn, cancellable, error))
             return FALSE;
