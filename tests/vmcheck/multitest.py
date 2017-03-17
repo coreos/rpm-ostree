@@ -14,11 +14,32 @@ def main():
     for host in sys.argv[1:]:
         hosts.append(Host(host))
 
-    for test in glob.iglob(os.path.join(sys.path[0], "test-*.sh")):
+    requested_tests_spec = os.environ.get('TESTS')
+    if requested_tests_spec is not None:
+        requested_tests = requested_tests_spec.split()
+    else:
+        requested_tests = None
+
+    tests = glob.iglob(os.path.join(sys.path[0], "test-*.sh"))
+    matched_tests = []
+    unmatched_tests = []
+    for test in tests:
+        testname = Host._strip_test(test)
+        if requested_tests is None or testname in requested_tests:
+            matched_tests.append(test)
+        else:
+            unmatched_tests.append(testname)
+    if len(matched_tests) == 0:
+        print("error: no tests match '{}': {}".format(requested_tests_spec, unmatched_tests))
+        sys.exit(1)
+
+    for test in matched_tests:
         host = wait_for_next_available_host(hosts)
         rc = host.flush()
         failed = failed or rc != 0
         host.dispatch(test)
+    if len(unmatched_tests) > 0:
+        print("NOTE: Skipping tests not matching {}: {}".format(requested_tests_spec, unmatched_tests))
 
     for host in hosts:
         rc = host.flush()
