@@ -1191,23 +1191,13 @@ rootfs_has_usrlib_passwd (int rootfs_dfd,
   return TRUE;
 }
 
-/* We actually want RPM to inject to /usr/lib/passwd - we
- * accomplish this by temporarily renaming /usr/lib/passwd -> /usr/etc/passwd
- * (Which appears as /etc/passwd via our compatibility symlink in the bubblewrap
- *  script runner). We also copy the merge deployment's /etc/passwd to
- *  /usr/lib/passwd, so that %pre scripts are aware of newly added system users
- *  not in the tree's /usr/lib/passwd (through nss-altfiles in the container).
+/* This may be leftover in the tree from an older version of rpm-ostree that
+ * didn't clean them up at compose time, and having them exist will mean
+ * rofiles-fuse will prevent useradd from opening it for write.
  */
 gboolean
-rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
-                                       const char        *merge_passwd_dir,
-                                       gboolean          *out_have_passwd,
-                                       GCancellable      *cancellable,
-                                       GError           **error)
+rpmostree_passwd_cleanup (int rootfs_dfd, GCancellable *cancellable, GError **error)
 {
-  /* This may be leftover in the tree, and having it exist will mean
-   * rofiles-fuse will prevent useradd from opening it for write.
-   */
   for (guint i = 0; i < G_N_ELEMENTS (pwgrp_lock_and_backup_files); i++)
     {
       const char *file = pwgrp_lock_and_backup_files[i];
@@ -1222,6 +1212,26 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
             }
         }
     }
+
+  return TRUE;
+}
+
+/* We actually want RPM to inject to /usr/lib/passwd - we
+ * accomplish this by temporarily renaming /usr/lib/passwd -> /usr/etc/passwd
+ * (Which appears as /etc/passwd via our compatibility symlink in the bubblewrap
+ *  script runner). We also copy the merge deployment's /etc/passwd to
+ *  /usr/lib/passwd, so that %pre scripts are aware of newly added system users
+ *  not in the tree's /usr/lib/passwd (through nss-altfiles in the container).
+ */
+gboolean
+rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
+                                       const char        *merge_passwd_dir,
+                                       gboolean          *out_have_passwd,
+                                       GCancellable      *cancellable,
+                                       GError           **error)
+{
+  if (!rpmostree_passwd_cleanup (rootfs_dfd, cancellable, error))
+    return FALSE;
 
   if (!rootfs_has_usrlib_passwd (rootfs_dfd, out_have_passwd, error))
     return FALSE;

@@ -1190,6 +1190,7 @@ rpmostree_rootfs_prepare_links (int           rootfs_fd,
  *
  *  - Move /etc to /usr/etc
  *  - Clean up RPM db leftovers
+ *  - Clean /usr/etc/passwd- backup files and such
  */
 gboolean
 rpmostree_rootfs_postprocess_common (int           rootfs_fd,
@@ -1235,6 +1236,9 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
           goto out;
         }
     }
+
+  if (!rpmostree_passwd_cleanup (rootfs_fd, cancellable, error))
+    goto out;
 
   ret = TRUE;
  out:
