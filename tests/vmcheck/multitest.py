@@ -102,10 +102,12 @@ class Host:
         rc = self._p.wait()
 
         # just merge the two files
-        with open("vmcheck/%s.out" % self.test) as f:
-            with open("vmcheck/%s.log" % self.test, 'a') as j:
-                j.write(f.read())
-        os.remove("vmcheck/%s.out" % self.test)
+        outfile = "vmcheck/{}.out".format(self.test)
+        if os.path.isfile(outfile):
+            with open(outfile) as f:
+                with open("vmcheck/%s.log" % self.test, 'a') as j:
+                    j.write(f.read())
+            os.remove(outfile)
 
         rcs = "PASS" if rc == 0 else ("FAIL (rc %d)" % rc)
         print("%s: %s" % (rcs, self.test))
