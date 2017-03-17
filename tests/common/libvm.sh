@@ -41,7 +41,7 @@ vm_rsync() {
     pushd ${topsrcdir}
     rsyncopts="ssh -o User=root"
     if [ -f ssh-config ]; then
-      rsyncopts="$rsync_opts -F ssh-config"
+      rsyncopts="$rsyncopts -F ssh-config"
     fi
     rsync -az --no-owner --no-group -e "$rsyncopts" \
               --exclude .git/ . $VM:/var/roothome/sync
