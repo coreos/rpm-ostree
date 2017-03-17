@@ -89,6 +89,7 @@ check_file() {
 
 check_file /usr/bin/nrc-none.sh root root ""
 check_file /usr/bin/nrc-user.sh nrcuser root ""
+check_file /usr/bin/nrc-user-link.sh nrcuser root ""
 check_file /usr/bin/nrc-group.sh root nrcgroup ""
 check_file /usr/bin/nrc-caps.sh root root "cap_net_bind_service+ep"
 check_file /usr/bin/nrc-caps-setuid.sh root root "cap_net_bind_service+ep"
@@ -102,4 +103,8 @@ check_file /run/nonrootcap nrcuser nrcgroup
 check_file /var/lib/nonrootcap-rootowned root root
 check_file /run/nonrootcap-rootowned root root
 check_file /etc/nrc.conf nrcuser root
+check_file /etc/nrc-link.conf nrcuser root
 echo "ok correct user/group and fcaps"
+
+vm_cmd ostree fsck
+echo "ok fsck"

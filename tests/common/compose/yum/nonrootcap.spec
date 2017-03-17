@@ -36,8 +36,10 @@ useradd -r nrcuser -g nrcgroup -s /sbin/nologin
 
 %install
 install -D nrc.conf %{buildroot}/etc/nrc.conf
+ln -sr %{buildroot}/etc/nrc.conf %{buildroot}/etc/nrc-link.conf
 mkdir -p %{buildroot}/usr/bin
 install *.sh %{buildroot}/usr/bin
+ln -sr %{buildroot}/usr/bin/{nrc-user.sh,nrc-user-link.sh}
 mkdir -p %{buildroot}/var/lib/nonrootcap
 mkdir -p %{buildroot}/run/nonrootcap
 mkdir -p %{buildroot}/var/lib/nonrootcap-rootowned
@@ -49,7 +51,9 @@ rm -rf %{buildroot}
 %files
 /usr/bin/nrc-none.sh
 %attr(-, nrcuser, -) /etc/nrc.conf
+%attr(-, nrcuser, -) /etc/nrc-link.conf
 %attr(-, nrcuser, -) /usr/bin/nrc-user.sh
+%attr(-, nrcuser, -) /usr/bin/nrc-user-link.sh
 %attr(-, -, nrcgroup) /usr/bin/nrc-group.sh
 %caps(cap_net_bind_service=ep) /usr/bin/nrc-caps.sh
 %attr(4775, -, -) %caps(cap_net_bind_service=ep) /usr/bin/nrc-caps-setuid.sh
