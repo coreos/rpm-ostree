@@ -18,6 +18,9 @@ cat > metadata.json <<EOF
 EOF
 runcompose --add-metadata-from-json metadata.json
 ostree --repo=${repobuild} ls -R ${treeref} /usr/lib/ostree-boot > bootls.txt
+if ostree --repo=${repobuild} ls -R ${treeref} /usr/etc/passwd-; then
+    assert_not_reached "Found /usr/etc/passwd- backup file in tree"
+fi
 echo "ok compose"
 
 ostree --repo=${repobuild} show --print-metadata-key exampleos.gitrepo ${treeref} > meta.txt

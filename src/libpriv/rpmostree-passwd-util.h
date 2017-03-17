@@ -63,6 +63,10 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                          GCancellable    *cancellable,
                                          GError         **error);
 
+
+gboolean
+rpmostree_passwd_cleanup (int rootfs_dfd, GCancellable *cancellable, GError **error);
+
 gboolean
 rpmostree_passwd_prepare_rpm_layering (int       rootfs_dfd,
                                        const char        *merge_passwd_dir,
