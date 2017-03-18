@@ -59,6 +59,9 @@ fi
 cd /ostree/repo/tmp
 rm vmcheck -rf
 ostree checkout $commit vmcheck --fsync=0
+# ✀✀✀ BEGIN hack for https://github.com/projectatomic/rpm-ostree/pull/693 ✀✀✀
+rm -f vmcheck/usr/etc/{.pwd.lock,passwd-,group-,shadow-,gshadow-,subuid-,subgid-}
+# ✀✀✀ END hack for https://github.com/projectatomic/rpm-ostree/pull/693 ✀✀✀
 rsync -rlv /var/roothome/sync/insttree/usr/ vmcheck/usr/
 # ✀✀✀ BEGIN hack for https://github.com/projectatomic/rpm-ostree/pull/642 ✀✀✀
 ostree admin unlock || true
