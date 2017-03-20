@@ -24,11 +24,11 @@ def main():
     matched_tests = []
     unmatched_tests = []
     for test in tests:
-        testbn = os.path.basename(test)
-        if requested_tests is None or testbn in requested_tests:
+        testname = Host._strip_test(test)
+        if requested_tests is None or testname in requested_tests:
             matched_tests.append(test)
         else:
-            unmatched_tests.append(testbn)
+            unmatched_tests.append(testname)
     if len(matched_tests) == 0:
         print("error: no tests match '{}': {}".format(requested_tests_spec, unmatched_tests))
         sys.exit(1)
