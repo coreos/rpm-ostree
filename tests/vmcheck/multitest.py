@@ -3,6 +3,7 @@
 import os
 import sys
 import glob
+import time
 import subprocess
 
 
@@ -41,7 +42,7 @@ def wait_for_next_available_host(hosts):
         for host in hosts:
             if host.is_done():
                 return host
-        os.wait()
+        time.sleep(1)
 
 
 class Host:
