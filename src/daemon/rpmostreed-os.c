@@ -685,6 +685,7 @@ out:
 static gboolean
 os_handle_pkg_change (RPMOSTreeOS *interface,
 		      GDBusMethodInvocation *invocation,
+		      GUnixFDList *fdlist,
 		      GVariant *arg_options,
 		      const char * const *arg_packages_added,
 		      const char * const *arg_packages_removed)
@@ -734,7 +735,7 @@ out:
     {
       const char *client_address;
       client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_pkg_change (interface, invocation, client_address);
+      rpmostree_os_complete_pkg_change (interface, invocation, NULL, client_address);
     }
 
   return TRUE;
@@ -794,7 +795,7 @@ out:
     {
       const char *client_address;
       client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_pkg_change (interface, invocation, client_address);
+      rpmostree_os_complete_pkg_change (interface, invocation, NULL, client_address);
     }
 
   return TRUE;
@@ -866,7 +867,7 @@ out:
     {
       const char *client_address;
       client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_pkg_change (interface, invocation, client_address);
+      rpmostree_os_complete_pkg_change (interface, invocation, NULL, client_address);
     }
 
   return TRUE;
