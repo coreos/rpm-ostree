@@ -209,7 +209,19 @@ rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
     return NULL;
 
   if (is_layered)
-    g_variant_dict_insert (&dict, "base-checksum", "s", base_checksum);
+    {
+      g_autoptr(GVariant) base_commit = NULL;
+
+      if (!ostree_repo_load_variant (repo,
+                                     OSTREE_OBJECT_TYPE_COMMIT,
+                                     base_checksum,
+                                     &base_commit,
+                                     error))
+        return NULL;
+
+      g_variant_dict_insert (&dict, "base-checksum", "s", base_checksum);
+      variant_add_commit_details (&dict, "base-", base_commit);
+    }
   else
     base_checksum = g_strdup (csum);
 
