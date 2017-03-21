@@ -879,7 +879,8 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
       self->revision = g_strdup (revision);
       self->packages_added = strdupv_canonicalize (packages_added);
       self->packages_removed = strdupv_canonicalize (packages_removed);
-      self->local_packages_added = g_object_ref (local_packages_added);
+      if (local_packages_added != NULL)
+        self->local_packages_added = g_object_ref (local_packages_added);
     }
 
   return (RpmostreedTransaction *) self;
