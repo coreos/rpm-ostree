@@ -20,6 +20,8 @@
 
 #include "rpmostreed-types.h"
 
+#include <gio/gunixfdlist.h>
+
 RpmostreedTransaction *
                 rpmostreed_transaction_new_package_diff    (GDBusMethodInvocation *invocation,
                                                             OstreeSysroot *sysroot,
@@ -64,6 +66,7 @@ RpmostreedTransaction *
                                                             const char *revision,
                                                             const char *const *packages_added,
                                                             const char *const *packages_removed,
+                                                            GUnixFDList *local_packages_added,
                                                             GCancellable *cancellable,
                                                             GError **error);
 
