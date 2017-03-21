@@ -30,22 +30,11 @@
 static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_dry_run;
-/* Turn off the noscripts stuff for now, since we aren't persisting
- * it, and I hope we can mostly get away with not needing it.
- */
-#if 0
-static gboolean opt_no_scripts;
-static char **opt_ignore_script;
-#endif
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after upgrade is prepared", NULL },
   { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction", NULL },
-#if 0
-  { "noscripts", 0, 0, G_OPTION_ARG_NONE, &opt_no_scripts, "Do not run scripts", NULL },
-  { "ignore-script", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_ignore_script, "Ignore a script for RPM", NULL },
-#endif
   { NULL }
 };
 
@@ -56,12 +45,6 @@ get_args_variant (void)
   g_variant_dict_init (&dict, NULL);
   g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
-#if 0
-  if (opt_no_scripts)
-      g_variant_dict_insert (&dict, "noscripts", "b", TRUE);
-  if (opt_ignore_script)
-    g_variant_dict_insert (&dict, "ignore-scripts", "^as", opt_ignore_script);
-#endif
   return g_variant_dict_end (&dict);
 }
 

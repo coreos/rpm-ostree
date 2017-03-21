@@ -360,7 +360,6 @@ deploy_flags_from_options (GVariant *options,
   gboolean opt_skip_purge = FALSE;
   gboolean opt_allow_downgrade = FALSE;
   gboolean opt_dry_run = FALSE;
-  gboolean opt_noscripts = FALSE;
 
   g_variant_dict_init (&options_dict, options);
 
@@ -384,11 +383,6 @@ deploy_flags_from_options (GVariant *options,
                          &opt_dry_run);
   if (opt_dry_run)
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN;
-
-  g_variant_dict_lookup (&options_dict, "noscripts", "b",
-                         &opt_noscripts);
-  if (opt_noscripts)
-    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NOSCRIPTS;
 
   g_variant_dict_clear (&options_dict);
 
