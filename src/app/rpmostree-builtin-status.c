@@ -267,7 +267,8 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
 
       if (is_locally_assembled)
         print_kv ("BaseCommit", max_key_len, base_checksum);
-      print_kv ("Commit", max_key_len, checksum);
+      else
+        print_kv ("Commit", max_key_len, checksum);
 
       /* Show any difference between the baseref vs head, but only for the
          booted commit, and only if there isn't a pending deployment. Otherwise
