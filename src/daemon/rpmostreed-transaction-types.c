@@ -574,6 +574,7 @@ typedef struct {
   char *revision; /* NULL for upgrade */
   char **packages_added;
   char **packages_removed;
+  GUnixFDList *local_packages_added;
 } DeployTransaction;
 
 typedef RpmostreedTransactionClass DeployTransactionClass;
@@ -595,20 +596,14 @@ deploy_transaction_finalize (GObject *object)
   g_free (self->revision);
   g_strfreev (self->packages_added);
   g_strfreev (self->packages_removed);
+  g_clear_pointer (&self->local_packages_added, g_object_unref);
 
   G_OBJECT_CLASS (deploy_transaction_parent_class)->finalize (object);
 }
 
 static gboolean
-is_local_rpm_file (const char *pkgspec)
-{
-  g_assert (pkgspec);
-  return pkgspec[0] == '/' && g_str_has_suffix (pkgspec, ".rpm");
-}
-
-static gboolean
 import_local_rpm (OstreeRepo    *parent,
-                  const char    *rpm,
+                  int            fd,
                   char         **sha256_nevra,
                   GCancellable  *cancellable,
                   GError       **error)
@@ -637,7 +632,7 @@ import_local_rpm (OstreeRepo    *parent,
       return FALSE;
   }
 
-  unpacker = rpmostree_unpacker_new_at (AT_FDCWD, rpm, NULL,
+  unpacker = rpmostree_unpacker_new_fd (fd, NULL,
                                         RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION,
                                         error);
   if (unpacker == NULL)
@@ -736,44 +731,36 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   if (self->packages_added)
     {
-      g_autoptr(GHashTable) pkgs =
-        g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-      g_autoptr(GHashTable) local_pkgs =
-        g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+      if (!rpmostree_origin_add_packages (origin, self->packages_added,
+                                          FALSE, cancellable, error))
+        goto out;
+    }
 
-      for (char **it = self->packages_added; it && *it; it++)
+  if (self->local_packages_added != NULL)
+    {
+      /* add them all to an array first to make the origin
+       * update more efficient */
+      g_autoptr(GPtrArray) pkgs = g_ptr_array_new_with_free_func (g_free);
+
+      gint nfds = 0;
+      const gint *fds =
+        g_unix_fd_list_steal_fds (self->local_packages_added, &nfds);
+      for (guint i = 0; i < nfds; i++)
         {
-          if (is_local_rpm_file (*it))
-            {
-              g_autofree char *sha256_nevra = NULL;
+          g_autofree char *sha256_nevra = NULL;
 
-              if (!import_local_rpm (repo, *it, &sha256_nevra,
-                                     cancellable, error))
-                goto out;
-
-              g_hash_table_add (local_pkgs, g_steal_pointer (&sha256_nevra));
-            }
-          else
-            {
-              g_hash_table_add (pkgs, g_strdup (*it));
-            }
-        }
-
-      if (g_hash_table_size (pkgs) > 0)
-        {
-          g_autofree char **keys =
-            (char **)g_hash_table_get_keys_as_array (pkgs, NULL);
-          if (!rpmostree_origin_add_packages (origin, keys, FALSE,
-                                              cancellable, error))
+          if (!import_local_rpm (repo, fds[i], &sha256_nevra,
+                                 cancellable, error))
             goto out;
+
+          g_ptr_array_add (pkgs, g_steal_pointer (&sha256_nevra));
         }
 
-      if (g_hash_table_size (local_pkgs) > 0)
+      if (pkgs->len > 0)
         {
-          g_autofree char **keys =
-            (char**)g_hash_table_get_keys_as_array (local_pkgs, NULL);
-          if (!rpmostree_origin_add_packages (origin, keys, TRUE,
-                                              cancellable, error))
+          g_ptr_array_add (pkgs, NULL);
+          if (!rpmostree_origin_add_packages (origin, (char**)pkgs->pdata,
+                                              TRUE, cancellable, error))
             goto out;
         }
 
@@ -868,6 +855,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    const char *revision,
                                    const char *const *packages_added,
                                    const char *const *packages_removed,
+                                   GUnixFDList *local_packages_added,
                                    GCancellable *cancellable,
                                    GError **error)
 {
@@ -891,6 +879,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
       self->revision = g_strdup (revision);
       self->packages_added = strdupv_canonicalize (packages_added);
       self->packages_removed = strdupv_canonicalize (packages_removed);
+      self->local_packages_added = g_object_ref (local_packages_added);
     }
 
   return (RpmostreedTransaction *) self;

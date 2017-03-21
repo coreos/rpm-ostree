@@ -419,7 +419,7 @@ os_handle_deploy (RPMOSTreeOS *interface,
                                                    ot_sysroot,
                                                    deploy_flags_from_options (arg_options,
                                                       RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE),
-                                                   osname, NULL, arg_revision, NULL, NULL,
+                                                   osname, NULL, arg_revision, NULL, NULL, NULL,
                                                    cancellable,
                                                    &local_error);
 
@@ -470,7 +470,7 @@ os_handle_upgrade (RPMOSTreeOS *interface,
 
   transaction = rpmostreed_transaction_new_deploy (invocation, ot_sysroot,
                                                    deploy_flags_from_options (arg_options, 0),
-                                                   osname, NULL, NULL, NULL, NULL,
+                                                   osname, NULL, NULL, NULL, NULL, NULL,
                                                    cancellable, &local_error);
 
   if (transaction == NULL)
@@ -658,7 +658,7 @@ os_handle_rebase (RPMOSTreeOS *interface,
                                                    deploy_flags_from_options (arg_options,
                                                       RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE),
                                                    osname, arg_refspec, opt_revision,
-                                                   NULL, NULL,
+                                                   NULL, NULL, NULL,
                                                    cancellable,
                                                    &local_error);
 
@@ -696,6 +696,7 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   GError *local_error = NULL;
+  g_auto(GVariantDict) options_dict;
 
   transaction = merge_compatible_txn (self, invocation);
   if (transaction)
@@ -710,6 +711,24 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
 
   osname = rpmostree_os_get_name (interface);
 
+  /* Right now, we only use the fd list from the D-Bus message to transfer local
+   * packages, so there's no point in re-extracting them from fdlist based on
+   * the indices in local-packages. We just do a sanity check here that they are
+   * indeed the same length. If this assertion ever becomes false, then we'll
+   * have to extract. */
+  g_variant_dict_init (&options_dict, arg_options);
+  if (g_variant_dict_contains (&options_dict, "local-packages"))
+    {
+      g_autoptr(GVariant) fds =
+        g_variant_dict_lookup_value (&options_dict, "local-packages",
+                                     G_VARIANT_TYPE ("ah"));
+      g_assert (fds);
+      g_assert (g_unix_fd_list_get_length (fdlist) ==
+                g_variant_n_children (fds));
+    }
+  else
+    g_assert (g_unix_fd_list_get_length (fdlist) == 0);
+
   /* By default, pkgchange does not pull the base; we will likley
    * add an option in the future.
    */
@@ -719,7 +738,7 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
                                                      RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE),
                                                    osname, NULL, NULL,
                                                    arg_packages_added,
-                                                   arg_packages_removed,
+                                                   arg_packages_removed, fdlist,
                                                    cancellable, &local_error);
   if (transaction == NULL)
     goto out;

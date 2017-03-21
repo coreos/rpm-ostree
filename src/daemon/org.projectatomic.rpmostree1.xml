@@ -196,6 +196,11 @@
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
+    <!-- Available options:
+         "reboot" (type 'b')
+         "dry-run" (type 'b')
+         "local-packages" (type 'ah')
+    -->
     <method name="PkgChange">
       <arg type="a{sv}" name="options" direction="in"/>
       <arg type="as" name="packages_added"/>
