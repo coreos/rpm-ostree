@@ -197,14 +197,6 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       g_assert (g_variant_dict_lookup (dict, "id", "&s", &id));
       g_assert (g_variant_dict_lookup (dict, "serial", "i", &serial));
       g_assert (g_variant_dict_lookup (dict, "checksum", "&s", &checksum));
-      g_assert (g_variant_dict_lookup (dict, "timestamp", "t", &t));
-      { g_autoptr(GDateTime) timestamp = g_date_time_new_from_unix_utc (t);
-
-        if (timestamp != NULL)
-          timestamp_string = g_date_time_format (timestamp, "%Y-%m-%d %T");
-        else
-          timestamp_string = g_strdup_printf ("(invalid timestamp)");
-      }
 
       if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
         {
@@ -244,6 +236,23 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         g_print ("%s", checksum);
       g_print ("\n");
 
+      const char *base_checksum = NULL;
+      g_variant_dict_lookup (dict, "base-checksum", "&s", &base_checksum);
+      if (base_checksum != NULL)
+        is_locally_assembled = TRUE;
+
+      if (is_locally_assembled)
+        g_assert (g_variant_dict_lookup (dict, "base-timestamp", "t", &t));
+      else
+        g_assert (g_variant_dict_lookup (dict, "timestamp", "t", &t));
+      { g_autoptr(GDateTime) timestamp = g_date_time_new_from_unix_utc (t);
+
+        if (timestamp != NULL)
+          timestamp_string = g_date_time_format (timestamp, "%Y-%m-%d %T");
+        else
+          timestamp_string = g_strdup_printf ("(invalid timestamp)");
+      }
+
       if (version_string)
         {
           g_autofree char *version_time
@@ -256,13 +265,8 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
           print_kv ("Timestamp", max_key_len, timestamp_string);
         }
 
-      if (g_variant_dict_contains (dict, "base-checksum"))
-        {
-          const char *base_checksum;
-          g_assert (g_variant_dict_lookup (dict, "base-checksum", "&s", &base_checksum));
-          print_kv ("BaseCommit", max_key_len, base_checksum);
-          is_locally_assembled = TRUE;
-        }
+      if (is_locally_assembled)
+        print_kv ("BaseCommit", max_key_len, base_checksum);
       print_kv ("Commit", max_key_len, checksum);
 
       /* Show any difference between the baseref vs head, but only for the
