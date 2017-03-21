@@ -2244,6 +2244,14 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
           g_str_equal (group, "root"))
         continue;
 
+      /* In theory, RPMs could contain block devices or FIFOs; we would normally
+       * have rejected that at the import time, but let's also be sure here.
+       */
+      if (!(S_ISREG (mode) ||
+            S_ISLNK (mode) ||
+            S_ISDIR (mode)))
+        continue;
+
       g_assert (fn != NULL);
       fn += strspn (fn, "/");
       g_assert (fn[0]);
