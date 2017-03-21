@@ -201,6 +201,7 @@
       <arg type="as" name="packages_added"/>
       <arg type="as" name="packages_removed"/>
       <arg type="s" name="transaction_address" direction="out"/>
+      <annotation name="org.gtk.GDBus.C.UnixFD" value="true"/>
     </method>
 
     <method name="SetInitramfsState">

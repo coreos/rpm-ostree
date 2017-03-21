@@ -73,7 +73,9 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
                                           get_args_variant (),
                                           packages_to_add,
                                           packages_to_remove,
+                                          NULL, /* fd_list */
                                           &transaction_address,
+                                          NULL, /* out_fd_list */
                                           cancellable,
                                           error))
     goto out;
