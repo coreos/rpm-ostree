@@ -714,8 +714,8 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
   /* Right now, we only use the fd list from the D-Bus message to transfer local
    * packages, so there's no point in re-extracting them from fdlist based on
    * the indices in local-packages. We just do a sanity check here that they are
-   * indeed the same length. If this assertion ever becomes false, then we'll
-   * have to extract. */
+   * indeed the same length. */
+  gsize n_local_pkgs = 0;
   g_variant_dict_init (&options_dict, arg_options);
   if (g_variant_dict_contains (&options_dict, "local-packages"))
     {
@@ -723,11 +723,18 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
         g_variant_dict_lookup_value (&options_dict, "local-packages",
                                      G_VARIANT_TYPE ("ah"));
       g_assert (fds);
+      n_local_pkgs = g_variant_n_children (fds);
       g_assert (g_unix_fd_list_get_length (fdlist) ==
                 g_variant_n_children (fds));
     }
-  else
-    g_assert (g_unix_fd_list_get_length (fdlist) == 0);
+
+  if (g_unix_fd_list_get_length (fdlist) != n_local_pkgs)
+    {
+        g_set_error (&local_error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                     "Expected %lu fds but only received %d", n_local_pkgs,
+                     g_unix_fd_list_get_length (fdlist));
+        goto out;
+    }
 
   /* By default, pkgchange does not pull the base; we will likley
    * add an option in the future.

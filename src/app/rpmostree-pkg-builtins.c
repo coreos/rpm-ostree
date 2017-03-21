@@ -95,7 +95,6 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
           int idx = g_unix_fd_list_append (fdl, fd, error);
           if (idx < 0)
             goto out;
-          close (fd);
           g_ptr_array_add (handles, GINT_TO_POINTER (idx));
         }
     }
@@ -145,6 +144,14 @@ out:
   return exit_status;
 }
 
+static void
+close_fd_as_pointer (gpointer fdp)
+{
+  int fd = GPOINTER_TO_INT (fdp);
+  if (fd != -1)
+    (void) close (fd);
+}
+
 int
 rpmostree_builtin_pkg_add (int            argc,
                            char         **argv,
@@ -156,7 +163,8 @@ rpmostree_builtin_pkg_add (int            argc,
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autoptr(GPtrArray) packages_to_add =
     g_ptr_array_new_with_free_func (g_free);
-  g_autoptr(GPtrArray) local_packages_to_add = g_ptr_array_new ();
+  g_autoptr(GPtrArray) local_packages_to_add =
+    g_ptr_array_new_with_free_func (close_fd_as_pointer);
 
   context = g_option_context_new ("PACKAGE [PACKAGE...] - Download and install layered RPM packages");
 
@@ -186,7 +194,7 @@ rpmostree_builtin_pkg_add (int            argc,
         }
       else /* local RPM install */
         {
-          int fd = open (pkgspec, O_RDONLY);
+          int fd = open (pkgspec, O_RDONLY | O_CLOEXEC);
           if (fd < 0)
             {
               glnx_set_prefix_error_from_errno (error, "can't open '%s'",

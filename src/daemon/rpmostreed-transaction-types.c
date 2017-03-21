@@ -734,6 +734,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (!rpmostree_origin_add_packages (origin, self->packages_added,
                                           FALSE, cancellable, error))
         goto out;
+
+      changed = TRUE;
     }
 
   if (self->local_packages_added != NULL)
@@ -744,7 +746,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       gint nfds = 0;
       const gint *fds =
-        g_unix_fd_list_steal_fds (self->local_packages_added, &nfds);
+        g_unix_fd_list_peek_fds (self->local_packages_added, &nfds);
       for (guint i = 0; i < nfds; i++)
         {
           g_autofree char *sha256_nevra = NULL;
