@@ -724,8 +724,6 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
                                      G_VARIANT_TYPE ("ah"));
       g_assert (fds);
       n_local_pkgs = g_variant_n_children (fds);
-      g_assert (g_unix_fd_list_get_length (fdlist) ==
-                g_variant_n_children (fds));
     }
 
   if (g_unix_fd_list_get_length (fdlist) != n_local_pkgs)
