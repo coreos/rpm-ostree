@@ -105,5 +105,5 @@ check_file /etc/nrc.conf nrcuser root
 check_file /etc/nrc-link.conf nrcuser root
 echo "ok correct user/group and fcaps"
 
-ostree fsck
+vm_cmd ostree fsck
 echo "ok fsck"
