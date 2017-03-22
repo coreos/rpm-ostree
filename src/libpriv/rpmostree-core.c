@@ -528,9 +528,6 @@ enable_one_repo (GPtrArray           *sources,
                  const char          *reponame,
                  GError             **error)
 {
-  gboolean ret = FALSE;
-  gboolean found = FALSE;
-
   for (guint i = 0; i < sources->len; i++)
     {
       DnfRepo *src = sources->pdata[i];
@@ -540,20 +537,10 @@ enable_one_repo (GPtrArray           *sources,
         continue;
 
       dnf_repo_set_enabled (src, DNF_REPO_ENABLED_PACKAGES);
-      found = TRUE;
-      break;
+      return TRUE;
     }
 
-  if (!found)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Unknown rpm-md repository: %s", reponame);
-      goto out;
-    }
-
-  ret = TRUE;
- out:
-  return ret;
+  return glnx_throw (error, "Unknown rpm-md repository: %s", reponame);
 }
 
 static gboolean
@@ -561,27 +548,20 @@ context_repos_enable_only (RpmOstreeContext    *context,
                            const char    *const *enabled_repos,
                            GError       **error)
 {
-  gboolean ret = FALSE;
-  guint i;
-  const char *const *iter;
-  GPtrArray *sources;
-
-  sources = dnf_context_get_repos (context->hifctx);
-  for (i = 0; i < sources->len; i++)
+  GPtrArray *sources = dnf_context_get_repos (context->hifctx);
+  for (guint i = 0; i < sources->len; i++)
     {
       DnfRepo *src = sources->pdata[i];
       dnf_repo_set_enabled (src, DNF_REPO_ENABLED_NONE);
     }
 
-  for (iter = enabled_repos; iter && *iter; iter++)
+  for (const char *const *iter = enabled_repos; iter && *iter; iter++)
     {
       if (!enable_one_repo (sources, *iter, error))
-        goto out;
+        return FALSE;
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 gboolean
@@ -592,7 +572,6 @@ rpmostree_context_setup (RpmOstreeContext    *self,
                          GCancellable  *cancellable,
                          GError       **error)
 {
-  gboolean ret = FALSE;
   GPtrArray *repos = NULL;
   g_autofree char **enabled_repos = NULL;
   g_autofree char **instlangs = NULL;
@@ -607,7 +586,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
       if (!rpmostree_mkdtemp ("/tmp/rpmostree-dummy-instroot-XXXXXX",
                               &self->dummy_instroot_path,
                               &dfd, error))
-        goto out;
+        return FALSE;
       dnf_context_set_install_root (self->hifctx, self->dummy_instroot_path);
     }
 
@@ -635,7 +614,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
     }
 
   if (!dnf_context_setup (self->hifctx, cancellable, error))
-    goto out;
+    return FALSE;
 
   /* This is what we use as default. */
   set_rpm_macro_define ("_dbpath", "/usr/share/rpm");
@@ -643,22 +622,18 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   /* NB: missing repo --> let hif figure it out for itself */
   if (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos))
     if (!context_repos_enable_only (self, (const char *const*)enabled_repos, error))
-      goto out;
+      return FALSE;
 
   repos = dnf_context_get_repos (self->hifctx);
   if (repos->len == 0)
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "No enabled repositories");
-      goto out;
-    }
+    return glnx_throw (error, "No enabled repositories");
 
   require_enabled_repos (repos);
 
   { gboolean docs;
 
     g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs);
-    
+
     if (!docs)
         dnf_transaction_set_flags (dnf_context_get_transaction (self->hifctx),
                                    DNF_TRANSACTION_FLAG_NODOCS);
@@ -670,14 +645,12 @@ rpmostree_context_setup (RpmOstreeContext    *self,
         g_autoptr(GHashTable) ignore_hash = NULL;
 
         if (!rpmostree_script_ignore_hash_from_strv (ignore_scripts, &ignore_hash, error))
-          goto out;
+          return FALSE;
         rpmostree_context_set_ignore_scripts (self, ignore_hash);
       }
   }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 
@@ -756,10 +729,7 @@ checkout_pkg_metadata (RpmOstreeContext *self,
     return TRUE;
 
   if (errno != ENOENT)
-    {
-      glnx_set_error_from_errno (error);
-      return FALSE;
-    }
+    return glnx_throw_errno (error);
 
   return glnx_file_replace_contents_at (self->metadata_dir_fd, path,
                                         g_variant_get_data (header),
@@ -873,11 +843,7 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
             return FALSE;
 
           if (!g_str_equal (expected_sha256, actual_sha256))
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Checksum mismatch for package %s", nevra);
-              return FALSE;
-            }
+            return glnx_throw (error, "Checksum mismatch for package %s", nevra);
         }
 
       if (!get_header_variant (pkgcache, ref, &header, cancellable, error))
@@ -887,9 +853,7 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
       return TRUE;
     }
 
-  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-               "Failed to find cached pkg for %s", nevra);
-  return FALSE;
+  return glnx_throw (error, "Failed to find cached pkg for %s", nevra);
 }
 
 static gboolean
