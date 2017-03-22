@@ -284,3 +284,134 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
 
   return TRUE;
 }
+/* This is like ostree_sysroot_get_merge_deployment() except we explicitly
+ * ignore the magical "booted" behavior. For rpm-ostree we're trying something
+ * different now where we are a bit more stateful and pick up changes from the
+ * pending root. This allows users to chain operations together naturally.
+ */
+OstreeDeployment *
+rpmostree_syscore_get_origin_merge_deployment (OstreeSysroot *self, const char *osname)
+{
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (self);
+
+  for (guint i = 0; i < deployments->len; i++)
+    {
+      OstreeDeployment *deployment = deployments->pdata[i];
+
+      if (strcmp (ostree_deployment_get_osname (deployment), osname) != 0)
+        continue;
+
+      return g_object_ref (deployment);
+    }
+
+  return NULL;
+}
+
+
+/* Copy of currently private _ostree_sysroot_bump_mtime()
+ * until we decide to either formalize that, or have a method
+ * to notify of changes to e.g. live replaced xattrs.
+ */
+gboolean
+rpmostree_syscore_bump_mtime (OstreeSysroot   *sysroot,
+                              GError         **error)
+{
+  if (utimensat (ostree_sysroot_get_fd (sysroot), "ostree/deploy", NULL, 0) < 0)
+    return glnx_throw_errno_prefix (error, "futimens");
+  return TRUE;
+}
+
+/* A version of ostree_sysroot_simple_write_deployment() but with
+ * a few changes:
+ *
+ *  - There's just @pushing_rollback, which if true makes the deployment not-default
+ *    as well as retaining the pending deployment
+ *  - osname logic is based on new deployment
+ *  - Fix insertion of deployment to be after booted (patch pending for ostree upstream)
+ */
+GPtrArray *
+rpmostree_syscore_add_deployment (OstreeSysroot      *sysroot,
+                                  OstreeDeployment   *new_deployment,
+                                  OstreeDeployment   *merge_deployment,
+                                  gboolean            pushing_rollback)
+{
+  OstreeDeployment *booted_deployment = NULL;
+  g_autoptr(GPtrArray) deployments = NULL;
+  g_autoptr(GPtrArray) new_deployments = g_ptr_array_new_with_free_func (g_object_unref);
+  const char *osname = ostree_deployment_get_osname (new_deployment);
+  /* Whether or not we added @new_deployment to the list yet */
+  gboolean added_new = FALSE;
+  /* Keep track of whether we're looking at a deployment before or after the booted */
+  gboolean before_booted = TRUE;
+
+  deployments = ostree_sysroot_get_deployments (sysroot);
+  booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
+
+  if (!pushing_rollback)
+    {
+      g_ptr_array_add (new_deployments, g_object_ref (new_deployment));
+      added_new = TRUE;
+    }
+
+  for (guint i = 0; i < deployments->len; i++)
+    {
+      OstreeDeployment *deployment = deployments->pdata[i];
+      const gboolean osname_matches = (strcmp (ostree_deployment_get_osname (deployment), osname) == 0);
+      const gboolean is_booted = ostree_deployment_equal (deployment, booted_deployment);
+      const gboolean is_merge_or_booted = is_booted ||
+        ostree_deployment_equal (deployment, merge_deployment);
+      const gboolean is_last = (i == (deployments->len - 1));
+
+      if (is_booted)
+        before_booted = FALSE;
+
+      /* Retain deployment if:
+       *   - The deployment is for another osname
+       *   - We're pushing a rollback and this is a pending deployment
+       *   - It's the merge or booted deployment
+       */
+      if (!osname_matches || (pushing_rollback && before_booted) || is_merge_or_booted)
+        g_ptr_array_add (new_deployments, g_object_ref (deployment));
+
+      /* Insert new rollback right after the booted */
+      if (!added_new && (!before_booted || is_last))
+        {
+          g_ptr_array_add (new_deployments, g_object_ref (new_deployment));
+          added_new = TRUE;
+        }
+    }
+
+  return g_steal_pointer (&new_deployments);
+}
+
+/* Commit @new_deployments and perform a cleanup */
+gboolean
+rpmostree_syscore_write_deployments (OstreeSysroot           *sysroot,
+                                     OstreeRepo              *repo,
+                                     GPtrArray               *new_deployments,
+                                     GCancellable            *cancellable,
+                                     GError                 **error)
+{
+  glnx_unref_object OstreeRepo *owned_repo = NULL;
+
+  /* Allow the caller to pass NULL as a convenience; in the future we really
+   * should have a strong ref to a repo in the sysroot and make retrieving it
+   * not failable.
+   */
+  if (repo == NULL)
+    {
+      if (!ostree_sysroot_get_repo (sysroot, &owned_repo, cancellable, error))
+        return FALSE;
+      repo = owned_repo;
+    }
+
+  OstreeSysrootWriteDeploymentsOpts write_opts = { .do_postclean = FALSE };
+  if (!ostree_sysroot_write_deployments_with_options (sysroot, new_deployments,
+                                                      &write_opts, cancellable, error))
+    return FALSE;
+
+  if (!rpmostree_syscore_cleanup (sysroot, repo, cancellable, error))
+    return FALSE;
+
+  return TRUE;
+}

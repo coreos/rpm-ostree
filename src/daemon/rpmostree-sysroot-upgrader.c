@@ -109,31 +109,6 @@ parse_origin_deployment (RpmOstreeSysrootUpgrader *self,
   return TRUE;
 }
 
-/* This is like ostree_sysroot_get_merge_deployment() except we explicitly
- * ignore the magical "booted" behavior. For rpm-ostree we're trying something
- * different now where we are a bit more stateful and pick up changes from the
- * pending root. This allows users to chain operations together naturally.
- */
-static OstreeDeployment *
-get_origin_merge_deployment (OstreeSysroot     *self,
-                             const char        *osname)
-{
-  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (self);
-  guint i;
-
-  for (i = 0; i < deployments->len; i++)
-    {
-      OstreeDeployment *deployment = deployments->pdata[i];
-
-      if (strcmp (ostree_deployment_get_osname (deployment), osname) != 0)
-        continue;
-
-      return g_object_ref (deployment);
-  }
-
-  return NULL;
-}
-
 static gboolean
 rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
                                           GCancellable     *cancellable,
@@ -169,7 +144,7 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
     goto out;
 
   self->cfg_merge_deployment = ostree_sysroot_get_merge_deployment (self->sysroot, self->osname);
-  self->origin_merge_deployment = get_origin_merge_deployment (self->sysroot, self->osname);
+  self->origin_merge_deployment = rpmostree_syscore_get_origin_merge_deployment (self->sysroot, self->osname);
   if (self->cfg_merge_deployment == NULL || self->origin_merge_deployment == NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -888,7 +863,6 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                    GCancellable             *cancellable,
                                    GError                  **error)
 {
-  gboolean ret = FALSE;
   glnx_unref_object OstreeDeployment *new_deployment = NULL;
   const char *target_revision;
   g_autoptr(GKeyFile) origin = NULL;
@@ -899,15 +873,15 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
       g_hash_table_size (rpmostree_origin_get_local_packages (self->origin)) > 0)
     {
       if (!do_local_assembly (self, cancellable, error))
-        goto out;
+        return FALSE;
     }
   else
     g_clear_pointer (&self->final_revision, g_free);
 
   if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN)
     {
-      ret = TRUE;
-      goto out;
+      /* we already printed the transaction in do_final_local_assembly() */
+      return TRUE;
     }
 
   /* make sure we have a known target to deploy */
@@ -921,7 +895,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                    NULL,
                                    &new_deployment,
                                    cancellable, error))
-    goto out;
+    return FALSE;
 
   if (self->final_revision)
     {
@@ -931,22 +905,17 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
       if (!ostree_repo_set_ref_immediate (self->repo, NULL, RPMOSTREE_TMP_BASE_REF,
                                           self->base_revision,
                                           cancellable, error))
-        goto out;
+        return FALSE;
     }
 
-  if (!ostree_sysroot_simple_write_deployment (self->sysroot, self->osname,
-                                               new_deployment,
-                                               self->cfg_merge_deployment,
-                                               OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_NO_CLEAN,
-                                               cancellable, error))
-    goto out;
+  g_autoptr(GPtrArray) new_deployments =
+    rpmostree_syscore_add_deployment (self->sysroot, new_deployment,
+                                      self->cfg_merge_deployment, FALSE);
+  if (!rpmostree_syscore_write_deployments (self->sysroot, self->repo, new_deployments,
+                                            cancellable, error))
+    return FALSE;
 
-  if (!rpmostree_syscore_cleanup (self->sysroot, self->repo, cancellable, error))
-    goto out;
-
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 GType

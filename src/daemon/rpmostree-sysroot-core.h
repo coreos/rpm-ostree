@@ -32,3 +32,18 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
                            OstreeRepo               *repo,
                            GCancellable             *cancellable,
                            GError                  **error);
+
+OstreeDeployment *rpmostree_syscore_get_origin_merge_deployment (OstreeSysroot *self, const char *osname);
+
+gboolean rpmostree_syscore_bump_mtime (OstreeSysroot *self, GError **error);
+
+GPtrArray *rpmostree_syscore_add_deployment (OstreeSysroot      *sysroot,
+                                             OstreeDeployment   *new_deployment,
+                                             OstreeDeployment   *merge_deployment,
+                                             gboolean            pushing_rollback);
+
+gboolean rpmostree_syscore_write_deployments (OstreeSysroot          *sysroot,
+                                              OstreeRepo              *repo,
+                                              GPtrArray              *new_deployments,
+                                              GCancellable           *cancellable,
+                                              GError                **error);
