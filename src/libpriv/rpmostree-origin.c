@@ -22,6 +22,7 @@
 
 #include "string.h"
 
+#include "libglnx.h"
 #include "rpmostree-origin.h"
 #include "rpmostree-util.h"
 
@@ -77,11 +78,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
 
       ret->cached_refspec = g_key_file_get_string (ret->kf, "origin", "baserefspec", NULL);
       if (!ret->cached_refspec)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "No origin/refspec or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree");
-          return NULL;
-        }
+        return glnx_throw (error, "No origin/refspec or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree"), NULL;
 
       packages = g_key_file_get_string_list (ret->kf, "packages", "requested", NULL, NULL);
       for (char **it = packages; it && *it; it++)
@@ -95,11 +92,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
           g_autofree char *sha256 = NULL;
 
           if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Invalid SHA-256 NEVRA string: %s", nevra);
-              return FALSE;
-            }
+            return glnx_throw (error, "Invalid SHA-256 NEVRA string: %s", nevra), NULL;
 
           g_hash_table_replace (ret->cached_local_packages,
                                 g_strdup (nevra), g_steal_pointer (&sha256));
@@ -360,11 +353,7 @@ rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
       if (local)
         {
           if (!rpmostree_decompose_sha256_nevra (&pkg, &sha256, error))
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Invalid SHA-256 NEVRA string: %s", pkg);
-              return FALSE;
-            }
+            return glnx_throw (error, "Invalid SHA-256 NEVRA string: %s", pkg);
         }
 
       requested = g_hash_table_contains (origin->cached_packages, pkg);
@@ -385,12 +374,9 @@ rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
       if (requested || requested_local)
         {
           if (requested)
-            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                         "Package/capability '%s' is already requested", pkg);
+            return glnx_throw (error, "Package/capability '%s' is already requested", pkg);
           else
-            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                         "Package '%s' is already layered", pkg);
-          return FALSE;
+            return glnx_throw (error, "Package '%s' is already layered", pkg);
         }
 
       if (local)
@@ -430,9 +416,7 @@ rpmostree_origin_delete_packages (RpmOstreeOrigin  *origin,
         }
       else
         {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Package/capability '%s' is not currently requested", *it);
-          return FALSE;
+          return glnx_throw (error, "Package/capability '%s' is not currently requested", *it);
         }
     }
 
