@@ -1,5 +1,3 @@
-include $(top_srcdir)/buildutil/glib-tap.mk
-
 BASE_TESTS_ENVIRONMENT = \
 	builddir=$(abs_builddir) \
 	topsrcdir=$(abs_top_srcdir) \
