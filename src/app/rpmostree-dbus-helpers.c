@@ -721,3 +721,42 @@ rpmostree_print_package_diffs (GVariant *variant)
       g_variant_unref (child);
     }
 }
+
+/* swiss-army knife: takes an strv of pkgspecs destined for
+ * install, and splits it into repo pkgs, and for local
+ * pkgs, an fd list & idx variant. */
+gboolean
+rpmostree_sort_pkgs_strv (const char *const* pkgs,
+                          GPtrArray   **out_repo_pkgs,
+                          GUnixFDList **out_fd_list,
+                          GVariant    **out_fd_idxs,
+                          GError      **error)
+{
+  g_autoptr(GPtrArray) repo_pkgs = g_ptr_array_new_with_free_func (g_free);
+  glnx_unref_object GUnixFDList *fd_list = g_unix_fd_list_new ();
+  g_auto(GVariantBuilder) builder;
+
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("ah"));
+  for (const char *const* pkg = pkgs; pkg && *pkg; pkg++)
+    {
+      if (!g_str_has_suffix (*pkg, ".rpm"))
+        g_ptr_array_add (repo_pkgs, g_strdup (*pkg));
+      else
+        {
+          glnx_fd_close int fd = open (*pkg, O_RDONLY | O_CLOEXEC);
+          if (fd < 0)
+            return glnx_throw_errno_prefix (error, "can't open '%s'", *pkg);
+
+          int idx = g_unix_fd_list_append (fd_list, fd, error);
+          if (idx < 0)
+            return FALSE;
+
+          g_variant_builder_add (&builder, "h", idx);
+        }
+    }
+
+  *out_fd_list = g_steal_pointer (&fd_list);
+  *out_fd_idxs = g_variant_ref_sink (g_variant_new ("ah", &builder));
+  *out_repo_pkgs = g_steal_pointer (&repo_pkgs);
+  return TRUE;
+}
