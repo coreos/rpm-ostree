@@ -66,6 +66,7 @@ get_connection_for_path (gchar *sysroot,
       if (sysroot != NULL)
         g_warning ("RPMOSTREE_USE_SESSION_BUS set, ignoring --sysroot=%s", sysroot);
 
+      /* NB: as opposed to other early returns, this is _also_ a happy path */
       return g_bus_get_sync (G_BUS_TYPE_SESSION, cancellable, error);
     }
 
@@ -73,6 +74,7 @@ get_connection_for_path (gchar *sysroot,
     sysroot = "/";
 
   if (g_strcmp0 ("/", sysroot) == 0 && force_peer == FALSE)
+    /* NB: as opposed to other early returns, this is _also_ a happy path */
     return g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
 
   g_print ("Running in single user mode. Be sure no other users are modifying the system\n");
