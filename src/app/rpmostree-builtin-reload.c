@@ -40,9 +40,9 @@ rpmostree_builtin_reload (int             argc,
                           GCancellable   *cancellable,
                           GError        **error)
 {
-  int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = g_option_context_new ("- Reload configuration");
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
+  _cleanup_peer_ GPid peer_pid = 0;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -50,15 +50,12 @@ rpmostree_builtin_reload (int             argc,
                                        invocation,
                                        cancellable,
                                        &sysroot_proxy,
+                                       &peer_pid,
                                        error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!rpmostree_sysroot_call_reload_config_sync (sysroot_proxy, cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
-  exit_status = EXIT_SUCCESS;
-out:
-  /* Does nothing if using the message bus. */
-  rpmostree_cleanup_peer ();
-  return exit_status;
+  return EXIT_SUCCESS;
 }

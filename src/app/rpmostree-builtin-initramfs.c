@@ -65,6 +65,7 @@ rpmostree_builtin_initramfs (int             argc,
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
+  _cleanup_peer_ GPid peer_pid = 0;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -72,6 +73,7 @@ rpmostree_builtin_initramfs (int             argc,
                                        invocation,
                                        cancellable,
                                        &sysroot_proxy,
+                                       &peer_pid,
                                        error))
     goto out;
 
@@ -166,8 +168,5 @@ rpmostree_builtin_initramfs (int             argc,
   exit_status = EXIT_SUCCESS;
 
 out:
-  /* Does nothing if using the message bus. */
-  rpmostree_cleanup_peer ();
-
   return exit_status;
 }

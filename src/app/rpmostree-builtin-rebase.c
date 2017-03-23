@@ -63,7 +63,6 @@ rpmostree_builtin_rebase (int             argc,
                           GCancellable   *cancellable,
                           GError        **error)
 {
-  int exit_status = EXIT_FAILURE;
   const char *new_provided_refspec;
   const char *revision = NULL;
 
@@ -72,8 +71,9 @@ rpmostree_builtin_rebase (int             argc,
 
   g_autoptr(GOptionContext) context = g_option_context_new ("REFSPEC [REVISION] - Switch to a different tree");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
+  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
+  _cleanup_peer_ GPid peer_pid = 0;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -81,13 +81,14 @@ rpmostree_builtin_rebase (int             argc,
                                        invocation,
                                        cancellable,
                                        &sysroot_proxy,
+                                       &peer_pid,
                                        error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (argc < 2 || argc > 3)
     {
       rpmostree_usage_error (context, "Too few or too many arguments", error);
-      goto out;
+      return EXIT_FAILURE;
     }
 
   new_provided_refspec = argv[1];
@@ -97,7 +98,7 @@ rpmostree_builtin_rebase (int             argc,
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!rpmostree_os_call_rebase_sync (os_proxy,
                                       get_args_variant (revision),
@@ -108,13 +109,13 @@ rpmostree_builtin_rebase (int             argc,
                                       NULL,
                                       cancellable,
                                       error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
                                                 cancellable,
                                                 error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!opt_reboot)
     {
@@ -126,16 +127,10 @@ rpmostree_builtin_rebase (int             argc,
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
                                                            error))
-        goto out;
+        return EXIT_FAILURE;
 
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
 
-  exit_status = EXIT_SUCCESS;
-
-out:
-  /* Does nothing if using the message bus. */
-  rpmostree_cleanup_peer ();
-
-  return exit_status;
+  return EXIT_SUCCESS;
 }

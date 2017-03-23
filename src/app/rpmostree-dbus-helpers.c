@@ -26,30 +26,28 @@
 #include "glib-unix.h"
 #include <signal.h>
 
-static GPid peer_pid = 0;
-
 void
-rpmostree_cleanup_peer ()
+rpmostree_cleanup_peer (GPid *peer_pid)
 {
-  if (peer_pid > 0)
-    kill (peer_pid, SIGTERM);
+  if (*peer_pid > 0)
+    kill (*peer_pid, SIGTERM);
 }
 
-static gboolean
+static GDBusConnection*
 get_connection_for_path (gchar *sysroot,
                          gboolean force_peer,
+                         GPid *out_peer_pid,
                          GCancellable *cancellable,
-                         GDBusConnection **out_connection,
                          GError **error)
 {
   glnx_unref_object GDBusConnection *connection = NULL;
   glnx_unref_object GSocketConnection *stream = NULL;
   glnx_unref_object GSocket *socket = NULL;
+  _cleanup_peer_ GPid peer_pid = 0;
 
   gchar buffer[16];
 
   int pair[2];
-  gboolean ret = FALSE;
 
   const gchar *args[] = {
     "rpm-ostree",
@@ -68,27 +66,20 @@ get_connection_for_path (gchar *sysroot,
       if (sysroot != NULL)
         g_warning ("RPMOSTREE_USE_SESSION_BUS set, ignoring --sysroot=%s", sysroot);
 
-      connection = g_bus_get_sync (G_BUS_TYPE_SESSION, cancellable, error);
-      goto out;
+      /* NB: as opposed to other early returns, this is _also_ a happy path */
+      return g_bus_get_sync (G_BUS_TYPE_SESSION, cancellable, error);
     }
 
   if (sysroot == NULL)
     sysroot = "/";
 
   if (g_strcmp0 ("/", sysroot) == 0 && force_peer == FALSE)
-    {
-      connection = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
-      goto out;
-    }
+    /* NB: as opposed to other early returns, this is _also_ a happy path */
+    return g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
 
   g_print ("Running in single user mode. Be sure no other users are modifying the system\n");
   if (socketpair (AF_UNIX, SOCK_STREAM, 0, pair) < 0)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Couldn't create socket pair: %s",
-                   g_strerror (errno));
-      goto out;
-    }
+    return glnx_null_throw_errno_prefix (error, "couldn't create socket pair");
 
   g_snprintf (buffer, sizeof (buffer), "%d", pair[1]);
 
@@ -97,7 +88,7 @@ get_connection_for_path (gchar *sysroot,
     {
       close (pair[0]);
       close (pair[1]);
-      goto out;
+      return NULL;
     }
 
   if (!g_spawn_async (NULL, (gchar **)args, NULL,
@@ -105,21 +96,18 @@ get_connection_for_path (gchar *sysroot,
                       NULL, NULL, &peer_pid, error))
     {
       close (pair[1]);
-      goto out;
+      return NULL;
     }
 
   stream = g_socket_connection_factory_create_connection (socket);
   connection = g_dbus_connection_new_sync (G_IO_STREAM (stream), NULL,
                                            G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
                                            NULL, cancellable, error);
+  if (!connection)
+    return NULL;
 
-out:
-  if (connection)
-    {
-      ret = TRUE;
-      *out_connection = g_steal_pointer (&connection);
-    }
-  return ret;
+  *out_peer_pid = peer_pid; peer_pid = 0;
+  return connection;
 }
 
 
@@ -138,21 +126,20 @@ rpmostree_load_sysroot (gchar *sysroot,
                         gboolean force_peer,
                         GCancellable *cancellable,
                         RPMOSTreeSysroot **out_sysroot_proxy,
+                        GPid *out_peer_pid,
                         GError **error)
 {
-  gboolean ret = FALSE;
   const char *bus_name = NULL;
   glnx_unref_object GDBusConnection *connection = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autoptr(GVariantBuilder) options_builder =
     g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+  _cleanup_peer_ GPid peer_pid = 0;
 
-  if (!get_connection_for_path (sysroot,
-                                force_peer,
-                                cancellable,
-                                &connection,
-                                error))
-    goto out;
+  connection = get_connection_for_path (sysroot, force_peer, &peer_pid,
+                                        cancellable, error);
+  if (connection == NULL)
+    return FALSE;
 
   if (g_dbus_connection_get_unique_name (connection) != NULL)
     bus_name = BUS_NAME;
@@ -164,19 +151,17 @@ rpmostree_load_sysroot (gchar *sysroot,
                                                     NULL,
                                                     error);
   if (sysroot_proxy == NULL)
-    goto out;
+    return FALSE;
 
   /* This tells the daemon not to auto-exit as long as we are alive */
   if (!rpmostree_sysroot_call_register_client_sync (sysroot_proxy,
                                                     g_variant_builder_end (options_builder),
                                                     cancellable, error))
-    goto out;
+    return FALSE;
 
   *out_sysroot_proxy = g_steal_pointer (&sysroot_proxy);
-  ret = TRUE;
-
-out:
-  return ret;
+  *out_peer_pid = peer_pid; peer_pid = 0;
+  return TRUE;
 }
 
 gboolean

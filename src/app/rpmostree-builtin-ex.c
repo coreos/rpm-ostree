@@ -91,6 +91,7 @@ rpmostree_builtin_ex (int argc, char **argv,
                                              invocation,
                                              cancellable,
                                              NULL,
+                                             NULL,
                                              NULL);
 
       if (subcommand_name == NULL)

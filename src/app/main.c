@@ -123,11 +123,12 @@ rpmostree_option_context_parse (GOptionContext *context,
                                 RpmOstreeCommandInvocation *invocation,
                                 GCancellable *cancellable,
                                 RPMOSTreeSysroot **out_sysroot_proxy,
+                                GPid *out_peer_pid,
                                 GError **error)
 {
-  gboolean ret = FALSE;
   /* with --version there's no command, don't require a daemon for it */
-  const RpmOstreeBuiltinFlags flags = invocation ? invocation->command->flags : RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD;
+  const RpmOstreeBuiltinFlags flags =
+    invocation ? invocation->command->flags : RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD;
   gboolean use_daemon = ((flags & RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD) == 0);
 
   if (main_entries != NULL)
@@ -139,7 +140,7 @@ rpmostree_option_context_parse (GOptionContext *context,
   g_option_context_add_main_entries (context, global_entries, NULL);
 
   if (!g_option_context_parse (context, argc, argv, error))
-    goto out;
+    return FALSE;
 
   if (opt_version)
     {
@@ -161,11 +162,7 @@ rpmostree_option_context_parse (GOptionContext *context,
   if ((flags & RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT) > 0
       && getuid () != 0
       && getenv ("RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK") == NULL)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "This command requires root privileges");
-      goto out;
-    }
+    return glnx_throw (error, "This command requires root privileges");
 
   if (use_daemon)
     {
@@ -173,14 +170,12 @@ rpmostree_option_context_parse (GOptionContext *context,
                                    opt_force_peer,
                                    cancellable,
                                    out_sysroot_proxy,
+                                   out_peer_pid,
                                    error))
-        goto out;
+        return FALSE;
     }
 
-  ret = TRUE;
-
-out:
-  return ret;
+  return TRUE;
 }
 
 void
@@ -294,7 +289,7 @@ main (int    argc,
 
       /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL, &argc, &argv,
-                                             NULL, NULL, NULL, NULL);
+                                             NULL, NULL, NULL, NULL, NULL);
       if (command_name == NULL)
         {
           local_error = g_error_new_literal (G_IO_ERROR, G_IO_ERROR_FAILED,

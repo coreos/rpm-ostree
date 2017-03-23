@@ -68,7 +68,6 @@ rpmostree_builtin_deploy (int            argc,
                           GCancellable  *cancellable,
                           GError       **error)
 {
-  int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = NULL;
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
@@ -76,6 +75,7 @@ rpmostree_builtin_deploy (int            argc,
   g_autofree char *transaction_address = NULL;
   const char * const packages[] = { NULL };
   const char *revision;
+  _cleanup_peer_ GPid peer_pid = 0;
 
   context = g_option_context_new ("REVISION - Deploy a specific commit");
 
@@ -85,20 +85,21 @@ rpmostree_builtin_deploy (int            argc,
                                        invocation,
                                        cancellable,
                                        &sysroot_proxy,
+                                       &peer_pid,
                                        error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (argc < 2)
     {
       rpmostree_usage_error (context, "REVISION must be specified", error);
-      goto out;
+      return EXIT_FAILURE;
     }
 
   revision = argv[1];
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (opt_preview)
     {
@@ -108,7 +109,7 @@ rpmostree_builtin_deploy (int            argc,
                                                             &transaction_address,
                                                             cancellable,
                                                             error))
-        goto out;
+        return EXIT_FAILURE;
     }
   else
     {
@@ -125,14 +126,14 @@ rpmostree_builtin_deploy (int            argc,
                                           NULL,
                                           cancellable,
                                           error))
-        goto out;
+        return EXIT_FAILURE;
     }
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
                                                 cancellable,
                                                 error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (opt_preview)
     {
@@ -146,13 +147,10 @@ rpmostree_builtin_deploy (int            argc,
                                                               &details,
                                                               cancellable,
                                                               error))
-        goto out;
+        return EXIT_FAILURE;
 
       if (g_variant_n_children (result) == 0)
-        {
-          exit_status = RPM_OSTREE_EXIT_UNCHANGED;
-          goto out;
-        }
+        return RPM_OSTREE_EXIT_UNCHANGED;
 
       rpmostree_print_package_diffs (result);
     }
@@ -161,26 +159,17 @@ rpmostree_builtin_deploy (int            argc,
       const char *sysroot_path;
 
       if (default_deployment == NULL)
-        {
-          exit_status = RPM_OSTREE_EXIT_UNCHANGED;
-          goto out;
-        }
+        return RPM_OSTREE_EXIT_UNCHANGED;
 
       sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
 
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
                                                            error))
-        goto out;
+        return EXIT_FAILURE;
 
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
 
-  exit_status = EXIT_SUCCESS;
-
-out:
-  /* Does nothing if using the message bus. */
-  rpmostree_cleanup_peer ();
-
-  return exit_status;
+  return EXIT_SUCCESS;
 }

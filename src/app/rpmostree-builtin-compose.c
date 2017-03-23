@@ -90,6 +90,7 @@ rpmostree_builtin_compose (int argc, char **argv,
                                              invocation,
                                              cancellable,
                                              NULL,
+                                             NULL,
                                              NULL);
       if (subcommand_name == NULL)
         {

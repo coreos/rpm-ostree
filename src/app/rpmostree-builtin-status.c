@@ -378,11 +378,11 @@ rpmostree_builtin_status (int             argc,
                           GCancellable   *cancellable,
                           GError        **error)
 {
-  int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = g_option_context_new ("- Get the version of the booted system");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autoptr(GVariant) deployments = NULL;
+  _cleanup_peer_ GPid peer_pid = 0;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -390,12 +390,13 @@ rpmostree_builtin_status (int             argc,
                                        invocation,
                                        cancellable,
                                        &sysroot_proxy,
+                                       &peer_pid,
                                        error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,
                                 cancellable, &os_proxy, error))
-    goto out;
+    return EXIT_FAILURE;
 
   deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
 
@@ -426,19 +427,14 @@ rpmostree_builtin_status (int             argc,
       /* NB: watch out for the misleading API docs */
       if (json_generator_to_stream (generator, stdout_gio, NULL, error) <= 0
           || (error != NULL && *error != NULL))
-        goto out;
+        return EXIT_FAILURE;
     }
   else
     {
       if (!status_generic (sysroot_proxy, os_proxy, deployments,
                            cancellable, error))
-        goto out;
+        return EXIT_FAILURE;
     }
 
-  exit_status = EXIT_SUCCESS;
-out:
-  /* Does nothing if using the message bus. */
-  rpmostree_cleanup_peer ();
-
-  return exit_status;
+  return EXIT_SUCCESS;
 }

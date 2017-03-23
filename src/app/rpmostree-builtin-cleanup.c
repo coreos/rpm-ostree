@@ -52,12 +52,12 @@ rpmostree_builtin_cleanup (int             argc,
                            GCancellable   *cancellable,
                            GError        **error)
 {
-  int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = g_option_context_new ("- Clear cached/pending data");
   g_autoptr(GPtrArray) cleanup_types = g_ptr_array_new ();
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
+  _cleanup_peer_ GPid peer_pid = 0;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -65,13 +65,14 @@ rpmostree_builtin_cleanup (int             argc,
                                        invocation,
                                        cancellable,
                                        &sysroot_proxy,
+                                       &peer_pid,
                                        error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (argc < 1 || argc > 2)
     {
       rpmostree_usage_error (context, "Too few or too many arguments", error);
-      goto out;
+      return EXIT_FAILURE;
     }
 
   if (opt_base)
@@ -84,31 +85,28 @@ rpmostree_builtin_cleanup (int             argc,
     g_ptr_array_add (cleanup_types, "repomd");
   if (cleanup_types->len == 0)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED, "At least one cleanup option must be specified");
-      goto out;
+      glnx_throw (error, "At least one cleanup option must be specified");
+      return EXIT_FAILURE;
     }
+
   g_ptr_array_add (cleanup_types, NULL);
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!rpmostree_os_call_cleanup_sync (os_proxy,
                                        (const char *const*)cleanup_types->pdata,
                                        &transaction_address,
                                        cancellable,
                                        error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
                                                 cancellable,
                                                 error))
-    goto out;
+    return EXIT_FAILURE;
 
-  exit_status = EXIT_SUCCESS;
-out:
-  /* Does nothing if using the message bus. */
-  rpmostree_cleanup_peer ();
-  return exit_status;
+  return EXIT_SUCCESS;
 }

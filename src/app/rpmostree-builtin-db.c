@@ -86,6 +86,7 @@ rpmostree_db_option_context_parse (GOptionContext *context,
                                        invocation,
                                        cancellable,
                                        NULL,
+                                       NULL,
                                        error))
     goto out;
 
@@ -154,6 +155,7 @@ rpmostree_builtin_db (int argc, char **argv,
                                              &argc, &argv,
                                              invocation,
                                              cancellable,
+                                             NULL,
                                              NULL,
                                              NULL);
       if (subcommand_name == NULL)
