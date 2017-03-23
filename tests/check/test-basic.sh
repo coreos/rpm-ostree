@@ -24,7 +24,7 @@ export RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK=yes
 
 ensure_dbus
 
-echo "1..17"
+echo "1..18"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -48,6 +48,12 @@ ostree admin --sysroot=sysroot deploy --karg=root=LABEL=MOO --karg=quiet --os=te
 
 assert_status_jq '.deployments[0].version == "1.0.10"'
 echo "ok status shows right version"
+
+busctl --user tree org.projectatomic.rpmostree1
+busctl --user introspect org.projectatomic.rpmostree1 /org/projectatomic/rpmostree1/testos
+dbus-send --session --dest=org.projectatomic.rpmostree1 --print-reply=literal /org/projectatomic/rpmostree1/testos org.projectatomic.rpmostree1.OSExperimental.Moo boolean:true > moo.txt
+assert_file_has_content moo.txt '🐄'
+echo "ok experimental"
 
 os_repository_new_commit
 rpm-ostree upgrade --os=testos

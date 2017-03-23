@@ -223,6 +223,16 @@
 
   </interface>
 
+  <interface name="org.projectatomic.rpmostree1.OSExperimental">
+
+    <!-- Just a test method -->
+    <method name="Moo">
+      <arg type="b" name="utf8" direction="in"/>
+      <arg type="s" name="result" direction="out"/>
+    </method>
+
+  </interface>
+
   <interface name="org.projectatomic.rpmostree1.Transaction">
 
     <!-- Yes, we can. -->
