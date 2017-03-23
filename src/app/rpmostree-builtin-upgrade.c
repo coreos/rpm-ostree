@@ -69,13 +69,13 @@ rpmostree_builtin_upgrade (int             argc,
                            GCancellable   *cancellable,
                            GError        **error)
 {
-  int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = g_option_context_new ("- Perform a system upgrade");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autoptr(GVariant) previous_default_deployment = NULL;
   g_autoptr(GVariant) new_default_deployment = NULL;
   g_autofree char *transaction_address = NULL;
+  _cleanup_peer_ GPid peer_pid = 0;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -83,21 +83,22 @@ rpmostree_builtin_upgrade (int             argc,
                                        invocation,
                                        cancellable,
                                        &sysroot_proxy,
+                                       &peer_pid,
                                        error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (opt_reboot && opt_preview)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Cannot specify both --reboot and --preview");
-      goto out;
+      return EXIT_FAILURE;
     }
 
   if (opt_reboot && opt_check)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Cannot specify both --reboot and --check");
-      goto out;
+      return EXIT_FAILURE;
     }
 
   /* If both --check and --preview were passed, --preview overrides. */
@@ -106,7 +107,7 @@ rpmostree_builtin_upgrade (int             argc,
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    goto out;
+    return EXIT_FAILURE;
 
   previous_default_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
@@ -116,7 +117,7 @@ rpmostree_builtin_upgrade (int             argc,
                                                             &transaction_address,
                                                             cancellable,
                                                             error))
-        goto out;
+        return EXIT_FAILURE;
     }
   else
     {
@@ -127,14 +128,14 @@ rpmostree_builtin_upgrade (int             argc,
                                            NULL,
                                            cancellable,
                                            error))
-        goto out;
+        return EXIT_FAILURE;
     }
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
                                                 cancellable,
                                                 error))
-    goto out;
+    return EXIT_FAILURE;
 
   new_default_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
@@ -149,13 +150,10 @@ rpmostree_builtin_upgrade (int             argc,
                                                               &details,
                                                               cancellable,
                                                               error))
-        goto out;
+        return EXIT_FAILURE;
 
       if (g_variant_n_children (result) == 0)
-        {
-          exit_status = RPM_OSTREE_EXIT_UNCHANGED;
-          goto out;
-        }
+        return RPM_OSTREE_EXIT_UNCHANGED;
 
       if (!opt_check)
         rpmostree_print_package_diffs (result);
@@ -175,25 +173,17 @@ rpmostree_builtin_upgrade (int             argc,
       if (!changed)
         {
           if (opt_upgrade_unchanged_exit_77 && !changed)
-            exit_status = RPM_OSTREE_EXIT_UNCHANGED;
-          else
-            exit_status = EXIT_SUCCESS;
-          goto out;
+            return RPM_OSTREE_EXIT_UNCHANGED;
+          return EXIT_SUCCESS;
         }
 
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
                                                            error))
-        goto out;
+        return EXIT_FAILURE;
 
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
 
-  exit_status = EXIT_SUCCESS;
-
-out:
-  /* Does nothing if using the message bus. */
-  rpmostree_cleanup_peer ();
-
-  return exit_status;
+  return EXIT_SUCCESS;
 }

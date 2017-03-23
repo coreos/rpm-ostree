@@ -72,6 +72,7 @@ rpmostree_ex_builtin_unpack (int             argc,
                                        invocation,
                                        cancellable,
                                        NULL,
+                                       NULL,
                                        error))
     goto out;
 

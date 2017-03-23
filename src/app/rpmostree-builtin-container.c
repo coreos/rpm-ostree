@@ -86,6 +86,7 @@ rpmostree_builtin_container (int argc, char **argv, RpmOstreeCommandInvocation *
                                              invocation,
                                              cancellable,
                                              NULL,
+                                             NULL,
                                              NULL);
 
       if (subcommand_name == NULL)

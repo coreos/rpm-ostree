@@ -87,6 +87,7 @@ gboolean rpmostree_option_context_parse (GOptionContext *context,
                                          RpmOstreeCommandInvocation *invocation,
                                          GCancellable *cancellable,
                                          RPMOSTreeSysroot **out_sysroot_proxy,
+                                         GPid *out_peer_pid,
                                          GError **error);
 
 void rpmostree_print_gpg_verify_result (OstreeGpgVerifyResult *result);

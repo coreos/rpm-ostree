@@ -138,9 +138,6 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
   exit_status = EXIT_SUCCESS;
 
 out:
-  /* Does nothing if using the message bus. */
-  rpmostree_cleanup_peer ();
-
   return exit_status;
 }
 
@@ -165,6 +162,7 @@ rpmostree_builtin_pkg_add (int            argc,
     g_ptr_array_new_with_free_func (g_free);
   g_autoptr(GPtrArray) local_packages_to_add =
     g_ptr_array_new_with_free_func (close_fd_as_pointer);
+  _cleanup_peer_ GPid peer_pid = 0;
 
   context = g_option_context_new ("PACKAGE [PACKAGE...] - Download and install layered RPM packages");
 
@@ -174,6 +172,7 @@ rpmostree_builtin_pkg_add (int            argc,
                                        invocation,
                                        cancellable,
                                        &sysroot_proxy,
+                                       &peer_pid,
                                        error))
     return EXIT_FAILURE;
 
@@ -221,6 +220,7 @@ rpmostree_builtin_pkg_remove (int            argc,
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autoptr(GPtrArray) packages_to_remove = g_ptr_array_new ();
+  _cleanup_peer_ GPid peer_pid = 0;
 
   context = g_option_context_new ("PACKAGE [PACKAGE...] - Remove one or more overlay packages");
 
@@ -230,6 +230,7 @@ rpmostree_builtin_pkg_remove (int            argc,
                                        invocation,
                                        cancellable,
                                        &sysroot_proxy,
+                                       &peer_pid,
                                        error))
     return EXIT_FAILURE;
 

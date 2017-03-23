@@ -54,12 +54,11 @@ rpmostree_builtin_rollback (int             argc,
                             GCancellable   *cancellable,
                             GError        **error)
 {
-  int exit_status = EXIT_FAILURE;
-
   GOptionContext *context = g_option_context_new ("- Revert to the previously booted tree");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;
+  _cleanup_peer_ GPid peer_pid = 0;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -67,25 +66,26 @@ rpmostree_builtin_rollback (int             argc,
                                        invocation,
                                        cancellable,
                                        &sysroot_proxy,
+                                       &peer_pid,
                                        error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,
                                 cancellable, &os_proxy, error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!rpmostree_os_call_rollback_sync (os_proxy,
                                         get_args_variant (),
                                         &transaction_address,
                                         cancellable,
                                         error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
                                                 cancellable,
                                                 error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!opt_reboot)
     {
@@ -97,16 +97,11 @@ rpmostree_builtin_rollback (int             argc,
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
                                                            error))
-        goto out;
+        return EXIT_FAILURE;
 
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
 
-  exit_status = EXIT_SUCCESS;
 
-out:
-  /* Does nothing if using the message bus. */
-  rpmostree_cleanup_peer ();
-
-  return exit_status;
+  return EXIT_SUCCESS;
 }

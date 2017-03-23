@@ -634,6 +634,7 @@ rpmostree_compose_builtin_tree (int             argc,
                                        invocation,
                                        cancellable,
                                        NULL,
+                                       NULL,
                                        error))
     goto out;
 
