@@ -41,23 +41,14 @@ static GOptionEntry option_entries[] = {
 };
 
 static GVariant *
-get_args_variant (GPtrArray *handles)
+get_args_variant (GVariant *handles)
 {
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
   g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
-
-  if (handles != NULL && handles->len > 0)
-    {
-      g_auto(GVariantBuilder) builder;
-      g_variant_builder_init (&builder, G_VARIANT_TYPE ("ah"));
-      for (guint i = 0; i < handles->len; i++)
-        g_variant_builder_add (&builder, "h", handles->pdata[i]);
-      g_variant_dict_insert_value (&dict, "local-packages",
-                                   g_variant_new ("ah", &builder));
-    }
-
+  if (handles != NULL)
+    g_variant_dict_insert_value (&dict, "install-local-packages", handles);
   return g_variant_dict_end (&dict);
 }
 
@@ -65,56 +56,48 @@ static int
 pkg_change (RPMOSTreeSysroot *sysroot_proxy,
             const char *const* packages_to_add,
             const char *const* packages_to_remove,
-            GPtrArray     *local_pkgs,
             GCancellable  *cancellable,
             GError       **error)
 {
-  int exit_status = EXIT_FAILURE;
-  glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  g_autofree char *transaction_address = NULL;
   const char *const strv_empty[] = { NULL };
-  glnx_unref_object GUnixFDList *fdl = NULL;
-  g_autoptr(GPtrArray) handles = NULL;
 
   if (!packages_to_add)
     packages_to_add = strv_empty;
   if (!packages_to_remove)
     packages_to_remove = strv_empty;
 
+  glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    goto out;
+    return EXIT_FAILURE;
 
-  if (local_pkgs != NULL && local_pkgs->len > 0)
-    {
-      handles = g_ptr_array_new ();
-      fdl = g_unix_fd_list_new ();
-      for (guint i = 0; i < local_pkgs->len; i++)
-        {
-          int fd = GPOINTER_TO_INT (local_pkgs->pdata[i]);
-          int idx = g_unix_fd_list_append (fdl, fd, error);
-          if (idx < 0)
-            goto out;
-          g_ptr_array_add (handles, GINT_TO_POINTER (idx));
-        }
-    }
+  g_autoptr(GPtrArray) repo_pkgs = NULL;
+  g_autoptr(GVariant) local_pkgs_fd_idxs = NULL;
+  glnx_unref_object GUnixFDList *local_pkgs_fd_list = NULL;
+  if (!rpmostree_sort_pkgs_strv (packages_to_add,
+                                 &repo_pkgs, &local_pkgs_fd_list,
+                                 &local_pkgs_fd_idxs, error))
+    return EXIT_FAILURE;
 
+  g_ptr_array_add (repo_pkgs, NULL);
+
+  g_autofree char *transaction_address = NULL;
   if (!rpmostree_os_call_pkg_change_sync (os_proxy,
-                                          get_args_variant (handles),
-                                          packages_to_add,
+                                          get_args_variant (local_pkgs_fd_idxs),
+                                          (const char *const*)repo_pkgs->pdata,
                                           packages_to_remove,
-                                          fdl,
+                                          local_pkgs_fd_list,
                                           &transaction_address,
                                           NULL, /* out_fd_list */
                                           cancellable,
                                           error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
                                                 cancellable,
                                                 error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (opt_dry_run)
     {
@@ -130,23 +113,12 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
                                                            error))
-        goto out;
+        return EXIT_FAILURE;
 
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
 
-  exit_status = EXIT_SUCCESS;
-
-out:
-  return exit_status;
-}
-
-static void
-close_fd_as_pointer (gpointer fdp)
-{
-  int fd = GPOINTER_TO_INT (fdp);
-  if (fd != -1)
-    (void) close (fd);
+  return EXIT_SUCCESS;
 }
 
 int
@@ -158,10 +130,6 @@ rpmostree_builtin_pkg_add (int            argc,
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GPtrArray) packages_to_add =
-    g_ptr_array_new_with_free_func (g_free);
-  g_autoptr(GPtrArray) local_packages_to_add =
-    g_ptr_array_new_with_free_func (close_fd_as_pointer);
   _cleanup_peer_ GPid peer_pid = 0;
 
   context = g_option_context_new ("PACKAGE [PACKAGE...] - Download and install layered RPM packages");
@@ -182,32 +150,13 @@ rpmostree_builtin_pkg_add (int            argc,
       return EXIT_FAILURE;
     }
 
-  for (int i = 1; i < argc; i++)
-    {
-      const char *pkgspec = argv[i];
+  /* shift to first pkgspec and ensure it's a proper strv (previous parsing
+   * might have moved args around) */
+  argv++; argc--;
+  argv[argc] = NULL;
 
-      if (!g_str_has_suffix (pkgspec, ".rpm")) /* repo install */
-        {
-          g_ptr_array_add (packages_to_add, g_strdup (pkgspec));
-          continue;
-        }
-      else /* local RPM install */
-        {
-          int fd = open (pkgspec, O_RDONLY | O_CLOEXEC);
-          if (fd < 0)
-            {
-              glnx_set_prefix_error_from_errno (error, "can't open '%s'",
-                                                pkgspec);
-              return EXIT_FAILURE;
-            }
-
-          g_ptr_array_add (local_packages_to_add, GINT_TO_POINTER (fd));
-        }
-    }
-  g_ptr_array_add (packages_to_add, NULL);
-
-  return pkg_change (sysroot_proxy, (const char *const*)packages_to_add->pdata,
-                     NULL, local_packages_to_add, cancellable, error);
+  return pkg_change (sysroot_proxy, (const char *const*)argv,
+                     NULL, cancellable, error);
 }
 
 int
@@ -219,7 +168,6 @@ rpmostree_builtin_pkg_remove (int            argc,
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GPtrArray) packages_to_remove = g_ptr_array_new ();
   _cleanup_peer_ GPid peer_pid = 0;
 
   context = g_option_context_new ("PACKAGE [PACKAGE...] - Remove one or more overlay packages");
@@ -240,10 +188,11 @@ rpmostree_builtin_pkg_remove (int            argc,
       return EXIT_FAILURE;
     }
 
-  for (int i = 1; i < argc; i++)
-    g_ptr_array_add (packages_to_remove, argv[i]);
-  g_ptr_array_add (packages_to_remove, NULL);
+  /* shift to first pkgspec and ensure it's a proper strv (previous parsing
+   * might have moved args around) */
+  argv++; argc--;
+  argv[argc] = NULL;
 
-  return pkg_change (sysroot_proxy, NULL, (const char *const*)packages_to_remove->pdata,
-                     NULL, cancellable, error);
+  return pkg_change (sysroot_proxy, NULL, (const char *const*)argv,
+                     cancellable, error);
 }

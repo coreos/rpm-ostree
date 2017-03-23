@@ -20,6 +20,7 @@
 
 #include <glib-unix.h>
 #include <gio/gio.h>
+#include <gio/gunixfdlist.h>
 
 #include "rpm-ostreed-generated.h"
 
@@ -61,3 +62,10 @@ rpmostree_print_signatures                   (GVariant *variant,
 
 void
 rpmostree_print_package_diffs                (GVariant *variant);
+
+gboolean
+rpmostree_sort_pkgs_strv (const char *const* pkgs,
+                          GPtrArray   **out_repo_pkgs,
+                          GUnixFDList **out_fd_list,
+                          GVariant    **out_fd_idxs,
+                          GError      **error);

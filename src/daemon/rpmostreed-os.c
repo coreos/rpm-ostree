@@ -720,10 +720,10 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
    * indeed the same length. */
   gsize n_local_pkgs = 0;
   g_variant_dict_init (&options_dict, arg_options);
-  if (g_variant_dict_contains (&options_dict, "local-packages"))
+  if (g_variant_dict_contains (&options_dict, "install-local-packages"))
     {
       g_autoptr(GVariant) fds =
-        g_variant_dict_lookup_value (&options_dict, "local-packages",
+        g_variant_dict_lookup_value (&options_dict, "install-local-packages",
                                      G_VARIANT_TYPE ("ah"));
       g_assert (fds);
       n_local_pkgs = g_variant_n_children (fds);
@@ -732,7 +732,7 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
   if (g_unix_fd_list_get_length (fdlist) != n_local_pkgs)
     {
         g_set_error (&local_error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                     "Expected %lu fds but only received %d", n_local_pkgs,
+                     "Expected %lu fds but received %d", n_local_pkgs,
                      g_unix_fd_list_get_length (fdlist));
         goto out;
     }
