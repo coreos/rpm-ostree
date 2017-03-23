@@ -15,21 +15,18 @@ if test -z "${INSIDE_VM:-}"; then
 
     cd ${topsrcdir}
 
+    # Support local development with e.g. an ostree built from git too,
+    # or libasan.
+    export VMCHECK_INSTTREE=${VMCHECK_INSTTREE:-$(pwd)/insttree}
+
     # Use a lock in case we're called in parallel (make install might fail).
     # Plus, we can just share the same install tree, and sharing is caring!
     flock insttree.lock sh -ec \
-      '[ ! -d insttree ] || exit 0
-       DESTDIR=$(pwd)/insttree
+      '[ ! -d ${VMCHECK_INSTTREE} ] || exit 0
+       DESTDIR=${VMCHECK_INSTTREE}
        make install DESTDIR=${DESTDIR}
-       for san in a t ub; do
-         if eu-readelf -d ${DESTDIR}/usr/bin/rpm-ostree | \
-              grep -q \"NEEDED.*lib${san}san\"; then
-           echo \"Installing extra sanitizier: lib${san}san\"
-           cp /usr/lib64/lib${san}san*.so.* ${DESTDIR}/usr/lib64
-         fi
-       done
        touch ${DESTDIR}/.completed'
-    [ -f insttree/.completed ]
+    [ -f ${VMCHECK_INSTTREE}/.completed ]
 
     vm_rsync
 
