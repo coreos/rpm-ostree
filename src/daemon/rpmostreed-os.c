@@ -392,6 +392,7 @@ deploy_flags_from_options (GVariant *options,
 static gboolean
 os_handle_deploy (RPMOSTreeOS *interface,
                   GDBusMethodInvocation *invocation,
+                  GUnixFDList *fdlist,
                   const char *arg_revision,
                   GVariant *arg_options)
 {
@@ -437,7 +438,7 @@ out:
     {
       const char *client_address;
       client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_deploy (interface, invocation, client_address);
+      rpmostree_os_complete_deploy (interface, invocation, NULL, client_address);
     }
 
   return TRUE;
@@ -446,6 +447,7 @@ out:
 static gboolean
 os_handle_upgrade (RPMOSTreeOS *interface,
                    GDBusMethodInvocation *invocation,
+                   GUnixFDList *fdlist,
                    GVariant *arg_options)
 {
   RpmostreedOS *self = RPMOSTREED_OS (interface);
@@ -487,7 +489,7 @@ out:
     {
       const char *client_address;
       client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_upgrade (interface, invocation, client_address);
+      rpmostree_os_complete_upgrade (interface, invocation, NULL, client_address);
     }
 
   return TRUE;
@@ -620,6 +622,7 @@ out:
 static gboolean
 os_handle_rebase (RPMOSTreeOS *interface,
                   GDBusMethodInvocation *invocation,
+                  GUnixFDList *fdlist,
                   GVariant *arg_options,
                   const char *arg_refspec,
                   const char * const *arg_packages)
@@ -676,7 +679,7 @@ out:
     {
       const char *client_address;
       client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_rebase (interface, invocation, client_address);
+      rpmostree_os_complete_rebase (interface, invocation, NULL, client_address);
     }
 
   return TRUE;
@@ -684,11 +687,11 @@ out:
 
 static gboolean
 os_handle_pkg_change (RPMOSTreeOS *interface,
-		      GDBusMethodInvocation *invocation,
-		      GUnixFDList *fdlist,
-		      GVariant *arg_options,
-		      const char * const *arg_packages_added,
-		      const char * const *arg_packages_removed)
+                      GDBusMethodInvocation *invocation,
+                      GUnixFDList *fdlist,
+                      GVariant *arg_options,
+                      const char * const *arg_packages_added,
+                      const char * const *arg_packages_removed)
 {
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;

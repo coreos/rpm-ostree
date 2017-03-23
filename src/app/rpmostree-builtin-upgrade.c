@@ -122,7 +122,9 @@ rpmostree_builtin_upgrade (int             argc,
     {
       if (!rpmostree_os_call_upgrade_sync (os_proxy,
                                            get_args_variant (),
+                                           NULL,
                                            &transaction_address,
+                                           NULL,
                                            cancellable,
                                            error))
         goto out;

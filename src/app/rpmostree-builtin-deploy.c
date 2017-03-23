@@ -120,7 +120,9 @@ rpmostree_builtin_deploy (int            argc,
       if (!rpmostree_os_call_deploy_sync (os_proxy,
                                           revision,
                                           get_args_variant (),
+                                          NULL,
                                           &transaction_address,
+                                          NULL,
                                           cancellable,
                                           error))
         goto out;

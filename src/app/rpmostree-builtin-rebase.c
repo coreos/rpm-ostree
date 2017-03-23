@@ -103,7 +103,9 @@ rpmostree_builtin_rebase (int             argc,
                                       get_args_variant (revision),
                                       new_provided_refspec,
                                       packages,
+                                      NULL,
                                       &transaction_address,
+                                      NULL,
                                       cancellable,
                                       error))
     goto out;
