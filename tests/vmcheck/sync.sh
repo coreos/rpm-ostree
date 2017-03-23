@@ -15,8 +15,8 @@ if test -z "${INSIDE_VM:-}"; then
     set -x
 
     cd ${topsrcdir}
-    rm insttree -rf
-    make install DESTDIR=$(pwd)/insttree
+    export VMCHECK_INSTTREE=${VMCHECK_INSTTREE:-$(pwd)/insttree}
+    make install DESTDIR=${VMCHECK_INSTTREE}
     vm_rsync
 
     $SSH "env INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/sync.sh"
