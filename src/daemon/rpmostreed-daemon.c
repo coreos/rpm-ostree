@@ -414,6 +414,7 @@ rpmostreed_daemon_publish (RpmostreedDaemon *self,
   GDBusInterface *prev = NULL;
   GDBusInterfaceInfo *info = NULL;
   GDBusObjectSkeleton *object = NULL;
+  g_autoptr(GDBusObjectSkeleton) owned_object = NULL;
 
   g_return_if_fail (RPMOSTREED_IS_DAEMON (self));
   g_return_if_fail (path != NULL);
@@ -440,7 +441,7 @@ rpmostreed_daemon_publish (RpmostreedDaemon *self,
         }
 
       if (object == NULL)
-        object = g_dbus_object_skeleton_new (path);
+        object = owned_object = g_dbus_object_skeleton_new (path);
 
       g_dbus_object_skeleton_add_interface (object, thing);
     }
@@ -454,9 +455,6 @@ rpmostreed_daemon_publish (RpmostreedDaemon *self,
     g_dbus_object_manager_server_export_uniquely (self->object_manager, object);
   else
     g_dbus_object_manager_server_export (self->object_manager, object);
-
-  if (object)
-    g_object_unref (object);
 }
 
 void

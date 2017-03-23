@@ -34,6 +34,8 @@ typedef struct _RpmostreedSysroot RpmostreedSysroot;
 
 struct _RpmostreedOS;
 typedef struct _RpmostreedOS RpmostreedOS;
+struct _RpmostreedOSExperimental;
+typedef struct _RpmostreedOSExperimental RpmostreedOSExperimental;
 
 struct _RpmostreedTransaction;
 typedef struct _RpmostreedTransaction RpmostreedTransaction;

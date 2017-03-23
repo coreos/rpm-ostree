@@ -22,6 +22,7 @@
 #include "rpmostreed-daemon.h"
 #include "rpmostreed-sysroot.h"
 #include "rpmostreed-os.h"
+#include "rpmostreed-os-experimental.h"
 #include "rpmostree-util.h"
 #include "rpmostreed-utils.h"
 #include "rpmostreed-deployment-utils.h"
@@ -62,6 +63,7 @@ struct _RpmostreedSysroot {
   RpmostreedTransactionMonitor *transaction_monitor;
 
   GHashTable *os_interfaces;
+  GHashTable *osexperimental_interfaces;
 
   /* The OS interface's various diff methods can run concurrently with
    * transactions, which is safe except when the transaction is writing
@@ -504,12 +506,18 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
        * now.
        */
       if (!g_hash_table_contains (self->os_interfaces, deployment_os))
-	{
-	  RPMOSTreeOS *obj = rpmostreed_os_new (self->ot_sysroot, self->repo,
-						deployment_os,
+        {
+          RPMOSTreeOS *obj = rpmostreed_os_new (self->ot_sysroot, self->repo,
+                                                deployment_os,
                                                 self->transaction_monitor);
           g_hash_table_insert (self->os_interfaces, g_strdup (deployment_os), obj);
-	}
+
+          RPMOSTreeOSExperimental *eobj = rpmostreed_osexperimental_new (self->ot_sysroot, self->repo,
+                                                                         deployment_os,
+                                                                         self->transaction_monitor);
+          g_hash_table_insert (self->osexperimental_interfaces, g_strdup (deployment_os), eobj);
+
+        }
       /* Owned by deployment, hash lifetime is smaller */
       g_hash_table_add (seen_osnames, (char*)deployment_os);
     }
@@ -522,6 +530,8 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
         {
           g_object_run_dispose (G_OBJECT (value));
           g_hash_table_iter_remove (&iter);
+
+          g_hash_table_remove (self->osexperimental_interfaces, hashkey);
         }
     }
 
@@ -591,8 +601,6 @@ static void
 sysroot_dispose (GObject *object)
 {
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
-  GHashTableIter iter;
-  gpointer value;
   gint tries;
 
   g_cancellable_cancel (self->cancellable);
@@ -623,10 +631,13 @@ sysroot_dispose (GObject *object)
     }
 
   /* Tracked os paths are responsible to unpublish themselves */
+  GHashTableIter iter;
   g_hash_table_iter_init (&iter, self->os_interfaces);
-  while (g_hash_table_iter_next (&iter, NULL, &value))
+  gpointer key, value;
+  while (g_hash_table_iter_next (&iter, &key, &value))
     g_object_run_dispose (value);
   g_hash_table_remove_all (self->os_interfaces);
+  g_hash_table_remove_all (self->osexperimental_interfaces);
 
   g_clear_object (&self->transaction_monitor);
 
@@ -640,6 +651,7 @@ sysroot_finalize (GObject *object)
   _sysroot_instance = NULL;
 
   g_hash_table_unref (self->os_interfaces);
+  g_hash_table_unref (self->osexperimental_interfaces);
 
   g_clear_object (&self->cancellable);
   g_clear_object (&self->monitor);
@@ -661,7 +673,9 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
   self->cancellable = g_cancellable_new ();
 
   self->os_interfaces = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
-  (GDestroyNotify) g_object_unref);
+                                               (GDestroyNotify) g_object_unref);
+  self->osexperimental_interfaces = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                                                           (GDestroyNotify) g_object_unref);
 
   self->monitor = NULL;
 
