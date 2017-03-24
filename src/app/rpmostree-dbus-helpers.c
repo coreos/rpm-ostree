@@ -165,24 +165,16 @@ rpmostree_load_sysroot (gchar *sysroot,
 }
 
 gboolean
-rpmostree_load_os_proxy (RPMOSTreeSysroot *sysroot_proxy,
-                         gchar *opt_osname,
-                         GCancellable *cancellable,
-                         RPMOSTreeOS **out_os_proxy,
-                         GError **error)
+rpmostree_load_os_proxies (RPMOSTreeSysroot *sysroot_proxy,
+                           gchar *opt_osname,
+                           GCancellable *cancellable,
+                           RPMOSTreeOS **out_os_proxy,
+                           RPMOSTreeOSExperimental **out_osexperimental_proxy,
+                           GError **error)
 {
-  gboolean ret = FALSE;
-  const char *bus_name;
   g_autofree char *os_object_path = NULL;
-  glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-
-  GDBusConnection *connection = NULL; /* owned by sysroot_proxy */
-
   if (opt_osname == NULL)
-    {
-      os_object_path = rpmostree_sysroot_dup_booted (sysroot_proxy);
-    }
-
+    os_object_path = rpmostree_sysroot_dup_booted (sysroot_proxy);
   if (os_object_path == NULL)
     {
       /* Usually if opt_osname is null and the property isn't
@@ -197,29 +189,54 @@ rpmostree_load_os_proxy (RPMOSTreeSysroot *sysroot_proxy,
                                                &os_object_path,
                                                cancellable,
                                                error))
-        goto out;
+        return FALSE;
     }
 
-  connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
-
+  /* owned by sysroot_proxy */
+  GDBusConnection *connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
+  const char *bus_name;
   if (g_dbus_connection_get_unique_name (connection) != NULL)
     bus_name = BUS_NAME;
 
-  os_proxy = rpmostree_os_proxy_new_sync (connection,
-                                          G_DBUS_PROXY_FLAGS_NONE,
-                                          bus_name,
-                                          os_object_path,
-                                          cancellable,
-                                          error);
-
+  glnx_unref_object RPMOSTreeOS *os_proxy =
+    rpmostree_os_proxy_new_sync (connection,
+                                 G_DBUS_PROXY_FLAGS_NONE,
+                                 bus_name,
+                                 os_object_path,
+                                 cancellable,
+                                 error);
   if (os_proxy == NULL)
-    goto out;
+    return FALSE;
+
+  glnx_unref_object RPMOSTreeOSExperimental *ret_osexperimental_proxy = NULL;
+  if (out_osexperimental_proxy)
+    {
+      ret_osexperimental_proxy =
+        rpmostree_osexperimental_proxy_new_sync (connection,
+                                                 G_DBUS_PROXY_FLAGS_NONE,
+                                                 bus_name,
+                                                 os_object_path,
+                                                 cancellable,
+                                                 error);
+      if (!ret_osexperimental_proxy)
+        return FALSE;
+    }
 
   *out_os_proxy = g_steal_pointer (&os_proxy);
-  ret = TRUE;
+  if (out_osexperimental_proxy)
+    *out_osexperimental_proxy = g_steal_pointer (&ret_osexperimental_proxy);
+  return TRUE;
+}
 
-out:
-  return ret;
+gboolean
+rpmostree_load_os_proxy (RPMOSTreeSysroot *sysroot_proxy,
+                         gchar *opt_osname,
+                         GCancellable *cancellable,
+                         RPMOSTreeOS **out_os_proxy,
+                         GError **error)
+{
+  return rpmostree_load_os_proxies (sysroot_proxy, opt_osname, cancellable,
+                                    out_os_proxy, NULL, error);
 }
 
 
