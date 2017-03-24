@@ -1,7 +1,9 @@
 dbus_built_sources = rpm-ostreed-generated.h rpm-ostreed-generated.c
 
+# TODO: Add --c-generate-autocleanup=all once we depend on GLib 2.50+
+# https://github.com/projectatomic/rpm-ostree/pull/705
 rpm-ostreed-generated.h: rpm-ostreed-generated.c
-rpm-ostreed-generated.c: Makefile.am $(top_srcdir)/src/daemon/org.projectatomic.rpmostree1.xml
+rpm-ostreed-generated.c: Makefile $(top_srcdir)/src/daemon/org.projectatomic.rpmostree1.xml
 	$(AM_V_GEN) gdbus-codegen \
 		--interface-prefix org.projectatomic.rpmostree1 \
 		--c-namespace RPMOSTree \
