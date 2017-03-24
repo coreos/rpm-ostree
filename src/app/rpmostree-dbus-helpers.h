@@ -51,6 +51,15 @@ rpmostree_load_os_proxy                      (RPMOSTreeSysroot *sysroot_proxy,
                                               GError **error);
 
 gboolean
+rpmostree_load_os_proxies                    (RPMOSTreeSysroot *sysroot_proxy,
+                                              gchar *opt_osname,
+                                              GCancellable *cancellable,
+                                              RPMOSTreeOS **out_os_proxy,
+                                              RPMOSTreeOSExperimental **out_osexperimental_proxy,
+                                              GError **error);
+
+
+gboolean
 rpmostree_transaction_get_response_sync      (RPMOSTreeSysroot *sysroot_proxy,
                                               const char *transaction_address,
                                               GCancellable *cancellable,
