@@ -157,7 +157,8 @@ variant_add_commit_details (GVariantDict *dict,
 }
 
 GVariant *
-rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
+rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
+                                        OstreeDeployment *deployment,
                                         const char *booted_id,
                                         OstreeRepo *repo,
                                         GError **error)
