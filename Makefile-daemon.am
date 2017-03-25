@@ -14,6 +14,7 @@ rpm-ostreed-generated.c: Makefile $(top_srcdir)/src/daemon/org.projectatomic.rpm
 		$(NULL)
 BUILT_SOURCES += $(dbus_built_sources)
 CLEANFILES += rpm-ostreed-generated-org.projectatomic.rpmostree1.OS.xml \
+	rpm-ostreed-generated-org.projectatomic.rpmostree1.OSExperimental.xml \
 	rpm-ostreed-generated-org.projectatomic.rpmostree1.Sysroot.xml \
 	rpm-ostreed-generated-org.projectatomic.rpmostree1.Transaction.xml \
 	$(NULL)
