@@ -30,15 +30,16 @@ OstreeDeployment *
 
 GVariant *      rpmostreed_deployment_generate_blank_variant (void);
 
-GVariant *      rpmostreed_deployment_generate_variant (OstreeDeployment *deployment,
-                                                        const char *booted_id,
-                                                        OstreeRepo *repo,
-							GError **error);
+GVariant *      rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
+                                                        OstreeDeployment *deployment,
+                                                        const char       *booted_id,
+                                                        OstreeRepo       *repo,
+                                                        GError          **error);
 
 GVariant *      rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
-                                                                   OstreeRepo *repo,
-                                                                   const gchar *refspec,
-								   GError **error);
+                                                                   OstreeRepo       *repo,
+                                                                   const gchar      *refspec,
+                                                                   GError          **error);
 
 gint            rpmostreed_rollback_deployment_index (const gchar *name,
                                                       OstreeSysroot *ot_sysroot,

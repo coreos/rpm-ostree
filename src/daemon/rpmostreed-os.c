@@ -1198,7 +1198,8 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   booted = ostree_sysroot_get_booted_deployment (ot_sysroot);
   if (booted && g_strcmp0 (ostree_deployment_get_osname (booted), name) == 0)
     {
-      booted_variant = rpmostreed_deployment_generate_variant (booted, booted_id, ot_repo, error);
+      booted_variant = rpmostreed_deployment_generate_variant (ot_sysroot, booted, booted_id,
+                                                               ot_repo, error);
       if (!booted_variant)
         return FALSE;
       booted_id = rpmostreed_deployment_generate_id (booted);
@@ -1209,11 +1210,12 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
     {
       if (g_strcmp0 (ostree_deployment_get_osname (deployments->pdata[i]), name) == 0)
         {
-          default_variant = rpmostreed_deployment_generate_variant (deployments->pdata[i],
+          default_variant = rpmostreed_deployment_generate_variant (ot_sysroot,
+                                                                    deployments->pdata[i],
                                                                     booted_id,
                                                                     ot_repo, error);
-	  if (default_variant == NULL)
-	    return FALSE;
+          if (default_variant == NULL)
+            return FALSE;
           break;
         }
     }
@@ -1223,8 +1225,9 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
       rollback_index = rpmostreed_rollback_deployment_index (name, ot_sysroot, NULL);
       if (rollback_index >= 0)
 	{
-	  rollback_variant = rpmostreed_deployment_generate_variant (deployments->pdata[rollback_index], booted_id,
-								     ot_repo, error);
+	  rollback_variant = rpmostreed_deployment_generate_variant (ot_sysroot,
+                                                               deployments->pdata[rollback_index], booted_id,
+                                                               ot_repo, error);
 	  if (!rollback_variant)
 	    return FALSE;
 	}
