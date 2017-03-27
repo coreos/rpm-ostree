@@ -385,6 +385,59 @@ rpmostree_syscore_add_deployment (OstreeSysroot      *sysroot,
   return g_steal_pointer (&new_deployments);
 }
 
+/* Also a variant of ostree_sysroot_simple_write_deployment(), but here we are
+ * just trying to remove a pending and/or rollback.
+ */
+GPtrArray *
+rpmostree_syscore_filter_deployments (OstreeSysroot      *sysroot,
+                                      const char         *osname,
+                                      gboolean            cleanup_pending,
+                                      gboolean            cleanup_rollback)
+{
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
+  g_autoptr(GPtrArray) new_deployments = g_ptr_array_new_with_free_func (g_object_unref);
+  OstreeDeployment *booted_deployment = NULL;
+  gboolean found_booted = FALSE;
+
+  booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
+
+  for (guint i = 0; i < deployments->len; i++)
+    {
+      OstreeDeployment *deployment = deployments->pdata[i];
+
+      /* Is this deployment booted?  If so, note we're past the booted,
+       * and ensure it's added. */
+      if (booted_deployment != NULL &&
+          ostree_deployment_equal (deployment, booted_deployment))
+        {
+          found_booted = TRUE;
+          g_ptr_array_add (new_deployments, g_object_ref (deployment));
+          continue;
+        }
+
+      /* Is this deployment for a different osname?  Keep it. */
+      if (strcmp (ostree_deployment_get_osname (deployment), osname) != 0)
+        {
+          g_ptr_array_add (new_deployments, g_object_ref (deployment));
+          continue;
+        }
+
+      /* Now, we may skip this deployment, i.e. GC it. */
+      if (!found_booted && cleanup_pending)
+        continue;
+
+      if (found_booted && cleanup_rollback)
+        continue;
+
+      /* Otherwise, add it */
+      g_ptr_array_add (new_deployments, g_object_ref (deployment));
+    }
+
+  if (new_deployments->len == deployments->len)
+    return NULL;
+  return g_steal_pointer (&new_deployments);
+}
+
 /* Commit @new_deployments and perform a cleanup */
 gboolean
 rpmostree_syscore_write_deployments (OstreeSysroot           *sysroot,
