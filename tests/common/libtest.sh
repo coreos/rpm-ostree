@@ -68,6 +68,18 @@ export G_DEBUG=fatal-warnings
 # easily clean up.
 export OSTREE_SYSROOT_DEBUG=mutable-deployments
 
+# See comment in ot-builtin-commit.c and https://github.com/ostreedev/ostree/issues/758
+# Also keep this in sync with the bits in libostreetest.c
+echo evaluating for overlayfs...
+case $(stat -f --printf '%T' /) in
+    overlayfs)
+        echo "overlayfs found; enabling OSTREE_NO_XATTRS"
+        export OSTREE_SYSROOT_DEBUG="${OSTREE_SYSROOT_DEBUG},no-xattrs"
+        export OSTREE_NO_XATTRS=1 ;;
+    *) ;;
+esac
+echo done
+
 export TEST_GPG_KEYID="472CDAFA"
 
 # GPG when creating signatures demands a writable
@@ -145,6 +157,16 @@ assert_file_empty() {
     fi
 }
 
+# A wrapper which also possibly disables xattrs for CI testing
+ostree_repo_init() {
+    repo=$1
+    shift
+    ${CMD_PREFIX} ostree --repo=${repo} init "$@"
+    if test -n "${OSTREE_NO_XATTRS:-}"; then
+        echo -e 'disable-xattrs=true\n' >> ${repo}/config
+    fi
+}
+
 setup_test_repository () {
     mode=$1
     shift
@@ -152,23 +174,13 @@ setup_test_repository () {
     oldpwd=`pwd`
 
     cd ${test_tmpdir}
-    mkdir repo
-    cd repo
-    ot_repo="--repo=`pwd`"
-    export OSTREE="${CMD_PREFIX} ostree ${ot_repo}"
-    if test -n "$mode"; then
-	$OSTREE init --mode=${mode}
+    if test -n "${mode}"; then
+        ostree_repo_init repo --mode=${mode}
     else
-	$OSTREE init
+        ostree_repo_init repo
     fi
-
-    cd ${test_tmpdir}
-    mkdir files
-    cd files
-    ot_files=`pwd`
-    export ht_files
-    ln -s nosuchfile somelink
-    echo first > firstfile
+    ot_repo="--repo=$(pwd)/repo"
+    export OSTREE="${CMD_PREFIX} ostree ${ot_repo}"
 
     cd ${test_tmpdir}/files
     $OSTREE commit -b test2 -s "Test Commit 1" -m "Commit body first"
@@ -209,8 +221,7 @@ setup_fake_remote_repo1() {
     oldpwd=`pwd`
     mkdir ostree-srv
     cd ostree-srv
-    mkdir gnomerepo
-    ${CMD_PREFIX} ostree --repo=gnomerepo init --mode=$mode
+    ostree_repo_init gnomerepo --mode=$mode
     mkdir gnomerepo-files
     cd gnomerepo-files 
     echo first > firstfile
@@ -266,9 +277,9 @@ setup_os_repository () {
     cd ${test_tmpdir}
     mkdir testos-repo
     if test -n "$mode"; then
-	ostree --repo=testos-repo init --mode=${mode}
+	      ostree_repo_init testos-repo --mode=${mode}
     else
-	ostree --repo=testos-repo init
+	      ostree_repo_init testos-repo
     fi
 
     cd ${test_tmpdir}
