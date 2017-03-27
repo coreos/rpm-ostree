@@ -62,8 +62,4 @@ EOF
 # Tell rpm-ostree to connect to the session bus instead of system
 export RPMOSTREE_USE_SESSION_BUS=1
 
-# Don't flag deployments as immutable so that test harnesses can
-# easily clean up.
-export OSTREE_SYSROOT_DEBUG=mutable-deployments
-
 exec dbus-run-session --config-file=${test_tmpdir}/session.conf $@
