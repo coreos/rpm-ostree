@@ -42,6 +42,11 @@ GPtrArray *rpmostree_syscore_add_deployment (OstreeSysroot      *sysroot,
                                              OstreeDeployment   *merge_deployment,
                                              gboolean            pushing_rollback);
 
+GPtrArray *rpmostree_syscore_filter_deployments (OstreeSysroot      *sysroot,
+                                                 const char         *osname,
+                                                 gboolean            remove_pending,
+                                                 gboolean            remove_rollback);
+
 gboolean rpmostree_syscore_write_deployments (OstreeSysroot          *sysroot,
                                               OstreeRepo              *repo,
                                               GPtrArray              *new_deployments,
