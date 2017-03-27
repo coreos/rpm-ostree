@@ -20,7 +20,7 @@ build:
       --enable-installed-tests
       --enable-gtk-doc
 
-# Build ostree from git for https://github.com/ostreedev/ostree/issues/758
+# ⚠ Build ostree from git for https://github.com/ostreedev/ostree/issues/758
 tests:
     - sudo dnf -y builddep ostree && git clone --depth=1 https://github.com/ostreedev/ostree ostree-git && (cd ostree-git && ./autogen.sh --prefix=/usr --libdir=/usr/lib64 && make -j 8 && sudo make install) && rm ostree-git -rf
     - make check
