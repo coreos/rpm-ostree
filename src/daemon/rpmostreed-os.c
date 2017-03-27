@@ -389,110 +389,200 @@ deploy_flags_from_options (GVariant *options,
   return ret;
 }
 
-static gboolean
-os_handle_deploy (RPMOSTreeOS *interface,
-                  GDBusMethodInvocation *invocation,
-                  GUnixFDList *fdlist,
-                  const char *arg_revision,
-                  GVariant *arg_options)
+static RpmostreedTransaction*
+start_deployment_txn (GDBusMethodInvocation  *invocation,
+                      const char             *osname,
+                      const char             *refspec,
+                      const char             *revision,
+                      RpmOstreeTransactionDeployFlags default_flags,
+                      GVariant               *options,
+                      const char *const      *pkgs_to_add,
+                      const char *const      *pkgs_to_remove,
+                      GUnixFDList            *local_pkgs_to_add,
+                      GError                 **error)
 {
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
-  const char *osname;
-  GError *local_error = NULL;
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable,
+                                      &ot_sysroot, NULL, error))
+    return NULL;
 
-  transaction = merge_compatible_txn (self, invocation);
-  if (transaction)
-    goto out;
+  g_auto(GVariantDict) options_dict;
+  g_variant_dict_init (&options_dict, options);
 
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
-                                      cancellable,
-                                      &ot_sysroot,
-                                      NULL,
-                                      &local_error))
-    goto out;
+  /* Right now, we only use the fd list from the D-Bus message to transfer local
+   * packages, so there's no point in re-extracting them from the fd list based
+   * on the handle indices. We just do a sanity check here that they are indeed
+   * the same length. */
 
-  osname = rpmostree_os_get_name (interface);
-
-  transaction = rpmostreed_transaction_new_deploy (invocation,
-                                                   ot_sysroot,
-                                                   deploy_flags_from_options (arg_options,
-                                                      RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE),
-                                                   osname, NULL, arg_revision, NULL, NULL, NULL,
-                                                   cancellable,
-                                                   &local_error);
-
-  if (transaction == NULL)
-    goto out;
-
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
-
-out:
-  if (local_error != NULL)
+  guint expected_fdn = 0;
+  if (g_variant_dict_contains (&options_dict, "install-local-packages"))
     {
-      g_dbus_method_invocation_take_error (invocation, local_error);
+      g_autoptr(GVariant) fds =
+        g_variant_dict_lookup_value (&options_dict, "install-local-packages",
+                                     G_VARIANT_TYPE ("ah"));
+      g_assert (fds);
+      expected_fdn = g_variant_n_children (fds);
+    }
+
+  guint actual_fdn = 0;
+  if (local_pkgs_to_add)
+    actual_fdn = g_unix_fd_list_get_length (local_pkgs_to_add);
+
+  if (expected_fdn != actual_fdn)
+    return glnx_null_throw (error, "Expected %u fds but only received %u",
+                            expected_fdn, actual_fdn);
+
+  default_flags = deploy_flags_from_options (options, default_flags);
+  return rpmostreed_transaction_new_deploy (invocation, ot_sysroot,
+                                            default_flags,
+                                            osname,
+                                            refspec,
+                                            revision,
+                                            pkgs_to_add,
+                                            pkgs_to_remove,
+                                            local_pkgs_to_add,
+                                            cancellable, error);
+}
+
+typedef void (*InvocationCompleter)(RPMOSTreeOS*,
+                                    GDBusMethodInvocation*,
+                                    GUnixFDList*,
+                                    const gchar*);
+
+static gboolean
+os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
+                                  GDBusMethodInvocation  *invocation,
+                                  const char             *refspec,
+                                  const char             *revision,
+                                  RpmOstreeTransactionDeployFlags default_flags,
+                                  GVariant               *options,
+                                  const char *const      *pkgs_to_add,
+                                  const char *const      *pkgs_to_remove,
+                                  GUnixFDList            *local_pkgs_to_add,
+                                  InvocationCompleter     completer)
+{
+  RpmostreedOS *self = RPMOSTREED_OS (interface);
+  g_autoptr(GError) local_error = NULL;
+
+  /* try to merge with an existing transaction, otherwise start a new one */
+
+  glnx_unref_object RpmostreedTransaction *transaction =
+    merge_compatible_txn (self, invocation);
+  if (!transaction)
+    {
+      transaction = start_deployment_txn (invocation,
+                                          rpmostree_os_get_name (interface),
+                                          refspec, revision, default_flags,
+                                          options, pkgs_to_add, pkgs_to_remove,
+                                          local_pkgs_to_add, &local_error);
+      if (transaction)
+        rpmostreed_transaction_monitor_add (self->transaction_monitor,
+                                            transaction);
+    }
+
+  if (transaction)
+    {
+      const char *client_address =
+        rpmostreed_transaction_get_client_address (transaction);
+      completer (interface, invocation, NULL, client_address);
     }
   else
     {
-      const char *client_address;
-      client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_deploy (interface, invocation, NULL, client_address);
+      if (!local_error) /* we should've gotten an error, but let's be safe */
+        glnx_throw (&local_error, "Failed to start the transaction");
+      g_dbus_method_invocation_take_error (invocation,
+                                           g_steal_pointer (&local_error));
     }
 
+  /* We always return TRUE to signal that we handled the invocation. */
   return TRUE;
+}
+
+static gboolean
+os_handle_deploy (RPMOSTreeOS *interface,
+                  GDBusMethodInvocation *invocation,
+                  GUnixFDList *fd_list,
+                  const char *arg_revision,
+                  GVariant *arg_options)
+{
+  return os_merge_or_start_deployment_txn (
+      interface,
+      invocation,
+      NULL,
+      arg_revision,
+      RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE,
+      arg_options,
+      NULL,
+      NULL,
+      NULL,
+      rpmostree_os_complete_deploy);
 }
 
 static gboolean
 os_handle_upgrade (RPMOSTreeOS *interface,
                    GDBusMethodInvocation *invocation,
-                   GUnixFDList *fdlist,
+                   GUnixFDList *fd_list,
                    GVariant *arg_options)
 {
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
-  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
-  const char *osname;
-  GError *local_error = NULL;
+  return os_merge_or_start_deployment_txn (
+      interface,
+      invocation,
+      NULL,
+      NULL,
+      0,
+      arg_options,
+      NULL,
+      NULL,
+      NULL,
+      rpmostree_os_complete_upgrade);
+}
 
-  transaction = merge_compatible_txn (self, invocation);
-  if (transaction)
-    goto out;
+static gboolean
+os_handle_rebase (RPMOSTreeOS *interface,
+                  GDBusMethodInvocation *invocation,
+                  GUnixFDList *fd_list,
+                  GVariant *arg_options,
+                  const char *arg_refspec,
+                  const char * const *arg_packages)
+{
+  g_auto(GVariantDict) options_dict;
+  g_variant_dict_init (&options_dict, arg_options);
+  const char *opt_revision = NULL;
+  g_variant_dict_lookup (&options_dict, "revision", "&s", &opt_revision);
 
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
-                                      cancellable,
-                                      &ot_sysroot,
-                                      NULL,
-                                      &local_error))
-    goto out;
+  return os_merge_or_start_deployment_txn (
+      interface,
+      invocation,
+      arg_refspec,
+      opt_revision,
+      RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE,
+      arg_options,
+      NULL,
+      NULL,
+      NULL,
+      rpmostree_os_complete_rebase);
+}
 
-  osname = rpmostree_os_get_name (interface);
-
-  transaction = rpmostreed_transaction_new_deploy (invocation, ot_sysroot,
-                                                   deploy_flags_from_options (arg_options, 0),
-                                                   osname, NULL, NULL, NULL, NULL, NULL,
-                                                   cancellable, &local_error);
-
-  if (transaction == NULL)
-    goto out;
-
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
-
-out:
-  if (local_error != NULL)
-    {
-      g_dbus_method_invocation_take_error (invocation, local_error);
-    }
-  else
-    {
-      const char *client_address;
-      client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_upgrade (interface, invocation, NULL, client_address);
-    }
-
-  return TRUE;
+static gboolean
+os_handle_pkg_change (RPMOSTreeOS *interface,
+                      GDBusMethodInvocation *invocation,
+                      GUnixFDList *fd_list,
+                      GVariant *arg_options,
+                      const char * const *arg_packages_added,
+                      const char * const *arg_packages_removed)
+{
+  return os_merge_or_start_deployment_txn (
+      interface,
+      invocation,
+      NULL,
+      NULL,
+      RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE,
+      arg_options,
+      arg_packages_added,
+      arg_packages_removed,
+      fd_list,
+      rpmostree_os_complete_pkg_change);
 }
 
 static gboolean
@@ -614,155 +704,6 @@ out:
       const char *client_address;
       client_address = rpmostreed_transaction_get_client_address (transaction);
       rpmostree_os_complete_clear_rollback_target (interface, invocation, client_address);
-    }
-
-  return TRUE;
-}
-
-static gboolean
-os_handle_rebase (RPMOSTreeOS *interface,
-                  GDBusMethodInvocation *invocation,
-                  GUnixFDList *fdlist,
-                  GVariant *arg_options,
-                  const char *arg_refspec,
-                  const char * const *arg_packages)
-{
-  /* TODO: Totally ignoring arg_packages for now */
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
-  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
-  GVariantDict options_dict;
-  const char *osname;
-  const char *opt_revision = NULL;
-  GError *local_error = NULL;
-
-  transaction = merge_compatible_txn (self, invocation);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
-                                      cancellable,
-                                      &ot_sysroot,
-                                      NULL,
-                                      &local_error))
-    goto out;
-
-  osname = rpmostree_os_get_name (interface);
-
-  g_variant_dict_init (&options_dict, arg_options);
-  g_variant_dict_lookup (&options_dict,
-                         "revision", "&s",
-                         &opt_revision);
-  g_variant_dict_clear (&options_dict);
-
-  transaction = rpmostreed_transaction_new_deploy (invocation,
-                                                   ot_sysroot,
-                                                   deploy_flags_from_options (arg_options,
-                                                      RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE),
-                                                   osname, arg_refspec, opt_revision,
-                                                   NULL, NULL, NULL,
-                                                   cancellable,
-                                                   &local_error);
-
-  if (transaction == NULL)
-    goto out;
-
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
-
-out:
-  if (local_error != NULL)
-    {
-      g_dbus_method_invocation_take_error (invocation, local_error);
-    }
-  else
-    {
-      const char *client_address;
-      client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_rebase (interface, invocation, NULL, client_address);
-    }
-
-  return TRUE;
-}
-
-static gboolean
-os_handle_pkg_change (RPMOSTreeOS *interface,
-                      GDBusMethodInvocation *invocation,
-                      GUnixFDList *fdlist,
-                      GVariant *arg_options,
-                      const char * const *arg_packages_added,
-                      const char * const *arg_packages_removed)
-{
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
-  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
-  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
-  const char *osname;
-  GError *local_error = NULL;
-  g_auto(GVariantDict) options_dict;
-
-  transaction = merge_compatible_txn (self, invocation);
-  if (transaction)
-    goto out;
-
-  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
-                                      cancellable,
-                                      &ot_sysroot,
-                                      NULL,
-                                      &local_error))
-    goto out;
-
-  osname = rpmostree_os_get_name (interface);
-
-  /* Right now, we only use the fd list from the D-Bus message to transfer local
-   * packages, so there's no point in re-extracting them from fdlist based on
-   * the indices in local-packages. We just do a sanity check here that they are
-   * indeed the same length. */
-  gsize n_local_pkgs = 0;
-  g_variant_dict_init (&options_dict, arg_options);
-  if (g_variant_dict_contains (&options_dict, "install-local-packages"))
-    {
-      g_autoptr(GVariant) fds =
-        g_variant_dict_lookup_value (&options_dict, "install-local-packages",
-                                     G_VARIANT_TYPE ("ah"));
-      g_assert (fds);
-      n_local_pkgs = g_variant_n_children (fds);
-    }
-
-  if (g_unix_fd_list_get_length (fdlist) != n_local_pkgs)
-    {
-        g_set_error (&local_error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                     "Expected %lu fds but received %d", n_local_pkgs,
-                     g_unix_fd_list_get_length (fdlist));
-        goto out;
-    }
-
-  /* By default, pkgchange does not pull the base; we will likley
-   * add an option in the future.
-   */
-  transaction = rpmostreed_transaction_new_deploy (invocation,
-                                                   ot_sysroot,
-                                                   deploy_flags_from_options (arg_options,
-                                                     RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE),
-                                                   osname, NULL, NULL,
-                                                   arg_packages_added,
-                                                   arg_packages_removed, fdlist,
-                                                   cancellable, &local_error);
-  if (transaction == NULL)
-    goto out;
-
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
-
-out:
-  if (local_error != NULL)
-    {
-      g_dbus_method_invocation_take_error (invocation, local_error);
-    }
-  else
-    {
-      const char *client_address;
-      client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_pkg_change (interface, invocation, NULL, client_address);
     }
 
   return TRUE;
