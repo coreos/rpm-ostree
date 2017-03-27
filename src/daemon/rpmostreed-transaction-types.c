@@ -1108,9 +1108,12 @@ cleanup_transaction_execute (RpmostreedTransaction *transaction,
                                               cleanup_rollback);
       if (new_deployments)
         {
-          /* TODO - expose the skip cleanup flag in libostree, use it here */
-          if (!ostree_sysroot_write_deployments (sysroot, new_deployments, cancellable, error))
+          OstreeSysrootWriteDeploymentsOpts write_opts = { .do_postclean = FALSE };
+
+          if (!ostree_sysroot_write_deployments_with_options (sysroot, new_deployments,
+                                                              &write_opts, cancellable, error))
             return FALSE;
+
           /* And ensure we fall through to base cleanup */
           self->flags |= RPMOSTREE_TRANSACTION_CLEANUP_BASE;
         }
