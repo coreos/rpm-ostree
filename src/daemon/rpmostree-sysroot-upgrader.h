@@ -22,6 +22,7 @@
 
 #include <ostree.h>
 #include "rpmostree-origin.h"
+#include "rpmostree-sysroot-core.h"
 
 G_BEGIN_DECLS
 
@@ -83,12 +84,5 @@ gboolean
 rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader  *self,
                                    GCancellable           *cancellable,
                                    GError                **error);
-
-gboolean
-rpmostree_sysroot_upgrader_cleanup (OstreeSysroot            *sysroot,
-                                    OstreeRepo               *repo,
-                                    GCancellable             *cancellable,
-                                    GError                  **error);
-
 
 G_END_DECLS

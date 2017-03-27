@@ -26,6 +26,7 @@
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostreed-sysroot.h"
 #include "rpmostree-sysroot-upgrader.h"
+#include "rpmostree-sysroot-core.h"
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
 #include "rpmostree-unpacker.h"
@@ -1170,7 +1171,7 @@ cleanup_transaction_execute (RpmostreedTransaction *transaction,
     }
   if (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_BASE)
     {
-      if (!rpmostree_sysroot_upgrader_cleanup (sysroot, repo, cancellable, error))
+      if (!rpmostree_syscore_cleanup (sysroot, repo, cancellable, error))
         return FALSE;
     }
   if (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_REPOMD)
