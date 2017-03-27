@@ -70,15 +70,14 @@ export OSTREE_SYSROOT_DEBUG=mutable-deployments
 
 # See comment in ot-builtin-commit.c and https://github.com/ostreedev/ostree/issues/758
 # Also keep this in sync with the bits in libostreetest.c
-echo evaluating for overlayfs...
 case $(stat -f --printf '%T' /) in
     overlayfs)
         echo "overlayfs found; enabling OSTREE_NO_XATTRS"
+        ostree --version
         export OSTREE_SYSROOT_DEBUG="${OSTREE_SYSROOT_DEBUG},no-xattrs"
         export OSTREE_NO_XATTRS=1 ;;
-    *) ;;
+    *) echo "Not using overlayfs" ;;
 esac
-echo done
 
 export TEST_GPG_KEYID="472CDAFA"
 
