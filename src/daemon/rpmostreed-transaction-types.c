@@ -626,12 +626,17 @@ import_local_rpm (OstreeRepo    *parent,
 
   /* let's just use the current sepolicy -- we'll just relabel it if the new
    * base turns out to have a different one */
-  {
-    glnx_unref_object GFile *root = g_file_new_for_path ("/");
-    policy = ostree_sepolicy_new (root, cancellable, error);
-    if (policy == NULL)
-      return FALSE;
-  }
+#if OSTREE_CHECK_VERSION(2017,4)
+  glnx_fd_close int rootfs_dfd = -1;
+  if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_dfd, error))
+    return FALSE;
+  policy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
+#else
+  { glnx_unref_object GFile *root = g_file_new_for_path ("/");
+    policy = ostree_sepolicy_new (root, cancellable, error); }
+  #endif
+  if (policy == NULL)
+    return FALSE;
 
   unpacker = rpmostree_unpacker_new_fd (fd, NULL,
                                         RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION,
