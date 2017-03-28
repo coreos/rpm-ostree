@@ -709,7 +709,7 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
   /* load the sepolicy to use during import */
   {
     glnx_unref_object OstreeSePolicy *sepolicy = NULL;
-    if (!rpmostree_prepare_rootfs_get_sepolicy (self->tmprootfs_dfd, ".", &sepolicy,
+    if (!rpmostree_prepare_rootfs_get_sepolicy (self->tmprootfs_dfd, &sepolicy,
                                                 cancellable, error))
       goto out;
 

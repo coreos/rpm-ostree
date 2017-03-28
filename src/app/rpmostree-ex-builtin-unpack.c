@@ -102,9 +102,14 @@ rpmostree_ex_builtin_unpack (int             argc,
 
   /* just use current policy */
   if (opt_selinux)
-    if (!rpmostree_prepare_rootfs_get_sepolicy (AT_FDCWD, "/", &sepolicy,
-                                                cancellable, error))
-      goto out;
+    {
+      glnx_fd_close int rootfs_dfd = -1;
+      if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_dfd, error))
+        goto out;
+      if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_dfd, &sepolicy,
+                                                  cancellable, error))
+        goto out;
+    }
 
   {
     const char *branch = rpmostree_unpacker_get_ostree_branch (unpacker);

@@ -458,7 +458,6 @@ workaround_selinux_cross_labeling_recurse (int            dfd,
 
 gboolean
 rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
-                                       const char    *path,
                                        OstreeSePolicy **out_sepolicy,
                                        GCancellable  *cancellable,
                                        GError       **error)
@@ -498,13 +497,15 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
         goto out;
     }
 
-  {
-    g_autofree char *abspath = glnx_fdrel_abspath (dfd, path);
-    glnx_unref_object GFile *rootfs = g_file_new_for_path (abspath);
-    ret_sepolicy = ostree_sepolicy_new (rootfs, cancellable, error);
-    if (!ret_sepolicy)
-      goto out;
-  }
+#if OSTREE_CHECK_VERSION(2017,4)
+  ret_sepolicy = ostree_sepolicy_new_at (dfd, cancellable, error);
+#else
+  { g_autofree char *abspath = glnx_fdrel_abspath (dfd, ".");
+    glnx_unref_object GFile *root = g_file_new_for_path (abspath);
+    ret_sepolicy = ostree_sepolicy_new (root, cancellable, error); }
+#endif
+  if (ret_sepolicy == NULL)
+    goto out;
 
   ret = TRUE;
   *out_sepolicy = g_steal_pointer (&ret_sepolicy);
@@ -623,7 +624,7 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
   const char *name;
   glnx_fd_close int etc_selinux_dfd = -1;
 
-  if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_dfd, ".", &sepolicy, cancellable, error))
+  if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_dfd, &sepolicy, cancellable, error))
     return FALSE;
 
   name = ostree_sepolicy_get_name (sepolicy);
@@ -1881,7 +1882,7 @@ rpmostree_commit (int            rootfs_fd,
   /* hardcode targeted policy for now */
   if (enable_selinux)
     {
-      if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_fd, ".", &sepolicy, cancellable, error))
+      if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_fd, &sepolicy, cancellable, error))
         goto out;
     }
 

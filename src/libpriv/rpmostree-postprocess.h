@@ -54,7 +54,6 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
 
 gboolean
 rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
-                                       const char    *path,
                                        OstreeSePolicy **out_sepolicy,
                                        GCancellable  *cancellable,
                                        GError       **error);
