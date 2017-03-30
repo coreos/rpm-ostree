@@ -1873,6 +1873,7 @@ rpmostree_commit (int            rootfs_fd,
   off_t n_bytes = 0;
   struct CommitThreadData tdata = { 0, };
   glnx_unref_object OstreeMutableTree *mtree = NULL;
+  OstreeRepoCommitModifierFlags modifier_flags = 0;
   OstreeRepoCommitModifier *commit_modifier = NULL;
   g_autofree char *parent_revision = NULL;
   g_autofree char *new_revision = NULL;
@@ -1890,7 +1891,14 @@ rpmostree_commit (int            rootfs_fd,
     goto out;
 
   mtree = ostree_mutable_tree_new ();
-  commit_modifier = ostree_repo_commit_modifier_new (0, NULL, NULL, NULL);
+  /* We may make this configurable if someone complains about including some
+   * unlabeled content, but I think the fix for that is to ensure that policy is
+   * labeling it.
+   */
+#if OSTREE_CHECK_VERSION(2017,4)
+  modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
+#endif
+  commit_modifier = ostree_repo_commit_modifier_new (modifier_flags, NULL, NULL, NULL);
   ostree_repo_commit_modifier_set_xattr_callback (commit_modifier,
                                                   read_xattrs_cb, NULL,
                                                   &tdata);
