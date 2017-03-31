@@ -779,3 +779,91 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
   *out_repo_pkgs = g_steal_pointer (&repo_pkgs);
   return TRUE;
 }
+
+static gboolean
+get_modifiers_variant (const char   *set_refspec,
+                       const char   *set_revision,
+                       const char *const* install_pkgs,
+                       const char *const* uninstall_pkgs,
+                       GVariant    **out_modifiers,
+                       GUnixFDList **out_fd_list,
+                       GError      **error)
+{
+  GVariantDict dict;
+  g_variant_dict_init (&dict, NULL);
+
+  /* let's take care of install_pkgs first since it can fail */
+  if (install_pkgs)
+    {
+      g_autoptr(GPtrArray) repo_pkgs = NULL;
+      g_autoptr(GVariant) fd_idxs = NULL;
+      /* NB: after this, it's a guaranteed TRUE, so we
+       * just pass the out_ var directly here */
+      if (!rpmostree_sort_pkgs_strv (install_pkgs, &repo_pkgs, out_fd_list,
+                                     &fd_idxs, error))
+        return FALSE;
+
+      if (repo_pkgs != NULL && repo_pkgs->len > 0)
+        g_variant_dict_insert_value (&dict, "install-packages",
+          g_variant_new_strv ((const char *const*)repo_pkgs->pdata,
+                                                  repo_pkgs->len));
+      if (fd_idxs != NULL)
+        g_variant_dict_insert_value (&dict, "install-local-packages", fd_idxs);
+    }
+
+  if (set_refspec)
+    g_variant_dict_insert (&dict, "set-refspec", "s", set_refspec);
+  if (set_revision)
+    g_variant_dict_insert (&dict, "set-revision", "s", set_revision);
+  if (uninstall_pkgs != NULL && g_strv_length ((char**)uninstall_pkgs) > 0)
+    g_variant_dict_insert (&dict, "uninstall-packages", "^as",
+                           (char**)uninstall_pkgs);
+
+  *out_modifiers = g_variant_ref_sink (g_variant_dict_end (&dict));
+  return TRUE;
+}
+
+GVariant*
+rpmostree_get_options_variant (gboolean reboot,
+                               gboolean allow_downgrade,
+                               gboolean skip_purge,
+                               gboolean no_pull_base,
+                               gboolean dry_run)
+{
+  GVariantDict dict;
+  g_variant_dict_init (&dict, NULL);
+  g_variant_dict_insert (&dict, "reboot", "b", reboot);
+  g_variant_dict_insert (&dict, "allow-downgrade", "b", allow_downgrade);
+  g_variant_dict_insert (&dict, "skip-purge", "b", skip_purge);
+  g_variant_dict_insert (&dict, "no-pull-base", "b", no_pull_base);
+  g_variant_dict_insert (&dict, "dry-run", "b", dry_run);
+  return g_variant_ref_sink (g_variant_dict_end (&dict));
+}
+
+gboolean
+rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
+                             const char   *set_refspec,
+                             const char   *set_revision,
+                             const char *const* install_pkgs,
+                             const char *const* uninstall_pkgs,
+                             GVariant     *options,
+                             char        **out_transaction_address,
+                             GCancellable *cancellable,
+                             GError      **error)
+{
+  g_autoptr(GVariant) modifiers = NULL;
+  glnx_unref_object GUnixFDList *fd_list = NULL;
+  if (!get_modifiers_variant (set_refspec, set_revision,
+                              install_pkgs, uninstall_pkgs,
+                              &modifiers, &fd_list, error))
+    return FALSE;
+
+  return rpmostree_os_call_update_deployment_sync (os_proxy,
+                                                   modifiers,
+                                                   options,
+                                                   fd_list,
+                                                   out_transaction_address,
+                                                   NULL,
+                                                   cancellable,
+                                                   error);
+}

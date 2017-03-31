@@ -32,6 +32,8 @@
 static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_dry_run;
+static gchar **opt_install;
+static gchar **opt_uninstall;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -40,17 +42,15 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-static GVariant *
-get_args_variant (GVariant *handles)
-{
-  GVariantDict dict;
-  g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
-  g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
-  if (handles != NULL)
-    g_variant_dict_insert_value (&dict, "install-local-packages", handles);
-  return g_variant_dict_end (&dict);
-}
+static GOptionEntry install_option_entry[] = {
+  { "install", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_install, "Install a package", "PKG" },
+  { NULL }
+};
+
+static GOptionEntry uninstall_option_entry[] = {
+  { "uninstall", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_uninstall, "Uninstall a package", "PKG" },
+  { NULL }
+};
 
 static int
 pkg_change (RPMOSTreeSysroot *sysroot_proxy,
@@ -71,27 +71,45 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
                                 cancellable, &os_proxy, error))
     return EXIT_FAILURE;
 
-  g_autoptr(GPtrArray) repo_pkgs = NULL;
-  g_autoptr(GVariant) local_pkgs_fd_idxs = NULL;
-  glnx_unref_object GUnixFDList *local_pkgs_fd_list = NULL;
-  if (!rpmostree_sort_pkgs_strv (packages_to_add,
-                                 &repo_pkgs, &local_pkgs_fd_list,
-                                 &local_pkgs_fd_idxs, error))
-    return EXIT_FAILURE;
+  g_autoptr(GVariant) options =
+    rpmostree_get_options_variant (opt_reboot,
+                                   FALSE,   /* allow-downgrade */
+                                   FALSE,   /* skip-purge */
+                                   TRUE,    /* no-pull-base */
+                                   opt_dry_run);
 
-  g_ptr_array_add (repo_pkgs, NULL);
+  gboolean met_local_pkg = FALSE;
+  for (const char *const* it = packages_to_add; it && *it; it++)
+    met_local_pkg = met_local_pkg || g_str_has_suffix (*it, ".rpm");
 
+  /* Use newer D-Bus API only if we have to. */
   g_autofree char *transaction_address = NULL;
-  if (!rpmostree_os_call_pkg_change_sync (os_proxy,
-                                          get_args_variant (local_pkgs_fd_idxs),
-                                          (const char *const*)repo_pkgs->pdata,
-                                          packages_to_remove,
-                                          local_pkgs_fd_list,
-                                          &transaction_address,
-                                          NULL, /* out_fd_list */
-                                          cancellable,
-                                          error))
-    return EXIT_FAILURE;
+  if (met_local_pkg)
+    {
+      if (!rpmostree_update_deployment (os_proxy,
+                                        NULL, /* refspec */
+                                        NULL, /* revision */
+                                        packages_to_add,
+                                        packages_to_remove,
+                                        options,
+                                        &transaction_address,
+                                        cancellable,
+                                        error))
+        return EXIT_FAILURE;
+    }
+  else
+    {
+      if (!rpmostree_os_call_pkg_change_sync (os_proxy,
+                                              options,
+                                              packages_to_add,
+                                              packages_to_remove,
+                                              NULL,
+                                              &transaction_address,
+                                              NULL,
+                                              cancellable,
+                                              error))
+        return EXIT_FAILURE;
+    }
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
@@ -134,11 +152,14 @@ rpmostree_builtin_pkg_add (int            argc,
 
   context = g_option_context_new ("PACKAGE [PACKAGE...] - Download and install layered RPM packages");
 
+  g_option_context_add_main_entries (context, uninstall_option_entry, NULL);
+
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
+                                       NULL, NULL,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
@@ -155,8 +176,10 @@ rpmostree_builtin_pkg_add (int            argc,
   argv++; argc--;
   argv[argc] = NULL;
 
-  return pkg_change (sysroot_proxy, (const char *const*)argv,
-                     NULL, cancellable, error);
+  return pkg_change (sysroot_proxy,
+                     (const char *const*)argv,
+                     (const char *const*)opt_uninstall,
+                     cancellable, error);
 }
 
 int
@@ -172,11 +195,14 @@ rpmostree_builtin_pkg_remove (int            argc,
 
   context = g_option_context_new ("PACKAGE [PACKAGE...] - Remove one or more overlay packages");
 
+  g_option_context_add_main_entries (context, install_option_entry, NULL);
+
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
+                                       NULL, NULL,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
@@ -193,6 +219,8 @@ rpmostree_builtin_pkg_remove (int            argc,
   argv++; argc--;
   argv[argc] = NULL;
 
-  return pkg_change (sysroot_proxy, NULL, (const char *const*)argv,
+  return pkg_change (sysroot_proxy,
+                     (const char *const*)opt_install,
+                     (const char *const*)argv,
                      cancellable, error);
 }

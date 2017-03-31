@@ -34,6 +34,7 @@ typedef enum {
   RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD = 1 << 0,
   RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT = 1 << 1,
   RPM_OSTREE_BUILTIN_FLAG_HIDDEN = 1 << 2,
+  RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS = 1 << 3,
 } RpmOstreeBuiltinFlags;
 
 typedef struct RpmOstreeCommand RpmOstreeCommand;
@@ -80,15 +81,18 @@ const char *rpmostree_subcommand_parse (int *inout_argc,
                                         char **inout_argv,
                                         RpmOstreeCommandInvocation *invocation);
 
-gboolean rpmostree_option_context_parse (GOptionContext *context,
-                                         const GOptionEntry *main_entries,
-                                         int *argc,
-                                         char ***argv,
-                                         RpmOstreeCommandInvocation *invocation,
-                                         GCancellable *cancellable,
-                                         RPMOSTreeSysroot **out_sysroot_proxy,
-                                         GPid *out_peer_pid,
-                                         GError **error);
+gboolean
+rpmostree_option_context_parse (GOptionContext *context,
+                                const GOptionEntry *main_entries,
+                                int *argc,
+                                char ***argv,
+                                RpmOstreeCommandInvocation *invocation,
+                                GCancellable *cancellable,
+                                const char *const* *out_install_pkgs,
+                                const char *const* *out_uninstall_pkgs,
+                                RPMOSTreeSysroot **out_sysroot_proxy,
+                                GPid *out_peer_pid,
+                                GError **error);
 
 void rpmostree_print_gpg_verify_result (OstreeGpgVerifyResult *result);
 

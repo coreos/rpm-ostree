@@ -41,21 +41,6 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-static GVariant *
-get_args_variant (const char *revision)
-{
-  GVariantDict dict;
-
-  g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "skip-purge", "b", opt_skip_purge);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
-
-  if (revision != NULL)
-    g_variant_dict_insert (&dict, "revision", "s", revision);
-
-  return g_variant_dict_end (&dict);
-}
-
 int
 rpmostree_builtin_rebase (int             argc,
                           char          **argv,
@@ -74,12 +59,16 @@ rpmostree_builtin_rebase (int             argc,
   g_autofree char *transaction_address = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
+  const char *const *install_pkgs = NULL;
+  const char *const *uninstall_pkgs = NULL;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
+                                       &install_pkgs,
+                                       &uninstall_pkgs,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
@@ -100,16 +89,50 @@ rpmostree_builtin_rebase (int             argc,
                                 cancellable, &os_proxy, error))
     return EXIT_FAILURE;
 
-  if (!rpmostree_os_call_rebase_sync (os_proxy,
-                                      get_args_variant (revision),
-                                      new_provided_refspec,
-                                      packages,
-                                      NULL,
-                                      &transaction_address,
-                                      NULL,
-                                      cancellable,
-                                      error))
-    return EXIT_FAILURE;
+  g_autoptr(GVariant) options =
+    rpmostree_get_options_variant (opt_reboot,
+                                   TRUE,   /* allow-downgrade */
+                                   opt_skip_purge,
+                                   FALSE,  /* no-pull-base */
+                                   FALSE); /* dry-run */
+
+  /* Use newer D-Bus API only if we have to. */
+  if (install_pkgs || uninstall_pkgs)
+    {
+      if (!rpmostree_update_deployment (os_proxy,
+                                        new_provided_refspec,
+                                        revision,
+                                        install_pkgs,
+                                        uninstall_pkgs,
+                                        options,
+                                        &transaction_address,
+                                        cancellable,
+                                        error))
+        return EXIT_FAILURE;
+    }
+  else
+    {
+      /* the original Rebase() call takes the revision through the options */
+      if (revision)
+        {
+          g_autoptr(GVariant) old_options = options;
+          g_auto(GVariantDict) dict;
+          g_variant_dict_init (&dict, old_options);
+          g_variant_dict_insert (&dict, "revision", "s", revision);
+          options = g_variant_ref_sink (g_variant_dict_end (&dict));
+        }
+
+      if (!rpmostree_os_call_rebase_sync (os_proxy,
+                                          options,
+                                          new_provided_refspec,
+                                          packages,
+                                          NULL,
+                                          &transaction_address,
+                                          NULL,
+                                          cancellable,
+                                          error))
+        return EXIT_FAILURE;
+    }
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
