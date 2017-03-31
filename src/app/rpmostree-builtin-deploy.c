@@ -42,17 +42,6 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-static GVariant *
-get_args_variant (void)
-{
-  GVariantDict dict;
-
-  g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
-
-  return g_variant_dict_end (&dict);
-}
-
 static void
 default_deployment_changed_cb (GObject *object,
                                GParamSpec *pspec,
@@ -76,6 +65,8 @@ rpmostree_builtin_deploy (int            argc,
   const char * const packages[] = { NULL };
   const char *revision;
   _cleanup_peer_ GPid peer_pid = 0;
+  const char *const *install_pkgs = NULL;
+  const char *const *uninstall_pkgs = NULL;
 
   context = g_option_context_new ("REVISION - Deploy a specific commit");
 
@@ -84,6 +75,8 @@ rpmostree_builtin_deploy (int            argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
+                                       &install_pkgs,
+                                       &uninstall_pkgs,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
@@ -92,6 +85,13 @@ rpmostree_builtin_deploy (int            argc,
   if (argc < 2)
     {
       rpmostree_usage_error (context, "REVISION must be specified", error);
+      return EXIT_FAILURE;
+    }
+
+  if (opt_preview && (install_pkgs != NULL || uninstall_pkgs != NULL))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Cannot specify both --preview and --install/--uninstall");
       return EXIT_FAILURE;
     }
 
@@ -113,20 +113,44 @@ rpmostree_builtin_deploy (int            argc,
     }
   else
     {
+      g_autoptr(GVariant) options =
+        rpmostree_get_options_variant (opt_reboot,
+                                       TRUE,   /* allow-downgrade */
+                                       FALSE,  /* skip-purge */
+                                       FALSE,  /* no-pull-base */
+                                       FALSE); /* dry-run */
+
       /* This will set the GVariant if the default deployment changes. */
       g_signal_connect (os_proxy, "notify::default-deployment",
                         G_CALLBACK (default_deployment_changed_cb),
                         &default_deployment);
 
-      if (!rpmostree_os_call_deploy_sync (os_proxy,
-                                          revision,
-                                          get_args_variant (),
-                                          NULL,
-                                          &transaction_address,
-                                          NULL,
-                                          cancellable,
-                                          error))
-        return EXIT_FAILURE;
+      /* Use newer D-Bus API only if we have to. */
+      if (install_pkgs || uninstall_pkgs)
+        {
+          if (!rpmostree_update_deployment (os_proxy,
+                                            NULL, /* refspec */
+                                            revision,
+                                            install_pkgs,
+                                            uninstall_pkgs,
+                                            options,
+                                            &transaction_address,
+                                            cancellable,
+                                            error))
+            return EXIT_FAILURE;
+        }
+      else
+        {
+          if (!rpmostree_os_call_deploy_sync (os_proxy,
+                                              revision,
+                                              options,
+                                              NULL,
+                                              &transaction_address,
+                                              NULL,
+                                              cancellable,
+                                              error))
+            return EXIT_FAILURE;
+        }
     }
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,

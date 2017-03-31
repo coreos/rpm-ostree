@@ -65,6 +65,7 @@ rpmostree_builtin_rollback (int             argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
+                                       NULL, NULL,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))

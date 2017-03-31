@@ -35,22 +35,26 @@
 
 static RpmOstreeCommand commands[] = {
 #ifdef HAVE_COMPOSE_TOOLING
-  { "compose", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "compose", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
+               RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     rpmostree_builtin_compose },
 #endif
   { "cleanup", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     rpmostree_builtin_cleanup },
   { "db", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     rpmostree_builtin_db },
-  { "deploy", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "deploy", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
+              RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
     rpmostree_builtin_deploy },
-  { "rebase", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "rebase", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
+              RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
     rpmostree_builtin_rebase },
   { "rollback", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     rpmostree_builtin_rollback },
   { "status", 0,
     rpmostree_builtin_status },
-  { "upgrade", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "upgrade", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
+               RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
     rpmostree_builtin_upgrade },
   { "reload", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     rpmostree_builtin_reload },
@@ -77,6 +81,8 @@ static RpmOstreeCommand commands[] = {
 static gboolean opt_version;
 static gboolean opt_force_peer;
 static char *opt_sysroot;
+static gchar **opt_install;
+static gchar **opt_uninstall;
 
 static GOptionEntry global_entries[] = {
   { "version", 0, 0, G_OPTION_ARG_NONE, &opt_version, "Print version information and exit", NULL },
@@ -86,6 +92,12 @@ static GOptionEntry global_entries[] = {
 static GOptionEntry daemon_entries[] = {
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { "peer", 0, 0, G_OPTION_ARG_NONE, &opt_force_peer, "Force a peer-to-peer connection instead of using the system message bus", NULL },
+  { NULL }
+};
+
+static GOptionEntry pkg_entries[] = {
+  { "install", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_install, "Install a package", "PKG" },
+  { "uninstall", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_uninstall, "Uninstall a package", "PKG" },
   { NULL }
 };
 
@@ -122,6 +134,8 @@ rpmostree_option_context_parse (GOptionContext *context,
                                 char ***argv,
                                 RpmOstreeCommandInvocation *invocation,
                                 GCancellable *cancellable,
+                                const char *const* *out_install_pkgs,
+                                const char *const* *out_uninstall_pkgs,
                                 RPMOSTreeSysroot **out_sysroot_proxy,
                                 GPid *out_peer_pid,
                                 GError **error)
@@ -136,6 +150,9 @@ rpmostree_option_context_parse (GOptionContext *context,
 
   if (use_daemon)
     g_option_context_add_main_entries (context, daemon_entries, NULL);
+
+  if ((flags & RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS) > 0)
+    g_option_context_add_main_entries (context, pkg_entries, NULL);
 
   g_option_context_add_main_entries (context, global_entries, NULL);
 
@@ -174,6 +191,11 @@ rpmostree_option_context_parse (GOptionContext *context,
                                    error))
         return FALSE;
     }
+
+  if (out_install_pkgs)
+    *out_install_pkgs = (const char *const*)opt_install;
+  if (out_uninstall_pkgs)
+    *out_uninstall_pkgs = (const char *const*)opt_uninstall;
 
   return TRUE;
 }
@@ -289,7 +311,8 @@ main (int    argc,
 
       /* This will not return for some options (e.g. --version). */
       (void) rpmostree_option_context_parse (context, NULL, &argc, &argv,
-                                             NULL, NULL, NULL, NULL, NULL);
+                                             NULL, NULL, NULL, NULL, NULL,
+                                             NULL, NULL);
       if (command_name == NULL)
         {
           local_error = g_error_new_literal (G_IO_ERROR, G_IO_ERROR_FAILED,

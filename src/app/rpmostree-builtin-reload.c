@@ -49,6 +49,7 @@ rpmostree_builtin_reload (int             argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
+                                       NULL, NULL,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))

@@ -78,3 +78,21 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
                           GUnixFDList **out_fd_list,
                           GVariant    **out_fd_idxs,
                           GError      **error);
+
+GVariant*
+rpmostree_get_options_variant (gboolean reboot,
+                               gboolean allow_downgrade,
+                               gboolean skip_purge,
+                               gboolean no_pull_base,
+                               gboolean dry_run);
+
+gboolean
+rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
+                             const char   *set_refspec,
+                             const char   *set_revision,
+                             const char *const* install_pkgs,
+                             const char *const* uninstall_pkgs,
+                             GVariant     *options,
+                             char        **out_transaction_address,
+                             GCancellable *cancellable,
+                             GError      **error);

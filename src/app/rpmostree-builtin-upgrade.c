@@ -50,18 +50,6 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-static GVariant *
-get_args_variant (void)
-{
-  GVariantDict dict;
-
-  g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "allow-downgrade", "b", opt_allow_downgrade);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
-
-  return g_variant_dict_end (&dict);
-}
-
 int
 rpmostree_builtin_upgrade (int             argc,
                            char          **argv,
@@ -76,12 +64,16 @@ rpmostree_builtin_upgrade (int             argc,
   g_autoptr(GVariant) new_default_deployment = NULL;
   g_autofree char *transaction_address = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
+  const char *const *install_pkgs = NULL;
+  const char *const *uninstall_pkgs = NULL;
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
+                                       &install_pkgs,
+                                       &uninstall_pkgs,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
@@ -98,6 +90,13 @@ rpmostree_builtin_upgrade (int             argc,
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Cannot specify both --reboot and --check");
+      return EXIT_FAILURE;
+    }
+
+  if (opt_preview && (install_pkgs != NULL || uninstall_pkgs != NULL))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Cannot specify both --preview and --install/--uninstall");
       return EXIT_FAILURE;
     }
 
@@ -121,14 +120,38 @@ rpmostree_builtin_upgrade (int             argc,
     }
   else
     {
-      if (!rpmostree_os_call_upgrade_sync (os_proxy,
-                                           get_args_variant (),
-                                           NULL,
-                                           &transaction_address,
-                                           NULL,
-                                           cancellable,
-                                           error))
-        return EXIT_FAILURE;
+      g_autoptr(GVariant) options =
+        rpmostree_get_options_variant (opt_reboot,
+                                       opt_allow_downgrade,
+                                       FALSE,  /* skip-purge */
+                                       FALSE,  /* no-pull-base */
+                                       FALSE); /* dry-run */
+
+      /* Use newer D-Bus API only if we have to. */
+      if (install_pkgs || uninstall_pkgs)
+        {
+          if (!rpmostree_update_deployment (os_proxy,
+                                            NULL, /* refspec */
+                                            NULL, /* revision */
+                                            install_pkgs,
+                                            uninstall_pkgs,
+                                            options,
+                                            &transaction_address,
+                                            cancellable,
+                                            error))
+            return EXIT_FAILURE;
+        }
+      else
+        {
+          if (!rpmostree_os_call_upgrade_sync (os_proxy,
+                                               options,
+                                               NULL,
+                                               &transaction_address,
+                                               NULL,
+                                               cancellable,
+                                               error))
+            return EXIT_FAILURE;
+        }
     }
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
