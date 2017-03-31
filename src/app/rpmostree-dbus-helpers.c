@@ -791,15 +791,14 @@ get_modifiers_variant (const char   *set_refspec,
 {
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
+  glnx_unref_object GUnixFDList *fd_list = NULL;
 
   /* let's take care of install_pkgs first since it can fail */
   if (install_pkgs)
     {
       g_autoptr(GPtrArray) repo_pkgs = NULL;
       g_autoptr(GVariant) fd_idxs = NULL;
-      /* NB: after this, it's a guaranteed TRUE, so we
-       * just pass the out_ var directly here */
-      if (!rpmostree_sort_pkgs_strv (install_pkgs, &repo_pkgs, out_fd_list,
+      if (!rpmostree_sort_pkgs_strv (install_pkgs, &repo_pkgs, &fd_list,
                                      &fd_idxs, error))
         return FALSE;
 
@@ -819,6 +818,7 @@ get_modifiers_variant (const char   *set_refspec,
     g_variant_dict_insert (&dict, "uninstall-packages", "^as",
                            (char**)uninstall_pkgs);
 
+  *out_fd_list = g_steal_pointer (&fd_list);
   *out_modifiers = g_variant_ref_sink (g_variant_dict_end (&dict));
   return TRUE;
 }
