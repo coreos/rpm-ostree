@@ -86,8 +86,8 @@ echo "ok pkg foo relayered on deploy"
 
 # REBASE
 
-commit=$(vm_cmd ostree commit -b rebase_test --tree=ref=vmcheck)
-vm_rpmostree rebase --skip-purge rebase_test
+commit=$(vm_cmd ostree commit -b vmcheck_tmp/rebase_test --tree=ref=vmcheck)
+vm_rpmostree rebase --skip-purge vmcheck_tmp/rebase_test
 reboot_and_assert_base $commit
 echo "ok rebase"
 
