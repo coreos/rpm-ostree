@@ -746,10 +746,10 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
   else
     rpmostree_context_set_is_empty (ctx);
 
-  if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN)
+  if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN)
     {
-      g_assert (have_packages);
-      rpmostree_print_transaction (rpmostree_context_get_hif (ctx));
+      if (have_packages)
+        rpmostree_print_transaction (rpmostree_context_get_hif (ctx));
       ret = TRUE;
       goto out;
     }
@@ -904,9 +904,8 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   else
     g_clear_pointer (&self->final_revision, g_free);
 
-  if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN)
+  if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN)
     {
-      /* we already printed the transaction in do_final_local_assembly() */
       ret = TRUE;
       goto out;
     }
@@ -964,9 +963,9 @@ rpmostree_sysroot_upgrader_flags_get_type (void)
         { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER,
           "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER",
           "allow-older" },
-        { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN,
-          "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_DRY_RUN",
-          "pkgoverlay-dry-run" }
+        { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN,
+          "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN",
+          "dry-run" }
       };
       GType g_define_type_id =
         g_flags_register_static (g_intern_static_string ("RpmOstreeSysrootUpgraderFlags"), values);
