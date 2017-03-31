@@ -355,9 +355,10 @@ vardict_lookup_ptr (GVariantDict  *dict,
                     const char    *key,
                     const char    *fmt)
 {
-  void *val = NULL;
-  g_variant_dict_lookup (dict, key, fmt, &val);
-  return val;
+  void *val;
+  if (g_variant_dict_lookup (dict, key, fmt, &val))
+    return val;
+  return NULL;
 }
 
 static gboolean
@@ -365,9 +366,10 @@ vardict_lookup_bool (GVariantDict *dict,
                      const char   *key,
                      gboolean      dfault)
 {
-  gboolean val = dfault;
-  g_variant_dict_lookup (dict, key, "b", &val);
-  return val;
+  gboolean val;
+  if (g_variant_dict_lookup (dict, key, "b", &val))
+    return val;
+  return dfault;
 }
 
 static RpmOstreeTransactionDeployFlags
