@@ -202,7 +202,6 @@
     <!-- Available options:
          "reboot" (type 'b')
          "dry-run" (type 'b')
-         "local-packages" (type 'ah')
     -->
     <method name="PkgChange">
       <arg type="a{sv}" name="options" direction="in"/>
@@ -222,6 +221,37 @@
     <method name="Cleanup">
       <arg type="as" name="elements" direction="in"/>
       <arg type="s" name="transaction_address" direction="out"/>
+    </method>
+
+    <!-- Available modifiers:
+         "set-refspec" (type 's')
+         "set-revision" (type 's')
+         "install-packages" (type 'as')
+         "uninstall-packages" (type 'as')
+         "install-local-packages" (type 'ah')
+
+         Available options:
+         "reboot" (type 'b')
+            Initiate a reboot after transaction.
+         "allow-downgrade" (type 'b')
+            Allow newly pulled bases to have older timestamps than the
+            current base. Defaults to TRUE if either "set-refspec" or
+            "set-revision" is specified.
+         "skip-purge" (type 'b')
+            Do not purge the old refspec. Only valid if "set-refspec" is
+            specified.
+         "no-pull-base" (type 'b')
+            Do not pull a base layer from the remote. Not valid if
+            either "set-refspec" or "set-revision" is specified.
+         "dry-run" (type 'b')
+            Stop short of deploying the new tree. If
+            layering packages, the pkg diff is printed.
+    -->
+    <method name="UpdateDeployment">
+      <arg type="a{sv}" name="modifiers" direction="in"/>
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="s" name="transaction_address" direction="out"/>
+      <annotation name="org.gtk.GDBus.C.UnixFD" value="true"/>
     </method>
 
   </interface>

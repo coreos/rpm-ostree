@@ -350,42 +350,45 @@ out:
   return TRUE;
 }
 
+static inline void*
+vardict_lookup_ptr (GVariantDict  *dict,
+                    const char    *key,
+                    const char    *fmt)
+{
+  void *val;
+  if (g_variant_dict_lookup (dict, key, fmt, &val))
+    return val;
+  return NULL;
+}
+
+static gboolean
+vardict_lookup_bool (GVariantDict *dict,
+                     const char   *key,
+                     gboolean      dfault)
+{
+  gboolean val;
+  if (g_variant_dict_lookup (dict, key, "b", &val))
+    return val;
+  return dfault;
+}
+
 static RpmOstreeTransactionDeployFlags
 deploy_flags_from_options (GVariant *options,
                            RpmOstreeTransactionDeployFlags defaults)
 {
   RpmOstreeTransactionDeployFlags ret = defaults;
-  GVariantDict options_dict;
-  gboolean opt_reboot = FALSE;
-  gboolean opt_skip_purge = FALSE;
-  gboolean opt_allow_downgrade = FALSE;
-  gboolean opt_dry_run = FALSE;
-
-  g_variant_dict_init (&options_dict, options);
-
-  g_variant_dict_lookup (&options_dict,
-                         "allow-downgrade", "b",
-                         &opt_allow_downgrade);
-  if (opt_allow_downgrade)
+  g_auto(GVariantDict) dict;
+  g_variant_dict_init (&dict, options);
+  if (vardict_lookup_bool (&dict, "allow-downgrade", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE;
-  g_variant_dict_lookup (&options_dict,
-                         "reboot", "b",
-                         &opt_reboot);
-  if (opt_reboot)
+  if (vardict_lookup_bool (&dict, "reboot", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_REBOOT;
-  g_variant_dict_lookup (&options_dict,
-                         "skip-purge", "b",
-                         &opt_skip_purge);
-  if (opt_skip_purge)
+  if (vardict_lookup_bool (&dict, "skip-purge", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_SKIP_PURGE;
-
-  g_variant_dict_lookup (&options_dict, "dry-run", "b",
-                         &opt_dry_run);
-  if (opt_dry_run)
+  if (vardict_lookup_bool (&dict, "no-pull-base", FALSE))
+    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE;
+  if (vardict_lookup_bool (&dict, "dry-run", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN;
-
-  g_variant_dict_clear (&options_dict);
-
   return ret;
 }
 
@@ -398,7 +401,8 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
                       GVariant               *options,
                       const char *const      *pkgs_to_add,
                       const char *const      *pkgs_to_remove,
-                      GUnixFDList            *local_pkgs_to_add,
+                      GVariant               *local_pkgs_to_add,
+                      GUnixFDList            *fd_list,
                       GError                 **error)
 {
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
@@ -416,22 +420,31 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
    * the same length. */
 
   guint expected_fdn = 0;
-  if (g_variant_dict_contains (&options_dict, "install-local-packages"))
-    {
-      g_autoptr(GVariant) fds =
-        g_variant_dict_lookup_value (&options_dict, "install-local-packages",
-                                     G_VARIANT_TYPE ("ah"));
-      g_assert (fds);
-      expected_fdn = g_variant_n_children (fds);
-    }
+  if (local_pkgs_to_add)
+    expected_fdn = g_variant_n_children (local_pkgs_to_add);
 
   guint actual_fdn = 0;
-  if (local_pkgs_to_add)
-    actual_fdn = g_unix_fd_list_get_length (local_pkgs_to_add);
+  if (fd_list)
+    actual_fdn = g_unix_fd_list_get_length (fd_list);
 
   if (expected_fdn != actual_fdn)
-    return glnx_null_throw (error, "Expected %u fds but only received %u",
+    return glnx_null_throw (error, "Expected %u fds but received %u",
                             expected_fdn, actual_fdn);
+
+  /* Also check for conflicting options -- this is after all a public API. */
+
+  if (!refspec && vardict_lookup_bool (&options_dict, "skip-purge", FALSE))
+    return glnx_null_throw (error, "Can't specify skip-purge if not setting a "
+                                   "new refspec");
+  if ((refspec || revision) &&
+      vardict_lookup_bool (&options_dict, "no-pull-base", FALSE))
+    return glnx_null_throw (error, "Can't specify no-pull-base if setting a "
+                                   "new refspec or revision");
+
+  /* default to allowing downgrades for rebases & deploys */
+  if (vardict_lookup_bool (&options_dict, "allow-downgrade", refspec ||
+                                                             revision))
+    default_flags |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE;
 
   default_flags = deploy_flags_from_options (options, default_flags);
   return rpmostreed_transaction_new_deploy (invocation, ot_sysroot,
@@ -441,7 +454,7 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
                                             revision,
                                             pkgs_to_add,
                                             pkgs_to_remove,
-                                            local_pkgs_to_add,
+                                            fd_list,
                                             cancellable, error);
 }
 
@@ -459,7 +472,8 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
                                   GVariant               *options,
                                   const char *const      *pkgs_to_add,
                                   const char *const      *pkgs_to_remove,
-                                  GUnixFDList            *local_pkgs_to_add,
+                                  GVariant               *local_pkgs_to_add,
+                                  GUnixFDList            *fd_list,
                                   InvocationCompleter     completer)
 {
   RpmostreedOS *self = RPMOSTREED_OS (interface);
@@ -475,7 +489,8 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
                                           rpmostree_os_get_name (interface),
                                           refspec, revision, default_flags,
                                           options, pkgs_to_add, pkgs_to_remove,
-                                          local_pkgs_to_add, &local_error);
+                                          local_pkgs_to_add, fd_list,
+                                          &local_error);
       if (transaction)
         rpmostreed_transaction_monitor_add (self->transaction_monitor,
                                             transaction);
@@ -516,6 +531,7 @@ os_handle_deploy (RPMOSTreeOS *interface,
       NULL,
       NULL,
       NULL,
+      NULL,
       rpmostree_os_complete_deploy);
 }
 
@@ -535,6 +551,7 @@ os_handle_upgrade (RPMOSTreeOS *interface,
       NULL,
       NULL,
       NULL,
+      NULL,
       rpmostree_os_complete_upgrade);
 }
 
@@ -546,6 +563,8 @@ os_handle_rebase (RPMOSTreeOS *interface,
                   const char *arg_refspec,
                   const char * const *arg_packages)
 {
+  /* back-compat -- the revision is specified in the options variant; take it
+   * out of there and make it a proper argument */
   g_auto(GVariantDict) options_dict;
   g_variant_dict_init (&options_dict, arg_options);
   const char *opt_revision = NULL;
@@ -558,6 +577,7 @@ os_handle_rebase (RPMOSTreeOS *interface,
       opt_revision,
       RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE,
       arg_options,
+      NULL,
       NULL,
       NULL,
       NULL,
@@ -581,8 +601,44 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
       arg_options,
       arg_packages_added,
       arg_packages_removed,
-      fd_list,
+      NULL,
+      NULL,
       rpmostree_os_complete_pkg_change);
+}
+
+static gboolean
+os_handle_update_deployment (RPMOSTreeOS *interface,
+                             GDBusMethodInvocation *invocation,
+                             GUnixFDList *fd_list,
+                             GVariant *arg_modifiers,
+                             GVariant *arg_options)
+{
+  g_auto(GVariantDict) dict;
+  g_variant_dict_init (&dict, arg_modifiers);
+  const char *refspec =
+    vardict_lookup_ptr (&dict, "set-refspec", "&s");
+  const char *revision =
+    vardict_lookup_ptr (&dict, "set-revision", "&s");
+  g_autofree const char *const *install_pkgs =
+    vardict_lookup_ptr (&dict, "install-packages", "^a&s");
+  g_autofree const char *const *uninstall_pkgs =
+    vardict_lookup_ptr (&dict, "uninstall-packages", "^a&s");
+  g_autoptr(GVariant) install_local_pkgs =
+    g_variant_dict_lookup_value (&dict, "install-local-packages",
+                                 G_VARIANT_TYPE("ah"));
+
+  return os_merge_or_start_deployment_txn (
+      interface,
+      invocation,
+      refspec,
+      revision,
+      0,
+      arg_options,
+      install_pkgs,
+      uninstall_pkgs,
+      install_local_pkgs,
+      fd_list,
+      rpmostree_os_complete_update_deployment);
 }
 
 static gboolean
@@ -1230,6 +1286,7 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_pkg_change                 = os_handle_pkg_change;
   iface->handle_set_initramfs_state        = os_handle_set_initramfs_state;
   iface->handle_cleanup                    = os_handle_cleanup;
+  iface->handle_update_deployment          = os_handle_update_deployment;
   iface->handle_get_cached_rebase_rpm_diff = os_handle_get_cached_rebase_rpm_diff;
   iface->handle_download_rebase_rpm_diff   = os_handle_download_rebase_rpm_diff;
   iface->handle_get_cached_deploy_rpm_diff = os_handle_get_cached_deploy_rpm_diff;
