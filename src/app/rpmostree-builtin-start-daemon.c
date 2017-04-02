@@ -51,7 +51,7 @@ static GOptionEntry opt_entries[] =
 {
   { "debug", 'd', 0, G_OPTION_ARG_NONE, &opt_debug, "Print debug information on stderr", NULL },
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
-  { "dbus-peer", 0, 0, G_OPTION_ARG_INT, &service_dbus_fd, "Use a peer to peer dbus connection on this fd", NULL },
+  { "dbus-peer", 0, 0, G_OPTION_ARG_INT, &service_dbus_fd, "Use a peer to peer dbus connection on this fd", "FD" },
   { NULL }
 };
 
