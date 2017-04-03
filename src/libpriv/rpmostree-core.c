@@ -614,11 +614,11 @@ rpmostree_context_setup (RpmOstreeContext    *self,
       g_string_free (opt, TRUE);
     }
 
+  /* This is what we use as default. */
+  dnf_context_set_rpm_macro (self->hifctx, "_dbpath", "/usr/share/rpm");
+
   if (!dnf_context_setup (self->hifctx, cancellable, error))
     return FALSE;
-
-  /* This is what we use as default. */
-  set_rpm_macro_define ("_dbpath", "/usr/share/rpm");
 
   /* NB: missing repo --> let hif figure it out for itself */
   if (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos))
