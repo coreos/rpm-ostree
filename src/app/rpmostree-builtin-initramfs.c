@@ -29,12 +29,14 @@
 
 #include <libglnx.h>
 
+static char *opt_osname;
 static gboolean opt_enable;
 static gboolean opt_disable;
 static char **opt_add_arg;
 static gboolean opt_reboot;
 
 static GOptionEntry option_entries[] = {
+  { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
   { "enable", 0, 0, G_OPTION_ARG_NONE, &opt_enable, "Enable regenerating initramfs locally", NULL },
   { "arg", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_add_arg, "Append ARG to the dracut arguments", "ARG" },
   { "disable", 0, 0, G_OPTION_ARG_NONE, &opt_disable, "Disable regenerating initramfs locally", NULL },
@@ -78,7 +80,7 @@ rpmostree_builtin_initramfs (int             argc,
                                        error))
     goto out;
 
-  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,
+  if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
     goto out;
 
