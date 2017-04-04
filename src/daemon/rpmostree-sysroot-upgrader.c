@@ -804,9 +804,9 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
                      &kernel_path, &initramfs_path);
       g_assert (initramfs_path);
 
-      if (!rpmostree_run_dracut (self->tmprootfs_dfd, add_dracut_argv, initramfs_path,
-                                 &initramfs_tmp_fd, &initramfs_tmp_path,
-                                 cancellable, error))
+      if (!rpmostree_run_dracut (self->tmprootfs_dfd, add_dracut_argv, kver,
+                                 initramfs_path, &initramfs_tmp_fd,
+                                 &initramfs_tmp_path, cancellable, error))
         goto out;
 
       if (!rpmostree_finalize_kernel (self->tmprootfs_dfd, bootdir, kver,

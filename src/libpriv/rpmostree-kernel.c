@@ -296,6 +296,7 @@ dracut_child_setup (gpointer data)
 gboolean
 rpmostree_run_dracut (int     rootfs_dfd,
                       const char *const* argv,
+                      const char *kver,
                       const char *rebuild_from_initramfs,
                       int     *out_initramfs_tmpfd,
                       char   **out_initramfs_tmppath,
@@ -381,6 +382,9 @@ rpmostree_run_dracut (int     rootfs_dfd,
   rpmostree_bwrap_append_child_argv (bwrap, (char*)glnx_basename (rpmostree_dracut_wrapper_path), NULL);
   for (char **iter = (char**)argv; iter && *iter; iter++)
     rpmostree_bwrap_append_child_argv (bwrap, *iter, NULL);
+
+  if (kver)
+    rpmostree_bwrap_append_child_argv (bwrap, "--kver", kver, NULL);
 
   rpmostree_bwrap_set_child_setup (bwrap, dracut_child_setup, GINT_TO_POINTER (tmp_fd));
 
