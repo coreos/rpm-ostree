@@ -165,13 +165,21 @@ rpmostree_find_kernel (int rootfs_dfd,
                        GCancellable *cancellable,
                        GError **error)
 {
+  /* Fetch the kver from /usr/lib/modules */
+  g_autofree char* modversion_dir = NULL;
+  if (!find_ensure_one_subdirectory (rootfs_dfd, "usr/lib/modules",
+                                     &modversion_dir, cancellable, error))
+    return NULL;
+
+  if (!modversion_dir)
+    return glnx_null_throw (error, "/usr/lib/modules is empty");
+
+  const char *kver = glnx_basename (modversion_dir);
+
+  /* First, look for the kernel in the canonical ostree directory */
   g_autofree char* kernel_path = NULL;
   g_autofree char* initramfs_path = NULL;
-  const char *kver = NULL; /* May point to kver_owned */
-  g_autofree char *kver_owned = NULL;
   g_autofree char *bootdir = g_strdup ("usr/lib/ostree-boot");
-
-  /* First, look in the canonical ostree directory */
   if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
                                              &kernel_path, &initramfs_path,
                                              cancellable, error))
@@ -192,39 +200,17 @@ rpmostree_find_kernel (int rootfs_dfd,
   /* Finally, the newer model of having the kernel with the modules */
   if (kernel_path == NULL)
     {
-      g_autofree char* modversion_dir = NULL;
-
-      if (!find_ensure_one_subdirectory (rootfs_dfd, "usr/lib/modules", &modversion_dir,
-                                         cancellable, error))
+      g_free (bootdir);
+      bootdir = g_steal_pointer (&modversion_dir);
+      if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
+                                                 &kernel_path, &initramfs_path,
+                                                 cancellable, error))
         return NULL;
-
-      if (modversion_dir)
-        {
-          kver = glnx_basename (modversion_dir);
-          bootdir = g_steal_pointer (&modversion_dir);
-          if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
-                                                     &kernel_path, &initramfs_path,
-                                                     cancellable, error))
-            return NULL;
-        }
     }
 
   if (kernel_path == NULL)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Unable to find kernel (vmlinuz) in /boot or /usr/lib/modules (bootdir=%s)", bootdir);
-      return NULL;
-    }
-
-  if (!kver)
-    {
-      const char *kname = glnx_basename (kernel_path);
-      const char *kver_p;
-
-      kver_p = strchr (kname, '-');
-      g_assert (kver_p);
-      kver = kver_owned = g_strdup (kver_p + 1);
-    }
+    return glnx_null_throw (error, "Unable to find kernel (vmlinuz) in /boot "
+                                   "or /usr/lib/modules (bootdir=%s)", bootdir);
 
   return g_variant_ref_sink (g_variant_new ("(sssms)", kver, bootdir, kernel_path, initramfs_path));
 }
@@ -264,7 +250,7 @@ rpmostree_finalize_kernel (int rootfs_dfd,
   }
   boot_checksum_str = g_checksum_get_string (boot_checksum);
 
-  kernel_final_path = g_strconcat (bootdir, "/", glnx_basename (kernel_path), "-", boot_checksum_str, NULL);
+  kernel_final_path = g_strconcat (bootdir, "/", "vmlinuz-", kver, "-", boot_checksum_str, NULL);
   initramfs_final_path = g_strconcat (bootdir, "/", "initramfs-", kver, ".img-", boot_checksum_str, NULL);
 
   /* Put the kernel in the final location */
