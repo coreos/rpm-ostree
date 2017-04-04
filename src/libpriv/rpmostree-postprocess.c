@@ -1896,6 +1896,7 @@ rpmostree_commit (int            rootfs_fd,
 #if OSTREE_CHECK_VERSION(2017,4)
   modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
 #endif
+  /* If changing this, also look at changing rpmostree-unpacker.c */
   commit_modifier = ostree_repo_commit_modifier_new (modifier_flags, NULL, NULL, NULL);
   ostree_repo_commit_modifier_set_xattr_callback (commit_modifier,
                                                   read_xattrs_cb, NULL,

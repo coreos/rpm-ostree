@@ -699,6 +699,7 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
   g_autoptr(GFile) root = NULL;
   OstreeRepoCommitModifier *modifier = NULL;
   OstreeRepoImportArchiveOptions opts = { 0 };
+  OstreeRepoCommitModifierFlags modifier_flags = 0;
   glnx_unref_object OstreeMutableTree *mtree = NULL;
   char *tmpdir = NULL;
   guint64 buildtime = 0;
@@ -712,7 +713,11 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
   else
     filter = compose_filter_cb;
 
-  modifier = ostree_repo_commit_modifier_new (0, filter, &fdata, NULL);
+  /* If changing this, also look at changing rpmostree-postprocess.c */
+#if OSTREE_CHECK_VERSION(2017,4)
+  modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
+#endif
+  modifier = ostree_repo_commit_modifier_new (modifier_flags, filter, &fdata, NULL);
   ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb,
                                                   NULL, self);
   ostree_repo_commit_modifier_set_sepolicy (modifier, sepolicy);
