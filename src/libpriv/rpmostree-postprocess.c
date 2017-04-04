@@ -186,8 +186,6 @@ do_kernel_prep (int            rootfs_dfd,
   {
     g_autoptr(GPtrArray) dracut_argv = g_ptr_array_new ();
 
-    g_ptr_array_add (dracut_argv, (char*)kver);
-
     if (json_object_has_member (treefile, "initramfs-args"))
       {
         guint i, len;
@@ -207,8 +205,8 @@ do_kernel_prep (int            rootfs_dfd,
     g_ptr_array_add (dracut_argv, NULL);
 
     if (!rpmostree_run_dracut (rootfs_dfd,
-                               (const char *const*)dracut_argv->pdata, NULL,
-                               &initramfs_tmp_fd, &initramfs_tmp_path,
+                               (const char *const*)dracut_argv->pdata, kver,
+                               NULL, &initramfs_tmp_fd, &initramfs_tmp_path,
                                cancellable, error))
       goto out;
   }
