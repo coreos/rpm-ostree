@@ -24,6 +24,9 @@ set -euo pipefail
 echo "1..2"
 
 rpm-ostree ex container init
+if test -n "${OSTREE_NO_XATTRS:-}"; then
+    echo -e 'disable-xattrs=true\n' >> repo/config
+fi
 
 cp ${commondir}/compose/test-repo.repo rpmmd.repos.d
 
