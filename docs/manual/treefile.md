@@ -30,9 +30,9 @@ It supports the following parameters:
     in /boot.  However, this has a few flaws; it gets shadowed at boot time,
     and also makes dealing with Anaconda installation harder.  There are 3
     possible values:
-    * "legacy": the default, data goes in /boot
-    * "both": Kernel data in /boot and /usr/lib/ostree-boot
-    * "new": Kernel data in /usr/lib/ostree-boot
+    * "legacy": kernel data goes in /boot
+    * "both": the default, kernel data goes in /boot and /usr/lib/ostree-boot
+    * "new": kernel data goes in /usr/lib/ostree-boot
 
  * `etc-group-members`: Array of strings, optional: Unix groups in this
    list will be stored in `/etc/group` instead of `/usr/lib/group`.  Use
