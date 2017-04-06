@@ -47,8 +47,18 @@ vm_cmd ostree refs vmcheck_tmp --delete
 # comes with the distro to help speed up rpm-ostree metadata fetching since we
 # don't cache it (e.g. on Fedora, it takes *forever* to fetch metadata, which we
 # have to do dozens of times throughout the suite)
-vm_cmd mv /etc/yum.repos.d{,.bak}
-vm_cmd mkdir /etc/yum.repos.d
+if ! vm_cmd test -f /etc/yum.repos.d/.vmcheck; then
+    echo "Neutering /etc/yum.repos.d"
+    # Move the current one to .bak
+    vm_cmd mv /etc/yum.repos.d{,.bak}
+    # And create a new one with a .vmcheck as a stamp file so we recognize it
+    vm_cmd rm /etc/yum.repos.d.tmp -rf
+    vm_cmd mkdir /etc/yum.repos.d.tmp
+    vm_cmd touch /etc/yum.repos.d.tmp/.vmcheck
+    vm_cmd mv /etc/yum.repos.d{.tmp,}
+else
+    echo "Keeping existing vmcheck /etc/yum.repos.d"
+fi
 
 origdir=$(pwd)
 echo -n '' > ${LOG}
@@ -119,6 +129,10 @@ for tf in $(find . -name 'test-*.sh' | sort); do
     fi
 
     vm_cmd logger "vmcheck: finished $bn..."
+    if test -n "${VMCHECK_DEBUG:-}"; then
+        echo "VMCHECK_DEBUG is set, skipping restoration of original deployment"
+        break
+    fi
 
     # go back to the original vmcheck deployment if needed
     csum_cur=$(vm_get_booted_csum)
@@ -136,9 +150,15 @@ for tf in $(find . -name 'test-*.sh' | sort); do
 
 done
 
+
 # put back the original yum repos
-vm_cmd rm -rf /etc/yum.repos.d
-vm_cmd mv /etc/yum.repos.d{.bak,}
+if test -z "${VMCHECK_DEBUG:-}"; then
+    if vm_cmd test -f /etc/yum.repos.d/.vmcheck; then
+        echo "Restoring original /etc/yum.repos.d"
+        vm_cmd rm -rf /etc/yum.repos.d
+        vm_cmd mv /etc/yum.repos.d{.bak,}
+    fi
+fi
 
 # Gather post-failure system logs if necessary
 ALL_LOGS=$LOG
