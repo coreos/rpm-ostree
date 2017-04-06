@@ -214,11 +214,55 @@ set_keyfile_string_array_from_json (GKeyFile    *keyfile,
   return ret;
 }
 
+/* Prepare /dev in the target root with the API devices.  TODO:
+ * Delete this when we implement https://github.com/projectatomic/rpm-ostree/issues/729
+ */
+static gboolean
+libcontainer_prep_dev (int         rootfs_dfd,
+                       GError    **error)
+{
+
+  glnx_fd_close int src_fd = openat (AT_FDCWD, "/dev", O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY);
+  if (src_fd == -1)
+    return glnx_throw_errno (error);
+
+  if (mkdirat (rootfs_dfd, "dev", 0755) != 0)
+    {
+      if (errno != ENOENT)
+        return glnx_throw_errno (error);
+    }
+
+  glnx_fd_close int dest_fd = openat (rootfs_dfd, "dev", O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY);
+  if (dest_fd == -1)
+    return glnx_throw_errno (error);
+
+  static const char *const devnodes[] = { "null", "zero", "full", "random", "urandom", "tty" };
+  for (guint i = 0; i < G_N_ELEMENTS (devnodes); i++)
+    {
+      const char *nodename = devnodes[i];
+      struct stat stbuf;
+      if (fstatat (src_fd, nodename, &stbuf, 0) == -1)
+        {
+          if (errno == ENOENT)
+            continue;
+          return glnx_throw_errno (error);
+        }
+
+      if (mknodat (dest_fd, nodename, stbuf.st_mode, stbuf.st_rdev) != 0)
+        return glnx_throw_errno (error);
+      if (fchmodat (dest_fd, nodename, stbuf.st_mode, 0) != 0)
+        return glnx_throw_errno (error);
+    }
+
+  return TRUE;
+}
+
 static gboolean
 install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                           RpmOstreeContext *ctx,
                           JsonObject      *treedata,
                           GFile           *yumroot,
+                          int              rootfs_dfd,
                           char           **packages,
                           gboolean        *out_unmodified,
                           char           **out_new_inputhash,
@@ -405,6 +449,9 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                                      "Installing packages:");
 
     glnx_console_lock (&console);
+
+    if (!libcontainer_prep_dev (rootfs_dfd, error))
+      goto out;
 
     if (!dnf_transaction_commit (dnf_context_get_transaction (hifctx),
                                  dnf_context_get_goal (hifctx),
@@ -915,7 +962,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
   { gboolean unmodified = FALSE;
 
-    if (!install_packages_in_root (self, corectx, treefile, yumroot,
+    if (!install_packages_in_root (self, corectx, treefile, yumroot, rootfs_fd,
                                    (char**)packages->pdata,
                                    opt_force_nocache ? NULL : &unmodified,
                                    &new_inputhash,
