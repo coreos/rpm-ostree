@@ -41,6 +41,7 @@
 #include "rpmostree-output.h"
 
 #define RPMOSTREE_MESSAGE_COMMIT_STATS SD_ID128_MAKE(e6,37,2e,38,41,21,42,a9,bc,13,b6,32,b3,f8,93,44)
+#define RPMOSTREE_MESSAGE_PKG_REPOS SD_ID128_MAKE(0e,ea,67,9b,bf,a3,4d,43,80,2d,ec,99,b2,74,eb,e7)
 
 #define RPMOSTREE_DIR_CACHE_REPOMD "repomd"
 #define RPMOSTREE_DIR_CACHE_SOLV "solv"
@@ -1268,6 +1269,36 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
 
       hy_goal_install (goal, pkg);
     }
+
+  { GPtrArray *repos = dnf_context_get_repos (hifctx);
+    g_autoptr(GString) enabled_repos = g_string_new ("[");
+    g_autoptr(GString) enabled_repos_solvables = g_string_new ("");
+    guint total_solvables = 0;
+    gboolean first = TRUE;
+
+    for (guint i = 0; i < repos->len; i++)
+      {
+        DnfRepo *repo = repos->pdata[i];
+        if (!dnf_repo_get_enabled (repo))
+          continue;
+        if (first)
+          first = FALSE;
+        else
+          g_string_append_c (enabled_repos, ' ');
+        g_autofree char *quoted = g_shell_quote (dnf_repo_get_id (repo));
+        g_string_append (enabled_repos, quoted);
+        total_solvables += dnf_repo_get_n_solvables (repo);
+        g_string_append_printf (enabled_repos_solvables, "%u ", dnf_repo_get_n_solvables (repo));
+      }
+    g_string_append_c (enabled_repos, ']');
+
+    sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_PKG_REPOS),
+                     "MESSAGE=Preparing pkg txn; enabled repos: %s solvables: %u", enabled_repos->str, total_solvables,
+                     "SACK_N_SOLVABLES=%i", dnf_sack_count (dnf_context_get_sack (hifctx)),
+                     "ENABLED_REPOS=%s", enabled_repos->str,
+                     "ENABLED_REPOS_SOLVABLES=%s", enabled_repos_solvables->str,
+                     NULL);
+  }
 
   { const char *const*strviter = (const char *const*)pkgnames;
     for (; strviter && *strviter; strviter++)
