@@ -214,7 +214,7 @@ set_keyfile_string_array_from_json (GKeyFile    *keyfile,
   return ret;
 }
 
-/* Prpare /dev in the target root with the API devices.  TODO:
+/* Prepare /dev in the target root with the API devices.  TODO:
  * Delete this when we implement https://github.com/projectatomic/rpm-ostree/issues/729
  */
 static gboolean
@@ -245,8 +245,7 @@ libcontainer_prep_dev (int         rootfs_dfd,
         {
           if (errno == ENOENT)
             continue;
-          else
-            glnx_throw_errno (error);
+          return glnx_throw_errno (error);
         }
 
       if (mknodat (dest_fd, nodename, stbuf.st_mode, stbuf.st_rdev) != 0)
