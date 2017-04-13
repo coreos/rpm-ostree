@@ -25,10 +25,6 @@
 #include <sys/wait.h>
 #include <ostree.h>
 
-#ifndef OSTREE_CHECK_VERSION
-#define OSTREE_CHECK_VERSION(year,minor) 0
-#endif
-
 int
 rpmostree_ptrarray_sort_compare_strings (gconstpointer ap,
                                          gconstpointer bp);

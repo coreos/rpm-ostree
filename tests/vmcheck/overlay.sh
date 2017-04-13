@@ -59,6 +59,16 @@ ostree checkout $commit vmcheck --fsync=0
 # ✀✀✀ BEGIN hack for https://github.com/projectatomic/rpm-ostree/pull/693 ✀✀✀
 rm -f vmcheck/usr/etc/{.pwd.lock,passwd-,group-,shadow-,gshadow-,subuid-,subgid-}
 # ✀✀✀ END hack for https://github.com/projectatomic/rpm-ostree/pull/693 ✀✀✀
+# ✀✀✀ BEGIN update ostree; see redhat-ci.sh ✀✀✀
+for url in https://kojipkgs.fedoraproject.org//packages/ostree/2017.5/2.fc25/x86_64/ostree-{,libs-,grub2-}2017.5-2.fc25.x86_64.rpm; do
+    curl -sSL -O $url
+done
+for x in *.rpm; do
+    rpm2cpio $x | (cd vmcheck && cpio -div)
+done
+rm vmcheck/etc -rf
+rm -f *.rpm
+# ✀✀✀ END update ostree; see redhat-ci.sh ✀✀✀
 # Now, overlay our built binaries
 rsync -rlv /var/roothome/sync/insttree/usr/ vmcheck/usr/
 ostree refs --delete vmcheck || true

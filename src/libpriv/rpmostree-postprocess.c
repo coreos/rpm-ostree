@@ -495,13 +495,7 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
         goto out;
     }
 
-#if OSTREE_CHECK_VERSION(2017,4)
   ret_sepolicy = ostree_sepolicy_new_at (dfd, cancellable, error);
-#else
-  { g_autofree char *abspath = glnx_fdrel_abspath (dfd, ".");
-    glnx_unref_object GFile *root = g_file_new_for_path (abspath);
-    ret_sepolicy = ostree_sepolicy_new (root, cancellable, error); }
-#endif
   if (ret_sepolicy == NULL)
     goto out;
 
@@ -1893,9 +1887,7 @@ rpmostree_commit (int            rootfs_fd,
    * unlabeled content, but I think the fix for that is to ensure that policy is
    * labeling it.
    */
-#if OSTREE_CHECK_VERSION(2017,4)
   modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
-#endif
   /* If changing this, also look at changing rpmostree-unpacker.c */
   commit_modifier = ostree_repo_commit_modifier_new (modifier_flags, NULL, NULL, NULL);
   ostree_repo_commit_modifier_set_xattr_callback (commit_modifier,
