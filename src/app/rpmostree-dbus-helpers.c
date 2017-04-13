@@ -153,11 +153,16 @@ rpmostree_load_sysroot (gchar *sysroot,
   if (sysroot_proxy == NULL)
     return FALSE;
 
-  /* This tells the daemon not to auto-exit as long as we are alive */
-  if (!rpmostree_sysroot_call_register_client_sync (sysroot_proxy,
-                                                    g_variant_builder_end (options_builder),
-                                                    cancellable, error))
-    return FALSE;
+  /* This tells the daemon not to auto-exit as long as we are alive; but we can
+   * only do this as root.
+   */
+  if (getuid () == 0)
+    {
+      if (!rpmostree_sysroot_call_register_client_sync (sysroot_proxy,
+                                                        g_variant_builder_end (options_builder),
+                                                        cancellable, error))
+        return FALSE;
+    }
 
   *out_sysroot_proxy = g_steal_pointer (&sysroot_proxy);
   *out_peer_pid = peer_pid; peer_pid = 0;
