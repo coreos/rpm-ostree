@@ -374,7 +374,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     for (guint i = 0; i < repos->len; i++)
       {
         DnfRepo *repo = repos->pdata[i];
-        if (dnf_repo_get_enabled (repo))
+        if (dnf_repo_get_enabled (repo) & DNF_REPO_ENABLED_PACKAGES)
           {
             g_autoptr(GDateTime) ts = g_date_time_new_from_unix_utc (dnf_repo_get_timestamp_generated (repo));
             g_autofree char *formatted = g_date_time_format (ts, "%Y-%m-%d %T");

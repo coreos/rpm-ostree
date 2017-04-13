@@ -1279,7 +1279,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
     for (guint i = 0; i < repos->len; i++)
       {
         DnfRepo *repo = repos->pdata[i];
-        if (!dnf_repo_get_enabled (repo))
+        if ((dnf_repo_get_enabled (repo) & DNF_REPO_ENABLED_PACKAGES) == 0)
           continue;
         if (first)
           first = FALSE;
