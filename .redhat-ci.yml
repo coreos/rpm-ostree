@@ -10,6 +10,15 @@ required: true
 container:
     image: projectatomic/rpm-ostree-tester
 
+# ⚠ Pull latest ostree for https://github.com/ostreedev/ostree/issues/758
+# And we now depend on 2017.4
+# Also, there's a copy of this below in the compose context
+# And also in tests/vmcheck/overlay.sh
+packages:
+  - https://kojipkgs.fedoraproject.org//packages/ostree/2017.5/2.fc25/x86_64/ostree-2017.5-2.fc25.x86_64.rpm
+  - https://kojipkgs.fedoraproject.org//packages/ostree/2017.5/2.fc25/x86_64/ostree-devel-2017.5-2.fc25.x86_64.rpm
+  - https://kojipkgs.fedoraproject.org//packages/ostree/2017.5/2.fc25/x86_64/ostree-libs-2017.5-2.fc25.x86_64.rpm
+
 env:
     CFLAGS: '-fsanitize=undefined'
 
@@ -20,9 +29,7 @@ build:
       --enable-installed-tests
       --enable-gtk-doc
 
-# ⚠ Build ostree from git for https://github.com/ostreedev/ostree/issues/758
 tests:
-    - sudo dnf -y builddep ostree && git clone --depth=1 https://github.com/ostreedev/ostree ostree-git && (cd ostree-git && ./autogen.sh --prefix=/usr --libdir=/usr/lib64 && make -j 8 && sudo make install) && rm ostree-git -rf
     - make check
     - gnome-desktop-testing-runner rpm-ostree
     - sudo --user=testuser gnome-desktop-testing-runner rpm-ostree
@@ -101,6 +108,7 @@ tests:
   - >
       docker run --privileged -v $(pwd):/srv/code --rm
       projectatomic/rpm-ostree-tester /bin/sh -c "
+      yum -y install https://kojipkgs.fedoraproject.org//packages/ostree/2017.5/2.fc25/x86_64/ostree-{,libs-,devel-,grub2-}2017.5-2.fc25.x86_64.rpm &&
       cd /srv/code &&
       env NOCONFIGURE=1 ./autogen.sh &&
       ./configure --prefix=/usr --libdir=/usr/lib64 &&

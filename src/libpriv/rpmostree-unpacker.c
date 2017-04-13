@@ -714,9 +714,7 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
     filter = compose_filter_cb;
 
   /* If changing this, also look at changing rpmostree-postprocess.c */
-#if OSTREE_CHECK_VERSION(2017,4)
   modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
-#endif
   modifier = ostree_repo_commit_modifier_new (modifier_flags, filter, &fdata, NULL);
   ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb,
                                                   NULL, self);
