@@ -49,6 +49,9 @@ if vm_cmd "runuser -u bin rpm-ostree pkg-add foo-1.0"; then
     assert_not_reached "Was able to install a package as non-root!"
 fi
 
+# Assert that we can do status as non-root
+vm_cmd "runuser -u bin rpm-ostree status" >/dev/null
+
 # Be sure an unprivileged user exists
 if vm_rpmostree install test-opt-1.0 2>err.txt; then
     assert_not_reached "Was able to install a package in /opt"
