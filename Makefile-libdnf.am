@@ -17,9 +17,12 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-libdnf.so.1:
+# Recurse into libdnf
+ALL_LOCAL_HOOKS += libdnf-local
+libdnf-local:
 	cd libdnf-build && $(MAKE)
 	ln -sf libdnf-build/libdnf/libdnf.so.1 .
+libdnf.so.1: libdnf-local
 CLEANFILES += libdnf.so.1
 GITIGNOREFILES += libdnf-build/
 
