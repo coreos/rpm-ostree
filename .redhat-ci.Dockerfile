@@ -2,9 +2,11 @@ FROM fedora:25
 
 # We could use the upstream spec file here, but anyway for
 # runtime reqs, we're at the mercy of whatever in the
-# updates repo.
+# updates repo.  Though we do explicitly use updates-testing
+# so our CI coverage indirectly tests that.
 
-RUN dnf install -y @buildsys-build && \
+RUN dnf config-manager --set-enabled updates-testing && \
+    dnf install -y @buildsys-build && \
     dnf install -y 'dnf-command(builddep)' && \
     dnf builddep -y rpm-ostree && \
     dnf install -y rpm-ostree && \
