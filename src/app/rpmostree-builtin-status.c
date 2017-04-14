@@ -303,7 +303,8 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
             }
         }
 
-      print_kv ("OSName", max_key_len, os_name);
+      /* This used to be OSName; see https://github.com/ostreedev/ostree/pull/794 */
+      print_kv ("StateRoot", max_key_len, os_name);
 
       if (!g_variant_dict_lookup (dict, "gpg-enabled", "b", &gpg_enabled))
         gpg_enabled = FALSE;
