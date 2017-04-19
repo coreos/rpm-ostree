@@ -5,7 +5,7 @@ FROM fedora:25
 # updates repo.  Though we do explicitly use updates-testing
 # so our CI coverage indirectly tests that.
 
-RUN dnf config-manager --set-enabled updates-testing \
+RUN dnf config-manager --set-enabled updates-testing && \
     dnf install -y @buildsys-build && \
     dnf install -y 'dnf-command(builddep)' && \
     dnf builddep -y rpm-ostree && \
