@@ -315,6 +315,10 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (opt_cache_only)
     dnf_context_set_cache_age (hifctx, G_MAXUINT);
 
+  /* By default, retain packages in addition to metadata with --cachedir */
+  if (opt_cachedir)
+    hif_context_set_keep_cache (hifctx, TRUE);
+
   g_key_file_set_string (treespec, "tree", "ref", self->ref);
   g_key_file_set_string_list (treespec, "tree", "packages", (const char *const*)packages, g_strv_length (packages));
 
