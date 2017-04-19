@@ -1,0 +1,13 @@
+[Unit]
+Description=rpm-ostree automatic upgrade
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/autoupdate.sh
+Restrat=True
+RemainAfterExit=True
+
+[install]
+WantedBy=mylti-user.target
