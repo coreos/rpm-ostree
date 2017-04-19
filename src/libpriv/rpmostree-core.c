@@ -2144,11 +2144,15 @@ add_to_transaction (rpmts  ts,
   if (!get_package_metainfo (tmp_metadata_dfd, path, &hdr, NULL, error))
     return FALSE;
 
+  /* TODO uncomment once upgrade understands this or we implement post
+     handling better */
+#if 0
   if (!noscripts)
     {
       if (!rpmostree_script_txn_validate (pkg, hdr, ignore_scripts, cancellable, error))
         return FALSE;
     }
+#endif
 
   r = rpmtsAddInstallElement (ts, hdr, pkg, TRUE, NULL);
   if (r != 0)
