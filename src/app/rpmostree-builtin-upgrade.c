@@ -162,6 +162,8 @@ rpmostree_builtin_upgrade (int             argc,
 
   new_default_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
+  new_default_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+
   if (opt_preview || opt_check)
     {
       g_autoptr(GVariant) result = NULL;
