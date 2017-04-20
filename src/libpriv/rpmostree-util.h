@@ -45,20 +45,6 @@ _rpmostree_varsubst_string (const char *instr,
                             GError **error);
 
 gboolean
-_rpmostree_util_enumerate_directory_allow_noent (GFile               *dirpath,
-						 const char          *queryargs,
-						 GFileQueryInfoFlags  queryflags,
-						 GFileEnumerator    **out_direnum,
-						 GCancellable        *cancellable,
-						 GError             **error);
-
-gboolean
-_rpmostree_file_load_contents_utf8_allow_noent (GFile          *path,
-                                                char          **out_contents,
-                                                GCancellable   *cancellable,
-                                                GError        **error);
-
-gboolean
 _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
                                            int           rootfs_dfd,
                                            const char   *path,
@@ -72,21 +58,9 @@ _rpmostree_util_get_commit_hashes (OstreeRepo *repo,
                                    GCancellable *cancellable,
                                    GError **error);
 
-gboolean
-_rpmostree_sync_wait_on_pid (pid_t          pid,
-                             GError       **error);
-
 char *
 _rpmostree_util_next_version (const char *auto_version_prefix,
                               const char *last_version);
-
-GKeyFile *
-_rpmostree_util_keyfile_clone (GKeyFile *keyfile);
-
-gboolean
-rpmostree_split_path_ptrarray_validate (const char *path,
-                                        GPtrArray  **out_components,
-                                        GError     **error);
 
 char *
 rpmostree_str_replace (const char  *buf,
