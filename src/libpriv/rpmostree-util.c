@@ -159,70 +159,6 @@ _rpmostree_varsubst_string (const char *instr,
 }
 
 gboolean
-_rpmostree_util_enumerate_directory_allow_noent (GFile               *dirpath,
-						 const char          *queryargs,
-						 GFileQueryInfoFlags  queryflags,
-						 GFileEnumerator    **out_direnum,
-						 GCancellable        *cancellable,
-						 GError             **error)
-{
-  gboolean ret = FALSE;
-  GError *temp_error = NULL;
-  g_autoptr(GFileEnumerator) ret_direnum = NULL;
-
-  ret_direnum = g_file_enumerate_children (dirpath, queryargs, queryflags,
-                                           cancellable, &temp_error);
-  if (!ret_direnum)
-    {
-      if (g_error_matches (temp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        {
-          g_clear_error (&temp_error);
-          ret = TRUE;
-        }
-      else
-        g_propagate_error (error, temp_error);
-
-      goto out;
-    }
-
-  ret = TRUE;
-  *out_direnum = g_steal_pointer (&ret_direnum);
- out:
-  return ret;
-}
-
-gboolean
-_rpmostree_file_load_contents_utf8_allow_noent (GFile          *path,
-                                                char          **out_contents,
-                                                GCancellable   *cancellable,
-                                                GError        **error)
-{
-  gboolean ret = FALSE;
-  GError *temp_error = NULL;
-  g_autofree char *ret_contents = NULL;
-
-  ret_contents = glnx_file_get_contents_utf8_at (AT_FDCWD, gs_file_get_path_cached (path), NULL,
-                                                 cancellable, &temp_error);
-  if (!ret_contents)
-    {
-      if (g_error_matches (temp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        {
-          g_clear_error (&temp_error);
-        }
-      else
-        {
-          g_propagate_error (error, temp_error);
-          goto out;
-        }
-    }
-
-  ret = TRUE;
-  *out_contents = g_steal_pointer (&ret_contents);
- out:
-  return ret;
-}
-
-gboolean
 _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
                                            int           dfd,
                                            const char   *path,
@@ -327,32 +263,6 @@ _rpmostree_util_get_commit_hashes (OstreeRepo    *repo,
   return ret;
 }
 
-gboolean
-_rpmostree_sync_wait_on_pid (pid_t          pid,
-                             GError       **error)
-{
-  gboolean ret = FALSE;
-  pid_t r;
-  int estatus;
-
-  do
-    r = waitpid (pid, &estatus, 0);
-  while (G_UNLIKELY (r == -1 && errno == EINTR));
-
-  if (r == -1)
-    {
-      glnx_set_prefix_error_from_errno (error, "%s", "waitpid");
-      goto out;
-    }
-
-  if (!g_spawn_check_exit_status (estatus, error))
-    goto out;
-
-  ret = TRUE;
- out:
-  return ret;
-}
-
 char *
 _rpmostree_util_next_version (const char *auto_version_prefix,
                               const char *last_version)
@@ -374,70 +284,6 @@ _rpmostree_util_next_version (const char *auto_version_prefix,
 
   num = g_ascii_strtoull (end, NULL, 10);
   return g_strdup_printf ("%s.%llu", auto_version_prefix, num + 1);
-}
-
-GKeyFile *
-_rpmostree_util_keyfile_clone (GKeyFile *keyfile)
-{
-  GKeyFile *ret = g_key_file_new ();
-  gsize len;
-  g_autofree char *data = g_key_file_to_data (keyfile, &len, NULL);
-  gboolean loaded;
-
-  loaded = g_key_file_load_from_data (ret, data, len, 0, NULL);
-  g_assert (loaded);
-  return ret;
-}
-
-gboolean
-rpmostree_split_path_ptrarray_validate (const char *path,
-                                        GPtrArray  **out_components,
-                                        GError     **error)
-{
-  if (strlen (path) > PATH_MAX)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Path '%s' is too long", path);
-      return FALSE;
-    }
-
-  g_autoptr(GPtrArray) ret_components = g_ptr_array_new_with_free_func (g_free);
-
-  do
-    {
-      const char *p = strchr (path, '/');
-      g_autofree char *component = NULL;
-
-      if (!p)
-        {
-          component = g_strdup (path);
-          path = NULL;
-        }
-      else
-        {
-          component = g_strndup (path, p - path);
-          path = p + 1;
-        }
-
-      if (!component[0])
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Invalid empty component in path '%s'", path);
-          return FALSE;
-        }
-      if (g_str_equal (component, ".") ||
-          g_str_equal (component, ".."))
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Invalid special element '.' or '..' in path %s", path);
-          return FALSE;
-        }
-
-      g_ptr_array_add (ret_components, (char*)g_steal_pointer (&component));
-    } while (path && *path);
-
-  *out_components = g_steal_pointer (&ret_components);
-  return TRUE;
 }
 
 /* Replace every occurrence of @old in @buf with @new. */
