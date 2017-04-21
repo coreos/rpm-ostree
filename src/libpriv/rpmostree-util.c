@@ -28,6 +28,7 @@
 
 #include "rpmostree-util.h"
 #include "rpmostree-origin.h"
+#include "rpmostree.h"
 #include "libglnx.h"
 
 int
@@ -612,4 +613,79 @@ rpmostree_cache_branch_to_nevra (const char *cachebranch)
     }
 
   return g_string_free (r, FALSE);
+}
+
+/* Given the result of rpm_ostree_db_diff(), print it. */
+void
+rpmostree_diff_print (OstreeRepo *repo,
+                      GPtrArray *removed,
+                      GPtrArray *added,
+                      GPtrArray *modified_old,
+                      GPtrArray *modified_new)
+{
+  gboolean first;
+
+  g_assert (modified_old->len == modified_new->len);
+
+  first = TRUE;
+  for (guint i = 0; i < modified_old->len; i++)
+    {
+      RpmOstreePackage *oldpkg = modified_old->pdata[i];
+      RpmOstreePackage *newpkg = modified_new->pdata[i];
+      const char *name = rpm_ostree_package_get_name (oldpkg);
+
+      if (rpm_ostree_package_cmp (oldpkg, newpkg) > 0)
+        continue;
+
+      if (first)
+        {
+          g_print ("Upgraded:\n");
+          first = FALSE;
+        }
+
+      g_print ("  %s %s -> %s\n", name,
+               rpm_ostree_package_get_evr (oldpkg),
+               rpm_ostree_package_get_evr (newpkg));
+    }
+
+  first = TRUE;
+  for (guint i = 0; i < modified_old->len; i++)
+    {
+      RpmOstreePackage *oldpkg = modified_old->pdata[i];
+      RpmOstreePackage *newpkg = modified_new->pdata[i];
+      const char *name = rpm_ostree_package_get_name (oldpkg);
+
+      if (rpm_ostree_package_cmp (oldpkg, newpkg) < 0)
+        continue;
+
+      if (first)
+        {
+          g_print ("Downgraded:\n");
+          first = FALSE;
+        }
+
+      g_print ("  %s %s -> %s\n", name,
+               rpm_ostree_package_get_evr (oldpkg),
+               rpm_ostree_package_get_evr (newpkg));
+    }
+
+  if (removed->len > 0)
+    g_print ("Removed:\n");
+  for (guint i = 0; i < removed->len; i++)
+    {
+      RpmOstreePackage *pkg = removed->pdata[i];
+      const char *nevra = rpm_ostree_package_get_nevra (pkg);
+
+      g_print ("  %s\n", nevra);
+    }
+
+  if (added->len > 0)
+    g_print ("Added:\n");
+  for (guint i = 0; i < added->len; i++)
+    {
+      RpmOstreePackage *pkg = added->pdata[i];
+      const char *nevra = rpm_ostree_package_get_nevra (pkg);
+
+      g_print ("  %s\n", nevra);
+    }
 }

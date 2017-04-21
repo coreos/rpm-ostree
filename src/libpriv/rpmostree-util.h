@@ -85,6 +85,12 @@ gs_file_get_path_cached (GFile *file)
   return rpmostree_file_get_path_cached (file);
 }
 
+void rpmostree_diff_print (OstreeRepo *repo,
+                           GPtrArray *removed,
+                           GPtrArray *added,
+                           GPtrArray *modified_old,
+                           GPtrArray *modified_new);
+
 gboolean
 rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        OstreeDeployment  *deployment,

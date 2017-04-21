@@ -53,6 +53,7 @@ librpmostreepriv_la_SOURCES = \
 
 librpmostreepriv_la_CFLAGS = \
 	$(AM_CFLAGS) \
+	-I$(srcdir)/src/lib \
 	-I$(srcdir)/src/libpriv \
 	-I$(libglnx_srcpath) \
 	-DPKGLIBDIR=\"$(pkglibdir)\" \
