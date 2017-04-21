@@ -35,10 +35,12 @@
 #include <libglnx.h>
 
 static gboolean opt_pretty;
+static gboolean opt_verbose;
 static gboolean opt_json;
 
 static GOptionEntry option_entries[] = {
   { "pretty", 'p', 0, G_OPTION_ARG_NONE, &opt_pretty, "This option is deprecated and no longer has any effect", NULL },
+  { "verbose", 'v', 0, G_OPTION_ARG_NONE, &opt_verbose, "Print additional fields (e.g. StateRoot)", NULL },
   { "json", 0, 0, G_OPTION_ARG_NONE, &opt_json, "Output JSON", NULL },
   { NULL }
 };
@@ -267,7 +269,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
 
       if (is_locally_assembled)
         print_kv ("BaseCommit", max_key_len, base_checksum);
-      else
+      if (opt_verbose || !is_locally_assembled)
         print_kv ("Commit", max_key_len, checksum);
 
       /* Show any difference between the baseref vs head, but only for the
@@ -304,7 +306,8 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         }
 
       /* This used to be OSName; see https://github.com/ostreedev/ostree/pull/794 */
-      print_kv ("StateRoot", max_key_len, os_name);
+      if (opt_verbose)
+        print_kv ("StateRoot", max_key_len, os_name);
 
       if (!g_variant_dict_lookup (dict, "gpg-enabled", "b", &gpg_enabled))
         gpg_enabled = FALSE;
