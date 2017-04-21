@@ -65,17 +65,20 @@ CLEANFILES += \
 	tests/common/compose/test-repo-local.repo \
 	$(NULL)
 
-tests_check_jsonutil_CPPFLAGS = $(AM_CPPFLAGS) -I $(srcdir)/src/libpriv -I $(srcdir)/libglnx
-tests_check_jsonutil_CFLAGS = $(AM_CFLAGS) $(PKGDEP_RPMOSTREE_CFLAGS)
-tests_check_jsonutil_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la
+testbin_cppflags = $(AM_CPPFLAGS) -I $(srcdir)/src/libpriv -I $(srcdir)/libglnx
+testbin_cflags = $(AM_CFLAGS) $(PKGDEP_RPMOSTREE_CFLAGS)
+testbin_ldadd = $(PKGDEP_RPMOSTREE_LIBS) librpmostree-1.la librpmostreepriv.la
+tests_check_jsonutil_CPPFLAGS = $(testbin_cppflags)
+tests_check_jsonutil_CFLAGS = $(testbin_cflags)
+tests_check_jsonutil_LDADD = $(testbin_ldadd)
 
-tests_check_cache_branch_to_nevra_CPPFLAGS = $(AM_CPPFLAGS) -I $(srcdir)/src/libpriv -I $(srcdir)/libglnx
-tests_check_cache_branch_to_nevra_CFLAGS = $(AM_CFLAGS) $(PKGDEP_RPMOSTREE_CFLAGS)
-tests_check_cache_branch_to_nevra_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la
+tests_check_cache_branch_to_nevra_CPPFLAGS = $(testbin_cppflags)
+tests_check_cache_branch_to_nevra_CFLAGS = $(testbin_cflags)
+tests_check_cache_branch_to_nevra_LDADD = $(testbin_ldadd)
 
-tests_check_postprocess_CPPFLAGS = $(AM_CPPFLAGS) -I $(srcdir)/src/libpriv -I $(srcdir)/libglnx
-tests_check_postprocess_CFLAGS = $(AM_CFLAGS) $(PKGDEP_RPMOSTREE_CFLAGS)
-tests_check_postprocess_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la
+tests_check_postprocess_CPPFLAGS = $(testbin_cppflags)
+tests_check_postprocess_CFLAGS = $(testbin_cflags)
+tests_check_postprocess_LDADD = $(testbin_ldadd)
 
 tests/check/test-compose.sh: tests/common/compose/test-repo.repo
 
