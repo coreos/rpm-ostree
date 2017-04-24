@@ -19,6 +19,8 @@ ca-certificates.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE  /* Looks like legacy... *
 filesystem.pretrans, RPMOSTREE_SCRIPT_ACTION_IGNORE
 libgcc.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
 setup.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
+java-1.8.0-openjdk-headless.pretrans, RPMOSTREE_SCRIPT_ACTION_IGNORE  /* https://bugzilla.redhat.com/show_bug.cgi?id=1038092 Upgrade compat, shouldn't be needed */
+copy-jdk-configs.pretrans, RPMOSTREE_SCRIPT_ACTION_IGNORE  /* See above */
 pinentry.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
 fedora-release.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
 fedora-release.posttrans, RPMOSTREE_SCRIPT_ACTION_IGNORE
