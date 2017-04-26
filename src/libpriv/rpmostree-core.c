@@ -1667,21 +1667,13 @@ break_single_hardlink_at (int           dfd,
                           GCancellable *cancellable,
                           GError      **error)
 {
-  gboolean ret = FALSE;
   struct stat stbuf;
 
   if (fstatat (dfd, path, &stbuf, AT_SYMLINK_NOFOLLOW) != 0)
-    {
-      glnx_set_prefix_error_from_errno (error, "%s", "fstatat");
-      goto out;
-    }
+    return glnx_throw_errno_prefix (error, "fstatat");
 
   if (!S_ISLNK (stbuf.st_mode) && !S_ISREG (stbuf.st_mode))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Unsupported type for entry '%s'", path);
-      goto out;
-    }
+    return glnx_throw (error, "Unsupported type for entry '%s'", path);
 
   if (stbuf.st_nlink > 1)
     {
@@ -1701,7 +1693,7 @@ break_single_hardlink_at (int           dfd,
               if (g_error_matches (tmp_error, G_IO_ERROR, G_IO_ERROR_EXISTS))
                 continue;
               g_propagate_error (error, g_steal_pointer (&tmp_error));
-              goto out;
+              return FALSE;
             }
 
           copy_success = TRUE;
@@ -1712,19 +1704,14 @@ break_single_hardlink_at (int           dfd,
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_EXISTS,
                        "Exceeded limit of %u file creation attempts", count);
-          goto out;
+          return FALSE;
         }
 
       if (renameat (dfd, path_tmp, dfd, path) != 0)
-        {
-          glnx_set_prefix_error_from_errno (error, "Rename %s", path);
-          goto out;
-        }
+        return glnx_throw_errno_prefix (error, "rename(%s)", path);
     }
 
-  ret = TRUE;
-out:
-  return ret;
+  return TRUE;
 }
 
 /* Given a directory referred to by @dfd and @dirpath, ensure that physical (or
@@ -1735,27 +1722,23 @@ break_hardlinks_at (int             dfd,
                     GCancellable   *cancellable,
                     GError        **error)
 {
-  gboolean ret = FALSE;
   g_auto(GLnxDirFdIterator) dfd_iter = { FALSE, };
-
   if (!glnx_dirfd_iterator_init_at (dfd, dirpath, TRUE, &dfd_iter, error))
-    goto out;
+    return FALSE;
 
   while (TRUE)
     {
       struct dirent *dent = NULL;
       if (!glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, cancellable, error))
-        goto out;
+        return FALSE;
       if (dent == NULL)
         break;
       if (!break_single_hardlink_at (dfd_iter.fd, dent->d_name,
                                      cancellable, error))
-        goto out;
+        return FALSE;
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static const char*
@@ -1806,16 +1789,13 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
                         GCancellable      *cancellable,
                         GError           **error)
 {
-  gboolean ret = FALSE;
-
   g_auto(GLnxDirFdIterator) dfd_iter = { FALSE, };
-  struct dirent *dent = NULL;
-
   if (!glnx_dirfd_iterator_init_at (dfd, path, FALSE, &dfd_iter, error))
-    goto out;
+    return FALSE;
 
   while (TRUE)
     {
+      struct dirent *dent = NULL;
       g_autofree char *fullpath = NULL;
 
       const char *cur_label = NULL;
@@ -1825,7 +1805,7 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
 
       if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent,
                                                        cancellable, error))
-        goto out;
+        return FALSE;
       if (dent == NULL)
         break;
 
@@ -1836,7 +1816,7 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
 
       if (!glnx_dfd_name_get_all_xattrs (dfd_iter.fd, dent->d_name, &cur_xattrs,
                                          cancellable, error))
-        goto out;
+        return FALSE;
 
       /* may return NULL */
       cur_label = get_selinux_label (cur_xattrs);
@@ -1851,15 +1831,12 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
 
         if (fstatat (dfd_iter.fd, dent->d_name, &stbuf,
                      AT_SYMLINK_NOFOLLOW) != 0)
-          {
-            glnx_set_prefix_error_from_errno (error, "%s", "fstatat");
-            goto out;
-          }
+          return glnx_throw_errno_prefix (error, "fstatat");
 
         /* may be NULL */
         if (!ostree_sepolicy_get_label (sepolicy, fullpath, stbuf.st_mode,
                                         &new_label, cancellable, error))
-          goto out;
+          return FALSE;
       }
 
       if (g_strcmp0 (cur_label, new_label) != 0)
@@ -1867,13 +1844,13 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
           if (dent->d_type != DT_DIR)
             if (!break_single_hardlink_at (dfd_iter.fd, dent->d_name,
                                            cancellable, error))
-              goto out;
+              return FALSE;
 
           new_xattrs = set_selinux_label (cur_xattrs, new_label);
 
           if (!glnx_dfd_name_set_all_xattrs (dfd_iter.fd, dent->d_name,
                                              new_xattrs, cancellable, error))
-            goto out;
+            return FALSE;
 
           *out_changed = TRUE;
         }
@@ -1881,12 +1858,10 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
       if (dent->d_type == DT_DIR)
         if (!relabel_dir_recurse_at (repo, dfd_iter.fd, dent->d_name, fullpath,
                                      sepolicy, out_changed, cancellable, error))
-          goto out;
+          return FALSE;
     }
 
-  ret = TRUE;
-out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -1914,8 +1889,8 @@ relabel_one_package (OstreeRepo     *repo,
 
   g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-relabel-XXXXXX");
   glnx_fd_close int tmprootfs_dfd = -1;
-  OstreeRepoDevInoCache *cache = NULL;
-  OstreeRepoCommitModifier *modifier = NULL;
+  g_autoptr(OstreeRepoDevInoCache) cache = NULL;
+  g_autoptr(OstreeRepoCommitModifier) modifier = NULL;
   g_autoptr(GFile) root = NULL;
   g_autofree char *commit_csum = NULL;
   g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
@@ -2008,10 +1983,6 @@ relabel_one_package (OstreeRepo     *repo,
 
   ret = TRUE;
 out:
-  if (cache)
-    ostree_repo_devino_cache_unref (cache);
-  if (modifier)
-    ostree_repo_commit_modifier_unref (modifier);
   if (tmprootfs_dfd != -1)
     glnx_shutil_rm_rf_at (tmprootfs_dfd, ".", cancellable, NULL);
   return ret;
@@ -2023,7 +1994,6 @@ rpmostree_context_relabel (RpmOstreeContext *self,
                            GCancellable     *cancellable,
                            GError          **error)
 {
-  gboolean ret = FALSE;
   guint progress_sigid;
   int n = install->packages_to_relabel->len;
   OstreeRepo *ostreerepo = get_pkgcache_repo (self);
@@ -2050,7 +2020,7 @@ rpmostree_context_relabel (RpmOstreeContext *self,
         DnfPackage *pkg = install->packages_to_relabel->pdata[i];
         if (!relabel_one_package (ostreerepo, pkg, self->sepolicy,
                                   cancellable, error))
-          goto out;
+          return FALSE;
         dnf_state_assert_done (hifstate);
       }
 
@@ -2058,9 +2028,7 @@ rpmostree_context_relabel (RpmOstreeContext *self,
     rpmostree_output_percent_progress_end ();
   }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 typedef struct {
@@ -2768,14 +2736,13 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
                                     GCancellable          *cancellable,
                                     GError               **error)
 {
-  gboolean ret = FALSE;
-  OstreeRepoCommitModifier *commit_modifier = NULL;
+  g_autoptr(OstreeRepoCommitModifier) commit_modifier = NULL;
   g_autofree char *ret_commit_checksum = NULL;
 
   rpmostree_output_task_begin ("Writing OSTree commit");
 
   if (!ostree_repo_prepare_transaction (self->ostreerepo, NULL, cancellable, error))
-    goto out;
+    return FALSE;
 
   { glnx_unref_object OstreeMutableTree *mtree = NULL;
     g_autoptr(GFile) root = NULL;
@@ -2792,7 +2759,7 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
         g_assert (parent != NULL);
 
         if (!ostree_repo_load_commit (self->ostreerepo, parent, &commit, NULL, error))
-          goto out;
+          return FALSE;
 
         parent_version = checksum_version (commit);
 
@@ -2860,17 +2827,17 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
     if (!ostree_repo_write_dfd_to_mtree (self->ostreerepo, tmprootfs_dfd, ".",
                                          mtree, commit_modifier,
                                          cancellable, error))
-      goto out;
+      return FALSE;
 
     if (!ostree_repo_write_mtree (self->ostreerepo, mtree, &root, cancellable, error))
-      goto out;
+      return FALSE;
 
     { g_autoptr(GVariant) metadata = g_variant_ref_sink (g_variant_builder_end (&metadata_builder));
       if (!ostree_repo_write_commit (self->ostreerepo, parent, "", "",
                                      metadata,
                                      OSTREE_REPO_FILE (root),
                                      &ret_commit_checksum, cancellable, error))
-      goto out;
+      return FALSE;
     }
 
     { const char * ref = rpmostree_treespec_get_ref (self->spec);
@@ -2883,7 +2850,7 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
       g_autofree char *bytes_written_formatted = NULL;
 
       if (!ostree_repo_commit_transaction (self->ostreerepo, &stats, cancellable, error))
-        goto out;
+        return FALSE;
 
       bytes_written_formatted = g_format_size (stats.content_bytes_written);
 
@@ -2916,13 +2883,9 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
 
   rpmostree_output_task_end ("done");
 
-  ret = TRUE;
   if (out_commit)
     *out_commit = g_steal_pointer (&ret_commit_checksum);
- out:
-  if (commit_modifier)
-    ostree_repo_commit_modifier_unref (commit_modifier);
-  return ret;
+  return TRUE;
 }
 
 gboolean
@@ -2936,32 +2899,28 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                    GCancellable          *cancellable,
                                    GError               **error)
 {
-  gboolean ret = FALSE;
+  g_autoptr(OstreeRepoDevInoCache) devino_owned = NULL;
 
   /* Auto-synthesize a cache if not provided */
   if (devino_cache == NULL)
-    devino_cache = ostree_repo_devino_cache_new ();
+    devino_cache = devino_owned = ostree_repo_devino_cache_new ();
   else
-    devino_cache = ostree_repo_devino_cache_ref (devino_cache);
+    devino_cache = devino_owned = ostree_repo_devino_cache_ref (devino_cache);
 
   if (!rpmostree_context_assemble_tmprootfs (self, tmprootfs_dfd, devino_cache,
                                              assemble_type, noscripts,
                                              cancellable, error))
-    goto out;
+    return FALSE;
 
 
   if (!rpmostree_rootfs_postprocess_common (tmprootfs_dfd, cancellable, error))
-    goto out;
+    return FALSE;
 
   if (!rpmostree_context_commit_tmprootfs (self, tmprootfs_dfd, devino_cache,
                                            parent, assemble_type,
                                            out_commit,
                                            cancellable, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
- out:
-  if (devino_cache)
-    ostree_repo_devino_cache_unref (devino_cache);
-  return ret; 
+  return TRUE;
 }
