@@ -293,9 +293,8 @@ OstreeDeployment *
 rpmostree_syscore_get_origin_merge_deployment (OstreeSysroot *self, const char *osname)
 {
   g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (self);
-  guint i;
 
-  for (i = 0; i < deployments->len; i++)
+  for (guint i = 0; i < deployments->len; i++)
     {
       OstreeDeployment *deployment = deployments->pdata[i];
 
@@ -361,7 +360,7 @@ rpmostree_syscore_add_deployment (OstreeSysroot      *sysroot,
       const gboolean is_booted = ostree_deployment_equal (deployment, booted_deployment);
       const gboolean is_merge_or_booted = is_booted ||
         ostree_deployment_equal (deployment, merge_deployment);
-      const gboolean is_last = i == (deployments->len - 1);
+      const gboolean is_last = (i == (deployments->len - 1));
 
       if (is_booted)
         before_booted = FALSE;
