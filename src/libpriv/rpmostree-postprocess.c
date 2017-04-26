@@ -1113,10 +1113,7 @@ rpmostree_rootfs_symlink_emptydir_at (int rootfs_fd,
   if (fstatat (rootfs_fd, src, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
     {
       if (errno != ENOENT)
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "fstatat");
     }
   else
     {
@@ -1125,20 +1122,14 @@ rpmostree_rootfs_symlink_emptydir_at (int rootfs_fd,
       else if (S_ISDIR (stbuf.st_mode))
         {
           if (unlinkat (rootfs_fd, src, AT_REMOVEDIR) < 0)
-            {
-              glnx_set_prefix_error_from_errno (error, "Removing %s", src);
-              return FALSE;
-            }
+            return glnx_throw_errno_prefix (error, "Removing %s", src);
         }
     }
 
   if (make_symlink)
     {
       if (symlinkat (dest, rootfs_fd, src) < 0)
-        {
-          glnx_set_prefix_error_from_errno (error, "Symlinking %s", src);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "Symlinking %s", src);
     }
   return TRUE;
 }
@@ -1190,52 +1181,40 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
                                      GCancellable *cancellable,
                                      GError       **error)
 {
-  gboolean ret = FALSE;
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  
   if (!rename_if_exists (rootfs_fd, "etc", "usr/etc", error))
-    goto out;
+    return FALSE;
 
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
   if (!glnx_dirfd_iterator_init_at (rootfs_fd, "usr/share/rpm", TRUE, &dfd_iter, error))
-    {
-      g_prefix_error (error, "Opening usr/share/rpm: ");
-      goto out;
-    }
-  
+    return g_prefix_error (error, "Opening usr/share/rpm: "), FALSE;
+
   while (TRUE)
     {
       struct dirent *dent = NULL;
       const char *name;
 
       if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
-        goto out;
+        return FALSE;
       if (!dent)
         break;
-
       if (dent->d_type != DT_REG)
         continue;
 
       name = dent->d_name;
-      
+
       if (!(g_str_has_prefix (name, "__db.") ||
             strcmp (name, ".dbenv.lock") == 0 ||
             strcmp (name, ".rpm.lock") == 0))
         continue;
-      
+
       if (unlinkat (dfd_iter.fd, name, 0) < 0)
-        {
-          glnx_set_error_from_errno (error);
-          g_prefix_error (error, "Unlinking %s: ", name);
-          goto out;
-        }
+        return glnx_throw_errno_prefix (error, "Unlinking %s: ", name);
     }
 
   if (!rpmostree_passwd_cleanup (rootfs_fd, cancellable, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 /**
