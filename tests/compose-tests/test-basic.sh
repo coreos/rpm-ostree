@@ -38,3 +38,9 @@ echo "ok boot files"
 ostree --repo=${repobuild} ls -R ${treeref} /usr/share/man > manpages.txt
 assert_file_has_content manpages.txt man5/ostree.repo.5
 echo "ok manpages"
+
+ostree --repo=${repobuild} ls -R ${treeref} /usr/etc/ld.so.cache > ls.txt
+assert_file_has_content ls.txt '^l0777.*/usr/etc/ld.so.cache -> \.\./usr/ld.so.cache'
+assert_file_has_content bootls.txt initramfs
+echo "ok ld.so.cache"
+

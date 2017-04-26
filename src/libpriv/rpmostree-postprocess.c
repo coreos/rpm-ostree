@@ -1045,10 +1045,12 @@ handle_remove_files_from_package (int               rootfs_fd,
   return ret;
 }
 
+/* Rename @from to @to if @from exists, and optionally leave a symlink behind */
 static gboolean
 rename_if_exists (int         dfd,
                   const char *from,
                   const char *to,
+                  const char *symlink_path, /* optional */
                   GError    **error)
 {
   gboolean ret = FALSE;
@@ -1076,6 +1078,16 @@ rename_if_exists (int         dfd,
                 }
             }
           else
+            {
+              glnx_set_error_from_errno (error);
+              goto out;
+            }
+        }
+
+      /* Optionally leave a compatibility symlink */
+      if (symlink_path)
+        {
+          if (symlinkat (symlink_path, dfd, from) < 0)
             {
               glnx_set_error_from_errno (error);
               goto out;
@@ -1175,13 +1187,14 @@ rpmostree_rootfs_prepare_links (int           rootfs_fd,
  *  - Move /etc to /usr/etc
  *  - Clean up RPM db leftovers
  *  - Clean /usr/etc/passwd- backup files and such
+ *  - Move /etc/ld.so.cache to /usr (FIXME add bugzilla link)
  */
 gboolean
 rpmostree_rootfs_postprocess_common (int           rootfs_fd,
                                      GCancellable *cancellable,
                                      GError       **error)
 {
-  if (!rename_if_exists (rootfs_fd, "etc", "usr/etc", error))
+  if (!rename_if_exists (rootfs_fd, "etc", "usr/etc", NULL, error))
     return FALSE;
 
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
@@ -1212,6 +1225,10 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
     }
 
   if (!rpmostree_passwd_cleanup (rootfs_fd, cancellable, error))
+    return FALSE;
+
+  if (!rename_if_exists (rootfs_fd, "etc/ld.so.cache", "usr/ld.so.cache",
+                         "../usr/ld.so.cache", error))
     return FALSE;
 
   return TRUE;
