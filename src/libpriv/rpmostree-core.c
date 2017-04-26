@@ -1737,16 +1737,18 @@ break_hardlinks_at (int             dfd,
 {
   gboolean ret = FALSE;
   g_auto(GLnxDirFdIterator) dfd_iter = { FALSE, };
-  struct dirent *dent = NULL;
 
   if (!glnx_dirfd_iterator_init_at (dfd, dirpath, TRUE, &dfd_iter, error))
     goto out;
 
-  while (glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, cancellable, error))
+  while (TRUE)
     {
+      struct dirent *dent = NULL;
+      if (!glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, cancellable, error))
+        goto out;
       if (dent == NULL)
         break;
-      if (!break_single_hardlink_at (dfd_iter.fd, dent->d_name, 
+      if (!break_single_hardlink_at (dfd_iter.fd, dent->d_name,
                                      cancellable, error))
         goto out;
     }
