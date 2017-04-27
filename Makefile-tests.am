@@ -80,6 +80,10 @@ tests_check_postprocess_CPPFLAGS = $(testbin_cppflags)
 tests_check_postprocess_CFLAGS = $(testbin_cflags)
 tests_check_postprocess_LDADD = $(testbin_ldadd)
 
+tests_check_test_utils_CPPFLAGS = $(testbin_cppflags)
+tests_check_test_utils_CFLAGS = $(testbin_cflags)
+tests_check_test_utils_LDADD = $(testbin_ldadd)
+
 tests/check/test-compose.sh: tests/common/compose/test-repo.repo
 
 tests/check/test-ucontainer.sh: tests/common/compose/test-repo.repo
@@ -88,6 +92,7 @@ uninstalled_test_programs = \
 	tests/check/jsonutil			\
 	tests/check/cache_branch_to_nevra			\
 	tests/check/postprocess			\
+	tests/check/test-utils			\
 	$(NULL)
 
 uninstalled_test_scripts = \
