@@ -138,9 +138,10 @@ _rpmostree_varsubst_string (const char *instr,
       s = varend+1;
     }
 
+  /* Append trailing bytes */
   if (s != instr)
     {
-      g_string_append_len (result, s, p - s);
+      g_string_append (result, s);
       /* Steal the C string, NULL out the GString since we freed it */
       return g_string_free (g_steal_pointer (&result), FALSE);
     }
