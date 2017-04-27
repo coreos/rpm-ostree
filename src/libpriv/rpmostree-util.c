@@ -117,12 +117,8 @@ _rpmostree_varsubst_string (const char *instr,
       const char *varend = strchr (varstart, '}');
       const char *value;
       if (!varend)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Unclosed variable reference starting at %u bytes",
-                       (guint)(p - instr));
-          return NULL;
-        }
+        return glnx_null_throw (error, "Unclosed variable reference in %s starting at %u bytes",
+                                instr, (guint)(p - instr));
 
       /* Append leading bytes */
       g_string_append_len (result, s, p - s);
@@ -133,12 +129,8 @@ _rpmostree_varsubst_string (const char *instr,
 
       value = g_hash_table_lookup (substitutions, varnamebuf->str);
       if (!value)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Unknown variable reference ${%s}",
-                       varnamebuf->str);
-          return NULL;
-        }
+        return glnx_null_throw (error, "Unknown variable reference ${%s} in %s",
+                                varnamebuf->str, instr);
       /* Append the replaced value */
       g_string_append (result, value);
 
@@ -148,12 +140,9 @@ _rpmostree_varsubst_string (const char *instr,
 
   if (s != instr)
     {
-      char *r;
       g_string_append_len (result, s, p - s);
       /* Steal the C string, NULL out the GString since we freed it */
-      r = g_string_free (result, FALSE);
-      result = NULL;
-      return r;
+      return g_string_free (g_steal_pointer (&result), FALSE);
     }
   else
     return g_strdup (instr);
@@ -514,7 +503,6 @@ rpmostree_get_pkgcache_repo (OstreeRepo   *parent,
                              GCancellable *cancellable,
                              GError      **error)
 {
-  gboolean ret = FALSE;
   glnx_unref_object OstreeRepo *pkgcache = NULL;
   g_autoptr(GFile) pkgcache_path = NULL;
 
@@ -532,21 +520,19 @@ rpmostree_get_pkgcache_repo (OstreeRepo   *parent,
     {
       if (!g_file_make_directory_with_parents (pkgcache_path,
                                                cancellable, error))
-        goto out;
+        return FALSE;
 
       if (!ostree_repo_create (pkgcache, OSTREE_REPO_MODE_BARE,
                                cancellable, error))
-        goto out;
+        return FALSE;
     }
 
   if (!ostree_repo_open (pkgcache, cancellable, error))
-    goto out;
+    return FALSE;
 
   *out_pkgcache = g_steal_pointer (&pkgcache);
 
-  ret = TRUE;
-out:
-  return ret;
+  return TRUE;
 }
 
 gboolean
