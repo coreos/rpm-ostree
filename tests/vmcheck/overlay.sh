@@ -24,6 +24,20 @@ if test -z "${INSIDE_VM:-}"; then
     flock insttree.lock sh -ec \
       '[ ! -d ${VMCHECK_INSTTREE} ] || exit 0
        DESTDIR=${VMCHECK_INSTTREE}
+       mkdir -p ${DESTDIR}
+       # Always pull ostree from the build container; we assume development and testing
+       # is against git master.  See also build.sh.
+       ostree --version
+       for pkg in ostree{,-libs,-grub2}; do
+          rpm -q $pkg
+          # We do not have perms to read /etc/grub2 as non-root
+          rpm -ql $pkg |grep -v '^/etc/'>  list.txt
+          # In the prebuilt container case, manpages are missing.  Ignore that.
+          # Also chown everything to writable, due to https://bugzilla.redhat.com/show_bug.cgi?id=517575
+          chmod -R u+w ${DESTDIR}/
+          rsync -l --ignore-missing-args --files-from=list.txt / ${DESTDIR}/
+          rm -f list.txt
+       done
        make install DESTDIR=${DESTDIR}
        touch ${DESTDIR}/.completed'
     [ -f ${VMCHECK_INSTTREE}/.completed ]
@@ -59,16 +73,7 @@ ostree checkout $commit vmcheck --fsync=0
 # ✀✀✀ BEGIN hack for https://github.com/projectatomic/rpm-ostree/pull/693 ✀✀✀
 rm -f vmcheck/usr/etc/{.pwd.lock,passwd-,group-,shadow-,gshadow-,subuid-,subgid-}
 # ✀✀✀ END hack for https://github.com/projectatomic/rpm-ostree/pull/693 ✀✀✀
-# ✀✀✀ BEGIN update ostree; see redhat-ci.sh ✀✀✀
-for url in https://kojipkgs.fedoraproject.org//packages/ostree/2017.5/2.fc25/x86_64/ostree-{,libs-,grub2-}2017.5-2.fc25.x86_64.rpm; do
-    curl -sSL -O $url
-done
-for x in *.rpm; do
-    rpm2cpio $x | (cd vmcheck && cpio -div)
-done
 rm vmcheck/etc -rf
-rm -f *.rpm
-# ✀✀✀ END update ostree; see redhat-ci.sh ✀✀✀
 # Now, overlay our built binaries
 rsync -rlv /var/roothome/sync/insttree/usr/ vmcheck/usr/
 ostree refs --delete vmcheck || true
