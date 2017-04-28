@@ -41,6 +41,7 @@
 #include "rpmostree-output.h"
 
 #define RPMOSTREE_MESSAGE_COMMIT_STATS SD_ID128_MAKE(e6,37,2e,38,41,21,42,a9,bc,13,b6,32,b3,f8,93,44)
+#define RPMOSTREE_MESSAGE_SELINUX_RELABEL SD_ID128_MAKE(5a,e0,56,34,f2,d7,49,3b,b1,58,79,b7,0c,02,e6,5d)
 #define RPMOSTREE_MESSAGE_PKG_REPOS SD_ID128_MAKE(0e,ea,67,9b,bf,a3,4d,43,80,2d,ec,99,b2,74,eb,e7)
 
 #define RPMOSTREE_DIR_CACHE_REPOMD "repomd"
@@ -1785,7 +1786,7 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
                         const char        *path,
                         const char        *prefix,
                         OstreeSePolicy    *sepolicy,
-                        gboolean          *out_changed,
+                        guint             *inout_n_changed,
                         GCancellable      *cancellable,
                         GError           **error)
 {
@@ -1852,12 +1853,12 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
                                              new_xattrs, cancellable, error))
             return FALSE;
 
-          *out_changed = TRUE;
+          (*inout_n_changed)++;
         }
 
       if (dent->d_type == DT_DIR)
         if (!relabel_dir_recurse_at (repo, dfd_iter.fd, dent->d_name, fullpath,
-                                     sepolicy, out_changed, cancellable, error))
+                                     sepolicy, inout_n_changed, cancellable, error))
           return FALSE;
     }
 
@@ -1868,20 +1869,21 @@ static gboolean
 relabel_rootfs (OstreeRepo        *repo,
                 int                dfd,
                 OstreeSePolicy    *sepolicy,
-                gboolean          *out_changed,
+                guint             *inout_n_changed,
                 GCancellable      *cancellable,
                 GError           **error)
 {
   /* NB: this does mean that / itself will not be labeled properly, but that
    * doesn't matter since it will always exist during overlay */
   return relabel_dir_recurse_at (repo, dfd, ".", "/", sepolicy,
-                                 out_changed, cancellable, error);
+                                 inout_n_changed, cancellable, error);
 }
 
 static gboolean
 relabel_one_package (OstreeRepo     *repo,
                      DnfPackage     *pkg,
                      OstreeSePolicy *sepolicy,
+                     guint          *inout_n_changed,
                      GCancellable   *cancellable,
                      GError        **error)
 {
@@ -1894,7 +1896,6 @@ relabel_one_package (OstreeRepo     *repo,
   g_autoptr(GFile) root = NULL;
   g_autofree char *commit_csum = NULL;
   g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
-  gboolean changed = FALSE;
 
   if (!ostree_repo_resolve_rev (repo, cachebranch, FALSE,
                                 &commit_csum, error))
@@ -1921,8 +1922,7 @@ relabel_one_package (OstreeRepo     *repo,
 
   /* This is where the magic happens. We traverse the tree and relabel stuff,
    * making sure to break hardlinks if needed. */
-  if (!relabel_rootfs (repo, tmprootfs_dfd, sepolicy, &changed,
-                       cancellable, error))
+  if (!relabel_rootfs (repo, tmprootfs_dfd, sepolicy, inout_n_changed, cancellable, error))
     goto out;
 
   if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
@@ -2005,28 +2005,41 @@ rpmostree_context_relabel (RpmOstreeContext *self,
 
   g_return_val_if_fail (ostreerepo != NULL, FALSE);
 
-  {
-    glnx_unref_object DnfState *hifstate = dnf_state_new ();
-    g_autofree char *prefix = g_strdup_printf ("Relabeling %d package%s:",
-                                               n, n>1 ? "s" : "");
+  glnx_unref_object DnfState *hifstate = dnf_state_new ();
+  g_autofree char *prefix = g_strdup_printf ("Relabeling %d package%s:",
+                                             n, n>1 ? "s" : "");
 
-    dnf_state_set_number_steps (hifstate, install->packages_to_relabel->len);
-    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                       G_CALLBACK (on_hifstate_percentage_changed),
-                                       prefix);
+  dnf_state_set_number_steps (hifstate, install->packages_to_relabel->len);
+  progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                     G_CALLBACK (on_hifstate_percentage_changed),
+                                     prefix);
 
-    for (guint i = 0; i < install->packages_to_relabel->len; i++)
-      {
+  guint n_changed_files = 0;
+  guint n_changed_pkgs = 0;
+  const guint n_to_relabel = install->packages_to_relabel->len;
+  for (guint i = 0; i < n_to_relabel; i++)
+    {
         DnfPackage *pkg = install->packages_to_relabel->pdata[i];
+        guint pkg_n_changed = 0;
         if (!relabel_one_package (ostreerepo, pkg, self->sepolicy,
-                                  cancellable, error))
+                                  &pkg_n_changed, cancellable, error))
           return FALSE;
+        if (pkg_n_changed > 0)
+          {
+            n_changed_files += pkg_n_changed;
+            n_changed_pkgs++;
+          }
         dnf_state_assert_done (hifstate);
-      }
+    }
 
-    g_signal_handler_disconnect (hifstate, progress_sigid);
-    rpmostree_output_percent_progress_end ();
-  }
+  g_signal_handler_disconnect (hifstate, progress_sigid);
+  rpmostree_output_percent_progress_end ();
+
+  sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_SELINUX_RELABEL),
+                   "MESSAGE=Relabeled %u/%u pkgs, %u files changed", n_changed_pkgs, n_to_relabel, n_changed_files,
+                   "RELABELED_PKGS=%u/%u", n_changed_pkgs, n_to_relabel,
+                   "RELABELED_N_CHANGED_FILES=%u", n_changed_files,
+                   NULL);
 
   return TRUE;
 }
