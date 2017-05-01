@@ -49,6 +49,14 @@ static const KnownRpmScriptKind ignored_scripts[] = {
     RPMTAG_TRIGGERUN, 0, 0 },
   { "%triggerpostun", RPMSENSE_TRIGGERPOSTUN,
     RPMTAG_TRIGGERPOSTUN, 0, 0 },
+
+  /* In practice, %pretrans are hack-arounds for broken upgrades.
+   * Again, since we always assemble a new root, there's no point
+   * to running them.
+   * http://lists.rpm.org/pipermail/rpm-ecosystem/2016-August/000391.html
+   */
+  { "%pretrans", 0,
+    RPMTAG_PRETRANS, RPMTAG_PRETRANSPROG, RPMTAG_PRETRANSFLAGS },
 };
 #endif
 
@@ -66,8 +74,6 @@ static const KnownRpmScriptKind posttrans_scripts[] = {
 };
 
 static const KnownRpmScriptKind unsupported_scripts[] = {
-  { "%pretrans", 0,
-    RPMTAG_PRETRANS, RPMTAG_PRETRANSPROG, RPMTAG_PRETRANSFLAGS },
   { "%triggerprein", RPMSENSE_TRIGGERPREIN,
     RPMTAG_TRIGGERPREIN, 0, 0 },
   { "%triggerin", RPMSENSE_TRIGGERIN,

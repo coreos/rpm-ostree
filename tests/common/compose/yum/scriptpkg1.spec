@@ -23,6 +23,10 @@ chmod a+x scriptpkg1
 # Test our /etc/passwd handling
 groupadd -r scriptpkg1
 
+%pretrans
+# http://lists.rpm.org/pipermail/rpm-ecosystem/2016-August/000391.html
+echo "I'm a workaround for a bug" >/dev/null
+
 %posttrans
 # Firewalld; https://github.com/projectatomic/rpm-ostree/issues/638
 . /etc/os-release || :
