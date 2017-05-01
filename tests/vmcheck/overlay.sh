@@ -74,7 +74,6 @@ ostree checkout $commit vmcheck --fsync=0
 rm -f vmcheck/usr/etc/{.pwd.lock,passwd-,group-,shadow-,gshadow-,subuid-,subgid-}
 # ✀✀✀ END hack for https://github.com/projectatomic/rpm-ostree/pull/693 ✀✀✀
 rm vmcheck/etc -rf
-# END update ostree
 # Now, overlay our built binaries
 rsync -rlv /var/roothome/sync/insttree/usr/ vmcheck/usr/
 ostree refs --delete vmcheck || true
