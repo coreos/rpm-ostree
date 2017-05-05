@@ -137,11 +137,18 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
 
   g_autofree gchar *ref = NULL;
   g_autofree gchar *remote = NULL;
+  gboolean infer_remote = TRUE;;
 
   /* Allow just switching remotes */
   if (g_str_has_suffix (new_provided_refspec, ":"))
     {
       remote = g_strndup (new_provided_refspec, strlen(new_provided_refspec)-1);
+    }
+  /* Allow switching to a local branch */
+  else if (g_str_has_prefix (new_provided_refspec, ":"))
+    {
+      infer_remote = FALSE;
+      ref = g_strdup (new_provided_refspec + 1);
     }
   else
     {
@@ -186,7 +193,7 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
         }
 
     }
-  else if (remote == NULL)
+  else if (infer_remote && remote == NULL)
     {
       if (origin_remote)
         {
