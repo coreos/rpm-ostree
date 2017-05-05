@@ -137,36 +137,38 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
 
   g_autofree gchar *ref = NULL;
   g_autofree gchar *remote = NULL;
-  g_autofree gchar *origin_ref = NULL;
-  g_autofree gchar *origin_remote = NULL;
-  GError *parse_error = NULL;
-
-  gboolean ret = FALSE;
 
   /* Allow just switching remotes */
   if (g_str_has_suffix (new_provided_refspec, ":"))
     {
-      remote = g_strdup (new_provided_refspec);
-      remote[strlen (remote) - 1] = '\0';
+      remote = g_strndup (new_provided_refspec, strlen(new_provided_refspec)-1);
     }
   else
     {
+      g_autoptr(GError) parse_error = NULL;
       if (!ostree_parse_refspec (new_provided_refspec, &remote,
                                  &ref, &parse_error))
         {
           g_set_error_literal (error, RPM_OSTREED_ERROR,
-                       RPM_OSTREED_ERROR_INVALID_REFSPEC,
-                       parse_error->message);
-          g_clear_error (&parse_error);
-          goto out;
+                               RPM_OSTREED_ERROR_INVALID_REFSPEC,
+                               parse_error->message);
+          return FALSE;
         }
     }
 
+  g_autofree gchar *origin_ref = NULL;
+  g_autofree gchar *origin_remote = NULL;
   if (base_refspec != NULL)
     {
+      g_autoptr(GError) parse_error = NULL;
       if (!ostree_parse_refspec (base_refspec, &origin_remote,
-                               &origin_ref, &parse_error))
-        goto out;
+                                 &origin_ref, &parse_error))
+        {
+          g_set_error_literal (error, RPM_OSTREED_ERROR,
+                               RPM_OSTREED_ERROR_INVALID_REFSPEC,
+                               parse_error->message);
+          return FALSE;
+        }
     }
 
   if (ref == NULL)
@@ -175,13 +177,12 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
         {
           ref = g_strdup (origin_ref);
         }
-
       else
         {
           g_set_error (error, RPM_OSTREED_ERROR,
                        RPM_OSTREED_ERROR_INVALID_REFSPEC,
                       "Could not determine default ref to pull.");
-          goto out;
+          return FALSE;
         }
 
     }
@@ -200,7 +201,7 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
                    RPM_OSTREED_ERROR_INVALID_REFSPEC,
                    "Old and new refs are equal: %s:%s",
                    remote, ref);
-      goto out;
+      return FALSE;
     }
 
   if (remote == NULL)
@@ -208,10 +209,7 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
   else
       *out_refspec = g_strconcat (remote, ":", ref, NULL);
 
-  ret = TRUE;
-
-out:
-  return ret;
+  return TRUE;
 }
 
 void
