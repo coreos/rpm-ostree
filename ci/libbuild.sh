@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 make() {
-    /usr/bin/make -j $(getconf _NPROCESSORS_ONLN)
+    /usr/bin/make -j $(getconf _NPROCESSORS_ONLN) "$@"
 }
 
 build() {
