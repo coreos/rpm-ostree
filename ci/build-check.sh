@@ -6,7 +6,9 @@ set -xeuo pipefail
 dn=$(dirname $0)
 . ${dn}/libbuild.sh
 ${dn}/build.sh
-make check
+# NB: override parallel builds because our RPM building
+# doesn't # support that right now
+make check -j1
 make install
 gnome-desktop-testing-runner rpm-ostree
 sudo --user=testuser gnome-desktop-testing-runner rpm-ostree
