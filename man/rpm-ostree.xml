@@ -247,9 +247,11 @@ Boston, MA 02111-1307, USA.
           </para>
           <para>
             The full syntax is <literal>rebase REMOTENAME:BRANCHNAME</literal>.
-            It is also possible to specify just <literal>BRANCHNAME</literal>,
-            reusing the same remote, as well as using <literal>REMOTENAME:</literal>,
-            which will use the same branch on a different remote.
+            Specifying just <literal>BRANCHNAME</literal> will reuse the same
+            remote. You may also omit one of <literal>REMOTENAME</literal> or
+            <literal>BRANCHNAME</literal> (keeping the colon). In the former
+            case, the branch refers to a local branch; in the latter case, the
+            same branch will be used on a different remote.
           </para>
         </listitem>
       </varlistentry>

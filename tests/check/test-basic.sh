@@ -24,7 +24,7 @@ export RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK=yes
 
 ensure_dbus
 
-echo "1..19"
+echo "1..21"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -147,6 +147,15 @@ $OSTREE remote add secureos file://$(pwd)/testos-repo
 
 rpm-ostree rebase --os=testos secureos:$branch gpg-signed
 echo "ok deploy from remote with unsigned and signed commits"
+
+rpm-ostree rebase --os=testos :$branch
+assert_status_jq '.deployments[0].origin|startswith("testos/")'
+echo "ok rebase from refspec with remote to local branch"
+
+$OSTREE commit -b another-branch --tree=ref=$branch
+rpm-ostree rebase --os=testos another-branch
+assert_status_jq '.deployments[0].origin == "another-branch"'
+echo "ok rebase from local branch to local branch"
 
 originpath=$(ostree admin --sysroot=sysroot --print-current-dir).origin
 echo "unconfigured-state=Access to TestOS requires ONE BILLION DOLLARS" >> ${originpath}
