@@ -891,7 +891,7 @@ out:
     {
       const char *client_address;
       client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_pkg_change (interface, invocation, NULL, client_address);
+      rpmostree_os_complete_cleanup (interface, invocation, client_address);
     }
 
   return TRUE;
