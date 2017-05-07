@@ -703,6 +703,7 @@ out:
   return TRUE;
 }
 
+/* This is an older variant of Cleanup, kept for backcompat */
 static gboolean
 os_handle_clear_rollback_target (RPMOSTreeOS *interface,
                                  GDBusMethodInvocation *invocation,
@@ -712,9 +713,8 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
+  RpmOstreeTransactionCleanupFlags flags = 0;
   const char *osname;
-  gboolean opt_reboot = FALSE;
-  GVariantDict options_dict;
   GError *local_error = NULL;
 
   transaction = merge_compatible_txn (self, invocation);
@@ -722,29 +722,19 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
     goto out;
 
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
-                                      cancellable,
-                                      &ot_sysroot,
-                                      NULL,
-                                      &local_error))
+                                      cancellable, &ot_sysroot, NULL, &local_error))
     goto out;
-
-  g_variant_dict_init (&options_dict, arg_options);
-
-  g_variant_dict_lookup (&options_dict,
-                         "reboot", "b",
-                         &opt_reboot);
-
-  g_variant_dict_clear (&options_dict);
 
   osname = rpmostree_os_get_name (interface);
 
-  transaction = rpmostreed_transaction_new_clear_rollback (invocation,
-                                                           ot_sysroot,
-                                                           osname,
-                                                           opt_reboot,
-                                                           cancellable,
-                                                           &local_error);
+  /* Note - intentionally ignoring the reboot option since I don't
+   * know why anyone would want that.
+   */
 
+  flags = RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY;
+  transaction = rpmostreed_transaction_new_cleanup (invocation, ot_sysroot,
+                                                    osname, flags,
+                                                    cancellable, &local_error);
   if (transaction == NULL)
     goto out;
 
@@ -761,7 +751,6 @@ out:
       client_address = rpmostreed_transaction_get_client_address (transaction);
       rpmostree_os_complete_clear_rollback_target (interface, invocation, client_address);
     }
-
   return TRUE;
 }
 
