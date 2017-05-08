@@ -384,6 +384,48 @@ rpmostree_syscore_add_deployment (OstreeSysroot      *sysroot,
   return g_steal_pointer (&new_deployments);
 }
 
+/* Find the pending and rollback deployments (if any) for @osname. */
+void
+rpmostree_syscore_query_deployments (OstreeSysroot      *sysroot,
+                                     const char         *osname,
+                                     OstreeDeployment  **out_pending,
+                                     OstreeDeployment  **out_rollback)
+{
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
+  OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
+  g_autoptr(OstreeDeployment) ret_pending = NULL;
+  g_autoptr(OstreeDeployment) ret_rollback = NULL;
+
+  gboolean found_booted = FALSE;
+  for (guint i = 0; i < deployments->len; i++)
+    {
+      OstreeDeployment *deployment = deployments->pdata[i];
+
+      /* Is this deployment booted?  If so, note we're past the booted */
+      if (booted_deployment != NULL &&
+          ostree_deployment_equal (deployment, booted_deployment))
+        {
+          found_booted = TRUE;
+          continue;
+        }
+
+      /* Ignore deployments not for this osname */
+      if (strcmp (ostree_deployment_get_osname (deployment), osname) != 0)
+          continue;
+
+      if (!found_booted && !ret_pending)
+        ret_pending = g_object_ref (deployment);
+
+      if (found_booted && !ret_rollback)
+        ret_rollback = g_object_ref (deployment);
+    }
+  if (out_pending)
+    *out_pending = g_steal_pointer (&ret_pending);
+  if (out_rollback)
+    *out_rollback = g_steal_pointer (&ret_rollback);
+}
+
+
 /* Also a variant of ostree_sysroot_simple_write_deployment(), but here we are
  * just trying to remove a pending and/or rollback.
  */

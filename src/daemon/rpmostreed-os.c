@@ -27,6 +27,7 @@
 #include "rpmostree-package-variants.h"
 #include "rpmostreed-errors.h"
 #include "rpmostree-origin.h"
+#include "rpmostree-sysroot-core.h"
 #include "rpmostreed-os.h"
 #include "rpmostreed-utils.h"
 #include "rpmostree-util.h"
@@ -1172,9 +1173,6 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   GVariant *cached_update = NULL;
   gboolean has_cached_updates = FALSE;
 
-  gint rollback_index;
-  guint i;
-
   name = rpmostree_os_get_name (RPMOSTREE_OS (self));
   g_debug ("loading %s", name);
 
@@ -1192,7 +1190,7 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
     }
 
   deployments = ostree_sysroot_get_deployments (ot_sysroot);
-  for (i=0; i<deployments->len; i++)
+  for (guint i=0; i<deployments->len; i++)
     {
       if (g_strcmp0 (ostree_deployment_get_osname (deployments->pdata[i]), name) == 0)
         {
@@ -1206,17 +1204,21 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
         }
     }
 
-  if (deployments->len >= 2)
+  if (booted)
     {
-      rollback_index = rpmostreed_rollback_deployment_index (name, ot_sysroot, NULL);
-      if (rollback_index >= 0)
-	{
-	  rollback_variant = rpmostreed_deployment_generate_variant (ot_sysroot,
-                                                               deployments->pdata[rollback_index], booted_id,
-                                                               ot_repo, error);
-	  if (!rollback_variant)
-	    return FALSE;
-	}
+      g_autoptr(OstreeDeployment) pending = NULL;
+      g_autoptr(OstreeDeployment) rollback = NULL;
+
+      rpmostree_syscore_query_deployments (ot_sysroot, ostree_deployment_get_osname (booted),
+                                           NULL, &rollback);
+
+      if (rollback)
+        {
+          rollback_variant = rpmostreed_deployment_generate_variant (ot_sysroot, rollback, booted_id,
+                                                                     ot_repo, error);
+          if (!rollback_variant)
+            return FALSE;
+        }
     }
 
   merge_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
