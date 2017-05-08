@@ -108,3 +108,28 @@ vm_assert_status_jq '.deployments|length == 2'
 vm_rpmostree cleanup -pr
 vm_assert_status_jq '.deployments|length == 1'
 echo "ok cleanup"
+
+# install foo and make sure it was imported
+vm_rpmostree install foo | tee output.txt
+assert_file_has_content output.txt '^Importing:'
+
+# upgrade with same foo in repos --> shouldn't re-import
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
+vm_rpmostree upgrade | tee output.txt
+assert_not_file_has_content output.txt '^Importing:'
+
+# upgrade with different foo in repos --> should re-import
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
+# this is a bit hacky: rpm building is normally handled by make, on which
+# vmcheck itself is dependent
+c1=$(sha256sum ${commondir}/compose/yum/repo/packages/x86_64/foo-1.0-1.x86_64.rpm)
+touch ${commondir}/compose/yum/foo.spec
+make -C ${builddir} tests/common/compose/yum/repo/repodata/repomd.xml
+c2=$(sha256sum ${commondir}/compose/yum/repo/packages/x86_64/foo-1.0-1.x86_64.rpm)
+if cmp -s c1 c2; then
+  assert_not_reached "RPM rebuild yielded same SHA256"
+fi
+vm_send_test_repo
+vm_rpmostree upgrade | tee output.txt
+assert_file_has_content output.txt '^Importing:'
+echo "ok invalidate pkgcache from RPM chksum"
