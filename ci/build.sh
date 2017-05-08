@@ -8,6 +8,8 @@ dn=$(dirname $0)
 
 # Use the latest ostree by default
 echo -e '[fahc]\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/fahc/rdgo/build/\ngpgcheck=0\n' > /etc/yum.repos.d/fahc.repo
+# Until we fix https://github.com/rpm-software-management/libdnf/pull/149
+sed -i -e 's,metadata_expire=6h,exclude=ostree ostree-devel ostree-libs ostree-grub2\nmetadata_expire=6h,' /etc/yum.repos.d/fedora-updates.repo
 # See also tests/vmcheck/overlay.sh
 
 install_builddeps rpm-ostree
