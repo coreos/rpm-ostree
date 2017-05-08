@@ -468,7 +468,7 @@ rpmostree_context_set_repos (RpmOstreeContext *self,
 static OstreeRepo *
 get_pkgcache_repo (RpmOstreeContext *self)
 {
-  return self->pkgcache_repo ? self->pkgcache_repo : self->ostreerepo;
+  return self->pkgcache_repo ?: self->ostreerepo;
 }
 
 /* I debated making this part of the treespec. Overall, I think it makes more
@@ -702,6 +702,15 @@ get_commit_header_sha256 (GVariant *commit,
                           GError  **error)
 {
   return get_commit_metadata_string (commit, "rpmostree.metadata_sha256",
+                                     out_csum, error);
+}
+
+static gboolean
+get_commit_repodata_chksum_repr (GVariant *commit,
+                            char    **out_csum,
+                            GError  **error)
+{
+  return get_commit_metadata_string (commit, "rpmostree.repodata_checksum",
                                      out_csum, error);
 }
 
@@ -997,8 +1006,39 @@ commit_has_matching_sepolicy (OstreeRepo     *repo,
   if (!get_commit_sepolicy_csum (commit, &sepolicy_csum, error))
     return FALSE;
 
-  *out_matches = strcmp (sepolicy_csum, sepolicy_csum_wanted) == 0;
+  *out_matches = g_str_equal (sepolicy_csum, sepolicy_csum_wanted);
 
+  return TRUE;
+}
+
+static gboolean
+commit_has_matching_repodata_chksum_repr (OstreeRepo  *repo,
+                                          const char  *rev,
+                                          const char  *expected,
+                                          gboolean    *out_matches,
+                                          GError     **error)
+{
+  g_autoptr(GVariant) commit = NULL;
+  if (!ostree_repo_load_commit (repo, rev, &commit, NULL, error))
+    return FALSE;
+
+  g_assert (commit);
+
+  g_autofree char *actual = NULL;
+  g_autoptr(GError) tmp_error = NULL;
+  if (!get_commit_repodata_chksum_repr (commit, &actual, &tmp_error))
+    {
+      /* never match pkgs unpacked with older versions that didn't embed csum */
+      if (g_error_matches (tmp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+        {
+          *out_matches = FALSE;
+          return TRUE;
+        }
+      g_propagate_error (error, g_steal_pointer (&tmp_error));
+      return FALSE;
+    }
+
+  *out_matches = g_str_equal (expected, actual);
   return TRUE;
 }
 
@@ -1026,31 +1066,56 @@ find_pkg_in_ostree (OstreeRepo     *repo,
                     gboolean       *out_selinux_match,
                     GError        **error)
 {
-  *out_in_ostree = FALSE;
-  *out_selinux_match = FALSE;
+  gboolean in_ostree = FALSE;
+  gboolean selinux_match = FALSE;
+  g_autofree char *cached_rev = NULL;
+  g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
 
-  if (repo != NULL)
+  /* NB: we're not using a pkgcache yet in the compose path */
+  if (repo == NULL)
+    goto done; /* Note early happy return */
+
+  if (!ostree_repo_resolve_rev (repo, cachebranch, TRUE,
+                                &cached_rev, error))
+    return FALSE;
+
+  if (!cached_rev)
+    goto done; /* Note early happy return */
+
+  /* NB: we do an exception for LocalPackages here; we've already checked that
+   * its cache is valid and matches what's in the origin. We never want to fetch
+   * newer versions of LocalPackages from the repos. But we do want to check
+   * whether a relabel will be necessary. */
+
+  const char *reponame = dnf_package_get_reponame (pkg);
+  if (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) != 0)
     {
-      g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
-      g_autofree char *cached_rev = NULL;
-
-      if (!ostree_repo_resolve_rev (repo, cachebranch, TRUE,
-                                    &cached_rev, error))
+      g_autofree char *expected_chksum_repr = NULL;
+      if (!rpmostree_get_repodata_chksum_repr (pkg, &expected_chksum_repr,
+                                               error))
         return FALSE;
 
-      if (cached_rev)
-        {
-          *out_in_ostree = TRUE;
+      gboolean same_pkg_chksum = FALSE;
+      if (!commit_has_matching_repodata_chksum_repr (repo, cached_rev,
+                                                     expected_chksum_repr,
+                                                     &same_pkg_chksum, error))
+        return FALSE;
 
-          if (sepolicy)
-            {
-              if (!commit_has_matching_sepolicy (repo, cached_rev, sepolicy,
-                                                 out_selinux_match, error))
-                return FALSE;
-            }
-        }
+      if (!same_pkg_chksum)
+        goto done; /* Note early happy return */
     }
 
+  in_ostree = TRUE;
+  if (sepolicy)
+    {
+      if (!commit_has_matching_sepolicy (repo, cached_rev, sepolicy,
+                                         &selinux_match, error))
+        return FALSE;
+    }
+
+done:
+  *out_in_ostree = in_ostree;
+  *out_selinux_match = selinux_match;
   return TRUE;
 }
 
