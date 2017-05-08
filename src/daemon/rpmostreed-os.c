@@ -1206,7 +1206,6 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
 
   if (booted)
     {
-      g_autoptr(OstreeDeployment) pending = NULL;
       g_autoptr(OstreeDeployment) rollback = NULL;
 
       rpmostree_syscore_query_deployments (ot_sysroot, ostree_deployment_get_osname (booted),
