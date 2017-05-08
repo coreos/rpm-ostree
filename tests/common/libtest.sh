@@ -328,6 +328,9 @@ EOF
     cd ${test_tmpdir}
     # sysroot dir already made by setup-session.sh
     ostree admin --sysroot=sysroot init-fs sysroot
+    if test -n "${OSTREE_NO_XATTRS:-}"; then
+        echo -e 'disable-xattrs=true\n' >> sysroot/ostree/repo/config
+    fi
     ostree admin --sysroot=sysroot os-init testos
 
     case $bootmode in
