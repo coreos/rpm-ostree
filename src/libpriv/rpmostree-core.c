@@ -1066,20 +1066,21 @@ find_pkg_in_ostree (OstreeRepo     *repo,
                     gboolean       *out_selinux_match,
                     GError        **error)
 {
-  g_assert (repo);
-
+  gboolean in_ostree = FALSE;
+  gboolean selinux_match = FALSE;
   g_autofree char *cached_rev = NULL;
   g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
+
+  /* NB: we're not using a pkgcache yet in the compose path */
+  if (repo == NULL)
+    goto happy_out; /* Note early happy return */
+
   if (!ostree_repo_resolve_rev (repo, cachebranch, TRUE,
                                 &cached_rev, error))
     return FALSE;
 
   if (!cached_rev)
-    { /* NB: not in tree; happy early return */
-      *out_in_ostree = FALSE;
-      *out_selinux_match = FALSE;
-      return TRUE;
-    }
+    goto happy_out; /* Note early happy return */
 
   /* NB: we do an exception for LocalPackages here; we've already checked that
    * its cache is valid and matches what's in the origin. We never want to fetch
@@ -1100,14 +1101,10 @@ find_pkg_in_ostree (OstreeRepo     *repo,
         return FALSE;
 
       if (!same_pkg_chksum)
-        { /* NB: chksum mismatch; happy early return */
-          *out_in_ostree = FALSE;
-          *out_selinux_match = FALSE;
-          return TRUE;
-        }
+        goto happy_out; /* Note early happy return */
     }
 
-  gboolean selinux_match = FALSE;
+  in_ostree = TRUE;
   if (sepolicy)
     {
       if (!commit_has_matching_sepolicy (repo, cached_rev, sepolicy,
@@ -1115,7 +1112,8 @@ find_pkg_in_ostree (OstreeRepo     *repo,
         return FALSE;
     }
 
-  *out_in_ostree = TRUE;
+happy_out:
+  *out_in_ostree = in_ostree;
   *out_selinux_match = selinux_match;
   return TRUE;
 }
