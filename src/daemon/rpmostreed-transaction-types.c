@@ -344,42 +344,38 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
 {
   RollbackTransaction *self;
   OstreeSysroot *sysroot;
-  OstreeDeployment *deployment;
   g_autoptr(GPtrArray) old_deployments = NULL;
   g_autoptr(GPtrArray) new_deployments = NULL;
-
-  gint rollback_index;
-  guint i;
+  g_autoptr(OstreeDeployment) rollback_deployment = NULL;
   gboolean ret = FALSE;
 
   self = (RollbackTransaction *) transaction;
 
   sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-  rollback_index = rpmostreed_rollback_deployment_index (self->osname, sysroot, error);
-  if (rollback_index < 0)
-    goto out;
+  rpmostree_syscore_query_deployments (sysroot, self->osname, NULL, &rollback_deployment);
+  if (!rollback_deployment)
+    {
+      (void) glnx_throw (error, "No rollback deployment found");
+      goto out;
+    }
 
   old_deployments = ostree_sysroot_get_deployments (sysroot);
   new_deployments = g_ptr_array_new_with_free_func (g_object_unref);
 
-  /* build out the reordered array */
-
-  deployment = old_deployments->pdata[rollback_index];
-  g_ptr_array_add (new_deployments, g_object_ref (deployment));
+  /* build out the reordered array; rollback is first now */
+  g_ptr_array_add (new_deployments, g_object_ref (rollback_deployment));
 
   rpmostreed_transaction_emit_message_printf (transaction,
                                               "Moving '%s.%d' to be first deployment",
-                                              ostree_deployment_get_csum (deployment),
-                                              ostree_deployment_get_deployserial (deployment));
+                                              ostree_deployment_get_csum (rollback_deployment),
+                                              ostree_deployment_get_deployserial (rollback_deployment));
 
-  for (i = 0; i < old_deployments->len; i++)
+  for (guint i = 0; i < old_deployments->len; i++)
     {
-      if (i == rollback_index)
-        continue;
-
-      deployment = old_deployments->pdata[i];
-      g_ptr_array_add (new_deployments, g_object_ref (deployment));
+      OstreeDeployment *deployment = old_deployments->pdata[i];
+      if (deployment != rollback_deployment)
+        g_ptr_array_add (new_deployments, g_object_ref (deployment));
     }
 
   /* if default changed write it */
@@ -396,7 +392,6 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
     rpmostreed_reboot (cancellable, error);
 
   ret = TRUE;
-
 out:
   return ret;
 }

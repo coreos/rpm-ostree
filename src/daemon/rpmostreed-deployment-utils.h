@@ -40,7 +40,3 @@ GVariant *      rpmostreed_commit_generate_cached_details_variant (OstreeDeploym
                                                                    OstreeRepo       *repo,
                                                                    const gchar      *refspec,
                                                                    GError          **error);
-
-gint            rpmostreed_rollback_deployment_index (const gchar *name,
-                                                      OstreeSysroot *ot_sysroot,
-                                                      GError **error);
