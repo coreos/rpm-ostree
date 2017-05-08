@@ -166,3 +166,8 @@ typedef enum {
 
 char *
 rpmostree_pkg_custom_nevra_strdup (Header h, RpmOstreePkgNevraFlags flags);
+
+gboolean
+rpmostree_get_repodata_chksum_repr (DnfPackage *pkg,
+                                    char      **out_chksum_repr,
+                                    GError    **error);

@@ -1360,12 +1360,9 @@ rpmostree_dnf_add_checksum_goal (GChecksum   *checksum,
   for (i = 0; i < pkglist->len; i++)
     {
       DnfPackage *pkg = pkglist->pdata[i];
-      int pkg_checksum_type;
-      const unsigned char *pkg_checksum_bytes = dnf_package_get_chksum (pkg, &pkg_checksum_type);
-      g_autofree char *pkg_checksum = hy_chksum_str (pkg_checksum_bytes, pkg_checksum_type);
-      char *pkg_checksum_with_type = g_strconcat (hy_chksum_name (pkg_checksum_type), ":", pkg_checksum, NULL);
-
-      g_ptr_array_add (pkg_checksums, pkg_checksum_with_type);
+      g_autofree char* chksum_repr = NULL;
+      g_assert (rpmostree_get_repodata_chksum_repr (pkg, &chksum_repr, NULL));
+      g_ptr_array_add (pkg_checksums, g_steal_pointer (&chksum_repr));
     }
 
   g_ptr_array_sort (pkg_checksums, rpmostree_ptrarray_sort_compare_strings);

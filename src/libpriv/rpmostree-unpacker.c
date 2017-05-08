@@ -431,7 +431,7 @@ get_lead_sig_header_as_bytes (RpmOstreeUnpacker *self,
                    bytes_remaining);
       goto out;
     }
-  
+
   ret = TRUE;
   *out_metadata = g_bytes_new_take (g_steal_pointer (&buf), self->cpio_offset);
  out:
@@ -464,10 +464,13 @@ build_metadata_variant (RpmOstreeUnpacker *self,
   g_auto(GVariantBuilder) metadata_builder;
   g_variant_builder_init (&metadata_builder, (GVariantType*)"a{sv}");
 
-  /* NB: We store the full header of the RPM in the commit for two reasons:
-   * first, it holds the file security capabilities, and secondly, we'll need to
-   * provide it to librpm when it updates the rpmdb (see
-   * rpmostree_context_assemble_commit()). */
+  /* NB: We store the full header of the RPM in the commit for three reasons:
+   *   1. it holds the file security capabilities, which we need during checkout
+   *   2. we'll need to provide it to librpm when it updates the rpmdb (see
+   *      rpmostree_context_assemble_commit())
+   *   3. it's needed in the local pkgs paths to fool the libdnf stack (see
+   *      rpmostree_context_prepare_install())
+   */
   {
     g_autoptr(GBytes) metadata = NULL;
 
@@ -478,8 +481,6 @@ build_metadata_variant (RpmOstreeUnpacker *self,
                            g_variant_new_from_bytes ((GVariantType*)"ay",
                                                      metadata, TRUE));
 
-    /* NB: the header also includes checksums for every entry in the (cut-off)
-     * archive, so there's no need to also bring that in */
     g_checksum_update (pkg_checksum, g_bytes_get_data (metadata, NULL),
                                      g_bytes_get_size (metadata));
 
@@ -506,7 +507,7 @@ build_metadata_variant (RpmOstreeUnpacker *self,
    * compatible increments.
    */
   g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.unpack_minor_version",
-                         g_variant_new_uint32 (2));
+                         g_variant_new_uint32 (3));
 
   if (self->pkg)
     {
@@ -516,6 +517,16 @@ build_metadata_variant (RpmOstreeUnpacker *self,
           g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.repo",
                                  repo_metadata_to_variant (repo));
         }
+
+      /* include a checksum of the RPM as a whole; the actual algo used depends
+       * on how the repodata was created, so just keep a repr */
+      g_autofree char* chksum_repr = NULL;
+      if (!rpmostree_get_repodata_chksum_repr (self->pkg, &chksum_repr, error))
+        return FALSE;
+
+      g_variant_builder_add (&metadata_builder, "{sv}",
+                             "rpmostree.repodata_checksum",
+                             g_variant_new_string (chksum_repr));
     }
 
   *out_variant = g_variant_builder_end (&metadata_builder);
