@@ -706,11 +706,11 @@ get_commit_header_sha256 (GVariant *commit,
 }
 
 static gboolean
-get_commit_pkg_chksum_repr (GVariant *commit,
+get_commit_repodata_chksum_repr (GVariant *commit,
                             char    **out_csum,
                             GError  **error)
 {
-  return get_commit_metadata_string (commit, "rpmostree.pkg_chksum_repr",
+  return get_commit_metadata_string (commit, "rpmostree.repodata_checksum",
                                      out_csum, error);
 }
 
@@ -1012,11 +1012,11 @@ commit_has_matching_sepolicy (OstreeRepo     *repo,
 }
 
 static gboolean
-commit_has_matching_pkg_chksum_repr (OstreeRepo  *repo,
-                                     const char  *rev,
-                                     const char  *expected,
-                                     gboolean    *out_matches,
-                                     GError     **error)
+commit_has_matching_repodata_chksum_repr (OstreeRepo  *repo,
+                                          const char  *rev,
+                                          const char  *expected,
+                                          gboolean    *out_matches,
+                                          GError     **error)
 {
   g_autoptr(GVariant) commit = NULL;
   if (!ostree_repo_load_commit (repo, rev, &commit, NULL, error))
@@ -1026,7 +1026,7 @@ commit_has_matching_pkg_chksum_repr (OstreeRepo  *repo,
 
   g_autofree char *actual = NULL;
   g_autoptr(GError) tmp_error = NULL;
-  if (!get_commit_pkg_chksum_repr (commit, &actual, &tmp_error))
+  if (!get_commit_repodata_chksum_repr (commit, &actual, &tmp_error))
     {
       /* never match pkgs unpacked with older versions that didn't embed csum */
       if (g_error_matches (tmp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
@@ -1073,14 +1073,14 @@ find_pkg_in_ostree (OstreeRepo     *repo,
 
   /* NB: we're not using a pkgcache yet in the compose path */
   if (repo == NULL)
-    goto happy_out; /* Note early happy return */
+    goto done; /* Note early happy return */
 
   if (!ostree_repo_resolve_rev (repo, cachebranch, TRUE,
                                 &cached_rev, error))
     return FALSE;
 
   if (!cached_rev)
-    goto happy_out; /* Note early happy return */
+    goto done; /* Note early happy return */
 
   /* NB: we do an exception for LocalPackages here; we've already checked that
    * its cache is valid and matches what's in the origin. We never want to fetch
@@ -1091,17 +1091,18 @@ find_pkg_in_ostree (OstreeRepo     *repo,
   if (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) != 0)
     {
       g_autofree char *expected_chksum_repr = NULL;
-      if (!rpmostree_get_pkg_chksum_repr (pkg, &expected_chksum_repr, error))
+      if (!rpmostree_get_repodata_chksum_repr (pkg, &expected_chksum_repr,
+                                               error))
         return FALSE;
 
       gboolean same_pkg_chksum = FALSE;
-      if (!commit_has_matching_pkg_chksum_repr (repo, cached_rev,
-                                                expected_chksum_repr,
-                                                &same_pkg_chksum, error))
+      if (!commit_has_matching_repodata_chksum_repr (repo, cached_rev,
+                                                     expected_chksum_repr,
+                                                     &same_pkg_chksum, error))
         return FALSE;
 
       if (!same_pkg_chksum)
-        goto happy_out; /* Note early happy return */
+        goto done; /* Note early happy return */
     }
 
   in_ostree = TRUE;
@@ -1112,7 +1113,7 @@ find_pkg_in_ostree (OstreeRepo     *repo,
         return FALSE;
     }
 
-happy_out:
+done:
   *out_in_ostree = in_ostree;
   *out_selinux_match = selinux_match;
   return TRUE;
