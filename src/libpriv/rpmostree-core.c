@@ -1426,7 +1426,7 @@ rpmostree_dnf_add_checksum_goal (GChecksum   *checksum,
     {
       DnfPackage *pkg = pkglist->pdata[i];
       g_autofree char* chksum_repr = NULL;
-      g_assert (rpmostree_get_pkg_chksum_repr (pkg, &chksum_repr, NULL));
+      g_assert (rpmostree_get_repodata_chksum_repr (pkg, &chksum_repr, NULL));
       g_ptr_array_add (pkg_checksums, g_steal_pointer (&chksum_repr));
     }
 

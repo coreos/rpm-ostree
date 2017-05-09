@@ -521,11 +521,11 @@ build_metadata_variant (RpmOstreeUnpacker *self,
       /* include a checksum of the RPM as a whole; the actual algo used depends
        * on how the repodata was created, so just keep a repr */
       g_autofree char* chksum_repr = NULL;
-      if (!rpmostree_get_pkg_chksum_repr (self->pkg, &chksum_repr, error))
+      if (!rpmostree_get_repodata_chksum_repr (self->pkg, &chksum_repr, error))
         return FALSE;
 
       g_variant_builder_add (&metadata_builder, "{sv}",
-                             "rpmostree.pkg_chksum_repr",
+                             "rpmostree.repodata_checksum",
                              g_variant_new_string (chksum_repr));
     }
 
