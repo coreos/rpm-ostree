@@ -134,20 +134,24 @@ for tf in $(find . -name 'test-*.sh' | sort); do
         break
     fi
 
+    # nuke all vmcheck and vmcheck_tmp refs and recreate vmcheck from orig
+    echo "Restoring original vmcheck commit" >> ${LOG}
+    vm_cmd ostree refs vmcheck vmcheck_tmp --delete
+    vm_cmd ostree refs vmcheck_orig --create vmcheck &>> ${LOG}
+
     # go back to the original vmcheck deployment if needed
     csum_cur=$(vm_get_booted_csum)
     unlocked_cur=$(vm_get_booted_deployment_info unlocked)
     if [[ $csum_orig != $csum_cur ]] || \
        [[ $unlocked_cur != none ]]; then
-      # redeploy under the name 'vmcheck' so that tests can never modify the
-      # vmcheck_orig ref itself (e.g. package layering)
-      echo "Restoring vmcheck commit" >> ${LOG}
-      vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_orig &>> ${LOG}
-      vm_cmd ostree refs vmcheck_tmp --delete # delete refs created by test
+      # redeploy under the name 'vmcheck' so that tests can
+      # never modify the vmcheck_orig ref itself
       vm_cmd ostree admin deploy vmcheck &>> ${LOG}
       vm_reboot &>> ${LOG}
     fi
 
+    # make sure to clean up any pending & rollback deployments
+    vm_rpmostree cleanup -b -p -r || :
 done
 
 
