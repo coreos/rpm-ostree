@@ -382,11 +382,10 @@ rpmostree_context_new_internal (int           userroot_dfd,
                                 GCancellable *cancellable,
                                 GError      **error)
 {
-  g_autoptr(RpmOstreeContext) ret = rpmostree_context_new_system (cancellable, error);
-  struct stat stbuf;
-
+  g_autoptr(RpmOstreeContext) ret =
+    rpmostree_context_new_system (cancellable, error);
   if (!ret)
-    goto out;
+    return NULL;
 
   ret->unprivileged = unprivileged;
 
@@ -406,13 +405,12 @@ rpmostree_context_new_internal (int           userroot_dfd,
     dnf_context_set_lock_dir (ret->hifctx, lockdir);
   }
 
+  /* open user root repo if exists (container path) */
+  struct stat stbuf;
   if (fstatat (userroot_dfd, "repo", &stbuf, 0) < 0)
     {
       if (errno != ENOENT)
-        {
-          glnx_set_error_from_errno (error);
-          goto out;
-        }
+        return glnx_null_throw_errno_prefix (error, "fstat");
     }
   else
     {
@@ -422,13 +420,10 @@ rpmostree_context_new_internal (int           userroot_dfd,
       ret->ostreerepo = ostree_repo_new (repopath);
 
       if (!ostree_repo_open (ret->ostreerepo, cancellable, error))
-        goto out;
+        return NULL;
     }
 
- out:
-  if (ret)
-    return g_steal_pointer (&ret);
-  return NULL;
+  return g_steal_pointer (&ret);
 }
 
 RpmOstreeContext *
@@ -601,7 +596,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
       GString *opt = g_string_new ("");
       char **iter;
       gboolean first = TRUE;
-      
+
       for (iter = instlangs; iter && *iter; iter++)
         {
           const char *v = *iter;
@@ -1128,7 +1123,6 @@ sort_packages (DnfContext       *hifctx,
                RpmOstreeInstall *install,
                GError          **error)
 {
-  gboolean ret = FALSE;
   g_autoptr(GPtrArray) packages = NULL;
   GPtrArray *sources = dnf_context_get_repos (hifctx);
 
@@ -1188,7 +1182,7 @@ sort_packages (DnfContext       *hifctx,
 
         if (!find_pkg_in_ostree (ostreerepo, pkg, sepolicy,
                                  &in_ostree, &selinux_match, error))
-          goto out;
+          return FALSE;
 
         if (is_locally_cached)
           g_assert (in_ostree);
@@ -1202,9 +1196,7 @@ sort_packages (DnfContext       *hifctx,
       }
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static char *
@@ -1291,7 +1283,6 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
                                    GCancellable         *cancellable,
                                    GError              **error)
 {
-  gboolean ret = FALSE;
   DnfContext *hifctx = self->hifctx;
   g_autofree char **pkgnames = NULL;
   g_autofree char **cached_pkgnames = NULL;
@@ -1314,11 +1305,11 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
       g_autofree char *sha256 = NULL;
 
       if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
-        goto out;
+        return FALSE;
 
       if (!checkout_pkg_metadata_by_nevra (self, nevra, sha256,
                                            cancellable, error))
-        goto out;
+        return FALSE;
 
       /* This is the great lie: we make libdnf et al. think that they're
        * dealing with a full RPM, all while crossing our fingers that they
@@ -1328,11 +1319,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
       path = g_strdup_printf ("%s/%s.rpm", self->metadata_dir_path, nevra);
       pkg = dnf_sack_add_cmdline_package (sack, path);
       if (!pkg)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Failed to add local pkg %s to sack", nevra);
-          goto out;
-        }
+        return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
 
       hy_goal_install (goal, pkg);
     }
@@ -1374,7 +1361,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
       {
         const char *pkgname = *strviter;
         if (!dnf_context_install (hifctx, pkgname, error))
-          goto out;
+          return FALSE;
         g_ptr_array_add (ret_install->packages_requested, g_strdup (pkgname));
       }
   }
@@ -1385,19 +1372,17 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
       !check_goal_solution (goal, error))
     {
       g_print ("failed\n");
-      goto out;
+      return FALSE;
     }
 
   rpmostree_output_task_end ("done");
 
   if (!sort_packages (hifctx, get_pkgcache_repo (self), self->sepolicy,
                       ret_install, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
   *out_install = g_steal_pointer (&ret_install);
- out:
-  return ret;
+  return TRUE;
 }
 
 /* Generate a checksum from a goal in a repeatable fashion -
@@ -1464,9 +1449,9 @@ gather_source_to_packages (DnfContext *hifctx,
       DnfPackage *pkg = install->packages_to_download->pdata[i];
       DnfRepo *src = dnf_package_get_repo (pkg);
       GPtrArray *source_packages;
-      
+
       g_assert (src);
-                     
+
       source_packages = g_hash_table_lookup (source_to_packages, src);
       if (!source_packages)
         {
@@ -1485,7 +1470,6 @@ rpmostree_context_download (RpmOstreeContext *ctx,
                             GCancellable     *cancellable,
                             GError          **error)
 {
-  gboolean ret = FALSE;
   DnfContext *hifctx = ctx->hifctx;
   int n = install->packages_to_download->len;
 
@@ -1520,21 +1504,18 @@ rpmostree_context_download (RpmOstreeContext *ctx,
 
         target_dir = g_build_filename (dnf_repo_get_location (src), "/packages/", NULL);
         if (!glnx_shutil_mkdir_p_at (AT_FDCWD, target_dir, 0755, cancellable, error))
-          goto out;
+          return FALSE;
 
         if (!dnf_repo_download_packages (src, src_packages, target_dir,
                                          hifstate, error))
-          goto out;
+          return FALSE;
 
         g_signal_handler_disconnect (hifstate, progress_sigid);
         rpmostree_output_percent_progress_end ();
       }
   }
 
-
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -1545,7 +1526,6 @@ import_one_package (RpmOstreeContext *self,
                     GCancellable   *cancellable,
                     GError        **error)
 {
-  gboolean ret = FALSE;
   OstreeRepo *ostreerepo = get_pkgcache_repo (self);
   g_autofree char *ostree_commit = NULL;
   glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
@@ -1568,7 +1548,7 @@ import_one_package (RpmOstreeContext *self,
 
   /* Verify signatures if enabled */
   if (!dnf_transaction_gpgcheck_package (dnf_context_get_transaction (hifctx), pkg, error))
-    goto out;
+    return FALSE;
 
   flags = RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION;
   if (self->unprivileged)
@@ -1577,29 +1557,20 @@ import_one_package (RpmOstreeContext *self,
   /* TODO - tweak the unpacker flags for containers */
   unpacker = rpmostree_unpacker_new_at (AT_FDCWD, pkg_path, pkg, flags, error);
   if (!unpacker)
-    goto out;
+    return FALSE;
 
   if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostreerepo, sepolicy,
                                             &ostree_commit, cancellable, error))
-    {
-      const char *nevra = dnf_package_get_nevra (pkg);
-      g_prefix_error (error, "Unpacking %s: ", nevra);
-      goto out;
-    }
+    return g_prefix_error (error, "Unpacking %s: ",
+                           dnf_package_get_nevra (pkg)), FALSE;
 
   if (!pkg_is_local (pkg))
     {
       if (TEMP_FAILURE_RETRY (unlinkat (AT_FDCWD, pkg_path, 0)) < 0)
-        {
-          glnx_set_error_from_errno (error);
-          g_prefix_error (error, "Deleting %s: ", pkg_path);
-          goto out;
-        }
+        return glnx_throw_errno_prefix (error, "Deleting %s", pkg_path);
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static inline void
@@ -1616,7 +1587,6 @@ rpmostree_context_import (RpmOstreeContext *self,
                           GCancellable     *cancellable,
                           GError          **error)
 {
-  gboolean ret = FALSE;
   DnfContext *hifctx = self->hifctx;
   guint progress_sigid;
   int n = install->packages_to_import->len;
@@ -1627,7 +1597,7 @@ rpmostree_context_import (RpmOstreeContext *self,
   g_return_val_if_fail (get_pkgcache_repo (self) != NULL, FALSE);
 
   if (!dnf_transaction_import_keys (dnf_context_get_transaction (hifctx), error))
-    goto out;
+    return FALSE;
 
   {
     glnx_unref_object DnfState *hifstate = dnf_state_new ();
@@ -1641,7 +1611,7 @@ rpmostree_context_import (RpmOstreeContext *self,
         DnfPackage *pkg = install->packages_to_import->pdata[i];
         if (!import_one_package (self, hifctx, pkg,
                                  self->sepolicy, cancellable, error))
-          goto out;
+          return FALSE;
         dnf_state_assert_done (hifstate);
       }
 
@@ -1654,9 +1624,7 @@ rpmostree_context_import (RpmOstreeContext *self,
                    "MESSAGE=Imported %u pkg%s", n, n > 1 ? "s" : "",
                    "IMPORTED_N_PKGS=%u", n, NULL);
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -1669,7 +1637,6 @@ checkout_package (OstreeRepo   *repo,
                   GCancellable *cancellable,
                   GError      **error)
 {
-  gboolean ret = FALSE;
   OstreeRepoCheckoutAtOptions opts = { OSTREE_REPO_CHECKOUT_MODE_USER,
                                        OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES, };
 
@@ -1684,16 +1651,9 @@ checkout_package (OstreeRepo   *repo,
 
   if (!ostree_repo_checkout_at (repo, &opts, dfd, path,
                                 pkg_commit, cancellable, error))
-    goto out;
-
-  ret = TRUE;
- out:
-  if (error && *error)
-    {
-      const char *nevra = dnf_package_get_nevra (pkg);
-      g_prefix_error (error, "Unpacking %s: ", nevra);
-    }
-  return ret;
+    return g_prefix_error (error, "Checking out %s: ",
+                           dnf_package_get_nevra (pkg)), FALSE;
+  return TRUE;
 }
 
 static gboolean
