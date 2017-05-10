@@ -1567,7 +1567,7 @@ import_one_package (RpmOstreeContext *self,
   if (!pkg_is_local (pkg))
     {
       if (TEMP_FAILURE_RETRY (unlinkat (AT_FDCWD, pkg_path, 0)) < 0)
-        return glnx_throw_errno_prefix (error, "Deleting %s: ", pkg_path);
+        return glnx_throw_errno_prefix (error, "Deleting %s", pkg_path);
     }
 
   return TRUE;
