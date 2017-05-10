@@ -38,7 +38,7 @@ _builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
   for (num = 0; num < revs->len; num++)
     {
       char *rev = revs->pdata[num];
-      _cleanup_rpmrev_ struct RpmRevisionData *rpmrev = NULL;
+      g_autoptr(RpmRevisionData) rpmrev = NULL;
       g_autofree char *rpmdbv = NULL;
       char *mrev = strstr (rev, "..");
 

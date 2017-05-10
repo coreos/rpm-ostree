@@ -39,7 +39,7 @@ _builtin_db_list (OstreeRepo *repo,
   for (num = 0; num < revs->len; num++)
     {
       char *rev = revs->pdata[num];
-      _cleanup_rpmrev_ struct RpmRevisionData *rpmrev = NULL;
+      g_autoptr(RpmRevisionData) rpmrev = NULL;
       char *mrev = strstr (rev, "..");
 
       if (mrev)

@@ -2120,9 +2120,9 @@ typedef struct {
 } TransactionData;
 
 static void *
-ts_callback (const void * h, 
-             const rpmCallbackType what, 
-             const rpm_loff_t amount, 
+ts_callback (const void * h,
+             const rpmCallbackType what,
+             const rpm_loff_t amount,
              const rpm_loff_t total,
              fnpyKey key,
              rpmCallbackData data)
@@ -2190,7 +2190,7 @@ add_to_transaction (rpmts  ts,
                     GCancellable *cancellable,
                     GError **error)
 {
-  _cleanup_rpmheader_ Header hdr = NULL;
+  g_auto(Header) hdr = NULL;
   g_autofree char *path = get_package_relpath (pkg);
   int r;
 
@@ -2225,7 +2225,7 @@ run_posttrans_sync (int tmp_metadata_dfd,
                     GCancellable *cancellable,
                     GError    **error)
 {
-  _cleanup_rpmheader_ Header hdr = NULL;
+  g_auto(Header) hdr = NULL;
   g_autofree char *path = get_package_relpath (pkg);
 
   if (!get_package_metainfo (tmp_metadata_dfd, path, &hdr, NULL, error))
@@ -2246,7 +2246,7 @@ run_pre_sync (int tmp_metadata_dfd,
               GCancellable *cancellable,
               GError    **error)
 {
-  _cleanup_rpmheader_ Header hdr = NULL;
+  g_auto(Header) hdr = NULL;
   g_autofree char *path = get_package_relpath (pkg);
 
   if (!get_package_metainfo (tmp_metadata_dfd, path, &hdr, NULL, error))
@@ -2269,7 +2269,7 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
                        GError       **error)
 {
   int i;
-  _cleanup_rpmfi_ rpmfi fi = NULL;
+  g_auto(rpmfi) fi = NULL;
   gboolean emitted_nonusr_warning = FALSE;
   g_autofree char *path = get_package_relpath (pkg);
 
