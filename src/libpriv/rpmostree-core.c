@@ -1319,7 +1319,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
       path = g_strdup_printf ("%s/%s.rpm", self->metadata_dir_path, nevra);
       pkg = dnf_sack_add_cmdline_package (sack, path);
       if (!pkg)
-        glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
+        return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
 
       hy_goal_install (goal, pkg);
     }
