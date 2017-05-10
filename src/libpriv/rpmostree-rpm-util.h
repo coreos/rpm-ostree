@@ -45,7 +45,7 @@ struct RpmHeadersDiff
   GPtrArray *hs_mod_new; /* list of rpm header objects from <rpm.h> = Header */
 };
 
-struct RpmRevisionData;
+typedef struct RpmRevisionData RpmRevisionData;
 
 struct RpmHeadersDiff *
 rpmhdrs_diff (struct RpmHeaders *l1,
@@ -62,28 +62,12 @@ rpmhdrs_rpmdbv (struct RpmHeaders *l1,
 void
 rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff);
 
-/* Define cleanup functions for librpm here */
-static inline void
-rpmostree_cleanup_rpmheader (Header *h)
-{
-  if (*h)
-    headerFree (*h);
-}
-#define _cleanup_rpmheader_ __attribute__((cleanup(rpmostree_cleanup_rpmheader)))
-static inline void
-rpmostree_cleanup_rpmfi (rpmfi *fi)
-{
-  if (*fi)
-    rpmfiFree (*fi);
-}
-#define _cleanup_rpmfi_ __attribute__((cleanup(rpmostree_cleanup_rpmfi)))
-static inline void
-rpmostree_cleanup_rpmts (rpmts *tsp)
-{
-  if (*tsp)
-    rpmtsFree (*tsp);
-}
-#define _cleanup_rpmts_ __attribute__((cleanup(rpmostree_cleanup_rpmts)))
+/* Define cleanup functions for librpm here. Note that this
+ * will break if one day librpm ever decides to define these
+ * itself. TODO: Move them to libdnf */
+G_DEFINE_AUTO_CLEANUP_FREE_FUNC(Header, headerFree, NULL)
+G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmfi, rpmfiFree, NULL)
+G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmts, rpmtsFree, NULL)
 
 void
 rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff);
@@ -99,18 +83,8 @@ struct RpmHeaders *rpmrev_get_headers (struct RpmRevisionData *self);
 
 const char *rpmrev_get_commit (struct RpmRevisionData *self);
 
-void
-rpmrev_free (struct RpmRevisionData *ptr);
-
-static inline void
-rpmostree_cleanup_rpmrev (struct RpmRevisionData **revp)
-{
-  struct RpmRevisionData *rev = *revp;
-  if (!rev)
-    return;
-  rpmrev_free (rev);
-}
-#define _cleanup_rpmrev_ __attribute__((cleanup(rpmostree_cleanup_rpmrev)))
+void rpmrev_free (struct RpmRevisionData *ptr);
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmRevisionData, rpmrev_free);
 
 gboolean
 rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
