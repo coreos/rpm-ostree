@@ -70,8 +70,8 @@ BUILTINPROTO(status);
 BUILTINPROTO(db);
 BUILTINPROTO(internals);
 BUILTINPROTO(container);
-BUILTINPROTO(pkg_add);
-BUILTINPROTO(pkg_remove);
+BUILTINPROTO(install);
+BUILTINPROTO(uninstall);
 BUILTINPROTO(start_daemon);
 BUILTINPROTO(ex);
 

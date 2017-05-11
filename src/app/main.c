@@ -61,14 +61,14 @@ static RpmOstreeCommand commands[] = {
   { "initramfs", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     rpmostree_builtin_initramfs },
   { "install", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
-    rpmostree_builtin_pkg_add },
+    rpmostree_builtin_install },
   { "uninstall", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
-    rpmostree_builtin_pkg_remove },
+    rpmostree_builtin_uninstall },
   /* Legacy aliases */
   { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    rpmostree_builtin_pkg_add },
+    rpmostree_builtin_install },
   { "pkg-remove", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    rpmostree_builtin_pkg_remove },
+    rpmostree_builtin_uninstall },
   { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_ex },
   /* Hidden */
