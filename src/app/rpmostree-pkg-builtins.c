@@ -140,7 +140,7 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
 }
 
 int
-rpmostree_builtin_pkg_add (int            argc,
+rpmostree_builtin_install (int            argc,
                            char         **argv,
                            RpmOstreeCommandInvocation *invocation,
                            GCancellable  *cancellable,
@@ -183,11 +183,11 @@ rpmostree_builtin_pkg_add (int            argc,
 }
 
 int
-rpmostree_builtin_pkg_remove (int            argc,
-                              char         **argv,
-                              RpmOstreeCommandInvocation *invocation,
-                              GCancellable  *cancellable,
-                              GError       **error)
+rpmostree_builtin_uninstall (int            argc,
+                             char         **argv,
+                             RpmOstreeCommandInvocation *invocation,
+                             GCancellable  *cancellable,
+                             GError       **error)
 {
   GOptionContext *context;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
