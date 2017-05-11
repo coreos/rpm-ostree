@@ -581,7 +581,7 @@ find_missing_pkgs_in_rpmdb (int            rootfs_dfd,
     {
       glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
 
-      if (!rpmostree_mkdtemp ("/tmp/rpmostree-metadata-XXXXXX",
+      if (!rpmostree_mkdtemp ("/tmp/rpmostree-localpkgmeta-XXXXXX",
                               &metadata_tmp_path, NULL, error))
         goto out;
 
@@ -631,12 +631,10 @@ find_missing_pkgs_in_rpmdb (int            rootfs_dfd,
     }
 
   *out_missing_pkgs = g_steal_pointer (&missing_pkgs);
-  return TRUE;
-
   ret = TRUE;
 out:
   if (metadata_tmp_path)
-    glnx_shutil_rm_rf_at (AT_FDCWD, metadata_tmp_path, cancellable, error);
+    (void) glnx_shutil_rm_rf_at (AT_FDCWD, metadata_tmp_path, NULL, NULL);
   return ret;
 }
 
