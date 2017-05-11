@@ -42,32 +42,27 @@ change_origin_refspec (OstreeSysroot *sysroot,
                        gchar **out_new_refspec,
                        GError **error)
 {
-  gboolean ret = FALSE;
-  g_autofree gchar *new_refspec = NULL;
-  g_autofree gchar *new_remote = NULL;
-  g_autofree gchar *new_branch = NULL;
   g_autofree gchar *current_refspec =
     g_strdup (rpmostree_origin_get_refspec (origin));
-  g_autofree gchar *current_remote = NULL;
-  g_autofree gchar *current_branch = NULL;
-
+  g_autofree gchar *new_refspec = NULL;
   if (!rpmostreed_refspec_parse_partial (refspec,
                                          current_refspec,
                                          &new_refspec,
                                          error))
-    goto out;
+    return FALSE;
 
   if (strcmp (current_refspec, new_refspec) == 0)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Old and new refs are equal: %s", new_refspec);
-      goto out;
-    }
+    return glnx_throw (error, "Old and new refs are equal: %s", new_refspec);
 
   if (!rpmostree_origin_set_rebase (origin, new_refspec, error))
-    goto out;
+    return FALSE;
 
+  g_autofree gchar *current_remote = NULL;
+  g_autofree gchar *current_branch = NULL;
   g_assert (ostree_parse_refspec (current_refspec, &current_remote, &current_branch, NULL));
+
+  g_autofree gchar *new_remote = NULL;
+  g_autofree gchar *new_branch = NULL;
   g_assert (ostree_parse_refspec (new_refspec, &new_remote, &new_branch, NULL));
 
   /* This version is a bit magical, so let's explain it.
@@ -84,10 +79,7 @@ change_origin_refspec (OstreeSysroot *sysroot,
   if (out_old_refspec != NULL)
     *out_old_refspec = g_strdup (current_refspec);
 
-  ret = TRUE;
-
-out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -172,52 +164,38 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
                                   GCancellable *cancellable,
                                   GError **error)
 {
-  PackageDiffTransaction *self;
-  OstreeSysroot *sysroot;
-
-  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
-  glnx_unref_object OstreeAsyncProgress *progress = NULL;
-  glnx_unref_object OstreeRepo *repo = NULL;
-  glnx_unref_object OstreeDeployment *merge_deployment = NULL;
-  g_autoptr(RpmOstreeOrigin) origin = NULL;
-
+  PackageDiffTransaction *self = (PackageDiffTransaction *) transaction;
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
-  gboolean upgrading = FALSE;
-  gboolean changed = FALSE;
-  gboolean ret = FALSE;
-
-  self = (PackageDiffTransaction *) transaction;
 
   if (self->revision != NULL || self->refspec != NULL)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
 
-  sysroot = rpmostreed_transaction_get_sysroot (transaction);
-  upgrader = rpmostree_sysroot_upgrader_new (sysroot,
-                                             self->osname,
-                                             upgrader_flags,
-                                             cancellable,
-                                             error);
+  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+  g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags,
+                                    cancellable, error);
   if (upgrader == NULL)
-    goto out;
+    return FALSE;
 
-  origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
+  g_autoptr(RpmOstreeOrigin) origin =
+    rpmostree_sysroot_upgrader_dup_origin (upgrader);
 
+  g_autoptr(OstreeRepo) repo = NULL;
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-    goto out;
-
-  merge_deployment = ostree_sysroot_get_merge_deployment (sysroot, self->osname);
+    return FALSE;
 
   /* Determine if we're upgrading before we set the refspec. */
-  upgrading = (self->refspec == NULL && self->revision == NULL);
+  gboolean upgrading = (self->refspec == NULL && self->revision == NULL);
 
   if (self->refspec != NULL)
     {
       if (!change_origin_refspec (sysroot, origin, self->refspec,
                                   cancellable, NULL, NULL, error))
-        goto out;
+        return FALSE;
     }
 
-  progress = ostree_async_progress_new ();
+  g_autoptr(OstreeAsyncProgress) progress =
+    ostree_async_progress_new ();
   rpmostreed_transaction_connect_download_progress (transaction, progress);
   rpmostreed_transaction_connect_signature_progress (transaction, repo);
 
@@ -225,7 +203,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
     {
       if (!apply_revision_override (transaction, repo, progress, origin,
                                     self->revision, cancellable, error))
-        goto out;
+        return FALSE;
     }
   else if (upgrading)
     {
@@ -238,6 +216,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
                                               "Updating from: %s",
                                               self->refspec);
 
+  gboolean changed = FALSE;
   if (!rpmostree_sysroot_upgrader_pull (upgrader,
                                         "/usr/share/rpm",
                                         0,
@@ -245,7 +224,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
                                         &changed,
                                         cancellable,
                                         error))
-    goto out;
+    return FALSE;
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
@@ -259,9 +238,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
                                                     "No change.");
     }
 
-  ret = TRUE;
-out:
-  return ret;
+  return TRUE;
 }
 
 static void
@@ -343,26 +320,18 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
                               GCancellable *cancellable,
                               GError **error)
 {
-  RollbackTransaction *self;
-  OstreeSysroot *sysroot;
-  g_autoptr(GPtrArray) old_deployments = NULL;
-  g_autoptr(GPtrArray) new_deployments = NULL;
+  RollbackTransaction *self = (RollbackTransaction *) transaction;
+  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+
   g_autoptr(OstreeDeployment) rollback_deployment = NULL;
-  gboolean ret = FALSE;
-
-  self = (RollbackTransaction *) transaction;
-
-  sysroot = rpmostreed_transaction_get_sysroot (transaction);
-
   rpmostree_syscore_query_deployments (sysroot, self->osname, NULL, &rollback_deployment);
   if (!rollback_deployment)
-    {
-      (void) glnx_throw (error, "No rollback deployment found");
-      goto out;
-    }
+    return glnx_throw (error, "No rollback deployment found");
 
-  old_deployments = ostree_sysroot_get_deployments (sysroot);
-  new_deployments = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr(GPtrArray) old_deployments =
+    ostree_sysroot_get_deployments (sysroot);
+  g_autoptr(GPtrArray) new_deployments =
+    g_ptr_array_new_with_free_func (g_object_unref);
 
   /* build out the reordered array; rollback is first now */
   g_ptr_array_add (new_deployments, g_object_ref (rollback_deployment));
@@ -383,18 +352,16 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
   if (old_deployments->pdata[0] != new_deployments->pdata[0])
     {
       if (!ostree_sysroot_write_deployments (sysroot,
-					     new_deployments,
-					     cancellable,
-					     error))
-        goto out;
+                                             new_deployments,
+                                             cancellable,
+                                             error))
+        return FALSE;
     }
 
   if (self->reboot)
     rpmostreed_reboot (cancellable, error);
 
-  ret = TRUE;
-out:
-  return ret;
+  return TRUE;
 }
 
 static void
@@ -442,7 +409,7 @@ rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
   return (RpmostreedTransaction *) self;
 }
 
-/* ================================ Upgrade/Deploy/Rebase ================================ */
+/* ============================ UpdateDeployment ============================ */
 
 typedef struct {
   RpmostreedTransaction parent;
@@ -486,9 +453,9 @@ import_local_rpm (OstreeRepo    *parent,
                   GCancellable  *cancellable,
                   GError       **error)
 {
-  glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
-  glnx_unref_object OstreeSePolicy *policy = NULL;
-  glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
+  g_autoptr(OstreeRepo) pkgcache_repo = NULL;
+  g_autoptr(OstreeSePolicy) policy = NULL;
+  g_autoptr(RpmOstreeUnpacker) unpacker = NULL;
   g_autofree char *nevra = NULL;
 
   /* It might seem risky to rely on the cache as the source of truth for local
@@ -532,22 +499,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                             GCancellable *cancellable,
                             GError **error)
 {
-  DeployTransaction *self;
-  OstreeSysroot *sysroot;
-  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
-  glnx_unref_object OstreeRepo *repo = NULL;
-  glnx_unref_object OstreeAsyncProgress *progress = NULL;
-  g_autofree gchar *new_refspec = NULL;
-  g_autofree gchar *old_refspec = NULL;
+  DeployTransaction *self = (DeployTransaction *) transaction;
+  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
-  gboolean changed = FALSE;
-  gboolean ret = FALSE;
-  g_autoptr(RpmOstreeOrigin) origin = NULL;
-
-  self = (DeployTransaction *) transaction;
-
-  sysroot = rpmostreed_transaction_get_sysroot (transaction);
-
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN)
@@ -562,25 +517,31 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED;
     }
 
-  upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname,
-                                             upgrader_flags,
-                                             cancellable, error);
+  g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags,
+                                    cancellable, error);
   if (upgrader == NULL)
-    goto out;
+    return FALSE;
 
-  origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
+  g_autoptr(RpmOstreeOrigin) origin =
+    rpmostree_sysroot_upgrader_dup_origin (upgrader);
 
+  g_autofree gchar *new_refspec = NULL;
+  g_autofree gchar *old_refspec = NULL;
   if (self->refspec)
     {
       if (!change_origin_refspec (sysroot, origin, self->refspec, cancellable,
                                   &old_refspec, &new_refspec, error))
-        goto out;
+        return FALSE;
     }
 
+  g_autoptr(OstreeRepo) repo = NULL;
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-    goto out;
+    return FALSE;
 
-  progress = ostree_async_progress_new ();
+  g_autoptr(OstreeAsyncProgress) progress =
+    ostree_async_progress_new ();
+
   rpmostreed_transaction_connect_download_progress (transaction, progress);
   rpmostreed_transaction_connect_signature_progress (transaction, repo);
 
@@ -588,18 +549,19 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     {
       if (!apply_revision_override (transaction, repo, progress, origin,
                                     self->revision, cancellable, error))
-        goto out;
+        return FALSE;
     }
   else
     {
       rpmostree_origin_set_override_commit (origin, NULL, NULL);
     }
 
+  gboolean changed = FALSE;
   if (self->packages_removed)
     {
       if (!rpmostree_origin_delete_packages (origin, self->packages_removed,
                                              cancellable, error))
-        goto out;
+        return FALSE;
 
       /* in reality, there may not be any new layer required (if e.g. we're
        * removing a duplicate provides), though the origin has changed so we
@@ -611,7 +573,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     {
       if (!rpmostree_origin_add_packages (origin, self->packages_added,
                                           FALSE, cancellable, error))
-        goto out;
+        return FALSE;
 
       changed = TRUE;
     }
@@ -631,7 +593,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
           if (!import_local_rpm (repo, fds[i], &sha256_nevra,
                                  cancellable, error))
-            goto out;
+            return FALSE;
 
           g_ptr_array_add (pkgs, g_steal_pointer (&sha256_nevra));
         }
@@ -641,7 +603,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           g_ptr_array_add (pkgs, NULL);
           if (!rpmostree_origin_add_packages (origin, (char**)pkgs->pdata,
                                               TRUE, cancellable, error))
-            goto out;
+            return FALSE;
         }
 
       changed = TRUE;
@@ -656,7 +618,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0, progress,
                                             &base_changed, cancellable, error))
-        goto out;
+        return FALSE;
 
       changed = changed || base_changed;
     }
@@ -667,7 +629,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   if (changed || self->refspec)
     {
       if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
-        goto out;
+        return FALSE;
 
       /* Are we rebasing?  May want to delete the previous ref */
       if (self->refspec && !(self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_SKIP_PURGE))
@@ -697,9 +659,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         rpmostreed_transaction_emit_message_printf (transaction, "No change.");
     }
 
-  ret = TRUE;
-out:
-  return ret;
+  return TRUE;
 }
 
 static void
@@ -803,7 +763,7 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
 {
   InitramfsStateTransaction *self;
   OstreeSysroot *sysroot;
-  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
+  g_autoptr(RpmOstreeSysrootUpgrader) upgrader = NULL;
   g_autoptr(RpmOstreeOrigin) origin = NULL;
   const char *const* current_initramfs_args = NULL;
   gboolean current_regenerate;
@@ -969,7 +929,7 @@ cleanup_transaction_execute (RpmostreedTransaction *transaction,
 {
   CleanupTransaction *self = (CleanupTransaction *) transaction;
   OstreeSysroot *sysroot;
-  glnx_unref_object OstreeRepo *repo = NULL;
+  g_autoptr(OstreeRepo) repo = NULL;
   const gboolean cleanup_pending = (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_PENDING_DEPLOY) > 0;
   const gboolean cleanup_rollback = (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY) > 0;
 

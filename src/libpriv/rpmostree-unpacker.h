@@ -34,6 +34,8 @@ typedef struct RpmOstreeUnpacker RpmOstreeUnpacker;
 
 GType rpmostree_unpacker_get_type (void);
 
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeUnpacker, g_object_unref)
+
 /**
  * RpmOstreeUnpackerFlags:
  * @RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION: Move files to follow ostree convention
