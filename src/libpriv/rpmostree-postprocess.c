@@ -1186,7 +1186,7 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
 
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
   if (!glnx_dirfd_iterator_init_at (rootfs_fd, "usr/share/rpm", TRUE, &dfd_iter, error))
-    return g_prefix_error (error, "Opening usr/share/rpm: "), FALSE;
+    return glnx_prefix_error (error, "Opening usr/share/rpm");
 
   while (TRUE)
     {

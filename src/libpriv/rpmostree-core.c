@@ -1561,8 +1561,8 @@ import_one_package (RpmOstreeContext *self,
 
   if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostreerepo, sepolicy,
                                             &ostree_commit, cancellable, error))
-    return g_prefix_error (error, "Unpacking %s: ",
-                           dnf_package_get_nevra (pkg)), FALSE;
+    return glnx_prefix_error (error, "Unpacking %s",
+                              dnf_package_get_nevra (pkg));
 
   if (!pkg_is_local (pkg))
     {
@@ -1651,8 +1651,8 @@ checkout_package (OstreeRepo   *repo,
 
   if (!ostree_repo_checkout_at (repo, &opts, dfd, path,
                                 pkg_commit, cancellable, error))
-    return g_prefix_error (error, "Checking out %s: ",
-                           dnf_package_get_nevra (pkg)), FALSE;
+    return glnx_prefix_error (error, "Checking out %s",
+                              dnf_package_get_nevra (pkg));
   return TRUE;
 }
 

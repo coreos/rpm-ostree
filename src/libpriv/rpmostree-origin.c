@@ -78,7 +78,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
 
       ret->cached_refspec = g_key_file_get_string (ret->kf, "origin", "baserefspec", NULL);
       if (!ret->cached_refspec)
-        return glnx_throw (error, "No origin/refspec or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree"), NULL;
+        return glnx_null_throw (error, "No origin/refspec or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree");
 
       packages = g_key_file_get_string_list (ret->kf, "packages", "requested", NULL, NULL);
       for (char **it = packages; it && *it; it++)
@@ -92,7 +92,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
           g_autofree char *sha256 = NULL;
 
           if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
-            return glnx_throw (error, "Invalid SHA-256 NEVRA string: %s", nevra), NULL;
+            return glnx_null_throw (error, "Invalid SHA-256 NEVRA string: %s", nevra);
 
           g_hash_table_replace (ret->cached_local_packages,
                                 g_strdup (nevra), g_steal_pointer (&sha256));
