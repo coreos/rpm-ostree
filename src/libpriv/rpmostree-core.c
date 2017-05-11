@@ -303,8 +303,6 @@ rpmostree_context_finalize (GObject *object)
 
   g_clear_pointer (&rctx->passwd_dir, g_free);
 
-  g_clear_pointer (&rctx->metadata_dir_path, g_free);
-
   if (rctx->metadata_dir_path)
     {
       (void) glnx_shutil_rm_rf_at (AT_FDCWD, rctx->metadata_dir_path, NULL, NULL);
