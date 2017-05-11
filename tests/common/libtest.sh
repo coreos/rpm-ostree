@@ -141,11 +141,15 @@ assert_not_has_dir () {
 }
 
 assert_file_has_content () {
-    if ! grep -q -e "$2" "$1"; then
-        sed -e 's/^/# /' < "$1" >&2
-        echo 1>&2 "File '$1' doesn't match regexp '$2'"
-        exit 1
-    fi
+    fpath=$1
+    shift
+    for re in $@; do
+        if ! grep -q -e "$re" "$fpath"; then
+            sed -e 's/^/# /' < "$1" >&2
+            echo 1>&2 "File '$1' doesn't match regexp '$2'"
+            exit 1
+        fi
+    done
 }
 
 assert_file_empty() {
