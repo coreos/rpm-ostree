@@ -69,7 +69,7 @@ get_connection_for_path (gchar *sysroot,
       /* NB: as opposed to other early returns, this is _also_ a happy path */
       GDBusConnection *ret = g_bus_get_sync (G_BUS_TYPE_SESSION, cancellable, error);
       if (!ret)
-        return g_prefix_error (error, "Connecting to session bus: "), NULL;
+        return glnx_prefix_error_null (error, "Connecting to session bus");
       return ret;
     }
 
@@ -81,7 +81,7 @@ get_connection_for_path (gchar *sysroot,
       /* NB: as opposed to other early returns, this is _also_ a happy path */
       GDBusConnection *ret = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
       if (!ret)
-        return g_prefix_error (error, "Connecting to system bus: "), NULL;
+        return glnx_prefix_error_null (error, "Connecting to system bus");
       return ret;
     }
 
