@@ -11,6 +11,7 @@ container:
     image: registry.fedoraproject.org/fedora:25
 
 tests:
+  - ci/ci-commitmessage-submodules.sh
   - ci/build-check.sh
 
 timeout: 30m
