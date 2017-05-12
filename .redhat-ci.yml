@@ -10,6 +10,9 @@ required: true
 container:
     image: registry.fedoraproject.org/fedora:25
 
+packages:
+  - git
+
 tests:
   - ci/ci-commitmessage-submodules.sh
   - ci/build-check.sh
