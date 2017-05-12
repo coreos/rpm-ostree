@@ -170,7 +170,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
 
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
-  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader =
+  g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
     rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags,
                                     cancellable, error);
   if (upgrader == NULL)
@@ -179,7 +179,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
   g_autoptr(RpmOstreeOrigin) origin =
     rpmostree_sysroot_upgrader_dup_origin (upgrader);
 
-  glnx_unref_object OstreeRepo *repo = NULL;
+  g_autoptr(OstreeRepo) repo = NULL;
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     return FALSE;
 
@@ -193,7 +193,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
     }
 
-  glnx_unref_object OstreeAsyncProgress *progress =
+  g_autoptr(OstreeAsyncProgress) progress =
     ostree_async_progress_new ();
   rpmostreed_transaction_connect_download_progress (transaction, progress);
   rpmostreed_transaction_connect_signature_progress (transaction, repo);
@@ -452,9 +452,9 @@ import_local_rpm (OstreeRepo    *parent,
                   GCancellable  *cancellable,
                   GError       **error)
 {
-  glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
-  glnx_unref_object OstreeSePolicy *policy = NULL;
-  glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
+  g_autoptr(OstreeRepo) pkgcache_repo = NULL;
+  g_autoptr(OstreeSePolicy) policy = NULL;
+  g_autoptr(RpmOstreeUnpacker) unpacker = NULL;
   g_autofree char *nevra = NULL;
 
   /* It might seem risky to rely on the cache as the source of truth for local
@@ -516,7 +516,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED;
     }
 
-  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader =
+  g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
     rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags,
                                     cancellable, error);
   if (upgrader == NULL)
@@ -534,11 +534,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
     }
 
-  glnx_unref_object OstreeRepo *repo = NULL;
+  g_autoptr(OstreeRepo) repo = NULL;
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     return FALSE;
 
-  glnx_unref_object OstreeAsyncProgress *progress =
+  g_autoptr(OstreeAsyncProgress) progress =
     ostree_async_progress_new ();
 
   rpmostreed_transaction_connect_download_progress (transaction, progress);
@@ -762,7 +762,7 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
 {
   InitramfsStateTransaction *self;
   OstreeSysroot *sysroot;
-  glnx_unref_object RpmOstreeSysrootUpgrader *upgrader = NULL;
+  g_autoptr(RpmOstreeSysrootUpgrader) upgrader = NULL;
   g_autoptr(RpmOstreeOrigin) origin = NULL;
   const char *const* current_initramfs_args = NULL;
   gboolean current_regenerate;
@@ -928,7 +928,7 @@ cleanup_transaction_execute (RpmostreedTransaction *transaction,
 {
   CleanupTransaction *self = (CleanupTransaction *) transaction;
   OstreeSysroot *sysroot;
-  glnx_unref_object OstreeRepo *repo = NULL;
+  g_autoptr(OstreeRepo) repo = NULL;
   const gboolean cleanup_pending = (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_PENDING_DEPLOY) > 0;
   const gboolean cleanup_rollback = (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY) > 0;
 

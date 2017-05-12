@@ -33,6 +33,7 @@ G_BEGIN_DECLS
   (G_TYPE_CHECK_INSTANCE_TYPE ((obj), RPMOSTREE_TYPE_SYSROOT_UPGRADER))
 
 typedef struct RpmOstreeSysrootUpgrader RpmOstreeSysrootUpgrader;
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeSysrootUpgrader, g_object_unref)
 
 /**
  * RpmOstreeSysrootUpgraderFlags:
