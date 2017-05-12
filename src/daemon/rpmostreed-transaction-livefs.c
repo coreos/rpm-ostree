@@ -189,6 +189,10 @@ copy_new_config_files (OstreeRepo          *repo,
   if (ostree_sepolicy_get_name (sepolicy) != NULL)
     etc_co_opts.sepolicy = sepolicy;
 
+  glnx_fd_close int deployment_etc_dfd = -1;
+  if (!glnx_opendirat (new_deployment_dfd, "etc", TRUE, &deployment_etc_dfd, error))
+    return FALSE;
+
   guint n_added = 0;
   for (guint i = 0; i < diff->added->len; i++)
     {
@@ -202,7 +206,7 @@ copy_new_config_files (OstreeRepo          *repo,
       etc_co_opts.sepolicy_prefix = path + strlen ("/usr");
 
       if (!ostree_repo_checkout_at (repo, &etc_co_opts,
-                                    new_deployment_dfd, "etc",
+                                    deployment_etc_dfd, ".",
                                     ostree_deployment_get_csum (merge_deployment),
                                     cancellable, error))
         return g_prefix_error (error, "Copying %s: ", path), FALSE;
