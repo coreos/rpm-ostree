@@ -1325,6 +1325,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
   { GPtrArray *repos = dnf_context_get_repos (hifctx);
     g_autoptr(GString) enabled_repos = g_string_new ("");
     g_autoptr(GString) enabled_repos_solvables = g_string_new ("");
+    g_autoptr(GString) enabled_repos_timestamps = g_string_new ("");
     guint total_solvables = 0;
     gboolean first = TRUE;
 
@@ -1333,17 +1334,20 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
         DnfRepo *repo = repos->pdata[i];
         if ((dnf_repo_get_enabled (repo) & DNF_REPO_ENABLED_PACKAGES) == 0)
           continue;
+
         if (first)
           first = FALSE;
         else
           {
             g_string_append (enabled_repos, ", ");
             g_string_append (enabled_repos_solvables, ", ");
+            g_string_append (enabled_repos_timestamps, ", ");
           }
         g_autofree char *quoted = g_shell_quote (dnf_repo_get_id (repo));
         g_string_append (enabled_repos, quoted);
         total_solvables += dnf_repo_get_n_solvables (repo);
         g_string_append_printf (enabled_repos_solvables, "%u", dnf_repo_get_n_solvables (repo));
+        g_string_append_printf (enabled_repos_timestamps, "%" G_GUINT64_FORMAT, dnf_repo_get_timestamp_generated (repo));
       }
 
     sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_PKG_REPOS),
@@ -1351,6 +1355,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
                      "SACK_N_SOLVABLES=%i", dnf_sack_count (dnf_context_get_sack (hifctx)),
                      "ENABLED_REPOS=[%s]", enabled_repos->str,
                      "ENABLED_REPOS_SOLVABLES=[%s]", enabled_repos_solvables->str,
+                     "ENABLED_REPOS_TIMESTAMPS=[%s]", enabled_repos_timestamps->str,
                      NULL);
   }
 
