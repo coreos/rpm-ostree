@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -xeuo pipefail
 
 # Copyright 2017 Colin Walters <walters@verbum.org>
 # Licensed under the new-BSD license (http://www.opensource.org/licenses/bsd-license.php)
@@ -38,6 +38,7 @@ git log --pretty=oneline origin/master..$HEAD | while read logline; do
     git diff --name-only ${commit}^..${commit} > ${tmpd}/diff.txt
     git log -1 ${commit} > ${tmpd}/log.txt
     echo "Validating commit for submodules: $commit"
+    sed -e 's,^,# ,' < ${tmpd}/log.txt
     git checkout -q "${commit}"
     git submodule update --init
     git submodule foreach --quiet 'echo $path'| while read submodule; do
@@ -45,7 +46,6 @@ git log --pretty=oneline origin/master..$HEAD | while read logline; do
             echo "Commit $commit modifies submodule: $submodule"
             expected_match="Update submodule: $submodule"
             if ! grep -q -e "$expected_match" ${tmpd}/log.txt; then
-                sed -e 's,^,# ,' < ${tmpd}/log.txt
                 echo "error: Commit message for ${commit} changes a submodule, but does not match regex ${expected_match}"
                 exit 1
             fi
