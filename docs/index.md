@@ -1,10 +1,10 @@
 # What is rpm-ostree?
 
 rpm-ostree is a hybrid image/package system.  It uses
-[OSTree](https://ostree.readthedocs.io/en/latest/) as a base image
+[libOSTree](https://ostree.readthedocs.io/en/latest/) as a base image
 format, and accepts RPM on both the client and server side, sharing
 code with the [dnf](https://en.wikipedia.org/wiki/DNF_(software)) project;
-specifically [libhif](https://github.com/rpm-software-management/libhif).
+specifically [libdnf](https://github.com/rpm-software-management/libdnf).
 
 # Getting started
 
@@ -18,7 +18,7 @@ interested in assembling your own systems, see
 One major feature rpm-ostree has over traditional package management
 is atomic upgrade/rollback.  It supports a model where an OS vendor
 (such as [CentOS](https://www.centos.org/) or
-[Fedora](https://getfedora.org/) can provide pre-assembled "base OS
+[Fedora](https://getfedora.org/)) can provide pre-assembled "base OS
 images", and client systems can replicate those, and possibly layer on
 additional packages.
 
@@ -54,7 +54,7 @@ result is significantly more reliable than having two separate
 systems like yum and snapper glued together, or apt-get and BTRFS,
 etc.
 
-### User experience 
+### User experience
 
 Furthermore, beyond just the mechanics of things like the filesystem
 layout, the implemented upgrade model affects the entire user
