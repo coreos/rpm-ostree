@@ -18,6 +18,8 @@ pysetjsonmember "remove-files" '["etc/hosts"]'
 pysetjsonmember "remove-from-packages" '[["setup", "/etc/hosts\..*"]]'
 rnd=$RANDOM
 echo $rnd > composedata/foo.txt
+# Test tmp-is-dir
+pysetjsonmember "tmp-is-dir" 'True'
 
 # Do the compose
 runcompose
@@ -52,3 +54,8 @@ ostree --repo=${repobuild} ls ${treeref} /usr/etc > out.txt
 assert_not_file_has_content out.txt '/usr/etc/hosts\.allow$'
 assert_not_file_has_content out.txt '/usr/etc/hosts\.deny$'
 echo "ok remove-from-packages"
+
+# https://github.com/projectatomic/rpm-ostree/issues/669
+ostree --repo=${repobuild} ls  ${treeref} /tmp > ls.txt
+assert_file_has_content ls.txt 'd01777 0 0      0 /tmp'
+echo "ok /tmp"
