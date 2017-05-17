@@ -93,12 +93,14 @@ typedef struct {
   const char *src;
 } Symlink;
 
+/* Initialize deployment root directory; currently hardcoded.  In the
+ * future we may make this configurable.
+ */
 static gboolean
 init_rootfs (int            dfd,
              GCancellable  *cancellable,
              GError       **error)
 {
-  guint i;
   const char *toplevel_dirs[] = { "dev", "proc", "run", "sys", "var", "sysroot" };
   const Symlink symlinks[] = {
     { "var/opt", "opt" },
@@ -111,27 +113,19 @@ init_rootfs (int            dfd,
     { "sysroot/tmp", "tmp" },
   };
 
-  for (i = 0; i < G_N_ELEMENTS (toplevel_dirs); i++)
+  for (guint i = 0; i < G_N_ELEMENTS (toplevel_dirs); i++)
     {
       if (mkdirat (dfd, toplevel_dirs[i], 0755) < 0)
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "mkdirat");
     }
 
-  for (i = 0; i < G_N_ELEMENTS (symlinks); i++)
+  for (guint i = 0; i < G_N_ELEMENTS (symlinks); i++)
     {
       const Symlink*linkinfo = symlinks + i;
-
       if (symlinkat (linkinfo->target, dfd, linkinfo->src) < 0)
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-           
-        }
+        return glnx_throw_errno_prefix (error, "symlinkat");
     }
-  
+
   return TRUE;
 }
 
@@ -231,12 +225,11 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
                                    GCancellable  *cancellable,
                                    GError       **error)
 {
-  gboolean ret = FALSE;
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
   gsize bytes_written;
 
   if (!glnx_dirfd_iterator_init_at (dfd, prefix->str + 1, TRUE, &dfd_iter, error))
-    goto out;
+    return FALSE;
 
   while (TRUE)
     {
@@ -246,7 +239,7 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
       char filetype_c;
 
       if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
-        goto out;
+        return FALSE;
 
       if (!dent)
         break;
@@ -276,13 +269,9 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
       if (filetype_c == 'd')
         {
           struct stat stbuf;
-
           if (TEMP_FAILURE_RETRY (fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW)) != 0)
-            {
-              glnx_set_error_from_errno (error);
-              goto out;
-            }
-          
+            return glnx_throw_errno_prefix (error, "fstatat");
+
           g_string_append_printf (tmpfiles_d_buf, " 0%02o", stbuf.st_mode & ~S_IFMT);
           g_string_append_printf (tmpfiles_d_buf, " %d %d - -", stbuf.st_uid, stbuf.st_gid);
 
@@ -292,7 +281,7 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
 
           if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, dfd, prefix,
                                                   cancellable, error))
-            goto out;
+            return FALSE;
 
           /* Pop prefix */
           {
@@ -305,7 +294,7 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
         {
           g_autofree char *link = glnx_readlinkat_malloc (dfd_iter.fd, dent->d_name, cancellable, error);
           if (!link)
-            goto out;
+            return FALSE;
           g_string_append (tmpfiles_d_buf, " - - - - ");
           g_string_append (tmpfiles_d_buf, link);
         }
@@ -317,12 +306,10 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
       if (!g_output_stream_write_all (tmpfiles_out, tmpfiles_d_line,
                                       strlen (tmpfiles_d_line), &bytes_written,
                                       cancellable, error))
-        goto out;
+        return FALSE;
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -331,10 +318,7 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
                            GCancellable  *cancellable,
                            GError       **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(GString) prefix = g_string_new ("/var");
   glnx_fd_close int var_dfd = -1;
-  glnx_fd_close int tmpfiles_fd = -1;
   /* List of files that shouldn't be in the tree */
   const char *known_state_files[] = {
     "lib/systemd/random-seed", /* https://bugzilla.redhat.com/show_bug.cgi?id=789407 */
@@ -343,7 +327,7 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
   };
 
   if (!glnx_opendirat (src_rootfs_dfd, "var", TRUE, &var_dfd, error))
-    goto out;
+    return FALSE;
 
   /* Here, delete some files ahead of time to avoid emitting warnings
    * for things that are known to be harmless.
@@ -354,37 +338,30 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
       if (unlinkat (var_dfd, path, 0) < 0)
         {
           if (errno != ENOENT)
-            {
-              glnx_set_error_from_errno (error);
-              goto out;
-            }
+            return glnx_throw_errno_prefix (error, "unlinkat");
         }
     }
 
   /* Append to an existing one for package layering */
-  if ((tmpfiles_fd = TEMP_FAILURE_RETRY (openat (dest_rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
-                                                 O_WRONLY | O_CREAT | O_APPEND | O_NOCTTY, 0644))) == -1)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
+  glnx_fd_close int tmpfiles_fd = openat (dest_rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
+                                          O_WRONLY | O_CREAT | O_APPEND | O_NOCTTY, 0644);
+  if (tmpfiles_fd == -1)
+    return glnx_throw_errno_prefix (error, "openat");
 
-  { glnx_unref_object GOutputStream *tmpfiles_out =
-      g_unix_output_stream_new (tmpfiles_fd, FALSE);
+  glnx_unref_object GOutputStream *tmpfiles_out =
+    g_unix_output_stream_new (tmpfiles_fd, FALSE);
 
-    if (!tmpfiles_out)
-      goto out;
+  if (!tmpfiles_out)
+    return FALSE;
 
-    if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, src_rootfs_dfd, prefix, cancellable, error))
-      goto out;
+  g_autoptr(GString) prefix = g_string_new ("/var");
+  if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, src_rootfs_dfd, prefix, cancellable, error))
+    return FALSE;
 
-    if (!g_output_stream_close (tmpfiles_out, cancellable, error))
-      goto out;
-  }
-  
-  ret = TRUE;
- out:
-  return ret;
+  if (!g_output_stream_close (tmpfiles_out, cancellable, error))
+    return FALSE;
+
+  return TRUE;
 }
 
 /* SELinux uses PCRE pre-compiled regexps for binary caches, which can
