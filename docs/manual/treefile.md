@@ -183,3 +183,10 @@ It supports the following parameters:
    source file must be in the same directory as the treefile.
 
    Example: `"add-files": [["bar", "/bar"], ["foo", "/foo"]]`
+
+ * `tmp-is-dir`: boolean, optional: Defaults to `false`.  By default,
+   rpm-ostree creates symlink `/tmp` → `/sysroot/tmp`.
+   It's more flexible to leave it as a directory (systemd will mount it),
+   and further, we don't want to encourage `/sysroot` to be writable.
+   For host system composes, we recommend turning this on; it's left off
+   by default to ease the transition.

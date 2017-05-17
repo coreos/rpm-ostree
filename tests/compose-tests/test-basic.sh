@@ -38,3 +38,9 @@ echo "ok boot files"
 ostree --repo=${repobuild} ls -R ${treeref} /usr/share/man > manpages.txt
 assert_file_has_content manpages.txt man5/ostree.repo.5
 echo "ok manpages"
+
+# https://github.com/projectatomic/rpm-ostree/issues/669
+ostree --repo=${repobuild} ls  ${treeref} /tmp > ls.txt
+assert_file_has_content ls.txt 'l00777 0 0      0 /tmp -> sysroot/tmp'
+echo "ok /tmp"
+

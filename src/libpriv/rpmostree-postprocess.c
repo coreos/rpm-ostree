@@ -93,11 +93,12 @@ typedef struct {
   const char *src;
 } Symlink;
 
-/* Initialize deployment root directory; currently hardcoded.  In the
- * future we may make this configurable.
+/* Initialize deployment root directory. This is mostly hardcoded; in the future
+ * we may make things more configurable.
  */
 static gboolean
 init_rootfs (int            dfd,
+             gboolean       tmp_is_dir,
              GCancellable  *cancellable,
              GError       **error)
 {
@@ -110,7 +111,6 @@ init_rootfs (int            dfd,
     { "var/home", "home" },
     { "run/media", "media" },
     { "sysroot/ostree", "ostree" },
-    { "sysroot/tmp", "tmp" },
   };
 
   for (guint i = 0; i < G_N_ELEMENTS (toplevel_dirs); i++)
@@ -123,6 +123,20 @@ init_rootfs (int            dfd,
     {
       const Symlink*linkinfo = symlinks + i;
       if (symlinkat (linkinfo->target, dfd, linkinfo->src) < 0)
+        return glnx_throw_errno_prefix (error, "symlinkat");
+    }
+
+  if (tmp_is_dir)
+    {
+      if (!glnx_shutil_mkdir_p_at (dfd, "tmp", 01777,
+                                   cancellable, error))
+        return FALSE;
+      if (fchmodat (dfd, "tmp", 01777, 0) == -1)
+        return glnx_throw_errno_prefix (error, "fchmodat");
+    }
+  else
+    {
+      if (symlinkat ("sysroot/tmp", dfd, "tmp") < 0)
         return glnx_throw_errno_prefix (error, "symlinkat");
     }
 
@@ -773,8 +787,16 @@ create_rootfs_from_yumroot_content (int            target_root_dfd,
     }
   
   g_print ("Initializing rootfs\n");
-  if (!init_rootfs (target_root_dfd, cancellable, error))
-    goto out;
+  { gboolean tmp_is_dir = FALSE;
+    if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
+                                                                 "tmp-is-dir",
+                                                                 &tmp_is_dir,
+                                                                 error))
+      goto out;
+
+    if (!init_rootfs (target_root_dfd, tmp_is_dir, cancellable, error))
+      goto out;
+  }
 
   g_print ("Migrating /etc/passwd to /usr/lib/\n");
   if (!rpmostree_passwd_migrate_except_root (yumroot, RPM_OSTREE_PASSWD_MIGRATE_PASSWD, NULL,
