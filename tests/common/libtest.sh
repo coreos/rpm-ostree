@@ -143,10 +143,10 @@ assert_not_has_dir () {
 assert_file_has_content () {
     fpath=$1
     shift
-    for re in $@; do
+    for re in "$@"; do
         if ! grep -q -e "$re" "$fpath"; then
-            sed -e 's/^/# /' < "$1" >&2
-            echo 1>&2 "File '$1' doesn't match regexp '$2'"
+            sed -e 's/^/# /' < "$fpath" >&2
+            echo 1>&2 "File '$fpath' doesn't match regexp '$re'"
             exit 1
         fi
     done
