@@ -145,7 +145,7 @@ assert_file_has_content () {
     shift
     for re in "$@"; do
         if ! grep -q -e "$re" "$fpath"; then
-            sed -e 's/^/# /' < "$re" >&2
+            sed -e 's/^/# /' < "$fpath" >&2
             echo 1>&2 "File '$fpath' doesn't match regexp '$re'"
             exit 1
         fi
