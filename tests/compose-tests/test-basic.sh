@@ -41,6 +41,6 @@ echo "ok manpages"
 
 # https://github.com/projectatomic/rpm-ostree/issues/669
 ostree --repo=${repobuild} ls  ${treeref} /tmp > ls.txt
-assert_file_has_content ls.txt 'd01777 0 0      0 /tmp'
+assert_file_has_content ls.txt 'l00777 0 0      0 /tmp -> sysroot/tmp'
 echo "ok /tmp"
 
