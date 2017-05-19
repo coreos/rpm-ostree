@@ -55,7 +55,7 @@ if ! vm_cmd test -f /etc/yum.repos.d/.vmcheck; then
     vm_cmd rm /etc/yum.repos.d.tmp -rf
     vm_cmd mkdir /etc/yum.repos.d.tmp
     vm_cmd touch /etc/yum.repos.d.tmp/.vmcheck
-    vm_cmd mv /etc/yum.repos.d{.tmp,}
+    vm_cmd cp -r /etc/yum.repos.d{.tmp,}
 else
     echo "Keeping existing vmcheck /etc/yum.repos.d"
 fi
@@ -152,6 +152,10 @@ for tf in $(find . -name 'test-*.sh' | sort); do
 
     # make sure to clean up any pending & rollback deployments
     vm_rpmostree cleanup -b -p -r || :
+
+    # and put back our tmp repo
+    vm_cmd rm /etc/yum.repos.d -rf
+    vm_cmd cp -r /etc/yum.repos.d{.tmp,}
 done
 
 

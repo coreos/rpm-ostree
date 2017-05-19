@@ -568,7 +568,6 @@ rpmostree_context_setup (RpmOstreeContext    *self,
                          GCancellable  *cancellable,
                          GError       **error)
 {
-  GPtrArray *repos = NULL;
   g_autofree char **enabled_repos = NULL;
   g_autofree char **instlangs = NULL;
 
@@ -615,15 +614,22 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   if (!dnf_context_setup (self->hifctx, cancellable, error))
     return FALSE;
 
-  /* NB: missing repo --> let hif figure it out for itself */
+  /* NB: missing "repos" --> let hif figure it out for itself */
   if (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos))
     if (!context_repos_enable_only (self, (const char *const*)enabled_repos, error))
       return FALSE;
 
-  repos = dnf_context_get_repos (self->hifctx);
+  GPtrArray *repos = dnf_context_get_repos (self->hifctx);
   if (repos->len == 0)
-    return glnx_throw (error, "No enabled repositories");
-
+    {
+      /* To be nice, let's only make this fatal if "packages" is empty (e.g. if
+       * we're only installing local RPMs. Missing deps will cause the regular
+       * 'not found' error from libdnf. */
+      g_autofree char **pkgs = NULL;
+      if (g_variant_dict_lookup (self->spec->dict, "packages", "^a&s", &pkgs) &&
+          g_strv_length (pkgs) > 0)
+        return glnx_throw (error, "No enabled repositories");
+    }
   require_enabled_repos (repos);
 
   { gboolean docs;
