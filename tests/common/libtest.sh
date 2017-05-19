@@ -26,16 +26,16 @@ fi
 LIBTEST_SH=1
 
 self="$(realpath $0)"
+if test -z "${SRCDIR:-}"; then
+    SRCDIR=${topsrcdir}/tests
+fi
+. ${SRCDIR}/common/libtest-core.sh
 
 for bin in jq; do
     if ! command -v $bin >/dev/null; then
         (echo ${bin} is required to execute tests 1>&2; exit 1)
     fi
 done
-
-if test -z "${SRCDIR:-}"; then
-    SRCDIR=${topsrcdir}/tests
-fi
 
 _cleanup_tmpdir () {
     if test -z "${TEST_SKIP_CLEANUP:-}"; then
@@ -97,68 +97,6 @@ fi
 if test -n "${OT_TESTS_VALGRIND:-}"; then
     CMD_PREFIX="env G_SLICE=always-malloc valgrind -q --leak-check=full --num-callers=30 --suppressions=${SRCDIR}/ostree-valgrind.supp"
 fi
-
-assert_not_reached () {
-    echo $@ 1>&2; exit 1
-}
-
-assert_streq () {
-    test "$1" = "$2" || (echo 1>&2 "$1 != $2"; exit 1)
-}
-
-assert_not_streq () {
-    (! test "$1" = "$2") || (echo 1>&2 "$1 == $2"; exit 1)
-}
-
-assert_has_file () {
-    test -f "$1" || (echo 1>&2 "Couldn't find '$1'"; exit 1)
-}
-
-assert_has_dir () {
-    test -d "$1" || (echo 1>&2 "Couldn't find '$1'"; exit 1)
-}
-
-assert_not_has_file () {
-    if test -f "$1"; then
-        sed -e 's/^/# /' < "$1" >&2
-        echo 1>&2 "File '$1' exists"
-        exit 1
-    fi
-}
-
-assert_not_file_has_content () {
-    if grep -q -e "$2" "$1"; then
-        sed -e 's/^/# /' < "$1" >&2
-        echo 1>&2 "File '$1' incorrectly matches regexp '$2'"
-        exit 1
-    fi
-}
-
-assert_not_has_dir () {
-    if test -d "$1"; then
-	echo 1>&2 "Directory '$1' exists"; exit 1
-    fi
-}
-
-assert_file_has_content () {
-    fpath=$1
-    shift
-    for re in "$@"; do
-        if ! grep -q -e "$re" "$fpath"; then
-            sed -e 's/^/# /' < "$fpath" >&2
-            echo 1>&2 "File '$fpath' doesn't match regexp '$re'"
-            exit 1
-        fi
-    done
-}
-
-assert_file_empty() {
-    if test -s "$1"; then
-        sed -e 's/^/# /' < "$1" >&2
-        echo 1>&2 "File '$1' is not empty"
-        exit 1
-    fi
-}
 
 # A wrapper which also possibly disables xattrs for CI testing
 ostree_repo_init() {
@@ -295,7 +233,7 @@ setup_os_repository () {
     export bootcsum
     mv boot/vmlinuz-3.6.0 boot/vmlinuz-3.6.0-${bootcsum}
     mv boot/initramfs-3.6.0 boot/initramfs-3.6.0-${bootcsum}
-    
+
     echo "an executable" > usr/bin/sh
     echo "some shared data" > usr/share/langs.txt
     echo "a library" > usr/lib/libfoo.so.0
@@ -314,7 +252,7 @@ EOF
     echo "a default daemon file" > usr/etc/testdirectory/test
 
     ostree --repo=${test_tmpdir}/testos-repo commit --add-metadata-string version=1.0.9 -b testos/buildmaster/x86_64-runtime -s "Build"
-    
+
     # Ensure these commits have distinct second timestamps
     sleep 2
     echo "a new executable" > usr/bin/sh
@@ -345,7 +283,7 @@ EOF
 	    setup_os_boot_uboot
             ;;
     esac
-    
+
     cd ${test_tmpdir}
     mkdir ${test_tmpdir}/httpd
     cd httpd
@@ -385,11 +323,6 @@ os_repository_new_commit ()
 
     ostree --repo=${test_tmpdir}/testos-repo commit  --add-metadata-string "version=${version}" -b testos/buildmaster/x86_64-runtime -s "Build"
     cd ${test_tmpdir}
-}
-
-skip() {
-    echo "1..0 # SKIP" "$@"
-    exit 0
 }
 
 check_root_test ()
