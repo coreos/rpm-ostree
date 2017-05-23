@@ -58,6 +58,12 @@ vm_cmd rpm -q foo test-livefs-with-etc > rpmq.txt
 assert_file_has_content rpmq.txt foo-1.0-1 test-livefs-with-etc-1.0-1
 vm_cmd cat /etc/test-livefs-with-etc.conf > test-livefs-with-etc.conf
 assert_file_has_content test-livefs-with-etc.conf "A config file for test-livefs-with-etc"
+for v in subconfig-one subconfig-two subdir/subconfig-three; do
+    vm_cmd cat /etc/test-livefs-with-etc/${v}.conf > test-livefs-with-etc.conf
+    assert_file_has_content_literal test-livefs-with-etc.conf $(basename $v)
+done
+vm_cmd cat /etc/opt/test-livefs-with-etc-opt.conf > test-livefs-with-etc.conf
+assert_file_has_content test-livefs-with-etc.conf "file-in-opt-subdir"
 
 echo "ok livefs stage2"
 

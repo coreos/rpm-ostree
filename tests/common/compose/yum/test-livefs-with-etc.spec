@@ -27,7 +27,16 @@ mkdir -p %{buildroot}/usr/bin
 install %{name} %{buildroot}/usr/bin
 mkdir -p %{buildroot}/etc
 install %{name}.conf %{buildroot}/etc
+mkdir -p %{buildroot}/etc/%{name}/
+echo subconfig-one > %{buildroot}/etc/%{name}/subconfig-one.conf
+echo subconfig-two > %{buildroot}/etc/%{name}/subconfig-two.conf
+mkdir -p %{buildroot}/etc/%{name}/subdir
+echo subconfig-three > %{buildroot}/etc/%{name}/subdir/subconfig-three.conf
+mkdir -p %{buildroot}/etc/opt
+echo file-in-opt-subdir > %{buildroot}/etc/opt/%{name}-opt.conf
 
 %files
 /usr/bin/%{name}
 /etc/%{name}.conf
+/etc/%{name}/*
+/etc/opt/%{name}*
