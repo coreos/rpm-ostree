@@ -193,6 +193,9 @@ copy_new_config_files (OstreeRepo          *repo,
   if (!glnx_opendirat (new_deployment_dfd, "etc", TRUE, &deployment_etc_dfd, error))
     return FALSE;
 
+  /* FIXME: This algorithm currently unncessarily recurses into added
+   * subdirectories, and checks out each file/subdir again.
+   */
   guint n_added = 0;
   for (guint i = 0; i < diff->added->len; i++)
     {
