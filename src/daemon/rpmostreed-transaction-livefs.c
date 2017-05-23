@@ -200,13 +200,44 @@ copy_new_config_files (OstreeRepo          *repo,
       const char *path = gs_file_get_path_cached (added_f);
       if (!g_str_has_prefix (path, "/usr/etc/"))
         continue;
+      const char *etc_path = path + strlen ("/usr");
 
       etc_co_opts.subpath = path;
       /* Strip off /usr for selinux labeling */
-      etc_co_opts.sepolicy_prefix = path + strlen ("/usr");
+      etc_co_opts.sepolicy_prefix = etc_path;
+
+      const char *sub_etc_relpath = etc_path + strlen ("/etc/");
+      g_autoptr(GFileInfo) finfo = g_file_query_info (added_f, "standard::type",
+                                                      G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
+                                                      cancellable, error);
+      if (!finfo)
+        return FALSE;
+
+      /* And now, to deal with ostree semantics around subpath checkouts,
+       * we want '.' for files, otherwise get the real dir name.  See also
+       * the comment in ostree-repo-checkout.c:checkout_tree_at().
+       */
+      /* First, get the destination parent dfd */
+      glnx_fd_close int dest_dfd = -1;
+      g_autofree char *dnbuf = g_strdup (sub_etc_relpath);
+      const char *dn = dirname (dnbuf);
+      if (!glnx_opendirat (deployment_etc_dfd, dn, TRUE, &dest_dfd, error))
+        return FALSE;
+      const char *dest_path;
+      /* Is it a non-directory?  OK, we check out into the parent directly */
+      if (g_file_info_get_file_type (finfo) != G_FILE_TYPE_DIRECTORY)
+        {
+          dest_path = ".";
+        }
+      else
+        {
+          /* For directories, we need to match the target's name and hence
+           * create a new directory. */
+          dest_path = glnx_basename (sub_etc_relpath);
+        }
 
       if (!ostree_repo_checkout_at (repo, &etc_co_opts,
-                                    deployment_etc_dfd, ".",
+                                    dest_dfd, dest_path,
                                     ostree_deployment_get_csum (merge_deployment),
                                     cancellable, error))
         return g_prefix_error (error, "Copying %s: ", path), FALSE;
