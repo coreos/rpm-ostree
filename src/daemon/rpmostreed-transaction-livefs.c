@@ -193,10 +193,9 @@ copy_new_config_files (OstreeRepo          *repo,
   if (!glnx_opendirat (new_deployment_dfd, "etc", TRUE, &deployment_etc_dfd, error))
     return FALSE;
 
-  /* FIXME: This algorithm currently unncessarily recurses into added
-   * subdirectories, and checks out each file/subdir again.
-   */
   guint n_added = 0;
+  /* Avoid checking out added subdirs recursively */
+  g_autoptr(GPtrArray) added_subdirs = g_ptr_array_new_with_free_func (g_free);
   for (guint i = 0; i < diff->added->len; i++)
     {
       GFile *added_f = diff->added->pdata[i];
@@ -210,11 +209,32 @@ copy_new_config_files (OstreeRepo          *repo,
       etc_co_opts.sepolicy_prefix = etc_path;
 
       const char *sub_etc_relpath = etc_path + strlen ("/etc/");
+      /* We keep track of added subdirectories and skip children of it, since
+       * both the diff and checkout are recursive, but we only need to checkout
+       * the directory, which will get all children. To do better I'd say we
+       * should add an option to ostree_repo_diff() to avoid recursing into
+       * changed subdirectories.  But at the scale we're dealing with here the
+       * constants for this O(N²) algorithm are tiny.
+       */
+      for (guint j = 0; j < added_subdirs->len; j++)
+        {
+          const char *already_added_subdir = added_subdirs->pdata[j];
+          if (g_str_has_prefix (sub_etc_relpath, already_added_subdir))
+            continue;
+        }
+
       g_autoptr(GFileInfo) finfo = g_file_query_info (added_f, "standard::type",
                                                       G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
                                                       cancellable, error);
       if (!finfo)
         return FALSE;
+
+      /* If this is a directory, add it to our "added subdirs" set. See above.  Add
+       * a trailing / to ensure we don't match other file prefixes.
+       */
+      const gboolean is_dir = g_file_info_get_file_type (finfo) == G_FILE_TYPE_DIRECTORY;
+      if (is_dir)
+        g_ptr_array_add (added_subdirs, g_strconcat (sub_etc_relpath, "/", NULL));
 
       /* And now, to deal with ostree semantics around subpath checkouts,
        * we want '.' for files, otherwise get the real dir name.  See also
@@ -228,7 +248,7 @@ copy_new_config_files (OstreeRepo          *repo,
         return FALSE;
       const char *dest_path;
       /* Is it a non-directory?  OK, we check out into the parent directly */
-      if (g_file_info_get_file_type (finfo) != G_FILE_TYPE_DIRECTORY)
+      if (!is_dir)
         {
           dest_path = ".";
         }
