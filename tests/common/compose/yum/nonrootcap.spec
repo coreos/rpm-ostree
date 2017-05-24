@@ -52,6 +52,7 @@ rm -rf %{buildroot}
 /usr/bin/nrc-none.sh
 %attr(-, nrcuser, -) /etc/nrc.conf
 %attr(-, nrcuser, -) /etc/nrc-link.conf
+%ghost %attr(-, nrcuser, -) /etc/nrc-ghost.conf
 %attr(-, nrcuser, -) /usr/bin/nrc-user.sh
 %attr(-, nrcuser, -) /usr/bin/nrc-user-link.sh
 %attr(-, -, nrcgroup) /usr/bin/nrc-group.sh
