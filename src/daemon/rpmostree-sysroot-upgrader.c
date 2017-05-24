@@ -119,19 +119,12 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
                                           GCancellable     *cancellable,
                                           GError          **error)
 {
-  gboolean ret = FALSE;
   RpmOstreeSysrootUpgrader *self = (RpmOstreeSysrootUpgrader*)initable;
+
   OstreeDeployment *booted_deployment =
     ostree_sysroot_get_booted_deployment (self->sysroot);
-  const char *merge_deployment_csum = NULL;
-  gboolean is_layered;
-
   if (booted_deployment == NULL && self->osname == NULL)
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Not currently booted into an OSTree system and no OS specified");
-      goto out;
-    }
+    return glnx_throw (error, "Not currently booted into an OSTree system and no OS specified");
 
   if (self->osname == NULL)
     {
@@ -139,42 +132,39 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
       self->osname = g_strdup (ostree_deployment_get_osname (booted_deployment));
     }
   else if (self->osname[0] == '\0')
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Invalid empty osname");
-      goto out;
-    }
+    return glnx_throw (error, "Invalid empty osname");
 
   if (!ostree_sysroot_get_repo (self->sysroot, &self->repo, cancellable, error))
-    goto out;
+    return FALSE;
 
-  self->cfg_merge_deployment = ostree_sysroot_get_merge_deployment (self->sysroot, self->osname);
-  self->origin_merge_deployment = rpmostree_syscore_get_origin_merge_deployment (self->sysroot, self->osname);
+  self->cfg_merge_deployment =
+    ostree_sysroot_get_merge_deployment (self->sysroot, self->osname);
+  self->origin_merge_deployment =
+    rpmostree_syscore_get_origin_merge_deployment (self->sysroot, self->osname);
   if (self->cfg_merge_deployment == NULL || self->origin_merge_deployment == NULL)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "No previous deployment for OS '%s'", self->osname);
-      goto out;
-    }
+    return glnx_throw (error, "No previous deployment for OS '%s'",
+                       self->osname);
 
   /* Should we consider requiring --discard-hotfix here?
    * See also `ostree admin upgrade` bits.
    */
-  if (!parse_origin_deployment (self, self->origin_merge_deployment, cancellable, error))
-    goto out;
+  if (!parse_origin_deployment (self, self->origin_merge_deployment,
+                                cancellable, error))
+    return FALSE;
 
-  merge_deployment_csum =
+  const char *merge_deployment_csum =
     ostree_deployment_get_csum (self->origin_merge_deployment);
 
   /* Now, load starting base/final checksums.  We may end up changing
    * one or both if we upgrade.  But we also want to support redeploying
    * without changing them.
    */
+  gboolean is_layered;
   if (!rpmostree_deployment_get_layered_info (self->repo,
                                               self->origin_merge_deployment,
                                               &is_layered, &self->base_revision,
                                               NULL, error))
-    goto out;
+    return FALSE;
 
   if (is_layered)
     /* base layer is already populated above */
@@ -183,10 +173,7 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
     self->base_revision = g_strdup (merge_deployment_csum);
 
   g_assert (self->base_revision);
-
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static void
@@ -369,18 +356,13 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
                                  GCancellable           *cancellable,
                                  GError                **error)
 {
-  gboolean ret = FALSE;
-  char *refs_to_fetch[] = { NULL, NULL };
-  g_autofree char *new_base_revision = NULL;
   g_autofree char *origin_remote = NULL;
   g_autofree char *origin_ref = NULL;
-
   if (!ostree_parse_refspec (rpmostree_origin_get_refspec (self->origin),
-                             &origin_remote, 
-                             &origin_ref,
-                             error))
-    goto out;
+                             &origin_remote, &origin_ref, error))
+    return FALSE;
 
+  char *refs_to_fetch[] = { NULL, NULL };
   if (rpmostree_origin_get_override_commit (self->origin) != NULL)
     refs_to_fetch[0] = (char*)rpmostree_origin_get_override_commit (self->origin);
   else
@@ -392,12 +374,13 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
       if (!ostree_repo_pull_one_dir (self->repo, origin_remote, dir_to_pull, refs_to_fetch,
                                      flags, progress,
                                      cancellable, error))
-        goto out;
+        return FALSE;
 
       if (progress)
         ostree_async_progress_finish (progress);
     }
 
+  g_autofree char *new_base_revision = NULL;
   if (rpmostree_origin_get_override_commit (self->origin) != NULL)
     {
       if (!ostree_repo_set_ref_immediate (self->repo,
@@ -406,7 +389,7 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
                                           rpmostree_origin_get_override_commit (self->origin),
                                           cancellable,
                                           error))
-        goto out;
+        return FALSE;
 
       new_base_revision = g_strdup (rpmostree_origin_get_override_commit (self->origin));
     }
@@ -414,7 +397,7 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
     {
       if (!ostree_repo_resolve_rev (self->repo, rpmostree_origin_get_refspec (self->origin), FALSE,
                                     &new_base_revision, error))
-        goto out;
+        return FALSE;
     }
 
   {
@@ -431,7 +414,7 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
             if (!ostree_sysroot_upgrader_check_timestamps (self->repo, self->base_revision,
                                                            new_base_revision,
                                                            error))
-              goto out;
+              return FALSE;
           }
 
         g_free (self->base_revision);
@@ -441,9 +424,7 @@ rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
     *out_changed = changed;
   }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -649,17 +630,11 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
                          GCancellable             *cancellable,
                          GError                  **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(RpmOstreeContext) ctx = NULL;
-  g_autoptr(RpmOstreeTreespec) treespec = NULL;
-  g_autoptr(RpmOstreeInstall) install = {0,};
-  g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
-  glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
-  GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
-  const gboolean have_packages = g_hash_table_size (pkgset) > 0 ||
-                                 g_hash_table_size (local_pkgs) > 0;
+  g_autoptr(RpmOstreeContext) ctx =
+    rpmostree_context_new_system (cancellable, error);
 
-  ctx = rpmostree_context_new_system (cancellable, error);
+  g_autofree char *tmprootfs_abspath =
+    glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
 
   /* pass merge deployment related values */
   {
@@ -689,37 +664,44 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
     glnx_unref_object OstreeSePolicy *sepolicy = NULL;
     if (!rpmostree_prepare_rootfs_get_sepolicy (self->tmprootfs_dfd, &sepolicy,
                                                 cancellable, error))
-      goto out;
+      return FALSE;
 
     rpmostree_context_set_sepolicy (ctx, sepolicy);
   }
 
+  GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
+
   /* NB: We're pretty much using the defaults for the other treespec values like
    * instlang and docs since it would be hard to expose the cli for them because
    * they wouldn't affect just the new pkgs, but even previously added ones. */
-  treespec = generate_treespec (pkgset, local_pkgs);
+  g_autoptr(RpmOstreeTreespec) treespec =
+    generate_treespec (pkgset, local_pkgs);
   if (treespec == NULL)
-    goto out;
+    return FALSE;
 
   if (!rpmostree_context_setup (ctx, tmprootfs_abspath, NULL, treespec,
                                 cancellable, error))
-    goto out;
+    return FALSE;
 
+  glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
   if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo,
                                     cancellable, error))
-    goto out;
+    return FALSE;
 
   rpmostree_context_set_repos (ctx, self->repo, pkgcache_repo);
 
+  const gboolean have_packages = g_hash_table_size (pkgset) > 0 ||
+                                 g_hash_table_size (local_pkgs) > 0;
+  g_autoptr(RpmOstreeInstall) install = {0,};
   if (have_packages)
     {
       /* --- Downloading metadata --- */
       if (!rpmostree_context_download_metadata (ctx, cancellable, error))
-        goto out;
+        return FALSE;
 
       /* --- Resolving dependencies --- */
       if (!rpmostree_context_prepare_install (ctx, &install, cancellable, error))
-        goto out;
+        return FALSE;
     }
   else
     rpmostree_context_set_is_empty (ctx);
@@ -728,23 +710,22 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
     {
       if (have_packages)
         rpmostree_print_transaction (rpmostree_context_get_hif (ctx));
-      ret = TRUE;
-      goto out;
+      return TRUE; /* Note early return */
     }
 
   if (have_packages)
     {
       /* --- Download as necessary --- */
       if (!rpmostree_context_download (ctx, install, cancellable, error))
-        goto out;
+        return FALSE;
 
       /* --- Import as necessary --- */
       if (!rpmostree_context_import (ctx, install, cancellable, error))
-        goto out;
+        return FALSE;
 
       /* --- Relabel as necessary --- */
       if (!rpmostree_context_relabel (ctx, install, cancellable, error))
-        goto out;
+        return FALSE;
 
       /* --- Overlay and commit --- */
 
@@ -753,11 +734,11 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
                                                  RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
                                                  (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS) > 0,
                                                  cancellable, error))
-        goto out;
+        return FALSE;
     }
 
   if (!rpmostree_rootfs_postprocess_common (self->tmprootfs_dfd, cancellable, error))
-    goto out;
+    return FALSE;
 
   if (rpmostree_origin_get_regenerate_initramfs (self->origin))
     {
@@ -776,7 +757,7 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
 
       kernel_state = rpmostree_find_kernel (self->tmprootfs_dfd, cancellable, error);
       if (!kernel_state)
-        goto out;
+        return FALSE;
       g_variant_get (kernel_state, "(&s&s&sm&s)",
                      &kver, &bootdir,
                      &kernel_path, &initramfs_path);
@@ -785,13 +766,13 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
       if (!rpmostree_run_dracut (self->tmprootfs_dfd, add_dracut_argv, kver,
                                  initramfs_path, &initramfs_tmp_fd,
                                  &initramfs_tmp_path, cancellable, error))
-        goto out;
+        return FALSE;
 
       if (!rpmostree_finalize_kernel (self->tmprootfs_dfd, bootdir, kver,
                                       kernel_path,
                                       initramfs_tmp_path, initramfs_tmp_fd,
                                       cancellable, error))
-        goto out;
+        return FALSE;
 
       rpmostree_output_task_end ("done");
     }
@@ -801,11 +782,9 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
                                            RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
                                            &self->final_revision,
                                            cancellable, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
-out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
