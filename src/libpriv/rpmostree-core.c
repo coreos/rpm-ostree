@@ -2301,10 +2301,9 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
           /* Not early loop skip; in the ghost case, we expect it to not
            * exist.
            */
-          if (is_ghost)
+          if (errno == ENOENT && is_ghost)
             continue;
-          glnx_set_prefix_error_from_errno (error, "fstatat: %s", fn);
-          return FALSE;
+          return glnx_throw_errno_prefix (error, "fstatat(%s)", fn);
         }
 
       if ((S_IFMT & stbuf.st_mode) != (S_IFMT & mode))
