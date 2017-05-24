@@ -2407,20 +2407,14 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                       GCancellable          *cancellable,
                                       GError               **error)
 {
-  gboolean ret = FALSE;
   OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
   DnfContext *hifctx = self->hifctx;
   TransactionData tdata = { 0, -1 };
-  rpmts ordering_ts = NULL;
-  rpmts rpmdb_ts = NULL;
-  guint n_rpmts_elements;
   g_autoptr(GHashTable) pkg_to_ostree_commit =
     g_hash_table_new_full (NULL, NULL, (GDestroyNotify)g_object_unref, (GDestroyNotify)g_free);
   DnfPackage *filesystem_package = NULL;   /* It's special... */
-  int r;
 
-
-  ordering_ts = rpmtsCreate ();
+  g_auto(rpmts) ordering_ts = rpmtsCreate ();
   rpmtsSetRootDir (ordering_ts, dnf_context_get_install_root (hifctx));
   /* First for the ordering TS, set the dbpath to relative, which will also gain
    * the root dir.
@@ -2444,11 +2438,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                           -1);
 
     if (package_list->len == 0)
-      {
-        g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                             "No packages in installation set");
-        goto out;
-      }
+      return glnx_throw (error, "No packages in installation set");
 
     for (guint i = 0; i < package_list->len; i++)
       {
@@ -2459,26 +2449,26 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
         if (!ostree_repo_resolve_rev (pkgcache_repo, cachebranch, FALSE,
                                       &cached_rev, error))
-          goto out;
+          return FALSE;
 
         if (self->sepolicy)
           {
             if (!commit_has_matching_sepolicy (pkgcache_repo, cached_rev,
                                                self->sepolicy, &sepolicy_matches,
                                                error))
-              goto out;
+              return FALSE;
 
             /* We already did any relabeling/reimporting above */
             g_assert (sepolicy_matches);
           }
 
         if (!checkout_pkg_metadata_by_dnfpkg (self, pkg, cancellable, error))
-          goto out;
+          return FALSE;
 
         if (!add_to_transaction (ordering_ts, pkg, self->metadata_dir_fd,
                                  noscripts, self->ignore_scripts,
                                  cancellable, error))
-          goto out;
+          return FALSE;
 
         g_hash_table_insert (pkg_to_ostree_commit, g_object_ref (pkg), g_steal_pointer (&cached_rev));
 
@@ -2492,7 +2482,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
   rpmostree_output_task_begin ("Overlaying");
 
-  n_rpmts_elements = (guint)rpmtsNElements (ordering_ts);
+  guint n_rpmts_elements = (guint)rpmtsNElements (ordering_ts);
 
   /* Okay so what's going on in Fedora with incestuous relationship
    * between the `filesystem`, `setup`, `libgcc` RPMs is actively
@@ -2511,7 +2501,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                        g_hash_table_lookup (pkg_to_ostree_commit,
                                                             filesystem_package),
                                        cancellable, error))
-        goto out;
+        return FALSE;
     }
   else
     {
@@ -2528,7 +2518,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                        g_hash_table_lookup (pkg_to_ostree_commit,
                                                             pkg),
                                        cancellable, error))
-        goto out;
+        return FALSE;
 
       filesystem_package = g_object_ref (pkg);
     }
@@ -2548,13 +2538,13 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                        g_hash_table_lookup (pkg_to_ostree_commit,
                                                             pkg),
                                        cancellable, error))
-        goto out;
+        return FALSE;
     }
 
   rpmostree_output_task_end ("done");
 
   if (!rpmostree_rootfs_prepare_links (tmprootfs_dfd, cancellable, error))
-    goto out;
+    return FALSE;
 
   if (!noscripts)
     {
@@ -2576,7 +2566,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                                   &have_passwd,
                                                   cancellable,
                                                   error))
-        goto out;
+        return FALSE;
 
       /* Also neuter systemctl - at least glusterfs calls it
        * in %post without disallowing errors.  Anyways,
@@ -2587,19 +2577,13 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
           if (errno == ENOENT)
             have_systemctl = FALSE;
           else
-            {
-              glnx_set_prefix_error_from_errno (error, "%s", "Renaming usr/bin/systemctl");
-              goto out;
-            }
+            return glnx_throw_errno_prefix (error, "rename(usr/bin/systemctl)");
         }
       else
         {
           have_systemctl = TRUE;
           if (symlinkat ("true", tmprootfs_dfd, "usr/bin/systemctl") < 0)
-            {
-              glnx_set_error_from_errno (error);
-              goto out;
-            }
+            return glnx_throw_errno_prefix (error, "symlinkat(usr/bin/systemctl)");
         }
 
       /* We're technically deviating from RPM here by running all the %pre's
@@ -2618,7 +2602,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
           if (!run_pre_sync (self->metadata_dir_fd, tmprootfs_dfd, pkg,
                              self->ignore_scripts,
                              cancellable, error))
-            goto out;
+            return FALSE;
         }
 
       if (have_passwd &&
@@ -2628,7 +2612,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
             glnx_file_get_contents_utf8_at (tmprootfs_dfd, "usr/etc/passwd",
                                             NULL, cancellable, error);
           if (!contents)
-            goto out;
+            return FALSE;
 
           passwdents_ptr = rpmostree_passwd_data2passwdents (contents);
           for (guint i = 0; i < passwdents_ptr->len; i++)
@@ -2645,7 +2629,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
             glnx_file_get_contents_utf8_at (tmprootfs_dfd, "usr/etc/group",
                                             NULL, cancellable, error);
           if (!contents)
-            goto out;
+            return FALSE;
 
           groupents_ptr = rpmostree_passwd_data2groupents (contents);
           for (guint i = 0; i < groupents_ptr->len; i++)
@@ -2665,32 +2649,26 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
           if (!apply_rpmfi_overrides (self->metadata_dir_fd, tmprootfs_dfd,
                                       pkg, passwdents, groupents,
                                       cancellable, error))
-            {
-              g_prefix_error (error, "While applying overrides for pkg %s: ",
-                              dnf_package_get_name (pkg));
-              goto out;
-            }
+            return glnx_prefix_error (error, "While applying overrides for pkg %s: ",
+                                      dnf_package_get_name (pkg));
 
           if (!run_posttrans_sync (self->metadata_dir_fd, tmprootfs_dfd, pkg,
                                    self->ignore_scripts,
                                    cancellable, error))
-            goto out;
+            return FALSE;
         }
 
       if (have_systemctl)
         {
           if (renameat (tmprootfs_dfd, "usr/bin/systemctl.rpmostreesave",
                         tmprootfs_dfd, "usr/bin/systemctl") < 0)
-            {
-              glnx_set_error_from_errno (error);
-              goto out;
-            }
+            return glnx_throw_errno_prefix (error, "renameat(usr/bin/systemctl)");
         }
 
       if (have_passwd)
         {
           if (!rpmostree_passwd_complete_rpm_layering (tmprootfs_dfd, error))
-            goto out;
+            return FALSE;
         }
     }
 
@@ -2700,7 +2678,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
   if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "usr/share/rpm", 0755,
                                cancellable, error))
-    goto out;
+    return FALSE;
 
   /* Now, we use the separate rpmdb ts which *doesn't* have a rootdir set,
    * because if it did rpmtsRun() would try to chroot which it won't be able to
@@ -2716,12 +2694,12 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
      * an rpmdb, we have to make sure to break its hardlinks as librpm mutates
      * the db in place */
     if (!break_hardlinks_at (AT_FDCWD, rpmdb_abspath, cancellable, error))
-      goto out;
+      return FALSE;
 
     set_rpm_macro_define ("_dbpath", rpmdb_abspath);
   }
 
-  rpmdb_ts = rpmtsCreate ();
+  g_auto(rpmts) rpmdb_ts = rpmtsCreate ();
   rpmtsSetVSFlags (rpmdb_ts, _RPMVSF_NOSIGNATURES | _RPMVSF_NODIGESTS);
   rpmtsSetFlags (rpmdb_ts, RPMTRANS_FLAG_JUSTDB);
 
@@ -2739,7 +2717,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
         /* Set noscripts since we already validated them above */
         if (!add_to_transaction (rpmdb_ts, pkg, self->metadata_dir_fd, TRUE, NULL,
                                  cancellable, error))
-          goto out;
+          return FALSE;
       }
   }
 
@@ -2752,30 +2730,18 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
    * root dir at least if we have CAP_SYS_CHROOT, or maybe do the space req
    * check ourselves if rpm makes that information easily accessible (doesn't
    * look like it from a quick glance). */
-  r = rpmtsRun (rpmdb_ts, NULL, RPMPROB_FILTER_DISKSPACE);
+  int r = rpmtsRun (rpmdb_ts, NULL, RPMPROB_FILTER_DISKSPACE);
   if (r < 0)
-    {
-      g_set_error (error,
-                   G_IO_ERROR,
-                   G_IO_ERROR_FAILED,
-                   "Failed to update rpmdb (rpmtsRun code %d)", r);
-      goto out;
-    }
+    return glnx_throw (error, "Failed to update rpmdb (rpmtsRun code %d)", r);
   if (r > 0)
     {
       if (!dnf_rpmts_look_for_problems (rpmdb_ts, error))
-        goto out;
+        return FALSE;
     }
 
   rpmostree_output_task_end ("done");
 
-  ret = TRUE;
- out:
-  if (ordering_ts)
-    rpmtsFree (ordering_ts);
-  if (rpmdb_ts)
-    rpmtsFree (rpmdb_ts);
-  return ret;
+  return TRUE;
 }
 
 gboolean
