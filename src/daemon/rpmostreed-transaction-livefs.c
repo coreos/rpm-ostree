@@ -195,7 +195,7 @@ copy_new_config_files (OstreeRepo          *repo,
 
   guint n_added = 0;
   /* Avoid checking out added subdirs recursively */
-  g_autoptr(GPtrArray) added_subdirs = g_ptr_array_new ();
+  g_autoptr(GPtrArray) added_subdirs = g_ptr_array_new_with_free_func (g_free);
   for (guint i = 0; i < diff->added->len; i++)
     {
       GFile *added_f = diff->added->pdata[i];
@@ -229,13 +229,12 @@ copy_new_config_files (OstreeRepo          *repo,
       if (!finfo)
         return FALSE;
 
-      /* If this is a directory, add it to our "added subdirs" set. See above.
-       * Yes, we're playing a bit fast-and-loose by not doing a strdup, but
-       * we know ultimately that `path` will be alive as long as the file.
+      /* If this is a directory, add it to our "added subdirs" set. See above.  Add
+       * a trailing / to ensure we don't match other file prefixes.
        */
       const gboolean is_dir = g_file_info_get_file_type (finfo) == G_FILE_TYPE_DIRECTORY;
       if (is_dir)
-        g_ptr_array_add (added_subdirs, (char*)sub_etc_relpath);
+        g_ptr_array_add (added_subdirs, g_strconcat (sub_etc_relpath, "/", NULL));
 
       /* And now, to deal with ostree semantics around subpath checkouts,
        * we want '.' for files, otherwise get the real dir name.  See also
