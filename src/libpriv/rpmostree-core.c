@@ -2253,6 +2253,8 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
       const char *group = rpmfiFGroup (fi) ?: "root";
       const char *fcaps = rpmfiFCaps (fi) ?: '\0';
       rpm_mode_t mode = rpmfiFMode (fi);
+      rpmfileAttrs fattrs = rpmfiFFlags (fi);
+      const gboolean is_ghost = fattrs & RPMFILE_GHOST;
       struct stat stbuf;
       uid_t uid = 0;
       gid_t gid = 0;
@@ -2296,8 +2298,12 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
 
       if (fstatat (tmprootfs_dfd, fn, &stbuf, AT_SYMLINK_NOFOLLOW) != 0)
         {
-          glnx_set_prefix_error_from_errno (error, "fstatat: %s", fn);
-          return FALSE;
+          /* Not early loop skip; in the ghost case, we expect it to not
+           * exist.
+           */
+          if (errno == ENOENT && is_ghost)
+            continue;
+          return glnx_throw_errno_prefix (error, "fstatat(%s)", fn);
         }
 
       if ((S_IFMT & stbuf.st_mode) != (S_IFMT & mode))
