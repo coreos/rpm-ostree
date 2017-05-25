@@ -11,7 +11,7 @@ build() {
 }
 
 build_default() {
-    export CFLAGS='-fsanitize=undefined'
+    export CFLAGS="${CFLAGS:-} -fsanitize=undefined"
     build
 }
 
