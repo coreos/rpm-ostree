@@ -13,9 +13,9 @@ set -xeuo pipefail
 # It's very common for people to accidentally change submodules, and having this
 # requirement is a small hurdle to pass.
 
-# if running under RHCI, use the branch/PR HEAD actually
+# if running under PAPR, use the branch/PR HEAD actually
 # being tested rather than the merge sha
-HEAD=${RHCI_COMMIT:-HEAD}
+HEAD=${PAPR_COMMIT:-HEAD}
 
 tmpd=$(mktemp -d)
 touch ${tmpd}/.tmpdir
