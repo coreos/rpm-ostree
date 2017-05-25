@@ -2092,7 +2092,7 @@ rpmostree_context_relabel (RpmOstreeContext *self,
 
 typedef struct {
   FD_t current_trans_fd;
-  int tmp_metadata_dfd;
+  RpmOstreeContext *ctx;
 } TransactionData;
 
 static void *
@@ -2113,7 +2113,7 @@ ts_callback (const void * h,
         /* just bypass fdrel_abspath here since we know the dfd is not ATCWD and
          * it saves us an allocation */
         g_autofree char *path = g_strdup_printf ("/proc/self/fd/%d/%s.rpm",
-                                                 tdata->tmp_metadata_dfd,
+                                                 tdata->ctx->metadata_dir_fd,
                                                  dnf_package_get_nevra (pkg));
         g_assert (tdata->current_trans_fd == NULL);
         tdata->current_trans_fd = Fopen (path, "r.ufdio");
@@ -2133,28 +2133,24 @@ ts_callback (const void * h,
 }
 
 static gboolean
-get_package_metainfo (int tmp_metadata_dfd,
+get_package_metainfo (RpmOstreeContext *self,
                       const char *path,
                       Header *out_header,
                       rpmfi *out_fi,
                       GError **error)
 {
   glnx_fd_close int metadata_fd = -1;
-
-  if ((metadata_fd = openat (tmp_metadata_dfd, path, O_RDONLY | O_CLOEXEC)) < 0)
-    {
-      glnx_set_error_from_errno (error);
-      return FALSE;
-    }
+  if ((metadata_fd = openat (self->metadata_dir_fd, path, O_RDONLY | O_CLOEXEC)) < 0)
+    return glnx_throw_errno_prefix (error, "open(%s)", path);
 
   return rpmostree_unpacker_read_metainfo (metadata_fd, out_header, NULL,
                                            out_fi, error);
 }
 
 static gboolean
-add_to_transaction (rpmts  ts,
+add_to_transaction (RpmOstreeContext *self,
+                    rpmts  ts,
                     DnfPackage *pkg,
-                    int tmp_metadata_dfd,
                     gboolean noscripts,
                     GHashTable *ignore_scripts,
                     GCancellable *cancellable,
@@ -2164,7 +2160,7 @@ add_to_transaction (rpmts  ts,
   g_autofree char *path = get_package_relpath (pkg);
   int r;
 
-  if (!get_package_metainfo (tmp_metadata_dfd, path, &hdr, NULL, error))
+  if (!get_package_metainfo (self, path, &hdr, NULL, error))
     return FALSE;
 
   if (!noscripts)
@@ -2188,20 +2184,19 @@ add_to_transaction (rpmts  ts,
 }
 
 static gboolean
-run_posttrans_sync (int tmp_metadata_dfd,
+run_posttrans_sync (RpmOstreeContext *self,
                     int rootfs_dfd,
                     DnfPackage *pkg,
-                    GHashTable *ignore_scripts,
                     GCancellable *cancellable,
                     GError    **error)
 {
   g_auto(Header) hdr = NULL;
   g_autofree char *path = get_package_relpath (pkg);
 
-  if (!get_package_metainfo (tmp_metadata_dfd, path, &hdr, NULL, error))
+  if (!get_package_metainfo (self, path, &hdr, NULL, error))
     return FALSE;
 
-  if (!rpmostree_posttrans_run_sync (pkg, hdr, ignore_scripts, rootfs_dfd,
+  if (!rpmostree_posttrans_run_sync (pkg, hdr, self->ignore_scripts, rootfs_dfd,
                                      cancellable, error))
     return FALSE;
 
@@ -2209,20 +2204,19 @@ run_posttrans_sync (int tmp_metadata_dfd,
 }
 
 static gboolean
-run_pre_sync (int tmp_metadata_dfd,
+run_pre_sync (RpmOstreeContext *self,
               int rootfs_dfd,
               DnfPackage *pkg,
-              GHashTable *ignore_scripts,
               GCancellable *cancellable,
               GError    **error)
 {
   g_auto(Header) hdr = NULL;
   g_autofree char *path = get_package_relpath (pkg);
 
-  if (!get_package_metainfo (tmp_metadata_dfd, path, &hdr, NULL, error))
+  if (!get_package_metainfo (self, path, &hdr, NULL, error))
     return FALSE;
 
-  if (!rpmostree_pre_run_sync (pkg, hdr, ignore_scripts,
+  if (!rpmostree_pre_run_sync (pkg, hdr, self->ignore_scripts,
                                rootfs_dfd, cancellable, error))
     return FALSE;
 
@@ -2230,7 +2224,7 @@ run_pre_sync (int tmp_metadata_dfd,
 }
 
 static gboolean
-apply_rpmfi_overrides (int            tmp_metadata_dfd,
+apply_rpmfi_overrides (RpmOstreeContext *self,
                        int            tmprootfs_dfd,
                        DnfPackage    *pkg,
                        GHashTable    *passwdents,
@@ -2243,7 +2237,7 @@ apply_rpmfi_overrides (int            tmp_metadata_dfd,
   gboolean emitted_nonusr_warning = FALSE;
   g_autofree char *path = get_package_relpath (pkg);
 
-  if (!get_package_metainfo (tmp_metadata_dfd, path, NULL, &fi, error))
+  if (!get_package_metainfo (self, path, NULL, &fi, error))
     return FALSE;
 
   while ((i = rpmfiNext (fi)) >= 0)
@@ -2416,7 +2410,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 {
   OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
   DnfContext *hifctx = self->hifctx;
-  TransactionData tdata = { 0, -1 };
+  TransactionData tdata = { 0, NULL };
   g_autoptr(GHashTable) pkg_to_ostree_commit =
     g_hash_table_new_full (NULL, NULL, (GDestroyNotify)g_object_unref, (GDestroyNotify)g_free);
   DnfPackage *filesystem_package = NULL;   /* It's special... */
@@ -2472,7 +2466,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
         if (!checkout_pkg_metadata_by_dnfpkg (self, pkg, cancellable, error))
           return FALSE;
 
-        if (!add_to_transaction (ordering_ts, pkg, self->metadata_dir_fd,
+        if (!add_to_transaction (self, ordering_ts, pkg,
                                  noscripts, self->ignore_scripts,
                                  cancellable, error))
           return FALSE;
@@ -2607,8 +2601,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
           g_assert (pkg);
 
-          if (!run_pre_sync (self->metadata_dir_fd, tmprootfs_dfd, pkg,
-                             self->ignore_scripts,
+          if (!run_pre_sync (self, tmprootfs_dfd, pkg,
                              cancellable, error))
             return FALSE;
         }
@@ -2654,14 +2647,13 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
           g_assert (pkg);
 
-          if (!apply_rpmfi_overrides (self->metadata_dir_fd, tmprootfs_dfd,
+          if (!apply_rpmfi_overrides (self, tmprootfs_dfd,
                                       pkg, passwdents, groupents,
                                       cancellable, error))
             return glnx_prefix_error (error, "While applying overrides for pkg %s: ",
                                       dnf_package_get_name (pkg));
 
-          if (!run_posttrans_sync (self->metadata_dir_fd, tmprootfs_dfd, pkg,
-                                   self->ignore_scripts,
+          if (!run_posttrans_sync (self, tmprootfs_dfd, pkg,
                                    cancellable, error))
             return FALSE;
         }
@@ -2711,7 +2703,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
   rpmtsSetVSFlags (rpmdb_ts, _RPMVSF_NOSIGNATURES | _RPMVSF_NODIGESTS);
   rpmtsSetFlags (rpmdb_ts, RPMTRANS_FLAG_JUSTDB);
 
-  tdata.tmp_metadata_dfd = self->metadata_dir_fd;
+  tdata.ctx = self;
   rpmtsSetNotifyCallback (rpmdb_ts, ts_callback, &tdata);
 
   { gpointer k;
@@ -2723,7 +2715,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
         DnfPackage *pkg = k;
 
         /* Set noscripts since we already validated them above */
-        if (!add_to_transaction (rpmdb_ts, pkg, self->metadata_dir_fd, TRUE, NULL,
+        if (!add_to_transaction (self, rpmdb_ts, pkg, TRUE, NULL,
                                  cancellable, error))
           return FALSE;
       }
