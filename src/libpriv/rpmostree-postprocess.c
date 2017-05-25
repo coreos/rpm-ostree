@@ -333,11 +333,18 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
                            GError       **error)
 {
   glnx_fd_close int var_dfd = -1;
-  /* List of files that shouldn't be in the tree */
+  /* List of files that are known to possibly exist, but in practice
+   * things work fine if we simply ignore them.  Don't add something
+   * to this list unless you've verified it's handled correctly at
+   * runtime.  (And really both in CentOS and Fedora)
+   */
   const char *known_state_files[] = {
+    "run", /* We never want to traverse into /run when making tmpfiles since it's a tmpfs */
     "lib/systemd/random-seed", /* https://bugzilla.redhat.com/show_bug.cgi?id=789407 */
     "lib/systemd/catalog/database",
     "lib/plymouth/boot-duration",
+    "log/wtmp", /* These two are part of systemd's var.tmp */
+    "log/btmp",
   };
 
   if (!glnx_opendirat (src_rootfs_dfd, "var", TRUE, &var_dfd, error))
