@@ -713,6 +713,18 @@ get_commit_repodata_chksum_repr (GVariant *commit,
                                      out_csum, error);
 }
 
+static char *
+get_nevra_relpath (const char *nevra)
+{
+  return g_strdup_printf ("%s.rpm", nevra);
+}
+
+static char *
+get_package_relpath (DnfPackage *pkg)
+{
+  return get_nevra_relpath (dnf_package_get_nevra (pkg));
+}
+
 static gboolean
 checkout_pkg_metadata (RpmOstreeContext *self,
                        const char       *nevra,
@@ -733,7 +745,7 @@ checkout_pkg_metadata (RpmOstreeContext *self,
     }
 
   /* give it a .rpm extension so we can fool the libdnf stack */
-  path = g_strdup_printf ("%s.rpm", nevra);
+  path = get_nevra_relpath (nevra);
 
   /* we may have already written the header out for this one */
   if (fstatat (self->metadata_dir_fd, path, &stbuf, 0) == 0)
@@ -2137,12 +2149,6 @@ get_package_metainfo (int tmp_metadata_dfd,
 
   return rpmostree_unpacker_read_metainfo (metadata_fd, out_header, NULL,
                                            out_fi, error);
-}
-
-static char *
-get_package_relpath (DnfPackage *pkg)
-{
-  return g_strdup_printf ("%s.rpm", dnf_package_get_nevra (pkg));
 }
 
 static gboolean
