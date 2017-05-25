@@ -347,7 +347,7 @@ rpmostree_context_new_system (GCancellable *cancellable,
 #endif
 
   self->hifctx = dnf_context_new ();
-  g_auto(RpmSighandlerResetCleanup) rpmsigreset = { 0, };
+  DECLARE_RPMSIGHANDLER_RESET;
   dnf_context_set_http_proxy (self->hifctx, g_getenv ("http_proxy"));
 
   dnf_context_set_repo_dir (self->hifctx, "/etc/yum.repos.d");
@@ -913,7 +913,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
                                            G_CALLBACK (on_hifstate_percentage_changed),
                                            "Downloading metadata:");
 
-  g_auto(RpmSighandlerResetCleanup) rpmsigreset = { 0, };
+  DECLARE_RPMSIGHANDLER_RESET;
   if (!dnf_context_setup_sack (self->hifctx, hifstate, error))
     return FALSE;
 
@@ -2481,7 +2481,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
       }
   }
 
-  { g_auto(RpmSighandlerResetCleanup) rpmsigreset = { 0, };
+  { DECLARE_RPMSIGHANDLER_RESET;
     rpmtsOrder (ordering_ts);
   }
 
