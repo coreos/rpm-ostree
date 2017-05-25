@@ -132,6 +132,20 @@ add_canonicalized_string_array (GVariantBuilder *builder,
                          g_variant_new_strv ((const char*const*)sorted, g_strv_length (sorted)));
 }
 
+static GPtrArray *
+get_enabled_rpmmd_repos (DnfContext *dnfctx, DnfRepoEnabled enablement)
+{
+  g_autoptr(GPtrArray) ret = g_ptr_array_new ();
+  GPtrArray *repos = dnf_context_get_repos (dnfctx);
+
+  for (guint i = 0; i < repos->len; i++)
+    {
+      DnfRepo *repo = repos->pdata[i];
+      if (dnf_repo_get_enabled (repo) >= enablement)
+        g_ptr_array_add (ret, repo);
+    }
+  return g_steal_pointer (&ret);
+}
 
 RpmOstreeTreespec *
 rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
@@ -519,17 +533,6 @@ rpmostree_context_get_varsubsts (RpmOstreeContext *context)
   return r;
 }
 
-static void
-require_enabled_repos (GPtrArray *sources)
-{
-  for (guint i = 0; i < sources->len; i++)
-    {
-      DnfRepo *src = sources->pdata[i];
-      if (dnf_repo_get_enabled (src) != DNF_REPO_ENABLED_NONE)
-        dnf_repo_set_required (src, TRUE);
-    }
-}
-
 static gboolean
 enable_one_repo (GPtrArray           *sources,
                  const char          *reponame,
@@ -629,7 +632,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
     if (!context_repos_enable_only (self, (const char *const*)enabled_repos, error))
       return FALSE;
 
-  GPtrArray *repos = dnf_context_get_repos (self->hifctx);
+  g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (self->hifctx, DNF_REPO_ENABLED_PACKAGES);
   if (repos->len == 0)
     {
       /* To be nice, let's only make this fatal if "packages" is empty (e.g. if
@@ -640,7 +643,12 @@ rpmostree_context_setup (RpmOstreeContext    *self,
           g_strv_length (pkgs) > 0)
         return glnx_throw (error, "No enabled repositories");
     }
-  require_enabled_repos (repos);
+  /* Ensure that each repo that's enabled is marked as required; this should be
+   * the default, but we make sure.  This is a bit of a messy topic, but for
+   * rpm-ostree we're being more strict about requiring repos.
+   */
+  for (guint i = 0; i < repos->len; i++)
+    dnf_repo_set_required (repos->pdata[i], TRUE);
 
   { gboolean docs;
 
@@ -1339,7 +1347,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
       hy_goal_install (goal, pkg);
     }
 
-  { GPtrArray *repos = dnf_context_get_repos (hifctx);
+  { g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (hifctx, DNF_REPO_ENABLED_PACKAGES);
     g_autoptr(GString) enabled_repos = g_string_new ("");
     g_autoptr(GString) enabled_repos_solvables = g_string_new ("");
     g_autoptr(GString) enabled_repos_timestamps = g_string_new ("");
@@ -1349,8 +1357,6 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
     for (guint i = 0; i < repos->len; i++)
       {
         DnfRepo *repo = repos->pdata[i];
-        if ((dnf_repo_get_enabled (repo) & DNF_REPO_ENABLED_PACKAGES) == 0)
-          continue;
 
         if (first)
           first = FALSE;
