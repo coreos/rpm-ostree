@@ -272,12 +272,11 @@ struct _RpmOstreeContext {
   OstreeRepo *ostreerepo;
   OstreeRepo *pkgcache_repo;
   gboolean unprivileged;
-  char *dummy_instroot_path;
   OstreeSePolicy *sepolicy;
   char *passwd_dir;
 
-  char *metadata_dir_path;
-  int metadata_dir_fd;
+  char *tmpdir_path;
+  int tmpdir_fd;
 };
 
 G_DEFINE_TYPE (RpmOstreeContext, rpmostree_context, G_TYPE_OBJECT)
@@ -290,12 +289,6 @@ rpmostree_context_finalize (GObject *object)
   g_clear_object (&rctx->spec);
   g_clear_object (&rctx->hifctx);
 
-  if (rctx->dummy_instroot_path)
-    {
-      (void) glnx_shutil_rm_rf_at (AT_FDCWD, rctx->dummy_instroot_path, NULL, NULL);
-      g_clear_pointer (&rctx->dummy_instroot_path, g_free);
-    }
-
   g_clear_object (&rctx->pkgcache_repo);
   g_clear_object (&rctx->ostreerepo);
 
@@ -303,14 +296,14 @@ rpmostree_context_finalize (GObject *object)
 
   g_clear_pointer (&rctx->passwd_dir, g_free);
 
-  if (rctx->metadata_dir_path)
+  if (rctx->tmpdir_path)
     {
-      (void) glnx_shutil_rm_rf_at (AT_FDCWD, rctx->metadata_dir_path, NULL, NULL);
-      g_clear_pointer (&rctx->metadata_dir_path, g_free);
+      (void) glnx_shutil_rm_rf_at (AT_FDCWD, rctx->tmpdir_path, NULL, NULL);
+      g_clear_pointer (&rctx->tmpdir_path, g_free);
     }
 
-  if (rctx->metadata_dir_fd != -1)
-    close (rctx->metadata_dir_fd);
+  if (rctx->tmpdir_fd != -1)
+    close (rctx->tmpdir_fd);
 
   G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
 }
@@ -325,7 +318,7 @@ rpmostree_context_class_init (RpmOstreeContextClass *klass)
 static void
 rpmostree_context_init (RpmOstreeContext *self)
 {
-  self->metadata_dir_fd = -1;
+  self->tmpdir_fd = -1;
 }
 
 static void
@@ -438,6 +431,24 @@ rpmostree_context_new_unprivileged (int basedir_dfd,
                                     GError **error)
 {
   return rpmostree_context_new_internal (basedir_dfd, TRUE, cancellable, error);
+}
+
+static gboolean
+rpmostree_context_ensure_tmpdir (RpmOstreeContext *self,
+                                 const char       *subdir,
+                                 GError          **error)
+{
+  if (self->tmpdir_path == NULL)
+    {
+      if (!rpmostree_mkdtemp ("/tmp/rpmostree-core-XXXXXX",
+                              &self->tmpdir_path,
+                              &self->tmpdir_fd,
+                              error))
+        return FALSE;
+    }
+  if (!glnx_shutil_mkdir_p_at (self->tmpdir_fd, subdir, 0755, NULL, error))
+    return FALSE;
+  return TRUE;
 }
 
 /* Use this if no packages will be installed, and we just want a "dummy" run.
@@ -577,12 +588,11 @@ rpmostree_context_setup (RpmOstreeContext    *self,
     dnf_context_set_install_root (self->hifctx, install_root);
   else
     {
-      glnx_fd_close int dfd = -1; /* Auto close, we just use the path */
-      if (!rpmostree_mkdtemp ("/tmp/rpmostree-dummy-instroot-XXXXXX",
-                              &self->dummy_instroot_path,
-                              &dfd, error))
+      /* We need this to ensure that libdnf doesn't read the host system packages */
+      if (!rpmostree_context_ensure_tmpdir (self, "dummy-instroot", error))
         return FALSE;
-      dnf_context_set_install_root (self->hifctx, self->dummy_instroot_path);
+      g_autofree char *root = g_strconcat (self->tmpdir_path, "/dummy-instroot", NULL);
+      dnf_context_set_install_root (self->hifctx, root);
     }
 
   if (source_root)
@@ -716,7 +726,7 @@ get_commit_repodata_chksum_repr (GVariant *commit,
 static char *
 get_nevra_relpath (const char *nevra)
 {
-  return g_strdup_printf ("%s.rpm", nevra);
+  return g_strdup_printf ("metarpm/%s.rpm", nevra);
 }
 
 static char *
@@ -735,26 +745,20 @@ checkout_pkg_metadata (RpmOstreeContext *self,
   g_autofree char *path = NULL;
   struct stat stbuf;
 
-  if (self->metadata_dir_path == NULL)
-    {
-      if (!rpmostree_mkdtemp ("/tmp/rpmostree-metadata-XXXXXX",
-                              &self->metadata_dir_path,
-                              &self->metadata_dir_fd,
-                              error))
-        return FALSE;
-    }
+  if (!rpmostree_context_ensure_tmpdir (self, "metarpm", error))
+    return FALSE;
 
   /* give it a .rpm extension so we can fool the libdnf stack */
   path = get_nevra_relpath (nevra);
 
   /* we may have already written the header out for this one */
-  if (fstatat (self->metadata_dir_fd, path, &stbuf, 0) == 0)
+  if (fstatat (self->tmpdir_fd, path, &stbuf, 0) == 0)
     return TRUE;
 
   if (errno != ENOENT)
     return glnx_throw_errno (error);
 
-  return glnx_file_replace_contents_at (self->metadata_dir_fd, path,
+  return glnx_file_replace_contents_at (self->tmpdir_fd, path,
                                         g_variant_get_data (header),
                                         g_variant_get_size (header),
                                         GLNX_FILE_REPLACE_NODATASYNC,
@@ -1327,7 +1331,7 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
        * don't try to look past the header. Ideally, it would be best if
        * libdnf could learn to treat the pkgcache repo as another DnfRepo.
        * */
-      path = g_strdup_printf ("%s/%s.rpm", self->metadata_dir_path, nevra);
+      path = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir_path, nevra);
       pkg = dnf_sack_add_cmdline_package (sack, path);
       if (!pkg)
         return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
@@ -2112,9 +2116,8 @@ ts_callback (const void * h,
         DnfPackage *pkg = (void*)key;
         /* just bypass fdrel_abspath here since we know the dfd is not ATCWD and
          * it saves us an allocation */
-        g_autofree char *path = g_strdup_printf ("/proc/self/fd/%d/%s.rpm",
-                                                 tdata->ctx->metadata_dir_fd,
-                                                 dnf_package_get_nevra (pkg));
+        g_autofree char *relpath = get_package_relpath (pkg);
+        g_autofree char *path = g_build_filename (tdata->ctx->tmpdir_path, relpath, NULL);
         g_assert (tdata->current_trans_fd == NULL);
         tdata->current_trans_fd = Fopen (path, "r.ufdio");
         return tdata->current_trans_fd;
@@ -2140,7 +2143,7 @@ get_package_metainfo (RpmOstreeContext *self,
                       GError **error)
 {
   glnx_fd_close int metadata_fd = -1;
-  if ((metadata_fd = openat (self->metadata_dir_fd, path, O_RDONLY | O_CLOEXEC)) < 0)
+  if ((metadata_fd = openat (self->tmpdir_fd, path, O_RDONLY | O_CLOEXEC)) < 0)
     return glnx_throw_errno_prefix (error, "open(%s)", path);
 
   return rpmostree_unpacker_read_metainfo (metadata_fd, out_header, NULL,
