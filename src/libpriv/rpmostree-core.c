@@ -354,7 +354,7 @@ rpmostree_context_new_system (GCancellable *cancellable,
 #endif
 
   self->hifctx = dnf_context_new ();
-  _rpmostree_reset_rpm_sighandlers ();
+  g_auto(RpmSighandlerResetCleanup) rpmsigreset = { 0, };
   dnf_context_set_http_proxy (self->hifctx, g_getenv ("http_proxy"));
 
   dnf_context_set_repo_dir (self->hifctx, "/etc/yum.repos.d");
@@ -889,26 +889,21 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
                                      GCancellable     *cancellable,
                                      GError          **error)
 {
-  gboolean ret = FALSE;
-  guint progress_sigid;
-  glnx_unref_object DnfState *hifstate = dnf_state_new ();
-
   g_assert (!self->empty);
 
-  progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                     G_CALLBACK (on_hifstate_percentage_changed),
-                                     "Downloading metadata:");
+  g_autoptr(DnfState) hifstate = dnf_state_new ();
 
+  guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                           G_CALLBACK (on_hifstate_percentage_changed),
+                                           "Downloading metadata:");
+
+  g_auto(RpmSighandlerResetCleanup) rpmsigreset = { 0, };
   if (!dnf_context_setup_sack (self->hifctx, hifstate, error))
-    goto out;
+    return FALSE;
 
   g_signal_handler_disconnect (hifstate, progress_sigid);
   rpmostree_output_percent_progress_end ();
-
-  ret = TRUE;
- out:
-  _rpmostree_reset_rpm_sighandlers ();
-  return ret;
+  return TRUE;
 }
 
 static void
@@ -2483,8 +2478,9 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
       }
   }
 
-  rpmtsOrder (ordering_ts);
-  _rpmostree_reset_rpm_sighandlers ();
+  { g_auto(RpmSighandlerResetCleanup) rpmsigreset = { 0, };
+    rpmtsOrder (ordering_ts);
+  }
 
   rpmostree_output_task_begin ("Overlaying");
 
