@@ -980,7 +980,7 @@ rpmostree_print_transaction (DnfContext   *hifctx)
 }
 
 void
-_rpmostree_reset_rpm_sighandlers (void)
+rpmostree_sighandler_reset_cleanup (RpmSighandlerResetCleanup *cleanup)
 {
   /* Forcibly override rpm/librepo SIGINT handlers.  We always operate
    * in a fully idempotent/atomic mode, and can be killed at any time.

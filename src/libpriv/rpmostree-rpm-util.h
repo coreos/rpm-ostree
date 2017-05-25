@@ -126,18 +126,16 @@ void
 rpmostree_print_transaction (DnfContext   *context);
 
 
-void _rpmostree_reset_rpm_sighandlers (void);
-
-/* This cleanup struct wraps _rpmostree_reset_rpm_sighandlers() */
+/* This cleanup struct wraps _rpmostree_reset_rpm_sighandlers(). We have a dummy
+ * variable to pacify clang's unused variable detection.
+ */
 typedef struct {
-  gpointer unused;
+  gboolean v;
 } RpmSighandlerResetCleanup;
-static inline void
-cleanup_rpmsighandler_reset(RpmSighandlerResetCleanup *cleanup)
-{
-  _rpmostree_reset_rpm_sighandlers ();
-}
-G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(RpmSighandlerResetCleanup, cleanup_rpmsighandler_reset);
+void rpmostree_sighandler_reset_cleanup (RpmSighandlerResetCleanup *cleanup);
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(RpmSighandlerResetCleanup, rpmostree_sighandler_reset_cleanup);
+
+#define DECLARE_RPMSIGHANDLER_RESET __attribute__((unused)) g_auto(RpmSighandlerResetCleanup) sigcleanup = { 0, };
 
 GVariant *
 rpmostree_fcap_to_xattr_variant (const char *fcap);

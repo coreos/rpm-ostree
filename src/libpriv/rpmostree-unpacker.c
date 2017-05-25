@@ -188,8 +188,8 @@ rpmostree_unpacker_read_metainfo (int fd,
   gsize ret_cpio_offset;
   g_autofree char *abspath = g_strdup_printf ("/proc/self/fd/%d", fd);
 
+  DECLARE_RPMSIGHANDLER_RESET;
   ts = rpmtsCreate ();
-  _rpmostree_reset_rpm_sighandlers ();
   rpmtsSetVSFlags (ts, _RPMVSF_NOSIGNATURES);
 
   /* librpm needs Fopenfd */
