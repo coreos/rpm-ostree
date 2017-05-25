@@ -141,7 +141,7 @@ get_enabled_rpmmd_repos (DnfContext *dnfctx, DnfRepoEnabled enablement)
   for (guint i = 0; i < repos->len; i++)
     {
       DnfRepo *repo = repos->pdata[i];
-      if (dnf_repo_get_enabled (repo) >= enablement)
+      if (dnf_repo_get_enabled (repo) & enablement)
         g_ptr_array_add (ret, repo);
     }
   return g_steal_pointer (&ret);
