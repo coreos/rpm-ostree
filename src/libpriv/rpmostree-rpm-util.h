@@ -128,6 +128,17 @@ rpmostree_print_transaction (DnfContext   *context);
 
 void _rpmostree_reset_rpm_sighandlers (void);
 
+/* This cleanup struct wraps _rpmostree_reset_rpm_sighandlers() */
+typedef struct {
+  gpointer unused;
+} RpmSighandlerResetCleanup;
+static inline void
+cleanup_rpmsighandler_reset(RpmSighandlerResetCleanup *cleanup)
+{
+  _rpmostree_reset_rpm_sighandlers ();
+}
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(RpmSighandlerResetCleanup, cleanup_rpmsighandler_reset);
+
 GVariant *
 rpmostree_fcap_to_xattr_variant (const char *fcap);
 
