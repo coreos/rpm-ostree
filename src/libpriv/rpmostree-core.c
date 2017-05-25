@@ -915,18 +915,72 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 {
   g_assert (!self->empty);
 
-  g_autoptr(DnfState) hifstate = dnf_state_new ();
+  g_auto(RpmSighandlerResetCleanup) rpmsigreset = { 0, };
 
-  guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                           G_CALLBACK (on_hifstate_percentage_changed),
-                                           "Downloading metadata:");
+  g_autoptr(GPtrArray) rpmmd_repos = get_enabled_rpmmd_repos (self->hifctx, DNF_REPO_ENABLED_METADATA);
 
-  DECLARE_RPMSIGHANDLER_RESET;
-  if (!dnf_context_setup_sack (self->hifctx, hifstate, error))
-    return FALSE;
+  g_print ("Enabled rpm-md repositories:");
+  for (guint i = 0; i < rpmmd_repos->len; i++)
+    {
+      DnfRepo *repo = rpmmd_repos->pdata[i];
+      g_print (" %s", dnf_repo_get_id (repo));
+    }
+  g_print ("\n");
 
-  g_signal_handler_disconnect (hifstate, progress_sigid);
-  rpmostree_output_percent_progress_end ();
+  for (guint i = 0; i < rpmmd_repos->len; i++)
+    {
+      DnfRepo *repo = rpmmd_repos->pdata[i];
+      g_autoptr(DnfState) hifstate = dnf_state_new ();
+
+      gboolean did_update = FALSE;
+      if (!dnf_repo_check(repo,
+                          dnf_context_get_cache_age (self->hifctx),
+                          hifstate,
+                          NULL))
+        {
+          dnf_state_reset (hifstate);
+          g_autofree char *prefix = g_strdup_printf ("Updating metadata for '%s':",
+                                                     dnf_repo_get_id (repo));
+          guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                                   G_CALLBACK (on_hifstate_percentage_changed),
+                                                   prefix);
+
+          if (!dnf_repo_update (repo, DNF_REPO_UPDATE_FLAG_FORCE, hifstate, error))
+            return FALSE;
+
+          did_update = TRUE;
+
+          g_signal_handler_disconnect (hifstate, progress_sigid);
+          rpmostree_output_percent_progress_end ();
+        }
+
+      guint64 ts = dnf_repo_get_timestamp_generated (repo);
+      g_autoptr(GDateTime) repo_ts = g_date_time_new_from_unix_utc (ts);
+      g_autofree char *repo_ts_str = NULL;
+
+      if (repo_ts != NULL)
+        repo_ts_str = g_date_time_format (repo_ts, "%Y-%m-%d %T");
+      else
+        repo_ts_str = g_strdup_printf ("(invalid timestamp)");
+
+      g_print ("rpm-md repo '%s'%s; generated: %s\n", dnf_repo_get_id (repo),
+               !did_update ? " (cached)" : "", repo_ts_str);
+    }
+
+  { g_autoptr(DnfState) hifstate = dnf_state_new ();
+    guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                             G_CALLBACK (on_hifstate_percentage_changed),
+                                             "Importing metadata");
+    /* This will check the metadata again, but it *should* hit the cache; down
+     * the line we should really improve the libdnf API around all of this.
+     */
+    DECLARE_RPMSIGHANDLER_RESET;
+    if (!dnf_context_setup_sack (self->hifctx, hifstate, error))
+      return FALSE;
+    g_signal_handler_disconnect (hifstate, progress_sigid);
+    rpmostree_output_percent_progress_end ();
+  }
+
   return TRUE;
 }
 
