@@ -897,10 +897,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
                                            G_CALLBACK (on_hifstate_percentage_changed),
                                            "Downloading metadata:");
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-variable"
-  g_auto(RpmSighandlerResetCleanup) rpmsigreset = { 0, };
-#pragma GCC diagnostic pop
+  DECLARE_RPMSIGHANDLER_RESET;
   if (!dnf_context_setup_sack (self->hifctx, hifstate, error))
     return FALSE;
 
