@@ -347,7 +347,10 @@ rpmostree_context_new_system (GCancellable *cancellable,
 #endif
 
   self->hifctx = dnf_context_new ();
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
   g_auto(RpmSighandlerResetCleanup) rpmsigreset = { 0, };
+#pragma GCC diagnostic pop
   dnf_context_set_http_proxy (self->hifctx, g_getenv ("http_proxy"));
 
   dnf_context_set_repo_dir (self->hifctx, "/etc/yum.repos.d");
@@ -913,7 +916,10 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
                                            G_CALLBACK (on_hifstate_percentage_changed),
                                            "Downloading metadata:");
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
   g_auto(RpmSighandlerResetCleanup) rpmsigreset = { 0, };
+#pragma GCC diagnostic pop
   if (!dnf_context_setup_sack (self->hifctx, hifstate, error))
     return FALSE;
 
@@ -2481,7 +2487,10 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
       }
   }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-variable"
   { g_auto(RpmSighandlerResetCleanup) rpmsigreset = { 0, };
+#pragma GCC diagnostic pop
     rpmtsOrder (ordering_ts);
   }
 
