@@ -1,4 +1,5 @@
 [fedora]
+#when bumping 25 here, also bump fedora-base.json, compose script, and .papr.yml
 name=Fedora 25 (devel) - $basearch
 failovermethod=priority
 baseurl=https://dl.fedoraproject.org/pub/fedora/linux/releases/25/Everything/$basearch/os/
