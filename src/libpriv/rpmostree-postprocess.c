@@ -149,17 +149,14 @@ do_kernel_prep (int            rootfs_dfd,
                 GCancellable  *cancellable,
                 GError       **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(GVariant) kernelstate = NULL;
+  g_autoptr(GVariant) kernelstate = rpmostree_find_kernel (rootfs_dfd, cancellable, error);
+  if (!kernelstate)
+    return FALSE;
+
   const char* kernel_path;
   const char* initramfs_path;
   const char *kver;
   const char *bootdir;
-  g_auto(GLnxTmpfile) initramfs_tmpf = { 0, };
-
-  kernelstate = rpmostree_find_kernel (rootfs_dfd, cancellable, error);
-  if (!kernelstate)
-    goto out;
   g_variant_get (kernelstate, "(&s&s&sm&s)",
                  &kver, &bootdir,
                  &kernel_path, &initramfs_path);
@@ -168,17 +165,17 @@ do_kernel_prep (int            rootfs_dfd,
     {
       g_print ("Removing RPM-generated '%s'\n", initramfs_path);
       if (!glnx_shutil_rm_rf_at (rootfs_dfd, initramfs_path, cancellable, error))
-        goto out;
+        return FALSE;
     }
 
   /* OSTree needs to own this */
   if (!glnx_shutil_rm_rf_at (rootfs_dfd, "boot/loader", cancellable, error))
-    goto out;
+    return FALSE;
 
   {
     char *child_argv[] = { "depmod", (char*)kver, NULL };
     if (!run_bwrap_mutably (rootfs_dfd, "depmod", child_argv, error))
-      goto out;
+      return FALSE;
   }
 
   /* Ensure the /etc/machine-id file is present and empty. Apparently systemd
@@ -188,45 +185,41 @@ do_kernel_prep (int            rootfs_dfd,
   if (!glnx_file_replace_contents_at (rootfs_dfd, "etc/machine-id", (guint8*)"", 0,
                                       GLNX_FILE_REPLACE_NODATASYNC,
                                       cancellable, error))
-    goto out;
+    return FALSE;
 
-  {
-    g_autoptr(GPtrArray) dracut_argv = g_ptr_array_new ();
+  g_autoptr(GPtrArray) dracut_argv = g_ptr_array_new ();
+  if (json_object_has_member (treefile, "initramfs-args"))
+    {
+      guint i, len;
+      JsonArray *initramfs_args;
 
-    if (json_object_has_member (treefile, "initramfs-args"))
-      {
-        guint i, len;
-        JsonArray *initramfs_args;
+      initramfs_args = json_object_get_array_member (treefile, "initramfs-args");
+      len = json_array_get_length (initramfs_args);
 
-        initramfs_args = json_object_get_array_member (treefile, "initramfs-args");
-        len = json_array_get_length (initramfs_args);
+      for (i = 0; i < len; i++)
+        {
+          const char *arg = _rpmostree_jsonutil_array_require_string_element (initramfs_args, i, error);
+          if (!arg)
+            return FALSE;
+          g_ptr_array_add (dracut_argv, (char*)arg);
+        }
+    }
+  g_ptr_array_add (dracut_argv, NULL);
 
-        for (i = 0; i < len; i++)
-          {
-            const char *arg = _rpmostree_jsonutil_array_require_string_element (initramfs_args, i, error);
-            if (!arg)
-              goto out;
-            g_ptr_array_add (dracut_argv, (char*)arg);
-          }
-      }
-    g_ptr_array_add (dracut_argv, NULL);
-
-    if (!rpmostree_run_dracut (rootfs_dfd,
-                               (const char *const*)dracut_argv->pdata, kver,
-                               NULL, &initramfs_tmpf,
-                               cancellable, error))
-      goto out;
-  }
+  g_auto(GLnxTmpfile) initramfs_tmpf = { 0, };
+  if (!rpmostree_run_dracut (rootfs_dfd,
+                             (const char *const*)dracut_argv->pdata, kver,
+                             NULL, &initramfs_tmpf,
+                             cancellable, error))
+    return FALSE;
 
   if (!rpmostree_finalize_kernel (rootfs_dfd, bootdir, kver,
                                   kernel_path,
                                   &initramfs_tmpf,
                                   cancellable, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -395,11 +388,9 @@ workaround_selinux_cross_labeling_recurse (int            dfd,
                                            GCancellable  *cancellable,
                                            GError       **error)
 {
-  gboolean ret = FALSE;
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-
   if (!glnx_dirfd_iterator_init_at (dfd, path, TRUE, &dfd_iter, error))
-    goto out;
+    return FALSE;
 
   while (TRUE)
     {
@@ -407,7 +398,7 @@ workaround_selinux_cross_labeling_recurse (int            dfd,
       const char *name;
 
       if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
-        goto out;
+        return FALSE;
 
       if (!dent)
         break;
@@ -417,7 +408,7 @@ workaround_selinux_cross_labeling_recurse (int            dfd,
       if (dent->d_type == DT_DIR)
         {
           if (!workaround_selinux_cross_labeling_recurse (dfd_iter.fd, name, cancellable, error))
-            goto out;
+            return FALSE;
         }
       else if (g_str_has_suffix (name, ".bin"))
         {
@@ -426,10 +417,7 @@ workaround_selinux_cross_labeling_recurse (int            dfd,
           g_autofree char *nonbin_name = NULL;
 
           if (TEMP_FAILURE_RETRY (fstatat (dfd_iter.fd, name, &stbuf, AT_SYMLINK_NOFOLLOW)) != 0)
-            {
-              glnx_set_error_from_errno (error);
-              goto out;
-            }
+            return glnx_throw_errno_prefix (error, "fstat");
 
           lastdot = strrchr (name, '.');
           g_assert (lastdot);
@@ -437,16 +425,11 @@ workaround_selinux_cross_labeling_recurse (int            dfd,
           nonbin_name = g_strndup (name, lastdot - name);
 
           if (TEMP_FAILURE_RETRY (utimensat (dfd_iter.fd, nonbin_name, NULL, 0)) == -1)
-            {
-              glnx_set_error_from_errno (error);
-              goto out;
-            }
+            return glnx_throw_errno_prefix (error, "utimensat");
         }
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 gboolean
@@ -455,8 +438,6 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
                                        GCancellable  *cancellable,
                                        GError       **error)
 {
-  gboolean ret = FALSE;
-  glnx_unref_object OstreeSePolicy *ret_sepolicy = NULL;
   struct stat stbuf;
   const char *policy_path;
 
@@ -466,10 +447,7 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
   if (fstatat (dfd, "usr/etc", &stbuf, 0) < 0)
     {
       if (errno != ENOENT)
-        {
-          glnx_set_error_from_errno (error);
-          goto out;
-        }
+        return glnx_throw_errno_prefix (error, "fstatat");
       policy_path = "etc/selinux";
     }
   else
@@ -478,26 +456,21 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
   if (TEMP_FAILURE_RETRY (fstatat (dfd, policy_path, &stbuf, AT_SYMLINK_NOFOLLOW)) != 0)
     {
       if (errno != ENOENT)
-        {
-          glnx_set_error_from_errno (error);
-          goto out;
-        }
+        return glnx_throw_errno_prefix (error, "fstatat");
     }
   else
     {
       if (!workaround_selinux_cross_labeling_recurse (dfd, policy_path,
                                                       cancellable, error))
-        goto out;
+        return FALSE;
     }
 
-  ret_sepolicy = ostree_sepolicy_new_at (dfd, cancellable, error);
+  g_autoptr(OstreeSePolicy) ret_sepolicy = ostree_sepolicy_new_at (dfd, cancellable, error);
   if (ret_sepolicy == NULL)
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
   *out_sepolicy = g_steal_pointer (&ret_sepolicy);
- out:
-  return ret;
+  return TRUE;
 }
 
 static char *
