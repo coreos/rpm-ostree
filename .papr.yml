@@ -70,7 +70,7 @@ host:
 # copy yum.repos.d to get any injected repos from the host, which
 # will point to a closer mirror
 tests:
-  - docker run --privileged --rm --name composer
+  - docker run --privileged -d --name composer
     -e RPMOSTREE_COMPOSE_TEST_USE_HOST_REPO=1 -v $(pwd):/srv/code
     registry.fedoraproject.org/fedora:25 sleep infinity
   - docker cp /etc/yum.repos.d/. composer:/etc/yum.repos.d
