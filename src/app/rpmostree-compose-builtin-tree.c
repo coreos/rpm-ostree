@@ -312,9 +312,14 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   /* By default, retain packages in addition to metadata with --cachedir */
   if (opt_cachedir)
     dnf_context_set_keep_cache (hifctx, TRUE);
-  if (opt_cache_only)
+  /* For compose, always try to refresh metadata; we're used in build servers
+   * where fetching should be cheap. Otherwise, if --cache-only is set, it's
+   * likely an offline developer laptop case, so never refresh.
+   */
+  if (!opt_cache_only)
+    dnf_context_set_cache_age (hifctx, 0);
+  else
     dnf_context_set_cache_age (hifctx, G_MAXUINT);
-
   g_key_file_set_string (treespec, "tree", "ref", self->ref);
   g_key_file_set_string_list (treespec, "tree", "packages", (const char *const*)packages, g_strv_length (packages));
 
