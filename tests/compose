@@ -49,6 +49,17 @@ mkdir -p ${test_compose_datadir}/cache
 
 echo "Preparing compose tests..." | tee -a ${LOG}
 
+# take the host repo if it matches our target tree
+if [ -n "${RPMOSTREE_COMPOSE_TEST_USE_HOST_REPO:-}" ]; then
+  # NB: when bumping 25 here, also bump fedora.repo, .papr.yml, and
+  # fedora-base.json
+  (source /etc/os-release;
+   if [ "$ID" == "fedora" ] && [ "$VERSION_ID" == "25" ]; then
+     echo "Taking stable Fedora repo file from test env."
+     cp -fv /etc/yum.repos.d/fedora.repo ${dn}/composedata
+   fi) &>> ${LOG}
+fi
+
 # Delete the default ref, since we want to use subrefs of it
 (rm ${repobuild}/refs/heads/* -rf
  rpm-ostree compose --repo=${repobuild} tree --dry-run --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json

@@ -1,7 +1,9 @@
 {
+    "COMMENT": "when bumping 25 here, also bump fedora.repo, compose script, and .papr.yml",
+
     "ref": "fedora/25/${basearch}",
 
-    "repos": ["fedora-25"],
+    "repos": ["fedora"],
 
     "packages": ["kernel", "nss-altfiles", "systemd", "ostree", "selinux-policy-targeted"],
 

@@ -54,6 +54,9 @@ timeout: 80m
 
 ---
 
+# NB: when bumping 25 here, also bump fedora.repo, compose script, and
+# fedora-base.json
+
 context: compose
 build: false
 timeout: 30m
@@ -64,10 +67,16 @@ timeout: 30m
 host:
   distro: fedora/25/atomic
 
+# copy yum.repos.d to get any injected repos from the host, which
+# will point to a closer mirror
 tests:
-  - >
-      docker run --privileged -v $(pwd):/srv/code --rm
-      registry.fedoraproject.org/fedora:25 /bin/sh -c "cd /srv/code && ./ci/build.sh && make install && ./tests/compose"
+  - docker run --privileged --rm
+    -e RPMOSTREE_COMPOSE_TEST_USE_HOST_REPO=1
+    -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
+    -v $(pwd):/srv/code -w /srv/code
+    registry.fedoraproject.org/fedora:25 /bin/sh -c
+    "cp -fv /etc/yum.repos.d{.host/*.repo,} &&
+     ./ci/build.sh && make install && ./tests/compose"
 
 artifacts:
   - compose.log
