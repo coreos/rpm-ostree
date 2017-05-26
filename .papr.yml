@@ -64,10 +64,18 @@ timeout: 30m
 host:
   distro: fedora/25/atomic
 
+env:
+  RPMOSTREE_COMPOSE_TEST_USE_HOST_REPO: 1
+
+# mount yum.repos.d to get any injected repos from the host, which
+# will point to a closer mirror
 tests:
   - >
-      docker run --privileged -v $(pwd):/srv/code --rm
-      registry.fedoraproject.org/fedora:25 /bin/sh -c "cd /srv/code && ./ci/build.sh && make install && ./tests/compose"
+      docker run --privileged --rm
+      -v /etc/yum.repos.d:/etc/yum.repos.d
+      -v $(pwd):/srv/code
+      registry.fedoraproject.org/fedora:25 /bin/sh -c
+      "cd /srv/code && ./ci/build.sh && make install && ./tests/compose"
 
 artifacts:
   - compose.log

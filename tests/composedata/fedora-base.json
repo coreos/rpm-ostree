@@ -1,7 +1,7 @@
 {
     "ref": "fedora/25/${basearch}",
 
-    "repos": ["fedora-25"],
+    "repos": ["fedora"],
 
     "packages": ["kernel", "nss-altfiles", "systemd", "ostree", "selinux-policy-targeted"],
 
