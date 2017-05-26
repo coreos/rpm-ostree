@@ -915,8 +915,6 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 {
   g_assert (!self->empty);
 
-  g_auto(RpmSighandlerResetCleanup) rpmsigreset = { 0, };
-
   g_autoptr(GPtrArray) rpmmd_repos = get_enabled_rpmmd_repos (self->hifctx, DNF_REPO_ENABLED_METADATA);
 
   g_print ("Enabled rpm-md repositories:");
