@@ -65,7 +65,7 @@ host:
   distro: fedora/25/atomic
 
 env:
-  RPMOSTREE_COMPOSE_TEST_USE_HOST_REPO: 1
+  RPMOSTREE_COMPOSE_TEST_USE_HOST_REPO: yes
 
 # mount yum.repos.d to get any injected repos from the host, which
 # will point to a closer mirror
