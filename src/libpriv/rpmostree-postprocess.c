@@ -155,8 +155,7 @@ do_kernel_prep (int            rootfs_dfd,
   const char* initramfs_path;
   const char *kver;
   const char *bootdir;
-  glnx_fd_close int initramfs_tmp_fd = -1;
-  g_autofree char *initramfs_tmp_path = NULL;
+  g_auto(GLnxTmpfile) initramfs_tmpf = { 0, };
 
   kernelstate = rpmostree_find_kernel (rootfs_dfd, cancellable, error);
   if (!kernelstate)
@@ -214,21 +213,19 @@ do_kernel_prep (int            rootfs_dfd,
 
     if (!rpmostree_run_dracut (rootfs_dfd,
                                (const char *const*)dracut_argv->pdata, kver,
-                               NULL, &initramfs_tmp_fd, &initramfs_tmp_path,
+                               NULL, &initramfs_tmpf,
                                cancellable, error))
       goto out;
   }
 
   if (!rpmostree_finalize_kernel (rootfs_dfd, bootdir, kver,
                                   kernel_path,
-                                  initramfs_tmp_path, initramfs_tmp_fd,
+                                  &initramfs_tmpf,
                                   cancellable, error))
     goto out;
 
   ret = TRUE;
  out:
-  if (initramfs_tmp_path != NULL)
-    (void) unlinkat (rootfs_dfd, initramfs_tmp_path, 0);
   return ret;
 }
 
