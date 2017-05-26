@@ -742,8 +742,7 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
 
   if (rpmostree_origin_get_regenerate_initramfs (self->origin))
     {
-      glnx_fd_close int initramfs_tmp_fd = -1;
-      g_autofree char *initramfs_tmp_path = NULL;
+      g_auto(GLnxTmpfile) initramfs_tmpf = { 0, };
       const char *bootdir;
       const char *kver;
       const char *kernel_path;
@@ -764,13 +763,12 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
       g_assert (initramfs_path);
 
       if (!rpmostree_run_dracut (self->tmprootfs_dfd, add_dracut_argv, kver,
-                                 initramfs_path, &initramfs_tmp_fd,
-                                 &initramfs_tmp_path, cancellable, error))
+                                 initramfs_path, &initramfs_tmpf,
+                                 cancellable, error))
         return FALSE;
 
-      if (!rpmostree_finalize_kernel (self->tmprootfs_dfd, bootdir, kver,
-                                      kernel_path,
-                                      initramfs_tmp_path, initramfs_tmp_fd,
+      if (!rpmostree_finalize_kernel (self->tmprootfs_dfd, bootdir, kver, kernel_path,
+                                      &initramfs_tmpf,
                                       cancellable, error))
         return FALSE;
 

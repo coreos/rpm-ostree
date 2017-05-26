@@ -32,8 +32,7 @@ rpmostree_finalize_kernel (int rootfs_dfd,
                            const char *bootdir,
                            const char *kver,
                            const char *kernel_path,
-                           const char *initramfs_tmp_path,
-                           int         initramfs_tmp_fd, /* consumed */
+                           GLnxTmpfile *initramfs_tmpf,
                            GCancellable *cancellable,
                            GError **error);
 
@@ -42,7 +41,6 @@ rpmostree_run_dracut (int     rootfs_dfd,
                       const char *const* argv,
                       const char *kver,
                       const char *rebuild_from_initramfs,
-                      int     *out_initramfs_tmpfd,
-                      char   **out_initramfs_tmppath,
+                      GLnxTmpfile *out_initramfs_tmpf,
                       GCancellable  *cancellable,
                       GError **error);

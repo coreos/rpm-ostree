@@ -223,8 +223,7 @@ rpmostree_finalize_kernel (int rootfs_dfd,
                            const char *bootdir,
                            const char *kver,
                            const char *kernel_path,
-                           const char *initramfs_tmp_path,
-                           int         initramfs_tmp_fd,
+                           GLnxTmpfile *initramfs_tmpf,
                            GCancellable *cancellable,
                            GError **error)
 {
@@ -242,7 +241,7 @@ rpmostree_finalize_kernel (int rootfs_dfd,
                                                   cancellable, error))
     return FALSE;
 
-  { g_autoptr(GMappedFile) mfile = g_mapped_file_new_from_fd (initramfs_tmp_fd, FALSE, error);
+  { g_autoptr(GMappedFile) mfile = g_mapped_file_new_from_fd (initramfs_tmpf->fd, FALSE, error);
     if (!mfile)
       return FALSE;
     g_checksum_update (boot_checksum, (guint8*)g_mapped_file_get_contents (mfile),
@@ -260,8 +259,7 @@ rpmostree_finalize_kernel (int rootfs_dfd,
       return FALSE;
     }
   /* Link the initramfs directly to its final destination */
-  if (!glnx_link_tmpfile_at (rootfs_dfd, GLNX_LINK_TMPFILE_NOREPLACE,
-                             initramfs_tmp_fd, initramfs_tmp_path,
+  if (!glnx_link_tmpfile_at (initramfs_tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
                              rootfs_dfd, initramfs_final_path,
                              error))
     return FALSE;
@@ -284,8 +282,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
                       const char *const* argv,
                       const char *kver,
                       const char *rebuild_from_initramfs,
-                      int     *out_initramfs_tmpfd,
-                      char   **out_initramfs_tmppath,
+                      GLnxTmpfile *out_initramfs_tmpf,
                       GCancellable  *cancellable,
                       GError **error)
 {
@@ -302,10 +299,9 @@ rpmostree_run_dracut (int     rootfs_dfd,
     "extra_argv=; if (dracut --help; true) | grep -q -e --reproducible; then extra_argv=\"--reproducible --gzip\"; fi\n"
     "dracut $extra_argv -v --add ostree --tmpdir=/tmp -f /tmp/initramfs.img \"$@\"\n"
     "cat /tmp/initramfs.img >/proc/self/fd/3\n";
-  glnx_fd_close int tmp_fd = -1;
-  g_autofree char *tmpfile_path = NULL;
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   g_autoptr(GPtrArray) rebuild_argv = NULL;
+  g_auto(GLnxTmpfile) tmpf = { 0, };
 
   g_assert (argv != NULL || rebuild_from_initramfs != NULL);
 
@@ -327,22 +323,21 @@ rpmostree_run_dracut (int     rootfs_dfd,
   /* First tempfile is just our shell script */
   if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, "usr/bin",
                                       O_RDWR | O_CLOEXEC,
-                                      &tmp_fd, &tmpfile_path,
-                                      error))
+                                      &tmpf, error))
     goto out;
-  if (glnx_loop_write (tmp_fd, rpmostree_dracut_wrapper, sizeof (rpmostree_dracut_wrapper)) < 0
-      || fchmod (tmp_fd, 0755) < 0)
+  if (glnx_loop_write (tmpf.fd, rpmostree_dracut_wrapper, sizeof (rpmostree_dracut_wrapper)) < 0
+      || fchmod (tmpf.fd, 0755) < 0)
     {
       glnx_set_error_from_errno (error);
       goto out;
     }
-  
-  if (!glnx_link_tmpfile_at (rootfs_dfd, GLNX_LINK_TMPFILE_NOREPLACE,
-                             tmp_fd, tmpfile_path, rootfs_dfd, rpmostree_dracut_wrapper_path,
+
+  if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
+                             rootfs_dfd, rpmostree_dracut_wrapper_path,
                              error))
     goto out;
-  /* We need to close the writable FD now to be able to exec it */
-  close (tmp_fd); tmp_fd = -1;
+  /* Close the fd now, otherwise an exec will fail */
+  glnx_tmpfile_clear (&tmpf);
 
   /* Second tempfile is the initramfs contents.  Note we generate the tmpfile
    * in . since in the current rpm-ostree design the temporary rootfs may not have tmp/
@@ -350,8 +345,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
    */
   if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, ".",
                                       O_RDWR | O_CLOEXEC,
-                                      &tmp_fd, &tmpfile_path,
-                                      error))
+                                      &tmpf, error))
     goto out;
 
   if (rebuild_from_initramfs)
@@ -372,7 +366,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
   if (kver)
     rpmostree_bwrap_append_child_argv (bwrap, "--kver", kver, NULL);
 
-  rpmostree_bwrap_set_child_setup (bwrap, dracut_child_setup, GINT_TO_POINTER (tmp_fd));
+  rpmostree_bwrap_set_child_setup (bwrap, dracut_child_setup, GINT_TO_POINTER (tmpf.fd));
 
   if (!rpmostree_bwrap_run (bwrap, error))
     goto out;
@@ -381,11 +375,8 @@ rpmostree_run_dracut (int     rootfs_dfd,
     (void) unlinkat (rootfs_dfd, rebuild_from_initramfs, 0);
 
   ret = TRUE;
-  *out_initramfs_tmpfd = tmp_fd; tmp_fd = -1;
-  *out_initramfs_tmppath = g_steal_pointer (&tmpfile_path);
+  *out_initramfs_tmpf = tmpf; tmpf.initialized = FALSE; /* Transfer */
  out:
-  if (tmpfile_path != NULL)
-    (void) unlink (tmpfile_path);
-  unlinkat (rootfs_dfd, rpmostree_dracut_wrapper_path, 0);
+  (void) unlinkat (rootfs_dfd, rpmostree_dracut_wrapper_path, 0);
   return ret;
 }
