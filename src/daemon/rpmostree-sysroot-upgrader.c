@@ -694,10 +694,6 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
                                  g_hash_table_size (local_pkgs) > 0;
   if (have_packages)
     {
-      /* --- Downloading metadata --- */
-      if (!rpmostree_context_download_metadata (ctx, cancellable, error))
-        return FALSE;
-
       if (!rpmostree_context_prepare (ctx, cancellable, error))
         return FALSE;
     }
