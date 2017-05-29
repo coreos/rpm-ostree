@@ -154,3 +154,11 @@ gboolean
 rpmostree_get_repodata_chksum_repr (DnfPackage *pkg,
                                     char      **out_chksum_repr,
                                     GError    **error);
+
+GPtrArray*
+rpmostree_get_matching_packages (DnfSack *sack,
+                                 const char *pattern);
+
+gboolean
+rpmostree_sack_has_subject (DnfSack *sack,
+                            const char *pattern);

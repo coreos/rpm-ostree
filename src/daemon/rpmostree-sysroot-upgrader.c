@@ -510,24 +510,6 @@ generate_treespec (GHashTable *packages,
   return g_steal_pointer (&ret);
 }
 
-static gboolean
-sack_has_subject (DnfSack    *sack,
-                  const char *pattern)
-{
-  /* mimic dnf_context_install() */
-  g_autoptr(GPtrArray) matches = NULL;
-  HySelector selector = NULL;
-  HySubject subject = NULL;
-
-  subject = hy_subject_create (pattern);
-  selector = hy_subject_get_best_selector (subject, sack);
-  matches = hy_selector_matches (selector);
-
-  hy_selector_free (selector);
-  hy_subject_free (subject);
-
-  return matches->len > 0;
-}
 
 /* Go through rpmdb and jot down the missing pkgs from the given set. Really, we
  * don't *have* to do this: we could just give everything to libdnf and let it
@@ -597,7 +579,7 @@ find_missing_pkgs_in_rpmdb (int            rootfs_dfd,
           /* Also check if that exact NEVRA is already in the root (if the pkg
            * exists, but is a different EVR, depsolve will catch that). In the
            * future, we'll allow packages to replace base pkgs. */
-          if (sack_has_subject (rsack->sack, nevra))
+          if (rpmostree_sack_has_subject (rsack->sack, nevra))
             {
               g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                            "Package '%s' is already in the base", nevra);
@@ -612,7 +594,7 @@ find_missing_pkgs_in_rpmdb (int            rootfs_dfd,
   g_hash_table_iter_init (&it, pkgs);
   while (g_hash_table_iter_next (&it, &itkey, NULL))
     {
-      if (!sack_has_subject (rsack->sack, itkey))
+      if (!rpmostree_sack_has_subject (rsack->sack, itkey))
         g_hash_table_add (missing_pkgs, g_strdup (itkey));
     }
 

@@ -1065,3 +1065,31 @@ rpmostree_get_repodata_chksum_repr (DnfPackage *pkg,
     g_strconcat (hy_chksum_name (chksum_type), ":", chksum, NULL);
   return TRUE;
 }
+
+GPtrArray*
+rpmostree_get_matching_packages (DnfSack *sack,
+                                 const char *pattern)
+{
+  /* mimic dnf_context_install() */
+  g_autoptr(GPtrArray) matches = NULL;
+  HySelector selector = NULL;
+  HySubject subject = NULL;
+
+  subject = hy_subject_create (pattern);
+  selector = hy_subject_get_best_selector (subject, sack);
+  matches = hy_selector_matches (selector);
+
+  hy_selector_free (selector);
+  hy_subject_free (subject);
+
+  return g_steal_pointer (&matches);
+}
+
+gboolean
+rpmostree_sack_has_subject (DnfSack *sack,
+                            const char *pattern)
+{
+  g_autoptr(GPtrArray) matches =
+    rpmostree_get_matching_packages (sack, pattern);
+  return matches->len > 0;
+}
