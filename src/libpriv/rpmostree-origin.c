@@ -156,6 +156,17 @@ rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
   return origin->cached_unconfigured_state;
 }
 
+/* Determines whether the origin hints at local assembly being required. In some
+ * cases, no assembly might actually be required (e.g. if requested packages are
+ * already in the base). */
+gboolean
+rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
+{
+  return rpmostree_origin_get_regenerate_initramfs (origin) ||
+        (g_hash_table_size (origin->cached_packages) > 0) ||
+        (g_hash_table_size (origin->cached_local_packages) > 0);
+}
+
 void
 rpmostree_origin_get_live_state (RpmOstreeOrigin *origin,
                                  char           **out_inprogress,

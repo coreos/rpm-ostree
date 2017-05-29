@@ -817,10 +817,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   const char *target_revision;
   g_autoptr(GKeyFile) origin = NULL;
 
-  /* might this need local assembly? */
-  if (rpmostree_origin_get_regenerate_initramfs (self->origin) ||
-      g_hash_table_size (rpmostree_origin_get_packages (self->origin)) > 0 ||
-      g_hash_table_size (rpmostree_origin_get_local_packages (self->origin)) > 0)
+  if (rpmostree_origin_may_require_local_assembly (self->origin))
     {
       if (!do_local_assembly (self, cancellable, error))
         return FALSE;
