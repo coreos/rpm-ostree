@@ -67,7 +67,6 @@ struct RpmOstreeSysrootUpgrader {
   /* Used during tree construction */
   OstreeRepoDevInoCache *devino_cache;
   int tmprootfs_dfd;
-  char *tmprootfs;
 
   char *base_revision; /* Non-layered replicated commit */
   char *final_revision; /* Computed by layering; if NULL, only using base_revision */
@@ -188,11 +187,7 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   RpmOstreeSysrootUpgrader *self = RPMOSTREE_SYSROOT_UPGRADER (object);
 
   if (self->tmprootfs_dfd != -1)
-    {
-      (void)glnx_shutil_rm_rf_at (AT_FDCWD, self->tmprootfs, NULL, NULL);
-      (void)close (self->tmprootfs_dfd);
-    }
-  g_free (self->tmprootfs);
+    (void)close (self->tmprootfs_dfd);
 
   g_clear_pointer (&self->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
 
@@ -435,7 +430,6 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
   OstreeRepoCheckoutAtOptions checkout_options = { 0, };
   int repo_dfd = ostree_repo_get_dfd (self->repo); /* borrowed */
 
-  g_assert (!self->tmprootfs);
   g_assert_cmpint (self->tmprootfs_dfd, ==, -1);
 
   /* let's give the user some feedback so they don't think we're blocked */
@@ -459,10 +453,8 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
                                 self->base_revision, cancellable, error))
     return FALSE;
 
-  /* Now we'll delete it on cleanup */
-  self->tmprootfs = glnx_fdrel_abspath (repo_dfd, RPMOSTREE_TMP_ROOTFS_DIR);
-
-  if (!glnx_opendirat (repo_dfd, self->tmprootfs, FALSE, &self->tmprootfs_dfd, error))
+  if (!glnx_opendirat (repo_dfd, RPMOSTREE_TMP_ROOTFS_DIR, FALSE,
+                       &self->tmprootfs_dfd, error))
     return FALSE;
 
   rpmostree_output_task_end ("done");
