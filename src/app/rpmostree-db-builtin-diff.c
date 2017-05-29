@@ -38,17 +38,13 @@ rpmostree_db_builtin_diff (int argc, char **argv,
                            RpmOstreeCommandInvocation *invocation,
                            GCancellable *cancellable, GError **error)
 {
-  int exit_status = EXIT_FAILURE;
-  g_autoptr(GOptionContext) context = NULL;
-  glnx_unref_object OstreeRepo *repo = NULL;
-  struct RpmRevisionData *rpmrev1 = NULL;
-  struct RpmRevisionData *rpmrev2 = NULL;
+  g_autoptr(GOptionContext) context =
+    g_option_context_new ("COMMIT COMMIT - Show package changes between two commits");
 
-  context = g_option_context_new ("COMMIT COMMIT - Show package changes between two commits");
-
+  g_autoptr(OstreeRepo) repo = NULL;
   if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv, invocation, &repo,
                                           cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (argc != 3)
     {
@@ -57,14 +53,16 @@ rpmostree_db_builtin_diff (int argc, char **argv,
       message = g_strdup_printf ("\"%s\" takes exactly 2 arguments",
                                  g_get_prgname ());
       rpmostree_usage_error (context, message, error);
-      goto out;
+      return EXIT_FAILURE;
     }
 
+  g_autoptr(RpmRevisionData) rpmrev1 = NULL;
   if (!(rpmrev1 = rpmrev_new (repo, argv[1], NULL, cancellable, error)))
-    goto out;
+    return EXIT_FAILURE;
 
+  g_autoptr(RpmRevisionData) rpmrev2 = NULL;
   if (!(rpmrev2 = rpmrev_new (repo, argv[2], NULL, cancellable, error)))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!g_str_equal (argv[1], rpmrev_get_commit (rpmrev1)))
     printf ("ostree diff commit old: %s (%s)\n", argv[1], rpmrev_get_commit (rpmrev1));
@@ -92,20 +90,10 @@ rpmostree_db_builtin_diff (int argc, char **argv,
     }
   else
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Format argument is invalid, pick one of: diff, block");
-      goto out;
+      glnx_throw (error, "Format argument is invalid, pick one of: diff, block");
+      return EXIT_FAILURE;
     }
 
-  exit_status = EXIT_SUCCESS;
-
-out:
-  /* Free the RpmRevisionData structs explicitly *before* possibly removing
-   * the database directory, since rpmhdrs_free() depends on that directory
-   * being there. */
-  rpmrev_free (rpmrev1);
-  rpmrev_free (rpmrev2);
-
-  return exit_status;
+  return EXIT_SUCCESS;
 }
 

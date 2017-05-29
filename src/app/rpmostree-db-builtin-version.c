@@ -32,10 +32,7 @@ _builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
                      GCancellable   *cancellable,
                      GError        **error)
 {
-  int num = 0;
-  gboolean ret = FALSE;
-
-  for (num = 0; num < revs->len; num++)
+  for (guint num = 0; num < revs->len; num++)
     {
       char *rev = revs->pdata[num];
       g_autoptr(RpmRevisionData) rpmrev = NULL;
@@ -56,23 +53,23 @@ _builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
 
           range_revs = _rpmostree_util_get_commit_hashes (repo, revdup, mrev, cancellable, error);
           if (!range_revs)
-            goto out;
+            return FALSE;
 
           if (!_builtin_db_version (repo, range_revs,
                                     cancellable, error))
-            goto out;
+            return FALSE;
 
           continue;
         }
 
         rpmrev = rpmrev_new (repo, rev, NULL, cancellable, error);
         if (!rpmrev)
-          goto out;
+          return FALSE;
 
         rpmdbv = rpmhdrs_rpmdbv (rpmrev_get_headers (rpmrev),
                                  cancellable, error);
         if (rpmdbv == NULL)
-          goto out;
+          return FALSE;
 
         /* FIXME: g_console? */
         if (!g_str_equal (rev, rpmrev_get_commit (rpmrev)))
@@ -83,10 +80,7 @@ _builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
         printf ("  rpmdbv is: %66s\n", rpmdbv);
       }
 
-  ret = TRUE;
-
- out:
-  return ret;
+  return TRUE;
 }
 
 int
@@ -94,29 +88,23 @@ rpmostree_db_builtin_version (int argc, char **argv,
                               RpmOstreeCommandInvocation *invocation,
                               GCancellable *cancellable, GError **error)
 {
-  int exit_status = EXIT_FAILURE;
-  g_autoptr(GOptionContext) context = NULL;
-  glnx_unref_object OstreeRepo *repo = NULL;
-  g_autoptr(GPtrArray) revs = NULL;
-  gint ii;
+  g_autoptr(GOptionContext) context =
+    g_option_context_new ("COMMIT... - Show rpmdb version of packages within the commits");
 
-  context = g_option_context_new ("COMMIT... - Show rpmdb version of packages within the commits");
+  g_autoptr(OstreeRepo) repo = NULL;
+  if (!rpmostree_db_option_context_parse (context, db_version_entries, &argc,
+                                          &argv, invocation, &repo, cancellable,
+                                          error))
+    return EXIT_FAILURE;
 
-  if (!rpmostree_db_option_context_parse (context, db_version_entries, &argc, &argv, invocation, &repo,
-                                          cancellable, error))
-    goto out;
+  g_autoptr(GPtrArray) revs = g_ptr_array_new ();
 
-  revs = g_ptr_array_new ();
-
-  for (ii = 1; ii < argc; ii++)
+  for (int ii = 1; ii < argc; ii++)
     g_ptr_array_add (revs, argv[ii]);
 
   if (!_builtin_db_version (repo, revs, cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
-  exit_status = EXIT_SUCCESS;
-
-out:
-  return exit_status;
+  return EXIT_SUCCESS;
 }
 
