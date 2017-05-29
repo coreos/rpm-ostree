@@ -69,9 +69,11 @@ static RpmOstreeCommand commands[] = {
     rpmostree_builtin_install },
   { "pkg-remove", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_uninstall },
+  { "rpm", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+    rpmostree_builtin_db },
+  /* Hidden */
   { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_ex },
-  /* Hidden */
   { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
                    RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_start_daemon },
@@ -297,10 +299,6 @@ main (int    argc,
    * to the commands, but also have them take effect globally.
    */
   command_name = rpmostree_subcommand_parse (&argc, argv, NULL);
-
-  /* Keep the "rpm" command working for backward-compatibility. */
-  if (g_strcmp0 (command_name, "rpm") == 0)
-    command_name = "db";
 
   command = lookup_command (command_name);
 
