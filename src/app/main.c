@@ -104,29 +104,27 @@ static GOptionEntry pkg_entries[] = {
 };
 
 static GOptionContext *
-option_context_new_with_commands (void)
+option_context_new_with_commands (RpmOstreeCommandInvocation *invocation,
+                                  RpmOstreeCommand *commands)
 {
-  RpmOstreeCommand *command = commands;
-  GOptionContext *context;
-  GString *summary;
+  g_autoptr(GOptionContext) context = g_option_context_new ("COMMAND");
+  g_autoptr(GString) summary = g_string_new (NULL);
 
-  context = g_option_context_new ("COMMAND");
+  if (invocation)
+    g_string_append_printf (summary, "Builtin \"%s\" Commands:",
+                            invocation->command->name);
+  else /* top level */
+    g_string_append (summary, "Builtin Commands:");
 
-  summary = g_string_new ("Builtin Commands:");
-
-  while (command->name != NULL)
+  for (RpmOstreeCommand *command = commands; command->name != NULL; command++)
     {
-      gboolean is_hidden = (command->flags & RPM_OSTREE_BUILTIN_FLAG_HIDDEN) > 0;
-      if (!is_hidden)
+      gboolean hidden = (command->flags & RPM_OSTREE_BUILTIN_FLAG_HIDDEN) > 0;
+      if (!hidden)
         g_string_append_printf (summary, "\n  %s", command->name);
-      command++;
     }
 
   g_option_context_set_summary (context, summary->str);
-
-  g_string_free (summary, TRUE);
-
-  return context;
+  return g_steal_pointer (&context);
 }
 
 gboolean
@@ -251,6 +249,61 @@ rpmostree_subcommand_parse (int *inout_argc,
 }
 
 int
+rpmostree_handle_subcommand (int argc, char **argv,
+                             RpmOstreeCommand *subcommands,
+                             RpmOstreeCommandInvocation *invocation,
+                             GCancellable *cancellable, GError **error)
+{
+  const char *subcommand_name =
+    rpmostree_subcommand_parse (&argc, argv, invocation);
+
+  RpmOstreeCommand *subcommand = subcommands;
+  while (subcommand->name)
+    {
+      if (g_strcmp0 (subcommand_name, subcommand->name) == 0)
+        break;
+      subcommand++;
+    }
+
+  if (!subcommand->name)
+    {
+      g_autoptr(GOptionContext) context =
+        option_context_new_with_commands (invocation, subcommands);
+
+      /* This will not return for some options (e.g. --version). */
+      (void) rpmostree_option_context_parse (context, NULL,
+                                             &argc, &argv,
+                                             invocation,
+                                             cancellable,
+                                             NULL, NULL, NULL, NULL, NULL);
+      if (subcommand_name == NULL)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "No \"%s\" subcommand specified",
+                       invocation->command->name);
+        }
+      else
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Unknown \"%s\" subcommand \"%s\"",
+                       invocation->command->name,
+                       subcommand_name);
+        }
+
+      g_autofree char *help = g_option_context_get_help (context, FALSE, NULL);
+      g_printerr ("%s", help);
+      return EXIT_FAILURE;
+    }
+
+  g_autofree char *prgname =
+    g_strdup_printf ("%s %s", g_get_prgname (), subcommand_name);
+  g_set_prgname (prgname);
+
+  RpmOstreeCommandInvocation sub_invocation = { .command = subcommand };
+  return subcommand->fn (argc, argv, &sub_invocation, cancellable, error);
+}
+
+int
 main (int    argc,
       char **argv)
 {
@@ -278,7 +331,8 @@ main (int    argc,
 
   if (!command)
     {
-      g_autoptr(GOptionContext) context = option_context_new_with_commands ();
+      g_autoptr(GOptionContext) context =
+        option_context_new_with_commands (NULL, commands);
       g_autofree char *help = NULL;
 
       /* This will not return for some options (e.g. --version). */
