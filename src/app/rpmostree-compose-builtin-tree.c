@@ -367,10 +367,6 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
       goto out;
   }
 
-  /* --- Downloading metadata --- */
-  if (!rpmostree_context_download_metadata (ctx, cancellable, error))
-    goto out;
-
   if (!rpmostree_context_prepare (ctx, cancellable, error))
     goto out;
 

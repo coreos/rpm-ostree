@@ -1310,8 +1310,6 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   g_assert (!self->empty);
 
   DnfContext *hifctx = self->hifctx;
-  DnfSack *sack = dnf_context_get_sack (hifctx);
-  HyGoal goal = dnf_context_get_goal (hifctx);
 
   g_autofree char **pkgnames = NULL;
   g_assert (g_variant_dict_lookup (self->spec->dict, "packages",
@@ -1320,6 +1318,16 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   g_autofree char **cached_pkgnames = NULL;
   g_assert (g_variant_dict_lookup (self->spec->dict, "cached-packages",
                                    "^a&s", &cached_pkgnames));
+
+  /* setup sack if not yet set up */
+  if (dnf_context_get_sack (hifctx) == NULL)
+    {
+      if (!rpmostree_context_download_metadata (self, cancellable, error))
+        return FALSE;
+    }
+
+  HyGoal goal = dnf_context_get_goal (hifctx);
+  DnfSack *sack = dnf_context_get_sack (hifctx);
 
   for (char **it = cached_pkgnames; it && *it; it++)
     {

@@ -294,10 +294,6 @@ rpmostree_container_builtin_assemble (int             argc,
   if (!roc_context_prepare_for_root (rocctx, treespec, cancellable, error))
     goto out;
 
-  /* --- Downloading metadata --- */
-  if (!rpmostree_context_download_metadata (rocctx->ctx, cancellable, error))
-    goto out;
-
   /* --- Resolving dependencies --- */
   if (!rpmostree_context_prepare (rocctx->ctx, cancellable, error))
     goto out;
@@ -497,11 +493,6 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
   if (!roc_context_prepare_for_root (rocctx, treespec, cancellable, error))
     goto out;
 
-  /* --- Downloading metadata --- */
-  if (!rpmostree_context_download_metadata (rocctx->ctx, cancellable, error))
-    goto out;
-
-  /* --- Resolving dependencies --- */
   if (!rpmostree_context_prepare (rocctx->ctx, cancellable, error))
     goto out;
 
