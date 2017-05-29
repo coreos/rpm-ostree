@@ -94,6 +94,11 @@ rpmostree_option_context_parse (GOptionContext *context,
                                 GPid *out_peer_pid,
                                 GError **error);
 
+int
+rpmostree_handle_subcommand (int argc, char **argv,
+                             RpmOstreeCommand *subcommands,
+                             RpmOstreeCommandInvocation *invocation,
+                             GCancellable *cancellable, GError **error);
 
 G_END_DECLS
 

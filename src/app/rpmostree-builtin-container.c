@@ -34,85 +34,12 @@ static RpmOstreeCommand container_subcommands[] = {
   { NULL, 0, NULL }
 };
 
-static GOptionContext *
-container_option_context_new_with_commands (void)
-{
-  RpmOstreeCommand *command = container_subcommands;
-  GOptionContext *context;
-  GString *summary;
-
-  context = g_option_context_new ("COMMAND");
-
-  summary = g_string_new ("Builtin \"container\" Commands:");
-
-  while (command->name != NULL)
-    {
-      g_string_append_printf (summary, "\n  %s", command->name);
-      command++;
-    }
-
-  g_option_context_set_summary (context, summary->str);
-
-  g_string_free (summary, TRUE);
-
-  return context;
-}
-
 int
-rpmostree_builtin_container (int argc, char **argv, RpmOstreeCommandInvocation *invocation, GCancellable *cancellable, GError **error)
+rpmostree_builtin_container (int argc, char **argv,
+                             RpmOstreeCommandInvocation *invocation,
+                             GCancellable *cancellable, GError **error)
 {
-  RpmOstreeCommand *subcommand;
-  const char *subcommand_name = NULL;
-  g_autofree char *prgname = NULL;
-  int exit_status = EXIT_SUCCESS;
-
-  subcommand_name = rpmostree_subcommand_parse (&argc, argv, invocation);
-  subcommand = container_subcommands;
-  while (subcommand->name)
-    {
-      if (g_strcmp0 (subcommand_name, subcommand->name) == 0)
-        break;
-      subcommand++;
-    }
-
-  if (!subcommand->name)
-    {
-      g_autoptr(GOptionContext) context =
-        container_option_context_new_with_commands ();
-      g_autofree char *help = NULL;
-
-      (void) rpmostree_option_context_parse (context, NULL,
-                                             &argc, &argv,
-                                             invocation,
-                                             cancellable,
-                                             NULL, NULL, NULL, NULL, NULL);
-
-      if (subcommand_name == NULL)
-        {
-          g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "No \"container\" subcommand specified");
-        }
-      else
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Unknown \"container\" subcommand '%s'", subcommand_name);
-        }
-
-      exit_status = EXIT_FAILURE;
-      help = g_option_context_get_help (context, FALSE, NULL);
-      g_printerr ("%s", help);
-
-      goto out;
-    }
-
-  prgname = g_strdup_printf ("%s %s", g_get_prgname (), subcommand_name);
-  g_set_prgname (prgname);
-
-  { RpmOstreeCommandInvocation sub_invocation = { .command = subcommand };
-    exit_status = subcommand->fn (argc, argv, &sub_invocation, cancellable, error);
-  }
-
- out:
-  return exit_status;
+  return rpmostree_handle_subcommand (argc, argv, container_subcommands,
+                                      invocation, cancellable, error);
 }
 
