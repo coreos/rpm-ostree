@@ -26,7 +26,7 @@ if test -z "${INSIDE_VM:-}"; then
        DESTDIR=${VMCHECK_INSTTREE}
        mkdir -p ${DESTDIR}
        # Always pull ostree from the build container; we assume development and testing
-       # is against git master.  See also build.sh.
+       # is against git master.  See also sync.sh and build.sh.
        ostree --version
        for pkg in ostree{,-libs,-grub2}; do
           rpm -q $pkg

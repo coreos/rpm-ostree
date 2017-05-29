@@ -16,6 +16,21 @@ if test -z "${INSIDE_VM:-}"; then
 
     cd ${topsrcdir}
     export VMCHECK_INSTTREE=${VMCHECK_INSTTREE:-$(pwd)/insttree}
+
+    # Always pull ostree from the build container; we assume development and
+    # testing is against git master. See also overlay.sh and build.sh.
+    ostree --version
+    for pkg in ostree{,-libs,-grub2}; do
+       rpm -q $pkg
+       # We do not have perms to read /etc/grub2 as non-root
+       rpm -ql $pkg |grep -v '^/etc/'>  list.txt
+       # In the prebuilt container case, manpages are missing.  Ignore that.
+       # Also chown everything to writable, due to https://bugzilla.redhat.com/show_bug.cgi?id=517575
+       chmod -R u+w ${VMCHECK_INSTTREE}/
+       rsync -l --ignore-missing-args --files-from=list.txt / ${VMCHECK_INSTTREE}/
+       rm -f list.txt
+    done
+
     make install DESTDIR=${VMCHECK_INSTTREE}
     vm_rsync
 
@@ -29,5 +44,6 @@ else
     rsync -rlv /var/roothome/sync/insttree/usr/ /usr/
     restorecon -v /usr/bin/rpm-ostree
     restorecon -v /usr/libexec/rpm-ostreed
+    systemctl daemon-reload
     systemctl restart rpm-ostreed
 fi
