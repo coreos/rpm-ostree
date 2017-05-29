@@ -272,7 +272,6 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   gboolean ret = FALSE;
   guint progress_sigid;
   GFile *contextdir = self->treefile_context_dirs->pdata[0];
-  g_autoptr(RpmOstreeInstall) hifinstall = { 0, };
   DnfContext *hifctx;
   g_autofree char *ret_new_inputhash = NULL;
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
@@ -372,7 +371,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (!rpmostree_context_download_metadata (ctx, cancellable, error))
     goto out;
 
-  if (!rpmostree_context_prepare_install (ctx, &hifinstall, cancellable, error))
+  if (!rpmostree_context_prepare (ctx, cancellable, error))
     goto out;
 
   rpmostree_print_transaction (hifctx);
@@ -419,7 +418,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     }
 
   /* --- Downloading packages --- */
-  if (!rpmostree_context_download (ctx, hifinstall, cancellable, error))
+  if (!rpmostree_context_download (ctx, cancellable, error))
     goto out;
   
   { g_auto(GLnxConsoleRef) console = { 0, };

@@ -236,14 +236,13 @@ rpmostree_container_builtin_assemble (int             argc,
   g_autoptr(GOptionContext) context = g_option_context_new ("NAME [PKGNAME PKGNAME...]");
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
-  g_autoptr(RpmOstreeInstall) install = {0,};
   const char *specpath;
   struct stat stbuf;
   const char *name;
   g_autofree char *commit = NULL;
   const char *target_rootdir;
   g_autoptr(RpmOstreeTreespec) treespec = NULL;
-  
+
   if (!rpmostree_option_context_parse (context,
                                        assemble_option_entries,
                                        &argc, &argv,
@@ -300,17 +299,17 @@ rpmostree_container_builtin_assemble (int             argc,
     goto out;
 
   /* --- Resolving dependencies --- */
-  if (!rpmostree_context_prepare_install (rocctx->ctx, &install, cancellable, error))
+  if (!rpmostree_context_prepare (rocctx->ctx, cancellable, error))
     goto out;
 
   rpmostree_print_transaction (rpmostree_context_get_hif (rocctx->ctx));
 
   /* --- Download as necessary --- */
-  if (!rpmostree_context_download (rocctx->ctx, install, cancellable, error))
+  if (!rpmostree_context_download (rocctx->ctx, cancellable, error))
     goto out;
 
   /* --- Import as necessary --- */
-  if (!rpmostree_context_import (rocctx->ctx, install, cancellable, error))
+  if (!rpmostree_context_import (rocctx->ctx, cancellable, error))
     goto out;
 
   { g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
@@ -389,7 +388,7 @@ parse_app_version (const char *name,
 
   { g_autofree char *version_str = g_match_info_fetch (match, 1);
     ret_version = g_ascii_strtoull (version_str, NULL, 10);
-    
+
     switch (ret_version)
       {
       case 0:
@@ -417,7 +416,6 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
   g_autoptr(GOptionContext) context = g_option_context_new ("NAME");
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
-  g_autoptr(RpmOstreeInstall) install = NULL;
   const char *name;
   g_autofree char *commit_checksum = NULL;
   g_autofree char *new_commit_checksum = NULL;
@@ -504,8 +502,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
     goto out;
 
   /* --- Resolving dependencies --- */
-  if (!rpmostree_context_prepare_install (rocctx->ctx, &install,
-                                          cancellable, error))
+  if (!rpmostree_context_prepare (rocctx->ctx, cancellable, error))
     goto out;
 
   rpmostree_print_transaction (rpmostree_context_get_hif (rocctx->ctx));
@@ -521,11 +518,11 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
   }
 
   /* --- Download as necessary --- */
-  if (!rpmostree_context_download (rocctx->ctx, install, cancellable, error))
+  if (!rpmostree_context_download (rocctx->ctx, cancellable, error))
     goto out;
 
   /* --- Import as necessary --- */
-  if (!rpmostree_context_import (rocctx->ctx, install, cancellable, error))
+  if (!rpmostree_context_import (rocctx->ctx, cancellable, error))
     goto out;
 
   { g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");

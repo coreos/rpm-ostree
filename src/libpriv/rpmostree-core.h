@@ -34,9 +34,6 @@ G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, G
 #define RPMOSTREE_TYPE_TREESPEC (rpmostree_treespec_get_type ())
 G_DECLARE_FINAL_TYPE (RpmOstreeTreespec, rpmostree_treespec, RPMOSTREE, TREESPEC, GObject)
 
-#define RPMOSTREE_TYPE_INSTALL (rpmostree_install_get_type ())
-G_DECLARE_FINAL_TYPE (RpmOstreeInstall, rpmostree_install, RPMOSTREE, INSTALL, GObject)
-
 RpmOstreeContext *rpmostree_context_new_system (GCancellable *cancellable,
                                                 GError **error);
 
@@ -97,23 +94,19 @@ gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
                                                GError           **error);
 
 /* This API allocates an install context, use with one of the later ones */
-gboolean rpmostree_context_prepare_install (RpmOstreeContext     *self,
-                                            RpmOstreeInstall **out_install,
-                                            GCancellable   *cancellable,
-                                            GError        **error);
+gboolean rpmostree_context_prepare (RpmOstreeContext     *self,
+                                    GCancellable   *cancellable,
+                                    GError        **error);
 
 gboolean rpmostree_context_download (RpmOstreeContext *self,
-                                     RpmOstreeInstall *install,
                                      GCancellable     *cancellable,
                                      GError           **error);
 
 gboolean rpmostree_context_import (RpmOstreeContext *self,
-                                   RpmOstreeInstall *install,
                                    GCancellable     *cancellable,
                                    GError          **error);
 
 gboolean rpmostree_context_relabel (RpmOstreeContext *self,
-                                    RpmOstreeInstall *install,
                                     GCancellable     *cancellable,
                                     GError          **error);
 
