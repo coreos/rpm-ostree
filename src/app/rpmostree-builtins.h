@@ -94,7 +94,6 @@ rpmostree_option_context_parse (GOptionContext *context,
                                 GPid *out_peer_pid,
                                 GError **error);
 
-void rpmostree_print_gpg_verify_result (OstreeGpgVerifyResult *result);
 
 G_END_DECLS
 
