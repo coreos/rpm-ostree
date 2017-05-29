@@ -469,7 +469,7 @@ build_metadata_variant (RpmOstreeUnpacker *self,
    *   2. we'll need to provide it to librpm when it updates the rpmdb (see
    *      rpmostree_context_assemble_commit())
    *   3. it's needed in the local pkgs paths to fool the libdnf stack (see
-   *      rpmostree_context_prepare_install())
+   *      rpmostree_context_prepare())
    */
   {
     g_autoptr(GBytes) metadata = NULL;

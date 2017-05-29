@@ -223,55 +223,6 @@ rpmostree_treespec_to_variant (RpmOstreeTreespec *spec)
 }
 
 /***********************************************************
- *                    RpmOstreeInstall                     *
- ***********************************************************
- */
-
-struct _RpmOstreeInstall {
-  GObject parent;
-
-  GPtrArray *packages_requested;
-
-  /* Target state -- these are populated during prepare_install() */
-  GPtrArray *packages_to_download;
-  GPtrArray *packages_to_import;
-  GPtrArray *packages_to_relabel;
-
-  guint64 n_bytes_to_fetch;
-
-  /* Current state */
-  guint n_packages_fetched;
-  guint64 n_bytes_fetched;
-};
-
-G_DEFINE_TYPE (RpmOstreeInstall, rpmostree_install, G_TYPE_OBJECT)
-
-static void
-rpmostree_install_finalize (GObject *object)
-{
-  RpmOstreeInstall *self = RPMOSTREE_INSTALL (object);
-
-  g_clear_pointer (&self->packages_requested, g_ptr_array_unref);
-  g_clear_pointer (&self->packages_to_download, g_ptr_array_unref);
-  g_clear_pointer (&self->packages_to_import, g_ptr_array_unref);
-  g_clear_pointer (&self->packages_to_relabel, g_ptr_array_unref);
-
-  G_OBJECT_CLASS (rpmostree_install_parent_class)->finalize (object);
-}
-
-static void
-rpmostree_install_class_init (RpmOstreeInstallClass *klass)
-{
-  GObjectClass *object_class = G_OBJECT_CLASS (klass);
-  object_class->finalize = rpmostree_install_finalize;
-}
-
-static void
-rpmostree_install_init (RpmOstreeInstall *self)
-{
-}
-
-/***********************************************************
  *                    RpmOstreeContext                     *
  ***********************************************************
  */
@@ -288,6 +239,10 @@ struct _RpmOstreeContext {
   gboolean unprivileged;
   OstreeSePolicy *sepolicy;
   char *passwd_dir;
+
+  GPtrArray *pkgs_to_download;
+  GPtrArray *pkgs_to_import;
+  GPtrArray *pkgs_to_relabel;
 
   char *tmpdir_path;
   int tmpdir_fd;
@@ -309,6 +264,10 @@ rpmostree_context_finalize (GObject *object)
   g_clear_object (&rctx->sepolicy);
 
   g_clear_pointer (&rctx->passwd_dir, g_free);
+
+  g_clear_pointer (&rctx->pkgs_to_download, g_ptr_array_unref);
+  g_clear_pointer (&rctx->pkgs_to_import, g_ptr_array_unref);
+  g_clear_pointer (&rctx->pkgs_to_relabel, g_ptr_array_unref);
 
   if (rctx->tmpdir_path)
     {
@@ -1192,30 +1151,21 @@ done:
 /* determine of all the marked packages, which ones we'll need to download,
  * which ones we'll need to import, and which ones we'll need to relabel */
 static gboolean
-sort_packages (DnfContext       *hifctx,
-               OstreeRepo       *ostreerepo,
-               OstreeSePolicy   *sepolicy,
-               RpmOstreeInstall *install,
+sort_packages (RpmOstreeContext *self,
                GError          **error)
 {
-  g_autoptr(GPtrArray) packages = NULL;
+  DnfContext *hifctx = self->hifctx;
+
+  g_assert (!self->pkgs_to_download);
+  self->pkgs_to_download = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+  g_assert (!self->pkgs_to_import);
+  self->pkgs_to_import = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+  g_assert (!self->pkgs_to_relabel);
+  self->pkgs_to_relabel = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+
   GPtrArray *sources = dnf_context_get_repos (hifctx);
-
-  g_clear_pointer (&install->packages_to_download, g_ptr_array_unref);
-  install->packages_to_download
-    = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-
-  g_clear_pointer (&install->packages_to_import, g_ptr_array_unref);
-  install->packages_to_import
-    = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-
-  g_clear_pointer (&install->packages_to_relabel, g_ptr_array_unref);
-  install->packages_to_relabel
-    = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-
-  packages = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
-                                    DNF_PACKAGE_INFO_INSTALL, -1);
-
+  g_autoptr(GPtrArray) packages = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+                                                         DNF_PACKAGE_INFO_INSTALL, -1);
   for (guint i = 0; i < packages->len; i++)
     {
       DnfPackage *pkg = packages->pdata[i];
@@ -1247,7 +1197,7 @@ sort_packages (DnfContext       *hifctx,
        * will work. (So e.g. pkgs might still get added to the import array in
        * the treecompose path, but since it will never call import(), that
        * doesn't matter). In the future, we might want to allow the user of
-       * RpmOstreeContext to express *why* they are calling prepare_install().
+       * RpmOstreeContext to express *why* they are calling prepare().
        * */
 
       {
@@ -1255,7 +1205,7 @@ sort_packages (DnfContext       *hifctx,
         gboolean selinux_match = FALSE;
         gboolean cached = pkg_is_cached (pkg);
 
-        if (!find_pkg_in_ostree (ostreerepo, pkg, sepolicy,
+        if (!find_pkg_in_ostree (get_pkgcache_repo (self), pkg, self->sepolicy,
                                  &in_ostree, &selinux_match, error))
           return FALSE;
 
@@ -1263,11 +1213,11 @@ sort_packages (DnfContext       *hifctx,
           g_assert (in_ostree);
 
         if (!in_ostree && !cached)
-          g_ptr_array_add (install->packages_to_download, g_object_ref (pkg));
+          g_ptr_array_add (self->pkgs_to_download, g_object_ref (pkg));
         if (!in_ostree)
-          g_ptr_array_add (install->packages_to_import, g_object_ref (pkg));
+          g_ptr_array_add (self->pkgs_to_import, g_object_ref (pkg));
         if (in_ostree && !selinux_match)
-          g_ptr_array_add (install->packages_to_relabel, g_object_ref (pkg));
+          g_ptr_array_add (self->pkgs_to_relabel, g_object_ref (pkg));
       }
     }
 
@@ -1353,24 +1303,23 @@ check_goal_solution (HyGoal    goal,
 }
 
 gboolean
-rpmostree_context_prepare_install (RpmOstreeContext    *self,
-                                   RpmOstreeInstall    **out_install,
-                                   GCancellable         *cancellable,
-                                   GError              **error)
+rpmostree_context_prepare (RpmOstreeContext *self,
+                           GCancellable     *cancellable,
+                           GError          **error)
 {
+  g_assert (!self->empty);
+
   DnfContext *hifctx = self->hifctx;
-  g_autofree char **pkgnames = NULL;
-  g_autofree char **cached_pkgnames = NULL;
   DnfSack *sack = dnf_context_get_sack (hifctx);
   HyGoal goal = dnf_context_get_goal (hifctx);
 
-  g_autoptr(RpmOstreeInstall) ret_install = g_object_new (RPMOSTREE_TYPE_INSTALL, NULL);
+  g_autofree char **pkgnames = NULL;
+  g_assert (g_variant_dict_lookup (self->spec->dict, "packages",
+                                   "^a&s", &pkgnames));
 
-  g_assert (g_variant_dict_lookup (self->spec->dict, "packages", "^a&s", &pkgnames));
-  g_assert (g_variant_dict_lookup (self->spec->dict, "cached-packages", "^a&s", &cached_pkgnames));
-  g_assert (!self->empty);
-
-  ret_install->packages_requested = g_ptr_array_new_with_free_func (g_free);
+  g_autofree char **cached_pkgnames = NULL;
+  g_assert (g_variant_dict_lookup (self->spec->dict, "cached-packages",
+                                   "^a&s", &cached_pkgnames));
 
   for (char **it = cached_pkgnames; it && *it; it++)
     {
@@ -1440,7 +1389,6 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
         const char *pkgname = *strviter;
         if (!dnf_context_install (hifctx, pkgname, error))
           return FALSE;
-        g_ptr_array_add (ret_install->packages_requested, g_strdup (pkgname));
       }
   }
 
@@ -1455,11 +1403,9 @@ rpmostree_context_prepare_install (RpmOstreeContext    *self,
 
   rpmostree_output_task_end ("done");
 
-  if (!sort_packages (hifctx, get_pkgcache_repo (self), self->sepolicy,
-                      ret_install, error))
+  if (!sort_packages (self, error))
     return FALSE;
 
-  *out_install = g_steal_pointer (&ret_install);
   return TRUE;
 }
 
@@ -1515,16 +1461,15 @@ rpmostree_context_get_state_sha512 (RpmOstreeContext *self)
 }
 
 static GHashTable *
-gather_source_to_packages (DnfContext *hifctx,
-                           RpmOstreeInstall *install)
+gather_source_to_packages (RpmOstreeContext *self)
 {
   guint i;
   g_autoptr(GHashTable) source_to_packages =
     g_hash_table_new_full (NULL, NULL, NULL, (GDestroyNotify)g_ptr_array_unref);
 
-  for (i = 0; i < install->packages_to_download->len; i++)
+  for (i = 0; i < self->pkgs_to_download->len; i++)
     {
-      DnfPackage *pkg = install->packages_to_download->pdata[i];
+      DnfPackage *pkg = self->pkgs_to_download->pdata[i];
       DnfRepo *src = dnf_package_get_repo (pkg);
       GPtrArray *source_packages;
 
@@ -1543,17 +1488,16 @@ gather_source_to_packages (DnfContext *hifctx,
 }
 
 gboolean
-rpmostree_context_download (RpmOstreeContext *ctx,
-                            RpmOstreeInstall *install,
+rpmostree_context_download (RpmOstreeContext *self,
                             GCancellable     *cancellable,
                             GError          **error)
 {
-  DnfContext *hifctx = ctx->hifctx;
-  int n = install->packages_to_download->len;
+  int n = self->pkgs_to_download->len;
 
   if (n > 0)
     {
-      guint64 size = dnf_package_array_get_download_size (install->packages_to_download);
+      guint64 size =
+        dnf_package_array_get_download_size (self->pkgs_to_download);
       g_autofree char *sizestr = g_format_size (size);
       g_print ("Will download: %u package%s (%s)\n", n, n > 1 ? "s" : "", sizestr);
     }
@@ -1563,7 +1507,7 @@ rpmostree_context_download (RpmOstreeContext *ctx,
   { guint progress_sigid;
     GHashTableIter hiter;
     gpointer key, value;
-    g_autoptr(GHashTable) source_to_packages = gather_source_to_packages (hifctx, install);
+    g_autoptr(GHashTable) source_to_packages = gather_source_to_packages (self);
 
     g_hash_table_iter_init (&hiter, source_to_packages);
     while (g_hash_table_iter_next (&hiter, &key, &value))
@@ -1661,13 +1605,12 @@ dnf_state_assert_done (DnfState *hifstate)
 
 gboolean
 rpmostree_context_import (RpmOstreeContext *self,
-                          RpmOstreeInstall *install,
                           GCancellable     *cancellable,
                           GError          **error)
 {
   DnfContext *hifctx = self->hifctx;
   guint progress_sigid;
-  int n = install->packages_to_import->len;
+  int n = self->pkgs_to_import->len;
 
   if (n == 0)
     return TRUE;
@@ -1679,14 +1622,14 @@ rpmostree_context_import (RpmOstreeContext *self,
 
   {
     glnx_unref_object DnfState *hifstate = dnf_state_new ();
-    dnf_state_set_number_steps (hifstate, install->packages_to_import->len);
+    dnf_state_set_number_steps (hifstate, self->pkgs_to_import->len);
     progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                        G_CALLBACK (on_hifstate_percentage_changed),
                                        "Importing:");
 
-    for (guint i = 0; i < install->packages_to_import->len; i++)
+    for (guint i = 0; i < self->pkgs_to_import->len; i++)
       {
-        DnfPackage *pkg = install->packages_to_import->pdata[i];
+        DnfPackage *pkg = self->pkgs_to_import->pdata[i];
         if (!import_one_package (self, hifctx, pkg,
                                  self->sepolicy, cancellable, error))
           return FALSE;
@@ -2098,12 +2041,11 @@ out:
 
 gboolean
 rpmostree_context_relabel (RpmOstreeContext *self,
-                           RpmOstreeInstall *install,
                            GCancellable     *cancellable,
                            GError          **error)
 {
   guint progress_sigid;
-  int n = install->packages_to_relabel->len;
+  int n = self->pkgs_to_relabel->len;
   OstreeRepo *ostreerepo = get_pkgcache_repo (self);
 
   if (n == 0)
@@ -2117,17 +2059,17 @@ rpmostree_context_relabel (RpmOstreeContext *self,
   g_autofree char *prefix = g_strdup_printf ("Relabeling %d package%s:",
                                              n, n>1 ? "s" : "");
 
-  dnf_state_set_number_steps (hifstate, install->packages_to_relabel->len);
+  dnf_state_set_number_steps (hifstate, self->pkgs_to_relabel->len);
   progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                      G_CALLBACK (on_hifstate_percentage_changed),
                                      prefix);
 
   guint n_changed_files = 0;
   guint n_changed_pkgs = 0;
-  const guint n_to_relabel = install->packages_to_relabel->len;
+  const guint n_to_relabel = self->pkgs_to_relabel->len;
   for (guint i = 0; i < n_to_relabel; i++)
     {
-        DnfPackage *pkg = install->packages_to_relabel->pdata[i];
+        DnfPackage *pkg = self->pkgs_to_relabel->pdata[i];
         guint pkg_n_changed = 0;
         if (!relabel_one_package (ostreerepo, pkg, self->sepolicy,
                                   &pkg_n_changed, cancellable, error))

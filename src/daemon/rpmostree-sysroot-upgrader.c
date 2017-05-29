@@ -692,15 +692,13 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
 
   const gboolean have_packages = g_hash_table_size (pkgset) > 0 ||
                                  g_hash_table_size (local_pkgs) > 0;
-  g_autoptr(RpmOstreeInstall) install = {0,};
   if (have_packages)
     {
       /* --- Downloading metadata --- */
       if (!rpmostree_context_download_metadata (ctx, cancellable, error))
         return FALSE;
 
-      /* --- Resolving dependencies --- */
-      if (!rpmostree_context_prepare_install (ctx, &install, cancellable, error))
+      if (!rpmostree_context_prepare (ctx, cancellable, error))
         return FALSE;
     }
   else
@@ -715,20 +713,14 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
 
   if (have_packages)
     {
-      /* --- Download as necessary --- */
-      if (!rpmostree_context_download (ctx, install, cancellable, error))
+      if (!rpmostree_context_download (ctx, cancellable, error))
         return FALSE;
-
-      /* --- Import as necessary --- */
-      if (!rpmostree_context_import (ctx, install, cancellable, error))
+      if (!rpmostree_context_import (ctx, cancellable, error))
         return FALSE;
-
-      /* --- Relabel as necessary --- */
-      if (!rpmostree_context_relabel (ctx, install, cancellable, error))
+      if (!rpmostree_context_relabel (ctx, cancellable, error))
         return FALSE;
 
       /* --- Overlay and commit --- */
-
       g_clear_pointer (&self->final_revision, g_free);
       if (!rpmostree_context_assemble_tmprootfs (ctx, self->tmprootfs_dfd, self->devino_cache,
                                                  RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
