@@ -48,9 +48,6 @@ rpmostree_db_option_context_parse (GOptionContext *context,
                                    OstreeRepo **out_repo,
                                    GCancellable *cancellable, GError **error)
 {
-  glnx_unref_object OstreeRepo *repo = NULL;
-  gboolean success = FALSE;
-
   /* Entries are listed in --help output in the order added.  We add the
    * main entries ourselves so that we can add the --repo entry first. */
 
@@ -63,18 +60,18 @@ rpmostree_db_option_context_parse (GOptionContext *context,
                                        cancellable,
                                        NULL, NULL, NULL, NULL,
                                        error))
-    goto out;
+    return FALSE;
 
+  g_autoptr(OstreeRepo) repo = NULL;
   if (opt_repo == NULL)
     {
-      glnx_unref_object OstreeSysroot *sysroot = NULL;
+      g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new_default ();
 
-      sysroot = ostree_sysroot_new_default ();
       if (!ostree_sysroot_load (sysroot, cancellable, error))
-        goto out;
+        return FALSE;
 
       if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-        goto out;
+        return FALSE;
     }
   else
     {
@@ -82,21 +79,14 @@ rpmostree_db_option_context_parse (GOptionContext *context,
 
       repo = ostree_repo_new (repo_file);
       if (!ostree_repo_open (repo, cancellable, error))
-        goto out;
+        return FALSE;
     }
 
   if (rpmReadConfigFiles (NULL, NULL))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "rpm failed to init: %s", rpmlogMessage ());
-      goto out;
-    }
+    return glnx_throw (error, "rpm failed to init: %s", rpmlogMessage ());
 
   *out_repo = g_steal_pointer (&repo);
-
-  success = TRUE;
-out:
-  return success;
+  return TRUE;
 }
 
 int

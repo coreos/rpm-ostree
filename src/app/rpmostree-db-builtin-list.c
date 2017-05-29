@@ -33,10 +33,7 @@ _builtin_db_list (OstreeRepo *repo,
                   GCancellable   *cancellable,
                   GError        **error)
 {
-  int num = 0;
-  gboolean ret = FALSE;
-
-  for (num = 0; num < revs->len; num++)
+  for (guint num = 0; num < revs->len; num++)
     {
       char *rev = revs->pdata[num];
       g_autoptr(RpmRevisionData) rpmrev = NULL;
@@ -56,11 +53,11 @@ _builtin_db_list (OstreeRepo *repo,
 
           range_revs = _rpmostree_util_get_commit_hashes (repo, revdup, mrev, cancellable, error);
           if (!range_revs)
-            goto out;
+            return FALSE;
 
           if (!_builtin_db_list (repo, range_revs, patterns,
                                  cancellable, error))
-            goto out;
+            return FALSE;
 
           continue;
         }
@@ -68,7 +65,7 @@ _builtin_db_list (OstreeRepo *repo,
       rpmrev = rpmrev_new (repo, rev, patterns,
                            cancellable, error);
       if (!rpmrev)
-        goto out;
+        return FALSE;
 
       if (!g_str_equal (rev, rpmrev_get_commit (rpmrev)))
         printf ("ostree commit: %s (%s)\n", rev, rpmrev_get_commit (rpmrev));
@@ -78,10 +75,7 @@ _builtin_db_list (OstreeRepo *repo,
       rpmhdrs_list (rpmrev_get_headers (rpmrev));
     }
 
-  ret = TRUE;
-
- out:
-  return ret;
+  return TRUE;
 }
 
 int
@@ -89,26 +83,22 @@ rpmostree_db_builtin_list (int argc, char **argv,
                            RpmOstreeCommandInvocation *invocation,
                            GCancellable *cancellable, GError **error)
 {
-  int exit_status = EXIT_FAILURE;
-  g_autoptr(GOptionContext) context = NULL;
-  glnx_unref_object OstreeRepo *repo = NULL;
-  g_autoptr(GPtrArray) patterns = NULL;
-  g_autoptr(GPtrArray) revs = NULL;
-  int ii;
+  g_autoptr(GOptionContext) context =
+    g_option_context_new ("[PREFIX-PKGNAME...] COMMIT... - List packages within commits");
 
-  context = g_option_context_new ("[PREFIX-PKGNAME...] COMMIT... - List packages within commits");
-
-  if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv, invocation,
-                                          &repo, cancellable, error))
-    goto out;
+  g_autoptr(OstreeRepo) repo = NULL;
+  if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv,
+                                          invocation, &repo, cancellable, error))
+    return EXIT_FAILURE;
 
   /* Iterate over all arguments. When we see the first argument which
    * appears to be an OSTree commit, take all other arguments to be
    * patterns.
    */
-  revs = g_ptr_array_new ();
+  g_autoptr(GPtrArray) revs = g_ptr_array_new ();
+  g_autoptr(GPtrArray) patterns = NULL;
 
-  for (ii = 1; ii < argc; ii++)
+  for (int ii = 1; ii < argc; ii++)
     {
       if (patterns != NULL)
         g_ptr_array_add (patterns, argv[ii]);
@@ -129,11 +119,8 @@ rpmostree_db_builtin_list (int argc, char **argv,
     }
 
   if (!_builtin_db_list (repo, revs, patterns, cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
-  exit_status = EXIT_SUCCESS;
-
-out:
-  return exit_status;
+  return EXIT_SUCCESS;
 }
 

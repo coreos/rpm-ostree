@@ -697,22 +697,18 @@ rpmrev_new (OstreeRepo *repo, const char *rev,
             GCancellable   *cancellable,
             GError        **error)
 {
-  struct RpmRevisionData *rpmrev = NULL;
   g_autofree char *commit = NULL;
-  g_autoptr(RpmOstreeRefTs) refts = NULL;
-
   if (!ostree_repo_resolve_rev (repo, rev, FALSE, &commit, error))
-    goto out;
+    return NULL;
 
+  g_autoptr(RpmOstreeRefTs) refts = NULL;
   if (!rpmostree_get_refts_for_commit (repo, commit, &refts, cancellable, error))
-    goto out;
+    return NULL;
 
-  rpmrev = g_malloc0 (sizeof(struct RpmRevisionData));
+  RpmRevisionData *rpmrev = g_malloc0 (sizeof(struct RpmRevisionData));
   rpmrev->refts = g_steal_pointer (&refts);
   rpmrev->commit = g_steal_pointer (&commit);
   rpmrev->rpmdb = rpmhdrs_new (rpmrev->refts, patterns);
-
- out:
   return rpmrev;
 }
 
@@ -810,25 +806,21 @@ get_sack_for_root (int               dfd,
                    GCancellable     *cancellable,
                    GError          **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(DnfSack) sack = NULL;
-  g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
-
   g_return_val_if_fail (out_sack != NULL, FALSE);
 
-  sack = dnf_sack_new ();
+  g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);
+
+  g_autoptr(DnfSack) sack = dnf_sack_new ();
   dnf_sack_set_rootdir (sack, fullpath);
 
   if (!dnf_sack_setup (sack, DNF_SACK_LOAD_FLAG_BUILD_CACHE, error))
-    goto out;
+    return FALSE;
 
   if (!dnf_sack_load_system_repo (sack, NULL, 0, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
   *out_sack = g_steal_pointer (&sack);
- out:
-  return ret;
+  return TRUE;
 }
 
 RpmOstreeRefSack *
@@ -837,16 +829,11 @@ rpmostree_get_refsack_for_root (int              dfd,
                                 GCancellable    *cancellable,
                                 GError         **error)
 {
-  RpmOstreeRefSack *ret = NULL;
-  DnfSack *sack;
+  g_autoptr(DnfSack) sack;
+  if (!get_sack_for_root (dfd, path, &sack, cancellable, error))
+    return NULL;
 
-  if (!get_sack_for_root (dfd, path,
-                          &sack, cancellable, error))
-    goto out;
-
-  ret = rpmostree_refsack_new (sack, AT_FDCWD, NULL);
- out:
-  return ret;
+  return rpmostree_refsack_new (sack, AT_FDCWD, NULL);
 }
 
 
@@ -859,7 +846,7 @@ rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
   RpmOstreeRefSack *ret = NULL;
   g_autofree char *tempdir = NULL;
   glnx_fd_close int tempdir_dfd = -1;
-  DnfSack *hsack; 
+  g_autoptr(DnfSack) hsack = NULL;
 
   if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref,
                                               "/tmp/rpmostree-dbquery-XXXXXX",
@@ -921,26 +908,20 @@ rpmostree_get_pkglist_for_root (int               dfd,
                                 GCancellable     *cancellable,
                                 GError          **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(RpmOstreeRefSack) refsack = NULL;
-  hy_autoquery HyQuery query = NULL;
-  g_autoptr(GPtrArray) pkglist = NULL;
-
-  refsack = rpmostree_get_refsack_for_root (dfd, path, cancellable, error);
+  g_autoptr(RpmOstreeRefSack) refsack =
+    rpmostree_get_refsack_for_root (dfd, path, cancellable, error);
   if (!refsack)
-    goto out;
+    return FALSE;
 
-  query = hy_query_create (refsack->sack);
+  hy_autoquery HyQuery query = hy_query_create (refsack->sack);
   hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
-  pkglist = hy_query_run (query);
+  g_autoptr(GPtrArray) pkglist = hy_query_run (query);
 
-  ret = TRUE;
   if (out_refsack)
     *out_refsack = g_steal_pointer (&refsack);
   if (out_pkglist)
     *out_pkglist = g_steal_pointer (&pkglist);
- out:
-  return ret;
+  return TRUE;
 }
 
 static gint
