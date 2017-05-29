@@ -68,6 +68,8 @@ struct RpmOstreeSysrootUpgrader {
   OstreeRepoDevInoCache *devino_cache;
   int tmprootfs_dfd;
 
+  GPtrArray *overlay_packages; /* Finalized list of pkgs to overlay */
+
   char *base_revision; /* Non-layered replicated commit */
   char *final_revision; /* Computed by layering; if NULL, only using base_revision */
 };
@@ -200,6 +202,8 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
   g_free (self->base_revision);
   g_free (self->final_revision);
+
+  g_clear_pointer (&self->overlay_packages, (GDestroyNotify)g_ptr_array_unref);
 
   G_OBJECT_CLASS (rpmostree_sysroot_upgrader_parent_class)->finalize (object);
 }
@@ -427,14 +431,12 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
                     GCancellable          *cancellable,
                     GError               **error)
 {
-  OstreeRepoCheckoutAtOptions checkout_options = { 0, };
-  int repo_dfd = ostree_repo_get_dfd (self->repo); /* borrowed */
-
   g_assert_cmpint (self->tmprootfs_dfd, ==, -1);
 
   /* let's give the user some feedback so they don't think we're blocked */
   rpmostree_output_task_begin ("Checking out tree %.7s", self->base_revision);
 
+  int repo_dfd = ostree_repo_get_dfd (self->repo); /* borrowed */
   if (!glnx_shutil_mkdir_p_at (repo_dfd,
                                dirname (strdupa (RPMOSTREE_TMP_ROOTFS_DIR)),
                                0755, cancellable, error))
@@ -447,7 +449,9 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
 
   /* NB: we let ostree create the dir for us so that the root dir has the
    * correct xattrs (e.g. selinux label) */
-  checkout_options.devino_to_csum_cache = self->devino_cache;
+  self->devino_cache = ostree_repo_devino_cache_new ();
+  OstreeRepoCheckoutAtOptions checkout_options =
+    { .devino_to_csum_cache = self->devino_cache };
   if (!ostree_repo_checkout_at (self->repo, &checkout_options,
                                 repo_dfd, RPMOSTREE_TMP_ROOTFS_DIR,
                                 self->base_revision, cancellable, error))
@@ -467,41 +471,38 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
  * assembled commit metadata. Probably assemble_commit() should live somewhere
  * else, maybe directly in `container-builtins.c`. */
 static RpmOstreeTreespec *
-generate_treespec (GHashTable *packages,
-                   GHashTable *local_packages)
+generate_treespec (RpmOstreeSysrootUpgrader *self)
 {
-  g_autoptr(RpmOstreeTreespec) ret = NULL;
-  g_autoptr(GError) tmp_error = NULL;
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
 
-  { g_autofree char **pkgv =
-    (char**) g_hash_table_get_keys_as_array (packages, NULL);
-    g_key_file_set_string_list (treespec, "tree", "packages",
-                                (const char* const*) pkgv,
-                                g_strv_length (pkgv));
-  }
+  GPtrArray *packages = self->overlay_packages;
+  if (packages->len > 0)
+    {
+      g_key_file_set_string_list (treespec, "tree", "packages",
+                                  (const char* const*)packages->pdata,
+                                  packages->len);
+    }
 
-  { GHashTableIter it;
-    gpointer k, v;
+  GHashTable *local_packages =
+    rpmostree_origin_get_local_packages (self->origin);
+  if (g_hash_table_size (local_packages) > 0)
+    {
+      g_autoptr(GPtrArray) sha256_nevra =
+        g_ptr_array_new_with_free_func (g_free);
 
-    g_autoptr(GPtrArray) sha256_nevra =
-      g_ptr_array_new_with_free_func (g_free);
+      gpointer k, v;
+      GHashTableIter it;
+      g_hash_table_iter_init (&it, local_packages);
+      while (g_hash_table_iter_next (&it, &k, &v))
+        g_ptr_array_add (sha256_nevra, g_strconcat (v, ":", k, NULL));
 
-    g_hash_table_iter_init (&it, local_packages);
-    while (g_hash_table_iter_next (&it, &k, &v))
-      g_ptr_array_add (sha256_nevra, g_strconcat (v, ":", k, NULL));
+      g_key_file_set_string_list (treespec, "tree", "cached-packages",
+                                  (const char* const*)sha256_nevra->pdata,
+                                  sha256_nevra->len);
+    }
 
-    g_key_file_set_string_list (treespec, "tree", "cached-packages",
-                                (const char* const*)sha256_nevra->pdata,
-                                sha256_nevra->len);
-  }
-
-  ret = rpmostree_treespec_new_from_keyfile (treespec, &tmp_error);
-  g_assert_no_error (tmp_error);
-
-  return g_steal_pointer (&ret);
+  return rpmostree_treespec_new_from_keyfile (treespec, NULL);
 }
-
 
 /* Go through rpmdb and jot down the missing pkgs from the given set. Really, we
  * don't *have* to do this: we could just give everything to libdnf and let it
@@ -513,23 +514,21 @@ generate_treespec (GHashTable *packages,
  * libdnf after resolution).
  * */
 static gboolean
-find_missing_pkgs_in_rpmdb (int            rootfs_dfd,
-                            OstreeRepo    *repo,
-                            GHashTable    *pkgs,
-                            GHashTable    *local_pkgs,
-                            GHashTable   **out_missing_pkgs,
-                            GCancellable  *cancellable,
-                            GError       **error)
+finalize_packages_to_overlay (RpmOstreeSysrootUpgrader *self,
+                              GCancellable             *cancellable,
+                              GError                  **error)
 {
   gboolean ret = FALSE;
+  g_autofree char *metadata_tmp_path = NULL;
+  g_autoptr(GPtrArray) ret_missing_pkgs =
+    g_ptr_array_new_with_free_func (g_free);
+
   GHashTableIter it;
   gpointer itkey, itval;
-  g_autoptr(RpmOstreeRefSack) rsack = NULL;
-  g_autoptr(GHashTable) missing_pkgs =
-    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  g_autofree char *metadata_tmp_path = NULL;
 
-  rsack = rpmostree_get_refsack_for_root (rootfs_dfd, ".", cancellable, error);
+  g_autoptr(RpmOstreeRefSack) rsack =
+    rpmostree_get_refsack_for_root (self->tmprootfs_dfd, ".",
+                                    cancellable, error);
   if (rsack == NULL)
     goto out;
 
@@ -537,6 +536,7 @@ find_missing_pkgs_in_rpmdb (int            rootfs_dfd,
    * layered, we treat them as part of the base wrt regular requested pkgs. E.g.
    * you can have foo-1.0-1.x86_64 layered, and foo or /usr/bin/foo as dormant.
    * */
+  GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
   if (g_hash_table_size (local_pkgs) > 0)
     {
       glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
@@ -545,7 +545,7 @@ find_missing_pkgs_in_rpmdb (int            rootfs_dfd,
                               &metadata_tmp_path, NULL, error))
         goto out;
 
-      if (!rpmostree_get_pkgcache_repo (repo, &pkgcache_repo,
+      if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo,
                                         cancellable, error))
         goto out;
 
@@ -583,14 +583,14 @@ find_missing_pkgs_in_rpmdb (int            rootfs_dfd,
     }
 
   /* check for each package if we have a provides or a path match */
-  g_hash_table_iter_init (&it, pkgs);
+  g_hash_table_iter_init (&it, rpmostree_origin_get_packages (self->origin));
   while (g_hash_table_iter_next (&it, &itkey, NULL))
     {
       if (!rpmostree_sack_has_subject (rsack->sack, itkey))
-        g_hash_table_add (missing_pkgs, g_strdup (itkey));
+        g_ptr_array_add (ret_missing_pkgs, g_strdup (itkey));
     }
 
-  *out_missing_pkgs = g_steal_pointer (&missing_pkgs);
+  self->overlay_packages = g_steal_pointer (&ret_missing_pkgs);
   ret = TRUE;
 out:
   if (metadata_tmp_path)
@@ -599,10 +599,48 @@ out:
 }
 
 static gboolean
-do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
-                         GHashTable               *pkgset,
-                         GCancellable             *cancellable,
-                         GError                  **error)
+prepare_context_for_assembly (RpmOstreeSysrootUpgrader *self,
+                              RpmOstreeContext         *ctx,
+                              const char               *tmprootfs,
+                              GCancellable             *cancellable,
+                              GError                  **error)
+{
+  DnfContext *hifctx = rpmostree_context_get_hif (ctx);
+
+  const char *sysroot_path =
+    gs_file_get_path_cached (ostree_sysroot_get_path (self->sysroot));
+  g_autofree char *merge_deployment_dirpath =
+    ostree_sysroot_get_deployment_dirpath (self->sysroot,
+                                           self->cfg_merge_deployment);
+  g_autofree char *merge_deployment_root =
+    g_build_filename (sysroot_path, merge_deployment_dirpath, NULL);
+
+  g_autofree char *reposdir = g_build_filename (merge_deployment_root,
+                                                "etc/yum.repos.d", NULL);
+  g_autofree char *passwddir = g_build_filename (merge_deployment_root,
+                                                 "etc", NULL);
+
+  /* point libhif to the yum.repos.d and os-release of the merge deployment */
+  dnf_context_set_repo_dir (hifctx, reposdir);
+  dnf_context_set_source_root (hifctx, tmprootfs);
+
+  /* point the core to the passwd & group of the merge deployment */
+  rpmostree_context_set_passwd_dir (ctx, passwddir);
+
+  /* load the sepolicy to use during import */
+  glnx_unref_object OstreeSePolicy *sepolicy = NULL;
+  if (!rpmostree_prepare_rootfs_get_sepolicy (self->tmprootfs_dfd, &sepolicy,
+                                              cancellable, error))
+    return FALSE;
+
+  rpmostree_context_set_sepolicy (ctx, sepolicy);
+  return TRUE;
+}
+
+static gboolean
+do_local_assembly (RpmOstreeSysrootUpgrader *self,
+                   GCancellable             *cancellable,
+                   GError                  **error)
 {
   g_autoptr(RpmOstreeContext) ctx =
     rpmostree_context_new_system (cancellable, error);
@@ -610,51 +648,21 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
   g_autofree char *tmprootfs_abspath =
     glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
 
-  /* pass merge deployment related values */
-  {
-    DnfContext *hifctx = rpmostree_context_get_hif (ctx);
-    g_autofree char *sysroot_path =
-      g_file_get_path (ostree_sysroot_get_path (self->sysroot));
-    g_autofree char *merge_deployment_dirpath =
-      ostree_sysroot_get_deployment_dirpath (self->sysroot,
-                                             self->cfg_merge_deployment);
-    g_autofree char *merge_deployment_root =
-      g_build_filename (sysroot_path, merge_deployment_dirpath, NULL);
-    g_autofree char *reposdir = g_build_filename (merge_deployment_root,
-                                                  "etc/yum.repos.d", NULL);
-    g_autofree char *passwddir = g_build_filename (merge_deployment_root,
-                                                  "etc", NULL);
-
-    /* point libhif to the yum.repos.d and os-release of the merge deployment */
-    dnf_context_set_repo_dir (hifctx, reposdir);
-    dnf_context_set_source_root (hifctx, tmprootfs_abspath);
-
-    /* point the core to the passwd & group of the merge deployment */
-    rpmostree_context_set_passwd_dir (ctx, passwddir);
-  }
-
-  /* load the sepolicy to use during import */
-  {
-    glnx_unref_object OstreeSePolicy *sepolicy = NULL;
-    if (!rpmostree_prepare_rootfs_get_sepolicy (self->tmprootfs_dfd, &sepolicy,
-                                                cancellable, error))
-      return FALSE;
-
-    rpmostree_context_set_sepolicy (ctx, sepolicy);
-  }
+  if (!prepare_context_for_assembly (self, ctx, tmprootfs_abspath,
+                                     cancellable, error))
+    return FALSE;
 
   GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
 
   /* NB: We're pretty much using the defaults for the other treespec values like
    * instlang and docs since it would be hard to expose the cli for them because
    * they wouldn't affect just the new pkgs, but even previously added ones. */
-  g_autoptr(RpmOstreeTreespec) treespec =
-    generate_treespec (pkgset, local_pkgs);
+  g_autoptr(RpmOstreeTreespec) treespec = generate_treespec (self);
   if (treespec == NULL)
     return FALSE;
 
-  if (!rpmostree_context_setup (ctx, tmprootfs_abspath, NULL, treespec,
-                                cancellable, error))
+  if (!rpmostree_context_setup (ctx, tmprootfs_abspath, NULL,
+                                treespec, cancellable, error))
     return FALSE;
 
   glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
@@ -664,8 +672,9 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
 
   rpmostree_context_set_repos (ctx, self->repo, pkgcache_repo);
 
-  const gboolean have_packages = g_hash_table_size (pkgset) > 0 ||
-                                 g_hash_table_size (local_pkgs) > 0;
+  const gboolean have_packages = (self->overlay_packages->len > 0 ||
+                                  g_hash_table_size (local_pkgs) > 0);
+
   if (have_packages)
     {
       if (!rpmostree_context_prepare (ctx, cancellable, error))
@@ -748,26 +757,9 @@ do_final_local_assembly (RpmOstreeSysrootUpgrader *self,
 }
 
 static gboolean
-do_local_assembly (RpmOstreeSysrootUpgrader *self,
-                   GCancellable             *cancellable,
-                   GError                  **error)
+requires_local_assembly (RpmOstreeSysrootUpgrader *self)
 {
-  GHashTable *pkgs = rpmostree_origin_get_packages (self->origin);
   GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
-  g_autoptr(GHashTable) final_pkgs = NULL; /* subset of pkgs */
-
-  self->devino_cache = ostree_repo_devino_cache_new ();
-
-  if (!checkout_base_tree (self, cancellable, error))
-    return FALSE;
-
-  /* if we're layering packages, let's get the *actual* list of
-   * packages/provides we'll need to layer */
-  if (!find_missing_pkgs_in_rpmdb (self->tmprootfs_dfd, self->repo, pkgs,
-                                   local_pkgs, &final_pkgs, cancellable,
-                                   error))
-    return FALSE;
-
 
   /* Now, it's possible all requested packages are in the new tree, so we have
    * another optimization here for that case. This is a bit tricky: assuming we
@@ -775,20 +767,34 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
    * the exact same base layer, with the only difference being the origin file.
    * We could down the line experiment with optimizing this by just updating the
    * merge deployment's origin.
+   * https://github.com/projectatomic/rpm-ostree/issues/753
    */
-  if (g_hash_table_size (local_pkgs) == 0 &&
-      g_hash_table_size (final_pkgs) == 0 &&
-      !rpmostree_origin_get_regenerate_initramfs (self->origin))
+
+  return g_hash_table_size (local_pkgs) > 0 ||
+         self->overlay_packages->len > 0 ||
+         rpmostree_origin_get_regenerate_initramfs (self->origin);
+}
+
+/* Determines whether local assembly is required and does it if so. */
+static gboolean
+maybe_do_local_assembly (RpmOstreeSysrootUpgrader *self,
+                         GCancellable             *cancellable,
+                         GError                  **error)
+{
+  if (!checkout_base_tree (self, cancellable, error))
+    return FALSE;
+
+  if (!finalize_packages_to_overlay (self, cancellable, error))
+    return FALSE;
+
+  if (!requires_local_assembly (self))
     {
+      /* no assembly required; clear final_revision to ensure we deploy base */
       g_clear_pointer (&self->final_revision, g_free);
-    }
-  else
-    {
-      if (!do_final_local_assembly (self, final_pkgs, cancellable, error))
-        return FALSE;
+      return TRUE;
     }
 
-  return TRUE;
+  return do_local_assembly (self, cancellable, error);
 }
 
 /**
@@ -811,7 +817,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   if (rpmostree_origin_may_require_local_assembly (self->origin))
     {
-      if (!do_local_assembly (self, cancellable, error))
+      if (!maybe_do_local_assembly (self, cancellable, error))
         return FALSE;
     }
   else
