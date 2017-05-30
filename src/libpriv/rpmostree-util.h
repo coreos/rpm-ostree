@@ -92,6 +92,10 @@ void rpmostree_diff_print (OstreeRepo *repo,
                            GPtrArray *modified_new);
 
 gboolean
+rpmostree_str_has_prefix_in_ptrarray (const char *str,
+                                      GPtrArray  *prefixes);
+
+gboolean
 rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        OstreeDeployment  *deployment,
                                        gboolean          *out_is_layered,
