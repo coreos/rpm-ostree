@@ -422,6 +422,19 @@ rpmostree_file_get_path_cached (GFile *file)
 }
 
 gboolean
+rpmostree_str_has_prefix_in_ptrarray (const char *str,
+                                      GPtrArray  *prefixes)
+{
+  for (guint j = 0; j < prefixes->len; j++)
+    {
+      const char *prefix = prefixes->pdata[j];
+      if (g_str_has_prefix (str, prefix))
+        return TRUE;
+    }
+  return FALSE;
+}
+
+gboolean
 rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        OstreeDeployment  *deployment,
                                        gboolean          *out_is_layered,

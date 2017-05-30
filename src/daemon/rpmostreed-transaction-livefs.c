@@ -216,12 +216,8 @@ copy_new_config_files (OstreeRepo          *repo,
        * changed subdirectories.  But at the scale we're dealing with here the
        * constants for this O(N²) algorithm are tiny.
        */
-      for (guint j = 0; j < added_subdirs->len; j++)
-        {
-          const char *already_added_subdir = added_subdirs->pdata[j];
-          if (g_str_has_prefix (sub_etc_relpath, already_added_subdir))
-            continue;
-        }
+      if (rpmostree_str_has_prefix_in_ptrarray (sub_etc_relpath, added_subdirs))
+        continue;
 
       g_autoptr(GFileInfo) finfo = g_file_query_info (added_f, "standard::type",
                                                       G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
