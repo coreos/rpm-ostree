@@ -829,7 +829,7 @@ rpmostree_get_refsack_for_root (int              dfd,
                                 GCancellable    *cancellable,
                                 GError         **error)
 {
-  g_autoptr(DnfSack) sack;
+  g_autoptr(DnfSack) sack; /* NB: refsack adds a ref to it */
   if (!get_sack_for_root (dfd, path, &sack, cancellable, error))
     return NULL;
 
@@ -846,7 +846,7 @@ rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
   RpmOstreeRefSack *ret = NULL;
   g_autofree char *tempdir = NULL;
   glnx_fd_close int tempdir_dfd = -1;
-  g_autoptr(DnfSack) hsack = NULL;
+  g_autoptr(DnfSack) hsack = NULL; /* NB: refsack adds a ref to it */
 
   if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref,
                                               "/tmp/rpmostree-dbquery-XXXXXX",
