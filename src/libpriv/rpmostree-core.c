@@ -2414,7 +2414,6 @@ gboolean
 rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                       int                    tmprootfs_dfd,
                                       OstreeRepoDevInoCache *devino_cache,
-                                      RpmOstreeAssembleType  assemble_type,
                                       gboolean               noscripts,
                                       GCancellable          *cancellable,
                                       GError               **error)
@@ -2937,8 +2936,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
     devino_cache = devino_owned = ostree_repo_devino_cache_ref (devino_cache);
 
   if (!rpmostree_context_assemble_tmprootfs (self, tmprootfs_dfd, devino_cache,
-                                             assemble_type, noscripts,
-                                             cancellable, error))
+                                             noscripts, cancellable, error))
     return FALSE;
 
 

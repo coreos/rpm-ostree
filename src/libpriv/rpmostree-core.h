@@ -120,7 +120,6 @@ typedef enum {
 gboolean rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                                int                    tmprootfs_dfd,
                                                OstreeRepoDevInoCache *devino_cache,
-                                               RpmOstreeAssembleType  assemble_type,
                                                gboolean               noscripts,
                                                GCancellable          *cancellable,
                                                GError               **error);

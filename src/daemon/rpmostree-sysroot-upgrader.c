@@ -701,9 +701,10 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
 
       /* --- Overlay and commit --- */
       g_clear_pointer (&self->final_revision, g_free);
-      if (!rpmostree_context_assemble_tmprootfs (ctx, self->tmprootfs_dfd, self->devino_cache,
-                                                 RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
-                                                 (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS) > 0,
+      gboolean noscripts =
+        (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS) > 0;
+      if (!rpmostree_context_assemble_tmprootfs (ctx, self->tmprootfs_dfd,
+                                                 self->devino_cache, noscripts,
                                                  cancellable, error))
         return FALSE;
     }
