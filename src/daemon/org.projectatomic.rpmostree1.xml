@@ -23,8 +23,10 @@
     <!-- The system root path -->
     <property name="Path" type="s" access="read"/>
 
-    <!-- The values are (method-name, sender-name) -->
+    <!-- The values are (method-name, sender-name, object path) -->
     <property name="ActiveTransaction" type="(sss)" access="read"/>
+    <!-- A DBus address - connect to it to access its methods -->
+    <property name="ActiveTransactionPath" type="s" access="read"/>
 
     <!-- (Currently) optional method to denote the client plans
          to either invoke methods on the daemon, or monitor status.
@@ -272,6 +274,9 @@
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.Transaction">
+
+    <!-- A single-line human-readable string -->
+    <property name="Title" type="s" access="read"/>
 
     <!-- Yes, we can. -->
     <method name="Cancel"/>
