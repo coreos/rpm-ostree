@@ -426,6 +426,20 @@ sysroot_transform_transaction_to_attrs (GBinding *binding,
 }
 
 static gboolean
+sysroot_transform_transaction_to_address (GBinding *binding,
+                                          const GValue *src_value,
+                                          GValue *dst_value,
+                                          gpointer user_data)
+{
+  RpmostreedTransaction *transaction = g_value_get_object (src_value);
+  const char *address = "";
+  if (transaction != NULL)
+    address = rpmostreed_transaction_get_client_address (transaction);
+  g_value_set_string (dst_value, address);
+  return TRUE;
+}
+
+static gboolean
 sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
 				       gboolean *out_changed,
 				       GError **error)
@@ -703,6 +717,17 @@ sysroot_constructed (GObject *object)
                                NULL,
                                NULL,
                                NULL);
+  g_object_bind_property_full (self->transaction_monitor,
+                               "active-transaction",
+                               self,
+                               "active-transaction-path",
+                               G_BINDING_DEFAULT |
+                               G_BINDING_SYNC_CREATE,
+                               sysroot_transform_transaction_to_address,
+                               NULL,
+                               NULL,
+                               NULL);
+
 
   /* Failure is not fatal, but the client may miss some messages. */
   if (!sysroot_setup_stdout_redirect (self, &local_error))

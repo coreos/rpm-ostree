@@ -555,6 +555,20 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     {
       rpmostree_origin_set_override_commit (origin, NULL, NULL);
     }
+  /* In practice today */
+  const gboolean is_install = self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE
+    && !self->revision;
+
+  /* https://github.com/projectatomic/rpm-ostree/issues/454 */
+  g_autoptr(GString) txn_title = g_string_new ("");
+  if (is_install)
+    g_string_append (txn_title, "install");
+  else if (self->refspec)
+    g_string_append (txn_title, "rebase");
+  else if (self->revision)
+    g_string_append (txn_title, "deploy");
+  else
+    g_string_append (txn_title, "upgrade");
 
   gboolean changed = FALSE;
   if (self->packages_removed)
@@ -608,6 +622,15 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       changed = TRUE;
     }
+
+
+  if (self->packages_removed || self->packages_added || self->local_packages_added)
+    g_string_append_printf (txn_title, "; remove: %u install: %u; localinstall: %u",
+                            g_strv_length (self->packages_removed),
+                            g_strv_length (self->packages_added),
+                            g_unix_fd_list_get_length (self->local_packages_added));
+
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, txn_title->str);
 
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 

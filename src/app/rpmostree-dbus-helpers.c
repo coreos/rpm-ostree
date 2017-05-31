@@ -536,6 +536,27 @@ on_sigint (gpointer user_data)
   return TRUE;
 }
 
+/* Connect to the transaction bus address and return a proxy for the transaction
+ * object.
+ */
+RPMOSTreeTransaction *
+rpmostree_transaction_connect (const char *transaction_address,
+                               GCancellable *cancellable,
+                               GError      **error)
+{
+  g_autoptr(GDBusConnection) peer_connection =
+    g_dbus_connection_new_for_address_sync (transaction_address,
+                                            G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
+                                            NULL, cancellable, error);
+
+  if (peer_connection == NULL)
+    return NULL;
+
+  return rpmostree_transaction_proxy_new_sync (peer_connection,
+                                               G_DBUS_PROXY_FLAGS_NONE,
+                                               NULL, "/", cancellable, error);
+}
+
 gboolean
 rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
                                          const char *transaction_address,
@@ -546,7 +567,6 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
   GDBusConnection *connection;
   glnx_unref_object GDBusObjectManager *object_manager = NULL;
   glnx_unref_object RPMOSTreeTransaction *transaction = NULL;
-  g_autoptr(GDBusConnection) peer_connection = NULL;
 
   TransactionProgress *tp = transaction_progress_new ();
 
@@ -581,22 +601,8 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
                         tp);
     }
 
-  peer_connection = g_dbus_connection_new_for_address_sync (transaction_address,
-                                                            G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
-                                                            NULL,
-                                                            cancellable,
-                                                            error);
-
-  if (peer_connection == NULL)
-    goto out;
-
-  transaction = rpmostree_transaction_proxy_new_sync (peer_connection,
-                                                      G_DBUS_PROXY_FLAGS_NONE,
-                                                      NULL,
-                                                      "/",
-                                                      cancellable,
-                                                      error);
-  if (transaction == NULL)
+  transaction = rpmostree_transaction_connect (transaction_address, cancellable, error);
+  if (!transaction)
     goto out;
 
   sigintid = g_unix_signal_add (SIGINT, on_sigint, cancellable);
