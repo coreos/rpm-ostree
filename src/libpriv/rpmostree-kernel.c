@@ -64,9 +64,8 @@ find_kernel_and_initramfs_in_bootdir (int          rootfs_dfd,
           return FALSE;
         }
     }
-  if (!glnx_dirfd_iterator_init_take_fd (dfd, &dfd_iter, error))
+  if (!glnx_dirfd_iterator_init_take_fd (&dfd, &dfd_iter, error))
     return FALSE;
-  dfd = -1;
 
   while (TRUE)
     {

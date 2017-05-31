@@ -902,9 +902,8 @@ remove_directory_content_if_exists (int dfd,
     }
   else
     {
-      if (!glnx_dirfd_iterator_init_take_fd (fd, &dfd_iter, error))
+      if (!glnx_dirfd_iterator_init_take_fd (&fd, &dfd_iter, error))
         return FALSE;
-      fd = -1;
 
       while (TRUE)
         {
