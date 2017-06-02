@@ -363,18 +363,19 @@ rpmostreed_daemon_add_client (RpmostreedDaemon *self,
 {
   if (g_hash_table_lookup (self->bus_clients, client))
     return;
-  g_dbus_connection_signal_subscribe (self->connection,
-                                      "org.freedesktop.DBus",
-                                      "org.freedesktop.DBus",
-                                      "NameOwnerChanged",
-                                      "/org/freedesktop/DBus",
-                                      client,
-                                      G_DBUS_SIGNAL_FLAGS_NONE,
-                                      on_name_owner_changed,
-                                      g_object_ref (self),
-                                      g_object_unref);
+  guint subid =
+    g_dbus_connection_signal_subscribe (self->connection,
+                                        "org.freedesktop.DBus",
+                                        "org.freedesktop.DBus",
+                                        "NameOwnerChanged",
+                                        "/org/freedesktop/DBus",
+                                        client,
+                                        G_DBUS_SIGNAL_FLAGS_NONE,
+                                        on_name_owner_changed,
+                                        g_object_ref (self),
+                                        g_object_unref);
 
-  g_hash_table_add (self->bus_clients, g_strdup (client));
+  g_hash_table_insert (self->bus_clients, g_strdup (client), GUINT_TO_POINTER (subid));
   sd_journal_print (LOG_INFO, "Client %s added; new total=%u", client, g_hash_table_size (self->bus_clients));
   render_systemd_status (self);
 }
@@ -383,8 +384,10 @@ void
 rpmostreed_daemon_remove_client (RpmostreedDaemon *self,
                                  const char       *client)
 {
-  if (!g_hash_table_lookup (self->bus_clients, client))
+  gpointer origkey, subid_p;
+  if (!g_hash_table_lookup_extended (self->bus_clients, client, &origkey, &subid_p))
     return;
+  g_dbus_connection_signal_unsubscribe (self->connection, GPOINTER_TO_UINT (subid_p));
   g_hash_table_remove (self->bus_clients, client);
   sd_journal_print (LOG_INFO, "Client %s vanished; remaining=%u", client, g_hash_table_size (self->bus_clients));
   render_systemd_status (self);
