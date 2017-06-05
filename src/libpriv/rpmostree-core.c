@@ -1755,12 +1755,12 @@ get_rpmdb_pkg_header (rpmts rpmdb_ts,
   g_auto(rpmdbMatchIterator) it =
     rpmtsInitIterator (rpmdb_ts, RPMDBI_PACKAGES, &dbid, sizeof(dbid));
 
-  g_auto(Header) hdr = it ? rpmdbNextIterator (it) : NULL;
+  Header hdr = it ? rpmdbNextIterator (it) : NULL;
   if (hdr == NULL)
     return glnx_null_throw (error, "Failed to find package '%s' in rpmdb",
                             dnf_package_get_nevra (pkg));
 
-  return headerLink (g_steal_pointer (&hdr));
+  return headerLink (hdr);
 }
 
 static gboolean
@@ -2622,7 +2622,15 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
     rpmtsOrder (ordering_ts);
   }
 
-  rpmostree_output_task_begin ("Applying overrides and overlays");
+  if (overrides_remove->len > 0 && overlays->len > 0)
+    rpmostree_output_task_begin ("Applying %u overrides and %u overlays",
+                                 overrides_remove->len, overlays->len);
+  else if (overrides_remove->len > 0)
+    rpmostree_output_task_begin ("Applying %u overrides", overrides_remove->len);
+  else if (overlays->len > 0)
+    rpmostree_output_task_begin ("Applying %u overlays", overlays->len);
+  else
+    g_assert_not_reached ();
 
   guint n_rpmts_elements = (guint)rpmtsNElements (ordering_ts);
   g_assert (n_rpmts_elements > 0);

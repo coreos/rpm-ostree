@@ -653,7 +653,8 @@ finalize_packages_to_overlay (RpmOstreeSysrootUpgrader *self,
   while (g_hash_table_iter_next (&it, &itkey, NULL))
     {
       const char *pattern = itkey;
-      GPtrArray *matches = rpmostree_get_matching_packages (self->rsack->sack, pattern);
+      g_autoptr(GPtrArray) matches =
+        rpmostree_get_matching_packages (self->rsack->sack, pattern);
 
       if (matches->len == 0)
         {

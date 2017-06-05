@@ -588,7 +588,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   g_autoptr(GString) txn_title = g_string_new ("");
   if (is_install)
     g_string_append (txn_title, "install");
-  if (is_override)
+  else if (is_override)
     g_string_append (txn_title, "override");
   else if (self->refspec)
     g_string_append (txn_title, "rebase");

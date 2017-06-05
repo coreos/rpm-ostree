@@ -846,11 +846,11 @@ get_modifiers_variant (const char   *set_refspec,
   if (set_revision)
     g_variant_dict_insert (&dict, "set-revision", "s", set_revision);
 
+  vardict_insert_strv (&dict, "uninstall-packages", uninstall_pkgs);
+
   /* NB: when we implement this, we'll have to pass it through sort_pkgs_strv to
    * split out local pkgs */
   vardict_insert_strv (&dict, "override-replace-packages", override_replace_pkgs);
-
-  vardict_insert_strv (&dict, "uninstall-packages", uninstall_pkgs);
   vardict_insert_strv (&dict, "override-remove-packages", override_remove_pkgs);
   vardict_insert_strv (&dict, "override-reset-packages", override_reset_pkgs);
 
