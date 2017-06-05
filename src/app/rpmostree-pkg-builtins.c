@@ -76,7 +76,8 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
                                    FALSE,   /* allow-downgrade */
                                    FALSE,   /* skip-purge */
                                    TRUE,    /* no-pull-base */
-                                   opt_dry_run);
+                                   opt_dry_run,
+                                   FALSE);  /* no-overrides */
 
   gboolean met_local_pkg = FALSE;
   for (const char *const* it = packages_to_add; it && *it; it++)
@@ -91,6 +92,9 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
                                         NULL, /* revision */
                                         packages_to_add,
                                         packages_to_remove,
+                                        NULL, /* override replace */
+                                        NULL, /* override remove */
+                                        NULL, /* override reset */
                                         options,
                                         &transaction_address,
                                         cancellable,

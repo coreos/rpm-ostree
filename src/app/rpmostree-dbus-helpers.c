@@ -799,11 +799,23 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
   return TRUE;
 }
 
+static void
+vardict_insert_strv (GVariantDict *dict,
+                     const char   *key,
+                     const char *const* strv)
+{
+  if (strv && *strv)
+    g_variant_dict_insert (dict, key, "^as", (char**)strv);
+}
+
 static gboolean
 get_modifiers_variant (const char   *set_refspec,
                        const char   *set_revision,
                        const char *const* install_pkgs,
                        const char *const* uninstall_pkgs,
+                       const char *const* override_replace_pkgs,
+                       const char *const* override_remove_pkgs,
+                       const char *const* override_reset_pkgs,
                        GVariant    **out_modifiers,
                        GUnixFDList **out_fd_list,
                        GError      **error)
@@ -833,9 +845,14 @@ get_modifiers_variant (const char   *set_refspec,
     g_variant_dict_insert (&dict, "set-refspec", "s", set_refspec);
   if (set_revision)
     g_variant_dict_insert (&dict, "set-revision", "s", set_revision);
-  if (uninstall_pkgs != NULL && g_strv_length ((char**)uninstall_pkgs) > 0)
-    g_variant_dict_insert (&dict, "uninstall-packages", "^as",
-                           (char**)uninstall_pkgs);
+
+  /* NB: when we implement this, we'll have to pass it through sort_pkgs_strv to
+   * split out local pkgs */
+  vardict_insert_strv (&dict, "override-replace-packages", override_replace_pkgs);
+
+  vardict_insert_strv (&dict, "uninstall-packages", uninstall_pkgs);
+  vardict_insert_strv (&dict, "override-remove-packages", override_remove_pkgs);
+  vardict_insert_strv (&dict, "override-reset-packages", override_reset_pkgs);
 
   *out_fd_list = g_steal_pointer (&fd_list);
   *out_modifiers = g_variant_ref_sink (g_variant_dict_end (&dict));
@@ -847,7 +864,8 @@ rpmostree_get_options_variant (gboolean reboot,
                                gboolean allow_downgrade,
                                gboolean skip_purge,
                                gboolean no_pull_base,
-                               gboolean dry_run)
+                               gboolean dry_run,
+                               gboolean no_overrides)
 {
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
@@ -856,6 +874,7 @@ rpmostree_get_options_variant (gboolean reboot,
   g_variant_dict_insert (&dict, "skip-purge", "b", skip_purge);
   g_variant_dict_insert (&dict, "no-pull-base", "b", no_pull_base);
   g_variant_dict_insert (&dict, "dry-run", "b", dry_run);
+  g_variant_dict_insert (&dict, "no-overrides", "b", no_overrides);
   return g_variant_ref_sink (g_variant_dict_end (&dict));
 }
 
@@ -865,6 +884,9 @@ rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
                              const char   *set_revision,
                              const char *const* install_pkgs,
                              const char *const* uninstall_pkgs,
+                             const char *const* override_replace_pkgs,
+                             const char *const* override_remove_pkgs,
+                             const char *const* override_reset_pkgs,
                              GVariant     *options,
                              char        **out_transaction_address,
                              GCancellable *cancellable,
@@ -874,6 +896,9 @@ rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
   glnx_unref_object GUnixFDList *fd_list = NULL;
   if (!get_modifiers_variant (set_refspec, set_revision,
                               install_pkgs, uninstall_pkgs,
+                              override_replace_pkgs,
+                              override_remove_pkgs,
+                              override_reset_pkgs,
                               &modifiers, &fd_list, error))
     return FALSE;
 

@@ -213,6 +213,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       g_autofree const gchar **origin_packages = NULL;
       g_autofree const gchar **origin_requested_packages = NULL;
       g_autofree const gchar **origin_requested_local_packages = NULL;
+      g_autofree const gchar **origin_removed_base_packages = NULL;
       const gchar *origin_refspec;
       const gchar *id;
       const gchar *os_name;
@@ -228,7 +229,8 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       gboolean is_booted;
       const gboolean was_first = first;
       /* Add the long keys here */
-      const guint max_key_len = MAX (strlen ("PendingBaseVersion"), strlen ("InterruptedLiveCommit"));
+      const guint max_key_len = MAX (strlen ("RemovedBasePackages"),
+                                     strlen ("InterruptedLiveCommit"));
       g_autoptr(GVariant) signatures = NULL;
       g_autofree char *timestamp_string = NULL;
 
@@ -251,6 +253,8 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
             lookup_array_and_canonicalize (dict, "requested-packages");
           origin_requested_local_packages =
             lookup_array_and_canonicalize (dict, "requested-local-packages");
+          origin_removed_base_packages =
+            lookup_array_and_canonicalize (dict, "removed-base-packages");
         }
       else
         origin_refspec = NULL;
@@ -410,6 +414,11 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
               print_kv ("GPGSignature", max_key_len, "(unsigned)");
             }
         }
+
+      /* print base overrides before overlays */
+      if (origin_removed_base_packages)
+        print_packages ("RemovedBasePackages", max_key_len,
+                        origin_removed_base_packages, NULL);
 
       /* let's be nice and only print requested - layered, rather than repeating
        * the ones in layered twice */

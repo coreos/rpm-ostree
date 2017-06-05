@@ -27,6 +27,7 @@
 #include "rpmostreed-sysroot.h"
 #include "rpmostree-sysroot-upgrader.h"
 #include "rpmostree-sysroot-core.h"
+#include "rpmostree-rpm-util.h"
 #include "rpmostree-util.h"
 #include "rpmostree-output.h"
 #include "rpmostree-core.h"
@@ -419,6 +420,8 @@ typedef struct {
   char *revision; /* NULL for upgrade */
   char **packages_added;
   char **packages_removed;
+  char **override_remove_packages;
+  char **override_reset_packages;
   GUnixFDList *local_packages_added;
 } DeployTransaction;
 
@@ -441,6 +444,8 @@ deploy_transaction_finalize (GObject *object)
   g_free (self->revision);
   g_strfreev (self->packages_added);
   g_strfreev (self->packages_removed);
+  g_strfreev (self->override_remove_packages);
+  g_strfreev (self->override_reset_packages);
   g_clear_pointer (&self->local_packages_added, g_object_unref);
 
   G_OBJECT_CLASS (deploy_transaction_parent_class)->finalize (object);
@@ -509,6 +514,15 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NOSCRIPTS)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS;
+  gboolean no_overrides =
+    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES) > 0);
+
+  /* this should have been checked already */
+  if (no_overrides)
+    {
+      g_assert (self->override_remove_packages == NULL);
+      g_assert (self->override_reset_packages == NULL);
+    }
 
   if (self->refspec)
     {
@@ -555,14 +569,27 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     {
       rpmostree_origin_set_override_commit (origin, NULL, NULL);
     }
+
+  gboolean is_install = FALSE;
+  gboolean is_override = FALSE;
+
   /* In practice today */
-  const gboolean is_install = self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE
-    && !self->revision;
+  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE)
+    {
+      /* this is a heuristic; by the end, once the proper switches are added, the two
+       * commands can look indistinguishable at the D-Bus level */
+      is_override = (self->override_reset_packages ||
+                     self->override_remove_packages ||
+                     no_overrides);
+      is_install = !is_override;
+    }
 
   /* https://github.com/projectatomic/rpm-ostree/issues/454 */
   g_autoptr(GString) txn_title = g_string_new ("");
   if (is_install)
     g_string_append (txn_title, "install");
+  if (is_override)
+    g_string_append (txn_title, "override");
   else if (self->refspec)
     g_string_append (txn_title, "rebase");
   else if (self->revision)
@@ -578,7 +605,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       /* in reality, there may not be any new layer required (if e.g. we're
        * removing a duplicate provides), though the origin has changed so we
-       * need to create a new deployment */
+       * need to create a new deployment -- see also
+       * https://github.com/projectatomic/rpm-ostree/issues/753 */
       changed = TRUE;
     }
 
@@ -587,6 +615,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (!rpmostree_origin_add_packages (origin, self->packages_added, FALSE, error))
         return FALSE;
 
+      /* here too -- we could optimize this under certain conditions
+       * (see related blurb in maybe_do_local_assembly()) */
       changed = TRUE;
     }
 
@@ -620,6 +650,21 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       changed = TRUE;
     }
 
+  if (no_overrides)
+    {
+      gboolean overrides_changed = FALSE;
+      if (!rpmostree_origin_remove_all_overrides (origin, &overrides_changed, error))
+        return FALSE;
+
+      changed = changed || overrides_changed;
+    }
+  else if (self->override_reset_packages)
+    {
+      if (!rpmostree_origin_remove_overrides (origin, self->override_reset_packages, error))
+        return FALSE;
+
+      changed = TRUE;
+    }
 
   if (self->packages_removed || self->packages_added || self->local_packages_added)
     g_string_append_printf (txn_title, "; remove: %u install: %u; localinstall: %u",
@@ -631,7 +676,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 
-  /* Mainly for the `install` command */
+  /* Mainly for the `install` and `override` commands */
   if (!(self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE))
     {
       gboolean base_changed;
@@ -641,6 +686,51 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
 
       changed = changed || base_changed;
+    }
+
+  /* let's figure out if those new overrides are valid and if so, canonicalize
+   * them -- we could have just pulled the rpmdb dir before to do this, and then
+   * do the full pull afterwards, though that would complicate the pull code and
+   * anyway in the common case even if there's an error with the overrides,
+   * users will fix it and try again, so the second pull will be a no-op */
+
+  if (self->override_remove_packages)
+    {
+      const char *base = rpmostree_sysroot_upgrader_get_base (upgrader);
+      g_autoptr(RpmOstreeRefSack) rsack =
+        rpmostree_get_refsack_for_commit (repo, base, cancellable, error);
+      if (rsack == NULL)
+        return FALSE;
+
+      /* NB: the strings are owned by the sack pool */
+      g_autoptr(GPtrArray) pkgnames = g_ptr_array_new ();
+      for (char **it = self->override_remove_packages; it && *it; it++)
+        {
+          const char *pkg = *it;
+          g_autoptr(GPtrArray) pkgs =
+            rpmostree_get_matching_packages (rsack->sack, pkg);
+
+          if (pkgs->len == 0)
+            return glnx_throw (error, "No package \"%s\" in base commit %.7s", pkg, base);
+
+          /* either the subject was somehow too broad, or it's one of the rare
+           * packages that supports installonly (e.g. kernel, though that one
+           * specifically should never have multiple instances in a compose),
+           * which you'd never want to remove */
+          if (pkgs->len > 1)
+            return glnx_throw (error, "Multiple packages match \"%s\"", pkg);
+
+          /* canonicalize to just the pkg name */
+          const char *pkgname = dnf_package_get_name (pkgs->pdata[0]);
+          g_ptr_array_add (pkgnames, (void*)pkgname);
+        }
+
+      g_ptr_array_add (pkgnames, NULL);
+      if (!rpmostree_origin_add_overrides (origin, (char**)pkgnames->pdata, TRUE, error))
+        return FALSE;
+
+      rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
+      changed = TRUE;
     }
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
@@ -716,6 +806,8 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    const char *const *packages_added,
                                    const char *const *packages_removed,
                                    GUnixFDList *local_packages_added,
+                                   const char *const *override_remove_packages,
+                                   const char *const *override_reset_packages,
                                    GCancellable *cancellable,
                                    GError **error)
 {
@@ -741,6 +833,10 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
       self->packages_removed = strdupv_canonicalize (packages_removed);
       if (local_packages_added != NULL)
         self->local_packages_added = g_object_ref (local_packages_added);
+      self->override_remove_packages =
+        strdupv_canonicalize (override_remove_packages);
+      self->override_reset_packages =
+        strdupv_canonicalize (override_reset_packages);
     }
 
   return (RpmostreedTransaction *) self;

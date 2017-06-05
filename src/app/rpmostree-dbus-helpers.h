@@ -87,7 +87,8 @@ rpmostree_get_options_variant (gboolean reboot,
                                gboolean allow_downgrade,
                                gboolean skip_purge,
                                gboolean no_pull_base,
-                               gboolean dry_run);
+                               gboolean dry_run,
+                               gboolean no_overrides);
 
 gboolean
 rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
@@ -95,6 +96,9 @@ rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
                              const char   *set_revision,
                              const char *const* install_pkgs,
                              const char *const* uninstall_pkgs,
+                             const char *const* override_replace_pkgs,
+                             const char *const* override_remove_pkgs,
+                             const char *const* override_reset_pkgs,
                              GVariant     *options,
                              char        **out_transaction_address,
                              GCancellable *cancellable,

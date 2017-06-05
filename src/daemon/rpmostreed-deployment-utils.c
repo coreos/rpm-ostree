@@ -158,6 +158,15 @@ variant_add_commit_details (GVariantDict *dict,
                            "t", timestamp);
 }
 
+static void
+variant_add_from_hash_table (GVariantDict *dict,
+                             const char   *key,
+                             GHashTable   *table)
+{
+  g_autofree char **values = (char**)g_hash_table_get_keys_as_array (table, NULL);
+  g_variant_dict_insert (dict, key, "^as", values);
+}
+
 GVariant *
 rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
                                         OstreeDeployment *deployment,
@@ -184,6 +193,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   g_autofree char *live_inprogress = NULL;
   g_autofree char *live_replaced = NULL;
   g_auto(GStrv) layered_pkgs = NULL;
+  g_auto(GStrv) removed_base_pkgs = NULL;
+  const char *const empty_v[] = { NULL };
 
   if (!ostree_repo_load_variant (repo,
 				 OSTREE_OBJECT_TYPE_COMMIT,
@@ -208,9 +219,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   g_variant_dict_insert (&dict, "serial", "i", serial);
   g_variant_dict_insert (&dict, "checksum", "s", csum);
 
-  if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered,
-                                              &base_checksum, &layered_pkgs,
-                                              error))
+  if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered, &base_checksum,
+                                              &layered_pkgs, &removed_base_pkgs, error))
     return NULL;
 
   if (is_layered)
@@ -264,28 +274,21 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
 
   g_variant_dict_insert (&dict, "origin", "s", refspec);
 
-  g_autofree char **requested_pkgs =
-    (char**)g_hash_table_get_keys_as_array (rpmostree_origin_get_packages (origin), NULL);
-  g_variant_dict_insert (&dict, "requested-packages", "^as", requested_pkgs);
+  variant_add_from_hash_table (&dict, "requested-packages",
+                               rpmostree_origin_get_packages (origin));
+  variant_add_from_hash_table (&dict, "requested-local-packages",
+                               rpmostree_origin_get_local_packages (origin));
 
-  g_autofree char **pkgs =
-    (char**)g_hash_table_get_keys_as_array (rpmostree_origin_get_local_packages (origin), NULL);
-  g_variant_dict_insert (&dict, "requested-local-packages", "^as", pkgs);
-
-  if (is_layered && g_strv_length (layered_pkgs) > 0)
-    g_variant_dict_insert (&dict, "packages", "^as", layered_pkgs);
-  else
-    {
-      const char *const p[] = { NULL };
-      g_variant_dict_insert (&dict, "packages", "^as", p);
-    }
+  g_variant_dict_insert (&dict, "packages", "^as", layered_pkgs ?: (char**)empty_v);
+  g_variant_dict_insert (&dict, "removed-base-packages", "^as",
+                         removed_base_pkgs ?: (char**)empty_v);
 
   if (sigs != NULL)
     g_variant_dict_insert_value (&dict, "signatures", sigs);
   g_variant_dict_insert (&dict, "gpg-enabled", "b", gpg_enabled);
 
   g_variant_dict_insert (&dict, "unlocked", "s",
-			 ostree_deployment_unlocked_state_to_string (ostree_deployment_get_unlocked (deployment)));
+                         ostree_deployment_unlocked_state_to_string (ostree_deployment_get_unlocked (deployment)));
 
   g_variant_dict_insert (&dict, "regenerate-initramfs", "b",
                          rpmostree_origin_get_regenerate_initramfs (origin));

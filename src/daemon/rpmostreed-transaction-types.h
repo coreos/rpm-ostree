@@ -53,22 +53,25 @@ typedef enum {
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE = (1 << 2),
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE = (1 << 4),
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN = (1 << 5),
-  RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NOSCRIPTS = (1 << 6)
+  RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NOSCRIPTS = (1 << 6),
+  RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES = (1 << 7)
 } RpmOstreeTransactionDeployFlags;
 
 
 RpmostreedTransaction *
-               rpmostreed_transaction_new_deploy           (GDBusMethodInvocation *invocation,
-                                                            OstreeSysroot *sysroot,
-                                                            RpmOstreeTransactionDeployFlags flags,
-                                                            const char *osname,
-                                                            const char *refspec,
-                                                            const char *revision,
-                                                            const char *const *packages_added,
-                                                            const char *const *packages_removed,
-                                                            GUnixFDList *local_packages_added,
-                                                            GCancellable *cancellable,
-                                                            GError **error);
+rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
+                                   OstreeSysroot *sysroot,
+                                   RpmOstreeTransactionDeployFlags flags,
+                                   const char *osname,
+                                   const char *refspec,
+                                   const char *revision,
+                                   const char *const *packages_added,
+                                   const char *const *packages_removed,
+                                   GUnixFDList *local_packages_added,
+                                   const char *const *override_remove_packages,
+                                   const char *const *override_reset_packages,
+                                   GCancellable *cancellable,
+                                   GError **error);
 
 RpmostreedTransaction *
 rpmostreed_transaction_new_initramfs_state       (GDBusMethodInvocation *invocation,
