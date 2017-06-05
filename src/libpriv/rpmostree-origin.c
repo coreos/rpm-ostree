@@ -478,20 +478,12 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
 
   for (char **it = packages; it && *it; it++)
     {
-      if (g_hash_table_contains (origin->cached_local_packages, *it))
-        {
-          g_hash_table_remove (origin->cached_local_packages, *it);
-          local_changed = TRUE;
-        }
-      else if (g_hash_table_contains (origin->cached_packages, *it))
-        {
-          g_hash_table_remove (origin->cached_packages, *it);
-          changed = TRUE;
-        }
+      if (g_hash_table_remove (origin->cached_local_packages, *it))
+        local_changed = TRUE;
+      else if (g_hash_table_remove (origin->cached_packages, *it))
+        changed = TRUE;
       else
-        {
-          return glnx_throw (error, "Package/capability '%s' is not currently requested", *it);
-        }
+        return glnx_throw (error, "Package/capability '%s' is not currently requested", *it);
     }
 
   if (changed)
@@ -540,10 +532,8 @@ rpmostree_origin_remove_overrides (RpmOstreeOrigin  *origin,
   for (char **it = packages; it && *it; it++)
     {
       const char *pkg = *it;
-      if (!g_hash_table_contains (origin->cached_overrides_remove, pkg))
+      if (!g_hash_table_remove (origin->cached_overrides_remove, pkg))
         return glnx_throw (error, "No overrides for package '%s'", pkg);
-
-      g_hash_table_remove (origin->cached_overrides_remove, pkg);
       changed = TRUE;
     }
 
