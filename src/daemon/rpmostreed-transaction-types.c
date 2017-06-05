@@ -573,8 +573,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   gboolean changed = FALSE;
   if (self->packages_removed)
     {
-      if (!rpmostree_origin_delete_packages (origin, self->packages_removed,
-                                             cancellable, error))
+      if (!rpmostree_origin_remove_packages (origin, self->packages_removed, error))
         return FALSE;
 
       /* in reality, there may not be any new layer required (if e.g. we're
@@ -585,8 +584,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   if (self->packages_added)
     {
-      if (!rpmostree_origin_add_packages (origin, self->packages_added,
-                                          FALSE, cancellable, error))
+      if (!rpmostree_origin_add_packages (origin, self->packages_added, FALSE, error))
         return FALSE;
 
       changed = TRUE;
@@ -615,8 +613,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (pkgs->len > 0)
         {
           g_ptr_array_add (pkgs, NULL);
-          if (!rpmostree_origin_add_packages (origin, (char**)pkgs->pdata,
-                                              TRUE, cancellable, error))
+          if (!rpmostree_origin_add_packages (origin, (char**)pkgs->pdata, TRUE, error))
             return FALSE;
         }
 

@@ -388,7 +388,6 @@ gboolean
 rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
                                char             **packages,
                                gboolean           local,
-                               GCancellable      *cancellable,
                                GError           **error)
 {
   gboolean changed = FALSE;
@@ -443,9 +442,8 @@ rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
 }
 
 gboolean
-rpmostree_origin_delete_packages (RpmOstreeOrigin  *origin,
+rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
                                   char            **packages,
-                                  GCancellable     *cancellable,
                                   GError          **error)
 {
   gboolean changed = FALSE;
