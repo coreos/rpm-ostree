@@ -60,6 +60,9 @@ rpmostree_origin_get_packages (RpmOstreeOrigin *origin);
 GHashTable *
 rpmostree_origin_get_local_packages (RpmOstreeOrigin *origin);
 
+GHashTable *
+rpmostree_origin_get_overrides_remove (RpmOstreeOrigin *origin);
+
 const char *
 rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin);
 
@@ -113,6 +116,22 @@ gboolean
 rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
                                   char            **packages,
                                   GError          **error);
+
+gboolean
+rpmostree_origin_add_overrides (RpmOstreeOrigin  *origin,
+                                char            **packages,
+                                gboolean          is_remove_override,
+                                GError          **error);
+
+gboolean
+rpmostree_origin_remove_overrides (RpmOstreeOrigin  *origin,
+                                   char            **packages,
+                                   GError          **error);
+
+gboolean
+rpmostree_origin_remove_all_overrides (RpmOstreeOrigin  *origin,
+                                       gboolean         *out_changed,
+                                       GError          **error);
 
 void
 rpmostree_origin_set_live_state (RpmOstreeOrigin *origin,

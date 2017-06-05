@@ -1,6 +1,6 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*-
  *
- * Copyright (C) 2015 Colin Walters <walters@verbum.org>
+ * Copyright (C) 2017 Red Hat Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published
@@ -21,31 +21,28 @@
 #include "config.h"
 
 #include "rpmostree-ex-builtins.h"
+#include "rpmostree-override-builtins.h"
 
-static RpmOstreeCommand ex_subcommands[] = {
-  { "livefs", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
-    rpmostree_ex_builtin_livefs },
-  { "override", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    rpmostree_ex_builtin_override },
-  { "unpack", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    rpmostree_ex_builtin_unpack },
-  { "container", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    rpmostree_builtin_container },
+static RpmOstreeCommand override_subcommands[] = {
+  { "replace", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
+               RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS |
+               RPM_OSTREE_BUILTIN_FLAG_HIDDEN, /* XXX UNDER CONSTRUCTION XXX */
+    rpmostree_override_builtin_replace },
+  { "remove", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
+              RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+    rpmostree_override_builtin_remove },
+  { "reset", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
+             RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+    rpmostree_override_builtin_reset },
   { NULL, 0, NULL }
 };
 
-/*
-static GOptionEntry global_entries[] = {
-  { NULL }
-};
-*/
-
 int
-rpmostree_builtin_ex (int argc, char **argv,
-                      RpmOstreeCommandInvocation *invocation,
-                      GCancellable *cancellable, GError **error)
+rpmostree_ex_builtin_override (int argc, char **argv,
+                               RpmOstreeCommandInvocation *invocation,
+                               GCancellable *cancellable, GError **error)
 {
-  return rpmostree_handle_subcommand (argc, argv, ex_subcommands,
+  return rpmostree_handle_subcommand (argc, argv, override_subcommands,
                                       invocation, cancellable, error);
 }
 

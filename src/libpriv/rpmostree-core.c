@@ -126,10 +126,11 @@ add_canonicalized_string_array (GVariantBuilder *builder,
     }
 
   sorted = (char**)g_hash_table_get_keys_as_array (set, &count);
-  g_qsort_with_data (sorted, count, sizeof (void*), qsort_cmpstr, NULL);
+  if (count > 1)
+    g_qsort_with_data (sorted, count, sizeof (void*), qsort_cmpstr, NULL);
 
   g_variant_builder_add (builder, "{sv}", key,
-                         g_variant_new_strv ((const char*const*)sorted, g_strv_length (sorted)));
+                         g_variant_new_strv ((const char*const*)sorted, count));
 }
 
 static GPtrArray *
@@ -165,6 +166,8 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
 
   add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
   add_canonicalized_string_array (&builder, "cached-packages", NULL, keyfile);
+  add_canonicalized_string_array (&builder, "removed-base-packages",
+                                  NULL, keyfile);
 
   /* We allow the "repo" key to be missing. This means that we rely on hif's
    * normal behaviour (i.e. look at repos in repodir with enabled=1). */
@@ -1246,26 +1249,38 @@ join_package_list (const char *prefix, char **pkgs, int len)
 
 static gboolean
 check_goal_solution (HyGoal    goal,
+                     const char *const *allowed_base_removals,
                      GError  **error)
 {
   g_autoptr(GPtrArray) packages = NULL;
 
-  /* Now we need to make sure that none of the pkgs in the base are marked for
-   * removal. The issue is that marking a package for DNF_INSTALL could
-   * uninstall a base pkg if it's an update or obsoletes it. There doesn't seem
-   * to be a way to tell libsolv to never touch pkgs in the base layer, so we
-   * just inspect its solution in retrospect. libdnf has the concept of
+  /* Now we need to make sure that only the pkgs in the base allowed to be
+   * removed are removed. The issue is that marking a package for DNF_INSTALL
+   * could uninstall a base pkg if it's an update or obsoletes it. There doesn't
+   * seem to be a way to tell libsolv to not touch some pkgs in the base layer,
+   * so we just inspect its solution in retrospect. libdnf has the concept of
    * protected packages, but it still allows updating protected packages. */
 
   packages = dnf_goal_get_packages (goal,
                                     DNF_PACKAGE_INFO_REMOVE,
                                     DNF_PACKAGE_INFO_OBSOLETE,
                                     -1);
-  if (packages->len > 0)
+
+  g_autoptr(GPtrArray) filtered_packages = g_ptr_array_new ();
+  for (guint i = 0; i < packages->len; i++)
+    {
+      DnfPackage *pkg = packages->pdata[i];
+      if (g_strv_contains (allowed_base_removals, dnf_package_get_name (pkg)))
+        continue;
+
+      g_ptr_array_add (filtered_packages, pkg);
+    }
+
+  if (filtered_packages->len > 0)
     {
       g_autofree char *msg = join_package_list (
           "The following base packages would be removed: ",
-          (char**)packages->pdata, packages->len);
+          (char**)filtered_packages->pdata, filtered_packages->len);
       g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, msg);
       return FALSE;
     }
@@ -1310,7 +1325,6 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   g_assert (!self->empty);
 
   DnfContext *hifctx = self->hifctx;
-
   g_autofree char **pkgnames = NULL;
   g_assert (g_variant_dict_lookup (self->spec->dict, "packages",
                                    "^a&s", &pkgnames));
@@ -1318,6 +1332,10 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   g_autofree char **cached_pkgnames = NULL;
   g_assert (g_variant_dict_lookup (self->spec->dict, "cached-packages",
                                    "^a&s", &cached_pkgnames));
+
+  g_autofree char **removed_base_pkgnames = NULL;
+  g_assert (g_variant_dict_lookup (self->spec->dict, "removed-base-packages",
+                                   "^a&s", &removed_base_pkgnames));
 
   /* setup sack if not yet set up */
   if (dnf_context_get_sack (hifctx) == NULL)
@@ -1391,28 +1409,34 @@ rpmostree_context_prepare (RpmOstreeContext *self,
                      NULL);
   }
 
-  { const char *const*strviter = (const char *const*)pkgnames;
-    for (; strviter && *strviter; strviter++)
-      {
-        const char *pkgname = *strviter;
-        if (!dnf_context_install (hifctx, pkgname, error))
-          return FALSE;
-      }
-  }
+  for (char **it = pkgnames; it && *it; it++)
+    {
+      const char *pkgname = *it;
+      if (!dnf_context_install (hifctx, pkgname, error))
+        return FALSE;
+    }
+
+  for (char **it = removed_base_pkgnames; it && *it; it++)
+    {
+      const char *pkgname = *it;
+      if (!dnf_context_remove (hifctx, pkgname, error))
+        return FALSE;
+    }
 
   rpmostree_output_task_begin ("Resolving dependencies");
 
-  if (!dnf_goal_depsolve (goal, DNF_INSTALL, error) ||
-      !check_goal_solution (goal, error))
+  /* XXX: consider a --allow-uninstall switch? */
+  if (!dnf_goal_depsolve (goal, DNF_INSTALL | DNF_ALLOW_UNINSTALL, error) ||
+      !check_goal_solution (goal, (const char *const*)removed_base_pkgnames, error))
     {
       g_print ("failed\n");
       return FALSE;
     }
 
-  rpmostree_output_task_end ("done");
-
   if (!sort_packages (self, error))
     return FALSE;
+
+  rpmostree_output_task_end ("done");
 
   return TRUE;
 }
@@ -1711,6 +1735,88 @@ checkout_package_into_root (RpmOstreeContext *self,
                          devino_cache, pkg_commit,
                          cancellable, error))
     return FALSE;
+
+  return TRUE;
+}
+
+static Header
+get_rpmdb_pkg_header (rpmts rpmdb_ts,
+                      DnfPackage *pkg,
+                      GCancellable *cancellable,
+                      GError **error)
+{
+  g_auto(rpmts) rpmdb_ts_owned = NULL;
+  if (!rpmdb_ts) /* allow callers to pass NULL */
+    rpmdb_ts = rpmdb_ts_owned = rpmtsCreate ();
+
+  unsigned int dbid = dnf_package_get_rpmdbid (pkg);
+  g_assert (dbid > 0);
+
+  g_auto(rpmdbMatchIterator) it =
+    rpmtsInitIterator (rpmdb_ts, RPMDBI_PACKAGES, &dbid, sizeof(dbid));
+
+  Header hdr = it ? rpmdbNextIterator (it) : NULL;
+  if (hdr == NULL)
+    return glnx_null_throw (error, "Failed to find package '%s' in rpmdb",
+                            dnf_package_get_nevra (pkg));
+
+  return headerLink (hdr);
+}
+
+static gboolean
+delete_package_from_root (RpmOstreeContext *self,
+                          rpmte         pkg,
+                          int           rootfs_dfd,
+                          GCancellable *cancellable,
+                          GError      **error)
+{
+  g_auto(rpmfiles) files = rpmteFiles (pkg);
+  g_auto(rpmfi) fi = rpmfilesIter (files, RPMFI_ITER_FWD);
+
+  g_autoptr(GPtrArray) deleted_dirs = g_ptr_array_new_with_free_func (g_free);
+
+  int i;
+  while ((i = rpmfiNext (fi)) >= 0)
+    {
+      /* see also apply_rpmfi_overrides() for a commented version of the loop */
+      const char *fn = rpmfiFN (fi);
+      rpm_mode_t mode = rpmfiFMode (fi);
+
+      if (!(S_ISREG (mode) ||
+            S_ISLNK (mode) ||
+            S_ISDIR (mode)))
+        continue;
+
+      g_assert (fn != NULL);
+      fn += strspn (fn, "/");
+      g_assert (fn[0]);
+
+      g_autofree char *fn_owned = NULL;
+      if (g_str_has_prefix (fn, "etc/"))
+        fn = fn_owned = g_strconcat ("usr/", fn, NULL);
+
+      /* for now, we only remove files from /usr */
+      if (!g_str_has_prefix (fn, "usr/"))
+        continue;
+
+      /* avoiding the stat syscall is worth a bit of userspace computation */
+      if (rpmostree_str_has_prefix_in_ptrarray (fn, deleted_dirs))
+        continue;
+
+      struct stat stbuf;
+      if (fstatat (rootfs_dfd, fn, &stbuf, AT_SYMLINK_NOFOLLOW) != 0)
+        {
+          if (errno == ENOENT)
+            continue; /* a job well done */
+          return glnx_throw_errno_prefix (error, "fstatat(%s)", fn);
+        }
+
+      if (!glnx_shutil_rm_rf_at (rootfs_dfd, fn, cancellable, error))
+        return FALSE;
+
+      if (S_ISDIR (mode))
+        g_ptr_array_add (deleted_dirs, g_strconcat (fn, "/", NULL));
+    }
 
   return TRUE;
 }
@@ -2159,17 +2265,16 @@ get_package_metainfo (RpmOstreeContext *self,
 }
 
 static gboolean
-add_to_transaction (RpmOstreeContext *self,
-                    rpmts  ts,
-                    DnfPackage *pkg,
-                    gboolean noscripts,
-                    GHashTable *ignore_scripts,
-                    GCancellable *cancellable,
-                    GError **error)
+rpmts_add_install (RpmOstreeContext *self,
+                   rpmts  ts,
+                   DnfPackage *pkg,
+                   gboolean noscripts,
+                   GHashTable *ignore_scripts,
+                   GCancellable *cancellable,
+                   GError **error)
 {
   g_auto(Header) hdr = NULL;
   g_autofree char *path = get_package_relpath (pkg);
-  int r;
 
   if (!get_package_metainfo (self, path, &hdr, NULL, error))
     return FALSE;
@@ -2180,16 +2285,28 @@ add_to_transaction (RpmOstreeContext *self,
         return FALSE;
     }
 
-  r = rpmtsAddInstallElement (ts, hdr, pkg, TRUE, NULL);
-  if (r != 0)
-    {
-      g_set_error (error,
-                   G_IO_ERROR,
-                   G_IO_ERROR_FAILED,
-                   "Failed to add install element for %s",
-                   dnf_package_get_filename (pkg));
-      return FALSE;
-    }
+  if (rpmtsAddInstallElement (ts, hdr, pkg, TRUE, NULL) != 0)
+    return glnx_throw (error, "Failed to add install element for %s",
+                       dnf_package_get_filename (pkg));
+
+  return TRUE;
+}
+
+static gboolean
+rpmts_add_erase (RpmOstreeContext *self,
+                 rpmts ts,
+                 DnfPackage *pkg,
+                 GCancellable *cancellable,
+                 GError **error)
+{
+  /* NB: we're not running any %*un scriptlets right now */
+  g_auto(Header) hdr = get_rpmdb_pkg_header (ts, pkg, cancellable, error);
+  if (hdr == NULL)
+    return FALSE;
+
+  if (rpmtsAddEraseElement (ts, hdr, -1))
+    return glnx_throw (error, "Failed to add erase element for package '%s'",
+                       dnf_package_get_nevra (pkg));
 
   return TRUE;
 }
@@ -2427,6 +2544,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
   g_auto(rpmts) ordering_ts = rpmtsCreate ();
   rpmtsSetRootDir (ordering_ts, dnf_context_get_install_root (hifctx));
+
   /* First for the ordering TS, set the dbpath to relative, which will also gain
    * the root dir.
    */
@@ -2438,63 +2556,84 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
    */
   rpmtsSetVSFlags (ordering_ts, _RPMVSF_NOSIGNATURES | _RPMVSF_NODIGESTS | RPMTRANS_FLAG_TEST);
 
+  g_autoptr(GPtrArray) overlays =
+    dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+                           DNF_PACKAGE_INFO_INSTALL,
+                           -1);
+
+  g_autoptr(GPtrArray) overrides_remove =
+    dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+                           DNF_PACKAGE_INFO_REMOVE,
+                           DNF_PACKAGE_INFO_OBSOLETE,
+                           -1);
+
+  if (overlays->len == 0 && overrides_remove->len == 0)
+    return glnx_throw (error, "No packages in transaction");
+
   /* Tell librpm about each one so it can tsort them.  What we really
    * want is to do this from the rpm-md metadata so that we can fully
    * parallelize download + unpack.
    */
-  { g_autoptr(GPtrArray) package_list = NULL;
 
-    package_list = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
-                                          DNF_PACKAGE_INFO_INSTALL,
-                                          -1);
+  for (guint i = 0; i < overrides_remove->len; i++)
+    {
+      DnfPackage *pkg = overrides_remove->pdata[i];
+      if (!rpmts_add_erase (self, ordering_ts, pkg, cancellable, error))
+        return FALSE;
+    }
 
-    if (package_list->len == 0)
-      return glnx_throw (error, "No packages in installation set");
+  for (guint i = 0; i < overlays->len; i++)
+    {
+      DnfPackage *pkg = overlays->pdata[i];
+      g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
+      g_autofree char *cached_rev = NULL;
+      gboolean sepolicy_matches;
 
-    for (guint i = 0; i < package_list->len; i++)
-      {
-        DnfPackage *pkg = package_list->pdata[i];
-        g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
-        g_autofree char *cached_rev = NULL;
-        gboolean sepolicy_matches;
+      if (!ostree_repo_resolve_rev (pkgcache_repo, cachebranch, FALSE,
+                                    &cached_rev, error))
+        return FALSE;
 
-        if (!ostree_repo_resolve_rev (pkgcache_repo, cachebranch, FALSE,
-                                      &cached_rev, error))
-          return FALSE;
+      if (self->sepolicy)
+        {
+          if (!commit_has_matching_sepolicy (pkgcache_repo, cached_rev,
+                                             self->sepolicy, &sepolicy_matches,
+                                             error))
+            return FALSE;
 
-        if (self->sepolicy)
-          {
-            if (!commit_has_matching_sepolicy (pkgcache_repo, cached_rev,
-                                               self->sepolicy, &sepolicy_matches,
-                                               error))
-              return FALSE;
+          /* We already did any relabeling/reimporting above */
+          g_assert (sepolicy_matches);
+        }
 
-            /* We already did any relabeling/reimporting above */
-            g_assert (sepolicy_matches);
-          }
+      if (!checkout_pkg_metadata_by_dnfpkg (self, pkg, cancellable, error))
+        return FALSE;
 
-        if (!checkout_pkg_metadata_by_dnfpkg (self, pkg, cancellable, error))
-          return FALSE;
+      if (!rpmts_add_install (self, ordering_ts, pkg,
+                              noscripts, self->ignore_scripts,
+                              cancellable, error))
+        return FALSE;
 
-        if (!add_to_transaction (self, ordering_ts, pkg,
-                                 noscripts, self->ignore_scripts,
-                                 cancellable, error))
-          return FALSE;
+      g_hash_table_insert (pkg_to_ostree_commit, g_object_ref (pkg), g_steal_pointer (&cached_rev));
 
-        g_hash_table_insert (pkg_to_ostree_commit, g_object_ref (pkg), g_steal_pointer (&cached_rev));
-
-        if (strcmp (dnf_package_get_name (pkg), "filesystem") == 0)
-          filesystem_package = g_object_ref (pkg);
-      }
-  }
+      if (strcmp (dnf_package_get_name (pkg), "filesystem") == 0)
+        filesystem_package = g_object_ref (pkg);
+    }
 
   { DECLARE_RPMSIGHANDLER_RESET;
     rpmtsOrder (ordering_ts);
   }
 
-  rpmostree_output_task_begin ("Overlaying");
+  if (overrides_remove->len > 0 && overlays->len > 0)
+    rpmostree_output_task_begin ("Applying %u overrides and %u overlays",
+                                 overrides_remove->len, overlays->len);
+  else if (overrides_remove->len > 0)
+    rpmostree_output_task_begin ("Applying %u overrides", overrides_remove->len);
+  else if (overlays->len > 0)
+    rpmostree_output_task_begin ("Applying %u overlays", overlays->len);
+  else
+    g_assert_not_reached ();
 
   guint n_rpmts_elements = (guint)rpmtsNElements (ordering_ts);
+  g_assert (n_rpmts_elements > 0);
 
   /* Okay so what's going on in Fedora with incestuous relationship
    * between the `filesystem`, `setup`, `libgcc` RPMs is actively
@@ -2515,42 +2654,29 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                        cancellable, error))
         return FALSE;
     }
-  else
-    {
-      /* Otherwise, we unpack the first package to get the initial
-       * rootfs dir.
-       */
-      rpmte te = rpmtsElement (ordering_ts, 0);
-      DnfPackage *pkg = (void*)rpmteKey (te);
-
-      g_assert (pkg);
-
-      if (!checkout_package_into_root (self, pkg,
-                                       tmprootfs_dfd, ".", devino_cache,
-                                       g_hash_table_lookup (pkg_to_ostree_commit,
-                                                            pkg),
-                                       cancellable, error))
-        return FALSE;
-
-      filesystem_package = g_object_ref (pkg);
-    }
 
   for (guint i = 0; i < n_rpmts_elements; i++)
     {
       rpmte te = rpmtsElement (ordering_ts, i);
-      DnfPackage *pkg = (void*)rpmteKey (te);
+      rpmElementType type = rpmteType (te);
 
-      g_assert (pkg);
+      if (type == TR_ADDED)
+        {
+          DnfPackage *pkg = (void*)rpmteKey (te);
+          if (pkg == filesystem_package)
+            continue;
 
-      if (pkg == filesystem_package)
-        continue;
-
-      if (!checkout_package_into_root (self, pkg,
-                                       tmprootfs_dfd, ".", devino_cache,
-                                       g_hash_table_lookup (pkg_to_ostree_commit,
-                                                            pkg),
-                                       cancellable, error))
-        return FALSE;
+          if (!checkout_package_into_root (self, pkg, tmprootfs_dfd, ".", devino_cache,
+                                           g_hash_table_lookup (pkg_to_ostree_commit, pkg),
+                                           cancellable, error))
+            return FALSE;
+        }
+      else
+        {
+          g_assert (type == TR_REMOVED);
+          if (!delete_package_from_root (self, te, tmprootfs_dfd, cancellable, error))
+            return FALSE;
+        }
     }
 
   rpmostree_output_task_end ("done");
@@ -2558,7 +2684,9 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
   if (!rpmostree_rootfs_prepare_links (tmprootfs_dfd, cancellable, error))
     return FALSE;
 
-  if (!noscripts)
+  /* NB: we're not running scripts right now for removals, so this is only for
+   * overlays */
+  if (!noscripts && overlays->len > 0)
     {
       gboolean have_passwd;
       gboolean have_systemctl;
@@ -2607,12 +2735,13 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
       for (guint i = 0; i < n_rpmts_elements; i++)
         {
           rpmte te = rpmtsElement (ordering_ts, i);
-          DnfPackage *pkg = (void*)rpmteKey (te);
+          if (rpmteType (te) != TR_ADDED)
+            continue;
 
+          DnfPackage *pkg = (void*)rpmteKey (te);
           g_assert (pkg);
 
-          if (!run_pre_sync (self, tmprootfs_dfd, pkg,
-                             cancellable, error))
+          if (!run_pre_sync (self, tmprootfs_dfd, pkg, cancellable, error))
             return FALSE;
         }
 
@@ -2653,18 +2782,19 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
       for (guint i = 0; i < n_rpmts_elements; i++)
         {
           rpmte te = rpmtsElement (ordering_ts, i);
+          if (rpmteType (te) != TR_ADDED)
+            continue;
+
           DnfPackage *pkg = (void*)rpmteKey (te);
 
           g_assert (pkg);
 
-          if (!apply_rpmfi_overrides (self, tmprootfs_dfd,
-                                      pkg, passwdents, groupents,
+          if (!apply_rpmfi_overrides (self, tmprootfs_dfd, pkg, passwdents, groupents,
                                       cancellable, error))
             return glnx_prefix_error (error, "While applying overrides for pkg %s: ",
                                       dnf_package_get_name (pkg));
 
-          if (!run_posttrans_sync (self, tmprootfs_dfd, pkg,
-                                   cancellable, error))
+          if (!run_posttrans_sync (self, tmprootfs_dfd, pkg, cancellable, error))
             return FALSE;
         }
 
@@ -2716,20 +2846,23 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
   tdata.ctx = self;
   rpmtsSetNotifyCallback (rpmdb_ts, ts_callback, &tdata);
 
-  { gpointer k;
-    GHashTableIter hiter;
+  for (guint i = 0; i < overlays->len; i++)
+    {
+      DnfPackage *pkg = overlays->pdata[i];
 
-    g_hash_table_iter_init (&hiter, pkg_to_ostree_commit);
-    while (g_hash_table_iter_next (&hiter, &k, NULL))
-      {
-        DnfPackage *pkg = k;
+      /* Set noscripts since we already validated them above */
+      if (!rpmts_add_install (self, rpmdb_ts, pkg, TRUE, NULL,
+                              cancellable, error))
+        return FALSE;
+    }
 
-        /* Set noscripts since we already validated them above */
-        if (!add_to_transaction (self, rpmdb_ts, pkg, TRUE, NULL,
-                                 cancellable, error))
-          return FALSE;
-      }
-  }
+  /* and mark removed packages as such so they drop out of rpmdb */
+  for (guint i = 0; i < overrides_remove->len; i++)
+    {
+      DnfPackage *pkg = overrides_remove->pdata[i];
+      if (!rpmts_add_erase (self, rpmdb_ts, pkg, cancellable, error))
+        return FALSE;
+    }
 
   rpmtsOrder (rpmdb_ts);
 
@@ -2800,27 +2933,50 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.clientlayer",
                                g_variant_new_boolean (TRUE));
 
-        if (!self->empty)
-          {
-            g_autoptr(GVariant) pkgs =
-              g_variant_dict_lookup_value (self->spec->dict, "packages",
-                                           G_VARIANT_TYPE ("as"));
-            g_assert (pkgs);
-            g_variant_builder_add (&metadata_builder, "{sv}",
-                                   "rpmostree.packages", pkgs);
-          }
-        else
-          {
-            const char *const p[] = { NULL };
-            g_variant_builder_add (&metadata_builder, "{sv}",
-                                   "rpmostree.packages",
-                                   g_variant_new_strv (p, -1));
-          }
+        /* embed packages (really, "patterns") layered */
+        g_autoptr(GVariant) pkgs =
+          g_variant_dict_lookup_value (self->spec->dict, "packages", G_VARIANT_TYPE ("as"));
+        g_assert (pkgs);
+        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.packages", pkgs);
+
+        /* embed the full NEVRA names of the base pkgs removed to make it easier to display
+         * to users (this does not include reverse deps that were also removed -- users can
+         * do `db diff` for the full list, much like regular pkglayering) */
+        {
+          g_autofree char **removed_base_pkgnames = NULL;
+          g_assert (g_variant_dict_lookup (self->spec->dict, "removed-base-packages",
+                                           "^a&s", &removed_base_pkgnames));
+          /* NB: strings owned by solv pool */
+          g_autoptr(GPtrArray) removed_base_pkgnevras = g_ptr_array_new ();
+
+          if (!self->empty)
+            {
+              g_autoptr(GPtrArray) packages =
+                dnf_goal_get_packages (dnf_context_get_goal (self->hifctx),
+                                       DNF_PACKAGE_INFO_REMOVE,
+                                       DNF_PACKAGE_INFO_OBSOLETE, -1);
+
+              for (guint i = 0; i < packages->len; i++)
+                {
+                  DnfPackage *pkg = packages->pdata[i];
+                  const char *name = dnf_package_get_name (pkg);
+                  const char *nevra = dnf_package_get_nevra (pkg);
+                  if (g_strv_contains ((const char*const*)removed_base_pkgnames, name))
+                    g_ptr_array_add (removed_base_pkgnevras, (gpointer)nevra);
+                }
+            }
+
+          g_variant_builder_add (&metadata_builder, "{sv}",
+                                 "rpmostree.removed-base-packages",
+                                 g_variant_new_strv (
+                                   (const char *const*)removed_base_pkgnevras->pdata,
+                                   removed_base_pkgnevras->len));
+        }
 
         /* be nice to our future selves */
         g_variant_builder_add (&metadata_builder, "{sv}",
                                "rpmostree.clientlayer_version",
-                               g_variant_new_uint32 (1));
+                               g_variant_new_uint32 (2));
       }
     else if (assemble_type == RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE)
       {

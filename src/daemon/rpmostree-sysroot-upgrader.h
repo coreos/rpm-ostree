@@ -72,6 +72,9 @@ void
 rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self,
                                        RpmOstreeOrigin *origin);
 
+const char *
+rpmostree_sysroot_upgrader_get_base (RpmOstreeSysrootUpgrader *self);
+
 gboolean
 rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
                                  const char             *dir_to_pull,

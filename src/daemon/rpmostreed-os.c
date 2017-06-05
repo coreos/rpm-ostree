@@ -198,7 +198,7 @@ out:
   else
     {
       g_dbus_method_invocation_return_value (invocation,
-					     g_variant_new ("(@a(sua{sv}))", value));
+                                             g_variant_new ("(@a(sua{sv}))", value));
     }
 
   return TRUE;
@@ -264,7 +264,7 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
                                                                ot_repo,
                                                                rpmostree_origin_get_refspec (origin),
-							       &local_error);
+                                                               &local_error);
   if (!details)
     goto out;
 
@@ -276,7 +276,7 @@ out:
   else
     {
       g_dbus_method_invocation_return_value (invocation,
-					     new_variant_diff_result (value, details));
+                                             new_variant_diff_result (value, details));
     }
 
   return TRUE;
@@ -390,6 +390,8 @@ deploy_flags_from_options (GVariant *options,
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE;
   if (vardict_lookup_bool (&dict, "dry-run", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN;
+  if (vardict_lookup_bool (&dict, "no-overrides", FALSE))
+    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES;
   return ret;
 }
 
@@ -403,6 +405,10 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
                       const char *const      *pkgs_to_add,
                       const char *const      *pkgs_to_remove,
                       GVariant               *local_pkgs_to_add,
+                      const char *const      *override_replace_pkgs,
+                      GVariant               *override_replace_local_pkgs,
+                      const char *const      *override_remove_pkgs,
+                      const char *const      *override_reset_pkgs,
                       GUnixFDList            *fd_list,
                       GError                 **error)
 {
@@ -442,6 +448,16 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
     return glnx_null_throw (error, "Can't specify no-pull-base if setting a "
                                    "new refspec or revision");
 
+  /* NB: remove HIDDEN attribute on "replace" cmdline once we implement this */
+  if (override_replace_pkgs || override_replace_local_pkgs)
+    return glnx_null_throw (error, "Replacement overrides not implemented yet");
+
+  if (vardict_lookup_bool (&options_dict, "no-overrides", FALSE) &&
+      (override_remove_pkgs || override_reset_pkgs ||
+       override_replace_pkgs || override_replace_local_pkgs))
+    return glnx_null_throw (error, "Can't specify no-overrides if setting "
+                                   "override modifiers");
+
   /* default to allowing downgrades for rebases & deploys */
   if (vardict_lookup_bool (&options_dict, "allow-downgrade", refspec ||
                                                              revision))
@@ -456,6 +472,8 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
                                             pkgs_to_add,
                                             pkgs_to_remove,
                                             fd_list,
+                                            override_remove_pkgs,
+                                            override_reset_pkgs,
                                             cancellable, error);
 }
 
@@ -474,6 +492,10 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
                                   const char *const      *pkgs_to_add,
                                   const char *const      *pkgs_to_remove,
                                   GVariant               *local_pkgs_to_add,
+                                  const char *const      *override_replace_pkgs,
+                                  GVariant               *override_replace_local_pkgs,
+                                  const char *const      *override_remove_pkgs,
+                                  const char *const      *override_reset_pkgs,
                                   GUnixFDList            *fd_list,
                                   InvocationCompleter     completer)
 {
@@ -490,7 +512,12 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
                                           rpmostree_os_get_name (interface),
                                           refspec, revision, default_flags,
                                           options, pkgs_to_add, pkgs_to_remove,
-                                          local_pkgs_to_add, fd_list,
+                                          local_pkgs_to_add,
+                                          override_replace_pkgs,
+                                          override_replace_local_pkgs,
+                                          override_remove_pkgs,
+                                          override_reset_pkgs,
+                                          fd_list,
                                           &local_error);
       if (transaction)
         rpmostreed_transaction_monitor_add (self->transaction_monitor,
@@ -533,6 +560,10 @@ os_handle_deploy (RPMOSTreeOS *interface,
       NULL,
       NULL,
       NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
       rpmostree_os_complete_deploy);
 }
 
@@ -549,6 +580,10 @@ os_handle_upgrade (RPMOSTreeOS *interface,
       NULL,
       0,
       arg_options,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
       NULL,
       NULL,
       NULL,
@@ -582,6 +617,10 @@ os_handle_rebase (RPMOSTreeOS *interface,
       NULL,
       NULL,
       NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
       rpmostree_os_complete_rebase);
 }
 
@@ -604,6 +643,10 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
       arg_packages_removed,
       NULL,
       NULL,
+      NULL,
+      NULL,
+      NULL,
+      NULL,
       rpmostree_os_complete_pkg_change);
 }
 
@@ -624,8 +667,17 @@ os_handle_update_deployment (RPMOSTreeOS *interface,
     vardict_lookup_ptr (&dict, "install-packages", "^a&s");
   g_autofree const char *const *uninstall_pkgs =
     vardict_lookup_ptr (&dict, "uninstall-packages", "^a&s");
+  g_autofree const char *const *override_replace_pkgs =
+    vardict_lookup_ptr (&dict, "override-replace-packages", "^a&s");
+  g_autofree const char *const *override_remove_pkgs =
+    vardict_lookup_ptr (&dict, "override-remove-packages", "^a&s");
+  g_autofree const char *const *override_reset_pkgs =
+    vardict_lookup_ptr (&dict, "override-reset-packages", "^a&s");
   g_autoptr(GVariant) install_local_pkgs =
     g_variant_dict_lookup_value (&dict, "install-local-packages",
+                                 G_VARIANT_TYPE("ah"));
+  g_autoptr(GVariant) override_replace_local_pkgs =
+    g_variant_dict_lookup_value (&dict, "override-replace-local-packages",
                                  G_VARIANT_TYPE("ah"));
 
   return os_merge_or_start_deployment_txn (
@@ -638,6 +690,10 @@ os_handle_update_deployment (RPMOSTreeOS *interface,
       install_pkgs,
       uninstall_pkgs,
       install_local_pkgs,
+      override_replace_pkgs,
+      override_replace_local_pkgs,
+      override_remove_pkgs,
+      override_reset_pkgs,
       fd_list,
       rpmostree_os_complete_update_deployment);
 }

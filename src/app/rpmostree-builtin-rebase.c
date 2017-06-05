@@ -94,7 +94,8 @@ rpmostree_builtin_rebase (int             argc,
                                    TRUE,   /* allow-downgrade */
                                    opt_skip_purge,
                                    FALSE,  /* no-pull-base */
-                                   FALSE); /* dry-run */
+                                   FALSE,  /* dry-run */
+                                   FALSE); /* no-overrides */
 
   /* Use newer D-Bus API only if we have to. */
   if (install_pkgs || uninstall_pkgs)
@@ -104,6 +105,9 @@ rpmostree_builtin_rebase (int             argc,
                                         revision,
                                         install_pkgs,
                                         uninstall_pkgs,
+                                        NULL, /* override replace */
+                                        NULL, /* override remove */
+                                        NULL, /* override reset */
                                         options,
                                         &transaction_address,
                                         cancellable,

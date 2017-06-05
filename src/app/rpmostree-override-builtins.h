@@ -1,6 +1,6 @@
 /* -*- mode: C; c-file-style: "gnu"; indent-tabs-mode: nil; -*-
  *
- * Copyright (C) 2015 Colin Walters <walters@verbum.org>
+ * Copyright (C) 2017 Red Hat, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -26,15 +26,21 @@
 
 G_BEGIN_DECLS
 
-#define BUILTINPROTO(name) gboolean rpmostree_ex_builtin_ ## name (int argc, char **argv, \
-                                                                   RpmOstreeCommandInvocation *invocation, \
-                                                                   GCancellable *cancellable, GError **error)
-
-BUILTINPROTO(unpack);
-BUILTINPROTO(livefs);
-BUILTINPROTO(override);
-
-#undef BUILTINPROTO
+gboolean
+rpmostree_override_builtin_replace (int argc, char **argv,
+                                    RpmOstreeCommandInvocation *invocation,
+                                    GCancellable *cancellable,
+                                    GError **error);
+gboolean
+rpmostree_override_builtin_remove (int argc, char **argv,
+                                   RpmOstreeCommandInvocation *invocation,
+                                   GCancellable *cancellable,
+                                   GError **error);
+gboolean
+rpmostree_override_builtin_reset (int argc, char **argv,
+                                  RpmOstreeCommandInvocation *invocation,
+                                  GCancellable *cancellable,
+                                  GError **error);
 
 G_END_DECLS
 

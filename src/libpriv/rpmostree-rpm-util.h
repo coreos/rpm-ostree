@@ -24,6 +24,7 @@
 
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
+#include <rpm/rpmdb.h>
 #include "libglnx.h"
 #include "rpmostree-util.h"
 #include "rpmostree-refsack.h"
@@ -67,7 +68,9 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff);
  * itself. TODO: Move them to libdnf */
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC(Header, headerFree, NULL)
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmfi, rpmfiFree, NULL)
+G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmfiles, rpmfilesFree, NULL)
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmts, rpmtsFree, NULL)
+G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmdbMatchIterator, rpmdbFreeIterator, NULL)
 
 void
 rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff);

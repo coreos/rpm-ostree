@@ -118,7 +118,8 @@ rpmostree_builtin_deploy (int            argc,
                                        TRUE,   /* allow-downgrade */
                                        FALSE,  /* skip-purge */
                                        FALSE,  /* no-pull-base */
-                                       FALSE); /* dry-run */
+                                       FALSE,  /* dry-run */
+                                       FALSE); /* no-overrides */
 
       /* This will set the GVariant if the default deployment changes. */
       g_signal_connect (os_proxy, "notify::default-deployment",
@@ -133,6 +134,9 @@ rpmostree_builtin_deploy (int            argc,
                                             revision,
                                             install_pkgs,
                                             uninstall_pkgs,
+                                            NULL, /* override replace */
+                                            NULL, /* override remove */
+                                            NULL, /* override reset */
                                             options,
                                             &transaction_address,
                                             cancellable,

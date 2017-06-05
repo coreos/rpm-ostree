@@ -231,6 +231,10 @@
          "install-packages" (type 'as')
          "uninstall-packages" (type 'as')
          "install-local-packages" (type 'ah')
+         "override-remove-packages" (type 'as')
+         "override-reset-packages" (type 'as')
+         "override-replace-packages" (type 'as')
+         "override-replace-local-packages" (type 'ah')
 
          Available options:
          "reboot" (type 'b')
@@ -248,6 +252,9 @@
          "dry-run" (type 'b')
             Stop short of deploying the new tree. If
             layering packages, the pkg diff is printed.
+         "no-overrides" (type 'b')
+            Remove all active overrides. Not valid if any override
+            modifiers are specified.
     -->
     <method name="UpdateDeployment">
       <arg type="a{sv}" name="modifiers" direction="in"/>

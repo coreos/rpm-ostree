@@ -440,12 +440,14 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        gboolean          *out_is_layered,
                                        char             **out_base_layer,
                                        char            ***out_layered_pkgs,
+                                       char            ***out_removed_base_pkgs,
                                        GError           **error)
 {
   g_autoptr(GVariant) commit = NULL;
   g_autoptr(GVariant) metadata = NULL;
   g_autoptr(GVariantDict) dict = NULL;
   g_auto(GStrv) layered_pkgs = NULL;
+  g_auto(GStrv) removed_base_pkgs = NULL;
   const char *csum = ostree_deployment_get_csum (deployment);
   gboolean is_layered = FALSE;
   g_autofree char *base_layer = NULL;
@@ -473,11 +475,11 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
       g_assert (base_layer);
     }
 
-  /* only fetch the pkgs if we have to */
-  if (is_layered && out_layered_pkgs != NULL)
+  /* only fetch pkgs if we have to */
+  if (is_layered && (out_layered_pkgs != NULL || out_removed_base_pkgs != NULL))
     {
       /* starting from v1, we no longer embed a treespec in client layers */
-      if (clientlayer_version > 0)
+      if (clientlayer_version >= 1)
         {
           g_assert (g_variant_dict_lookup (dict, "rpmostree.packages", "^as",
                                            &layered_pkgs));
@@ -499,6 +501,12 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
           g_assert (g_variant_dict_lookup (treespec, "packages", "^as",
                                            &layered_pkgs));
         }
+
+      if (clientlayer_version >= 2)
+        {
+          g_assert (g_variant_dict_lookup (dict, "rpmostree.removed-base-packages", "^as",
+                                           &removed_base_pkgs));
+        }
     }
 
   if (out_is_layered != NULL)
@@ -507,6 +515,8 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
     *out_base_layer = g_steal_pointer (&base_layer);
   if (out_layered_pkgs != NULL)
     *out_layered_pkgs = g_steal_pointer (&layered_pkgs);
+  if (out_removed_base_pkgs != NULL)
+    *out_removed_base_pkgs = g_steal_pointer (&removed_base_pkgs);
 
   return TRUE;
 }

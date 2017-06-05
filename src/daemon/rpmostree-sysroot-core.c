@@ -96,7 +96,7 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
         g_autofree char *base_rev = NULL;
 
         if (!rpmostree_deployment_get_layered_info (repo, deployment, NULL,
-                                                    &base_rev, NULL, error))
+                                                    &base_rev, NULL, NULL, error))
           goto out;
 
         if (base_rev)
@@ -192,7 +192,7 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
       gboolean is_layered;
 
       if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered,
-                                                  NULL, NULL, error))
+                                                  NULL, NULL, NULL, error))
         return FALSE;
 
       if (is_layered)

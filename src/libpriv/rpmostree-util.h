@@ -101,6 +101,7 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        gboolean          *out_is_layered,
                                        char             **out_base_layer,
                                        char            ***out_layered_pkgs,
+                                       char            ***out_removed_base_pkgs,
                                        GError           **error);
 
 gboolean

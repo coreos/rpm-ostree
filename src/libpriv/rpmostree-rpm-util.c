@@ -28,7 +28,6 @@
 #include <sys/capability.h>
 #include <libglnx.h>
 
-#include <rpm/rpmdb.h>
 #include <rpm/rpmts.h>
 
 /* FIXME: */
@@ -932,35 +931,6 @@ pkg_array_compare (DnfPackage **p_pkg1,
 }
 
 void
-rpmostree_print_transaction (DnfContext   *hifctx)
-{
-  guint i;
-  g_autoptr(GPtrArray) install = NULL;
-
-  install = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
-                                   DNF_PACKAGE_INFO_INSTALL,
-                                   DNF_PACKAGE_INFO_REINSTALL,
-                                   DNF_PACKAGE_INFO_DOWNGRADE,
-                                   DNF_PACKAGE_INFO_UPDATE,
-                                   -1);
-
-  g_print ("Transaction: %u packages\n", install->len);
-  
-  if (install->len == 0)
-    g_print ("  (empty)\n");
-  else
-    {
-      g_ptr_array_sort (install, (GCompareFunc) pkg_array_compare);
-
-      for (i = 0; i < install->len; i++)
-        {
-          DnfPackage *pkg = install->pdata[i];
-          g_print ("  %s (%s)\n", dnf_package_get_nevra (pkg), dnf_package_get_reponame (pkg));
-        }
-    }
-}
-
-void
 rpmostree_sighandler_reset_cleanup (RpmSighandlerResetCleanup *cleanup)
 {
   /* Forcibly override rpm/librepo SIGINT handlers.  We always operate
@@ -970,6 +940,56 @@ rpmostree_sighandler_reset_cleanup (RpmSighandlerResetCleanup *cleanup)
   signal (SIGINT, SIG_DFL);
   signal (SIGTERM, SIG_DFL);
 #endif
+}
+
+static void
+print_pkglist (GPtrArray *pkglist)
+{
+  g_ptr_array_sort (pkglist, (GCompareFunc) pkg_array_compare);
+
+  for (guint i = 0; i < pkglist->len; i++)
+    {
+      DnfPackage *pkg = pkglist->pdata[i];
+      g_print ("  %s (%s)\n", dnf_package_get_nevra (pkg),
+                              dnf_package_get_reponame (pkg));
+    }
+}
+
+void
+rpmostree_print_transaction (DnfContext   *hifctx)
+{
+  gboolean empty = TRUE;
+
+  { g_autoptr(GPtrArray) packages = NULL;
+    packages = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+                                      DNF_PACKAGE_INFO_INSTALL,
+                                      DNF_PACKAGE_INFO_REINSTALL,
+                                      DNF_PACKAGE_INFO_DOWNGRADE,
+                                      DNF_PACKAGE_INFO_UPDATE,
+                                      -1);
+
+    if (packages->len > 0)
+      empty = FALSE;
+
+    g_print ("Installing %u packages:\n", packages->len);
+    print_pkglist (packages);
+  }
+
+  { g_autoptr(GPtrArray) packages = NULL;
+    packages = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+                                    DNF_PACKAGE_INFO_REMOVE,
+                                    DNF_PACKAGE_INFO_OBSOLETE,
+                                      -1);
+
+    if (packages->len > 0)
+      empty = FALSE;
+
+    g_print ("Removing %u packages:\n", packages->len);
+    print_pkglist (packages);
+  }
+
+  if (empty)
+    g_print ("Empty transaction\n");
 }
 
 struct _cap_struct {
