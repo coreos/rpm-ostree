@@ -258,6 +258,40 @@ libcontainer_prep_dev (int         rootfs_dfd,
 }
 
 static gboolean
+treefile_sanity_checks (JsonObject   *treedata,
+                        GFile        *contextdir,
+                        GCancellable *cancellable,
+                        GError      **error)
+{
+  /* Check that postprocess-script is executable; https://github.com/projectatomic/rpm-ostree/issues/817 */
+  const char *postprocess_script = NULL;
+
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "postprocess-script",
+                                                              &postprocess_script, error))
+    return FALSE;
+
+  if (!postprocess_script)
+    return TRUE;
+
+  g_autofree char *src = NULL;
+  if (g_path_is_absolute (postprocess_script))
+    src = g_strdup (postprocess_script);
+  else
+    src = g_build_filename (gs_file_get_path_cached (contextdir), postprocess_script, NULL);
+
+  struct stat stbuf;
+  if (fstatat (AT_FDCWD, src, &stbuf, 0) < 0)
+    return glnx_throw_errno_prefix (error, "postprocess-script: stat(%s)", postprocess_script);
+
+  if ((stbuf.st_mode & S_IXUSR) == 0)
+    return glnx_throw (error, "postprocess-script (%s) must be executable", postprocess_script);
+
+  /* Insert other sanity checks here */
+
+  return TRUE;
+}
+
+static gboolean
 install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                           RpmOstreeContext *ctx,
                           JsonObject      *treedata,
@@ -412,6 +446,10 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
       ret = TRUE;
       goto out;
     }
+
+  if (!treefile_sanity_checks (treedata, self->treefile_context_dirs->pdata[0],
+                               cancellable, error))
+    goto out;
 
   /* --- Downloading packages --- */
   if (!rpmostree_context_download (ctx, cancellable, error))
