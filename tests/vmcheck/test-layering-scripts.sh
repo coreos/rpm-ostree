@@ -41,6 +41,9 @@ vm_reboot
 vm_assert_layered_pkg scriptpkg1 present
 echo "ok pkg scriptpkg1 added"
 
+vm_cmd "test ! -f /usr/scriptpkg1.posttrans"
+echo "ok no embarrassing crud leftover"
+
 # let's check that the group was successfully added
 vm_cmd getent group scriptpkg1
 echo "ok group scriptpkg1 active"

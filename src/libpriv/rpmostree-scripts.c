@@ -220,6 +220,7 @@ run_script_in_bwrap_container (int rootfs_fd,
 
   ret = TRUE;
  out:
+  (void) unlinkat (rootfs_fd, postscript_path_host, 0);
   if (created_var_tmp)
     (void) unlinkat (rootfs_fd, "var/tmp", AT_REMOVEDIR);
   return ret;
