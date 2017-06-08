@@ -26,6 +26,30 @@ artifacts:
 
 inherit: true
 
+context: c7-build
+
+required: true
+
+container:
+  image: registry.centos.org/centos/centos:7
+
+extra-repos:
+  - name: atomic-centos-continuous
+    baseurl: https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/build
+    gpgcheck: 0
+
+# XXX: integrate better with ci/ scripts
+tests:
+  - yum-builddep -y rpm-ostree
+  - yum install -y make
+  - source ci/libbuild.sh && build
+
+timeout: 15m
+
+---
+
+inherit: true
+
 context: vmcheck
 
 required: true
