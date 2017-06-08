@@ -68,9 +68,11 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff);
  * itself. TODO: Move them to libdnf */
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC(Header, headerFree, NULL)
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmfi, rpmfiFree, NULL)
-G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmfiles, rpmfilesFree, NULL)
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmts, rpmtsFree, NULL)
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmdbMatchIterator, rpmdbFreeIterator, NULL)
+#if BUILDOPT_HAVE_RPMFILES
+G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmfiles, rpmfilesFree, NULL)
+#endif
 
 void
 rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff);

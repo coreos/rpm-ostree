@@ -77,6 +77,12 @@ AC_SEARCH_LIBS([rpmsqSetInterruptSafety], [rpmio],
   AC_DEFINE([BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY], 0, [Set to 1 if we have interrupt safety API])
 )
 
+# rpmfiles was made public in rpm >= 4.12, el7 is still on 4.11
+AC_SEARCH_LIBS([rpmfilesNew], [rpm],
+  AC_DEFINE([BUILDOPT_HAVE_RPMFILES], 1, [Set to 1 if we have rpmfiles API]),
+  AC_DEFINE([BUILDOPT_HAVE_RPMFILES], 0, [Set to 1 if we have rpmfiles API])
+)
+
 # Remember to update AM_CPPFLAGS in Makefile.am when bumping GIO req.
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
