@@ -187,7 +187,9 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
        * on watching the path property, trying a connection, and re-reading the value
        * and only erroring out if the property hasn't changed.
        */
-      g_autoptr(RPMOSTreeTransactionProxy) txn_proxy = (RPMOSTreeTransactionProxy*)rpmostree_transaction_connect (txn_path, NULL, NULL);
+      /* gdbus-codegen started generating autocleanups from 2.50 */
+      glnx_unref_object RPMOSTreeTransactionProxy *txn_proxy =
+        (RPMOSTreeTransactionProxy*)rpmostree_transaction_connect (txn_path, NULL, NULL);
       if (txn_proxy)
         {
           const char *title = rpmostree_transaction_get_title ((RPMOSTreeTransaction*)txn_proxy);
