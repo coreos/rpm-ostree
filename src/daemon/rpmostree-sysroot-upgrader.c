@@ -443,9 +443,23 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
   rpmostree_output_task_begin ("Checking out tree %.7s", self->base_revision);
 
   int repo_dfd = ostree_repo_get_dfd (self->repo); /* borrowed */
+  /* Always delete this */
+  if (!glnx_shutil_rm_rf_at (repo_dfd, RPMOSTREE_OLD_TMP_ROOTFS_DIR,
+                             cancellable, error))
+    return FALSE;
+
+  /* Make the parents with default mode */
   if (!glnx_shutil_mkdir_p_at (repo_dfd,
-                               dirname (strdupa (RPMOSTREE_TMP_ROOTFS_DIR)),
+                               dirname (strdupa (RPMOSTREE_TMP_PRIVATE_DIR)),
                                0755, cancellable, error))
+    return FALSE;
+
+  /* And this dir should always be 0700, to ensure that when we checkout
+   * world-writable dirs like /tmp it's not accessible to unprivileged users.
+   */
+  if (!glnx_shutil_mkdir_p_at (repo_dfd,
+                               RPMOSTREE_TMP_PRIVATE_DIR,
+                               0700, cancellable, error))
     return FALSE;
 
   /* delete dir in case a previous run didn't finish successfully */
