@@ -1531,7 +1531,7 @@ rpmostree_context_download (RpmOstreeContext *self,
       guint64 size =
         dnf_package_array_get_download_size (self->pkgs_to_download);
       g_autofree char *sizestr = g_format_size (size);
-      g_print ("Will download: %u package%s (%s)\n", n, n > 1 ? "s" : "", sizestr);
+      g_print ("Will download: %u package%s (%s)\n", n, _NS(n), sizestr);
     }
   else
     return TRUE;
@@ -1674,7 +1674,7 @@ rpmostree_context_import (RpmOstreeContext *self,
 
   sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR,
                    SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_PKG_IMPORT),
-                   "MESSAGE=Imported %u pkg%s", n, n > 1 ? "s" : "",
+                   "MESSAGE=Imported %u pkg%s", n, _NS(n),
                    "IMPORTED_N_PKGS=%u", n, NULL);
 
   return TRUE;
@@ -2174,8 +2174,7 @@ rpmostree_context_relabel (RpmOstreeContext *self,
   g_return_val_if_fail (ostreerepo != NULL, FALSE);
 
   glnx_unref_object DnfState *hifstate = dnf_state_new ();
-  g_autofree char *prefix = g_strdup_printf ("Relabeling %d package%s:",
-                                             n, n>1 ? "s" : "");
+  g_autofree char *prefix = g_strdup_printf ("Relabeling %d package%s:", n, _NS(n));
 
   dnf_state_set_number_steps (hifstate, self->pkgs_to_relabel->len);
   progress_sigid = g_signal_connect (hifstate, "percentage-changed",
@@ -2627,12 +2626,15 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
   }
 
   if (overrides_remove->len > 0 && overlays->len > 0)
-    rpmostree_output_task_begin ("Applying %u overrides and %u overlays",
-                                 overrides_remove->len, overlays->len);
+    rpmostree_output_task_begin ("Applying %u override%s and %u overlay%s",
+                                 overrides_remove->len, _NS(overrides_remove->len),
+                                 overlays->len, _NS(overlays->len));
   else if (overrides_remove->len > 0)
-    rpmostree_output_task_begin ("Applying %u overrides", overrides_remove->len);
+    rpmostree_output_task_begin ("Applying %u override%s", overrides_remove->len,
+                                 _NS(overrides_remove->len));
   else if (overlays->len > 0)
-    rpmostree_output_task_begin ("Applying %u overlays", overlays->len);
+    rpmostree_output_task_begin ("Applying %u overlay%s", overlays->len,
+                                 _NS(overlays->len));
   else
     g_assert_not_reached ();
 
