@@ -35,9 +35,6 @@
 
 #include "ostree-repo.h"
 
-#define RPMOSTREE_TMP_BASE_REF "rpmostree/base/tmp"
-#define RPMOSTREE_TMP_ROOTFS_DIR "extensions/rpmostree/commit"
-
 /**
  * SECTION:rpmostree-sysroot-upgrader
  * @title: Simple upgrade class
