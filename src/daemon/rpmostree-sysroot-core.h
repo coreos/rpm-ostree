@@ -24,8 +24,12 @@
 
 /* Used by the upgrader to hold a strong ref temporarily to a base commit */
 #define RPMOSTREE_TMP_BASE_REF "rpmostree/base/tmp"
+/* Diretory that is defined to have 0700 mode always, used for checkouts */
+#define RPMOSTREE_TMP_PRIVATE_DIR "extensions/rpmostree/private"
 /* Where we check out a new rootfs */
-#define RPMOSTREE_TMP_ROOTFS_DIR "extensions/rpmostree/commit"
+#define RPMOSTREE_TMP_ROOTFS_DIR RPMOSTREE_TMP_PRIVATE_DIR "/commit"
+/* The legacy dir, which we will just delete if we find it */
+#define RPMOSTREE_OLD_TMP_ROOTFS_DIR "extensions/rpmostree/commit"
 
 gboolean
 rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
