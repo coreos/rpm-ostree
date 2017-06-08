@@ -1770,8 +1770,12 @@ delete_package_from_root (RpmOstreeContext *self,
                           GCancellable *cancellable,
                           GError      **error)
 {
+#if BUILDOPT_HAVE_RPMFILES /* use rpmfiles API if possible, rpmteFI is deprecated */
   g_auto(rpmfiles) files = rpmteFiles (pkg);
   g_auto(rpmfi) fi = rpmfilesIter (files, RPMFI_ITER_FWD);
+#else
+  rpmfi fi = rpmteFI (pkg); /* rpmfi owned by rpmte */
+#endif
 
   g_autoptr(GPtrArray) deleted_dirs = g_ptr_array_new_with_free_func (g_free);
 
