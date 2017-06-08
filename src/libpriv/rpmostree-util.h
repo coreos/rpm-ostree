@@ -25,6 +25,9 @@
 #include <sys/wait.h>
 #include <ostree.h>
 
+#define _N(single, plural, n) ( (n) == 1 ? (single) : (plural) )
+#define _NS(n) _N("", "s", n)
+
 int
 rpmostree_ptrarray_sort_compare_strings (gconstpointer ap,
                                          gconstpointer bp);
