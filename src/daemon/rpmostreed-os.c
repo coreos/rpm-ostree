@@ -20,6 +20,7 @@
 #include "ostree.h"
 
 #include <libglnx.h>
+#include <polkit/polkit.h>
 
 #include "rpmostreed-sysroot.h"
 #include "rpmostreed-daemon.h"
@@ -40,6 +41,7 @@ typedef struct _RpmostreedOSClass RpmostreedOSClass;
 struct _RpmostreedOS
 {
   RPMOSTreeOSSkeleton parent_instance;
+  PolkitAuthority *authority;
   RpmostreedTransactionMonitor *transaction_monitor;
   guint signal_id;
 };
@@ -52,6 +54,8 @@ struct _RpmostreedOSClass
 static void rpmostreed_os_iface_init (RPMOSTreeOSIface *iface);
 
 static gboolean rpmostreed_os_load_internals (RpmostreedOS *self, GError **error);
+
+static inline void *vardict_lookup_ptr (GVariantDict *dict, const char *key, const char *fmt);
 
 G_DEFINE_TYPE_WITH_CODE (RpmostreedOS,
                          rpmostreed_os,
@@ -77,6 +81,101 @@ sysroot_changed (RpmostreedSysroot *sysroot,
     g_warning ("%s", local_error->message);
 }
 
+static gboolean
+os_authorize_method (GDBusInterfaceSkeleton *interface,
+                     GDBusMethodInvocation  *invocation)
+{
+  RpmostreedOS *self = RPMOSTREED_OS (interface);
+  const gchar *method_name = g_dbus_method_invocation_get_method_name (invocation);
+  const gchar *sender = g_dbus_method_invocation_get_sender (invocation);
+  GVariant *parameters = g_dbus_method_invocation_get_parameters (invocation);
+  const gchar *action = NULL;
+  gboolean authorized = FALSE;
+
+  if (g_strcmp0 (method_name, "GetDeploymentsRpmDiff") == 0 ||
+      g_strcmp0 (method_name, "GetCachedDeployRpmDiff") == 0 ||
+      g_strcmp0 (method_name, "DownloadDeployRpmDiff") == 0 ||
+      g_strcmp0 (method_name, "GetCachedUpdateRpmDiff") == 0 ||
+      g_strcmp0 (method_name, "DownloadUpdateRpmDiff") == 0 ||
+      g_strcmp0 (method_name, "GetCachedRebaseRpmDiff") == 0 ||
+      g_strcmp0 (method_name, "DownloadRebaseRpmDiff") == 0)
+    {
+      action = "org.projectatomic.rpmostree1.repo-refresh";
+    }
+  else if (g_strcmp0 (method_name, "Deploy") == 0 ||
+           g_strcmp0 (method_name, "Rebase") == 0)
+    {
+      action = "org.projectatomic.rpmostree1.rebase";
+    }
+  else if (g_strcmp0 (method_name, "Upgrade") == 0)
+    {
+      action = "org.projectatomic.rpmostree1.upgrade";
+    }
+  else if (g_strcmp0 (method_name, "SetInitramfsState") == 0)
+    {
+      action = "org.projectatomic.rpmostree1.set-initramfs-state";
+    }
+  else if (g_strcmp0 (method_name, "Cleanup") == 0)
+    {
+      action = "org.projectatomic.rpmostree1.cleanup";
+    }
+  else if (g_strcmp0 (method_name, "Rollback") == 0 ||
+           g_strcmp0 (method_name, "ClearRollbackTarget") == 0)
+    {
+      action = "org.projectatomic.rpmostree1.rollback";
+    }
+  else if (g_strcmp0 (method_name, "PkgChange") == 0)
+    {
+      action = "org.projectatomic.rpmostree1.package-install-uninstall";
+    }
+  else if (g_strcmp0 (method_name, "UpdateDeployment") == 0)
+    {
+      g_autoptr(GVariant) modifiers = g_variant_get_child_value (parameters, 0);
+      g_auto(GVariantDict) dict;
+      g_variant_dict_init (&dict, modifiers);
+      g_autofree char **install_pkgs =
+        vardict_lookup_ptr (&dict, "install-packages", "^a&s");
+      g_autofree char **uninstall_pkgs =
+        vardict_lookup_ptr (&dict, "uninstall-packages", "^a&s");
+
+      if (g_strv_length (install_pkgs) > 0 ||
+          g_strv_length (uninstall_pkgs) > 0)
+        action = "org.projectatomic.rpmostree1.package-install-uninstall";
+      else
+        action = "org.projectatomic.rpmostree1.upgrade";
+    }
+
+  if (action)
+    {
+      glnx_unref_object PolkitSubject *subject = polkit_system_bus_name_new (sender);
+      glnx_unref_object PolkitAuthorizationResult *result = NULL;
+      g_autoptr(GError) error = NULL;
+
+      result = polkit_authority_check_authorization_sync (self->authority, subject,
+                                                          action, NULL,
+                                                          POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION,
+                                                          NULL, &error);
+      if (result == NULL)
+        {
+          g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                                 "Authorization error: %s", error->message);
+          return FALSE;
+        }
+
+      authorized = polkit_authorization_result_get_is_authorized (result);
+    }
+
+  if (!authorized)
+    {
+      g_dbus_method_invocation_return_error (invocation,
+                                             G_DBUS_ERROR,
+                                             G_DBUS_ERROR_ACCESS_DENIED,
+                                             "rpmostreed OS operation %s not allowed for user", method_name);
+    }
+
+  return authorized;
+}
+
 static void
 os_dispose (GObject *object)
 {
@@ -90,6 +189,7 @@ os_dispose (GObject *object)
                                    object_path, object);
     }
 
+  g_clear_object (&self->authority);
   g_clear_object (&self->transaction_monitor);
 
   if (self->signal_id > 0)
@@ -104,9 +204,13 @@ static void
 os_constructed (GObject *object)
 {
   RpmostreedOS *self = RPMOSTREED_OS (object);
+  GError *error = NULL;
 
-  /* TODO Integrate with PolicyKit via the "g-authorize-method" signal. */
-
+  self->authority = polkit_authority_get_sync (NULL, &error);
+  if (self->authority == NULL)
+    {
+      g_error ("Can't get polkit authority: %s", error->message);
+    }
   self->signal_id = g_signal_connect (rpmostreed_sysroot_get (),
                                       "updated",
                                       G_CALLBACK (sysroot_changed), self);
@@ -117,11 +221,14 @@ static void
 rpmostreed_os_class_init (RpmostreedOSClass *klass)
 {
   GObjectClass *gobject_class;
+  GDBusInterfaceSkeletonClass *gdbus_interface_skeleton_class;
 
   gobject_class = G_OBJECT_CLASS (klass);
   gobject_class->dispose = os_dispose;
   gobject_class->constructed  = os_constructed;
 
+  gdbus_interface_skeleton_class = G_DBUS_INTERFACE_SKELETON_CLASS (klass);
+  gdbus_interface_skeleton_class->g_authorize_method = os_authorize_method;
 }
 
 static void

@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<policyconfig>
+
+  <vendor>Project Atomic</vendor>
+  <vendor_url>https://www.projectatomic.io/</vendor_url>
+  <icon_name>package-x-generic</icon_name>
+
+  <action id="org.projectatomic.rpmostree1.package-install-uninstall">
+    <description>Install and remove packages</description>
+    <message>Authentication is required to install and remove software</message>
+    <icon_name>package-x-generic</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.projectatomic.rpmostree1.rebase">
+    <description>Switch to a different base OS</description>
+    <message>Authentication is required to switch to a different base OS</message>
+    <icon_name>package-x-generic</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.projectatomic.rpmostree1.upgrade">
+    <description>Update base OS</description>
+    <message>Authentication is required to update software</message>
+    <icon_name>package-x-generic</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.projectatomic.rpmostree1.rollback">
+    <description>Rollback OS updates</description>
+    <message>Authentication is required to roll back software updates</message>
+    <icon_name>package-x-generic</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.projectatomic.rpmostree1.set-initramfs-state">
+    <description>Set initramfs state</description>
+    <message>Authentication is required to enable or disable local initramfs generation</message>
+    <icon_name>package-x-generic</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.projectatomic.rpmostree1.cleanup">
+    <description>Clear cache</description>
+    <message>Authentication is required to clear cache / pending data</message>
+    <icon_name>package-x-generic</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.projectatomic.rpmostree1.repo-refresh">
+    <description>Refresh repository metadata</description>
+    <message>Authentication is required to check available updates</message>
+    <icon_name>package-x-generic</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

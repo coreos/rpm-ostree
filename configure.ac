@@ -88,6 +88,7 @@ PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
 				     ostree-1 >= 2017.4
 				     libsystemd
+				     polkit-gobject-1
 				     rpm librepo
 				     libarchive])
 dnl bundled libdnf

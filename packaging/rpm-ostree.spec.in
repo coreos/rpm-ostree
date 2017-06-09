@@ -21,6 +21,7 @@ BuildRequires: pkgconfig(json-glib-1.0)
 BuildRequires: pkgconfig(rpm)
 BuildRequires: pkgconfig(libarchive)
 BuildRequires: pkgconfig(libsystemd)
+BuildRequires: pkgconfig(polkit-gobject-1)
 BuildRequires: libcap-devel
 BuildRequires: libattr-devel
 
@@ -115,7 +116,8 @@ python autofiles.py > files \
   '%{_sysconfdir}/dbus-1/system.d/*' \
   '%{_prefix}/lib/systemd/system/*' \
   '%{_libexecdir}/rpm-ostree*' \
-  '%{_datadir}/dbus-1/system-services'
+  '%{_datadir}/dbus-1/system-services' \
+  '%{_datadir}/polkit-1/actions/org.projectatomic.rpmostree1.policy'
 python autofiles.py > files.devel \
   '%{_libdir}/lib*.so' \
   '%{_includedir}/*' \
