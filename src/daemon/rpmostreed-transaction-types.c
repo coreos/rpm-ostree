@@ -608,6 +608,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
        * need to create a new deployment -- see also
        * https://github.com/projectatomic/rpm-ostree/issues/753 */
       changed = TRUE;
+
+      g_string_append_printf (txn_title, "; uninstall: %u",
+                              g_strv_length (self->packages_removed));
     }
 
   if (self->packages_added)
@@ -618,6 +621,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       /* here too -- we could optimize this under certain conditions
        * (see related blurb in maybe_do_local_assembly()) */
       changed = TRUE;
+
+      g_string_append_printf (txn_title, "; install: %u",
+                              g_strv_length (self->packages_added));
     }
 
   if (self->local_packages_added != NULL)
@@ -648,6 +654,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         }
 
       changed = TRUE;
+
+      g_string_append_printf (txn_title, "; localinstall: %u", nfds);
     }
 
   if (no_overrides)
@@ -665,12 +673,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       changed = TRUE;
     }
-
-  if (self->packages_removed || self->packages_added || self->local_packages_added)
-    g_string_append_printf (txn_title, "; remove: %u install: %u; localinstall: %u",
-                            g_strv_length (self->packages_removed),
-                            g_strv_length (self->packages_added),
-                            g_unix_fd_list_get_length (self->local_packages_added));
 
   rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, txn_title->str);
 
