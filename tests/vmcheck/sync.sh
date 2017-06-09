@@ -44,6 +44,12 @@ else
     rsync -rlv /var/roothome/sync/insttree/usr/ /usr/
     restorecon -v /usr/bin/rpm-ostree
     restorecon -v /usr/libexec/rpm-ostreed
+    mkdir -p /etc/systemd/system/rpm-ostreed.service.d
+    # For our test suite at least, to catch things like https://github.com/projectatomic/rpm-ostree/issues/826
+    cat > /etc/systemd/system/rpm-ostreed.service.d/fatal-warnings.conf << EOF
+[Service]
+Environment=G_DEBUG=fatal-warnings
+EOF
     systemctl daemon-reload
     systemctl restart rpm-ostreed
 fi
