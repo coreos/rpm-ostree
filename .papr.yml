@@ -41,6 +41,7 @@ extra-repos:
 # XXX: integrate better with ci/ scripts
 tests:
   - yum-builddep -y rpm-ostree
+  - yum install -y polkit-devel
   - yum install -y make
   - source ci/libbuild.sh && build
 
