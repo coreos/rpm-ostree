@@ -765,13 +765,12 @@ rpmostree_print_package_diffs (GVariant *variant)
  * pkgs, an fd list & idx variant. */
 gboolean
 rpmostree_sort_pkgs_strv (const char *const* pkgs,
+                          GUnixFDList  *fd_list,
                           GPtrArray   **out_repo_pkgs,
-                          GUnixFDList **out_fd_list,
                           GVariant    **out_fd_idxs,
                           GError      **error)
 {
   g_autoptr(GPtrArray) repo_pkgs = g_ptr_array_new_with_free_func (g_free);
-  glnx_unref_object GUnixFDList *fd_list = g_unix_fd_list_new ();
   g_auto(GVariantBuilder) builder;
 
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("ah"));
@@ -793,7 +792,6 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
         }
     }
 
-  *out_fd_list = g_steal_pointer (&fd_list);
   *out_fd_idxs = g_variant_ref_sink (g_variant_new ("ah", &builder));
   *out_repo_pkgs = g_steal_pointer (&repo_pkgs);
   return TRUE;
@@ -806,6 +804,32 @@ vardict_insert_strv (GVariantDict *dict,
 {
   if (strv && *strv)
     g_variant_dict_insert (dict, key, "^as", (char**)strv);
+}
+
+static gboolean
+vardict_sort_and_insert_pkgs (GVariantDict *dict,
+                              const char   *key_prefix,
+                              GUnixFDList  *fd_list,
+                              const char *const* pkgs,
+                              GError      **error)
+{
+  g_autoptr(GVariant) fd_idxs = NULL;
+  g_autoptr(GPtrArray) repo_pkgs = NULL;
+
+  if (!rpmostree_sort_pkgs_strv (pkgs, fd_list, &repo_pkgs, &fd_idxs, error))
+    return FALSE;
+
+  /* for grep: here we insert install-packages */
+  if (repo_pkgs != NULL && repo_pkgs->len > 0)
+    g_variant_dict_insert_value (dict, glnx_strjoina (key_prefix, "-packages"),
+      g_variant_new_strv ((const char *const*)repo_pkgs->pdata,
+                                              repo_pkgs->len));
+
+  /* for grep: here we insert install-local-packages */
+  if (fd_idxs != NULL)
+    g_variant_dict_insert_value (dict, glnx_strjoina (key_prefix, "-local-packages"),
+                                 fd_idxs);
+  return TRUE;
 }
 
 static gboolean
@@ -822,23 +846,15 @@ get_modifiers_variant (const char   *set_refspec,
 {
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
-  glnx_unref_object GUnixFDList *fd_list = NULL;
+  g_autoptr(GUnixFDList) fd_list = g_unix_fd_list_new ();
 
-  /* let's take care of install_pkgs first since it can fail */
   if (install_pkgs)
     {
-      g_autoptr(GPtrArray) repo_pkgs = NULL;
-      g_autoptr(GVariant) fd_idxs = NULL;
-      if (!rpmostree_sort_pkgs_strv (install_pkgs, &repo_pkgs, &fd_list,
-                                     &fd_idxs, error))
+      if (!vardict_sort_and_insert_pkgs (&dict, "install", fd_list,
+                                         install_pkgs, error))
         return FALSE;
+    }
 
-      if (repo_pkgs != NULL && repo_pkgs->len > 0)
-        g_variant_dict_insert_value (&dict, "install-packages",
-          g_variant_new_strv ((const char *const*)repo_pkgs->pdata,
-                                                  repo_pkgs->len));
-      if (fd_idxs != NULL)
-        g_variant_dict_insert_value (&dict, "install-local-packages", fd_idxs);
     }
 
   if (set_refspec)
