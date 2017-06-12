@@ -53,14 +53,13 @@ set -x
 
 # And then this code path in the VM
 
+# get csum of current default deployment
 commit=$(rpm-ostree status --json | \
   python -c '
 import sys, json;
-deployments = json.load(sys.stdin)["deployments"]
-for deployment in deployments:
-  if deployment["booted"]:
-    print deployment["checksum"]
-    exit()')
+deployment = json.load(sys.stdin)["deployments"][0]
+print deployment["checksum"]
+exit()')
 
 if [[ -z $commit ]] || ! ostree rev-parse $commit; then
   echo "Error while determining current commit" >&2
