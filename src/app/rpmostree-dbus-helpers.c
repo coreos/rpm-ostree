@@ -855,8 +855,6 @@ get_modifiers_variant (const char   *set_refspec,
         return FALSE;
     }
 
-    }
-
   if (set_refspec)
     g_variant_dict_insert (&dict, "set-refspec", "s", set_refspec);
   if (set_revision)
