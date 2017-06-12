@@ -77,8 +77,8 @@ rpmostree_print_package_diffs                (GVariant *variant);
 
 gboolean
 rpmostree_sort_pkgs_strv (const char *const* pkgs,
+                          GUnixFDList  *fd_list,
                           GPtrArray   **out_repo_pkgs,
-                          GUnixFDList **out_fd_list,
                           GVariant    **out_fd_idxs,
                           GError      **error);
 
