@@ -415,14 +415,14 @@ rpmostreed_transaction_new_rollback (GDBusMethodInvocation *invocation,
 typedef struct {
   RpmostreedTransaction parent;
   RpmOstreeTransactionDeployFlags flags;
-  char *osname;
-  char *refspec; /* NULL for non-rebases */
-  char *revision; /* NULL for upgrade */
-  char **packages_added;
-  char **packages_removed;
-  char **override_remove_packages;
-  char **override_reset_packages;
-  GUnixFDList *local_packages_added;
+  char   *osname;
+  char   *refspec; /* NULL for non-rebases */
+  char   *revision; /* NULL for upgrade */
+  char  **install_pkgs;
+  GUnixFDList *install_local_pkgs;
+  char  **uninstall_pkgs;
+  char  **override_remove_pkgs;
+  char  **override_reset_pkgs;
 } DeployTransaction;
 
 typedef RpmostreedTransactionClass DeployTransactionClass;
@@ -442,11 +442,11 @@ deploy_transaction_finalize (GObject *object)
   g_free (self->osname);
   g_free (self->refspec);
   g_free (self->revision);
-  g_strfreev (self->packages_added);
-  g_strfreev (self->packages_removed);
-  g_strfreev (self->override_remove_packages);
-  g_strfreev (self->override_reset_packages);
-  g_clear_pointer (&self->local_packages_added, g_object_unref);
+  g_strfreev (self->install_pkgs);
+  g_clear_pointer (&self->install_local_pkgs, g_object_unref);
+  g_strfreev (self->uninstall_pkgs);
+  g_strfreev (self->override_remove_pkgs);
+  g_strfreev (self->override_reset_pkgs);
 
   G_OBJECT_CLASS (deploy_transaction_parent_class)->finalize (object);
 }
@@ -520,8 +520,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   /* this should have been checked already */
   if (no_overrides)
     {
-      g_assert (self->override_remove_packages == NULL);
-      g_assert (self->override_reset_packages == NULL);
+      g_assert (self->override_remove_pkgs == NULL);
+      g_assert (self->override_reset_pkgs == NULL);
     }
 
   if (self->refspec)
@@ -578,8 +578,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     {
       /* this is a heuristic; by the end, once the proper switches are added, the two
        * commands can look indistinguishable at the D-Bus level */
-      is_override = (self->override_reset_packages ||
-                     self->override_remove_packages ||
+      is_override = (self->override_reset_pkgs ||
+                     self->override_remove_pkgs ||
                      no_overrides);
       is_install = !is_override;
     }
@@ -598,9 +598,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     g_string_append (txn_title, "upgrade");
 
   gboolean changed = FALSE;
-  if (self->packages_removed)
+  if (self->uninstall_pkgs)
     {
-      if (!rpmostree_origin_remove_packages (origin, self->packages_removed, error))
+      if (!rpmostree_origin_remove_packages (origin, self->uninstall_pkgs, error))
         return FALSE;
 
       /* in reality, there may not be any new layer required (if e.g. we're
@@ -610,12 +610,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       changed = TRUE;
 
       g_string_append_printf (txn_title, "; uninstall: %u",
-                              g_strv_length (self->packages_removed));
+                              g_strv_length (self->uninstall_pkgs));
     }
 
-  if (self->packages_added)
+  if (self->install_pkgs)
     {
-      if (!rpmostree_origin_add_packages (origin, self->packages_added, FALSE, error))
+      if (!rpmostree_origin_add_packages (origin, self->install_pkgs, FALSE, error))
         return FALSE;
 
       /* here too -- we could optimize this under certain conditions
@@ -623,10 +623,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       changed = TRUE;
 
       g_string_append_printf (txn_title, "; install: %u",
-                              g_strv_length (self->packages_added));
+                              g_strv_length (self->install_pkgs));
     }
 
-  if (self->local_packages_added != NULL)
+  if (self->install_local_pkgs != NULL)
     {
       /* add them all to an array first to make the origin
        * update more efficient */
@@ -634,7 +634,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       gint nfds = 0;
       const gint *fds =
-        g_unix_fd_list_peek_fds (self->local_packages_added, &nfds);
+        g_unix_fd_list_peek_fds (self->install_local_pkgs, &nfds);
       for (guint i = 0; i < nfds; i++)
         {
           g_autofree char *sha256_nevra = NULL;
@@ -666,9 +666,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       changed = changed || overrides_changed;
     }
-  else if (self->override_reset_packages)
+  else if (self->override_reset_pkgs)
     {
-      if (!rpmostree_origin_remove_overrides (origin, self->override_reset_packages, error))
+      if (!rpmostree_origin_remove_overrides (origin, self->override_reset_pkgs, error))
         return FALSE;
 
       changed = TRUE;
@@ -696,7 +696,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
    * anyway in the common case even if there's an error with the overrides,
    * users will fix it and try again, so the second pull will be a no-op */
 
-  if (self->override_remove_packages)
+  if (self->override_remove_pkgs)
     {
       const char *base = rpmostree_sysroot_upgrader_get_base (upgrader);
       g_autoptr(RpmOstreeRefSack) rsack =
@@ -706,7 +706,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       /* NB: the strings are owned by the sack pool */
       g_autoptr(GPtrArray) pkgnames = g_ptr_array_new ();
-      for (char **it = self->override_remove_packages; it && *it; it++)
+      for (char **it = self->override_remove_pkgs; it && *it; it++)
         {
           const char *pkg = *it;
           g_autoptr(GPtrArray) pkgs =
@@ -805,11 +805,11 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    const char *osname,
                                    const char *refspec,
                                    const char *revision,
-                                   const char *const *packages_added,
-                                   const char *const *packages_removed,
-                                   GUnixFDList *local_packages_added,
-                                   const char *const *override_remove_packages,
-                                   const char *const *override_reset_packages,
+                                   const char *const *install_pkgs,
+                                   GUnixFDList       *install_local_pkgs,
+                                   const char *const *uninstall_pkgs,
+                                   const char *const *override_remove_pkgs,
+                                   const char *const *override_reset_pkgs,
                                    GCancellable *cancellable,
                                    GError **error)
 {
@@ -831,14 +831,12 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
       self->flags = flags;
       self->refspec = g_strdup (refspec);
       self->revision = g_strdup (revision);
-      self->packages_added = strdupv_canonicalize (packages_added);
-      self->packages_removed = strdupv_canonicalize (packages_removed);
-      if (local_packages_added != NULL)
-        self->local_packages_added = g_object_ref (local_packages_added);
-      self->override_remove_packages =
-        strdupv_canonicalize (override_remove_packages);
-      self->override_reset_packages =
-        strdupv_canonicalize (override_reset_packages);
+      self->install_pkgs = strdupv_canonicalize (install_pkgs);
+      if (install_local_pkgs != NULL)
+        self->install_local_pkgs = g_object_ref (install_local_pkgs);
+      self->uninstall_pkgs = strdupv_canonicalize (uninstall_pkgs);
+      self->override_remove_pkgs = strdupv_canonicalize (override_remove_pkgs);
+      self->override_reset_pkgs = strdupv_canonicalize (override_reset_pkgs);
     }
 
   return (RpmostreedTransaction *) self;

@@ -402,15 +402,15 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
                       const char             *revision,
                       RpmOstreeTransactionDeployFlags default_flags,
                       GVariant               *options,
-                      const char *const      *pkgs_to_add,
-                      const char *const      *pkgs_to_remove,
-                      GVariant               *local_pkgs_to_add,
+                      const char *const      *install_pkgs,
+                      GVariant               *install_local_pkgs_idxs,
+                      const char *const      *uninstall_pkgs,
                       const char *const      *override_replace_pkgs,
-                      GVariant               *override_replace_local_pkgs,
+                      GVariant               *override_replace_local_pkgs_idxs,
                       const char *const      *override_remove_pkgs,
                       const char *const      *override_reset_pkgs,
                       GUnixFDList            *fd_list,
-                      GError                 **error)
+                      GError                **error)
 {
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
@@ -427,8 +427,8 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
    * the same length. */
 
   guint expected_fdn = 0;
-  if (local_pkgs_to_add)
-    expected_fdn = g_variant_n_children (local_pkgs_to_add);
+  if (install_local_pkgs_idxs)
+    expected_fdn = g_variant_n_children (install_local_pkgs_idxs);
 
   guint actual_fdn = 0;
   if (fd_list)
@@ -449,12 +449,12 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
                                    "new refspec or revision");
 
   /* NB: remove HIDDEN attribute on "replace" cmdline once we implement this */
-  if (override_replace_pkgs || override_replace_local_pkgs)
+  if (override_replace_pkgs || override_replace_local_pkgs_idxs)
     return glnx_null_throw (error, "Replacement overrides not implemented yet");
 
   if (vardict_lookup_bool (&options_dict, "no-overrides", FALSE) &&
       (override_remove_pkgs || override_reset_pkgs ||
-       override_replace_pkgs || override_replace_local_pkgs))
+       override_replace_pkgs || override_replace_local_pkgs_idxs))
     return glnx_null_throw (error, "Can't specify no-overrides if setting "
                                    "override modifiers");
 
@@ -469,9 +469,9 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
                                             osname,
                                             refspec,
                                             revision,
-                                            pkgs_to_add,
-                                            pkgs_to_remove,
+                                            install_pkgs,
                                             fd_list,
+                                            uninstall_pkgs,
                                             override_remove_pkgs,
                                             override_reset_pkgs,
                                             cancellable, error);
@@ -489,11 +489,11 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
                                   const char             *revision,
                                   RpmOstreeTransactionDeployFlags default_flags,
                                   GVariant               *options,
-                                  const char *const      *pkgs_to_add,
-                                  const char *const      *pkgs_to_remove,
-                                  GVariant               *local_pkgs_to_add,
+                                  const char *const      *install_pkgs,
+                                  const char *const      *uninstall_pkgs,
+                                  GVariant               *install_local_pkgs_idxs,
                                   const char *const      *override_replace_pkgs,
-                                  GVariant               *override_replace_local_pkgs,
+                                  GVariant               *override_replace_local_pkgs_idxs,
                                   const char *const      *override_remove_pkgs,
                                   const char *const      *override_reset_pkgs,
                                   GUnixFDList            *fd_list,
@@ -510,11 +510,12 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
     {
       transaction = start_deployment_txn (invocation,
                                           rpmostree_os_get_name (interface),
-                                          refspec, revision, default_flags,
-                                          options, pkgs_to_add, pkgs_to_remove,
-                                          local_pkgs_to_add,
+                                          refspec, revision, default_flags, options,
+                                          install_pkgs,
+                                          install_local_pkgs_idxs,
+                                          uninstall_pkgs,
                                           override_replace_pkgs,
-                                          override_replace_local_pkgs,
+                                          override_replace_local_pkgs_idxs,
                                           override_remove_pkgs,
                                           override_reset_pkgs,
                                           fd_list,
@@ -673,10 +674,10 @@ os_handle_update_deployment (RPMOSTreeOS *interface,
     vardict_lookup_ptr (&dict, "override-remove-packages", "^a&s");
   g_autofree const char *const *override_reset_pkgs =
     vardict_lookup_ptr (&dict, "override-reset-packages", "^a&s");
-  g_autoptr(GVariant) install_local_pkgs =
+  g_autoptr(GVariant) install_local_pkgs_idxs =
     g_variant_dict_lookup_value (&dict, "install-local-packages",
                                  G_VARIANT_TYPE("ah"));
-  g_autoptr(GVariant) override_replace_local_pkgs =
+  g_autoptr(GVariant) override_replace_local_pkgs_idxs =
     g_variant_dict_lookup_value (&dict, "override-replace-local-packages",
                                  G_VARIANT_TYPE("ah"));
 
@@ -689,9 +690,9 @@ os_handle_update_deployment (RPMOSTreeOS *interface,
       arg_options,
       install_pkgs,
       uninstall_pkgs,
-      install_local_pkgs,
+      install_local_pkgs_idxs,
       override_replace_pkgs,
-      override_replace_local_pkgs,
+      override_replace_local_pkgs_idxs,
       override_remove_pkgs,
       override_reset_pkgs,
       fd_list,
