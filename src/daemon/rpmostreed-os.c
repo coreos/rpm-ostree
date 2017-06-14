@@ -19,6 +19,7 @@
 #include "config.h"
 #include "ostree.h"
 
+#include <err.h>
 #include <libglnx.h>
 #include <polkit/polkit.h>
 
@@ -102,12 +103,12 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
     {
       action = "org.projectatomic.rpmostree1.repo-refresh";
     }
-  else if (g_strcmp0 (method_name, "Deploy") == 0 ||
-           g_strcmp0 (method_name, "Rebase") == 0)
+  else if (g_strcmp0 (method_name, "Rebase") == 0)
     {
       action = "org.projectatomic.rpmostree1.rebase";
     }
-  else if (g_strcmp0 (method_name, "Upgrade") == 0)
+  else if (g_strcmp0 (method_name, "Deploy") == 0 ||
+           g_strcmp0 (method_name, "Upgrade") == 0)
     {
       action = "org.projectatomic.rpmostree1.upgrade";
     }
@@ -126,21 +127,29 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
     }
   else if (g_strcmp0 (method_name, "PkgChange") == 0)
     {
-      action = "org.projectatomic.rpmostree1.package-install-uninstall";
+      action = "org.projectatomic.rpmostree1.install-uninstall-packages";
     }
   else if (g_strcmp0 (method_name, "UpdateDeployment") == 0)
     {
       g_autoptr(GVariant) modifiers = g_variant_get_child_value (parameters, 0);
       g_auto(GVariantDict) dict;
       g_variant_dict_init (&dict, modifiers);
+      const char *refspec =
+        vardict_lookup_ptr (&dict, "set-refspec", "&s");
       g_autofree char **install_pkgs =
         vardict_lookup_ptr (&dict, "install-packages", "^a&s");
       g_autofree char **uninstall_pkgs =
         vardict_lookup_ptr (&dict, "uninstall-packages", "^a&s");
+      g_autoptr(GVariant) install_local_pkgs =
+        g_variant_dict_lookup_value (&dict, "install-local-packages",
+                                     G_VARIANT_TYPE("ah"));
 
-      if (g_strv_length (install_pkgs) > 0 ||
-          g_strv_length (uninstall_pkgs) > 0)
-        action = "org.projectatomic.rpmostree1.package-install-uninstall";
+      if (refspec != NULL)
+        action = "org.projectatomic.rpmostree1.rebase";
+      else if (install_pkgs != NULL || uninstall_pkgs != NULL)
+        action = "org.projectatomic.rpmostree1.install-uninstall-packages";
+      else if (install_local_pkgs != NULL)
+        action = "org.projectatomic.rpmostree1.install-local-packages";
       else
         action = "org.projectatomic.rpmostree1.upgrade";
     }
@@ -204,12 +213,12 @@ static void
 os_constructed (GObject *object)
 {
   RpmostreedOS *self = RPMOSTREED_OS (object);
-  GError *error = NULL;
+  g_autoptr(GError) error = NULL;
 
   self->authority = polkit_authority_get_sync (NULL, &error);
   if (self->authority == NULL)
     {
-      g_error ("Can't get polkit authority: %s", error->message);
+      errx (1, "Can't get polkit authority: %s", error->message);
     }
   self->signal_id = g_signal_connect (rpmostreed_sysroot_get (),
                                       "updated",
