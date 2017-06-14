@@ -1266,14 +1266,16 @@ check_goal_solution (HyGoal    goal,
                                     DNF_PACKAGE_INFO_OBSOLETE,
                                     -1);
 
+  /* strings are owned by pool */
   g_autoptr(GPtrArray) filtered_packages = g_ptr_array_new ();
   for (guint i = 0; i < packages->len; i++)
     {
       DnfPackage *pkg = packages->pdata[i];
-      if (g_strv_contains (allowed_base_removals, dnf_package_get_name (pkg)))
+      const char *name = dnf_package_get_name (pkg);
+      if (g_strv_contains (allowed_base_removals, name))
         continue;
 
-      g_ptr_array_add (filtered_packages, pkg);
+      g_ptr_array_add (filtered_packages, (gpointer)name);
     }
 
   if (filtered_packages->len > 0)
