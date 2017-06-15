@@ -329,7 +329,6 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
    * runtime.  (And really both in CentOS and Fedora)
    */
   const char *known_state_files[] = {
-    "run", /* We never want to traverse into /run when making tmpfiles since it's a tmpfs */
     "lib/systemd/random-seed", /* https://bugzilla.redhat.com/show_bug.cgi?id=789407 */
     "lib/systemd/catalog/database",
     "lib/plymouth/boot-duration",
@@ -338,6 +337,10 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
   };
 
   if (!glnx_opendirat (src_rootfs_dfd, "var", TRUE, &var_dfd, error))
+    return FALSE;
+
+  /* We never want to traverse into /run when making tmpfiles since it's a tmpfs */
+  if (!glnx_shutil_rm_rf_at (var_dfd, "run", cancellable, error))
     return FALSE;
 
   /* Here, delete some files ahead of time to avoid emitting warnings
@@ -349,7 +352,7 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
       if (unlinkat (var_dfd, path, 0) < 0)
         {
           if (errno != ENOENT)
-            return glnx_throw_errno_prefix (error, "unlinkat");
+            return glnx_throw_errno_prefix (error, "unlinkat(%s)", path);
         }
     }
 
