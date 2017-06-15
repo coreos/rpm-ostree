@@ -58,6 +58,8 @@ static gboolean rpmostreed_os_load_internals (RpmostreedOS *self, GError **error
 
 static inline void *vardict_lookup_ptr (GVariantDict *dict, const char *key, const char *fmt);
 
+static gboolean vardict_lookup_bool (GVariantDict *dict, const char *key, gboolean dfault);
+
 G_DEFINE_TYPE_WITH_CODE (RpmostreedOS,
                          rpmostreed_os,
                          RPMOSTREE_TYPE_OS_SKELETON,
@@ -90,7 +92,7 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
   const gchar *method_name = g_dbus_method_invocation_get_method_name (invocation);
   const gchar *sender = g_dbus_method_invocation_get_sender (invocation);
   GVariant *parameters = g_dbus_method_invocation_get_parameters (invocation);
-  const gchar *action = NULL;
+  g_autoptr(GPtrArray) actions = g_ptr_array_new ();
   gboolean authorized = FALSE;
 
   if (g_strcmp0 (method_name, "GetDeploymentsRpmDiff") == 0 ||
@@ -101,61 +103,76 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
       g_strcmp0 (method_name, "GetCachedRebaseRpmDiff") == 0 ||
       g_strcmp0 (method_name, "DownloadRebaseRpmDiff") == 0)
     {
-      action = "org.projectatomic.rpmostree1.repo-refresh";
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.repo-refresh");
+    }
+  else if (g_strcmp0 (method_name, "Deploy") == 0)
+    {
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.deploy");
+    }
+  else if (g_strcmp0 (method_name, "Upgrade") == 0)
+    {
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.upgrade");
     }
   else if (g_strcmp0 (method_name, "Rebase") == 0)
     {
-      action = "org.projectatomic.rpmostree1.rebase";
-    }
-  else if (g_strcmp0 (method_name, "Deploy") == 0 ||
-           g_strcmp0 (method_name, "Upgrade") == 0)
-    {
-      action = "org.projectatomic.rpmostree1.upgrade";
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rebase");
     }
   else if (g_strcmp0 (method_name, "SetInitramfsState") == 0)
     {
-      action = "org.projectatomic.rpmostree1.set-initramfs-state";
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.set-initramfs-state");
     }
   else if (g_strcmp0 (method_name, "Cleanup") == 0)
     {
-      action = "org.projectatomic.rpmostree1.cleanup";
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.cleanup");
     }
   else if (g_strcmp0 (method_name, "Rollback") == 0 ||
            g_strcmp0 (method_name, "ClearRollbackTarget") == 0)
     {
-      action = "org.projectatomic.rpmostree1.rollback";
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rollback");
     }
   else if (g_strcmp0 (method_name, "PkgChange") == 0)
     {
-      action = "org.projectatomic.rpmostree1.install-uninstall-packages";
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.install-uninstall-packages");
     }
   else if (g_strcmp0 (method_name, "UpdateDeployment") == 0)
     {
       g_autoptr(GVariant) modifiers = g_variant_get_child_value (parameters, 0);
-      g_auto(GVariantDict) dict;
-      g_variant_dict_init (&dict, modifiers);
+      g_autoptr(GVariant) options = g_variant_get_child_value (parameters, 1);
+      g_auto(GVariantDict) modifiers_dict;
+      g_auto(GVariantDict) options_dict;
+      g_variant_dict_init (&modifiers_dict, modifiers);
+      g_variant_dict_init (&options_dict, options);
       const char *refspec =
-        vardict_lookup_ptr (&dict, "set-refspec", "&s");
+        vardict_lookup_ptr (&modifiers_dict, "set-refspec", "&s");
+      const char *revision =
+        vardict_lookup_ptr (&modifiers_dict, "set-revision", "&s");
       g_autofree char **install_pkgs =
-        vardict_lookup_ptr (&dict, "install-packages", "^a&s");
+        vardict_lookup_ptr (&modifiers_dict, "install-packages", "^a&s");
       g_autofree char **uninstall_pkgs =
-        vardict_lookup_ptr (&dict, "uninstall-packages", "^a&s");
+        vardict_lookup_ptr (&modifiers_dict, "uninstall-packages", "^a&s");
       g_autoptr(GVariant) install_local_pkgs =
-        g_variant_dict_lookup_value (&dict, "install-local-packages",
+        g_variant_dict_lookup_value (&modifiers_dict, "install-local-packages",
                                      G_VARIANT_TYPE("ah"));
+      gboolean no_pull_base =
+        vardict_lookup_bool (&options_dict, "no-pull-base", FALSE);
 
       if (refspec != NULL)
-        action = "org.projectatomic.rpmostree1.rebase";
-      else if (install_pkgs != NULL || uninstall_pkgs != NULL)
-        action = "org.projectatomic.rpmostree1.install-uninstall-packages";
-      else if (install_local_pkgs != NULL)
-        action = "org.projectatomic.rpmostree1.install-local-packages";
-      else
-        action = "org.projectatomic.rpmostree1.upgrade";
+        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rebase");
+      else if (revision != NULL)
+        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.deploy");
+      else if (!no_pull_base)
+        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.upgrade");
+
+      if (install_pkgs != NULL || uninstall_pkgs != NULL)
+        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.install-uninstall-packages");
+
+      if (install_local_pkgs != NULL && g_variant_n_children (install_local_pkgs) > 0)
+        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.install-local-packages");
     }
 
-  if (action)
+  for (guint i = 0; i < actions->len; i++)
     {
+      const gchar *action = g_ptr_array_index (actions, i);
       glnx_unref_object PolkitSubject *subject = polkit_system_bus_name_new (sender);
       glnx_unref_object PolkitAuthorizationResult *result = NULL;
       g_autoptr(GError) error = NULL;
@@ -172,6 +189,8 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
         }
 
       authorized = polkit_authorization_result_get_is_authorized (result);
+      if (!authorized)
+        break;
     }
 
   if (!authorized)

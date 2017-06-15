@@ -30,9 +30,9 @@
     </defaults>
   </action>
 
-  <action id="org.projectatomic.rpmostree1.rebase">
-    <description>Switch to a different base OS</description>
-    <message>Authentication is required to switch to a different base OS</message>
+  <action id="org.projectatomic.rpmostree1.deploy">
+    <description>Update base OS</description>
+    <message>Authentication is required to update software</message>
     <icon_name>package-x-generic</icon_name>
     <defaults>
       <allow_any>auth_admin</allow_any>
@@ -44,6 +44,17 @@
   <action id="org.projectatomic.rpmostree1.upgrade">
     <description>Update base OS</description>
     <message>Authentication is required to update software</message>
+    <icon_name>package-x-generic</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
+  <action id="org.projectatomic.rpmostree1.rebase">
+    <description>Switch to a different base OS</description>
+    <message>Authentication is required to switch to a different base OS</message>
     <icon_name>package-x-generic</icon_name>
     <defaults>
       <allow_any>auth_admin</allow_any>
