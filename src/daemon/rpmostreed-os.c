@@ -170,6 +170,8 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
                                      G_VARIANT_TYPE("ah"));
       gboolean no_pull_base =
         vardict_lookup_bool (&options_dict, "no-pull-base", FALSE);
+      gboolean no_overrides =
+        vardict_lookup_bool (&options_dict, "no-overrides", FALSE);
 
       if (refspec != NULL)
         g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rebase");
@@ -185,7 +187,8 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
         g_ptr_array_add (actions, "org.projectatomic.rpmostree1.install-local-packages");
 
       if (override_replace_pkgs != NULL || override_remove_pkgs != NULL || override_reset_pkgs != NULL ||
-          (override_replace_local_pkgs != NULL && g_variant_n_children (override_replace_local_pkgs) > 0))
+          (override_replace_local_pkgs != NULL && g_variant_n_children (override_replace_local_pkgs) > 0) ||
+          no_overrides)
         g_ptr_array_add (actions, "org.projectatomic.rpmostree1.override");
     }
 
