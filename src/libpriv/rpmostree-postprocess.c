@@ -329,7 +329,6 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
    * runtime.  (And really both in CentOS and Fedora)
    */
   const char *known_state_files[] = {
-    "run", /* We never want to traverse into /run when making tmpfiles since it's a tmpfs */
     "lib/systemd/random-seed", /* https://bugzilla.redhat.com/show_bug.cgi?id=789407 */
     "lib/systemd/catalog/database",
     "lib/plymouth/boot-duration",
@@ -338,6 +337,10 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
   };
 
   if (!glnx_opendirat (src_rootfs_dfd, "var", TRUE, &var_dfd, error))
+    return FALSE;
+
+  /* We never want to traverse into /run when making tmpfiles since it's a tmpfs */
+  if (!glnx_shutil_rm_rf_at (var_dfd, "run", cancellable, error))
     return FALSE;
 
   /* Here, delete some files ahead of time to avoid emitting warnings
@@ -349,7 +352,7 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
       if (unlinkat (var_dfd, path, 0) < 0)
         {
           if (errno != ENOENT)
-            return glnx_throw_errno_prefix (error, "unlinkat");
+            return glnx_throw_errno_prefix (error, "unlinkat(%s)", path);
         }
     }
 
@@ -592,13 +595,11 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
     return TRUE;
 
   var_policy_location = glnx_strjoina ("var/lib/selinux/", name);
-  if (fstatat (rootfs_dfd, var_policy_location, &stbuf, 0) != 0)
+  const char *modules_location = glnx_strjoina (var_policy_location, "/active/modules");
+  if (fstatat (rootfs_dfd, modules_location, &stbuf, 0) != 0)
     {
       if (errno != ENOENT)
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "fstat(%s)", modules_location);
 
       /* Okay, this is probably CentOS 7, or maybe we have a build of
        * selinux-policy with the path moved back into /etc (or maybe it's
@@ -615,28 +616,19 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
     orig_contents = glnx_file_get_contents_utf8_at (rootfs_dfd, semanage_path, NULL,
                                                     cancellable, error);
     if (orig_contents == NULL)
-      {
-        g_prefix_error (error, "Opening %s: ", semanage_path);
-        return FALSE;
-      }
+      return glnx_prefix_error (error, "Opening %s:", semanage_path);
 
     contents = g_strconcat (orig_contents, "\nstore-root=/etc/selinux\n", NULL);
 
     if (!glnx_file_replace_contents_at (rootfs_dfd, semanage_path,
                                         (guint8*)contents, -1, 0,
                                         cancellable, error))
-      {
-        g_prefix_error (error, "Replacing %s: ", semanage_path);
-        return FALSE;
-      }
+      return glnx_prefix_error (error, "Replacing %s:", semanage_path);
   }
 
   etc_policy_location = glnx_strjoina ("etc/selinux/", name);
   if (!glnx_opendirat (rootfs_dfd, etc_policy_location, TRUE, &etc_selinux_dfd, error))
-    {
-      g_prefix_error (error, "Opening %s: ", etc_policy_location);
-      return FALSE;
-    }
+    return glnx_prefix_error (error, "Opening %s:", etc_policy_location);
 
   if (!glnx_dirfd_iterator_init_at (rootfs_dfd, var_policy_location, TRUE, &dfd_iter, error))
     return FALSE;
