@@ -340,6 +340,8 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
     return FALSE;
 
   /* We never want to traverse into /run when making tmpfiles since it's a tmpfs */
+  /* Note that in a Fedora yumroot, /var/run is a symlink, though on el7, it can be a dir.
+   * See: https://github.com/projectatomic/rpm-ostree/pull/831 */
   if (!glnx_shutil_rm_rf_at (var_dfd, "run", cancellable, error))
     return FALSE;
 
