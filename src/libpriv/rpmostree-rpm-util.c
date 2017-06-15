@@ -969,10 +969,11 @@ rpmostree_print_transaction (DnfContext   *hifctx)
                                       -1);
 
     if (packages->len > 0)
-      empty = FALSE;
-
-    g_print ("Installing %u packages:\n", packages->len);
-    print_pkglist (packages);
+      {
+        empty = FALSE;
+        g_print ("Installing %u packages:\n", packages->len);
+        print_pkglist (packages);
+      }
   }
 
   { g_autoptr(GPtrArray) packages = NULL;
@@ -982,10 +983,11 @@ rpmostree_print_transaction (DnfContext   *hifctx)
                                       -1);
 
     if (packages->len > 0)
-      empty = FALSE;
-
-    g_print ("Removing %u packages:\n", packages->len);
-    print_pkglist (packages);
+      {
+        empty = FALSE;
+        g_print ("Removing %u packages:\n", packages->len);
+        print_pkglist (packages);
+      }
   }
 
   if (empty)
