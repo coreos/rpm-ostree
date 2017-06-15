@@ -1008,12 +1008,18 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!rpmostree_treefile_postprocessing (rootfs_fd, self->treefile_context_dirs->pdata[0],
                                           self->serialized_treefile, treefile,
                                           next_version, cancellable, error))
-    goto out;
+    {
+      g_prefix_error (error, "Postprocessing: ");
+      goto out;
+    }
 
   if (!rpmostree_prepare_rootfs_for_commit (self->workdir_dfd, &rootfs_fd, rootfs_name,
                                             treefile,
                                             cancellable, error))
-    goto out;
+    {
+      g_prefix_error (error, "Preparing rootfs for commit: ");
+      goto out;
+    }
 
   if (!rpmostree_copy_additional_files (yumroot, self->treefile_context_dirs->pdata[0], treefile, cancellable, error))
     goto out;
@@ -1021,12 +1027,18 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!rpmostree_check_passwd (repo, yumroot, treefile_dirpath, treefile,
                                previous_checksum,
                                cancellable, error))
-    goto out;
+    {
+      g_prefix_error (error, "Handling passwd db: ");
+      goto out;
+    }
 
   if (!rpmostree_check_groups (repo, yumroot, treefile_dirpath, treefile,
                                previous_checksum,
                                cancellable, error))
-    goto out;
+    {
+      g_prefix_error (error, "Handling group db: ");
+      goto out;
+    }
 
   /* Insert our input hash */
   g_hash_table_replace (metadata_hash, g_strdup ("rpmostree.inputhash"),

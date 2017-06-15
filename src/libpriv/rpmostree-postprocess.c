@@ -654,10 +654,7 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
 
       name = dent->d_name;
       if (renameat (dfd_iter.fd, name, etc_selinux_dfd, name) != 0)
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "rename(%s)", name);
     }
 
   return TRUE;
@@ -794,12 +791,18 @@ create_rootfs_from_yumroot_content (int            target_root_dfd,
 
   /* NSS configuration to look at the new files */
   if (!replace_nsswitch (src_rootfs_fd, cancellable, error))
-    goto out;
+    {
+      g_prefix_error (error, "nsswitch replacement: ");
+      goto out;
+    }
 
   if (selinux)
     {
       if (!postprocess_selinux_policy_store_location (src_rootfs_fd, cancellable, error))
-        goto out;
+        {
+          g_prefix_error (error, "SELinux postprocess: ");
+          goto out;
+        }
     }
 
   /* We take /usr from the yum content */
@@ -1615,17 +1618,15 @@ rpmostree_prepare_rootfs_for_commit (int            workdir_dfd,
   glnx_fd_close int target_root_dfd = -1;
 
   if (mkdirat (workdir_dfd, temp_new_root, 0755) < 0)
-    {
-      glnx_set_error_from_errno (error);
-      return FALSE;
-    }
+    return glnx_throw_errno_prefix (error, "creating %s", temp_new_root);
+
   if (!glnx_opendirat (workdir_dfd, temp_new_root, TRUE,
                        &target_root_dfd, error))
     return FALSE;
 
   if (!create_rootfs_from_yumroot_content (target_root_dfd, *inout_rootfs_fd, treefile,
                                            cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Finalizing rootfs");
 
   (void) close (*inout_rootfs_fd);
 
@@ -1634,10 +1635,7 @@ rpmostree_prepare_rootfs_for_commit (int            workdir_dfd,
 
   if (TEMP_FAILURE_RETRY (renameat (workdir_dfd, temp_new_root,
                                     workdir_dfd, rootfs_name)) != 0)
-    {
-      glnx_set_error_from_errno (error);
-      return FALSE;
-    }
+    return glnx_throw_errno_prefix (error, "rename(%s, %s)", temp_new_root, rootfs_name);
 
   *inout_rootfs_fd = target_root_dfd;
   target_root_dfd = -1;  /* Transfer ownership */
