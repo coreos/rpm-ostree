@@ -44,6 +44,7 @@ struct _RpmostreedOS
   RPMOSTreeOSSkeleton parent_instance;
   PolkitAuthority *authority;
   RpmostreedTransactionMonitor *transaction_monitor;
+  gboolean on_session_bus;
   guint signal_id;
 };
 
@@ -95,13 +96,18 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
   g_autoptr(GPtrArray) actions = g_ptr_array_new ();
   gboolean authorized = FALSE;
 
-  if (g_strcmp0 (method_name, "GetDeploymentsRpmDiff") == 0 ||
-      g_strcmp0 (method_name, "GetCachedDeployRpmDiff") == 0 ||
-      g_strcmp0 (method_name, "DownloadDeployRpmDiff") == 0 ||
-      g_strcmp0 (method_name, "GetCachedUpdateRpmDiff") == 0 ||
-      g_strcmp0 (method_name, "DownloadUpdateRpmDiff") == 0 ||
-      g_strcmp0 (method_name, "GetCachedRebaseRpmDiff") == 0 ||
-      g_strcmp0 (method_name, "DownloadRebaseRpmDiff") == 0)
+  if (self->on_session_bus)
+    {
+      /* The daemon is on the session bus, running self tests */
+      authorized = TRUE;
+    }
+  else if (g_strcmp0 (method_name, "GetDeploymentsRpmDiff") == 0 ||
+           g_strcmp0 (method_name, "GetCachedDeployRpmDiff") == 0 ||
+           g_strcmp0 (method_name, "DownloadDeployRpmDiff") == 0 ||
+           g_strcmp0 (method_name, "GetCachedUpdateRpmDiff") == 0 ||
+           g_strcmp0 (method_name, "DownloadUpdateRpmDiff") == 0 ||
+           g_strcmp0 (method_name, "GetCachedRebaseRpmDiff") == 0 ||
+           g_strcmp0 (method_name, "DownloadRebaseRpmDiff") == 0)
     {
       g_ptr_array_add (actions, "org.projectatomic.rpmostree1.repo-refresh");
     }
@@ -252,13 +258,7 @@ static void
 os_constructed (GObject *object)
 {
   RpmostreedOS *self = RPMOSTREED_OS (object);
-  g_autoptr(GError) error = NULL;
 
-  self->authority = polkit_authority_get_sync (NULL, &error);
-  if (self->authority == NULL)
-    {
-      errx (1, "Can't get polkit authority: %s", error->message);
-    }
   self->signal_id = g_signal_connect (rpmostreed_sysroot_get (),
                                       "updated",
                                       G_CALLBACK (sysroot_changed), self);
@@ -1516,6 +1516,20 @@ rpmostreed_os_new (OstreeSysroot *sysroot,
 
   /* FIXME Make this a construct-only property? */
   obj->transaction_monitor = g_object_ref (monitor);
+
+  if (g_getenv ("RPMOSTREE_USE_SESSION_BUS") != NULL)
+    obj->on_session_bus = TRUE;
+
+  /* Only use polkit when running as root on system bus; self-tests don't need it */
+  if (!obj->on_session_bus)
+    {
+      g_autoptr(GError) local_error = NULL;
+      obj->authority = polkit_authority_get_sync (NULL, &local_error);
+      if (obj->authority == NULL)
+        {
+          errx (1, "Can't get polkit authority: %s", local_error->message);
+        }
+    }
 
   /* FIXME - use GInitable */
   { g_autoptr(GError) local_error = NULL;
