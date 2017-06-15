@@ -592,7 +592,8 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
     return TRUE;
 
   var_policy_location = glnx_strjoina ("var/lib/selinux/", name);
-  if (fstatat (rootfs_dfd, var_policy_location, &stbuf, 0) != 0)
+  const char *modules_location = glnx_strjoina (var_policy_location, "/active/modules");
+  if (fstatat (rootfs_dfd, modules_location, &stbuf, 0) != 0)
     {
       if (errno != ENOENT)
         return glnx_throw_errno_prefix (error, "fstat(%s)", modules_location);
