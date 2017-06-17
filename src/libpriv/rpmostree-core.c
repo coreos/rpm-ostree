@@ -802,8 +802,6 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
 {
   g_autoptr(GVariant) header = NULL;
   g_autoptr(GHashTable) refs = NULL;
-  GHashTableIter it;
-  gpointer k;
 
   /* there's no safe way to convert a nevra string to its
    * cache branch, so let's just do a dumb lookup */
@@ -813,12 +811,9 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
                                   error))
     return FALSE;
 
-  g_hash_table_iter_init (&it, refs);
-  while (g_hash_table_iter_next (&it, &k, NULL))
+  GLNX_HASH_TABLE_FOREACH (refs, const char*, ref)
     {
-      const char *ref = k;
       g_autofree char *cache_nevra = rpmostree_cache_branch_to_nevra (ref);
-
       if (!g_str_equal (nevra, cache_nevra))
         continue;
 
@@ -1537,16 +1532,10 @@ rpmostree_context_download (RpmOstreeContext *self,
     return TRUE;
 
   { guint progress_sigid;
-    GHashTableIter hiter;
-    gpointer key, value;
     g_autoptr(GHashTable) source_to_packages = gather_source_to_packages (self);
-
-    g_hash_table_iter_init (&hiter, source_to_packages);
-    while (g_hash_table_iter_next (&hiter, &key, &value))
+    GLNX_HASH_TABLE_FOREACH_KV (source_to_packages, DnfRepo*, src, GPtrArray*, src_packages)
       {
         g_autofree char *target_dir = NULL;
-        DnfRepo *src = key;
-        GPtrArray *src_packages = value;
         glnx_unref_object DnfState *hifstate = dnf_state_new ();
 
         g_autofree char *prefix

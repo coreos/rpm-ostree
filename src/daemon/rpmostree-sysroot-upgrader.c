@@ -516,10 +516,7 @@ generate_treespec (RpmOstreeSysrootUpgrader *self)
       g_autoptr(GPtrArray) sha256_nevra =
         g_ptr_array_new_with_free_func (g_free);
 
-      gpointer k, v;
-      GHashTableIter it;
-      g_hash_table_iter_init (&it, local_packages);
-      while (g_hash_table_iter_next (&it, &k, &v))
+      GLNX_HASH_TABLE_FOREACH_KV (local_packages, const char*, k, const char*, v)
         g_ptr_array_add (sha256_nevra, g_strconcat (v, ":", k, NULL));
 
       g_key_file_set_string_list (treespec, "tree", "cached-packages",
@@ -559,13 +556,9 @@ finalize_overrides (RpmOstreeSysrootUpgrader *self,
   /* NB: strings are owned by hash table */
   g_autoptr(GPtrArray) removals_to_remove = g_ptr_array_new ();
 
-  GHashTableIter it;
-  gpointer itkey;
-  g_hash_table_iter_init (&it, removals);
-  while (g_hash_table_iter_next (&it, &itkey, NULL))
+  GLNX_HASH_TABLE_FOREACH (removals, const char*, pkgname)
     {
       /* only match pkgname */
-      const char *pkgname = itkey;
       hy_autoquery HyQuery query = hy_query_create (self->rsack->sack);
       hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
       g_autoptr(GPtrArray) pkgs = hy_query_run (query);
@@ -604,9 +597,6 @@ finalize_packages_to_overlay (RpmOstreeSysrootUpgrader *self,
   g_autoptr(GPtrArray) ret_missing_pkgs =
     g_ptr_array_new_with_free_func (g_free);
 
-  GHashTableIter it;
-  gpointer itkey, itval;
-
   /* Add the local pkgs as if they were installed: since they're unconditionally
    * layered, we treat them as part of the base wrt regular requested pkgs. E.g.
    * you can have foo-1.0-1.x86_64 layered, and foo or /usr/bin/foo as dormant.
@@ -624,15 +614,13 @@ finalize_packages_to_overlay (RpmOstreeSysrootUpgrader *self,
                                         cancellable, error))
         goto out;
 
-      g_hash_table_iter_init (&it, local_pkgs);
-      while (g_hash_table_iter_next (&it, &itkey, &itval))
+      GLNX_HASH_TABLE_FOREACH_KV (local_pkgs, const char*, nevra, const char*, sha256)
         {
-          const char *nevra = itkey;
           g_autoptr(GVariant) header = NULL;
           g_autofree char *path =
             g_strdup_printf ("%s/%s.rpm", metadata_tmp_path, nevra);
 
-          if (!rpmostree_pkgcache_find_pkg_header (pkgcache_repo, nevra, itval,
+          if (!rpmostree_pkgcache_find_pkg_header (pkgcache_repo, nevra, sha256,
                                                    &header, cancellable, error))
             goto out;
 
@@ -660,17 +648,16 @@ finalize_packages_to_overlay (RpmOstreeSysrootUpgrader *self,
   GHashTable *removals = rpmostree_origin_get_overrides_remove (self->origin);
 
   /* check for each package if we have a provides or a path match */
-  g_hash_table_iter_init (&it, rpmostree_origin_get_packages (self->origin));
-  while (g_hash_table_iter_next (&it, &itkey, NULL))
+  GLNX_HASH_TABLE_FOREACH (rpmostree_origin_get_packages (self->origin),
+                           const char*, pattern)
     {
-      const char *pattern = itkey;
       g_autoptr(GPtrArray) matches =
         rpmostree_get_matching_packages (self->rsack->sack, pattern);
 
       if (matches->len == 0)
         {
           /* no matches, so we'll need to layer it */
-          g_ptr_array_add (ret_missing_pkgs, g_strdup (itkey));
+          g_ptr_array_add (ret_missing_pkgs, g_strdup (pattern));
           continue;
         }
 
