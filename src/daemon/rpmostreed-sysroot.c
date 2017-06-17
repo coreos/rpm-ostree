@@ -449,9 +449,6 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
   g_autofree gchar *booted_id = NULL;
   g_autoptr(GPtrArray) deployments = NULL;
   g_autoptr(GHashTable) seen_osnames = NULL;
-  GHashTableIter iter;
-  gpointer hashkey;
-  gpointer value;
   GVariantBuilder builder;
   guint i;
   gboolean sysroot_changed;
@@ -538,15 +535,14 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
     }
 
   /* Remove dead os paths */
-  g_hash_table_iter_init (&iter, self->os_interfaces);
-  while (g_hash_table_iter_next (&iter, &hashkey, &value))
+  GLNX_HASH_TABLE_FOREACH_IT (self->os_interfaces, it, const char*, k, GObject*, v)
     {
-      if (!g_hash_table_contains (seen_osnames, hashkey))
+      if (!g_hash_table_contains (seen_osnames, k))
         {
-          g_object_run_dispose (G_OBJECT (value));
-          g_hash_table_iter_remove (&iter);
+          g_object_run_dispose (G_OBJECT (v));
+          g_hash_table_iter_remove (&it);
 
-          g_hash_table_remove (self->osexperimental_interfaces, hashkey);
+          g_hash_table_remove (self->osexperimental_interfaces, k);
         }
     }
 
@@ -646,10 +642,7 @@ sysroot_dispose (GObject *object)
     }
 
   /* Tracked os paths are responsible to unpublish themselves */
-  GHashTableIter iter;
-  g_hash_table_iter_init (&iter, self->os_interfaces);
-  gpointer key, value;
-  while (g_hash_table_iter_next (&iter, &key, &value))
+  GLNX_HASH_TABLE_FOREACH_KV (self->os_interfaces, const char*, k, GObject*, value)
     g_object_run_dispose (value);
   g_hash_table_remove_all (self->os_interfaces);
   g_hash_table_remove_all (self->osexperimental_interfaces);

@@ -71,17 +71,8 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
     goto out;
 
   /* delete all the refs */
-  {
-    GHashTableIter it;
-    gpointer key;
-
-    g_hash_table_iter_init (&it, refs);
-    while (g_hash_table_iter_next (&it, &key, NULL))
-      {
-        const char *ref = key;
-        ostree_repo_transaction_set_refspec (repo, ref, NULL);
-      }
-  }
+  GLNX_HASH_TABLE_FOREACH (refs, const char*, ref)
+    ostree_repo_transaction_set_refspec (repo, ref, NULL);
 
   /* collect the csums */
   {
@@ -107,13 +98,8 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
   /* create the new refs */
   {
     guint i = 0;
-    GHashTableIter it;
-    gpointer key;
-
-    g_hash_table_iter_init (&it, bases);
-    while (g_hash_table_iter_next (&it, &key, NULL))
+    GLNX_HASH_TABLE_FOREACH (bases, const char*, base)
       {
-        const char *base = key;
         g_autofree char *ref = g_strdup_printf ("rpmostree/base/%u", i++);
         ostree_repo_transaction_set_refspec (repo, ref, base);
       }
@@ -176,8 +162,6 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
   g_autoptr(GHashTable) current_refs = NULL;
   g_autoptr(GHashTable) referenced_pkgs = /* cache refs of packages we want to keep */
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  GHashTableIter hiter;
-  gpointer hkey, hvalue;
   gint n_objects_total;
   gint n_objects_pruned;
   guint64 freed_space;
@@ -222,10 +206,8 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
                                   cancellable, error))
     return FALSE;
 
-  g_hash_table_iter_init (&hiter, current_refs);
-  while (g_hash_table_iter_next (&hiter, &hkey, &hvalue))
+  GLNX_HASH_TABLE_FOREACH (current_refs, const char*, ref)
     {
-      const char *ref = hkey;
       if (g_hash_table_contains (referenced_pkgs, ref))
         continue;
 
