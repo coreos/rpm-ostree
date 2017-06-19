@@ -1054,16 +1054,8 @@ rpmostree_compose_builtin_tree (int             argc,
 
   /* Convert metadata hash to GVariant */
   { g_autoptr(GVariantBuilder) metadata_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
-    gpointer key, value;
-    GHashTableIter viter;
-
-    g_hash_table_iter_init (&viter, metadata_hash);
-    while (g_hash_table_iter_next (&viter, &key, &value))
-      {
-        const char *strkey = key;
-        GVariant *v = value;
-        g_variant_builder_add (metadata_builder, "{sv}", strkey, v);
-      }
+    GLNX_HASH_TABLE_FOREACH_KV (metadata_hash, const char*, strkey, GVariant*, v)
+      g_variant_builder_add (metadata_builder, "{sv}", strkey, v);
 
     metadata = g_variant_ref_sink (g_variant_builder_end (metadata_builder));
     /* Canonicalize to big endian, like OSTree does. Without this, any numbers

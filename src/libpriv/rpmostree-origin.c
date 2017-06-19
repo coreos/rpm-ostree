@@ -376,16 +376,10 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin,
 
   if (has_csum)
     {
-      GHashTableIter it;
-      gpointer k, v;
-
       g_autoptr(GPtrArray) pkg_csum =
         g_ptr_array_new_with_free_func (g_free);
-
-      g_hash_table_iter_init (&it, pkgs);
-      while (g_hash_table_iter_next (&it, &k, &v))
+      GLNX_HASH_TABLE_FOREACH_KV (pkgs, const char*, k, const char*, v)
         g_ptr_array_add (pkg_csum, g_strconcat (v, ":", k, NULL));
-
       g_key_file_set_string_list (origin->kf, group, key,
                                   (const char *const*)pkg_csum->pdata,
                                   pkg_csum->len);
