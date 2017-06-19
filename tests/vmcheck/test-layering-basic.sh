@@ -66,6 +66,18 @@ if ! vm_cmd /usr/bin/foo | grep "Happy foobing!"; then
 fi
 echo "ok correct output"
 
+# upgrade to a layer with foo already builtin
+vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_booted_csum)
+vm_rpmostree upgrade
+if vm_rpmostree install bar &> err.txt; then
+  assert_not_reached "successfully layered conflicting pkg bar?"
+fi
+assert_file_has_content err.txt "The following base packages would be removed"
+assert_file_has_content err.txt "foo-1.0-1.x86_64"
+vm_rpmostree cleanup -p
+vm_cmd ostree reset vmcheck $(vm_cmd ostree rev-parse "vmcheck^")
+echo "ok can't layer pkg that would remove base pkg"
+
 # check that root is a shared mount
 # https://bugzilla.redhat.com/show_bug.cgi?id=1318547
 if ! vm_cmd "findmnt / -no PROPAGATION" | grep shared; then

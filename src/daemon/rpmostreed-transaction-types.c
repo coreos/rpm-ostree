@@ -500,6 +500,30 @@ import_local_rpm (OstreeRepo    *parent,
 }
 
 static gboolean
+import_many_local_rpms (OstreeRepo    *parent,
+                        GUnixFDList   *fdl,
+                        GPtrArray    **out_pkgs,
+                        GCancellable  *cancellable,
+                        GError       **error)
+{
+  g_autoptr(GPtrArray) pkgs = g_ptr_array_new_with_free_func (g_free);
+
+  gint nfds = 0;
+  const gint *fds = g_unix_fd_list_peek_fds (fdl, &nfds);
+  for (guint i = 0; i < nfds; i++)
+    {
+      g_autofree char *sha256_nevra = NULL;
+      if (!import_local_rpm (parent, fds[i], &sha256_nevra, cancellable, error))
+        return FALSE;
+
+      g_ptr_array_add (pkgs, g_steal_pointer (&sha256_nevra));
+    }
+
+  *out_pkgs = g_steal_pointer (&pkgs);
+  return TRUE;
+}
+
+static gboolean
 deploy_transaction_execute (RpmostreedTransaction *transaction,
                             GCancellable *cancellable,
                             GError **error)
@@ -628,34 +652,20 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   if (self->install_local_pkgs != NULL)
     {
-      /* add them all to an array first to make the origin
-       * update more efficient */
-      g_autoptr(GPtrArray) pkgs = g_ptr_array_new_with_free_func (g_free);
-
-      gint nfds = 0;
-      const gint *fds =
-        g_unix_fd_list_peek_fds (self->install_local_pkgs, &nfds);
-      for (guint i = 0; i < nfds; i++)
-        {
-          g_autofree char *sha256_nevra = NULL;
-
-          if (!import_local_rpm (repo, fds[i], &sha256_nevra,
-                                 cancellable, error))
-            return FALSE;
-
-          g_ptr_array_add (pkgs, g_steal_pointer (&sha256_nevra));
-        }
+      g_autoptr(GPtrArray) pkgs = NULL;
+      if (!import_many_local_rpms (repo, self->install_local_pkgs, &pkgs,
+                                   cancellable, error))
+        return FALSE;
 
       if (pkgs->len > 0)
         {
           g_ptr_array_add (pkgs, NULL);
           if (!rpmostree_origin_add_packages (origin, (char**)pkgs->pdata, TRUE, error))
             return FALSE;
+
+          changed = TRUE;
+          g_string_append_printf (txn_title, "; localinstall: %u", pkgs->len);
         }
-
-      changed = TRUE;
-
-      g_string_append_printf (txn_title, "; localinstall: %u", nfds);
     }
 
   if (no_overrides)

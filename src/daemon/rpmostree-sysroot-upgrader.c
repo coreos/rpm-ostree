@@ -689,6 +689,7 @@ finalize_packages_to_overlay (RpmOstreeSysrootUpgrader *self,
             {
               glnx_throw (error, "Cannot request '%s' provided by removed package '%s'",
                           pattern, dnf_package_get_nevra (pkg));
+              goto out;
             }
         }
 
