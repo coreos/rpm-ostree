@@ -23,6 +23,7 @@ install_builddeps() {
 
     # builddeps+runtime deps
     dnf builddep -y $pkg
+    dnf install -y polkit-devel
     dnf install -y $pkg
     rpm -e $pkg
 }

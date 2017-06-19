@@ -105,8 +105,12 @@ servicedir       = $(dbusservicedir)
 %.service: %.service.in Makefile
 	$(SED_SUBST) $@.in > $@.tmp && mv $@.tmp $@
 
+polkit_policy_DATA = $(srcdir)/src/daemon/org.projectatomic.rpmostree1.policy
+polkit_policydir = $(datadir)/polkit-1/actions
+
 EXTRA_DIST += \
 	$(dbusservice_DATA) \
+	$(polkit_policy_DATA) \
 	$(service_in_files) \
 	$(systemdunit_in_files) \
 	$(NULL)

@@ -19,7 +19,9 @@
 #include "config.h"
 #include "ostree.h"
 
+#include <err.h>
 #include <libglnx.h>
+#include <polkit/polkit.h>
 
 #include "rpmostreed-sysroot.h"
 #include "rpmostreed-daemon.h"
@@ -40,7 +42,9 @@ typedef struct _RpmostreedOSClass RpmostreedOSClass;
 struct _RpmostreedOS
 {
   RPMOSTreeOSSkeleton parent_instance;
+  PolkitAuthority *authority;
   RpmostreedTransactionMonitor *transaction_monitor;
+  gboolean on_session_bus;
   guint signal_id;
 };
 
@@ -52,6 +56,10 @@ struct _RpmostreedOSClass
 static void rpmostreed_os_iface_init (RPMOSTreeOSIface *iface);
 
 static gboolean rpmostreed_os_load_internals (RpmostreedOS *self, GError **error);
+
+static inline void *vardict_lookup_ptr (GVariantDict *dict, const char *key, const char *fmt);
+
+static gboolean vardict_lookup_bool (GVariantDict *dict, const char *key, gboolean dfault);
 
 G_DEFINE_TYPE_WITH_CODE (RpmostreedOS,
                          rpmostreed_os,
@@ -77,6 +85,151 @@ sysroot_changed (RpmostreedSysroot *sysroot,
     g_warning ("%s", local_error->message);
 }
 
+static gboolean
+os_authorize_method (GDBusInterfaceSkeleton *interface,
+                     GDBusMethodInvocation  *invocation)
+{
+  RpmostreedOS *self = RPMOSTREED_OS (interface);
+  const gchar *method_name = g_dbus_method_invocation_get_method_name (invocation);
+  const gchar *sender = g_dbus_method_invocation_get_sender (invocation);
+  GVariant *parameters = g_dbus_method_invocation_get_parameters (invocation);
+  g_autoptr(GPtrArray) actions = g_ptr_array_new ();
+  gboolean authorized = FALSE;
+
+  if (self->on_session_bus)
+    {
+      /* The daemon is on the session bus, running self tests */
+      authorized = TRUE;
+    }
+  else if (g_strcmp0 (method_name, "GetDeploymentsRpmDiff") == 0 ||
+           g_strcmp0 (method_name, "GetCachedDeployRpmDiff") == 0 ||
+           g_strcmp0 (method_name, "DownloadDeployRpmDiff") == 0 ||
+           g_strcmp0 (method_name, "GetCachedUpdateRpmDiff") == 0 ||
+           g_strcmp0 (method_name, "DownloadUpdateRpmDiff") == 0 ||
+           g_strcmp0 (method_name, "GetCachedRebaseRpmDiff") == 0 ||
+           g_strcmp0 (method_name, "DownloadRebaseRpmDiff") == 0)
+    {
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.repo-refresh");
+    }
+  else if (g_strcmp0 (method_name, "Deploy") == 0)
+    {
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.deploy");
+    }
+  else if (g_strcmp0 (method_name, "Upgrade") == 0)
+    {
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.upgrade");
+    }
+  else if (g_strcmp0 (method_name, "Rebase") == 0)
+    {
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rebase");
+    }
+  else if (g_strcmp0 (method_name, "SetInitramfsState") == 0)
+    {
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.bootconfig");
+    }
+  else if (g_strcmp0 (method_name, "Cleanup") == 0)
+    {
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.cleanup");
+    }
+  else if (g_strcmp0 (method_name, "Rollback") == 0 ||
+           g_strcmp0 (method_name, "ClearRollbackTarget") == 0)
+    {
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rollback");
+    }
+  else if (g_strcmp0 (method_name, "PkgChange") == 0)
+    {
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.install-uninstall-packages");
+    }
+  else if (g_strcmp0 (method_name, "UpdateDeployment") == 0)
+    {
+      g_autoptr(GVariant) modifiers = g_variant_get_child_value (parameters, 0);
+      g_autoptr(GVariant) options = g_variant_get_child_value (parameters, 1);
+      g_auto(GVariantDict) modifiers_dict;
+      g_auto(GVariantDict) options_dict;
+      g_variant_dict_init (&modifiers_dict, modifiers);
+      g_variant_dict_init (&options_dict, options);
+      const char *refspec =
+        vardict_lookup_ptr (&modifiers_dict, "set-refspec", "&s");
+      const char *revision =
+        vardict_lookup_ptr (&modifiers_dict, "set-revision", "&s");
+      g_autofree char **install_pkgs =
+        vardict_lookup_ptr (&modifiers_dict, "install-packages", "^a&s");
+      g_autofree char **uninstall_pkgs =
+        vardict_lookup_ptr (&modifiers_dict, "uninstall-packages", "^a&s");
+      g_autofree const char *const *override_replace_pkgs =
+        vardict_lookup_ptr (&modifiers_dict, "override-replace-packages", "^a&s");
+      g_autofree const char *const *override_remove_pkgs =
+        vardict_lookup_ptr (&modifiers_dict, "override-remove-packages", "^a&s");
+      g_autofree const char *const *override_reset_pkgs =
+        vardict_lookup_ptr (&modifiers_dict, "override-reset-packages", "^a&s");
+      g_autoptr(GVariant) install_local_pkgs =
+        g_variant_dict_lookup_value (&modifiers_dict, "install-local-packages",
+                                     G_VARIANT_TYPE("ah"));
+      g_autoptr(GVariant) override_replace_local_pkgs =
+        g_variant_dict_lookup_value (&modifiers_dict, "override-replace-local-packages",
+                                     G_VARIANT_TYPE("ah"));
+      gboolean no_pull_base =
+        vardict_lookup_bool (&options_dict, "no-pull-base", FALSE);
+      gboolean no_overrides =
+        vardict_lookup_bool (&options_dict, "no-overrides", FALSE);
+
+      if (refspec != NULL)
+        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rebase");
+      else if (revision != NULL)
+        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.deploy");
+      else if (!no_pull_base)
+        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.upgrade");
+
+      if (install_pkgs != NULL || uninstall_pkgs != NULL)
+        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.install-uninstall-packages");
+
+      if (install_local_pkgs != NULL && g_variant_n_children (install_local_pkgs) > 0)
+        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.install-local-packages");
+
+      if (override_replace_pkgs != NULL || override_remove_pkgs != NULL || override_reset_pkgs != NULL ||
+          (override_replace_local_pkgs != NULL && g_variant_n_children (override_replace_local_pkgs) > 0) ||
+          no_overrides)
+        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.override");
+    }
+  else
+    {
+      authorized = FALSE;
+    }
+
+  for (guint i = 0; i < actions->len; i++)
+    {
+      const gchar *action = g_ptr_array_index (actions, i);
+      glnx_unref_object PolkitSubject *subject = polkit_system_bus_name_new (sender);
+      glnx_unref_object PolkitAuthorizationResult *result = NULL;
+      g_autoptr(GError) error = NULL;
+
+      result = polkit_authority_check_authorization_sync (self->authority, subject,
+                                                          action, NULL,
+                                                          POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION,
+                                                          NULL, &error);
+      if (result == NULL)
+        {
+          g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR, G_DBUS_ERROR_FAILED,
+                                                 "Authorization error: %s", error->message);
+          return FALSE;
+        }
+
+      authorized = polkit_authorization_result_get_is_authorized (result);
+      if (!authorized)
+        break;
+    }
+
+  if (!authorized)
+    {
+      g_dbus_method_invocation_return_error (invocation,
+                                             G_DBUS_ERROR,
+                                             G_DBUS_ERROR_ACCESS_DENIED,
+                                             "rpmostreed OS operation %s not allowed for user", method_name);
+    }
+
+  return authorized;
+}
+
 static void
 os_dispose (GObject *object)
 {
@@ -90,6 +243,7 @@ os_dispose (GObject *object)
                                    object_path, object);
     }
 
+  g_clear_object (&self->authority);
   g_clear_object (&self->transaction_monitor);
 
   if (self->signal_id > 0)
@@ -105,8 +259,6 @@ os_constructed (GObject *object)
 {
   RpmostreedOS *self = RPMOSTREED_OS (object);
 
-  /* TODO Integrate with PolicyKit via the "g-authorize-method" signal. */
-
   self->signal_id = g_signal_connect (rpmostreed_sysroot_get (),
                                       "updated",
                                       G_CALLBACK (sysroot_changed), self);
@@ -117,11 +269,14 @@ static void
 rpmostreed_os_class_init (RpmostreedOSClass *klass)
 {
   GObjectClass *gobject_class;
+  GDBusInterfaceSkeletonClass *gdbus_interface_skeleton_class;
 
   gobject_class = G_OBJECT_CLASS (klass);
   gobject_class->dispose = os_dispose;
   gobject_class->constructed  = os_constructed;
 
+  gdbus_interface_skeleton_class = G_DBUS_INTERFACE_SKELETON_CLASS (klass);
+  gdbus_interface_skeleton_class->g_authorize_method = os_authorize_method;
 }
 
 static void
@@ -1361,6 +1516,20 @@ rpmostreed_os_new (OstreeSysroot *sysroot,
 
   /* FIXME Make this a construct-only property? */
   obj->transaction_monitor = g_object_ref (monitor);
+
+  if (g_getenv ("RPMOSTREE_USE_SESSION_BUS") != NULL)
+    obj->on_session_bus = TRUE;
+
+  /* Only use polkit when running as root on system bus; self-tests don't need it */
+  if (!obj->on_session_bus)
+    {
+      g_autoptr(GError) local_error = NULL;
+      obj->authority = polkit_authority_get_sync (NULL, &local_error);
+      if (obj->authority == NULL)
+        {
+          errx (1, "Can't get polkit authority: %s", local_error->message);
+        }
+    }
 
   /* FIXME - use GInitable */
   { g_autoptr(GError) local_error = NULL;
