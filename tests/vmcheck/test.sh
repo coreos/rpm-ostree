@@ -151,7 +151,7 @@ for tf in $(find . -name 'test-*.sh' | sort); do
     fi
 
     # make sure to clean up any pending & rollback deployments
-    vm_rpmostree cleanup -b -p -r || :
+    vm_rpmostree cleanup -b -p -r -m || :
 
     # and put back our tmp repo
     vm_cmd rm /etc/yum.repos.d -rf
