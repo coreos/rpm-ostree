@@ -1275,7 +1275,7 @@ check_goal_solution (HyGoal    goal,
       if (g_strv_contains (allowed_base_removals, name))
         continue;
 
-      g_ptr_array_add (filtered_packages, (gpointer)name);
+      g_ptr_array_add (filtered_packages, (gpointer)dnf_package_get_nevra (pkg));
     }
 
   if (filtered_packages->len > 0)
