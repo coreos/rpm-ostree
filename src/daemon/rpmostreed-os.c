@@ -125,7 +125,7 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
     }
   else if (g_strcmp0 (method_name, "SetInitramfsState") == 0)
     {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.set-initramfs-state");
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.bootconfig");
     }
   else if (g_strcmp0 (method_name, "Cleanup") == 0)
     {
@@ -190,6 +190,10 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
           (override_replace_local_pkgs != NULL && g_variant_n_children (override_replace_local_pkgs) > 0) ||
           no_overrides)
         g_ptr_array_add (actions, "org.projectatomic.rpmostree1.override");
+    }
+  else
+    {
+      authorized = FALSE;
     }
 
   for (guint i = 0; i < actions->len; i++)
