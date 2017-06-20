@@ -594,8 +594,9 @@ finalize_packages_to_overlay (RpmOstreeSysrootUpgrader *self,
 {
   gboolean ret = FALSE;
   g_autofree char *metadata_tmp_path = NULL;
-  g_autoptr(GPtrArray) ret_missing_pkgs =
-    g_ptr_array_new_with_free_func (g_free);
+  /* request (owned by origin) --> providing nevra (owned by rsack) */
+  g_autoptr(GHashTable) inactive_requests = g_hash_table_new (g_str_hash, g_str_equal);
+  g_autoptr(GPtrArray) ret_missing_pkgs = g_ptr_array_new_with_free_func (g_free);
 
   /* Add the local pkgs as if they were installed: since they're unconditionally
    * layered, we treat them as part of the base wrt regular requested pkgs. E.g.
@@ -680,7 +681,17 @@ finalize_packages_to_overlay (RpmOstreeSysrootUpgrader *self,
             }
         }
 
-      /* otherwise, it's a dormant package */
+      /* Otherwise, it's an inactive request: remember them so we can print a nice notice.
+       * Just use the first package as the "providing" pkg. */
+      const char *providing_nevra = dnf_package_get_nevra (matches->pdata[0]);
+      g_hash_table_insert (inactive_requests, (gpointer)pattern, (gpointer)providing_nevra);
+    }
+
+  if (g_hash_table_size (inactive_requests) > 0)
+    {
+      g_print ("Inactive requests:\n");
+      GLNX_HASH_TABLE_FOREACH_KV (inactive_requests, const char*, req, const char*, nevra)
+        g_print ("  %s (already provided by %s)\n", req, nevra);
     }
 
   self->overlay_packages = g_steal_pointer (&ret_missing_pkgs);
