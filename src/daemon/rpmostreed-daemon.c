@@ -164,14 +164,6 @@ rpmostreed_daemon_init (RpmostreedDaemon *self)
   self->bus_clients = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 }
 
-static char *
-render_txn (const char *method,
-            const char *sender,
-            const char *path)
-{
-  return g_strdup_printf ("%s %s %s", method, sender, path);
-}
-
 static void
 on_active_txn_changed (GObject *object,
                        GParamSpec *pspec,
@@ -188,9 +180,10 @@ on_active_txn_changed (GObject *object,
       g_variant_get (active_txn, "(&s&s&s)", &method, &sender, &path);
       if (*method)
         {
-          g_autofree char *txn_str = render_txn (method, sender, path);
+          gboolean is_registered = rpmostreed_daemon_has_client (self, sender);
+          const char *caller_str = is_registered ? "client" : "caller";
           sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_TRANSACTION_STARTED),
-                           "MESSAGE=Initiated txn: %s", txn_str,
+                           "MESSAGE=Initiated txn %s for %s %s: %s", method, caller_str, sender, path,
                            NULL);
         }
     }
@@ -350,8 +343,8 @@ render_systemd_status (RpmostreedDaemon *self)
 
   if (have_active_txn)
     {
-      g_autofree char *txn_str = render_txn (method, sender, path);
-      sd_notifyf (0, "STATUS=clients=%u; txn=%s", g_hash_table_size (self->bus_clients), txn_str);
+      sd_notifyf (0, "STATUS=clients=%u; txn=%s caller=%s path=%s", g_hash_table_size (self->bus_clients),
+                  method, sender, path);
     }
   else
     sd_notifyf (0, "STATUS=clients=%u; idle", g_hash_table_size (self->bus_clients));
@@ -378,6 +371,13 @@ rpmostreed_daemon_add_client (RpmostreedDaemon *self,
   g_hash_table_insert (self->bus_clients, g_strdup (client), GUINT_TO_POINTER (subid));
   sd_journal_print (LOG_INFO, "Client %s added; new total=%u", client, g_hash_table_size (self->bus_clients));
   render_systemd_status (self);
+}
+
+/* Return `TRUE` if the bus address @client called RegisterClient. */
+gboolean
+rpmostreed_daemon_has_client (RpmostreedDaemon *self, const char *client)
+{
+  return g_hash_table_contains (self->bus_clients, client);
 }
 
 void
