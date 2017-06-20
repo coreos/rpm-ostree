@@ -541,24 +541,27 @@ finalize_overrides (RpmOstreeSysrootUpgrader *self,
   GHashTable *removals = rpmostree_origin_get_overrides_remove (self->origin);
   g_autoptr(GPtrArray) ret_final_removals = g_ptr_array_new_with_free_func (g_free);
 
-  if (g_hash_table_size (removals) > 0)
+  g_autoptr(GPtrArray) inactive_removals = g_ptr_array_new ();
+  GLNX_HASH_TABLE_FOREACH (removals, const char*, pkgname)
     {
-      GLNX_HASH_TABLE_FOREACH (removals, const char*, pkgname)
-        {
-          /* only match pkgname */
-          hy_autoquery HyQuery query = hy_query_create (self->rsack->sack);
-          hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
-          g_autoptr(GPtrArray) pkgs = hy_query_run (query);
+      /* only match pkgname */
+      hy_autoquery HyQuery query = hy_query_create (self->rsack->sack);
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
+      g_autoptr(GPtrArray) pkgs = hy_query_run (query);
 
-          if (pkgs->len > 1)
-            return glnx_throw (error, "Multiple packages match \"%s\"", pkgname);
-          else if (pkgs->len == 1)
-            g_ptr_array_add (ret_final_removals, g_strdup (pkgname));
-          else
-            {
-              /* it's an inactive base removal */ ;
-            }
-        }
+      if (pkgs->len > 1)
+        return glnx_throw (error, "Multiple packages match \"%s\"", pkgname);
+      else if (pkgs->len == 1)
+        g_ptr_array_add (ret_final_removals, g_strdup (pkgname));
+      else
+        g_ptr_array_add (inactive_removals, (gpointer)pkgname);
+    }
+
+  if (inactive_removals->len > 0)
+    {
+      g_print ("Inactive base removals:\n");
+      for (guint i = 0; i < inactive_removals->len; i++)
+        g_print ("  %s\n", (const char*)inactive_removals->pdata[i]);
     }
 
   g_assert (!self->override_remove_packages);
