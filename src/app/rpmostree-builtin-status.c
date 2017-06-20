@@ -422,10 +422,10 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         print_packages ("RemovedBasePackages", max_key_len,
                         origin_removed_base_packages, NULL);
 
-      /* let's be nice and only print requested - layered, rather than repeating
-       * the ones in layered twice */
-      if (origin_requested_packages)
-        print_packages ("RequestedPackages", max_key_len,
+      /* only print inactive layering requests in verbose mode */
+      if (origin_requested_packages && opt_verbose)
+        /* requested-packages - packages = inactive (i.e. dormant requests) */
+        print_packages ("InactiveRequests", max_key_len,
                         origin_requested_packages, origin_packages);
 
       if (origin_packages)
