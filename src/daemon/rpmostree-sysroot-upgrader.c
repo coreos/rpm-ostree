@@ -67,6 +67,7 @@ struct RpmOstreeSysrootUpgrader {
   RpmOstreeRefSack *rsack;
 
   GPtrArray *overlay_packages; /* Finalized list of pkgs to overlay */
+  GPtrArray *override_remove_packages; /* Finalized list of base pkgs to remove */
 
   char *base_revision; /* Non-layered replicated commit */
   char *final_revision; /* Computed by layering; if NULL, only using base_revision */
@@ -204,6 +205,7 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   g_free (self->final_revision);
 
   g_clear_pointer (&self->overlay_packages, (GDestroyNotify)g_ptr_array_unref);
+  g_clear_pointer (&self->override_remove_packages, (GDestroyNotify)g_ptr_array_unref);
 
   G_OBJECT_CLASS (rpmostree_sysroot_upgrader_parent_class)->finalize (object);
 }
@@ -501,20 +503,17 @@ generate_treespec (RpmOstreeSysrootUpgrader *self)
 {
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
 
-  GPtrArray *packages = self->overlay_packages;
-  if (packages->len > 0)
+  if (self->overlay_packages->len > 0)
     {
       g_key_file_set_string_list (treespec, "tree", "packages",
-                                  (const char* const*)packages->pdata,
-                                  packages->len);
+                                  (const char* const*)self->overlay_packages->pdata,
+                                  self->overlay_packages->len);
     }
 
-  GHashTable *local_packages =
-    rpmostree_origin_get_local_packages (self->origin);
+  GHashTable *local_packages = rpmostree_origin_get_local_packages (self->origin);
   if (g_hash_table_size (local_packages) > 0)
     {
-      g_autoptr(GPtrArray) sha256_nevra =
-        g_ptr_array_new_with_free_func (g_free);
+      g_autoptr(GPtrArray) sha256_nevra = g_ptr_array_new_with_free_func (g_free);
 
       GLNX_HASH_TABLE_FOREACH_KV (local_packages, const char*, k, const char*, v)
         g_ptr_array_add (sha256_nevra, g_strconcat (v, ":", k, NULL));
@@ -524,16 +523,11 @@ generate_treespec (RpmOstreeSysrootUpgrader *self)
                                   sha256_nevra->len);
     }
 
-  GHashTable *overrides_remove =
-    rpmostree_origin_get_overrides_remove (self->origin);
-  if (g_hash_table_size (overrides_remove) > 0)
+  if (self->override_remove_packages->len > 0)
     {
-      g_autofree char **pkgv =
-        (char**) g_hash_table_get_keys_as_array (overrides_remove, NULL);
-      g_key_file_set_string_list (treespec, "tree",
-                                  "removed-base-packages",
-                                  (const char* const*)pkgv,
-                                  g_strv_length (pkgv));
+      g_key_file_set_string_list (treespec, "tree", "removed-base-packages",
+                                  (const char* const*)self->override_remove_packages->pdata,
+                                  self->override_remove_packages->len);
     }
 
   return rpmostree_treespec_new_from_keyfile (treespec, NULL);
@@ -544,37 +538,31 @@ finalize_overrides (RpmOstreeSysrootUpgrader *self,
                     GCancellable             *cancellable,
                     GError                  **error)
 {
-  /* Removal overrides have the magical property that they drop out if the base layer no
-   * longer has them. This keeps the origin consistent. New removal overrides are checked in
-   * deploy_transaction_execute() to ensure they're valid; i.e. the pkgs exist. */
-
   GHashTable *removals = rpmostree_origin_get_overrides_remove (self->origin);
+  g_autoptr(GPtrArray) ret_final_removals = g_ptr_array_new_with_free_func (g_free);
 
-  if (g_hash_table_size (removals) == 0)
-    return TRUE;
-
-  /* NB: strings are owned by hash table */
-  g_autoptr(GPtrArray) removals_to_remove = g_ptr_array_new ();
-
-  GLNX_HASH_TABLE_FOREACH (removals, const char*, pkgname)
+  if (g_hash_table_size (removals) > 0)
     {
-      /* only match pkgname */
-      hy_autoquery HyQuery query = hy_query_create (self->rsack->sack);
-      hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
-      g_autoptr(GPtrArray) pkgs = hy_query_run (query);
+      GLNX_HASH_TABLE_FOREACH (removals, const char*, pkgname)
+        {
+          /* only match pkgname */
+          hy_autoquery HyQuery query = hy_query_create (self->rsack->sack);
+          hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
+          g_autoptr(GPtrArray) pkgs = hy_query_run (query);
 
-      if (pkgs->len == 0)
-        g_ptr_array_add (removals_to_remove, (gpointer)pkgname);
+          if (pkgs->len > 1)
+            return glnx_throw (error, "Multiple packages match \"%s\"", pkgname);
+          else if (pkgs->len == 1)
+            g_ptr_array_add (ret_final_removals, g_strdup (pkgname));
+          else
+            {
+              /* it's an inactive base removal */ ;
+            }
+        }
     }
 
-  if (removals_to_remove->len > 0)
-    {
-      g_ptr_array_add (removals_to_remove, NULL);
-      if (!rpmostree_origin_remove_overrides (self->origin,
-                                              (char**)removals_to_remove->pdata, error))
-        return FALSE;
-    }
-
+  g_assert (!self->override_remove_packages);
+  self->override_remove_packages = g_steal_pointer (&ret_final_removals);
   return TRUE;
 }
 
@@ -683,6 +671,7 @@ finalize_packages_to_overlay (RpmOstreeSysrootUpgrader *self,
       /* otherwise, it's a dormant package */
     }
 
+  g_assert (!self->overlay_packages);
   self->overlay_packages = g_steal_pointer (&ret_missing_pkgs);
   ret = TRUE;
 out:
@@ -857,10 +846,6 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
 static gboolean
 requires_local_assembly (RpmOstreeSysrootUpgrader *self)
 {
-  GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
-  GHashTable *overrides_remove =
-    rpmostree_origin_get_overrides_remove (self->origin);
-
   /* Now, it's possible all requested packages are in the new tree, so we have
    * another optimization here for that case. This is a bit tricky: assuming we
    * came here from an 'rpm-ostree install', this might mean that we redeploy
@@ -870,9 +855,9 @@ requires_local_assembly (RpmOstreeSysrootUpgrader *self)
    * https://github.com/projectatomic/rpm-ostree/issues/753
    */
 
-  return g_hash_table_size (local_pkgs) > 0 ||
-         g_hash_table_size (overrides_remove) > 0 ||
-         self->overlay_packages->len > 0 ||
+  return self->overlay_packages->len > 0 ||
+         self->override_remove_packages->len > 0 ||
+         g_hash_table_size (rpmostree_origin_get_local_packages (self->origin)) > 0 ||
          rpmostree_origin_get_regenerate_initramfs (self->origin);
 }
 

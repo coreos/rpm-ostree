@@ -278,9 +278,11 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
                                rpmostree_origin_get_packages (origin));
   variant_add_from_hash_table (&dict, "requested-local-packages",
                                rpmostree_origin_get_local_packages (origin));
+  variant_add_from_hash_table (&dict, "requested-base-removals",
+                               rpmostree_origin_get_overrides_remove (origin));
 
   g_variant_dict_insert (&dict, "packages", "^as", layered_pkgs ?: (char**)empty_v);
-  g_variant_dict_insert (&dict, "removed-base-packages", "^as",
+  g_variant_dict_insert (&dict, "base-removals", "^as",
                          removed_base_pkgs ?: (char**)empty_v);
 
   if (sigs != NULL)

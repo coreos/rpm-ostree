@@ -2936,39 +2936,13 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
         g_assert (pkgs);
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.packages", pkgs);
 
-        /* embed the full NEVRA names of the base pkgs removed to make it easier to display
-         * to users (this does not include reverse deps that were also removed -- users can
-         * do `db diff` for the full list, much like regular pkglayering) */
-        {
-          g_autofree char **removed_base_pkgnames = NULL;
-          g_assert (g_variant_dict_lookup (self->spec->dict, "removed-base-packages",
-                                           "^a&s", &removed_base_pkgnames));
-          /* NB: strings owned by solv pool */
-          g_autoptr(GPtrArray) removed_base_pkgnevras = g_ptr_array_new ();
-
-          if (!self->empty)
-            {
-              g_autoptr(GPtrArray) packages =
-                dnf_goal_get_packages (dnf_context_get_goal (self->hifctx),
-                                       DNF_PACKAGE_INFO_REMOVE,
-                                       DNF_PACKAGE_INFO_OBSOLETE, -1);
-
-              for (guint i = 0; i < packages->len; i++)
-                {
-                  DnfPackage *pkg = packages->pdata[i];
-                  const char *name = dnf_package_get_name (pkg);
-                  const char *nevra = dnf_package_get_nevra (pkg);
-                  if (g_strv_contains ((const char*const*)removed_base_pkgnames, name))
-                    g_ptr_array_add (removed_base_pkgnevras, (gpointer)nevra);
-                }
-            }
-
-          g_variant_builder_add (&metadata_builder, "{sv}",
-                                 "rpmostree.removed-base-packages",
-                                 g_variant_new_strv (
-                                   (const char *const*)removed_base_pkgnevras->pdata,
-                                   removed_base_pkgnevras->len));
-        }
+        /* embed packages removed */
+        g_autoptr(GVariant) removed_pkgs =
+          g_variant_dict_lookup_value (self->spec->dict, "removed-base-packages",
+                                       G_VARIANT_TYPE ("as"));
+        g_assert (removed_pkgs);
+        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.removed-base-packages",
+                               removed_pkgs);
 
         /* be nice to our future selves */
         g_variant_builder_add (&metadata_builder, "{sv}",
