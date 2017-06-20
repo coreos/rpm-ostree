@@ -215,7 +215,8 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       g_autofree const gchar **origin_packages = NULL;
       g_autofree const gchar **origin_requested_packages = NULL;
       g_autofree const gchar **origin_requested_local_packages = NULL;
-      g_autofree const gchar **origin_removed_base_packages = NULL;
+      g_autofree const gchar **origin_base_removals = NULL;
+      g_autofree const gchar **origin_requested_base_removals = NULL;
       const gchar *origin_refspec;
       const gchar *id;
       const gchar *os_name;
@@ -255,8 +256,10 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
             lookup_array_and_canonicalize (dict, "requested-packages");
           origin_requested_local_packages =
             lookup_array_and_canonicalize (dict, "requested-local-packages");
-          origin_removed_base_packages =
-            lookup_array_and_canonicalize (dict, "removed-base-packages");
+          origin_base_removals =
+            lookup_array_and_canonicalize (dict, "base-removals");
+          origin_requested_base_removals =
+            lookup_array_and_canonicalize (dict, "requested-base-removals");
         }
       else
         origin_refspec = NULL;
@@ -418,14 +421,18 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         }
 
       /* print base overrides before overlays */
-      if (origin_removed_base_packages)
-        print_packages ("RemovedBasePackages", max_key_len,
-                        origin_removed_base_packages, NULL);
+      if (origin_base_removals)
+        print_packages ("RemovedBasePackages", max_key_len, origin_base_removals, NULL);
 
-      /* let's be nice and only print requested - layered, rather than repeating
-       * the ones in layered twice */
-      if (origin_requested_packages)
-        print_packages ("RequestedPackages", max_key_len,
+      /* only print inactive base removal requests in verbose mode */
+      if (origin_requested_base_removals && opt_verbose)
+        print_packages ("InactiveBaseRemovals", max_key_len,
+                        origin_requested_base_removals, origin_base_removals);
+
+      /* only print inactive layering requests in verbose mode */
+      if (origin_requested_packages && opt_verbose)
+        /* requested-packages - packages = inactive (i.e. dormant requests) */
+        print_packages ("InactiveRequests", max_key_len,
                         origin_requested_packages, origin_packages);
 
       if (origin_packages)

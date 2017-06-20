@@ -719,8 +719,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       for (char **it = self->override_remove_pkgs; it && *it; it++)
         {
           const char *pkg = *it;
-          g_autoptr(GPtrArray) pkgs =
-            rpmostree_get_matching_packages (rsack->sack, pkg);
+          g_autoptr(GPtrArray) pkgs = rpmostree_get_matching_packages (rsack->sack, pkg);
 
           if (pkgs->len == 0)
             return glnx_throw (error, "No package \"%s\" in base commit %.7s", pkg, base);

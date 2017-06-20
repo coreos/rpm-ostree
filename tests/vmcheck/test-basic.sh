@@ -30,7 +30,8 @@ vm_assert_status_jq \
   '.deployments[0]["packages"]' \
   '.deployments[0]["requested-packages"]' \
   '.deployments[0]["requested-local-packages"]' \
-  '.deployments[0]["removed-base-packages"]'
+  '.deployments[0]["base-removals"]' \
+  '.deployments[0]["requested-base-removals"]'
 echo "ok empty pkg arrays in status json"
 
 # Be sure an unprivileged user exists
