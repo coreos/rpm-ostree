@@ -34,9 +34,12 @@ vm_assert_layered_pkg foo absent
 vm_assert_layered_pkg nonrootcap absent
 vm_assert_status_jq \
   '.deployments[0]["base-checksum"]|not' \
-  '.deployments[0]["pending-base-checksum"]|not'
+  '.deployments[0]["pending-base-checksum"]|not' \
+  '.deployments[0]["base-removals"]|length == 0' \
+  '.deployments[0]["requested-base-removals"]|length == 0'
 
-vm_cmd ostree refs $(vm_get_booted_csum) --create vmcheck_tmp/without_foo_and_nonrootcap
+vm_cmd ostree refs $(vm_get_booted_csum) \
+  --create vmcheck_tmp/without_foo_and_nonrootcap
 
 # create a new branch with foo and nonrootcap already in it
 vm_rpmostree install foo nonrootcap
@@ -55,40 +58,64 @@ echo "ok setup"
 
 vm_rpmostree ex override remove foo nonrootcap
 vm_assert_status_jq \
-  '.deployments[0]["removed-base-packages"]|length == 2' \
-  '.deployments[0]["removed-base-packages"]|index("foo-1.0-1.x86_64") >= 0' \
-  '.deployments[0]["removed-base-packages"]|index("nonrootcap-1.0-1.x86_64") >= 0'
+  '.deployments[0]["base-removals"]|length == 2' \
+  '.deployments[0]["base-removals"]|index("foo") >= 0' \
+  '.deployments[0]["base-removals"]|index("nonrootcap") >= 0' \
+  '.deployments[0]["requested-base-removals"]|length == 2' \
+  '.deployments[0]["requested-base-removals"]|index("foo") >= 0' \
+  '.deployments[0]["requested-base-removals"]|index("nonrootcap") >= 0'
 echo "ok override remove foo and nonrootcap"
 
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
 vm_rpmostree upgrade
 vm_assert_status_jq \
-  '.deployments[0]["removed-base-packages"]|length == 2' \
-  '.deployments[0]["removed-base-packages"]|index("foo-1.0-1.x86_64") >= 0' \
-  '.deployments[0]["removed-base-packages"]|index("nonrootcap-1.0-1.x86_64") >= 0'
+  '.deployments[0]["base-removals"]|length == 2' \
+  '.deployments[0]["base-removals"]|index("foo") >= 0' \
+  '.deployments[0]["base-removals"]|index("nonrootcap") >= 0' \
+  '.deployments[0]["requested-base-removals"]|length == 2' \
+  '.deployments[0]["requested-base-removals"]|index("foo") >= 0' \
+  '.deployments[0]["requested-base-removals"]|index("nonrootcap") >= 0'
 echo "ok override remove carried through upgrade"
 
 vm_rpmostree ex override reset foo
 vm_assert_status_jq \
-  '.deployments[0]["removed-base-packages"]|length == 1' \
-  '.deployments[0]["removed-base-packages"]|index("nonrootcap-1.0-1.x86_64") >= 0'
+  '.deployments[0]["base-removals"]|length == 1' \
+  '.deployments[0]["base-removals"]|index("nonrootcap") >= 0' \
+  '.deployments[0]["requested-base-removals"]|length == 1' \
+  '.deployments[0]["requested-base-removals"]|index("nonrootcap") >= 0'
 echo "ok override reset foo"
 
 vm_rpmostree ex override reset --all
 vm_assert_status_jq \
-  '.deployments[0]["removed-base-packages"]|length == 0'
+  '.deployments[0]["base-removals"]|length == 0' \
+  '.deployments[0]["requested-base-removals"]|length == 0'
 echo "ok override reset --all"
 
-# check that upgrading to a base without foo drops the override
+# check that upgrading to a base without foo works
 vm_rpmostree ex override remove foo
 vm_assert_status_jq \
-  '.deployments[0]["removed-base-packages"]|length == 1' \
-  '.deployments[0]["removed-base-packages"]|index("foo-1.0-1.x86_64") >= 0'
+  '.deployments[0]["base-removals"]|length == 1' \
+  '.deployments[0]["base-removals"]|index("foo") >= 0' \
+  '.deployments[0]["requested-base-removals"]|length == 1' \
+  '.deployments[0]["requested-base-removals"]|index("foo") >= 0'
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo_and_nonrootcap
 vm_rpmostree upgrade
 vm_assert_status_jq \
-  '.deployments[0]["removed-base-packages"]|length == 0'
-echo "ok override drops out"
+  '.deployments[0]["base-removals"]|length == 0' \
+  '.deployments[0]["requested-base-removals"]|length == 1' \
+  '.deployments[0]["requested-base-removals"]|index("foo") >= 0'
+echo "ok override remove requested but not applied"
+
+# check that upgrading again to a base with foo turns the override back on
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_nonrootcap
+vm_rpmostree upgrade
+vm_assert_status_jq \
+  '.deployments[0]["base-removals"]|length == 1' \
+  '.deployments[0]["base-removals"]|index("foo") >= 0' \
+  '.deployments[0]["requested-base-removals"]|length == 1' \
+  '.deployments[0]["requested-base-removals"]|index("foo") >= 0'
+echo "ok override remove re-applied"
+vm_rpmostree cleanup -p
 
 # a few error checks
 
