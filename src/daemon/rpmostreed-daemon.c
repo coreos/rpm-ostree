@@ -180,8 +180,10 @@ on_active_txn_changed (GObject *object,
       g_variant_get (active_txn, "(&s&s&s)", &method, &sender, &path);
       if (*method)
         {
+          gboolean is_registered = rpmostreed_daemon_has_client (self, sender);
+          const char *caller_str = is_registered ? "client" : "caller";
           sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_TRANSACTION_STARTED),
-                           "MESSAGE=Initiated txn %s for caller %s: %s", method, sender, path,
+                           "MESSAGE=Initiated txn %s for %s %s: %s", method, caller_str, sender, path,
                            NULL);
         }
     }
@@ -369,6 +371,13 @@ rpmostreed_daemon_add_client (RpmostreedDaemon *self,
   g_hash_table_insert (self->bus_clients, g_strdup (client), GUINT_TO_POINTER (subid));
   sd_journal_print (LOG_INFO, "Client %s added; new total=%u", client, g_hash_table_size (self->bus_clients));
   render_systemd_status (self);
+}
+
+/* Return `TRUE` if the bus address @client called RegisterClient. */
+gboolean
+rpmostreed_daemon_has_client (RpmostreedDaemon *self, const char *client)
+{
+  return g_hash_table_contains (self->bus_clients, client);
 }
 
 void
