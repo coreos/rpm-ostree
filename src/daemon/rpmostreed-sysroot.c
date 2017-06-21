@@ -441,8 +441,8 @@ sysroot_transform_transaction_to_address (GBinding *binding,
 
 static gboolean
 sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
-				       gboolean *out_changed,
-				       GError **error)
+                                       gboolean *out_changed,
+                                       GError **error)
 {
   gboolean ret = FALSE;
   OstreeDeployment *booted = NULL; /* owned by sysroot */
@@ -465,7 +465,7 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
     }
 
   repo_changed = !(self->repo_last_stat.st_mtim.tv_sec == repo_new_stat.st_mtim.tv_sec
-		   && self->repo_last_stat.st_mtim.tv_nsec == repo_new_stat.st_mtim.tv_nsec);
+                   && self->repo_last_stat.st_mtim.tv_nsec == repo_new_stat.st_mtim.tv_nsec);
   if (repo_changed)
     self->repo_last_stat = repo_new_stat;
 
@@ -473,7 +473,7 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
     {
       ret = TRUE;
       if (out_changed)
-	*out_changed = FALSE;
+        *out_changed = FALSE;
       goto out;
     }
 
@@ -752,7 +752,7 @@ rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
 
 gboolean
 rpmostreed_sysroot_reload (RpmostreedSysroot *self,
-			   GError **error)
+                           GError **error)
 {
   gboolean ret = FALSE;
   gboolean did_change;
@@ -771,18 +771,18 @@ rpmostreed_sysroot_reload (RpmostreedSysroot *self,
 
 static void
 on_deploy_changed (GFileMonitor *monitor,
-		   GFile *file,
-		   GFile *other_file,
-		   GFileMonitorEvent event_type,
-		   gpointer user_data)
+                   GFile *file,
+                   GFile *other_file,
+                   GFileMonitorEvent event_type,
+                   gpointer user_data)
 {
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (user_data);
   g_autoptr(GError) error = NULL;
-  
+
   if (event_type == G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED)
     {
       if (!rpmostreed_sysroot_reload (self, &error))
-	goto out;
+        goto out;
     }
 
  out:
@@ -809,7 +809,7 @@ rpmostreed_sysroot_iface_init (RPMOSTreeSysrootIface *iface)
  */
 gboolean
 rpmostreed_sysroot_populate (RpmostreedSysroot *self,
-			     GCancellable *cancellable,
+                             GCancellable *cancellable,
                              GError **error)
 {
   gboolean ret = FALSE;
@@ -837,7 +837,7 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
       const char *sysroot_path = gs_file_get_path_cached (ostree_sysroot_get_path (self->ot_sysroot));
       g_autofree char *sysroot_deploy_path = g_build_filename (sysroot_path, "ostree/deploy", NULL);
       g_autoptr(GFile) sysroot_deploy = g_file_new_for_path (sysroot_deploy_path);
-      
+
       self->monitor = g_file_monitor (sysroot_deploy, 0, NULL, error);
 
       if (self->monitor == NULL)
@@ -856,10 +856,10 @@ out:
 
 gboolean
 rpmostreed_sysroot_load_state (RpmostreedSysroot *self,
-			       GCancellable *cancellable,
-			       OstreeSysroot **out_sysroot,
-			       OstreeRepo **out_repo,
-			       GError **error)
+                               GCancellable *cancellable,
+                               OstreeSysroot **out_sysroot,
+                               OstreeRepo **out_repo,
+                               GError **error)
 {
   if (out_sysroot)
     *out_sysroot = g_object_ref (rpmostreed_sysroot_get_root (self));
