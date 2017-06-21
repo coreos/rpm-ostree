@@ -15,6 +15,7 @@ packages:
 
 tests:
   - ci/ci-commitmessage-submodules.sh
+  - ci/codestyle.sh
   - ci/build-check.sh
 
 timeout: 30m

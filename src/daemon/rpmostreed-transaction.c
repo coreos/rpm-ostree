@@ -327,7 +327,7 @@ transaction_execute_done_cb (GObject *source_object,
   if (success)
     {
       if (!rpmostreed_sysroot_reload (rpmostreed_sysroot_get (), &local_error))
-	success = FALSE;
+        success = FALSE;
     }
 
   /* Sanity check */
@@ -372,7 +372,7 @@ transaction_set_property (GObject *object,
     {
       case PROP_INVOCATION:
         priv->invocation = g_value_dup_object (value);
-	break;
+        break;
       case PROP_SYSROOT_PATH:
         priv->sysroot_path = g_value_dup_string (value);
         break;
@@ -519,7 +519,7 @@ transaction_initable_init (GInitable *initable,
       priv->sysroot = ostree_sysroot_new (tmp_path);
 
       if (!ostree_sysroot_load (priv->sysroot, cancellable, error))
-	goto out;
+        goto out;
 
       if (!ostree_sysroot_try_lock (priv->sysroot, &lock_acquired, error))
         goto out;

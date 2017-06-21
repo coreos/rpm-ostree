@@ -56,7 +56,7 @@ const char *libsd_special_glyph(SpecialGlyph code) {
                 [MDASH]              = "\342\200\223",             /* – */
         };
 
-	gboolean locale_is_utf8 = g_get_charset (NULL);
+        gboolean locale_is_utf8 = g_get_charset (NULL);
 
         if (locale_is_utf8)
           return draw_table_utf8[code];
