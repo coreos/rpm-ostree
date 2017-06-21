@@ -1154,7 +1154,7 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
                                                                ot_repo,
                                                                comp_ref,
-							       &local_error);
+                                                               &local_error);
   if (!details)
     goto out;
 
@@ -1294,7 +1294,7 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
                                                                ot_repo,
                                                                NULL,
-							       &local_error);
+                                                               &local_error);
   if (!details)
     goto out;
 
@@ -1306,7 +1306,7 @@ out:
   else
     {
       g_dbus_method_invocation_return_value (invocation,
-					     new_variant_diff_result (value, details));
+                                             new_variant_diff_result (value, details));
     }
 
   return TRUE;

@@ -27,9 +27,9 @@
 
 gboolean
 _rpmostree_jsonutil_object_get_optional_string_member (JsonObject     *object,
-						       const char     *member_name,
-						       const char    **out_value,
-						       GError        **error)
+                                                       const char     *member_name,
+                                                       const char    **out_value,
+                                                       GError        **error)
 {
   gboolean ret = FALSE;
   JsonNode *node = json_object_get_member (object, member_name);
@@ -54,8 +54,8 @@ _rpmostree_jsonutil_object_get_optional_string_member (JsonObject     *object,
 
 const char *
 _rpmostree_jsonutil_object_require_string_member (JsonObject     *object,
-						  const char     *member_name,
-						  GError        **error)
+                                                  const char     *member_name,
+                                                  GError        **error)
 {
   const char *ret;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (object, member_name, &ret, error))
@@ -160,8 +160,8 @@ _rpmostree_jsonutil_object_get_optional_boolean_member (JsonObject     *object,
 
 const char *
 _rpmostree_jsonutil_array_require_string_element (JsonArray      *array,
-						  guint           i,
-						  GError        **error)
+                                                  guint           i,
+                                                  GError        **error)
 {
   const char *ret = json_array_get_string_element (array, i);
   if (!ret)
@@ -195,9 +195,9 @@ _rpmostree_jsonutil_array_require_int_element (JsonArray      *array,
 
 gboolean
 _rpmostree_jsonutil_append_string_array_to (JsonObject   *object,
-					    const char   *member_name,
-					    GPtrArray    *array,
-					    GError      **error)
+                                            const char   *member_name,
+                                            GPtrArray    *array,
+                                            GError      **error)
 {
   JsonArray *jarray = json_object_get_array_member (object, member_name);
   guint i, len;

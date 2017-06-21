@@ -35,9 +35,9 @@ rpmostreed_deployment_generate_id (OstreeDeployment *deployment)
 {
   g_return_val_if_fail (OSTREE_IS_DEPLOYMENT (deployment), NULL);
   return g_strdup_printf ("%s-%s.%u",
-			  ostree_deployment_get_osname (deployment),
-			  ostree_deployment_get_csum (deployment),
-			  ostree_deployment_get_deployserial (deployment));
+                          ostree_deployment_get_osname (deployment),
+                          ostree_deployment_get_csum (deployment),
+                          ostree_deployment_get_deployserial (deployment));
 }
 
 OstreeDeployment *
@@ -69,7 +69,7 @@ static GVariant *
 rpmostreed_deployment_gpg_results (OstreeRepo *repo,
                                    const gchar *origin_refspec,
                                    const gchar *csum,
-				   gboolean *out_enabled)
+                                   gboolean *out_enabled)
 {
   GError *error = NULL;
   GVariant *ret = NULL;
@@ -89,7 +89,7 @@ rpmostreed_deployment_gpg_results (OstreeRepo *repo,
   if (remote)
     {
       if (!ostree_repo_remote_get_gpg_verify (repo, remote, &gpg_verify, &error))
-	goto out;
+        goto out;
     }
   else
     {
@@ -102,7 +102,7 @@ rpmostreed_deployment_gpg_results (OstreeRepo *repo,
 
   result = ostree_repo_verify_commit_for_remote (repo, csum, remote, NULL, &error);
   if (!result)
-      goto out;
+    goto out;
 
   n_sigs = ostree_gpg_verify_result_count_all (result);
   if (n_sigs < 1)
@@ -197,12 +197,12 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   const char *const empty_v[] = { NULL };
 
   if (!ostree_repo_load_variant (repo,
-				 OSTREE_OBJECT_TYPE_COMMIT,
-				 csum,
-				 &commit,
-				 error))
+                                 OSTREE_OBJECT_TYPE_COMMIT,
+                                 csum,
+                                 &commit,
+                                 error))
     return NULL;
-  
+
   id = rpmostreed_deployment_generate_id (deployment);
 
   origin = rpmostree_origin_parse_deployment (deployment, error);
@@ -309,7 +309,7 @@ GVariant *
 rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
                                                    OstreeRepo *repo,
                                                    const gchar *refspec,
-						   GError **error)
+                                                   GError **error)
 {
   g_autoptr(GVariant) commit = NULL;
   g_autofree gchar *origin_refspec = NULL;
@@ -346,10 +346,10 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
     head = g_strdup (ostree_deployment_get_csum (deployment));
 
   if (!ostree_repo_load_variant (repo,
-				 OSTREE_OBJECT_TYPE_COMMIT,
-				 head,
-				 &commit,
-				 error))
+                                 OSTREE_OBJECT_TYPE_COMMIT,
+                                 head,
+                                 &commit,
+                                 error))
     return NULL;
 
   sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, head, &gpg_enabled);

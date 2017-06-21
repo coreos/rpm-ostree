@@ -226,7 +226,7 @@ rpmostreed_reboot (GCancellable *cancellable, GError **error)
 {
   const char *child_argv[] = { "systemctl", "reboot", NULL };
   (void) g_spawn_sync (NULL, (char**)child_argv, NULL, G_SPAWN_CHILD_INHERITS_STDIN | G_SPAWN_SEARCH_PATH,
-		       NULL, NULL, NULL, NULL, NULL, NULL);
+                       NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 /**
