@@ -49,9 +49,10 @@ typedef struct _RpmostreedDaemonClass RpmostreedDaemonClass;
 struct _RpmostreedDaemon {
   GObject parent_instance;
 
-  GHashTable *bus_clients;
+  GHashTable *bus_clients; /* <utf8 busname, struct RpmOstreeClient> */
 
   gboolean running;
+  GDBusProxy *bus_proxy;
   RpmostreedSysroot *sysroot;
   gchar *sysroot_path;
 
@@ -80,6 +81,32 @@ G_DEFINE_TYPE_WITH_CODE (RpmostreedDaemon, rpmostreed_daemon, G_TYPE_OBJECT,
                          G_IMPLEMENT_INTERFACE (G_TYPE_INITABLE,
                                                 rpmostreed_daemon_initable_iface_init))
 
+struct RpmOstreeClient {
+  char *address;
+  guint name_watch_id;
+  gboolean uid_valid;
+  uid_t uid;
+};
+
+static void
+rpmostree_client_free (struct RpmOstreeClient *client)
+{
+  g_free (client->address);
+  g_free (client);
+}
+
+static char *
+rpmostree_client_to_string (struct RpmOstreeClient *client)
+{
+  g_autoptr(GString) buf = g_string_new ("client ");
+  g_string_append (buf, client->address);
+  if (client->uid_valid)
+    g_string_append_printf (buf, " (uid %lu)", (unsigned long) client->uid);
+  else
+    g_string_append (buf, " (unknown uid)");
+  return g_string_free (g_steal_pointer (&buf), FALSE);
+}
+
 typedef struct {
   GAsyncReadyCallback callback;
   gpointer callback_data;
@@ -96,6 +123,7 @@ daemon_finalize (GObject *object)
   self->object_manager = NULL;
 
   g_clear_object (&self->sysroot);
+  g_clear_object (&self->bus_proxy);
 
   g_object_unref (self->connection);
   g_hash_table_unref (self->bus_clients);
@@ -161,7 +189,7 @@ rpmostreed_daemon_init (RpmostreedDaemon *self)
 
   self->sysroot_path = NULL;
   self->sysroot = NULL;
-  self->bus_clients = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  self->bus_clients = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, (GDestroyNotify)rpmostree_client_free);
 }
 
 static void
@@ -180,10 +208,15 @@ on_active_txn_changed (GObject *object,
       g_variant_get (active_txn, "(&s&s&s)", &method, &sender, &path);
       if (*method)
         {
-          gboolean is_registered = rpmostreed_daemon_has_client (self, sender);
-          const char *caller_str = is_registered ? "client" : "caller";
+          g_autofree char *client_str = rpmostreed_daemon_client_get_string (self, sender);
+          struct RpmOstreeClient *clientdata = g_hash_table_lookup (self->bus_clients, sender);
+          g_autofree char *client_data_msg = NULL;
+          if (clientdata && clientdata->uid_valid)
+            client_data_msg = g_strdup_printf ("CLIENT_UID=%u", clientdata->uid);
           sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_TRANSACTION_STARTED),
-                           "MESSAGE=Initiated txn %s for %s %s: %s", method, caller_str, sender, path,
+                           "MESSAGE=Initiated txn %s for %s: %s", method, client_str, path,
+                           "BUS_ADDRESS=%s", sender,
+                           client_data_msg ?: NULL,
                            NULL);
         }
     }
@@ -218,6 +251,19 @@ rpmostreed_daemon_initable_init (GInitable *initable,
 
   g_signal_connect (rpmostreed_sysroot_get (), "notify::active-transaction",
                     G_CALLBACK (on_active_txn_changed), self);
+
+  self->bus_proxy =
+    g_dbus_proxy_new_sync (self->connection,
+                           G_DBUS_PROXY_FLAGS_DO_NOT_LOAD_PROPERTIES |
+                           G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS,
+                           NULL,
+                           "org.freedesktop.DBus",
+                           "/org/freedesktop/DBus",
+                           "org.freedesktop.DBus",
+                           NULL,
+                           error);
+  if (!self->bus_proxy)
+    goto out;
 
   rpmostreed_daemon_publish (self, path, FALSE, self->sysroot);
   g_dbus_connection_start_message_processing (self->connection);
@@ -356,7 +402,22 @@ rpmostreed_daemon_add_client (RpmostreedDaemon *self,
 {
   if (g_hash_table_lookup (self->bus_clients, client))
     return;
-  guint subid =
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(GVariant) uidcall = g_dbus_proxy_call_sync (self->bus_proxy,
+                                                        "GetConnectionUnixUser",
+                                                        g_variant_new ("(s)", client),
+                                                        G_DBUS_CALL_FLAGS_NONE,
+                                                        2000, NULL, &local_error);
+  if (!uidcall)
+    {
+      sd_journal_print (LOG_WARNING, "Failed to GetConnectionUnixUser for client %s: %s",
+                        client, local_error->message);
+      g_clear_error (&local_error);
+    }
+
+  struct RpmOstreeClient *clientdata = g_new0 (struct RpmOstreeClient, 1);
+  clientdata->address = g_strdup (client);
+  clientdata->name_watch_id =
     g_dbus_connection_signal_subscribe (self->connection,
                                         "org.freedesktop.DBus",
                                         "org.freedesktop.DBus",
@@ -367,29 +428,45 @@ rpmostreed_daemon_add_client (RpmostreedDaemon *self,
                                         on_name_owner_changed,
                                         g_object_ref (self),
                                         g_object_unref);
+  if (uidcall)
+    {
+      g_variant_get (uidcall, "(u)", &clientdata->uid);
+      clientdata->uid_valid = TRUE;
+    }
 
-  g_hash_table_insert (self->bus_clients, g_strdup (client), GUINT_TO_POINTER (subid));
-  sd_journal_print (LOG_INFO, "Client %s added; new total=%u", client, g_hash_table_size (self->bus_clients));
+  g_hash_table_insert (self->bus_clients, (char*)clientdata->address, clientdata);
+  g_autofree char *clientstr = rpmostree_client_to_string (clientdata);
+  sd_journal_print (LOG_INFO, "%s added; new total=%u", clientstr, g_hash_table_size (self->bus_clients));
   render_systemd_status (self);
 }
 
-/* Return `TRUE` if the bus address @client called RegisterClient. */
-gboolean
-rpmostreed_daemon_has_client (RpmostreedDaemon *self, const char *client)
+/* Returns a string representing the state of the bus name @client.
+ * If @client is unknown (i.e. has not called RegisterClient), we just
+ * return "caller".
+ */
+char *
+rpmostreed_daemon_client_get_string (RpmostreedDaemon *self, const char *client)
 {
-  return g_hash_table_contains (self->bus_clients, client);
+  struct RpmOstreeClient *clientdata = g_hash_table_lookup (self->bus_clients, client);
+  if (!clientdata)
+    return g_strdup_printf ("caller %s", client);
+  else
+    return rpmostree_client_to_string (clientdata);
 }
 
 void
 rpmostreed_daemon_remove_client (RpmostreedDaemon *self,
                                  const char       *client)
 {
-  gpointer origkey, subid_p;
-  if (!g_hash_table_lookup_extended (self->bus_clients, client, &origkey, &subid_p))
+  gpointer origkey, clientdatap;
+  struct RpmOstreeClient *clientdata;
+  if (!g_hash_table_lookup_extended (self->bus_clients, client, &origkey, &clientdatap))
     return;
-  g_dbus_connection_signal_unsubscribe (self->connection, GPOINTER_TO_UINT (subid_p));
+  clientdata = clientdatap;
+  g_dbus_connection_signal_unsubscribe (self->connection, clientdata->name_watch_id);
+  g_autofree char *clientstr = rpmostree_client_to_string (clientdata);
   g_hash_table_remove (self->bus_clients, client);
-  sd_journal_print (LOG_INFO, "Client %s vanished; remaining=%u", client, g_hash_table_size (self->bus_clients));
+  sd_journal_print (LOG_INFO, "%s vanished; remaining=%u", clientstr, g_hash_table_size (self->bus_clients));
   render_systemd_status (self);
 }
 
