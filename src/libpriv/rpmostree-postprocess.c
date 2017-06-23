@@ -720,107 +720,88 @@ hardlink_recurse (int                src_dfd,
   return TRUE;
 }
 
-/* Prepare a root filesystem, taking mainly the contents of /usr from yumroot */
+/* Prepare a root filesystem, taking mainly the contents of /usr from pkgroot */
 static gboolean
-create_rootfs_from_yumroot_content (int            target_root_dfd,
+create_rootfs_from_pkgroot_content (int            target_root_dfd,
                                     int            src_rootfs_fd,
                                     JsonObject    *treefile,
                                     GCancellable  *cancellable,
                                     GError       **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(GHashTable) preserve_groups_set = NULL;
-  g_autofree char *yumroot_path = glnx_fdrel_abspath (src_rootfs_fd, ".");
-  g_autoptr(GFile) yumroot = g_file_new_for_path (yumroot_path);
-  gboolean container = FALSE;
   gboolean selinux = TRUE;
-
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
                                                                "selinux",
                                                                &selinux,
                                                                error))
-    goto out;
+    return FALSE;
 
+  gboolean container = FALSE;
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
                                                                "container",
                                                                &container,
                                                                error))
-    goto out;
+    return FALSE;
 
   g_print ("Preparing kernel\n");
   if (!container && !do_kernel_prep (src_rootfs_fd, treefile, cancellable, error))
-    {
-      g_prefix_error (error, "During kernel processing: ");
-      goto out;
-    }
-  
-  g_print ("Initializing rootfs\n");
-  { gboolean tmp_is_dir = FALSE;
-    if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
-                                                                 "tmp-is-dir",
-                                                                 &tmp_is_dir,
-                                                                 error))
-      goto out;
+    return glnx_prefix_error (error, "During kernel processing");
 
-    if (!init_rootfs (target_root_dfd, tmp_is_dir, cancellable, error))
-      goto out;
-  }
+  g_print ("Initializing rootfs\n");
+  gboolean tmp_is_dir = FALSE;
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
+                                                               "tmp-is-dir",
+                                                               &tmp_is_dir,
+                                                               error))
+    return FALSE;
+
+  if (!init_rootfs (target_root_dfd, tmp_is_dir, cancellable, error))
+    return FALSE;
+
+  g_autofree char *pkgroot_path = glnx_fdrel_abspath (src_rootfs_fd, ".");
+  g_autoptr(GFile) pkgroot = g_file_new_for_path (pkgroot_path);
 
   g_print ("Migrating /etc/passwd to /usr/lib/\n");
-  if (!rpmostree_passwd_migrate_except_root (yumroot, RPM_OSTREE_PASSWD_MIGRATE_PASSWD, NULL,
+  if (!rpmostree_passwd_migrate_except_root (pkgroot, RPM_OSTREE_PASSWD_MIGRATE_PASSWD, NULL,
                                              cancellable, error))
-    goto out;
+    return FALSE;
 
+  g_autoptr(GHashTable) preserve_groups_set = NULL;
   if (json_object_has_member (treefile, "etc-group-members"))
     {
       JsonArray *etc_group_members = json_object_get_array_member (treefile, "etc-group-members");
       preserve_groups_set = _rpmostree_jsonutil_jsarray_strings_to_set (etc_group_members);
     }
-      
+
   g_print ("Migrating /etc/group to /usr/lib/\n");
-  if (!rpmostree_passwd_migrate_except_root (yumroot, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
+  if (!rpmostree_passwd_migrate_except_root (pkgroot, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
                                              preserve_groups_set,
                                              cancellable, error))
-    goto out;
+    return FALSE;
 
   /* NSS configuration to look at the new files */
   if (!replace_nsswitch (src_rootfs_fd, cancellable, error))
-    {
-      g_prefix_error (error, "nsswitch replacement: ");
-      goto out;
-    }
+    return glnx_prefix_error (error, "nsswitch replacement");
 
   if (selinux)
     {
       if (!postprocess_selinux_policy_store_location (src_rootfs_fd, cancellable, error))
-        {
-          g_prefix_error (error, "SELinux postprocess: ");
-          goto out;
-        }
+        return glnx_prefix_error (error, "SELinux postprocess");
     }
 
   /* We take /usr from the yum content */
   g_print ("Moving /usr and /etc to target\n");
-  {
-    if (renameat (src_rootfs_fd, "usr", target_root_dfd, "usr") < 0)
-      {
-        glnx_set_error_from_errno (error);
-        goto out;
-      }
-    if (renameat (src_rootfs_fd, "etc", target_root_dfd, "etc") < 0)
-      {
-        glnx_set_error_from_errno (error);
-        goto out;
-      }
-  }
+  if (renameat (src_rootfs_fd, "usr", target_root_dfd, "usr") < 0)
+    return glnx_throw_errno_prefix (error, "renameat");
+  if (renameat (src_rootfs_fd, "etc", target_root_dfd, "etc") < 0)
+    return glnx_throw_errno_prefix (error, "renameat");
 
   if (!rpmostree_rootfs_prepare_links (target_root_dfd, cancellable, error))
-    goto out;
+    return FALSE;
   if (!rpmostree_rootfs_postprocess_common (target_root_dfd, cancellable, error))
-    goto out;
+    return FALSE;
 
   if (!convert_var_to_tmpfiles_d (src_rootfs_fd, target_root_dfd, cancellable, error))
-    goto out;
+    return FALSE;
 
   /* Move boot, but rename the kernel/initramfs to have a checksum */
   if (!container)
@@ -834,7 +815,7 @@ create_rootfs_from_yumroot_content (int            target_root_dfd,
       if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile,
                                                                   "boot_location",
                                                                   &boot_location_str, error))
-        goto out;
+        return FALSE;
 
       if (boot_location_str != NULL)
         {
@@ -845,16 +826,12 @@ create_rootfs_from_yumroot_content (int            target_root_dfd,
           else if (strcmp (boot_location_str, "new") == 0)
             boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
           else
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Invalid boot location '%s'", boot_location_str);
-              goto out;
-            }
+            return glnx_throw (error, "Invalid boot location '%s'", boot_location_str);
         }
 
       if (!glnx_shutil_mkdir_p_at (target_root_dfd, "usr/lib", 0755,
                                    cancellable, error))
-        goto out;
+        return FALSE;
 
       switch (boot_location)
         {
@@ -862,29 +839,23 @@ create_rootfs_from_yumroot_content (int            target_root_dfd,
           {
             g_print ("Using boot location: legacy\n");
             if (renameat (src_rootfs_fd, "boot", target_root_dfd, "boot") < 0)
-              {
-                glnx_set_error_from_errno (error);
-                goto out;
-              }
+              return glnx_throw_errno_prefix (error, "renameat");
           }
           break;
         case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH:
           {
             g_print ("Using boot location: both\n");
             if (renameat (src_rootfs_fd, "boot", target_root_dfd, "boot") < 0)
-              {
-                glnx_set_error_from_errno (error);
-                goto out;
-              }
+              return glnx_throw_errno_prefix (error, "renameat");
             if (!glnx_shutil_mkdir_p_at (target_root_dfd, "usr/lib/ostree-boot", 0755,
                                          cancellable, error))
-              goto out;
+              return FALSE;
             /* Hardlink the existing content, only a little ugly as
              * we'll end up sha256'ing it twice, but oh well. */
             if (!hardlink_recurse (target_root_dfd, "boot",
                                    target_root_dfd, "usr/lib/ostree-boot",
                                    cancellable, error))
-              goto out;
+              return FALSE;
           }
           break;
         case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW:
@@ -892,10 +863,7 @@ create_rootfs_from_yumroot_content (int            target_root_dfd,
             g_print ("Using boot location: new\n");
             if (renameat (src_rootfs_fd, "boot",
                           target_root_dfd, "usr/lib/ostree-boot") < 0)
-              {
-                glnx_set_error_from_errno (error);
-                goto out;
-              }
+              return glnx_throw_errno_prefix (error, "renameat");
           }
           break;
         }
@@ -914,42 +882,34 @@ create_rootfs_from_yumroot_content (int            target_root_dfd,
           {
             if (errno == ENOENT)
               continue;
-            glnx_set_error_from_errno (error);
-            goto out;
+            return glnx_throw_errno_prefix (error, "fstatat");
           }
 
         if (renameat (src_rootfs_fd, toplevel_links[i], target_root_dfd, toplevel_links[i]) < 0)
-          {
-            glnx_set_error_from_errno (error);
-            goto out;
-          }
+          return glnx_throw_errno_prefix (error, "renameat");
       }
   }
 
   g_print ("Adding rpm-ostree-0-integration.conf\n");
-  {
-    /* This is useful if we're running in an uninstalled configuration, e.g.
-     * during tests. */
-    const char *pkglibdir_path
-      = g_getenv("RPMOSTREE_UNINSTALLED_PKGLIBDIR") ?: PKGLIBDIR;
-    glnx_fd_close int pkglibdir_dfd = -1;
+  /* This is useful if we're running in an uninstalled configuration, e.g.
+   * during tests. */
+  const char *pkglibdir_path
+    = g_getenv("RPMOSTREE_UNINSTALLED_PKGLIBDIR") ?: PKGLIBDIR;
+  glnx_fd_close int pkglibdir_dfd = -1;
 
-    if (!glnx_opendirat (AT_FDCWD, pkglibdir_path, TRUE, &pkglibdir_dfd, error))
-      goto out;
-    
-    if (!glnx_shutil_mkdir_p_at (target_root_dfd, "usr/lib/tmpfiles.d", 0755, cancellable, error))
-      goto out;
+  if (!glnx_opendirat (AT_FDCWD, pkglibdir_path, TRUE, &pkglibdir_dfd, error))
+    return FALSE;
 
-    if (!glnx_file_copy_at (pkglibdir_dfd, "rpm-ostree-0-integration.conf", NULL,
-                            target_root_dfd, "usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf",
-                            GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
-                            cancellable, error))
-      goto out;
-  }
+  if (!glnx_shutil_mkdir_p_at (target_root_dfd, "usr/lib/tmpfiles.d", 0755, cancellable, error))
+    return FALSE;
 
-  ret = TRUE;
- out:
-  return ret;
+  if (!glnx_file_copy_at (pkglibdir_dfd, "rpm-ostree-0-integration.conf", NULL,
+                          target_root_dfd, "usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf",
+                          GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
+                          cancellable, error))
+    return FALSE;
+
+  return TRUE;
 }
 
 static gboolean
@@ -959,44 +919,29 @@ handle_remove_files_from_package (int               rootfs_fd,
                                   GCancellable     *cancellable,
                                   GError          **error)
 {
-  gboolean ret = FALSE;
   const char *pkgname = json_array_get_string_element (removespec, 0);
-  guint i, j, npackages;
-  guint len = json_array_get_length (removespec);
-  hy_autoquery HyQuery query = NULL;
-  g_autoptr(GPtrArray) pkglist = NULL;
-      
-  query = hy_query_create (refsack->sack);
+  const guint len = json_array_get_length (removespec);
+  hy_autoquery HyQuery query = hy_query_create (refsack->sack);
   hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
-  pkglist = hy_query_run (query);
-  npackages = pkglist->len;
+  g_autoptr(GPtrArray) pkglist = hy_query_run (query);
+  guint npackages = pkglist->len;
   if (npackages == 0)
+    return glnx_throw (error, "Unable to find package '%s' specified in remove-from-packages", pkgname);
+
+  for (guint j = 0; j < npackages; j++)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Unable to find package '%s' specified in remove-from-packages", pkgname);
-      goto out;
-    }
+      DnfPackage *pkg = pkglist->pdata[j];
+      g_auto(GStrv) pkg_files = dnf_package_get_files (pkg);
 
-  for (j = 0; j < npackages; j++)
-    {
-      DnfPackage *pkg;
-      g_auto(GStrv) pkg_files = NULL;
-
-      pkg = pkglist->pdata[j];
-      pkg_files = dnf_package_get_files (pkg);
-
-      for (i = 1; i < len; i++)
+      for (guint i = 1; i < len; i++)
         {
           const char *remove_regex_pattern = json_array_get_string_element (removespec, i);
-          GRegex *regex;
-          char **strviter;
 
-          regex = g_regex_new (remove_regex_pattern, G_REGEX_JAVASCRIPT_COMPAT, 0, error);
-
+          GRegex *regex = g_regex_new (remove_regex_pattern, G_REGEX_JAVASCRIPT_COMPAT, 0, error);
           if (!regex)
-            goto out;
-      
-          for (strviter = pkg_files; strviter && strviter[0]; strviter++)
+            return FALSE;
+
+          for (char **strviter = pkg_files; strviter && strviter[0]; strviter++)
             {
               const char *file = *strviter;
 
@@ -1004,18 +949,16 @@ handle_remove_files_from_package (int               rootfs_fd,
                 {
                   if (file[0] == '/')
                     file++;
-              
+
                   g_print ("Deleting: %s\n", file);
                   if (!glnx_shutil_rm_rf_at (rootfs_fd, file, cancellable, error))
-                    goto out;
+                    return FALSE;
                 }
             }
         }
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -1203,44 +1146,34 @@ rpmostree_copy_additional_files (GFile         *rootfs,
                                  GCancellable  *cancellable,
                                  GError       **error)
 {
-  gboolean ret = FALSE;
-  JsonArray *add = NULL;
-  guint i, len;
-
   g_autofree char *dest_rootfs_path = g_strconcat (gs_file_get_path_cached (rootfs), ".post", NULL);
   g_autoptr(GFile) targetroot = g_file_new_for_path (dest_rootfs_path);
 
+  guint len;
+  JsonArray *add = NULL;
   if (json_object_has_member (treefile, "add-files"))
     {
       add = json_object_get_array_member (treefile, "add-files");
       len = json_array_get_length (add);
     }
   else
-    {
-      ret = TRUE;
-      goto out;
-    }
+    return TRUE; /* Early return */
 
-  for (i = 0; i < len; i++)
+  for (guint i = 0; i < len; i++)
     {
       const char *src, *dest;
-
       JsonArray *add_el = json_array_get_array_element (add, i);
 
       if (!add_el)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Element in add-files is not an array");
-          goto out;
-        }
+        return glnx_throw (error, "Element in add-files is not an array");
 
       src = _rpmostree_jsonutil_array_require_string_element (add_el, 0, error);
       if (!src)
-        goto out;
+        return FALSE;
 
       dest = _rpmostree_jsonutil_array_require_string_element (add_el, 1, error);
       if (!dest)
-        goto out;
+        return FALSE;
 
       {
         g_autoptr(GFile) srcfile = g_file_resolve_relative_path (context_directory, src);
@@ -1253,18 +1186,14 @@ rpmostree_copy_additional_files (GFile         *rootfs,
 
         if (!glnx_shutil_mkdir_p_at (AT_FDCWD, gs_file_get_path_cached (target_tmpfilesd_parent), 0755,
                                      cancellable, error))
-          goto out;
+          return FALSE;
 
         if (!g_file_copy (srcfile, destfile, 0, cancellable, NULL, NULL, error))
-          {
-            g_prefix_error (error, "Copying file '%s' into target: ", src);
-            goto out;
-          }
+          return glnx_prefix_error (error, "Copying file '%s' into target", src);
       }
     }
-  ret = TRUE;
- out:
-  return ret;
+
+  return TRUE;
 }
 
 static char *
@@ -1618,7 +1547,7 @@ rpmostree_prepare_rootfs_for_commit (int            workdir_dfd,
                        &target_root_dfd, error))
     return FALSE;
 
-  if (!create_rootfs_from_yumroot_content (target_root_dfd, *inout_rootfs_fd, treefile,
+  if (!create_rootfs_from_pkgroot_content (target_root_dfd, *inout_rootfs_fd, treefile,
                                            cancellable, error))
     return glnx_prefix_error (error, "Finalizing rootfs");
 
@@ -1807,36 +1736,27 @@ rpmostree_commit (int            rootfs_fd,
                   GCancellable  *cancellable,
                   GError       **error)
 {
-  gboolean ret = FALSE;
-  OstreeRepoTransactionStats stats = { 0, };
-  off_t n_bytes = 0;
-  struct CommitThreadData tdata = { 0, };
-  glnx_unref_object OstreeMutableTree *mtree = NULL;
-  OstreeRepoCommitModifierFlags modifier_flags = 0;
-  OstreeRepoCommitModifier *commit_modifier = NULL;
-  g_autofree char *parent_revision = NULL;
-  g_autofree char *new_revision = NULL;
-  g_autoptr(GFile) root_tree = NULL;
-  glnx_unref_object OstreeSePolicy *sepolicy = NULL;
-  
   /* hardcode targeted policy for now */
+  g_autoptr(OstreeSePolicy) sepolicy = NULL;
   if (enable_selinux)
     {
       if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_fd, &sepolicy, cancellable, error))
-        goto out;
+        return FALSE;
     }
 
   if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
-    goto out;
+    return FALSE;
 
-  mtree = ostree_mutable_tree_new ();
+  g_autoptr(OstreeMutableTree) mtree = ostree_mutable_tree_new ();
   /* We may make this configurable if someone complains about including some
    * unlabeled content, but I think the fix for that is to ensure that policy is
    * labeling it.
    */
-  modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
+  OstreeRepoCommitModifierFlags modifier_flags = OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
   /* If changing this, also look at changing rpmostree-unpacker.c */
-  commit_modifier = ostree_repo_commit_modifier_new (modifier_flags, NULL, NULL, NULL);
+  g_autoptr(OstreeRepoCommitModifier) commit_modifier =
+    ostree_repo_commit_modifier_new (modifier_flags, NULL, NULL, NULL);
+  struct CommitThreadData tdata = { 0, };
   ostree_repo_commit_modifier_set_xattr_callback (commit_modifier,
                                                   read_xattrs_cb, NULL,
                                                   &tdata);
@@ -1847,14 +1767,15 @@ rpmostree_commit (int            rootfs_fd,
     {
       g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                            "SELinux enabled, but no policy found");
-      goto out;
+      return FALSE;
     }
 
   if (devino_cache)
     ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
 
+  off_t n_bytes = 0;
   if (!count_filesizes (rootfs_fd, ".", &n_bytes, cancellable, error))
-    goto out;
+    return FALSE;
 
   tdata.n_bytes = n_bytes;
   tdata.repo = repo;
@@ -1864,73 +1785,70 @@ rpmostree_commit (int            rootfs_fd,
   tdata.commit_modifier = commit_modifier;
   tdata.error = error;
 
-  { g_autoptr(GThread) commit_thread = NULL;
-    g_auto(GLnxConsoleRef) console = { 0, };
-    g_autoptr(GSource) progress_src = NULL;
+  g_autoptr(GThread) commit_thread = NULL;
+  g_auto(GLnxConsoleRef) console = { 0, };
+  g_autoptr(GSource) progress_src = NULL;
 
-    glnx_console_lock (&console);
+  glnx_console_lock (&console);
 
-    commit_thread = g_thread_new ("commit", write_dfd_thread, &tdata);
+  commit_thread = g_thread_new ("commit", write_dfd_thread, &tdata);
 
-    progress_src = g_timeout_source_new_seconds (console.is_tty ? 1 : 5);
-    g_source_set_callback (progress_src, on_progress_timeout, &tdata, NULL);
-    g_source_attach (progress_src, NULL);
+  progress_src = g_timeout_source_new_seconds (console.is_tty ? 1 : 5);
+  g_source_set_callback (progress_src, on_progress_timeout, &tdata, NULL);
+  g_source_attach (progress_src, NULL);
 
-    while (g_atomic_int_get (&tdata.done) == 0)
-      g_main_context_iteration (NULL, TRUE);
+  while (g_atomic_int_get (&tdata.done) == 0)
+    g_main_context_iteration (NULL, TRUE);
 
-    glnx_console_progress_text_percent ("Committing:", 100.0);
-  
-    glnx_console_unlock (&console);
-    
-    g_thread_join (commit_thread);
-    commit_thread = NULL;
+  glnx_console_progress_text_percent ("Committing:", 100.0);
+  glnx_console_unlock (&console);
 
-    if (!tdata.success)
-      goto out;
-  }
+  g_thread_join (g_steal_pointer (&commit_thread));
+  if (!tdata.success)
+    return FALSE;
 
+  g_autoptr(GFile) root_tree = NULL;
   if (!ostree_repo_write_mtree (repo, mtree, &root_tree, cancellable, error))
-    goto out;
+    return glnx_prefix_error (error, "Writing tree");
 
+  g_autofree char *parent_revision = NULL;
   if (refname)
     {
       if (!ostree_repo_resolve_rev (repo, refname, TRUE, &parent_revision, error))
-        goto out;
+        return FALSE;
     }
 
+  g_autofree char *new_revision = NULL;
   if (!ostree_repo_write_commit (repo, parent_revision, "", "", metadata,
                                  (OstreeRepoFile*)root_tree, &new_revision,
                                  cancellable, error))
-    goto out;
+    return FALSE;
 
   if (gpg_keyid)
     {
       if (!ostree_repo_sign_commit (repo, new_revision, gpg_keyid, NULL,
                                     cancellable, error))
-        goto out;
+        return FALSE;
     }
-  
+
   if (write_commitid_to)
     {
-      if (!g_file_set_contents(write_commitid_to, new_revision, -1, error))
-        goto out;
+      if (!g_file_set_contents (write_commitid_to, new_revision, -1, error))
+        return FALSE;
     }
   else if (refname)
     ostree_repo_transaction_set_ref (repo, NULL, refname, new_revision);
 
+  OstreeRepoTransactionStats stats = { 0, };
   if (!ostree_repo_commit_transaction (repo, &stats, cancellable, error))
-    goto out;
+    return glnx_prefix_error (error, "Commit");
 
   g_print ("Metadata Total: %u\n", stats.metadata_objects_total);
   g_print ("Metadata Written: %u\n", stats.metadata_objects_written);
   g_print ("Content Total: %u\n", stats.content_objects_total);
   g_print ("Content Written: %u\n", stats.content_objects_written);
   g_print ("Content Bytes Written: %" G_GUINT64_FORMAT "\n", stats.content_bytes_written);
-
-  ret = TRUE;
   if (out_new_revision)
     *out_new_revision = g_steal_pointer (&new_revision);
- out:
-  return ret;
+  return TRUE;
 }
