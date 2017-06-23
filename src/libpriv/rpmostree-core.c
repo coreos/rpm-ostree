@@ -752,8 +752,7 @@ get_header_variant (OstreeRepo       *repo,
                                 &cached_rev, error))
     return FALSE;
 
-  if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
-                                 cached_rev, &pkg_commit, error))
+  if (!ostree_repo_load_commit (repo, cached_rev, &pkg_commit, NULL, error))
     return FALSE;
 
   pkg_meta = g_variant_get_child_value (pkg_commit, 0);
@@ -792,20 +791,18 @@ checkout_pkg_metadata_by_dnfpkg (RpmOstreeContext *self,
   return checkout_pkg_metadata (self, nevra, header, cancellable, error);
 }
 
-gboolean
-rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
-                                    const char    *nevra,
-                                    const char    *expected_sha256,
-                                    GVariant     **out_header,
-                                    GCancellable  *cancellable,
-                                    GError       **error)
+static gboolean
+find_cache_branch_by_nevra (OstreeRepo    *pkgcache,
+                            const char    *nevra,
+                            char         **out_cache_branch,
+                            GCancellable  *cancellable,
+                            GError       **error)
+
 {
-  g_autoptr(GVariant) header = NULL;
+  /* there's no safe way to convert a nevra string to its cache branch, so let's
+   * just do a dumb lookup */
+
   g_autoptr(GHashTable) refs = NULL;
-
-  /* there's no safe way to convert a nevra string to its
-   * cache branch, so let's just do a dumb lookup */
-
   if (!ostree_repo_list_refs_ext (pkgcache, "rpmostree/pkg", &refs,
                                   OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable,
                                   error))
@@ -814,38 +811,48 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
   GLNX_HASH_TABLE_FOREACH (refs, const char*, ref)
     {
       g_autofree char *cache_nevra = rpmostree_cache_branch_to_nevra (ref);
-      if (!g_str_equal (nevra, cache_nevra))
-        continue;
-
-      if (expected_sha256 != NULL)
+      if (g_str_equal (nevra, cache_nevra))
         {
-          g_autofree char *commit_csum = NULL;
-          g_autoptr(GVariant) commit = NULL;
-          g_autofree char *actual_sha256 = NULL;
-
-          if (!ostree_repo_resolve_rev (pkgcache, ref, TRUE,
-                                        &commit_csum, error))
-            return FALSE;
-
-          if (!ostree_repo_load_commit (pkgcache, commit_csum,
-                                        &commit, NULL, error))
-            return FALSE;
-
-          if (!get_commit_header_sha256 (commit, &actual_sha256, error))
-            return FALSE;
-
-          if (!g_str_equal (expected_sha256, actual_sha256))
-            return glnx_throw (error, "Checksum mismatch for package %s", nevra);
+          *out_cache_branch = g_strdup (ref);
+          return TRUE;
         }
-
-      if (!get_header_variant (pkgcache, ref, &header, cancellable, error))
-        return FALSE;
-
-      *out_header = g_steal_pointer (&header);
-      return TRUE;
     }
 
   return glnx_throw (error, "Failed to find cached pkg for %s", nevra);
+}
+
+gboolean
+rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
+                                    const char    *nevra,
+                                    const char    *expected_sha256,
+                                    GVariant     **out_header,
+                                    GCancellable  *cancellable,
+                                    GError       **error)
+{
+  g_autofree char *cache_branch = NULL;
+  if (!find_cache_branch_by_nevra (pkgcache, nevra, &cache_branch, cancellable, error))
+    return FALSE;
+
+  if (expected_sha256 != NULL)
+    {
+      g_autofree char *commit_csum = NULL;
+      g_autoptr(GVariant) commit = NULL;
+      g_autofree char *actual_sha256 = NULL;
+
+      if (!ostree_repo_resolve_rev (pkgcache, cache_branch, TRUE, &commit_csum, error))
+        return FALSE;
+
+      if (!ostree_repo_load_commit (pkgcache, commit_csum, &commit, NULL, error))
+        return FALSE;
+
+      if (!get_commit_header_sha256 (commit, &actual_sha256, error))
+        return FALSE;
+
+      if (!g_str_equal (expected_sha256, actual_sha256))
+        return glnx_throw (error, "Checksum mismatch for package %s", nevra);
+    }
+
+  return get_header_variant (pkgcache, cache_branch, out_header, cancellable, error);
 }
 
 static gboolean
