@@ -167,3 +167,9 @@ rpmostree_get_matching_packages (DnfSack *sack,
 gboolean
 rpmostree_sack_has_subject (DnfSack *sack,
                             const char *pattern);
+
+gboolean
+rpmostree_sack_get_by_pkgname (DnfSack     *sack,
+                               const char  *pkgname,
+                               DnfPackage **out_pkg,
+                               GError     **error);

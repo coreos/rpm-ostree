@@ -571,14 +571,11 @@ finalize_overrides (RpmOstreeSysrootUpgrader *self,
   g_autoptr(GPtrArray) inactive_removals = g_ptr_array_new ();
   GLNX_HASH_TABLE_FOREACH (removals, const char*, pkgname)
     {
-      /* only match pkgname */
-      hy_autoquery HyQuery query = hy_query_create (self->rsack->sack);
-      hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
-      g_autoptr(GPtrArray) pkgs = hy_query_run (query);
+      g_autoptr(DnfPackage) pkg = NULL;
+      if (!rpmostree_sack_get_by_pkgname (self->rsack->sack, pkgname, &pkg, error))
+        return FALSE;
 
-      if (pkgs->len > 1)
-        return glnx_throw (error, "Multiple packages match \"%s\"", pkgname);
-      else if (pkgs->len == 1)
+      if (pkg)
         g_ptr_array_add (ret_final_removals, g_strdup (pkgname));
       else
         g_ptr_array_add (inactive_removals, (gpointer)pkgname);
