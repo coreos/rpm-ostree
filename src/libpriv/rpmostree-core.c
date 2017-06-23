@@ -852,12 +852,7 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
         return glnx_throw (error, "Checksum mismatch for package %s", nevra);
     }
 
-  g_autoptr(GVariant) header = NULL;
-  if (!get_header_variant (pkgcache, cache_branch, &header, cancellable, error))
-    return FALSE;
-
-  *out_header = g_steal_pointer (&header);
-  return TRUE;
+  return get_header_variant (pkgcache, cache_branch, out_header, cancellable, error);
 }
 
 static gboolean
