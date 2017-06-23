@@ -493,26 +493,14 @@ build_metadata_variant (RpmOstreeUnpacker *self,
 
   /* include basic NEVRA information so we don't have to write out and read back the header
    * just to get e.g. the pkgname */
-  {
-    g_auto(GVariantBuilder) nevra_builder;
-    g_variant_builder_init (&nevra_builder, (GVariantType*)"a{sv}");
-
-    g_autofree char *nevra = rpmostree_unpacker_get_nevra (self);
-    g_variant_builder_add (&nevra_builder, "{sv}", "nevra", g_variant_new_string (nevra));
-    g_variant_builder_add (&nevra_builder, "{sv}", "name",
-                           g_variant_new_string (headerGetString (self->hdr, RPMTAG_NAME)));
-    g_variant_builder_add (&nevra_builder, "{sv}", "epoch",
-                           g_variant_new_uint64 (headerGetNumber (self->hdr, RPMTAG_EPOCH)));
-    g_variant_builder_add (&nevra_builder, "{sv}", "version",
-                           g_variant_new_string (headerGetString (self->hdr, RPMTAG_VERSION)));
-    g_variant_builder_add (&nevra_builder, "{sv}", "release",
-                           g_variant_new_string (headerGetString (self->hdr, RPMTAG_RELEASE)));
-    g_variant_builder_add (&nevra_builder, "{sv}", "arch",
-                           g_variant_new_string (headerGetString (self->hdr, RPMTAG_ARCH)));
-
-    g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.nevra",
-                           g_variant_builder_end (&nevra_builder));
-  }
+  g_autofree char *nevra = rpmostree_unpacker_get_nevra (self);
+  g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.nevra",
+                         g_variant_new ("(sstsss)", nevra,
+                                        headerGetString (self->hdr, RPMTAG_NAME),
+                                        headerGetNumber (self->hdr, RPMTAG_EPOCH),
+                                        headerGetString (self->hdr, RPMTAG_VERSION),
+                                        headerGetString (self->hdr, RPMTAG_RELEASE),
+                                        headerGetString (self->hdr, RPMTAG_ARCH)));
 
   /* The current sepolicy that was used to label the unpacked files is important
    * to record. It will help us during future overlays to determine whether the

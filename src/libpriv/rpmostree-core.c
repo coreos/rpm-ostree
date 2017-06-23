@@ -877,6 +877,8 @@ checkout_pkg_metadata_by_nevra (RpmOstreeContext *self,
                                 cancellable, error);
 }
 
+/* Fetches decomposed NEVRA information from pkgcache for a given nevra string. Requires the
+ * package to have been unpacked with unpack_version 1.4+ */
 gboolean
 rpmostree_get_nevra_from_pkgcache (OstreeRepo  *repo,
                                    const char  *nevra,
@@ -903,22 +905,12 @@ rpmostree_get_nevra_from_pkgcache (OstreeRepo  *repo,
   g_autoptr(GVariant) meta = g_variant_get_child_value (commit, 0);
   g_autoptr(GVariantDict) dict = g_variant_dict_new (meta);
 
-  g_autoptr(GVariant) nevra_variant =
-    g_variant_dict_lookup_value (dict, "rpmostree.nevra", G_VARIANT_TYPE ("a{sv}"));
-  if (!nevra_variant)
+  g_autofree char *actual_nevra = NULL;
+  if (!g_variant_dict_lookup (dict, "rpmostree.nevra", "(sstsss)", &actual_nevra,
+                              out_name, out_epoch, out_version, out_release, out_arch))
     return glnx_throw (error, "Cannot get nevra variant from commit metadata");
 
-  g_autoptr(GVariantDict) nevra_dict = g_variant_dict_new (nevra_variant);
-  if (out_name)
-    g_assert (g_variant_dict_lookup (nevra_dict, "name", "s", out_name));
-  if (out_epoch)
-    g_assert (g_variant_dict_lookup (nevra_dict, "epoch", "t", out_epoch));
-  if (out_version)
-    g_assert (g_variant_dict_lookup (nevra_dict, "version", "s", out_version));
-  if (out_release)
-    g_assert (g_variant_dict_lookup (nevra_dict, "release", "s", out_release));
-  if (out_arch)
-    g_assert (g_variant_dict_lookup (nevra_dict, "arch", "s", out_arch));
+  g_assert (g_str_equal (nevra, actual_nevra));
   return TRUE;
 }
 
