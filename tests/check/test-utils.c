@@ -8,6 +8,7 @@
 #include "libglnx.h"
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
+#include "rpmostree-unpacker.h"
 
 static void
 test_substs_eq (const char *str,
@@ -110,6 +111,54 @@ test_cache_branch_to_nevra (void)
   test_one_cache_branch_to_nevra ("rpmostree/pkg/vim-filesystem/2_3A7.4.160-1.el7__3.1.x86__64", "vim-filesystem-2:7.4.160-1.el7_3.1.x86_64");
 }
 
+static void
+test_variant_to_nevra(void)
+{
+  GError *error = NULL;
+
+  g_autoptr(GFile) repo_path = g_file_new_for_path ("repo");
+  g_autoptr(OstreeRepo) repo = ostree_repo_new (repo_path);
+  g_assert (ostree_repo_create (repo, OSTREE_REPO_MODE_BARE_USER, NULL, &error));
+  g_assert_no_error (error);
+
+  const char *nevra = "foo-1.0-1.x86_64";
+  const char *name = "foo";
+  guint64 epoch = 0;
+  const char *version = "1.0";
+  const char *release = "1";
+  const char *arch = "x86_64";
+
+  g_autoptr(RpmOstreeUnpacker) unpacker = NULL;
+  g_autofree char *foo_rpm = g_strdup_printf ("%s/compose/yum/repo/packages/%s/%s.rpm",
+                                              getenv ("commondir"), arch, nevra);
+  unpacker = rpmostree_unpacker_new_at (AT_FDCWD, foo_rpm, NULL, 0, &error);
+  g_assert (unpacker);
+  g_assert_no_error (error);
+
+  g_assert (rpmostree_unpacker_unpack_to_ostree (unpacker, repo, NULL, NULL, NULL, &error));
+  g_assert_no_error (error);
+
+  g_autoptr(GVariant) header = NULL;
+  g_assert (rpmostree_pkgcache_find_pkg_header (repo, nevra, NULL, &header, NULL, &error));
+  g_assert_no_error (error);
+
+  g_autofree char *tname;
+  guint64 tepoch;
+  g_autofree char *tversion;
+  g_autofree char *trelease;
+  g_autofree char *tarch;
+
+  g_assert (rpmostree_get_nevra_from_pkgcache (repo, nevra, &tname, &tepoch, &tversion,
+                                               &trelease, &tarch, NULL, &error));
+  g_assert_no_error (error);
+
+  g_assert_cmpstr (tname, ==, name);
+  g_assert_cmpuint (tepoch, ==, epoch);
+  g_assert_cmpstr (tversion, ==, version);
+  g_assert_cmpstr (trelease, ==, release);
+  g_assert_cmpstr (tarch, ==, arch);
+}
+
 int
 main (int   argc,
       char *argv[])
@@ -118,6 +167,7 @@ main (int   argc,
 
   g_test_add_func ("/utils/varsubst", test_varsubst_string);
   g_test_add_func ("/utils/cachebranch_to_nevra", test_cache_branch_to_nevra);
+  g_test_add_func ("/unpacker/variant_to_nevra", test_variant_to_nevra);
 
   return g_test_run ();
 }

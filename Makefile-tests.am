@@ -102,7 +102,7 @@ uninstalled_test_extra_programs = dbus-run-session
 
 dbus_run_session_SOURCES = tests/utils/dbus-run-session.c
 
-check-local:
+check-local: $(testpackages)
 	@echo "  *** NOTE ***"
 	@echo "  *** NOTE ***"
 	@echo " \"make check\" only runs a subset of rpm-ostree's tests."

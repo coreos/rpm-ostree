@@ -872,6 +872,43 @@ checkout_pkg_metadata_by_nevra (RpmOstreeContext *self,
                                 cancellable, error);
 }
 
+/* Fetches decomposed NEVRA information from pkgcache for a given nevra string. Requires the
+ * package to have been unpacked with unpack_version 1.4+ */
+gboolean
+rpmostree_get_nevra_from_pkgcache (OstreeRepo  *repo,
+                                   const char  *nevra,
+                                   char       **out_name,
+                                   guint64     *out_epoch,
+                                   char       **out_version,
+                                   char       **out_release,
+                                   char       **out_arch,
+                                   GCancellable *cancellable,
+                                   GError  **error)
+{
+  g_autofree char *ref = NULL;
+  if (!find_cache_branch_by_nevra (repo, nevra, &ref, cancellable, error))
+    return FALSE;
+
+  g_autofree char *rev = NULL;
+  if (!ostree_repo_resolve_rev (repo, ref, FALSE, &rev, error))
+    return FALSE;
+
+  g_autoptr(GVariant) commit = NULL;
+  if (!ostree_repo_load_commit (repo, rev, &commit, NULL, error))
+    return FALSE;
+
+  g_autoptr(GVariant) meta = g_variant_get_child_value (commit, 0);
+  g_autoptr(GVariantDict) dict = g_variant_dict_new (meta);
+
+  g_autofree char *actual_nevra = NULL;
+  if (!g_variant_dict_lookup (dict, "rpmostree.nevra", "(sstsss)", &actual_nevra,
+                              out_name, out_epoch, out_version, out_release, out_arch))
+    return glnx_throw (error, "Cannot get nevra variant from commit metadata");
+
+  g_assert (g_str_equal (nevra, actual_nevra));
+  return TRUE;
+}
+
 gboolean
 rpmostree_context_download_metadata (RpmOstreeContext *self,
                                      GCancellable     *cancellable,
