@@ -108,7 +108,11 @@ servicedir       = $(dbusservicedir)
 polkit_policy_DATA = $(srcdir)/src/daemon/org.projectatomic.rpmostree1.policy
 polkit_policydir = $(datadir)/polkit-1/actions
 
+dbus_introspection_DATA = src/daemon/org.projectatomic.rpmostree1.xml
+dbus_introspectiondir = $(datadir)/dbus-1/interfaces
+
 EXTRA_DIST += \
+	$(dbus_introspection_DATA) \
 	$(dbusservice_DATA) \
 	$(polkit_policy_DATA) \
 	$(service_in_files) \
