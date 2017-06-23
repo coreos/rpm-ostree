@@ -1764,11 +1764,7 @@ rpmostree_commit (int            rootfs_fd,
   if (sepolicy && ostree_sepolicy_get_name (sepolicy) != NULL)
     ostree_repo_commit_modifier_set_sepolicy (commit_modifier, sepolicy);
   else if (enable_selinux)
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "SELinux enabled, but no policy found");
-      return FALSE;
-    }
+    return glnx_throw (error, "SELinux enabled, but no policy found");
 
   if (devino_cache)
     ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
@@ -1805,11 +1801,11 @@ rpmostree_commit (int            rootfs_fd,
 
   g_thread_join (g_steal_pointer (&commit_thread));
   if (!tdata.success)
-    return FALSE;
+    return glnx_prefix_error (error, "While writing rootfs to mtree");
 
   g_autoptr(GFile) root_tree = NULL;
   if (!ostree_repo_write_mtree (repo, mtree, &root_tree, cancellable, error))
-    return glnx_prefix_error (error, "Writing tree");
+    return glnx_prefix_error (error, "While writing tree");
 
   g_autofree char *parent_revision = NULL;
   if (refname)
@@ -1822,19 +1818,19 @@ rpmostree_commit (int            rootfs_fd,
   if (!ostree_repo_write_commit (repo, parent_revision, "", "", metadata,
                                  (OstreeRepoFile*)root_tree, &new_revision,
                                  cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "While writing commit");
 
   if (gpg_keyid)
     {
       if (!ostree_repo_sign_commit (repo, new_revision, gpg_keyid, NULL,
                                     cancellable, error))
-        return FALSE;
+        return glnx_prefix_error (error, "While signing commit");
     }
 
   if (write_commitid_to)
     {
       if (!g_file_set_contents (write_commitid_to, new_revision, -1, error))
-        return FALSE;
+        return glnx_prefix_error (error, "While writing to '%s'", write_commitid_to);
     }
   else if (refname)
     ostree_repo_transaction_set_ref (repo, NULL, refname, new_revision);
