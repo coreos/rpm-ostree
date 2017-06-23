@@ -878,6 +878,51 @@ checkout_pkg_metadata_by_nevra (RpmOstreeContext *self,
 }
 
 gboolean
+rpmostree_get_nevra_from_pkgcache (OstreeRepo  *repo,
+                                   const char  *nevra,
+                                   char       **out_name,
+                                   guint64     *out_epoch,
+                                   char       **out_version,
+                                   char       **out_release,
+                                   char       **out_arch,
+                                   GCancellable *cancellable,
+                                   GError  **error)
+{
+  g_autofree char *ref = NULL;
+  if (!find_cache_branch_by_nevra (repo, nevra, &ref, cancellable, error))
+    return FALSE;
+
+  g_autofree char *rev = NULL;
+  if (!ostree_repo_resolve_rev (repo, ref, FALSE, &rev, error))
+    return FALSE;
+
+  g_autoptr(GVariant) commit = NULL;
+  if (!ostree_repo_load_commit (repo, rev, &commit, NULL, error))
+    return FALSE;
+
+  g_autoptr(GVariant) meta = g_variant_get_child_value (commit, 0);
+  g_autoptr(GVariantDict) dict = g_variant_dict_new (meta);
+
+  g_autoptr(GVariant) nevra_variant =
+    g_variant_dict_lookup_value (dict, "rpmostree.nevra", G_VARIANT_TYPE ("a{sv}"));
+  if (!nevra_variant)
+    return glnx_throw (error, "Cannot get nevra variant from commit metadata");
+
+  g_autoptr(GVariantDict) nevra_dict = g_variant_dict_new (nevra_variant);
+  if (out_name)
+    g_assert (g_variant_dict_lookup (nevra_dict, "name", "s", out_name));
+  if (out_epoch)
+    g_assert (g_variant_dict_lookup (nevra_dict, "epoch", "t", out_epoch));
+  if (out_version)
+    g_assert (g_variant_dict_lookup (nevra_dict, "version", "s", out_version));
+  if (out_release)
+    g_assert (g_variant_dict_lookup (nevra_dict, "release", "s", out_release));
+  if (out_arch)
+    g_assert (g_variant_dict_lookup (nevra_dict, "arch", "s", out_arch));
+  return TRUE;
+}
+
+gboolean
 rpmostree_context_download_metadata (RpmOstreeContext *self,
                                      GCancellable     *cancellable,
                                      GError          **error)
