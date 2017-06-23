@@ -70,7 +70,8 @@ rpmostree_transaction_get_response_sync      (RPMOSTreeSysroot *sysroot_proxy,
 
 void
 rpmostree_print_signatures                   (GVariant *variant,
-                                              const gchar *sep);
+                                              const gchar *sep,
+                                              gboolean verbose);
 
 void
 rpmostree_print_package_diffs                (GVariant *variant);

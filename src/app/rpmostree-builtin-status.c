@@ -53,15 +53,24 @@ printpad (char c, guint n)
 }
 
 static void
-print_kv (const char *key,
-          guint       maxkeylen,
-          const char *value)
+print_kv_no_newline (const char *key,
+                     guint       maxkeylen,
+                     const char *value)
 {
   int pad = maxkeylen - strlen (key);
   g_assert (pad >= 0);
   /* +2 for initial leading spaces */
   printpad (' ', pad + 2);
-  printf ("%s: %s\n", key, value);
+  printf ("%s: %s", key, value);
+}
+
+static void
+print_kv (const char *key,
+          guint       maxkeylen,
+          const char *value)
+{
+  print_kv_no_newline (key, maxkeylen, value);
+  putc ('\n', stdout);
 }
 
 static GVariant *
@@ -403,16 +412,22 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         {
           if (signatures)
             {
-              guint n_sigs = g_variant_n_children (signatures);
-              g_autofree char *gpgheader = g_strdup_printf ("%u signature%s", n_sigs,
-                                                            n_sigs == 1 ? "" : "s");
               const guint gpgpad = max_key_len+4;
               char gpgspaces[gpgpad+1];
               memset (gpgspaces, ' ', gpgpad);
               gpgspaces[gpgpad] = '\0';
 
-              print_kv ("GPGSignature", max_key_len, gpgheader);
-              rpmostree_print_signatures (signatures, gpgspaces);
+              if (opt_verbose)
+                {
+                  const guint n_sigs = g_variant_n_children (signatures);
+                  g_autofree char *gpgheader =
+                    g_strdup_printf ("%u signature%s", n_sigs,
+                                     n_sigs == 1 ? "" : "s");
+                  print_kv ("GPGSignature", max_key_len, gpgheader);
+                }
+              else
+                print_kv_no_newline ("GPGSignature", max_key_len, "");
+              rpmostree_print_signatures (signatures, gpgspaces, opt_verbose);
             }
           else
             {
