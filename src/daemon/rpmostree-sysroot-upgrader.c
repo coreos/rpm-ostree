@@ -65,6 +65,9 @@ struct RpmOstreeSysrootUpgrader {
   OstreeRepoDevInoCache *devino_cache;
   int tmprootfs_dfd;
   RpmOstreeRefSack *rsack;
+  char *metatmpdir_path;
+  int metatmpdir_dfd;
+
 
   GPtrArray *overlay_packages; /* Finalized list of pkgs to overlay */
   GPtrArray *override_remove_packages; /* Finalized list of base pkgs to remove */
@@ -192,6 +195,15 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   if (self->tmprootfs_dfd != -1)
     (void)close (self->tmprootfs_dfd);
 
+  if (self->metatmpdir_path)
+    {
+      (void)glnx_shutil_rm_rf_at (AT_FDCWD, self->metatmpdir_path, NULL, NULL);
+      g_clear_pointer (&self->metatmpdir_path, g_free);
+    }
+
+  if (self->metatmpdir_dfd != -1)
+    (void)close (self->metatmpdir_dfd);
+
   g_clear_pointer (&self->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
 
   g_clear_object (&self->sysroot);
@@ -303,6 +315,7 @@ static void
 rpmostree_sysroot_upgrader_init (RpmOstreeSysrootUpgrader *self)
 {
   self->tmprootfs_dfd = -1;
+  self->metatmpdir_dfd = -1;
 }
 
 
@@ -534,6 +547,20 @@ generate_treespec (RpmOstreeSysrootUpgrader *self)
 }
 
 static gboolean
+initialize_metatmpdir (RpmOstreeSysrootUpgrader *self,
+                       GError                  **error)
+{
+  if (self->metatmpdir_dfd != -1)
+    return TRUE; /* already initialized; return early */
+
+  if (!rpmostree_mkdtemp ("/tmp/rpmostree-localpkgmeta-XXXXXX",
+                          &self->metatmpdir_path, &self->metatmpdir_dfd, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
 finalize_overrides (RpmOstreeSysrootUpgrader *self,
                     GCancellable             *cancellable,
                     GError                  **error)
@@ -544,14 +571,11 @@ finalize_overrides (RpmOstreeSysrootUpgrader *self,
   g_autoptr(GPtrArray) inactive_removals = g_ptr_array_new ();
   GLNX_HASH_TABLE_FOREACH (removals, const char*, pkgname)
     {
-      /* only match pkgname */
-      hy_autoquery HyQuery query = hy_query_create (self->rsack->sack);
-      hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
-      g_autoptr(GPtrArray) pkgs = hy_query_run (query);
+      g_autoptr(DnfPackage) pkg = NULL;
+      if (!rpmostree_sack_get_by_pkgname (self->rsack->sack, pkgname, &pkg, error))
+        return FALSE;
 
-      if (pkgs->len > 1)
-        return glnx_throw (error, "Multiple packages match \"%s\"", pkgname);
-      else if (pkgs->len == 1)
+      if (pkg)
         g_ptr_array_add (ret_final_removals, g_strdup (pkgname));
       else
         g_ptr_array_add (inactive_removals, (gpointer)pkgname);
@@ -579,12 +603,10 @@ finalize_overrides (RpmOstreeSysrootUpgrader *self,
  * libdnf after resolution).
  * */
 static gboolean
-finalize_packages_to_overlay (RpmOstreeSysrootUpgrader *self,
-                              GCancellable             *cancellable,
-                              GError                  **error)
+finalize_overlays (RpmOstreeSysrootUpgrader *self,
+                   GCancellable             *cancellable,
+                   GError                  **error)
 {
-  gboolean ret = FALSE;
-  g_autofree char *metadata_tmp_path = NULL;
   /* request (owned by origin) --> providing nevra (owned by rsack) */
   g_autoptr(GHashTable) inactive_requests = g_hash_table_new (g_str_hash, g_str_equal);
   g_autoptr(GPtrArray) ret_missing_pkgs = g_ptr_array_new_with_free_func (g_free);
@@ -596,42 +618,35 @@ finalize_packages_to_overlay (RpmOstreeSysrootUpgrader *self,
   GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
   if (g_hash_table_size (local_pkgs) > 0)
     {
-      glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
+      if (!initialize_metatmpdir (self, error))
+        return FALSE;
 
-      if (!rpmostree_mkdtemp ("/tmp/rpmostree-localpkgmeta-XXXXXX",
-                              &metadata_tmp_path, NULL, error))
-        goto out;
-
-      if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo,
-                                        cancellable, error))
-        goto out;
+      g_autoptr(OstreeRepo) pkgcache_repo = NULL;
+      if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
+        return FALSE;
 
       GLNX_HASH_TABLE_FOREACH_KV (local_pkgs, const char*, nevra, const char*, sha256)
         {
           g_autoptr(GVariant) header = NULL;
           g_autofree char *path =
-            g_strdup_printf ("%s/%s.rpm", metadata_tmp_path, nevra);
+            g_strdup_printf ("%s/%s.rpm", self->metatmpdir_path, nevra);
 
           if (!rpmostree_pkgcache_find_pkg_header (pkgcache_repo, nevra, sha256,
                                                    &header, cancellable, error))
-            goto out;
+            return FALSE;
 
           if (!glnx_file_replace_contents_at (AT_FDCWD, path,
                                               g_variant_get_data (header),
                                               g_variant_get_size (header),
                                               GLNX_FILE_REPLACE_NODATASYNC,
                                               cancellable, error))
-            goto out;
+            return FALSE;
 
           /* Also check if that exact NEVRA is already in the root (if the pkg
            * exists, but is a different EVR, depsolve will catch that). In the
            * future, we'll allow packages to replace base pkgs. */
           if (rpmostree_sack_has_subject (self->rsack->sack, nevra))
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Package '%s' is already in the base", nevra);
-              goto out;
-            }
+            return glnx_throw (error, "Package '%s' is already in the base", nevra);
 
           dnf_sack_add_cmdline_package (self->rsack->sack, path);
         }
@@ -665,11 +680,9 @@ finalize_packages_to_overlay (RpmOstreeSysrootUpgrader *self,
             continue; /* local RPM added up above */
 
           if (g_hash_table_contains (removals, name))
-            {
-              glnx_throw (error, "Cannot request '%s' provided by removed package '%s'",
-                          pattern, dnf_package_get_nevra (pkg));
-              goto out;
-            }
+            return glnx_throw (error,
+                               "Cannot request '%s' provided by removed package '%s'",
+                               pattern, dnf_package_get_nevra (pkg));
         }
 
       /* Otherwise, it's an inactive request: remember them so we can print a nice notice.
@@ -687,11 +700,7 @@ finalize_packages_to_overlay (RpmOstreeSysrootUpgrader *self,
 
   g_assert (!self->overlay_packages);
   self->overlay_packages = g_steal_pointer (&ret_missing_pkgs);
-  ret = TRUE;
-out:
-  if (metadata_tmp_path)
-    (void) glnx_shutil_rm_rf_at (AT_FDCWD, metadata_tmp_path, NULL, NULL);
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -887,7 +896,7 @@ maybe_do_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (!finalize_overrides (self, cancellable, error))
     return FALSE;
 
-  if (!finalize_packages_to_overlay (self, cancellable, error))
+  if (!finalize_overlays (self, cancellable, error))
     return FALSE;
 
   if (!requires_local_assembly (self))

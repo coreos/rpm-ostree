@@ -222,7 +222,7 @@ rpmostree_unpacker_read_metainfo (int fd,
     }
 
   ret_cpio_offset = Ftell (rpmfd);
-  
+
   if (out_fi)
     {
       ret_fi = rpmfiNew (ts, ret_header, RPMTAG_BASENAMES, (RPMFI_NOHEADER | RPMFI_FLAGS_INSTALL));
@@ -491,6 +491,17 @@ build_metadata_variant (RpmOstreeUnpacker *self,
                            g_variant_new_string (self->hdr_sha256));
   }
 
+  /* include basic NEVRA information so we don't have to write out and read back the header
+   * just to get e.g. the pkgname */
+  g_autofree char *nevra = rpmostree_unpacker_get_nevra (self);
+  g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.nevra",
+                         g_variant_new ("(sstsss)", nevra,
+                                        headerGetString (self->hdr, RPMTAG_NAME),
+                                        headerGetNumber (self->hdr, RPMTAG_EPOCH),
+                                        headerGetString (self->hdr, RPMTAG_VERSION),
+                                        headerGetString (self->hdr, RPMTAG_RELEASE),
+                                        headerGetString (self->hdr, RPMTAG_ARCH)));
+
   /* The current sepolicy that was used to label the unpacked files is important
    * to record. It will help us during future overlays to determine whether the
    * files should be relabeled. */
@@ -507,7 +518,7 @@ build_metadata_variant (RpmOstreeUnpacker *self,
    * compatible increments.
    */
   g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.unpack_minor_version",
-                         g_variant_new_uint32 (3));
+                         g_variant_new_uint32 (4));
 
   if (self->pkg)
     {

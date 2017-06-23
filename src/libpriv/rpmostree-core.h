@@ -89,6 +89,17 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
                                     GCancellable  *cancellable,
                                     GError       **error);
 
+gboolean
+rpmostree_get_nevra_from_pkgcache (OstreeRepo   *repo,
+                                   const char   *nevra,
+                                   char        **out_name,
+                                   guint64      *out_epoch,
+                                   char        **out_version,
+                                   char        **out_release,
+                                   char        **out_arch,
+                                   GCancellable *cancellable,
+                                   GError  **error);
+
 gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
                                                GCancellable      *cancellable,
                                                GError           **error);

@@ -1111,7 +1111,30 @@ gboolean
 rpmostree_sack_has_subject (DnfSack *sack,
                             const char *pattern)
 {
-  g_autoptr(GPtrArray) matches =
-    rpmostree_get_matching_packages (sack, pattern);
+  g_autoptr(GPtrArray) matches = rpmostree_get_matching_packages (sack, pattern);
   return matches->len > 0;
+}
+
+/* Errors out if multiple pkgs match pkgname. Otherwise, sets out_pkg to the found pkg, or
+ * NULL if not found. */
+gboolean
+rpmostree_sack_get_by_pkgname (DnfSack     *sack,
+                               const char  *pkgname,
+                               DnfPackage **out_pkg,
+                               GError     **error)
+{
+  g_autoptr(DnfPackage) ret_pkg = NULL;
+  hy_autoquery HyQuery query = hy_query_create (sack);
+  hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
+  g_autoptr(GPtrArray) pkgs = hy_query_run (query);
+
+  if (pkgs->len > 1)
+    return glnx_throw (error, "Multiple packages match \"%s\"", pkgname);
+  else if (pkgs->len == 1)
+    ret_pkg = g_object_ref (pkgs->pdata[0]);
+  else /* for obviousness */
+    ret_pkg = NULL;
+
+  *out_pkg = g_steal_pointer (&ret_pkg);
+  return TRUE;
 }
