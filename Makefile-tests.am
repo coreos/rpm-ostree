@@ -74,10 +74,6 @@ tests_check_jsonutil_CPPFLAGS = $(testbin_cppflags)
 tests_check_jsonutil_CFLAGS = $(testbin_cflags)
 tests_check_jsonutil_LDADD = $(testbin_ldadd)
 
-tests_check_cache_branch_to_nevra_CPPFLAGS = $(testbin_cppflags)
-tests_check_cache_branch_to_nevra_CFLAGS = $(testbin_cflags)
-tests_check_cache_branch_to_nevra_LDADD = $(testbin_ldadd)
-
 tests_check_postprocess_CPPFLAGS = $(testbin_cppflags)
 tests_check_postprocess_CFLAGS = $(testbin_cflags)
 tests_check_postprocess_LDADD = $(testbin_ldadd)
@@ -92,7 +88,6 @@ tests/check/test-ucontainer.sh: tests/common/compose/test-repo.repo
 
 uninstalled_test_programs = \
 	tests/check/jsonutil			\
-	tests/check/cache_branch_to_nevra			\
 	tests/check/postprocess			\
 	tests/check/test-utils			\
 	$(NULL)
