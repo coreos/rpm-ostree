@@ -401,10 +401,10 @@ on_transaction_progress (GDBusProxy *proxy,
 
   if (g_strcmp0 (signal_name, "SignatureProgress") == 0)
     {
-      g_autoptr(GVariant) sig = NULL;
-      sig = g_variant_get_child_value (parameters, 0);
-      rpmostree_print_signatures (g_variant_ref (sig), "  ");
-      add_status_line (tp, "\n", -1);
+      /* We used to print the signature here, but doing so interferes with the
+       * libostree HTTP progress, and it gets really, really verbose when doing
+       * a deploy. Let's follow the Unix philosophy here: silence is success.
+       */
     }
   else if (g_strcmp0 (signal_name, "Message") == 0)
     {
