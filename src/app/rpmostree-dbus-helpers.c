@@ -683,6 +683,8 @@ rpmostree_print_signatures (GVariant *variant,
           g_variant_get_child (v, OSTREE_GPG_SIGNATURE_ATTR_VALID, "b", &valid);
           const char *fingerprint;
           g_variant_get_child (v, OSTREE_GPG_SIGNATURE_ATTR_FINGERPRINT, "&s", &fingerprint);
+          if (i != 0)
+            g_string_append (sigs_buffer, sep);
           g_string_append_printf (sigs_buffer, "%s signature by %s\n", valid ? "Valid" : "Invalid",
                                   fingerprint);
         }
