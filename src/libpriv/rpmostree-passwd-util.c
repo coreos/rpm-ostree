@@ -77,23 +77,19 @@ dir_contains_uid_or_gid (GFile         *root,
                          GCancellable  *cancellable,
                          GError       **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(GFileInfo) file_info = NULL;
-  guint32 type;
-  guint32 tid;
   gboolean found_match = FALSE;
 
   /* zero it out, just to be sure */
   *out_found_match = found_match;
 
-  file_info = g_file_query_info (root, OSTREE_GIO_FAST_QUERYINFO,
-                                 G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                 cancellable, error);
+  g_autoptr(GFileInfo) file_info = g_file_query_info (root, OSTREE_GIO_FAST_QUERYINFO,
+                                                      G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
+                                                      cancellable, error);
   if (!file_info)
-    goto out;
+    return FALSE;
 
-  type = g_file_info_get_file_type (file_info);
-
+  GFileType type = g_file_info_get_file_type (file_info);
+  guint32 tid;
   switch (type)
     {
     case G_FILE_TYPE_DIRECTORY:
@@ -115,15 +111,13 @@ dir_contains_uid_or_gid (GFile         *root,
   /* Now recurse for dirs. */
   if (!found_match && type == G_FILE_TYPE_DIRECTORY)
     {
-      g_autoptr(GFileEnumerator) dir_enum = NULL;
-
-      dir_enum = g_file_enumerate_children (root, OSTREE_GIO_FAST_QUERYINFO, 
-                                            G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                            NULL, 
-                                            error);
+      g_autoptr(GFileEnumerator) dir_enum =
+        g_file_enumerate_children (root, OSTREE_GIO_FAST_QUERYINFO,
+                                   G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
+                                   NULL, error);
       if (!dir_enum)
-        goto out;
-  
+        return FALSE;
+
       while (TRUE)
         {
           GFileInfo *file_info;
@@ -131,23 +125,21 @@ dir_contains_uid_or_gid (GFile         *root,
 
           if (!g_file_enumerator_iterate (dir_enum, &file_info, &child,
                                           cancellable, error))
-            goto out;
+            return FALSE;
           if (!file_info)
             break;
 
           if (!dir_contains_uid_or_gid (child, id, attr, &found_match,
                                         cancellable, error))
-            goto out;
+            return FALSE;
 
           if (found_match)
             break;
         }
     }
-  
-  ret = TRUE;
+
   *out_found_match = found_match;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -272,49 +264,36 @@ rpmostree_check_passwd_groups (gboolean         passwd,
                                GCancellable    *cancellable,
                                GError         **error)
 {
-  gboolean ret = FALSE;
   const char *direct = NULL;
   const char *chk_type = "previous";
   const char *commit_filepath = passwd ? "usr/lib/passwd" : "usr/lib/group";
   const char *json_conf_name  = passwd ? "check-passwd" : "check-groups";
   const char *json_conf_ign   = passwd ? "ignore-removed-users" : "ignore-removed-groups";
-  g_autoptr(GFile) old_path = NULL;
   g_autoptr(GFile) new_path = g_file_resolve_relative_path (yumroot, commit_filepath);
   g_autoptr(GPtrArray) ignore_removed_ents = NULL;
   gboolean ignore_all_removed = FALSE;
-  g_autofree char *old_contents = NULL;
-  g_autofree char *new_contents = NULL;
   g_autoptr(GPtrArray) old_ents = NULL;
   g_autoptr(GPtrArray) new_ents = NULL;
-  unsigned int oiter = 0;
-  unsigned int niter = 0;
 
   if (json_object_has_member (treedata, json_conf_name))
     {
       JsonObject *chk = json_object_get_object_member (treedata,json_conf_name);
       if (!chk)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "%s is not an object", json_conf_name);
-          goto out;
-        }
+        return glnx_throw (error, "%s is not an object", json_conf_name);
 
-      chk_type = _rpmostree_jsonutil_object_require_string_member (chk, "type",
-                                                                   error);
+      chk_type = _rpmostree_jsonutil_object_require_string_member (chk, "type", error);
       if (!chk_type)
-        goto out;
+        return FALSE;
       if (g_str_equal (chk_type, "none"))
-        {
-          ret = TRUE;
-          goto out;
-        }
+        return TRUE; /* Note early return */
+
       else if (g_str_equal (chk_type, "file"))
         {
           direct = _rpmostree_jsonutil_object_require_string_member (chk,
                                                                      "filename",
                                                                      error);
           if (!direct)
-            goto out;
+            return FALSE;
         }
       else if (g_str_equal (chk_type, "data"))
         {
@@ -324,11 +303,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
           GList *iter;
 
           if (!ents_node)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "No entries member for data in %s", json_conf_name);
-              goto out;
-            }
+            return glnx_throw (error, "No entries member for data in %s", json_conf_name);
 
           ents_obj = json_node_get_object (ents_node);
 
@@ -351,7 +326,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
               if (child_type != JSON_NODE_ARRAY)
                 {
                   if (!_rpmostree_jsonutil_object_require_int_member (ents_obj, name, &uid, error))
-                    goto out;
+                    return FALSE;
                   gid = uid;
                 }
               else
@@ -360,18 +335,14 @@ rpmostree_check_passwd_groups (gboolean         passwd,
                   guint len = json_array_get_length (child_array);
 
                   if (!len || (len > 2))
-                    {
-                      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                                   "Array %s is only for uid and gid. Has length %u",
-                                   name, len);
-                      goto out;
-                    }
+                    return glnx_throw (error, "Array %s is only for uid and gid. Has length %u",
+                                       name, len);
                   if (!_rpmostree_jsonutil_array_require_int_element (child_array, 0, &uid, error))
-                    goto out;
+                    return FALSE;
                   if (len == 1)
                     gid = uid;
                   else if (!_rpmostree_jsonutil_array_require_int_element (child_array, 1, &gid, error))
-                    goto out;
+                    return FALSE;
                 }
 
               convent->name = g_strdup (name);
@@ -386,7 +357,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
               struct conv_group_ent *convent = g_new (struct conv_group_ent, 1);
 
               if (!_rpmostree_jsonutil_object_require_int_member (ents_obj, name, &gid, error))
-                goto out;
+                return FALSE;
 
               convent->name = g_strdup (name);
               convent->gid  = gid;
@@ -395,27 +366,28 @@ rpmostree_check_passwd_groups (gboolean         passwd,
         }
     }
 
+  g_autoptr(GFile) old_path = NULL;
+  g_autofree char *old_contents = NULL;
   if (g_str_equal (chk_type, "previous"))
     {
       if (previous_commit != NULL)
         {
           g_autoptr(GFile) root = NULL;
-          
+
           if (!ostree_repo_read_commit (repo, previous_commit, &root, NULL, NULL, error))
-            goto out;
-          
+            return FALSE;
+
           old_path = g_file_resolve_relative_path (root, commit_filepath);
           /* Note this one can't be ported to glnx_file_get_contents_utf8_at() because
            * we're loading from ostree via `OstreeRepoFile`.
            */
           if (!g_file_load_contents (old_path, cancellable, &old_contents, NULL, NULL, error))
-            goto out;
+            return FALSE;
         }
       else
         {
           /* Early return */
-          ret = TRUE;
-          goto out;
+          return TRUE;
         }
     }
   else if (g_str_equal (chk_type, "file"))
@@ -424,7 +396,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
       old_contents = glnx_file_get_contents_utf8_at (AT_FDCWD, gs_file_get_path_cached (old_path), NULL,
                                                      cancellable, error);
       if (!old_contents)
-        goto out;
+        return FALSE;
     }
 
   if (g_str_equal (chk_type, "previous") || g_str_equal (chk_type, "file"))
@@ -441,10 +413,11 @@ rpmostree_check_passwd_groups (gboolean         passwd,
   else
     g_ptr_array_sort (old_ents, compare_group_ents);
 
-  new_contents = glnx_file_get_contents_utf8_at (AT_FDCWD, gs_file_get_path_cached (new_path), NULL,
-                                                 cancellable, error);
+  g_autofree char *new_contents =
+    glnx_file_get_contents_utf8_at (AT_FDCWD, gs_file_get_path_cached (new_path), NULL,
+                                    cancellable, error);
   if (!new_contents)
-      goto out;
+      return FALSE;
 
   if (json_object_has_member (treedata, json_conf_ign))
     {
@@ -452,7 +425,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
       if (!_rpmostree_jsonutil_append_string_array_to (treedata, json_conf_ign,
                                                        ignore_removed_ents,
                                                        error))
-        goto out;
+        return FALSE;
     }
   ignore_all_removed = ptrarray_contains_str (ignore_removed_ents, "*");
 
@@ -467,6 +440,8 @@ rpmostree_check_passwd_groups (gboolean         passwd,
       g_ptr_array_sort (new_ents, compare_group_ents);
     }
 
+  unsigned int oiter = 0;
+  unsigned int niter = 0;
   while ((oiter < old_ents->len) && (niter < new_ents->len))
     if (passwd)
     {
@@ -479,19 +454,11 @@ rpmostree_check_passwd_groups (gboolean         passwd,
       if (cmp == 0)
         {
           if (odata->uid != ndata->uid)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "passwd UID changed: %s (%u to %u)",
-                           odata->name, (guint)odata->uid, (guint)ndata->uid);
-              goto out;
-            }
+            return glnx_throw (error, "passwd UID changed: %s (%u to %u)",
+                               odata->name, (guint)odata->uid, (guint)ndata->uid);
           if (odata->gid != ndata->gid)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "passwd GID changed: %s (%u to %u)",
-                           odata->name, (guint)odata->gid, (guint)ndata->gid);
-              goto out;
-            }
+            return glnx_throw (error, "passwd GID changed: %s (%u to %u)",
+                               odata->name, (guint)odata->gid, (guint)ndata->gid);
 
           ++oiter;
           ++niter;
@@ -510,14 +477,10 @@ rpmostree_check_passwd_groups (gboolean         passwd,
             {
               if (!dir_contains_uid (yumroot, odata->uid, &found_matching_uid,
                                      cancellable, error))
-                goto out;
+                return FALSE;
 
               if (found_matching_uid)
-                {
-                  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "User missing from new passwd file: %s", odata->name);
-                  goto out;
-                }
+                return glnx_throw (error, "User missing from new passwd file: %s", odata->name);
               else
                 g_print ("User removed from new passwd file: %s\n",
                          odata->name);
@@ -542,12 +505,8 @@ rpmostree_check_passwd_groups (gboolean         passwd,
       if (cmp == 0)
         {
           if (odata->gid != ndata->gid)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "group GID changed: %s (%u to %u)",
-                           odata->name, (guint)odata->gid, (guint)ndata->gid);
-              goto out;
-            }
+            return glnx_throw (error, "group GID changed: %s (%u to %u)",
+                               odata->name, (guint)odata->gid, (guint)ndata->gid);
 
           ++oiter;
           ++niter;
@@ -568,14 +527,10 @@ rpmostree_check_passwd_groups (gboolean         passwd,
 
               if (!dir_contains_gid (yumroot, odata->gid, &found_gid,
                                      cancellable, error))
-                goto out;
+                return FALSE;
 
               if (found_gid)
-                {
-                  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Group missing from new group file: %s", odata->name);
-                  goto out;
-                }
+                return glnx_throw (error, "Group missing from new group file: %s", odata->name);
               else
                 g_print ("Group removed from new passwd file: %s\n",
                          odata->name);
@@ -596,9 +551,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
         {
           struct conv_passwd_ent *odata = old_ents->pdata[oiter];
 
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "User missing from new passwd file: %s", odata->name);
-          goto out;
+          return glnx_throw (error, "User missing from new passwd file: %s", odata->name);
         }
 
       while (niter < new_ents->len)
@@ -615,9 +568,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
         {
           struct conv_group_ent *odata = old_ents->pdata[oiter];
 
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Group missing from new group file: %s", odata->name);
-          goto out;
+          return glnx_throw (error, "Group missing from new group file: %s", odata->name);
         }
 
       while (niter < new_ents->len)
@@ -629,9 +580,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
         }
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 /* See "man 5 passwd" We just make sure the name and uid/gid match,
@@ -674,14 +623,9 @@ gfopen (const char       *path,
         GCancellable     *cancellable,
         GError          **error)
 {
-  FILE *ret = NULL; 
-
-  ret = fopen (path, mode);
+  FILE *ret = fopen (path, mode);
   if (!ret)
-    {
-      glnx_set_prefix_error_from_errno (error, "fopen(%s)", path);
-      return NULL;
-    }
+    return glnx_null_throw_errno_prefix (error, "fopen(%s)", path);
   return ret;
 }
 
@@ -691,10 +635,7 @@ gfflush (FILE         *f,
          GError      **error)
 {
   if (fflush (f) != 0)
-    {
-      glnx_set_prefix_error_from_errno (error, "%s", "fflush");
-      return FALSE;
-    }
+    return glnx_throw_errno_prefix (error, "fflush");
   return TRUE;
 }
 
@@ -714,37 +655,29 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
                                       GCancellable  *cancellable,
                                       GError       **error)
 {
-  gboolean ret = FALSE;
   const char *name = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD ? "passwd" : "group";
+
   g_autofree char *src_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, NULL);
-  g_autofree char *etctmp_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, ".tmp", NULL);
-  g_autofree char *usrdest_path = g_strconcat (gs_file_get_path_cached (rootfs), "/usr/lib/", name, NULL);
-  _cleanup_stdio_file_ FILE *src_stream = NULL;
-  _cleanup_stdio_file_ FILE *etcdest_stream = NULL;
-  _cleanup_stdio_file_ FILE *usrdest_stream = NULL;
-
-  src_stream = gfopen (src_path, "r", cancellable, error);
+  _cleanup_stdio_file_ FILE *src_stream = gfopen (src_path, "r", cancellable, error);
   if (!src_stream)
-    goto out;
+    return FALSE;
 
-  etcdest_stream = gfopen (etctmp_path, "w", cancellable, error);
+  g_autofree char *etctmp_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, ".tmp", NULL);
+  _cleanup_stdio_file_ FILE *etcdest_stream = gfopen (etctmp_path, "w", cancellable, error);
   if (!etcdest_stream)
-    goto out;
+    return FALSE;
 
-  usrdest_stream = gfopen (usrdest_path, "a", cancellable, error);
+  g_autofree char *usrdest_path = g_strconcat (gs_file_get_path_cached (rootfs), "/usr/lib/", name, NULL);
+  _cleanup_stdio_file_ FILE *usrdest_stream = gfopen (usrdest_path, "a", cancellable, error);
   if (!usrdest_stream)
-    goto out;
+    return FALSE;
 
   errno = 0;
   while (TRUE)
     {
       struct passwd *pw = NULL;
       struct group *gr = NULL;
-      FILE *deststream;
-      int r;
-      guint32 id;
-      const char *name;
-      
+
       if (kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD)
         pw = fgetpwent (src_stream);
       else
@@ -753,15 +686,13 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
       if (!(pw || gr))
         {
           if (errno != 0 && errno != ENOENT)
-            {
-              glnx_set_prefix_error_from_errno (error, "%s", "fgetpwent");
-              goto out;
-            }
+            return glnx_throw_errno_prefix (error, "fgetpwent");
           else
             break;
         }
 
-
+      guint32 id;
+      const char *name;
       if (pw)
         {
           id = pw->pw_uid;
@@ -773,11 +704,13 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
           name = gr->gr_name;
         }
 
+      FILE *deststream;
       if (id == 0)
         deststream = etcdest_stream;
       else
         deststream = usrdest_stream;
 
+      int r;
       if (pw)
         r = putpwent (pw, deststream);
       else
@@ -801,27 +734,18 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
         }
 
       if (r == -1)
-        {
-          glnx_set_prefix_error_from_errno (error, "%s", "putpwent");
-          goto out;
-        }
+        return glnx_throw_errno_prefix (error, "putpwent");
     }
 
   if (!gfflush (etcdest_stream, cancellable, error))
-    goto out;
+    return FALSE;
   if (!gfflush (usrdest_stream, cancellable, error))
-    goto out;
+    return FALSE;
 
   if (rename (etctmp_path, src_path) != 0)
-    {
-      glnx_set_prefix_error_from_errno (error, "rename(%s, %s)",
-                                        etctmp_path, src_path);
-      goto out;
-    }
+    return glnx_throw_errno_prefix (error, "rename");
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static FILE *
@@ -830,17 +754,10 @@ target_etc_filename (GFile         *yumroot,
                      GCancellable  *cancellable,
                      GError       **error)
 {
-  FILE *ret = NULL;
   g_autofree char *etc_subpath = g_strconcat ("etc/", filename, NULL);
   g_autofree char *target_etc =
     g_build_filename (gs_file_get_path_cached (yumroot), etc_subpath, NULL);
-
-  ret = gfopen (target_etc, "w", cancellable, error);
-  if (!ret)
-    goto out;
-
- out:
-  return ret;
+  return gfopen (target_etc, "w", cancellable, error);
 }
 
 static gboolean
@@ -850,34 +767,28 @@ _rpmostree_gfile2stdio (GFile         *source,
                         GCancellable  *cancellable,
                         GError       **error)
 {
-  gboolean ret = FALSE;
   gsize len;
-  FILE *src_stream = NULL;
 
   /* We read the file into memory using Gio (which talks
    * to libostree), then memopen it, which works with libc.
    */
   if (!g_file_load_contents (source, cancellable,
                              storage_buf, &len, NULL, error))
-    goto out;
+    return FALSE;
 
   if (len == 0)
-    goto done;
-
-  src_stream = fmemopen (*storage_buf, len, "r");
-  if (!src_stream)
     {
-      glnx_set_error_from_errno (error);
-      goto out;
+      *ret_src_stream = NULL;
+      return TRUE; /* Early return */
     }
 
- done:
-  ret = TRUE;
- out:
-  *ret_src_stream = src_stream;
-  return ret;
-}
+  FILE *src_stream = fmemopen (*storage_buf, len, "r");
+  if (!src_stream)
+    return glnx_throw_errno_prefix (error, "fmemopen");
 
+  *ret_src_stream = g_steal_pointer (&src_stream);
+  return TRUE;
+}
 
 static gboolean
 concat_entries (FILE    *src_stream,
@@ -886,8 +797,6 @@ concat_entries (FILE    *src_stream,
                 GHashTable *seen_names,
                 GError **error)
 {
-  gboolean ret = FALSE;
-
   errno = 0;
   while (TRUE)
     {
@@ -904,10 +813,7 @@ concat_entries (FILE    *src_stream,
       if (!(pw || gr))
         {
           if (errno != 0 && errno != ENOENT)
-            {
-              glnx_set_prefix_error_from_errno (error, "%s", "fgetpwent");
-              goto out;
-            }
+            return glnx_throw_errno_prefix (error, "fgetpwent");
           else
             break;
         }
@@ -928,15 +834,10 @@ concat_entries (FILE    *src_stream,
         r = putgrent (gr, dest_stream);
 
       if (r == -1)
-        {
-          glnx_set_prefix_error_from_errno (error, "%s", "putpwent");
-          goto out;
-        }
+        return glnx_throw_errno_prefix (error, "putpwent");
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -946,7 +847,6 @@ concat_passwd_file (GFile           *yumroot,
                     GCancellable    *cancellable,
                     GError         **error)
 {
-  gboolean ret = FALSE;
   const char *filename = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD ? "passwd" : "group";
   g_autofree char *usretc_subpath = g_strconcat ("usr/etc/", filename, NULL);
   g_autofree char *usrlib_subpath = g_strconcat ("usr/lib/", filename, NULL);
@@ -956,52 +856,45 @@ concat_passwd_file (GFile           *yumroot,
     g_file_resolve_relative_path (previous_commit, usrlib_subpath);
   g_autoptr(GHashTable) seen_names =
     g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
-  g_autofree char *contents = NULL;
   GFile *sources[] = { orig_etc_content, orig_usrlib_content };
-  guint i;
-  gboolean have_etc, have_usr;
   _cleanup_stdio_file_ FILE *dest_stream = NULL;
 
-  have_etc = g_file_query_exists (orig_etc_content, NULL);
-  have_usr = g_file_query_exists (orig_usrlib_content, NULL);
+  gboolean have_etc = g_file_query_exists (orig_etc_content, NULL);
+  gboolean have_usr = g_file_query_exists (orig_usrlib_content, NULL);
 
   /* This could actually happen after we transition to
    * systemd-sysusers; we won't have a need for preallocated user data
    * in the tree.
    */
   if (!(have_etc || have_usr))
-    {
-      ret = TRUE;
-      goto out;
-    }
+    return TRUE;
 
   if (!(dest_stream = target_etc_filename (yumroot, filename,
                                            cancellable, error)))
-      goto out;
+    return FALSE;
 
-  for (i = 0; i < G_N_ELEMENTS (sources); i++)
+  for (guint i = 0; i < G_N_ELEMENTS (sources); i++)
     {
       GFile *source = sources[i];
       _cleanup_stdio_file_ FILE *src_stream = NULL;
 
+      g_autofree char *contents = NULL;
       if (!_rpmostree_gfile2stdio (source, &contents, &src_stream,
                                    cancellable, error))
-        goto out;
+        return FALSE;
 
       if (!src_stream)
         continue;
 
       if (!concat_entries (src_stream, dest_stream, kind,
                            seen_names, error))
-        goto out;
+        return FALSE;
     }
 
   if (!gfflush (dest_stream, cancellable, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -1013,7 +906,6 @@ _data_from_json (GFile           *yumroot,
                  GCancellable    *cancellable,
                  GError         **error)
 {
-  gboolean ret = FALSE;
   const gboolean passwd = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD;
   const char *json_conf_name = passwd ? "check-passwd" : "check-groups";
   const char *filebasename   = passwd ? "passwd" : "group";
@@ -1038,7 +930,7 @@ _data_from_json (GFile           *yumroot,
   chk_type = _rpmostree_jsonutil_object_require_string_member (chk, "type",
                                                                error);
   if (!chk_type)
-    goto out;
+    return FALSE;
 
   if (!g_str_equal (chk_type, "file"))
     return TRUE;
@@ -1047,16 +939,16 @@ _data_from_json (GFile           *yumroot,
                                                                "filename",
                                                                error);
   if (!filename)
-    goto out;
+    return FALSE;
 
   source = g_file_resolve_relative_path (treefile_dirpath, filename);
   if (!source)
-    goto out;
+    return FALSE;
 
   /* migrate the check data from the specified file to /etc */
   if (!_rpmostree_gfile2stdio (source, &contents, &src_stream,
                                cancellable, error))
-    goto out;
+    return FALSE;
 
   if (!src_stream)
     return TRUE;
@@ -1066,14 +958,12 @@ _data_from_json (GFile           *yumroot,
 
   if (!(dest_stream = target_etc_filename (yumroot, filebasename,
                                            cancellable, error)))
-    goto out;
+    return FALSE;
 
   if (!concat_entries (src_stream, dest_stream, kind, seen_names, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 gboolean
@@ -1085,7 +975,6 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                          GCancellable    *cancellable,
                                          GError         **error)
 {
-  gboolean ret = FALSE;
   gboolean found_passwd_data = FALSE;
   gboolean found_groups_data = FALSE;
   gboolean perform_migrate = FALSE;
@@ -1100,16 +989,13 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
   if (mkdirat (rootfs_dfd, "etc", 0755) < 0)
     {
       if (errno != ENOENT)
-        {
-          glnx_set_error_from_errno (error);
-          goto out;
-        }
+        return glnx_throw_errno_prefix (error, "mkdirat");
     }
 
   if (!_data_from_json (yumroot, treefile_dirpath,
                         treedata, RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
                         &found_passwd_data, cancellable, error))
-    goto out;
+    return FALSE;
   perform_migrate = !found_passwd_data;
 
   if (!previous_root)
@@ -1118,12 +1004,12 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
   if (perform_migrate && !concat_passwd_file (yumroot, previous_root,
                                               RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
                                               cancellable, error))
-    goto out;
+    return FALSE;
 
   if (!_data_from_json (yumroot, treefile_dirpath,
                         treedata, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
                         &found_groups_data, cancellable, error))
-    goto out;
+    return FALSE;
 
   perform_migrate = !found_groups_data;
 
@@ -1133,27 +1019,17 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
   if (perform_migrate && !concat_passwd_file (yumroot, previous_root,
                                               RPM_OSTREE_PASSWD_MIGRATE_GROUP,
                                               cancellable, error))
-    goto out;
+    return FALSE;
 
   /* We should error if we are getting passwd data from JSON and group from
    * previous commit, or vice versa, as that'll confuse everyone when it goes
    * wrong. */
   if ( found_passwd_data && !found_groups_data)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Configured to migrate passwd data from JSON, and group data from commit");
-      goto out;
-    }
+    return glnx_throw (error, "Configured to migrate passwd data from JSON, and group data from commit");
   if (!found_passwd_data &&  found_groups_data)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Configured to migrate passwd data from commit, and group data from JSON");
-      goto out;
-    }
+    return glnx_throw (error, "Configured to migrate passwd data from commit, and group data from JSON");
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static const char *usrlib_pwgrp_files[] = { "passwd", "group" };
@@ -1182,10 +1058,7 @@ rootfs_has_usrlib_passwd (int rootfs_dfd,
           return TRUE;
         }
       else
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "fstatat");
     }
   *out_have_passwd = TRUE;
   return TRUE;
@@ -1206,10 +1079,7 @@ rpmostree_passwd_cleanup (int rootfs_dfd, GCancellable *cancellable, GError **er
           if (errno == ENOENT)
             ;
           else
-            {
-              glnx_set_error_from_errno (error);
-              return FALSE;
-            }
+            return glnx_throw_errno_prefix (error, "unlinkat");
         }
     }
 
@@ -1248,10 +1118,7 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
       /* Retain the current copies in /etc as backups */
       if (renameat (rootfs_dfd, usretcfile, rootfs_dfd,
                     glnx_strjoina (usretcfile, ".rpmostreesave")) < 0)
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "renameat");
 
       /* Copy /usr/lib/{passwd,group} -> /usr/etc (breaking hardlinks) */
       if (!glnx_file_copy_at (rootfs_dfd, usrlibfile, NULL,
@@ -1266,10 +1133,7 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
         return FALSE;
 
       if (renameat (rootfs_dfd, usrlibfiletmp, rootfs_dfd, usrlibfile) < 0)
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "renameat");
     }
 
   /* And break hardlinks for the shadow files, since we don't have
@@ -1285,10 +1149,7 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
       if (fstatat (rootfs_dfd, src, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
         {
           if (errno != ENOENT)
-            {
-              glnx_set_error_from_errno (error);
-              return FALSE;
-            }
+            return glnx_throw_errno_prefix (error, "fstatat");
           continue;
         }
 
@@ -1297,12 +1158,9 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
                               cancellable, error))
         return FALSE;
       if (renameat (rootfs_dfd, tmp, rootfs_dfd, src) < 0)
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "renameat");
     }
-  
+
   return TRUE;
 }
 
@@ -1316,17 +1174,11 @@ rpmostree_passwd_complete_rpm_layering (int       rootfs_dfd,
       /* And now the inverse: /usr/etc/passwd -> /usr/lib/passwd */
       if (renameat (rootfs_dfd, glnx_strjoina ("usr/etc/", file),
                     rootfs_dfd, glnx_strjoina ("usr/lib/", file)) < 0)
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "renameat");
       /* /usr/etc/passwd.rpmostreesave -> /usr/etc/passwd */
       if (renameat (rootfs_dfd, glnx_strjoina ("usr/etc/", file, ".rpmostreesave"),
                     rootfs_dfd, glnx_strjoina ("usr/etc/", file)) < 0)
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "renameat");
     }
   /* However, we leave the (potentially modified) shadow files in place.
    * In actuality, nothing should change /etc/shadow or /etc/gshadow, so
