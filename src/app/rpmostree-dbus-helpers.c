@@ -662,25 +662,35 @@ out:
 
 void
 rpmostree_print_signatures (GVariant *variant,
-                            const gchar *sep)
+                            const gchar *sep,
+                            gboolean verbose)
 {
-  GString *sigs_buffer;
-  guint i;
-  guint n_sigs = g_variant_n_children (variant);
-  sigs_buffer = g_string_sized_new (256);
+  const guint n_sigs = g_variant_n_children (variant);
+  g_autoptr(GString) sigs_buffer = g_string_sized_new (256);
 
-  for (i = 0; i < n_sigs; i++)
+  for (guint i = 0; i < n_sigs; i++)
     {
       g_autoptr(GVariant) v = NULL;
       if (i != 0)
         g_string_append_c (sigs_buffer, '\n');
       g_variant_get_child (variant, i, "v", &v);
-      ostree_gpg_verify_result_describe_variant (v, sigs_buffer, sep,
-                                                 OSTREE_GPG_SIGNATURE_FORMAT_DEFAULT);
+      if (verbose)
+        ostree_gpg_verify_result_describe_variant (v, sigs_buffer, sep,
+                                                   OSTREE_GPG_SIGNATURE_FORMAT_DEFAULT);
+      else
+        {
+          gboolean valid;
+          g_variant_get_child (v, OSTREE_GPG_SIGNATURE_ATTR_VALID, "b", &valid);
+          const char *fingerprint;
+          g_variant_get_child (v, OSTREE_GPG_SIGNATURE_ATTR_FINGERPRINT, "&s", &fingerprint);
+          if (i != 0)
+            g_string_append (sigs_buffer, sep);
+          g_string_append_printf (sigs_buffer, "%s signature by %s\n", valid ? "Valid" : "Invalid",
+                                  fingerprint);
+        }
     }
 
   g_print ("%s", sigs_buffer->str);
-  g_string_free (sigs_buffer, TRUE);
 }
 
 static gint
