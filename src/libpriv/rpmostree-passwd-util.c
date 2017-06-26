@@ -769,8 +769,6 @@ _rpmostree_gfile2stdio (GFile         *source,
 {
   gsize len;
 
-  *ret_src_stream = NULL;
-
   /* We read the file into memory using Gio (which talks
    * to libostree), then memopen it, which works with libc.
    */
@@ -779,7 +777,10 @@ _rpmostree_gfile2stdio (GFile         *source,
     return FALSE;
 
   if (len == 0)
-    return TRUE;
+    {
+      *ret_src_stream = NULL;
+      return TRUE; /* Early return */
+    }
 
   FILE *src_stream = fmemopen (*storage_buf, len, "r");
   if (!src_stream)
