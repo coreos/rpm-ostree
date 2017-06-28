@@ -1,19 +1,21 @@
 #! /bin/bash
+set -euo pipefail
 
 # run a GTest in tap mode. The test binary is passed as $1
 
 srcd=$(cd $(dirname $1) && pwd)
 bn=$(basename $1)
-tempdir=$(mktemp -d)
+test_tmpdir=$(mktemp -d)
 function cleanup () {
-    if test -z "${TEST_SKIP_CLEANUP:-}"; then
-	      if test -f ${test_tmpdir}/.test; then
-            rm "${tempdir}" -rf
-        fi
-    else
-	      echo "Skipping cleanup of ${test_tmpdir}"
+  if test -z "${TEST_SKIP_CLEANUP:-}"; then
+    if test -f ${test_tmpdir}/.test; then
+      rm "${test_tmpdir}" -rf
     fi
+  else
+    echo "Skipping cleanup of ${test_tmpdir}"
+  fi
 }
 trap cleanup EXIT
-cd ${tempdir}
+cd ${test_tmpdir}
+touch .test
 ${srcd}/${bn} -k --tap
