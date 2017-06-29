@@ -24,13 +24,14 @@ set -e
 
 set -x
 
-vm_send_test_repo 1
 vm_clean_caches
 
 # make sure the package is not already layered
 vm_assert_layered_pkg foo absent
 
-if vm_rpmostree pkg-add foo-1.0 2>err.txt; then
+vm_build_rpm foo version 4.5 release 6
+vm_send_test_repo 1 # resend repo with gpg checking on
+if vm_rpmostree pkg-add foo-4.5 2>err.txt; then
     assert_not_reached "Installed unsigned package"
 fi
 assert_file_has_content err.txt 'package not signed: foo'

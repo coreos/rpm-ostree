@@ -30,11 +30,10 @@ set -x
 #     Add a package, then test that after an upgrade, deploy, or rebase, we
 #     still have the package.
 
-vm_send_test_repo
-
 # make sure the package is not already layered
 vm_assert_layered_pkg foo absent
 
+vm_build_rpm foo
 vm_rpmostree pkg-add foo
 echo "ok pkg-add foo"
 
@@ -98,19 +97,20 @@ echo "ok pkg foo relayered on rebase"
 
 vm_assert_status_jq ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
                  '.deployments[0]["packages"]|index("foo") >= 0' \
-                 '.deployments[0]["packages"]|index("nonrootcap")|not'
-vm_rpmostree install nonrootcap
+                 '.deployments[0]["packages"]|index("bar")|not'
+vm_build_rpm bar
+vm_rpmostree install bar
 vm_assert_status_jq ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
                  '.deployments[0]["packages"]|index("foo") >= 0' \
-                 '.deployments[0]["packages"]|index("nonrootcap") >= 0'
+                 '.deployments[0]["packages"]|index("bar") >= 0'
 commit=$(vm_cmd ostree commit -b vmcheck \
                 --tree=ref=vmcheck --add-metadata-string=version=my-commit2)
 vm_rpmostree rebase ${commit}
 vm_assert_status_jq ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
                  '.deployments[0]["packages"]|index("foo") >= 0' \
-                 '.deployments[0]["packages"]|index("nonrootcap") >= 0'
+                 '.deployments[0]["packages"]|index("bar") >= 0'
 vm_rpmostree uninstall foo
 vm_assert_status_jq ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
                  '.deployments[0]["packages"]|index("foo")|not' \
-                 '.deployments[0]["packages"]|index("nonrootcap") >= 0'
+                 '.deployments[0]["packages"]|index("bar") >= 0'
 echo "ok rollup"

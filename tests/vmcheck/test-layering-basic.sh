@@ -29,8 +29,6 @@ set -x
 #     Add a package, verify that it was added, then remove it, and verify that
 #     it was removed.
 
-vm_send_test_repo
-
 # make sure the package is not already layered
 vm_assert_layered_pkg foo absent
 vm_assert_status_jq \
@@ -38,6 +36,11 @@ vm_assert_status_jq \
   '.deployments[0]["pending-base-checksum"]|not'
 
 # make sure installing in /opt fails
+
+vm_build_rpm test-opt \
+  files /opt/app \
+  install "mkdir -p %{buildroot}/opt/app/bin
+           touch %{buildroot}/opt/app/bin/foo"
 if vm_rpmostree install test-opt-1.0 2>err.txt; then
     assert_not_reached "Was able to install a package in /opt"
 fi
@@ -45,6 +48,7 @@ assert_file_has_content err.txt "See https://github.com/projectatomic/rpm-ostree
 
 echo "ok failed to install in opt"
 
+vm_build_rpm foo
 vm_rpmostree pkg-add foo-1.0
 vm_cmd ostree --repo=/sysroot/ostree/repo/extensions/rpmostree/pkgcache refs |grep /foo/> refs.txt
 pkgref=$(head -1 refs.txt)
@@ -61,7 +65,8 @@ vm_assert_status_jq \
 vm_assert_layered_pkg foo-1.0 present
 echo "ok pkg foo added"
 
-if ! vm_cmd /usr/bin/foo | grep "Happy foobing!"; then
+output=$(vm_cmd /usr/bin/foo)
+if [[ $output != foo ]]; then
   assert_not_reached "foo printed wrong output"
 fi
 echo "ok correct output"
@@ -69,6 +74,7 @@ echo "ok correct output"
 # upgrade to a layer with foo already builtin
 vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_booted_csum)
 vm_rpmostree upgrade
+vm_build_rpm bar conflicts foo
 if vm_rpmostree install bar &> err.txt; then
   assert_not_reached "successfully layered conflicting pkg bar?"
 fi
@@ -117,16 +123,12 @@ assert_not_file_has_content output.txt '^Importing:'
 
 # upgrade with different foo in repos --> should re-import
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
-# this is a bit hacky: rpm building is normally handled by make, on which
-# vmcheck itself is dependent
-c1=$(sha256sum ${commondir}/compose/yum/repo/packages/x86_64/foo-1.0-1.x86_64.rpm)
-touch ${commondir}/compose/yum/foo.spec
-make -C ${builddir} tests/common/compose/yum/repo/repodata/repomd.xml
-c2=$(sha256sum ${commondir}/compose/yum/repo/packages/x86_64/foo-1.0-1.x86_64.rpm)
+c1=$(sha256sum ${test_tmpdir}/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm)
+vm_build_rpm foo
+c2=$(sha256sum ${test_tmpdir}/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm)
 if cmp -s c1 c2; then
   assert_not_reached "RPM rebuild yielded same SHA256"
 fi
-vm_send_test_repo
 vm_rpmostree upgrade | tee output.txt
 assert_file_has_content output.txt '^Importing:'
 echo "ok invalidate pkgcache from RPM chksum"
