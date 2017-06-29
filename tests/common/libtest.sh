@@ -357,3 +357,97 @@ assert_status_jq() {
     rpm-ostree status --json > status.json
     assert_status_file_jq status.json "$@"
 }
+
+# builds a new RPM and adds it to the testdir's repo
+# $1 - name
+# $2 - version
+# $3 - release
+# $4+ - optional, treated as directive/value pairs
+build_rpm() {
+    local name=$1; shift
+    local version=$1; shift
+    local release=$1; shift
+    local arch=x86_64
+
+    mkdir -p $test_tmpdir/yumrepo/{specs,packages}
+    local spec=$test_tmpdir/yumrepo/specs/$name.spec
+
+    # write out the header
+    cat > $spec << EOF
+Name: $name
+Version: $version
+Release: $release
+BuildArch: $arch
+Summary: %{name}
+License: GPLv2+
+EOF
+
+    local build= install= files= pretrans= pre= post= posttrans=
+    while [ $# -ne 0 ]; do
+        local section=$1; shift
+        local arg=$1; shift
+        case $section in
+        requires)
+            echo "Requires: $arg" >> $spec;;
+        provides)
+            echo "Provides: $arg" >> $spec;;
+        conflicts)
+            echo "Conflicts: $arg" >> $spec;;
+        build|install|files|pretrans|pre|post|posttrans)
+            declare $section="$arg";;
+        *)
+            assert_not_reached "unhandled section $section";;
+        esac
+    done
+
+    cat >> $spec << EOF
+%description
+%{summary}
+
+# by default, we create a /usr/bin/$name script which just outputs $name
+%build
+echo -e "#!/bin/sh\necho $name" > $name
+chmod a+x $name
+$build
+
+%pretrans
+$pretrans
+
+%pre
+$pre
+
+%post
+$post
+
+%posttrans
+$posttrans
+
+%install
+mkdir -p %{buildroot}/usr/bin
+install $name %{buildroot}/usr/bin
+$install
+
+%clean
+rm -rf %{buildroot}
+
+%files
+/usr/bin/$name
+$files
+EOF
+    (cd $test_tmpdir/yumrepo/specs &&
+     rpmbuild -ba $name.spec \
+        --define "_sourcedir $PWD" \
+        --define "_specdir $PWD" \
+        --define "_builddir $PWD/.build" \
+        --define "_srcrpmdir $PWD" \
+        --define "_rpmdir $test_tmpdir/yumrepo/packages" \
+        --define "_buildrootdir $PWD")
+    (cd yumrepo && createrepo_c --no-database .)
+    if test -n yumrepo.repo; then
+        cat > yumrepo.repo << EOF
+[test-repo]
+name=test-repo
+baseurl=file:///$PWD/yumrepo
+EOF
+    fi
+}
