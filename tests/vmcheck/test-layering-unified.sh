@@ -24,13 +24,14 @@ set -e
 
 set -x
 
-vm_send_test_repo
-
 vm_assert_layered_pkg foo absent
-vm_assert_layered_pkg nonrootcap absent
+vm_assert_layered_pkg bar absent
 
-foo_rpm=/tmp/vmcheck/repo/packages/x86_64/foo-1.0-1.x86_64.rpm
-nrc_rpm=/tmp/vmcheck/repo/packages/x86_64/nonrootcap-1.0-1.x86_64.rpm
+vm_build_rpm foo
+foo_rpm=/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
+
+vm_build_rpm bar
+bar_rpm=/tmp/vmcheck/yumrepo/packages/x86_64/bar-1.0-1.x86_64.rpm
 
 # We cheat a bit here and don't actually reboot the system. Instead, we just
 # check that then pending deployment looks sane.
@@ -38,50 +39,50 @@ nrc_rpm=/tmp/vmcheck/repo/packages/x86_64/nonrootcap-1.0-1.x86_64.rpm
 # UPGRADE
 
 commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
-vm_rpmostree upgrade --install nonrootcap --install $foo_rpm
+vm_rpmostree upgrade --install bar --install $foo_rpm
 vm_assert_status_jq \
     ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
     '.deployments[0]["packages"]|length == 1' \
-    '.deployments[0]["packages"]|index("nonrootcap") >= 0' \
+    '.deployments[0]["packages"]|index("bar") >= 0' \
     '.deployments[0]["requested-local-packages"]|length == 1' \
     '.deployments[0]["requested-local-packages"]|index("foo-1.0-1.x86_64") >= 0'
 vm_rpmostree cleanup -p
 
-echo "ok upgrade with nonrootcap and local foo"
+echo "ok upgrade with bar and local foo"
 
 # DEPLOY
 
 commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck \
            --add-metadata-string=version=SUPADUPAVERSION)
-vm_rpmostree deploy SUPADUPAVERSION --install foo --install $nrc_rpm
+vm_rpmostree deploy SUPADUPAVERSION --install foo --install $bar_rpm
 vm_assert_status_jq \
     ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
     '.deployments[0]["version"] == "SUPADUPAVERSION"' \
     '.deployments[0]["packages"]|length == 1' \
     '.deployments[0]["packages"]|index("foo") >= 0' \
     '.deployments[0]["requested-local-packages"]|length == 1' \
-    '.deployments[0]["requested-local-packages"]|index("nonrootcap-1.0-1.x86_64") >= 0'
+    '.deployments[0]["requested-local-packages"]|index("bar-1.0-1.x86_64") >= 0'
 vm_rpmostree cleanup -p
 
-echo "ok deploy with foo and local nonrootcap"
+echo "ok deploy with foo and local bar"
 
 # REBASE
 
 commit=$(vm_cmd ostree commit -b vmcheck_tmp/rebase \
            --tree=ref=vmcheck --add-metadata-string=version=SUPADUPAVERSION)
 vm_rpmostree rebase vmcheck_tmp/rebase SUPADUPAVERSION \
-    --install nonrootcap --install $foo_rpm
+    --install bar --install $foo_rpm
 vm_assert_status_jq \
     ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
     '.deployments[0]["origin"] == "vmcheck_tmp/rebase"' \
     '.deployments[0]["version"] == "SUPADUPAVERSION"' \
     '.deployments[0]["packages"]|length == 1' \
-    '.deployments[0]["packages"]|index("nonrootcap") >= 0' \
+    '.deployments[0]["packages"]|index("bar") >= 0' \
     '.deployments[0]["requested-local-packages"]|length == 1' \
     '.deployments[0]["requested-local-packages"]|index("foo-1.0-1.x86_64") >= 0'
 vm_rpmostree cleanup -p
 
-echo "ok rebase with nonrootcap and local foo"
+echo "ok rebase with bar and local foo"
 
 # PKG CHANGES
 
@@ -90,12 +91,12 @@ vm_assert_status_jq \
     '.deployments[0]["packages"]|length == 0' \
     '.deployments[0]["requested-local-packages"]|length == 1' \
     '.deployments[0]["requested-local-packages"]|index("foo-1.0-1.x86_64") >= 0'
-vm_rpmostree uninstall foo-1.0-1.x86_64 --install nonrootcap
+vm_rpmostree uninstall foo-1.0-1.x86_64 --install bar
 vm_assert_status_jq \
     '.deployments[0]["packages"]|length == 1' \
-    '.deployments[0]["packages"]|index("nonrootcap") >= 0' \
+    '.deployments[0]["packages"]|index("bar") >= 0' \
     '.deployments[0]["requested-local-packages"]|length == 0'
-vm_rpmostree install foo --uninstall nonrootcap
+vm_rpmostree install foo --uninstall bar
 vm_assert_status_jq \
     '.deployments[0]["packages"]|length == 1' \
     '.deployments[0]["packages"]|index("foo") >= 0' \

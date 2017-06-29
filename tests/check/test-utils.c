@@ -9,6 +9,7 @@
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
 #include "rpmostree-unpacker.h"
+#include "libtest.h"
 
 static void
 test_substs_eq (const char *str,
@@ -114,12 +115,14 @@ test_cache_branch_to_nevra (void)
 static void
 test_variant_to_nevra(void)
 {
+  gboolean ret = FALSE;
   GError *error = NULL;
 
   g_autoptr(GFile) repo_path = g_file_new_for_path ("repo");
   g_autoptr(OstreeRepo) repo = ostree_repo_new (repo_path);
-  g_assert (ostree_repo_create (repo, OSTREE_REPO_MODE_BARE_USER, NULL, &error));
+  ret = ostree_repo_create (repo, OSTREE_REPO_MODE_BARE_USER, NULL, &error);
   g_assert_no_error (error);
+  g_assert (ret);
 
   const char *nevra = "foo-1.0-1.x86_64";
   const char *name = "foo";
@@ -128,19 +131,24 @@ test_variant_to_nevra(void)
   const char *release = "1";
   const char *arch = "x86_64";
 
-  g_autoptr(RpmOstreeUnpacker) unpacker = NULL;
-  g_autofree char *foo_rpm = g_strdup_printf ("%s/compose/yum/repo/packages/%s/%s.rpm",
-                                              getenv ("commondir"), arch, nevra);
-  unpacker = rpmostree_unpacker_new_at (AT_FDCWD, foo_rpm, NULL, 0, &error);
-  g_assert (unpacker);
+  ret = rot_test_run_libtest ("build_rpm foo", &error);
   g_assert_no_error (error);
+  g_assert (ret);
 
-  g_assert (rpmostree_unpacker_unpack_to_ostree (unpacker, repo, NULL, NULL, NULL, &error));
+  g_autoptr(RpmOstreeUnpacker) unpacker = NULL;
+  g_autofree char *foo_rpm = g_strdup_printf ("yumrepo/packages/%s/%s.rpm", arch, nevra);
+  unpacker = rpmostree_unpacker_new_at (AT_FDCWD, foo_rpm, NULL, 0, &error);
   g_assert_no_error (error);
+  g_assert (unpacker);
+
+  ret = rpmostree_unpacker_unpack_to_ostree (unpacker, repo, NULL, NULL, NULL, &error);
+  g_assert_no_error (error);
+  g_assert (ret);
 
   g_autoptr(GVariant) header = NULL;
-  g_assert (rpmostree_pkgcache_find_pkg_header (repo, nevra, NULL, &header, NULL, &error));
+  ret = rpmostree_pkgcache_find_pkg_header (repo, nevra, NULL, &header, NULL, &error);
   g_assert_no_error (error);
+  g_assert (ret);
 
   g_autofree char *tname;
   guint64 tepoch;
@@ -148,9 +156,10 @@ test_variant_to_nevra(void)
   g_autofree char *trelease;
   g_autofree char *tarch;
 
-  g_assert (rpmostree_get_nevra_from_pkgcache (repo, nevra, &tname, &tepoch, &tversion,
-                                               &trelease, &tarch, NULL, &error));
+  ret = rpmostree_get_nevra_from_pkgcache (repo, nevra, &tname, &tepoch, &tversion,
+                                           &trelease, &tarch, NULL, &error);
   g_assert_no_error (error);
+  g_assert (ret);
 
   g_assert_cmpstr (tname, ==, name);
   g_assert_cmpuint (tepoch, ==, epoch);
