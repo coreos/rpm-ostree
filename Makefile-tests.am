@@ -67,20 +67,27 @@ CLEANFILES += \
 	tests/common/compose/test-repo-local.repo \
 	$(NULL)
 
-testbin_cppflags = $(AM_CPPFLAGS) -I $(srcdir)/src/libpriv -I $(srcdir)/libglnx
+testbin_cppflags = $(AM_CPPFLAGS) -I $(srcdir)/src/libpriv -I $(srcdir)/libglnx -I $(srcdir)/tests/common
 testbin_cflags = $(AM_CFLAGS) $(PKGDEP_RPMOSTREE_CFLAGS)
 testbin_ldadd = $(PKGDEP_RPMOSTREE_LIBS) librpmostree-1.la librpmostreepriv.la
+
+noinst_LTLIBRARIES += libtest.la
+libtest_la_SOURCES = tests/common/libtest.c
+libtest_la_CPPFLAGS = $(testbin_cppflags)
+libtest_la_CFLAGS = $(testbin_cflags)
+libtest_la_LIBADD = $(testbin_ldadd)
+
 tests_check_jsonutil_CPPFLAGS = $(testbin_cppflags)
 tests_check_jsonutil_CFLAGS = $(testbin_cflags)
-tests_check_jsonutil_LDADD = $(testbin_ldadd)
+tests_check_jsonutil_LDADD = $(testbin_ldadd) libtest.la
 
 tests_check_postprocess_CPPFLAGS = $(testbin_cppflags)
 tests_check_postprocess_CFLAGS = $(testbin_cflags)
-tests_check_postprocess_LDADD = $(testbin_ldadd)
+tests_check_postprocess_LDADD = $(testbin_ldadd) libtest.la
 
 tests_check_test_utils_CPPFLAGS = $(testbin_cppflags)
 tests_check_test_utils_CFLAGS = $(testbin_cflags)
-tests_check_test_utils_LDADD = $(testbin_ldadd)
+tests_check_test_utils_LDADD = $(testbin_ldadd) libtest.la
 
 tests/check/test-compose.sh: tests/common/compose/test-repo.repo
 
