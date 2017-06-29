@@ -89,8 +89,6 @@ tests_check_test_utils_CPPFLAGS = $(testbin_cppflags)
 tests_check_test_utils_CFLAGS = $(testbin_cflags)
 tests_check_test_utils_LDADD = $(testbin_ldadd) libtest.la
 
-tests/check/test-compose.sh: tests/common/compose/test-repo.repo
-
 tests/check/test-ucontainer.sh: tests/common/compose/test-repo.repo
 
 uninstalled_test_programs = \
@@ -101,7 +99,6 @@ uninstalled_test_programs = \
 
 uninstalled_test_scripts = \
 	tests/check/test-basic.sh \
-	tests/check/test-compose.sh \
 	tests/check/test-ucontainer.sh \
 	$(NULL)
 
