@@ -26,7 +26,7 @@ set -x
 
 vm_assert_layered_pkg foo absent
 
-vm_build_rpm foo 1.0 1
+vm_build_rpm foo
 vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
 vm_assert_status_jq '.deployments|length == 2'
 echo "ok install foo locally"
@@ -50,7 +50,7 @@ vm_assert_status_jq '.deployments|length == 3' '.deployments[0]["live-replaced"]
 
 echo "ok livefs stage1"
 
-vm_build_rpm test-livefs-with-etc 1.0 1 \
+vm_build_rpm test-livefs-with-etc \
   build 'echo "A config file for %{name}" > %{name}.conf' \
   install 'install -Dt %{buildroot}/etc %{name}.conf
            mkdir -p %{buildroot}/etc/%{name}/

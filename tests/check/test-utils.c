@@ -131,7 +131,7 @@ test_variant_to_nevra(void)
   const char *release = "1";
   const char *arch = "x86_64";
 
-  ret = rot_test_run_libtest ("build_rpm foo 1.0 1", &error);
+  ret = rot_test_run_libtest ("build_rpm foo", &error);
   g_assert_no_error (error);
   g_assert (ret);
 

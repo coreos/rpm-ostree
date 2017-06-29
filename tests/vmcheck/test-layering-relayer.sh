@@ -33,7 +33,7 @@ set -x
 # make sure the package is not already layered
 vm_assert_layered_pkg foo absent
 
-vm_build_rpm foo 1.0 1
+vm_build_rpm foo
 vm_rpmostree pkg-add foo
 echo "ok pkg-add foo"
 
@@ -98,7 +98,7 @@ echo "ok pkg foo relayered on rebase"
 vm_assert_status_jq ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
                  '.deployments[0]["packages"]|index("foo") >= 0' \
                  '.deployments[0]["packages"]|index("bar")|not'
-vm_build_rpm bar 1.0 1
+vm_build_rpm bar
 vm_rpmostree install bar
 vm_assert_status_jq ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
                  '.deployments[0]["packages"]|index("foo") >= 0' \

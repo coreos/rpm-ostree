@@ -28,7 +28,7 @@ set -x
 
 # do a bunch of tests together so that we only have to reboot once
 
-vm_build_rpm scriptpkg1 1.0 1 \
+vm_build_rpm scriptpkg1 \
   pre "groupadd -r scriptpkg1" \
   pretrans "# http://lists.rpm.org/pipermail/rpm-ecosystem/2016-August/000391.html
             echo i should've been ignored && exit 1" \
@@ -60,7 +60,7 @@ vm_cmd getent group scriptpkg1
 echo "ok group scriptpkg1 active"
 
 # And now, things that should fail
-vm_build_rpm rofiles-violation 1.0 1 \
+vm_build_rpm rofiles-violation \
   post "echo should fail >> /usr/share/licenses/glibc/COPYING"
 if vm_rpmostree install rofiles-violation; then
     assert_not_reached "installed test-post-rofiles-violation!"

@@ -29,7 +29,7 @@ set -x
 # make sure the package is not already layered
 vm_assert_layered_pkg nonrootcap absent
 
-vm_build_rpm nonrootcap 1.0 1 \
+vm_build_rpm nonrootcap \
     build "echo nrc.conf > nrc.conf
            for mode in none user group caps{,-setuid} usergroup{,caps{,-setuid}}; do
                cp nonrootcap nrc-\$mode.sh

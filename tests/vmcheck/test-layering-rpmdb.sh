@@ -42,7 +42,7 @@ vm_assert_layered_pkg foo absent
 # remember this current commit for later
 vm_cmd ostree refs $(vm_get_booted_csum) --create vmcheck_tmp/without_foo
 
-vm_build_rpm foo 1.0 1
+vm_build_rpm foo
 vm_rpmostree install foo
 echo "ok install foo"
 
@@ -72,7 +72,7 @@ fi
 
 echo "ok layered to dormant"
 
-vm_build_rpm bar 1.0 1 conflicts foo
+vm_build_rpm bar conflicts foo
 if vm_rpmostree pkg-add bar; then
   assert_not_reached "pkg-add bar succeeded but it conflicts with foo in base"
 fi

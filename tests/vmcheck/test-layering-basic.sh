@@ -37,7 +37,7 @@ vm_assert_status_jq \
 
 # make sure installing in /opt fails
 
-vm_build_rpm test-opt 1.0 1 \
+vm_build_rpm test-opt \
   files /opt/app \
   install "mkdir -p %{buildroot}/opt/app/bin
            touch %{buildroot}/opt/app/bin/foo"
@@ -48,7 +48,7 @@ assert_file_has_content err.txt "See https://github.com/projectatomic/rpm-ostree
 
 echo "ok failed to install in opt"
 
-vm_build_rpm foo 1.0 1
+vm_build_rpm foo
 vm_rpmostree pkg-add foo-1.0
 vm_cmd ostree --repo=/sysroot/ostree/repo/extensions/rpmostree/pkgcache refs |grep /foo/> refs.txt
 pkgref=$(head -1 refs.txt)
@@ -74,7 +74,7 @@ echo "ok correct output"
 # upgrade to a layer with foo already builtin
 vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_booted_csum)
 vm_rpmostree upgrade
-vm_build_rpm bar 1.0 1 conflicts foo
+vm_build_rpm bar conflicts foo
 if vm_rpmostree install bar &> err.txt; then
   assert_not_reached "successfully layered conflicting pkg bar?"
 fi
@@ -124,7 +124,7 @@ assert_not_file_has_content output.txt '^Importing:'
 # upgrade with different foo in repos --> should re-import
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
 c1=$(sha256sum ${test_tmpdir}/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm)
-vm_build_rpm foo 1.0 1
+vm_build_rpm foo
 c2=$(sha256sum ${test_tmpdir}/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm)
 if cmp -s c1 c2; then
   assert_not_reached "RPM rebuild yielded same SHA256"

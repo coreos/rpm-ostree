@@ -40,8 +40,8 @@ vm_cmd ostree refs $(vm_get_booted_csum) \
   --create vmcheck_tmp/without_foo_and_bar
 
 # create a new branch with foo and bar
-vm_build_rpm foo 1.0 1
-vm_build_rpm bar 1.0 1
+vm_build_rpm foo
+vm_build_rpm bar
 vm_rpmostree install foo bar
 vm_cmd ostree refs $(vm_get_deployment_info 0 checksum) \
   --create vmcheck_tmp/with_foo_and_bar
@@ -147,7 +147,7 @@ fi
 vm_rpmostree cleanup -p
 echo "ok can't layer pkg removed by override"
 
-vm_build_rpm foo-ext 1.0 1 requires "foo = 1.0-1"
+vm_build_rpm foo-ext requires "foo = 1.0-1"
 vm_rpmostree upgrade --install foo-ext
 if vm_rpmostree ex override remove foo; then
   assert_not_reached "override remove base pkg needed by layered pkg succeeded?"

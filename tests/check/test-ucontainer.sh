@@ -28,8 +28,8 @@ if test -n "${OSTREE_NO_XATTRS:-}"; then
     echo -e 'disable-xattrs=true\n' >> repo/config
 fi
 
-build_rpm foo 1.0 1
-build_rpm fake-shell 1.0 1 provides /bin/sh
+build_rpm foo
+build_rpm fake-shell provides /bin/sh
 
 cat > rpmmd.repos.d/test-repo.repo <<EOF
 [test-repo]
