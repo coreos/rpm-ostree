@@ -360,13 +360,11 @@ assert_status_jq() {
 
 # builds a new RPM and adds it to the testdir's repo
 # $1 - name
-# $2 - version
-# $3 - release
-# $4+ - optional, treated as directive/value pairs
+# $2+ - optional, treated as directive/value pairs
 build_rpm() {
     local name=$1; shift
-    local version=$1; shift
-    local release=$1; shift
+    local version=1.0
+    local release=1
     local arch=x86_64
 
     mkdir -p $test_tmpdir/yumrepo/{specs,packages}
@@ -375,9 +373,6 @@ build_rpm() {
     # write out the header
     cat > $spec << EOF
 Name: $name
-Version: $version
-Release: $release
-BuildArch: $arch
 Summary: %{name}
 License: GPLv2+
 EOF
@@ -393,7 +388,7 @@ EOF
             echo "Provides: $arg" >> $spec;;
         conflicts)
             echo "Conflicts: $arg" >> $spec;;
-        build|install|files|pretrans|pre|post|posttrans)
+        version|release|arch|build|install|files|pretrans|pre|post|posttrans)
             declare $section="$arg";;
         *)
             assert_not_reached "unhandled section $section";;
@@ -401,6 +396,10 @@ EOF
     done
 
     cat >> $spec << EOF
+Version: $version
+Release: $release
+BuildArch: $arch
+
 %description
 %{summary}
 
@@ -410,16 +409,16 @@ echo -e "#!/bin/sh\necho $name" > $name
 chmod a+x $name
 $build
 
-%pretrans
+${pretrans:+%pretrans}
 $pretrans
 
-%pre
+${pre:+%pre}
 $pre
 
-%post
+${post:+%post}
 $post
 
-%posttrans
+${posttrans:+%posttrans}
 $posttrans
 
 %install
