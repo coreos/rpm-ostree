@@ -93,12 +93,12 @@ vm_send() {
 vm_send_test_repo() {
   gpgcheck=${1:-0}
   vm_cmd rm -rf /tmp/vmcheck
-  vm_send /tmp/vmcheck ${commondir}/compose/yum/repo
+  vm_send /tmp/vmcheck ${test_tmpdir}/yumrepo
 
   cat > vmcheck.repo << EOF
 [test-repo]
 name=test-repo
-baseurl=file:///tmp/vmcheck/repo
+baseurl=file:///tmp/vmcheck/yumrepo
 EOF
 
   if [ $gpgcheck -eq 1 ]; then
@@ -309,4 +309,10 @@ vm_assert_layered_pkg() {
 vm_assert_status_jq() {
     vm_rpmostree status --json > status.json
     assert_status_file_jq status.json "$@"
+}
+
+# Like build_rpm, but also sends it to the VM
+vm_build_rpm() {
+    build_rpm "$@"
+    vm_send_test_repo 0 # XXX use rsync
 }
