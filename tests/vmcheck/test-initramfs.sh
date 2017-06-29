@@ -26,7 +26,6 @@ set -x
 
 # SUMMARY: Tests for the `initramfs` functionality
 
-vm_send_test_repo
 base=$(vm_get_booted_csum)
 
 vm_rpmostree initramfs > initramfs.txt

@@ -28,23 +28,30 @@ if test -n "${OSTREE_NO_XATTRS:-}"; then
     echo -e 'disable-xattrs=true\n' >> repo/config
 fi
 
-cp ${commondir}/compose/test-repo.repo rpmmd.repos.d
+build_rpm foo 1.0 1
+build_rpm fake-shell 1.0 1 provides /bin/sh
 
-cat >empty.conf <<EOF
+cat > rpmmd.repos.d/test-repo.repo <<EOF
+[test-repo]
+baseurl=file://$PWD/yumrepo
+gpgcheck=0
+EOF
+
+cat > foo.conf <<EOF
 [tree]
-ref=empty
-packages=empty
+ref=foo
+packages=foo
 repos=test-repo
 EOF
 
-rpm-ostree ex container assemble empty.conf
-assert_has_dir roots/empty.0
-ostree --repo=repo rev-parse empty
+rpm-ostree ex container assemble foo.conf
+assert_has_dir roots/foo.0
+ostree --repo=repo rev-parse foo
 echo "ok assemble"
 
 cat >nobranch.conf <<EOF
 [tree]
-packages=empty
+packages=foo
 repos=test-repo
 EOF
 if rpm-ostree ex container assemble nobranch.conf 2>err.txt; then
@@ -53,7 +60,7 @@ fi
 
 cat >nopackages.conf <<EOF
 [tree]
-ref=empty
+ref=foo
 packages=
 repos=test-repo
 EOF
@@ -63,8 +70,8 @@ fi
 
 cat >norepos.conf <<EOF
 [tree]
-ref=empty
-packages=empty
+ref=foo
+packages=foo
 EOF
 if rpm-ostree ex container assemble norepos.conf 2>err.txt; then
     assert_not_reached "norepos.conf"

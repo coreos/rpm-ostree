@@ -9,6 +9,7 @@
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
 #include "rpmostree-unpacker.h"
+#include "libtest.h"
 
 static void
 test_substs_eq (const char *str,
@@ -130,9 +131,12 @@ test_variant_to_nevra(void)
   const char *release = "1";
   const char *arch = "x86_64";
 
+  ret = rot_test_run_libtest ("build_rpm foo 1.0 1", &error);
+  g_assert_no_error (error);
+  g_assert (ret);
+
   g_autoptr(RpmOstreeUnpacker) unpacker = NULL;
-  g_autofree char *foo_rpm = g_strdup_printf ("%s/compose/yum/repo/packages/%s/%s.rpm",
-                                              getenv ("commondir"), arch, nevra);
+  g_autofree char *foo_rpm = g_strdup_printf ("yumrepo/packages/%s/%s.rpm", arch, nevra);
   unpacker = rpmostree_unpacker_new_at (AT_FDCWD, foo_rpm, NULL, 0, &error);
   g_assert_no_error (error);
   g_assert (unpacker);

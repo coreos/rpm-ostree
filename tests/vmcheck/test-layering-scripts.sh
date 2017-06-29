@@ -26,12 +26,23 @@ set -x
 
 # SUMMARY: check that RPM scripts are properly handled during package layering
 
-vm_send_test_repo
+# do a bunch of tests together so that we only have to reboot once
 
-# make sure the package is not already layered
-vm_assert_layered_pkg scriptpkg1 absent
+vm_build_rpm scriptpkg1 1.0 1 \
+  pre "groupadd -r scriptpkg1" \
+  pretrans "# http://lists.rpm.org/pipermail/rpm-ecosystem/2016-August/000391.html
+            echo i should've been ignored && exit 1" \
+  posttrans "# Firewalld; https://github.com/projectatomic/rpm-ostree/issues/638
+             . /etc/os-release || :
+             # See https://github.com/projectatomic/rpm-ostree/pull/647
+             for path in /tmp /var/tmp; do
+               if test -f \${path}/file-in-host-tmp-not-for-scripts; then
+                 echo found file from host /tmp
+                 exit 1
+               fi
+             done"
 
-# See scriptpkg1.spec
+# check that host /tmp doesn't get mounted
 vm_cmd touch /tmp/file-in-host-tmp-not-for-scripts
 vm_rpmostree pkg-add scriptpkg1
 echo "ok pkg-add scriptpkg1"
@@ -49,6 +60,8 @@ vm_cmd getent group scriptpkg1
 echo "ok group scriptpkg1 active"
 
 # And now, things that should fail
-if vm_rpmostree install test-post-rofiles-violation; then
+vm_build_rpm rofiles-violation 1.0 1 \
+  post "echo should fail >> /usr/share/licenses/glibc/COPYING"
+if vm_rpmostree install rofiles-violation; then
     assert_not_reached "installed test-post-rofiles-violation!"
 fi

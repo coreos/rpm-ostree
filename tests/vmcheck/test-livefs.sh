@@ -24,11 +24,10 @@ set -e
 
 set -x
 
-vm_send_test_repo
-
 vm_assert_layered_pkg foo absent
 
-vm_rpmostree install /tmp/vmcheck/repo/packages/x86_64/foo-1.0-1.x86_64.rpm
+vm_build_rpm foo 1.0 1
+vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
 vm_assert_status_jq '.deployments|length == 2'
 echo "ok install foo locally"
 
@@ -51,7 +50,21 @@ vm_assert_status_jq '.deployments|length == 3' '.deployments[0]["live-replaced"]
 
 echo "ok livefs stage1"
 
-vm_rpmostree install /tmp/vmcheck/repo/packages/x86_64/test-livefs-with-etc-1.0-1.x86_64.rpm
+vm_build_rpm test-livefs-with-etc 1.0 1 \
+  build 'echo "A config file for %{name}" > %{name}.conf' \
+  install 'install -Dt %{buildroot}/etc %{name}.conf
+           mkdir -p %{buildroot}/etc/%{name}/
+           echo subconfig-one > %{buildroot}/etc/%{name}/subconfig-one.conf
+           echo subconfig-two > %{buildroot}/etc/%{name}/subconfig-two.conf
+           mkdir -p %{buildroot}/etc/%{name}/subdir
+           echo subconfig-three > %{buildroot}/etc/%{name}/subdir/subconfig-three.conf
+           mkdir -p %{buildroot}/etc/opt
+           echo file-in-opt-subdir > %{buildroot}/etc/opt/%{name}-opt.conf' \
+  files "/etc/%{name}.conf
+         /etc/%{name}/*
+         /etc/opt/%{name}*"
+
+vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-with-etc-1.0-1.x86_64.rpm
 assert_livefs_ok
 vm_rpmostree ex livefs
 vm_cmd rpm -q foo test-livefs-with-etc > rpmq.txt
@@ -82,7 +95,7 @@ reset() {
 reset
 
 # If the admin created a config file before, we need to keep it
-vm_rpmostree install /tmp/vmcheck/repo/packages/x86_64/test-livefs-with-etc-1.0-1.x86_64.rpm
+vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-with-etc-1.0-1.x86_64.rpm
 vm_cmd cat /etc/test-livefs-with-etc.conf || true
 vm_cmd echo custom \> /etc/test-livefs-with-etc.conf
 vm_cmd cat /etc/test-livefs-with-etc.conf
@@ -92,7 +105,7 @@ assert_file_has_content test-livefs-with-etc.conf "custom"
 echo "ok livefs preserved modified config"
 
 reset
-vm_rpmostree install /tmp/vmcheck/repo/packages/x86_64/foo-1.0-1.x86_64.rpm
+vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
 vm_rpmostree ex livefs
 generate_upgrade() {
     # Create a modified vmcheck commit

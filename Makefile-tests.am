@@ -17,56 +17,6 @@ if BUILDOPT_ASAN
 AM_TESTS_ENVIRONMENT += ASAN_OPTIONS=detect_leaks=false
 endif
 
-CLEANFILES += \
-	tests/common/compose/yum/repo \
-	tests/common/compose/test-repo.repo \
-	$(NULL)
-
-testpackages = \
-	tests/common/compose/yum/repo/packages/x86_64/empty-1.0-1.x86_64.rpm \
-	tests/common/compose/yum/repo/packages/x86_64/foo-1.0-1.x86_64.rpm \
-	tests/common/compose/yum/repo/packages/x86_64/foo-ext-1.0-1.x86_64.rpm \
-	tests/common/compose/yum/repo/packages/x86_64/bar-1.0-1.x86_64.rpm \
-	tests/common/compose/yum/repo/packages/x86_64/scriptpkg1-1.0-1.x86_64.rpm \
-	tests/common/compose/yum/repo/packages/x86_64/nonrootcap-1.0-1.x86_64.rpm \
-	tests/common/compose/yum/repo/packages/x86_64/test-post-rofiles-violation-1.0-1.x86_64.rpm \
-	tests/common/compose/yum/repo/packages/x86_64/test-opt-1.0-1.x86_64.rpm \
-	tests/common/compose/yum/repo/packages/x86_64/test-livefs-with-etc-1.0-1.x86_64.rpm \
-	$(NULL)
-
-# Create a rule for each testpkg with their respective spec file as dep.
-# The static pattern feature is almost a fit for this, but does not allow string
-# substitutions and wildcards in the patterns to allow rpm-filename -->
-# spec-filename without also encoding the arch, release, and rev.
-define testpkgbuild_template =
-$(1): tests/common/compose/yum/$(2).spec
-	(cd tests/common/compose/yum && \
-	 rm -rf .build && \
-	 rpmbuild -ba $$$$(basename $$<) \
-	   --define "_sourcedir    $$$$PWD" \
-	   --define "_specdir      $$$$PWD" \
-	   --define "_builddir     $$$$PWD/.build" \
-	   --define "_srcrpmdir    $$$$PWD" \
-	   --define "_rpmdir       $$$$PWD/repo/packages" \
-	   --define "_buildrootdir $$$$PWD" && \
-	 rm -rf .build && \
-	 rm -f  *.src.rpm)
-endef
-
-$(foreach pkg,$(testpackages),$(eval $(call testpkgbuild_template,$(pkg),$(shell basename $(pkg) | sed -e 's,-1\.0.*,,'))))
-
-tests/common/compose/yum/repo/repodata/repomd.xml: $(testpackages)
-	(cd tests/common/compose/yum/repo && \
-	 createrepo_c --no-database $$PWD)
-
-tests/common/compose/test-repo.repo: tests/common/compose/test-repo.repo.in \
-                                     tests/common/compose/yum/repo/repodata/repomd.xml
-	cat $< | sed -e "s|%WHERE%|$(abs_top_srcdir)|" > $@
-
-CLEANFILES += \
-	tests/common/compose/test-repo-local.repo \
-	$(NULL)
-
 testbin_cppflags = $(AM_CPPFLAGS) -I $(srcdir)/src/libpriv -I $(srcdir)/libglnx -I $(srcdir)/tests/common
 testbin_cflags = $(AM_CFLAGS) $(PKGDEP_RPMOSTREE_CFLAGS)
 testbin_ldadd = $(PKGDEP_RPMOSTREE_LIBS) librpmostree-1.la librpmostreepriv.la
@@ -89,8 +39,6 @@ tests_check_test_utils_CPPFLAGS = $(testbin_cppflags)
 tests_check_test_utils_CFLAGS = $(testbin_cflags)
 tests_check_test_utils_LDADD = $(testbin_ldadd) libtest.la
 
-tests/check/test-ucontainer.sh: tests/common/compose/test-repo.repo
-
 uninstalled_test_programs = \
 	tests/check/jsonutil			\
 	tests/check/postprocess			\
@@ -106,7 +54,7 @@ uninstalled_test_extra_programs = dbus-run-session
 
 dbus_run_session_SOURCES = tests/utils/dbus-run-session.c
 
-check-local: $(testpackages)
+check-local:
 	@echo "  *** NOTE ***"
 	@echo "  *** NOTE ***"
 	@echo " \"make check\" only runs a subset of rpm-ostree's tests."
@@ -133,7 +81,7 @@ vmshell: vmsync
 	ssh -F ssh-config vmcheck
 
 # set up test environment to somewhat resemble uninstalled tests
-vmcheck: vmoverlay tests/common/compose/yum/repo/repodata/repomd.xml
+vmcheck: vmoverlay
 	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) PYTHONUNBUFFERED=1 \
 	  tests/vmcheck/multitest.py $(HOSTS)
 

@@ -26,10 +26,40 @@ set -x
 
 # SUMMARY: check that RPM scripts are properly handled during package layering
 
-vm_send_test_repo
-
 # make sure the package is not already layered
 vm_assert_layered_pkg nonrootcap absent
+
+vm_build_rpm nonrootcap 1.0 1 \
+    build "echo nrc.conf > nrc.conf
+           for mode in none user group caps{,-setuid} usergroup{,caps{,-setuid}}; do
+               cp nonrootcap nrc-\$mode.sh
+           done" \
+    pre "groupadd -r nrcgroup
+         useradd -r nrcuser -g nrcgroup -s /sbin/nologin" \
+    install "install -Dt %{buildroot}/etc nrc.conf
+             ln -sr %{buildroot}/etc/nrc.conf %{buildroot}/etc/nrc-link.conf
+             install -Dt %{buildroot}/usr/bin *.sh
+             ln -sr %{buildroot}/usr/bin/{nrc-user.sh,nrc-user-link.sh}
+             mkdir -p %{buildroot}/var/lib/nonrootcap
+             mkdir -p %{buildroot}/run/nonrootcap
+             mkdir -p %{buildroot}/var/lib/nonrootcap-rootowned
+             mkdir -p %{buildroot}/run/nonrootcap-rootowned" \
+    files "/usr/bin/nrc-none.sh
+           %attr(-, nrcuser, -) /etc/nrc.conf
+           %attr(-, nrcuser, -) /etc/nrc-link.conf
+           %ghost %attr(-, nrcuser, -) /etc/nrc-ghost.conf
+           %attr(-, nrcuser, -) /usr/bin/nrc-user.sh
+           %attr(-, nrcuser, -) /usr/bin/nrc-user-link.sh
+           %attr(-, -, nrcgroup) /usr/bin/nrc-group.sh
+           %caps(cap_net_bind_service=ep) /usr/bin/nrc-caps.sh
+           %attr(4775, -, -) %caps(cap_net_bind_service=ep) /usr/bin/nrc-caps-setuid.sh
+           %attr(-, nrcuser, nrcgroup) /usr/bin/nrc-usergroup.sh
+           %attr(-, nrcuser, nrcgroup) %caps(cap_net_bind_service=ep) /usr/bin/nrc-usergroupcaps.sh
+           %attr(4775, nrcuser, nrcgroup) %caps(cap_net_bind_service=ep) /usr/bin/nrc-usergroupcaps-setuid.sh
+           %attr(-, nrcuser, nrcgroup) /var/lib/nonrootcap
+           %attr(-, nrcuser, nrcgroup) /run/nonrootcap
+           /var/lib/nonrootcap-rootowned
+           /run/nonrootcap-rootowned"
 
 vm_rpmostree install nonrootcap
 echo "ok install nonrootcap"
