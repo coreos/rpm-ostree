@@ -140,6 +140,7 @@ static gboolean
 run_script_in_bwrap_container (int rootfs_fd,
                                const char *name,
                                const char *scriptdesc,
+                               const char *argv0,
                                const char *script,
                                GCancellable  *cancellable,
                                GError       **error)
@@ -161,11 +162,6 @@ run_script_in_bwrap_container (int rootfs_fd,
                                       NULL, error))
     {
       g_prefix_error (error, "Writing script to %s: ", postscript_path_host);
-      goto out;
-    }
-  if (fchmodat (rootfs_fd, postscript_path_host, 0755, 0) != 0)
-    {
-      glnx_set_error_from_errno (error);
       goto out;
     }
 
@@ -210,6 +206,7 @@ run_script_in_bwrap_container (int rootfs_fd,
     goto out;
 
   rpmostree_bwrap_append_child_argv (bwrap,
+                                     argv0,
                                      postscript_path_container,
                                      /* http://www.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S3-RPM-INSIDE-PRE-SCRIPT */
                                      "1",
@@ -263,7 +260,8 @@ run_known_rpm_script (const KnownRpmScriptKind *rpmscript,
           return glnx_throw (error, "Package '%s' has (currently) unsupported %s script in '%s'",
                              dnf_package_get_name (pkg), lua_builtin, desc);
 
-        if (!run_script_in_bwrap_container (rootfs_fd, dnf_package_get_name (pkg), desc, script,
+        if (!run_script_in_bwrap_container (rootfs_fd, dnf_package_get_name (pkg), desc,
+                                            argv0, script,
                                             cancellable, error))
           return glnx_prefix_error (error, "Running %s for %s", desc, dnf_package_get_name (pkg));
         break;
