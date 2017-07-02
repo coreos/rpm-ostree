@@ -32,6 +32,7 @@ vm_build_rpm scriptpkg1 \
   pre "groupadd -r scriptpkg1" \
   pretrans "# http://lists.rpm.org/pipermail/rpm-ecosystem/2016-August/000391.html
             echo i should've been ignored && exit 1" \
+  post_interp /usr/bin/python 'open("/usr/lib/rpmostreetestinterp", "w")' \
   posttrans "# Firewalld; https://github.com/projectatomic/rpm-ostree/issues/638
              . /etc/os-release || :
              # See https://github.com/projectatomic/rpm-ostree/pull/647
@@ -58,6 +59,9 @@ echo "ok no embarrassing crud leftover"
 # let's check that the group was successfully added
 vm_cmd getent group scriptpkg1
 echo "ok group scriptpkg1 active"
+
+vm_has_files "/usr/lib/rpmostreetestinterp"
+echo "ok interp"
 
 # And now, things that should fail
 vm_build_rpm rofiles-violation \

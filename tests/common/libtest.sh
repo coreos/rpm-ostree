@@ -377,7 +377,7 @@ Summary: %{name}
 License: GPLv2+
 EOF
 
-    local build= install= files= pretrans= pre= post= posttrans=
+    local build= install= files= pretrans= pre= post= posttrans= post_interp=
     while [ $# -ne 0 ]; do
         local section=$1; shift
         local arg=$1; shift
@@ -388,6 +388,8 @@ EOF
             echo "Provides: $arg" >> $spec;;
         conflicts)
             echo "Conflicts: $arg" >> $spec;;
+        post_interp)
+            post_interp="$arg"; post="$1"; shift;;
         version|release|arch|build|install|files|pretrans|pre|post|posttrans)
             declare $section="$arg";;
         *)
@@ -415,7 +417,7 @@ $pretrans
 ${pre:+%pre}
 $pre
 
-${post:+%post}
+${post:+%post} ${post_interp:+-p ${post_interp}}
 $post
 
 ${posttrans:+%posttrans}
