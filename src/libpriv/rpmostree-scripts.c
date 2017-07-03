@@ -140,6 +140,7 @@ static gboolean
 run_script_in_bwrap_container (int rootfs_fd,
                                const char *name,
                                const char *scriptdesc,
+                               const char *argv0,
                                const char *script,
                                GCancellable  *cancellable,
                                GError       **error)
@@ -161,11 +162,6 @@ run_script_in_bwrap_container (int rootfs_fd,
                                       NULL, error))
     {
       g_prefix_error (error, "Writing script to %s: ", postscript_path_host);
-      goto out;
-    }
-  if (fchmodat (rootfs_fd, postscript_path_host, 0755, 0) != 0)
-    {
-      glnx_set_error_from_errno (error);
       goto out;
     }
 
@@ -210,6 +206,7 @@ run_script_in_bwrap_container (int rootfs_fd,
     goto out;
 
   rpmostree_bwrap_append_child_argv (bwrap,
+                                     argv0,
                                      postscript_path_container,
                                      /* http://www.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S3-RPM-INSIDE-PRE-SCRIPT */
                                      "1",
@@ -235,43 +232,38 @@ run_known_rpm_script (const KnownRpmScriptKind *rpmscript,
                       GCancellable  *cancellable,
                       GError       **error)
 {
-  const char *desc = rpmscript->desc;
   rpmTagVal tagval = rpmscript->tag;
   rpmTagVal progtagval = rpmscript->progtag;
-  const char *script;
-  g_autofree char **args = NULL;
-  RpmOstreeScriptAction action;
-  struct rpmtd_s td;
 
   if (!(headerIsEntry (hdr, tagval) || headerIsEntry (hdr, progtagval)))
     return TRUE;
 
-  script = headerGetString (hdr, tagval);
+  const char *script = headerGetString (hdr, tagval);
   if (!script)
     return TRUE;
 
+  struct rpmtd_s td;
+  g_autofree char **args = NULL;
   if (headerGet (hdr, progtagval, &td, (HEADERGET_ALLOC|HEADERGET_ARGV)))
     args = td.data;
 
-  action = lookup_script_action (pkg, ignore_scripts, desc);
+  const char *desc = rpmscript->desc;
+  RpmOstreeScriptAction action = lookup_script_action (pkg, ignore_scripts, desc);
   switch (action)
     {
     case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
       {
-        static const char lua[] = "<lua>";
-        if (args && args[0] && strcmp (args[0], lua) == 0)
-          {
-            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                         "Package '%s' has (currently) unsupported %s script in '%s'",
-                         dnf_package_get_name (pkg), lua, desc);
-            return FALSE;
-          }
-        if (!run_script_in_bwrap_container (rootfs_fd, dnf_package_get_name (pkg), desc, script,
+        const char *argv0 = args && args[0] ? args[0] : "/bin/sh";
+
+        static const char lua_builtin[] = "<lua>";
+        if (g_strcmp0 (argv0, lua_builtin) == 0)
+          return glnx_throw (error, "Package '%s' has (currently) unsupported %s script in '%s'",
+                             dnf_package_get_name (pkg), lua_builtin, desc);
+
+        if (!run_script_in_bwrap_container (rootfs_fd, dnf_package_get_name (pkg), desc,
+                                            argv0, script,
                                             cancellable, error))
-          {
-            g_prefix_error (error, "Running %s for %s: ", desc, dnf_package_get_name (pkg));
-            return FALSE;
-          }
+          return glnx_prefix_error (error, "Running %s for %s", desc, dnf_package_get_name (pkg));
         break;
       }
     case RPMOSTREE_SCRIPT_ACTION_IGNORE:
