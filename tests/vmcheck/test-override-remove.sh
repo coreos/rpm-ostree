@@ -59,8 +59,8 @@ echo "ok setup"
 vm_rpmostree ex override remove foo bar
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 2' \
-  '.deployments[0]["base-removals"]|index("foo") >= 0' \
-  '.deployments[0]["base-removals"]|index("bar") >= 0' \
+  '[.deployments[0]["base-removals"][][.0]]|index("foo-1.0-1.x86_64") >= 0' \
+  '[.deployments[0]["base-removals"][][.0]]|index("bar-1.0-1.x86_64") >= 0' \
   '.deployments[0]["requested-base-removals"]|length == 2' \
   '.deployments[0]["requested-base-removals"]|index("foo") >= 0' \
   '.deployments[0]["requested-base-removals"]|index("bar") >= 0'
@@ -70,8 +70,8 @@ vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
 vm_rpmostree upgrade
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 2' \
-  '.deployments[0]["base-removals"]|index("foo") >= 0' \
-  '.deployments[0]["base-removals"]|index("bar") >= 0' \
+  '[.deployments[0]["base-removals"][][.0]]|index("foo-1.0-1.x86_64") >= 0' \
+  '[.deployments[0]["base-removals"][][.0]]|index("bar-1.0-1.x86_64") >= 0' \
   '.deployments[0]["requested-base-removals"]|length == 2' \
   '.deployments[0]["requested-base-removals"]|index("foo") >= 0' \
   '.deployments[0]["requested-base-removals"]|index("bar") >= 0'
@@ -80,7 +80,7 @@ echo "ok override remove carried through upgrade"
 vm_rpmostree ex override reset foo
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 1' \
-  '.deployments[0]["base-removals"]|index("bar") >= 0' \
+  '[.deployments[0]["base-removals"][][.0]]|index("bar-1.0-1.x86_64") >= 0' \
   '.deployments[0]["requested-base-removals"]|length == 1' \
   '.deployments[0]["requested-base-removals"]|index("bar") >= 0'
 echo "ok override reset foo"
@@ -95,7 +95,7 @@ echo "ok override reset --all"
 vm_rpmostree ex override remove foo
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 1' \
-  '.deployments[0]["base-removals"]|index("foo") >= 0' \
+  '[.deployments[0]["base-removals"][][.0]]|index("foo-1.0-1.x86_64") >= 0' \
   '.deployments[0]["requested-base-removals"]|length == 1' \
   '.deployments[0]["requested-base-removals"]|index("foo") >= 0'
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo_and_bar
@@ -111,7 +111,7 @@ vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
 vm_rpmostree upgrade
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 1' \
-  '.deployments[0]["base-removals"]|index("foo") >= 0' \
+  '[.deployments[0]["base-removals"][][.0]]|index("foo-1.0-1.x86_64") >= 0' \
   '.deployments[0]["requested-base-removals"]|length == 1' \
   '.deployments[0]["requested-base-removals"]|index("foo") >= 0'
 echo "ok override remove re-applied"

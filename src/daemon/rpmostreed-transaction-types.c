@@ -421,6 +421,8 @@ typedef struct {
   char  **install_pkgs;
   GUnixFDList *install_local_pkgs;
   char  **uninstall_pkgs;
+  char  **override_replace_pkgs;
+  GUnixFDList *override_replace_local_pkgs;
   char  **override_remove_pkgs;
   char  **override_reset_pkgs;
 } DeployTransaction;
@@ -445,6 +447,8 @@ deploy_transaction_finalize (GObject *object)
   g_strfreev (self->install_pkgs);
   g_clear_pointer (&self->install_local_pkgs, g_object_unref);
   g_strfreev (self->uninstall_pkgs);
+  g_strfreev (self->override_replace_pkgs);
+  g_clear_pointer (&self->override_replace_local_pkgs, g_object_unref);
   g_strfreev (self->override_remove_pkgs);
   g_strfreev (self->override_reset_pkgs);
 
@@ -523,6 +527,21 @@ import_many_local_rpms (OstreeRepo    *parent,
   return TRUE;
 }
 
+static void
+gv_nevra_add_nevra_name_mappings (GVariant *gv_nevra,
+                                  GHashTable *name_to_nevra, /* borrows strs */
+                                  GHashTable *nevra_to_name) /* owns strs */
+{
+  g_autofree char *name = NULL;
+  g_autofree char *nevra = NULL;
+  g_variant_get_child (gv_nevra, 0, "s", &nevra);
+  g_variant_get_child (gv_nevra, 1, "s", &name);
+  g_hash_table_insert (name_to_nevra, name, nevra);
+  g_hash_table_insert (nevra_to_name, g_steal_pointer (&nevra),
+                                      g_steal_pointer (&name));
+}
+
+
 static gboolean
 deploy_transaction_execute (RpmostreedTransaction *transaction,
                             GCancellable *cancellable,
@@ -544,6 +563,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   /* this should have been checked already */
   if (no_overrides)
     {
+      g_assert (self->override_replace_pkgs == NULL);
+      g_assert (self->override_replace_local_pkgs == NULL);
       g_assert (self->override_remove_pkgs == NULL);
       g_assert (self->override_reset_pkgs == NULL);
     }
@@ -604,6 +625,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
        * commands can look indistinguishable at the D-Bus level */
       is_override = (self->override_reset_pkgs ||
                      self->override_remove_pkgs ||
+                     self->override_replace_pkgs ||
+                     self->override_replace_local_pkgs ||
                      no_overrides);
       is_install = !is_override;
     }
@@ -678,10 +701,100 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     }
   else if (self->override_reset_pkgs)
     {
-      if (!rpmostree_origin_remove_overrides (origin, self->override_reset_pkgs, error))
+      /* The origin stores removal overrides as pkgnames and replacement overrides as nevra.
+       * To be nice, we support both name & nevra and do the translation here by just
+       * looking at the commit metadata. */
+      OstreeDeployment *merge_deployment =
+        rpmostree_sysroot_upgrader_get_merge_deployment (upgrader);
+
+      gboolean is_layered;
+      g_autoptr(GVariant) removed = NULL;
+      g_autoptr(GVariant) replaced = NULL;
+      if (!rpmostree_deployment_get_layered_info (repo, merge_deployment, &is_layered, NULL,
+                                                  NULL, &removed, &replaced, error))
         return FALSE;
 
+      if (!is_layered)
+        return glnx_throw (error, "No overrides currently applied");
+
+      /* the strings are only stored once; in nevra_to_name */
+      g_autoptr(GHashTable) nevra_to_name =
+        g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+      g_autoptr(GHashTable) name_to_nevra = g_hash_table_new (g_str_hash, g_str_equal);
+
+      if (removed)
+        {
+          const guint n = g_variant_n_children (removed);
+          for (guint i = 0; i < n; i++)
+            {
+              g_autoptr(GVariant) gv_nevra;
+              g_variant_get_child (removed, i, "v", &gv_nevra);
+              gv_nevra_add_nevra_name_mappings (gv_nevra, name_to_nevra, nevra_to_name);
+            }
+        }
+
+      if (replaced)
+        {
+          const guint n = g_variant_n_children (replaced);
+          for (guint i = 0; i < n; i++)
+            {
+              g_autoptr(GVariant) gv_nevra;
+              g_variant_get_child (replaced, i, "(vv)", &gv_nevra, NULL);
+              gv_nevra_add_nevra_name_mappings (gv_nevra, name_to_nevra, nevra_to_name);
+            }
+        }
+
+      for (char **it = self->override_reset_pkgs; it && *it; it++)
+        {
+          const char *name_or_nevra = *it;
+          const char *name = g_hash_table_lookup (nevra_to_name, name_or_nevra);
+          const char *nevra = g_hash_table_lookup (name_to_nevra, name_or_nevra);
+
+          if (name == NULL && nevra == NULL)
+            return glnx_throw (error, "No overrides for package '%s'", name_or_nevra);
+          else if (name == NULL)
+            name = name_or_nevra;
+          else if (nevra == NULL)
+            nevra = name_or_nevra;
+          else
+            {
+              ; /* completely brush over the ridiculous corner-case of a
+                   pkgname that's also a nevra for another package */
+            }
+
+          if (rpmostree_origin_remove_override (origin, name,
+                                                RPMOSTREE_ORIGIN_OVERRIDE_REMOVE))
+            continue; /* override found; move on to the next one */
+
+          if (rpmostree_origin_remove_override (origin, nevra,
+                                                RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL))
+            continue; /* override found; move on to the next one */
+
+          /* if a mapping was found, then it must be an override */
+          g_assert_not_reached ();
+        }
+
       changed = TRUE;
+    }
+
+  if (self->override_replace_local_pkgs)
+    {
+      g_autoptr(GPtrArray) pkgs = NULL;
+      if (!import_many_local_rpms (repo, self->override_replace_local_pkgs, &pkgs,
+                                   cancellable, error))
+        return FALSE;
+
+      if (pkgs->len > 0)
+        {
+          g_ptr_array_add (pkgs, NULL);
+          if (!rpmostree_origin_add_overrides (origin, (char**)pkgs->pdata,
+                                               RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL,
+                                               error))
+            return FALSE;
+
+          rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
+          changed = TRUE;
+        }
     }
 
   rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, txn_title->str);
@@ -737,7 +850,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         }
 
       g_ptr_array_add (pkgnames, NULL);
-      if (!rpmostree_origin_add_overrides (origin, (char**)pkgnames->pdata, TRUE, error))
+      if (!rpmostree_origin_add_overrides (origin, (char**)pkgnames->pdata,
+                                           RPMOSTREE_ORIGIN_OVERRIDE_REMOVE, error))
         return FALSE;
 
       rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
@@ -817,6 +931,8 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    const char *const *install_pkgs,
                                    GUnixFDList       *install_local_pkgs,
                                    const char *const *uninstall_pkgs,
+                                   const char *const *override_replace_pkgs,
+                                   GUnixFDList       *override_replace_local_pkgs,
                                    const char *const *override_remove_pkgs,
                                    const char *const *override_reset_pkgs,
                                    GCancellable *cancellable,
@@ -844,6 +960,9 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
       if (install_local_pkgs != NULL)
         self->install_local_pkgs = g_object_ref (install_local_pkgs);
       self->uninstall_pkgs = strdupv_canonicalize (uninstall_pkgs);
+      self->override_replace_pkgs = strdupv_canonicalize (override_replace_pkgs);
+      if (override_replace_local_pkgs != NULL)
+        self->override_replace_local_pkgs = g_object_ref (override_replace_local_pkgs);
       self->override_remove_pkgs = strdupv_canonicalize (override_remove_pkgs);
       self->override_reset_pkgs = strdupv_canonicalize (override_reset_pkgs);
     }

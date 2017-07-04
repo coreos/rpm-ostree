@@ -86,8 +86,8 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
         OstreeDeployment *deployment = deployments->pdata[i];
         g_autofree char *base_rev = NULL;
 
-        if (!rpmostree_deployment_get_layered_info (repo, deployment, NULL,
-                                                    &base_rev, NULL, NULL, error))
+        if (!rpmostree_deployment_get_layered_info (repo, deployment, NULL, &base_rev, NULL,
+                                                    NULL, NULL, error))
           goto out;
 
         if (base_rev)
@@ -169,8 +169,8 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
       OstreeDeployment *deployment = deployments->pdata[i];
 
       gboolean is_layered;
-      if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered,
-                                                  NULL, NULL, NULL, error))
+      if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered, NULL, NULL,
+                                                  NULL, NULL, error))
         return FALSE;
 
       if (is_layered)
@@ -189,6 +189,20 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
 
           if (!add_package_refs_to_set (rsack, referenced_pkgs, cancellable, error))
             return FALSE;
+        }
+
+      /* also add any inactive local replacements */
+      g_autoptr(RpmOstreeOrigin) origin =
+        rpmostree_origin_parse_deployment (deployment, error);
+      GHashTable *local_replace = rpmostree_origin_get_overrides_local_replace (origin);
+      GLNX_HASH_TABLE_FOREACH (local_replace, const char*, nevra)
+        {
+          g_autofree char *cachebranch = NULL;
+          if (!rpmostree_find_cache_branch_by_nevra (pkgcache_repo, nevra, &cachebranch,
+                                                     cancellable, error))
+            return FALSE;
+
+          g_hash_table_add (referenced_pkgs, g_steal_pointer (&cachebranch));
         }
     }
 

@@ -153,7 +153,15 @@ typedef enum {
 } RpmOstreePkgNevraFlags;
 
 char *
-rpmostree_pkg_custom_nevra_strdup (Header h, RpmOstreePkgNevraFlags flags);
+rpmostree_custom_nevra_strdup (const char *name,
+                               uint64_t    epoch,
+                               const char *version,
+                               const char *release,
+                               const char *arch,
+                               RpmOstreePkgNevraFlags flags);
+
+char *
+rpmostree_header_custom_nevra_strdup (Header h, RpmOstreePkgNevraFlags flags);
 
 gboolean
 rpmostree_get_repodata_chksum_repr (DnfPackage *pkg,

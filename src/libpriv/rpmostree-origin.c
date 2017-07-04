@@ -38,6 +38,8 @@ struct RpmOstreeOrigin {
   char **cached_initramfs_args;
   GHashTable *cached_packages;                  /* set of reldeps */
   GHashTable *cached_local_packages;            /* NEVRA --> header sha256 */
+  /* GHashTable *cached_overrides_replace;         XXX: NOT IMPLEMENTED YET */
+  GHashTable *cached_overrides_local_replace;   /* NEVRA --> header sha256 */
   GHashTable *cached_overrides_remove;          /* set of pkgnames (no EVRA) */
 };
 
@@ -52,6 +54,36 @@ keyfile_dup (GKeyFile *kf)
   return ret;
 }
 
+/* take <nevra:sha256> entries from keyfile and inserts them into hash table */
+static gboolean
+parse_packages_strv (GKeyFile *kf,
+                     const char *group,
+                     const char *key,
+                     gboolean    has_sha256,
+                     GHashTable *ht,
+                     GError    **error)
+{
+  g_auto(GStrv) packages = g_key_file_get_string_list (kf, group, key, NULL, NULL);
+
+  for (char **it = packages; it && *it; it++)
+    {
+      if (has_sha256)
+        {
+          const char *nevra = *it;
+          g_autofree char *sha256 = NULL;
+          if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
+            return glnx_throw (error, "Invalid SHA-256 NEVRA string: %s", nevra);
+          g_hash_table_replace (ht, g_strdup (nevra), g_steal_pointer (&sha256));
+        }
+      else
+        {
+          g_hash_table_add (ht, g_steal_pointer (it));
+        }
+    }
+
+  return TRUE;
+}
+
 RpmOstreeOrigin *
 rpmostree_origin_parse_keyfile (GKeyFile         *origin,
                                 GError          **error)
@@ -62,12 +94,13 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   ret->refcount = 1;
   ret->kf = keyfile_dup (origin);
 
-  ret->cached_packages = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                g_free, NULL);
-  ret->cached_local_packages = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                      g_free, g_free);
-  ret->cached_overrides_remove = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                        g_free, NULL);
+  ret->cached_packages = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  ret->cached_local_packages =
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+  ret->cached_overrides_local_replace =
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+  ret->cached_overrides_remove =
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   /* NOTE hack here - see https://github.com/ostreedev/ostree/pull/343 */
   g_key_file_remove_key (ret->kf, "origin", "unlocked", NULL);
@@ -81,33 +114,21 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
       if (!ret->cached_refspec)
         return glnx_null_throw (error, "No origin/refspec or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree");
 
-      { g_auto(GStrv) packages =
-          g_key_file_get_string_list (ret->kf, "packages", "requested", NULL, NULL);
-        for (char **it = packages; it && *it; it++)
-          g_hash_table_add (ret->cached_packages, g_steal_pointer (it));
-      }
+      if (!parse_packages_strv (ret->kf, "packages", "requested", FALSE,
+                                ret->cached_packages, error))
+        return FALSE;
 
-      { g_auto(GStrv) packages =
-          g_key_file_get_string_list (ret->kf, "packages", "requested-local", NULL, NULL);
-        for (char **it = packages; it && *it; it++)
-          {
-            const char *nevra = *it;
-            g_autofree char *sha256 = NULL;
+      if (!parse_packages_strv (ret->kf, "packages", "requested-local", TRUE,
+                                ret->cached_local_packages, error))
+        return FALSE;
 
-            if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
-              return glnx_null_throw (error, "Invalid SHA-256 NEVRA string: %s",
-                                      nevra);
+      if (!parse_packages_strv (ret->kf, "overrides", "remove", FALSE,
+                                ret->cached_overrides_remove, error))
+        return FALSE;
 
-            g_hash_table_replace (ret->cached_local_packages,
-                                  g_strdup (nevra), g_steal_pointer (&sha256));
-          }
-      }
-
-      { g_auto(GStrv) overrides =
-          g_key_file_get_string_list (ret->kf, "overrides", "remove", NULL, NULL);
-        for (char **it = overrides; it && *it; it++)
-          g_hash_table_add (ret->cached_overrides_remove, g_steal_pointer (it));
-      }
+      if (!parse_packages_strv (ret->kf, "overrides", "replace-local", TRUE,
+                                ret->cached_overrides_local_replace, error))
+        return FALSE;
     }
 
   ret->cached_override_commit =
@@ -149,6 +170,12 @@ rpmostree_origin_get_overrides_remove (RpmOstreeOrigin *origin)
   return origin->cached_overrides_remove;
 }
 
+GHashTable *
+rpmostree_origin_get_overrides_local_replace (RpmOstreeOrigin *origin)
+{
+  return origin->cached_overrides_local_replace;
+}
+
 const char *
 rpmostree_origin_get_override_commit (RpmOstreeOrigin *origin)
 {
@@ -182,6 +209,7 @@ rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
   return rpmostree_origin_get_regenerate_initramfs (origin) ||
         (g_hash_table_size (origin->cached_packages) > 0) ||
         (g_hash_table_size (origin->cached_local_packages) > 0) ||
+        (g_hash_table_size (origin->cached_overrides_local_replace) > 0) ||
         (g_hash_table_size (origin->cached_overrides_remove) > 0);
 }
 
@@ -232,6 +260,8 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
   g_strfreev (origin->cached_initramfs_args);
   g_clear_pointer (&origin->cached_packages, g_hash_table_unref);
   g_clear_pointer (&origin->cached_local_packages, g_hash_table_unref);
+  g_clear_pointer (&origin->cached_overrides_local_replace, g_hash_table_unref);
+  g_clear_pointer (&origin->cached_overrides_remove, g_hash_table_unref);
   g_free (origin);
 }
 
@@ -493,47 +523,76 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
 gboolean
 rpmostree_origin_add_overrides (RpmOstreeOrigin  *origin,
                                 char            **packages,
-                                gboolean          is_remove_override,
+                                RpmOstreeOriginOverrideType type,
                                 GError          **error)
 {
-  /* that's all we support for now */
-  g_assert (is_remove_override);
-
   gboolean changed = FALSE;
   for (char **it = packages; it && *it; it++)
     {
       const char *pkg = *it;
-      if (g_hash_table_contains (origin->cached_overrides_remove, pkg))
-        return glnx_throw (error, "Package '%s' is already removed", pkg);
+      g_autofree char *sha256 = NULL;
 
-      g_hash_table_add (origin->cached_overrides_remove, g_strdup (pkg));
+      if (type == RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL)
+        {
+          if (!rpmostree_decompose_sha256_nevra (&pkg, &sha256, error))
+            return glnx_throw (error, "Invalid SHA-256 NEVRA string: %s", pkg);
+        }
+
+      /* Check that the same overrides don't already exist. Of course, in the local replace
+       * case, this doesn't catch same pkg name but different EVRA; we'll just barf at that
+       * later on in the core. This is just an early easy sanity check. */
+      if (g_hash_table_contains (origin->cached_overrides_remove, pkg) ||
+          g_hash_table_contains (origin->cached_overrides_local_replace, pkg))
+        return glnx_throw (error, "Override already exists for package '%s'", pkg);
+
+      if (type == RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL)
+        g_hash_table_insert (origin->cached_overrides_local_replace, g_strdup (pkg),
+                             g_steal_pointer (&sha256));
+      else if (type == RPMOSTREE_ORIGIN_OVERRIDE_REMOVE)
+        g_hash_table_add (origin->cached_overrides_remove, g_strdup (pkg));
+      else
+        g_assert_not_reached ();
+
       changed = TRUE;
     }
 
   if (changed)
-    update_keyfile_pkgs_from_cache (origin, "overrides", "remove",
-                                    origin->cached_overrides_remove, FALSE);
+    {
+      if (type == RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL)
+        update_keyfile_pkgs_from_cache (origin, "overrides", "replace-local",
+                                        origin->cached_overrides_local_replace, TRUE);
+      else if (type == RPMOSTREE_ORIGIN_OVERRIDE_REMOVE)
+        update_keyfile_pkgs_from_cache (origin, "overrides", "remove",
+                                        origin->cached_overrides_remove, FALSE);
+      else
+        g_assert_not_reached ();
+    }
 
   return TRUE;
 }
 
+/* Returns FALSE if the override does not exist. */
 gboolean
-rpmostree_origin_remove_overrides (RpmOstreeOrigin  *origin,
-                                   char            **packages,
-                                   GError          **error)
+rpmostree_origin_remove_override (RpmOstreeOrigin  *origin,
+                                  const char       *package,
+                                  RpmOstreeOriginOverrideType type)
 {
-  gboolean changed = FALSE;
-  for (char **it = packages; it && *it; it++)
+  if (type == RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL)
     {
-      const char *pkg = *it;
-      if (!g_hash_table_remove (origin->cached_overrides_remove, pkg))
-        return glnx_throw (error, "No overrides for package '%s'", pkg);
-      changed = TRUE;
+      if (!g_hash_table_remove (origin->cached_overrides_local_replace, package))
+        return FALSE;
+      update_keyfile_pkgs_from_cache (origin, "overrides", "replace-local",
+                                      origin->cached_overrides_local_replace, TRUE);
     }
-
-  if (changed)
-    update_keyfile_pkgs_from_cache (origin, "overrides", "remove",
-                                    origin->cached_overrides_remove, FALSE);
+  else if (type == RPMOSTREE_ORIGIN_OVERRIDE_REMOVE)
+    {
+      if (!g_hash_table_remove (origin->cached_overrides_remove, package))
+        return FALSE;
+      update_keyfile_pkgs_from_cache (origin, "overrides", "remove",
+                                      origin->cached_overrides_remove, FALSE);
+    }
+  else
+    g_assert_not_reached ();
 
   return TRUE;
 }
@@ -543,13 +602,20 @@ rpmostree_origin_remove_all_overrides (RpmOstreeOrigin  *origin,
                                        gboolean         *out_changed,
                                        GError          **error)
 {
-  gboolean changed = (g_hash_table_size (origin->cached_overrides_remove) > 0);
+  gboolean remove_changed = (g_hash_table_size (origin->cached_overrides_remove) > 0);
   g_hash_table_remove_all (origin->cached_overrides_remove);
 
-  if (changed)
+  gboolean local_replace_changed =
+    (g_hash_table_size (origin->cached_overrides_local_replace) > 0);
+  g_hash_table_remove_all (origin->cached_overrides_local_replace);
+
+  if (remove_changed)
     update_keyfile_pkgs_from_cache (origin, "overrides", "remove",
                                     origin->cached_overrides_remove, FALSE);
+  if (local_replace_changed)
+    update_keyfile_pkgs_from_cache (origin, "overrides", "replace-local",
+                                    origin->cached_overrides_local_replace, TRUE);
   if (out_changed)
-    *out_changed = changed;
+    *out_changed = remove_changed || local_replace_changed;
   return TRUE;
 }

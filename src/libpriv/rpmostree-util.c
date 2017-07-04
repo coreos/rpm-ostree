@@ -434,20 +434,36 @@ rpmostree_str_has_prefix_in_ptrarray (const char *str,
   return FALSE;
 }
 
+/* Like g_strv_contains() but for ptrarray */
+gboolean
+rpmostree_str_ptrarray_contains (GPtrArray  *strs,
+                                 const char *str)
+{
+  guint n = strs->len;
+  for (guint i = 0; i < n; i++)
+    {
+      if (g_str_equal (str, strs->pdata[i]))
+        return TRUE;
+    }
+  return FALSE;
+}
+
 gboolean
 rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        OstreeDeployment  *deployment,
                                        gboolean          *out_is_layered,
                                        char             **out_base_layer,
                                        char            ***out_layered_pkgs,
-                                       char            ***out_removed_base_pkgs,
+                                       GVariant         **out_removed_base_pkgs,
+                                       GVariant         **out_replaced_base_pkgs,
                                        GError           **error)
 {
   g_autoptr(GVariant) commit = NULL;
   g_autoptr(GVariant) metadata = NULL;
   g_autoptr(GVariantDict) dict = NULL;
   g_auto(GStrv) layered_pkgs = NULL;
-  g_auto(GStrv) removed_base_pkgs = NULL;
+  g_autoptr(GVariant) removed_base_pkgs = NULL;
+  g_autoptr(GVariant) replaced_base_pkgs = NULL;
   const char *csum = ostree_deployment_get_csum (deployment);
   gboolean is_layered = FALSE;
   g_autofree char *base_layer = NULL;
@@ -504,8 +520,15 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
 
       if (clientlayer_version >= 2)
         {
-          g_assert (g_variant_dict_lookup (dict, "rpmostree.removed-base-packages", "^as",
-                                           &removed_base_pkgs));
+          removed_base_pkgs =
+            g_variant_dict_lookup_value (dict, "rpmostree.removed-base-packages",
+                                         G_VARIANT_TYPE ("av"));
+          g_assert (removed_base_pkgs);
+
+          replaced_base_pkgs =
+            g_variant_dict_lookup_value (dict, "rpmostree.replaced-base-packages",
+                                         G_VARIANT_TYPE ("a(vv)"));
+          g_assert (replaced_base_pkgs);
         }
     }
 
@@ -517,6 +540,8 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
     *out_layered_pkgs = g_steal_pointer (&layered_pkgs);
   if (out_removed_base_pkgs != NULL)
     *out_removed_base_pkgs = g_steal_pointer (&removed_base_pkgs);
+  if (out_replaced_base_pkgs != NULL)
+    *out_replaced_base_pkgs = g_steal_pointer (&replaced_base_pkgs);
 
   return TRUE;
 }

@@ -30,6 +30,7 @@
 #include "rpmostree-builtins.h"
 #include "rpmostree-dbus-helpers.h"
 #include "rpmostree-util.h"
+#include "rpmostree-rpm-util.h"
 #include "libsd-locale-util.h"
 
 #include <libglnx.h>
@@ -143,6 +144,16 @@ lookup_array_and_canonicalize (GVariantDict *dict,
   return g_steal_pointer (&ret);
 }
 
+static char*
+gv_nevra_to_evr (GVariant *gv_nevra)
+{
+  guint64 epoch;
+  const char *version, *release;
+  g_variant_get (gv_nevra, "(sst&s&ss)", NULL, NULL, &epoch, &version, &release, NULL);
+  return rpmostree_custom_nevra_strdup (NULL, epoch, version, release, NULL,
+                                        PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE);
+}
+
 /* We will have an optimized path for the case where there are just
  * two deployments, this code will be the generic fallback.
  */
@@ -224,8 +235,10 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       g_autofree const gchar **origin_packages = NULL;
       g_autofree const gchar **origin_requested_packages = NULL;
       g_autofree const gchar **origin_requested_local_packages = NULL;
-      g_autofree const gchar **origin_base_removals = NULL;
+      g_autoptr(GVariant) origin_base_removals = NULL;
       g_autofree const gchar **origin_requested_base_removals = NULL;
+      g_autoptr(GVariant) origin_base_local_replacements = NULL;
+      g_autofree const gchar **origin_requested_base_local_replacements = NULL;
       const gchar *origin_refspec;
       const gchar *id;
       const gchar *os_name;
@@ -241,7 +254,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       gboolean is_booted;
       const gboolean was_first = first;
       /* Add the long keys here */
-      const guint max_key_len = MAX (strlen ("RemovedBasePackages"),
+      const guint max_key_len = MAX (strlen ("InactiveBaseReplacements"),
                                      strlen ("InterruptedLiveCommit"));
       g_autoptr(GVariant) signatures = NULL;
       g_autofree char *timestamp_string = NULL;
@@ -266,9 +279,14 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
           origin_requested_local_packages =
             lookup_array_and_canonicalize (dict, "requested-local-packages");
           origin_base_removals =
-            lookup_array_and_canonicalize (dict, "base-removals");
+            g_variant_dict_lookup_value (dict, "base-removals", G_VARIANT_TYPE ("av"));
           origin_requested_base_removals =
             lookup_array_and_canonicalize (dict, "requested-base-removals");
+          origin_base_local_replacements =
+            g_variant_dict_lookup_value (dict, "base-local-replacements",
+                                         G_VARIANT_TYPE ("a(vv)"));
+          origin_requested_base_local_replacements =
+            lookup_array_and_canonicalize (dict, "requested-base-local-replacements");
         }
       else
         origin_refspec = NULL;
@@ -436,13 +454,77 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         }
 
       /* print base overrides before overlays */
+      g_autoptr(GPtrArray) active_removals = g_ptr_array_new_with_free_func (g_free);
       if (origin_base_removals)
-        print_packages ("RemovedBasePackages", max_key_len, origin_base_removals, NULL);
+        {
+          g_autoptr(GString) str = g_string_new ("");
+          const guint n = g_variant_n_children (origin_base_removals);
+          for (guint i = 0; i < n; i++)
+            {
+              g_autoptr(GVariant) gv_nevra;
+              g_variant_get_child (origin_base_removals, i, "v", &gv_nevra);
+              const char *name, *nevra;
+              g_variant_get_child (gv_nevra, 0, "&s", &nevra);
+              g_variant_get_child (gv_nevra, 1, "&s", &name);
+              if (str->len)
+                g_string_append (str, ", ");
+              g_string_append (str, nevra);
+              g_ptr_array_add (active_removals, g_strdup (name));
+            }
+          g_ptr_array_add (active_removals, NULL);
+          if (str->len)
+            print_kv ("RemovedBasePackages", max_key_len, str->str);
+        }
 
       /* only print inactive base removal requests in verbose mode */
       if (origin_requested_base_removals && opt_verbose)
         print_packages ("InactiveBaseRemovals", max_key_len,
-                        origin_requested_base_removals, origin_base_removals);
+                        origin_requested_base_removals,
+                        (const char *const*)active_removals->pdata);
+
+      g_autoptr(GPtrArray) active_replacements = g_ptr_array_new_with_free_func (g_free);
+      if (origin_base_local_replacements)
+        {
+          g_autoptr(GString) str = g_string_new ("");
+          const guint n = g_variant_n_children (origin_base_local_replacements);
+          for (guint i = 0; i < n; i++)
+            {
+              g_autoptr(GVariant) gv_nevra_new;
+              g_autoptr(GVariant) gv_nevra_old;
+              g_variant_get_child (origin_base_local_replacements, i, "(vv)",
+                                   &gv_nevra_new, &gv_nevra_old);
+              const char *nevra_new, *name_new, *name_old;
+              g_variant_get_child (gv_nevra_new, 0, "&s", &nevra_new);
+              g_variant_get_child (gv_nevra_new, 1, "&s", &name_new);
+              g_variant_get_child (gv_nevra_old, 1, "&s", &name_old);
+
+              if (str->len)
+                g_string_append (str, ", ");
+
+              /* if pkgnames match, print a nicer version like treediff */
+              if (g_str_equal (name_new, name_old))
+                {
+                  g_autofree char *old_evr = gv_nevra_to_evr (gv_nevra_old);
+                  g_autofree char *new_evr = gv_nevra_to_evr (gv_nevra_new);
+                  g_string_append_printf (str, "%s %s -> %s", name_new, old_evr, new_evr);
+                }
+              else
+                {
+                  const char *nevra_old;
+                  g_variant_get_child (gv_nevra_old, 0, "&s", &nevra_old);
+                  g_string_append_printf (str, "%s -> %s", nevra_old, nevra_new);
+                }
+              g_ptr_array_add (active_replacements, g_strdup (nevra_new));
+            }
+          g_ptr_array_add (active_replacements, NULL);
+          if (str->len)
+            print_kv ("ReplacedBasePackages", max_key_len, str->str);
+        }
+
+      if (origin_requested_base_local_replacements && opt_verbose)
+        print_packages ("InactiveBaseReplacements", max_key_len,
+                        origin_requested_base_local_replacements,
+                        (const char *const*)active_replacements->pdata);
 
       /* only print inactive layering requests in verbose mode */
       if (origin_requested_packages && opt_verbose)
