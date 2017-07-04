@@ -156,56 +156,48 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
                         GCancellable             *cancellable,
                         GError                  **error)
 {
-  glnx_unref_object OstreeRepo *pkgcache_repo = NULL;
-  g_autoptr(GPtrArray) deployments =
-    ostree_sysroot_get_deployments (sysroot);
-  g_autoptr(GHashTable) current_refs = NULL;
   g_autoptr(GHashTable) referenced_pkgs = /* cache refs of packages we want to keep */
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  gint n_objects_total;
-  gint n_objects_pruned;
-  guint64 freed_space;
-  guint n_freed = 0;
 
+  g_autoptr(OstreeRepo) pkgcache_repo = NULL;
   if (!rpmostree_get_pkgcache_repo (repo, &pkgcache_repo, cancellable, error))
     return FALSE;
 
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
   for (guint i = 0; i < deployments->len; i++)
     {
       OstreeDeployment *deployment = deployments->pdata[i];
-      gboolean is_layered;
 
+      gboolean is_layered;
       if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered,
                                                   NULL, NULL, NULL, error))
         return FALSE;
 
       if (is_layered)
         {
-          g_autoptr(RpmOstreeRefSack) rsack = NULL;
-          g_autofree char *deployment_dirpath = NULL;
-
-          deployment_dirpath = ostree_sysroot_get_deployment_dirpath (sysroot, deployment);
+          g_autofree char *deployment_dirpath =
+            ostree_sysroot_get_deployment_dirpath (sysroot, deployment);
 
           /* We could do this via the commit object, but it's faster
            * to reuse the existing rpmdb checkout.
            */
-          rsack = rpmostree_get_refsack_for_root (ostree_sysroot_get_fd (sysroot),
-                                                  deployment_dirpath,
-                                                  cancellable, error);
+          g_autoptr(RpmOstreeRefSack) rsack =
+            rpmostree_get_refsack_for_root (ostree_sysroot_get_fd (sysroot),
+                                            deployment_dirpath, cancellable, error);
           if (rsack == NULL)
             return FALSE;
 
-          if (!add_package_refs_to_set (rsack, referenced_pkgs,
-                                        cancellable, error))
+          if (!add_package_refs_to_set (rsack, referenced_pkgs, cancellable, error))
             return FALSE;
         }
     }
 
+  g_autoptr(GHashTable) current_refs = NULL;
   if (!ostree_repo_list_refs_ext (pkgcache_repo, "rpmostree/pkg", &current_refs,
-                                  OSTREE_REPO_LIST_REFS_EXT_NONE,
-                                  cancellable, error))
+                                  OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
     return FALSE;
 
+  guint n_freed = 0;
   GLNX_HASH_TABLE_FOREACH (current_refs, const char*, ref)
     {
       if (g_hash_table_contains (referenced_pkgs, ref))
@@ -217,6 +209,8 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
       n_freed++;
     }
 
+  guint64 freed_space;
+  gint n_objects_total, n_objects_pruned;
   if (!ostree_repo_prune (pkgcache_repo, OSTREE_REPO_PRUNE_FLAGS_REFS_ONLY, 0,
                           &n_objects_total, &n_objects_pruned, &freed_space,
                           cancellable, error))

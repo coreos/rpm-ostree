@@ -64,6 +64,11 @@ vm_build_rpm test-livefs-with-etc \
          /etc/%{name}/*
          /etc/opt/%{name}*"
 
+# make sure there are no config files already present
+vm_cmd rm -rf /etc/test-livefs-with-etc \
+              /etc/test-livefs-with-etc.conf \
+              /etc/opt/test-livefs-with-etc-opt.conf
+
 vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-with-etc-1.0-1.x86_64.rpm
 assert_livefs_ok
 vm_rpmostree ex livefs

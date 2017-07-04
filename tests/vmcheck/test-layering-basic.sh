@@ -66,7 +66,7 @@ vm_assert_layered_pkg foo-1.0 present
 echo "ok pkg foo added"
 
 output=$(vm_cmd /usr/bin/foo)
-if [[ $output != foo ]]; then
+if [[ $output != foo-1.0-1.x86_64 ]]; then
   assert_not_reached "foo printed wrong output"
 fi
 echo "ok correct output"
