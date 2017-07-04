@@ -261,6 +261,8 @@ rpmostree_context_finalize (GObject *object)
   g_clear_object (&rctx->spec);
   g_clear_object (&rctx->hifctx);
 
+  g_clear_pointer (&rctx->ignore_scripts, g_hash_table_unref);
+
   g_clear_object (&rctx->pkgcache_repo);
   g_clear_object (&rctx->ostreerepo);
 
