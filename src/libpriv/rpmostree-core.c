@@ -793,12 +793,12 @@ checkout_pkg_metadata_by_dnfpkg (RpmOstreeContext *self,
   return checkout_pkg_metadata (self, nevra, header, cancellable, error);
 }
 
-static gboolean
-find_cache_branch_by_nevra (OstreeRepo    *pkgcache,
-                            const char    *nevra,
-                            char         **out_cache_branch,
-                            GCancellable  *cancellable,
-                            GError       **error)
+gboolean
+rpmostree_find_cache_branch_by_nevra (OstreeRepo    *pkgcache,
+                                      const char    *nevra,
+                                      char         **out_cache_branch,
+                                      GCancellable  *cancellable,
+                                      GError       **error)
 
 {
   /* there's no safe way to convert a nevra string to its cache branch, so let's
@@ -832,7 +832,8 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
                                     GError       **error)
 {
   g_autofree char *cache_branch = NULL;
-  if (!find_cache_branch_by_nevra (pkgcache, nevra, &cache_branch, cancellable, error))
+  if (!rpmostree_find_cache_branch_by_nevra (pkgcache, nevra, &cache_branch,
+                                             cancellable, error))
     return FALSE;
 
   if (expected_sha256 != NULL)
@@ -888,7 +889,7 @@ rpmostree_get_nevra_from_pkgcache (OstreeRepo  *repo,
                                    GError  **error)
 {
   g_autofree char *ref = NULL;
-  if (!find_cache_branch_by_nevra (repo, nevra, &ref, cancellable, error))
+  if (!rpmostree_find_cache_branch_by_nevra (repo, nevra, &ref, cancellable, error))
     return FALSE;
 
   g_autofree char *rev = NULL;

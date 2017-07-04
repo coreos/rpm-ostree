@@ -82,6 +82,13 @@ char *rpmostree_get_cache_branch_header (Header hdr);
 char *rpmostree_get_cache_branch_pkg (DnfPackage *pkg);
 
 gboolean
+rpmostree_find_cache_branch_by_nevra (OstreeRepo    *pkgcache,
+                                      const char    *nevra,
+                                      char         **out_cache_branch,
+                                      GCancellable  *cancellable,
+                                      GError       **error);
+
+gboolean
 rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
                                     const char    *nevra,
                                     const char    *expected_sha256,
