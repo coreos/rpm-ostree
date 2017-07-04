@@ -863,10 +863,10 @@ rpmostree_unpacker_get_nevra (RpmOstreeUnpacker *self)
 {
   if (self->hdr == NULL)
     return NULL;
-  return rpmostree_pkg_custom_nevra_strdup (self->hdr,
-                                            PKG_NEVRA_FLAGS_NAME |
-                                            PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
-                                            PKG_NEVRA_FLAGS_ARCH);
+  return rpmostree_header_custom_nevra_strdup (self->hdr,
+                                               PKG_NEVRA_FLAGS_NAME |
+                                               PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
+                                               PKG_NEVRA_FLAGS_ARCH);
 }
 
 const char *

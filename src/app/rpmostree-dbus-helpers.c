@@ -829,13 +829,13 @@ vardict_sort_and_insert_pkgs (GVariantDict *dict,
   if (!rpmostree_sort_pkgs_strv (pkgs, fd_list, &repo_pkgs, &fd_idxs, error))
     return FALSE;
 
-  /* for grep: here we insert install-packages */
+  /* for grep: here we insert install-packages/override-replace-packages */
   if (repo_pkgs != NULL && repo_pkgs->len > 0)
     g_variant_dict_insert_value (dict, glnx_strjoina (key_prefix, "-packages"),
       g_variant_new_strv ((const char *const*)repo_pkgs->pdata,
                                               repo_pkgs->len));
 
-  /* for grep: here we insert install-local-packages */
+  /* for grep: here we insert install-local-packages/override-replace-local-packages */
   if (fd_idxs != NULL)
     g_variant_dict_insert_value (dict, glnx_strjoina (key_prefix, "-local-packages"),
                                  fd_idxs);
@@ -865,16 +865,19 @@ get_modifiers_variant (const char   *set_refspec,
         return FALSE;
     }
 
+  if (override_replace_pkgs)
+    {
+      if (!vardict_sort_and_insert_pkgs (&dict, "override-replace", fd_list,
+                                         override_replace_pkgs, error))
+        return FALSE;
+    }
+
   if (set_refspec)
     g_variant_dict_insert (&dict, "set-refspec", "s", set_refspec);
   if (set_revision)
     g_variant_dict_insert (&dict, "set-revision", "s", set_revision);
 
   vardict_insert_strv (&dict, "uninstall-packages", uninstall_pkgs);
-
-  /* NB: when we implement this, we'll have to pass it through sort_pkgs_strv to
-   * split out local pkgs */
-  vardict_insert_strv (&dict, "override-replace-packages", override_replace_pkgs);
   vardict_insert_strv (&dict, "override-remove-packages", override_remove_pkgs);
   vardict_insert_strv (&dict, "override-reset-packages", override_reset_pkgs);
 
