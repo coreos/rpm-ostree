@@ -142,8 +142,10 @@ for tf in $(find . -name 'test-*.sh' | sort); do
     # go back to the original vmcheck deployment if needed
     csum_cur=$(vm_get_booted_csum)
     unlocked_cur=$(vm_get_booted_deployment_info unlocked)
+    live_csum=$(vm_get_booted_deployment_info live-replaced)
     if [[ $csum_orig != $csum_cur ]] || \
-       [[ $unlocked_cur != none ]]; then
+       [[ $unlocked_cur != none ]] || \
+       [ -n "${live_csum}" ]; then
       # redeploy under the name 'vmcheck' so that tests can
       # never modify the vmcheck_orig ref itself
       vm_cmd ostree admin deploy vmcheck &>> ${LOG}
