@@ -407,7 +407,7 @@ BuildArch: $arch
 
 # by default, we create a /usr/bin/$name script which just outputs $name
 %build
-echo -e "#!/bin/sh\necho $name" > $name
+echo -e "#!/bin/sh\necho $name-$version-$release.$arch" > $name
 chmod a+x $name
 $build
 
