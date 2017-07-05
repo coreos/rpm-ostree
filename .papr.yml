@@ -116,6 +116,13 @@ cluster:
 env:
   HOSTS: vmcheck
 
+tests:
+  # updates-source mirrors are being flaky
+  - sed -i '/metalink=.*updates-released-source.*/ d' /etc/yum.repos.d/fedora-updates.repo
+  - sed -i '/SRPMS/ s/^#baseurl/baseurl/' /etc/yum.repos.d/fedora-updates.repo
+  - ./ci/build.sh
+  - make vmcheck
+
 ---
 
 branches:
