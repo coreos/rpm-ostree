@@ -27,6 +27,23 @@ artifacts:
 
 inherit: true
 
+context: f26-build-check
+
+required: false
+
+container:
+    image: registry.fedoraproject.org/fedora:26
+
+tests:
+  # updates-source mirrors are being flaky
+  - sed -i '/metalink=.*updates-released-source.*/ d' /etc/yum.repos.d/fedora-updates.repo
+  - sed -i '/SRPMS/ s/^#baseurl/baseurl/' /etc/yum.repos.d/fedora-updates.repo
+  - ci/build-check.sh
+
+---
+
+inherit: true
+
 context: c7-build
 
 required: true
@@ -67,9 +84,15 @@ cluster:
   container:
     image: registry.fedoraproject.org/fedora:25
 
+env:
+  HOSTS: vmcheck1 vmcheck2 vmcheck3
+
+packages:
+  - rsync
+
 tests:
   - ./ci/build.sh
-  - make vmcheck HOSTS="vmcheck1 vmcheck2 vmcheck3"
+  - make vmcheck
 
 artifacts:
   - vmcheck
@@ -77,6 +100,31 @@ artifacts:
 # We really need to work on getting this down:
 # https://github.com/projectatomic/rpm-ostree/issues/662
 timeout: 80m
+
+---
+
+inherit: true
+
+context: f26-vmcheck
+
+required: false
+
+cluster:
+  hosts:
+    - name: vmcheck
+      distro: fedora/26/atomic
+  container:
+    image: registry.fedoraproject.org/fedora:26
+
+env:
+  HOSTS: vmcheck
+
+tests:
+  # updates-source mirrors are being flaky
+  - sed -i '/metalink=.*updates-released-source.*/ d' /etc/yum.repos.d/fedora-updates.repo
+  - sed -i '/SRPMS/ s/^#baseurl/baseurl/' /etc/yum.repos.d/fedora-updates.repo
+  - ./ci/build.sh
+  - make vmcheck
 
 ---
 
