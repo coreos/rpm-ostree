@@ -108,6 +108,7 @@ cluster:
     image: registry.fedoraproject.org/fedora:26
 
 env:
+  HOSTS: vmcheck
 
 ---
 
