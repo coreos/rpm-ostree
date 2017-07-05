@@ -166,8 +166,8 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
 
   add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
   add_canonicalized_string_array (&builder, "cached-packages", NULL, keyfile);
-  add_canonicalized_string_array (&builder, "removed-base-packages",
-                                  NULL, keyfile);
+  add_canonicalized_string_array (&builder, "removed-base-packages", NULL, keyfile);
+  add_canonicalized_string_array (&builder, "cached-replaced-base-packages", NULL, keyfile);
 
   /* We allow the "repo" key to be missing. This means that we rely on hif's
    * normal behaviour (i.e. look at repos in repodir with enabled=1). */
@@ -247,6 +247,9 @@ struct _RpmOstreeContext {
   GPtrArray *pkgs_to_import;
   GPtrArray *pkgs_to_relabel;
 
+  GHashTable *pkgs_to_remove;  /* pkgname --> gv_nevra */
+  GHashTable *pkgs_to_replace; /* new gv_nevra --> old gv_nevra */
+
   char *tmpdir_path;
   int tmpdir_fd;
 };
@@ -273,6 +276,9 @@ rpmostree_context_finalize (GObject *object)
   g_clear_pointer (&rctx->pkgs_to_download, g_ptr_array_unref);
   g_clear_pointer (&rctx->pkgs_to_import, g_ptr_array_unref);
   g_clear_pointer (&rctx->pkgs_to_relabel, g_ptr_array_unref);
+
+  g_clear_pointer (&rctx->pkgs_to_remove, g_hash_table_unref);
+  g_clear_pointer (&rctx->pkgs_to_replace, g_hash_table_unref);
 
   if (rctx->tmpdir_path)
     {
@@ -1269,33 +1275,56 @@ sort_packages (RpmOstreeContext *self,
   return TRUE;
 }
 
-static char *
-join_package_list (const char *prefix, char **pkgs, int len)
+static gboolean
+throw_package_list (GError **error, const char *suffix, GPtrArray *pkgs)
 {
-  GString *ret = g_string_new (prefix);
+  if (!error)
+    return FALSE; /* Note early simultaneously happy and sad return */
 
-  if (len < 0)
-    len = g_strv_length (pkgs);
+  GString *msg = g_string_new ("The following base packages ");
+  g_string_append (msg, suffix);
+  g_string_append (msg, ": ");
 
   gboolean first = TRUE;
-  for (guint i = 0; i < len; i++)
+  for (guint i = 0; i < pkgs->len; i++)
     {
       if (!first)
-        g_string_append (ret, ", ");
-      g_string_append (ret, pkgs[i]);
+        g_string_append (msg, ", ");
+      g_string_append (msg, pkgs->pdata[i]);
       first = FALSE;
     }
 
-  return g_string_free (ret, FALSE);
+  /* need a glnx_set_error_steal */
+  g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, msg->str);
+  return FALSE;
+}
+
+static GVariant*
+gv_nevra_from_pkg (DnfPackage *pkg)
+{
+  return g_variant_ref_sink (g_variant_new ("(sstsss)",
+                             dnf_package_get_nevra (pkg),
+                             dnf_package_get_name (pkg),
+                             dnf_package_get_epoch (pkg),
+                             dnf_package_get_version (pkg),
+                             dnf_package_get_release (pkg),
+                             dnf_package_get_arch (pkg)));
+}
+
+/* g_variant_hash can't handle container types */
+static guint
+gv_nevra_hash (gconstpointer v)
+{
+  g_autoptr(GVariant) nevra = g_variant_get_child_value ((GVariant*)v, 0);
+  return g_str_hash (g_variant_get_string (nevra, NULL));
 }
 
 static gboolean
-check_goal_solution (HyGoal    goal,
-                     const char *const *allowed_base_removals,
-                     GError  **error)
+check_goal_solution (RpmOstreeContext *self,
+                     GPtrArray        *removed_pkgnames,
+                     GPtrArray        *replaced_nevras,
+                     GError          **error)
 {
-  g_autoptr(GPtrArray) packages = NULL;
-
   /* Now we need to make sure that only the pkgs in the base allowed to be
    * removed are removed. The issue is that marking a package for DNF_INSTALL
    * could uninstall a base pkg if it's an update or obsoletes it. There doesn't
@@ -1303,61 +1332,129 @@ check_goal_solution (HyGoal    goal,
    * so we just inspect its solution in retrospect. libdnf has the concept of
    * protected packages, but it still allows updating protected packages. */
 
+  HyGoal goal = dnf_context_get_goal (self->hifctx);
+
+  g_autoptr(GPtrArray) packages = NULL;
+
+  /* all strings are owned by pool */
+  g_autoptr(GPtrArray) forbidden = g_ptr_array_new ();
+
+  g_assert (!self->pkgs_to_remove);
+  self->pkgs_to_remove = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                                                (GDestroyNotify)g_variant_unref);
   packages = dnf_goal_get_packages (goal,
                                     DNF_PACKAGE_INFO_REMOVE,
-                                    DNF_PACKAGE_INFO_OBSOLETE,
-                                    -1);
-
-  /* strings are owned by pool */
-  g_autoptr(GPtrArray) filtered_packages = g_ptr_array_new ();
+                                    DNF_PACKAGE_INFO_OBSOLETE, -1);
   for (guint i = 0; i < packages->len; i++)
     {
       DnfPackage *pkg = packages->pdata[i];
       const char *name = dnf_package_get_name (pkg);
-      if (g_strv_contains (allowed_base_removals, name))
-        continue;
+      const char *nevra = dnf_package_get_nevra (pkg);
 
-      g_ptr_array_add (filtered_packages, (gpointer)dnf_package_get_nevra (pkg));
+      /* did we expect this package to be removed? */
+      if (rpmostree_str_ptrarray_contains (removed_pkgnames, name))
+        g_hash_table_insert (self->pkgs_to_remove, g_strdup (name),
+                                                   gv_nevra_from_pkg (pkg));
+      else
+        g_ptr_array_add (forbidden, (gpointer)nevra);
     }
 
-  if (filtered_packages->len > 0)
+  if (forbidden->len > 0)
+    return throw_package_list (error, "would be removed", forbidden);
+
+  g_ptr_array_unref (forbidden);
+  forbidden = g_ptr_array_new ();
+
+  /* check that all the pkgs we expect to remove are marked for removal */
+  for (guint i = 0; i < removed_pkgnames->len; i++)
     {
-      g_autofree char *msg = join_package_list (
-          "The following base packages would be removed: ",
-          (char**)filtered_packages->pdata, filtered_packages->len);
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, msg);
-      return FALSE;
+      const char *pkgname = removed_pkgnames->pdata[i];
+      if (!g_hash_table_contains (self->pkgs_to_remove, pkgname))
+        g_ptr_array_add (forbidden, (gpointer)pkgname);
     }
+
+  if (forbidden->len > 0)
+    return throw_package_list (error, "are not marked to be removed", forbidden);
+
+  /* REINSTALLs should never happen since it doesn't make sense in the rpm-ostree flow, and
+   * we check very early whether a package is already in the rootfs or not, but let's check
+   * for it anyway so that we get a bug report in case it somehow happens. */
+  g_ptr_array_unref (packages);
+  packages = dnf_goal_get_packages (goal, DNF_PACKAGE_INFO_REINSTALL, -1);
+  g_assert_cmpint (packages->len, ==, 0);
+
+  g_ptr_array_unref (forbidden);
+  forbidden = g_ptr_array_new ();
+
+  g_assert (!self->pkgs_to_replace);
+  self->pkgs_to_replace = g_hash_table_new_full (gv_nevra_hash, g_variant_equal,
+                                                 (GDestroyNotify)g_variant_unref,
+                                                 (GDestroyNotify)g_variant_unref);
 
   g_ptr_array_unref (packages);
-
   packages = dnf_goal_get_packages (goal,
-                                    DNF_PACKAGE_INFO_REINSTALL,
                                     DNF_PACKAGE_INFO_UPDATE,
-                                    DNF_PACKAGE_INFO_DOWNGRADE,
-                                    -1);
-  if (packages->len > 0)
+                                    DNF_PACKAGE_INFO_DOWNGRADE, -1);
+  for (guint i = 0; i < packages->len; i++)
     {
-      g_autoptr(GHashTable) nevras = g_hash_table_new (g_str_hash, g_str_equal);
-      g_autofree char **keys = NULL;
+      DnfPackage *pkg = packages->pdata[i];
+      const char *nevra = dnf_package_get_nevra (pkg);
 
-      for (guint i = 0; i < packages->len; i++)
-        {
-          DnfPackage *pkg = packages->pdata[i];
-          g_autoptr(GPtrArray) old =
-            hy_goal_list_obsoleted_by_package (goal, pkg);
-          for (guint j = 0; j < old->len; j++)
-            g_hash_table_add (nevras,
-                              (gpointer)dnf_package_get_nevra (old->pdata[j]));
-        }
+      /* just pick the first pkg */
+      g_autoptr(GPtrArray) old = hy_goal_list_obsoleted_by_package (goal, pkg);
+      g_assert_cmpint (old->len, >, 0);
+      DnfPackage *old_pkg = old->pdata[0];
+      const char *old_nevra = dnf_package_get_nevra (old_pkg);
 
-      keys = (char**)g_hash_table_get_keys_as_array (nevras, NULL);
-      g_autofree char *msg = join_package_list (
-          "The following base packages would be replaced: ", keys, -1);
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, msg);
-      return FALSE;
+      /* did we expect this nevra to replace a base pkg? */
+      if (rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
+        g_hash_table_insert (self->pkgs_to_replace, gv_nevra_from_pkg (pkg),
+                                                    gv_nevra_from_pkg (old_pkg));
+      else
+        g_ptr_array_add (forbidden, (gpointer)old_nevra);
     }
 
+  if (forbidden->len > 0)
+    return throw_package_list (error, "would be replaced", forbidden);
+
+  g_ptr_array_unref (forbidden);
+  forbidden = g_ptr_array_new_with_free_func (g_free);
+
+  /* check that all the pkgs we expect to replace are marked for replacement */
+  GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_replace, GVariant*, new, GVariant*, old)
+    {
+      g_autoptr(GVariant) nevra_v = g_variant_get_child_value (new, 0);
+      const char *nevra = g_variant_get_string (nevra_v, NULL);
+      if (!rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
+        g_ptr_array_add (forbidden, g_strdup (nevra));
+    }
+
+  if (forbidden->len > 0)
+    return throw_package_list (error, "are not marked to be installed", forbidden);
+
+  return TRUE;
+}
+
+static gboolean
+install_pkg_from_cache (RpmOstreeContext *self,
+                        const char       *nevra,
+                        const char       *sha256,
+                        GCancellable     *cancellable,
+                        GError          **error)
+{
+  if (!checkout_pkg_metadata_by_nevra (self, nevra, sha256, cancellable, error))
+    return FALSE;
+
+  /* This is the great lie: we make libdnf et al. think that they're dealing with a full
+   * RPM, all while crossing our fingers that they don't try to look past the header.
+   * Ideally, it would be best if libdnf could learn to treat the pkgcache repo as another
+   * DnfRepo. */
+  g_autofree char *rpm = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir_path, nevra);
+  DnfPackage *pkg = dnf_sack_add_cmdline_package (dnf_context_get_sack (self->hifctx), rpm);
+  if (!pkg)
+    return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
+
+  hy_goal_install (dnf_context_get_goal (self->hifctx), pkg);
   return TRUE;
 }
 
@@ -1377,6 +1474,10 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   g_assert (g_variant_dict_lookup (self->spec->dict, "cached-packages",
                                    "^a&s", &cached_pkgnames));
 
+  g_autofree char **cached_replace_pkgs = NULL;
+  g_assert (g_variant_dict_lookup (self->spec->dict, "cached-replaced-base-packages",
+                                   "^a&s", &cached_replace_pkgs));
+
   g_autofree char **removed_base_pkgnames = NULL;
   g_assert (g_variant_dict_lookup (self->spec->dict, "removed-base-packages",
                                    "^a&s", &removed_base_pkgnames));
@@ -1389,33 +1490,47 @@ rpmostree_context_prepare (RpmOstreeContext *self,
     }
 
   HyGoal goal = dnf_context_get_goal (hifctx);
-  DnfSack *sack = dnf_context_get_sack (hifctx);
+
+  g_autoptr(GPtrArray) removed_pkgnames = g_ptr_array_new ();
+  for (char **it = removed_base_pkgnames; it && *it; it++)
+    {
+      const char *pkgname = *it;
+      if (!dnf_context_remove (hifctx, pkgname, error))
+        return FALSE;
+
+      g_ptr_array_add (removed_pkgnames, (gpointer)pkgname);
+    }
+
+  g_autoptr(GPtrArray) replaced_nevras = g_ptr_array_new ();
+  for (char **it = cached_replace_pkgs; it && *it; it++)
+    {
+      const char *nevra = *it;
+      g_autofree char *sha256 = NULL;
+      if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
+        return FALSE;
+
+      if (!install_pkg_from_cache (self, nevra, sha256, cancellable, error))
+        return FALSE;
+
+      g_ptr_array_add (replaced_nevras, (gpointer)nevra);
+    }
 
   for (char **it = cached_pkgnames; it && *it; it++)
     {
       const char *nevra = *it;
-      DnfPackage *pkg = NULL;
-      g_autofree char *path = NULL;
       g_autofree char *sha256 = NULL;
-
       if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
         return FALSE;
 
-      if (!checkout_pkg_metadata_by_nevra (self, nevra, sha256,
-                                           cancellable, error))
+      if (!install_pkg_from_cache (self, nevra, sha256, cancellable, error))
         return FALSE;
+    }
 
-      /* This is the great lie: we make libdnf et al. think that they're
-       * dealing with a full RPM, all while crossing our fingers that they
-       * don't try to look past the header. Ideally, it would be best if
-       * libdnf could learn to treat the pkgcache repo as another DnfRepo.
-       * */
-      path = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir_path, nevra);
-      pkg = dnf_sack_add_cmdline_package (sack, path);
-      if (!pkg)
-        return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
-
-      hy_goal_install (goal, pkg);
+  for (char **it = pkgnames; it && *it; it++)
+    {
+      const char *pkgname = *it;
+      if (!dnf_context_install (hifctx, pkgname, error))
+        return FALSE;
     }
 
   { g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (hifctx, DNF_REPO_ENABLED_PACKAGES);
@@ -1453,35 +1568,18 @@ rpmostree_context_prepare (RpmOstreeContext *self,
                      NULL);
   }
 
-  for (char **it = pkgnames; it && *it; it++)
-    {
-      const char *pkgname = *it;
-      if (!dnf_context_install (hifctx, pkgname, error))
-        return FALSE;
-    }
-
-  for (char **it = removed_base_pkgnames; it && *it; it++)
-    {
-      const char *pkgname = *it;
-      if (!dnf_context_remove (hifctx, pkgname, error))
-        return FALSE;
-    }
-
   rpmostree_output_task_begin ("Resolving dependencies");
 
   /* XXX: consider a --allow-uninstall switch? */
   if (!dnf_goal_depsolve (goal, DNF_INSTALL | DNF_ALLOW_UNINSTALL, error) ||
-      !check_goal_solution (goal, (const char *const*)removed_base_pkgnames, error))
+      !check_goal_solution (self, removed_pkgnames, replaced_nevras, error) ||
+      !sort_packages (self, error))
     {
       g_print ("failed\n");
       return FALSE;
     }
 
-  if (!sort_packages (self, error))
-    return FALSE;
-
   rpmostree_output_task_end ("done");
-
   return TRUE;
 }
 
@@ -2309,6 +2407,7 @@ static gboolean
 rpmts_add_install (RpmOstreeContext *self,
                    rpmts  ts,
                    DnfPackage *pkg,
+                   gboolean is_upgrade,
                    gboolean noscripts,
                    GHashTable *ignore_scripts,
                    GCancellable *cancellable,
@@ -2326,7 +2425,7 @@ rpmts_add_install (RpmOstreeContext *self,
         return FALSE;
     }
 
-  if (rpmtsAddInstallElement (ts, hdr, pkg, TRUE, NULL) != 0)
+  if (rpmtsAddInstallElement (ts, hdr, pkg, is_upgrade, NULL) != 0)
     return glnx_throw (error, "Failed to add install element for %s",
                        dnf_package_get_filename (pkg));
 
@@ -2568,6 +2667,48 @@ checksum_version (GVariant *checksum)
   return g_strdup (ret);
 }
 
+static gboolean
+add_install (RpmOstreeContext *self,
+             DnfPackage       *pkg,
+             rpmts             ts,
+             gboolean          noscripts,
+             gboolean          is_upgrade,
+             GHashTable       *pkg_to_ostree_commit,
+             GCancellable     *cancellable,
+             GError          **error)
+{
+  OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
+  g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
+  g_autofree char *cached_rev = NULL;
+  gboolean sepolicy_matches;
+
+  if (!ostree_repo_resolve_rev (pkgcache_repo, cachebranch, FALSE,
+                                &cached_rev, error))
+    return FALSE;
+
+  if (self->sepolicy)
+    {
+      if (!commit_has_matching_sepolicy (pkgcache_repo, cached_rev,
+                                         self->sepolicy, &sepolicy_matches,
+                                         error))
+        return FALSE;
+
+      /* We already did any relabeling/reimporting above */
+      g_assert (sepolicy_matches);
+    }
+
+  if (!checkout_pkg_metadata_by_dnfpkg (self, pkg, cancellable, error))
+    return FALSE;
+
+  if (!rpmts_add_install (self, ts, pkg, is_upgrade, noscripts, self->ignore_scripts,
+                          cancellable, error))
+    return FALSE;
+
+  g_hash_table_insert (pkg_to_ostree_commit, g_object_ref (pkg),
+                                             g_steal_pointer (&cached_rev));
+  return TRUE;
+}
+
 gboolean
 rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                       int                    tmprootfs_dfd,
@@ -2576,7 +2717,6 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                       GCancellable          *cancellable,
                                       GError               **error)
 {
-  OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
   DnfContext *hifctx = self->hifctx;
   TransactionData tdata = { 0, NULL };
   g_autoptr(GHashTable) pkg_to_ostree_commit =
@@ -2602,13 +2742,19 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                            DNF_PACKAGE_INFO_INSTALL,
                            -1);
 
+  g_autoptr(GPtrArray) overrides_replace =
+    dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+                           DNF_PACKAGE_INFO_UPDATE,
+                           DNF_PACKAGE_INFO_DOWNGRADE,
+                           -1);
+
   g_autoptr(GPtrArray) overrides_remove =
     dnf_goal_get_packages (dnf_context_get_goal (hifctx),
                            DNF_PACKAGE_INFO_REMOVE,
                            DNF_PACKAGE_INFO_OBSOLETE,
                            -1);
 
-  if (overlays->len == 0 && overrides_remove->len == 0)
+  if (overlays->len == 0 && overrides_remove->len == 0 && overrides_replace->len == 0)
     return glnx_throw (error, "No packages in transaction");
 
   /* Tell librpm about each one so it can tsort them.  What we really
@@ -2623,37 +2769,20 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
         return FALSE;
     }
 
+  for (guint i = 0; i < overrides_replace->len; i++)
+    {
+      DnfPackage *pkg = overrides_replace->pdata[i];
+      if (!add_install (self, pkg, ordering_ts, noscripts, TRUE, pkg_to_ostree_commit,
+                        cancellable, error))
+        return FALSE;
+    }
+
   for (guint i = 0; i < overlays->len; i++)
     {
       DnfPackage *pkg = overlays->pdata[i];
-      g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
-      g_autofree char *cached_rev = NULL;
-      gboolean sepolicy_matches;
-
-      if (!ostree_repo_resolve_rev (pkgcache_repo, cachebranch, FALSE,
-                                    &cached_rev, error))
+      if (!add_install (self, pkg, ordering_ts, noscripts, FALSE,
+                        pkg_to_ostree_commit, cancellable, error))
         return FALSE;
-
-      if (self->sepolicy)
-        {
-          if (!commit_has_matching_sepolicy (pkgcache_repo, cached_rev,
-                                             self->sepolicy, &sepolicy_matches,
-                                             error))
-            return FALSE;
-
-          /* We already did any relabeling/reimporting above */
-          g_assert (sepolicy_matches);
-        }
-
-      if (!checkout_pkg_metadata_by_dnfpkg (self, pkg, cancellable, error))
-        return FALSE;
-
-      if (!rpmts_add_install (self, ordering_ts, pkg,
-                              noscripts, self->ignore_scripts,
-                              cancellable, error))
-        return FALSE;
-
-      g_hash_table_insert (pkg_to_ostree_commit, g_object_ref (pkg), g_steal_pointer (&cached_rev));
 
       if (strcmp (dnf_package_get_name (pkg), "filesystem") == 0)
         filesystem_package = g_object_ref (pkg);
@@ -2663,13 +2792,14 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
     rpmtsOrder (ordering_ts);
   }
 
-  if (overrides_remove->len > 0 && overlays->len > 0)
+  guint overrides_total = overrides_remove->len + overrides_replace->len;
+  if (overrides_total > 0 && overlays->len > 0)
     rpmostree_output_task_begin ("Applying %u override%s and %u overlay%s",
-                                 overrides_remove->len, _NS(overrides_remove->len),
+                                 overrides_total, _NS(overrides_total),
                                  overlays->len, _NS(overlays->len));
-  else if (overrides_remove->len > 0)
-    rpmostree_output_task_begin ("Applying %u override%s", overrides_remove->len,
-                                 _NS(overrides_remove->len));
+  else if (overrides_total > 0)
+    rpmostree_output_task_begin ("Applying %u override%s", overrides_total,
+                                 _NS(overrides_total));
   else if (overlays->len > 0)
     rpmostree_output_task_begin ("Applying %u overlay%s", overlays->len,
                                  _NS(overlays->len));
@@ -2699,28 +2829,44 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
         return FALSE;
     }
 
+  /* We're completely disregarding how rpm normally does upgrades/downgrade here. rpm
+   * usually calculates the fate of each file and then installs the new files first, then
+   * removes the obsoleted files. So the TR_ADDED element for the new pkg comes *before* the
+   * TR_REMOVED element for the old pkg. This makes sense when operating on the live system.
+   * Though that's not the case here, so let's just take the easy way out and first nuke
+   * TR_REMOVED pkgs, then checkout the TR_ADDED ones. This will probably start to matter
+   * though when we start handling e.g. file triggers. */
+
   for (guint i = 0; i < n_rpmts_elements; i++)
     {
       rpmte te = rpmtsElement (ordering_ts, i);
       rpmElementType type = rpmteType (te);
 
       if (type == TR_ADDED)
-        {
-          DnfPackage *pkg = (void*)rpmteKey (te);
-          if (pkg == filesystem_package)
-            continue;
+        continue;
+      g_assert_cmpint (type, ==, TR_REMOVED);
 
-          if (!checkout_package_into_root (self, pkg, tmprootfs_dfd, ".", devino_cache,
-                                           g_hash_table_lookup (pkg_to_ostree_commit, pkg),
-                                           cancellable, error))
-            return FALSE;
-        }
-      else
-        {
-          g_assert (type == TR_REMOVED);
-          if (!delete_package_from_root (self, te, tmprootfs_dfd, cancellable, error))
-            return FALSE;
-        }
+      if (!delete_package_from_root (self, te, tmprootfs_dfd, cancellable, error))
+        return FALSE;
+    }
+
+  for (guint i = 0; i < n_rpmts_elements; i++)
+    {
+      rpmte te = rpmtsElement (ordering_ts, i);
+      rpmElementType type = rpmteType (te);
+
+      if (type == TR_REMOVED)
+        continue;
+      g_assert (type == TR_ADDED);
+
+      DnfPackage *pkg = (void*)rpmteKey (te);
+      if (pkg == filesystem_package)
+        continue;
+
+      if (!checkout_package_into_root (self, pkg, tmprootfs_dfd, ".", devino_cache,
+                                       g_hash_table_lookup (pkg_to_ostree_commit, pkg),
+                                       cancellable, error))
+        return FALSE;
     }
 
   rpmostree_output_task_end ("done");
@@ -2728,9 +2874,9 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
   if (!rpmostree_rootfs_prepare_links (tmprootfs_dfd, cancellable, error))
     return FALSE;
 
-  /* NB: we're not running scripts right now for removals, so this is only for
-   * overlays */
-  if (!noscripts && overlays->len > 0)
+  /* NB: we're not running scripts right now for removals, so this is only for overlays and
+   * replacements */
+  if (!noscripts && (overlays->len > 0 || overrides_replace->len > 0))
     {
       gboolean have_passwd;
       gboolean have_systemctl;
@@ -2860,8 +3006,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
   rpmostree_output_task_begin ("Writing rpmdb");
 
-  if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "usr/share/rpm", 0755,
-                               cancellable, error))
+  if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "usr/share/rpm", 0755, cancellable, error))
     return FALSE;
 
   /* Now, we use the separate rpmdb ts which *doesn't* have a rootdir set,
@@ -2895,8 +3040,16 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
       DnfPackage *pkg = overlays->pdata[i];
 
       /* Set noscripts since we already validated them above */
-      if (!rpmts_add_install (self, rpmdb_ts, pkg, TRUE, NULL,
-                              cancellable, error))
+      if (!rpmts_add_install (self, rpmdb_ts, pkg, FALSE, TRUE, NULL, cancellable, error))
+        return FALSE;
+    }
+
+  for (guint i = 0; i < overrides_replace->len; i++)
+    {
+      DnfPackage *pkg = overrides_replace->pdata[i];
+
+      /* Set noscripts since we already validated them above */
+      if (!rpmts_add_install (self, rpmdb_ts, pkg, TRUE, TRUE, NULL, cancellable, error))
         return FALSE;
     }
 
@@ -2917,7 +3070,8 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
    * root dir at least if we have CAP_SYS_CHROOT, or maybe do the space req
    * check ourselves if rpm makes that information easily accessible (doesn't
    * look like it from a quick glance). */
-  int r = rpmtsRun (rpmdb_ts, NULL, RPMPROB_FILTER_DISKSPACE);
+  /* Also enable OLDPACKAGE to allow replacement overrides to older version. */
+  int r = rpmtsRun (rpmdb_ts, NULL, RPMPROB_FILTER_DISKSPACE | RPMPROB_FILTER_OLDPACKAGE);
   if (r < 0)
     return glnx_throw (error, "Failed to update rpmdb (rpmtsRun code %d)", r);
   if (r > 0)
@@ -2984,12 +3138,30 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.packages", pkgs);
 
         /* embed packages removed */
-        g_autoptr(GVariant) removed_pkgs =
-          g_variant_dict_lookup_value (self->spec->dict, "removed-base-packages",
-                                       G_VARIANT_TYPE ("as"));
-        g_assert (removed_pkgs);
+        /* we have to embed both the pkgname and the full nevra to make it easier to match
+         * them up with origin directives. the full nevra is used for status -v */
+        g_auto(GVariantBuilder) removed_base_pkgs;
+        g_variant_builder_init (&removed_base_pkgs, (GVariantType*)"av");
+        if (self->pkgs_to_remove)
+          {
+            GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_remove,
+                                        const char*, name, GVariant*, nevra)
+              g_variant_builder_add (&removed_base_pkgs, "v", nevra);
+          }
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.removed-base-packages",
-                               removed_pkgs);
+                               g_variant_builder_end (&removed_base_pkgs));
+
+        /* embed packages replaced */
+        g_auto(GVariantBuilder) replaced_base_pkgs;
+        g_variant_builder_init (&replaced_base_pkgs, (GVariantType*)"a(vv)");
+        if (self->pkgs_to_replace)
+          {
+            GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_replace,
+                                        GVariant*, new_nevra, GVariant*, old_nevra)
+              g_variant_builder_add (&replaced_base_pkgs, "(vv)", new_nevra, old_nevra);
+          }
+        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.replaced-base-packages",
+                               g_variant_builder_end (&replaced_base_pkgs));
 
         /* be nice to our future selves */
         g_variant_builder_add (&metadata_builder, "{sv}",

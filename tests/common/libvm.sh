@@ -212,6 +212,16 @@ if \"$key\" in depl:
 "
 }
 
+# retrieve the deployment root
+# - $1   index of deployment
+vm_get_deployment_root() {
+  idx=$1
+  csum=$(vm_get_deployment_info $idx checksum)
+  serial=$(vm_get_deployment_info $idx serial)
+  osname=$(vm_get_deployment_info $idx osname)
+  echo /ostree/deploy/$osname/deploy/$csum.$serial
+}
+
 # retrieve info from the booted deployment
 # - $1   key to retrieve
 vm_get_booted_deployment_info() {

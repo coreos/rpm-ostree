@@ -32,6 +32,7 @@
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-output.h"
+#include "rpmostree-unpacker.h"
 
 #include "ostree-repo.h"
 
@@ -71,6 +72,7 @@ struct RpmOstreeSysrootUpgrader {
 
   GPtrArray *overlay_packages; /* Finalized list of pkgs to overlay */
   GPtrArray *override_remove_packages; /* Finalized list of base pkgs to remove */
+  GPtrArray *override_replace_local_packages; /* Finalized list of local base pkgs to replace */
 
   char *base_revision; /* Non-layered replicated commit */
   char *final_revision; /* Computed by layering; if NULL, only using base_revision */
@@ -166,7 +168,7 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
   if (!rpmostree_deployment_get_layered_info (self->repo,
                                               self->origin_merge_deployment,
                                               &is_layered, &self->base_revision,
-                                              NULL, NULL, error))
+                                              NULL, NULL, NULL, error))
     return FALSE;
 
   if (is_layered)
@@ -536,6 +538,13 @@ generate_treespec (RpmOstreeSysrootUpgrader *self)
                                   sha256_nevra->len);
     }
 
+  if (self->override_replace_local_packages->len > 0)
+    {
+      g_key_file_set_string_list (treespec, "tree", "cached-replaced-base-packages",
+                                  (const char* const*)self->override_replace_local_packages->pdata,
+                                  self->override_replace_local_packages->len);
+    }
+
   if (self->override_remove_packages->len > 0)
     {
       g_key_file_set_string_list (treespec, "tree", "removed-base-packages",
@@ -561,9 +570,9 @@ initialize_metatmpdir (RpmOstreeSysrootUpgrader *self,
 }
 
 static gboolean
-finalize_overrides (RpmOstreeSysrootUpgrader *self,
-                    GCancellable             *cancellable,
-                    GError                  **error)
+finalize_removal_overrides (RpmOstreeSysrootUpgrader *self,
+                            GCancellable             *cancellable,
+                            GError                  **error)
 {
   GHashTable *removals = rpmostree_origin_get_overrides_remove (self->origin);
   g_autoptr(GPtrArray) ret_final_removals = g_ptr_array_new_with_free_func (g_free);
@@ -591,6 +600,64 @@ finalize_overrides (RpmOstreeSysrootUpgrader *self,
   g_assert (!self->override_remove_packages);
   self->override_remove_packages = g_steal_pointer (&ret_final_removals);
   return TRUE;
+}
+
+static gboolean
+finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self,
+                                GCancellable             *cancellable,
+                                GError                  **error)
+{
+  GHashTable *local_replacements =
+    rpmostree_origin_get_overrides_local_replace (self->origin);
+  g_autoptr(GPtrArray) ret_final_local_replacements =
+    g_ptr_array_new_with_free_func (g_free);
+
+  g_autoptr(GPtrArray) inactive_replacements = g_ptr_array_new ();
+  g_autoptr(OstreeRepo) pkgcache_repo = NULL;
+  if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
+    return FALSE;
+
+  GLNX_HASH_TABLE_FOREACH_KV (local_replacements, const char*, nevra, const char*, sha256)
+    {
+      /* use the pkgcache because there's no safe way to go from nevra --> pkgname */
+      g_autofree char *pkgname = NULL;
+      if (!rpmostree_get_nevra_from_pkgcache (pkgcache_repo, nevra, &pkgname, NULL, NULL,
+                                              NULL, NULL, cancellable, error))
+        return FALSE;
+
+      g_autoptr(DnfPackage) pkg = NULL;
+      if (!rpmostree_sack_get_by_pkgname (self->rsack->sack, pkgname, &pkg, error))
+        return FALSE;
+
+      /* make inactive if it's missing or if that exact nevra is already present */
+      if (pkg && !rpmostree_sack_has_subject (self->rsack->sack, nevra))
+        {
+          g_ptr_array_add (ret_final_local_replacements,
+                           g_strconcat (sha256, ":", nevra, NULL));
+        }
+      else
+        g_ptr_array_add (inactive_replacements, (gpointer)nevra);
+    }
+
+  if (inactive_replacements->len > 0)
+    {
+      g_print ("Inactive base replacements:\n");
+      for (guint i = 0; i < inactive_replacements->len; i++)
+        g_print ("  %s\n", (const char*)inactive_replacements->pdata[i]);
+    }
+
+  g_assert (!self->override_replace_local_packages);
+  self->override_replace_local_packages = g_steal_pointer (&ret_final_local_replacements);
+  return TRUE;
+}
+
+static gboolean
+finalize_overrides (RpmOstreeSysrootUpgrader *self,
+                    GCancellable             *cancellable,
+                    GError                  **error)
+{
+  return finalize_removal_overrides (self, cancellable, error)
+      && finalize_replacement_overrides (self, cancellable, error);
 }
 
 /* Go through rpmdb and jot down the missing pkgs from the given set. Really, we
@@ -669,7 +736,9 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
         }
 
       /* Error out if it matches a base package that was also requested to be removed.
-       * Conceptually, we want users to use override replacements, not remove+overlay. */
+       * Conceptually, we want users to use override replacements, not remove+overlay.
+       * Really, we could just not do this check; it'd just end up being dormant, though
+       * that might be confusing to users. */
       for (guint i = 0; i < matches->len; i++)
         {
           DnfPackage *pkg = matches->pdata[i];
@@ -747,14 +816,10 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
                    GCancellable             *cancellable,
                    GError                  **error)
 {
-  g_autoptr(RpmOstreeContext) ctx =
-    rpmostree_context_new_system (cancellable, error);
+  g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_system (cancellable, error);
+  g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
 
-  g_autofree char *tmprootfs_abspath =
-    glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
-
-  if (!prepare_context_for_assembly (self, ctx, tmprootfs_abspath,
-                                     cancellable, error))
+  if (!prepare_context_for_assembly (self, ctx, tmprootfs_abspath, cancellable, error))
     return FALSE;
 
   GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
@@ -766,23 +831,19 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (treespec == NULL)
     return FALSE;
 
-  if (!rpmostree_context_setup (ctx, tmprootfs_abspath, NULL,
-                                treespec, cancellable, error))
+  if (!rpmostree_context_setup (ctx, tmprootfs_abspath, NULL, treespec, cancellable, error))
     return FALSE;
 
   g_autoptr(OstreeRepo) pkgcache_repo = NULL;
-  if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo,
-                                    cancellable, error))
+  if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
     return FALSE;
 
   rpmostree_context_set_repos (ctx, self->repo, pkgcache_repo);
 
-  GHashTable *overrides_remove =
-    rpmostree_origin_get_overrides_remove (self->origin);
   const gboolean have_packages = (self->overlay_packages->len > 0 ||
                                   g_hash_table_size (local_pkgs) > 0 ||
-                                  g_hash_table_size (overrides_remove) > 0);
-
+                                  self->override_remove_packages->len > 0 ||
+                                  self->override_replace_local_packages->len > 0);
   if (have_packages)
     {
       if (!rpmostree_context_prepare (ctx, cancellable, error))
@@ -880,6 +941,7 @@ requires_local_assembly (RpmOstreeSysrootUpgrader *self)
 
   return self->overlay_packages->len > 0 ||
          self->override_remove_packages->len > 0 ||
+         self->override_replace_local_packages->len > 0 ||
          g_hash_table_size (rpmostree_origin_get_local_packages (self->origin)) > 0 ||
          rpmostree_origin_get_regenerate_initramfs (self->origin);
 }

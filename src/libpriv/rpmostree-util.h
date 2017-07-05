@@ -99,12 +99,17 @@ rpmostree_str_has_prefix_in_ptrarray (const char *str,
                                       GPtrArray  *prefixes);
 
 gboolean
+rpmostree_str_ptrarray_contains (GPtrArray  *strs,
+                                 const char *str);
+
+gboolean
 rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        OstreeDeployment  *deployment,
                                        gboolean          *out_is_layered,
                                        char             **out_base_layer,
                                        char            ***out_layered_pkgs,
-                                       char            ***out_removed_base_pkgs,
+                                       GVariant         **out_removed_base_pkgs,
+                                       GVariant         **out_replaced_base_pkgs,
                                        GError           **error);
 
 gboolean

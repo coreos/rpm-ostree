@@ -193,8 +193,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   g_autofree char *live_inprogress = NULL;
   g_autofree char *live_replaced = NULL;
   g_auto(GStrv) layered_pkgs = NULL;
-  g_auto(GStrv) removed_base_pkgs = NULL;
-  const char *const empty_v[] = { NULL };
+  g_autoptr(GVariant) removed_base_pkgs = NULL;
+  g_autoptr(GVariant) replaced_base_pkgs = NULL;
 
   if (!ostree_repo_load_variant (repo,
                                  OSTREE_OBJECT_TYPE_COMMIT,
@@ -220,7 +220,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   g_variant_dict_insert (&dict, "checksum", "s", csum);
 
   if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered, &base_checksum,
-                                              &layered_pkgs, &removed_base_pkgs, error))
+                                              &layered_pkgs, &removed_base_pkgs,
+                                              &replaced_base_pkgs, error))
     return NULL;
 
   if (is_layered)
@@ -280,10 +281,12 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
                                rpmostree_origin_get_local_packages (origin));
   variant_add_from_hash_table (&dict, "requested-base-removals",
                                rpmostree_origin_get_overrides_remove (origin));
+  variant_add_from_hash_table (&dict, "requested-base-local-replacements",
+                               rpmostree_origin_get_overrides_local_replace (origin));
 
-  g_variant_dict_insert (&dict, "packages", "^as", layered_pkgs ?: (char**)empty_v);
-  g_variant_dict_insert (&dict, "base-removals", "^as",
-                         removed_base_pkgs ?: (char**)empty_v);
+  g_variant_dict_insert (&dict, "packages", "^as", layered_pkgs);
+  g_variant_dict_insert_value (&dict, "base-removals", removed_base_pkgs);
+  g_variant_dict_insert_value (&dict, "base-local-replacements", replaced_base_pkgs);
 
   if (sigs != NULL)
     g_variant_dict_insert_value (&dict, "signatures", sigs);

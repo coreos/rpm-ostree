@@ -550,6 +550,27 @@ deploy_flags_from_options (GVariant *options,
   return ret;
 }
 
+static gint*
+get_fd_array_from_sparse (gint     *fds,
+                          gint      nfds,
+                          GVariant *idxs)
+{
+  guint n = g_variant_n_children (idxs);
+  gint *new_fds = g_new0 (gint, n+1);
+
+  for (guint i = 0; i < n; i++)
+    {
+      g_autoptr(GVariant) hv = g_variant_get_child_value (idxs, i);
+      g_assert (hv);
+      gint32 h = g_variant_get_handle (hv);
+      g_assert (0 <= h && h < nfds);
+      new_fds[i] = fds[h];
+    }
+
+  new_fds[n] = -1;
+  return new_fds;
+}
+
 static RpmostreedTransaction*
 start_deployment_txn (GDBusMethodInvocation  *invocation,
                       const char             *osname,
@@ -576,14 +597,15 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
   g_auto(GVariantDict) options_dict;
   g_variant_dict_init (&options_dict, options);
 
-  /* Right now, we only use the fd list from the D-Bus message to transfer local
-   * packages, so there's no point in re-extracting them from the fd list based
-   * on the handle indices. We just do a sanity check here that they are indeed
-   * the same length. */
+  /* We only use the fd list right now to transfer local RPM fds, which are relevant in the
+   * `install foo.rpm` case and the `override replace foo.rpm` case. Let's make sure that
+   * the actual number of fds passed is what we expect. */
 
   guint expected_fdn = 0;
   if (install_local_pkgs_idxs)
-    expected_fdn = g_variant_n_children (install_local_pkgs_idxs);
+    expected_fdn += g_variant_n_children (install_local_pkgs_idxs);
+  if (override_replace_local_pkgs_idxs)
+    expected_fdn += g_variant_n_children (override_replace_local_pkgs_idxs);
 
   guint actual_fdn = 0;
   if (fd_list)
@@ -592,6 +614,29 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
   if (expected_fdn != actual_fdn)
     return glnx_null_throw (error, "Expected %u fds but received %u",
                             expected_fdn, actual_fdn);
+
+  /* split into two fd lists to make it easier for deploy_transaction_execute */
+  g_autoptr(GUnixFDList) install_local_pkgs = NULL;
+  g_autoptr(GUnixFDList) override_replace_local_pkgs = NULL;
+  if (fd_list)
+    {
+      gint nfds = 0; /* the strange constructions below allow us to avoid dup()s */
+      g_autofree gint *fds = g_unix_fd_list_steal_fds (fd_list, &nfds);
+
+      if (install_local_pkgs_idxs)
+        {
+          g_autofree gint *new_fds =
+            get_fd_array_from_sparse (fds, nfds, install_local_pkgs_idxs);
+          install_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
+        }
+
+      if (override_replace_local_pkgs_idxs)
+        {
+          g_autofree gint *new_fds =
+            get_fd_array_from_sparse (fds, nfds, override_replace_local_pkgs_idxs);
+          override_replace_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
+        }
+    }
 
   /* Also check for conflicting options -- this is after all a public API. */
 
@@ -602,10 +647,8 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
       vardict_lookup_bool (&options_dict, "no-pull-base", FALSE))
     return glnx_null_throw (error, "Can't specify no-pull-base if setting a "
                                    "new refspec or revision");
-
-  /* NB: remove HIDDEN attribute on "replace" cmdline once we implement this */
-  if (override_replace_pkgs || override_replace_local_pkgs_idxs)
-    return glnx_null_throw (error, "Replacement overrides not implemented yet");
+  if (override_replace_pkgs)
+    return glnx_null_throw (error, "Non-local replacement overrides not implemented yet");
 
   if (vardict_lookup_bool (&options_dict, "no-overrides", FALSE) &&
       (override_remove_pkgs || override_reset_pkgs ||
@@ -625,8 +668,10 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
                                             refspec,
                                             revision,
                                             install_pkgs,
-                                            fd_list,
+                                            install_local_pkgs,
                                             uninstall_pkgs,
+                                            override_replace_pkgs,
+                                            override_replace_local_pkgs,
                                             override_remove_pkgs,
                                             override_reset_pkgs,
                                             cancellable, error);

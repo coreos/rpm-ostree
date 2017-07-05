@@ -140,8 +140,9 @@ static gboolean
 run_script_in_bwrap_container (int rootfs_fd,
                                const char *name,
                                const char *scriptdesc,
-                               const char *argv0,
+                               const char *interp,
                                const char *script,
+                               const char *script_arg,
                                GCancellable  *cancellable,
                                GError       **error)
 {
@@ -206,10 +207,9 @@ run_script_in_bwrap_container (int rootfs_fd,
     goto out;
 
   rpmostree_bwrap_append_child_argv (bwrap,
-                                     argv0,
+                                     interp,
                                      postscript_path_container,
-                                     /* http://www.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S3-RPM-INSIDE-PRE-SCRIPT */
-                                     "1",
+                                     script_arg,
                                      NULL);
 
   if (!rpmostree_bwrap_run (bwrap, error))
@@ -253,15 +253,40 @@ run_known_rpm_script (const KnownRpmScriptKind *rpmscript,
     {
     case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
       {
-        const char *argv0 = args && args[0] ? args[0] : "/bin/sh";
+        const char *interp = args && args[0] ? args[0] : "/bin/sh";
+
+        /* http://ftp.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S2-RPM-INSIDE-ERASE-TIME-SCRIPTS */
+        const char *script_arg = NULL;
+        switch (dnf_package_get_action (pkg))
+          {
+          /* XXX: we're not running *un scripts for removals yet, though it'd look like:
+          case DNF_STATE_ACTION_REMOVE:
+          case DNF_STATE_ACTION_OBSOLETE:
+            script_arg = obsoleted_by_update ? "1" : "0";
+            break;
+            */
+          case DNF_STATE_ACTION_INSTALL:
+            script_arg = "1";
+            break;
+          case DNF_STATE_ACTION_UPDATE:
+            script_arg = "2";
+            break;
+          case DNF_STATE_ACTION_DOWNGRADE:
+            script_arg = "2";
+            break;
+          default:
+            /* we shouldn't have been asked to perform for any other kind of action */
+            g_assert_not_reached ();
+            break;
+          }
 
         static const char lua_builtin[] = "<lua>";
-        if (g_strcmp0 (argv0, lua_builtin) == 0)
+        if (g_strcmp0 (interp, lua_builtin) == 0)
           return glnx_throw (error, "Package '%s' has (currently) unsupported %s script in '%s'",
                              dnf_package_get_name (pkg), lua_builtin, desc);
 
         if (!run_script_in_bwrap_container (rootfs_fd, dnf_package_get_name (pkg), desc,
-                                            argv0, script,
+                                            interp, script, script_arg,
                                             cancellable, error))
           return glnx_prefix_error (error, "Running %s for %s", desc, dnf_package_get_name (pkg));
         break;
