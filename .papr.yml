@@ -87,6 +87,9 @@ cluster:
 env:
   HOSTS: vmcheck1 vmcheck2 vmcheck3
 
+packages:
+  - rsync
+
 tests:
   - ./ci/build.sh
   - make vmcheck
