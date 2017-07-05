@@ -1402,7 +1402,7 @@ check_goal_solution (RpmOstreeContext *self,
 
       /* just pick the first pkg */
       g_autoptr(GPtrArray) old = hy_goal_list_obsoleted_by_package (goal, pkg);
-      g_assert (old->len > 0);
+      g_assert_cmpint (old->len, >, 0);
       DnfPackage *old_pkg = old->pdata[0];
       const char *old_nevra = dnf_package_get_nevra (old_pkg);
 

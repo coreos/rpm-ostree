@@ -529,18 +529,16 @@ import_many_local_rpms (OstreeRepo    *parent,
 
 static void
 gv_nevra_add_nevra_name_mappings (GVariant *gv_nevra,
-                                  GHashTable *name_to_nevra, /* borrows strs */
-                                  GHashTable *nevra_to_name) /* owns strs */
+                                  GHashTable *name_to_nevra,
+                                  GHashTable *nevra_to_name)
 {
-  g_autofree char *name = NULL;
-  g_autofree char *nevra = NULL;
-  g_variant_get_child (gv_nevra, 0, "s", &nevra);
-  g_variant_get_child (gv_nevra, 1, "s", &name);
-  g_hash_table_insert (name_to_nevra, name, nevra);
-  g_hash_table_insert (nevra_to_name, g_steal_pointer (&nevra),
-                                      g_steal_pointer (&name));
+  const char *name = NULL;
+  const char *nevra = NULL;
+  g_variant_get_child (gv_nevra, 0, "&s", &nevra);
+  g_variant_get_child (gv_nevra, 1, "&s", &name);
+  g_hash_table_insert (name_to_nevra, (gpointer)name, (gpointer)nevra);
+  g_hash_table_insert (nevra_to_name, (gpointer)nevra, (gpointer)name);
 }
-
 
 static gboolean
 deploy_transaction_execute (RpmostreedTransaction *transaction,
@@ -717,31 +715,30 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (!is_layered)
         return glnx_throw (error, "No overrides currently applied");
 
-      /* the strings are only stored once; in nevra_to_name */
-      g_autoptr(GHashTable) nevra_to_name =
-        g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+      g_autoptr(GHashTable) nevra_to_name = g_hash_table_new (g_str_hash, g_str_equal);
       g_autoptr(GHashTable) name_to_nevra = g_hash_table_new (g_str_hash, g_str_equal);
 
-      if (removed)
+      /* keep a reference on the child nevras so that the hash tables above can directly
+       * reference strings within them */
+      g_autoptr(GPtrArray) gv_nevras =
+        g_ptr_array_new_with_free_func ((GDestroyNotify)g_variant_unref);
+
+      const guint nremoved = g_variant_n_children (removed);
+      for (guint i = 0; i < nremoved; i++)
         {
-          const guint n = g_variant_n_children (removed);
-          for (guint i = 0; i < n; i++)
-            {
-              g_autoptr(GVariant) gv_nevra;
-              g_variant_get_child (removed, i, "v", &gv_nevra);
-              gv_nevra_add_nevra_name_mappings (gv_nevra, name_to_nevra, nevra_to_name);
-            }
+          g_autoptr(GVariant) gv_nevra;
+          g_variant_get_child (removed, i, "v", &gv_nevra);
+          gv_nevra_add_nevra_name_mappings (gv_nevra, name_to_nevra, nevra_to_name);
+          g_ptr_array_add (gv_nevras, g_steal_pointer (&gv_nevra));
         }
 
-      if (replaced)
+      const guint nreplaced = g_variant_n_children (replaced);
+      for (guint i = 0; i < nreplaced; i++)
         {
-          const guint n = g_variant_n_children (replaced);
-          for (guint i = 0; i < n; i++)
-            {
-              g_autoptr(GVariant) gv_nevra;
-              g_variant_get_child (replaced, i, "(vv)", &gv_nevra, NULL);
-              gv_nevra_add_nevra_name_mappings (gv_nevra, name_to_nevra, nevra_to_name);
-            }
+          g_autoptr(GVariant) gv_nevra;
+          g_variant_get_child (replaced, i, "(vv)", &gv_nevra, NULL);
+          gv_nevra_add_nevra_name_mappings (gv_nevra, name_to_nevra, nevra_to_name);
+          g_ptr_array_add (gv_nevras, g_steal_pointer (&gv_nevra));
         }
 
       for (char **it = self->override_reset_pkgs; it && *it; it++)
@@ -758,8 +755,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             nevra = name_or_nevra;
           else
             {
-              ; /* completely brush over the ridiculous corner-case of a
-                   pkgname that's also a nevra for another package */
+              /* completely brush over the ridiculous corner-case of a
+                 pkgname that's also a nevra for another package */
+              g_assert_not_reached ();
             }
 
           if (rpmostree_origin_remove_override (origin, name,

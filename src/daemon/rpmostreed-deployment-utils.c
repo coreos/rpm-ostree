@@ -195,7 +195,6 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   g_auto(GStrv) layered_pkgs = NULL;
   g_autoptr(GVariant) removed_base_pkgs = NULL;
   g_autoptr(GVariant) replaced_base_pkgs = NULL;
-  const char *const empty_v[] = { NULL };
 
   if (!ostree_repo_load_variant (repo,
                                  OSTREE_OBJECT_TYPE_COMMIT,
@@ -224,14 +223,6 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
                                               &layered_pkgs, &removed_base_pkgs,
                                               &replaced_base_pkgs, error))
     return NULL;
-
-  /* canonicalize to empty array */
-  if (!removed_base_pkgs)
-    removed_base_pkgs =
-      g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("v"), NULL, 0));
-  if (!replaced_base_pkgs)
-    replaced_base_pkgs =
-      g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("(vv)"), NULL, 0));
 
   if (is_layered)
     {
@@ -293,7 +284,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   variant_add_from_hash_table (&dict, "requested-base-local-replacements",
                                rpmostree_origin_get_overrides_local_replace (origin));
 
-  g_variant_dict_insert (&dict, "packages", "^as", layered_pkgs ?: (char**)empty_v);
+  g_variant_dict_insert (&dict, "packages", "^as", layered_pkgs);
   g_variant_dict_insert_value (&dict, "base-removals", removed_base_pkgs);
   g_variant_dict_insert_value (&dict, "base-local-replacements", replaced_base_pkgs);
 

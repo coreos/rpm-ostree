@@ -532,16 +532,32 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
         }
     }
 
+  /* canonicalize outputs to empty array */
+
   if (out_is_layered != NULL)
     *out_is_layered = is_layered;
   if (out_base_layer != NULL)
     *out_base_layer = g_steal_pointer (&base_layer);
   if (out_layered_pkgs != NULL)
-    *out_layered_pkgs = g_steal_pointer (&layered_pkgs);
+    {
+      if (!layered_pkgs)
+        layered_pkgs = g_new0 (char*, 1);
+      *out_layered_pkgs = g_steal_pointer (&layered_pkgs);
+    }
   if (out_removed_base_pkgs != NULL)
-    *out_removed_base_pkgs = g_steal_pointer (&removed_base_pkgs);
+    {
+      if (!removed_base_pkgs)
+        removed_base_pkgs =
+          g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("v"), NULL, 0));
+      *out_removed_base_pkgs = g_steal_pointer (&removed_base_pkgs);
+    }
   if (out_replaced_base_pkgs != NULL)
-    *out_replaced_base_pkgs = g_steal_pointer (&replaced_base_pkgs);
+    {
+      if (!replaced_base_pkgs)
+        replaced_base_pkgs =
+          g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("(vv)"), NULL, 0));
+      *out_replaced_base_pkgs = g_steal_pointer (&replaced_base_pkgs);
+    }
 
   return TRUE;
 }

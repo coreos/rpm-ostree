@@ -43,7 +43,7 @@ vm_cmd ostree refs $(vm_get_booted_csum) --create vmcheck_tmp/without_foo_and_ba
 vm_build_rpm foo
 vm_build_rpm bar
 vm_build_rpm fooext requires "foo = 1.0-1"
-vm_rpmostree install foo bar fooext
+vm_rpmostree install fooext bar
 vm_cmd ostree refs $(vm_get_deployment_info 0 checksum) \
   --create vmcheck_tmp/with_foo_and_bar
 vm_rpmostree cleanup -p
@@ -60,6 +60,13 @@ echo "ok setup"
 assert_replaced_local_pkg() {
   old_nevra=$1; shift
   new_nevra=$1; shift
+
+  # funky jq syntax here: base-local-replacements is a list of (new, old)
+  # tuples. The first [] is to print out all the tuples, the following [0/1] is
+  # to access the new/old element of the tuple, and the [0] is to access the
+  # nevra. We wrap the whole thing in [...] so that we get a list of nevra
+  # strings to which we can then apply the index filter.
+
   vm_assert_status_jq \
     "[.deployments[0][\"base-local-replacements\"][][0][0]]|index(\"$new_nevra\") >= 0" \
     "[.deployments[0][\"base-local-replacements\"][][1][0]]|index(\"$old_nevra\") >= 0" \
@@ -69,7 +76,7 @@ assert_replaced_local_pkg() {
     assert_not_reached "new pkg not in rpmdb?"
   fi
   name=${new_nevra%%-*}
-  if ! vm_cmd $root/usr/bin/$name | grep $new_nevra; then
+  if ! vm_cmd $root/usr/bin/$name | grep -q $new_nevra; then
     assert_not_reached "new pkg not in tree?"
   fi
 }
