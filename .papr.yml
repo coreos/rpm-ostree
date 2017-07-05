@@ -52,7 +52,7 @@ timeout: 15m
 
 inherit: true
 
-context: vmcheck
+context: f25-vmcheck
 
 required: true
 
@@ -80,12 +80,21 @@ timeout: 80m
 
 ---
 
+branches:
+  - master
+  - auto
+  - try
+
 # NB: when bumping 25 here, also bump fedora.repo, compose script, and
 # fedora-base.json
 
-context: compose
+context: f25-compose
+
 build: false
+
 timeout: 30m
+
+required: true
 
 # This test case wants an "unprivileged container with bubblewrap",
 # which we don't have right now; so just provision a VM and do a
