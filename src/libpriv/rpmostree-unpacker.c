@@ -336,26 +336,18 @@ rpmostree_unpacker_new_at (int dfd, const char *path,
                            RpmOstreeUnpackerFlags flags,
                            GError **error)
 {
-  RpmOstreeUnpacker *ret = NULL;
-  glnx_fd_close int fd = -1;
-
-  fd = openat (dfd, path, O_RDONLY | O_CLOEXEC | O_NOCTTY);
+  glnx_fd_close int fd = openat (dfd, path, O_RDONLY | O_CLOEXEC | O_NOCTTY);
   if (fd < 0)
-    {
-      glnx_set_error_from_errno (error);
-      g_prefix_error (error, "Opening %s: ", path);
-      goto out;
-    }
+    return glnx_null_throw_errno_prefix (error, "openat(%s)", path);
 
-  ret = rpmostree_unpacker_new_fd (fd, pkg, flags, error);
+  RpmOstreeUnpacker *ret = rpmostree_unpacker_new_fd (fd, pkg, flags, error);
   if (ret == NULL)
-    goto out;
+    return NULL;
 
   ret->owns_fd = TRUE;
   fd = -1;
 
- out:
-  return ret;
+  return g_steal_pointer (&ret);
 }
 
 static void
@@ -397,45 +389,28 @@ get_lead_sig_header_as_bytes (RpmOstreeUnpacker *self,
                               GCancellable *cancellable,
                               GError  **error)
 {
-  gboolean ret = FALSE;
-  g_autofree char *buf = NULL;
-  char *bufp;
-  size_t bytes_remaining;
-
   /* Inline a pread() based reader here to avoid affecting the file
    * offset since both librpm and libarchive have references.
    */
-  buf = g_malloc (self->cpio_offset);
-  bufp = buf;
-  bytes_remaining = self->cpio_offset;
+  g_autofree char *buf = g_malloc (self->cpio_offset);
+  char *bufp = buf;
+  size_t bytes_remaining = self->cpio_offset;
   while (bytes_remaining > 0)
     {
-      ssize_t bytes_read;
-      do
-        bytes_read = pread (self->fd, bufp, bytes_remaining, bufp - buf);
-      while (bytes_read < 0 && errno == EINTR);
+      ssize_t bytes_read = TEMP_FAILURE_RETRY (pread (self->fd, bufp, bytes_remaining, bufp - buf));
       if (bytes_read < 0)
-        {
-          glnx_set_error_from_errno (error);
-          goto out;
-        }
+        return glnx_throw_errno_prefix (error, "pread");
       if (bytes_read == 0)
         break;
       bufp += bytes_read;
       bytes_remaining -= bytes_read;
     }
   if (bytes_remaining > 0)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Failed to read %" G_GSIZE_FORMAT " bytes of metadata",
-                   bytes_remaining);
-      goto out;
-    }
+    return glnx_throw (error, "Failed to read %" G_GSIZE_FORMAT " bytes of metadata",
+                       bytes_remaining);
 
-  ret = TRUE;
   *out_metadata = g_bytes_new_take (g_steal_pointer (&buf), self->cpio_offset);
- out:
-  return ret;
+  return TRUE;
 }
 
 static GVariant *
