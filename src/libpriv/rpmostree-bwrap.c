@@ -200,7 +200,6 @@ rpmostree_bwrap_new (int rootfs_fd,
                      ...)
 {
   va_list args;
-  RpmOstreeBwrap *retval = NULL;
   g_autoptr(RpmOstreeBwrap) ret = g_new0 (RpmOstreeBwrap, 1);
   static const char *usr_links[] = {"lib", "lib32", "lib64", "bin", "sbin"};
 
@@ -243,10 +242,7 @@ rpmostree_bwrap_new (int rootfs_fd,
       if (fstatat (rootfs_fd, subdir, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
         {
           if (errno != ENOENT)
-            {
-              glnx_set_error_from_errno (error);
-              return FALSE;
-            }
+            return glnx_null_throw_errno_prefix (error, "fstatat");
           continue;
         }
       else if (!S_ISLNK (stbuf.st_mode))
@@ -264,7 +260,7 @@ rpmostree_bwrap_new (int rootfs_fd,
       break;
     case RPMOSTREE_BWRAP_MUTATE_ROFILES:
       if (!setup_rofiles_usr (ret, error))
-        goto out;
+        return NULL;
       break;
     case RPMOSTREE_BWRAP_MUTATE_FREELY:
       rpmostree_bwrap_append_bwrap_argv (ret, "--bind", "usr", "/usr", NULL);
@@ -278,9 +274,7 @@ rpmostree_bwrap_new (int rootfs_fd,
     va_end (args);
   }
 
-  retval = g_steal_pointer (&ret);
- out:
-  return retval;
+  return g_steal_pointer (&ret);
 }
 
 static void

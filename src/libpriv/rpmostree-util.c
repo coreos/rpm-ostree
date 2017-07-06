@@ -179,20 +179,12 @@ _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
 static char *
 ost_get_prev_commit (OstreeRepo *repo, char *checksum)
 {
-  char *ret = NULL;
   g_autoptr(GVariant) commit = NULL;
-  GError *tmp_error = NULL;
-
   if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum,
-                                 &commit, &tmp_error))
-    goto out;
+                                 &commit, NULL))
+    return NULL;
 
-  ret = ostree_commit_get_parent (commit);
-
- out:
-  g_clear_error (&tmp_error);
-
-  return ret;
+  return ostree_commit_get_parent (commit);
 }
 
 GPtrArray *
@@ -458,33 +450,27 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        GVariant         **out_replaced_base_pkgs,
                                        GError           **error)
 {
-  g_autoptr(GVariant) commit = NULL;
-  g_autoptr(GVariant) metadata = NULL;
-  g_autoptr(GVariantDict) dict = NULL;
-  g_auto(GStrv) layered_pkgs = NULL;
-  g_autoptr(GVariant) removed_base_pkgs = NULL;
-  g_autoptr(GVariant) replaced_base_pkgs = NULL;
   const char *csum = ostree_deployment_get_csum (deployment);
-  gboolean is_layered = FALSE;
-  g_autofree char *base_layer = NULL;
-  guint clientlayer_version = 0;
-
+  g_autoptr(GVariant) commit = NULL;
   if (!ostree_repo_load_commit (repo, csum, &commit, NULL, error))
     return FALSE;
 
-  metadata = g_variant_get_child_value (commit, 0);
-  dict = g_variant_dict_new (metadata);
+  g_autoptr(GVariant) metadata = g_variant_get_child_value (commit, 0);
+  g_autoptr(GVariantDict) dict = g_variant_dict_new (metadata);
 
   /* More recent versions have an explicit clientlayer attribute (which
    * realistically will always be TRUE). For older versions, we just
    * rely on the treespec being present. */
+  gboolean is_layered = FALSE;
   if (!g_variant_dict_lookup (dict, "rpmostree.clientlayer", "b", &is_layered))
     is_layered = g_variant_dict_contains (dict, "rpmostree.spec");
 
+  guint clientlayer_version = 0;
   g_variant_dict_lookup (dict, "rpmostree.clientlayer_version", "u",
                          &clientlayer_version);
 
   /* only fetch base if we have to */
+  g_autofree char *base_layer = NULL;
   if (is_layered && out_base_layer != NULL)
     {
       base_layer = ostree_commit_get_parent (commit);
@@ -492,6 +478,9 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
     }
 
   /* only fetch pkgs if we have to */
+  g_auto(GStrv) layered_pkgs = NULL;
+  g_autoptr(GVariant) removed_base_pkgs = NULL;
+  g_autoptr(GVariant) replaced_base_pkgs = NULL;
   if (is_layered && (out_layered_pkgs != NULL || out_removed_base_pkgs != NULL))
     {
       /* starting from v1, we no longer embed a treespec in client layers */
@@ -568,7 +557,6 @@ rpmostree_get_pkgcache_repo (OstreeRepo   *parent,
                              GCancellable *cancellable,
                              GError      **error)
 {
-  glnx_unref_object OstreeRepo *pkgcache = NULL;
   g_autoptr(GFile) pkgcache_path = NULL;
 
   /* get the GFile to it */
@@ -579,7 +567,7 @@ rpmostree_get_pkgcache_repo (OstreeRepo   *parent,
     pkgcache_path = g_file_new_for_path (pkgcache_path_s);
   }
 
-  pkgcache = ostree_repo_new (pkgcache_path);
+  g_autoptr(OstreeRepo) pkgcache = ostree_repo_new (pkgcache_path);
 
   if (!g_file_query_exists (pkgcache_path, cancellable))
     {

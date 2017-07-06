@@ -103,37 +103,27 @@ rpmostree_script_txn_validate (DnfPackage    *package,
                                GCancellable  *cancellable,
                                GError       **error)
 {
-  gboolean ret = FALSE;
-  guint i;
-
-  for (i = 0; i < G_N_ELEMENTS (unsupported_scripts); i++)
+  for (guint i = 0; i < G_N_ELEMENTS (unsupported_scripts); i++)
     {
       const char *desc = unsupported_scripts[i].desc;
       rpmTagVal tagval = unsupported_scripts[i].tag;
       rpmTagVal progtagval = unsupported_scripts[i].progtag;
-      RpmOstreeScriptAction action;
 
       if (!(headerIsEntry (hdr, tagval) || headerIsEntry (hdr, progtagval)))
         continue;
 
-      action = lookup_script_action (package, override_ignored_scripts, desc);
+      RpmOstreeScriptAction action = lookup_script_action (package, override_ignored_scripts, desc);
       switch (action)
         {
         case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
-          {
-            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                         "Package '%s' has (currently) unsupported script of type '%s'",
-                         dnf_package_get_name (package), desc);
-            goto out;
-          }
+          return glnx_throw (error, "Package '%s' has (currently) unsupported script of type '%s'",
+                             dnf_package_get_name (package), desc);
         case RPMOSTREE_SCRIPT_ACTION_IGNORE:
           continue;
         }
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean

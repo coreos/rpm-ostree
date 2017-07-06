@@ -21,6 +21,7 @@
 #include "config.h"
 
 #include "rpmostree-json-parsing.h"
+#include "libglnx.h"
 
 #include <string.h>
 #include <glib-unix.h>
@@ -31,25 +32,18 @@ _rpmostree_jsonutil_object_get_optional_string_member (JsonObject     *object,
                                                        const char    **out_value,
                                                        GError        **error)
 {
-  gboolean ret = FALSE;
   JsonNode *node = json_object_get_member (object, member_name);
 
   if (node != NULL)
     {
       *out_value = json_node_get_string (node);
       if (!*out_value)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Member '%s' is not a string", member_name);
-          goto out;
-        }
+        return glnx_throw (error, "Member '%s' is not a string", member_name);
     }
   else
     *out_value = NULL;
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 const char *
@@ -61,11 +55,7 @@ _rpmostree_jsonutil_object_require_string_member (JsonObject     *object,
   if (!_rpmostree_jsonutil_object_get_optional_string_member (object, member_name, &ret, error))
     return NULL;
   if (!ret)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Member '%s' not found", member_name);
-      return NULL;
-    }
+    return glnx_null_throw (error, "Member '%s' not found", member_name);
   return ret;
 }
 
@@ -88,17 +78,12 @@ _rpmostree_jsonutil_object_get_optional_int_member (JsonObject     *object,
                                                     gboolean       *found,
                                                     GError        **error)
 {
-  gboolean ret = FALSE;
   JsonNode *node = json_object_get_member (object, member_name);
 
   if (node != NULL)
     {
       if (!_jsonutil_node_check_int (node))
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Member '%s' is not an integer", member_name);
-          goto out;
-        }
+        return glnx_throw (error, "Member '%s' is not an integer", member_name);
       if (found)
         *found = TRUE;
       *out_value = json_node_get_int (node);
@@ -110,9 +95,7 @@ _rpmostree_jsonutil_object_get_optional_int_member (JsonObject     *object,
       *out_value = 0;
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 gboolean
@@ -125,11 +108,7 @@ _rpmostree_jsonutil_object_require_int_member (JsonObject     *object,
   if (!_rpmostree_jsonutil_object_get_optional_int_member (object, member_name, out_val, &found, error))
     return FALSE;
   if (!found)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Member '%s' not found", member_name);
-      return FALSE;
-    }
+    return glnx_throw (error, "Member '%s' not found", member_name);
   return TRUE;
 }
 
@@ -139,23 +118,16 @@ _rpmostree_jsonutil_object_get_optional_boolean_member (JsonObject     *object,
                                                        gboolean       *out_value,
                                                        GError        **error)
 {
-  gboolean ret = FALSE;
   JsonNode *node = json_object_get_member (object, member_name);
 
   if (node != NULL)
     {
       if (json_node_get_value_type (node) != G_TYPE_BOOLEAN)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Member '%s' is not a boolean", member_name);
-          goto out;
-        }
+        return glnx_throw (error, "Member '%s' is not a boolean", member_name);
       *out_value = json_node_get_boolean (node);
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 const char *
@@ -165,11 +137,7 @@ _rpmostree_jsonutil_array_require_string_element (JsonArray      *array,
 {
   const char *ret = json_array_get_string_element (array, i);
   if (!ret)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Element at index %u is not a string", i);
-      return NULL;
-    }
+    return glnx_null_throw (error, "Element at index %u is not a string", i);
   return ret;
 }
 
@@ -182,12 +150,7 @@ _rpmostree_jsonutil_array_require_int_element (JsonArray      *array,
   JsonNode *node = json_array_get_element (array, i);
 
   if (!_jsonutil_node_check_int (node))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Element at index %u is not an integer", i);
-      *out_val = 0;
-      return FALSE;
-    }
+    return glnx_throw (error, "Element at index %u is not an integer", i);
 
   *out_val = json_array_get_int_element (array, i);
   return TRUE;
@@ -200,17 +163,12 @@ _rpmostree_jsonutil_append_string_array_to (JsonObject   *object,
                                             GError      **error)
 {
   JsonArray *jarray = json_object_get_array_member (object, member_name);
-  guint i, len;
 
   if (!jarray)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "No member '%s' found", member_name);
-      return FALSE;
-    }
+    return glnx_throw (error, "No member '%s' found", member_name);
 
-  len = json_array_get_length (jarray);
-  for (i = 0; i < len; i++)
+  guint len = json_array_get_length (jarray);
+  for (guint i = 0; i < len; i++)
     {
       const char *v = _rpmostree_jsonutil_array_require_string_element (jarray, i, error);
       if (!v)
@@ -225,14 +183,13 @@ GHashTable *
 _rpmostree_jsonutil_jsarray_strings_to_set (JsonArray  *array)
 {
   GHashTable *ret = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
-  guint i;
-  guint len = json_array_get_length (array);
+  const guint len = json_array_get_length (array);
 
-  for (i = 0; i < len; i++)
+  for (guint i = 0; i < len; i++)
     {
       const char *elt = json_array_get_string_element (array, i);
       g_hash_table_add (ret, g_strdup (elt));
     }
-  
+
   return ret;
 }
