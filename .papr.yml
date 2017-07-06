@@ -27,6 +27,23 @@ artifacts:
 
 inherit: true
 
+context: f26-build-check
+
+required: false
+
+container:
+    image: registry.fedoraproject.org/fedora:26
+
+tests:
+  # updates-source mirrors are being flaky
+  - sed -i '/metalink=.*updates-released-source.*/ d' /etc/yum.repos.d/fedora-updates.repo
+  - sed -i '/SRPMS/ s/^#baseurl/baseurl/' /etc/yum.repos.d/fedora-updates.repo
+  - ci/build-check.sh
+
+---
+
+inherit: true
+
 context: c7-build
 
 required: true
@@ -52,7 +69,7 @@ timeout: 15m
 
 inherit: true
 
-context: vmcheck
+context: f25-vmcheck
 
 required: true
 
@@ -67,9 +84,15 @@ cluster:
   container:
     image: registry.fedoraproject.org/fedora:25
 
+env:
+  HOSTS: vmcheck1 vmcheck2 vmcheck3
+
+packages:
+  - rsync
+
 tests:
   - ./ci/build.sh
-  - make vmcheck HOSTS="vmcheck1 vmcheck2 vmcheck3"
+  - make vmcheck
 
 artifacts:
   - vmcheck
@@ -80,12 +103,46 @@ timeout: 80m
 
 ---
 
+inherit: true
+
+context: f26-vmcheck
+
+required: false
+
+cluster:
+  hosts:
+    - name: vmcheck
+      distro: fedora/26/atomic
+  container:
+    image: registry.fedoraproject.org/fedora:26
+
+env:
+  HOSTS: vmcheck
+
+tests:
+  # updates-source mirrors are being flaky
+  - sed -i '/metalink=.*updates-released-source.*/ d' /etc/yum.repos.d/fedora-updates.repo
+  - sed -i '/SRPMS/ s/^#baseurl/baseurl/' /etc/yum.repos.d/fedora-updates.repo
+  - ./ci/build.sh
+  - make vmcheck
+
+---
+
+branches:
+  - master
+  - auto
+  - try
+
 # NB: when bumping 25 here, also bump fedora.repo, compose script, and
 # fedora-base.json
 
-context: compose
+context: f25-compose
+
 build: false
+
 timeout: 30m
+
+required: true
 
 # This test case wants an "unprivileged container with bubblewrap",
 # which we don't have right now; so just provision a VM and do a

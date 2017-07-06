@@ -67,7 +67,7 @@ check-local:
 vmsync:
 	@env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh
 
-HOSTS := "vmcheck"
+HOSTS ?= "vmcheck"
 
 vmoverlay:
 	@if [ -z "$(SKIP_VMOVERLAY)" ]; then \
