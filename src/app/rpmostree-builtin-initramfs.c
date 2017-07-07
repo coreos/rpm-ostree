@@ -62,13 +62,10 @@ rpmostree_builtin_initramfs (int             argc,
                              GCancellable   *cancellable,
                              GError        **error)
 {
-  int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = g_option_context_new ("- Enable or disable local initramfs regeneration");
-  glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
-  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autofree char *transaction_address = NULL;
-  _cleanup_peer_ GPid peer_pid = 0;
 
+  _cleanup_peer_ GPid peer_pid = 0;
+  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
@@ -78,11 +75,12 @@ rpmostree_builtin_initramfs (int             argc,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    goto out;
+    return EXIT_FAILURE;
 
+  glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!(opt_enable || opt_disable))
     {
@@ -93,7 +91,7 @@ rpmostree_builtin_initramfs (int             argc,
         {
           g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                                "--reboot must be used with --enable or --disable");
-          goto out;
+          return EXIT_FAILURE;
         }
 
       g_variant_iter_init (&iter, deployments);
@@ -137,7 +135,7 @@ rpmostree_builtin_initramfs (int             argc,
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Cannot simultaenously specify --enable and --disable");
-      goto out;
+      return EXIT_FAILURE;
     }
   else
     {
@@ -146,10 +144,12 @@ rpmostree_builtin_initramfs (int             argc,
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Cannot simultaenously specify --disable and --arg");
-          goto out;
+          return EXIT_FAILURE;
         }
       if (!opt_add_arg)
         opt_add_arg = empty_strv;
+
+      g_autofree char *transaction_address = NULL;
       if (!rpmostree_os_call_set_initramfs_state_sync (os_proxy,
                                                        opt_enable,
                                                        (const char *const*)opt_add_arg,
@@ -157,19 +157,16 @@ rpmostree_builtin_initramfs (int             argc,
                                                        &transaction_address,
                                                        cancellable,
                                                        error))
-        goto out;
+        return EXIT_FAILURE;
 
       if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                     transaction_address,
                                                     cancellable,
                                                     error))
-        goto out;
+        return EXIT_FAILURE;
 
       g_print ("Initramfs regeneration is now: %s\n", opt_enable ? "enabled" : "disabled");
     }
 
-  exit_status = EXIT_SUCCESS;
-
-out:
-  return exit_status;
+  return EXIT_SUCCESS;
 }
