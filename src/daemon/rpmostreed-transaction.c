@@ -480,8 +480,6 @@ transaction_initable_init (GInitable *initable,
 {
   RpmostreedTransaction *self = RPMOSTREED_TRANSACTION (initable);
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (self);
-  g_autofree char *guid = NULL;
-  gboolean ret = FALSE;
 
   if (G_IS_CANCELLABLE (cancellable))
     priv->cancellable = g_object_ref (cancellable);
@@ -489,17 +487,15 @@ transaction_initable_init (GInitable *initable,
   /* Set up a private D-Bus server over which to emit
    * progress and informational messages to the caller. */
 
-  guid = g_dbus_generate_guid ();
-
+  g_autofree char *guid = g_dbus_generate_guid ();
   priv->server = g_dbus_server_new_sync ("unix:tmpdir=/tmp/rpm-ostree",
                                          G_DBUS_SERVER_FLAGS_NONE,
                                          guid,
                                          NULL,
                                          cancellable,
                                          error);
-
   if (priv->server == NULL)
-    goto out;
+    return FALSE;
 
   g_signal_connect_object (priv->server,
                            "new-connection",
@@ -519,16 +515,16 @@ transaction_initable_init (GInitable *initable,
       priv->sysroot = ostree_sysroot_new (tmp_path);
 
       if (!ostree_sysroot_load (priv->sysroot, cancellable, error))
-        goto out;
+        return FALSE;
 
       if (!ostree_sysroot_try_lock (priv->sysroot, &lock_acquired, error))
-        goto out;
+        return FALSE;
 
       if (!lock_acquired)
         {
           g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_BUSY,
                                "System transaction in progress");
-          goto out;
+          return FALSE;
         }
     }
 
@@ -538,10 +534,7 @@ transaction_initable_init (GInitable *initable,
            G_OBJECT_TYPE_NAME (self), self,
            rpmostreed_transaction_get_client_address (self));
 
-  ret = TRUE;
-
-out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean

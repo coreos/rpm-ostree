@@ -308,29 +308,24 @@ rpmostree_builtin_start_daemon (int             argc,
                                 GCancellable   *cancellable,
                                 GError        **error)
 {
-  int ret = 1;
   g_autoptr(GOptionContext) opt_context = g_option_context_new (" - start the daemon process");
-  GIOChannel *channel;
-  g_autoptr(GMainContext) mainctx = g_main_context_default ();
-  g_autoptr(GDBusConnection) bus = NULL;
+  g_option_context_add_main_entries (opt_context, opt_entries, NULL);
 
   /* There's not really a "root dconf" right now */
   g_assert (g_setenv ("GSETTINGS_BACKEND", "memory", TRUE));
 
-  g_option_context_add_main_entries (opt_context, opt_entries, NULL);
-
   if (!g_option_context_parse (opt_context, &argc, &argv, error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (opt_debug)
     {
+      g_autoptr(GIOChannel) channel = NULL;
       g_log_set_handler (G_LOG_DOMAIN, G_LOG_LEVEL_DEBUG | G_LOG_LEVEL_INFO, on_log_debug, NULL);
       g_log_set_always_fatal (G_LOG_LEVEL_ERROR | G_LOG_LEVEL_CRITICAL | G_LOG_LEVEL_WARNING);
 
       /* When in debug mode (often testing) we exit when stdin closes */
       channel = g_io_channel_unix_new (0);
       g_io_add_watch (channel, G_IO_HUP, on_stdin_close, NULL);
-      g_io_channel_unref (channel);
     }
   else
     {
@@ -341,6 +336,7 @@ rpmostree_builtin_start_daemon (int             argc,
   g_unix_signal_add (SIGINT, on_sigint, NULL);
   g_unix_signal_add (SIGTERM, on_sigint, NULL);
 
+  g_autoptr(GDBusConnection) bus = NULL;
   if (service_dbus_fd == -1)
     {
       GBusType bus_type;
@@ -358,15 +354,15 @@ rpmostree_builtin_start_daemon (int             argc,
       /* Get an explicit ref to the bus so we can use it later */
       bus = g_bus_get_sync (bus_type, NULL, error);
       if (!bus)
-        goto out;
+        return EXIT_FAILURE;
       if (!start_daemon (bus, error))
-        goto out;
+        return EXIT_FAILURE;
       (void) g_bus_own_name_on_connection (bus, DBUS_NAME, G_BUS_NAME_OWNER_FLAGS_NONE,
                                            on_name_acquired, on_name_lost,
                                            NULL, NULL);
     }
   else if (!connect_to_peer (service_dbus_fd, error))
-    goto out;
+    return EXIT_FAILURE;
 
   state_transition (APPSTATE_RUNNING);
 
@@ -394,10 +390,9 @@ rpmostree_builtin_start_daemon (int             argc,
     }
 
   /* Waiting 🛌 for the name to be released */
+  g_autoptr(GMainContext) mainctx = g_main_context_default ();
   while (appstate == APPSTATE_FLUSHING)
     g_main_context_iteration (mainctx, TRUE);
 
-  ret = 0;
-out:
-  return ret;
+  return EXIT_SUCCESS;
 }

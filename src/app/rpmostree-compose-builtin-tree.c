@@ -93,7 +93,7 @@ checksum_version (GVariant *checksum)
 
 typedef struct {
   GPtrArray *treefile_context_dirs;
-  
+
   GFile *workdir;
   int workdir_dfd;
   int cachedir_dfd;
@@ -112,9 +112,8 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
                                          char                        **out_checksum,
                                          GError                      **error)
 {
-  gboolean ret = FALSE;
-  GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA256);
-  
+  g_autoptr(GChecksum) checksum = g_checksum_new (G_CHECKSUM_SHA256);
+
   /* Hash in the raw treefile; this means reordering the input packages
    * or adding a comment will cause a recompose, but let's be conservative
    * here.
@@ -135,18 +134,15 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
           JsonArray *add_el = json_array_get_array_element (add_files, i);
 
           if (!add_el)
-            {
-              g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Element in add-files is not an array");
-              goto out;
-            }
+            return glnx_throw (error, "Element in add-files is not an array");
+
           src = _rpmostree_jsonutil_array_require_string_element (add_el, 0, error);
           if (!src)
-            goto out;
+            return FALSE;
 
           dest = _rpmostree_jsonutil_array_require_string_element (add_el, 1, error);
           if (!dest)
-            goto out;
+            return FALSE;
 
           srcfile = g_file_resolve_relative_path (contextdir, src);
 
@@ -155,7 +151,7 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
                                                           gs_file_get_path_cached (srcfile),
                                                           NULL,
                                                           error))
-            goto out;
+            return FALSE;
 
           g_checksum_update (checksum, (const guint8 *) dest, strlen (dest));
         }
@@ -167,11 +163,8 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
   /* Hash in each package */
   rpmostree_dnf_add_checksum_goal (checksum, goal);
 
-  ret = TRUE;
   *out_checksum = g_strdup (g_checksum_get_string (checksum));
- out:
-  if (checksum) g_checksum_free (checksum);
-  return ret;
+  return TRUE;
 }
 
 
@@ -191,27 +184,23 @@ set_keyfile_string_array_from_json (GKeyFile    *keyfile,
                                     JsonArray   *a,
                                     GError     **error)
 {
-  gboolean ret = FALSE;
-  guint len = json_array_get_length (a);
-  guint i;
   g_autoptr(GPtrArray) instlangs_v = g_ptr_array_new ();
-  
-  for (i = 0; i < len; i++)
+
+  guint len = json_array_get_length (a);
+  for (guint i = 0; i < len; i++)
     {
       const char *elt = _rpmostree_jsonutil_array_require_string_element (a, i, error);
 
       if (!elt)
-        goto out;
+        return FALSE;
 
       g_ptr_array_add (instlangs_v, (char*)elt);
     }
-  
+
   g_key_file_set_string_list (keyfile, keyfile_group, keyfile_key,
                               (const char*const*)instlangs_v->pdata, instlangs_v->len);
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 /* Prepare /dev in the target root with the API devices.  TODO:
@@ -303,15 +292,6 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                           GCancellable    *cancellable,
                           GError         **error)
 {
-  gboolean ret = FALSE;
-  guint progress_sigid;
-  GFile *contextdir = self->treefile_context_dirs->pdata[0];
-  DnfContext *hifctx;
-  g_autofree char *ret_new_inputhash = NULL;
-  g_autoptr(GKeyFile) treespec = g_key_file_new ();
-  JsonArray *enable_repos = NULL;
-  JsonArray *add_files = NULL;
-
   /* TODO - uncomment this once we have SELinux working */
 #if 0
   g_autofree char *cache_repo_pathstr = glnx_fdrel_abspath (self->cachedir_dfd, "repo");
@@ -325,7 +305,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     }
 #endif
 
-  hifctx = rpmostree_context_get_hif (ctx);
+  DnfContext *hifctx = rpmostree_context_get_hif (ctx);
   if (opt_proxy)
     dnf_context_set_http_proxy (hifctx, opt_proxy);
 
@@ -340,6 +320,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     rpmlogSetFile(NULL);
   }
 
+  GFile *contextdir = self->treefile_context_dirs->pdata[0];
   dnf_context_set_repo_dir (hifctx, gs_file_get_path_cached (contextdir));
 
   /* By default, retain packages in addition to metadata with --cachedir */
@@ -353,6 +334,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     dnf_context_set_cache_age (hifctx, 0);
   else
     dnf_context_set_cache_age (hifctx, G_MAXUINT);
+
+  g_autoptr(GKeyFile) treespec = g_key_file_new ();
   g_key_file_set_string (treespec, "tree", "ref", self->ref);
   g_key_file_set_string_list (treespec, "tree", "packages", (const char *const*)packages, g_strv_length (packages));
 
@@ -361,7 +344,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     {
       JsonArray *a = json_object_get_array_member (treedata, "install-langs");
       if (!set_keyfile_string_array_from_json (treespec, "tree", "instlangs", a, error))
-        goto out;
+        return FALSE;
     }
 
   /* Bind the json \"repos\" member to the hif state, which looks at the
@@ -372,13 +355,13 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     {
       g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                            "Treefile is missing required \"repos\" member");
-      goto out;
+      return FALSE;
     }
 
-  enable_repos = json_object_get_array_member (treedata, "repos");
+  JsonArray *enable_repos = json_object_get_array_member (treedata, "repos");
 
   if (!set_keyfile_string_array_from_json (treespec, "tree", "repos", enable_repos, error))
-    goto out;
+    return FALSE;
 
   { gboolean docs = TRUE;
 
@@ -386,7 +369,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                                                                  "documentation",
                                                                  &docs,
                                                                  error))
-      goto out;
+      return FALSE;
 
     if (!docs)
       g_key_file_set_boolean (treespec, "tree", "documentation", FALSE);
@@ -395,25 +378,27 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   { g_autoptr(GError) tmp_error = NULL;
     g_autoptr(RpmOstreeTreespec) treespec_value = rpmostree_treespec_new_from_keyfile (treespec, &tmp_error);
     g_assert_no_error (tmp_error);
-    
+
     if (!rpmostree_context_setup (ctx, gs_file_get_path_cached (yumroot), "/", treespec_value,
                                   cancellable, error))
-      goto out;
+      return FALSE;
   }
 
   if (!rpmostree_context_prepare (ctx, cancellable, error))
-    goto out;
+    return FALSE;
 
   rpmostree_print_transaction (hifctx);
 
+  JsonArray *add_files = NULL;
   if (json_object_has_member (treedata, "add-files"))
     add_files = json_object_get_array_member (treedata, "add-files");
 
   /* FIXME - just do a depsolve here before we compute download requirements */
+  g_autofree char *ret_new_inputhash = NULL;
   if (!compute_checksum_from_treefile_and_goal (self, dnf_context_get_goal (hifctx),
                                                 contextdir, add_files,
                                                 &ret_new_inputhash, error))
-    goto out;
+    return FALSE;
 
   /* Only look for previous checksum if caller has passed *out_unmodified */
   if (self->previous_checksum && out_unmodified != NULL)
@@ -421,11 +406,11 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
       g_autoptr(GVariant) commit_v = NULL;
       g_autoptr(GVariant) commit_metadata = NULL;
       const char *previous_inputhash = NULL;
-      
+
       if (!ostree_repo_load_variant (self->repo, OSTREE_OBJECT_TYPE_COMMIT,
                                      self->previous_checksum,
                                      &commit_v, error))
-        goto out;
+        return FALSE;
 
       commit_metadata = g_variant_get_child_value (commit_v, 0);
       if (g_variant_lookup (commit_metadata, "rpmostree.inputhash", "&s", &previous_inputhash))
@@ -433,8 +418,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
           if (strcmp (previous_inputhash, ret_new_inputhash) == 0)
             {
               *out_unmodified = TRUE;
-              ret = TRUE;
-              goto out;
+              return TRUE; /* NB: early return */
             }
         }
       else
@@ -442,46 +426,41 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     }
 
   if (opt_dry_run)
-    {
-      ret = TRUE;
-      goto out;
-    }
+    return TRUE; /* NB: early return */
 
   if (!treefile_sanity_checks (treedata, self->treefile_context_dirs->pdata[0],
                                cancellable, error))
-    goto out;
+    return FALSE;
 
   /* --- Downloading packages --- */
   if (!rpmostree_context_download (ctx, cancellable, error))
-    goto out;
-  
-  { g_auto(GLnxConsoleRef) console = { 0, };
-    glnx_unref_object DnfState *hifstate = dnf_state_new ();
+    return FALSE;
 
-    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                     G_CALLBACK (on_hifstate_percentage_changed), 
-                                     "Installing packages:");
+  { g_auto(GLnxConsoleRef) console = { 0, };
+    g_autoptr(DnfState) hifstate = dnf_state_new ();
+
+    guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                             G_CALLBACK (on_hifstate_percentage_changed),
+                                             "Installing packages:");
 
     glnx_console_lock (&console);
 
     if (!libcontainer_prep_dev (rootfs_dfd, error))
-      goto out;
+      return FALSE;
 
     if (!dnf_transaction_commit (dnf_context_get_transaction (hifctx),
                                  dnf_context_get_goal (hifctx),
                                  hifstate,
                                  error))
-      goto out;
+      return FALSE;
 
     g_signal_handler_disconnect (hifstate, progress_sigid);
   }
-      
-  ret = TRUE;
+
   if (out_unmodified)
     *out_unmodified = FALSE;
   *out_new_inputhash = g_steal_pointer (&ret_new_inputhash);
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -492,16 +471,9 @@ process_includes (RpmOstreeTreeComposeContext  *self,
                   GCancellable      *cancellable,
                   GError           **error)
 {
-  gboolean ret = FALSE;
-  const char *include_path;
   const guint maxdepth = 50;
-
   if (depth > maxdepth)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Exceeded maximum include depth of %u", maxdepth);
-      goto out;
-    }
+    return glnx_throw (error, "Exceeded maximum include depth of %u", maxdepth);
 
   {
     g_autoptr(GFile) parent = g_file_get_parent (treefile_path);
@@ -519,9 +491,10 @@ process_includes (RpmOstreeTreeComposeContext  *self,
       }
   }
 
+  const char *include_path;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (root, "include", &include_path, error))
-    goto out;
-                                          
+    return FALSE;
+
   if (include_path)
     {
       g_autoptr(GFile) treefile_dirpath = g_file_get_parent (treefile_path);
@@ -535,21 +508,21 @@ process_includes (RpmOstreeTreeComposeContext  *self,
       if (!json_parser_load_from_file (parent_parser,
                                        gs_file_get_path_cached (parent_path),
                                        error))
-        goto out;
+        return FALSE;
 
       parent_rootval = json_parser_get_root (parent_parser);
       if (!JSON_NODE_HOLDS_OBJECT (parent_rootval))
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Treefile root is not an object");
-          goto out;
+          return FALSE;
         }
       parent_root = json_node_get_object (parent_rootval);
-      
+
       if (!process_includes (self, parent_path, depth + 1, parent_root,
                              cancellable, error))
-        goto out;
-                             
+        return FALSE;
+
       members = json_object_get_members (parent_root);
       for (iter = members; iter; iter = iter->next)
         {
@@ -572,7 +545,7 @@ process_includes (RpmOstreeTreeComposeContext  *self,
                   g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                                "Conflicting element type of '%s'",
                                name);
-                  goto out;
+                  return FALSE;
                 }
               if (child_type == JSON_NODE_ARRAY)
                 {
@@ -587,7 +560,7 @@ process_includes (RpmOstreeTreeComposeContext  *self,
                   len = json_array_get_length (child_array);
                   for (i = 0; i < len; i++)
                     json_array_add_element (new_child, json_node_copy (json_array_get_element (child_array, i)));
-                  
+
                   json_object_set_array_member (root, name, new_child);
                 }
             }
@@ -596,9 +569,7 @@ process_includes (RpmOstreeTreeComposeContext  *self,
       json_object_remove_member (root, "include");
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -634,7 +605,7 @@ static gboolean
 process_touch_if_changed (GError **error)
 {
   glnx_fd_close int fd = -1;
-  
+
   if (!opt_touch_if_changed)
     return TRUE;
 
@@ -688,7 +659,7 @@ rpmostree_compose_builtin_tree (int             argc,
   g_autoptr(GVariant) metadata = NULL;
 
   self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-  
+
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
@@ -703,7 +674,7 @@ rpmostree_compose_builtin_tree (int             argc,
       rpmostree_usage_error (context, "TREEFILE must be specified", error);
       goto out;
     }
-  
+
   if (!opt_repo)
     {
       rpmostree_usage_error (context, "--repo must be specified", error);
@@ -858,7 +829,7 @@ rpmostree_compose_builtin_tree (int             argc,
                                 cancellable, &temp_error))
     {
       if (g_error_matches (temp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-        { 
+        {
           g_clear_error (&temp_error);
           g_print ("No previous commit for %s\n", self->ref);
         }
@@ -1090,7 +1061,7 @@ rpmostree_compose_builtin_tree (int             argc,
   g_clear_object (&corectx);
 
   g_free (self->ref);
-  
+
   /* Move back out of the workding directory and close all fds pointing
    * to it ensure unmount works */
   (void )chdir ("/");
