@@ -29,3 +29,5 @@ bash.post, RPMOSTREE_SCRIPT_ACTION_TODO_SHELL_POSTTRANS
 glibc-common.post, RPMOSTREE_SCRIPT_ACTION_TODO_SHELL_POSTTRANS
 /* Seems to be another case of legacy workaround */
 gdb.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
+systemd.transfiletriggerin, RPMOSTREE_SCRIPT_ACTION_IGNORE /* Just does a daemon-reload  which we don't want offline */
+man-db.transfiletriggerin, RPMOSTREE_SCRIPT_ACTION_IGNORE /* https://bugzilla.redhat.com/show_bug.cgi?id=1473402 */

@@ -83,17 +83,6 @@ CAP_LIBS="$LIBS"
 AC_SUBST(CAP_LIBS)
 LIBS="$save_LIBS"
 
-AC_SEARCH_LIBS([rpmsqSetInterruptSafety], [rpmio],
-  AC_DEFINE([BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY], 1, [Set to 1 if we have interrupt safety API]),
-  AC_DEFINE([BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY], 0, [Set to 1 if we have interrupt safety API])
-)
-
-# rpmfiles was made public in rpm >= 4.12, el7 is still on 4.11
-AC_SEARCH_LIBS([rpmfilesNew], [rpm],
-  AC_DEFINE([BUILDOPT_HAVE_RPMFILES], 1, [Set to 1 if we have rpmfiles API]),
-  AC_DEFINE([BUILDOPT_HAVE_RPMFILES], 0, [Set to 1 if we have rpmfiles API])
-)
-
 # Remember to update AM_CPPFLAGS in Makefile.am when bumping GIO req.
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
@@ -105,6 +94,14 @@ PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
 dnl bundled libdnf
 PKGDEP_RPMOSTREE_CFLAGS="-I $(pwd)/libdnf -I $(pwd)/libdnf-build $PKGDEP_RPMOSTREE_CFLAGS"
 PKGDEP_RPMOSTREE_LIBS="-L$(pwd)/libdnf-build/libdnf -ldnf $PKGDEP_RPMOSTREE_LIBS"
+
+dnl This is the current version in Fedora 25.
+AS_IF([pkg-config --atleast-version=4.13.0.1 rpm], [
+have_modern_rpm=true
+AC_DEFINE([BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY], 1, [Set to 1 if we have interrupt safety API])
+AC_DEFINE([BUILDOPT_HAVE_RPM_FILETRIGGERS], 1, [Set to 1 if we have file triggers])
+AC_DEFINE([BUILDOPT_HAVE_RPMFILES], 1, [Set to 1 if we have rpmfiles API]),
+], [have_modern_rpm=false])
 
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
@@ -209,9 +206,10 @@ AC_OUTPUT
 echo "
     $PACKAGE $VERSION
 
-    nts name:	        $enable_new_name
-    compose tooling:	$enable_compose_tooling
-    introspection:      $found_introspection
-    bubblewrap:         $with_bubblewrap
-    gtk-doc:            $enable_gtk_doc
+    built with modern RPM (e.g. Fedora 25+): $have_modern_rpm
+    nts name:                                $enable_new_name
+    compose tooling:                         $enable_compose_tooling
+    introspection:                           $found_introspection
+    bubblewrap:                              $with_bubblewrap
+    gtk-doc:                                 $enable_gtk_doc
 "
