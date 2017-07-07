@@ -44,25 +44,15 @@ OstreeDeployment *
 rpmostreed_deployment_get_for_id (OstreeSysroot *sysroot,
                                   const gchar *deploy_id)
 {
-  g_autoptr(GPtrArray) deployments = NULL;
-  guint i;
-
-  OstreeDeployment *deployment = NULL;
-
-  deployments = ostree_sysroot_get_deployments (sysroot);
-  if (deployments == NULL)
-    goto out;
-
-  for (i=0; i<deployments->len; i++)
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
+  for (guint i = 0; i < deployments->len; i++)
     {
       g_autofree gchar *id = rpmostreed_deployment_generate_id (deployments->pdata[i]);
-      if (g_strcmp0 (deploy_id, id) == 0) {
-        deployment = g_object_ref (deployments->pdata[i]);
-      }
+      if (g_strcmp0 (deploy_id, id) == 0)
+        return g_object_ref (deployments->pdata[i]);
     }
 
-out:
-  return deployment;
+  return NULL;
 }
 
 static GVariant *

@@ -230,24 +230,21 @@ rpmostreed_daemon_initable_init (GInitable *initable,
                                  GError **error)
 {
   RpmostreedDaemon *self = RPMOSTREED_DAEMON (initable);
-  g_autofree gchar *path = NULL;
-  gboolean ret = FALSE;
 
   self->object_manager = g_dbus_object_manager_server_new (BASE_DBUS_PATH);
+
   /* Export the ObjectManager */
   g_dbus_object_manager_server_set_connection (self->object_manager, self->connection);
   g_debug ("exported object manager");
 
-  path = rpmostreed_generate_object_path (BASE_DBUS_PATH, "Sysroot", NULL);
+  g_autofree gchar *path =
+    rpmostreed_generate_object_path (BASE_DBUS_PATH, "Sysroot", NULL);
   self->sysroot = g_object_new (RPMOSTREED_TYPE_SYSROOT,
                                 "path", self->sysroot_path,
                                 NULL);
 
   if (!rpmostreed_sysroot_populate (rpmostreed_sysroot_get (), cancellable, error))
-    {
-      g_prefix_error (error, "Error setting up sysroot: ");
-      goto out;
-    }
+    return glnx_prefix_error (error, "Error setting up sysroot");
 
   g_signal_connect (rpmostreed_sysroot_get (), "notify::active-transaction",
                     G_CALLBACK (on_active_txn_changed), self);
@@ -263,17 +260,14 @@ rpmostreed_daemon_initable_init (GInitable *initable,
                            NULL,
                            error);
   if (!self->bus_proxy)
-    goto out;
+    return FALSE;
 
   rpmostreed_daemon_publish (self, path, FALSE, self->sysroot);
   g_dbus_connection_start_message_processing (self->connection);
 
   g_debug ("daemon constructed");
 
-  ret = TRUE;
-
-out:
-  return ret;
+  return TRUE;
 }
 
 static void
