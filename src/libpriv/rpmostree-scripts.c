@@ -84,13 +84,10 @@ static const KnownRpmScriptKind unsupported_scripts[] = {
 
 static RpmOstreeScriptAction
 lookup_script_action (DnfPackage *package,
-                      GHashTable *ignored_scripts,
                       const char *scriptdesc)
 {
   const char *pkg_script = glnx_strjoina (dnf_package_get_name (package), ".", scriptdesc+1);
   const struct RpmOstreePackageScriptHandler *handler = rpmostree_script_gperf_lookup (pkg_script, strlen (pkg_script));
-  if (ignored_scripts && g_hash_table_contains (ignored_scripts, pkg_script))
-    return RPMOSTREE_SCRIPT_ACTION_IGNORE;
   if (!handler)
     return RPMOSTREE_SCRIPT_ACTION_DEFAULT;
   return handler->action;
@@ -99,7 +96,6 @@ lookup_script_action (DnfPackage *package,
 gboolean
 rpmostree_script_txn_validate (DnfPackage    *package,
                                Header         hdr,
-                               GHashTable    *override_ignored_scripts,
                                GCancellable  *cancellable,
                                GError       **error)
 {
@@ -112,7 +108,7 @@ rpmostree_script_txn_validate (DnfPackage    *package,
       if (!(headerIsEntry (hdr, tagval) || headerIsEntry (hdr, progtagval)))
         continue;
 
-      RpmOstreeScriptAction action = lookup_script_action (package, override_ignored_scripts, desc);
+      RpmOstreeScriptAction action = lookup_script_action (package, desc);
       switch (action)
         {
         case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
@@ -217,7 +213,6 @@ static gboolean
 run_known_rpm_script (const KnownRpmScriptKind *rpmscript,
                       DnfPackage    *pkg,
                       Header         hdr,
-                      GHashTable    *ignore_scripts,
                       int            rootfs_fd,
                       GCancellable  *cancellable,
                       GError       **error)
@@ -238,7 +233,7 @@ run_known_rpm_script (const KnownRpmScriptKind *rpmscript,
     args = td.data;
 
   const char *desc = rpmscript->desc;
-  RpmOstreeScriptAction action = lookup_script_action (pkg, ignore_scripts, desc);
+  RpmOstreeScriptAction action = lookup_script_action (pkg, desc);
   switch (action)
     {
     case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
@@ -291,14 +286,13 @@ run_known_rpm_script (const KnownRpmScriptKind *rpmscript,
 gboolean
 rpmostree_posttrans_run_sync (DnfPackage    *pkg,
                               Header         hdr,
-                              GHashTable    *ignore_scripts,
                               int            rootfs_fd,
                               GCancellable  *cancellable,
                               GError       **error)
 {
   for (guint i = 0; i < G_N_ELEMENTS (posttrans_scripts); i++)
     {
-      if (!run_known_rpm_script (&posttrans_scripts[i], pkg, hdr, ignore_scripts,
+      if (!run_known_rpm_script (&posttrans_scripts[i], pkg, hdr,
                                  rootfs_fd, cancellable, error))
         return FALSE;
     }
@@ -309,35 +303,16 @@ rpmostree_posttrans_run_sync (DnfPackage    *pkg,
 gboolean
 rpmostree_pre_run_sync (DnfPackage    *pkg,
                         Header         hdr,
-                        GHashTable    *ignore_scripts,
                         int            rootfs_fd,
                         GCancellable  *cancellable,
                         GError       **error)
 {
   for (guint i = 0; i < G_N_ELEMENTS (pre_scripts); i++)
     {
-      if (!run_known_rpm_script (&pre_scripts[i], pkg, hdr, ignore_scripts,
+      if (!run_known_rpm_script (&pre_scripts[i], pkg, hdr,
                                  rootfs_fd, cancellable, error))
         return FALSE;
     }
 
-  return TRUE;
-}
-
-gboolean
-rpmostree_script_ignore_hash_from_strv (const char *const *strv,
-                                        GHashTable **out_hash,
-                                        GError **error)
-{
-  g_autoptr(GHashTable) ignore_scripts = NULL;
-  if (!strv)
-    {
-      *out_hash = NULL;
-      return TRUE;
-    }
-  ignore_scripts = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  for (const char *const* iter = strv; iter && *iter; iter++)
-    g_hash_table_add (ignore_scripts, g_strdup (*iter));
-  *out_hash = g_steal_pointer (&ignore_scripts);
   return TRUE;
 }
