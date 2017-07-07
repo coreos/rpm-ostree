@@ -72,8 +72,6 @@ void rpmostree_context_set_sepolicy (RpmOstreeContext *self,
                                      OstreeSePolicy   *sepolicy);
 void rpmostree_context_set_passwd_dir (RpmOstreeContext *self,
                                        const char *passwd_dir);
-void rpmostree_context_set_ignore_scripts (RpmOstreeContext *self,
-                                           GHashTable   *ignore_scripts);
 
 void rpmostree_dnf_add_checksum_goal (GChecksum *checksum, HyGoal goal);
 char *rpmostree_context_get_state_sha512 (RpmOstreeContext *self);
