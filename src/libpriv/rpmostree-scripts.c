@@ -122,6 +122,9 @@ rpmostree_script_txn_validate (DnfPackage    *package,
   return TRUE;
 }
 
+/* Lowest level script handler in this file; create a bwrap instance and run it
+ * synchronously.
+ */
 static gboolean
 run_script_in_bwrap_container (int rootfs_fd,
                                const char *name,
@@ -209,13 +212,75 @@ run_script_in_bwrap_container (int rootfs_fd,
   return ret;
 }
 
+/* Medium level script entrypoint; we already validated it exists and isn't
+ * ignored. Here we mostly compute arguments/input, then proceed into the lower
+ * level bwrap execution.
+ */
 static gboolean
-run_known_rpm_script (const KnownRpmScriptKind *rpmscript,
-                      DnfPackage    *pkg,
-                      Header         hdr,
-                      int            rootfs_fd,
-                      GCancellable  *cancellable,
-                      GError       **error)
+impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
+                     DnfPackage    *pkg,
+                     Header         hdr,
+                     int            rootfs_fd,
+                     GCancellable  *cancellable,
+                     GError       **error)
+{
+  const char *script = headerGetString (hdr, rpmscript->tag);
+  g_assert (script);
+
+  struct rpmtd_s td;
+  g_autofree char **args = NULL;
+  if (headerGet (hdr, rpmscript->progtag, &td, (HEADERGET_ALLOC|HEADERGET_ARGV)))
+    args = td.data;
+
+  const char *interp = args && args[0] ? args[0] : "/bin/sh";
+  /* Check for lua; see also https://github.com/projectatomic/rpm-ostree/issues/749 */
+  static const char lua_builtin[] = "<lua>";
+  if (g_strcmp0 (interp, lua_builtin) == 0)
+    return glnx_throw (error, "Package '%s' has (currently) unsupported %s script in '%s'",
+                       dnf_package_get_name (pkg), lua_builtin, rpmscript->desc);
+
+  /* http://ftp.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S2-RPM-INSIDE-ERASE-TIME-SCRIPTS */
+  const char *script_arg = NULL;
+  switch (dnf_package_get_action (pkg))
+    {
+      /* XXX: we're not running *un scripts for removals yet, though it'd look like:
+         case DNF_STATE_ACTION_REMOVE:
+         case DNF_STATE_ACTION_OBSOLETE:
+         script_arg = obsoleted_by_update ? "1" : "0";
+         break;
+      */
+    case DNF_STATE_ACTION_INSTALL:
+      script_arg = "1";
+      break;
+    case DNF_STATE_ACTION_UPDATE:
+      script_arg = "2";
+      break;
+    case DNF_STATE_ACTION_DOWNGRADE:
+      script_arg = "2";
+      break;
+    default:
+      /* we shouldn't have been asked to perform for any other kind of action */
+      g_assert_not_reached ();
+      break;
+    }
+
+  if (!run_script_in_bwrap_container (rootfs_fd, dnf_package_get_name (pkg),
+                                      rpmscript->desc, interp, script, script_arg,
+                                      cancellable, error))
+    return glnx_prefix_error (error, "Running %s for %s", rpmscript->desc, dnf_package_get_name (pkg));
+  return TRUE;
+}
+
+/* High level script entrypoint; check a package to see whether a script exists,
+ * execute it if it exists (and it's not ignored).
+ */
+static gboolean
+run_script (const KnownRpmScriptKind *rpmscript,
+            DnfPackage               *pkg,
+            Header                    hdr,
+            int                       rootfs_fd,
+            GCancellable             *cancellable,
+            GError                  **error)
 {
   rpmTagVal tagval = rpmscript->tag;
   rpmTagVal progtagval = rpmscript->progtag;
@@ -227,60 +292,18 @@ run_known_rpm_script (const KnownRpmScriptKind *rpmscript,
   if (!script)
     return TRUE;
 
-  struct rpmtd_s td;
-  g_autofree char **args = NULL;
-  if (headerGet (hdr, progtagval, &td, (HEADERGET_ALLOC|HEADERGET_ARGV)))
-    args = td.data;
-
   const char *desc = rpmscript->desc;
   RpmOstreeScriptAction action = lookup_script_action (pkg, desc);
   switch (action)
     {
-    case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
-      {
-        const char *interp = args && args[0] ? args[0] : "/bin/sh";
-
-        /* http://ftp.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S2-RPM-INSIDE-ERASE-TIME-SCRIPTS */
-        const char *script_arg = NULL;
-        switch (dnf_package_get_action (pkg))
-          {
-          /* XXX: we're not running *un scripts for removals yet, though it'd look like:
-          case DNF_STATE_ACTION_REMOVE:
-          case DNF_STATE_ACTION_OBSOLETE:
-            script_arg = obsoleted_by_update ? "1" : "0";
-            break;
-            */
-          case DNF_STATE_ACTION_INSTALL:
-            script_arg = "1";
-            break;
-          case DNF_STATE_ACTION_UPDATE:
-            script_arg = "2";
-            break;
-          case DNF_STATE_ACTION_DOWNGRADE:
-            script_arg = "2";
-            break;
-          default:
-            /* we shouldn't have been asked to perform for any other kind of action */
-            g_assert_not_reached ();
-            break;
-          }
-
-        static const char lua_builtin[] = "<lua>";
-        if (g_strcmp0 (interp, lua_builtin) == 0)
-          return glnx_throw (error, "Package '%s' has (currently) unsupported %s script in '%s'",
-                             dnf_package_get_name (pkg), lua_builtin, desc);
-
-        if (!run_script_in_bwrap_container (rootfs_fd, dnf_package_get_name (pkg), desc,
-                                            interp, script, script_arg,
-                                            cancellable, error))
-          return glnx_prefix_error (error, "Running %s for %s", desc, dnf_package_get_name (pkg));
-        break;
-      }
     case RPMOSTREE_SCRIPT_ACTION_IGNORE:
-      return TRUE;
+      return TRUE; /* Note early return */
+    case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
+      break; /* Continue below */
     }
 
-  return TRUE;
+  return impl_run_rpm_script (rpmscript, pkg, hdr, rootfs_fd,
+                              cancellable, error);
 }
 
 gboolean
@@ -292,8 +315,8 @@ rpmostree_posttrans_run_sync (DnfPackage    *pkg,
 {
   for (guint i = 0; i < G_N_ELEMENTS (posttrans_scripts); i++)
     {
-      if (!run_known_rpm_script (&posttrans_scripts[i], pkg, hdr,
-                                 rootfs_fd, cancellable, error))
+      if (!run_script (&posttrans_scripts[i], pkg, hdr, rootfs_fd,
+                       cancellable, error))
         return FALSE;
     }
 
@@ -309,8 +332,8 @@ rpmostree_pre_run_sync (DnfPackage    *pkg,
 {
   for (guint i = 0; i < G_N_ELEMENTS (pre_scripts); i++)
     {
-      if (!run_known_rpm_script (&pre_scripts[i], pkg, hdr,
-                                 rootfs_fd, cancellable, error))
+      if (!run_script (&pre_scripts[i], pkg, hdr, rootfs_fd,
+                       cancellable, error))
         return FALSE;
     }
 
