@@ -40,15 +40,6 @@
 
 #include "libglnx.h"
 
-static inline void
-cleanup_stdio_file (FILE **filep)
-{
-  FILE *f = *filep;
-  if (f)
-    fclose (f);
-}
-#define _cleanup_stdio_file_ __attribute__((cleanup(cleanup_stdio_file)))
-
 static gboolean
 ptrarray_contains_str (GPtrArray *haystack, const char *needle)
 {
@@ -177,12 +168,11 @@ GPtrArray *
 rpmostree_passwd_data2passwdents (const char *data)
 {
   struct passwd *ent = NULL;
-  _cleanup_stdio_file_ FILE *mf = NULL;
   GPtrArray *ret = g_ptr_array_new_with_free_func (conv_passwd_ent_free);
 
   g_return_val_if_fail (data != NULL, NULL);
 
-  mf = fmemopen ((void *)data, strlen (data), "r");
+  g_autoptr(FILE) mf = fmemopen ((void *)data, strlen (data), "r");
 
   while ((ent = fgetpwent (mf)))
     {
@@ -221,12 +211,11 @@ GPtrArray *
 rpmostree_passwd_data2groupents (const char *data)
 {
   struct group *ent = NULL;
-  _cleanup_stdio_file_ FILE *mf = NULL;
   GPtrArray *ret = g_ptr_array_new_with_free_func (conv_group_ent_free);
 
   g_return_val_if_fail (data != NULL, NULL);
 
-  mf = fmemopen ((void *)data, strlen (data), "r");
+  g_autoptr(FILE) mf = fmemopen ((void *)data, strlen (data), "r");
 
   while ((ent = fgetgrent (mf)))
     {
@@ -629,16 +618,6 @@ gfopen (const char       *path,
   return ret;
 }
 
-static gboolean
-gfflush (FILE         *f,
-         GCancellable *cancellable,
-         GError      **error)
-{
-  if (fflush (f) != 0)
-    return glnx_throw_errno_prefix (error, "fflush");
-  return TRUE;
-}
-
 /*
  * This function is taking the /etc/passwd generated in the install
  * root, and splitting it into two streams: a new /etc/passwd that
@@ -658,17 +637,17 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
   const char *name = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD ? "passwd" : "group";
 
   g_autofree char *src_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, NULL);
-  _cleanup_stdio_file_ FILE *src_stream = gfopen (src_path, "r", cancellable, error);
+  g_autoptr(FILE) src_stream = gfopen (src_path, "r", cancellable, error);
   if (!src_stream)
     return FALSE;
 
   g_autofree char *etctmp_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, ".tmp", NULL);
-  _cleanup_stdio_file_ FILE *etcdest_stream = gfopen (etctmp_path, "w", cancellable, error);
+  g_autoptr(FILE) etcdest_stream = gfopen (etctmp_path, "w", cancellable, error);
   if (!etcdest_stream)
     return FALSE;
 
   g_autofree char *usrdest_path = g_strconcat (gs_file_get_path_cached (rootfs), "/usr/lib/", name, NULL);
-  _cleanup_stdio_file_ FILE *usrdest_stream = gfopen (usrdest_path, "a", cancellable, error);
+  g_autoptr(FILE) usrdest_stream = gfopen (usrdest_path, "a", cancellable, error);
   if (!usrdest_stream)
     return FALSE;
 
@@ -737,9 +716,9 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
         return glnx_throw_errno_prefix (error, "putpwent");
     }
 
-  if (!gfflush (etcdest_stream, cancellable, error))
+  if (!glnx_stdio_file_flush (etcdest_stream, error))
     return FALSE;
-  if (!gfflush (usrdest_stream, cancellable, error))
+  if (!glnx_stdio_file_flush (usrdest_stream, error))
     return FALSE;
 
   if (rename (etctmp_path, src_path) != 0)
@@ -857,7 +836,6 @@ concat_passwd_file (GFile           *yumroot,
   g_autoptr(GHashTable) seen_names =
     g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
   GFile *sources[] = { orig_etc_content, orig_usrlib_content };
-  _cleanup_stdio_file_ FILE *dest_stream = NULL;
 
   gboolean have_etc = g_file_query_exists (orig_etc_content, NULL);
   gboolean have_usr = g_file_query_exists (orig_usrlib_content, NULL);
@@ -869,6 +847,7 @@ concat_passwd_file (GFile           *yumroot,
   if (!(have_etc || have_usr))
     return TRUE;
 
+  g_autoptr(FILE) dest_stream = NULL;
   if (!(dest_stream = target_etc_filename (yumroot, filename,
                                            cancellable, error)))
     return FALSE;
@@ -876,7 +855,7 @@ concat_passwd_file (GFile           *yumroot,
   for (guint i = 0; i < G_N_ELEMENTS (sources); i++)
     {
       GFile *source = sources[i];
-      _cleanup_stdio_file_ FILE *src_stream = NULL;
+      g_autoptr(FILE) src_stream = NULL;
 
       g_autofree char *contents = NULL;
       if (!_rpmostree_gfile2stdio (source, &contents, &src_stream,
@@ -891,7 +870,7 @@ concat_passwd_file (GFile           *yumroot,
         return FALSE;
     }
 
-  if (!gfflush (dest_stream, cancellable, error))
+  if (!glnx_stdio_file_flush (dest_stream, error))
     return FALSE;
 
   return TRUE;
@@ -916,8 +895,6 @@ _data_from_json (GFile           *yumroot,
   g_autofree char *contents = NULL;
   g_autoptr(GHashTable) seen_names =
     g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
-  _cleanup_stdio_file_ FILE *src_stream = NULL;
-  _cleanup_stdio_file_ FILE *dest_stream = NULL;
 
   *out_found = FALSE;
   if (!json_object_has_member (treedata, json_conf_name))
@@ -946,6 +923,7 @@ _data_from_json (GFile           *yumroot,
     return FALSE;
 
   /* migrate the check data from the specified file to /etc */
+  g_autoptr(FILE) src_stream = NULL;
   if (!_rpmostree_gfile2stdio (source, &contents, &src_stream,
                                cancellable, error))
     return FALSE;
@@ -956,6 +934,7 @@ _data_from_json (GFile           *yumroot,
   /* no matter what we've used the data now */
   *out_found = TRUE;
 
+  g_autoptr(FILE) dest_stream = NULL;
   if (!(dest_stream = target_etc_filename (yumroot, filebasename,
                                            cancellable, error)))
     return FALSE;
