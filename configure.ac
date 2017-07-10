@@ -1,5 +1,8 @@
 AC_PREREQ([2.63])
-dnl To do a release, increment this number, commit, and use git-evtag sign.
+dnl To do a release, increment this number, commit, then submit it as a PR
+dnl to merge via homu.  After that, do `git pull origin && git reset --hard origin/master`.
+dnl Then use https://github.com/cgwalters/git-evtag to sign.
+dnl Then, git push origin v201X.XX
 AC_INIT([rpm-ostree], [2017.7], [walters@verbum.org])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_MACRO_DIR([buildutil])
