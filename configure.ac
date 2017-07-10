@@ -1,5 +1,6 @@
 AC_PREREQ([2.63])
-AC_INIT([rpm-ostree], [2017.6], [walters@verbum.org])
+dnl To do a release, increment this number, commit, and use git-evtag sign.
+AC_INIT([rpm-ostree], [2017.7], [walters@verbum.org])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_MACRO_DIR([buildutil])
 AC_CONFIG_AUX_DIR([build-aux])
