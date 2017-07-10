@@ -31,11 +31,12 @@ if test -z "${INSIDE_VM:-}"; then
        for pkg in ostree{,-libs,-grub2}; do
           rpm -q $pkg
           # We do not have perms to read /etc/grub2 as non-root
-          rpm -ql $pkg |grep -v '^/etc/'>  list.txt
+          rpm -ql $pkg | grep -v '^/etc/' | sed "s/^/+ /" >  list.txt
+          echo "- *" >> list.txt
           # In the prebuilt container case, manpages are missing.  Ignore that.
           # Also chown everything to writable, due to https://bugzilla.redhat.com/show_bug.cgi?id=517575
           chmod -R u+w ${DESTDIR}/
-          rsync -l --ignore-missing-args --files-from=list.txt / ${DESTDIR}/
+          rsync -l --include-from=list.txt / ${DESTDIR}/
           rm -f list.txt
        done
        make install DESTDIR=${DESTDIR}
