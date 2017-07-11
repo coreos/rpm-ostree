@@ -36,6 +36,9 @@ if test -z "${INSIDE_VM:-}"; then
           # In the prebuilt container case, manpages are missing.  Ignore that.
           # Also chown everything to writable, due to https://bugzilla.redhat.com/show_bug.cgi?id=517575
           chmod -R u+w ${DESTDIR}/
+          # The --ignore-missing-args option was added in rsync 3.1.0,
+          # but CentOS7 only has rsync 3.0.9.  Can simulate the behavior
+          # with --include-from and the way we constructed list.txt.
           rsync -l --include-from=list.txt / ${DESTDIR}/
           rm -f list.txt
        done
