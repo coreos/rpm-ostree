@@ -213,9 +213,12 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
 
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 
-  rpmostreed_transaction_emit_message_printf (transaction,
-                                              "Updating from: %s",
-                                              self->refspec);
+  if (self->refspec != NULL)
+    {
+      rpmostreed_transaction_emit_message_printf (transaction,
+                                                  "Updating from: %s",
+                                                  self->refspec);
+    }
 
   gboolean changed = FALSE;
   if (!rpmostree_sysroot_upgrader_pull (upgrader,
