@@ -28,6 +28,13 @@
 
 #include "rpmostree-scripts.h"
 
+/* This bit is currently private in librpm */
+enum rpmscriptFlags_e {
+  RPMSCRIPT_FLAG_NONE		= 0,
+  RPMSCRIPT_FLAG_EXPAND	= (1 << 0), /* macro expansion */
+  RPMSCRIPT_FLAG_QFORMAT	= (1 << 1), /* header queryformat expansion */
+};
+
 typedef struct {
     const char *desc;
     rpmsenseFlags sense;
@@ -224,8 +231,12 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
                      GCancellable  *cancellable,
                      GError       **error)
 {
+  g_autofree char *script_owned = NULL;
   const char *script = headerGetString (hdr, rpmscript->tag);
   g_assert (script);
+  const rpmFlags flags = headerGetNumber (hdr, rpmscript->flagtag);
+  if (flags & RPMSCRIPT_FLAG_EXPAND)
+    script = script_owned = rpmExpand (script, NULL);
 
   struct rpmtd_s td;
   g_autofree char **args = NULL;
