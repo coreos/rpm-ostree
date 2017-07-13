@@ -531,6 +531,16 @@ context_repos_enable_only (RpmOstreeContext    *context,
   return TRUE;
 }
 
+/* Wraps `dnf_context_setup()`, and initializes state based on the treespec
+ * @spec. Another way to say it is we pair `DnfContext` with an
+ * `RpmOstreeTreespec`. For example, we handle "instlangs", set the rpmdb root
+ * to `/usr/share/rpm`, and handle the required rpm-md repos. The "packages"
+ * entry from @spec is processed later.
+ *
+ * If either @install_root or @source_root are `NULL`, `/usr/share/empty` is
+ * used. Typically @source_root being `NULL` is for "from scratch" root
+ * filesystems.
+ */
 gboolean
 rpmostree_context_setup (RpmOstreeContext    *self,
                          const char    *install_root,
@@ -539,24 +549,32 @@ rpmostree_context_setup (RpmOstreeContext    *self,
                          GCancellable  *cancellable,
                          GError       **error)
 {
+  const char *releasever = NULL;
   g_autofree char **enabled_repos = NULL;
   g_autofree char **instlangs = NULL;
+  /* This exists (as a canonically empty dir) at least on RHEL7+ */
+  static const char emptydir_path[] = "/usr/share/empty";
 
   self->spec = g_object_ref (spec);
 
-  if (install_root)
-    dnf_context_set_install_root (self->hifctx, install_root);
-  else
-    {
-      /* We need this to ensure that libdnf doesn't read the host system packages */
-      if (!rpmostree_context_ensure_tmpdir (self, "dummy-instroot", error))
-        return FALSE;
-      g_autofree char *root = g_strconcat (self->tmpdir_path, "/dummy-instroot", NULL);
-      dnf_context_set_install_root (self->hifctx, root);
-    }
+  g_variant_dict_lookup (self->spec->dict, "releasever", "&s", &releasever);
 
-  if (source_root)
-    dnf_context_set_source_root (self->hifctx, source_root);
+  if (!install_root)
+    install_root = emptydir_path;
+  if (!source_root)
+    {
+      source_root = emptydir_path;
+      /* Hackaround libdnf's auto-introspection semantics. For e.g.
+       * treecompose/container, we currently require using .repo files which
+       * don't reference $releasever.
+       */
+      dnf_context_set_release_ver (self->hifctx, releasever ?: "rpmostree-unset-releasever");
+    }
+  else if (releasever)
+    dnf_context_set_release_ver (self->hifctx, releasever);
+
+  dnf_context_set_install_root (self->hifctx, install_root);
+  dnf_context_set_source_root (self->hifctx, source_root);
 
   if (g_variant_dict_lookup (self->spec->dict, "instlangs", "^a&s", &instlangs))
     {

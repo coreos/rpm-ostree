@@ -133,6 +133,11 @@ It supports the following parameters:
 
    Example: `ignore-removed-groups: ["avahi"]`
 
+ * `releasever`: String, optional: Used to set the librepo `$releasever` variable,
+   commonly used in yum repo files.
+
+   Example: `releasever: "26"`
+
  * `automatic_version_prefix`: String, optional: Set the prefix for versions
    on the commits. The idea is that if the previous commit on the branch to the
    doesn't match the prefix, or doesn't have a version, then the new commit will

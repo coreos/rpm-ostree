@@ -831,7 +831,7 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (treespec == NULL)
     return FALSE;
 
-  if (!rpmostree_context_setup (ctx, tmprootfs_abspath, NULL, treespec, cancellable, error))
+  if (!rpmostree_context_setup (ctx, tmprootfs_abspath, tmprootfs_abspath, treespec, cancellable, error))
     return FALSE;
 
   g_autoptr(OstreeRepo) pkgcache_repo = NULL;
