@@ -481,11 +481,11 @@ rpmostree_context_get_hif (RpmOstreeContext *self)
 }
 
 GHashTable *
-rpmostree_context_get_varsubsts (RpmOstreeContext *context)
+rpmostree_dnfcontext_get_varsubsts (DnfContext *context)
 {
   GHashTable *r = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
 
-  g_hash_table_insert (r, g_strdup ("basearch"), g_strdup (dnf_context_get_base_arch (context->hifctx)));
+  g_hash_table_insert (r, g_strdup ("basearch"), g_strdup (dnf_context_get_base_arch (context)));
 
   return r;
 }

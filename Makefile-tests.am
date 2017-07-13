@@ -12,6 +12,7 @@ AM_TESTS_ENVIRONMENT = \
 # don't want it to fall back to the system libhif if it's also installed)
 AM_TESTS_ENVIRONMENT += \
 	LD_LIBRARY_PATH=$(abs_builddir)/libdnf-build/libdnf \
+	GI_TYPELIB_PATH=$$(cd $(top_builddir) && pwd)$${GI_TYPELIB_PATH:+:$$GI_TYPELIB_PATH} \
 	$(NULL)
 if BUILDOPT_ASAN
 AM_TESTS_ENVIRONMENT += ASAN_OPTIONS=detect_leaks=false

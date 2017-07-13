@@ -1,4 +1,10 @@
 <SECTION>
+<FILE>librpmostree-core</FILE>
+rpm_ostree_get_basearch
+rpm_ostree_varsubst_basearch
+</SECTION>
+
+<SECTION>
 <FILE>librpmostree-dbquery</FILE>
 rpm_ostree_db_query
 </SECTION>
