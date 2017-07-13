@@ -26,3 +26,13 @@
 
 #include <rpmostree-db.h>
 #include <rpmostree-package.h>
+
+G_BEGIN_DECLS
+
+_RPMOSTREE_EXTERN
+char *rpm_ostree_get_basearch (void);
+
+_RPMOSTREE_EXTERN
+char *rpm_ostree_varsubst_basearch (const char *src, GError **error);
+
+G_END_DECLS

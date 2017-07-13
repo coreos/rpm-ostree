@@ -19,8 +19,10 @@ fi
 
 install_builddeps rpm-ostree
 
+yum install -y /usr/bin/g-ir-scanner # Accidentally omitted
+# Mostly dependencies for tests
 yum install -y ostree{,-devel,-grub2} createrepo_c /usr/bin/jq PyYAML clang \
-    libubsan libasan libtsan elfutils fuse sudo
+    libubsan libasan libtsan elfutils fuse sudo python-gobject-base
 
 # create an unprivileged user for testing
 adduser testuser
