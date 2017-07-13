@@ -32,7 +32,7 @@ vm_build_rpm scriptpkg1 \
   pre "groupadd -r scriptpkg1" \
   pretrans "# http://lists.rpm.org/pipermail/rpm-ecosystem/2016-August/000391.html
             echo i should've been ignored && exit 1" \
-  post_interp /usr/bin/python 'open("/usr/lib/rpmostreetestinterp", "w")' \
+  post_args "-p /usr/bin/python" 'open("/usr/lib/rpmostreetestinterp", "w")' \
   posttrans "# Firewalld; https://github.com/projectatomic/rpm-ostree/issues/638
              . /etc/os-release || :
              # See https://github.com/projectatomic/rpm-ostree/pull/647
@@ -62,6 +62,18 @@ echo "ok group scriptpkg1 active"
 
 vm_has_files "/usr/lib/rpmostreetestinterp"
 echo "ok interp"
+
+vm_build_rpm scriptpkg2 \
+             post_args "-e" 'echo %%{_prefix} > /usr/lib/prefixtest.txt'
+vm_build_rpm scriptpkg3 \
+             post 'echo %%{_prefix} > /usr/lib/noprefixtest.txt'
+vm_rpmostree pkg-add scriptpkg{2,3}
+vm_rpmostree ex livefs
+vm_cmd cat /usr/lib/noprefixtest.txt > noprefixtest.txt
+assert_file_has_content noprefixtest.txt '%{_prefix}'
+vm_cmd cat /usr/lib/prefixtest.txt > prefixtest.txt
+assert_file_has_content prefixtest.txt "/usr"
+echo "ok script expansion"
 
 # And now, things that should fail
 vm_build_rpm rofiles-violation \
