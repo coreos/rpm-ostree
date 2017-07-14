@@ -57,7 +57,7 @@ into the VM.
 `make vmoverlay` will do a non-live overlay, and reboot the VM.
 
 For convenience, the `make vmshell` command does the same
-as `make vmbuild` but additionally places you in a shell,
+as `make vmsync` but additionally places you in a shell,
 ready to test your changes.
 
 Note that by default, all the commands above try to re-use
