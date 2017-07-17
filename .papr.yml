@@ -3,127 +3,70 @@ branches:
     - auto
     - try
 
-context: f25-build-check
-
-required: true
-
-container:
-    image: registry.fedoraproject.org/fedora:25
-
-packages:
-  - git
-
-tests:
-  - ci/ci-commitmessage-submodules.sh
-  - ci/codestyle.sh
-  - ci/build-check.sh
-
-timeout: 30m
-
-artifacts:
-    - test-suite.log
-
----
-
-inherit: true
-
-context: f26-build-check
-
-required: false
-
-container:
-    image: registry.fedoraproject.org/fedora:26
-
-tests:
-  # updates-source mirrors are being flaky
-  - sed -i '/metalink=.*updates-released-source.*/ d' /etc/yum.repos.d/fedora-updates.repo
-  - sed -i '/SRPMS/ s/^#baseurl/baseurl/' /etc/yum.repos.d/fedora-updates.repo
-  - ci/build-check.sh
-
----
-
-inherit: true
-
-context: c7-build
-
-required: true
-
-container:
-  image: registry.centos.org/centos/centos:7
-
-extra-repos:
-  - name: atomic-centos-continuous
-    baseurl: https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/build
-    gpgcheck: 0
-
-# XXX: integrate better with ci/ scripts
-tests:
-  - yum-builddep -y rpm-ostree
-  - yum install -y polkit-devel
-  - yum install -y make
-  - source ci/libbuild.sh && build
-
-timeout: 15m
-
----
-
-inherit: true
-
-context: f25-vmcheck
+context: f26-primary
 
 required: true
 
 cluster:
   hosts:
     - name: vmcheck1
-      distro: fedora/25/atomic
+      distro: fedora/26/atomic
     - name: vmcheck2
-      distro: fedora/25/atomic
+      distro: fedora/26/atomic
     - name: vmcheck3
-      distro: fedora/25/atomic
+      distro: fedora/26/atomic
   container:
-    image: registry.fedoraproject.org/fedora:25
+    image: registry.fedoraproject.org/fedora:26
+
+packages:
+  - git
+  - rsync
 
 env:
   HOSTS: vmcheck1 vmcheck2 vmcheck3
 
-packages:
-  - rsync
-
 tests:
-  - ./ci/build.sh
+  - ci/ci-commitmessage-submodules.sh
+  - ci/codestyle.sh
+  # updates-source mirrors are being flaky
+  - sed -i '/metalink=.*updates-released-source.*/ d' /etc/yum.repos.d/fedora-updates.repo
+  - sed -i '/SRPMS/ s/^#baseurl/baseurl/' /etc/yum.repos.d/fedora-updates.repo
+  - ci/build-check.sh
   - make vmcheck
 
-artifacts:
-  - vmcheck
+timeout: 60m
 
-# We really need to work on getting this down:
-# https://github.com/projectatomic/rpm-ostree/issues/662
-timeout: 80m
+artifacts:
+  - test-suite.log
+  - vmcheck
 
 ---
 
 inherit: true
 
-context: f26-vmcheck
+context: c7-primary
 
-required: false
+required: true
 
 cluster:
   hosts:
-    - name: vmcheck
-      distro: fedora/26/atomic
+    - name: vmcheck1
+      distro: centos/7/atomic/alpha
+    - name: vmcheck2
+      distro: centos/7/atomic/alpha
+    - name: vmcheck3
+      distro: centos/7/atomic/alpha
   container:
-    image: registry.fedoraproject.org/fedora:26
+    image: registry.centos.org/centos/centos:7
 
-env:
-  HOSTS: vmcheck
+extra-repos:
+  - name: atomic-centos-continuous
+    baseurl: https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/build
+    gpgcheck: 0
 
 tests:
-  # updates-source mirrors are being flaky
-  - sed -i '/metalink=.*updates-released-source.*/ d' /etc/yum.repos.d/fedora-updates.repo
-  - sed -i '/SRPMS/ s/^#baseurl/baseurl/' /etc/yum.repos.d/fedora-updates.repo
-  - ./ci/build.sh
+  - yum install -y epel-release
+  - ci/build-check.sh
   - make vmcheck
 
 ---
@@ -133,10 +76,9 @@ branches:
   - auto
   - try
 
-# NB: when bumping 25 here, also bump fedora.repo, compose script, and
-# fedora-base.json
+# NB: when bumping 26 here, also bump fedora.repo, and compose script
 
-context: f25-compose
+context: f26-compose
 
 build: false
 
@@ -148,7 +90,7 @@ required: true
 # which we don't have right now; so just provision a VM and do a
 # docker --privileged run.
 host:
-  distro: fedora/25/atomic
+  distro: fedora/26/atomic
 
 # copy yum.repos.d to get any injected repos from the host, which
 # will point to a closer mirror
@@ -157,7 +99,7 @@ tests:
     -e RPMOSTREE_COMPOSE_TEST_USE_HOST_REPO=1
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
-    registry.fedoraproject.org/fedora:25 /bin/sh -c
+    registry.fedoraproject.org/fedora:26 /bin/sh -c
     "cp -fv /etc/yum.repos.d{.host/*.repo,} &&
      ./ci/build.sh && make install && ./tests/compose"
 

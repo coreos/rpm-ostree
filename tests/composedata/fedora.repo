@@ -1,9 +1,9 @@
 [fedora]
-#when bumping 25 here, also bump fedora-base.json, compose script, and .papr.yml
-name=Fedora 25 (devel) - $basearch
+#when bumping 26 here, also bump compose script, and .papr.yml
+name=Fedora 26 (devel) - $basearch
 failovermethod=priority
-baseurl=https://dl.fedoraproject.org/pub/fedora/linux/releases/25/Everything/$basearch/os/
+baseurl=https://dl.fedoraproject.org/pub/fedora/linux/releases/26/Everything/$basearch/os/
 enabled=1
 gpgcheck=0
-gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-25-$basearch
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-26-$basearch
 skip_if_unavailable=False

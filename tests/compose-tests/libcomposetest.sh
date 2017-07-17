@@ -30,7 +30,7 @@ prepare_compose_test() {
     export treefile=composedata/fedora-${name}.json
     pyeditjson "jd['ref'] += \"/${name}\"" < composedata/fedora-base.json > ${treefile}
     # FIXME extract from json
-    export treeref=fedora/25/x86_64/${name}
+    export treeref=fedora/stable/x86_64/${name}
 }
 
 runcompose() {
