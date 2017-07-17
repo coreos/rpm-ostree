@@ -51,10 +51,9 @@ echo "Preparing compose tests..." | tee -a ${LOG}
 
 # take the host repo if it matches our target tree
 if [ -n "${RPMOSTREE_COMPOSE_TEST_USE_HOST_REPO:-}" ]; then
-  # NB: when bumping 25 here, also bump fedora.repo, .papr.yml, and
-  # fedora-base.json
+  # NB: when bumping 26 here, also bump fedora.repo, .papr.yml
   (source /etc/os-release;
-   if [ "$ID" == "fedora" ] && [ "$VERSION_ID" == "25" ]; then
+   if [ "$ID" == "fedora" ] && [ "$VERSION_ID" == "26" ]; then
      echo "Taking stable Fedora repo file from test env."
      cp -fv /etc/yum.repos.d/fedora.repo ${dn}/composedata
    fi) &>> ${LOG}

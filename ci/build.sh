@@ -7,14 +7,19 @@ dn=$(dirname $0)
 . ${dn}/libbuild.sh
 
 # Use the latest ostree by default
-echo -e '[fahc]\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/fahc/rdgo/build/\ngpgcheck=0\n' > /etc/yum.repos.d/fahc.repo
-# Until we fix https://github.com/rpm-software-management/libdnf/pull/149
-sed -i -e 's,metadata_expire=6h,exclude=ostree ostree-devel ostree-libs ostree-grub2\nmetadata_expire=6h,' /etc/yum.repos.d/fedora-updates.repo
-# See also tests/vmcheck/overlay.sh
+id=$(. /etc/os-release && echo $ID)
+version_id=$(. /etc/os-release && echo $VERSION_ID)
+if [ "$id" == fedora ] && [ "$version_id" == 26 ]; then
+    echo -e '[fahc]\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/fahc/rdgo/build/\ngpgcheck=0\n' > /etc/yum.repos.d/fahc.repo
+    # Until we fix https://github.com/rpm-software-management/libdnf/pull/149
+    sed -i -e 's,metadata_expire=6h,exclude=ostree ostree-devel ostree-libs ostree-grub2\nmetadata_expire=6h,' /etc/yum.repos.d/fedora-updates.repo
+elif [ "$id" == centos ]; then
+    echo -e '[cahc]\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/build\ngpgcheck=0\n' > /etc/yum.repos.d/cahc.repo
+fi
 
 install_builddeps rpm-ostree
 
-dnf install -y ostree{,-devel,-grub2} createrepo_c /usr/bin/jq PyYAML clang \
+yum install -y ostree{,-devel,-grub2} createrepo_c /usr/bin/jq PyYAML clang \
     libubsan libasan libtsan elfutils fuse sudo gnome-desktop-testing
 
 # create an unprivileged user for testing
