@@ -9,7 +9,7 @@ Running the test suite
 ----------------------
 
 There is `make check` as well as `make vmcheck`. See also what
-the [PAPR](papr.yml) file does.
+the [PAPR](.papr.yml) file does.
 
 Coding style
 ------------
