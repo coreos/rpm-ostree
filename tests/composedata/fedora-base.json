@@ -1,7 +1,5 @@
 {
-    "COMMENT": "when bumping 25 here, also bump fedora.repo, compose script, and .papr.yml",
-
-    "ref": "fedora/25/${basearch}",
+    "ref": "fedora/stable/${basearch}",
 
     "repos": ["fedora"],
 

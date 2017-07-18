@@ -52,7 +52,8 @@ echo "ok livefs stage1"
 
 vm_build_rpm test-livefs-with-etc \
   build 'echo "A config file for %{name}" > %{name}.conf' \
-  install 'install -Dt %{buildroot}/etc %{name}.conf
+  install 'mkdir -p %{buildroot}/etc
+           install %{name}.conf %{buildroot}/etc
            mkdir -p %{buildroot}/etc/%{name}/
            echo subconfig-one > %{buildroot}/etc/%{name}/subconfig-one.conf
            echo subconfig-two > %{buildroot}/etc/%{name}/subconfig-two.conf

@@ -17,13 +17,20 @@ build_default() {
 
 install_builddeps() {
     pkg=$1
-    dnf -y install dnf-plugins-core
-    dnf install -y @buildsys-build
-    dnf install -y 'dnf-command(builddep)'
+
+    if [ -x /usr/bin/dnf ]; then
+        dnf -y install dnf-plugins-core
+        dnf install -y @buildsys-build
+        dnf install -y 'dnf-command(builddep)'
+        dnf builddep -y $pkg
+    else
+        yum install -y make rpm-build
+        yum-builddep -y rpm-ostree
+    fi
 
     # builddeps+runtime deps
-    dnf builddep -y $pkg
-    dnf install -y polkit-devel
-    dnf install -y $pkg
+    yum install -y $pkg
+    yum install -y polkit-devel
+
     rpm -e $pkg
 }

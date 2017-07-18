@@ -36,9 +36,11 @@ vm_build_rpm nonrootcap \
            done" \
     pre "groupadd -r nrcgroup
          useradd -r nrcuser -g nrcgroup -s /sbin/nologin" \
-    install "install -Dt %{buildroot}/etc nrc.conf
+    install "mkdir -p %{buildroot}/etc
+             install nrc.conf %{buildroot}/etc
              ln -sr %{buildroot}/etc/nrc.conf %{buildroot}/etc/nrc-link.conf
-             install -Dt %{buildroot}/usr/bin *.sh
+             mkdir -p %{buildroot}/usr/bin
+             install *.sh %{buildroot}/usr/bin
              ln -sr %{buildroot}/usr/bin/{nrc-user.sh,nrc-user-link.sh}
              mkdir -p %{buildroot}/var/lib/nonrootcap
              mkdir -p %{buildroot}/run/nonrootcap
