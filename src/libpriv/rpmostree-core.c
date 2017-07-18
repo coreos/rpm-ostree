@@ -176,7 +176,6 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
       add_canonicalized_string_array (&builder, "repos", NULL, keyfile);
   }
   add_canonicalized_string_array (&builder, "instlangs", "instlangs-all", keyfile);
-  add_canonicalized_string_array (&builder, "ignore-scripts", NULL, keyfile);
 
   { gboolean documentation = TRUE;
     g_autofree char *value = g_key_file_get_value (keyfile, "tree", "documentation", NULL);
@@ -236,7 +235,6 @@ struct _RpmOstreeContext {
   RpmOstreeTreespec *spec;
   gboolean empty;
   DnfContext *hifctx;
-  GHashTable *ignore_scripts;
   OstreeRepo *ostreerepo;
   OstreeRepo *pkgcache_repo;
   gboolean unprivileged;
@@ -263,8 +261,6 @@ rpmostree_context_finalize (GObject *object)
 
   g_clear_object (&rctx->spec);
   g_clear_object (&rctx->hifctx);
-
-  g_clear_pointer (&rctx->ignore_scripts, g_hash_table_unref);
 
   g_clear_object (&rctx->pkgcache_repo);
   g_clear_object (&rctx->ostreerepo);
@@ -478,15 +474,6 @@ rpmostree_context_set_passwd_dir (RpmOstreeContext *self,
   self->passwd_dir = g_strdup (passwd_dir);
 }
 
-void
-rpmostree_context_set_ignore_scripts (RpmOstreeContext *self,
-                                      GHashTable   *ignore_scripts)
-{
-  g_clear_pointer (&self->ignore_scripts, g_hash_table_unref);
-  if (ignore_scripts)
-    self->ignore_scripts = g_hash_table_ref (ignore_scripts);
-}
-
 DnfContext *
 rpmostree_context_get_hif (RpmOstreeContext *self)
 {
@@ -629,16 +616,9 @@ rpmostree_context_setup (RpmOstreeContext    *self,
                                    DNF_TRANSACTION_FLAG_NODOCS);
   }
 
-  { const char *const *ignore_scripts = NULL;
-    if (g_variant_dict_lookup (self->spec->dict, "ignore-scripts", "^a&s", &ignore_scripts))
-      {
-        g_autoptr(GHashTable) ignore_hash = NULL;
-
-        if (!rpmostree_script_ignore_hash_from_strv (ignore_scripts, &ignore_hash, error))
-          return FALSE;
-        rpmostree_context_set_ignore_scripts (self, ignore_hash);
-      }
-  }
+  /* We could likely delete this, but I'm keeping a log message just in case */
+  if (g_variant_dict_contains (self->spec->dict, "ignore-scripts"))
+    sd_journal_print (LOG_INFO, "ignore-scripts is no longer supported");
 
   return TRUE;
 }
@@ -2409,7 +2389,6 @@ rpmts_add_install (RpmOstreeContext *self,
                    DnfPackage *pkg,
                    gboolean is_upgrade,
                    gboolean noscripts,
-                   GHashTable *ignore_scripts,
                    GCancellable *cancellable,
                    GError **error)
 {
@@ -2421,7 +2400,7 @@ rpmts_add_install (RpmOstreeContext *self,
 
   if (!noscripts)
     {
-      if (!rpmostree_script_txn_validate (pkg, hdr, ignore_scripts, cancellable, error))
+      if (!rpmostree_script_txn_validate (pkg, hdr, cancellable, error))
         return FALSE;
     }
 
@@ -2464,7 +2443,7 @@ run_posttrans_sync (RpmOstreeContext *self,
   if (!get_package_metainfo (self, path, &hdr, NULL, error))
     return FALSE;
 
-  if (!rpmostree_posttrans_run_sync (pkg, hdr, self->ignore_scripts, rootfs_dfd,
+  if (!rpmostree_posttrans_run_sync (pkg, hdr, rootfs_dfd,
                                      cancellable, error))
     return FALSE;
 
@@ -2484,8 +2463,7 @@ run_pre_sync (RpmOstreeContext *self,
   if (!get_package_metainfo (self, path, &hdr, NULL, error))
     return FALSE;
 
-  if (!rpmostree_pre_run_sync (pkg, hdr, self->ignore_scripts,
-                               rootfs_dfd, cancellable, error))
+  if (!rpmostree_pre_run_sync (pkg, hdr, rootfs_dfd, cancellable, error))
     return FALSE;
 
   return TRUE;
@@ -2700,7 +2678,7 @@ add_install (RpmOstreeContext *self,
   if (!checkout_pkg_metadata_by_dnfpkg (self, pkg, cancellable, error))
     return FALSE;
 
-  if (!rpmts_add_install (self, ts, pkg, is_upgrade, noscripts, self->ignore_scripts,
+  if (!rpmts_add_install (self, ts, pkg, is_upgrade, noscripts,
                           cancellable, error))
     return FALSE;
 
@@ -3040,7 +3018,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
       DnfPackage *pkg = overlays->pdata[i];
 
       /* Set noscripts since we already validated them above */
-      if (!rpmts_add_install (self, rpmdb_ts, pkg, FALSE, TRUE, NULL, cancellable, error))
+      if (!rpmts_add_install (self, rpmdb_ts, pkg, FALSE, TRUE, cancellable, error))
         return FALSE;
     }
 
@@ -3049,7 +3027,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
       DnfPackage *pkg = overrides_replace->pdata[i];
 
       /* Set noscripts since we already validated them above */
-      if (!rpmts_add_install (self, rpmdb_ts, pkg, TRUE, TRUE, NULL, cancellable, error))
+      if (!rpmts_add_install (self, rpmdb_ts, pkg, TRUE, TRUE, cancellable, error))
         return FALSE;
     }
 
