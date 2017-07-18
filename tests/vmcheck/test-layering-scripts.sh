@@ -32,7 +32,8 @@ vm_build_rpm scriptpkg1 \
   pre "groupadd -r scriptpkg1" \
   pretrans "# http://lists.rpm.org/pipermail/rpm-ecosystem/2016-August/000391.html
             echo i should've been ignored && exit 1" \
-  post_args "-p /usr/bin/python" 'open("/usr/lib/rpmostreetestinterp", "w")' \
+  post_args "-p /usr/bin/python" \
+  post 'open("/usr/lib/rpmostreetestinterp", "w")' \
   posttrans "# Firewalld; https://github.com/projectatomic/rpm-ostree/issues/638
              . /etc/os-release || :
              # See https://github.com/projectatomic/rpm-ostree/pull/647
@@ -64,7 +65,8 @@ vm_has_files "/usr/lib/rpmostreetestinterp"
 echo "ok interp"
 
 vm_build_rpm scriptpkg2 \
-             post_args "-e" 'echo %%{_prefix} > /usr/lib/prefixtest.txt'
+             post_args "-e" \
+             post 'echo %%{_prefix} > /usr/lib/prefixtest.txt'
 vm_build_rpm scriptpkg3 \
              post 'echo %%{_prefix} > /usr/lib/noprefixtest.txt'
 vm_rpmostree pkg-add scriptpkg{2,3}

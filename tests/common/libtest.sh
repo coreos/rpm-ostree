@@ -389,7 +389,7 @@ EOF
         conflicts)
             echo "Conflicts: $arg" >> $spec;;
         post_args)
-            post_args="$arg"; post="$1"; shift;;
+            post_args="$arg";;
         version|release|arch|build|install|files|pretrans|pre|post|posttrans)
             declare $section="$arg";;
         *)
