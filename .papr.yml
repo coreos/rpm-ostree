@@ -28,9 +28,6 @@ env:
 tests:
   - ci/ci-commitmessage-submodules.sh
   - ci/codestyle.sh
-  # updates-source mirrors are being flaky
-  - sed -i '/metalink=.*updates-released-source.*/ d' /etc/yum.repos.d/fedora-updates.repo
-  - sed -i '/SRPMS/ s/^#baseurl/baseurl/' /etc/yum.repos.d/fedora-updates.repo
   - ci/build-check.sh
   - make vmcheck
 
