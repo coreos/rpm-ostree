@@ -176,7 +176,6 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
       add_canonicalized_string_array (&builder, "repos", NULL, keyfile);
   }
   add_canonicalized_string_array (&builder, "instlangs", "instlangs-all", keyfile);
-  add_canonicalized_string_array (&builder, "ignore-scripts", NULL, keyfile);
 
   { gboolean documentation = TRUE;
     g_autofree char *value = g_key_file_get_value (keyfile, "tree", "documentation", NULL);
@@ -618,12 +617,8 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   }
 
   /* We could likely delete this, but I'm keeping a log message just in case */
-  const char *const *ignore_scripts = NULL;
-  if (g_variant_dict_lookup (self->spec->dict, "ignore-scripts", "^a&s", &ignore_scripts))
-    {
-      if (ignore_scripts && *ignore_scripts)
-        sd_journal_print (LOG_INFO, "ignore-scripts is no longer supported");
-    }
+  if (g_variant_dict_contains (self->spec->dict, "ignore-scripts"))
+    sd_journal_print (LOG_INFO, "ignore-scripts is no longer supported");
 
   return TRUE;
 }
