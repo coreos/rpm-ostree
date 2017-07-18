@@ -243,7 +243,7 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
   if (headerGet (hdr, rpmscript->progtag, &td, (HEADERGET_ALLOC|HEADERGET_ARGV)))
     args = td.data;
 
-  const char *interp = args && args[0] ? args[0] : "/bin/sh";
+  const char *interp = (args && args[0]) ? args[0] : "/bin/sh";
   /* Check for lua; see also https://github.com/projectatomic/rpm-ostree/issues/749 */
   static const char lua_builtin[] = "<lua>";
   if (g_strcmp0 (interp, lua_builtin) == 0)
