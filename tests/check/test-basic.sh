@@ -182,15 +182,17 @@ fi
 assert_file_has_content err.txt 'Unknown.*command'
 echo "ok error on unknown command"
 
-cat >rpmostree-gi.py <<EOF
+cat >test-rpmostree-gi <<EOF
+#!/usr/bin/python3
 import gi
 gi.require_version("RpmOstree", "1.0")
 from gi.repository import RpmOstree
 assert RpmOstree.get_basearch() == 'x86_64'
 assert RpmOstree.varsubst_basearch('http://example.com/foo/\${basearch}/bar') == 'http://example.com/foo/x86_64/bar'
 EOF
+chmod a+x test-rpmostree-gi
 case $(arch) in
-    x86_64) env GI_TYPELIB_PATH=$(pwd) python rpmostree-gi.py;;
+    x86_64) ./test-rpmostree-gi;;
     *) echo "Skipping RPM architecture test on $(arch)"
 esac
 echo "ok rpmostree arch"

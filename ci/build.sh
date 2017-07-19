@@ -19,8 +19,9 @@ fi
 
 install_builddeps rpm-ostree
 
+# Mostly dependencies for tests
 yum install -y ostree{,-devel,-grub2} createrepo_c /usr/bin/jq PyYAML clang \
-    libubsan libasan libtsan elfutils fuse sudo
+    libubsan libasan libtsan elfutils fuse sudo python3-gobject-base
 
 # create an unprivileged user for testing
 adduser testuser
