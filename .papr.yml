@@ -89,8 +89,9 @@ required: true
 host:
   distro: fedora/26/atomic
 
-# copy yum.repos.d to get any injected repos from the host, which
-# will point to a closer mirror
+# Copy yum.repos.d to get any injected repos from the host, which
+# will point to a closer mirror.  Note we substitute $releasever
+# since https://github.com/projectatomic/rpm-ostree/pull/875
 tests:
   - docker run --privileged --rm
     -e RPMOSTREE_COMPOSE_TEST_USE_HOST_REPO=1
@@ -98,6 +99,7 @@ tests:
     -v $(pwd):/srv/code -w /srv/code
     registry.fedoraproject.org/fedora:26 /bin/sh -c
     "cp -fv /etc/yum.repos.d{.host/*.repo,} &&
+     for x in /etc/yum.repos.d/*.repo; do sed -i -e 's,\$releasever,26,' \$x; done && \
      ./ci/build.sh && make install && ./tests/compose"
 
 artifacts:
