@@ -183,7 +183,7 @@ assert_file_has_content err.txt 'Unknown.*command'
 echo "ok error on unknown command"
 
 cat >test-rpmostree-gi <<EOF
-#!/usr/bin/python3
+#!/usr/bin/python2
 import gi
 gi.require_version("RpmOstree", "1.0")
 from gi.repository import RpmOstree
