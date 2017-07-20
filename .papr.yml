@@ -99,7 +99,7 @@ tests:
     -v $(pwd):/srv/code -w /srv/code
     registry.fedoraproject.org/fedora:26 /bin/sh -c
     "cp -fv /etc/yum.repos.d{.host/*.repo,} &&
-     for x in /etc/yum.repos.d/*.repo; do sed -i -e 's,\$releasever,26,' \$x; done && \
+     for x in /etc/yum.repos.d/*.repo; do sed -i -e 's,\$releasever,26,' \$x; done &&
      ./ci/build.sh && make install && ./tests/compose"
 
 artifacts:
