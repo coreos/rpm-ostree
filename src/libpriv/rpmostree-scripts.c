@@ -21,6 +21,7 @@
 #include "config.h"
 
 #include <gio/gio.h>
+#include <systemd/sd-journal.h>
 #include "rpmostree-output.h"
 #include "rpmostree-bwrap.h"
 #include <err.h>
@@ -348,5 +349,33 @@ rpmostree_pre_run_sync (DnfPackage    *pkg,
         return FALSE;
     }
 
+  return TRUE;
+}
+
+/* Ensure that we can at least execute /usr/bin/true inside the new root.
+ * See https://github.com/projectatomic/rpm-ostree/pull/888
+ *
+ * Currently at least on Fedora this will run through e.g. the dynamic linker
+ * and hence some bits of glibc.
+ *
+ * We could consider doing more here, perhaps even starting systemd in a
+ * volatile mode, but that could just as easily be a separate tool.
+ */
+gboolean
+rpmostree_deployment_sanitycheck (int           rootfs_fd,
+                                  GCancellable *cancellable,
+                                  GError      **error)
+{
+  GLNX_AUTO_PREFIX_ERROR("sanitycheck", error);
+  g_autoptr(RpmOstreeBwrap) bwrap =
+    rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_IMMUTABLE, error,
+                         "--ro-bind", "./usr/etc", "/etc",
+                         NULL);
+  rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/true", NULL);
+  if (!bwrap)
+    return FALSE;
+  if (!rpmostree_bwrap_run (bwrap, error))
+    return FALSE;
+  sd_journal_print (LOG_INFO, "sanitycheck(/usr/bin/true) successful");
   return TRUE;
 }

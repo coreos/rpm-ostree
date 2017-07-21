@@ -32,6 +32,7 @@
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-output.h"
+#include "rpmostree-scripts.h"
 #include "rpmostree-unpacker.h"
 
 #include "ostree-repo.h"
@@ -1015,6 +1016,21 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                    &new_deployment,
                                    cancellable, error))
     return FALSE;
+
+  /* Also do a sanitycheck even if there's no local mutation; it's basically free
+   * and might save someone in the future.
+   */
+  if (!self->final_revision)
+    {
+      g_autofree char *deployment_path = ostree_sysroot_get_deployment_dirpath (self->sysroot, new_deployment);
+      glnx_fd_close int deployment_dfd = -1;
+      if (!glnx_opendirat (ostree_sysroot_get_fd (self->sysroot), deployment_path, TRUE,
+                           &deployment_dfd, error))
+        return FALSE;
+
+      if (!rpmostree_deployment_sanitycheck (deployment_dfd, cancellable, error))
+        return FALSE;
+    }
 
   if (self->final_revision)
     {

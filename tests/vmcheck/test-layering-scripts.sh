@@ -94,4 +94,4 @@ if vm_rpmostree install rmrf 2>err.txt; then
 fi
 vm_cmd test -f /home/testuser/somedata -a -f /etc/fstab -a -f /tmp/sometmpfile -a -f /var/tmp/sometmpfile
 # This is the error today, we may improve it later
-assert_file_has_content err.txt 'renameat(usr/bin/systemctl): No such file or directory'
+assert_file_has_content err.txt 'error: sanitycheck: Executing bwrap(/usr/bin/true)'
