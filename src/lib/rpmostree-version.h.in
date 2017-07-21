@@ -31,7 +31,7 @@
 /**
  * RPM_OSTREE_YEAR_VERSION:
  *
- * Year version component (e.g. 2017 if %RPM_OSTREE_VERSION is 2017.2)
+ * Year version component (e.g. 2017 if %RPM_OSTREE_VERSION is 2017.9)
  *
  * Since: 2017.8
  */
@@ -40,7 +40,7 @@
 /**
  * RPM_OSTREE_RELEASE_VERSION:
  *
- * Release version component (e.g. 2 if %RPM_OSTREE_VERSION is 2017.2)
+ * Release version component (e.g. 9 if %RPM_OSTREE_VERSION is 2017.9)
  *
  * Since: 2017.8
  */

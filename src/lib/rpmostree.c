@@ -77,5 +77,5 @@ rpm_ostree_varsubst_basearch (const char *src, GError **error)
 gboolean
 rpm_ostree_check_version (guint required_year, guint required_release)
 {
-  return OSTREE_CHECK_VERSION(required_year, required_release);
+  return RPM_OSTREE_CHECK_VERSION(required_year, required_release);
 }
