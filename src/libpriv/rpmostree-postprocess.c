@@ -681,11 +681,8 @@ hardlink_recurse (int                src_dfd,
       if (!dent)
         break;
 
-      if (fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+      if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+        return FALSE;
 
       if (dent->d_type == DT_DIR)
         {

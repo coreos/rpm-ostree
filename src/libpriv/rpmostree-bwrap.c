@@ -326,18 +326,15 @@ rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
     /* Add the final NULL */
     g_ptr_array_add (bwrap->argv, NULL);
 
+    const char *errmsg = glnx_strjoina ("Executing bwrap(", bwrap->child_argv0, ")");
+    GLNX_AUTO_PREFIX_ERROR (errmsg, error);
+
     if (!g_spawn_sync (NULL, (char**)bwrap->argv->pdata, (char**) bwrap_env, G_SPAWN_SEARCH_PATH,
                        bwrap_child_setup, bwrap,
                        NULL, NULL, &estatus, error))
-      {
-        g_prefix_error (error, "Executing bwrap(%s): ", bwrap->child_argv0);
-        return FALSE;
-      }
+      return FALSE;
     if (!g_spawn_check_exit_status (estatus, error))
-      {
-        g_prefix_error (error, "Executing bwrap(%s): ", bwrap->child_argv0);
-        return FALSE;
-      }
+      return FALSE;
   }
 
   return TRUE;

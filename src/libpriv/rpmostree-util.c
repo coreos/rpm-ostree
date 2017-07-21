@@ -159,12 +159,8 @@ _rpmostree_util_update_checksum_from_file (GChecksum    *checksum,
   glnx_fd_close int fd = -1;
   g_autoptr(GMappedFile) mfile = NULL;
 
-  fd = openat (dfd, path, O_RDONLY | O_CLOEXEC);
-  if (fd < 0)
-    {
-      glnx_set_error_from_errno (error);
-      return FALSE;
-    }
+  if (!glnx_openat_rdonly (dfd, path, TRUE, &fd, error))
+    return FALSE;
 
   mfile = g_mapped_file_new_from_fd (fd, FALSE, error);
   if (!mfile)

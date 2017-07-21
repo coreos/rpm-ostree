@@ -336,9 +336,9 @@ rpmostree_unpacker_new_at (int dfd, const char *path,
                            RpmOstreeUnpackerFlags flags,
                            GError **error)
 {
-  glnx_fd_close int fd = openat (dfd, path, O_RDONLY | O_CLOEXEC | O_NOCTTY);
-  if (fd < 0)
-    return glnx_null_throw_errno_prefix (error, "openat(%s)", path);
+  glnx_fd_close int fd = -1;
+  if (!glnx_openat_rdonly (dfd, path, TRUE, &fd, error))
+    return FALSE;
 
   RpmOstreeUnpacker *ret = rpmostree_unpacker_new_fd (fd, pkg, flags, error);
   if (ret == NULL)
