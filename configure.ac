@@ -3,7 +3,10 @@ dnl To do a release, increment this number, commit, then submit it as a PR
 dnl to merge via homu.  After that, do `git pull origin && git reset --hard origin/master`.
 dnl Then use https://github.com/cgwalters/git-evtag to sign.
 dnl Then, git push origin v201X.XX
-AC_INIT([rpm-ostree], [2017.7], [walters@verbum.org])
+m4_define([year_version], [2017])
+m4_define([release_version], [7])
+m4_define([package_version], [year_version.release_version])
+AC_INIT([rpm-ostree], [package_version], [atomic-devel@projectatomic.io])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_MACRO_DIR([buildutil])
 AC_CONFIG_AUX_DIR([build-aux])
@@ -195,6 +198,7 @@ AC_CONFIG_FILES([
 Makefile
 api-doc/Makefile
 src/lib/rpm-ostree-1.pc
+src/lib/rpmostree-version.h
 ])
 AC_OUTPUT
 
