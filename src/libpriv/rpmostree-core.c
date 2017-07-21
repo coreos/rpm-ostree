@@ -1973,8 +1973,8 @@ break_single_hardlink_at (int           dfd,
 {
   struct stat stbuf;
 
-  if (fstatat (dfd, path, &stbuf, AT_SYMLINK_NOFOLLOW) != 0)
-    return glnx_throw_errno_prefix (error, "fstatat");
+  if (!glnx_fstatat (dfd, path, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+    return FALSE;
 
   if (!S_ISLNK (stbuf.st_mode) && !S_ISREG (stbuf.st_mode))
     return glnx_throw (error, "Unsupported type for entry '%s'", path);
@@ -2011,8 +2011,8 @@ break_single_hardlink_at (int           dfd,
           return FALSE;
         }
 
-      if (renameat (dfd, path_tmp, dfd, path) != 0)
-        return glnx_throw_errno_prefix (error, "rename(%s)", path);
+      if (!glnx_renameat (dfd, path_tmp, dfd, path, error))
+        return FALSE;
     }
 
   return TRUE;
@@ -2394,8 +2394,8 @@ get_package_metainfo (RpmOstreeContext *self,
                       GError **error)
 {
   glnx_fd_close int metadata_fd = -1;
-  if ((metadata_fd = openat (self->tmpdir_fd, path, O_RDONLY | O_CLOEXEC)) < 0)
-    return glnx_throw_errno_prefix (error, "open(%s)", path);
+  if (!glnx_openat_rdonly (self->tmpdir_fd, path, TRUE, &metadata_fd, error))
+    return FALSE;
 
   return rpmostree_unpacker_read_metainfo (metadata_fd, out_header, NULL,
                                            out_fi, error);

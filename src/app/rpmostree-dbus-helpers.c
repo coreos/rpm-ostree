@@ -790,9 +790,9 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
         g_ptr_array_add (repo_pkgs, g_strdup (*pkg));
       else
         {
-          glnx_fd_close int fd = open (*pkg, O_RDONLY | O_CLOEXEC);
-          if (fd < 0)
-            return glnx_throw_errno_prefix (error, "can't open '%s'", *pkg);
+          glnx_fd_close int fd = -1;
+          if (!glnx_openat_rdonly (AT_FDCWD, *pkg, TRUE, &fd, error))
+            return FALSE;
 
           int idx = g_unix_fd_list_append (fd_list, fd, error);
           if (idx < 0)

@@ -78,16 +78,14 @@ static gboolean
 start_daemon (GDBusConnection *connection,
               GError         **error)
 {
+  GLNX_AUTO_PREFIX_ERROR("Couldn't start daemon", error);
   rpm_ostree_daemon = g_initable_new (RPMOSTREED_TYPE_DAEMON,
                                       NULL, error,
                                       "connection", connection,
                                       "sysroot-path", opt_sysroot,
                                       NULL);
   if (!rpm_ostree_daemon)
-    {
-      g_prefix_error (error,  "Couldn't start daemon: ");
-      return FALSE;
-    }
+    return FALSE;
 
   return TRUE;
 }
