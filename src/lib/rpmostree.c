@@ -62,3 +62,20 @@ rpm_ostree_varsubst_basearch (const char *src, GError **error)
   g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (ctx);
   return _rpmostree_varsubst_string (src, varsubsts, error);
 }
+
+/**
+ * rpm_ostree_check_version:
+ * @required_year: Major/year required
+ * @required_release: Release version required
+ *
+ * The `RPM_OSTREE_CHECK_VERSION` macro operates at compile time, whereas
+ * this function operates at runtime.  The distinction is most useful for
+ * things that are dynamic, such as scripting language callers.
+ *
+ * Returns: %TRUE if current library has at least the requested version, %FALSE otherwise
+ */
+gboolean
+rpm_ostree_check_version (guint required_year, guint required_release)
+{
+  return RPM_OSTREE_CHECK_VERSION(required_year, required_release);
+}

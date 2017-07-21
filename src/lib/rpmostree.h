@@ -26,6 +26,7 @@
 
 #include <rpmostree-db.h>
 #include <rpmostree-package.h>
+#include <rpmostree-version.h>
 
 G_BEGIN_DECLS
 
@@ -34,5 +35,8 @@ char *rpm_ostree_get_basearch (void);
 
 _RPMOSTREE_EXTERN
 char *rpm_ostree_varsubst_basearch (const char *src, GError **error);
+
+_RPMOSTREE_EXTERN
+gboolean rpm_ostree_check_version (guint required_year, guint required_release);
 
 G_END_DECLS

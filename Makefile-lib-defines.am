@@ -20,6 +20,7 @@
 
 librpmostree_public_headers = \
 	src/lib/rpmostree.h \
+	src/lib/rpmostree-version.h \
 	src/lib/rpmostree-db.h \
 	src/lib/rpmostree-package.h \
 	$(NULL)
