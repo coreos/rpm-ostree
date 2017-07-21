@@ -1018,9 +1018,10 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
     return FALSE;
 
   /* Also do a sanitycheck even if there's no local mutation; it's basically free
-   * and might save someone in the future.
+   * and might save someone in the future.  The RPMOSTREE_SKIP_SANITYCHECK
+   * environment variable is just used by test-basic.sh currently.
    */
-  if (!self->final_revision)
+  if (!self->final_revision && !getenv ("RPMOSTREE_SKIP_SANITYCHECK"))
     {
       g_autofree char *deployment_path = ostree_sysroot_get_deployment_dirpath (self->sysroot, new_deployment);
       glnx_fd_close int deployment_dfd = -1;

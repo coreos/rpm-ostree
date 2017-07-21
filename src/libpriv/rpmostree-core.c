@@ -177,6 +177,9 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   }
   add_canonicalized_string_array (&builder, "instlangs", "instlangs-all", keyfile);
 
+  if (g_key_file_get_boolean (keyfile, "tree", "skip-sanity-check", NULL))
+    g_variant_builder_add (&builder, "{sv}", "skip-sanity-check", g_variant_new_boolean (TRUE));
+
   { gboolean documentation = TRUE;
     g_autofree char *value = g_key_file_get_value (keyfile, "tree", "documentation", NULL);
 
@@ -2987,7 +2990,11 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
       /* We want this to be the first error message if something went wrong
        * with a script; see https://github.com/projectatomic/rpm-ostree/pull/888
        */
-      if (!rpmostree_deployment_sanitycheck (tmprootfs_dfd, cancellable, error))
+
+      gboolean skip_sanity_check = FALSE;
+      g_variant_dict_lookup (self->spec->dict, "skip-sanity-check", "b", &skip_sanity_check);
+      if (!skip_sanity_check &&
+          !rpmostree_deployment_sanitycheck (tmprootfs_dfd, cancellable, error))
         return FALSE;
 
       if (have_systemctl)

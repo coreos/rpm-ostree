@@ -61,5 +61,6 @@ EOF
 
 # Tell rpm-ostree to connect to the session bus instead of system
 export RPMOSTREE_USE_SESSION_BUS=1
+export RPMOSTREE_SKIP_SANITYCHECK=1
 
 exec dbus-run-session --config-file=${test_tmpdir}/session.conf $@
