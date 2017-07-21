@@ -327,7 +327,7 @@ rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
     g_ptr_array_add (bwrap->argv, NULL);
 
     const char *errmsg = glnx_strjoina ("Executing bwrap(", bwrap->child_argv0, ")");
-    GLNX_AUTO_PREFIX_ERROR(errmsg, error);
+    GLNX_AUTO_PREFIX_ERROR (errmsg, error);
 
     if (!g_spawn_sync (NULL, (char**)bwrap->argv->pdata, (char**) bwrap_env, G_SPAWN_SEARCH_PATH,
                        bwrap_child_setup, bwrap,
