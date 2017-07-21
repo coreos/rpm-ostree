@@ -10,6 +10,10 @@ AC_INIT([rpm-ostree], [package_version], [atomic-devel@projectatomic.io])
 AC_CONFIG_HEADER([config.h])
 AC_CONFIG_MACRO_DIR([buildutil])
 AC_CONFIG_AUX_DIR([build-aux])
+dnl Versioning information
+AC_SUBST([YEAR_VERSION], [year_version])
+AC_SUBST([RELEASE_VERSION], [release_version])
+AC_SUBST([PACKAGE_VERSION], [package_version])
 
 AM_INIT_AUTOMAKE([1.11 -Wno-portability foreign no-define tar-ustar no-dist-gzip dist-xz subdir-objects])
 AM_MAINTAINER_MODE([enable])

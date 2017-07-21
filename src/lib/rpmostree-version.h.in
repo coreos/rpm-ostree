@@ -89,5 +89,3 @@
 #define RPM_OSTREE_CHECK_VERSION(year,release)   \
         (RPM_OSTREE_YEAR_VERSION > (year) || \
          (RPM_OSTREE_YEAR_VERSION == (year) && RPM_OSTREE_RELEASE_VERSION >= (release)))
-
-gboolean rpm_ostree_check_version (guint required_year, guint required_release);
