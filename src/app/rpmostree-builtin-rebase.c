@@ -33,9 +33,13 @@
 static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_skip_purge;
+static char * opt_branch;
+static char * opt_remote;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+  { "branch", 'b', 0, G_OPTION_ARG_STRING, &opt_branch, "Rebase to branch BRANCH from the current remote", "BRANCH" },
+  { "remote", 'm', 0, G_OPTION_ARG_STRING, &opt_remote, "Reusing the same branch name, rebase to REMOTE", "REMOTE" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after rebase is finished", NULL },
   { "skip-purge", 0, 0, G_OPTION_ARG_NONE, &opt_skip_purge, "Keep previous refspec after rebase", NULL },
   { NULL }
@@ -49,6 +53,7 @@ rpmostree_builtin_rebase (int             argc,
                           GError        **error)
 {
   const char *new_provided_refspec;
+  g_autofree char *new_refspec_owned = NULL;
   const char *revision = NULL;
 
   /* forced blank for now */
@@ -74,20 +79,45 @@ rpmostree_builtin_rebase (int             argc,
                                        error))
     return EXIT_FAILURE;
 
-  if (argc < 2 || argc > 3)
+  if (argc > 3)
     {
-      rpmostree_usage_error (context, "Too few or too many arguments", error);
+      rpmostree_usage_error (context, "Too many arguments", error);
       return EXIT_FAILURE;
     }
-
-  new_provided_refspec = argv[1];
-
-  if (argc == 3)
-    revision = argv[2];
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
     return EXIT_FAILURE;
+
+  if (argc < 2 && !(opt_branch || opt_remote))
+    {
+      return rpmostree_usage_error (context, "Must specify refspec, or -b branch or -r remote", error), EXIT_FAILURE;
+    }
+  else if (argc >= 2)
+    {
+      new_provided_refspec = argv[1];
+      if (argc == 3)
+        revision = argv[2];
+    }
+  else
+    {
+      GVariant *default_deploy = rpmostree_os_get_default_deployment (os_proxy);
+      g_assert (default_deploy);
+      g_autoptr(GVariantDict) dict = g_variant_dict_new (default_deploy);
+      const char *origin_refspec;
+      g_autofree char *remote = NULL;
+      g_autofree char *branch = NULL;
+
+      if (!g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
+        return glnx_throw (error, "No origin"), EXIT_FAILURE;
+
+      if (!ostree_parse_refspec (origin_refspec, &remote, &branch, error))
+        return EXIT_FAILURE;
+
+      const char *target_remote = opt_remote ?: remote;
+      const char *target_branch = opt_branch ?: branch;
+      new_provided_refspec = new_refspec_owned = g_strconcat (target_remote ?: "", ":", target_branch, NULL);
+    }
 
   g_autoptr(GVariant) options =
     rpmostree_get_options_variant (opt_reboot,

@@ -24,7 +24,7 @@ export RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK=yes
 
 ensure_dbus
 
-echo "1..23"
+echo "1..24"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -157,6 +157,18 @@ rpm-ostree rebase --os=testos another-branch
 assert_status_jq '.deployments[0].origin == "another-branch"'
 echo "ok rebase from local branch to local branch"
 
+rpm-ostree rebase --skip-purge --os=testos testos:testos/buildmaster/x86_64-runtime
+assert_status_jq '.deployments[0].origin == "testos:testos/buildmaster/x86_64-runtime"'
+ostree --repo=${test_tmpdir}/testos-repo commit --add-metadata-string version=1.0.2 -b testos/stable/x86_64-runtime -s "Build" \
+       --tree=ref=testos/buildmaster/x86_64-runtime
+rpm-ostree rebase --skip-purge --os=testos -b testos/stable/x86_64-runtime
+assert_status_jq '.deployments[0].origin == "testos:testos/stable/x86_64-runtime"'
+ostree --repo=${test_tmpdir}/sysroot/ostree/repo commit -b localbranch --tree=ref=testos:testos/stable/x86_64-runtime
+rpm-ostree rebase --skip-purge --os=testos -m '' -b localbranch
+assert_status_jq '.deployments[0].origin == "localbranch"'
+echo "ok rebase new syntax"
+
+rpm-ostree rebase --os=testos :another-branch
 originpath=$(ostree admin --sysroot=sysroot --print-current-dir).origin
 echo "unconfigured-state=Access to TestOS requires ONE BILLION DOLLARS" >> ${originpath}
 rpm-ostree reload
