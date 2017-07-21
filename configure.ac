@@ -203,6 +203,7 @@ echo "
 
     nts name:	        $enable_new_name
     compose tooling:	$enable_compose_tooling
+    introspection:      $found_introspection
     bubblewrap:         $with_bubblewrap
     gtk-doc:            $enable_gtk_doc
 "

@@ -790,7 +790,7 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!corectx)
     goto out;
 
-  varsubsts = rpmostree_context_get_varsubsts (corectx);
+  varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_hif (corectx));
 
   treefile_parser = json_parser_new ();
   if (!json_parser_load_from_file (treefile_parser,

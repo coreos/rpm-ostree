@@ -24,7 +24,7 @@ export RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK=yes
 
 ensure_dbus
 
-echo "1..21"
+echo "1..22"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -181,3 +181,18 @@ if rpm-ostree nosuchcommand --nosuchoption 2>err.txt; then
 fi
 assert_file_has_content err.txt 'Unknown.*command'
 echo "ok error on unknown command"
+
+cat >test-rpmostree-gi <<EOF
+#!/usr/bin/python2
+import gi
+gi.require_version("RpmOstree", "1.0")
+from gi.repository import RpmOstree
+assert RpmOstree.get_basearch() == 'x86_64'
+assert RpmOstree.varsubst_basearch('http://example.com/foo/\${basearch}/bar') == 'http://example.com/foo/x86_64/bar'
+EOF
+chmod a+x test-rpmostree-gi
+case $(arch) in
+    x86_64) ./test-rpmostree-gi;;
+    *) echo "Skipping RPM architecture test on $(arch)"
+esac
+echo "ok rpmostree arch"
