@@ -338,6 +338,13 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
   g_key_file_set_string (treespec, "tree", "ref", self->ref);
   g_key_file_set_string_list (treespec, "tree", "packages", (const char *const*)packages, g_strv_length (packages));
+  { const char *releasever;
+    if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "releasever",
+                                                                &releasever, error))
+      return FALSE;
+    if (releasever)
+      g_key_file_set_string (treespec, "tree", "releasever", releasever);
+  }
 
   /* Some awful code to translate between JSON and GKeyFile */
   if (json_object_has_member (treedata, "install-langs"))
@@ -379,7 +386,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     g_autoptr(RpmOstreeTreespec) treespec_value = rpmostree_treespec_new_from_keyfile (treespec, &tmp_error);
     g_assert_no_error (tmp_error);
 
-    if (!rpmostree_context_setup (ctx, gs_file_get_path_cached (yumroot), "/", treespec_value,
+    if (!rpmostree_context_setup (ctx, gs_file_get_path_cached (yumroot), NULL, treespec_value,
                                   cancellable, error))
       return FALSE;
   }
