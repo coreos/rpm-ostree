@@ -1095,9 +1095,9 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
       const char *usrlibfiletmp = glnx_strjoina ("usr/lib/", file, ".tmp");
 
       /* Retain the current copies in /etc as backups */
-      if (renameat (rootfs_dfd, usretcfile, rootfs_dfd,
-                    glnx_strjoina (usretcfile, ".rpmostreesave")) < 0)
-        return glnx_throw_errno_prefix (error, "renameat");
+      if (!glnx_renameat (rootfs_dfd, usretcfile, rootfs_dfd,
+                          glnx_strjoina (usretcfile, ".rpmostreesave"), error))
+        return FALSE;
 
       /* Copy /usr/lib/{passwd,group} -> /usr/etc (breaking hardlinks) */
       if (!glnx_file_copy_at (rootfs_dfd, usrlibfile, NULL,
@@ -1111,8 +1111,8 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
                               GLNX_FILE_COPY_OVERWRITE, cancellable, error))
         return FALSE;
 
-      if (renameat (rootfs_dfd, usrlibfiletmp, rootfs_dfd, usrlibfile) < 0)
-        return glnx_throw_errno_prefix (error, "renameat");
+      if (!glnx_renameat (rootfs_dfd, usrlibfiletmp, rootfs_dfd, usrlibfile, error))
+        return FALSE;
     }
 
   /* And break hardlinks for the shadow files, since we don't have
@@ -1136,8 +1136,8 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
                               rootfs_dfd, tmp, GLNX_FILE_COPY_OVERWRITE,
                               cancellable, error))
         return FALSE;
-      if (renameat (rootfs_dfd, tmp, rootfs_dfd, src) < 0)
-        return glnx_throw_errno_prefix (error, "renameat");
+      if (!glnx_renameat (rootfs_dfd, tmp, rootfs_dfd, src, error))
+        return FALSE;
     }
 
   return TRUE;
