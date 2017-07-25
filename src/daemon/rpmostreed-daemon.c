@@ -390,12 +390,11 @@ render_systemd_status (RpmostreedDaemon *self)
     sd_notifyf (0, "STATUS=clients=%u; idle", g_hash_table_size (self->bus_clients));
 }
 
-void
-rpmostreed_daemon_add_client (RpmostreedDaemon *self,
-                              const char       *client)
+gboolean
+rpmostreed_get_client_uid (RpmostreedDaemon *self,
+                           const char       *client,
+                           uid_t            *out_uid)
 {
-  if (g_hash_table_lookup (self->bus_clients, client))
-    return;
   g_autoptr(GError) local_error = NULL;
   g_autoptr(GVariant) uidcall = g_dbus_proxy_call_sync (self->bus_proxy,
                                                         "GetConnectionUnixUser",
@@ -406,8 +405,19 @@ rpmostreed_daemon_add_client (RpmostreedDaemon *self,
     {
       sd_journal_print (LOG_WARNING, "Failed to GetConnectionUnixUser for client %s: %s",
                         client, local_error->message);
-      g_clear_error (&local_error);
+      return FALSE;
     }
+
+  g_variant_get (uidcall, "(u)", out_uid);
+  return TRUE;
+}
+
+void
+rpmostreed_daemon_add_client (RpmostreedDaemon *self,
+                              const char       *client)
+{
+  if (g_hash_table_lookup (self->bus_clients, client))
+    return;
 
   struct RpmOstreeClient *clientdata = g_new0 (struct RpmOstreeClient, 1);
   clientdata->address = g_strdup (client);
@@ -422,11 +432,9 @@ rpmostreed_daemon_add_client (RpmostreedDaemon *self,
                                         on_name_owner_changed,
                                         g_object_ref (self),
                                         g_object_unref);
-  if (uidcall)
-    {
-      g_variant_get (uidcall, "(u)", &clientdata->uid);
-      clientdata->uid_valid = TRUE;
-    }
+
+  if (rpmostreed_get_client_uid (self, client, &clientdata->uid))
+    clientdata->uid_valid = TRUE;
 
   g_hash_table_insert (self->bus_clients, (char*)clientdata->address, clientdata);
   g_autofree char *clientstr = rpmostree_client_to_string (clientdata);
