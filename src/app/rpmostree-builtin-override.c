@@ -24,14 +24,11 @@
 #include "rpmostree-override-builtins.h"
 
 static RpmOstreeCommand override_subcommands[] = {
-  { "replace", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
-               RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+  { "replace", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
     rpmostree_override_builtin_replace },
-  { "remove", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
-              RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+  { "remove", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
     rpmostree_override_builtin_remove },
-  { "reset", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
-             RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+  { "reset", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
     rpmostree_override_builtin_reset },
   { NULL, 0, NULL }
 };

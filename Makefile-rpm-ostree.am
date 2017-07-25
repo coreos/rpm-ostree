@@ -50,6 +50,8 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-ex-builtin-unpack.c \
 	src/app/rpmostree-libbuiltin.c \
 	src/app/rpmostree-libbuiltin.h \
+	src/app/rpmostree-polkit-agent.c \
+	src/app/rpmostree-polkit-agent.h \
 	$(NULL)
 
 if BUILDOPT_COMPOSE_TOOLING
