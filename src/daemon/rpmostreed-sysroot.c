@@ -32,9 +32,12 @@
 
 #include "rpmostree-output.h"
 
+#include <err.h>
 #include "libglnx.h"
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
+#include <systemd/sd-login.h>
+#include <systemd/sd-journal.h>
 
 /**
  * SECTION: sysroot
@@ -61,6 +64,8 @@ struct _RpmostreedSysroot {
   OstreeRepo *repo;
   struct stat repo_last_stat;
   RpmostreedTransactionMonitor *transaction_monitor;
+  PolkitAuthority *authority;
+  gboolean on_session_bus;
 
   GHashTable *os_interfaces;
   GHashTable *osexperimental_interfaces;
@@ -648,6 +653,7 @@ sysroot_dispose (GObject *object)
   g_hash_table_remove_all (self->osexperimental_interfaces);
 
   g_clear_object (&self->transaction_monitor);
+  g_clear_object (&self->authority);
 
   G_OBJECT_CLASS (rpmostreed_sysroot_parent_class)->dispose (object);
 }
@@ -689,6 +695,20 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
 
   self->transaction_monitor = rpmostreed_transaction_monitor_new ();
 
+  if (g_getenv ("RPMOSTREE_USE_SESSION_BUS") != NULL)
+    self->on_session_bus = TRUE;
+
+  /* Only use polkit when running as root on system bus; self-tests don't need it */
+  if (!self->on_session_bus)
+    {
+      g_autoptr(GError) local_error = NULL;
+      self->authority = polkit_authority_get_sync (NULL, &local_error);
+      if (self->authority == NULL)
+        {
+          errx (EXIT_FAILURE, "Can't get polkit authority: %s", local_error->message);
+        }
+    }
+
   rpmostree_output_set_callback (sysroot_output_cb, self);
 }
 
@@ -697,8 +717,6 @@ sysroot_constructed (GObject *object)
 {
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
   GError *local_error = NULL;
-
-  /* TODO Integrate with PolicyKit via the "g-authorize-method" signal. */
 
   g_object_bind_property_full (self->transaction_monitor,
                                "active-transaction",
@@ -732,10 +750,92 @@ sysroot_constructed (GObject *object)
   G_OBJECT_CLASS (rpmostreed_sysroot_parent_class)->constructed (object);
 }
 
+static gboolean
+sysroot_authorize_method (GDBusInterfaceSkeleton *interface,
+                          GDBusMethodInvocation  *invocation)
+{
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (interface);
+  const gchar *method_name = g_dbus_method_invocation_get_method_name (invocation);
+  const gchar *sender = g_dbus_method_invocation_get_sender (invocation);
+  gboolean authorized = FALSE;
+  const char *action = NULL;
+
+  if (self->on_session_bus)
+    {
+      /* The daemon is on the session bus, running self tests */
+      authorized = TRUE;
+    }
+  else if (g_strcmp0 (method_name, "GetOS") == 0)
+    {
+      /* GetOS() is always allowed */
+      authorized = TRUE;
+    }
+  else if (g_strcmp0 (method_name, "RegisterClient") == 0 ||
+           g_strcmp0 (method_name, "UnregisterClient") == 0)
+    {
+      action = "org.projectatomic.rpmostree1.client-management";
+
+      /* automatically allow register/unregister for users with active sessions */
+      uid_t uid;
+      if (rpmostreed_get_client_uid (rpmostreed_daemon_get (), sender, &uid))
+        {
+          g_autofree char *state = NULL;
+          if (sd_uid_get_state (uid, &state) >= 0)
+            {
+              if (g_strcmp0 (state, "active") == 0)
+                {
+                  authorized = TRUE;
+                  sd_journal_print (LOG_INFO, "Allowing active client %s (uid %d)",
+                                    sender, uid);
+                }
+            }
+          else
+            {
+              sd_journal_print (LOG_WARNING, "Failed to get state for uid %d", uid);
+            }
+        }
+    }
+
+  /* only ask polkit if we didn't already authorize it */
+  if (!authorized && action != NULL)
+    {
+      glnx_unref_object PolkitSubject *subject = polkit_system_bus_name_new (sender);
+      g_autoptr(GError) local_error = NULL;
+
+      glnx_unref_object PolkitAuthorizationResult *result =
+        polkit_authority_check_authorization_sync (self->authority, subject,
+                                                   action, NULL,
+                                                   POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION,
+                                                   NULL, &local_error);
+      if (result == NULL)
+        {
+          g_dbus_method_invocation_return_error (invocation, G_DBUS_ERROR,
+                                                 G_DBUS_ERROR_FAILED,
+                                                 "Authorization error: %s",
+                                                 local_error->message);
+          return FALSE;
+        }
+
+      authorized = polkit_authorization_result_get_is_authorized (result);
+    }
+
+  if (!authorized)
+    {
+      g_dbus_method_invocation_return_error (invocation,
+                                             G_DBUS_ERROR,
+                                             G_DBUS_ERROR_ACCESS_DENIED,
+                                             "rpmostreed Sysroot operation %s not allowed for user",
+                                             method_name);
+    }
+
+  return authorized;
+}
+
 static void
 rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
 {
   GObjectClass *gobject_class;
+  GDBusInterfaceSkeletonClass *gdbus_interface_skeleton_class;
 
   gobject_class = G_OBJECT_CLASS (klass);
   gobject_class->dispose = sysroot_dispose;
@@ -748,6 +848,9 @@ rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
                                    0,
                                    NULL, NULL, NULL,
                                    G_TYPE_NONE, 0);
+
+  gdbus_interface_skeleton_class = G_DBUS_INTERFACE_SKELETON_CLASS (klass);
+  gdbus_interface_skeleton_class->g_authorize_method = sysroot_authorize_method;
 }
 
 gboolean
@@ -878,6 +981,18 @@ OstreeRepo *
 rpmostreed_sysroot_get_repo (RpmostreedSysroot *self)
 {
   return self->repo;
+}
+
+PolkitAuthority *
+rpmostreed_sysroot_get_polkit_authority (RpmostreedSysroot *self)
+{
+  return self->authority;
+}
+
+gboolean
+rpmostreed_sysroot_is_on_session_bus (RpmostreedSysroot *self)
+{
+  return self->on_session_bus;
 }
 
 /**

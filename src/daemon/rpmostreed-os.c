@@ -19,9 +19,7 @@
 #include "config.h"
 #include "ostree.h"
 
-#include <err.h>
 #include <libglnx.h>
-#include <polkit/polkit.h>
 
 #include "rpmostreed-sysroot.h"
 #include "rpmostreed-daemon.h"
@@ -42,7 +40,6 @@ typedef struct _RpmostreedOSClass RpmostreedOSClass;
 struct _RpmostreedOS
 {
   RPMOSTreeOSSkeleton parent_instance;
-  PolkitAuthority *authority;
   RpmostreedTransactionMonitor *transaction_monitor;
   gboolean on_session_bus;
   guint signal_id;
@@ -89,14 +86,15 @@ static gboolean
 os_authorize_method (GDBusInterfaceSkeleton *interface,
                      GDBusMethodInvocation  *invocation)
 {
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
+  RpmostreedSysroot *sysroot = rpmostreed_sysroot_get ();
+  PolkitAuthority *authority = rpmostreed_sysroot_get_polkit_authority (sysroot);
   const gchar *method_name = g_dbus_method_invocation_get_method_name (invocation);
   const gchar *sender = g_dbus_method_invocation_get_sender (invocation);
   GVariant *parameters = g_dbus_method_invocation_get_parameters (invocation);
   g_autoptr(GPtrArray) actions = g_ptr_array_new ();
   gboolean authorized = FALSE;
 
-  if (self->on_session_bus)
+  if (rpmostreed_sysroot_is_on_session_bus (sysroot))
     {
       /* The daemon is on the session bus, running self tests */
       authorized = TRUE;
@@ -203,7 +201,7 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
       glnx_unref_object PolkitAuthorizationResult *result = NULL;
       g_autoptr(GError) error = NULL;
 
-      result = polkit_authority_check_authorization_sync (self->authority, subject,
+      result = polkit_authority_check_authorization_sync (authority, subject,
                                                           action, NULL,
                                                           POLKIT_CHECK_AUTHORIZATION_FLAGS_ALLOW_USER_INTERACTION,
                                                           NULL, &error);
@@ -243,7 +241,6 @@ os_dispose (GObject *object)
                                    object_path, object);
     }
 
-  g_clear_object (&self->authority);
   g_clear_object (&self->transaction_monitor);
 
   if (self->signal_id > 0)
@@ -1561,20 +1558,6 @@ rpmostreed_os_new (OstreeSysroot *sysroot,
 
   /* FIXME Make this a construct-only property? */
   obj->transaction_monitor = g_object_ref (monitor);
-
-  if (g_getenv ("RPMOSTREE_USE_SESSION_BUS") != NULL)
-    obj->on_session_bus = TRUE;
-
-  /* Only use polkit when running as root on system bus; self-tests don't need it */
-  if (!obj->on_session_bus)
-    {
-      g_autoptr(GError) local_error = NULL;
-      obj->authority = polkit_authority_get_sync (NULL, &local_error);
-      if (obj->authority == NULL)
-        {
-          errx (1, "Can't get polkit authority: %s", local_error->message);
-        }
-    }
 
   /* FIXME - use GInitable */
   { g_autoptr(GError) local_error = NULL;
