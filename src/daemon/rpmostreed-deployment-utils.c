@@ -127,6 +127,23 @@ rpmostreed_deployment_generate_blank_variant (void)
 }
 
 static void
+variant_add_metadata_attribute (GVariantDict *dict,
+                                const gchar  *attribute,
+                                const gchar  *new_attribute,
+                                GVariant     *commit)
+{
+  g_autofree gchar *attribute_string_value = NULL;
+  g_autoptr(GVariant) metadata = g_variant_get_child_value (commit, 0);
+
+  if (metadata != NULL)
+    {
+      g_variant_lookup (metadata, attribute, "s", &attribute_string_value);
+      if (attribute_string_value != NULL)
+        g_variant_dict_insert (dict, new_attribute ?: attribute, "s", attribute_string_value);
+    }
+}
+
+static void
 variant_add_commit_details (GVariantDict *dict,
                             const char *prefix,
                             GVariant     *commit)
@@ -227,9 +244,14 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
 
       g_variant_dict_insert (&dict, "base-checksum", "s", base_checksum);
       variant_add_commit_details (&dict, "base-", base_commit);
+      /* for layered commits, check if their base commit has end of life attribute */
+      variant_add_metadata_attribute (&dict, OSTREE_COMMIT_META_KEY_ENDOFLIFE, "endoflife", base_commit);
     }
   else
-    base_checksum = g_strdup (csum);
+    {
+      base_checksum = g_strdup (csum);
+      variant_add_metadata_attribute (&dict, OSTREE_COMMIT_META_KEY_ENDOFLIFE, "endoflife", commit);
+    }
 
   sigs = rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &gpg_enabled);
   variant_add_commit_details (&dict, NULL, commit);

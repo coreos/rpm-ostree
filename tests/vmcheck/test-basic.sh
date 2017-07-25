@@ -59,3 +59,15 @@ echo "ok status doesn't require root"
 # Also check that we can do status as non-root non-active
 vm_cmd runuser -u bin rpm-ostree status
 echo "ok status doesn't require active PAM session"
+
+# Add metadata string containing EnfOfLife attribtue
+META_ENDOFLIFE_MESSAGE="this_is_a_test"
+commit=$(vm_cmd ostree commit -b vmcheck \
+            --tree=ref=vmcheck --add-metadata-string=ostree.endoflife=$META_ENDOFLIFE_MESSAGE)
+vm_rpmostree upgrade
+vm_assert_status_jq ".deployments[0][\"endoflife\"] == \"${META_ENDOFLIFE_MESSAGE}\""
+
+# Build a layered commit and check if EndOfLife still present
+vm_build_rpm foo
+vm_rpmostree install foo
+vm_assert_status_jq ".deployments[0][\"endoflife\"] == \"${META_ENDOFLIFE_MESSAGE}\""
