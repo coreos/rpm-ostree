@@ -45,7 +45,9 @@ else
     # then do this in the VM
     set -x
     ostree admin unlock || :
+    # only copy /usr and /etc
     rsync -rlv /var/roothome/sync/insttree/usr/ /usr/
+    rsync -rlv /var/roothome/sync/insttree/etc/ /etc/
     restorecon -v /usr/bin/rpm-ostree
     restorecon -v /usr/libexec/rpm-ostreed
     mkdir -p /etc/systemd/system/rpm-ostreed.service.d

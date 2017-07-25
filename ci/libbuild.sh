@@ -30,7 +30,5 @@ install_builddeps() {
 
     # builddeps+runtime deps
     yum install -y $pkg
-    yum install -y polkit-devel
-
     rpm -e $pkg
 }
