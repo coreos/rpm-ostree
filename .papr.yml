@@ -104,3 +104,30 @@ tests:
 
 artifacts:
   - compose.log
+
+---
+
+branches:
+  - master
+  - auto
+  - try
+
+cluster:
+  hosts:
+    - name: testnode
+      distro: fedora/26/atomic
+  container:
+    image: registry.fedoraproject.org/fedora:26
+
+context: f26-sanity
+
+packages:
+  - ansible
+  - git
+  - rsync
+
+tests:
+  - git clone https://github.com/projectatomic/atomic-host-tests
+  - ci/build.sh
+  - make vmoverlay HOSTS=testnode
+  - cd atomic-host-tests && ./.test_director
