@@ -3028,6 +3028,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
       if (!run_all_transfiletriggers (self, ordering_ts, tmprootfs_dfd,
                                       cancellable, error))
+        return FALSE;
 
       /* We want this to be the first error message if something went wrong
        * with a script; see https://github.com/projectatomic/rpm-ostree/pull/888
