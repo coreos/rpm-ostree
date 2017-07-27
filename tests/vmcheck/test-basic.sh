@@ -38,9 +38,11 @@ echo "ok empty pkg arrays in status json"
 vm_cmd getent passwd bin
 
 # Make sure we can't layer as non-root
-if vm_cmd "runuser -u bin rpm-ostree pkg-add foo-1.0"; then
+vm_build_rpm foo
+if vm_cmd "runuser -u bin rpm-ostree pkg-add foo" &> err.txt; then
     assert_not_reached "Was able to install a package as non-root!"
 fi
+assert_file_has_content err.txt 'PkgChange not allowed for user'
 echo "ok layering requires root"
 
 # Assert that we can do status as non-root
