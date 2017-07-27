@@ -78,9 +78,6 @@ vmoverlay:
 	      ./tests/vmcheck/overlay.sh; \
 	fi
 
-vmshell: vmsync
-	ssh -F ssh-config vmcheck
-
 # set up test environment to somewhat resemble uninstalled tests
 vmcheck: vmoverlay
 	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) PYTHONUNBUFFERED=1 \
