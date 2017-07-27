@@ -39,7 +39,7 @@ vm_setup() {
 vm_rsync() {
   if ! test -f .vagrant/using_sshfs; then
     pushd ${topsrcdir}
-    rsyncopts="ssh -o User=root"
+    local rsyncopts="ssh -o User=root"
     if [ -f ssh-config ]; then
       rsyncopts="$rsyncopts -F ssh-config"
     fi
@@ -53,6 +53,19 @@ vm_rsync() {
   fi
 }
 
+# run command in vm as user
+# - $1    username
+# - $@    command to run
+vm_cmd_as() {
+  local user=$1; shift
+  # don't reuse root's ControlPath
+  local sshopts="-o User=$user"
+  if [ -f "${topsrcdir}/ssh-config" ]; then
+    sshopts="$sshopts -F ${topsrcdir}/ssh-config"
+  fi
+  ssh $sshopts $VM "$@"
+}
+
 # run command in vm
 # - $@    command to run
 vm_cmd() {
@@ -61,9 +74,9 @@ vm_cmd() {
 
 # Copy argument (usually shell script) to VM, execute it there
 vm_cmdfile() {
-    bin=$1
+    local bin=$1
     chmod a+x ${bin}
-    bn=$(basename ${bin})
+    local bn=$(basename ${bin})
     $SCP $1 $VM:/root/${bn}
     $SSH /root/${bn}
 }
@@ -77,14 +90,14 @@ vm_clean_caches() {
 # run rpm-ostree in vm
 # - $@    args
 vm_rpmostree() {
-    $SSH env ASAN_OPTIONS=detect_leaks=false rpm-ostree "$@"
+    vm_cmd env ASAN_OPTIONS=detect_leaks=false rpm-ostree "$@"
 }
 
 # copy files to a directory in the vm
 # - $1    target directory
 # - $2..  files & dirs to copy
 vm_send() {
-  dir=$1; shift
+  local dir=$1; shift
   vm_cmd mkdir -p $dir
   $SCP -r "$@" $VM:$dir
 }
@@ -118,8 +131,8 @@ EOF
 # - $1    timeout in second (optional)
 # - $2    previous bootid (optional)
 vm_ssh_wait() {
-  timeout=${1:-0}; shift
-  old_bootid=${1:-}; shift
+  local timeout=${1:-0}; shift
+  local old_bootid=${1:-}; shift
   if ! vm_cmd true; then
      echo "Failed to log into VM, retrying with debug:"
      $SSH -o LogLevel=debug true || true
@@ -151,7 +164,7 @@ vm_get_boot_id() {
 # Run a command in the VM that will cause a reboot
 vm_reboot_cmd() {
     vm_cmd sync
-    bootid=$(vm_get_boot_id 2>/dev/null)
+    local bootid=$(vm_get_boot_id 2>/dev/null)
     vm_cmd $@ || :
     vm_ssh_wait 120 $bootid
 }
@@ -185,8 +198,8 @@ vm_has_packages() {
 # - $1   index of deployment (or -1 for booted)
 # - $2   key to retrieve
 vm_get_deployment_info() {
-  idx=$1
-  key=$2
+  local idx=$1
+  local key=$2
   vm_rpmostree status --json | \
     python -c "
 import sys, json
@@ -215,10 +228,10 @@ if \"$key\" in depl:
 # retrieve the deployment root
 # - $1   index of deployment
 vm_get_deployment_root() {
-  idx=$1
-  csum=$(vm_get_deployment_info $idx checksum)
-  serial=$(vm_get_deployment_info $idx serial)
-  osname=$(vm_get_deployment_info $idx osname)
+  local idx=$1
+  local csum=$(vm_get_deployment_info $idx checksum)
+  local serial=$(vm_get_deployment_info $idx serial)
+  local osname=$(vm_get_deployment_info $idx osname)
   echo /ostree/deploy/$osname/deploy/$csum.$serial
 }
 
@@ -245,7 +258,7 @@ vm_get_local_packages() {
 # check that the packages are currently layered
 # - $@    packages to check for
 vm_has_layered_packages() {
-  pkgs=$(vm_get_layered_packages)
+  local pkgs=$(vm_get_layered_packages)
   for pkg in "$@"; do
     if [[ " $pkgs " != *$pkg* ]]; then
         return 1
@@ -256,7 +269,7 @@ vm_has_layered_packages() {
 # check that the packages are currently requested
 # - $@    packages to check for
 vm_has_requested_packages() {
-  pkgs=$(vm_get_requested_packages)
+  local pkgs=$(vm_get_requested_packages)
   for pkg in "$@"; do
     if [[ " $pkgs " != *$pkg* ]]; then
         return 1
@@ -265,7 +278,7 @@ vm_has_requested_packages() {
 }
 
 vm_has_local_packages() {
-  pkgs=$(vm_get_local_packages)
+  local pkgs=$(vm_get_local_packages)
   for pkg in "$@"; do
     if [[ " $pkgs " != *$pkg* ]]; then
         return 1
@@ -287,8 +300,8 @@ vm_get_booted_csum() {
 # - $1    package to check for
 # - $2    either "present" or "absent"
 vm_assert_layered_pkg() {
-  pkg=$1; shift
-  policy=$1; shift
+  local pkg=$1; shift
+  local policy=$1; shift
 
   set +e
   vm_has_packages $pkg;         pkg_in_rpmdb=$?

@@ -38,7 +38,7 @@ if test -z "${INSIDE_VM:-}"; then
     make install DESTDIR=${VMCHECK_INSTTREE}
     vm_rsync
 
-    $SSH "env INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/sync.sh"
+    vm_cmd env INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/sync.sh
     exit 0
 else
 
