@@ -64,3 +64,8 @@ rpmostree_pre_run_sync (DnfPackage    *pkg,
                         int            rootfs_fd,
                         GCancellable  *cancellable,
                         GError       **error);
+
+gboolean
+rpmostree_deployment_sanitycheck (int           rootfs_fd,
+                                  GCancellable *cancellable,
+                                  GError      **error);

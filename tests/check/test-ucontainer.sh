@@ -42,6 +42,7 @@ cat > foo.conf <<EOF
 ref=foo
 packages=foo
 repos=test-repo
+skip-sanity-check=true
 EOF
 
 rpm-ostree ex container assemble foo.conf
