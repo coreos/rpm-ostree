@@ -25,6 +25,7 @@
 #include <sys/socket.h>
 #include "glib-unix.h"
 #include <signal.h>
+#include <systemd/sd-login.h>
 
 void
 rpmostree_cleanup_peer (GPid *peer_pid)
@@ -161,11 +162,29 @@ rpmostree_load_sysroot (gchar *sysroot,
   if (sysroot_proxy == NULL)
     return FALSE;
 
-  /* this tells the daemon not to auto-exit as long as we are alive */
-  if (!rpmostree_sysroot_call_register_client_sync (sysroot_proxy,
-                                                    g_variant_builder_end (options_builder),
-                                                    cancellable, error))
-    return FALSE;
+  /* Try to register if we can; it doesn't matter much now since the daemon doesn't
+   * auto-exit, though that might change in the future. But only register if we're active or
+   * root; the daemon won't allow it otherwise. */
+  uid_t uid = getuid ();
+  gboolean should_register;
+  if (uid == 0)
+    should_register = TRUE;
+  else
+    {
+      g_autofree char *state = NULL;
+      if (sd_uid_get_state (uid, &state) >= 0)
+        should_register = (g_strcmp0 (state, "active") == 0);
+      else
+        should_register = FALSE;
+    }
+
+  if (should_register)
+    {
+      if (!rpmostree_sysroot_call_register_client_sync (sysroot_proxy,
+                                                        g_variant_builder_end (options_builder),
+                                                        cancellable, error))
+        return FALSE;
+    }
 
   *out_sysroot_proxy = g_steal_pointer (&sysroot_proxy);
   *out_peer_pid = peer_pid; peer_pid = 0;

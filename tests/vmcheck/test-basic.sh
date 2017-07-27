@@ -50,8 +50,12 @@ if vm_cmd_as testuser rpm-ostree pkg-add foo &> err.txt; then
     assert_not_reached "Was able to install a package as non-root!"
 fi
 assert_file_has_content err.txt 'PkgChange not allowed for user'
-echo "ok layering requires root"
+echo "ok layering requires root or auth"
 
 # Assert that we can do status as non-root
 vm_cmd_as testuser rpm-ostree status
 echo "ok status doesn't require root"
+
+# Also check that we can do status as non-root non-active
+vm_cmd runuser -u bin rpm-ostree status
+echo "ok status doesn't require active PAM session"
