@@ -366,7 +366,11 @@ rpmostree_deployment_sanitycheck (int           rootfs_fd,
                                   GCancellable *cancellable,
                                   GError      **error)
 {
-  GLNX_AUTO_PREFIX_ERROR("sanitycheck", error);
+  /* Used by the test suite */
+  if (getenv ("RPMOSTREE_SKIP_SANITYCHECK"))
+    return TRUE;
+
+  GLNX_AUTO_PREFIX_ERROR ("sanitycheck", error);
   g_autoptr(RpmOstreeBwrap) bwrap =
     rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_IMMUTABLE, error,
                          "--ro-bind", "./usr/etc", "/etc",
