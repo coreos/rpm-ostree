@@ -34,17 +34,24 @@ vm_assert_status_jq \
   '.deployments[0]["requested-base-removals"]'
 echo "ok empty pkg arrays in status json"
 
-# Be sure an unprivileged user exists
-vm_cmd getent passwd bin
+# Be sure an unprivileged user exists and that we can SSH into it. This is a bit
+# underhanded, but we need a bona fide user session to verify non-priv status,
+# and logging in through SSH is an easy way to achieve that.
+if ! vm_cmd getent passwd testuser; then
+  vm_cmd useradd testuser
+  vm_cmd mkdir -pm 0700 /home/testuser/.ssh
+  vm_cmd cp -a /root/.ssh/authorized_keys /home/testuser/.ssh
+  vm_cmd chown -R testuser:testuser /home/testuser/.ssh
+fi
 
 # Make sure we can't layer as non-root
 vm_build_rpm foo
-if vm_cmd "runuser -u bin rpm-ostree pkg-add foo" &> err.txt; then
+if vm_cmd_as testuser rpm-ostree pkg-add foo &> err.txt; then
     assert_not_reached "Was able to install a package as non-root!"
 fi
 assert_file_has_content err.txt 'PkgChange not allowed for user'
 echo "ok layering requires root"
 
 # Assert that we can do status as non-root
-vm_cmd "runuser -u bin rpm-ostree status"
+vm_cmd_as testuser rpm-ostree status
 echo "ok status doesn't require root"

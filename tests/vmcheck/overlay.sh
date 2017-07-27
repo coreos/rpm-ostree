@@ -48,7 +48,7 @@ if test -z "${INSIDE_VM:-}"; then
 
     vm_rsync
 
-    $SSH "env INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh"
+    vm_cmd env INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh
     vm_reboot
     exit 0
 fi
