@@ -77,9 +77,13 @@ ostree checkout $commit vmcheck --fsync=0
 rm -f vmcheck/usr/etc/{.pwd.lock,passwd-,group-,shadow-,gshadow-,subuid-,subgid-}
 # ✀✀✀ END hack for https://github.com/projectatomic/rpm-ostree/pull/693 ✀✀✀
 rm vmcheck/etc -rf
+
 # Now, overlay our built binaries & config files
-rsync -rlv /var/roothome/sync/insttree/usr/ vmcheck/usr/
-rsync -rlv /var/roothome/sync/insttree/etc/ vmcheck/usr/etc/
+INSTTREE=/var/roothome/sync/insttree
+rsync -rlv $INSTTREE/usr/ vmcheck/usr/
+if [ -d $INSTTREE/etc ]; then # on CentOS, the dbus service file is in /usr
+  rsync -rlv $INSTTREE/etc/ vmcheck/usr/etc/
+fi
 ostree refs --delete vmcheck || true
 ostree commit -b vmcheck -s '' --tree=dir=vmcheck --link-checkout-speedup
 ostree admin deploy vmcheck
