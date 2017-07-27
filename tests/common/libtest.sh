@@ -378,6 +378,9 @@ License: GPLv2+
 EOF
 
     local build= install= files= pretrans= pre= post= posttrans= post_args=
+    local transfiletriggerin= transfiletriggerin_patterns=
+    local transfiletriggerin2= transfiletriggerin2_patterns=
+    local transfiletriggerun= transfiletriggerun_patterns=
     while [ $# -ne 0 ]; do
         local section=$1; shift
         local arg=$1; shift
@@ -392,6 +395,15 @@ EOF
             post_args="$arg";;
         version|release|arch|build|install|files|pretrans|pre|post|posttrans)
             declare $section="$arg";;
+        transfiletriggerin)
+            transfiletriggerin_patterns="$arg";
+            declare $section="$1"; shift;;
+        transfiletriggerin2)
+            transfiletriggerin2_patterns="$arg";
+            declare $section="$1"; shift;;
+        transfiletriggerun)
+            transfiletriggerun_patterns="$arg";
+            declare $section="$1"; shift;;
         *)
             assert_not_reached "unhandled section $section";;
         esac
@@ -422,6 +434,15 @@ $post
 
 ${posttrans:+%posttrans}
 $posttrans
+
+${transfiletriggerin:+%transfiletriggerin -- ${transfiletriggerin_patterns}}
+$transfiletriggerin
+
+${transfiletriggerin2:+%transfiletriggerin -- ${transfiletriggerin2_patterns}}
+$transfiletriggerin2
+
+${transfiletriggerun:+%transfiletriggerun -- ${transfiletriggerun_patterns}}
+$transfiletriggerun
 
 %install
 mkdir -p %{buildroot}/usr/bin

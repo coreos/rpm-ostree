@@ -2708,6 +2708,45 @@ add_install (RpmOstreeContext *self,
   return TRUE;
 }
 
+/* Run %transfiletriggerin */
+static gboolean
+run_all_transfiletriggers (RpmOstreeContext *self,
+                           rpmts         ts,
+                           int           rootfs_dfd,
+                           GCancellable *cancellable,
+                           GError      **error)
+{
+  /* Triggers from base packages */
+  g_auto(rpmdbMatchIterator) mi = rpmtsInitIterator (ts, RPMDBI_PACKAGES, NULL, 0);
+  { Header hdr;
+    while ((hdr = rpmdbNextIterator (mi)) != NULL)
+      {
+        if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd,
+                                                   cancellable, error))
+          return FALSE;
+      }
+  }
+
+  /* Triggers from newly added packages */
+  const guint n = (guint)rpmtsNElements (ts);
+  for (guint i = 0; i < n; i++)
+    {
+      rpmte te = rpmtsElement (ts, i);
+      if (rpmteType (te) != TR_ADDED)
+        continue;
+      DnfPackage *pkg = (void*)rpmteKey (te);
+      g_autofree char *path = get_package_relpath (pkg);
+      g_auto(Header) hdr = NULL;
+      if (!get_package_metainfo (self, path, &hdr, NULL, error))
+        return FALSE;
+
+      if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd,
+                                                 cancellable, error))
+        return FALSE;
+    }
+  return TRUE;
+}
+
 gboolean
 rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                       int                    tmprootfs_dfd,
@@ -2987,10 +3026,13 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
             return FALSE;
         }
 
+      if (!run_all_transfiletriggers (self, ordering_ts, tmprootfs_dfd,
+                                      cancellable, error))
+        return FALSE;
+
       /* We want this to be the first error message if something went wrong
        * with a script; see https://github.com/projectatomic/rpm-ostree/pull/888
        */
-
       gboolean skip_sanity_check = FALSE;
       g_variant_dict_lookup (self->spec->dict, "skip-sanity-check", "b", &skip_sanity_check);
       if (!skip_sanity_check &&
