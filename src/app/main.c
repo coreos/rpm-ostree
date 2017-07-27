@@ -30,6 +30,7 @@
 #include <locale.h>
 
 #include "rpmostree-builtins.h"
+#include "rpmostree-polkit-agent.h"
 
 #include "libglnx.h"
 
@@ -39,43 +40,43 @@ static RpmOstreeCommand commands[] = {
                RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     rpmostree_builtin_compose },
 #endif
-  { "cleanup", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "cleanup", 0,
     rpmostree_builtin_cleanup },
   { "db", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     rpmostree_builtin_db },
-  { "deploy", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
-              RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+  { "deploy", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
     rpmostree_builtin_deploy },
-  { "rebase", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
-              RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+  { "rebase", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
     rpmostree_builtin_rebase },
-  { "rollback", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "rollback", 0,
     rpmostree_builtin_rollback },
   { "status", 0,
     rpmostree_builtin_status },
-  { "upgrade", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
-               RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+  { "upgrade", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
     rpmostree_builtin_upgrade },
-  { "reload", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "reload", 0,
     rpmostree_builtin_reload },
-  { "initramfs", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "initramfs", 0,
     rpmostree_builtin_initramfs },
-  { "install", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "install", 0,
     rpmostree_builtin_install },
-  { "uninstall", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+  { "uninstall", 0,
     rpmostree_builtin_uninstall },
   /* Legacy aliases */
-  { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_install },
-  { "pkg-remove", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "pkg-remove", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_uninstall },
-  { "rpm", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "rpm", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
+           RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_db },
   /* Hidden */
-  { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
+          RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_ex },
-  { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
-                   RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+  { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
+                    RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
+                    RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     rpmostree_builtin_start_daemon },
   { NULL }
 };
@@ -183,6 +184,11 @@ rpmostree_option_context_parse (GOptionContext *context,
 
   if (use_daemon)
     {
+      /* root never needs to auth */
+      if (getuid () != 0)
+        /* ignore errors; we print out a warning if we fail to spawn pkttyagent */
+        (void)rpmostree_polkit_agent_open ();
+
       if (!rpmostree_load_sysroot (opt_sysroot,
                                    opt_force_peer,
                                    cancellable,
@@ -383,6 +389,8 @@ main (int    argc,
        * actually had an error, so it gets reported and fixed quickly. */
       g_warn_if_fail (exit_status != EXIT_SUCCESS);
     }
+
+  rpmostree_polkit_agent_close ();
 
   return exit_status;
 }
