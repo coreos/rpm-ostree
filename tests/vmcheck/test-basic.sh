@@ -61,13 +61,15 @@ vm_cmd runuser -u bin rpm-ostree status
 echo "ok status doesn't require active PAM session"
 
 # Add metadata string containing EnfOfLife attribtue
-META_ENDOFLIFE_MESSAGE="this_is_a_test"
+META_ENDOFLIFE_MESSAGE="this is a test for metadata message"
 commit=$(vm_cmd ostree commit -b vmcheck \
-            --tree=ref=vmcheck --add-metadata-string=ostree.endoflife=$META_ENDOFLIFE_MESSAGE)
+            --tree=ref=vmcheck --add-metadata-string=ostree.endoflife=\"${META_ENDOFLIFE_MESSAGE}\")
 vm_rpmostree upgrade
 vm_assert_status_jq ".deployments[0][\"endoflife\"] == \"${META_ENDOFLIFE_MESSAGE}\""
+echo "ok endoflife metadata gets parsed correctly"
 
 # Build a layered commit and check if EndOfLife still present
 vm_build_rpm foo
 vm_rpmostree install foo
 vm_assert_status_jq ".deployments[0][\"endoflife\"] == \"${META_ENDOFLIFE_MESSAGE}\""
+echo "ok layered commit inherits the endoflife attribute"
