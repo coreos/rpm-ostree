@@ -563,6 +563,16 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
           print_kv ("Unlocked", max_key_len, unlocked);
           g_print ("%s%s", bold_suffix, red_suffix);
         }
+      const char *end_of_life_string = NULL;
+      /* look for endoflife attribute in the deployment */
+      g_variant_dict_lookup (dict, "endoflife", "&s", &end_of_life_string);
+
+      if (end_of_life_string)
+        {
+          g_print ("%s%s", red_prefix, bold_prefix);
+          print_kv ("EndOfLife", max_key_len, end_of_life_string);
+          g_print ("%s%s", bold_suffix, red_suffix);
+        }
     }
 
   return TRUE;
