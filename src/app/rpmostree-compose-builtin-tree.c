@@ -730,13 +730,7 @@ rpmostree_compose_builtin_tree (int             argc,
       workdir_is_tmp = TRUE;
 
       if (opt_workdir_tmpfs)
-        {
-          if (mount ("tmpfs", tmpd, "tmpfs", 0, (const void*)"mode=755") != 0)
-            {
-              glnx_set_prefix_error_from_errno (error, "%s", "mount(tmpfs)");
-              goto out;
-            }
-        }
+        g_print ("note: --workdir-tmpfs is deprecated and will be ignored\n");
     }
 
   if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (self->workdir),
@@ -1080,21 +1074,8 @@ rpmostree_compose_builtin_tree (int             argc,
    */
   g_clear_object (&self->corectx);
 
-  /* Move back out of the workding directory and close all fds pointing
-   * to it ensure unmount works */
-  (void )chdir ("/");
-  if (rootfs_fd != -1)
-    (void) close (rootfs_fd);
-
   if (workdir_is_tmp)
-    {
-      if (opt_workdir_tmpfs)
-        if (umount (gs_file_get_path_cached (self->workdir)) != 0)
-          {
-            fprintf (stderr, "warning: umount failed: %m\n");
-          }
-      (void) glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (self->workdir), NULL, NULL);
-    }
+    (void) glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (self->workdir), NULL, NULL);
 
   return exit_status;
 }
