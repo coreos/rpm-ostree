@@ -96,6 +96,7 @@ typedef struct {
 
   RpmOstreeContext *corectx;
   GFile *workdir;
+  gboolean workdir_is_tmp;
   int workdir_dfd;
   int cachedir_dfd;
   OstreeRepo *repo;
@@ -110,6 +111,8 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
 {
   g_clear_pointer (&ctx->treefile_context_dirs, (GDestroyNotify)g_ptr_array_unref);
   g_clear_object (&ctx->corectx);
+  if (ctx->workdir_is_tmp)
+    (void) glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (ctx->workdir), NULL, NULL);
   g_clear_object (&ctx->workdir);
   if (ctx->workdir_dfd != -1)
     (void) close (ctx->workdir_dfd);
@@ -319,7 +322,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (!g_file_test (cache_repo_pathstr, G_FILE_TEST_EXISTS))
     {
       if (!ostree_repo_create (ostreerepo, OSTREE_REPO_MODE_BARE_USER, cancellable, error))
-        goto out;
+        return FALSE;
     }
 #endif
 
@@ -377,11 +380,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
    * only repos which are specified, ignoring the enabled= flag.
    */
   if (!json_object_has_member (treedata, "repos"))
-    {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "Treefile is missing required \"repos\" member");
-      return FALSE;
-    }
+    return glnx_throw (error, "Treefile is missing required \"repos\" member");
 
   JsonArray *enable_repos = json_object_get_array_member (treedata, "repos");
 
@@ -537,11 +536,7 @@ process_includes (RpmOstreeTreeComposeContext  *self,
 
       parent_rootval = json_parser_get_root (parent_parser);
       if (!JSON_NODE_HOLDS_OBJECT (parent_rootval))
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Treefile root is not an object");
-          return FALSE;
-        }
+        return glnx_throw (error, "Treefile root is not an object");
       parent_root = json_node_get_object (parent_rootval);
 
       if (!process_includes (self, parent_path, depth + 1, parent_root,
@@ -566,12 +561,7 @@ process_includes (RpmOstreeTreeComposeContext  *self,
               JsonNodeType child_type =
                 json_node_get_node_type (val);
               if (parent_type != child_type)
-                {
-                  g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                               "Conflicting element type of '%s'",
-                               name);
-                  return FALSE;
-                }
+                return glnx_throw (error, "Conflicting element type of '%s'", name);
               if (child_type == JSON_NODE_ARRAY)
                 {
                   JsonArray *parent_array = json_node_get_array (parent_val);
@@ -602,22 +592,12 @@ parse_metadata_keyvalue_strings (char             **strings,
                                  GHashTable        *metadata_hash,
                                  GError           **error)
 {
-  char **iter;
-
-  for (iter = strings; *iter; iter++)
+  for (char **iter = strings; *iter; iter++)
     {
-      const char *s;
-      const char *eq;
-
-      s = *iter;
-
-      eq = strchr (s, '=');
+      const char *s = *iter;
+      const char *eq = strchr (s, '=');
       if (!eq)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Missing '=' in KEY=VALUE metadata '%s'", s);
-          return FALSE;
-        }
+        return glnx_throw (error, "Missing '=' in KEY=VALUE metadata '%s'", s);
 
       g_hash_table_insert (metadata_hash, g_strndup (s, eq - s),
                            g_variant_ref_sink (g_variant_new_string (eq + 1)));
@@ -629,120 +609,61 @@ parse_metadata_keyvalue_strings (char             **strings,
 static gboolean
 process_touch_if_changed (GError **error)
 {
-  glnx_fd_close int fd = -1;
 
   if (!opt_touch_if_changed)
     return TRUE;
 
-  fd = open (opt_touch_if_changed, O_CREAT|O_WRONLY|O_NOCTTY, 0644);
+  glnx_fd_close int fd = open (opt_touch_if_changed, O_CREAT|O_WRONLY|O_NOCTTY, 0644);
   if (fd == -1)
-    {
-      glnx_set_prefix_error_from_errno (error, "Updating '%s': ", opt_touch_if_changed);
-      return FALSE;
-    }
+    return glnx_throw_errno_prefix (error, "Updating '%s'", opt_touch_if_changed);
   if (futimens (fd, NULL) == -1)
-    {
-      glnx_set_error_from_errno (error);
-      return FALSE;
-    }
+    return glnx_throw_errno_prefix (error, "futimens");
 
   return TRUE;
 }
 
-int
-rpmostree_compose_builtin_tree (int             argc,
-                                char          **argv,
-                                RpmOstreeCommandInvocation *invocation,
-                                GCancellable   *cancellable,
-                                GError        **error)
+static gboolean
+impl_compose_tree (const char      *treefile_pathstr,
+                   GCancellable    *cancellable,
+                   GError         **error)
 {
-  int exit_status = EXIT_FAILURE;
-  GError *temp_error = NULL;
-  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE - Install packages and commit the result to an OSTree repository");
   g_autoptr(RpmOstreeTreeComposeContext) self = g_new0 (RpmOstreeTreeComposeContext, 1);
-  JsonNode *treefile_rootval = NULL;
-  JsonObject *treefile = NULL;
-  g_autofree char *new_inputhash = NULL;
-  g_autoptr(GFile) previous_root = NULL;
-  const char *rootfs_name = "rootfs.tmp";
-  g_autoptr(GFile) yumroot = NULL;
-  glnx_fd_close int rootfs_fd = -1;
-  g_autoptr(GPtrArray) packages = NULL;
-  g_autoptr(GFile) treefile_path = NULL;
-  g_autoptr(GFile) treefile_dirpath = NULL;
-  g_autoptr(GFile) repo_path = NULL;
-  glnx_unref_object JsonParser *treefile_parser = NULL;
-  g_autoptr(GHashTable) metadata_hash = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_variant_unref);
-  g_autoptr(GHashTable) varsubsts = NULL;
-  gboolean workdir_is_tmp = FALSE;
-  g_autofree char *next_version = NULL;
-  g_autofree char *new_revision = NULL;
-  g_autoptr(GVariant) metadata = NULL;
-
-  self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-
-  if (!rpmostree_option_context_parse (context,
-                                       option_entries,
-                                       &argc, &argv,
-                                       invocation,
-                                       cancellable,
-                                       NULL, NULL, NULL, NULL,
-                                       error))
-    goto out;
-
-  if (argc < 2)
-    {
-      rpmostree_usage_error (context, "TREEFILE must be specified", error);
-      goto out;
-    }
-
-  if (!opt_repo)
-    {
-      rpmostree_usage_error (context, "--repo must be specified", error);
-      goto out;
-    }
+  g_autoptr(GError) temp_error = NULL;
 
   /* Test whether or not bwrap is going to work - we will fail inside e.g. a Docker
    * container without --privileged or userns exposed.
    */
   if (!rpmostree_bwrap_selftest (error))
-    goto out;
+    return FALSE;
 
-  repo_path = g_file_new_for_path (opt_repo);
+  if (opt_workdir_tmpfs)
+    g_print ("note: --workdir-tmpfs is deprecated and will be ignored\n");
+  if (!opt_workdir)
+    {
+      if (!rpmostree_mkdtemp ("/var/tmp/rpm-ostree.XXXXXX", &opt_workdir, NULL, error))
+        return FALSE;
+      self->workdir_is_tmp = TRUE;
+    }
+  self->workdir = g_file_new_for_path (opt_workdir);
+
+  self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+  g_autoptr(GFile) repo_path = g_file_new_for_path (opt_repo);
   self->repo = ostree_repo_new (repo_path);
   if (!ostree_repo_open (self->repo, cancellable, error))
-    goto out;
+    return FALSE;
 
-  treefile_path = g_file_new_for_path (argv[1]);
-
-  if (opt_workdir)
-    {
-      self->workdir = g_file_new_for_path (opt_workdir);
-    }
-  else
-    {
-      g_autofree char *tmpd = NULL;
-
-      if (!rpmostree_mkdtemp ("/var/tmp/rpm-ostree.XXXXXX", &tmpd, NULL, error))
-        goto out;
-
-      self->workdir = g_file_new_for_path (tmpd);
-      workdir_is_tmp = TRUE;
-
-      if (opt_workdir_tmpfs)
-        g_print ("note: --workdir-tmpfs is deprecated and will be ignored\n");
-    }
+  g_autoptr(GFile) treefile_path = g_file_new_for_path (treefile_pathstr);
 
   if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (self->workdir),
                        FALSE, &self->workdir_dfd, error))
-    goto out;
+    return FALSE;
 
   if (opt_cachedir)
     {
       if (!glnx_opendirat (AT_FDCWD, opt_cachedir, TRUE, &self->cachedir_dfd, error))
         {
           g_prefix_error (error, "Opening cachedir '%s': ", opt_cachedir);
-          goto out;
+          return FALSE;
         }
     }
   else
@@ -751,10 +672,11 @@ rpmostree_compose_builtin_tree (int             argc,
       if (self->cachedir_dfd < 0)
         {
           glnx_set_error_from_errno (error);
-          goto out;
+          return FALSE;
         }
     }
 
+  g_autoptr(GHashTable) metadata_hash = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_variant_unref);
   if (opt_metadata_json)
     {
       glnx_unref_object JsonParser *jparser = json_parser_new ();
@@ -763,7 +685,7 @@ rpmostree_compose_builtin_tree (int             argc,
       GVariantIter viter;
 
       if (!json_parser_load_from_file (jparser, opt_metadata_json, error))
-        goto out;
+        return FALSE;
 
       metarootval = json_parser_get_root (jparser);
 
@@ -771,7 +693,7 @@ rpmostree_compose_builtin_tree (int             argc,
       if (!jsonmetav)
         {
           g_prefix_error (error, "Parsing %s: ", opt_metadata_json);
-          goto out;
+          return FALSE;
         }
 
       g_variant_iter_init (&viter, jsonmetav);
@@ -785,39 +707,35 @@ rpmostree_compose_builtin_tree (int             argc,
   if (opt_metadata_strings)
     {
       if (!parse_metadata_keyvalue_strings (opt_metadata_strings, metadata_hash, error))
-        goto out;
+        return FALSE;
     }
 
   if (fchdir (self->workdir_dfd) != 0)
     {
       glnx_set_error_from_errno (error);
-      goto out;
+      return FALSE;
     }
 
   self->corectx = rpmostree_context_new_compose (self->cachedir_dfd, cancellable, error);
   if (!self->corectx)
-    goto out;
+    return FALSE;
 
-  varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_hif (self->corectx));
+  g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_hif (self->corectx));
 
-  treefile_parser = json_parser_new ();
+  glnx_unref_object JsonParser *treefile_parser = json_parser_new ();
   if (!json_parser_load_from_file (treefile_parser,
                                    gs_file_get_path_cached (treefile_path),
                                    error))
-    goto out;
+    return FALSE;
 
-  treefile_rootval = json_parser_get_root (treefile_parser);
+  JsonNode *treefile_rootval = json_parser_get_root (treefile_parser);
   if (!JSON_NODE_HOLDS_OBJECT (treefile_rootval))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Treefile root is not an object");
-      goto out;
-    }
-  treefile = json_node_get_object (treefile_rootval);
+    return glnx_throw (error, "Treefile root is not an object");
+  JsonObject *treefile = json_node_get_object (treefile_rootval);
 
   if (!process_includes (self, treefile_path, 0, treefile,
                          cancellable, error))
-    goto out;
+    return FALSE;
 
   if (opt_print_only)
     {
@@ -828,18 +746,19 @@ rpmostree_compose_builtin_tree (int             argc,
       json_generator_set_root (generator, treefile_rootval);
       (void) json_generator_to_stream (generator, stdout, NULL, NULL);
 
-      exit_status = EXIT_SUCCESS;
-      goto out;
+      /* Note early return */
+      return TRUE;
     }
 
   { const char *input_ref = _rpmostree_jsonutil_object_require_string_member (treefile, "ref", error);
     if (!input_ref)
-      goto out;
+      return FALSE;
     self->ref = _rpmostree_varsubst_string (input_ref, varsubsts, error);
     if (!self->ref)
-      goto out;
+      return FALSE;
   }
 
+  g_autoptr(GFile) previous_root = NULL;
   if (!ostree_repo_read_commit (self->repo, self->ref, &previous_root, &self->previous_checksum,
                                 cancellable, &temp_error))
     {
@@ -851,43 +770,41 @@ rpmostree_compose_builtin_tree (int             argc,
       else
         {
           g_propagate_error (error, temp_error);
-          goto out;
+          return FALSE;
         }
     }
   else
     g_print ("Previous commit: %s\n", self->previous_checksum);
 
-  yumroot = g_file_get_child (self->workdir, rootfs_name);
+  const char rootfs_name[] = "rootfs.tmp";
+  g_autoptr(GFile) yumroot = g_file_get_child (self->workdir, rootfs_name);
   if (!glnx_shutil_rm_rf_at (self->workdir_dfd, rootfs_name, cancellable, error))
-    goto out;
+    return FALSE;
   if (mkdirat (self->workdir_dfd, rootfs_name, 0755) < 0)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
+    return glnx_throw_errno_prefix (error, "mkdirat(%s)", rootfs_name);
+
+  glnx_fd_close int rootfs_fd = -1;
   if (!glnx_opendirat (self->workdir_dfd, rootfs_name, TRUE,
                        &rootfs_fd, error))
-    goto out;
+    return FALSE;
 
+  g_autofree char *next_version = NULL;
   if (json_object_has_member (treefile, "automatic_version_prefix") &&
       /* let --add-metadata-string=version=... take precedence */
       !g_hash_table_contains (metadata_hash, "version"))
     {
       g_autoptr(GVariant) variant = NULL;
       g_autofree char *last_version = NULL;
-      const char *ver_prefix;
-
-      ver_prefix = _rpmostree_jsonutil_object_require_string_member (treefile,
-                                                                     "automatic_version_prefix",
-                                                                     error);
+      const char *ver_prefix =
+        _rpmostree_jsonutil_object_require_string_member (treefile, "automatic_version_prefix", error);
       if (!ver_prefix)
-          goto out;
+        return FALSE;
 
       if (self->previous_checksum)
         {
           if (!ostree_repo_load_variant (self->repo, OSTREE_OBJECT_TYPE_COMMIT,
                                          self->previous_checksum, &variant, error))
-            goto out;
+            return FALSE;
 
           last_version = checksum_version (variant);
         }
@@ -906,22 +823,22 @@ rpmostree_compose_builtin_tree (int             argc,
         }
     }
 
-  packages = g_ptr_array_new_with_free_func (g_free);
+  g_autoptr(GPtrArray) packages = g_ptr_array_new_with_free_func (g_free);
 
   if (json_object_has_member (treefile, "bootstrap_packages"))
     {
       if (!_rpmostree_jsonutil_append_string_array_to (treefile, "bootstrap_packages", packages, error))
-        goto out;
+        return FALSE;
     }
   if (!_rpmostree_jsonutil_append_string_array_to (treefile, "packages", packages, error))
-    goto out;
+    return FALSE;
 
   { g_autofree char *thisarch_packages = g_strconcat ("packages-", dnf_context_get_base_arch (rpmostree_context_get_hif (self->corectx)), NULL);
 
     if (json_object_has_member (treefile, thisarch_packages))
       {
         if (!_rpmostree_jsonutil_append_string_array_to (treefile, thisarch_packages, packages, error))
-          goto out;
+          return FALSE;
       }
   }
   g_ptr_array_add (packages, NULL);
@@ -937,7 +854,7 @@ rpmostree_compose_builtin_tree (int             argc,
     self->serialized_treefile = g_bytes_new_take (treefile_buf, len);
   }
 
-  treefile_dirpath = g_file_get_parent (treefile_path);
+  g_autoptr(GFile) treefile_dirpath = g_file_get_parent (treefile_path);
   if (TRUE)
     {
       gboolean generate_from_previous = TRUE;
@@ -946,7 +863,7 @@ rpmostree_compose_builtin_tree (int             argc,
                                                                    "preserve-passwd",
                                                                    &generate_from_previous,
                                                                    error))
-        goto out;
+        return FALSE;
 
       if (generate_from_previous)
         {
@@ -954,10 +871,11 @@ rpmostree_compose_builtin_tree (int             argc,
                                                         treefile_dirpath,
                                                         previous_root, treefile,
                                                         cancellable, error))
-            goto out;
+            return FALSE;
         }
     }
 
+  g_autofree char *new_inputhash = NULL;
   { gboolean unmodified = FALSE;
 
     if (!install_packages_in_root (self, treefile, yumroot, rootfs_fd,
@@ -965,13 +883,13 @@ rpmostree_compose_builtin_tree (int             argc,
                                    opt_force_nocache ? NULL : &unmodified,
                                    &new_inputhash,
                                    cancellable, error))
-      goto out;
+      return FALSE;
 
     if (unmodified)
       {
         g_print ("No apparent changes since previous commit; use --force-nocache to override\n");
-        exit_status = EXIT_SUCCESS;
-        goto out;
+        /* Note early return */
+        return TRUE;
       }
     else if (opt_dry_run)
       {
@@ -980,49 +898,37 @@ rpmostree_compose_builtin_tree (int             argc,
           g_print (", updating --touch-if-changed=%s", opt_touch_if_changed);
         g_print ("; exiting\n");
         if (!process_touch_if_changed (error))
-          goto out;
-        exit_status = EXIT_SUCCESS;
-        goto out;
+          return FALSE;
+        /* Note early return */
+        return TRUE;
       }
   }
 
   if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
-    goto out;
+    return FALSE;
 
   if (!rpmostree_treefile_postprocessing (rootfs_fd, self->treefile_context_dirs->pdata[0],
                                           self->serialized_treefile, treefile,
                                           next_version, cancellable, error))
-    {
-      g_prefix_error (error, "Postprocessing: ");
-      goto out;
-    }
+    return glnx_prefix_error (error, "Postprocessing");
 
   if (!rpmostree_prepare_rootfs_for_commit (self->workdir_dfd, &rootfs_fd, rootfs_name,
                                             treefile,
                                             cancellable, error))
-    {
-      g_prefix_error (error, "Preparing rootfs for commit: ");
-      goto out;
-    }
+    return glnx_prefix_error (error, "Preparing rootfs for commit");
 
   if (!rpmostree_copy_additional_files (yumroot, self->treefile_context_dirs->pdata[0], treefile, cancellable, error))
-    goto out;
+    return FALSE;
 
   if (!rpmostree_check_passwd (self->repo, yumroot, treefile_dirpath, treefile,
                                self->previous_checksum,
                                cancellable, error))
-    {
-      g_prefix_error (error, "Handling passwd db: ");
-      goto out;
-    }
+    return glnx_prefix_error (error, "Handling passwd db");
 
   if (!rpmostree_check_groups (self->repo, yumroot, treefile_dirpath, treefile,
                                self->previous_checksum,
                                cancellable, error))
-    {
-      g_prefix_error (error, "Handling group db: ");
-      goto out;
-    }
+    glnx_prefix_error (error, "Handling group db");
 
   /* Insert our input hash */
   g_hash_table_replace (metadata_hash, g_strdup ("rpmostree.inputhash"),
@@ -1030,13 +936,14 @@ rpmostree_compose_builtin_tree (int             argc,
 
   const char *gpgkey = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "gpg_key", &gpgkey, error))
-    goto out;
+    return FALSE;
 
   gboolean selinux = TRUE;
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile, "selinux", &selinux, error))
-    goto out;
+    return FALSE;
 
   /* Convert metadata hash to GVariant */
+  g_autoptr(GVariant) metadata = NULL;
   { g_autoptr(GVariantBuilder) metadata_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
     GLNX_HASH_TABLE_FOREACH_KV (metadata_hash, const char*, strkey, GVariant*, v)
       g_variant_builder_add (metadata_builder, "{sv}", strkey, v);
@@ -1055,27 +962,52 @@ rpmostree_compose_builtin_tree (int             argc,
       }
   }
 
+  g_autofree char *new_revision = NULL;
   if (!rpmostree_commit (rootfs_fd, self->repo, self->ref, opt_write_commitid_to,
                          metadata, gpgkey, selinux, NULL,
                          &new_revision,
                          cancellable, error))
-    goto out;
+    return FALSE;
 
   g_print ("%s => %s\n", self->ref, new_revision);
 
   if (!process_touch_if_changed (error))
-    goto out;
+    return FALSE;
 
-  exit_status = EXIT_SUCCESS;
+  return TRUE;
+}
 
- out:
-  /* FIXME: Hack: explicitly close this one now as it may have references to
-   * files we delete below.
-   */
-  g_clear_object (&self->corectx);
+int
+rpmostree_compose_builtin_tree (int             argc,
+                                char          **argv,
+                                RpmOstreeCommandInvocation *invocation,
+                                GCancellable   *cancellable,
+                                GError        **error)
+{
+  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE - Install packages and commit the result to an OSTree repository");
+  if (!rpmostree_option_context_parse (context,
+                                       option_entries,
+                                       &argc, &argv,
+                                       invocation,
+                                       cancellable,
+                                       NULL, NULL, NULL, NULL,
+                                       error))
+    return EXIT_FAILURE;
 
-  if (workdir_is_tmp)
-    (void) glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (self->workdir), NULL, NULL);
+  if (argc < 2)
+    {
+      rpmostree_usage_error (context, "TREEFILE must be specified", error);
+      return EXIT_FAILURE;
+    }
 
-  return exit_status;
+  if (!opt_repo)
+    {
+      rpmostree_usage_error (context, "--repo must be specified", error);
+      return EXIT_FAILURE;
+    }
+
+  if (!impl_compose_tree (argv[1], cancellable, error))
+    return EXIT_FAILURE;
+
+  return EXIT_SUCCESS;
 }
