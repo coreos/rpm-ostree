@@ -55,12 +55,14 @@ gboolean
 rpmostree_posttrans_run_sync (DnfPackage    *pkg,
                               Header         hdr,
                               int            rootfs_fd,
+                              guint         *out_n_run,
                               GCancellable  *cancellable,
                               GError       **error);
 
 gboolean
 rpmostree_transfiletriggers_run_sync (Header         hdr,
                                       int            rootfs_fd,
+                                      guint         *out_n_run,
                                       GCancellable  *cancellable,
                                       GError       **error);
 
@@ -68,6 +70,7 @@ gboolean
 rpmostree_pre_run_sync (DnfPackage    *pkg,
                         Header         hdr,
                         int            rootfs_fd,
+                        guint         *out_n_run,
                         GCancellable  *cancellable,
                         GError       **error);
 

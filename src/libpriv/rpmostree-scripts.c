@@ -318,11 +318,14 @@ run_script (const KnownRpmScriptKind *rpmscript,
             DnfPackage               *pkg,
             Header                    hdr,
             int                       rootfs_fd,
+            gboolean                 *out_did_run,
             GCancellable             *cancellable,
             GError                  **error)
 {
   rpmTagVal tagval = rpmscript->tag;
   rpmTagVal progtagval = rpmscript->progtag;
+
+  *out_did_run = FALSE;
 
   if (!(headerIsEntry (hdr, tagval) || headerIsEntry (hdr, progtagval)))
     return TRUE;
@@ -341,6 +344,7 @@ run_script (const KnownRpmScriptKind *rpmscript,
       break; /* Continue below */
     }
 
+  *out_did_run = TRUE;
   return impl_run_rpm_script (rpmscript, pkg, hdr, rootfs_fd,
                               cancellable, error);
 }
@@ -458,15 +462,21 @@ gboolean
 rpmostree_posttrans_run_sync (DnfPackage    *pkg,
                               Header         hdr,
                               int            rootfs_fd,
+                              guint         *out_n_run,
                               GCancellable  *cancellable,
                               GError       **error)
 {
   /* We treat %post and %posttrans equivalently, so do those in one go */
   for (guint i = 0; i < G_N_ELEMENTS (posttrans_scripts); i++)
     {
+      gboolean did_run = FALSE;
+
       if (!run_script (&posttrans_scripts[i], pkg, hdr, rootfs_fd,
-                       cancellable, error))
+                       &did_run, cancellable, error))
         return FALSE;
+
+      if (did_run)
+        (*out_n_run)++;
     }
   return TRUE;
 }
@@ -477,6 +487,7 @@ rpmostree_posttrans_run_sync (DnfPackage    *pkg,
 gboolean
 rpmostree_transfiletriggers_run_sync (Header        hdr,
                                       int           rootfs_fd,
+                                      guint        *out_n_run,
                                       GCancellable *cancellable,
                                       GError      **error)
 {
@@ -633,6 +644,8 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
                                           matching_files_tmpf.fd, cancellable, error))
         return FALSE;
 
+      (*out_n_run)++;
+
       sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_FILETRIGGER),
                        "MESSAGE=Executed %%transfiletriggerin(%s) for %s; %u matched files",
                        pkg_name, patterns_joined->str, n_total_matched,
@@ -651,14 +664,20 @@ gboolean
 rpmostree_pre_run_sync (DnfPackage    *pkg,
                         Header         hdr,
                         int            rootfs_fd,
+                        guint         *out_n_run,
                         GCancellable  *cancellable,
                         GError       **error)
 {
   for (guint i = 0; i < G_N_ELEMENTS (pre_scripts); i++)
     {
+      gboolean did_run = FALSE;
+
       if (!run_script (&pre_scripts[i], pkg, hdr, rootfs_fd,
-                       cancellable, error))
+                       &did_run, cancellable, error))
         return FALSE;
+
+      if (did_run)
+        (*out_n_run)++;
     }
 
   return TRUE;

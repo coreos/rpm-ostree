@@ -2455,6 +2455,7 @@ static gboolean
 run_posttrans_sync (RpmOstreeContext *self,
                     int rootfs_dfd,
                     DnfPackage *pkg,
+                    guint        *out_n_run,
                     GCancellable *cancellable,
                     GError    **error)
 {
@@ -2465,7 +2466,7 @@ run_posttrans_sync (RpmOstreeContext *self,
     return FALSE;
 
   if (!rpmostree_posttrans_run_sync (pkg, hdr, rootfs_dfd,
-                                     cancellable, error))
+                                     out_n_run, cancellable, error))
     return FALSE;
 
   return TRUE;
@@ -2475,6 +2476,7 @@ static gboolean
 run_pre_sync (RpmOstreeContext *self,
               int rootfs_dfd,
               DnfPackage *pkg,
+              guint        *out_n_run,
               GCancellable *cancellable,
               GError    **error)
 {
@@ -2484,7 +2486,8 @@ run_pre_sync (RpmOstreeContext *self,
   if (!get_package_metainfo (self, path, &hdr, NULL, error))
     return FALSE;
 
-  if (!rpmostree_pre_run_sync (pkg, hdr, rootfs_dfd, cancellable, error))
+  if (!rpmostree_pre_run_sync (pkg, hdr, rootfs_dfd,
+                               out_n_run, cancellable, error))
     return FALSE;
 
   return TRUE;
@@ -2713,6 +2716,7 @@ static gboolean
 run_all_transfiletriggers (RpmOstreeContext *self,
                            rpmts         ts,
                            int           rootfs_dfd,
+                           guint        *out_n_run,
                            GCancellable *cancellable,
                            GError      **error)
 {
@@ -2721,7 +2725,7 @@ run_all_transfiletriggers (RpmOstreeContext *self,
   { Header hdr;
     while ((hdr = rpmdbNextIterator (mi)) != NULL)
       {
-        if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd,
+        if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, out_n_run,
                                                    cancellable, error))
           return FALSE;
       }
@@ -2740,7 +2744,7 @@ run_all_transfiletriggers (RpmOstreeContext *self,
       if (!get_package_metainfo (self, path, &hdr, NULL, error))
         return FALSE;
 
-      if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd,
+      if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, out_n_run,
                                                  cancellable, error))
         return FALSE;
     }
@@ -2960,6 +2964,8 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
        * this way is that we only need to read the passwd/group files once
        * before applying the overrides, rather than after each %pre.
        */
+      rpmostree_output_task_begin ("Running pre scripts");
+      guint n_pre_scripts_run = 0;
       for (guint i = 0; i < n_rpmts_elements; i++)
         {
           rpmte te = rpmtsElement (ordering_ts, i);
@@ -2969,9 +2975,11 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
           DnfPackage *pkg = (void*)rpmteKey (te);
           g_assert (pkg);
 
-          if (!run_pre_sync (self, tmprootfs_dfd, pkg, cancellable, error))
+          if (!run_pre_sync (self, tmprootfs_dfd, pkg,
+                             &n_pre_scripts_run, cancellable, error))
             return FALSE;
         }
+      rpmostree_output_task_end ("%u done", n_pre_scripts_run);
 
       if (have_passwd &&
           faccessat (tmprootfs_dfd, "usr/etc/passwd", F_OK, 0) == 0)
@@ -3007,6 +3015,9 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
             }
         }
 
+      rpmostree_output_task_begin ("Running post scripts");
+      guint n_post_scripts_run = 0;
+
       for (guint i = 0; i < n_rpmts_elements; i++)
         {
           rpmte te = rpmtsElement (ordering_ts, i);
@@ -3022,13 +3033,16 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
             return glnx_prefix_error (error, "While applying overrides for pkg %s: ",
                                       dnf_package_get_name (pkg));
 
-          if (!run_posttrans_sync (self, tmprootfs_dfd, pkg, cancellable, error))
+          if (!run_posttrans_sync (self, tmprootfs_dfd, pkg,
+                                   &n_post_scripts_run, cancellable, error))
             return FALSE;
         }
 
       if (!run_all_transfiletriggers (self, ordering_ts, tmprootfs_dfd,
-                                      cancellable, error))
+                                      &n_post_scripts_run, cancellable, error))
         return FALSE;
+
+      rpmostree_output_task_end ("%u done", n_post_scripts_run);
 
       /* We want this to be the first error message if something went wrong
        * with a script; see https://github.com/projectatomic/rpm-ostree/pull/888
