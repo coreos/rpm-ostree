@@ -94,6 +94,7 @@ checksum_version (GVariant *checksum)
 typedef struct {
   GPtrArray *treefile_context_dirs;
 
+  RpmOstreeContext *corectx;
   GFile *workdir;
   int workdir_dfd;
   int cachedir_dfd;
@@ -103,6 +104,24 @@ typedef struct {
 
   GBytes *serialized_treefile;
 } RpmOstreeTreeComposeContext;
+
+static void
+rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
+{
+  g_clear_pointer (&ctx->treefile_context_dirs, (GDestroyNotify)g_ptr_array_unref);
+  g_clear_object (&ctx->corectx);
+  g_clear_object (&ctx->workdir);
+  if (ctx->workdir_dfd != -1)
+    (void) close (ctx->workdir_dfd);
+  if (ctx->cachedir_dfd != -1)
+    (void) close (ctx->cachedir_dfd);
+  g_clear_object (&ctx->repo);
+  g_free (ctx->ref);
+  g_free (ctx->previous_checksum);
+  g_clear_pointer (&ctx->serialized_treefile, (GDestroyNotify)g_bytes_unref);
+  g_free (ctx);
+}
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeTreeComposeContext, rpm_ostree_tree_compose_context_free)
 
 static gboolean
 compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
@@ -282,7 +301,6 @@ treefile_sanity_checks (JsonObject   *treedata,
 
 static gboolean
 install_packages_in_root (RpmOstreeTreeComposeContext  *self,
-                          RpmOstreeContext *ctx,
                           JsonObject      *treedata,
                           GFile           *yumroot,
                           int              rootfs_dfd,
@@ -305,7 +323,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     }
 #endif
 
-  DnfContext *hifctx = rpmostree_context_get_hif (ctx);
+  DnfContext *hifctx = rpmostree_context_get_hif (self->corectx);
   if (opt_proxy)
     dnf_context_set_http_proxy (hifctx, opt_proxy);
 
@@ -386,12 +404,12 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     g_autoptr(RpmOstreeTreespec) treespec_value = rpmostree_treespec_new_from_keyfile (treespec, &tmp_error);
     g_assert_no_error (tmp_error);
 
-    if (!rpmostree_context_setup (ctx, gs_file_get_path_cached (yumroot), NULL, treespec_value,
+    if (!rpmostree_context_setup (self->corectx, gs_file_get_path_cached (yumroot), NULL, treespec_value,
                                   cancellable, error))
       return FALSE;
   }
 
-  if (!rpmostree_context_prepare (ctx, cancellable, error))
+  if (!rpmostree_context_prepare (self->corectx, cancellable, error))
     return FALSE;
 
   rpmostree_print_transaction (hifctx);
@@ -440,7 +458,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     return FALSE;
 
   /* --- Downloading packages --- */
-  if (!rpmostree_context_download (ctx, cancellable, error))
+  if (!rpmostree_context_download (self->corectx, cancellable, error))
     return FALSE;
 
   { g_auto(GLnxConsoleRef) console = { 0, };
@@ -641,24 +659,20 @@ rpmostree_compose_builtin_tree (int             argc,
   int exit_status = EXIT_FAILURE;
   GError *temp_error = NULL;
   g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE - Install packages and commit the result to an OSTree repository");
-  RpmOstreeTreeComposeContext selfdata = { NULL, };
-  RpmOstreeTreeComposeContext *self = &selfdata;
+  g_autoptr(RpmOstreeTreeComposeContext) self = g_new0 (RpmOstreeTreeComposeContext, 1);
   JsonNode *treefile_rootval = NULL;
   JsonObject *treefile = NULL;
   g_autofree char *new_inputhash = NULL;
   g_autoptr(GFile) previous_root = NULL;
-  g_autofree char *previous_checksum = NULL;
   const char *rootfs_name = "rootfs.tmp";
   g_autoptr(GFile) yumroot = NULL;
   glnx_fd_close int rootfs_fd = -1;
-  glnx_unref_object OstreeRepo *repo = NULL;
   g_autoptr(GPtrArray) packages = NULL;
   g_autoptr(GFile) treefile_path = NULL;
   g_autoptr(GFile) treefile_dirpath = NULL;
   g_autoptr(GFile) repo_path = NULL;
   glnx_unref_object JsonParser *treefile_parser = NULL;
   g_autoptr(GHashTable) metadata_hash = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_variant_unref);
-  g_autoptr(RpmOstreeContext) corectx = NULL;
   g_autoptr(GHashTable) varsubsts = NULL;
   gboolean workdir_is_tmp = FALSE;
   g_autofree char *next_version = NULL;
@@ -695,8 +709,8 @@ rpmostree_compose_builtin_tree (int             argc,
     goto out;
 
   repo_path = g_file_new_for_path (opt_repo);
-  repo = self->repo = ostree_repo_new (repo_path);
-  if (!ostree_repo_open (repo, cancellable, error))
+  self->repo = ostree_repo_new (repo_path);
+  if (!ostree_repo_open (self->repo, cancellable, error))
     goto out;
 
   treefile_path = g_file_new_for_path (argv[1]);
@@ -786,11 +800,11 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
     }
 
-  corectx = rpmostree_context_new_compose (self->cachedir_dfd, cancellable, error);
-  if (!corectx)
+  self->corectx = rpmostree_context_new_compose (self->cachedir_dfd, cancellable, error);
+  if (!self->corectx)
     goto out;
 
-  varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_hif (corectx));
+  varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_hif (self->corectx));
 
   treefile_parser = json_parser_new ();
   if (!json_parser_load_from_file (treefile_parser,
@@ -832,7 +846,7 @@ rpmostree_compose_builtin_tree (int             argc,
       goto out;
   }
 
-  if (!ostree_repo_read_commit (repo, self->ref, &previous_root, &previous_checksum,
+  if (!ostree_repo_read_commit (self->repo, self->ref, &previous_root, &self->previous_checksum,
                                 cancellable, &temp_error))
     {
       if (g_error_matches (temp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
@@ -847,9 +861,7 @@ rpmostree_compose_builtin_tree (int             argc,
         }
     }
   else
-    g_print ("Previous commit: %s\n", previous_checksum);
-
-  self->previous_checksum = previous_checksum;
+    g_print ("Previous commit: %s\n", self->previous_checksum);
 
   yumroot = g_file_get_child (self->workdir, rootfs_name);
   if (!glnx_shutil_rm_rf_at (self->workdir_dfd, rootfs_name, cancellable, error))
@@ -877,10 +889,10 @@ rpmostree_compose_builtin_tree (int             argc,
       if (!ver_prefix)
           goto out;
 
-      if (previous_checksum)
+      if (self->previous_checksum)
         {
-          if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
-                                         previous_checksum, &variant, error))
+          if (!ostree_repo_load_variant (self->repo, OSTREE_OBJECT_TYPE_COMMIT,
+                                         self->previous_checksum, &variant, error))
             goto out;
 
           last_version = checksum_version (variant);
@@ -910,7 +922,7 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!_rpmostree_jsonutil_append_string_array_to (treefile, "packages", packages, error))
     goto out;
 
-  { g_autofree char *thisarch_packages = g_strconcat ("packages-", dnf_context_get_base_arch (rpmostree_context_get_hif (corectx)), NULL);
+  { g_autofree char *thisarch_packages = g_strconcat ("packages-", dnf_context_get_base_arch (rpmostree_context_get_hif (self->corectx)), NULL);
 
     if (json_object_has_member (treefile, thisarch_packages))
       {
@@ -944,7 +956,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
       if (generate_from_previous)
         {
-          if (!rpmostree_generate_passwd_from_previous (repo, rootfs_fd,
+          if (!rpmostree_generate_passwd_from_previous (self->repo, rootfs_fd,
                                                         treefile_dirpath,
                                                         previous_root, treefile,
                                                         cancellable, error))
@@ -954,7 +966,7 @@ rpmostree_compose_builtin_tree (int             argc,
 
   { gboolean unmodified = FALSE;
 
-    if (!install_packages_in_root (self, corectx, treefile, yumroot, rootfs_fd,
+    if (!install_packages_in_root (self, treefile, yumroot, rootfs_fd,
                                    (char**)packages->pdata,
                                    opt_force_nocache ? NULL : &unmodified,
                                    &new_inputhash,
@@ -1002,16 +1014,16 @@ rpmostree_compose_builtin_tree (int             argc,
   if (!rpmostree_copy_additional_files (yumroot, self->treefile_context_dirs->pdata[0], treefile, cancellable, error))
     goto out;
 
-  if (!rpmostree_check_passwd (repo, yumroot, treefile_dirpath, treefile,
-                               previous_checksum,
+  if (!rpmostree_check_passwd (self->repo, yumroot, treefile_dirpath, treefile,
+                               self->previous_checksum,
                                cancellable, error))
     {
       g_prefix_error (error, "Handling passwd db: ");
       goto out;
     }
 
-  if (!rpmostree_check_groups (repo, yumroot, treefile_dirpath, treefile,
-                               previous_checksum,
+  if (!rpmostree_check_groups (self->repo, yumroot, treefile_dirpath, treefile,
+                               self->previous_checksum,
                                cancellable, error))
     {
       g_prefix_error (error, "Handling group db: ");
@@ -1049,7 +1061,8 @@ rpmostree_compose_builtin_tree (int             argc,
       }
   }
 
-  if (!rpmostree_commit (rootfs_fd, repo, self->ref, opt_write_commitid_to, metadata, gpgkey, selinux, NULL,
+  if (!rpmostree_commit (rootfs_fd, self->repo, self->ref, opt_write_commitid_to,
+                         metadata, gpgkey, selinux, NULL,
                          &new_revision,
                          cancellable, error))
     goto out;
@@ -1062,18 +1075,14 @@ rpmostree_compose_builtin_tree (int             argc,
   exit_status = EXIT_SUCCESS;
 
  out:
-  /* Explicitly close this one now as it may have references to files
-   * we delete below.
+  /* FIXME: Hack: explicitly close this one now as it may have references to
+   * files we delete below.
    */
-  g_clear_object (&corectx);
-
-  g_free (self->ref);
+  g_clear_object (&self->corectx);
 
   /* Move back out of the workding directory and close all fds pointing
    * to it ensure unmount works */
   (void )chdir ("/");
-  if (self->workdir_dfd != -1)
-    (void) close (self->workdir_dfd);
   if (rootfs_fd != -1)
     (void) close (rootfs_fd);
 
@@ -1085,12 +1094,6 @@ rpmostree_compose_builtin_tree (int             argc,
             fprintf (stderr, "warning: umount failed: %m\n");
           }
       (void) glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (self->workdir), NULL, NULL);
-    }
-  if (self)
-    {
-      g_clear_object (&self->workdir);
-      g_clear_pointer (&self->serialized_treefile, g_bytes_unref);
-      g_ptr_array_unref (self->treefile_context_dirs);
     }
 
   return exit_status;
