@@ -328,7 +328,7 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
   g_autoptr(OstreeDeployment) rollback_deployment = NULL;
-  rpmostree_syscore_query_deployments (sysroot, self->osname, NULL, &rollback_deployment);
+  ostree_sysroot_query_deployments_for (sysroot, self->osname, NULL, &rollback_deployment);
   if (!rollback_deployment)
     return glnx_throw (error, "No rollback deployment found");
 
