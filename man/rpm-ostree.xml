@@ -415,6 +415,20 @@ Boston, MA 02111-1307, USA.
         </listitem>
       </varlistentry>
 
+      <varlistentry>
+        <term><command>ex</command></term>
+
+        <listitem>
+          <para>
+            This command offers access to experimental features; command line
+            stability is not guaranteed.  The available subcommands will be listed
+            by invoking <command>rpm-ostree ex</command>.  For example, there is
+            <command>rpm-ostree ex livefs</command> which is an experimental
+            interface for applying changes to the booted deployment.
+          </para>
+        </listitem>
+      </varlistentry>
+
     </variablelist>
   </refsect1>
 
