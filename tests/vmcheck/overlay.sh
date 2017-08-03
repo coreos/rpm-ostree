@@ -30,16 +30,16 @@ if test -z "${INSIDE_VM:-}"; then
        ostree --version
        for pkg in ostree{,-libs,-grub2}; do
           rpm -q $pkg
-          # We do not have perms to read /etc/grub2 as non-root
-          rpm -ql $pkg | grep -v '^/etc/' | sed "s/^/+ /" >  list.txt
-          echo "- *" >> list.txt
-          # In the prebuilt container case, manpages are missing.  Ignore that.
-          # Also chown everything to writable, due to https://bugzilla.redhat.com/show_bug.cgi?id=517575
+          # We do not have perms to read /etc/grub2 as non-root. In the prebuilt
+          # container case, manpages are missing. Ignore that.
+          rpm -ql $pkg | grep -vE "^/(etc|usr/share/(doc|man))/" >  list.txt
+          # Also chown everything to writable, due to
+          # https://bugzilla.redhat.com/show_bug.cgi?id=517575
           chmod -R u+w ${DESTDIR}/
-          # The --ignore-missing-args option was added in rsync 3.1.0,
-          # but CentOS7 only has rsync 3.0.9.  Can simulate the behavior
-          # with --include-from and the way we constructed list.txt.
-          rsync -l --include-from=list.txt / ${DESTDIR}/
+          # Note we cant use --ignore-missing-args here since it was added in
+          # rsync 3.1.0, but CentOS7 only has rsync 3.0.9. Anyway, we expect
+          # everything in list.txt to be present (otherwise, tweak grep above).
+          rsync -l --files-from=list.txt / ${DESTDIR}/
           rm -f list.txt
        done
        make install DESTDIR=${DESTDIR}
