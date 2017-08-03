@@ -65,11 +65,6 @@ GPtrArray *rpmostree_syscore_add_deployment (OstreeSysroot      *sysroot,
                                              gboolean            pushing_rollback,
                                              GError            **error);
 
-void rpmostree_syscore_query_deployments (OstreeSysroot      *sysroot,
-                                          const char         *osname,
-                                          OstreeDeployment  **out_pending,
-                                          OstreeDeployment  **out_rollback);
-
 GPtrArray *rpmostree_syscore_filter_deployments (OstreeSysroot      *sysroot,
                                                  const char         *osname,
                                                  gboolean            remove_pending,

@@ -379,8 +379,8 @@ get_rollback_deployment (OstreeSysroot *sysroot,
   const char *booted_csum = ostree_deployment_get_csum (booted);
 
   g_autoptr(OstreeDeployment) rollback_deployment = NULL;
-  rpmostree_syscore_query_deployments (sysroot, ostree_deployment_get_osname (booted),
-                                       NULL, &rollback_deployment);
+  ostree_sysroot_query_deployments_for (sysroot, ostree_deployment_get_osname (booted),
+                                        NULL, &rollback_deployment);
   /* If no rollback found, we're done */
   if (!rollback_deployment)
     return NULL;

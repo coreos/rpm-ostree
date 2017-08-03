@@ -326,11 +326,22 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
 {
   RollbackTransaction *self = (RollbackTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+  OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
 
+  g_autoptr(OstreeDeployment) pending_deployment = NULL;
   g_autoptr(OstreeDeployment) rollback_deployment = NULL;
-  rpmostree_syscore_query_deployments (sysroot, self->osname, NULL, &rollback_deployment);
-  if (!rollback_deployment)
+  ostree_sysroot_query_deployments_for (sysroot, self->osname,
+                                        &pending_deployment, &rollback_deployment);
+
+  if (!rollback_deployment && !pending_deployment) /* i.e. do we just have 1 deployment? */
     return glnx_throw (error, "No rollback deployment found");
+  else if (!rollback_deployment)
+    {
+      /* If there isn't a rollback deployment, but there *is* a pending deployment, then we
+       * want "rpm-ostree rollback" to put the currently booted deployment back on top. This
+       * also allows users to effectively undo a rollback operation. */
+      rollback_deployment = g_object_ref (booted_deployment);
+    }
 
   g_autoptr(GPtrArray) old_deployments =
     ostree_sysroot_get_deployments (sysroot);
@@ -348,7 +359,7 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
   for (guint i = 0; i < old_deployments->len; i++)
     {
       OstreeDeployment *deployment = old_deployments->pdata[i];
-      if (deployment != rollback_deployment)
+      if (!ostree_deployment_equal (deployment, rollback_deployment))
         g_ptr_array_add (new_deployments, g_object_ref (deployment));
     }
 

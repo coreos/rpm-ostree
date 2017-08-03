@@ -22,16 +22,16 @@ if test -z "${INSIDE_VM:-}"; then
     ostree --version
     for pkg in ostree{,-libs,-grub2}; do
        rpm -q $pkg
-       # We do not have perms to read /etc/grub2 as non-root
-       rpm -ql $pkg | grep -v '^/etc/' | sed "s/^/+ /" >  list.txt
-       echo "- *" >> list.txt
-       # In the prebuilt container case, manpages are missing.  Ignore that.
-       # Also chown everything to writable, due to https://bugzilla.redhat.com/show_bug.cgi?id=517575
+       # We do not have perms to read /etc/grub2 as non-root. In the prebuilt
+       # container case, manpages are missing. Ignore that.
+       rpm -ql $pkg | grep -vE '^/(etc|usr/share/(doc|man))/' >  list.txt
+       # Also chown everything to writable, due to
+       # https://bugzilla.redhat.com/show_bug.cgi?id=517575
        chmod -R u+w ${VMCHECK_INSTTREE}/
-       # The --ignore-missing-args option was added in rsync 3.1.0,
-       # but CentOS7 only has rsync 3.0.9.  Can simulate the behavior
-       # with --include-from and the way we constructed list.txt.
-       rsync -l --include-from=list.txt / ${VMCHECK_INSTTREE}/
+       # Note we can't use --ignore-missing-args here since it was added in
+       # rsync 3.1.0, but CentOS7 only has rsync 3.0.9. Anyway, we expect
+       # everything in list.txt to be present (otherwise, tweak grep above).
+       rsync -l --files-from=list.txt / ${VMCHECK_INSTTREE}/
        rm -f list.txt
     done
 
@@ -45,9 +45,14 @@ else
     # then do this in the VM
     set -x
     ostree admin unlock || :
-    # only copy /usr and /etc
-    rsync -rlv /var/roothome/sync/insttree/usr/ /usr/
-    rsync -rlv /var/roothome/sync/insttree/etc/ /etc/
+
+    # Now, overlay our built binaries & config files
+    INSTTREE=/var/roothome/sync/insttree
+    rsync -rlv $INSTTREE/usr/ /usr/
+    if [ -d $INSTTREE/etc ]; then # on CentOS, the dbus service file is in /usr
+      rsync -rlv $INSTTREE/etc/ /etc/
+    fi
+
     restorecon -v /usr/bin/rpm-ostree
     restorecon -v /usr/libexec/rpm-ostreed
     mkdir -p /etc/systemd/system/rpm-ostreed.service.d
