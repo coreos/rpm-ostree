@@ -45,9 +45,14 @@ else
     # then do this in the VM
     set -x
     ostree admin unlock || :
-    # only copy /usr and /etc
-    rsync -rlv /var/roothome/sync/insttree/usr/ /usr/
-    rsync -rlv /var/roothome/sync/insttree/etc/ /etc/
+
+    # Now, overlay our built binaries & config files
+    INSTTREE=/var/roothome/sync/insttree
+    rsync -rlv $INSTTREE/usr/ /usr/
+    if [ -d $INSTTREE/etc ]; then # on CentOS, the dbus service file is in /usr
+      rsync -rlv $INSTTREE/etc/ /etc/
+    fi
+
     restorecon -v /usr/bin/rpm-ostree
     restorecon -v /usr/libexec/rpm-ostreed
     mkdir -p /etc/systemd/system/rpm-ostreed.service.d
