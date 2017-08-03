@@ -73,3 +73,13 @@ vm_build_rpm foo
 vm_rpmostree install foo
 vm_assert_status_jq ".deployments[0][\"endoflife\"] == \"${META_ENDOFLIFE_MESSAGE}\""
 echo "ok layered commit inherits the endoflife attribute"
+
+vm_assert_status_jq ".deployments[0][\"booted\"] == false" \
+                    ".deployments[1][\"booted\"] == true"
+vm_rpmostree rollback
+vm_assert_status_jq ".deployments[0][\"booted\"] == true" \
+                    ".deployments[1][\"booted\"] == false"
+vm_rpmostree rollback
+vm_assert_status_jq ".deployments[0][\"booted\"] == false" \
+                    ".deployments[1][\"booted\"] == true"
+echo "ok rollback"
