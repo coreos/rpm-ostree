@@ -30,6 +30,7 @@
 
 #include "rpmostree-scripts.h"
 
+#define RPMOSTREE_MESSAGE_PREPOST SD_ID128_MAKE(42,d3,72,22,dc,a2,4a,3b,9d,30,ce,d4,bb,bc,ac,d2)
 #define RPMOSTREE_MESSAGE_FILETRIGGER SD_ID128_MAKE(ef,dd,0e,4e,79,ca,45,d3,88,76,ac,45,e1,28,23,68)
 
 /* This bit is currently private in librpm */
@@ -303,10 +304,21 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
       break;
     }
 
+  guint64 start_time_ms = g_get_monotonic_time () / 1000;
   if (!run_script_in_bwrap_container (rootfs_fd, dnf_package_get_name (pkg),
                                       rpmscript->desc, interp, script, script_arg,
                                       -1, cancellable, error))
     return glnx_prefix_error (error, "Running %s for %s", rpmscript->desc, dnf_package_get_name (pkg));
+  guint64 end_time_ms = g_get_monotonic_time () / 1000;
+  guint64 elapsed_ms = end_time_ms - start_time_ms;
+
+  sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_PREPOST),
+                   "MESSAGE=Executed %s for %s in %ums", rpmscript->desc, dnf_package_get_name (pkg), elapsed_ms,
+                   "SCRIPT_TYPE=%s", rpmscript->desc,
+                   "PKG=%s", dnf_package_get_name (pkg),
+                   "EXEC_TIME_MS=%" G_GUINT64_FORMAT, elapsed_ms,
+                   NULL);
+
   return TRUE;
 }
 
@@ -639,20 +651,24 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
         return glnx_throw_errno_prefix (error, "lseek");
 
       /* Run it, and log the result */
+      guint64 start_time_ms = g_get_monotonic_time () / 1000;
       if (!run_script_in_bwrap_container (rootfs_fd, pkg_name,
                                           "%transfiletriggerin", interp, script, NULL,
                                           matching_files_tmpf.fd, cancellable, error))
         return FALSE;
+      guint64 end_time_ms = g_get_monotonic_time () / 1000;
+      guint64 elapsed_ms = end_time_ms - start_time_ms;
 
       (*out_n_run)++;
 
       sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_FILETRIGGER),
-                       "MESSAGE=Executed %%transfiletriggerin(%s) for %s; %u matched files",
-                       pkg_name, patterns_joined->str, n_total_matched,
+                       "MESSAGE=Executed %%transfiletriggerin(%s) for %s in %ums; %u matched files",
+                       pkg_name, patterns_joined->str, elapsed_ms, n_total_matched,
                        "SCRIPT_TYPE=%%transfiletriggerin"
                        "PKG=%s", pkg_name,
                        "PATTERNS=%s", patterns_joined->str,
                        "TRIGGER_N_MATCHES=%u", n_total_matched,
+                       "EXEC_TIME_MS=%" G_GUINT64_FORMAT, elapsed_ms,
                        NULL);
     }
 #endif
