@@ -38,8 +38,8 @@ static char * opt_remote;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
-  { "branch", 'b', 0, G_OPTION_ARG_STRING, &opt_branch, "Rebase to branch BRANCH from the current remote", "BRANCH" },
-  { "remote", 'm', 0, G_OPTION_ARG_STRING, &opt_remote, "Reusing the same branch name, rebase to REMOTE", "REMOTE" },
+  { "branch", 'b', 0, G_OPTION_ARG_STRING, &opt_branch, "Rebase to branch BRANCH; use --remote to change remote as well", "BRANCH" },
+  { "remote", 'm', 0, G_OPTION_ARG_STRING, &opt_remote, "Rebase to current branch name using REMOTE; may also be combined with --branch", "REMOTE" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after rebase is finished", NULL },
   { "skip-purge", 0, 0, G_OPTION_ARG_NONE, &opt_skip_purge, "Keep previous refspec after rebase", NULL },
   { NULL }
@@ -101,22 +101,13 @@ rpmostree_builtin_rebase (int             argc,
     }
   else
     {
-      GVariant *default_deploy = rpmostree_os_get_default_deployment (os_proxy);
-      g_assert (default_deploy);
-      g_autoptr(GVariantDict) dict = g_variant_dict_new (default_deploy);
-      const char *origin_refspec;
-      g_autofree char *remote = NULL;
-      g_autofree char *branch = NULL;
-
-      if (!g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
-        return glnx_throw (error, "No origin"), EXIT_FAILURE;
-
-      if (!ostree_parse_refspec (origin_refspec, &remote, &branch, error))
-        return EXIT_FAILURE;
-
-      const char *target_remote = opt_remote ?: remote;
-      const char *target_branch = opt_branch ?: branch;
-      new_provided_refspec = new_refspec_owned = g_strconcat (target_remote ?: "", ":", target_branch, NULL);
+      if (opt_remote)
+        {
+          new_provided_refspec = new_refspec_owned =
+            g_strconcat (opt_remote, ":", opt_branch ?: "", NULL);
+        }
+      else
+        new_provided_refspec = opt_branch;
     }
 
   g_autoptr(GVariant) options =
