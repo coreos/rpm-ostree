@@ -4,31 +4,36 @@ At the moment, there are four primary commands to be familiar with on
 an `rpm-ostree` based system.  Also remember that in a Project Atomic
 system, the `atomic host` command (from the
 [Atomic command](https://github.com/projectatomic/atomic/)) is an
-alias for `rpm-ostree`.  The author tends to use the former on client
-systems, and the latter on compose servers.
+alias for `rpm-ostree`.
 
 ```
-   # atomic host status
+   # rpm-ostree status
 ```
+
 Will show you your deployments, in the order in which they will appear
-in the bootloader.  The `*` shows the currently booted deployment.
+in the bootloader.  The `●` shows the currently booted deployment.
 
 ```
-   # atomic host upgrade
+   # rpm-ostree upgrade
 ```
-Will perform a system upgrade, creating a *new* chroot, and set it as
-the default for the next boot.  You should use `systemctl reboot`
+
+Will perform a system upgrade, creating a *new* deployment (root filesystem) and
+set it as the default for the next boot.  You should use `systemctl reboot`
 shortly afterwards.
 
 ```
-   # atomic host rollback
+   # rpm-ostree rollback
 ```
-By default, the `atomic upgrade` will keep at most two bootable
-"deployments", though the underlying technology supports more.
+
+This rolls back to the previous state.  By default, the `rpm-ostree upgrade` will
+keep at most two bootable "deployments", though the underlying technology
+supports more.
+
 
 ```
-# atomic host deploy <version>
+# rpm-ostree deploy <version>
 ```
+
 This command makes use of the server-side history feature of OSTree.
 It will search the history of the current branch for a commit with the
 specified version, and deploy it.  This can be used in scripts to
@@ -37,33 +42,66 @@ provides an update online, you might not want to deploy it until
 you've tested it.  This helps ensure that when you upgrade, you are
 getting exactly what you asked for.
 
-## Package layering
+### Hybrid image/packaging via package layering
 
-It is possible to add more packages onto the system that are not part of
-the commit composed on the server. These additional "layered" packages
+It is possible to dynamically add more packages onto the system that are not
+part of the commit composed on the server. These additional "layered" packages
 are persistent across upgrades, rebases, and deploys (contrast with the
-ostree [unlocking](https://github.com/ostreedev/ostree/blob/master/man/ostree-admin-unlock.xml)
-mechanism). This allows you to easily enhance the base set of packages
-on only some machines, or only temporarily (rather than asking to have
-it part of the server compose and affecting every machine). For example,
-you may wish to permanently install some diagnostics tools on a test
-machine.
+ostree [unlocking](https://github.com/ostreedev/ostree/blob/master/man/ostree-admin-unlock.xml) mechanism).
+
+This is where the true hybrid image/package nature of rpm-ostree comes into
+play; you get a combination of the benefits of images and packages.  The
+package updates are still fully transactional and offline.
+
+For example, you can use package layering to install 3rd party
+kernel modules, or userspace driver daemons such as `pcsc-lite-ccid`.
+While most software should go into a container, you have full flexibilty
+to use packages where it suits.
 
 ```
-# rpm-ostree pkg-add <pkg>
+# rpm-ostree install <pkg>
 ```
 
-Will download the target package, its dependencies, and create a new
-deployment with those packages installed.
+Will download the target package, its dependencies, and create a new deployment
+with those packages installed.  To remove layered packages, use `rpm-ostree
+uninstall`.
+
+By default, every `rpm-ostree` operation is "offline" - it has no effect
+on your running system, and will only take effect when you reboot.  This "pending" state is
+called the "pending deployment".  Operations can be chained; for example,
+if you invoke `rpm-ostree upgrade` after installing a package, your new root
+will upgraded with the package also installed.
+
+### Rebasing
 
 ```
-# rpm-ostree pkg-remove <pkg>
+rpm-ostree rebase -b $branchname
 ```
 
-Will create a new deployment with the target package removed.
+Your operating system vendor may provide multiple base branches.  For example,
+Fedora Atomic Host has branches of the form:
 
-Note that package layering is currently in preview mode and as such may
-change interface or functionality before being declared stable.
+ - `fedora/26/x86_64/atomic-host`
+ - `fedora/26/x86_64/updates-testing/atomic-host`
+ - `fedora/27/x86_64/atomic-host`
+
+You can use the `rebase` command to switch between these; this can represent a
+major version upgrade, or logically switching between different "testing"
+streams within the same release. Like every other `rpm-ostree` operation, All
+layered packages and local state will be carried across.
+
+### Other local state changes
+
+See `man rpm-ostree` for more.  For example, there is an `rpm-ostree initramfs`
+command that enables local initramfs generation.
+
+### Experimental interface
+
+There is a generic `rpm-ostree ex` command that offers experimental features.
+One of those is `rpm-ostree ex livefs`, which offers the ability to apply
+changes from the pending deployment to the booted deployment.
+
+See `man rpm-ostree` for more information.
 
 ## Filesystem layout
 
