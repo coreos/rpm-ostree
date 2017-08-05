@@ -964,16 +964,14 @@ rename_if_exists (int         dfd,
                   const char *to,
                   GError    **error)
 {
-  gboolean ret = FALSE;
   struct stat stbuf;
+  const char *errmsg = glnx_strjoina ("renaming ", from);
+  GLNX_AUTO_PREFIX_ERROR (errmsg, error);
 
   if (fstatat (dfd, from, &stbuf, 0) < 0)
     {
       if (errno != ENOENT)
-        {
-          glnx_set_error_from_errno (error);
-          goto out;
-        }
+        return glnx_throw_errno_prefix (error, "fstatat(%s)", from);
     }
   else
     {
@@ -983,23 +981,14 @@ rename_if_exists (int         dfd,
           if (errno == EEXIST)
             {
               if (unlinkat (dfd, from, AT_REMOVEDIR) < 0)
-                {
-                  glnx_set_error_from_errno (error);
-                  goto out;
-                }
+                return glnx_throw_errno_prefix (error, "rmdirat(%s)", from);
             }
           else
-            {
-              glnx_set_error_from_errno (error);
-              goto out;
-            }
+            return glnx_throw_errno_prefix (error, "renameat(%s)", to);
         }
     }
 
-  ret = TRUE;
- out:
-  g_prefix_error (error, "Renaming %s -> %s: ", from, to);
-  return ret;
+  return TRUE;
 }
 
 gboolean
@@ -1247,16 +1236,11 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
                                    GCancellable  *cancellable,
                                    GError       **error)
 {
-  gboolean ret = FALSE;
-  guint i, len;
   JsonArray *units = NULL;
-  JsonArray *remove = NULL;
-  const char *default_target = NULL;
-  const char *postprocess_script = NULL;
-
   if (json_object_has_member (treefile, "units"))
     units = json_object_get_array_member (treefile, "units");
 
+  guint len;
   if (units)
     len = json_array_get_length (units);
   else
@@ -1267,76 +1251,67 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 
     if (!glnx_shutil_mkdir_p_at (rootfs_fd, "etc/systemd/system/multi-user.target.wants", 0755,
                                  cancellable, error))
-      goto out;
+      return FALSE;
     if (!glnx_opendirat (rootfs_fd, "etc/systemd/system/multi-user.target.wants", TRUE,
                          &multiuser_wants_dfd, error))
-      goto out;
+      return FALSE;
 
-    for (i = 0; i < len; i++)
+    for (guint i = 0; i < len; i++)
       {
         const char *unitname = _rpmostree_jsonutil_array_require_string_element (units, i, error);
         g_autofree char *symlink_target = NULL;
         struct stat stbuf;
 
         if (!unitname)
-          goto out;
+          return FALSE;
 
         symlink_target = g_strconcat ("/usr/lib/systemd/system/", unitname, NULL);
 
         if (fstatat (multiuser_wants_dfd, unitname, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
           {
             if (errno != ENOENT)
-              {
-                glnx_set_error_from_errno (error);
-                goto out;
-              }
+              return glnx_throw_errno_prefix (error, "fstatat(%s)", unitname);
           }
         else
           continue;
-          
+
         g_print ("Adding %s to multi-user.target.wants\n", unitname);
 
         if (symlinkat (symlink_target, multiuser_wants_dfd, unitname) < 0)
-          {
-            glnx_set_error_from_errno (error);
-            goto out;
-          }
+          return glnx_throw_errno_prefix (error, "symlinkat(%s)", unitname);
       }
   }
 
-  {
-    const guint8 *buf;
-    gsize len;
+  if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/share/rpm-ostree", 0755, cancellable, error))
+    return FALSE;
 
-    if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/share/rpm-ostree", 0755, cancellable, error))
-      goto out;
+  { gsize len;
+    const guint8 *buf = g_bytes_get_data (serialized_treefile, &len);
 
-    buf = g_bytes_get_data (serialized_treefile, &len);
-    
     if (!glnx_file_replace_contents_at (rootfs_fd, "usr/share/rpm-ostree/treefile.json",
                                         buf, len, GLNX_FILE_REPLACE_NODATASYNC,
                                         cancellable, error))
-      goto out;
+      return FALSE;
   }
 
+  const char *default_target = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "default_target",
                                                               &default_target, error))
-    goto out;
-  
+    return FALSE;
+
   if (default_target != NULL)
     {
       g_autofree char *dest_default_target_path =
         g_strconcat ("/usr/lib/systemd/system/", default_target, NULL);
 
-      (void) unlinkat (rootfs_fd, "etc/systemd/system/default.target", 0);
-        
-      if (symlinkat (dest_default_target_path, rootfs_fd, "etc/systemd/system/default.target") < 0)
-        {
-          glnx_set_error_from_errno (error);
-          goto out;
-        }
+      static const char default_target_path[] = "etc/systemd/system/default.target";
+      (void) unlinkat (rootfs_fd, default_target_path, 0);
+
+      if (symlinkat (dest_default_target_path, rootfs_fd, default_target_path) < 0)
+        return glnx_throw_errno_prefix (error, "symlinkat(%s)", default_target_path);
     }
 
+  JsonArray *remove = NULL;
   if (json_object_has_member (treefile, "remove-files"))
     {
       remove = json_object_get_array_member (treefile, "remove-files");
@@ -1344,25 +1319,21 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
     }
   else
     len = 0;
-    
-  for (i = 0; i < len; i++)
+
+  for (guint i = 0; i < len; i++)
     {
       const char *val = _rpmostree_jsonutil_array_require_string_element (remove, i, error);
 
       if (!val)
         return FALSE;
       if (g_path_is_absolute (val))
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "'remove' elements must be relative");
-          goto out;
-        }
-      g_assert (val[0] != '/');
+        return glnx_throw (error, "'remove' elements must be relative");
+      g_assert_cmpint (val[0], !=, '/');
       g_assert (strstr (val, "..") == NULL);
 
       g_print ("Deleting: %s\n", val);
       if (!glnx_shutil_rm_rf_at (rootfs_fd, val, cancellable, error))
-        goto out;
+        return FALSE;
     }
 
   /* This works around a potential issue with libsolv if we go down the
@@ -1377,33 +1348,26 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
    * compatibility reasons using tmpfiles.
    * */
   if (!glnx_shutil_rm_rf_at (rootfs_fd, "var/lib/rpm", cancellable, error))
-    goto out;
+    return FALSE;
   if (symlinkat ("../../usr/share/rpm", rootfs_fd, "var/lib/rpm") < 0)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
+    return glnx_throw_errno_prefix (error, "symlinkat(%s)", "var/lib/rpm");
 
   if (json_object_has_member (treefile, "remove-from-packages"))
     {
       g_autoptr(RpmOstreeRefSack) refsack = NULL;
-      guint i;
 
       remove = json_object_get_array_member (treefile, "remove-from-packages");
       len = json_array_get_length (remove);
 
       if (!rpmostree_get_pkglist_for_root (rootfs_fd, ".", &refsack, NULL,
                                            cancellable, error))
-        {
-          g_prefix_error (error, "Reading package set: ");
-          goto out;
-        }
+        return glnx_prefix_error (error, "Reading package set");
 
-      for (i = 0; i < len; i++)
+      for (guint i = 0; i < len; i++)
         {
           JsonArray *elt = json_array_get_array_element (remove, i);
           if (!handle_remove_files_from_package (rootfs_fd, refsack, elt, cancellable, error))
-            goto out;
+            return FALSE;
         }
     }
 
@@ -1414,7 +1378,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
                                                                 "mutate-os-release",
                                                                 &base_version,
                                                                 error))
-      goto out;
+      return FALSE;
 
     if (base_version != NULL && next_version == NULL)
       {
@@ -1422,10 +1386,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
       }
     else if (base_version != NULL)
       {
-        g_autofree char *contents = NULL;
-        g_autofree char *new_contents = NULL;
-        const char *path = NULL;
-
         /* let's try to find the first non-symlink */
         const char *os_release[] = {
           "etc/os-release",
@@ -1434,19 +1394,15 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
         };
 
         /* fallback on just overwriting etc/os-release */
-        path = os_release[0];
+        const char *path = os_release[0];
 
         for (guint i = 0; i < G_N_ELEMENTS (os_release); i++)
           {
             struct stat stbuf;
 
-            if (TEMP_FAILURE_RETRY (fstatat (rootfs_fd, os_release[i], &stbuf,
-                                             AT_SYMLINK_NOFOLLOW)) != 0)
-              {
-                glnx_set_prefix_error_from_errno (error, "fstatat(%s)",
-                                                  os_release[i]);
-                goto out;
-              }
+            if (!glnx_fstatat (rootfs_fd, os_release[i], &stbuf,
+                               AT_SYMLINK_NOFOLLOW, error))
+              return FALSE;
 
             if (S_ISREG (stbuf.st_mode))
               {
@@ -1457,26 +1413,27 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 
         g_print ("Mutating /%s\n", path);
 
-        contents = glnx_file_get_contents_utf8_at (rootfs_fd, path, NULL,
-                                                   cancellable, error);
+        g_autofree char *contents = glnx_file_get_contents_utf8_at (rootfs_fd, path, NULL,
+                                                                    cancellable, error);
         if (contents == NULL)
-          goto out;
+          return FALSE;
 
-        new_contents = mutate_os_release (contents, base_version,
-                                          next_version, error);
+        g_autofree char *new_contents = mutate_os_release (contents, base_version,
+                                                           next_version, error);
         if (new_contents == NULL)
-          goto out;
+          return FALSE;
 
         if (!glnx_file_replace_contents_at (rootfs_fd, path,
                                             (guint8*)new_contents, -1, 0,
                                             cancellable, error))
-          goto out;
+          return FALSE;
       }
   }
 
+  const char *postprocess_script = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "postprocess-script",
                                                               &postprocess_script, error))
-    goto out;
+    return FALSE;
 
   if (postprocess_script)
     {
@@ -1495,25 +1452,20 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
       /* Note we need to make binpath *not* absolute here */
       if (!glnx_file_copy_at (AT_FDCWD, src, NULL, rootfs_fd, binpath + 1,
                               GLNX_FILE_COPY_NOXATTRS, cancellable, error))
-        goto out;
+        return FALSE;
 
       g_print ("Executing postprocessing script '%s'\n", bn);
 
       {
         char *child_argv[] = { binpath, NULL };
         if (!run_bwrap_mutably (rootfs_fd, binpath, child_argv, error))
-          {
-            g_prefix_error (error, "While executing postprocessing script '%s': ", bn);
-            goto out;
-          }
+          return glnx_prefix_error (error, "While executing postprocessing script '%s'", bn);
       }
 
       g_print ("Finished postprocessing script '%s'\n", bn);
     }
-  
-  ret = TRUE;
- out:
-  return ret;
+
+  return TRUE;
 }
 
 /**
