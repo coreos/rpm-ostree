@@ -33,9 +33,13 @@
 static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_skip_purge;
+static char * opt_branch;
+static char * opt_remote;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
+  { "branch", 'b', 0, G_OPTION_ARG_STRING, &opt_branch, "Rebase to branch BRANCH; use --remote to change remote as well", "BRANCH" },
+  { "remote", 'm', 0, G_OPTION_ARG_STRING, &opt_remote, "Rebase to current branch name using REMOTE; may also be combined with --branch", "REMOTE" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after rebase is finished", NULL },
   { "skip-purge", 0, 0, G_OPTION_ARG_NONE, &opt_skip_purge, "Keep previous refspec after rebase", NULL },
   { NULL }
@@ -49,6 +53,7 @@ rpmostree_builtin_rebase (int             argc,
                           GError        **error)
 {
   const char *new_provided_refspec;
+  g_autofree char *new_refspec_owned = NULL;
   const char *revision = NULL;
 
   /* forced blank for now */
@@ -74,20 +79,36 @@ rpmostree_builtin_rebase (int             argc,
                                        error))
     return EXIT_FAILURE;
 
-  if (argc < 2 || argc > 3)
+  if (argc > 3)
     {
-      rpmostree_usage_error (context, "Too few or too many arguments", error);
+      rpmostree_usage_error (context, "Too many arguments", error);
       return EXIT_FAILURE;
     }
-
-  new_provided_refspec = argv[1];
-
-  if (argc == 3)
-    revision = argv[2];
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
     return EXIT_FAILURE;
+
+  if (argc < 2 && !(opt_branch || opt_remote))
+    {
+      return rpmostree_usage_error (context, "Must specify refspec, or -b branch or -r remote", error), EXIT_FAILURE;
+    }
+  else if (argc >= 2)
+    {
+      new_provided_refspec = argv[1];
+      if (argc == 3)
+        revision = argv[2];
+    }
+  else
+    {
+      if (opt_remote)
+        {
+          new_provided_refspec = new_refspec_owned =
+            g_strconcat (opt_remote, ":", opt_branch ?: "", NULL);
+        }
+      else
+        new_provided_refspec = opt_branch;
+    }
 
   g_autoptr(GVariant) options =
     rpmostree_get_options_variant (opt_reboot,
