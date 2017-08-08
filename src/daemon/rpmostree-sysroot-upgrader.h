@@ -53,6 +53,16 @@ typedef enum {
   RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS = (1 << 4)
 } RpmOstreeSysrootUpgraderFlags;
 
+/* _NONE means we're doing pure ostree, no client-side computation.
+ * _LOCAL is just e.g. rpm-ostree initramfs
+ * _RPMMD_REPOS is where we're downloading data from /etc/yum.repos.d
+ */
+typedef enum {
+  RPMOSTREE_SYSROOT_UPGRADER_LAYERING_NONE = 0,
+  RPMOSTREE_SYSROOT_UPGRADER_LAYERING_LOCAL = 1,
+  RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS = 2,
+} RpmOstreeSysrootUpgraderLayeringType;
+
 GType rpmostree_sysroot_upgrader_get_type (void);
 
 GType rpmostree_sysroot_upgrader_flags_get_type (void);
@@ -76,13 +86,31 @@ const char *
 rpmostree_sysroot_upgrader_get_base (RpmOstreeSysrootUpgrader *self);
 
 gboolean
-rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
-                                 const char             *dir_to_pull,
-                                 OstreeRepoPullFlags     flags,
-                                 OstreeAsyncProgress    *progress,
-                                 gboolean               *out_changed,
-                                 GCancellable           *cancellable,
-                                 GError                **error);
+rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
+                                      const char             *dir_to_pull,
+                                      OstreeRepoPullFlags     flags,
+                                      OstreeAsyncProgress    *progress,
+                                      gboolean               *out_changed,
+                                      GCancellable           *cancellable,
+                                      GError                **error);
+
+gboolean
+rpmostree_sysroot_upgrader_prep_layering (RpmOstreeSysrootUpgrader *self,
+                                          RpmOstreeSysrootUpgraderLayeringType *out_layering,
+                                          gboolean                 *out_changed,
+                                          GCancellable             *cancellable,
+                                          GError                  **error);
+
+gboolean
+rpmostree_sysroot_upgrader_pull_repos (RpmOstreeSysrootUpgrader  *self,
+                                       const char             *dir_to_pull,
+                                       OstreeRepoPullFlags     flags,
+                                       OstreeAsyncProgress    *progress,
+                                       gboolean               *out_changed,
+                                       GCancellable           *cancellable,
+                                       GError                **error);
+
+
 
 gboolean
 rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader  *self,

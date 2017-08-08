@@ -69,12 +69,15 @@ struct RpmOstreeSysrootUpgrader {
   RpmOstreeRefSack *rsack;
   char *metatmpdir_path;
   int metatmpdir_dfd;
-
+  RpmOstreeContext *ctx;
 
   GPtrArray *overlay_packages; /* Finalized list of pkgs to overlay */
   GPtrArray *override_remove_packages; /* Finalized list of base pkgs to remove */
   GPtrArray *override_replace_local_packages; /* Finalized list of local base pkgs to replace */
 
+  gboolean layering_initialized; /* Whether layering_type is known */
+  RpmOstreeSysrootUpgraderLayeringType layering_type;
+  gboolean layering_changed; /* Whether changes to layering should result in a new commit */
   char *base_revision; /* Non-layered replicated commit */
   char *final_revision; /* Computed by layering; if NULL, only using base_revision */
 };
@@ -194,7 +197,7 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   RpmOstreeSysrootUpgrader *self = RPMOSTREE_SYSROOT_UPGRADER (object);
 
   g_clear_pointer (&self->rsack, rpmostree_refsack_unref);
-
+  g_clear_object (&self->ctx);
   if (self->tmprootfs_dfd != -1)
     (void)close (self->tmprootfs_dfd);
 
@@ -368,16 +371,17 @@ rpmostree_sysroot_upgrader_get_merge_deployment (RpmOstreeSysrootUpgrader *self)
 }
 
 /*
- * Like ostree_sysroot_upgrader_pull(), but modified to handle layered packages.
+ * Like ostree_sysroot_upgrader_pull(), but also handles the `baserefspec` we
+ * use when doing layered packages.
  */
 gboolean
-rpmostree_sysroot_upgrader_pull (RpmOstreeSysrootUpgrader  *self,
-                                 const char             *dir_to_pull,
-                                 OstreeRepoPullFlags     flags,
-                                 OstreeAsyncProgress    *progress,
-                                 gboolean               *out_changed,
-                                 GCancellable           *cancellable,
-                                 GError                **error)
+rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
+                                      const char             *dir_to_pull,
+                                      OstreeRepoPullFlags     flags,
+                                      OstreeAsyncProgress    *progress,
+                                      gboolean               *out_changed,
+                                      GCancellable           *cancellable,
+                                      GError                **error)
 {
   g_autofree char *origin_remote = NULL;
   g_autofree char *origin_ref = NULL;
@@ -775,12 +779,11 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
 
 static gboolean
 prepare_context_for_assembly (RpmOstreeSysrootUpgrader *self,
-                              RpmOstreeContext         *ctx,
                               const char               *tmprootfs,
                               GCancellable             *cancellable,
                               GError                  **error)
 {
-  DnfContext *hifctx = rpmostree_context_get_hif (ctx);
+  DnfContext *hifctx = rpmostree_context_get_hif (self->ctx);
 
   const char *sysroot_path =
     gs_file_get_path_cached (ostree_sysroot_get_path (self->sysroot));
@@ -800,7 +803,7 @@ prepare_context_for_assembly (RpmOstreeSysrootUpgrader *self,
   dnf_context_set_source_root (hifctx, tmprootfs);
 
   /* point the core to the passwd & group of the merge deployment */
-  rpmostree_context_set_passwd_dir (ctx, passwddir);
+  rpmostree_context_set_passwd_dir (self->ctx, passwddir);
 
   /* load the sepolicy to use during import */
   glnx_unref_object OstreeSePolicy *sepolicy = NULL;
@@ -808,19 +811,21 @@ prepare_context_for_assembly (RpmOstreeSysrootUpgrader *self,
                                               cancellable, error))
     return FALSE;
 
-  rpmostree_context_set_sepolicy (ctx, sepolicy);
+  rpmostree_context_set_sepolicy (self->ctx, sepolicy);
   return TRUE;
 }
 
+/* Initialize libdnf context from our configuration */
 static gboolean
-do_local_assembly (RpmOstreeSysrootUpgrader *self,
-                   GCancellable             *cancellable,
-                   GError                  **error)
+prep_local_assembly (RpmOstreeSysrootUpgrader *self,
+                     GCancellable             *cancellable,
+                     GError                  **error)
 {
-  g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_system (cancellable, error);
+  g_assert (!self->ctx);
+  self->ctx = rpmostree_context_new_system (cancellable, error);
   g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
 
-  if (!prepare_context_for_assembly (self, ctx, tmprootfs_abspath, cancellable, error))
+  if (!prepare_context_for_assembly (self, tmprootfs_abspath, cancellable, error))
     return FALSE;
 
   GHashTable *local_pkgs = rpmostree_origin_get_local_packages (self->origin);
@@ -832,14 +837,15 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (treespec == NULL)
     return FALSE;
 
-  if (!rpmostree_context_setup (ctx, tmprootfs_abspath, tmprootfs_abspath, treespec, cancellable, error))
+  if (!rpmostree_context_setup (self->ctx, tmprootfs_abspath, tmprootfs_abspath, treespec,
+                                cancellable, error))
     return FALSE;
 
   g_autoptr(OstreeRepo) pkgcache_repo = NULL;
   if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
     return FALSE;
 
-  rpmostree_context_set_repos (ctx, self->repo, pkgcache_repo);
+  rpmostree_context_set_repos (self->ctx, self->repo, pkgcache_repo);
 
   const gboolean have_packages = (self->overlay_packages->len > 0 ||
                                   g_hash_table_size (local_pkgs) > 0 ||
@@ -847,26 +853,69 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
                                   self->override_replace_local_packages->len > 0);
   if (have_packages)
     {
-      if (!rpmostree_context_prepare (ctx, cancellable, error))
+      if (!rpmostree_context_prepare (self->ctx, cancellable, error))
         return FALSE;
+      self->layering_type = RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS;
     }
   else
-    rpmostree_context_set_is_empty (ctx);
+    {
+      rpmostree_context_set_is_empty (self->ctx);
+      self->layering_type = RPMOSTREE_SYSROOT_UPGRADER_LAYERING_LOCAL;
+    }
 
   if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN)
     {
       if (have_packages)
-        rpmostree_print_transaction (rpmostree_context_get_hif (ctx));
-      return TRUE; /* Note early return */
+        rpmostree_print_transaction (rpmostree_context_get_hif (self->ctx));
     }
 
-  if (have_packages)
+  /* If the current state has layering, compare the depsolved set for changes. */
+  if (self->final_revision)
     {
-      if (!rpmostree_context_download (ctx, cancellable, error))
+      g_autoptr(GVariant) prev_commit = NULL;
+
+      if (!ostree_repo_load_variant (self->repo, OSTREE_OBJECT_TYPE_COMMIT,
+                                     self->final_revision, &prev_commit, error))
         return FALSE;
-      if (!rpmostree_context_import (ctx, cancellable, error))
+
+      g_autoptr(GVariant) metadata = g_variant_get_child_value (prev_commit, 0);
+      g_autoptr(GVariantDict) metadata_dict = g_variant_dict_new (metadata);
+      g_autoptr(GVariant) previous_sha512_v =
+        _rpmostree_vardict_lookup_value_required (metadata_dict, "rpmostree.state-sha512",
+                                                  (GVariantType*)"s", error);
+      if (!previous_sha512_v)
         return FALSE;
-      if (!rpmostree_context_relabel (ctx, cancellable, error))
+      const char *previous_state_sha512 = g_variant_get_string (previous_sha512_v, NULL);
+      g_autofree char *new_state_sha512 = rpmostree_context_get_state_sha512 (self->ctx);
+
+      self->layering_changed = strcmp (previous_state_sha512, new_state_sha512) != 0;
+    }
+  else
+    /* Otherwise, we're transitioning from not-layered to layered, so it
+       definitely changed */
+    self->layering_changed = TRUE;
+
+  self->layering_initialized = TRUE;
+  return TRUE;
+}
+
+/* Download packages, overlay, run scripts, and commit final rootfs to ostree */
+static gboolean
+perform_local_assembly (RpmOstreeSysrootUpgrader *self,
+                        GCancellable             *cancellable,
+                        GError                  **error)
+{
+  /* If we computed no layering is required, we're done */
+  if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_NONE)
+    return TRUE;
+
+  if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
+    {
+      if (!rpmostree_context_download (self->ctx, cancellable, error))
+        return FALSE;
+      if (!rpmostree_context_import (self->ctx, cancellable, error))
+        return FALSE;
+      if (!rpmostree_context_relabel (self->ctx, cancellable, error))
         return FALSE;
 
       g_clear_pointer (&self->final_revision, g_free);
@@ -874,7 +923,7 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
         (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS) > 0;
 
       /* --- override/overlay and commit --- */
-      if (!rpmostree_context_assemble_tmprootfs (ctx, self->tmprootfs_dfd,
+      if (!rpmostree_context_assemble_tmprootfs (self->ctx, self->tmprootfs_dfd,
                                                  self->devino_cache, noscripts,
                                                  cancellable, error))
         return FALSE;
@@ -918,7 +967,7 @@ do_local_assembly (RpmOstreeSysrootUpgrader *self,
       rpmostree_output_task_end ("done");
     }
 
-  if (!rpmostree_context_commit_tmprootfs (ctx, self->tmprootfs_dfd, self->devino_cache,
+  if (!rpmostree_context_commit_tmprootfs (self->ctx, self->tmprootfs_dfd, self->devino_cache,
                                            self->base_revision,
                                            RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
                                            &self->final_revision,
@@ -947,29 +996,52 @@ requires_local_assembly (RpmOstreeSysrootUpgrader *self)
          rpmostree_origin_get_regenerate_initramfs (self->origin);
 }
 
-/* Determines whether local assembly is required and does it if so. */
-static gboolean
-maybe_do_local_assembly (RpmOstreeSysrootUpgrader *self,
-                         GCancellable             *cancellable,
-                         GError                  **error)
+/* Determine whether or not we require local modifications,
+ * and if so, prepare layering (download rpm-md, depsolve etc).
+ */
+gboolean
+rpmostree_sysroot_upgrader_prep_layering (RpmOstreeSysrootUpgrader *self,
+                                          RpmOstreeSysrootUpgraderLayeringType *out_layering,
+                                          gboolean                 *out_changed,
+                                          GCancellable             *cancellable,
+                                          GError                  **error)
 {
-  if (!checkout_base_tree (self, cancellable, error))
-    return FALSE;
+  /* Default to no assembly required, and not changed */
+  self->layering_initialized = TRUE;
+  self->layering_type = RPMOSTREE_SYSROOT_UPGRADER_LAYERING_NONE;
+  *out_layering = self->layering_type;
+  *out_changed = FALSE;
 
-  if (!finalize_overrides (self, cancellable, error))
-    return FALSE;
-
-  if (!finalize_overlays (self, cancellable, error))
-    return FALSE;
-
-  if (!requires_local_assembly (self))
+  if (!rpmostree_origin_may_require_local_assembly (self->origin))
     {
-      /* no assembly required; clear final_revision to ensure we deploy base */
       g_clear_pointer (&self->final_revision, g_free);
+      /* No assembly? We're done then */
       return TRUE;
     }
 
-  return do_local_assembly (self, cancellable, error);
+  /* Do a bit more work to see whether or not we have to do assembly */
+  if (!checkout_base_tree (self, cancellable, error))
+    return FALSE;
+  if (!finalize_overrides (self, cancellable, error))
+    return FALSE;
+  if (!finalize_overlays (self, cancellable, error))
+    return FALSE;
+
+  /* Recheck the state */
+  if (!requires_local_assembly (self))
+    {
+      g_clear_pointer (&self->final_revision, g_free);
+      /* No assembly? We're done then */
+      return TRUE;
+    }
+
+  /* Actually do the prep work for local assembly */
+  if (!prep_local_assembly (self, cancellable, error))
+    return FALSE;
+
+  *out_layering = self->layering_type;
+  *out_changed = self->layering_changed;
+  return TRUE;
 }
 
 /**
@@ -986,29 +1058,24 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                    GCancellable             *cancellable,
                                    GError                  **error)
 {
-  glnx_unref_object OstreeDeployment *new_deployment = NULL;
-  const char *target_revision;
-  g_autoptr(GKeyFile) origin = NULL;
-
-  if (rpmostree_origin_may_require_local_assembly (self->origin))
-    {
-      if (!maybe_do_local_assembly (self, cancellable, error))
-        return FALSE;
-    }
-  else
-    g_clear_pointer (&self->final_revision, g_free);
-
   if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN)
     {
       /* we already printed the transaction in do_final_local_assembly() */
       return TRUE;
     }
 
+  /* rpmostree_sysroot_upgrader_prep_layering() must have been invoked */
+  g_assert (self->layering_initialized);
+  /* Generate the final ostree commit */
+  if (!perform_local_assembly (self, cancellable, error))
+    return FALSE;
+
   /* make sure we have a known target to deploy */
-  target_revision = self->final_revision ?: self->base_revision;
+  const char *target_revision = self->final_revision ?: self->base_revision;
   g_assert (target_revision);
 
-  origin = rpmostree_origin_dup_keyfile (self->origin);
+  g_autoptr(GKeyFile) origin = rpmostree_origin_dup_keyfile (self->origin);
+  g_autoptr(OstreeDeployment) new_deployment = NULL;
   if (!ostree_sysroot_deploy_tree (self->sysroot, self->osname,
                                    target_revision, origin,
                                    self->cfg_merge_deployment,
