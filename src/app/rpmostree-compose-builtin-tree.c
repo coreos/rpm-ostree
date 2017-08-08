@@ -984,9 +984,7 @@ rpmostree_compose_builtin_tree (int             argc,
                                 GCancellable   *cancellable,
                                 GError        **error)
 {
-  int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE - Install packages and commit the result to an OSTree repository");
-
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
@@ -994,24 +992,22 @@ rpmostree_compose_builtin_tree (int             argc,
                                        cancellable,
                                        NULL, NULL, NULL, NULL,
                                        error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (argc < 2)
     {
       rpmostree_usage_error (context, "TREEFILE must be specified", error);
-      goto out;
+      return EXIT_FAILURE;
     }
 
   if (!opt_repo)
     {
       rpmostree_usage_error (context, "--repo must be specified", error);
-      goto out;
+      return EXIT_FAILURE;
     }
 
   if (!impl_compose_tree (argv[1], cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
-  exit_status = EXIT_SUCCESS;
- out:
-  return exit_status;
+  return EXIT_SUCCESS;
 }
