@@ -122,7 +122,6 @@ vm_rpmostree upgrade | tee output.txt
 assert_not_file_has_content output.txt '^Importing:'
 
 # upgrade with different foo in repos --> should re-import
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
 c1=$(sha256sum ${test_tmpdir}/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm)
 vm_build_rpm foo
 c2=$(sha256sum ${test_tmpdir}/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm)

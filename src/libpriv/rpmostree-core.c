@@ -1459,6 +1459,7 @@ install_pkg_from_cache (RpmOstreeContext *self,
   return TRUE;
 }
 
+/* Check for/download new rpm-md, then depsolve */
 gboolean
 rpmostree_context_prepare (RpmOstreeContext *self,
                            GCancellable     *cancellable,
