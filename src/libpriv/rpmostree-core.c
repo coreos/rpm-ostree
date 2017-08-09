@@ -928,6 +928,8 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 
   g_autoptr(GPtrArray) rpmmd_repos = get_enabled_rpmmd_repos (self->hifctx, DNF_REPO_ENABLED_PACKAGES);
 
+  /* this tells whether the suffix for cache directory matches the current version */
+  gboolean cache_suffix_match = dnf_context_get_cache_suffix_match (self->hifctx);
   g_print ("Enabled rpm-md repositories:");
   for (guint i = 0; i < rpmmd_repos->len; i++)
     {
@@ -945,7 +947,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
       if (!dnf_repo_check(repo,
                           dnf_context_get_cache_age (self->hifctx),
                           hifstate,
-                          NULL))
+                          NULL) || !cache_suffix_match)
         {
           dnf_state_reset (hifstate);
           g_autofree char *prefix = g_strdup_printf ("Updating metadata for '%s':",
