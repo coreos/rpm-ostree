@@ -63,43 +63,34 @@ static gboolean
 roc_context_init_core (ROContainerContext *rocctx,
                        GError            **error)
 {
-  gboolean ret = FALSE;
-
   rocctx->userroot_base = get_current_dir_name ();
   if (!glnx_opendirat (AT_FDCWD, rocctx->userroot_base, TRUE, &rocctx->userroot_dfd, error))
-    goto out;
+    return FALSE;
 
-  { g_autofree char *repo_pathstr = g_strconcat (rocctx->userroot_base, "/repo", NULL);
-    g_autoptr(GFile) repo_path = g_file_new_for_path (repo_pathstr);
-    rocctx->repo = ostree_repo_new (repo_path);
-  }
+  g_autofree char *repo_pathstr = g_strconcat (rocctx->userroot_base, "/repo", NULL);
+  g_autoptr(GFile) repo_path = g_file_new_for_path (repo_pathstr);
+  rocctx->repo = ostree_repo_new (repo_path);
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
 roc_context_init (ROContainerContext *rocctx,
                   GError            **error)
 {
-  gboolean ret = FALSE;
-  
   if (!roc_context_init_core (rocctx, error))
-    goto out;
+    return FALSE;
 
   if (!glnx_opendirat (rocctx->userroot_dfd, "roots", TRUE, &rocctx->roots_dfd, error))
-    goto out;
+    return FALSE;
 
   if (!ostree_repo_open (rocctx->repo, NULL, error))
-    goto out;
+    return FALSE;
 
   if (!glnx_opendirat (rocctx->userroot_dfd, "cache/rpm-md", FALSE, &rocctx->rpmmd_dfd, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -108,18 +99,14 @@ roc_context_prepare_for_root (ROContainerContext *rocctx,
                               GCancellable       *cancellable,
                               GError            **error)
 {
-  gboolean ret = FALSE;
-
   rocctx->ctx = rpmostree_context_new_unprivileged (rocctx->userroot_dfd, NULL, error);
   if (!rocctx->ctx)
-    goto out;
+    return FALSE;
 
   if (!rpmostree_context_setup (rocctx->ctx, NULL, NULL, treespec, cancellable, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static void
@@ -145,13 +132,10 @@ rpmostree_container_builtin_init (int             argc,
                                   GCancellable   *cancellable,
                                   GError        **error)
 {
-  int exit_status = EXIT_FAILURE;
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
   g_autoptr(GOptionContext) context = g_option_context_new ("");
-  static const char* const directories[] = { "repo", "rpmmd.repos.d", "cache/rpm-md", "roots", "tmp" };
-  guint i;
-  
+
   if (!rpmostree_option_context_parse (context,
                                        init_option_entries,
                                        &argc, &argv,
@@ -159,23 +143,22 @@ rpmostree_container_builtin_init (int             argc,
                                        cancellable,
                                        NULL, NULL, NULL, NULL,
                                        error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!roc_context_init_core (rocctx, error))
-    goto out;
+    return EXIT_FAILURE;
 
-  for (i = 0; i < G_N_ELEMENTS (directories); i++)
+  static const char* const directories[] = { "repo", "rpmmd.repos.d", "cache/rpm-md", "roots", "tmp" };
+  for (guint i = 0; i < G_N_ELEMENTS (directories); i++)
     {
       if (!glnx_shutil_mkdir_p_at (rocctx->userroot_dfd, directories[i], 0755, cancellable, error))
-        goto out;
+        return EXIT_FAILURE;
     }
 
   if (!ostree_repo_create (rocctx->repo, OSTREE_REPO_MODE_BARE_USER, cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
-  exit_status = EXIT_SUCCESS;
- out:
-  return exit_status;
+  return EXIT_SUCCESS;
 }
 
 /*
@@ -189,40 +172,24 @@ symlink_at_replace (const char    *oldpath,
                     GCancellable  *cancellable,
                     GError       **error)
 {
-  gboolean ret = FALSE;
-  int res;
   /* Possibly in the future generate a temporary random name here,
    * would need to move "generate a temporary name" code into
    * libglnx or glib?
    */
   const char *temppath = glnx_strjoina (newpath, ".tmp");
 
-  /* Clean up any stale temporary links */ 
+  /* Clean up any stale temporary links */
   (void) unlinkat (parent_dfd, temppath, 0);
 
-  /* Create the temp link */ 
-  do
-    res = symlinkat (oldpath, parent_dfd, temppath);
-  while (G_UNLIKELY (res == -1 && errno == EINTR));
-  if (res == -1)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
+  /* Create the temp link */
+  if (TEMP_FAILURE_RETRY (symlinkat (oldpath, parent_dfd, temppath)) < 0)
+    return glnx_throw_errno_prefix (error, "symlinkat(%s)", temppath);
 
-  /* Rename it into place */ 
-  do
-    res = renameat (parent_dfd, temppath, parent_dfd, newpath);
-  while (G_UNLIKELY (res == -1 && errno == EINTR));
-  if (res == -1)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
+  /* Rename it into place */
+  if (!glnx_renameat (parent_dfd, temppath, parent_dfd, newpath, error))
+    return FALSE;
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 int
@@ -232,16 +199,9 @@ rpmostree_container_builtin_assemble (int             argc,
                                       GCancellable   *cancellable,
                                       GError        **error)
 {
-  int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = g_option_context_new ("NAME [PKGNAME PKGNAME...]");
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
-  const char *specpath;
-  struct stat stbuf;
-  const char *name;
-  g_autofree char *commit = NULL;
-  const char *target_rootdir;
-  g_autoptr(RpmOstreeTreespec) treespec = NULL;
 
   if (!rpmostree_option_context_parse (context,
                                        assemble_option_entries,
@@ -250,78 +210,80 @@ rpmostree_container_builtin_assemble (int             argc,
                                        cancellable,
                                        NULL, NULL, NULL, NULL,
                                        error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (argc < 1)
     {
       rpmostree_usage_error (context, "SPEC must be specified", error);
-      goto out;
+      return EXIT_FAILURE;
     }
 
-  specpath = argv[1];
-  treespec = rpmostree_treespec_new_from_path (specpath, error);
+  const char *specpath = argv[1];
+  g_autoptr(RpmOstreeTreespec) treespec = rpmostree_treespec_new_from_path (specpath, error);
   if (!treespec)
-    goto out;
+    return EXIT_FAILURE;
 
-  name = rpmostree_treespec_get_ref (treespec);
+  const char *name = rpmostree_treespec_get_ref (treespec);
   if (name == NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Missing ref in treespec");
-      goto out;
+      return EXIT_FAILURE;
     }
 
   if (!roc_context_init (rocctx, error))
-    goto out;
+    return EXIT_FAILURE;
 
-  target_rootdir = glnx_strjoina (name, ".0");
+  const char *target_rootdir = glnx_strjoina (name, ".0");
 
+  struct stat stbuf;
   if (fstatat (rocctx->roots_dfd, target_rootdir, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
     {
       if (errno != ENOENT)
         {
           glnx_set_error_from_errno (error);
-          goto out;
+          return EXIT_FAILURE;
         }
     }
   else
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Tree %s already exists", target_rootdir);
-      goto out;
+      return EXIT_FAILURE;
     }
 
   if (!roc_context_prepare_for_root (rocctx, treespec, cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
   /* --- Resolving dependencies --- */
   if (!rpmostree_context_prepare (rocctx->ctx, cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
   rpmostree_print_transaction (rpmostree_context_get_hif (rocctx->ctx));
 
   /* --- Download as necessary --- */
   if (!rpmostree_context_download (rocctx->ctx, cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
   /* --- Import as necessary --- */
   if (!rpmostree_context_import (rocctx->ctx, cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
+  g_autofree char *commit = NULL;
   { g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
     glnx_fd_close int tmprootfs_dfd = -1;
 
     if (!glnx_mkdtempat (rocctx->userroot_dfd, tmprootfs, 0755, error))
-      goto out;
+      return EXIT_FAILURE;
 
     if (!glnx_opendirat (rocctx->userroot_dfd, tmprootfs, TRUE,
                          &tmprootfs_dfd, error))
-      goto out;
+      return EXIT_FAILURE;
 
     if (!rpmostree_context_assemble_commit (rocctx->ctx, tmprootfs_dfd, NULL,
                                             NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
                                             FALSE, &commit, cancellable, error))
-      goto out;
+      return EXIT_FAILURE;
 
     glnx_shutil_rm_rf_at (rocctx->userroot_dfd, tmprootfs, cancellable, NULL);
   }
@@ -335,24 +297,22 @@ rpmostree_container_builtin_assemble (int             argc,
      * management with whatever is running in the root.
      */
     if (!glnx_shutil_rm_rf_at (rocctx->roots_dfd, target_rootdir, cancellable, error))
-      goto out;
+      return EXIT_FAILURE;
 
     if (!ostree_repo_checkout_at (rocctx->repo, &opts, rocctx->roots_dfd, target_rootdir,
                                   commit, cancellable, error))
-      goto out;
+      return EXIT_FAILURE;
   }
 
   g_print ("Checking out %s @ %s...done\n", name, commit);
 
   if (!symlink_at_replace (target_rootdir, rocctx->roots_dfd, name,
                            cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
   g_print ("Creating current symlink...done\n");
 
-  exit_status = EXIT_SUCCESS;
- out:
-  return exit_status;
+  return EXIT_SUCCESS;
 }
 
 #define APP_VERSION_REGEXP ".+\\.([01])"
@@ -362,8 +322,7 @@ parse_app_version (const char *name,
                    guint      *out_version,
                    GError    **error)
 {
-  gboolean ret = FALSE;
-  GMatchInfo *match = NULL;
+  g_autoptr(GMatchInfo) match = NULL;
   static gsize regex_initialized;
   static GRegex *regex;
   int ret_version;
@@ -376,11 +335,7 @@ parse_app_version (const char *name,
     }
 
   if (!g_regex_match (regex, name, 0, &match))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Invalid app link %s", name);
-      goto out;
-    }
+    return glnx_throw (error, "Invalid app link %s", name);
 
   { g_autofree char *version_str = g_match_info_fetch (match, 1);
     ret_version = g_ascii_strtoull (version_str, NULL, 10);
@@ -391,16 +346,12 @@ parse_app_version (const char *name,
       case 1:
         break;
       default:
-        g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                     "Invalid version in app link %s", name);
-        goto out;
+        return glnx_throw (error, "Invalid version in app link %s", name);
       }
   }
 
-  ret = TRUE;
   *out_version = ret_version;
- out:
-  return ret;
+  return TRUE;
 }
 
 gboolean
@@ -408,22 +359,10 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
                                      RpmOstreeCommandInvocation *invocation,
                                      GCancellable *cancellable, GError **error)
 {
-  int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = g_option_context_new ("NAME");
   g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
   ROContainerContext *rocctx = &rocctx_data;
-  const char *name;
-  g_autofree char *commit_checksum = NULL;
-  g_autofree char *new_commit_checksum = NULL;
-  g_autoptr(GVariant) commit = NULL;
-  g_autoptr(GVariant) metadata = NULL;
-  g_autoptr(RpmOstreeTreespec) treespec = NULL;
-  guint current_version;
-  guint new_version;
-  g_autofree char *previous_state_sha512 = NULL;
-  const char *target_current_root;
-  const char *target_new_root;
-  
+
   if (!rpmostree_option_context_parse (context,
                                        assemble_option_entries,
                                        &argc, &argv,
@@ -431,39 +370,45 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
                                        cancellable,
                                        NULL, NULL, NULL, NULL,
                                        error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (argc < 1)
     {
       rpmostree_usage_error (context, "NAME must be specified", error);
-      goto out;
+      return EXIT_FAILURE;
     }
 
-  name = argv[1];
+  const char *name = argv[1];
 
   if (!roc_context_init (rocctx, error))
-    goto out;
+    return EXIT_FAILURE;
 
-  target_current_root = glnx_readlinkat_malloc (rocctx->roots_dfd, name, cancellable, error);
+  g_autofree char *target_current_root = glnx_readlinkat_malloc (rocctx->roots_dfd, name, cancellable, error);
   if (!target_current_root)
     {
       g_prefix_error (error, "Reading app link %s: ", name);
-      goto out;
+      return EXIT_FAILURE;
     }
 
+  guint current_version;
   if (!parse_app_version (target_current_root, &current_version, error))
-    goto out;
+    return EXIT_FAILURE;
 
+  g_autofree char *commit_checksum = NULL;
+  g_autofree char *previous_state_sha512 = NULL;
+  g_autoptr(GVariant) metadata = NULL;
+  g_autoptr(RpmOstreeTreespec) treespec = NULL;
   { g_autoptr(GVariantDict) metadata_dict = NULL;
     g_autoptr(GVariant) spec_v = NULL;
     g_autoptr(GVariant) previous_sha512_v = NULL;
+    g_autoptr(GVariant) commit = NULL;
 
     if (!ostree_repo_resolve_rev (rocctx->repo, name, FALSE, &commit_checksum, error))
-      goto out;
+      return EXIT_FAILURE;
 
     if (!ostree_repo_load_variant (rocctx->repo, OSTREE_OBJECT_TYPE_COMMIT, commit_checksum,
                                    &commit, error))
-      goto out;
+      return EXIT_FAILURE;
 
     metadata = g_variant_get_child_value (commit, 0);
     metadata_dict = g_variant_dict_new (metadata);
@@ -471,7 +416,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
     spec_v = _rpmostree_vardict_lookup_value_required (metadata_dict, "rpmostree.spec",
                                                                  (GVariantType*)"a{sv}", error);
     if (!spec_v)
-      goto out;
+      return EXIT_FAILURE;
 
     treespec = rpmostree_treespec_new (spec_v);
 
@@ -479,22 +424,23 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
                                                                   "rpmostree.state-sha512",
                                                                   (GVariantType*)"s", error);
     if (!previous_sha512_v)
-      goto out;
+      return EXIT_FAILURE;
 
     previous_state_sha512 = g_variant_dup_string (previous_sha512_v, NULL);
   }
 
-  new_version = current_version == 0 ? 1 : 0;
+  guint new_version = current_version == 0 ? 1 : 0;
+  const char *target_new_root;
   if (new_version == 0)
     target_new_root = glnx_strjoina (name, ".0");
   else
     target_new_root = glnx_strjoina (name, ".1");
 
   if (!roc_context_prepare_for_root (rocctx, treespec, cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
   if (!rpmostree_context_prepare (rocctx->ctx, cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
   rpmostree_print_transaction (rpmostree_context_get_hif (rocctx->ctx));
 
@@ -503,34 +449,35 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
     if (strcmp (new_state_sha512, previous_state_sha512) == 0)
       {
         g_print ("No changes in inputs to %s (%s)\n", name, commit_checksum);
-        exit_status = EXIT_SUCCESS;
-        goto out;
+        /* Note early return */
+        return EXIT_SUCCESS;
       }
   }
 
   /* --- Download as necessary --- */
   if (!rpmostree_context_download (rocctx->ctx, cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
   /* --- Import as necessary --- */
   if (!rpmostree_context_import (rocctx->ctx, cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
+  g_autofree char *new_commit_checksum = NULL;
   { g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
     glnx_fd_close int tmprootfs_dfd = -1;
 
     if (!glnx_mkdtempat (rocctx->userroot_dfd, tmprootfs, 0755, error))
-      goto out;
+      return EXIT_FAILURE;
 
     if (!glnx_opendirat (rocctx->userroot_dfd, tmprootfs, TRUE,
                          &tmprootfs_dfd, error))
-      goto out;
+      return EXIT_FAILURE;
 
     if (!rpmostree_context_assemble_commit (rocctx->ctx, tmprootfs_dfd, NULL,
                                             NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
                                             TRUE, &new_commit_checksum,
                                             cancellable, error))
-      goto out;
+      return EXIT_FAILURE;
 
     glnx_shutil_rm_rf_at (rocctx->userroot_dfd, tmprootfs, cancellable, NULL);
   }
@@ -542,18 +489,16 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
 
     if (!ostree_repo_checkout_at (rocctx->repo, &opts, rocctx->roots_dfd, target_new_root,
                                   new_commit_checksum, cancellable, error))
-      goto out;
+      return EXIT_FAILURE;
   }
 
   g_print ("Checking out %s @ %s...done\n", name, new_commit_checksum);
 
   if (!symlink_at_replace (target_new_root, rocctx->roots_dfd, name,
                            cancellable, error))
-    goto out;
+    return EXIT_FAILURE;
 
   g_print ("Creating current symlink...done\n");
 
-  exit_status = EXIT_SUCCESS;
- out:
-  return exit_status;
+  return EXIT_SUCCESS;
 }
