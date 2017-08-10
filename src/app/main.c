@@ -136,12 +136,13 @@ option_context_new_with_commands (RpmOstreeCommandInvocation *invocation,
         {
           g_string_append_printf (summary, "\n  %s", command->name);
           if (command->description != NULL)
-            { /* add padding for description alignment */
-              guint max_command_len = 13;
-              guint pad = max_command_len - strlen(command->name);
+            {
+              /* add padding for description alignment */
+              guint max_command_len = 15;
+              guint pad = max_command_len - strlen (command->name);
 
               for (guint padding_num = 0; padding_num < pad + 2; padding_num++)
-                g_string_append_printf (summary, " ");
+                g_string_append (summary, " ");
 
               g_string_append_printf (summary, "%s", command->description);
             }
