@@ -619,11 +619,6 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
   if (!sepolicy)
     return FALSE;
 
-  /* Crack open our booted root */
-  if (!ostree_sysroot_deployment_set_mutable (sysroot, booted_deployment, TRUE,
-                                              cancellable, error))
-    return g_prefix_error (error, "Setting deployment mutable: "), FALSE;
-
   /* Note we inherit the previous value of `live_replaced` (which may be NULL) */
   if (!write_livefs_state (sysroot, booted_deployment, target_csum, live_replaced, error))
     return FALSE;
@@ -667,11 +662,6 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
   /* Write out the origin as having completed this */
   if (!write_livefs_state (sysroot, booted_deployment, NULL, target_csum, error))
     return FALSE;
-
-  /* Seal the root back up again */
-  if (!ostree_sysroot_deployment_set_mutable (sysroot, booted_deployment, FALSE,
-                                              cancellable, error))
-    return g_prefix_error (error, "Setting deployment mutable: "), FALSE;
 
   sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_LIVEFS_END),
                    "MESSAGE=Completed livefs for commit %s", target_csum,
