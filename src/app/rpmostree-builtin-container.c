@@ -25,13 +25,13 @@
 
 static RpmOstreeCommand container_subcommands[] = {
   { "init", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    rpmostree_container_builtin_init },
+    NULL, rpmostree_container_builtin_init },
   { "assemble", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    rpmostree_container_builtin_assemble },
+    NULL, rpmostree_container_builtin_assemble },
   /* { "start", rpmostree_container_builtin_start }, */
   { "upgrade", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    rpmostree_container_builtin_upgrade },
-  { NULL, 0, NULL }
+    NULL, rpmostree_container_builtin_upgrade },
+  { NULL, 0, NULL, NULL }
 };
 
 int

@@ -38,46 +38,58 @@ static RpmOstreeCommand commands[] = {
 #ifdef HAVE_COMPOSE_TOOLING
   { "compose", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
                RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
-    rpmostree_builtin_compose },
+    NULL, rpmostree_builtin_compose },
 #endif
   { "cleanup", 0,
+    "Clear cached/pending data",
     rpmostree_builtin_cleanup },
   { "db", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    rpmostree_builtin_db },
+    NULL, rpmostree_builtin_db },
   { "deploy", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+    "Deploy a specific commit",
     rpmostree_builtin_deploy },
   { "rebase", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+    "Switch to a different tree",
     rpmostree_builtin_rebase },
   { "rollback", 0,
+    "Revert to the previously booted tree",
     rpmostree_builtin_rollback },
   { "status", 0,
+    "Get the version of the booted system",
     rpmostree_builtin_status },
   { "upgrade", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+    "Perform a system upgrade",
     rpmostree_builtin_upgrade },
   { "reload", 0,
+    "Reload configuration",
     rpmostree_builtin_reload },
   { "initramfs", 0,
+    "Enable or disable local initramfs regeneration",
     rpmostree_builtin_initramfs },
   { "install", 0,
+    "Download and install layered RPM packages",
     rpmostree_builtin_install },
   { "uninstall", 0,
+    "Remove one or more overlay packages",
     rpmostree_builtin_uninstall },
   /* Legacy aliases */
   { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+    "Download and install layered RPM packages",
     rpmostree_builtin_install },
   { "pkg-remove", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+    "Remove one or more overlay packages",
     rpmostree_builtin_uninstall },
   { "rpm", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
            RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    rpmostree_builtin_db },
+    NULL, rpmostree_builtin_db },
   /* Hidden */
   { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
           RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    rpmostree_builtin_ex },
+    NULL,rpmostree_builtin_ex },
   { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
                     RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
                     RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    rpmostree_builtin_start_daemon },
+    "start the daemon process", rpmostree_builtin_start_daemon },
   { NULL }
 };
 
@@ -121,7 +133,20 @@ option_context_new_with_commands (RpmOstreeCommandInvocation *invocation,
     {
       gboolean hidden = (command->flags & RPM_OSTREE_BUILTIN_FLAG_HIDDEN) > 0;
       if (!hidden)
-        g_string_append_printf (summary, "\n  %s", command->name);
+        {
+          g_string_append_printf (summary, "\n  %s", command->name);
+          if (command->description != NULL)
+            {
+              /* add padding for description alignment */
+              guint max_command_len = 15;
+              guint pad = max_command_len - strlen (command->name);
+
+              for (guint padding_num = 0; padding_num < pad + 2; padding_num++)
+                g_string_append (summary, " ");
+
+              g_string_append_printf (summary, "%s", command->description);
+            }
+        }
     }
 
   g_option_context_set_summary (context, summary->str);
