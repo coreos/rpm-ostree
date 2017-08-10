@@ -24,14 +24,15 @@
 
 static RpmOstreeCommand ex_subcommands[] = {
   { "livefs", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    "Apply pending deployment changes to booted deployment",
     rpmostree_ex_builtin_livefs },
   { "override", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    rpmostree_ex_builtin_override },
+    NULL, rpmostree_ex_builtin_override },
   { "unpack", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    rpmostree_ex_builtin_unpack },
+    NULL, rpmostree_ex_builtin_unpack },
   { "container", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    rpmostree_builtin_container },
-  { NULL, 0, NULL }
+    NULL, rpmostree_builtin_container },
+  { NULL, 0, NULL, NULL }
 };
 
 /*

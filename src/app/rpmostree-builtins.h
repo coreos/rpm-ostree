@@ -43,6 +43,7 @@ typedef struct RpmOstreeCommandInvocation RpmOstreeCommandInvocation;
 struct RpmOstreeCommand {
   const char *name;
   RpmOstreeBuiltinFlags flags;
+  const char *description; /* a short decription to describe the functionality */
   int (*fn) (int argc, char **argv, RpmOstreeCommandInvocation *invocation, GCancellable *cancellable, GError **error);
 };
 
