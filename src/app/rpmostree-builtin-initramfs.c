@@ -62,7 +62,7 @@ rpmostree_builtin_initramfs (int             argc,
                              GCancellable   *cancellable,
                              GError        **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("- Enable or disable local initramfs regeneration");
+  g_autoptr(GOptionContext) context = g_option_context_new ("");
 
   _cleanup_peer_ GPid peer_pid = 0;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;

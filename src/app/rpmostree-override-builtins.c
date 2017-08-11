@@ -114,8 +114,7 @@ rpmostree_override_builtin_replace (int argc, char **argv,
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
 
-  context = g_option_context_new ("PACKAGE [PACKAGE...] - "
-                                  "Remove packages from the base layer");
+  context = g_option_context_new ("PACKAGE [PACKAGE...]");
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -156,8 +155,7 @@ rpmostree_override_builtin_remove (int argc, char **argv,
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
 
-  context = g_option_context_new ("PACKAGE [PACKAGE...] - "
-                                  "Remove packages from the base layer");
+  context = g_option_context_new ("PACKAGE [PACKAGE...] - ");
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -198,8 +196,7 @@ rpmostree_override_builtin_reset (int argc, char **argv,
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
 
-  context = g_option_context_new ("PACKAGE [PACKAGE...] - "
-                                  "Reset currently active package overrides");
+  context = g_option_context_new ("PACKAGE [PACKAGE...] - ");
 
   g_option_context_add_main_entries (context, reset_option_entries, NULL);
 

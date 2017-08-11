@@ -585,7 +585,7 @@ rpmostree_builtin_status (int             argc,
                           GCancellable   *cancellable,
                           GError        **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("- Get the version of the booted system");
+  g_autoptr(GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autoptr(GVariant) deployments = NULL;

@@ -984,7 +984,7 @@ rpmostree_compose_builtin_tree (int             argc,
                                 GCancellable   *cancellable,
                                 GError        **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE - Install packages and commit the result to an OSTree repository");
+  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE");
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,

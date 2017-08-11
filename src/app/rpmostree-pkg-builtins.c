@@ -154,7 +154,7 @@ rpmostree_builtin_install (int            argc,
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
 
-  context = g_option_context_new ("PACKAGE [PACKAGE...] - Download and install layered RPM packages");
+  context = g_option_context_new ("PACKAGE [PACKAGE...]");
 
   g_option_context_add_main_entries (context, uninstall_option_entry, NULL);
 
@@ -197,7 +197,7 @@ rpmostree_builtin_uninstall (int            argc,
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
 
-  context = g_option_context_new ("PACKAGE [PACKAGE...] - Remove one or more overlay packages");
+  context = g_option_context_new ("PACKAGE [PACKAGE...]");
 
   g_option_context_add_main_entries (context, install_option_entry, NULL);
 

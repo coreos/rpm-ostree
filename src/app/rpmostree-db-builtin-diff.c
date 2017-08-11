@@ -39,7 +39,7 @@ rpmostree_db_builtin_diff (int argc, char **argv,
                            GCancellable *cancellable, GError **error)
 {
   g_autoptr(GOptionContext) context =
-    g_option_context_new ("COMMIT COMMIT - Show package changes between two commits");
+    g_option_context_new ("COMMIT COMMIT");
 
   g_autoptr(OstreeRepo) repo = NULL;
   if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv, invocation, &repo,
