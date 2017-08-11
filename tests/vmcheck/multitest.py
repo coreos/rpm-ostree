@@ -14,6 +14,10 @@ def main():
     for host in sys.argv[1:]:
         hosts.append(Host(host))
 
+    if len(hosts) == 0:
+        print("error: no hosts provided")
+        sys.exit(1)
+
     requested_tests_spec = os.environ.get('TESTS')
     if requested_tests_spec is not None:
         requested_tests = requested_tests_spec.split()
