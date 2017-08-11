@@ -84,7 +84,7 @@ rpmostree_db_builtin_list (int argc, char **argv,
                            GCancellable *cancellable, GError **error)
 {
   g_autoptr(GOptionContext) context =
-    g_option_context_new ("[PREFIX-PKGNAME...] COMMIT... - List packages within commits");
+    g_option_context_new ("[PREFIX-PKGNAME...] COMMIT...");
 
   g_autoptr(OstreeRepo) repo = NULL;
   if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv,

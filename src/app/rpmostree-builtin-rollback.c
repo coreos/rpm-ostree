@@ -54,7 +54,7 @@ rpmostree_builtin_rollback (int             argc,
                             GCancellable   *cancellable,
                             GError        **error)
 {
-  GOptionContext *context = g_option_context_new ("- Revert to the previously booted tree");
+  GOptionContext *context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autofree char *transaction_address = NULL;

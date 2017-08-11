@@ -25,7 +25,7 @@
 
 static RpmOstreeCommand override_subcommands[] = {
   { "replace", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
-    "Remove packages from the base layer",
+    "Replace packages in the base layer",
     rpmostree_override_builtin_replace },
   { "remove", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
     "Remove packages from the base layer",

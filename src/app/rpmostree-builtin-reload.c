@@ -40,7 +40,7 @@ rpmostree_builtin_reload (int             argc,
                           GCancellable   *cancellable,
                           GError        **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("- Reload configuration");
+  g_autoptr(GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
 

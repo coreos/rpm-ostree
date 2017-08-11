@@ -68,7 +68,7 @@ rpmostree_builtin_deploy (int            argc,
   const char *const *install_pkgs = NULL;
   const char *const *uninstall_pkgs = NULL;
 
-  context = g_option_context_new ("REVISION - Deploy a specific commit");
+  context = g_option_context_new ("REVISION");
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,

@@ -89,7 +89,7 @@ rpmostree_db_builtin_version (int argc, char **argv,
                               GCancellable *cancellable, GError **error)
 {
   g_autoptr(GOptionContext) context =
-    g_option_context_new ("COMMIT... - Show rpmdb version of packages within the commits");
+    g_option_context_new ("COMMIT...");
 
   g_autoptr(OstreeRepo) repo = NULL;
   if (!rpmostree_db_option_context_parse (context, db_version_entries, &argc,
