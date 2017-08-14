@@ -59,7 +59,7 @@ rpmostree_ex_builtin_livefs (int             argc,
 {
   _cleanup_peer_ GPid peer_pid = 0;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GOptionContext) context = g_option_context_new ("- Apply pending deployment changes to booted deployment");
+  g_autoptr(GOptionContext) context = g_option_context_new ("");
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,

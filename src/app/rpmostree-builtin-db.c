@@ -25,12 +25,15 @@
 
 static RpmOstreeCommand rpm_subcommands[] = {
   { "diff", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "Show package changes between two commits",
     rpmostree_db_builtin_diff },
   { "list", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "List packages within commits",
     rpmostree_db_builtin_list },
   { "version", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "Show rpmdb version of packages within the commits",
     rpmostree_db_builtin_version },
-  { NULL, 0, NULL }
+  { NULL, 0, NULL, NULL }
 };
 
 static char *opt_repo;

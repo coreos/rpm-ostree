@@ -38,46 +38,58 @@ static RpmOstreeCommand commands[] = {
 #ifdef HAVE_COMPOSE_TOOLING
   { "compose", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
                RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    "Commands to compose a tree",
     rpmostree_builtin_compose },
 #endif
   { "cleanup", 0,
+    "Clear cached/pending data",
     rpmostree_builtin_cleanup },
   { "db", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "Commands to query the RPM database",
     rpmostree_builtin_db },
   { "deploy", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+    "Deploy a specific commit",
     rpmostree_builtin_deploy },
   { "rebase", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+    "Switch to a different tree",
     rpmostree_builtin_rebase },
   { "rollback", 0,
+    "Revert to the previously booted tree",
     rpmostree_builtin_rollback },
   { "status", 0,
+    "Get the version of the booted system",
     rpmostree_builtin_status },
   { "upgrade", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
+    "Perform a system upgrade",
     rpmostree_builtin_upgrade },
   { "reload", 0,
+    "Reload configuration",
     rpmostree_builtin_reload },
   { "initramfs", 0,
+    "Enable or disable local initramfs regeneration",
     rpmostree_builtin_initramfs },
   { "install", 0,
+    "Download and install layered RPM packages",
     rpmostree_builtin_install },
   { "uninstall", 0,
+    "Remove one or more overlay packages",
     rpmostree_builtin_uninstall },
   /* Legacy aliases */
   { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    rpmostree_builtin_install },
+    NULL, rpmostree_builtin_install },
   { "pkg-remove", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    rpmostree_builtin_uninstall },
+    NULL, rpmostree_builtin_uninstall },
   { "rpm", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
            RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    rpmostree_builtin_db },
+    NULL, rpmostree_builtin_db },
   /* Hidden */
   { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
           RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    rpmostree_builtin_ex },
+    "Commands still under experiment", rpmostree_builtin_ex },
   { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
                     RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
                     RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    rpmostree_builtin_start_daemon },
+    NULL, rpmostree_builtin_start_daemon },
   { NULL }
 };
 
@@ -112,8 +124,14 @@ option_context_new_with_commands (RpmOstreeCommandInvocation *invocation,
   g_autoptr(GString) summary = g_string_new (NULL);
 
   if (invocation)
-    g_string_append_printf (summary, "Builtin \"%s\" Commands:",
-                            invocation->command->name);
+    {
+      if (invocation->command->description != NULL)
+        g_string_append_printf (summary, "%s\n\n",
+                                invocation->command->description);
+
+      g_string_append_printf (summary, "Builtin \"%s\" Commands:",
+                              invocation->command->name);
+    }
   else /* top level */
     g_string_append (summary, "Builtin Commands:");
 
@@ -121,7 +139,11 @@ option_context_new_with_commands (RpmOstreeCommandInvocation *invocation,
     {
       gboolean hidden = (command->flags & RPM_OSTREE_BUILTIN_FLAG_HIDDEN) > 0;
       if (!hidden)
-        g_string_append_printf (summary, "\n  %s", command->name);
+        {
+          g_string_append_printf (summary, "\n  %-17s", command->name);
+          if (command->description != NULL)
+            g_string_append_printf (summary, "%s", command->description);
+        }
     }
 
   g_option_context_set_summary (context, summary->str);
@@ -145,6 +167,16 @@ rpmostree_option_context_parse (GOptionContext *context,
   const RpmOstreeBuiltinFlags flags =
     invocation ? invocation->command->flags : RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD;
   gboolean use_daemon = ((flags & RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD) == 0);
+
+  if (invocation && invocation->command->description != NULL)
+    {
+      /* The extra summary explanation is only provided for commands with description */
+      const char* context_summary = g_option_context_get_summary (context);
+
+      /* check whether the summary has been set earlier */
+      if (context_summary == NULL)
+       g_option_context_set_summary (context, invocation->command->description);
+    }
 
   if (main_entries != NULL)
     g_option_context_add_main_entries (context, main_entries, NULL);

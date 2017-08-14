@@ -52,7 +52,7 @@ rpmostree_builtin_cleanup (int             argc,
                            GCancellable   *cancellable,
                            GError        **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("- Clear cached/pending data");
+  g_autoptr(GOptionContext) context = g_option_context_new ("");
   g_autoptr(GPtrArray) cleanup_types = g_ptr_array_new ();
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;

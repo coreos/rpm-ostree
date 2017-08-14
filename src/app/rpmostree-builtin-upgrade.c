@@ -57,7 +57,7 @@ rpmostree_builtin_upgrade (int             argc,
                            GCancellable   *cancellable,
                            GError        **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("- Perform a system upgrade");
+  g_autoptr(GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   g_autoptr(GVariant) previous_default_deployment = NULL;
