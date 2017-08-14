@@ -85,11 +85,11 @@ static RpmOstreeCommand commands[] = {
   /* Hidden */
   { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
           RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    NULL,rpmostree_builtin_ex },
+    "Commands still under experiment", rpmostree_builtin_ex },
   { "start-daemon", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
                     RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
                     RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    "start the daemon process", rpmostree_builtin_start_daemon },
+    NULL, rpmostree_builtin_start_daemon },
   { NULL }
 };
 
@@ -124,8 +124,14 @@ option_context_new_with_commands (RpmOstreeCommandInvocation *invocation,
   g_autoptr(GString) summary = g_string_new (NULL);
 
   if (invocation)
-    g_string_append_printf (summary, "Builtin \"%s\" Commands:",
-                            invocation->command->name);
+    {
+      if (invocation->command->description != NULL)
+        g_string_append_printf (summary, "%s\n\n",
+                                invocation->command->description);
+
+      g_string_append_printf (summary, "Builtin \"%s\" Commands:",
+                              invocation->command->name);
+    }
   else /* top level */
     g_string_append (summary, "Builtin Commands:");
 
@@ -165,17 +171,11 @@ rpmostree_option_context_parse (GOptionContext *context,
   if (invocation && invocation->command->description != NULL)
     {
       /* The extra summary explanation is only provided for commands with description */
-      g_autoptr(GString) context_summary = g_string_new (g_option_context_get_summary(context));
+      const char* context_summary = g_option_context_get_summary (context);
 
-      /* handle differently if a command has subcommands */
-      const gchar *line_separator = !(*context_summary->str) ? "" : "\n\n";
-
-      g_string_append_printf (context_summary,
-                              "%sCommand Description: \n  %s",
-                              line_separator,
-                              invocation->command->description);
-
-      g_option_context_set_summary(context, context_summary->str);
+      /* check whether the summary has been set earlier */
+      if (context_summary == NULL)
+       g_option_context_set_summary (context, invocation->command->description);
     }
 
   if (main_entries != NULL)
