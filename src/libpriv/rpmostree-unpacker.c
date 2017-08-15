@@ -746,7 +746,7 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
       g_autofree char *pkgname = headerGetAsString (self->hdr, RPMTAG_NAME);
 
       tmpdir = strdupa ("/tmp/rpm-ostree-import.XXXXXX");
-      if (g_mkdtemp_full (tmpdir, 0755) < 0)
+      if (g_mkdtemp_full (tmpdir, 0755) == NULL)
         {
           glnx_set_error_from_errno (error);
           goto out;

@@ -221,7 +221,7 @@ rpmostree_load_os_proxies (RPMOSTreeSysroot *sysroot_proxy,
 
   /* owned by sysroot_proxy */
   GDBusConnection *connection = g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
-  const char *bus_name;
+  const char *bus_name = NULL;
   if (g_dbus_connection_get_unique_name (connection) != NULL)
     bus_name = BUS_NAME;
 
