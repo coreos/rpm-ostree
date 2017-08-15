@@ -2291,7 +2291,7 @@ relabel_one_package (OstreeRepo     *repo,
 out:
   if (tmprootfs_dfd != -1)
     {
-      GError *local_error = NULL;
+      g_autoptr(GError) local_error = NULL;
       if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, ".", cancellable, &local_error))
         {
           sd_journal_print (LOG_WARNING, "failed to delete tmpdir %s: %s",
