@@ -720,11 +720,10 @@ rpmostree_deployment_sanitycheck (int           rootfs_fd,
   GLNX_AUTO_PREFIX_ERROR ("sanitycheck", error);
   g_autoptr(RpmOstreeBwrap) bwrap =
     rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_IMMUTABLE, error,
-                         "--ro-bind", "./usr/etc", "/etc",
-                         NULL);
-  rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/true", NULL);
+                         "--ro-bind", "./usr/etc", "/etc", NULL);
   if (!bwrap)
     return FALSE;
+  rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/true", NULL);
   if (!rpmostree_bwrap_run (bwrap, error))
     return FALSE;
   sd_journal_print (LOG_INFO, "sanitycheck(/usr/bin/true) successful");
