@@ -57,7 +57,7 @@ typedef struct {
   int rpmmd_dfd;
 } ROContainerContext;
 
-#define RO_CONTAINER_CONTEXT_INIT { .userroot_dfd = -1, .rpmmd_dfd = -1 }
+#define RO_CONTAINER_CONTEXT_INIT { .userroot_dfd = -1, .roots_dfd = -1, .rpmmd_dfd = -1 }
 
 static gboolean
 roc_context_init_core (ROContainerContext *rocctx,
@@ -113,12 +113,12 @@ static void
 roc_context_deinit (ROContainerContext *rocctx)
 {
   g_free (rocctx->userroot_base);
-  if (rocctx->userroot_dfd)
+  if (rocctx->userroot_dfd != -1)
     (void) close (rocctx->userroot_dfd);
   g_clear_object (&rocctx->repo);
-  if (rocctx->roots_dfd)
+  if (rocctx->roots_dfd != -1)
     (void) close (rocctx->roots_dfd);
-  if (rocctx->rpmmd_dfd)
+  if (rocctx->rpmmd_dfd != -1)
     (void) close (rocctx->rpmmd_dfd);
   g_clear_object (&rocctx->ctx);
 }
