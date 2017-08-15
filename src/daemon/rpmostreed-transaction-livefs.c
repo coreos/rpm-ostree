@@ -582,13 +582,17 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
   g_string_append_printf (journal_msg, "Starting livefs for commit %s", target_csum);
   if (resuming_overlay)
     g_string_append (journal_msg, " (resuming)");
-  if (!replacing)
-    g_string_append_printf (journal_msg, " addition; %u pkgs, %u files",
-                            diff->added_pkgs->len, diff->added->len);
-  else
+
+  /* We don't currently support replacement mode
+  if (replacing)
     g_string_append_printf (journal_msg, " replacement; %u/%u/%u pkgs (added, removed, modified); %u/%u/%u files",
                             diff->added_pkgs->len, diff->removed_pkgs->len, diff->modified_pkgs_old->len,
                             diff->added->len, diff->removed->len, diff->modified->len);
+  else
+  */
+  g_string_append_printf (journal_msg, " addition; %u pkgs, %u files",
+                          diff->added_pkgs->len, diff->added->len);
+
   if (replacing_overlay)
     g_string_append_printf (journal_msg, "; replacing %s", replacing_overlay);
   sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_LIVEFS_BEGIN),
