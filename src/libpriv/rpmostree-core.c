@@ -2290,7 +2290,14 @@ relabel_one_package (OstreeRepo     *repo,
   ret = TRUE;
 out:
   if (tmprootfs_dfd != -1)
-    glnx_shutil_rm_rf_at (tmprootfs_dfd, ".", cancellable, NULL);
+    {
+      GError *local_error = NULL;
+      if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, ".", cancellable, &local_error))
+        {
+          sd_journal_print (LOG_WARNING, "failed to delete tmpdir %s: %s",
+                            tmprootfs, local_error->message);
+        }
+    }
   return ret;
 }
 
