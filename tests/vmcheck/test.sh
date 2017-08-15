@@ -40,6 +40,15 @@ vm_cmd ostree rev-parse $csum_orig &> /dev/null # validate
 vm_cmd ostree refs vmcheck_orig --delete
 vm_cmd ostree refs $csum_orig --create vmcheck_orig
 
+# reboot onto the vmcheck ref if we're not already on it
+origin=$(vm_get_booted_deployment_info origin)
+if [[ $origin != vmcheck ]]; then
+  vm_cmd ostree refs vmcheck --delete
+  vm_cmd ostree refs vmcheck_orig --create vmcheck
+  vm_cmd ostree admin deploy vmcheck &>> ${LOG}
+  vm_reboot &>> ${LOG}
+fi
+
 # delete whatever tmp refs the previous testsuite runs may have created
 vm_cmd ostree refs vmcheck_tmp --delete
 
