@@ -199,15 +199,8 @@ on_log_handler (const gchar *log_domain,
                 const gchar *message,
                 gpointer user_data)
 {
-  static gboolean have_called_openlog = FALSE;
   const gchar *domains;
   int priority;
-
-  if (!have_called_openlog)
-    {
-      have_called_openlog = TRUE;
-      openlog (G_LOG_DOMAIN, LOG_CONS | LOG_NDELAY | LOG_PID, LOG_DAEMON);
-    }
 
   /*
   * Note: we should not call GLib fucntions here.
@@ -269,7 +262,7 @@ on_log_handler (const gchar *log_domain,
       break;
     }
 
-  syslog (priority, "%s", message);
+  sd_journal_print (priority, "%s", message);
 }
 
 
