@@ -303,6 +303,10 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
 
   switch (type)
   {
+  case RPMOSTREE_OUTPUT_MESSAGE:
+    rpmostree_transaction_emit_message (RPMOSTREE_TRANSACTION (transaction),
+                                        ((RpmOstreeOutputMessage*)data)->text);
+    break;
   case RPMOSTREE_OUTPUT_TASK_BEGIN:
     rpmostree_transaction_emit_task_begin (RPMOSTREE_TRANSACTION (transaction),
                                            ((RpmOstreeOutputTaskBegin*)data)->text);
