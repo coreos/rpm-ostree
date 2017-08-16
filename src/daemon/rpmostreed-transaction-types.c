@@ -221,13 +221,9 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   gboolean changed = FALSE;
-  if (!rpmostree_sysroot_upgrader_pull (upgrader,
-                                        "/usr/share/rpm",
-                                        0,
-                                        progress,
-                                        &changed,
-                                        cancellable,
-                                        error))
+  if (!rpmostree_sysroot_upgrader_pull_base (upgrader, "/usr/share/rpm",
+                                             0, progress, &changed,
+                                             cancellable, error))
     return FALSE;
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
@@ -818,8 +814,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     {
       gboolean base_changed;
 
-      if (!rpmostree_sysroot_upgrader_pull (upgrader, NULL, 0, progress,
-                                            &base_changed, cancellable, error))
+      if (!rpmostree_sysroot_upgrader_pull_base (upgrader, NULL, 0, progress,
+                                                 &base_changed, cancellable, error))
         return FALSE;
 
       changed = changed || base_changed;
@@ -869,6 +865,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
       changed = TRUE;
     }
+
+  RpmOstreeSysrootUpgraderLayeringType layering_type;
+  gboolean layering_changed = FALSE;
+  if (!rpmostree_sysroot_upgrader_prep_layering (upgrader, &layering_type, &layering_changed,
+                                                 cancellable, error))
+    return FALSE;
+  changed = changed || layering_changed;
 
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
