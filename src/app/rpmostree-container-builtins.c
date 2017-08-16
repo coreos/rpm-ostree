@@ -390,9 +390,10 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
       return EXIT_FAILURE;
     }
 
-  guint current_version;
+  guint current_version = 2;
   if (!parse_app_version (target_current_root, &current_version, error))
     return EXIT_FAILURE;
+  g_assert_cmpuint (current_version, <, 2);
 
   g_autofree char *commit_checksum = NULL;
   g_autofree char *previous_state_sha512 = NULL;
@@ -429,7 +430,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
     previous_state_sha512 = g_variant_dup_string (previous_sha512_v, NULL);
   }
 
-  guint new_version = current_version == 0 ? 1 : 0;
+  guint new_version = (current_version == 0 ? 1 : 0);
   const char *target_new_root;
   if (new_version == 0)
     target_new_root = glnx_strjoina (name, ".0");
