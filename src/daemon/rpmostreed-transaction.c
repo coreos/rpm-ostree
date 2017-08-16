@@ -473,6 +473,15 @@ transaction_constructed (GObject *object)
     }
 }
 
+static void
+on_sysroot_journal_msg (OstreeSysroot *sysroot,
+                        const char    *msg,
+                        void          *opaque)
+{
+  rpmostree_transaction_emit_message (RPMOSTREE_TRANSACTION (opaque), msg);
+}
+
+
 static gboolean
 transaction_initable_init (GInitable *initable,
                            GCancellable *cancellable,
@@ -513,6 +522,8 @@ transaction_initable_init (GInitable *initable,
        * everything from disk.
        */
       priv->sysroot = ostree_sysroot_new (tmp_path);
+      g_signal_connect (priv->sysroot, "journal-msg",
+                        G_CALLBACK (on_sysroot_journal_msg), self);
 
       if (!ostree_sysroot_load (priv->sysroot, cancellable, error))
         return FALSE;
