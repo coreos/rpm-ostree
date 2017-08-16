@@ -593,9 +593,9 @@ finalize_removal_overrides (RpmOstreeSysrootUpgrader *self,
 
   if (inactive_removals->len > 0)
     {
-      g_print ("Inactive base removals:\n");
+      rpmostree_output_message ("Inactive base removals:");
       for (guint i = 0; i < inactive_removals->len; i++)
-        g_print ("  %s\n", (const char*)inactive_removals->pdata[i]);
+        rpmostree_output_message ("  %s", (const char*)inactive_removals->pdata[i]);
     }
 
   g_assert (!self->override_remove_packages);
@@ -642,9 +642,9 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self,
 
   if (inactive_replacements->len > 0)
     {
-      g_print ("Inactive base replacements:\n");
+      rpmostree_output_message ("Inactive base replacements:");
       for (guint i = 0; i < inactive_replacements->len; i++)
-        g_print ("  %s\n", (const char*)inactive_replacements->pdata[i]);
+        rpmostree_output_message ("  %s", (const char*)inactive_replacements->pdata[i]);
     }
 
   g_assert (!self->override_replace_local_packages);
@@ -763,9 +763,9 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
 
   if (g_hash_table_size (inactive_requests) > 0)
     {
-      g_print ("Inactive requests:\n");
+      rpmostree_output_message ("Inactive requests:");
       GLNX_HASH_TABLE_FOREACH_KV (inactive_requests, const char*, req, const char*, nevra)
-        g_print ("  %s (already provided by %s)\n", req, nevra);
+        rpmostree_output_message ("  %s (already provided by %s)", req, nevra);
     }
 
   g_assert (!self->overlay_packages);

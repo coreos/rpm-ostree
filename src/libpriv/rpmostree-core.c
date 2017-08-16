@@ -581,11 +581,10 @@ rpmostree_context_setup (RpmOstreeContext    *self,
 
   if (g_variant_dict_lookup (self->spec->dict, "instlangs", "^a&s", &instlangs))
     {
-      GString *opt = g_string_new ("");
-      char **iter;
-      gboolean first = TRUE;
+      g_autoptr(GString) opt = g_string_new ("");
 
-      for (iter = instlangs; iter && *iter; iter++)
+      gboolean first = TRUE;
+      for (char **iter = instlangs; iter && *iter; iter++)
         {
           const char *v = *iter;
           if (!first)
@@ -596,7 +595,6 @@ rpmostree_context_setup (RpmOstreeContext    *self,
         }
 
       dnf_context_set_rpm_macro (self->hifctx, "_install_langs", opt->str);
-      g_string_free (opt, TRUE);
     }
 
   /* This is what we use as default. */
@@ -928,13 +926,13 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 
   g_autoptr(GPtrArray) rpmmd_repos = get_enabled_rpmmd_repos (self->hifctx, DNF_REPO_ENABLED_PACKAGES);
 
-  g_print ("Enabled rpm-md repositories:");
+  g_autoptr(GString) enabled_repos = g_string_new ("Enabled rpm-md repositories:");
   for (guint i = 0; i < rpmmd_repos->len; i++)
     {
       DnfRepo *repo = rpmmd_repos->pdata[i];
-      g_print (" %s", dnf_repo_get_id (repo));
+      g_string_append_printf (enabled_repos, " %s", dnf_repo_get_id (repo));
     }
-  g_print ("\n");
+  rpmostree_output_message ("%s", enabled_repos->str);
 
   for (guint i = 0; i < rpmmd_repos->len; i++)
     {
@@ -972,8 +970,9 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
       else
         repo_ts_str = g_strdup_printf ("(invalid timestamp)");
 
-      g_print ("rpm-md repo '%s'%s; generated: %s\n", dnf_repo_get_id (repo),
-               !did_update ? " (cached)" : "", repo_ts_str);
+      rpmostree_output_message ("rpm-md repo '%s'%s; generated: %s\n",
+                                dnf_repo_get_id (repo), !did_update ? " (cached)" : "",
+                                repo_ts_str);
     }
 
   { g_autoptr(DnfState) hifstate = dnf_state_new ();
@@ -1576,7 +1575,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       !check_goal_solution (self, removed_pkgnames, replaced_nevras, error) ||
       !sort_packages (self, error))
     {
-      g_print ("failed\n");
+      rpmostree_output_task_end ("failed");
       return FALSE;
     }
 
@@ -1674,7 +1673,7 @@ rpmostree_context_download (RpmOstreeContext *self,
       guint64 size =
         dnf_package_array_get_download_size (self->pkgs_to_download);
       g_autofree char *sizestr = g_format_size (size);
-      g_print ("Will download: %u package%s (%s)\n", n, _NS(n), sizestr);
+      rpmostree_output_message ("Will download: %u package%s (%s)", n, _NS(n), sizestr);
     }
   else
     return TRUE;
