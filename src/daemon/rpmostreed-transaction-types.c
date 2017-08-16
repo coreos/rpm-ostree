@@ -72,7 +72,7 @@ change_origin_refspec (OstreeSysroot *sysroot,
     g_strcmp0 (new_remote, current_remote) != 0 &&
     g_strcmp0 (new_branch, current_branch) == 0;
   if (switching_only_remote && new_remote != NULL)
-    g_print ("Rebasing to %s:%s\n", new_remote, current_branch);
+    rpmostree_output_message ("Rebasing to %s:%s", new_remote, current_branch);
 
   if (out_new_refspec != NULL)
     *out_new_refspec = g_steal_pointer (&new_refspec);
@@ -1215,7 +1215,7 @@ cleanup_transaction_execute (RpmostreedTransaction *transaction,
         }
       else
         {
-          g_print ("Deployments unchanged.\n");
+          rpmostree_output_message ("Deployments unchanged.");
         }
     }
   if (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_BASE)
