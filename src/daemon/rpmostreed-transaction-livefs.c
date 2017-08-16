@@ -348,25 +348,26 @@ static void
 print_commit_diff (CommitDiff *diff)
 {
   /* Print out the results of the two diffs */
-  g_print ("Diff Analysis: %s => %s\n", diff->from, diff->to);
-  g_print ("Files:\n modified: %u\n removed: %u\n added: %u\n",
-           diff->modified->len, diff->removed->len, diff->added->len);
-  g_print ("Packages:\n modified: %u\n removed: %u\n added: %u\n",
-           diff->modified_pkgs_new->len, diff->removed_pkgs->len, diff->added_pkgs->len);
+  rpmostree_output_message ("Diff Analysis: %s => %s", diff->from, diff->to);
+  rpmostree_output_message ("Files: modified: %u removed: %u added: %u",
+                            diff->modified->len, diff->removed->len, diff->added->len);
+  rpmostree_output_message ("Packages: modified: %u removed: %u added: %u",
+                            diff->modified_pkgs_new->len,
+                            diff->removed_pkgs->len,
+                            diff->added_pkgs->len);
 
   if (diff->flags & COMMIT_DIFF_FLAGS_ETC)
     {
-      g_print ("* Configuration changed in /etc\n");
+      rpmostree_output_message ("* Configuration changed in /etc");
     }
   if (diff->flags & COMMIT_DIFF_FLAGS_ROOTFS)
     {
-      g_print ("* Content outside of /usr and /etc is modified\n");
+      rpmostree_output_message ("* Content outside of /usr and /etc is modified");
     }
   if (diff->flags & COMMIT_DIFF_FLAGS_BOOT)
     {
-      g_print ("* Kernel/initramfs changed\n");
+      rpmostree_output_message ("* Kernel/initramfs changed");
     }
-  fflush (stdout);
 }
 
 /* We want to ensure the rollback deployment matches our booted checksum. If it
@@ -406,7 +407,7 @@ prepare_rollback_deployment (OstreeSysroot  *sysroot,
   if (!ostree_sysroot_prepare_cleanup (sysroot, cancellable, error))
     return g_prefix_error (error, "Performing initial cleanup: "), FALSE;
 
-  g_print ("Preparing new rollback matching currently booted deployment\n");
+  rpmostree_output_message ("Preparing new rollback matching currently booted deployment");
 
   if (!ostree_sysroot_deploy_tree (sysroot,
                                    ostree_deployment_get_osname (booted_deployment),
@@ -537,9 +538,9 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
     }
 
   if (resuming_overlay)
-    g_print ("Note: Resuming interrupted overlay of %s\n", target_csum);
+    rpmostree_output_message ("Note: Resuming interrupted overlay of %s", target_csum);
   if (replacing_overlay)
-    g_print ("Note: Previous overlay: %s\n", replacing_overlay);
+    rpmostree_output_message ("Note: Previous overlay: %s", replacing_overlay);
 
   /* Look at the difference between the two commits - we could also walk the
    * filesystem, but doing it at the ostree level is potentially faster, since
@@ -573,7 +574,7 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
     return glnx_throw (error, "Replacement mode not implemented yet");
   if ((self->flags & RPMOSTREE_TRANSACTION_LIVEFS_FLAG_DRY_RUN) > 0)
     {
-      g_print ("livefs OK (dry run)\n");
+      rpmostree_output_message ("livefs OK (dry run)");
       /* Note early return */
       return TRUE;
     }

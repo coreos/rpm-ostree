@@ -21,6 +21,7 @@
 #include "config.h"
 
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-output.h"
 
 #include <inttypes.h>
 #include <fnmatch.h>
@@ -960,8 +961,8 @@ print_pkglist (GPtrArray *pkglist)
   for (guint i = 0; i < pkglist->len; i++)
     {
       DnfPackage *pkg = pkglist->pdata[i];
-      g_print ("  %s (%s)\n", dnf_package_get_nevra (pkg),
-                              dnf_package_get_reponame (pkg));
+      rpmostree_output_message ("  %s (%s)", dnf_package_get_nevra (pkg),
+                                             dnf_package_get_reponame (pkg));
     }
 }
 
@@ -981,7 +982,7 @@ rpmostree_print_transaction (DnfContext   *hifctx)
     if (packages->len > 0)
       {
         empty = FALSE;
-        g_print ("Installing %u packages:\n", packages->len);
+        rpmostree_output_message ("Installing %u packages:", packages->len);
         print_pkglist (packages);
       }
   }
@@ -995,13 +996,13 @@ rpmostree_print_transaction (DnfContext   *hifctx)
     if (packages->len > 0)
       {
         empty = FALSE;
-        g_print ("Removing %u packages:\n", packages->len);
+        rpmostree_output_message ("Removing %u packages:", packages->len);
         print_pkglist (packages);
       }
   }
 
   if (empty)
-    g_print ("Empty transaction\n");
+    rpmostree_output_message ("Empty transaction");
 }
 
 struct _cap_struct {

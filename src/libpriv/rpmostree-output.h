@@ -19,6 +19,7 @@
 #pragma once
 
 typedef enum {
+  RPMOSTREE_OUTPUT_MESSAGE,
   RPMOSTREE_OUTPUT_TASK_BEGIN,
   RPMOSTREE_OUTPUT_TASK_END,
   RPMOSTREE_OUTPUT_PERCENT_PROGRESS,
@@ -33,12 +34,17 @@ rpmostree_output_set_callback (void (*cb)(RpmOstreeOutputType, void*, void*), vo
 
 typedef struct {
   const char *text;
-} RpmOstreeOutputTaskBegin;
+} RpmOstreeOutputMessage;
+
+void
+rpmostree_output_message (const char *format, ...) G_GNUC_PRINTF (1,2);
+
+typedef RpmOstreeOutputMessage RpmOstreeOutputTaskBegin;
 
 void
 rpmostree_output_task_begin (const char *format, ...) G_GNUC_PRINTF (1,2);
 
-typedef RpmOstreeOutputTaskBegin RpmOstreeOutputTaskEnd;
+typedef RpmOstreeOutputMessage RpmOstreeOutputTaskEnd;
 
 void
 rpmostree_output_task_end (const char *format, ...) G_GNUC_PRINTF (1,2);

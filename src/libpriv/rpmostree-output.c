@@ -37,6 +37,9 @@ rpmostree_output_default_handler (RpmOstreeOutputType type,
 {
   switch (type)
   {
+  case RPMOSTREE_OUTPUT_MESSAGE:
+    g_print ("%s\n", ((RpmOstreeOutputMessage*)data)->text);
+    break;
   case RPMOSTREE_OUTPUT_TASK_BEGIN:
     /* XXX: move to libglnx spinner once it's implemented */
     g_print ("%s... ", ((RpmOstreeOutputTaskBegin*)data)->text);
@@ -71,36 +74,33 @@ rpmostree_output_set_callback (void (*cb)(RpmOstreeOutputType, void*, void*),
   active_cb_opaque = opaque;
 }
 
+#define strdup_vprintf(format)                  \
+  ({ va_list args; va_start (args, format);     \
+     char *s = g_strdup_vprintf (format, args); \
+     va_end (args); s; })
+
+void
+rpmostree_output_message (const char *format, ...)
+{
+  g_autofree char *final_msg = strdup_vprintf (format);
+  RpmOstreeOutputMessage task = { final_msg };
+  active_cb (RPMOSTREE_OUTPUT_MESSAGE, &task, active_cb_opaque);
+}
+
 void
 rpmostree_output_task_begin (const char *format, ...)
 {
-  g_autofree char *final = NULL;
-  va_list args;
-
-  va_start (args, format);
-  final = g_strdup_vprintf (format, args);
-  va_end (args);
-
-  {
-    RpmOstreeOutputTaskBegin task = { final };
-    active_cb (RPMOSTREE_OUTPUT_TASK_BEGIN, &task, active_cb_opaque);
-  }
+  g_autofree char *final_msg = strdup_vprintf (format);
+  RpmOstreeOutputTaskBegin task = { final_msg };
+  active_cb (RPMOSTREE_OUTPUT_TASK_BEGIN, &task, active_cb_opaque);
 }
 
 void
 rpmostree_output_task_end (const char *format, ...)
 {
-  g_autofree char *final = NULL;
-  va_list args;
-
-  va_start (args, format);
-  final = g_strdup_vprintf (format, args);
-  va_end (args);
-
-  {
-    RpmOstreeOutputTaskEnd task = { final };
-    active_cb (RPMOSTREE_OUTPUT_TASK_END, &task, active_cb_opaque);
-  }
+  g_autofree char *final_msg = strdup_vprintf (format);
+  RpmOstreeOutputTaskEnd task = { final_msg };
+  active_cb (RPMOSTREE_OUTPUT_TASK_END, &task, active_cb_opaque);
 }
 
 void

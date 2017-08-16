@@ -233,7 +233,8 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
   if (n_freed > 0 || freed_space > 0)
     {
       char *freed_space_str = g_format_size_full (freed_space, 0);
-      g_print ("Freed pkgcache branches: %u size: %s\n", n_freed, freed_space_str);
+      rpmostree_output_message ("Freed pkgcache branches: %u size: %s",
+                                n_freed, freed_space_str);
     }
 
   return TRUE;

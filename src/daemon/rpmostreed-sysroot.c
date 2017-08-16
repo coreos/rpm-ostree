@@ -79,8 +79,6 @@ struct _RpmostreedSysroot {
 
   GFileMonitor *monitor;
   guint sig_changed;
-
-  guint stdout_source_id;
 };
 
 struct _RpmostreedSysrootClass {
@@ -105,187 +103,6 @@ static RpmostreedSysroot *_sysroot_instance;
 
 /* ---------------------------------------------------------------------------------------------------- */
 
-typedef struct {
-  GWeakRef sysroot;
-  GOutputStream *real_stdout;
-  GDataInputStream *data_stream;
-} StdoutClosure;
-
-static void
-stdout_closure_free (StdoutClosure *closure)
-{
-  g_weak_ref_set (&closure->sysroot, NULL);
-  g_clear_object (&closure->real_stdout);
-  g_clear_object (&closure->data_stream);
-  g_slice_free (StdoutClosure, closure);
-}
-
-static gboolean
-sysroot_stdout_ready_cb (GPollableInputStream *pollable_stream,
-                         StdoutClosure *closure)
-{
-  glnx_unref_object RpmostreedSysroot *sysroot = NULL;
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
-  GMemoryInputStream *memory_stream;
-  GBufferedInputStream *buffered_stream;
-  char buffer[1024];
-  gconstpointer stream_buffer;
-  gsize stream_buffer_size;
-  gsize total_bytes_read = 0;
-  gboolean have_line = FALSE;
-  GError *local_error = NULL;
-
-  sysroot = g_weak_ref_get (&closure->sysroot);
-  if (sysroot != NULL)
-    transaction = rpmostreed_transaction_monitor_ref_active_transaction (sysroot->transaction_monitor);
-
-  /* XXX Would very much like g_buffered_input_stream_fill_nonblocking().
-   *     Much of this function is a clumsy and inefficient attempt to
-   *     achieve the same thing.
-   *
-   *     See: https://bugzilla.gnome.org/726797
-   */
-
-  buffered_stream = G_BUFFERED_INPUT_STREAM (closure->data_stream);
-  memory_stream = (GMemoryInputStream *) g_filter_input_stream_get_base_stream (G_FILTER_INPUT_STREAM (buffered_stream));
-
-  while (local_error == NULL)
-    {
-      gssize n_read;
-
-      n_read = g_pollable_input_stream_read_nonblocking (pollable_stream,
-                                                         buffer,
-                                                         sizeof (buffer),
-                                                         NULL, &local_error);
-
-      if (n_read > 0)
-        {
-          /* XXX Gotta use GBytes so the data gets copied. */
-          g_autoptr(GBytes) bytes = g_bytes_new (buffer, n_read);
-          g_memory_input_stream_add_bytes (memory_stream, bytes);
-          total_bytes_read += n_read;
-        }
-    }
-
-  if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_WOULD_BLOCK))
-    goto out;
-
-  g_clear_error (&local_error);
-
-read_another_line:
-
-  /* Fill the buffered stream with the data we just put in the
-   * memory stream, then peek at the buffer to see if it's safe
-   * to call g_data_input_stream_read_line() without blocking.
-   *
-   * XXX Oye, there's gotta be an easier way to do this...
-   */
-
-  /* This should never fail since it's just reading from memory. */
-  g_buffered_input_stream_fill (buffered_stream, total_bytes_read, NULL, NULL);
-
-  stream_buffer = g_buffered_input_stream_peek_buffer (buffered_stream, &stream_buffer_size);
-  have_line = (memchr (stream_buffer, '\n', stream_buffer_size) != NULL);
-
-  if (have_line)
-    {
-      g_autofree char *line = NULL;
-      gsize length;
-
-      line = g_data_input_stream_read_line (closure->data_stream,
-                                            &length, NULL, &local_error);
-
-      if (local_error != NULL)
-        goto out;
-
-      /* If there's an active transaction, forward the line to the
-       * transaction's owner through the "Message" signal.  Otherwise
-       * dump it to the non-redirected standard output stream. */
-      if (transaction != NULL)
-        {
-          rpmostree_transaction_emit_message (RPMOSTREE_TRANSACTION (transaction), line);
-        }
-      else
-        {
-          /* This is essentially puts(), don't care about errors. */
-          g_output_stream_write_all (closure->real_stdout,
-                                     line, length, NULL, NULL, NULL);
-          g_output_stream_write_all (closure->real_stdout,
-                                     "\n", 1, NULL, NULL, NULL);
-        }
-
-      goto read_another_line;
-    }
-
-out:
-  if (local_error != NULL)
-    {
-      g_warning ("Failed to read stdout pipe: %s", local_error->message);
-      g_clear_error (&local_error);
-    }
-
-  return G_SOURCE_CONTINUE;
-}
-
-static gboolean
-sysroot_setup_stdout_redirect (RpmostreedSysroot *self,
-                               GError **error)
-{
-  g_autoptr(GInputStream) stream = NULL;
-  g_autoptr(GSource) source = NULL;
-  StdoutClosure *closure;
-  gint pipefd[2];
-  gboolean ret = FALSE;
-
-  /* XXX libostree logs messages to systemd's journal and also to stdout.
-   *     Redirect our own stdout back to ourselves so we can capture those
-   *     messages and pass them on to clients.  Admittedly hokey but avoids
-   *     hacking libostree directly (for now). */
-
-  closure = g_slice_new0 (StdoutClosure);
-  g_weak_ref_set (&closure->sysroot, self);
-
-  /* Save the real stdout before overwriting its file descriptor. */
-  closure->real_stdout = g_unix_output_stream_new (dup (STDOUT_FILENO), FALSE);
-
-  if (pipe (pipefd) < 0)
-    {
-      glnx_set_prefix_error_from_errno (error, "%s", "pipe() failed");
-      goto out;
-    }
-
-  if (dup2 (pipefd[1], STDOUT_FILENO) < 0)
-    {
-      glnx_set_prefix_error_from_errno (error, "%s", "dup2() failed");
-      goto out;
-    }
-
-  stream = g_memory_input_stream_new ();
-  closure->data_stream = g_data_input_stream_new (stream);
-  g_clear_object (&stream);
-
-  stream = g_unix_input_stream_new (pipefd[0], FALSE);
-
-  source = g_pollable_input_stream_create_source (G_POLLABLE_INPUT_STREAM (stream),
-                                                  NULL);
-  /* Transfer ownership of the StdoutClosure. */
-  g_source_set_callback (source,
-                         (GSourceFunc) sysroot_stdout_ready_cb,
-                         closure,
-                         (GDestroyNotify) stdout_closure_free);
-  closure = NULL;
-
-  self->stdout_source_id = g_source_attach (source, NULL);
-
-  ret = TRUE;
-
-out:
-  if (closure != NULL)
-    stdout_closure_free (closure);
-
-  return ret;
-}
-
 static void
 sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
 {
@@ -303,6 +120,10 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
 
   switch (type)
   {
+  case RPMOSTREE_OUTPUT_MESSAGE:
+    rpmostree_transaction_emit_message (RPMOSTREE_TRANSACTION (transaction),
+                                        ((RpmOstreeOutputMessage*)data)->text);
+    break;
   case RPMOSTREE_OUTPUT_TASK_BEGIN:
     rpmostree_transaction_emit_task_begin (RPMOSTREE_TRANSACTION (transaction),
                                            ((RpmOstreeOutputTaskBegin*)data)->text);
@@ -670,9 +491,6 @@ sysroot_finalize (GObject *object)
   g_clear_object (&self->cancellable);
   g_clear_object (&self->monitor);
 
-  if (self->stdout_source_id > 0)
-    g_source_remove (self->stdout_source_id);
-
   rpmostree_output_set_callback (NULL, NULL);
 
   G_OBJECT_CLASS (rpmostreed_sysroot_parent_class)->finalize (object);
@@ -716,7 +534,6 @@ static void
 sysroot_constructed (GObject *object)
 {
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
-  GError *local_error = NULL;
 
   g_object_bind_property_full (self->transaction_monitor,
                                "active-transaction",
@@ -738,14 +555,6 @@ sysroot_constructed (GObject *object)
                                NULL,
                                NULL,
                                NULL);
-
-
-  /* Failure is not fatal, but the client may miss some messages. */
-  if (!sysroot_setup_stdout_redirect (self, &local_error))
-    {
-      g_critical ("%s", local_error->message);
-      g_clear_error (&local_error);
-    }
 
   G_OBJECT_CLASS (rpmostreed_sysroot_parent_class)->constructed (object);
 }
