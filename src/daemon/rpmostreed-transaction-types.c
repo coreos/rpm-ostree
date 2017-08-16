@@ -809,8 +809,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 
-  RpmOstreeSysrootUpgraderLayeringType layering_type;
-  gboolean layering_changed = FALSE;
   /* Mainly for the `install` and `override` commands */
   if (!(self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE))
     {
@@ -868,6 +866,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       changed = TRUE;
     }
 
+  RpmOstreeSysrootUpgraderLayeringType layering_type;
+  gboolean layering_changed = FALSE;
   if (!rpmostree_sysroot_upgrader_prep_layering (upgrader, &layering_type, &layering_changed,
                                                  cancellable, error))
     return FALSE;
@@ -1056,12 +1056,6 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
 
   rpmostree_origin_set_regenerate_initramfs (origin, self->regenerate, self->args);
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
-
-  RpmOstreeSysrootUpgraderLayeringType layering_type;
-  gboolean layering_changed = FALSE;
-  if (!rpmostree_sysroot_upgrader_prep_layering (upgrader, &layering_type, &layering_changed,
-                                                 cancellable, error))
-    return FALSE;
 
   if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
     return FALSE;

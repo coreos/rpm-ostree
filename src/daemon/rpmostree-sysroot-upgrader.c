@@ -895,7 +895,6 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
        definitely changed */
     self->layering_changed = TRUE;
 
-  self->layering_initialized = TRUE;
   return TRUE;
 }
 
@@ -1064,7 +1063,15 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
       return TRUE;
     }
 
-  /* rpmostree_sysroot_upgrader_prep_layering() must have been invoked */
+  /* Invoke prep_layering() if not done already */
+  if (!self->layering_initialized)
+    {
+      RpmOstreeSysrootUpgraderLayeringType layering_type;
+      gboolean layering_changed = FALSE;
+      if (!rpmostree_sysroot_upgrader_prep_layering (self, &layering_type, &layering_changed,
+                                                     cancellable, error))
+        return FALSE;
+    }
   g_assert (self->layering_initialized);
   /* Generate the final ostree commit */
   if (!perform_local_assembly (self, cancellable, error))
