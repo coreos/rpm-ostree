@@ -4,7 +4,7 @@ dnl to merge via homu.  After that, do `git pull origin && git reset --hard orig
 dnl Then use https://github.com/cgwalters/git-evtag to sign.
 dnl Then, git push origin v201X.XX
 m4_define([year_version], [2017])
-m4_define([release_version], [7])
+m4_define([release_version], [8])
 m4_define([package_version], [year_version.release_version])
 AC_INIT([rpm-ostree], [package_version], [atomic-devel@projectatomic.io])
 AC_CONFIG_HEADER([config.h])
@@ -86,7 +86,7 @@ LIBS="$save_LIBS"
 # Remember to update AM_CPPFLAGS in Makefile.am when bumping GIO req.
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
-				     ostree-1 >= 2017.4
+				     ostree-1 >= 2017.10
 				     libsystemd
 				     polkit-gobject-1
 				     rpm librepo
