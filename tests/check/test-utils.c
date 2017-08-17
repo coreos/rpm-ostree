@@ -118,11 +118,11 @@ test_variant_to_nevra(void)
   gboolean ret = FALSE;
   GError *error = NULL;
 
-  g_autoptr(GFile) repo_path = g_file_new_for_path ("repo");
-  g_autoptr(OstreeRepo) repo = ostree_repo_new (repo_path);
-  ret = ostree_repo_create (repo, OSTREE_REPO_MODE_BARE_USER, NULL, &error);
+  g_autoptr(OstreeRepo) repo =
+    ostree_repo_create_at (AT_FDCWD, "repo", OSTREE_REPO_MODE_BARE_USER,
+                           NULL, NULL, &error);
   g_assert_no_error (error);
-  g_assert (ret);
+  g_assert (repo);
 
   const char *nevra = "foo-1.0-1.x86_64";
   const char *name = "foo";

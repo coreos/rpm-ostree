@@ -388,12 +388,8 @@ rpmostree_context_new_internal (int           userroot_dfd,
     }
   else
     {
-      g_autofree char *repopath_str = glnx_fdrel_abspath (userroot_dfd, "repo");
-      g_autoptr(GFile) repopath = g_file_new_for_path (repopath_str);
-
-      ret->ostreerepo = ostree_repo_new (repopath);
-
-      if (!ostree_repo_open (ret->ostreerepo, cancellable, error))
+      ret->ostreerepo = ostree_repo_open_at (userroot_dfd, "repo", cancellable, error);
+      if (!ret->ostreerepo)
         return NULL;
     }
 

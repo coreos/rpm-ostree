@@ -84,13 +84,9 @@ rpmostree_ex_builtin_unpack (int             argc,
   target = argv[1];
   rpmpath = argv[2];
 
-  {
-    g_autoptr(GFile) ostree_repo_file = g_file_new_for_path (target);
-
-    ostree_repo = ostree_repo_new (ostree_repo_file);
-    if (!ostree_repo_open (ostree_repo, cancellable, error))
-      goto out;
-  }
+  ostree_repo = ostree_repo_open_at (AT_FDCWD, target, cancellable, error);
+  if (!ostree_repo)
+    goto out;
 
   if (opt_ostree_convention)
     flags |= RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION;
