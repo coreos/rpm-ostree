@@ -47,7 +47,6 @@ static GOptionEntry assemble_option_entries[] = {
 };
 
 typedef struct {
-  char *userroot_base;
   int userroot_dfd;
 
   int roots_dfd;
@@ -63,13 +62,8 @@ static gboolean
 roc_context_init_core (ROContainerContext *rocctx,
                        GError            **error)
 {
-  rocctx->userroot_base = get_current_dir_name ();
-  if (!glnx_opendirat (AT_FDCWD, rocctx->userroot_base, TRUE, &rocctx->userroot_dfd, error))
+  if (!glnx_opendirat (AT_FDCWD, ".", TRUE, &rocctx->userroot_dfd, error))
     return FALSE;
-
-  g_autofree char *repo_pathstr = g_strconcat (rocctx->userroot_base, "/repo", NULL);
-  g_autoptr(GFile) repo_path = g_file_new_for_path (repo_pathstr);
-  rocctx->repo = ostree_repo_new (repo_path);
 
   return TRUE;
 }
@@ -81,10 +75,11 @@ roc_context_init (ROContainerContext *rocctx,
   if (!roc_context_init_core (rocctx, error))
     return FALSE;
 
-  if (!glnx_opendirat (rocctx->userroot_dfd, "roots", TRUE, &rocctx->roots_dfd, error))
+  rocctx->repo = ostree_repo_open_at (rocctx->userroot_dfd, "repo", NULL, error);
+  if (!rocctx->repo)
     return FALSE;
 
-  if (!ostree_repo_open (rocctx->repo, NULL, error))
+  if (!glnx_opendirat (rocctx->userroot_dfd, "roots", TRUE, &rocctx->roots_dfd, error))
     return FALSE;
 
   if (!glnx_opendirat (rocctx->userroot_dfd, "cache/rpm-md", FALSE, &rocctx->rpmmd_dfd, error))
@@ -112,7 +107,6 @@ roc_context_prepare_for_root (ROContainerContext *rocctx,
 static void
 roc_context_deinit (ROContainerContext *rocctx)
 {
-  g_free (rocctx->userroot_base);
   if (rocctx->userroot_dfd != -1)
     (void) close (rocctx->userroot_dfd);
   g_clear_object (&rocctx->repo);
@@ -155,8 +149,11 @@ rpmostree_container_builtin_init (int             argc,
         return EXIT_FAILURE;
     }
 
-  if (!ostree_repo_create (rocctx->repo, OSTREE_REPO_MODE_BARE_USER, cancellable, error))
-    return EXIT_FAILURE;
+  rocctx->repo = ostree_repo_create_at (rocctx->userroot_dfd, "repo",
+                                        OSTREE_REPO_MODE_BARE_USER, NULL,
+                                        cancellable, error);
+  if (!rocctx->repo)
+    return FALSE;
 
   return EXIT_SUCCESS;
 }
