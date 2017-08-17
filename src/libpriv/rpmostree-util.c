@@ -553,34 +553,19 @@ rpmostree_get_pkgcache_repo (OstreeRepo   *parent,
                              GCancellable *cancellable,
                              GError      **error)
 {
-  g_autoptr(GFile) pkgcache_path = NULL;
-
-  /* get the GFile to it */
-  {
-    int parent_dfd = ostree_repo_get_dfd (parent); /* borrowed */
-    g_autofree char *pkgcache_path_s =
-      glnx_fdrel_abspath (parent_dfd, "extensions/rpmostree/pkgcache");
-    pkgcache_path = g_file_new_for_path (pkgcache_path_s);
-  }
-
-  g_autoptr(OstreeRepo) pkgcache = ostree_repo_new (pkgcache_path);
-
-  if (!g_file_query_exists (pkgcache_path, cancellable))
-    {
-      if (!g_file_make_directory_with_parents (pkgcache_path,
-                                               cancellable, error))
-        return FALSE;
-
-      if (!ostree_repo_create (pkgcache, OSTREE_REPO_MODE_BARE,
+  if (!glnx_shutil_mkdir_p_at (ostree_repo_get_dfd (parent),
+                               "extensions/rpmostree", 0755,
                                cancellable, error))
-        return FALSE;
-    }
-
-  if (!ostree_repo_open (pkgcache, cancellable, error))
+    return FALSE;
+  g_autoptr(OstreeRepo) pkgcache =
+    ostree_repo_create_at (ostree_repo_get_dfd (parent),
+                           "extensions/rpmostree/pkgcache",
+                           OSTREE_REPO_MODE_BARE, NULL,
+                           cancellable, error);
+  if (!pkgcache)
     return FALSE;
 
   *out_pkgcache = g_steal_pointer (&pkgcache);
-
   return TRUE;
 }
 

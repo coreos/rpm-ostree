@@ -78,10 +78,8 @@ rpmostree_db_option_context_parse (GOptionContext *context,
     }
   else
     {
-      g_autoptr(GFile) repo_file = g_file_new_for_path (opt_repo);
-
-      repo = ostree_repo_new (repo_file);
-      if (!ostree_repo_open (repo, cancellable, error))
+      repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
+      if (!repo)
         return FALSE;
     }
 

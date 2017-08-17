@@ -315,15 +315,12 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 {
   /* TODO - uncomment this once we have SELinux working */
 #if 0
-  g_autofree char *cache_repo_pathstr = glnx_fdrel_abspath (self->cachedir_dfd, "repo");
-  g_autoptr(GFile) cache_repo_path = g_file_new_for_path (cache_repo_pathstr);
-  glnx_unref_object OstreeRepo *ostreerepo = ostree_repo_new (cache_repo_path);
-
-  if (!g_file_test (cache_repo_pathstr, G_FILE_TEST_EXISTS))
-    {
-      if (!ostree_repo_create (ostreerepo, OSTREE_REPO_MODE_BARE_USER, cancellable, error))
-        return FALSE;
-    }
+  g_autoptr(OstreeRepo) cache_repo =
+    ostree_repo_create_at (self->cachedir_dfd, "repo",
+                           OSTREE_REPO_MODE_BARE_USER, NULL,
+                           cancellable, error);
+  if (!cache_repo)
+    return FALSE;
 #endif
 
   DnfContext *hifctx = rpmostree_context_get_hif (self->corectx);
@@ -647,9 +644,8 @@ impl_compose_tree (const char      *treefile_pathstr,
   self->workdir = g_file_new_for_path (opt_workdir);
 
   self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-  g_autoptr(GFile) repo_path = g_file_new_for_path (opt_repo);
-  self->repo = ostree_repo_new (repo_path);
-  if (!ostree_repo_open (self->repo, cancellable, error))
+  self->repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
+  if (!self->repo)
     return FALSE;
 
   g_autoptr(GFile) treefile_path = g_file_new_for_path (treefile_pathstr);
