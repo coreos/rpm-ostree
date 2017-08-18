@@ -666,10 +666,7 @@ impl_compose_tree (const char      *treefile_pathstr,
     {
       self->cachedir_dfd = fcntl (self->workdir_dfd, F_DUPFD_CLOEXEC, 3);
       if (self->cachedir_dfd < 0)
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "fcntl");
     }
 
   g_autoptr(GHashTable) metadata_hash = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_variant_unref);
@@ -707,10 +704,7 @@ impl_compose_tree (const char      *treefile_pathstr,
     }
 
   if (fchdir (self->workdir_dfd) != 0)
-    {
-      glnx_set_error_from_errno (error);
-      return FALSE;
-    }
+    return glnx_throw_errno_prefix (error, "fchdir");
 
   self->corectx = rpmostree_context_new_compose (self->cachedir_dfd, cancellable, error);
   if (!self->corectx)
