@@ -479,6 +479,21 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
         return FALSE;
     }
 
+  /* Before we install packages, drop a file to suppress the kernel.rpm dracut run.
+   * <https://github.com/systemd/systemd/pull/4174> */
+  const char *kernel_installd_path = "usr/lib/kernel/install.d";
+  if (!glnx_shutil_mkdir_p_at (rootfs_dfd, kernel_installd_path, 0755, cancellable, error))
+    return FALSE;
+  const char skip_kernel_install_data[] = "#!/usr/bin/sh\nexit 77\n";
+  const char *kernel_skip_path = glnx_strjoina (kernel_installd_path, "/00-rpmostree-skip.install");
+  if (!glnx_file_replace_contents_with_perms_at (rootfs_dfd, kernel_skip_path,
+                                                 (guint8*)skip_kernel_install_data,
+                                                 strlen (skip_kernel_install_data),
+                                                 0755, 0, 0,
+                                                 GLNX_FILE_REPLACE_NODATASYNC,
+                                                 cancellable, error))
+    return FALSE;
+
   /* Now actually run through librpm to install the packages.  Note this bit
    * will be replaced in the future with a unified core:
    * https://github.com/projectatomic/rpm-ostree/issues/729
