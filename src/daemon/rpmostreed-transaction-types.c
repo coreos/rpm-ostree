@@ -1154,10 +1154,7 @@ remove_directory_content_if_exists (int dfd,
   if (fd < 0)
     {
       if (errno != ENOENT)
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "opendir(%s)", path);
     }
   else
     {
