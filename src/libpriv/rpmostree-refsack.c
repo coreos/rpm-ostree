@@ -25,13 +25,16 @@
 #include "rpmostree-rpm-util.h"
 
 RpmOstreeRefSack *
-rpmostree_refsack_new (DnfSack *sack, int temp_base_dfd, const char *temp_path)
+rpmostree_refsack_new (DnfSack *sack, GLnxTmpDir *tmpdir)
 {
   RpmOstreeRefSack *rsack = g_new0 (RpmOstreeRefSack, 1);
   rsack->sack = g_object_ref (sack);
   rsack->refcount = 1;
-  rsack->temp_base_dfd = temp_base_dfd;
-  rsack->temp_path = g_strdup (temp_path);
+  if (tmpdir)
+    {
+      rsack->tmpdir = *tmpdir;
+      tmpdir->initialized = FALSE; /* Steal ownership */
+    }
   return rsack;
 }
 
@@ -48,13 +51,10 @@ rpmostree_refsack_unref (RpmOstreeRefSack *rsack)
   if (!g_atomic_int_dec_and_test (&rsack->refcount))
     return;
   g_object_unref (rsack->sack);
-  
+
   /* The sack might point to a temporarily allocated rpmdb copy, if so,
    * prune it now.
    */
-  if (rsack->temp_path)
-    (void) glnx_shutil_rm_rf_at (rsack->temp_base_dfd, rsack->temp_path, NULL, NULL);
-
-  g_free (rsack->temp_path);
+  glnx_tmpdir_clear (&rsack->tmpdir);
   g_free (rsack);
 }
