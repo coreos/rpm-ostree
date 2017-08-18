@@ -60,7 +60,8 @@ if [ -n "${RPMOSTREE_COMPOSE_TEST_USE_HOST_REPO:-}" ]; then
 fi
 
 # Delete the default ref, since we want to use subrefs of it
-(rm ${repobuild}/refs/heads/* -rf
+(set -x
+ rm ${repobuild}/refs/heads/* -rf
  rpm-ostree compose --repo=${repobuild} tree --dry-run --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json
  rm ${repobuild}/refs/heads/* -rf) &>> ${LOG}
 
