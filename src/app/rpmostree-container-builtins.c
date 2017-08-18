@@ -267,22 +267,16 @@ rpmostree_container_builtin_assemble (int             argc,
     return EXIT_FAILURE;
 
   g_autofree char *commit = NULL;
-  { g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
-    glnx_fd_close int tmprootfs_dfd = -1;
+  { g_auto(GLnxTmpDir) tmpdir = { 0, };
 
-    if (!glnx_mkdtempat (rocctx->userroot_dfd, tmprootfs, 0755, error))
+    if (!glnx_mkdtempat (rocctx->userroot_dfd, "tmp/rpmostree-commit-XXXXXX", 0755,
+                         &tmpdir, error))
       return EXIT_FAILURE;
 
-    if (!glnx_opendirat (rocctx->userroot_dfd, tmprootfs, TRUE,
-                         &tmprootfs_dfd, error))
-      return EXIT_FAILURE;
-
-    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmprootfs_dfd, NULL,
+    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir.fd, NULL,
                                             NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
                                             FALSE, &commit, cancellable, error))
       return EXIT_FAILURE;
-
-    glnx_shutil_rm_rf_at (rocctx->userroot_dfd, tmprootfs, cancellable, NULL);
   }
 
   g_print ("Checking out %s @ %s...\n", name, commit);
@@ -461,23 +455,17 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
     return EXIT_FAILURE;
 
   g_autofree char *new_commit_checksum = NULL;
-  { g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-commit-XXXXXX");
-    glnx_fd_close int tmprootfs_dfd = -1;
+  { g_auto(GLnxTmpDir) tmpdir = { 0, };
 
-    if (!glnx_mkdtempat (rocctx->userroot_dfd, tmprootfs, 0755, error))
+    if (!glnx_mkdtempat (rocctx->userroot_dfd, "tmp/rpmostree-commit-XXXXXX", 0755,
+                         &tmpdir, error))
       return EXIT_FAILURE;
 
-    if (!glnx_opendirat (rocctx->userroot_dfd, tmprootfs, TRUE,
-                         &tmprootfs_dfd, error))
-      return EXIT_FAILURE;
-
-    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmprootfs_dfd, NULL,
+    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir.fd, NULL,
                                             NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
                                             TRUE, &new_commit_checksum,
                                             cancellable, error))
       return EXIT_FAILURE;
-
-    glnx_shutil_rm_rf_at (rocctx->userroot_dfd, tmprootfs, cancellable, NULL);
   }
 
   g_print ("Checking out %s @ %s...\n", name, new_commit_checksum);

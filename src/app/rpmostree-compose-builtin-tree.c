@@ -98,7 +98,7 @@ typedef struct {
   GFile *treefile;
   GFile *previous_root;
   GFile *workdir;
-  gboolean workdir_is_tmp;
+  GLnxTmpDir workdir_tmp;
   int workdir_dfd;
   int cachedir_dfd;
   OstreeRepo *repo;
@@ -115,11 +115,11 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_clear_object (&ctx->corectx);
   g_clear_object (&ctx->treefile);
   g_clear_object (&ctx->previous_root);
-  if (ctx->workdir_is_tmp)
-    (void) glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (ctx->workdir), NULL, NULL);
-  g_clear_object (&ctx->workdir);
-  if (ctx->workdir_dfd != -1)
+  /* Only close workdir_dfd if it's not owned by the tmpdir */
+  if (!ctx->workdir_tmp.initialized && ctx->workdir_dfd != -1)
     (void) close (ctx->workdir_dfd);
+  glnx_tmpdir_clear (&ctx->workdir_tmp);
+  g_clear_object (&ctx->workdir);
   if (ctx->cachedir_dfd != -1)
     (void) close (ctx->cachedir_dfd);
   g_clear_object (&ctx->repo);
@@ -663,11 +663,19 @@ impl_compose_tree (const char      *treefile_pathstr,
     g_print ("note: --workdir-tmpfs is deprecated and will be ignored\n");
   if (!opt_workdir)
     {
-      if (!rpmostree_mkdtemp ("/var/tmp/rpm-ostree.XXXXXX", &opt_workdir, NULL, error))
+      if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &self->workdir_tmp, error))
         return FALSE;
-      self->workdir_is_tmp = TRUE;
+      self->workdir = g_file_new_for_path (self->workdir_tmp.path);
+      /* Note special handling of this aliasing in _finalize() */
+      self->workdir_dfd = self->workdir_tmp.fd;
     }
-  self->workdir = g_file_new_for_path (opt_workdir);
+  else
+    {
+      self->workdir = g_file_new_for_path (opt_workdir);
+      if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (self->workdir),
+                           FALSE, &self->workdir_dfd, error))
+        return FALSE;
+    }
 
   self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
   self->repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
@@ -675,10 +683,6 @@ impl_compose_tree (const char      *treefile_pathstr,
     return FALSE;
 
   self->treefile = g_file_new_for_path (treefile_pathstr);
-
-  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (self->workdir),
-                       FALSE, &self->workdir_dfd, error))
-    return FALSE;
 
   if (opt_cachedir)
     {

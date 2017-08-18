@@ -46,7 +46,7 @@ struct RpmOstreeBwrap {
 
   GPtrArray *argv;
   const char *child_argv0;
-  char *rofiles_mnt;
+  GLnxTmpDir rofiles_mnt;
 
   GSpawnChildSetupFunc child_setup_func;
   gpointer child_setup_data;
@@ -66,10 +66,10 @@ rpmostree_bwrap_unref (RpmOstreeBwrap *bwrap)
   if (bwrap->refcount > 0)
     return;
 
-  if (bwrap->rofiles_mnt)
+  if (bwrap->rofiles_mnt.initialized)
     {
       g_autoptr(GError) tmp_error = NULL;
-      const char *fusermount_argv[] = { "fusermount", "-u", bwrap->rofiles_mnt, NULL};
+      const char *fusermount_argv[] = { "fusermount", "-u", bwrap->rofiles_mnt.path, NULL};
       int estatus;
 
       if (!g_spawn_sync (NULL, (char**)fusermount_argv, NULL, G_SPAWN_SEARCH_PATH,
@@ -84,7 +84,6 @@ rpmostree_bwrap_unref (RpmOstreeBwrap *bwrap)
           goto out;
         }
 
-      (void) unlinkat (AT_FDCWD, bwrap->rofiles_mnt, AT_REMOVEDIR);
     out:
       /* We don't want a failure to unmount to be fatal, so all we do here
        * is log.  Though in practice what we *really* want is for the
@@ -97,9 +96,9 @@ rpmostree_bwrap_unref (RpmOstreeBwrap *bwrap)
       if (tmp_error)
         sd_journal_print (LOG_WARNING, "%s", tmp_error->message);
     }
+  glnx_tmpdir_clear (&bwrap->rofiles_mnt);
 
   g_ptr_array_unref (bwrap->argv);
-  g_free (bwrap->rofiles_mnt);
   g_free (bwrap);
 }
 
@@ -149,32 +148,25 @@ static gboolean
 setup_rofiles_usr (RpmOstreeBwrap *bwrap,
                    GError **error)
 {
-  gboolean ret = FALSE;
-  int estatus;
   const char *rofiles_argv[] = { "rofiles-fuse", "./usr", NULL, NULL};
-  gboolean mntpoint_created = FALSE;
 
-  bwrap->rofiles_mnt = g_strdup ("/tmp/rofiles-fuse.XXXXXX");
-  rofiles_argv[2] = bwrap->rofiles_mnt;
+  if (!glnx_mkdtemp ("rpmostree-rofiles-fuse.XXXXXX", 0700, &bwrap->rofiles_mnt, error))
+    return FALSE;
 
-  if (!glnx_mkdtempat (AT_FDCWD, bwrap->rofiles_mnt, 0700, error))
-    goto out;
-  mntpoint_created = TRUE;
+  const char *rofiles_mntpath = bwrap->rofiles_mnt.path;
+  rofiles_argv[2] = rofiles_mntpath;
 
+  int estatus;
   if (!g_spawn_sync (NULL, (char**)rofiles_argv, NULL, G_SPAWN_SEARCH_PATH,
                      child_setup_fchdir, GINT_TO_POINTER (bwrap->rootfs_fd),
                      NULL, NULL, &estatus, error))
-    goto out;
+    return FALSE;
   if (!g_spawn_check_exit_status (estatus, error))
-    goto out;
+    return FALSE;
 
-  rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", bwrap->rofiles_mnt, "/usr", NULL);
+  rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", rofiles_mntpath, "/usr", NULL);
 
-  ret = TRUE;
- out:
-  if (!ret && mntpoint_created)
-    (void) unlinkat (AT_FDCWD, bwrap->rofiles_mnt, AT_REMOVEDIR);
-  return ret;
+  return TRUE;
 }
 
 /* nspawn by default doesn't give us CAP_NET_ADMIN; see

@@ -251,8 +251,7 @@ struct _RpmOstreeContext {
   GHashTable *pkgs_to_remove;  /* pkgname --> gv_nevra */
   GHashTable *pkgs_to_replace; /* new gv_nevra --> old gv_nevra */
 
-  char *tmpdir_path;
-  int tmpdir_fd;
+  GLnxTmpDir tmpdir;
 };
 
 G_DEFINE_TYPE (RpmOstreeContext, rpmostree_context, G_TYPE_OBJECT)
@@ -279,14 +278,7 @@ rpmostree_context_finalize (GObject *object)
   g_clear_pointer (&rctx->pkgs_to_remove, g_hash_table_unref);
   g_clear_pointer (&rctx->pkgs_to_replace, g_hash_table_unref);
 
-  if (rctx->tmpdir_path)
-    {
-      (void) glnx_shutil_rm_rf_at (AT_FDCWD, rctx->tmpdir_path, NULL, NULL);
-      g_clear_pointer (&rctx->tmpdir_path, g_free);
-    }
-
-  if (rctx->tmpdir_fd != -1)
-    close (rctx->tmpdir_fd);
+  glnx_tmpdir_clear (&rctx->tmpdir);
 
   G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
 }
@@ -301,7 +293,6 @@ rpmostree_context_class_init (RpmOstreeContextClass *klass)
 static void
 rpmostree_context_init (RpmOstreeContext *self)
 {
-  self->tmpdir_fd = -1;
 }
 
 static void
@@ -417,15 +408,13 @@ rpmostree_context_ensure_tmpdir (RpmOstreeContext *self,
                                  const char       *subdir,
                                  GError          **error)
 {
-  if (self->tmpdir_path == NULL)
-    {
-      if (!rpmostree_mkdtemp ("/tmp/rpmostree-core-XXXXXX",
-                              &self->tmpdir_path,
-                              &self->tmpdir_fd,
-                              error))
-        return FALSE;
-    }
-  if (!glnx_shutil_mkdir_p_at (self->tmpdir_fd, subdir, 0755, NULL, error))
+  if (self->tmpdir.initialized)
+    return TRUE;
+
+  if (!glnx_mkdtemp ("rpmostree-core-XXXXXX", 0700,
+                     &self->tmpdir, error))
+    return FALSE;
+  if (!glnx_shutil_mkdir_p_at (self->tmpdir.fd, subdir, 0755, NULL, error))
     return FALSE;
   return TRUE;
 }
@@ -725,13 +714,13 @@ checkout_pkg_metadata (RpmOstreeContext *self,
   path = get_nevra_relpath (nevra);
 
   /* we may have already written the header out for this one */
-  if (fstatat (self->tmpdir_fd, path, &stbuf, 0) == 0)
+  if (fstatat (self->tmpdir.fd, path, &stbuf, 0) == 0)
     return TRUE;
 
   if (errno != ENOENT)
     return glnx_throw_errno (error);
 
-  return glnx_file_replace_contents_at (self->tmpdir_fd, path,
+  return glnx_file_replace_contents_at (self->tmpdir.fd, path,
                                         g_variant_get_data (header),
                                         g_variant_get_size (header),
                                         GLNX_FILE_REPLACE_NODATASYNC,
@@ -1445,7 +1434,7 @@ install_pkg_from_cache (RpmOstreeContext *self,
    * RPM, all while crossing our fingers that they don't try to look past the header.
    * Ideally, it would be best if libdnf could learn to treat the pkgcache repo as another
    * DnfRepo. */
-  g_autofree char *rpm = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir_path, nevra);
+  g_autofree char *rpm = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir.path, nevra);
   DnfPackage *pkg = dnf_sack_add_cmdline_package (dnf_context_get_sack (self->hifctx), rpm);
   if (!pkg)
     return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
@@ -2194,64 +2183,49 @@ relabel_one_package (OstreeRepo     *repo,
                      GCancellable   *cancellable,
                      GError        **error)
 {
-  gboolean ret = FALSE;
-
-  g_autofree char *tmprootfs = g_strdup ("tmp/rpmostree-relabel-XXXXXX");
-  glnx_fd_close int tmprootfs_dfd = -1;
-  g_autoptr(OstreeRepoDevInoCache) cache = NULL;
-  g_autoptr(OstreeRepoCommitModifier) modifier = NULL;
-  g_autoptr(GFile) root = NULL;
-  g_autofree char *commit_csum = NULL;
   g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
-
+  g_autofree char *commit_csum = NULL;
   if (!ostree_repo_resolve_rev (repo, cachebranch, FALSE,
                                 &commit_csum, error))
-    goto out;
+    return FALSE;
 
-  /* create a tmprootfs in ostree tmp dir */
-  {
-    int repo_dfd = ostree_repo_get_dfd (repo); /* borrowed */
-
-    if (!glnx_mkdtempat (repo_dfd, tmprootfs, 00755, error))
-      goto out;
-
-    if (!glnx_opendirat (repo_dfd, tmprootfs, FALSE, &tmprootfs_dfd, error))
-      goto out;
-  }
+  g_auto(GLnxTmpDir) tmpdir = { 0, };
+  if (!glnx_mkdtempat (ostree_repo_get_dfd (repo), "tmp/rpmostree-relabel-XXXXXX",
+                       0700, &tmpdir, error))
+    return FALSE;
 
   /* checkout the pkg and relabel, breaking hardlinks */
+  g_autoptr(OstreeRepoDevInoCache) cache = ostree_repo_devino_cache_new ();
 
-  cache = ostree_repo_devino_cache_new ();
-
-  if (!checkout_package (repo, pkg, tmprootfs_dfd, ".", cache,
+  if (!checkout_package (repo, pkg, tmpdir.fd, ".", cache,
                          commit_csum, cancellable, error))
-    goto out;
+    return FALSE;
 
   /* This is where the magic happens. We traverse the tree and relabel stuff,
    * making sure to break hardlinks if needed. */
-  if (!relabel_rootfs (repo, tmprootfs_dfd, sepolicy, inout_n_changed, cancellable, error))
-    goto out;
+  if (!relabel_rootfs (repo, tmpdir.fd, sepolicy, inout_n_changed, cancellable, error))
+    return FALSE;
 
   if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
-    goto out;
+    return FALSE;
 
   /* write to the tree */
+  g_autoptr(GFile) root = NULL;
   {
     glnx_unref_object OstreeMutableTree *mtree = ostree_mutable_tree_new ();
 
-    modifier =
+    g_autoptr(OstreeRepoCommitModifier) modifier =
       ostree_repo_commit_modifier_new (OSTREE_REPO_COMMIT_MODIFIER_FLAGS_NONE,
                                        NULL, NULL, NULL);
 
     ostree_repo_commit_modifier_set_devino_cache (modifier, cache);
 
-    if (!ostree_repo_write_dfd_to_mtree (repo, tmprootfs_dfd, ".", mtree,
+    if (!ostree_repo_write_dfd_to_mtree (repo, tmpdir.fd, ".", mtree,
                                          modifier, cancellable, error))
-      goto out;
+      return FALSE;
 
     if (!ostree_repo_write_mtree (repo, mtree, &root, cancellable, error))
-      goto out;
-
+      return FALSE;
   }
 
   /* build metadata and commit */
@@ -2260,7 +2234,7 @@ relabel_one_package (OstreeRepo     *repo,
     g_autoptr(GVariantDict) meta_dict = NULL;
 
     if (!ostree_repo_load_commit (repo, commit_csum, &commit_var, NULL, error))
-      goto out;
+      return FALSE;
 
     /* let's just copy the metadata from the previous commit and only change the
      * rpmostree.sepolicy value */
@@ -2278,7 +2252,7 @@ relabel_one_package (OstreeRepo     *repo,
                                      g_variant_dict_end (meta_dict),
                                      OSTREE_REPO_FILE (root), &new_commit_csum,
                                      cancellable, error))
-        goto out;
+        return FALSE;
 
       ostree_repo_transaction_set_ref (repo, NULL, cachebranch,
                                        new_commit_csum);
@@ -2286,20 +2260,9 @@ relabel_one_package (OstreeRepo     *repo,
   }
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
-out:
-  if (tmprootfs_dfd != -1)
-    {
-      g_autoptr(GError) local_error = NULL;
-      if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, ".", cancellable, &local_error))
-        {
-          sd_journal_print (LOG_WARNING, "failed to delete tmpdir %s: %s",
-                            tmprootfs, local_error->message);
-        }
-    }
-  return ret;
+  return TRUE;
 }
 
 gboolean
@@ -2379,7 +2342,7 @@ ts_callback (const void * h,
         /* just bypass fdrel_abspath here since we know the dfd is not ATCWD and
          * it saves us an allocation */
         g_autofree char *relpath = get_package_relpath (pkg);
-        g_autofree char *path = g_build_filename (tdata->ctx->tmpdir_path, relpath, NULL);
+        g_autofree char *path = g_build_filename (tdata->ctx->tmpdir.path, relpath, NULL);
         g_assert (tdata->current_trans_fd == NULL);
         tdata->current_trans_fd = Fopen (path, "r.ufdio");
         return tdata->current_trans_fd;
@@ -2405,7 +2368,7 @@ get_package_metainfo (RpmOstreeContext *self,
                       GError **error)
 {
   glnx_fd_close int metadata_fd = -1;
-  if (!glnx_openat_rdonly (self->tmpdir_fd, path, TRUE, &metadata_fd, error))
+  if (!glnx_openat_rdonly (self->tmpdir.fd, path, TRUE, &metadata_fd, error))
     return FALSE;
 
   return rpmostree_unpacker_read_metainfo (metadata_fd, out_header, NULL,

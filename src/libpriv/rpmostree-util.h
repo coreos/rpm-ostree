@@ -37,11 +37,6 @@ GVariant *_rpmostree_vardict_lookup_value_required (GVariantDict *dict,
                                                     const GVariantType *fmt,
                                                     GError     **error);
 
-gboolean rpmostree_mkdtemp (const char   *template,
-                             char       **out_tmpdir,
-                             int         *out_tmpdir_dfd,  /* allow-none */
-                             GError     **error);
-
 char *
 _rpmostree_varsubst_string (const char *instr,
                             GHashTable *substitutions,

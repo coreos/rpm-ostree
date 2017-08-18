@@ -22,16 +22,16 @@
 #pragma once
 
 #include <libdnf/libdnf.h>
+#include "libglnx.h"
 
 typedef struct {
   volatile gint refcount;
   rpmts ts;
-  int temp_base_dfd;
-  char *temp_path;
+  GLnxTmpDir tmpdir;
 } RpmOstreeRefTs;
 
 RpmOstreeRefTs *
-rpmostree_refts_new (rpmts ts, int temp_base_dfd, const char *temp_path);
+rpmostree_refts_new (rpmts ts, GLnxTmpDir *tmpdir);
 
 RpmOstreeRefTs *
 rpmostree_refts_ref (RpmOstreeRefTs *rts);

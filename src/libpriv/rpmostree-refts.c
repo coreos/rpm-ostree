@@ -32,13 +32,16 @@
  */
 
 RpmOstreeRefTs *
-rpmostree_refts_new (rpmts ts, int temp_base_dfd, const char *temp_path)
+rpmostree_refts_new (rpmts ts, GLnxTmpDir *tmpdir)
 {
   RpmOstreeRefTs *rts = g_new0 (RpmOstreeRefTs, 1);
   rts->ts = ts;
   rts->refcount = 1;
-  rts->temp_base_dfd = temp_base_dfd;
-  rts->temp_path = g_strdup (temp_path);
+  if (tmpdir)
+    {
+      rts->tmpdir = *tmpdir;
+      tmpdir->initialized = FALSE; /* Steal ownership */
+    }
   return rts;
 }
 
@@ -55,10 +58,6 @@ rpmostree_refts_unref (RpmOstreeRefTs *rts)
   if (!g_atomic_int_dec_and_test (&rts->refcount))
     return;
   rpmtsFree (rts->ts);
-  
-  if (rts->temp_path)
-    (void) glnx_shutil_rm_rf_at (rts->temp_base_dfd, rts->temp_path, NULL, NULL);
-
-  g_free (rts->temp_path);
+  glnx_tmpdir_clear (&rts->tmpdir);
   g_free (rts);
 }

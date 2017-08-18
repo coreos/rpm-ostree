@@ -91,15 +91,6 @@ const char *rpmrev_get_commit (struct RpmRevisionData *self);
 void rpmrev_free (struct RpmRevisionData *ptr);
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmRevisionData, rpmrev_free);
 
-gboolean
-rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
-                                       const char       *ref,
-                                       const char       *template,
-                                       char            **out_tempdir,
-                                       int              *out_tempdir_dfd,
-                                       GCancellable     *cancellable,
-                                       GError          **error);
-
 RpmOstreeRefSack *
 rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
                                   const char                *ref,
