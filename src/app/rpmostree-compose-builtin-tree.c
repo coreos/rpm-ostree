@@ -95,6 +95,7 @@ typedef struct {
   GPtrArray *treefile_context_dirs;
 
   RpmOstreeContext *corectx;
+  GFile *treefile;
   GFile *workdir;
   gboolean workdir_is_tmp;
   int workdir_dfd;
@@ -111,6 +112,7 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
 {
   g_clear_pointer (&ctx->treefile_context_dirs, (GDestroyNotify)g_ptr_array_unref);
   g_clear_object (&ctx->corectx);
+  g_clear_object (&ctx->treefile);
   if (ctx->workdir_is_tmp)
     (void) glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (ctx->workdir), NULL, NULL);
   g_clear_object (&ctx->workdir);
@@ -648,7 +650,7 @@ impl_compose_tree (const char      *treefile_pathstr,
   if (!self->repo)
     return FALSE;
 
-  g_autoptr(GFile) treefile_path = g_file_new_for_path (treefile_pathstr);
+  self->treefile = g_file_new_for_path (treefile_pathstr);
 
   if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (self->workdir),
                        FALSE, &self->workdir_dfd, error))
@@ -714,7 +716,7 @@ impl_compose_tree (const char      *treefile_pathstr,
 
   glnx_unref_object JsonParser *treefile_parser = json_parser_new ();
   if (!json_parser_load_from_file (treefile_parser,
-                                   gs_file_get_path_cached (treefile_path),
+                                   gs_file_get_path_cached (self->treefile),
                                    error))
     return FALSE;
 
@@ -723,7 +725,7 @@ impl_compose_tree (const char      *treefile_pathstr,
     return glnx_throw (error, "Treefile root is not an object");
   JsonObject *treefile = json_node_get_object (treefile_rootval);
 
-  if (!process_includes (self, treefile_path, 0, treefile,
+  if (!process_includes (self, self->treefile, 0, treefile,
                          cancellable, error))
     return FALSE;
 
@@ -844,7 +846,7 @@ impl_compose_tree (const char      *treefile_pathstr,
     self->serialized_treefile = g_bytes_new_take (treefile_buf, len);
   }
 
-  g_autoptr(GFile) treefile_dirpath = g_file_get_parent (treefile_path);
+  g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile);
   if (TRUE)
     {
       gboolean generate_from_previous = TRUE;
