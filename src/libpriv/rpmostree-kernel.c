@@ -59,10 +59,7 @@ find_kernel_and_initramfs_in_bootdir (int          rootfs_dfd,
       if (errno == ENOENT)
         return TRUE;
       else
-        {
-          glnx_set_error_from_errno (error);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "opendir(%s)", bootdir);
     }
   if (!glnx_dirfd_iterator_init_take_fd (&dfd, &dfd_iter, error))
     return FALSE;
@@ -252,11 +249,8 @@ rpmostree_finalize_kernel (int rootfs_dfd,
   initramfs_final_path = g_strconcat (bootdir, "/", "initramfs-", kver, ".img-", boot_checksum_str, NULL);
 
   /* Put the kernel in the final location */
-  if (renameat (rootfs_dfd, kernel_path, rootfs_dfd, kernel_final_path) < 0)
-    {
-      glnx_set_error_from_errno (error);
-      return FALSE;
-    }
+  if (!glnx_renameat (rootfs_dfd, kernel_path, rootfs_dfd, kernel_final_path, error))
+    return FALSE;
   /* Link the initramfs directly to its final destination */
   if (!glnx_link_tmpfile_at (initramfs_tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
                              rootfs_dfd, initramfs_final_path,

@@ -688,16 +688,10 @@ hardlink_recurse (int                src_dfd,
         {
           mode_t perms = stbuf.st_mode & ~S_IFMT;
 
-          if (mkdirat (dest_target_dfd, dent->d_name, perms) < 0)
-            {
-              glnx_set_error_from_errno (error);
-              return FALSE;
-            }
+          if (!glnx_ensure_dir (dest_target_dfd, dent->d_name, perms, error))
+            return FALSE;
           if (fchmodat (dest_target_dfd, dent->d_name, perms, 0) < 0)
-            {
-              glnx_set_error_from_errno (error);
-              return FALSE;
-            }
+            return glnx_throw_errno_prefix (error, "fchmodat");
           if (!hardlink_recurse (dfd_iter.fd, dent->d_name,
                                  dest_target_dfd, dent->d_name,
                                  cancellable, error))
@@ -707,10 +701,7 @@ hardlink_recurse (int                src_dfd,
         {
           if (linkat (dfd_iter.fd, dent->d_name,
                       dest_target_dfd, dent->d_name, 0) < 0)
-            {
-              glnx_set_error_from_errno (error);
-              return FALSE;
-            }
+            return glnx_throw_errno_prefix (error, "linkat");
         }
     }
 
