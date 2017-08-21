@@ -395,12 +395,29 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
   else
     refs_to_fetch[0] = origin_ref;
 
+  const gboolean allow_older =
+    (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER) > 0;
+
   g_assert (self->origin_merge_deployment);
   if (origin_remote)
     {
-      if (!ostree_repo_pull_one_dir (self->repo, origin_remote, dir_to_pull, refs_to_fetch,
-                                     flags, progress,
-                                     cancellable, error))
+      g_autoptr(GVariantBuilder) optbuilder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+      if (dir_to_pull && *dir_to_pull)
+        g_variant_builder_add (optbuilder, "{s@v}", "subdir",
+                               g_variant_new_variant (g_variant_new_string (dir_to_pull)));
+      g_variant_builder_add (optbuilder, "{s@v}", "flags",
+                             g_variant_new_variant (g_variant_new_int32 (flags)));
+      /* Add the timestamp check, unless disabled. The option was added in
+       * libostree v2017.11 */
+      if (!allow_older)
+        g_variant_builder_add (optbuilder, "{s@v}", "timestamp-check",
+                               g_variant_new_variant (g_variant_new_boolean (TRUE)));
+      g_variant_builder_add (optbuilder, "{s@v}", "refs",
+                             g_variant_new_variant (g_variant_new_strv ((const char *const*) refs_to_fetch, -1)));
+
+      g_autoptr(GVariant) opts = g_variant_ref_sink (g_variant_builder_end (optbuilder));
+      if (!ostree_repo_pull_with_options (self->repo, origin_remote, opts, progress,
+                                          cancellable, error))
         return FALSE;
 
       if (progress)
@@ -428,8 +445,6 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
     }
 
   {
-    gboolean allow_older =
-      (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER) > 0;
     gboolean changed = FALSE;
 
     if (strcmp (new_base_revision, self->base_revision) != 0)
