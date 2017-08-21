@@ -41,26 +41,6 @@
 #include "libglnx.h"
 
 static gboolean
-ptrarray_contains_str (GPtrArray *haystack, const char *needle)
-{
-  /* faster if sorted+bsearch ... but probably doesn't matter */
-  guint i;
-
-  if (!haystack || !needle)
-    return FALSE;
-
-  for (i = 0; i < haystack->len; i++)
-    {
-      const char *data = haystack->pdata[i];
-
-      if (g_str_equal (data, needle))
-        return TRUE;
-    }
-
-  return FALSE;
-}
-
-static gboolean
 dir_contains_uid_or_gid (GFile         *root,
                          guint32        id,
                          const char    *attr,
@@ -210,13 +190,11 @@ conv_group_ent_free (void *vptr)
 GPtrArray *
 rpmostree_passwd_data2groupents (const char *data)
 {
-  struct group *ent = NULL;
-  GPtrArray *ret = g_ptr_array_new_with_free_func (conv_group_ent_free);
-
   g_return_val_if_fail (data != NULL, NULL);
 
   g_autoptr(FILE) mf = fmemopen ((void *)data, strlen (data), "r");
-
+  GPtrArray *ret = g_ptr_array_new_with_free_func (conv_group_ent_free);
+  struct group *ent = NULL;
   while ((ent = fgetgrent (mf)))
     {
       struct conv_group_ent *convent = g_new (struct conv_group_ent, 1);
@@ -416,7 +394,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
                                                        error))
         return FALSE;
     }
-  ignore_all_removed = ptrarray_contains_str (ignore_removed_ents, "*");
+  ignore_all_removed = rpmostree_str_ptrarray_contains (ignore_removed_ents, "*");
 
   if (passwd)
     {
@@ -457,7 +435,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
           gboolean found_matching_uid;
 
           if (ignore_all_removed ||
-              ptrarray_contains_str (ignore_removed_ents, odata->name))
+              rpmostree_str_ptrarray_contains (ignore_removed_ents, odata->name))
             {
               g_print ("Ignored user missing from new passwd file: %s\n",
                        odata->name);
@@ -505,7 +483,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
         {
 
           if (ignore_all_removed ||
-              ptrarray_contains_str (ignore_removed_ents, odata->name))
+              rpmostree_str_ptrarray_contains (ignore_removed_ents, odata->name))
             {
               g_print ("Ignored group missing from new group file: %s\n",
                        odata->name);
@@ -885,45 +863,36 @@ _data_from_json (GFile           *yumroot,
                  GCancellable    *cancellable,
                  GError         **error)
 {
-  const gboolean passwd = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD;
+  const gboolean passwd = (kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD);
   const char *json_conf_name = passwd ? "check-passwd" : "check-groups";
-  const char *filebasename   = passwd ? "passwd" : "group";
-  JsonObject *chk = NULL;
-  const char *chk_type = NULL;
-  const char *filename = NULL;
-  g_autoptr(GFile) source = NULL;
-  g_autofree char *contents = NULL;
-  g_autoptr(GHashTable) seen_names =
-    g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
-
   *out_found = FALSE;
   if (!json_object_has_member (treedata, json_conf_name))
     return TRUE;
-  
-  chk = json_object_get_object_member (treedata,json_conf_name);
+
+  JsonObject *chk = json_object_get_object_member (treedata,json_conf_name);
   if (!chk)
     return TRUE;
-  
-  chk_type = _rpmostree_jsonutil_object_require_string_member (chk, "type",
-                                                               error);
+
+  const char *chk_type =
+    _rpmostree_jsonutil_object_require_string_member (chk, "type", error);
   if (!chk_type)
     return FALSE;
 
   if (!g_str_equal (chk_type, "file"))
     return TRUE;
 
-  filename = _rpmostree_jsonutil_object_require_string_member (chk,
-                                                               "filename",
-                                                               error);
+  const char *filename =
+    _rpmostree_jsonutil_object_require_string_member (chk, "filename", error);
   if (!filename)
     return FALSE;
 
-  source = g_file_resolve_relative_path (treefile_dirpath, filename);
+  g_autoptr(GFile) source = g_file_resolve_relative_path (treefile_dirpath, filename);
   if (!source)
     return FALSE;
 
   /* migrate the check data from the specified file to /etc */
   g_autoptr(FILE) src_stream = NULL;
+  g_autofree char *contents = NULL;
   if (!_rpmostree_gfile2stdio (source, &contents, &src_stream,
                                cancellable, error))
     return FALSE;
@@ -935,10 +904,13 @@ _data_from_json (GFile           *yumroot,
   *out_found = TRUE;
 
   g_autoptr(FILE) dest_stream = NULL;
+  const char *filebasename = passwd ? "passwd" : "group";
   if (!(dest_stream = target_etc_filename (yumroot, filebasename,
                                            cancellable, error)))
     return FALSE;
 
+  g_autoptr(GHashTable) seen_names =
+    g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
   if (!concat_entries (src_stream, dest_stream, kind, seen_names, error))
     return FALSE;
 
@@ -965,11 +937,8 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
    * is really hard because filesystem depends on setup which installs
    * the files...
    */
-  if (mkdirat (rootfs_dfd, "etc", 0755) < 0)
-    {
-      if (errno != ENOENT)
-        return glnx_throw_errno_prefix (error, "mkdirat");
-    }
+  if (!glnx_ensure_dir (rootfs_dfd, "etc", 0755, error))
+    return FALSE;
 
   if (!_data_from_json (yumroot, treefile_dirpath,
                         treedata, RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
@@ -1151,13 +1120,13 @@ rpmostree_passwd_complete_rpm_layering (int       rootfs_dfd,
     {
       const char *file = usrlib_pwgrp_files[i];
       /* And now the inverse: /usr/etc/passwd -> /usr/lib/passwd */
-      if (renameat (rootfs_dfd, glnx_strjoina ("usr/etc/", file),
-                    rootfs_dfd, glnx_strjoina ("usr/lib/", file)) < 0)
-        return glnx_throw_errno_prefix (error, "renameat");
+      if (!glnx_renameat (rootfs_dfd, glnx_strjoina ("usr/etc/", file),
+                          rootfs_dfd, glnx_strjoina ("usr/lib/", file), error))
+        return FALSE;
       /* /usr/etc/passwd.rpmostreesave -> /usr/etc/passwd */
-      if (renameat (rootfs_dfd, glnx_strjoina ("usr/etc/", file, ".rpmostreesave"),
-                    rootfs_dfd, glnx_strjoina ("usr/etc/", file)) < 0)
-        return glnx_throw_errno_prefix (error, "renameat");
+      if (!glnx_renameat (rootfs_dfd, glnx_strjoina ("usr/etc/", file, ".rpmostreesave"),
+                          rootfs_dfd, glnx_strjoina ("usr/etc/", file), error))
+        return FALSE;
     }
   /* However, we leave the (potentially modified) shadow files in place.
    * In actuality, nothing should change /etc/shadow or /etc/gshadow, so
