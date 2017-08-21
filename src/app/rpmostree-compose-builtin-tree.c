@@ -95,6 +95,8 @@ typedef struct {
   GPtrArray *treefile_context_dirs;
 
   RpmOstreeContext *corectx;
+  GFile *treefile;
+  GFile *previous_root;
   GFile *workdir;
   gboolean workdir_is_tmp;
   int workdir_dfd;
@@ -111,6 +113,8 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
 {
   g_clear_pointer (&ctx->treefile_context_dirs, (GDestroyNotify)g_ptr_array_unref);
   g_clear_object (&ctx->corectx);
+  g_clear_object (&ctx->treefile);
+  g_clear_object (&ctx->previous_root);
   if (ctx->workdir_is_tmp)
     (void) glnx_shutil_rm_rf_at (AT_FDCWD, gs_file_get_path_cached (ctx->workdir), NULL, NULL);
   g_clear_object (&ctx->workdir);
@@ -457,6 +461,43 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (!rpmostree_context_download (self->corectx, cancellable, error))
     return FALSE;
 
+  /* Before we install packages, inject /etc/{passwd,group} if configured. */
+  g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile);
+  gboolean generate_from_previous = TRUE;
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treedata,
+                                                               "preserve-passwd",
+                                                               &generate_from_previous,
+                                                               error))
+    return FALSE;
+
+  if (generate_from_previous)
+    {
+      if (!rpmostree_generate_passwd_from_previous (self->repo, rootfs_dfd,
+                                                    treefile_dirpath,
+                                                    self->previous_root, treedata,
+                                                    cancellable, error))
+        return FALSE;
+    }
+
+  /* Before we install packages, drop a file to suppress the kernel.rpm dracut run.
+   * <https://github.com/systemd/systemd/pull/4174> */
+  const char *kernel_installd_path = "usr/lib/kernel/install.d";
+  if (!glnx_shutil_mkdir_p_at (rootfs_dfd, kernel_installd_path, 0755, cancellable, error))
+    return FALSE;
+  const char skip_kernel_install_data[] = "#!/usr/bin/sh\nexit 77\n";
+  const char *kernel_skip_path = glnx_strjoina (kernel_installd_path, "/00-rpmostree-skip.install");
+  if (!glnx_file_replace_contents_with_perms_at (rootfs_dfd, kernel_skip_path,
+                                                 (guint8*)skip_kernel_install_data,
+                                                 strlen (skip_kernel_install_data),
+                                                 0755, 0, 0,
+                                                 GLNX_FILE_REPLACE_NODATASYNC,
+                                                 cancellable, error))
+    return FALSE;
+
+  /* Now actually run through librpm to install the packages.  Note this bit
+   * will be replaced in the future with a unified core:
+   * https://github.com/projectatomic/rpm-ostree/issues/729
+   */
   { g_auto(GLnxConsoleRef) console = { 0, };
     g_autoptr(DnfState) hifstate = dnf_state_new ();
 
@@ -648,7 +689,7 @@ impl_compose_tree (const char      *treefile_pathstr,
   if (!self->repo)
     return FALSE;
 
-  g_autoptr(GFile) treefile_path = g_file_new_for_path (treefile_pathstr);
+  self->treefile = g_file_new_for_path (treefile_pathstr);
 
   if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (self->workdir),
                        FALSE, &self->workdir_dfd, error))
@@ -714,7 +755,7 @@ impl_compose_tree (const char      *treefile_pathstr,
 
   glnx_unref_object JsonParser *treefile_parser = json_parser_new ();
   if (!json_parser_load_from_file (treefile_parser,
-                                   gs_file_get_path_cached (treefile_path),
+                                   gs_file_get_path_cached (self->treefile),
                                    error))
     return FALSE;
 
@@ -723,7 +764,7 @@ impl_compose_tree (const char      *treefile_pathstr,
     return glnx_throw (error, "Treefile root is not an object");
   JsonObject *treefile = json_node_get_object (treefile_rootval);
 
-  if (!process_includes (self, treefile_path, 0, treefile,
+  if (!process_includes (self, self->treefile, 0, treefile,
                          cancellable, error))
     return FALSE;
 
@@ -748,8 +789,7 @@ impl_compose_tree (const char      *treefile_pathstr,
       return FALSE;
   }
 
-  g_autoptr(GFile) previous_root = NULL;
-  if (!ostree_repo_read_commit (self->repo, self->ref, &previous_root, &self->previous_checksum,
+  if (!ostree_repo_read_commit (self->repo, self->ref, &self->previous_root, &self->previous_checksum,
                                 cancellable, &temp_error))
     {
       if (g_error_matches (temp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
@@ -844,27 +884,7 @@ impl_compose_tree (const char      *treefile_pathstr,
     self->serialized_treefile = g_bytes_new_take (treefile_buf, len);
   }
 
-  g_autoptr(GFile) treefile_dirpath = g_file_get_parent (treefile_path);
-  if (TRUE)
-    {
-      gboolean generate_from_previous = TRUE;
-
-      if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
-                                                                   "preserve-passwd",
-                                                                   &generate_from_previous,
-                                                                   error))
-        return FALSE;
-
-      if (generate_from_previous)
-        {
-          if (!rpmostree_generate_passwd_from_previous (self->repo, rootfs_fd,
-                                                        treefile_dirpath,
-                                                        previous_root, treefile,
-                                                        cancellable, error))
-            return FALSE;
-        }
-    }
-
+  /* Download rpm-md repos, packages, do install */
   g_autofree char *new_inputhash = NULL;
   { gboolean unmodified = FALSE;
 
@@ -897,6 +917,7 @@ impl_compose_tree (const char      *treefile_pathstr,
   if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
     return FALSE;
 
+  /* Start postprocessing */
   if (!rpmostree_treefile_postprocessing (rootfs_fd, self->treefile_context_dirs->pdata[0],
                                           self->serialized_treefile, treefile,
                                           next_version, cancellable, error))
@@ -910,6 +931,7 @@ impl_compose_tree (const char      *treefile_pathstr,
   if (!rpmostree_copy_additional_files (yumroot, self->treefile_context_dirs->pdata[0], treefile, cancellable, error))
     return FALSE;
 
+  g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile);
   if (!rpmostree_check_passwd (self->repo, yumroot, treefile_dirpath, treefile,
                                self->previous_checksum,
                                cancellable, error))
