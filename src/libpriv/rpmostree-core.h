@@ -136,7 +136,6 @@ typedef enum {
 gboolean rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                                int                    tmprootfs_dfd,
                                                OstreeRepoDevInoCache *devino_cache,
-                                               gboolean               noscripts,
                                                GCancellable          *cancellable,
                                                GError               **error);
 gboolean rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
@@ -153,7 +152,6 @@ gboolean rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                             OstreeRepoDevInoCache *devino_cache,
                                             const char            *parent,
                                             RpmOstreeAssembleType  assemble_type,
-                                            gboolean               noscripts,
                                             char                 **out_commit,
                                             GCancellable          *cancellable,
                                             GError               **error);
