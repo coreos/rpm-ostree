@@ -56,45 +56,6 @@ _rpmostree_vardict_lookup_value_required (GVariantDict *dict,
   return r;
 }
 
-gboolean
-rpmostree_mkdtemp (const char   *template,
-                   char        **out_tmpdir,
-                   int          *out_tmpdir_dfd,  /* allow-none */
-                   GError      **error)
-{
-  gboolean ret = FALSE;
-  g_autofree char *tmpdir = g_strdup (template);
-  gboolean created_tmpdir = FALSE;
-  glnx_fd_close int ret_tmpdir_dfd = -1;
-
-  if (mkdtemp (tmpdir) == NULL)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
-  created_tmpdir = TRUE;
-
-  if (out_tmpdir_dfd)
-    {
-      if (!glnx_opendirat (AT_FDCWD, tmpdir, FALSE, &ret_tmpdir_dfd, error))
-        goto out;
-    }
-
-  ret = TRUE;
-  *out_tmpdir = g_steal_pointer (&tmpdir);
-  if (out_tmpdir_dfd)
-    {
-      *out_tmpdir_dfd = ret_tmpdir_dfd;
-      ret_tmpdir_dfd = -1;
-    }
- out:
-  if (created_tmpdir && tmpdir)
-    {
-     (void) glnx_shutil_rm_rf_at (AT_FDCWD, tmpdir, NULL, NULL);
-    }
-  return ret;
-}
-
 /* Given a string of the form
  * "bla blah ${foo} blah ${bar}"
  * and a hash table of variables, substitute the variable values.

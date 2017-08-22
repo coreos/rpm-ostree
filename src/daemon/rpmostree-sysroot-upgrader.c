@@ -67,8 +67,7 @@ struct RpmOstreeSysrootUpgrader {
   OstreeRepoDevInoCache *devino_cache;
   int tmprootfs_dfd;
   RpmOstreeRefSack *rsack;
-  char *metatmpdir_path;
-  int metatmpdir_dfd;
+  GLnxTmpDir metatmpdir;
   RpmOstreeContext *ctx;
 
   GPtrArray *overlay_packages; /* Finalized list of pkgs to overlay */
@@ -201,14 +200,7 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   if (self->tmprootfs_dfd != -1)
     (void)close (self->tmprootfs_dfd);
 
-  if (self->metatmpdir_path)
-    {
-      (void)glnx_shutil_rm_rf_at (AT_FDCWD, self->metatmpdir_path, NULL, NULL);
-      g_clear_pointer (&self->metatmpdir_path, g_free);
-    }
-
-  if (self->metatmpdir_dfd != -1)
-    (void)close (self->metatmpdir_dfd);
+  glnx_tmpdir_clear (&self->metatmpdir);
 
   g_clear_pointer (&self->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
 
@@ -321,9 +313,7 @@ static void
 rpmostree_sysroot_upgrader_init (RpmOstreeSysrootUpgrader *self)
 {
   self->tmprootfs_dfd = -1;
-  self->metatmpdir_dfd = -1;
 }
-
 
 /**
  * rpmostree_sysroot_upgrader_new_for_os_with_flags:
@@ -579,11 +569,11 @@ static gboolean
 initialize_metatmpdir (RpmOstreeSysrootUpgrader *self,
                        GError                  **error)
 {
-  if (self->metatmpdir_dfd != -1)
+  if (self->metatmpdir.initialized)
     return TRUE; /* already initialized; return early */
 
-  if (!rpmostree_mkdtemp ("/tmp/rpmostree-localpkgmeta-XXXXXX",
-                          &self->metatmpdir_path, &self->metatmpdir_dfd, error))
+  if (!glnx_mkdtemp ("rpmostree-localpkgmeta-XXXXXX", 0700,
+                     &self->metatmpdir, error))
     return FALSE;
 
   return TRUE;
@@ -716,7 +706,7 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
         {
           g_autoptr(GVariant) header = NULL;
           g_autofree char *path =
-            g_strdup_printf ("%s/%s.rpm", self->metatmpdir_path, nevra);
+            g_strdup_printf ("%s/%s.rpm", self->metatmpdir.path, nevra);
 
           if (!rpmostree_pkgcache_find_pkg_header (pkgcache_repo, nevra, sha256,
                                                    &header, cancellable, error))

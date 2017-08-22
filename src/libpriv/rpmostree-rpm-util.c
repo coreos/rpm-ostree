@@ -750,63 +750,38 @@ rpmrev_free (struct RpmRevisionData *ptr)
   g_free (ptr);
 }
 
-gboolean
-rpmostree_checkout_only_rpmdb_tempdir (OstreeRepo       *repo,
-                                       const char       *ref,
-                                       const char       *template,
-                                       char            **out_tempdir,
-                                       int              *out_tempdir_dfd,
-                                       GCancellable     *cancellable,
-                                       GError          **error)
+/* Check out a copy of the rpmdb into @tmpdir */
+static gboolean
+checkout_only_rpmdb (OstreeRepo       *repo,
+                     const char       *ref,
+                     GLnxTmpDir       *tmpdir,
+                     GCancellable     *cancellable,
+                     GError          **error)
 {
-  gboolean ret = FALSE;
   g_autofree char *commit = NULL;
-  g_autofree char *tempdir = NULL;
-  OstreeRepoCheckoutAtOptions checkout_options = { 0, };
-  glnx_fd_close int tempdir_dfd = -1;
-
-  g_return_val_if_fail (out_tempdir != NULL, FALSE);
-
-  if (!rpmostree_mkdtemp (template, &tempdir, &tempdir_dfd, error))
-    goto out;
-
   if (!ostree_repo_resolve_rev (repo, ref, FALSE, &commit, error))
-    goto out;
+    return FALSE;
 
-  /* Create intermediate dirs */ 
-  if (!glnx_shutil_mkdir_p_at (tempdir_dfd, "usr/share", 0777, cancellable, error))
-    goto out;
+  /* Create intermediate dirs */
+  if (!glnx_shutil_mkdir_p_at (tmpdir->fd, "usr/share", 0777, cancellable, error))
+    return FALSE;
 
+  /* Check out the database (via copy) */
+  OstreeRepoCheckoutAtOptions checkout_options = { 0, };
   checkout_options.mode = OSTREE_REPO_CHECKOUT_MODE_USER;
   checkout_options.subpath = "usr/share/rpm";
-
-  if (!ostree_repo_checkout_at (repo, &checkout_options,
-                                tempdir_dfd, "usr/share/rpm",
-                                commit, 
+  if (!ostree_repo_checkout_at (repo, &checkout_options, tmpdir->fd,
+                                "usr/share/rpm", commit,
                                 cancellable, error))
-    goto out;
+    return FALSE;
 
-  /* And make a compat symlink to keep rpm happy */ 
-  if (!glnx_shutil_mkdir_p_at (tempdir_dfd, "var/lib", 0777, cancellable, error))
-    goto out;
+  /* And make a compat symlink to keep rpm happy */
+  if (!glnx_shutil_mkdir_p_at (tmpdir->fd, "var/lib", 0777, cancellable, error))
+    return FALSE;
+  if (symlinkat ("../../usr/share/rpm", tmpdir->fd, "var/lib/rpm") == -1)
+    return glnx_throw_errno_prefix (error, "symlinkat");
 
-  if (symlinkat ("../../usr/share/rpm", tempdir_dfd, "var/lib/rpm") == -1)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
-
-  *out_tempdir = g_steal_pointer (&tempdir);
-  if (out_tempdir_dfd)
-    {
-      *out_tempdir_dfd = tempdir_dfd;
-      tempdir_dfd = -1;
-    }
-  ret = TRUE;
- out:
-  if (tempdir)
-    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -833,6 +808,8 @@ get_sack_for_root (int               dfd,
   return TRUE;
 }
 
+/* Given @dfd + @path, return a "sack", i.e. database of packages.
+ */
 RpmOstreeRefSack *
 rpmostree_get_refsack_for_root (int              dfd,
                                 const char      *path,
@@ -843,37 +820,31 @@ rpmostree_get_refsack_for_root (int              dfd,
   if (!get_sack_for_root (dfd, path, &sack, cancellable, error))
     return NULL;
 
-  return rpmostree_refsack_new (sack, AT_FDCWD, NULL);
+  return rpmostree_refsack_new (sack, NULL);
 }
 
 
+/* Given @ref which is an OSTree ref, return a "sack" i.e. database of packages.
+ */
 RpmOstreeRefSack *
 rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
                                   const char                *ref,
                                   GCancellable              *cancellable,
                                   GError                   **error)
 {
-  RpmOstreeRefSack *ret = NULL;
-  g_autofree char *tempdir = NULL;
-  glnx_fd_close int tempdir_dfd = -1;
+  g_auto(GLnxTmpDir) tmpdir = { 0, };
+  if (!glnx_mkdtemp ("rpmostree-dbquery-XXXXXX", 0700, &tmpdir, error))
+    return FALSE;
+
+  if (!checkout_only_rpmdb (repo, ref, &tmpdir, cancellable, error))
+    return FALSE;
+
   g_autoptr(DnfSack) hsack = NULL; /* NB: refsack adds a ref to it */
+  if (!get_sack_for_root (tmpdir.fd, ".", &hsack, cancellable, error))
+    return FALSE;
 
-  if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref,
-                                              "/tmp/rpmostree-dbquery-XXXXXX",
-                                              &tempdir, &tempdir_dfd,
-                                              cancellable, error))
-    goto out;
-
-  if (!get_sack_for_root (tempdir_dfd, ".",
-                          &hsack, cancellable, error))
-    goto out;
-
-  ret = rpmostree_refsack_new (hsack, AT_FDCWD, tempdir);
-  g_clear_pointer (&tempdir, g_free);
- out:
-  if (tempdir)
-    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
-  return ret;
+  /* Ownership of tmpdir is transferred */
+  return rpmostree_refsack_new (hsack, &tmpdir);
 }
 
 gboolean
@@ -883,31 +854,23 @@ rpmostree_get_refts_for_commit (OstreeRepo                *repo,
                                 GCancellable              *cancellable,
                                 GError                   **error)
 {
-  gboolean ret = FALSE;
-  g_autofree char *tempdir = NULL;
-  rpmts ts;
-  int r;
-  
-  if (!rpmostree_checkout_only_rpmdb_tempdir (repo, ref,
-                                              "/tmp/rpmostree-dbquery-XXXXXX",
-                                              &tempdir, NULL,
-                                              cancellable, error))
-    goto out;
+  g_auto(GLnxTmpDir) tmpdir = { 0, };
+  if (!glnx_mkdtemp ("rpmostree-dbquery-XXXXXX", 0700, &tmpdir, error))
+    return FALSE;
 
-  ts = rpmtsCreate ();
+  if (!checkout_only_rpmdb (repo, ref, &tmpdir, cancellable, error))
+    return FALSE;
+
+  rpmts ts = rpmtsCreate ();
   /* This actually makes sense because we know we've verified it at build time */
   rpmtsSetVSFlags (ts, _RPMVSF_NODIGESTS | _RPMVSF_NOSIGNATURES);
 
-  r = rpmtsSetRootDir (ts, tempdir);
+  int r = rpmtsSetRootDir (ts, tmpdir.path);
   g_assert_cmpint (r, ==, 0);
-  
-  ret = TRUE;
-  *out_ts = rpmostree_refts_new (ts, AT_FDCWD, tempdir);
-  g_clear_pointer (&tempdir, g_free);
- out:
-  if (tempdir)
-    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tempdir, NULL, NULL);
-  return ret;
+
+  /* Ownership of tmpdir is transferred */
+  *out_ts = rpmostree_refts_new (ts, &tmpdir);
+  return TRUE;
 }
 
 gboolean
