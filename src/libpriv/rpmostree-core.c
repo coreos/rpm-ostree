@@ -1746,16 +1746,21 @@ import_one_package (RpmOstreeContext *self,
   if (!unpacker)
     return FALSE;
 
-  if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostreerepo, sepolicy,
-                                            &ostree_commit, cancellable, error))
-    return glnx_prefix_error (error, "Unpacking %s",
-                              dnf_package_get_nevra (pkg));
-
+  /* And delete it now; this does mean if we fail it'll have been
+   * deleted and hence more annoying to debug, but in practice people
+   * should be able to redownload, and if the error was something like
+   * ENOSPC, deleting it was the right move I'd say.
+   */
   if (!pkg_is_local (pkg))
     {
       if (TEMP_FAILURE_RETRY (unlinkat (AT_FDCWD, pkg_path, 0)) < 0)
         return glnx_throw_errno_prefix (error, "Deleting %s", pkg_path);
     }
+
+  if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostreerepo, sepolicy,
+                                            &ostree_commit, cancellable, error))
+    return glnx_prefix_error (error, "Unpacking %s",
+                              dnf_package_get_nevra (pkg));
 
   return TRUE;
 }
