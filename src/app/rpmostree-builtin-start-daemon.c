@@ -299,9 +299,6 @@ rpmostree_builtin_start_daemon (int             argc,
   g_autoptr(GOptionContext) opt_context = g_option_context_new (" - start the daemon process");
   g_option_context_add_main_entries (opt_context, opt_entries, NULL);
 
-  /* There's not really a "root dconf" right now */
-  g_assert (g_setenv ("GSETTINGS_BACKEND", "memory", TRUE));
-
   if (!g_option_context_parse (opt_context, &argc, &argv, error))
     return EXIT_FAILURE;
 
