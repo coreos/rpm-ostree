@@ -2375,12 +2375,16 @@ get_package_metainfo (RpmOstreeContext *self,
                                            out_fi, error);
 }
 
+typedef enum {
+  RPMOSTREE_TS_FLAG_UPGRADE = (1 << 0),
+  RPMOSTREE_TS_FLAG_NOVALIDATE_SCRIPTS = (1 << 1),
+} RpmOstreeTsAddInstallFlags;
+
 static gboolean
 rpmts_add_install (RpmOstreeContext *self,
                    rpmts  ts,
                    DnfPackage *pkg,
-                   gboolean is_upgrade,
-                   gboolean noscripts,
+                   RpmOstreeTsAddInstallFlags flags,
                    GCancellable *cancellable,
                    GError **error)
 {
@@ -2390,12 +2394,13 @@ rpmts_add_install (RpmOstreeContext *self,
   if (!get_package_metainfo (self, path, &hdr, NULL, error))
     return FALSE;
 
-  if (!noscripts)
+  if (!(flags & RPMOSTREE_TS_FLAG_NOVALIDATE_SCRIPTS))
     {
       if (!rpmostree_script_txn_validate (pkg, hdr, cancellable, error))
         return FALSE;
     }
 
+  gboolean is_upgrade = (flags & RPMOSTREE_TS_FLAG_UPGRADE) > 0;
   if (rpmtsAddInstallElement (ts, hdr, pkg, is_upgrade, NULL) != 0)
     return glnx_throw (error, "Failed to add install element for %s",
                        dnf_package_get_filename (pkg));
@@ -2644,7 +2649,6 @@ static gboolean
 add_install (RpmOstreeContext *self,
              DnfPackage       *pkg,
              rpmts             ts,
-             gboolean          noscripts,
              gboolean          is_upgrade,
              GHashTable       *pkg_to_ostree_commit,
              GCancellable     *cancellable,
@@ -2673,8 +2677,10 @@ add_install (RpmOstreeContext *self,
   if (!checkout_pkg_metadata_by_dnfpkg (self, pkg, cancellable, error))
     return FALSE;
 
-  if (!rpmts_add_install (self, ts, pkg, is_upgrade, noscripts,
-                          cancellable, error))
+  RpmOstreeTsAddInstallFlags flags = 0;
+  if (is_upgrade)
+    flags |= RPMOSTREE_TS_FLAG_UPGRADE;
+  if (!rpmts_add_install (self, ts, pkg, flags, cancellable, error))
     return FALSE;
 
   g_hash_table_insert (pkg_to_ostree_commit, g_object_ref (pkg),
@@ -2726,7 +2732,6 @@ gboolean
 rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                       int                    tmprootfs_dfd,
                                       OstreeRepoDevInoCache *devino_cache,
-                                      gboolean               noscripts,
                                       GCancellable          *cancellable,
                                       GError               **error)
 {
@@ -2785,7 +2790,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
   for (guint i = 0; i < overrides_replace->len; i++)
     {
       DnfPackage *pkg = overrides_replace->pdata[i];
-      if (!add_install (self, pkg, ordering_ts, noscripts, TRUE, pkg_to_ostree_commit,
+      if (!add_install (self, pkg, ordering_ts, TRUE, pkg_to_ostree_commit,
                         cancellable, error))
         return FALSE;
     }
@@ -2793,7 +2798,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
   for (guint i = 0; i < overlays->len; i++)
     {
       DnfPackage *pkg = overlays->pdata[i];
-      if (!add_install (self, pkg, ordering_ts, noscripts, FALSE,
+      if (!add_install (self, pkg, ordering_ts, FALSE,
                         pkg_to_ostree_commit, cancellable, error))
         return FALSE;
 
@@ -2889,7 +2894,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
   /* NB: we're not running scripts right now for removals, so this is only for overlays and
    * replacements */
-  if (!noscripts && (overlays->len > 0 || overrides_replace->len > 0))
+  if (overlays->len > 0 || overrides_replace->len > 0)
     {
       gboolean have_passwd;
       gboolean have_systemctl;
@@ -3077,12 +3082,14 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
   tdata.ctx = self;
   rpmtsSetNotifyCallback (rpmdb_ts, ts_callback, &tdata);
 
+  /* Skip validating scripts since we already validated them above */
+  RpmOstreeTsAddInstallFlags rpmdb_instflags = RPMOSTREE_TS_FLAG_NOVALIDATE_SCRIPTS;
   for (guint i = 0; i < overlays->len; i++)
     {
       DnfPackage *pkg = overlays->pdata[i];
 
-      /* Set noscripts since we already validated them above */
-      if (!rpmts_add_install (self, rpmdb_ts, pkg, FALSE, TRUE, cancellable, error))
+      if (!rpmts_add_install (self, rpmdb_ts, pkg, rpmdb_instflags,
+                              cancellable, error))
         return FALSE;
     }
 
@@ -3090,8 +3097,9 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
     {
       DnfPackage *pkg = overrides_replace->pdata[i];
 
-      /* Set noscripts since we already validated them above */
-      if (!rpmts_add_install (self, rpmdb_ts, pkg, TRUE, TRUE, cancellable, error))
+      if (!rpmts_add_install (self, rpmdb_ts, pkg,
+                              rpmdb_instflags | RPMOSTREE_TS_FLAG_UPGRADE,
+                              cancellable, error))
         return FALSE;
     }
 
@@ -3310,7 +3318,6 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
                                    OstreeRepoDevInoCache *devino_cache,
                                    const char            *parent,
                                    RpmOstreeAssembleType  assemble_type,
-                                   gboolean               noscripts,
                                    char                 **out_commit,
                                    GCancellable          *cancellable,
                                    GError               **error)
@@ -3324,7 +3331,7 @@ rpmostree_context_assemble_commit (RpmOstreeContext      *self,
     devino_cache = devino_owned = ostree_repo_devino_cache_ref (devino_cache);
 
   if (!rpmostree_context_assemble_tmprootfs (self, tmprootfs_dfd, devino_cache,
-                                             noscripts, cancellable, error))
+                                             cancellable, error))
     return FALSE;
 
 

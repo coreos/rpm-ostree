@@ -275,7 +275,7 @@ rpmostree_container_builtin_assemble (int             argc,
 
     if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir.fd, NULL,
                                             NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
-                                            FALSE, &commit, cancellable, error))
+                                            &commit, cancellable, error))
       return EXIT_FAILURE;
   }
 
@@ -463,7 +463,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
 
     if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir.fd, NULL,
                                             NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
-                                            TRUE, &new_commit_checksum,
+                                            &new_commit_checksum,
                                             cancellable, error))
       return EXIT_FAILURE;
   }
