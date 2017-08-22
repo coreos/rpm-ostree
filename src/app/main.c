@@ -354,6 +354,9 @@ main (int    argc,
 
   /* avoid gvfs (http://bugzilla.gnome.org/show_bug.cgi?id=526454) */
   g_setenv ("GIO_USE_VFS", "local", TRUE);
+  /* There's not really a "root dconf" right now */
+  if (getuid () == 0)
+    g_assert (g_setenv ("GSETTINGS_BACKEND", "memory", TRUE));
   g_set_prgname (argv[0]);
 
   setlocale (LC_ALL, "");
