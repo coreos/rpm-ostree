@@ -251,9 +251,11 @@ rpmostree_check_passwd_groups (gboolean         passwd,
       chk_type = _rpmostree_jsonutil_object_require_string_member (chk, "type", error);
       if (!chk_type)
         return FALSE;
+
       if (g_str_equal (chk_type, "none"))
         return TRUE; /* Note early return */
-
+      else if (g_str_equal (chk_type, "previous"))
+        ; /* Handled below */
       else if (g_str_equal (chk_type, "file"))
         {
           direct = _rpmostree_jsonutil_object_require_string_member (chk,
@@ -331,6 +333,8 @@ rpmostree_check_passwd_groups (gboolean         passwd,
               g_ptr_array_add (old_ents, convent);
             }
         }
+      else
+        return glnx_throw (error, "Invalid %s type '%s'", json_conf_name, chk_type);
     }
 
   g_autoptr(GFile) old_path = NULL;
