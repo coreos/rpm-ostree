@@ -313,80 +313,6 @@ rpmostree_syscore_bump_mtime (OstreeSysroot   *sysroot,
   return TRUE;
 }
 
-/* A version of ostree_sysroot_simple_write_deployment() but with
- * a few changes:
- *
- *  - There's just @pushing_rollback, which if true makes the deployment not-default
- *    as well as retaining the pending deployment
- *  - osname logic is based on new deployment
- *  - Fix insertion of deployment to be after booted (patch pending for ostree upstream)
- */
-GPtrArray *
-rpmostree_syscore_add_deployment (OstreeSysroot      *sysroot,
-                                  OstreeDeployment   *new_deployment,
-                                  OstreeDeployment   *merge_deployment,
-                                  gboolean            pushing_rollback,
-                                  GError            **error)
-{
-  OstreeDeployment *booted_deployment = NULL;
-  g_autoptr(GPtrArray) deployments = NULL;
-  g_autoptr(GPtrArray) new_deployments = g_ptr_array_new_with_free_func (g_object_unref);
-  const char *osname = ostree_deployment_get_osname (new_deployment);
-  /* Whether or not we added @new_deployment to the list yet */
-  gboolean added_new = FALSE;
-  /* Keep track of whether we're looking at a deployment before or after the booted */
-  gboolean before_booted = TRUE;
-  gboolean booted_is_live = FALSE;
-
-  deployments = ostree_sysroot_get_deployments (sysroot);
-  booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
-
-  if (!pushing_rollback)
-    {
-      g_ptr_array_add (new_deployments, g_object_ref (new_deployment));
-      added_new = TRUE;
-    }
-
-  for (guint i = 0; i < deployments->len; i++)
-    {
-      OstreeDeployment *deployment = deployments->pdata[i];
-      const gboolean osname_matches = (strcmp (ostree_deployment_get_osname (deployment), osname) == 0);
-      const gboolean is_booted = ostree_deployment_equal (deployment, booted_deployment);
-      const gboolean is_merge_or_booted = is_booted ||
-        ostree_deployment_equal (deployment, merge_deployment);
-      const gboolean is_last = (i == (deployments->len - 1));
-
-      if (is_booted)
-        {
-          before_booted = FALSE;
-          if (!rpmostree_syscore_deployment_is_live (sysroot, deployment, -1,
-                                                     &booted_is_live, error))
-            return NULL;
-        }
-
-      /* Retain deployment if:
-       *   - The deployment is for another osname
-       *   - We're pushing a rollback and this is a pending deployment
-       *   - It's the merge or booted deployment
-       *   - The booted deployment is live, this is a rollback
-       */
-      if (!osname_matches
-          || (pushing_rollback && before_booted)
-          || is_merge_or_booted
-          || (!before_booted && booted_is_live))
-        g_ptr_array_add (new_deployments, g_object_ref (deployment));
-
-      /* Insert new rollback right after the booted */
-      if (!added_new && (!before_booted || is_last))
-        {
-          g_ptr_array_add (new_deployments, g_object_ref (new_deployment));
-          added_new = TRUE;
-        }
-    }
-
-  return g_steal_pointer (&new_deployments);
-}
-
 /* Also a variant of ostree_sysroot_simple_write_deployment(), but here we are
  * just trying to remove a pending and/or rollback.
  */
@@ -440,30 +366,43 @@ rpmostree_syscore_filter_deployments (OstreeSysroot      *sysroot,
   return g_steal_pointer (&new_deployments);
 }
 
-/* Commit @new_deployments and perform a cleanup */
+/* A wrapper around ostree_sysroot_simple_write_deployment() that makes it easy to push
+ * livefs rollbacks as well as retain them afterwards */
 gboolean
-rpmostree_syscore_write_deployments (OstreeSysroot           *sysroot,
-                                     OstreeRepo              *repo,
-                                     GPtrArray               *new_deployments,
-                                     GCancellable            *cancellable,
-                                     GError                 **error)
+rpmostree_syscore_write_deployment (OstreeSysroot           *sysroot,
+                                    OstreeDeployment        *new_deployment,
+                                    OstreeDeployment        *merge_deployment,
+                                    gboolean                 pushing_rollback,
+                                    GCancellable            *cancellable,
+                                    GError                 **error)
 {
-  glnx_unref_object OstreeRepo *owned_repo = NULL;
+  OstreeRepo *repo = ostree_sysroot_repo (sysroot);
 
-  /* Allow the caller to pass NULL as a convenience; in the future we really
-   * should have a strong ref to a repo in the sysroot and make retrieving it
-   * not failable.
-   */
-  if (repo == NULL)
+  /* we do our own cleanup afterwards */
+  OstreeSysrootSimpleWriteDeploymentFlags flags =
+    OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_NO_CLEAN;
+
+  if (pushing_rollback)
+    flags |= (OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_NOT_DEFAULT |
+              OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_RETAIN_PENDING);
+  else
     {
-      if (!ostree_sysroot_get_repo (sysroot, &owned_repo, cancellable, error))
-        return FALSE;
-      repo = owned_repo;
+      /* make sure rollbacks of live deployments aren't pruned */
+      OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
+      if (booted)
+        {
+          gboolean is_live;
+          if (!rpmostree_syscore_deployment_is_live (sysroot, booted,
+                                                     &is_live, error))
+            return FALSE;
+          if (is_live)
+            flags |= OSTREE_SYSROOT_SIMPLE_WRITE_DEPLOYMENT_FLAGS_RETAIN_ROLLBACK;
+        }
     }
 
-  OstreeSysrootWriteDeploymentsOpts write_opts = { .do_postclean = FALSE };
-  if (!ostree_sysroot_write_deployments_with_options (sysroot, new_deployments,
-                                                      &write_opts, cancellable, error))
+  const char *osname = ostree_deployment_get_osname (new_deployment);
+  if (!ostree_sysroot_simple_write_deployment (sysroot, osname, new_deployment,
+                                               merge_deployment, flags, cancellable, error))
     return FALSE;
 
   if (!rpmostree_syscore_cleanup (sysroot, repo, cancellable, error))
@@ -478,7 +417,6 @@ rpmostree_syscore_write_deployments (OstreeSysroot           *sysroot,
 gboolean
 rpmostree_syscore_deployment_get_live (OstreeSysroot    *sysroot,
                                        OstreeDeployment *deployment,
-                                       int               deployment_dfd,
                                        char            **out_inprogress_checksum,
                                        char            **out_livereplaced_checksum,
                                        GError          **error)
@@ -494,16 +432,14 @@ rpmostree_syscore_deployment_get_live (OstreeSysroot    *sysroot,
 gboolean
 rpmostree_syscore_deployment_is_live (OstreeSysroot    *sysroot,
                                       OstreeDeployment *deployment,
-                                      int               deployment_dfd,
                                       gboolean         *out_is_live,
                                       GError          **error)
 {
   g_autofree char *inprogress_checksum = NULL;
   g_autofree char *livereplaced_checksum = NULL;
 
-  if (!rpmostree_syscore_deployment_get_live (sysroot, deployment, deployment_dfd,
-                                              &inprogress_checksum, &livereplaced_checksum,
-                                              error))
+  if (!rpmostree_syscore_deployment_get_live (sysroot, deployment, &inprogress_checksum,
+                                              &livereplaced_checksum, error))
     return FALSE;
 
   *out_is_live = (inprogress_checksum != NULL || livereplaced_checksum != NULL);

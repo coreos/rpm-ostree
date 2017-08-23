@@ -48,30 +48,23 @@ gboolean rpmostree_syscore_bump_mtime (OstreeSysroot *self, GError **error);
 
 gboolean rpmostree_syscore_deployment_get_live (OstreeSysroot   *sysroot,
                                                 OstreeDeployment *deployment,
-                                                int               deployment_dfd,
                                                 char            **out_inprogress_checksum,
                                                 char            **out_livereplaced_checksum,
                                                 GError          **error);
 
 gboolean rpmostree_syscore_deployment_is_live (OstreeSysroot   *sysroot,
                                                OstreeDeployment *deployment,
-                                               int               deployment_dfd,
                                                gboolean         *out_is_live,
                                                GError          **error);
-
-GPtrArray *rpmostree_syscore_add_deployment (OstreeSysroot      *sysroot,
-                                             OstreeDeployment   *new_deployment,
-                                             OstreeDeployment   *merge_deployment,
-                                             gboolean            pushing_rollback,
-                                             GError            **error);
 
 GPtrArray *rpmostree_syscore_filter_deployments (OstreeSysroot      *sysroot,
                                                  const char         *osname,
                                                  gboolean            remove_pending,
                                                  gboolean            remove_rollback);
 
-gboolean rpmostree_syscore_write_deployments (OstreeSysroot          *sysroot,
-                                              OstreeRepo              *repo,
-                                              GPtrArray              *new_deployments,
-                                              GCancellable           *cancellable,
-                                              GError                **error);
+gboolean rpmostree_syscore_write_deployment (OstreeSysroot           *sysroot,
+                                             OstreeDeployment        *new_deployment,
+                                             OstreeDeployment        *merge_deployment,
+                                             gboolean                 pushing_rollback,
+                                             GCancellable            *cancellable,
+                                             GError                 **error);
