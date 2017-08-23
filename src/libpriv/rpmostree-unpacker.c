@@ -644,9 +644,10 @@ compose_filter_cb (OstreeRepo         *repo,
       /* And ensure the RPM installs into supported paths */
       else if (!path_is_ostree_compliant (path))
         {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Unsupported path: %s; See %s",
-                       path, "https://github.com/projectatomic/rpm-ostree/issues/233");
+          if ((self->flags & RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS) == 0)
+            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                         "Unsupported path: %s; See %s",
+                         path, "https://github.com/projectatomic/rpm-ostree/issues/233");
           return OSTREE_REPO_COMMIT_FILTER_SKIP;
         }
     }
