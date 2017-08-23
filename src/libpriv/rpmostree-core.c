@@ -1726,7 +1726,6 @@ import_one_package (RpmOstreeContext *self,
   if (!dnf_transaction_gpgcheck_package (dnf_context_get_transaction (hifctx), pkg, error))
     return FALSE;
 
-  flags = RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION;
   if (self->unprivileged)
     flags |= RPMOSTREE_UNPACKER_FLAGS_UNPRIVILEGED;
 

@@ -40,13 +40,10 @@
 #include "libglnx.h"
 
 static gboolean opt_selinux = FALSE;
-static gboolean opt_ostree_convention = FALSE;
 
 static GOptionEntry option_entries[] = {
   { "selinux", 0, 0, G_OPTION_ARG_NONE, &opt_selinux,
       "Enable setting SELinux labels", NULL },
-  { "ostree-convention", 0, 0, G_OPTION_ARG_NONE, &opt_ostree_convention,
-      "Change file paths following ostree conventions", NULL },
   { NULL }
 };
 
@@ -87,9 +84,6 @@ rpmostree_ex_builtin_unpack (int             argc,
   ostree_repo = ostree_repo_open_at (AT_FDCWD, target, cancellable, error);
   if (!ostree_repo)
     goto out;
-
-  if (opt_ostree_convention)
-    flags |= RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION;
 
   unpacker = rpmostree_unpacker_new_at (AT_FDCWD, rpmpath, NULL, flags, error);
   if (!unpacker)
