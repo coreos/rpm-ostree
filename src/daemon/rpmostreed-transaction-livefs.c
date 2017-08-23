@@ -422,12 +422,8 @@ prepare_rollback_deployment (OstreeSysroot  *sysroot,
   /* Inherit kernel arguments */
   ostree_deployment_set_bootconfig (new_deployment, new_bootconfig);
 
-  g_autoptr(GPtrArray) new_deployments =
-    rpmostree_syscore_add_deployment (sysroot, new_deployment, booted_deployment, TRUE, error);
-  if (!new_deployments)
-    return FALSE;
-  if (!rpmostree_syscore_write_deployments (sysroot, repo, new_deployments,
-                                            cancellable, error))
+  if (!rpmostree_syscore_write_deployment (sysroot, new_deployment, booted_deployment,
+                                           TRUE, cancellable, error))
     return FALSE;
 
   return TRUE;
@@ -519,9 +515,8 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
   /* Find out whether we already have a live overlay */
   g_autofree char *live_inprogress = NULL;
   g_autofree char *live_replaced = NULL;
-  if (!rpmostree_syscore_deployment_get_live (sysroot, booted_deployment, -1,
-                                              &live_inprogress, &live_replaced,
-                                              error))
+  if (!rpmostree_syscore_deployment_get_live (sysroot, booted_deployment, &live_inprogress,
+                                              &live_replaced, error))
     return FALSE;
   const char *resuming_overlay = NULL;
   if (live_inprogress != NULL)

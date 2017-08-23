@@ -275,9 +275,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
       variant_add_commit_details (&dict, "pending-base-", pending_base_commit);
     }
 
-  if (!rpmostree_syscore_deployment_get_live (sysroot, deployment, -1,
-                                              &live_inprogress, &live_replaced,
-                                              error))
+  if (!rpmostree_syscore_deployment_get_live (sysroot, deployment, &live_inprogress,
+                                              &live_replaced, error))
     return NULL;
 
   if (live_inprogress)
