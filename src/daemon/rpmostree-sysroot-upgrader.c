@@ -923,12 +923,10 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
         return FALSE;
 
       g_clear_pointer (&self->final_revision, g_free);
-      gboolean noscripts =
-        (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGOVERLAY_NOSCRIPTS) > 0;
 
       /* --- override/overlay and commit --- */
       if (!rpmostree_context_assemble_tmprootfs (self->ctx, self->tmprootfs_dfd,
-                                                 self->devino_cache, noscripts,
+                                                 self->devino_cache,
                                                  cancellable, error))
         return FALSE;
     }
