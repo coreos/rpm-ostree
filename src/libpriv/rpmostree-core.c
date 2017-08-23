@@ -2400,7 +2400,7 @@ rpmts_add_install (RpmOstreeContext *self,
         return FALSE;
     }
 
-  gboolean is_upgrade = (flags & RPMOSTREE_TS_FLAG_UPGRADE) > 0;
+  const gboolean is_upgrade = (flags & RPMOSTREE_TS_FLAG_UPGRADE) > 0;
   if (rpmtsAddInstallElement (ts, hdr, pkg, is_upgrade, NULL) != 0)
     return glnx_throw (error, "Failed to add install element for %s",
                        dnf_package_get_filename (pkg));
