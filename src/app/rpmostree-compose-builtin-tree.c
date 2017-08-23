@@ -295,8 +295,8 @@ treefile_sanity_checks (JsonObject   *treedata,
     src = g_build_filename (gs_file_get_path_cached (contextdir), postprocess_script, NULL);
 
   struct stat stbuf;
-  if (fstatat (AT_FDCWD, src, &stbuf, 0) < 0)
-    return glnx_throw_errno_prefix (error, "postprocess-script: stat(%s)", postprocess_script);
+  if (!glnx_fstatat (AT_FDCWD, src, &stbuf, 0, error))
+    return glnx_prefix_error (error, "postprocess-script");
 
   if ((stbuf.st_mode & S_IXUSR) == 0)
     return glnx_throw (error, "postprocess-script (%s) must be executable", postprocess_script);

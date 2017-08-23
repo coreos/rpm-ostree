@@ -115,8 +115,8 @@ init_rootfs (int            dfd,
 
   for (guint i = 0; i < G_N_ELEMENTS (toplevel_dirs); i++)
     {
-      if (mkdirat (dfd, toplevel_dirs[i], 0755) < 0)
-        return glnx_throw_errno_prefix (error, "mkdirat");
+      if (!glnx_ensure_dir (dfd, toplevel_dirs[i], 0755, error))
+        return FALSE;
     }
 
   for (guint i = 0; i < G_N_ELEMENTS (symlinks); i++)
@@ -647,8 +647,8 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
         break;
 
       name = dent->d_name;
-      if (renameat (dfd_iter.fd, name, etc_selinux_dfd, name) != 0)
-        return glnx_throw_errno_prefix (error, "rename(%s)", name);
+      if (!glnx_renameat (dfd_iter.fd, name, etc_selinux_dfd, name, error))
+        return FALSE;
     }
 
   return TRUE;
@@ -778,9 +778,9 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
 
   /* We take /usr from the yum content */
   g_print ("Moving /usr and /etc to target\n");
-  if (renameat (src_rootfs_fd, "usr", target_root_dfd, "usr") < 0)
-    return glnx_throw_errno_prefix (error, "renameat");
-  if (renameat (src_rootfs_fd, "etc", target_root_dfd, "etc") < 0)
+  if (!glnx_renameat (src_rootfs_fd, "usr", target_root_dfd, "usr", error))
+    return FALSE;
+  if (!glnx_renameat (src_rootfs_fd, "etc", target_root_dfd, "etc", error))
     return glnx_throw_errno_prefix (error, "renameat");
 
   if (!rpmostree_rootfs_prepare_links (target_root_dfd, cancellable, error))
@@ -826,15 +826,15 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
         case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY:
           {
             g_print ("Using boot location: legacy\n");
-            if (renameat (src_rootfs_fd, "boot", target_root_dfd, "boot") < 0)
-              return glnx_throw_errno_prefix (error, "renameat");
+            if (!glnx_renameat (src_rootfs_fd, "boot", target_root_dfd, "boot", error))
+              return FALSE;
           }
           break;
         case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH:
           {
             g_print ("Using boot location: both\n");
-            if (renameat (src_rootfs_fd, "boot", target_root_dfd, "boot") < 0)
-              return glnx_throw_errno_prefix (error, "renameat");
+            if (!glnx_renameat (src_rootfs_fd, "boot", target_root_dfd, "boot", error))
+              return FALSE;
             if (!glnx_shutil_mkdir_p_at (target_root_dfd, "usr/lib/ostree-boot", 0755,
                                          cancellable, error))
               return FALSE;
@@ -849,9 +849,9 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
         case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW:
           {
             g_print ("Using boot location: new\n");
-            if (renameat (src_rootfs_fd, "boot",
-                          target_root_dfd, "usr/lib/ostree-boot") < 0)
-              return glnx_throw_errno_prefix (error, "renameat");
+            if (!glnx_renameat (src_rootfs_fd, "boot",
+                                target_root_dfd, "usr/lib/ostree-boot", error))
+              return FALSE;
           }
           break;
         }
@@ -873,8 +873,9 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
             return glnx_throw_errno_prefix (error, "fstatat");
           }
 
-        if (renameat (src_rootfs_fd, toplevel_links[i], target_root_dfd, toplevel_links[i]) < 0)
-          return glnx_throw_errno_prefix (error, "renameat");
+        if (!glnx_renameat (src_rootfs_fd, toplevel_links[i],
+                            target_root_dfd, toplevel_links[i], error))
+          return FALSE;
       }
   }
 
@@ -1480,8 +1481,8 @@ rpmostree_prepare_rootfs_for_commit (int            workdir_dfd,
   const char *temp_new_root = "tmp-new-rootfs";
   glnx_fd_close int target_root_dfd = -1;
 
-  if (mkdirat (workdir_dfd, temp_new_root, 0755) < 0)
-    return glnx_throw_errno_prefix (error, "creating %s", temp_new_root);
+  if (!glnx_ensure_dir (workdir_dfd, temp_new_root, 0755, error))
+    return FALSE;
 
   if (!glnx_opendirat (workdir_dfd, temp_new_root, TRUE,
                        &target_root_dfd, error))
@@ -1496,9 +1497,9 @@ rpmostree_prepare_rootfs_for_commit (int            workdir_dfd,
   if (!glnx_shutil_rm_rf_at (workdir_dfd, rootfs_name, cancellable, error))
     return FALSE;
 
-  if (TEMP_FAILURE_RETRY (renameat (workdir_dfd, temp_new_root,
-                                    workdir_dfd, rootfs_name)) != 0)
-    return glnx_throw_errno_prefix (error, "rename(%s, %s)", temp_new_root, rootfs_name);
+  if (!glnx_renameat (workdir_dfd, temp_new_root,
+                      workdir_dfd, rootfs_name, error))
+    return FALSE;
 
   *inout_rootfs_fd = target_root_dfd;
   target_root_dfd = -1;  /* Transfer ownership */
