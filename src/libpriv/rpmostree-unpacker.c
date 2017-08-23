@@ -724,7 +724,7 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
   /* check if any of the cbs set an error */
   if (cb_error != NULL)
     {
-      *error = cb_error;
+      g_propagate_error (error, cb_error);
       return FALSE;
     }
 
@@ -754,7 +754,7 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
       /* check if any of the cbs set an error */
       if (cb_error != NULL)
         {
-          *error = cb_error;
+          g_propagate_error (error, cb_error);
           return FALSE;
         }
     }
