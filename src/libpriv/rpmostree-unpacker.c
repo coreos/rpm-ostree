@@ -713,8 +713,7 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
   OstreeRepoImportArchiveOptions opts = { 0 };
   opts.ignore_unsupported_content = TRUE;
   opts.autocreate_parents = TRUE;
-  opts.use_ostree_convention =
-    (self->flags & RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION);
+  opts.use_ostree_convention = TRUE;
 
   g_autoptr(OstreeMutableTree) mtree = ostree_mutable_tree_new ();
   if (!ostree_repo_import_archive_to_mtree (repo, &opts, self->archive, mtree,

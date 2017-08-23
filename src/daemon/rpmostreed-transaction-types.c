@@ -496,9 +496,7 @@ import_local_rpm (OstreeRepo    *parent,
   if (policy == NULL)
     return FALSE;
 
-  unpacker = rpmostree_unpacker_new_fd (fd, NULL,
-                                        RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION,
-                                        error);
+  unpacker = rpmostree_unpacker_new_fd (fd, NULL, 0, error);
   if (unpacker == NULL)
     return FALSE;
 
