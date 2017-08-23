@@ -691,48 +691,41 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
                     GCancellable      *cancellable,
                     GError           **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(GVariant) metadata = NULL;
-  g_autoptr(GFile) root = NULL;
-  OstreeRepoCommitModifier *modifier = NULL;
-  OstreeRepoImportArchiveOptions opts = { 0 };
-  OstreeRepoCommitModifierFlags modifier_flags = 0;
-  glnx_unref_object OstreeMutableTree *mtree = NULL;
-  char *tmpdir = NULL;
-  guint64 buildtime = 0;
-
+  /* Passed to the commit modifier */
   GError *cb_error = NULL;
   cb_data fdata = { self, &cb_error };
-  OstreeRepoCommitFilter filter;
 
+  OstreeRepoCommitFilter filter;
   if ((self->flags & RPMOSTREE_UNPACKER_FLAGS_UNPRIVILEGED) > 0)
     filter = unprivileged_filter_cb;
   else
     filter = compose_filter_cb;
 
   /* If changing this, also look at changing rpmostree-postprocess.c */
-  modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
-  modifier = ostree_repo_commit_modifier_new (modifier_flags, filter, &fdata, NULL);
+  OstreeRepoCommitModifierFlags modifier_flags =
+    OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
+  g_autoptr(OstreeRepoCommitModifier) modifier =
+    ostree_repo_commit_modifier_new (modifier_flags, filter, &fdata, NULL);
   ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb,
                                                   NULL, self);
   ostree_repo_commit_modifier_set_sepolicy (modifier, sepolicy);
 
+  OstreeRepoImportArchiveOptions opts = { 0 };
   opts.ignore_unsupported_content = TRUE;
   opts.autocreate_parents = TRUE;
   opts.use_ostree_convention =
     (self->flags & RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION);
 
-  mtree = ostree_mutable_tree_new ();
-
+  g_autoptr(OstreeMutableTree) mtree = ostree_mutable_tree_new ();
   if (!ostree_repo_import_archive_to_mtree (repo, &opts, self->archive, mtree,
                                             modifier, cancellable, error))
-    goto out;
+    return FALSE;
 
   /* check if any of the cbs set an error */
   if (cb_error != NULL)
     {
       *error = cb_error;
-      goto out;
+      return FALSE;
     }
 
   /* Handle any data we've accumulated data to write to tmpfiles.d.
@@ -740,64 +733,53 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
    * like selinux labeling only happen as callbacks out of using
    * the input dfd/archive paths...so let's just use a tempdir. (:sadface:)
    */
+  g_auto(GLnxTmpDir) tmpdir = { 0, };
   if (self->tmpfiles_d->len > 0)
     {
-      glnx_fd_close int tmpdir_dfd = -1;
       g_autofree char *pkgname = headerGetAsString (self->hdr, RPMTAG_NAME);
 
-      tmpdir = strdupa ("/tmp/rpm-ostree-import.XXXXXX");
-      if (g_mkdtemp_full (tmpdir, 0755) == NULL)
-        {
-          glnx_set_error_from_errno (error);
-          goto out;
-        }
-
-      if (!glnx_opendirat (AT_FDCWD, tmpdir, TRUE, &tmpdir_dfd, error))
-        goto out;
-      if (!glnx_shutil_mkdir_p_at (tmpdir_dfd, "usr/lib/tmpfiles.d", 0755, cancellable,  error))
-        goto out;
-      if (!glnx_file_replace_contents_at (tmpdir_dfd, glnx_strjoina ("usr/lib/tmpfiles.d/", "pkg-", pkgname, ".conf"),
+      if (!glnx_mkdtemp ("rpm-ostree-import.XXXXXX", 0700, &tmpdir, error))
+        return FALSE;
+      if (!glnx_shutil_mkdir_p_at (tmpdir.fd, "usr/lib/tmpfiles.d", 0755, cancellable,  error))
+        return FALSE;
+      if (!glnx_file_replace_contents_at (tmpdir.fd, glnx_strjoina ("usr/lib/tmpfiles.d/", "pkg-", pkgname, ".conf"),
                                           (guint8*)self->tmpfiles_d->str, self->tmpfiles_d->len, GLNX_FILE_REPLACE_NODATASYNC,
                                           cancellable, error))
-        goto out;
+        return FALSE;
 
-      if (!ostree_repo_write_dfd_to_mtree (repo, tmpdir_dfd, ".", mtree, modifier,
+      if (!ostree_repo_write_dfd_to_mtree (repo, tmpdir.fd, ".", mtree, modifier,
                                            cancellable, error))
-        goto out;
+        return FALSE;
 
       /* check if any of the cbs set an error */
       if (cb_error != NULL)
         {
           *error = cb_error;
-          goto out;
+          return FALSE;
         }
     }
-    
+
+  g_autoptr(GFile) root = NULL;
   if (!ostree_repo_write_mtree (repo, mtree, &root, cancellable, error))
-    goto out;
-  
+    return FALSE;
+
+  g_autoptr(GVariant) metadata = NULL;
   if (!build_metadata_variant (self, sepolicy, &metadata, cancellable, error))
-    goto out;
+    return FALSE;
   g_variant_ref_sink (metadata);
 
   /* Use the build timestamp for the commit: this ensures that committing the
    * same RPM always yields the same checksum, which is a useful property to
    * have (barring changes in the unpacker, in which case we wouldn't want the
    * same checksum anyway). */
-  buildtime = headerGetNumber (self->hdr, RPMTAG_BUILDTIME);
+  guint64 buildtime = headerGetNumber (self->hdr, RPMTAG_BUILDTIME);
 
   if (!ostree_repo_write_commit_with_time (repo, NULL, "", "", metadata,
                                            OSTREE_REPO_FILE (root), buildtime,
                                            out_csum, cancellable, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
-out:
-  if (modifier)
-    ostree_repo_commit_modifier_unref (modifier);
-  if (tmpdir)
-    (void) glnx_shutil_rm_rf_at (AT_FDCWD, tmpdir, NULL, NULL);
-  return ret;
+  return TRUE;
 }
 
 gboolean
