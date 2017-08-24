@@ -40,73 +40,70 @@
 
 #include "libglnx.h"
 
+/* Recursively search a directory for a subpath
+ * owned by a uid/gid.
+ */
 static gboolean
-dir_contains_uid_or_gid (GFile         *root,
+dir_contains_uid_or_gid (int            rootfs_fd,
+                         const char    *path,
                          guint32        id,
-                         const char    *attr,
+                         gboolean       is_uid,
                          gboolean      *out_found_match,
                          GCancellable  *cancellable,
                          GError       **error)
 {
   gboolean found_match = FALSE;
 
-  /* zero it out, just to be sure */
-  *out_found_match = found_match;
-
-  g_autoptr(GFileInfo) file_info = g_file_query_info (root, OSTREE_GIO_FAST_QUERYINFO,
-                                                      G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                                      cancellable, error);
-  if (!file_info)
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  if (!glnx_dirfd_iterator_init_at (rootfs_fd, path, FALSE, &dfd_iter, error))
     return FALSE;
 
-  GFileType type = g_file_info_get_file_type (file_info);
-  guint32 tid;
-  switch (type)
-    {
-    case G_FILE_TYPE_DIRECTORY:
-    case G_FILE_TYPE_SYMBOLIC_LINK:
-    case G_FILE_TYPE_REGULAR:
-    case G_FILE_TYPE_SPECIAL:
-      tid = g_file_info_get_attribute_uint32 (file_info, attr);
-      if (tid == id)
-        found_match = TRUE;
-      break;
+  /* Examine the owner of the directory */
+  struct stat stbuf;
+  if (!glnx_fstat (dfd_iter.fd, &stbuf, error))
+    return FALSE;
 
-    case G_FILE_TYPE_UNKNOWN:
-    case G_FILE_TYPE_SHORTCUT:
-    case G_FILE_TYPE_MOUNTABLE:
-      g_assert_not_reached ();
-      break;
+  if (is_uid)
+    found_match = (id == stbuf.st_uid);
+  else
+    found_match = (id == stbuf.st_gid);
+
+  /* Early return if we found a match */
+  if (found_match)
+    {
+      *out_found_match = TRUE;
+      return TRUE;
     }
 
-  /* Now recurse for dirs. */
-  if (!found_match && type == G_FILE_TYPE_DIRECTORY)
+  /* Loop over the directory contents */
+  while (TRUE)
     {
-      g_autoptr(GFileEnumerator) dir_enum =
-        g_file_enumerate_children (root, OSTREE_GIO_FAST_QUERYINFO,
-                                   G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS,
-                                   NULL, error);
-      if (!dir_enum)
+      struct dirent *dent = NULL;
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
         return FALSE;
+      if (dent == NULL)
+        break;
 
-      while (TRUE)
+      if (dent->d_type == DT_DIR)
         {
-          GFileInfo *file_info;
-          GFile *child;
-
-          if (!g_file_enumerator_iterate (dir_enum, &file_info, &child,
-                                          cancellable, error))
-            return FALSE;
-          if (!file_info)
-            break;
-
-          if (!dir_contains_uid_or_gid (child, id, attr, &found_match,
+          if (!dir_contains_uid_or_gid (dfd_iter.fd, dent->d_name,
+                                        id, is_uid, out_found_match,
                                         cancellable, error))
             return FALSE;
-
-          if (found_match)
-            break;
         }
+      else
+        {
+          if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+            return FALSE;
+
+          if (is_uid)
+            found_match = (id == stbuf.st_uid);
+          else
+            found_match = (id == stbuf.st_gid);
+        }
+
+      if (found_match)
+        break;
     }
 
   *out_found_match = found_match;
@@ -114,24 +111,26 @@ dir_contains_uid_or_gid (GFile         *root,
 }
 
 static gboolean
-dir_contains_uid (GFile           *yumroot,
+dir_contains_uid (int              rootfs_fd,
                   uid_t            uid,
                   gboolean        *out_found_match,
                   GCancellable    *cancellable,
                   GError         **error)
 {
-  return dir_contains_uid_or_gid (yumroot, uid, "unix::uid",
+  *out_found_match = FALSE;
+  return dir_contains_uid_or_gid (rootfs_fd, ".", uid, TRUE,
                                   out_found_match, cancellable, error);
 }
 
 static gboolean
-dir_contains_gid (GFile           *yumroot,
+dir_contains_gid (int              rootfs_fd,
                   gid_t            gid,
                   gboolean        *out_found_match,
                   GCancellable    *cancellable,
                   GError         **error)
 {
-  return dir_contains_uid_or_gid (yumroot, gid, "unix::gid",
+  *out_found_match = FALSE;
+  return dir_contains_uid_or_gid (rootfs_fd, ".", gid, FALSE,
                                   out_found_match, cancellable, error);
 }
 
@@ -224,7 +223,7 @@ compare_group_ents (gconstpointer a, gconstpointer b)
 static gboolean
 rpmostree_check_passwd_groups (gboolean         passwd,
                                OstreeRepo      *repo,
-                               GFile           *yumroot,
+                               int              rootfs_fd,
                                GFile           *treefile_dirpath,
                                JsonObject      *treedata,
                                const char      *previous_commit,
@@ -236,7 +235,6 @@ rpmostree_check_passwd_groups (gboolean         passwd,
   const char *commit_filepath = passwd ? "usr/lib/passwd" : "usr/lib/group";
   const char *json_conf_name  = passwd ? "check-passwd" : "check-groups";
   const char *json_conf_ign   = passwd ? "ignore-removed-users" : "ignore-removed-groups";
-  g_autoptr(GFile) new_path = g_file_resolve_relative_path (yumroot, commit_filepath);
   g_autoptr(GPtrArray) ignore_removed_ents = NULL;
   gboolean ignore_all_removed = FALSE;
   g_autoptr(GPtrArray) old_ents = NULL;
@@ -385,7 +383,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
     g_ptr_array_sort (old_ents, compare_group_ents);
 
   g_autofree char *new_contents =
-    glnx_file_get_contents_utf8_at (AT_FDCWD, gs_file_get_path_cached (new_path), NULL,
+    glnx_file_get_contents_utf8_at (rootfs_fd, commit_filepath, NULL,
                                     cancellable, error);
   if (!new_contents)
       return FALSE;
@@ -446,7 +444,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
             }
           else
             {
-              if (!dir_contains_uid (yumroot, odata->uid, &found_matching_uid,
+              if (!dir_contains_uid (rootfs_fd, odata->uid, &found_matching_uid,
                                      cancellable, error))
                 return FALSE;
 
@@ -496,7 +494,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
             {
               gboolean found_gid;
 
-              if (!dir_contains_gid (yumroot, odata->gid, &found_gid,
+              if (!dir_contains_gid (rootfs_fd, odata->gid, &found_gid,
                                      cancellable, error))
                 return FALSE;
 
@@ -559,14 +557,14 @@ rpmostree_check_passwd_groups (gboolean         passwd,
 */
 gboolean
 rpmostree_check_passwd (OstreeRepo      *repo,
-                        GFile           *yumroot,
+                        int              rootfs_fd,
                         GFile           *treefile_dirpath,
                         JsonObject      *treedata,
                         const char      *previous_commit,
                         GCancellable    *cancellable,
                         GError         **error)
 {
-  return rpmostree_check_passwd_groups (TRUE, repo, yumroot, treefile_dirpath,
+  return rpmostree_check_passwd_groups (TRUE, repo, rootfs_fd, treefile_dirpath,
                                         treedata, previous_commit,
                                         cancellable, error);
 }
@@ -576,14 +574,14 @@ rpmostree_check_passwd (OstreeRepo      *repo,
  */
 gboolean
 rpmostree_check_groups (OstreeRepo      *repo,
-                        GFile           *yumroot,
+                        int              rootfs_fd,
                         GFile           *treefile_dirpath,
                         JsonObject      *treedata,
                         const char      *previous_commit,
                         GCancellable    *cancellable,
                         GError         **error)
 {
-  return rpmostree_check_passwd_groups (TRUE, repo, yumroot, treefile_dirpath,
+  return rpmostree_check_passwd_groups (TRUE, repo, rootfs_fd, treefile_dirpath,
                                         treedata, previous_commit,
                                         cancellable, error);
 }
