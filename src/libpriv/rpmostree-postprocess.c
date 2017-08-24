@@ -745,11 +745,8 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
   if (!init_rootfs (target_root_dfd, tmp_is_dir, cancellable, error))
     return FALSE;
 
-  g_autofree char *pkgroot_path = glnx_fdrel_abspath (src_rootfs_fd, ".");
-  g_autoptr(GFile) pkgroot = g_file_new_for_path (pkgroot_path);
-
   g_print ("Migrating /etc/passwd to /usr/lib/\n");
-  if (!rpmostree_passwd_migrate_except_root (pkgroot, RPM_OSTREE_PASSWD_MIGRATE_PASSWD, NULL,
+  if (!rpmostree_passwd_migrate_except_root (src_rootfs_fd, RPM_OSTREE_PASSWD_MIGRATE_PASSWD, NULL,
                                              cancellable, error))
     return FALSE;
 
@@ -761,7 +758,7 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
     }
 
   g_print ("Migrating /etc/group to /usr/lib/\n");
-  if (!rpmostree_passwd_migrate_except_root (pkgroot, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
+  if (!rpmostree_passwd_migrate_except_root (src_rootfs_fd, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
                                              preserve_groups_set,
                                              cancellable, error))
     return FALSE;
