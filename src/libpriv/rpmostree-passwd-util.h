@@ -26,7 +26,7 @@
 
 gboolean
 rpmostree_check_passwd (OstreeRepo      *repo,
-                        GFile           *yumroot,
+                        int              rootfs_dfd,
                         GFile           *treefile_path,
                         JsonObject      *treedata,
                         const char      *previous_commit,
@@ -35,7 +35,7 @@ rpmostree_check_passwd (OstreeRepo      *repo,
 
 gboolean
 rpmostree_check_groups (OstreeRepo      *repo,
-                        GFile           *yumroot,
+                        int              rootfs_dfd,
                         GFile           *treefile_path,
                         JsonObject      *treedata,
                         const char      *previous_commit,

@@ -921,12 +921,12 @@ impl_compose_tree (const char      *treefile_pathstr,
     return FALSE;
 
   g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile);
-  if (!rpmostree_check_passwd (self->repo, yumroot, treefile_dirpath, treefile,
+  if (!rpmostree_check_passwd (self->repo, rootfs_fd, treefile_dirpath, treefile,
                                self->previous_checksum,
                                cancellable, error))
     return glnx_prefix_error (error, "Handling passwd db");
 
-  if (!rpmostree_check_groups (self->repo, yumroot, treefile_dirpath, treefile,
+  if (!rpmostree_check_groups (self->repo, rootfs_fd, treefile_dirpath, treefile,
                                self->previous_checksum,
                                cancellable, error))
     glnx_prefix_error (error, "Handling group db");
