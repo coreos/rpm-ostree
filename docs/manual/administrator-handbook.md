@@ -10,8 +10,9 @@ alias for `rpm-ostree`.
    # rpm-ostree status
 ```
 
-Will show you your deployments, in the order in which they will appear
-in the bootloader.  The `●` shows the currently booted deployment.
+Will show you your deployments in the order in which they will appear in the
+bootloader, the first deployment in the list being the current default one. The
+`●` shows the currently booted deployment.
 
 ```
    # rpm-ostree upgrade
@@ -25,9 +26,10 @@ shortly afterwards.
    # rpm-ostree rollback
 ```
 
-This rolls back to the previous state.  By default, the `rpm-ostree upgrade` will
-keep at most two bootable "deployments", though the underlying technology
-supports more.
+This rolls back to the previous state, i.e. the default deployment changes
+places with the non-default one.  By default, the `rpm-ostree upgrade` will keep
+at most two bootable "deployments", though the underlying technology supports
+more.
 
 
 ```
