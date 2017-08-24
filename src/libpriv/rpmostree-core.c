@@ -3006,7 +3006,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
           if (!apply_rpmfi_overrides (self, tmprootfs_dfd, pkg, passwdents, groupents,
                                       cancellable, error))
-            return glnx_prefix_error (error, "While applying overrides for pkg %s: ",
+            return glnx_prefix_error (error, "While applying overrides for pkg %s",
                                       dnf_package_get_name (pkg));
 
           if (!run_posttrans_sync (self, tmprootfs_dfd, pkg,
