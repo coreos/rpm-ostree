@@ -95,8 +95,8 @@ static const KnownRpmScriptKind unsupported_scripts[] = {
 };
 
 static gboolean
-fail_if_interp_is_lua (const char *pkg_name,
-                       const char *interp,
+fail_if_interp_is_lua (const char *interp,
+                       const char *pkg_name,
                        const char *script_desc,
                        GError    **error)
 {
