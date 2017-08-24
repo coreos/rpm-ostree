@@ -340,7 +340,7 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
     return FALSE;
 
   /* We never want to traverse into /run when making tmpfiles since it's a tmpfs */
-  /* Note that in a Fedora yumroot, /var/run is a symlink, though on el7, it can be a dir.
+  /* Note that in a Fedora root, /var/run is a symlink, though on el7, it can be a dir.
    * See: https://github.com/projectatomic/rpm-ostree/pull/831 */
   if (!glnx_shutil_rm_rf_at (var_dfd, "run", cancellable, error))
     return FALSE;
@@ -1115,15 +1115,12 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
  * the context directory to the rootfs.
  */
 gboolean
-rpmostree_copy_additional_files (GFile         *rootfs,
+rpmostree_copy_additional_files (int            rootfs_dfd,
                                  GFile         *context_directory,
                                  JsonObject    *treefile,
                                  GCancellable  *cancellable,
                                  GError       **error)
 {
-  g_autofree char *dest_rootfs_path = g_strconcat (gs_file_get_path_cached (rootfs), ".post", NULL);
-  g_autoptr(GFile) targetroot = g_file_new_for_path (dest_rootfs_path);
-
   guint len;
   JsonArray *add = NULL;
   if (json_object_has_member (treefile, "add-files"))
@@ -1134,6 +1131,13 @@ rpmostree_copy_additional_files (GFile         *rootfs,
   else
     return TRUE; /* Early return */
 
+  glnx_fd_close int context_dfd = -1;
+  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (context_directory), TRUE,
+                       &context_dfd, error))
+    return FALSE;
+
+  /* Reusable dirname buffer */
+  g_autoptr(GString) dnbuf = g_string_new ("");
   for (guint i = 0; i < len; i++)
     {
       const char *src, *dest;
@@ -1149,23 +1153,23 @@ rpmostree_copy_additional_files (GFile         *rootfs,
       dest = _rpmostree_jsonutil_array_require_string_element (add_el, 1, error);
       if (!dest)
         return FALSE;
+      dest += strspn (dest, "/");
+      if (!*dest)
+        return glnx_throw (error, "Invalid destination in add-files");
 
-      {
-        g_autoptr(GFile) srcfile = g_file_resolve_relative_path (context_directory, src);
-        const char *rootfs_path = gs_file_get_path_cached (rootfs);
-        g_autofree char *destpath = g_strconcat (rootfs_path, "/", dest, NULL);
-        g_autoptr(GFile) destfile = g_file_resolve_relative_path (targetroot, destpath);
-        g_autoptr(GFile) target_tmpfilesd_parent = g_file_get_parent (destfile);
+      g_print ("Adding file '%s'\n", dest);
 
-        g_print ("Adding file '%s'\n", dest);
+      g_string_truncate (dnbuf, 0);
+      g_string_append (dnbuf, dest);
+      const char *dn = dirname (dnbuf->str);
+      g_assert_cmpint (*dn, !=, '/');
 
-        if (!glnx_shutil_mkdir_p_at (AT_FDCWD, gs_file_get_path_cached (target_tmpfilesd_parent), 0755,
-                                     cancellable, error))
-          return FALSE;
+      if (!glnx_shutil_mkdir_p_at (rootfs_dfd, dn, 0755, cancellable, error))
+        return FALSE;
 
-        if (!g_file_copy (srcfile, destfile, 0, cancellable, NULL, NULL, error))
+      if (!glnx_file_copy_at (context_dfd, src, NULL, rootfs_dfd, dest, 0,
+                              cancellable, error))
           return glnx_prefix_error (error, "Copying file '%s' into target", src);
-      }
     }
 
   return TRUE;
