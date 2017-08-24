@@ -545,8 +545,15 @@ static gboolean
 on_sigint (gpointer user_data)
 {
   GCancellable *cancellable = user_data;
-  g_printerr ("Caught SIGINT, cancelling transaction\n");
-  g_cancellable_cancel (cancellable);
+  if (!g_cancellable_is_cancelled (cancellable))
+    {
+      g_printerr ("Caught SIGINT, cancelling transaction\n");
+      g_cancellable_cancel (cancellable);
+    }
+  else
+    {
+      g_printerr ("Awaiting transaction cancellation...\n");
+    }
   return TRUE;
 }
 
