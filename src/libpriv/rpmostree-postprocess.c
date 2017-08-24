@@ -618,19 +618,19 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
     orig_contents = glnx_file_get_contents_utf8_at (rootfs_dfd, semanage_path, NULL,
                                                     cancellable, error);
     if (orig_contents == NULL)
-      return glnx_prefix_error (error, "Opening %s:", semanage_path);
+      return glnx_prefix_error (error, "Opening %s", semanage_path);
 
     contents = g_strconcat (orig_contents, "\nstore-root=/etc/selinux\n", NULL);
 
     if (!glnx_file_replace_contents_at (rootfs_dfd, semanage_path,
                                         (guint8*)contents, -1, 0,
                                         cancellable, error))
-      return glnx_prefix_error (error, "Replacing %s:", semanage_path);
+      return glnx_prefix_error (error, "Replacing %s", semanage_path);
   }
 
   etc_policy_location = glnx_strjoina ("etc/selinux/", name);
   if (!glnx_opendirat (rootfs_dfd, etc_policy_location, TRUE, &etc_selinux_dfd, error))
-    return glnx_prefix_error (error, "Opening %s:", etc_policy_location);
+    return FALSE;
 
   if (!glnx_dirfd_iterator_init_at (rootfs_dfd, var_policy_location, TRUE, &dfd_iter, error))
     return FALSE;
