@@ -23,7 +23,7 @@ vm_setup() {
   export VM=${VM:-vmcheck}
   local sshopts="-o User=root \
                  -o ControlMaster=auto \
-                 -o ControlPath=${topsrcdir}/ssh-$VM.sock \
+                 -o ControlPath=/var/tmp/ssh-$VM-$(date +%s%N).sock \
                  -o ControlPersist=yes"
 
   # If we're provided with an ssh-config, make sure we tell
