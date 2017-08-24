@@ -309,7 +309,6 @@ treefile_sanity_checks (JsonObject   *treedata,
 static gboolean
 install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                           JsonObject      *treedata,
-                          GFile           *yumroot,
                           int              rootfs_dfd,
                           char           **packages,
                           gboolean        *out_unmodified,
@@ -404,7 +403,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     g_autoptr(RpmOstreeTreespec) treespec_value = rpmostree_treespec_new_from_keyfile (treespec, &tmp_error);
     g_assert_no_error (tmp_error);
 
-    if (!rpmostree_context_setup (self->corectx, gs_file_get_path_cached (yumroot), NULL, treespec_value,
+    g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (rootfs_dfd, ".");
+    if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL, treespec_value,
                                   cancellable, error))
       return FALSE;
   }
@@ -877,7 +877,7 @@ impl_compose_tree (const char      *treefile_pathstr,
   g_autofree char *new_inputhash = NULL;
   { gboolean unmodified = FALSE;
 
-    if (!install_packages_in_root (self, treefile, yumroot, rootfs_fd,
+    if (!install_packages_in_root (self, treefile, rootfs_fd,
                                    (char**)packages->pdata,
                                    opt_force_nocache ? NULL : &unmodified,
                                    &new_inputhash,
