@@ -950,7 +950,6 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
   gboolean found_passwd_data = FALSE;
   gboolean found_groups_data = FALSE;
   gboolean perform_migrate = FALSE;
-  g_autofree char *rootfs_abspath = glnx_fdrel_abspath (rootfs_dfd, ".");
 
   /* Create /etc in the target root; FIXME - should ensure we're using
    * the right permissions from the filesystem RPM.  Doing this right
