@@ -48,7 +48,7 @@ typedef enum {
 } RpmOstreePasswdMigrateKind;
 
 gboolean
-rpmostree_passwd_migrate_except_root (GFile         *rootfs,
+rpmostree_passwd_migrate_except_root (int            rootfs_dfd,
                                       RpmOstreePasswdMigrateKind    kind,
                                       GHashTable    *preserve,
                                       GCancellable  *cancellable,

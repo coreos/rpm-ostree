@@ -586,15 +586,45 @@ rpmostree_check_groups (OstreeRepo      *repo,
                                         cancellable, error);
 }
 
+/* Like glnx_openat_rdonly() but returns a FILE*.
+ * Or, like fopen() but fd-relative.
+ *
+ * (And in both cases use GError)
+ */
 static FILE *
-gfopen (const char       *path,
-        const char       *mode,
-        GCancellable     *cancellable,
-        GError          **error)
+open_file_stream_read_at (int dfd,
+                          const char *path,
+                          GError **error)
 {
-  FILE *ret = fopen (path, mode);
+  glnx_fd_close int fd = -1;
+  if (!glnx_openat_rdonly (dfd, path, TRUE, &fd, error))
+    return FALSE;
+  FILE *ret = fdopen (fd, "r");
   if (!ret)
-    return glnx_null_throw_errno_prefix (error, "fopen(%s)", path);
+    return glnx_null_throw_errno_prefix (error, "fdopen");
+  /* fdopen() steals ownership of fd */
+  fd = -1;
+  return ret;
+}
+
+/* Like fopen() but fd-relative and with GError. */
+static FILE *
+open_file_stream_write_at (int dfd,
+                           const char *path,
+                           const char *mode,
+                           GError **error)
+{
+  /* Explicitly use 0664 rather than 0666 as fopen() does since IMO if one wants
+   * a world-writable file, do it explicitly.
+   */
+  glnx_fd_close int fd = openat (dfd, path, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOCTTY, 0664);
+  if (fd < 0)
+    return glnx_null_throw_errno_prefix (error, "openat(%s)", path);
+  FILE *ret = fdopen (fd, mode);
+  if (!ret)
+    return glnx_null_throw_errno_prefix (error, "fdopen");
+  /* fdopen() steals ownership of fd */
+  fd = -1;
   return ret;
 }
 
@@ -608,26 +638,27 @@ gfopen (const char       *path,
  * duplicating the user/group code.
  */
 gboolean
-rpmostree_passwd_migrate_except_root (GFile         *rootfs,
+rpmostree_passwd_migrate_except_root (int            rootfs_dfd,
                                       RpmOstreePasswdMigrateKind    kind,
                                       GHashTable    *preserve,
                                       GCancellable  *cancellable,
                                       GError       **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("passwd migration", error);
   const char *name = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD ? "passwd" : "group";
 
-  g_autofree char *src_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, NULL);
-  g_autoptr(FILE) src_stream = gfopen (src_path, "r", cancellable, error);
+  const char *src_path = glnx_strjoina ("etc/", name);
+  g_autoptr(FILE) src_stream = open_file_stream_read_at (rootfs_dfd, src_path, error);
   if (!src_stream)
     return FALSE;
 
-  g_autofree char *etctmp_path = g_strconcat (gs_file_get_path_cached (rootfs), "/etc/", name, ".tmp", NULL);
-  g_autoptr(FILE) etcdest_stream = gfopen (etctmp_path, "w", cancellable, error);
+  const char *etctmp_path = glnx_strjoina ("etc/", name, ".tmp");
+  g_autoptr(FILE) etcdest_stream = open_file_stream_write_at (rootfs_dfd, etctmp_path, "w", error);
   if (!etcdest_stream)
     return FALSE;
 
-  g_autofree char *usrdest_path = g_strconcat (gs_file_get_path_cached (rootfs), "/usr/lib/", name, NULL);
-  g_autoptr(FILE) usrdest_stream = gfopen (usrdest_path, "a", cancellable, error);
+  const char *usrdest_path = glnx_strjoina ("usr/lib/", name);
+  g_autoptr(FILE) usrdest_stream = open_file_stream_write_at (rootfs_dfd, usrdest_path, "a", error);
   if (!usrdest_stream)
     return FALSE;
 
@@ -701,22 +732,10 @@ rpmostree_passwd_migrate_except_root (GFile         *rootfs,
   if (!glnx_stdio_file_flush (usrdest_stream, error))
     return FALSE;
 
-  if (rename (etctmp_path, src_path) != 0)
-    return glnx_throw_errno_prefix (error, "rename");
+  if (!glnx_renameat (rootfs_dfd, etctmp_path, rootfs_dfd, src_path, error))
+    return FALSE;
 
   return TRUE;
-}
-
-static FILE *
-target_etc_filename (GFile         *yumroot,
-                     const char    *filename,
-                     GCancellable  *cancellable,
-                     GError       **error)
-{
-  g_autofree char *etc_subpath = g_strconcat ("etc/", filename, NULL);
-  g_autofree char *target_etc =
-    g_build_filename (gs_file_get_path_cached (yumroot), etc_subpath, NULL);
-  return gfopen (target_etc, "w", cancellable, error);
 }
 
 static gboolean
@@ -800,7 +819,7 @@ concat_entries (FILE    *src_stream,
 }
 
 static gboolean
-concat_passwd_file (GFile           *yumroot,
+concat_passwd_file (int              rootfs_fd,
                     GFile           *previous_commit,
                     RpmOstreePasswdMigrateKind kind,
                     GCancellable    *cancellable,
@@ -828,8 +847,8 @@ concat_passwd_file (GFile           *yumroot,
     return TRUE;
 
   g_autoptr(FILE) dest_stream = NULL;
-  if (!(dest_stream = target_etc_filename (yumroot, filename,
-                                           cancellable, error)))
+  const char *target_etc_filename = glnx_strjoina ("etc/", filename);
+  if (!(dest_stream = open_file_stream_write_at (rootfs_fd, target_etc_filename, "w", error)))
     return FALSE;
 
   for (guint i = 0; i < G_N_ELEMENTS (sources); i++)
@@ -857,7 +876,7 @@ concat_passwd_file (GFile           *yumroot,
 }
 
 static gboolean
-_data_from_json (GFile           *yumroot,
+_data_from_json (int              rootfs_dfd,
                  GFile           *treefile_dirpath,
                  JsonObject      *treedata,
                  RpmOstreePasswdMigrateKind kind,
@@ -907,8 +926,8 @@ _data_from_json (GFile           *yumroot,
 
   g_autoptr(FILE) dest_stream = NULL;
   const char *filebasename = passwd ? "passwd" : "group";
-  if (!(dest_stream = target_etc_filename (yumroot, filebasename,
-                                           cancellable, error)))
+  const char *target_etc_filename = glnx_strjoina ("etc/", filebasename);
+  if (!(dest_stream = open_file_stream_write_at (rootfs_dfd, target_etc_filename, "w", error)))
     return FALSE;
 
   g_autoptr(GHashTable) seen_names =
@@ -932,7 +951,6 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
   gboolean found_groups_data = FALSE;
   gboolean perform_migrate = FALSE;
   g_autofree char *rootfs_abspath = glnx_fdrel_abspath (rootfs_dfd, ".");
-  g_autoptr(GFile) yumroot = g_file_new_for_path (rootfs_abspath);
 
   /* Create /etc in the target root; FIXME - should ensure we're using
    * the right permissions from the filesystem RPM.  Doing this right
@@ -942,7 +960,7 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
   if (!glnx_ensure_dir (rootfs_dfd, "etc", 0755, error))
     return FALSE;
 
-  if (!_data_from_json (yumroot, treefile_dirpath,
+  if (!_data_from_json (rootfs_dfd, treefile_dirpath,
                         treedata, RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
                         &found_passwd_data, cancellable, error))
     return FALSE;
@@ -951,12 +969,12 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
   if (!previous_root)
     perform_migrate = FALSE;
 
-  if (perform_migrate && !concat_passwd_file (yumroot, previous_root,
+  if (perform_migrate && !concat_passwd_file (rootfs_dfd, previous_root,
                                               RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
                                               cancellable, error))
     return FALSE;
 
-  if (!_data_from_json (yumroot, treefile_dirpath,
+  if (!_data_from_json (rootfs_dfd, treefile_dirpath,
                         treedata, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
                         &found_groups_data, cancellable, error))
     return FALSE;
@@ -966,7 +984,7 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
   if (!previous_root)
     perform_migrate = FALSE;
 
-  if (perform_migrate && !concat_passwd_file (yumroot, previous_root,
+  if (perform_migrate && !concat_passwd_file (rootfs_dfd, previous_root,
                                               RPM_OSTREE_PASSWD_MIGRATE_GROUP,
                                               cancellable, error))
     return FALSE;
