@@ -846,9 +846,9 @@ concat_passwd_file (int              rootfs_fd,
   if (!(have_etc || have_usr))
     return TRUE;
 
-  g_autoptr(FILE) dest_stream = NULL;
   const char *target_etc_filename = glnx_strjoina ("etc/", filename);
-  if (!(dest_stream = open_file_stream_write_at (rootfs_fd, target_etc_filename, "w", error)))
+  g_autoptr(FILE) dest_stream = open_file_stream_write_at (rootfs_fd, target_etc_filename, "w", error);
+  if (!dest_stream)
     return FALSE;
 
   for (guint i = 0; i < G_N_ELEMENTS (sources); i++)
@@ -924,10 +924,10 @@ _data_from_json (int              rootfs_dfd,
   /* no matter what we've used the data now */
   *out_found = TRUE;
 
-  g_autoptr(FILE) dest_stream = NULL;
   const char *filebasename = passwd ? "passwd" : "group";
   const char *target_etc_filename = glnx_strjoina ("etc/", filebasename);
-  if (!(dest_stream = open_file_stream_write_at (rootfs_dfd, target_etc_filename, "w", error)))
+  g_autoptr(FILE) dest_stream = open_file_stream_write_at (rootfs_dfd, target_etc_filename, "w", error);
+  if (!dest_stream)
     return FALSE;
 
   g_autoptr(GHashTable) seen_names =
