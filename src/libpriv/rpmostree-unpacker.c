@@ -644,9 +644,10 @@ compose_filter_cb (OstreeRepo         *repo,
       /* And ensure the RPM installs into supported paths */
       else if (!path_is_ostree_compliant (path))
         {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Unsupported path: %s; See %s",
-                       path, "https://github.com/projectatomic/rpm-ostree/issues/233");
+          if ((self->flags & RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS) == 0)
+            g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                         "Unsupported path: %s; See %s",
+                         path, "https://github.com/projectatomic/rpm-ostree/issues/233");
           return OSTREE_REPO_COMMIT_FILTER_SKIP;
         }
     }
@@ -713,8 +714,7 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
   OstreeRepoImportArchiveOptions opts = { 0 };
   opts.ignore_unsupported_content = TRUE;
   opts.autocreate_parents = TRUE;
-  opts.use_ostree_convention =
-    (self->flags & RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION);
+  opts.use_ostree_convention = TRUE;
 
   g_autoptr(OstreeMutableTree) mtree = ostree_mutable_tree_new ();
   if (!ostree_repo_import_archive_to_mtree (repo, &opts, self->archive, mtree,
@@ -724,7 +724,7 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
   /* check if any of the cbs set an error */
   if (cb_error != NULL)
     {
-      *error = cb_error;
+      g_propagate_error (error, cb_error);
       return FALSE;
     }
 
@@ -754,7 +754,7 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
       /* check if any of the cbs set an error */
       if (cb_error != NULL)
         {
-          *error = cb_error;
+          g_propagate_error (error, cb_error);
           return FALSE;
         }
     }

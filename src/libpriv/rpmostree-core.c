@@ -1726,9 +1726,17 @@ import_one_package (RpmOstreeContext *self,
   if (!dnf_transaction_gpgcheck_package (dnf_context_get_transaction (hifctx), pkg, error))
     return FALSE;
 
-  flags = RPMOSTREE_UNPACKER_FLAGS_OSTREE_CONVENTION;
   if (self->unprivileged)
     flags |= RPMOSTREE_UNPACKER_FLAGS_UNPRIVILEGED;
+
+  /* Only set SKIP_EXTRANEOUS for packages we know need it, so that
+   * people doing custom composes don't have files silently discarded.
+   * (This will also likely need to be configurable).
+   */
+  const char *pkg_name = dnf_package_get_name (pkg);
+  if (g_str_equal (pkg_name, "filesystem") ||
+      g_str_equal (pkg_name, "rootfiles"))
+    flags |= RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS;
 
   /* TODO - tweak the unpacker flags for containers */
   unpacker = rpmostree_unpacker_new_at (AT_FDCWD, pkg_path, pkg, flags, error);
