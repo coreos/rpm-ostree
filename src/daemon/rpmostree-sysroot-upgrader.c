@@ -1100,7 +1100,8 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
    */
   if (!self->final_revision)
     {
-      g_autofree char *deployment_path = ostree_sysroot_get_deployment_dirpath (self->sysroot, new_deployment);
+      g_autofree char *deployment_path =
+        ostree_sysroot_get_deployment_dirpath (self->sysroot, new_deployment);
       glnx_fd_close int deployment_dfd = -1;
       if (!glnx_opendirat (ostree_sysroot_get_fd (self->sysroot), deployment_path, TRUE,
                            &deployment_dfd, error))
@@ -1121,13 +1122,9 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
         return FALSE;
     }
 
-  g_autoptr(GPtrArray) new_deployments =
-    rpmostree_syscore_add_deployment (self->sysroot, new_deployment,
-                                      self->cfg_merge_deployment, FALSE, error);
-  if (!new_deployments)
-    return FALSE;
-  if (!rpmostree_syscore_write_deployments (self->sysroot, self->repo, new_deployments,
-                                            cancellable, error))
+  if (!rpmostree_syscore_write_deployment (self->sysroot, new_deployment,
+                                           self->cfg_merge_deployment, FALSE,
+                                           cancellable, error))
     return FALSE;
 
   return TRUE;
