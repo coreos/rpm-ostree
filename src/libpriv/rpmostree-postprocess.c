@@ -1162,7 +1162,7 @@ rpmostree_copy_additional_files (int            rootfs_dfd,
       g_string_truncate (dnbuf, 0);
       g_string_append (dnbuf, dest);
       const char *dn = dirname (dnbuf->str);
-      dn += strspn (dest, "/");
+      dn += strspn (dest, "/"); /* Shouldn't happen, but be defensive */
       if (!*dn)
         return glnx_throw (error, "Invalid destination in add-files");
 
