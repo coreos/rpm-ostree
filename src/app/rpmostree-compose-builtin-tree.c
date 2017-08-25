@@ -796,7 +796,6 @@ impl_compose_tree (const char      *treefile_pathstr,
     g_print ("Previous commit: %s\n", self->previous_checksum);
 
   const char rootfs_name[] = "rootfs.tmp";
-  g_autoptr(GFile) yumroot = g_file_get_child (self->workdir, rootfs_name);
   if (!glnx_shutil_rm_rf_at (self->workdir_dfd, rootfs_name, cancellable, error))
     return FALSE;
   if (mkdirat (self->workdir_dfd, rootfs_name, 0755) < 0)
@@ -917,7 +916,7 @@ impl_compose_tree (const char      *treefile_pathstr,
                                             cancellable, error))
     return glnx_prefix_error (error, "Preparing rootfs for commit");
 
-  if (!rpmostree_copy_additional_files (yumroot, self->treefile_context_dirs->pdata[0], treefile, cancellable, error))
+  if (!rpmostree_copy_additional_files (rootfs_fd, self->treefile_context_dirs->pdata[0], treefile, cancellable, error))
     return FALSE;
 
   g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile);
