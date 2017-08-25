@@ -16,3 +16,5 @@ git clean -dfx
 export CC=clang
 export CFLAGS='-Werror=unused-variable'
 build_default
+# don't actually run the tests, just compile them
+/usr/bin/make check TESTS=
