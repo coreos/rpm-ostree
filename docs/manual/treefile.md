@@ -32,7 +32,7 @@ It supports the following parameters:
     possible values:
     * "both": the default, kernel data goes in /boot and /usr/lib/ostree-boot
     * "legacy": Now an alias for "both"; historically meant just "boot"
-    * "new": kernel data goes in /usr/lib/ostree-boot
+    * "new": kernel data goes in /usr/lib/ostree-boot and /usr/lib/modules
 
  * `etc-group-members`: Array of strings, optional: Unix groups in this
    list will be stored in `/etc/group` instead of `/usr/lib/group`.  Use
