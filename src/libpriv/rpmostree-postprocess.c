@@ -46,7 +46,6 @@
 #include "rpmostree-util.h"
 
 typedef enum {
-  RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY,
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH,
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW
 } RpmOstreePostprocessBootLocation;
@@ -801,9 +800,9 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
 
       if (boot_location_str != NULL)
         {
-          if (strcmp (boot_location_str, "legacy") == 0)
-            boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY;
-          else if (strcmp (boot_location_str, "both") == 0)
+          /* Note that "legacy" is now an alias for "both" */
+          if (strcmp (boot_location_str, "both") == 0 ||
+              strcmp (boot_location_str, "legacy") == 0)
             boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
           else if (strcmp (boot_location_str, "new") == 0)
             boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
@@ -817,13 +816,6 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
 
       switch (boot_location)
         {
-        case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY:
-          {
-            g_print ("Using boot location: legacy\n");
-            if (!glnx_renameat (src_rootfs_fd, "boot", target_root_dfd, "boot", error))
-              return FALSE;
-          }
-          break;
         case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH:
           {
             g_print ("Using boot location: both\n");
