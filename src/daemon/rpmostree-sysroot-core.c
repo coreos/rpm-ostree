@@ -57,6 +57,7 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
                          GCancellable             *cancellable,
                          GError                  **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("baselayer refs", error);
   gboolean ret = FALSE;
   g_autoptr(GHashTable) refs = NULL;
   g_autoptr(GHashTable) bases =
@@ -156,6 +157,7 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
                         GCancellable             *cancellable,
                         GError                  **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("pkgcache cleanup", error);
   g_autoptr(GHashTable) referenced_pkgs = /* cache refs of packages we want to keep */
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
@@ -249,6 +251,7 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
                            GCancellable             *cancellable,
                            GError                  **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("syscore cleanup", error);
   int repo_dfd = ostree_repo_get_dfd (repo); /* borrowed */
 
   /* regenerate the baselayer refs in case we just kicked out an ancient layered
