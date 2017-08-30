@@ -72,18 +72,13 @@ static const KnownRpmScriptKind ignored_scripts[] = {
 };
 #endif
 
-static const KnownRpmScriptKind pre_scripts[] = {
-  { "%prein", 0,
-    RPMTAG_PREIN, RPMTAG_PREINPROG, RPMTAG_PREINFLAGS },
-};
-
-static const KnownRpmScriptKind posttrans_scripts[] = {
-  /* For now, we treat %post as equivalent to %posttrans */
-  { "%post", 0,
-    RPMTAG_POSTIN, RPMTAG_POSTINPROG, RPMTAG_POSTINFLAGS },
-  { "%posttrans", 0,
-    RPMTAG_POSTTRANS, RPMTAG_POSTTRANSPROG, RPMTAG_POSTTRANSFLAGS },
-};
+/* Supported script types */
+static const KnownRpmScriptKind pre_script =
+  { "%prein", 0, RPMTAG_PREIN, RPMTAG_PREINPROG, RPMTAG_PREINFLAGS };
+static const KnownRpmScriptKind post_script =
+  { "%post", 0, RPMTAG_POSTIN, RPMTAG_POSTINPROG, RPMTAG_POSTINFLAGS };
+static const KnownRpmScriptKind posttrans_script =
+  { "%posttrans", 0, RPMTAG_POSTTRANS, RPMTAG_POSTTRANSPROG, RPMTAG_POSTTRANSFLAGS };
 
 static const KnownRpmScriptKind unsupported_scripts[] = {
   { "%triggerprein", RPMSENSE_TRIGGERPREIN,
@@ -469,27 +464,39 @@ find_and_write_matching_files (int rootfs_fd, const char *pattern,
 }
 #endif
 
-/* Execute all post/post-transaction scripts for @pkg */
+/* Execute a supported script.  Note that @cancellable
+ * does not currently kill a running script subprocess.
+ */
 gboolean
-rpmostree_posttrans_run_sync (DnfPackage    *pkg,
-                              Header         hdr,
-                              int            rootfs_fd,
-                              guint         *out_n_run,
-                              GCancellable  *cancellable,
-                              GError       **error)
+rpmostree_script_run_sync (DnfPackage    *pkg,
+                           Header         hdr,
+                           RpmOstreeScriptKind kind,
+                           int            rootfs_fd,
+                           guint         *out_n_run,
+                           GCancellable  *cancellable,
+                           GError       **error)
 {
-  /* We treat %post and %posttrans equivalently, so do those in one go */
-  for (guint i = 0; i < G_N_ELEMENTS (posttrans_scripts); i++)
+  KnownRpmScriptKind *scriptkind;
+  switch (kind)
     {
-      gboolean did_run = FALSE;
-
-      if (!run_script (&posttrans_scripts[i], pkg, hdr, rootfs_fd,
-                       &did_run, cancellable, error))
-        return FALSE;
-
-      if (did_run)
-        (*out_n_run)++;
+    case RPMOSTREE_SCRIPT_PREIN:
+      scriptkind = &pre_script;
+      break;
+    case RPMOSTREE_SCRIPT_POSTIN:
+      scriptkind = &post_script;
+      break;
+    case RPMOSTREE_SCRIPT_POSTTRANS:
+      scriptkind = &posttrans_script;
+      break;
     }
+
+  gboolean did_run = FALSE;
+  if (!run_script (scriptkind, pkg, hdr, rootfs_fd,
+                   &did_run, cancellable, error))
+    return FALSE;
+
+  if (did_run)
+    (*out_n_run)++;
   return TRUE;
 }
 
@@ -672,30 +679,6 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
                        NULL);
     }
 #endif
-  return TRUE;
-}
-
-/* Execute all pre-install scripts for @pkg */
-gboolean
-rpmostree_pre_run_sync (DnfPackage    *pkg,
-                        Header         hdr,
-                        int            rootfs_fd,
-                        guint         *out_n_run,
-                        GCancellable  *cancellable,
-                        GError       **error)
-{
-  for (guint i = 0; i < G_N_ELEMENTS (pre_scripts); i++)
-    {
-      gboolean did_run = FALSE;
-
-      if (!run_script (&pre_scripts[i], pkg, hdr, rootfs_fd,
-                       &did_run, cancellable, error))
-        return FALSE;
-
-      if (did_run)
-        (*out_n_run)++;
-    }
-
   return TRUE;
 }
 
