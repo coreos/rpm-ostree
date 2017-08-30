@@ -60,9 +60,13 @@ if [ -n "${RPMOSTREE_COMPOSE_TEST_USE_HOST_REPO:-}" ]; then
 fi
 
 # Delete the default ref, since we want to use subrefs of it
+compose_prepargs=
+if test -n "${RPMOSTREE_COMPOSE_CACHEONLY:-}"; then
+    compose_prepargs="--cache-only"
+fi
 (set -x
  rm ${repobuild}/refs/heads/* -rf
- rpm-ostree compose --repo=${repobuild} tree --dry-run --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json
+ rpm-ostree compose --repo=${repobuild} tree --dry-run ${compose_prepargs} --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json
  rm ${repobuild}/refs/heads/* -rf) &>> ${LOG}
 
 total=0
@@ -101,6 +105,9 @@ for tf in $(find ${dn}/compose-tests -name 'test-*.sh' | sort); do
             fail_print "FAIL: $bn"
             echo "FAIL" >> ${LOG}
             let "fail += 1"
+            if test -n "${RPMOSTREE_COMPOSE_FASTFAIL:-}"; then
+                break;
+            fi
         fi
     fi
 done
