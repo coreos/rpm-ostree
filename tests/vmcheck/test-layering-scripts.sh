@@ -103,6 +103,22 @@ vm_cmd cat /usr/lib/prefixtest.txt > prefixtest.txt
 assert_file_has_content prefixtest.txt "/usr"
 echo "ok script expansion"
 
+# script overrides (also one that expands)
+vm_build_rpm rpmostree-lua-override-test \
+             post_args "-p <lua>" \
+             post 'posix.stat("/")'
+vm_build_rpm rpmostree-lua-override-test-expand \
+             post_args "-e -p <lua>" \
+             post 'posix.stat("/")'
+vm_rpmostree install rpmostree-lua-override-test{,-expand}
+vm_rpmostree ex livefs
+vm_cmd cat /usr/share/rpmostree-lua-override-test > lua-override.txt
+assert_file_has_content lua-override.txt _install_langs
+vm_cmd rpm --eval '%{_install_langs}' > install-langs.txt
+vm_cmd cat /usr/share/rpmostree-lua-override-test-expand > lua-override-expand.txt
+diff -u install-langs.txt lua-override-expand.txt
+echo "ok script override"
+
 vm_rpmostree rollback
 vm_reboot
 vm_rpmostree cleanup -p
