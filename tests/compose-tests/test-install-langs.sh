@@ -30,4 +30,9 @@ assert_file_has_content out.txt 'Thu Jan  1 00:00:00 UTC 1970'
 ostree --repo=${repobuild} cat ${treeref} /usr/etc/lang-test.de.touch.txt > out.txt
 assert_file_has_content out.txt 'missing file operand'
 
+if ostree --repo=${repobuild} ls ${treeref} /usr/bin/rpmostree-postprocess-lang-test.sh 2>err.txt; then
+    assert_not_reached "we failed to unlink?"
+fi
+assert_file_has_content err.txt "error: No such file or directory"
+
 echo "ok install-langs"
