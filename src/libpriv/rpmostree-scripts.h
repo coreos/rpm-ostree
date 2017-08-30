@@ -45,6 +45,12 @@ struct RpmOstreePackageScriptHandler {
 
 const struct RpmOstreePackageScriptHandler* rpmostree_script_gperf_lookup(const char *key, GPERF_LEN_TYPE length);
 
+typedef enum {
+  RPMOSTREE_SCRIPT_PREIN,
+  RPMOSTREE_SCRIPT_POSTIN,
+  RPMOSTREE_SCRIPT_POSTTRANS,
+} RpmOstreeScriptKind;
+
 gboolean
 rpmostree_script_txn_validate (DnfPackage    *package,
                                Header         hdr,
@@ -52,12 +58,13 @@ rpmostree_script_txn_validate (DnfPackage    *package,
                                GError       **error);
 
 gboolean
-rpmostree_posttrans_run_sync (DnfPackage    *pkg,
-                              Header         hdr,
-                              int            rootfs_fd,
-                              guint         *out_n_run,
-                              GCancellable  *cancellable,
-                              GError       **error);
+rpmostree_script_run_sync (DnfPackage    *pkg,
+                           Header         hdr,
+                           RpmOstreeScriptKind kind,
+                           int            rootfs_fd,
+                           guint         *out_n_run,
+                           GCancellable  *cancellable,
+                           GError       **error);
 
 gboolean
 rpmostree_transfiletriggers_run_sync (Header         hdr,
@@ -65,14 +72,6 @@ rpmostree_transfiletriggers_run_sync (Header         hdr,
                                       guint         *out_n_run,
                                       GCancellable  *cancellable,
                                       GError       **error);
-
-gboolean
-rpmostree_pre_run_sync (DnfPackage    *pkg,
-                        Header         hdr,
-                        int            rootfs_fd,
-                        guint         *out_n_run,
-                        GCancellable  *cancellable,
-                        GError       **error);
 
 gboolean
 rpmostree_deployment_sanitycheck (int           rootfs_fd,
