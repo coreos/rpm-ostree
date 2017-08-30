@@ -63,7 +63,23 @@ echo "ok group scriptpkg1 active"
 
 vm_has_files "/usr/lib/rpmostreetestinterp"
 echo "ok interp"
+# cleanup
+vm_rpmostree uninstall scriptpkg1
+vm_reboot
 
+# post ordering
+vm_build_rpm postorder1 \
+             post 'touch /usr/share/postorder1.post' \
+             posttrans 'test -f /usr/share/postorder1.post && test -f /usr/share/postorder2.post'
+vm_build_rpm postorder2 \
+             requires 'postorder1' \
+             post 'touch /usr/share/postorder2.post' \
+             posttrans 'test -f /usr/share/postorder1.post && test -f /usr/share/postorder2.post'
+vm_rpmostree install postorder{1,2}
+vm_rpmostree cleanup -p
+echo "ok post ordering"
+
+# script expansion
 vm_build_rpm scriptpkg2 \
              post_args "-e" \
              post 'echo %%{_prefix} > /usr/lib/prefixtest.txt'

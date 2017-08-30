@@ -2435,13 +2435,17 @@ rpmts_add_erase (RpmOstreeContext *self,
   return TRUE;
 }
 
+/* Look up the header for a package, and pass it
+ * to the script core to execute.
+ */
 static gboolean
-run_posttrans_sync (RpmOstreeContext *self,
-                    int rootfs_dfd,
-                    DnfPackage *pkg,
-                    guint        *out_n_run,
-                    GCancellable *cancellable,
-                    GError    **error)
+run_script_sync (RpmOstreeContext *self,
+                 int rootfs_dfd,
+                 DnfPackage *pkg,
+                 RpmOstreeScriptKind kind,
+                 guint        *out_n_run,
+                 GCancellable *cancellable,
+                 GError    **error)
 {
   g_auto(Header) hdr = NULL;
   g_autofree char *path = get_package_relpath (pkg);
@@ -2449,29 +2453,8 @@ run_posttrans_sync (RpmOstreeContext *self,
   if (!get_package_metainfo (self, path, &hdr, NULL, error))
     return FALSE;
 
-  if (!rpmostree_posttrans_run_sync (pkg, hdr, rootfs_dfd,
-                                     out_n_run, cancellable, error))
-    return FALSE;
-
-  return TRUE;
-}
-
-static gboolean
-run_pre_sync (RpmOstreeContext *self,
-              int rootfs_dfd,
-              DnfPackage *pkg,
-              guint        *out_n_run,
-              GCancellable *cancellable,
-              GError    **error)
-{
-  g_auto(Header) hdr = NULL;
-  g_autofree char *path = get_package_relpath (pkg);
-
-  if (!get_package_metainfo (self, path, &hdr, NULL, error))
-    return FALSE;
-
-  if (!rpmostree_pre_run_sync (pkg, hdr, rootfs_dfd,
-                               out_n_run, cancellable, error))
+  if (!rpmostree_script_run_sync (pkg, hdr, kind, rootfs_dfd,
+                                  out_n_run, cancellable, error))
     return FALSE;
 
   return TRUE;
@@ -2959,8 +2942,8 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
           DnfPackage *pkg = (void*)rpmteKey (te);
           g_assert (pkg);
 
-          if (!run_pre_sync (self, tmprootfs_dfd, pkg,
-                             &n_pre_scripts_run, cancellable, error))
+          if (!run_script_sync (self, tmprootfs_dfd, pkg, RPMOSTREE_SCRIPT_PREIN,
+                                &n_pre_scripts_run, cancellable, error))
             return FALSE;
         }
       rpmostree_output_task_end ("%u done", n_pre_scripts_run);
@@ -3002,6 +2985,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
       rpmostree_output_task_begin ("Running post scripts");
       guint n_post_scripts_run = 0;
 
+      /* %post */
       for (guint i = 0; i < n_rpmts_elements; i++)
         {
           rpmte te = rpmtsElement (ordering_ts, i);
@@ -3009,7 +2993,6 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
             continue;
 
           DnfPackage *pkg = (void*)rpmteKey (te);
-
           g_assert (pkg);
 
           if (!apply_rpmfi_overrides (self, tmprootfs_dfd, pkg, passwdents, groupents,
@@ -3017,11 +3000,27 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
             return glnx_prefix_error (error, "While applying overrides for pkg %s",
                                       dnf_package_get_name (pkg));
 
-          if (!run_posttrans_sync (self, tmprootfs_dfd, pkg,
-                                   &n_post_scripts_run, cancellable, error))
+          if (!run_script_sync (self, tmprootfs_dfd, pkg, RPMOSTREE_SCRIPT_POSTIN,
+                                &n_post_scripts_run, cancellable, error))
             return FALSE;
         }
 
+      /* %posttrans */
+      for (guint i = 0; i < n_rpmts_elements; i++)
+        {
+          rpmte te = rpmtsElement (ordering_ts, i);
+          if (rpmteType (te) != TR_ADDED)
+            continue;
+
+          DnfPackage *pkg = (void*)rpmteKey (te);
+          g_assert (pkg);
+
+          if (!run_script_sync (self, tmprootfs_dfd, pkg, RPMOSTREE_SCRIPT_POSTTRANS,
+                                &n_post_scripts_run, cancellable, error))
+            return FALSE;
+        }
+
+      /* file triggers */
       if (!run_all_transfiletriggers (self, ordering_ts, tmprootfs_dfd,
                                       &n_post_scripts_run, cancellable, error))
         return FALSE;
