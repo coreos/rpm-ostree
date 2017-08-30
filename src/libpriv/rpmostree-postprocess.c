@@ -1443,7 +1443,9 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
       /* Clone all the things */
 
       /* Note we need to make binpath *not* absolute here */
-      if (!glnx_file_copy_at (AT_FDCWD, src, NULL, rootfs_fd, binpath + 1,
+      const char *target_binpath = binpath + 1;
+      g_assert_cmpint (*target_binpath, !=, '/');
+      if (!glnx_file_copy_at (AT_FDCWD, src, NULL, rootfs_fd, target_binpath,
                               GLNX_FILE_COPY_NOXATTRS, cancellable, error))
         return FALSE;
 
@@ -1454,6 +1456,9 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
         if (!run_bwrap_mutably (rootfs_fd, binpath, child_argv, error))
           return glnx_prefix_error (error, "While executing postprocessing script '%s'", bn);
       }
+
+      if (unlinkat (rootfs_fd, target_binpath, 0) < 0)
+        return glnx_throw_errno_prefix (error, "unlinkat(%s)", target_binpath);
 
       g_print ("Finished postprocessing script '%s'\n", bn);
     }
