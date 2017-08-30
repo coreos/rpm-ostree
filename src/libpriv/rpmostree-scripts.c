@@ -476,7 +476,7 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
                            GCancellable  *cancellable,
                            GError       **error)
 {
-  KnownRpmScriptKind *scriptkind;
+  const KnownRpmScriptKind *scriptkind;
   switch (kind)
     {
     case RPMOSTREE_SCRIPT_PREIN:
