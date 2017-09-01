@@ -47,8 +47,10 @@ if [ -d $INSTTREE/etc ]; then # on CentOS, the dbus service file is in /usr
 fi
 
 # ✀✀✀ BEGIN hack to get --selinux-policy (https://github.com/ostreedev/ostree/pull/1114) ✀✀✀
+# this is fine, rsync doesn't modify in place
 mount -o rw,remount /usr
-rsync -rlv vmcheck/usr/ /usr/
+# don't overwrite /etc/ to not mess up 3-way merge
+rsync -rlv --exclude '/etc/' vmcheck/usr/ /usr/
 # ✀✀✀ END hack to get --selinux-policy ✀✀✀
 
 ostree refs --delete vmcheck || true
