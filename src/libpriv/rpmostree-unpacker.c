@@ -684,6 +684,22 @@ xattr_cb (OstreeRepo  *repo,
   return NULL;
 }
 
+/* Given a path in an RPM archive, possibly translate it
+ * for ostree convention.
+ */
+static char *
+handle_translate_pathname (OstreeRepo   *repo,
+                           const struct stat *stbuf,
+                           const char   *path,
+                           gpointer      user_data)
+{
+  if (g_str_has_prefix (path, "etc/"))
+    return g_strconcat ("usr/", path, NULL);
+  else if (g_str_has_prefix (path, "boot/"))
+    return g_strconcat ("usr/lib/ostree-boot/", path + strlen ("boot/"), NULL);
+  return NULL;
+}
+
 static gboolean
 import_rpm_to_repo (RpmOstreeUnpacker *self,
                     OstreeRepo        *repo,
@@ -714,7 +730,8 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
   OstreeRepoImportArchiveOptions opts = { 0 };
   opts.ignore_unsupported_content = TRUE;
   opts.autocreate_parents = TRUE;
-  opts.use_ostree_convention = TRUE;
+  opts.translate_pathname = handle_translate_pathname;
+  opts.translate_pathname_user_data = self;
 
   g_autoptr(OstreeMutableTree) mtree = ostree_mutable_tree_new ();
   if (!ostree_repo_import_archive_to_mtree (repo, &opts, self->archive, mtree,
