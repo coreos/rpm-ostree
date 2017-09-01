@@ -45,6 +45,17 @@ rsync -rlv $INSTTREE/usr/ vmcheck/usr/
 if [ -d $INSTTREE/etc ]; then # on CentOS, the dbus service file is in /usr
   rsync -rlv $INSTTREE/etc/ vmcheck/usr/etc/
 fi
+
+# ✀✀✀ BEGIN hack to get --selinux-policy (https://github.com/ostreedev/ostree/pull/1114) ✀✀✀
+if ! ostree commit --help | grep -q -e --selinux-policy; then
+  # this is fine, rsync doesn't modify in place
+  mount -o rw,remount /usr
+  # don't overwrite /etc/ to not mess up 3-way merge
+  rsync -rlv --exclude '/etc/' vmcheck/usr/ /usr/
+fi
+# ✀✀✀ END hack to get --selinux-policy ✀✀✀
+
 ostree refs --delete vmcheck || true
-ostree commit -b vmcheck -s '' --tree=dir=vmcheck --link-checkout-speedup
+ostree commit -b vmcheck --link-checkout-speedup \
+  --selinux-policy=vmcheck --tree=dir=vmcheck
 ostree admin deploy vmcheck
