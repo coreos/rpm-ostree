@@ -68,12 +68,12 @@ check-local:
 HOSTS ?= "vmcheck"
 
 vmsync:
-	@env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/build.sh; \
+	@env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/install.sh; \
 	env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh
 
 vmoverlay:
 	@if [ -z "$(SKIP_VMOVERLAY)" ]; then \
-	  env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/build.sh; \
+	  env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/install.sh; \
 	  echo -n "$(HOSTS)" | xargs -P 0 -n 1 -d ' ' -I {} \
 	    env $(BASE_TESTS_ENVIRONMENT) VM={} \
 	      ./tests/vmcheck/overlay.sh; \
