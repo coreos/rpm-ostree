@@ -45,6 +45,13 @@ rsync -rlv $INSTTREE/usr/ vmcheck/usr/
 if [ -d $INSTTREE/etc ]; then # on CentOS, the dbus service file is in /usr
   rsync -rlv $INSTTREE/etc/ vmcheck/usr/etc/
 fi
+
+# ✀✀✀ BEGIN hack to get --selinux-policy (https://github.com/ostreedev/ostree/pull/1114) ✀✀✀
+mount -o rw,remount /usr
+rsync -rlv vmcheck/usr/ /usr/
+# ✀✀✀ END hack to get --selinux-policy ✀✀✀
+
 ostree refs --delete vmcheck || true
-ostree commit -b vmcheck -s '' --tree=dir=vmcheck --link-checkout-speedup
+ostree commit -b vmcheck --selinux-policy vmcheck -s '' \
+  --tree=dir=vmcheck --link-checkout-speedup
 ostree admin deploy vmcheck
