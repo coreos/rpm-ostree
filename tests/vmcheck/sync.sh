@@ -30,13 +30,11 @@ if [ -d $INSTTREE/etc ]; then # on CentOS, the dbus service file is in /usr
   rsync -rlv $INSTTREE/etc/ /etc/
 fi
 
-restorecon -v /usr/bin/ostree
-restorecon -v /usr/bin/rpm-ostree
-restorecon -v /usr/libexec/rpm-ostreed
-mkdir -p /etc/systemd/system/rpm-ostreed.service.d
+restorecon -v /usr/bin/{rpm-,}ostree /usr/libexec/rpm-ostreed
 
 # For our test suite at least, to catch things like
 # https://github.com/projectatomic/rpm-ostree/issues/826
+mkdir -p /etc/systemd/system/rpm-ostreed.service.d
 cat > /etc/systemd/system/rpm-ostreed.service.d/fatal-warnings.conf << EOF
 [Service]
 Environment=G_DEBUG=fatal-warnings
