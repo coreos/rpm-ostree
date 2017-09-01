@@ -11,43 +11,7 @@ if test -z "${INSIDE_VM:-}"; then
       exit 1
     fi
 
-    set -x
-
-    cd ${topsrcdir}
-
-    # Support local development with e.g. an ostree built from git too,
-    # or libasan.
-    export VMCHECK_INSTTREE=${VMCHECK_INSTTREE:-$(pwd)/insttree}
-
-    # Use a lock in case we're called in parallel (make install might fail).
-    # Plus, we can just share the same install tree, and sharing is caring!
-    flock insttree.lock sh -ec \
-      '[ ! -d ${VMCHECK_INSTTREE} ] || exit 0
-       DESTDIR=${VMCHECK_INSTTREE}
-       mkdir -p ${DESTDIR}
-       # Always pull ostree from the build container; we assume development and testing
-       # is against git master.  See also sync.sh and build.sh.
-       ostree --version
-       for pkg in ostree{,-libs,-grub2}; do
-          rpm -q $pkg
-          # We do not have perms to read /etc/grub2 as non-root. In the prebuilt
-          # container case, manpages are missing. Ignore that.
-          rpm -ql $pkg | grep -vE "^/(etc|usr/share/(doc|man))/" >  list.txt
-          # Also chown everything to writable, due to
-          # https://bugzilla.redhat.com/show_bug.cgi?id=517575
-          chmod -R u+w ${DESTDIR}/
-          # Note we cant use --ignore-missing-args here since it was added in
-          # rsync 3.1.0, but CentOS7 only has rsync 3.0.9. Anyway, we expect
-          # everything in list.txt to be present (otherwise, tweak grep above).
-          rsync -l --files-from=list.txt / ${DESTDIR}/
-          rm -f list.txt
-       done
-       make install DESTDIR=${DESTDIR}
-       touch ${DESTDIR}/.completed'
-    [ -f ${VMCHECK_INSTTREE}/.completed ]
-
     vm_rsync
-
     vm_cmd env INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh
     vm_reboot
     exit 0
