@@ -13,21 +13,26 @@ struct RpmOstreePackageScriptHandler;
 %includes
 %%
 glibc.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
-glibc-headers.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE /* Legacy workaround */
-coreutils.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE  /* workaround for old bug? */
-ca-certificates.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE  /* Looks like legacy... */
+# Legacy workaround
+glibc-headers.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
+# workaround for old bug?
+coreutils.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
+# Looks like legacy...
+ca-certificates.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
 libgcc.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
 setup.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
 pinentry.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
 fedora-release.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
 fedora-release.posttrans, RPMOSTREE_SCRIPT_ACTION_IGNORE
-/* These add the vagrant group which IMO is really
- * a libvirt-user group */
+# These add the vagrant group which IMO is really
+# a libvirt-user group
 vagrant.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
 vagrant-libvirt.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
 bash.post, RPMOSTREE_SCRIPT_ACTION_TODO_SHELL_POSTTRANS
 glibc-common.post, RPMOSTREE_SCRIPT_ACTION_TODO_SHELL_POSTTRANS
-/* Seems to be another case of legacy workaround */
+# Seems to be another case of legacy workaround
 gdb.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
-systemd.transfiletriggerin, RPMOSTREE_SCRIPT_ACTION_IGNORE /* Just does a daemon-reload  which we don't want offline */
-man-db.transfiletriggerin, RPMOSTREE_SCRIPT_ACTION_IGNORE /* https://bugzilla.redhat.com/show_bug.cgi?id=1473402 */
+# Just does a daemon-reload  which we don't want offline
+systemd.transfiletriggerin, RPMOSTREE_SCRIPT_ACTION_IGNORE
+# https://bugzilla.redhat.com/show_bug.cgi?id=1473402
+man-db.transfiletriggerin, RPMOSTREE_SCRIPT_ACTION_IGNORE
