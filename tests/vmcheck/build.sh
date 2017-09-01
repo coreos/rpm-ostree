@@ -6,7 +6,7 @@ set -euo pipefail
 # and testing is against git master ostree and that the build container is
 # tracking e.g. CAHC or FAHC (see HACKING.md for more details).
 
-DESTDIR=${abs_top_srcdir}/insttree
+DESTDIR=${topsrcdir}/insttree
 
 rm -rf ${DESTDIR}
 mkdir -p ${DESTDIR}
