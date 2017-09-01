@@ -2172,6 +2172,7 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
 static gboolean
 relabel_rootfs (OstreeRepo        *repo,
                 int                dfd,
+                const char        *path,
                 OstreeSePolicy    *sepolicy,
                 guint             *inout_n_changed,
                 GCancellable      *cancellable,
@@ -2179,44 +2180,38 @@ relabel_rootfs (OstreeRepo        *repo,
 {
   /* NB: this does mean that / itself will not be labeled properly, but that
    * doesn't matter since it will always exist during overlay */
-  return relabel_dir_recurse_at (repo, dfd, ".", "/", sepolicy,
+  return relabel_dir_recurse_at (repo, dfd, path, "/", sepolicy,
                                  inout_n_changed, cancellable, error);
 }
 
 static gboolean
-relabel_one_package (OstreeRepo     *repo,
+relabel_one_package (RpmOstreeContext *self,
+                     OstreeRepo     *repo,
                      DnfPackage     *pkg,
                      OstreeSePolicy *sepolicy,
                      guint          *inout_n_changed,
                      GCancellable   *cancellable,
                      GError        **error)
 {
+  /* Check out into a subdirectory of the tmpdir */
+  const char *pkg_dirname = glnx_strjoina ("relabel/", dnf_package_get_nevra (pkg));
   g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
   g_autofree char *commit_csum = NULL;
   if (!ostree_repo_resolve_rev (repo, cachebranch, FALSE,
                                 &commit_csum, error))
     return FALSE;
 
-  g_auto(GLnxTmpDir) tmpdir = { 0, };
-  if (!glnx_mkdtempat (ostree_repo_get_dfd (repo), "tmp/rpmostree-relabel-XXXXXX",
-                       0700, &tmpdir, error))
-    return FALSE;
-
   /* checkout the pkg and relabel, breaking hardlinks */
   g_autoptr(OstreeRepoDevInoCache) cache = ostree_repo_devino_cache_new ();
 
-  if (!checkout_package (repo, pkg, tmpdir.fd, ".", cache,
+  if (!checkout_package (repo, pkg, self->tmpdir.fd, pkg_dirname, cache,
                          commit_csum, cancellable, error))
     return FALSE;
 
   /* This is where the magic happens. We traverse the tree and relabel stuff,
    * making sure to break hardlinks if needed. */
-  if (!relabel_rootfs (repo, tmpdir.fd, sepolicy, inout_n_changed, cancellable, error))
-    return FALSE;
-
-  g_autoptr(_OstreeRepoAutoTransaction) txn =
-    _ostree_repo_auto_transaction_start (repo, cancellable, error);
-  if (!txn)
+  if (!relabel_rootfs (repo, self->tmpdir.fd, pkg_dirname, sepolicy, inout_n_changed,
+                       cancellable, error))
     return FALSE;
 
   /* write to the tree */
@@ -2230,7 +2225,7 @@ relabel_one_package (OstreeRepo     *repo,
 
     ostree_repo_commit_modifier_set_devino_cache (modifier, cache);
 
-    if (!ostree_repo_write_dfd_to_mtree (repo, tmpdir.fd, ".", mtree,
+    if (!ostree_repo_write_dfd_to_mtree (repo, self->tmpdir.fd, pkg_dirname, mtree,
                                          modifier, cancellable, error))
       return FALSE;
 
@@ -2269,7 +2264,8 @@ relabel_one_package (OstreeRepo     *repo,
     }
   }
 
-  if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
+  /* Clean up */
+  if (!glnx_shutil_rm_rf_at (self->tmpdir.fd, pkg_dirname, cancellable, error))
     return FALSE;
 
   return TRUE;
@@ -2299,23 +2295,35 @@ rpmostree_context_relabel (RpmOstreeContext *self,
                                      G_CALLBACK (on_hifstate_percentage_changed),
                                      prefix);
 
+  /* Prep a txn and tmpdir for all of the relabels */
+  g_autoptr(_OstreeRepoAutoTransaction) txn =
+    _ostree_repo_auto_transaction_start (ostreerepo, cancellable, error);
+  if (!txn)
+    return FALSE;
+  if (!rpmostree_context_ensure_tmpdir (self, "relabel", error))
+    return FALSE;
+
   guint n_changed_files = 0;
   guint n_changed_pkgs = 0;
   const guint n_to_relabel = self->pkgs_to_relabel->len;
   for (guint i = 0; i < n_to_relabel; i++)
     {
-        DnfPackage *pkg = self->pkgs_to_relabel->pdata[i];
-        guint pkg_n_changed = 0;
-        if (!relabel_one_package (ostreerepo, pkg, self->sepolicy,
-                                  &pkg_n_changed, cancellable, error))
-          return FALSE;
-        if (pkg_n_changed > 0)
-          {
-            n_changed_files += pkg_n_changed;
-            n_changed_pkgs++;
-          }
-        dnf_state_assert_done (hifstate);
+      DnfPackage *pkg = self->pkgs_to_relabel->pdata[i];
+      guint pkg_n_changed = 0;
+      if (!relabel_one_package (self, ostreerepo, pkg, self->sepolicy,
+                                &pkg_n_changed, cancellable, error))
+        return FALSE;
+      if (pkg_n_changed > 0)
+        {
+          n_changed_files += pkg_n_changed;
+          n_changed_pkgs++;
+        }
+      dnf_state_assert_done (hifstate);
     }
+
+  /* Commit */
+  if (!ostree_repo_commit_transaction (ostreerepo, NULL, cancellable, error))
+    return FALSE;
 
   g_signal_handler_disconnect (hifstate, progress_sigid);
   rpmostree_output_percent_progress_end ();
