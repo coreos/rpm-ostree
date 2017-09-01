@@ -488,6 +488,8 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
     case RPMOSTREE_SCRIPT_POSTTRANS:
       scriptkind = &posttrans_script;
       break;
+    default:
+      g_assert_not_reached ();
     }
 
   gboolean did_run = FALSE;
