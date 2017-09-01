@@ -63,16 +63,17 @@ check-local:
 	@echo "  *** NOTE ***"
 	@echo "  *** NOTE ***"
 
-.PHONY: vmsync vmoverlay vmshell vmcheck testenv
-
-vmsync:
-	@env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh
+.PHONY: vmsync vmoverlay vmcheck testenv
 
 HOSTS ?= "vmcheck"
 
+vmsync:
+	@env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/build.sh; \
+	env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh
+
 vmoverlay:
 	@if [ -z "$(SKIP_VMOVERLAY)" ]; then \
-	  rm -rf $(abs_top_srcdir)/insttree; \
+	  env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/build.sh; \
 	  echo -n "$(HOSTS)" | xargs -P 0 -n 1 -d ' ' -I {} \
 	    env $(BASE_TESTS_ENVIRONMENT) VM={} \
 	      ./tests/vmcheck/overlay.sh; \

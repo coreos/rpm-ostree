@@ -14,7 +14,7 @@ git clean -dfx
 
 # And now a clang build to find unused variables
 export CC=clang
-export CFLAGS='-Werror=unused-variable'
+export CFLAGS='-Werror=unused-variable -Werror=maybe-uninitialized'
 build_default
 # don't actually run the tests, just compile them
 /usr/bin/make check TESTS=
