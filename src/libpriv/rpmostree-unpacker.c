@@ -807,29 +807,24 @@ rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *self,
                                      GCancellable      *cancellable,
                                      GError           **error)
 {
-  gboolean ret = FALSE;
+  g_autoptr(_OstreeRepoAutoTransaction) txn =
+    _ostree_repo_auto_transaction_start (repo, cancellable, error);
+  if (!txn)
+    return FALSE;
+
   g_autofree char *csum = NULL;
-  const char *branch = NULL;
-
-  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
-    goto out;
-
   if (!import_rpm_to_repo (self, repo, sepolicy, &csum, cancellable, error))
-    goto out;
+    return FALSE;
 
-  branch = rpmostree_unpacker_get_ostree_branch (self);
+  const char *branch = rpmostree_unpacker_get_ostree_branch (self);
   ostree_repo_transaction_set_ref (repo, NULL, branch, csum);
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
-    goto out;
+    return FALSE;
 
   if (out_csum)
     *out_csum = g_steal_pointer (&csum);
-
-  ret = TRUE;
- out:
-  ostree_repo_abort_transaction (repo, cancellable, NULL);
-  return ret;
+  return TRUE;
 }
 
 char *
