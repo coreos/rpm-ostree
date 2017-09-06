@@ -449,12 +449,10 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
   /* Handle the policy being in both /usr/etc and /etc since
    * this function can be called at different points.
    */
-  if (fstatat (dfd, "usr/etc", &stbuf, 0) < 0)
-    {
-      if (errno != ENOENT)
-        return glnx_throw_errno_prefix (error, "fstatat");
-      policy_path = "etc/selinux";
-    }
+  if (!glnx_fstatat_allow_noent (dfd, "usr/etc", &stbuf, 0, error))
+    return FALSE;
+  if (errno == ENOENT)
+    policy_path = "etc/selinux";
   else
     policy_path = "usr/etc/selinux";
 
@@ -598,11 +596,10 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
 
   var_policy_location = glnx_strjoina ("var/lib/selinux/", name);
   const char *modules_location = glnx_strjoina (var_policy_location, "/active/modules");
-  if (fstatat (rootfs_dfd, modules_location, &stbuf, 0) != 0)
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, modules_location, &stbuf, 0, error))
+    return FALSE;
+  if (errno == ENOENT)
     {
-      if (errno != ENOENT)
-        return glnx_throw_errno_prefix (error, "fstat(%s)", modules_location);
-
       /* Okay, this is probably CentOS 7, or maybe we have a build of
        * selinux-policy with the path moved back into /etc (or maybe it's
        * in /usr).
@@ -957,12 +954,9 @@ rename_if_exists (int         dfd,
   const char *errmsg = glnx_strjoina ("renaming ", from);
   GLNX_AUTO_PREFIX_ERROR (errmsg, error);
 
-  if (fstatat (dfd, from, &stbuf, 0) < 0)
-    {
-      if (errno != ENOENT)
-        return glnx_throw_errno_prefix (error, "fstatat(%s)", from);
-    }
-  else
+  if (!glnx_fstatat_allow_noent (dfd, from, &stbuf, 0, error))
+    return FALSE;
+  if (errno == 0)
     {
       if (renameat (dfd, from, dfd, to) < 0)
         {
