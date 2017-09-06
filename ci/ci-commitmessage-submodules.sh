@@ -1,6 +1,9 @@
 #!/bin/bash
 set -xeuo pipefail
 
+dn=$(dirname $0)
+. ${dn}/libbuild.sh
+
 # Copyright 2017 Colin Walters <walters@verbum.org>
 # Licensed under the new-BSD license (http://www.opensource.org/licenses/bsd-license.php)
 
@@ -26,6 +29,9 @@ cleanup_tmp() {
     fi
 }
 trap cleanup_tmp EXIT
+
+pkg_upgrade
+pkg_install git
 
 gitdir=$(realpath $(pwd))
 # Create a temporary copy of this (using cp not git clone) so git doesn't
