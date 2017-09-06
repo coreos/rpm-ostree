@@ -18,12 +18,14 @@ cluster:
   container:
     image: registry.fedoraproject.org/fedora:26
 
-packages:
-  - git
-  - rsync
+# https://bugzilla.redhat.com/show_bug.cgi?id=1483553
+#packages:
+#  - git
+#  - rsync
 
 env:
   HOSTS: vmcheck1 vmcheck2 vmcheck3
+  CI_PKGS: rsync
 
 tests:
   - ci/ci-commitmessage-submodules.sh
@@ -121,13 +123,17 @@ cluster:
 
 context: f26-sanity
 
-packages:
-  - ansible
-  - git
-  - rsync
+# https://bugzilla.redhat.com/show_bug.cgi?id=1483553
+#packages:
+#  - ansible
+#  - git
+#  - rsync
+
+env:
+  CI_PKGS: ansible git rsync
 
 tests:
-  - git clone https://github.com/projectatomic/atomic-host-tests
   - ci/build.sh
+  - git clone https://github.com/projectatomic/atomic-host-tests
   - make vmoverlay HOSTS=testnode
   - cd atomic-host-tests && ./.test_director
