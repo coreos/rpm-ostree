@@ -25,7 +25,7 @@ cluster:
 
 env:
   HOSTS: vmcheck1 vmcheck2 vmcheck3
-  CI_PKGS: git rsync
+  CI_PKGS: rsync
 
 tests:
   - ci/ci-commitmessage-submodules.sh
