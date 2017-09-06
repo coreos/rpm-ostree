@@ -17,12 +17,18 @@ elif [ "$id" == centos ]; then
     echo -e '[cahc]\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/build\ngpgcheck=0\n' > /etc/yum.repos.d/cahc.repo
 fi
 
+pkg_upgrade
+
 install_builddeps rpm-ostree
 
 yum install -y /usr/bin/g-ir-scanner # Accidentally omitted
 # Mostly dependencies for tests
 yum install -y ostree{,-devel,-grub2} createrepo_c /usr/bin/jq PyYAML clang \
     libubsan libasan libtsan elfutils fuse sudo python-gobject-base
+
+if [ -n "${CI_PKGS:-}" ]; then
+  pkg_install ${CI_PKGS}
+fi
 
 # create an unprivileged user for testing
 adduser testuser
