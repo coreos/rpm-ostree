@@ -2214,7 +2214,9 @@ relabel_one_package (OstreeRepo     *repo,
   if (!relabel_rootfs (repo, tmpdir.fd, sepolicy, inout_n_changed, cancellable, error))
     return FALSE;
 
-  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
+  g_autoptr(_OstreeRepoAutoTransaction) txn =
+    _ostree_repo_auto_transaction_start (repo, cancellable, error);
+  if (!txn)
     return FALSE;
 
   /* write to the tree */
@@ -3157,7 +3159,9 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
 
   rpmostree_output_task_begin ("Writing OSTree commit");
 
-  if (!ostree_repo_prepare_transaction (self->ostreerepo, NULL, cancellable, error))
+  g_autoptr(_OstreeRepoAutoTransaction) txn =
+    _ostree_repo_auto_transaction_start (self->ostreerepo, cancellable, error);
+  if (!txn)
     return FALSE;
 
   { glnx_unref_object OstreeMutableTree *mtree = NULL;

@@ -58,26 +58,25 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
                          GError                  **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("baselayer refs", error);
-  gboolean ret = FALSE;
   g_autoptr(GHashTable) refs = NULL;
-  g_autoptr(GHashTable) bases =
-    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-
   if (!ostree_repo_list_refs_ext (repo, "rpmostree/base", &refs,
                                   OSTREE_REPO_LIST_REFS_EXT_NONE,
                                   cancellable, error))
-    goto out;
+    return FALSE;
 
-  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
-    goto out;
+  g_autoptr(_OstreeRepoAutoTransaction) txn =
+    _ostree_repo_auto_transaction_start (repo, cancellable, error);
+  if (!txn)
+    return FALSE;
 
   /* delete all the refs */
   GLNX_HASH_TABLE_FOREACH (refs, const char*, ref)
     ostree_repo_transaction_set_refspec (repo, ref, NULL);
 
+  g_autoptr(GHashTable) bases =
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   /* collect the csums */
-  {
-    guint i = 0;
+  { guint i = 0;
     g_autoptr(GPtrArray) deployments =
       ostree_sysroot_get_deployments (sysroot);
 
@@ -89,7 +88,7 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
 
         if (!rpmostree_deployment_get_layered_info (repo, deployment, NULL, &base_rev, NULL,
                                                     NULL, NULL, error))
-          goto out;
+          return FALSE;
 
         if (base_rev)
           g_hash_table_add (bases, g_steal_pointer (&base_rev));
@@ -97,8 +96,7 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
   }
 
   /* create the new refs */
-  {
-    guint i = 0;
+  { guint i = 0;
     GLNX_HASH_TABLE_FOREACH (bases, const char*, base)
       {
         g_autofree char *ref = g_strdup_printf ("rpmostree/base/%u", i++);
@@ -107,12 +105,9 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
   }
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
-    goto out;
+    return FALSE;
 
-  ret = TRUE;
-out:
-  ostree_repo_abort_transaction (repo, cancellable, NULL);
-  return ret;
+  return TRUE;
 }
 
 /* For all packages in the sack, generate a cached refspec and add it

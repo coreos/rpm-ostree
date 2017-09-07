@@ -120,3 +120,24 @@ rpmostree_decompose_sha256_nevra (const char **nevra,
 
 char *
 rpmostree_cache_branch_to_nevra (const char *cachebranch);
+
+/* https://github.com/ostreedev/ostree/pull/1132 */
+typedef OstreeRepo _OstreeRepoAutoTransaction;
+static inline void
+_ostree_repo_auto_transaction_cleanup (void *p)
+{
+  OstreeRepo *repo = p;
+  if (repo)
+    (void) ostree_repo_abort_transaction (repo, NULL, NULL);
+}
+
+static inline _OstreeRepoAutoTransaction *
+_ostree_repo_auto_transaction_start (OstreeRepo     *repo,
+                                     GCancellable   *cancellable,
+                                     GError        **error)
+{
+  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
+    return NULL;
+  return (_OstreeRepoAutoTransaction *)repo;
+}
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (_OstreeRepoAutoTransaction, _ostree_repo_auto_transaction_cleanup)
