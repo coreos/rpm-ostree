@@ -79,6 +79,16 @@ vm_rpmostree install postorder{1,2}
 vm_rpmostree cleanup -p
 echo "ok post ordering"
 
+# lua should (currently) fail
+vm_build_rpm luapkg \
+             post_args "-p <lua>" \
+             post 'posix.stat("/")'
+if vm_rpmostree install luapkg 2>err.txt; then
+    assert_not_reached "lua post?"
+fi
+assert_file_has_content_literal err.txt "unsupported <lua> script in '%post'"
+echo "ok lua %post"
+
 # script expansion
 vm_build_rpm scriptpkg2 \
              post_args "-e" \
