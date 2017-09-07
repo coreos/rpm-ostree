@@ -131,3 +131,17 @@ fi
 vm_rpmostree upgrade | tee output.txt
 assert_file_has_content output.txt '^Importing:'
 echo "ok invalidate pkgcache from RPM chksum"
+
+# make sure installing in /boot translates to /usr/lib/ostree-boot
+efidir=/boot/EFI/efi/fedora
+vm_build_rpm test-boot \
+             files "${efidir}/*" \
+             install "mkdir -p %{buildroot}/${efidir}/fonts && echo grubenv > %{buildroot}/${efidir}/grubenv && echo unicode > %{buildroot}/${efidir}/fonts/unicode.pf2"
+vm_rpmostree install test-boot
+vm_reboot
+vm_cmd cat /usr/lib/ostree-boot/EFI/efi/fedora/grubenv > grubenv.txt
+assert_file_has_content grubenv.txt grubenv
+vm_cmd cat /usr/lib/ostree-boot/EFI/efi/fedora/fonts/unicode.pf2 > unicode.txt
+assert_file_has_content unicode.txt unicode
+echo "ok failed installed in /boot"
+
