@@ -55,6 +55,9 @@ pkgref=$(head -1 refs.txt)
 vm_cmd ostree --repo=/sysroot/ostree/repo/extensions/rpmostree/pkgcache show --print-metadata-key rpmostree.repo ${pkgref} >refdata.txt
 assert_file_has_content refdata.txt 'id.*test-repo'
 rm -f refs.txt refdata.txt
+# This will cover things like us failing to break hardlinks for the rpmdb,
+# as well as rofiles-fuse
+vm_cmd ostree fsck
 echo "ok pkg-add foo"
 
 vm_reboot
