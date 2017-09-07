@@ -92,3 +92,21 @@ fi
 assert_file_has_content err.txt "chronologically older"
 echo "ok failed to upgrade to older commit"
 
+# https://github.com/projectatomic/rpm-ostree/issues/365
+vm_build_rpm test-conflict \
+    files /usr/app \
+    install "mkdir -p %{buildroot}/usr/app
+             echo one > %{buildroot}/usr/app/conflict-file"
+vm_rpmostree install test-conflict
+
+# build a rpm containing the same file and test for error
+vm_build_rpm conflict-pkg \
+    files /usr/app \
+    install "mkdir -p %{buildroot}/usr/app
+             echo two > %{buildroot}/usr/app/conflict-file"
+if vm_rpmostree install conflict-pkg 2>err.txt; then
+    assert_not_reached "Install packages with conflicting files unexpected succeeded"
+fi
+assert_not_file_has_content err.txt "Writing rpmdb"
+assert_file_has_content err.txt "File exists"
+echo "ok detecting file name conflicts before writing rpmdb"
