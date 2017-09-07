@@ -96,6 +96,16 @@
     </defaults>
   </action>
 
+  <action id="org.projectatomic.rpmostree1.reload-daemon">
+    <description>Reload the daemon state</description>
+    <message>Authentication is required to reload the rpmostree daemon state</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+
   <action id="org.projectatomic.rpmostree1.cleanup">
     <description>Clear cache</description>
     <message>Authentication is required to clear cache / pending data</message>
