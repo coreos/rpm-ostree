@@ -3082,7 +3082,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
     /* if we were passed an existing tmprootfs, and that tmprootfs already has
      * an rpmdb, we have to make sure to break its hardlinks as librpm mutates
      * the db in place */
-    if (!break_hardlinks_at (AT_FDCWD, rpmdb_abspath, cancellable, error))
+    if (!break_hardlinks_at (tmprootfs_dfd, "usr/share/rpm", cancellable, error))
       return FALSE;
 
     set_rpm_macro_define ("_dbpath", rpmdb_abspath);
