@@ -582,6 +582,10 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface,
       /* GetOS() is always allowed */
       authorized = TRUE;
     }
+  else if (g_strcmp0 (method_name, "ReloadConfig") == 0)
+    {
+      action = "org.projectatomic.rpmostree1.reload-daemon";
+    }
   else if (g_strcmp0 (method_name, "RegisterClient") == 0 ||
            g_strcmp0 (method_name, "UnregisterClient") == 0)
     {
