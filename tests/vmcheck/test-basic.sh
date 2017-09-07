@@ -44,13 +44,17 @@ if ! vm_cmd getent passwd testuser; then
   vm_cmd chown -R testuser:testuser /home/testuser/.ssh
 fi
 
-# Make sure we can't layer as non-root
+# Make sure we can't do various operations as non-root
 vm_build_rpm foo
 if vm_cmd_as testuser rpm-ostree pkg-add foo &> err.txt; then
     assert_not_reached "Was able to install a package as non-root!"
 fi
 assert_file_has_content err.txt 'PkgChange not allowed for user'
-echo "ok layering requires root or auth"
+if vm_cmd_as testuser rpm-ostree reload &> err.txt; then
+    assert_not_reached "Was able to reload as non-root!"
+fi
+assert_file_has_content err.txt 'ReloadConfig not allowed for user'
+echo "ok auth"
 
 # Assert that we can do status as non-root
 vm_cmd_as testuser rpm-ostree status
@@ -59,6 +63,10 @@ echo "ok status doesn't require root"
 # Also check that we can do status as non-root non-active
 vm_cmd runuser -u bin rpm-ostree status
 echo "ok status doesn't require active PAM session"
+
+# Reload as root https://github.com/projectatomic/rpm-ostree/issues/976
+vm_cmd rpm-ostree reload
+echo "ok reload"
 
 # Add metadata string containing EnfOfLife attribtue
 META_ENDOFLIFE_MESSAGE="this is a test for metadata message"
