@@ -1017,17 +1017,9 @@ rootfs_has_usrlib_passwd (int rootfs_dfd,
   /* Does this rootfs have a usr/lib/passwd?  We might be doing a
    * container or something else.
    */
-  if (fstatat (rootfs_dfd, "usr/lib/passwd", &stbuf, 0) < 0)
-    {
-      if (errno == ENOENT)
-        {
-          *out_have_passwd = FALSE;
-          return TRUE;
-        }
-      else
-        return glnx_throw_errno_prefix (error, "fstatat");
-    }
-  *out_have_passwd = TRUE;
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, "usr/lib/passwd", &stbuf, 0, error))
+    return FALSE;
+  *out_have_passwd = (errno == 0);
   return TRUE;
 }
 

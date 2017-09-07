@@ -372,12 +372,9 @@ rpmostree_context_new_internal (int           userroot_dfd,
 
   /* open user root repo if exists (container path) */
   struct stat stbuf;
-  if (fstatat (userroot_dfd, "repo", &stbuf, 0) < 0)
-    {
-      if (errno != ENOENT)
-        return glnx_null_throw_errno_prefix (error, "fstat");
-    }
-  else
+  if (!glnx_fstatat_allow_noent (userroot_dfd, "repo", &stbuf, 0, error))
+    return NULL;
+  if (errno == 0)
     {
       ret->ostreerepo = ostree_repo_open_at (userroot_dfd, "repo", cancellable, error);
       if (!ret->ostreerepo)
@@ -713,12 +710,11 @@ checkout_pkg_metadata (RpmOstreeContext *self,
   /* give it a .rpm extension so we can fool the libdnf stack */
   path = get_nevra_relpath (nevra);
 
+  if (!glnx_fstatat_allow_noent (self->tmpdir.fd, path, &stbuf, 0, error))
+    return FALSE;
   /* we may have already written the header out for this one */
-  if (fstatat (self->tmpdir.fd, path, &stbuf, 0) == 0)
+  if (errno == 0)
     return TRUE;
-
-  if (errno != ENOENT)
-    return glnx_throw_errno (error);
 
   return glnx_file_replace_contents_at (self->tmpdir.fd, path,
                                         g_variant_get_data (header),
@@ -2134,9 +2130,9 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
       {
         struct stat stbuf;
 
-        if (fstatat (dfd_iter.fd, dent->d_name, &stbuf,
-                     AT_SYMLINK_NOFOLLOW) != 0)
-          return glnx_throw_errno_prefix (error, "fstatat");
+        if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf,
+                           AT_SYMLINK_NOFOLLOW, error))
+          return FALSE;
 
         /* may be NULL */
         if (!ostree_sepolicy_get_label (sepolicy, fullpath, stbuf.st_mode,

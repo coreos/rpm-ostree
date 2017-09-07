@@ -256,12 +256,10 @@ libcontainer_prep_dev (int         rootfs_dfd,
     {
       const char *nodename = devnodes[i];
       struct stat stbuf;
-      if (fstatat (src_fd, nodename, &stbuf, 0) == -1)
-        {
-          if (errno == ENOENT)
-            continue;
-          return glnx_throw_errno (error);
-        }
+      if (!glnx_fstatat_allow_noent (src_fd, nodename, &stbuf, 0, error))
+        return FALSE;
+      if (errno == ENOENT)
+        continue;
 
       if (mknodat (dest_fd, nodename, stbuf.st_mode, stbuf.st_rdev) != 0)
         return glnx_throw_errno (error);
