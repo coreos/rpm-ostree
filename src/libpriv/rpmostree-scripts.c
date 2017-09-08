@@ -48,6 +48,9 @@ typedef struct {
     rpmTagVal flagtag;
 } KnownRpmScriptKind;
 
+/* The RPM interpreter for built-in lua */
+static const char lua_builtin[] = "<lua>";
+
 #if 0
 static const KnownRpmScriptKind ignored_scripts[] = {
   /* Ignore all of the *un variants since we never uninstall
@@ -89,13 +92,46 @@ static const KnownRpmScriptKind unsupported_scripts[] = {
     RPMTAG_VERIFYSCRIPT, RPMTAG_VERIFYSCRIPTPROG, RPMTAG_VERIFYSCRIPTFLAGS},
 };
 
+typedef struct {
+  const char *pkgname_script;
+  const char *interp;
+  const char *replacement;
+} RpmOstreeLuaReplacement;
+
+static const RpmOstreeLuaReplacement lua_replacements[] = {
+  /* No bug yet */
+  { "fedora-release-atomichost.post",
+    "/usr/bin/sh",
+    "set -euo pipefail\n"
+    "ln -s os.release.d/os-release-atomichost /usr/lib/os-release\n"
+  },
+  /* https://bugzilla.redhat.com/show_bug.cgi?id=1367585 */
+  { "glibc-all-langpacks.posttrans",
+    "/usr/bin/sh",
+    "set -euo pipefail\n"
+    "if test -s \"/usr/lib/locale/locale-archive.tmpl\"; then\n"
+    "  exec /usr/sbin/build-locale-archive --install-langs \"%{_install_langs}\"\n"
+    "fi\n"
+  },
+  /* Just for the tests */
+  { "rpmostree-lua-override-test.post",
+    "/usr/bin/sh",
+    "set -euo pipefail\n"
+    "echo %{_install_langs} >/usr/share/rpmostree-lua-override-test\n"
+  },
+  { "rpmostree-lua-override-test-expand.post",
+    "/usr/bin/sh",
+    "set -euo pipefail\n"
+    "echo %{_install_langs} >/usr/share/rpmostree-lua-override-test-expand\n"
+  },
+};
+
 static gboolean
 fail_if_interp_is_lua (const char *interp,
                        const char *pkg_name,
                        const char *script_desc,
                        GError    **error)
 {
-  static const char lua_builtin[] = "<lua>";
   if (g_strcmp0 (interp, lua_builtin) == 0)
     return glnx_throw (error, "Package '%s' has (currently) unsupported %s script in '%s'",
                        pkg_name, lua_builtin, script_desc);
@@ -258,22 +294,45 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
                      GCancellable  *cancellable,
                      GError       **error)
 {
-  g_autofree char *script_owned = NULL;
-  const char *script = headerGetString (hdr, rpmscript->tag);
-  g_assert (script);
-  const rpmFlags flags = headerGetNumber (hdr, rpmscript->flagtag);
-  if (flags & RPMSCRIPT_FLAG_EXPAND)
-    script = script_owned = rpmExpand (script, NULL);
-
   struct rpmtd_s td;
   g_autofree char **args = NULL;
   if (headerGet (hdr, rpmscript->progtag, &td, (HEADERGET_ALLOC|HEADERGET_ARGV)))
     args = td.data;
 
+  const char *script;
   const char *interp = (args && args[0]) ? args[0] : "/bin/sh";
-  /* Check for lua; see also https://github.com/projectatomic/rpm-ostree/issues/749 */
-  if (!fail_if_interp_is_lua (interp, dnf_package_get_name (pkg), rpmscript->desc, error))
-    return FALSE;
+  if (g_str_equal (interp, lua_builtin))
+    {
+      /* This is a lua script; look for a built-in override/replacement */
+      const char *pkg_scriptid = glnx_strjoina (dnf_package_get_name (pkg), ".", rpmscript->desc + 1);
+      gboolean found_replacement = FALSE;
+      for (guint i = 0; i < G_N_ELEMENTS (lua_replacements); i++)
+        {
+          const RpmOstreeLuaReplacement *repl = &lua_replacements[i];
+          if (!g_str_equal (repl->pkgname_script, pkg_scriptid))
+            continue;
+          found_replacement = TRUE;
+          interp = repl->interp;
+          script = repl->replacement;
+          break;
+        }
+      if (!found_replacement)
+        {
+          /* No override found, throw an error and return */
+          g_assert (!fail_if_interp_is_lua (interp, dnf_package_get_name (pkg), rpmscript->desc, error));
+          return FALSE;
+        }
+    }
+  else
+    {
+      script = headerGetString (hdr, rpmscript->tag);
+    }
+  g_autofree char *script_owned = NULL;
+  g_assert (script);
+  const rpmFlags flags = headerGetNumber (hdr, rpmscript->flagtag);
+  if (flags & RPMSCRIPT_FLAG_EXPAND)
+    script = script_owned = rpmExpand (script, NULL);
+
   /* http://ftp.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S2-RPM-INSIDE-ERASE-TIME-SCRIPTS */
   const char *script_arg = NULL;
   switch (dnf_package_get_action (pkg))
