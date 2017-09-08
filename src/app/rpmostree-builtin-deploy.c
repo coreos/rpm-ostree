@@ -42,14 +42,6 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-static void
-default_deployment_changed_cb (GObject *object,
-                               GParamSpec *pspec,
-                               GVariant **value)
-{
-  g_object_get (object, pspec->name, value, NULL);
-}
-
 int
 rpmostree_builtin_deploy (int            argc,
                           char         **argv,
@@ -113,6 +105,8 @@ rpmostree_builtin_deploy (int            argc,
     }
   else
     {
+      rpmostree_monitor_default_deployment_change (os_proxy, &default_deployment);
+
       g_autoptr(GVariant) options =
         rpmostree_get_options_variant (opt_reboot,
                                        TRUE,   /* allow-downgrade */
@@ -121,12 +115,8 @@ rpmostree_builtin_deploy (int            argc,
                                        FALSE,  /* dry-run */
                                        FALSE); /* no-overrides */
 
-      /* This will set the GVariant if the default deployment changes. */
-      g_signal_connect (os_proxy, "notify::default-deployment",
-                        G_CALLBACK (default_deployment_changed_cb),
-                        &default_deployment);
 
-      /* Use newer D-Bus API only if we have to. */
+      /* Use newer D-Bus API only if we have to so we maintain coverage. */
       if (install_pkgs || uninstall_pkgs)
         {
           if (!rpmostree_update_deployment (os_proxy,
@@ -184,13 +174,10 @@ rpmostree_builtin_deploy (int            argc,
     }
   else if (!opt_reboot)
     {
-      const char *sysroot_path;
-
       if (default_deployment == NULL)
         return RPM_OSTREE_EXIT_UNCHANGED;
 
-      sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-
+      const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
                                                            error))

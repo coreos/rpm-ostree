@@ -42,6 +42,23 @@ rpmostree_usage_error (GOptionContext  *context,
   (void) glnx_throw (error, "usage error: %s", message);
 }
 
+static void
+default_deployment_change_cb (GObject *object,
+                              GParamSpec *pspec,
+                              GVariant **value)
+{
+  g_object_get (object, pspec->name, value, NULL);
+}
+
+void
+rpmostree_monitor_default_deployment_change (RPMOSTreeOS *os_proxy,
+                                             GVariant   **deployment)
+{
+  /* This will set the GVariant if the default deployment changes. */
+  g_signal_connect (os_proxy, "notify::default-deployment",
+                    G_CALLBACK (default_deployment_change_cb), deployment);
+}
+
 /* Print the diff between the booted and pending deployments */
 gboolean
 rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
