@@ -60,7 +60,6 @@ rpmostree_builtin_upgrade (int             argc,
   g_autoptr(GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GVariant) previous_default_deployment = NULL;
   g_autoptr(GVariant) new_default_deployment = NULL;
   g_autofree char *transaction_address = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
@@ -108,8 +107,6 @@ rpmostree_builtin_upgrade (int             argc,
                                 cancellable, &os_proxy, error))
     return EXIT_FAILURE;
 
-  previous_default_deployment = rpmostree_os_dup_default_deployment (os_proxy);
-
   if (opt_preview || opt_check)
     {
       if (!rpmostree_os_call_download_update_rpm_diff_sync (os_proxy,
@@ -120,6 +117,8 @@ rpmostree_builtin_upgrade (int             argc,
     }
   else
     {
+      rpmostree_monitor_default_deployment_change (os_proxy, &new_default_deployment);
+
       g_autoptr(GVariant) options =
         rpmostree_get_options_variant (opt_reboot,
                                        opt_allow_downgrade,
@@ -164,8 +163,6 @@ rpmostree_builtin_upgrade (int             argc,
                                                 error))
     return EXIT_FAILURE;
 
-  new_default_deployment = rpmostree_os_dup_default_deployment (os_proxy);
-
   if (opt_preview || opt_check)
     {
       g_autoptr(GVariant) result = NULL;
@@ -187,23 +184,15 @@ rpmostree_builtin_upgrade (int             argc,
     }
   else if (!opt_reboot)
     {
-      const char *sysroot_path;
-      gboolean changed;
-
-      sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-
-      if (previous_default_deployment == new_default_deployment)
-        changed = FALSE;
-      else
-        changed = !g_variant_equal (previous_default_deployment, new_default_deployment);
-
-      if (!changed)
+      if (new_default_deployment == NULL)
         {
-          if (opt_upgrade_unchanged_exit_77 && !changed)
+          if (opt_upgrade_unchanged_exit_77)
             return RPM_OSTREE_EXIT_UNCHANGED;
           return EXIT_SUCCESS;
         }
 
+      /* do diff without dbus: https://github.com/projectatomic/rpm-ostree/pull/116 */
+      const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
                                                            error))
