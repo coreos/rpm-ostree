@@ -209,11 +209,10 @@ rpmostree_find_kernel (int rootfs_dfd,
 }
 
 /* Given a @rootfs_dfd and path to kernel/initramfs that live in
- * usr/lib/modules/$kver, possibly update @bootdir to use them.
- * @bootdir should be one of either /usr/lib/ostree-boot or /boot.
- * If @copy_if_not_found is set, we do the copy unconditionally,
- * otherwise only update if found.  (This way we avoid e.g. touching /boot
- * if it isn't being used).
+ * usr/lib/modules/$kver, possibly update @bootdir to use them. @bootdir should
+ * be one of either /usr/lib/ostree-boot or /boot. If @only_if_found is set, we
+ * do the copy only if we find a kernel; this way we avoid e.g. touching /boot
+ * if it isn't being used.
  */
 static gboolean
 copy_kernel_into (int rootfs_dfd,
@@ -221,7 +220,7 @@ copy_kernel_into (int rootfs_dfd,
                   const char *boot_checksum_str,
                   const char *kernel_modules_path,
                   const char *initramfs_modules_path,
-                  gboolean is_auto,
+                  gboolean only_if_found,
                   const char *bootdir,
                   GCancellable *cancellable,
                   GError **error)
@@ -236,7 +235,7 @@ copy_kernel_into (int rootfs_dfd,
   /* No kernel found? Skip to the next if we're in "auto"
    * mode i.e. only update if found.
    */
-  if (!legacy_kernel_path && is_auto)
+  if (!legacy_kernel_path && only_if_found)
     return TRUE;
 
   /* Update kernel */
@@ -325,20 +324,20 @@ rpmostree_finalize_kernel (int rootfs_dfd,
     return FALSE;
 
   /* Update /usr/lib/ostree-boot and /boot (if desired) */
-  const gboolean is_auto = (dest == RPMOSTREE_FINALIZE_KERNEL_AUTO);
-  if (is_auto || dest >= RPMOSTREE_FINALIZE_KERNEL_USRLIB_OSTREEBOOT)
+  const gboolean only_if_found = (dest == RPMOSTREE_FINALIZE_KERNEL_AUTO);
+  if (only_if_found || dest >= RPMOSTREE_FINALIZE_KERNEL_USRLIB_OSTREEBOOT)
     {
       if (!copy_kernel_into (rootfs_dfd, kver, boot_checksum_str,
                              kernel_modules_path, initramfs_modules_path,
-                             is_auto, usrlib_ostreeboot,
+                             only_if_found, usrlib_ostreeboot,
                              cancellable, error))
         return FALSE;
     }
-  if (is_auto || dest >= RPMOSTREE_FINALIZE_KERNEL_SLASH_BOOT)
+  if (only_if_found || dest >= RPMOSTREE_FINALIZE_KERNEL_SLASH_BOOT)
     {
       if (!copy_kernel_into (rootfs_dfd, kver, boot_checksum_str,
                              kernel_modules_path, initramfs_modules_path,
-                             is_auto, slash_bootdir,
+                             only_if_found, slash_bootdir,
                              cancellable, error))
         return FALSE;
     }
@@ -435,7 +434,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
                                  NULL);
   else
     bwrap = rpmostree_bwrap_new (rootfs_dfd, RPMOSTREE_BWRAP_IMMUTABLE, error,
-                                 "--ro-bind", "./usr/etc", "/etc",
+                                 "--ro-bind", "usr/etc", "/etc",
                                  NULL);
   if (!bwrap)
     return FALSE;
