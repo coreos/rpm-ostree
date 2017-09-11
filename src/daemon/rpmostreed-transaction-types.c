@@ -814,7 +814,23 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                                                  &base_changed, cancellable, error))
         return FALSE;
 
-      changed = changed || base_changed;
+      if (base_changed)
+        changed = TRUE;
+      else
+        {
+          /* If we're on a live deployment, then allow redeploying a clean version of the
+           * same base commit. This is useful if e.g. the pushed rollback was cleaned up. */
+
+          OstreeDeployment *deployment =
+            rpmostree_sysroot_upgrader_get_merge_deployment (upgrader);
+
+          gboolean is_live;
+          if (!rpmostree_syscore_deployment_is_live (sysroot, deployment, &is_live, error))
+            return FALSE;
+
+          if (is_live)
+            changed = TRUE;
+        }
     }
 
   /* let's figure out if those new overrides are valid and if so, canonicalize
