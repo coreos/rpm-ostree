@@ -93,7 +93,6 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
   else if (!opt_reboot)
     {
       /* override ops currently always result in a new deployment */
-
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,

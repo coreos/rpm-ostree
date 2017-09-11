@@ -169,7 +169,6 @@ rpmostree_builtin_rebase (int             argc,
     {
       /* rebase operations always result in a new default deployment since we
        * error if the refspec doesn't change */
-
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,

@@ -52,7 +52,7 @@ rpmostree_builtin_deploy (int            argc,
   g_autoptr(GOptionContext) context = NULL;
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GVariant) default_deployment = NULL;
+  g_autoptr(GVariant) new_default_deployment = NULL;
   g_autofree char *transaction_address = NULL;
   const char * const packages[] = { NULL };
   const char *revision;
@@ -105,7 +105,7 @@ rpmostree_builtin_deploy (int            argc,
     }
   else
     {
-      rpmostree_monitor_default_deployment_change (os_proxy, &default_deployment);
+      rpmostree_monitor_default_deployment_change (os_proxy, &new_default_deployment);
 
       g_autoptr(GVariant) options =
         rpmostree_get_options_variant (opt_reboot,
@@ -174,9 +174,10 @@ rpmostree_builtin_deploy (int            argc,
     }
   else if (!opt_reboot)
     {
-      if (default_deployment == NULL)
+      if (new_default_deployment == NULL)
         return RPM_OSTREE_EXIT_UNCHANGED;
 
+      /* do diff without dbus: https://github.com/projectatomic/rpm-ostree/pull/116 */
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
