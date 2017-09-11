@@ -60,7 +60,6 @@ rpmostree_builtin_upgrade (int             argc,
   g_autoptr(GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GVariant) new_default_deployment = NULL;
   g_autofree char *transaction_address = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
   const char *const *install_pkgs = NULL;
@@ -107,6 +106,8 @@ rpmostree_builtin_upgrade (int             argc,
                                 cancellable, &os_proxy, error))
     return EXIT_FAILURE;
 
+  gboolean default_deployment_changed = FALSE;
+
   if (opt_preview || opt_check)
     {
       if (!rpmostree_os_call_download_update_rpm_diff_sync (os_proxy,
@@ -117,7 +118,7 @@ rpmostree_builtin_upgrade (int             argc,
     }
   else
     {
-      rpmostree_monitor_default_deployment_change (os_proxy, &new_default_deployment);
+      rpmostree_monitor_default_deployment_change (os_proxy, &default_deployment_changed);
 
       g_autoptr(GVariant) options =
         rpmostree_get_options_variant (opt_reboot,
@@ -184,7 +185,7 @@ rpmostree_builtin_upgrade (int             argc,
     }
   else if (!opt_reboot)
     {
-      if (new_default_deployment == NULL)
+      if (!default_deployment_changed)
         {
           if (opt_upgrade_unchanged_exit_77)
             return RPM_OSTREE_EXIT_UNCHANGED;

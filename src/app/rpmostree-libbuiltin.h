@@ -43,6 +43,6 @@ rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
 
 void
 rpmostree_monitor_default_deployment_change (RPMOSTreeOS *os_proxy,
-                                             GVariant   **deployment);
+                                             gboolean    *changed);
 
 G_END_DECLS

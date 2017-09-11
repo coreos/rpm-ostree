@@ -42,21 +42,47 @@ rpmostree_usage_error (GOptionContext  *context,
   (void) glnx_throw (error, "usage error: %s", message);
 }
 
+static char*
+get_id_from_deployment_variant (GVariant *deployment)
+{
+  g_autoptr(GVariantDict) dict = g_variant_dict_new (deployment);
+  g_autofree char *id;
+  g_assert (g_variant_dict_lookup (dict, "id", "s", &id));
+  return g_steal_pointer (&id);
+}
+
+static
+G_DEFINE_QUARK (rpmostree-original-id, rpmostree_original_id)
+#define RPMOSTREE_ORIGINAL_ID rpmostree_original_id_quark()
+
 static void
 default_deployment_change_cb (GObject *object,
                               GParamSpec *pspec,
-                              GVariant **value)
+                              gboolean   *changed)
 {
-  g_object_get (object, pspec->name, value, NULL);
+  GVariant *new_default_deployment;
+  g_object_get (object, pspec->name, &new_default_deployment, NULL);
+  g_autofree char *new_id = get_id_from_deployment_variant (new_default_deployment);
+
+  const char *original_id = g_object_get_qdata (object, RPMOSTREE_ORIGINAL_ID);
+  if (!g_str_equal (original_id, new_id))
+    *changed = TRUE;
 }
 
 void
 rpmostree_monitor_default_deployment_change (RPMOSTreeOS *os_proxy,
-                                             GVariant   **deployment)
+                                             gboolean    *changed)
 {
-  /* This will set the GVariant if the default deployment changes. */
+  g_autoptr(GVariant) default_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+  g_autofree char *original_id = get_id_from_deployment_variant (default_deployment);
+
+  /* we use a quark here so original_id automatically gets freed with os_proxy (but also as
+   * an easy way to pass data to the cb without a struct and worrying about its lifetime) */
+  g_object_set_qdata_full (G_OBJECT (os_proxy), RPMOSTREE_ORIGINAL_ID,
+                           g_steal_pointer (&original_id), (GDestroyNotify)g_free);
+
   g_signal_connect (os_proxy, "notify::default-deployment",
-                    G_CALLBACK (default_deployment_change_cb), deployment);
+                    G_CALLBACK (default_deployment_change_cb), changed);
 }
 
 /* Print the diff between the booted and pending deployments */
