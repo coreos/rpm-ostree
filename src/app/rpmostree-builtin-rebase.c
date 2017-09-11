@@ -167,11 +167,9 @@ rpmostree_builtin_rebase (int             argc,
 
   if (!opt_reboot)
     {
-      const char *sysroot_path;
-
-      sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-
-      /* By request, doing this without dbus */
+      /* rebase operations always result in a new default deployment since we
+       * error if the refspec doesn't change */
+      const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
                                                            error))

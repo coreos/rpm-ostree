@@ -33,15 +33,30 @@ rpmostree_usage_error (GOptionContext  *context,
                        const char      *message,
                        GError         **error)
 {
-  g_autofree char *help = NULL;
-
   g_return_if_fail (context != NULL);
   g_return_if_fail (message != NULL);
 
-  help = g_option_context_get_help (context, TRUE, NULL);
+  g_autofree char *help = g_option_context_get_help (context, TRUE, NULL);
   g_printerr ("%s\n", help);
 
-  g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED, message);
+  (void) glnx_throw (error, "usage error: %s", message);
+}
+
+static void
+default_deployment_change_cb (GObject *object,
+                              GParamSpec *pspec,
+                              GVariant **value)
+{
+  g_object_get (object, pspec->name, value, NULL);
+}
+
+void
+rpmostree_monitor_default_deployment_change (RPMOSTreeOS *os_proxy,
+                                             GVariant   **deployment)
+{
+  /* This will set the GVariant if the default deployment changes. */
+  g_signal_connect (os_proxy, "notify::default-deployment",
+                    G_CALLBACK (default_deployment_change_cb), deployment);
 }
 
 /* Print the diff between the booted and pending deployments */
@@ -50,20 +65,12 @@ rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
                                                 GCancellable *cancellable,
                                                 GError **error)
 {
-  glnx_unref_object OstreeSysroot *sysroot = NULL;
-  glnx_unref_object GFile *sysroot_file = NULL;
-  gboolean ret = FALSE;
-
-  sysroot_file = g_file_new_for_path (sysroot_path);
-  sysroot = ostree_sysroot_new (sysroot_file);
-
+  g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
+  g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new (sysroot_file);
   if (!ostree_sysroot_load (sysroot, cancellable, error))
-    goto out;
+    return FALSE;
 
-  ret = rpmostree_print_treepkg_diff (sysroot, cancellable, error);
-
-out:
-  return ret;
+  return rpmostree_print_treepkg_diff (sysroot, cancellable, error);
 }
 
 /* Print the diff between the booted and pending deployments */
@@ -72,39 +79,32 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
                               GCancellable     *cancellable,
                               GError          **error)
 {
-  gboolean ret = FALSE;
-  OstreeDeployment *booted_deployment;
-  OstreeDeployment *new_deployment;
-  g_autoptr(GPtrArray) deployments =
-    ostree_sysroot_get_deployments (sysroot);
-
-  booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
-
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
   g_assert (deployments->len > 1);
-  new_deployment = deployments->pdata[0];
+
+  OstreeDeployment *new_deployment = deployments->pdata[0];
+  OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
 
   if (booted_deployment && new_deployment != booted_deployment)
     {
-      glnx_unref_object OstreeRepo *repo = NULL;
+      g_autoptr(OstreeRepo) repo = NULL;
+      if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
+        return FALSE;
+
       const char *from_rev = ostree_deployment_get_csum (booted_deployment);
       const char *to_rev = ostree_deployment_get_csum (new_deployment);
+
       g_autoptr(GPtrArray) removed = NULL;
       g_autoptr(GPtrArray) added = NULL;
       g_autoptr(GPtrArray) modified_old = NULL;
       g_autoptr(GPtrArray) modified_new = NULL;
-
-      if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-        goto out;
-
       if (!rpm_ostree_db_diff (repo, from_rev, to_rev,
                                &removed, &added, &modified_old, &modified_new,
                                cancellable, error))
-        goto out;
+        return FALSE;
 
       rpmostree_diff_print (repo, removed, added, modified_old, modified_new);
     }
 
-  ret = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
