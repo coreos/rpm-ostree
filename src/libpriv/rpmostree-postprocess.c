@@ -1281,6 +1281,9 @@ rpmostree_copy_additional_files (int            rootfs_dfd,
       if (!glnx_shutil_mkdir_p_at (rootfs_dfd, dn, 0755, cancellable, error))
         return FALSE;
 
+      /* FIXME: Should probably use GLNX_FILE_COPY_NOXATTRS, but someone
+       * may be relying on current semantics?
+       */
       if (!glnx_file_copy_at (context_dfd, src, NULL, rootfs_dfd, dest, 0,
                               cancellable, error))
           return glnx_prefix_error (error, "Copying file '%s' into target", src);

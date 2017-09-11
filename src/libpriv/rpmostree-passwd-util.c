@@ -1081,14 +1081,17 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
 
       /* Copy /usr/lib/{passwd,group} -> /usr/etc (breaking hardlinks) */
       if (!glnx_file_copy_at (rootfs_dfd, usrlibfile, NULL,
-                              rootfs_dfd, usretcfile, 0, cancellable, error))
+                              rootfs_dfd, usretcfile,
+                              GLNX_FILE_COPY_NOXATTRS,
+                              cancellable, error))
         return FALSE;
 
       /* Copy the merge's passwd/group to usr/lib (breaking hardlinks) */
       if (!glnx_file_copy_at (AT_FDCWD,
                               glnx_strjoina (merge_passwd_dir, "/", file), NULL,
                               rootfs_dfd, usrlibfiletmp,
-                              GLNX_FILE_COPY_OVERWRITE, cancellable, error))
+                              GLNX_FILE_COPY_OVERWRITE | GLNX_FILE_COPY_NOXATTRS,
+                              cancellable, error))
         return FALSE;
 
       if (!glnx_renameat (rootfs_dfd, usrlibfiletmp, rootfs_dfd, usrlibfile, error))
@@ -1113,7 +1116,8 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
         }
 
       if (!glnx_file_copy_at (rootfs_dfd, src, NULL,
-                              rootfs_dfd, tmp, GLNX_FILE_COPY_OVERWRITE,
+                              rootfs_dfd, tmp,
+                              GLNX_FILE_COPY_OVERWRITE | GLNX_FILE_COPY_NOXATTRS,
                               cancellable, error))
         return FALSE;
       if (!glnx_renameat (rootfs_dfd, tmp, rootfs_dfd, src, error))
