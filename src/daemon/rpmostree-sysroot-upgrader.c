@@ -373,20 +373,17 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
                                       GCancellable           *cancellable,
                                       GError                **error)
 {
+  const char *refspec = rpmostree_origin_get_refspec (self->origin);
+
   g_autofree char *origin_remote = NULL;
   g_autofree char *origin_ref = NULL;
-  if (!ostree_parse_refspec (rpmostree_origin_get_refspec (self->origin),
-                             &origin_remote, &origin_ref, error))
+  if (!ostree_parse_refspec (refspec, &origin_remote, &origin_ref, error))
     return FALSE;
-
-  char *refs_to_fetch[] = { NULL, NULL };
-  if (rpmostree_origin_get_override_commit (self->origin) != NULL)
-    refs_to_fetch[0] = (char*)rpmostree_origin_get_override_commit (self->origin);
-  else
-    refs_to_fetch[0] = origin_ref;
 
   const gboolean allow_older =
     (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER) > 0;
+
+  const char *override_commit = rpmostree_origin_get_override_commit (self->origin);
 
   g_assert (self->origin_merge_deployment);
   if (origin_remote)
@@ -403,7 +400,12 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
         g_variant_builder_add (optbuilder, "{s@v}", "timestamp-check",
                                g_variant_new_variant (g_variant_new_boolean (TRUE)));
       g_variant_builder_add (optbuilder, "{s@v}", "refs",
-                             g_variant_new_variant (g_variant_new_strv ((const char *const*) refs_to_fetch, -1)));
+                             g_variant_new_variant (g_variant_new_strv (
+                                 (const char *const *)&origin_ref, 1)));
+      if (override_commit)
+        g_variant_builder_add (optbuilder, "{s@v}", "override-commit-ids",
+                               g_variant_new_variant (g_variant_new_strv (
+                                   (const char *const *)&override_commit, 1)));
 
       g_autoptr(GVariant) opts = g_variant_ref_sink (g_variant_builder_end (optbuilder));
       if (!ostree_repo_pull_with_options (self->repo, origin_remote, opts, progress,
@@ -414,48 +416,32 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
         ostree_async_progress_finish (progress);
     }
 
-  g_autofree char *new_base_revision = NULL;
-  if (rpmostree_origin_get_override_commit (self->origin) != NULL)
-    {
-      if (!ostree_repo_set_ref_immediate (self->repo,
-                                          origin_remote,
-                                          origin_ref,
-                                          rpmostree_origin_get_override_commit (self->origin),
-                                          cancellable,
-                                          error))
-        return FALSE;
-
-      new_base_revision = g_strdup (rpmostree_origin_get_override_commit (self->origin));
-    }
+  g_autofree char *new_base_rev = NULL;
+  if (override_commit)
+    new_base_rev = g_strdup (override_commit);
   else
     {
-      if (!ostree_repo_resolve_rev (self->repo, rpmostree_origin_get_refspec (self->origin), FALSE,
-                                    &new_base_revision, error))
+      if (!ostree_repo_resolve_rev (self->repo, refspec, FALSE, &new_base_rev, error))
         return FALSE;
     }
 
-  {
-    gboolean changed = FALSE;
+  gboolean changed = !g_str_equal (new_base_rev, self->base_revision);
+  if (changed)
+    {
+      /* check timestamps here too in case the commit was already pulled (or the
+       * refspec is local) */
+      if (!allow_older)
+        {
+          if (!ostree_sysroot_upgrader_check_timestamps (self->repo, self->base_revision,
+                                                         new_base_rev, error))
+            return FALSE;
+        }
 
-    if (strcmp (new_base_revision, self->base_revision) != 0)
-      {
-        changed = TRUE;
+      g_free (self->base_revision);
+      self->base_revision = g_steal_pointer (&new_base_rev);
+    }
 
-        if (!allow_older)
-          {
-            if (!ostree_sysroot_upgrader_check_timestamps (self->repo, self->base_revision,
-                                                           new_base_revision,
-                                                           error))
-              return FALSE;
-          }
-
-        g_free (self->base_revision);
-        self->base_revision = g_steal_pointer (&new_base_revision);
-      }
-
-    *out_changed = changed;
-  }
-
+  *out_changed = changed;
   return TRUE;
 }
 
