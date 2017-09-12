@@ -317,7 +317,14 @@ rpmostree_finalize_kernel (int rootfs_dfd,
       if (linkat (rootfs_dfd, kernel_path, rootfs_dfd, kernel_modules_path, 0) < 0)
         return glnx_throw_errno_prefix (error, "linkat(%s)", kernel_modules_path);
     }
+
+  /* Replace the initramfs */
   g_autofree char *initramfs_modules_path = g_strconcat (modules_bootdir, "/initramfs.img", NULL);
+  if (unlinkat (rootfs_dfd, initramfs_modules_path, 0) < 0)
+    {
+      if (errno != ENOENT)
+        return glnx_throw_errno_prefix (error, "unlinkat(%s)", initramfs_modules_path);
+    }
   if (!glnx_link_tmpfile_at (initramfs_tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
                              rootfs_dfd, initramfs_modules_path,
                              error))
