@@ -65,7 +65,7 @@ run_bwrap_mutably (int           rootfs_fd,
   /* This gets called both by treecompose, where in the non-unified path we just
    * have /etc, and in kernel postprocessing where we have usr/etc.
    */
-  if (!glnx_fstatat (rootfs_fd, "etc", &stbuf, 0, error))
+  if (!glnx_fstatat_allow_noent (rootfs_fd, "etc", &stbuf, 0, error))
     return FALSE;
   if (errno == ENOENT)
     etc_bind = "usr/etc";
