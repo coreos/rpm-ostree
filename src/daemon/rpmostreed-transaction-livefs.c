@@ -659,6 +659,9 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
         return FALSE;
     }
 
+  /* XXX: right now we don't have a good solution for this */
+  rpmostree_output_message ("WARNING: changes to /etc are not currently preserved!");
+
   /* Write out the origin as having completed this */
   if (!write_livefs_state (sysroot, booted_deployment, NULL, target_csum, error))
     return FALSE;
