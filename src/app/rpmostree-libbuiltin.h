@@ -32,6 +32,10 @@ rpmostree_usage_error (GOptionContext  *context,
                        GError         **error);
 
 gboolean
+rpmostree_has_new_default_deployment (RPMOSTreeOS *os_proxy,
+                                      GVariant    *previous_deployment);
+
+gboolean
 rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
                               GCancellable     *cancellable,
                               GError          **error);
@@ -40,9 +44,5 @@ gboolean
 rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
                                                 GCancellable *cancellable,
                                                 GError **error);
-
-void
-rpmostree_monitor_default_deployment_change (RPMOSTreeOS *os_proxy,
-                                             gboolean    *changed);
 
 G_END_DECLS

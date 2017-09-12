@@ -123,7 +123,7 @@ echo "ok detecting file name conflicts before writing rpmdb"
 # https://github.com/projectatomic/rpm-ostree/issues/981
 vm_rpmostree cleanup -rp
 csum=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
-# restart to make daemon see the pending cheksum
+# restart to make daemon see the pending checksum
 vm_cmd systemctl restart rpm-ostreed
 vm_assert_status_jq '.deployments[0]["pending-base-checksum"]'
 # hard reset to booted csum (simulates what deploy does to remote refspecs)

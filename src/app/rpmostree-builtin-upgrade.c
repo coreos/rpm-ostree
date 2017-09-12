@@ -106,7 +106,7 @@ rpmostree_builtin_upgrade (int             argc,
                                 cancellable, &os_proxy, error))
     return EXIT_FAILURE;
 
-  gboolean default_deployment_changed = FALSE;
+  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
   if (opt_preview || opt_check)
     {
@@ -118,8 +118,6 @@ rpmostree_builtin_upgrade (int             argc,
     }
   else
     {
-      rpmostree_monitor_default_deployment_change (os_proxy, &default_deployment_changed);
-
       g_autoptr(GVariant) options =
         rpmostree_get_options_variant (opt_reboot,
                                        opt_allow_downgrade,
@@ -185,7 +183,7 @@ rpmostree_builtin_upgrade (int             argc,
     }
   else if (!opt_reboot)
     {
-      if (!default_deployment_changed)
+      if (!rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
         {
           if (opt_upgrade_unchanged_exit_77)
             return RPM_OSTREE_EXIT_UNCHANGED;
