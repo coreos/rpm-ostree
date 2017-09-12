@@ -110,6 +110,12 @@ vm_cmd cat /etc/test-livefs-with-etc.conf > test-livefs-with-etc.conf
 assert_file_has_content test-livefs-with-etc.conf "custom"
 echo "ok livefs preserved modified config"
 
+vm_rpmostree cleanup -p
+# make sure there's no layering going on somehow
+vm_assert_status_jq '.deployments[0]["base-checksum"]|not'
+vm_rpmostree deploy $(vm_get_booted_deployment_info checksum)
+echo "ok livefs redeploy booted commit"
+
 reset
 vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
 vm_rpmostree ex livefs

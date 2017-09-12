@@ -42,21 +42,28 @@ rpmostree_usage_error (GOptionContext  *context,
   (void) glnx_throw (error, "usage error: %s", message);
 }
 
-static void
-default_deployment_change_cb (GObject *object,
-                              GParamSpec *pspec,
-                              GVariant **value)
+static const char*
+get_id_from_deployment_variant (GVariant *deployment)
 {
-  g_object_get (object, pspec->name, value, NULL);
+  g_autoptr(GVariantDict) dict = g_variant_dict_new (deployment);
+  const char *id;
+  g_assert (g_variant_dict_lookup (dict, "id", "&s", &id));
+  return id;
 }
 
-void
-rpmostree_monitor_default_deployment_change (RPMOSTreeOS *os_proxy,
-                                             GVariant   **deployment)
+gboolean
+rpmostree_has_new_default_deployment (RPMOSTreeOS *os_proxy,
+                                      GVariant    *previous_deployment)
 {
-  /* This will set the GVariant if the default deployment changes. */
-  g_signal_connect (os_proxy, "notify::default-deployment",
-                    G_CALLBACK (default_deployment_change_cb), deployment);
+  g_autoptr(GVariant) new_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+
+  /* trivial case */
+  if (g_variant_equal (previous_deployment, new_deployment))
+    return FALSE;
+
+  const char *previous_id = get_id_from_deployment_variant (previous_deployment);
+  const char *new_id = get_id_from_deployment_variant (new_deployment);
+  return !g_str_equal (previous_id, new_id);
 }
 
 /* Print the diff between the booted and pending deployments */

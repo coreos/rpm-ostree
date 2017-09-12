@@ -24,7 +24,7 @@ export RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK=yes
 
 ensure_dbus
 
-echo "1..24"
+echo "1..25"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -156,6 +156,14 @@ $OSTREE commit -b another-branch --tree=ref=$branch
 rpm-ostree rebase --os=testos another-branch
 assert_status_jq '.deployments[0].origin == "another-branch"'
 echo "ok rebase from local branch to local branch"
+
+csum1=$($OSTREE commit -b another-branch --tree=ref=$branch)
+csum2=$($OSTREE commit -b another-branch --tree=ref=$branch)
+rpm-ostree deploy --os=testos $csum1
+if [ "$($OSTREE rev-parse another-branch)" != $csum2 ]; then
+    assert_not_reached "deploying from local branch changes branch"
+fi
+echo "ok local deploy doesn't affect branch"
 
 rpm-ostree rebase --skip-purge --os=testos testos:testos/buildmaster/x86_64-runtime
 assert_status_jq '.deployments[0].origin == "testos:testos/buildmaster/x86_64-runtime"'

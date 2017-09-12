@@ -118,3 +118,21 @@ fi
 assert_not_file_has_content err.txt "Writing rpmdb"
 assert_file_has_content err.txt "File exists"
 echo "ok detecting file name conflicts before writing rpmdb"
+
+# check that the way we detect deployment changes is not dependent on pending-*
+# https://github.com/projectatomic/rpm-ostree/issues/981
+vm_rpmostree cleanup -rp
+csum=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
+# restart to make daemon see the pending checksum
+vm_cmd systemctl restart rpm-ostreed
+vm_assert_status_jq '.deployments[0]["pending-base-checksum"]'
+# hard reset to booted csum (simulates what deploy does to remote refspecs)
+vm_cmd ostree reset vmcheck $(vm_get_booted_csum)
+rc=0
+vm_rpmostree deploy $(vm_get_booted_csum) > out.txt || rc=$?
+if [ $rc != 77 ]; then
+    assert_not_reached "trying to re-deploy same commit didn't exit 77"
+fi
+assert_file_has_content out.txt 'No change.'
+vm_assert_status_jq '.deployments[0]["pending-base-checksum"]|not'
+echo "ok changes to deployment variant don't affect deploy"
