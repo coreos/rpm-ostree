@@ -56,7 +56,8 @@ cluster:
     - name: vmcheck3
       distro: centos/7/atomic/alpha
   container:
-    image: registry.centos.org/centos/centos:7
+    # FIXME remove this version binding when rpm-md repos are updated
+    image: registry.centos.org/centos/centos:7.3.1611
 
 extra-repos:
   - name: atomic-centos-continuous
