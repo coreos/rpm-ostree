@@ -962,7 +962,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
         return FALSE;
 
       if (!rpmostree_finalize_kernel (self->tmprootfs_dfd, bootdir, kver, kernel_path,
-                                      &initramfs_tmpf,
+                                      &initramfs_tmpf, RPMOSTREE_FINALIZE_KERNEL_AUTO,
                                       cancellable, error))
         return FALSE;
 

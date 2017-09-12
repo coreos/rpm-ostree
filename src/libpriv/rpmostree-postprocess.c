@@ -46,7 +46,6 @@
 #include "rpmostree-util.h"
 
 typedef enum {
-  RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY,
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH,
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW
 } RpmOstreePostprocessBootLocation;
@@ -60,12 +59,24 @@ run_bwrap_mutably (int           rootfs_fd,
                    char        **child_argv,
                    GError     **error)
 {
-  g_autoptr(RpmOstreeBwrap) bwrap = NULL;
+  struct stat stbuf;
+  const char *etc_bind;
 
-  bwrap = rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_MUTATE_FREELY, error,
-                               "--bind", "var", "/var",
-                               "--bind", "etc", "/etc",
-                               NULL);
+  /* This gets called both by treecompose, where in the non-unified path we just
+   * have /etc, and in kernel postprocessing where we have usr/etc.
+   */
+  if (!glnx_fstatat_allow_noent (rootfs_fd, "etc", &stbuf, 0, error))
+    return FALSE;
+  if (errno == ENOENT)
+    etc_bind = "usr/etc";
+  else
+    etc_bind = "etc";
+
+  g_autoptr(RpmOstreeBwrap) bwrap =
+    rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_MUTATE_FREELY, error,
+                         "--bind", "var", "/var",
+                         "--bind", etc_bind, "/etc",
+                         NULL);
   if (!bwrap)
     return FALSE;
 
@@ -143,60 +154,186 @@ init_rootfs (int            dfd,
   return TRUE;
 }
 
+/* Given a directory referenced by @src_dfd+@src_path,
+ * Create @dest_dfd+@dest_path as a directory, hardlinking
+ * all content - recursively.
+ */
 static gboolean
-do_kernel_prep (int            rootfs_dfd,
-                JsonObject    *treefile,
-                GCancellable  *cancellable,
-                GError       **error)
+hardlink_recurse (int                src_dfd,
+                  const char        *src_path,
+                  int                dest_dfd,
+                  const char        *dest_path,
+                  GCancellable      *cancellable,
+                  GError            **error)
 {
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  glnx_fd_close int dest_target_dfd = -1;
+
+  if (!glnx_dirfd_iterator_init_at (src_dfd, src_path, TRUE, &dfd_iter, error))
+    return FALSE;
+
+  if (!glnx_opendirat (dest_dfd, dest_path, TRUE, &dest_target_dfd, error))
+    return FALSE;
+
+  while (TRUE)
+    {
+      struct dirent *dent = NULL;
+      struct stat stbuf;
+
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
+        return FALSE;
+      if (!dent)
+        break;
+
+      if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+        return FALSE;
+
+      if (dent->d_type == DT_DIR)
+        {
+          mode_t perms = stbuf.st_mode & ~S_IFMT;
+
+          if (!glnx_ensure_dir (dest_target_dfd, dent->d_name, perms, error))
+            return FALSE;
+          if (fchmodat (dest_target_dfd, dent->d_name, perms, 0) < 0)
+            return glnx_throw_errno_prefix (error, "fchmodat");
+          if (!hardlink_recurse (dfd_iter.fd, dent->d_name,
+                                 dest_target_dfd, dent->d_name,
+                                 cancellable, error))
+            return FALSE;
+        }
+      else
+        {
+          if (linkat (dfd_iter.fd, dent->d_name,
+                      dest_target_dfd, dent->d_name, 0) < 0)
+            return glnx_throw_errno_prefix (error, "linkat");
+        }
+    }
+
+  return TRUE;
+}
+
+/* Handle the kernel/initramfs, which can be in at least 2 different places:
+ *  - /boot (CentOS, Fedora treecompose before we suppressed kernel.spec's %posttrans)
+ *  - /usr/lib/modules (Fedora treecompose without kernel.spec's %posttrans)
+ *
+ * We then need to handle the boot_location option, which can put that data in
+ * either both (/boot and /usr/lib/ostree-boot), or just the latter.
+ */
+static gboolean
+process_kernel_and_initramfs (int            rootfs_dfd,
+                              JsonObject    *treefile,
+                              GCancellable  *cancellable,
+                              GError       **error)
+{
+  /* The current systemd kernel-install will inject
+   * /boot/${machine_id}/${uname -r} which we don't use;
+   * to avoid confusion, we will delete it.  This relies
+   * on systemd itself having set up the machine id from its %post,
+   * so we need to read it.  We'll reset the machine ID after this.
+   */
+  { glnx_fd_close int fd = openat (rootfs_dfd, "usr/etc/machine-id", O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+      {
+        if (errno != ENOENT)
+          return glnx_throw_errno_prefix (error, "openat(usr/etc/machine-id)");
+      }
+    else
+      {
+        g_autofree char *old_machine_id = glnx_fd_readall_utf8 (fd, NULL, cancellable, error);
+        if (!old_machine_id)
+          return FALSE;
+        if (strlen (old_machine_id) != 33)
+          return glnx_throw (error, "invalid machine ID '%.33s'", old_machine_id);
+        /* Trim newline */
+        old_machine_id[32] = '\0';
+
+        const char *boot_machineid_dir = glnx_strjoina ("boot/", old_machine_id);
+        if (!glnx_shutil_rm_rf_at (rootfs_dfd, boot_machineid_dir, cancellable, error))
+          return FALSE;
+      }
+  }
+
+  /* We need to move non-kernel data (bootloader bits usually) into
+   * /usr/lib/ostree-boot; this will also take care of moving the kernel in legacy
+   * paths (CentOS, Fedora <= 24), etc.
+   */
+  if (!glnx_renameat (rootfs_dfd, "boot", rootfs_dfd, "usr/lib/ostree-boot", error))
+    return FALSE;
+
+  /* Find the kernel in the source root (at this point one of usr/lib/modules or
+   * usr/lib/ostree-boot)
+   */
   g_autoptr(GVariant) kernelstate = rpmostree_find_kernel (rootfs_dfd, cancellable, error);
   if (!kernelstate)
     return FALSE;
-
   const char* kernel_path;
   const char* initramfs_path;
   const char *kver;
   const char *bootdir;
+  /* Used to optionally hardlink result of our dracut run */
   g_variant_get (kernelstate, "(&s&s&sm&s)",
                  &kver, &bootdir,
                  &kernel_path, &initramfs_path);
 
+  /* We generate our own initramfs with custom arguments, so if the RPM install
+   * generated one (should only happen on CentOS now), delete it.
+   */
   if (initramfs_path)
     {
+      g_assert_cmpstr (bootdir, ==, "usr/lib/ostree-boot");
+      g_assert_cmpint (*initramfs_path, !=, '/');
       g_print ("Removing RPM-generated '%s'\n", initramfs_path);
       if (!glnx_shutil_rm_rf_at (rootfs_dfd, initramfs_path, cancellable, error))
         return FALSE;
+      initramfs_path = NULL;
     }
 
-  /* OSTree needs to own this */
-  if (!glnx_shutil_rm_rf_at (rootfs_dfd, "boot/loader", cancellable, error))
-    return FALSE;
-
+  /* Ensure depmod (kernel modules index) is up to date; because on Fedora we
+   * suppress the kernel %posttrans we need to take care of this.
+   */
   {
     char *child_argv[] = { "depmod", (char*)kver, NULL };
     if (!run_bwrap_mutably (rootfs_dfd, "depmod", child_argv, error))
       return FALSE;
   }
 
-  /* Ensure the /etc/machine-id file is present and empty. Apparently systemd
-     doesn't work when the file is missing (as of systemd-219-9.fc22) but it is
-     correctly populated if the file is there.  */
+  RpmOstreePostprocessBootLocation boot_location =
+    RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
+  const char *boot_location_str = NULL;
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile,
+                                                              "boot_location",
+                                                              &boot_location_str, error))
+    return FALSE;
+  if (boot_location_str != NULL)
+    {
+      /* Make "legacy" an alias for "both" */
+      if (strcmp (boot_location_str, "both") == 0 ||
+          strcmp (boot_location_str, "legacy") == 0)
+        ;
+      else if (strcmp (boot_location_str, "new") == 0)
+        boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
+      else
+        return glnx_throw (error, "Invalid boot location '%s'", boot_location_str);
+    }
+
+  /* Ensure the /etc/machine-id file is present and empty; it is read by
+   * dracut. Apparently systemd doesn't work when the file is missing (as of
+   * systemd-219-9.fc22) but it is correctly populated if the file is there.
+   */
   g_print ("Creating empty machine-id\n");
-  if (!glnx_file_replace_contents_at (rootfs_dfd, "etc/machine-id", (guint8*)"", 0,
+  if (!glnx_file_replace_contents_at (rootfs_dfd, "usr/etc/machine-id", (guint8*)"", 0,
                                       GLNX_FILE_REPLACE_NODATASYNC,
                                       cancellable, error))
     return FALSE;
 
+  /* Run dracut with our chosen arguments (commonly at least --no-hostonly) */
   g_autoptr(GPtrArray) dracut_argv = g_ptr_array_new ();
   if (json_object_has_member (treefile, "initramfs-args"))
     {
-      guint i, len;
-      JsonArray *initramfs_args;
+      JsonArray *initramfs_args = json_object_get_array_member (treefile, "initramfs-args");
+      guint len = json_array_get_length (initramfs_args);
 
-      initramfs_args = json_object_get_array_member (treefile, "initramfs-args");
-      len = json_array_get_length (initramfs_args);
-
-      for (i = 0; i < len; i++)
+      for (guint i = 0; i < len; i++)
         {
           const char *arg = _rpmostree_jsonutil_array_require_string_element (initramfs_args, i, error);
           if (!arg)
@@ -213,11 +350,36 @@ do_kernel_prep (int            rootfs_dfd,
                              cancellable, error))
     return FALSE;
 
-  if (!rpmostree_finalize_kernel (rootfs_dfd, bootdir, kver,
-                                  kernel_path,
+  /* We always tell rpmostree_finalize_kernel() to skip /boot, since we'll do a
+   * full hardlink pass if needed after that for the kernel + bootloader data.
+   */
+  if (!rpmostree_finalize_kernel (rootfs_dfd, bootdir, kver, kernel_path,
                                   &initramfs_tmpf,
+                                  RPMOSTREE_FINALIZE_KERNEL_USRLIB_OSTREEBOOT,
                                   cancellable, error))
     return FALSE;
+
+  /* We always ensure this exists as a mountpoint */
+  if (!glnx_ensure_dir (rootfs_dfd, "boot", 0755, error))
+    return FALSE;
+
+  /* If the boot location includes /boot, we also need to copy /usr/lib/ostree-boot there */
+  switch (boot_location)
+    {
+    case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH:
+      {
+        g_print ("Using boot location: both\n");
+        /* Hardlink the existing content, only a little ugly as
+         * we'll end up sha256'ing it twice, but oh well. */
+        if (!hardlink_recurse (rootfs_dfd, "usr/lib/ostree-boot",
+                               rootfs_dfd, "boot",
+                               cancellable, error))
+          return glnx_prefix_error (error, "hardlinking /boot");
+      }
+      break;
+    case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW:
+      break;
+    }
 
   return TRUE;
 }
@@ -651,60 +813,6 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
   return TRUE;
 }
 
-static gboolean
-hardlink_recurse (int                src_dfd,
-                  const char        *src_path,
-                  int                dest_dfd,
-                  const char        *dest_path,
-                  GCancellable      *cancellable,
-                  GError            **error)
-{
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  glnx_fd_close int dest_target_dfd = -1;
-
-  if (!glnx_dirfd_iterator_init_at (src_dfd, src_path, TRUE, &dfd_iter, error))
-    return FALSE;
-
-  if (!glnx_opendirat (dest_dfd, dest_path, TRUE, &dest_target_dfd, error))
-    return FALSE;
-
-  while (TRUE)
-    {
-      struct dirent *dent = NULL;
-      struct stat stbuf;
-
-      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
-        return FALSE;
-      if (!dent)
-        break;
-
-      if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
-        return FALSE;
-
-      if (dent->d_type == DT_DIR)
-        {
-          mode_t perms = stbuf.st_mode & ~S_IFMT;
-
-          if (!glnx_ensure_dir (dest_target_dfd, dent->d_name, perms, error))
-            return FALSE;
-          if (fchmodat (dest_target_dfd, dent->d_name, perms, 0) < 0)
-            return glnx_throw_errno_prefix (error, "fchmodat");
-          if (!hardlink_recurse (dfd_iter.fd, dent->d_name,
-                                 dest_target_dfd, dent->d_name,
-                                 cancellable, error))
-            return FALSE;
-        }
-      else
-        {
-          if (linkat (dfd_iter.fd, dent->d_name,
-                      dest_target_dfd, dent->d_name, 0) < 0)
-            return glnx_throw_errno_prefix (error, "linkat");
-        }
-    }
-
-  return TRUE;
-}
-
 /* Prepare a root filesystem, taking mainly the contents of /usr from pkgroot */
 static gboolean
 create_rootfs_from_pkgroot_content (int            target_root_dfd,
@@ -727,10 +835,7 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
                                                                error))
     return FALSE;
 
-  g_print ("Preparing kernel\n");
-  if (!container && !do_kernel_prep (src_rootfs_fd, treefile, cancellable, error))
-    return glnx_prefix_error (error, "During kernel processing");
-
+  /* Initialize target root */
   g_print ("Initializing rootfs\n");
   gboolean tmp_is_dir = FALSE;
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
@@ -785,72 +890,6 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
   if (!convert_var_to_tmpfiles_d (src_rootfs_fd, target_root_dfd, cancellable, error))
     return FALSE;
 
-  /* Move boot, but rename the kernel/initramfs to have a checksum */
-  if (!container)
-    {
-      RpmOstreePostprocessBootLocation boot_location =
-        RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
-      const char *boot_location_str = NULL;
-
-      g_print ("Moving /boot\n");
-
-      if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile,
-                                                                  "boot_location",
-                                                                  &boot_location_str, error))
-        return FALSE;
-
-      if (boot_location_str != NULL)
-        {
-          if (strcmp (boot_location_str, "legacy") == 0)
-            boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY;
-          else if (strcmp (boot_location_str, "both") == 0)
-            boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
-          else if (strcmp (boot_location_str, "new") == 0)
-            boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
-          else
-            return glnx_throw (error, "Invalid boot location '%s'", boot_location_str);
-        }
-
-      if (!glnx_shutil_mkdir_p_at (target_root_dfd, "usr/lib", 0755,
-                                   cancellable, error))
-        return FALSE;
-
-      switch (boot_location)
-        {
-        case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_LEGACY:
-          {
-            g_print ("Using boot location: legacy\n");
-            if (!glnx_renameat (src_rootfs_fd, "boot", target_root_dfd, "boot", error))
-              return FALSE;
-          }
-          break;
-        case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH:
-          {
-            g_print ("Using boot location: both\n");
-            if (!glnx_renameat (src_rootfs_fd, "boot", target_root_dfd, "boot", error))
-              return FALSE;
-            if (!glnx_shutil_mkdir_p_at (target_root_dfd, "usr/lib/ostree-boot", 0755,
-                                         cancellable, error))
-              return FALSE;
-            /* Hardlink the existing content, only a little ugly as
-             * we'll end up sha256'ing it twice, but oh well. */
-            if (!hardlink_recurse (target_root_dfd, "boot",
-                                   target_root_dfd, "usr/lib/ostree-boot",
-                                   cancellable, error))
-              return FALSE;
-          }
-          break;
-        case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW:
-          {
-            g_print ("Using boot location: new\n");
-            if (!glnx_renameat (src_rootfs_fd, "boot",
-                                target_root_dfd, "usr/lib/ostree-boot", error))
-              return FALSE;
-          }
-          break;
-        }
-    }
-
   /* Also carry along toplevel compat links */
   g_print ("Copying toplevel compat symlinks\n");
   {
@@ -891,6 +930,27 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
                           GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
                           cancellable, error))
     return FALSE;
+
+  /* Handle kernel/initramfs if we're not doing a container */
+  if (!container)
+    {
+      g_print ("Preparing kernel\n");
+
+      /* OSTree needs to own this */
+      if (!glnx_shutil_rm_rf_at (src_rootfs_fd, "boot/loader", cancellable, error))
+        return FALSE;
+
+      /* The kernel may be in the source rootfs /boot; to handle that, we always
+       * rename the source /boot to the target, and will handle everything after
+       * that in the target root.
+       */
+      if (!glnx_renameat (src_rootfs_fd, "boot", target_root_dfd, "boot", error))
+        return FALSE;
+
+      if (!process_kernel_and_initramfs (target_root_dfd, treefile,
+                                         cancellable, error))
+        return glnx_prefix_error (error, "During kernel processing");
+    }
 
   return TRUE;
 }

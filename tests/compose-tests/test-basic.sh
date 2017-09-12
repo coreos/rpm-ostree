@@ -30,10 +30,14 @@ ostree --repo=${repobuild} show --print-metadata-key exampleos.tests ${treeref} 
 assert_file_has_content meta.txt 'smoketested.*e2e'
 echo "ok metadata"
 
-ostree --repo=${repobuild} ls -R ${treeref} /usr/lib/ostree-boot > bootls.txt
-assert_file_has_content bootls.txt vmlinuz
-assert_file_has_content bootls.txt initramfs
-echo "ok boot files"
+for path in /boot /usr/lib/ostree-boot; do
+    ostree --repo=${repobuild} ls -R ${treeref} ${path} > bootls.txt
+    assert_file_has_content bootls.txt vmlinuz-
+    assert_file_has_content bootls.txt initramfs-
+    echo "ok boot files"
+done
+kver=$(grep /vmlinuz bootls.txt | sed -e 's,.*/vmlinuz-\(.*\)-[0-9a-e].*$,\1,')
+ostree --repo=${repobuild} ls ${treeref} /usr/lib/modules/${kver}/{vmlinuz,initramfs.img} >/dev/null
 
 ostree --repo=${repobuild} ls -R ${treeref} /usr/share/man > manpages.txt
 assert_file_has_content manpages.txt man5/ostree.repo.5
