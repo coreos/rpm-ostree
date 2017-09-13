@@ -1822,7 +1822,7 @@ checkout_package (OstreeRepo   *repo,
                   GError      **error)
 {
   OstreeRepoCheckoutAtOptions opts = { OSTREE_REPO_CHECKOUT_MODE_USER,
-                                       OSTREE_REPO_CHECKOUT_OVERWRITE_DISJOINT_UNION_FILES, };
+                                       OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL, };
 
   /* We want the checkout to match the repo type so that we get hardlinks. */
   if (ostree_repo_get_mode (repo) == OSTREE_REPO_MODE_BARE)

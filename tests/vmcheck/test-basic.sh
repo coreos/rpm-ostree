@@ -101,13 +101,21 @@ assert_file_has_content err.txt "chronologically older"
 echo "ok failed to upgrade to older commit"
 
 # https://github.com/projectatomic/rpm-ostree/issues/365
-vm_build_rpm test-conflict \
+vm_build_rpm base-package \
     files /usr/app \
     install "mkdir -p %{buildroot}/usr/app
              echo one > %{buildroot}/usr/app/conflict-file"
-vm_rpmostree install test-conflict
+vm_rpmostree install base-package
 
-# build a rpm containing the same file and test for error
+# build a file having exact same content and check for merging
+vm_build_rpm test-merging \
+    files /usr/app \
+    install "mkdir -p %{buildroot}/usr/app
+             echo one > %{buildroot}/usr/app/conflict-file"
+vm_rpmostree install test-merging
+echo "ok identical file merges"
+
+# have a file with same file path but different content, testing for conflicts
 vm_build_rpm conflict-pkg \
     files /usr/app \
     install "mkdir -p %{buildroot}/usr/app
