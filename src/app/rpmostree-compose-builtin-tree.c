@@ -112,7 +112,6 @@ static void
 rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
 {
   g_clear_pointer (&ctx->treefile_context_dirs, (GDestroyNotify)g_ptr_array_unref);
-  g_clear_object (&ctx->corectx);
   g_clear_object (&ctx->treefile);
   g_clear_object (&ctx->previous_root);
   /* Only close workdir_dfd if it's not owned by the tmpdir */
@@ -914,6 +913,11 @@ impl_compose_tree (const char      *treefile_pathstr,
         return TRUE;
       }
   }
+
+  /* Destroy this now so the libdnf stack won't have any references
+   * into the filesystem before we manipulate it.
+   */
+  g_clear_object (&self->corectx);
 
   if (g_strcmp0 (g_getenv ("RPM_OSTREE_BREAK"), "post-yum") == 0)
     return FALSE;
