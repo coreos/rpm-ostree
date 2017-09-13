@@ -661,7 +661,7 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
 
   /* XXX: right now we don't have a good solution for this:
    * https://github.com/projectatomic/rpm-ostree/issues/40 */
-  rpmostree_output_message ("WARNING: changes to /etc will not appear in the pending deployment (next reboot)");
+  rpmostree_output_message ("WARNING: any changes to /etc will be lost on next reboot");
 
   /* Write out the origin as having completed this */
   if (!write_livefs_state (sysroot, booted_deployment, NULL, target_csum, error))
