@@ -112,6 +112,7 @@ static void
 rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
 {
   g_clear_pointer (&ctx->treefile_context_dirs, (GDestroyNotify)g_ptr_array_unref);
+  g_clear_object (&ctx->corectx);
   g_clear_object (&ctx->treefile);
   g_clear_object (&ctx->previous_root);
   /* Only close workdir_dfd if it's not owned by the tmpdir */
