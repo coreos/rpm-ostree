@@ -2694,16 +2694,23 @@ run_all_transfiletriggers (RpmOstreeContext *self,
                            GCancellable *cancellable,
                            GError      **error)
 {
-  /* Triggers from base packages */
-  g_auto(rpmdbMatchIterator) mi = rpmtsInitIterator (ts, RPMDBI_PACKAGES, NULL, 0);
-  { Header hdr;
-    while ((hdr = rpmdbNextIterator (mi)) != NULL)
-      {
-        if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, out_n_run,
-                                                   cancellable, error))
-          return FALSE;
-      }
-  }
+  /* Triggers from base packages, but only if we already have an rpmdb,
+   * otherwise librpm will whine on our stderr.
+   */
+  struct stat stbuf;
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, "usr/share/rpm", &stbuf, AT_SYMLINK_NOFOLLOW, error))
+    return FALSE;
+  if (errno == 0)
+    {
+      g_auto(rpmdbMatchIterator) mi = rpmtsInitIterator (ts, RPMDBI_PACKAGES, NULL, 0);
+      Header hdr;
+      while ((hdr = rpmdbNextIterator (mi)) != NULL)
+        {
+          if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, out_n_run,
+                                                     cancellable, error))
+            return FALSE;
+        }
+    }
 
   /* Triggers from newly added packages */
   const guint n = (guint)rpmtsNElements (ts);
