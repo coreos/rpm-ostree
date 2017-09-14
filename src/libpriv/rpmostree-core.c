@@ -405,14 +405,16 @@ rpmostree_context_ensure_tmpdir (RpmOstreeContext *self,
                                  const char       *subdir,
                                  GError          **error)
 {
-  if (self->tmpdir.initialized)
-    return TRUE;
+  if (!self->tmpdir.initialized)
+    {
+      if (!glnx_mkdtemp ("rpmostree-core-XXXXXX", 0700, &self->tmpdir, error))
+        return FALSE;
+    }
+  g_assert (self->tmpdir.initialized);
 
-  if (!glnx_mkdtemp ("rpmostree-core-XXXXXX", 0700,
-                     &self->tmpdir, error))
-    return FALSE;
   if (!glnx_shutil_mkdir_p_at (self->tmpdir.fd, subdir, 0755, NULL, error))
     return FALSE;
+
   return TRUE;
 }
 
