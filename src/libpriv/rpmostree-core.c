@@ -1199,7 +1199,9 @@ sort_packages (RpmOstreeContext *self,
 
   GPtrArray *sources = dnf_context_get_repos (hifctx);
   g_autoptr(GPtrArray) packages = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
-                                                         DNF_PACKAGE_INFO_INSTALL, -1);
+                                                         DNF_PACKAGE_INFO_INSTALL,
+                                                         DNF_PACKAGE_INFO_UPDATE,
+                                                         DNF_PACKAGE_INFO_DOWNGRADE, -1);
   for (guint i = 0; i < packages->len; i++)
     {
       DnfPackage *pkg = packages->pdata[i];
