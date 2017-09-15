@@ -962,8 +962,11 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
                                            cancellable, error))
     return FALSE;
 
-  /* Ensure we aren't holding any references to the tmpdir now that we're
-   * done. */
+  /* Ensure we aren't holding any references to the tmpdir now that we're done;
+   * rpmostree_sysroot_upgrader_deploy() eventually calls
+   * rpmostree_syscore_cleanup() which deletes 🗑 the tmpdir.  See also similar
+   * bits in the compose and container path.
+   */
   g_clear_object (&self->ctx);
   (void) close (self->tmprootfs_dfd);
   self->tmprootfs_dfd = -1;
