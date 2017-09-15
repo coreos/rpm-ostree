@@ -405,14 +405,16 @@ rpmostree_context_ensure_tmpdir (RpmOstreeContext *self,
                                  const char       *subdir,
                                  GError          **error)
 {
-  if (self->tmpdir.initialized)
-    return TRUE;
+  if (!self->tmpdir.initialized)
+    {
+      if (!glnx_mkdtemp ("rpmostree-core-XXXXXX", 0700, &self->tmpdir, error))
+        return FALSE;
+    }
+  g_assert (self->tmpdir.initialized);
 
-  if (!glnx_mkdtemp ("rpmostree-core-XXXXXX", 0700,
-                     &self->tmpdir, error))
-    return FALSE;
   if (!glnx_shutil_mkdir_p_at (self->tmpdir.fd, subdir, 0755, NULL, error))
     return FALSE;
+
   return TRUE;
 }
 
@@ -1197,7 +1199,9 @@ sort_packages (RpmOstreeContext *self,
 
   GPtrArray *sources = dnf_context_get_repos (hifctx);
   g_autoptr(GPtrArray) packages = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
-                                                         DNF_PACKAGE_INFO_INSTALL, -1);
+                                                         DNF_PACKAGE_INFO_INSTALL,
+                                                         DNF_PACKAGE_INFO_UPDATE,
+                                                         DNF_PACKAGE_INFO_DOWNGRADE, -1);
   for (guint i = 0; i < packages->len; i++)
     {
       DnfPackage *pkg = packages->pdata[i];
