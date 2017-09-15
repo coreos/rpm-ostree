@@ -128,6 +128,7 @@ cd /ostree/repo/tmp
 rm vmcheck -rf
 ostree checkout vmcheck vmcheck --fsync=0
 (cat vmcheck/usr/bin/ls; echo more stuff) > vmcheck/usr/bin/ls.new
+chmod a+x vmcheck/usr/bin/ls.new
 mv vmcheck/usr/bin/ls{.new,}
 ostree commit -b vmcheck --tree=dir=vmcheck --link-checkout-speedup
 rm vmcheck -rf
