@@ -65,16 +65,26 @@ vm_build_rpm test-livefs-with-etc \
          /etc/%{name}/*
          /etc/opt/%{name}*"
 
+# Simulate a service that adds a user and has data in tmpfiles.d
+vm_build_rpm test-livefs-service \
+             build "echo test-livefs-service > test-livefs-service.txt" \
+             install "mkdir -p %{buildroot}/{usr/share,var/lib/%{name}}
+                      install test-livefs-service.txt %{buildroot}/usr/share" \
+             pre "groupadd -r livefs-group
+                  useradd -r livefs-user -g livefs-group -s /sbin/nologin" \
+             files "/usr/share/%{name}.txt
+                    /var/lib/%{name}"
+
 # make sure there are no config files already present
 vm_cmd rm -rf /etc/test-livefs-with-etc \
               /etc/test-livefs-with-etc.conf \
               /etc/opt/test-livefs-with-etc-opt.conf
 
-vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-with-etc-1.0-1.x86_64.rpm
+vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-{with-etc,service}-1.0-1.x86_64.rpm
 assert_livefs_ok
 vm_rpmostree ex livefs
-vm_cmd rpm -q foo test-livefs-with-etc > rpmq.txt
-assert_file_has_content rpmq.txt foo-1.0-1 test-livefs-with-etc-1.0-1
+vm_cmd rpm -q foo test-livefs-{with-etc,service} > rpmq.txt
+assert_file_has_content rpmq.txt foo-1.0-1 test-livefs-{with-etc,service}-1.0-1
 vm_cmd cat /etc/test-livefs-with-etc.conf > test-livefs-with-etc.conf
 assert_file_has_content test-livefs-with-etc.conf "A config file for test-livefs-with-etc"
 for v in subconfig-one subconfig-two subdir/subconfig-three; do
@@ -83,6 +93,13 @@ for v in subconfig-one subconfig-two subdir/subconfig-three; do
 done
 vm_cmd cat /etc/opt/test-livefs-with-etc-opt.conf > test-livefs-with-etc.conf
 assert_file_has_content test-livefs-with-etc.conf "file-in-opt-subdir"
+# Test /usr/lib/{passwd,group} bits
+vm_cmd getent passwd livefs-user > test-livefs-user.txt
+assert_file_has_content test-livefs-user.txt livefs-user
+vm_cmd getent group livefs-group > test-livefs-group.txt
+assert_file_has_content test-livefs-group.txt livefs-group
+# Test systemd-tmpfiles
+vm_cmd test -d /var/lib/test-livefs-service
 
 echo "ok livefs stage2"
 

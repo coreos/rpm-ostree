@@ -73,6 +73,7 @@ typedef struct {
   guint refcount;
   CommitDiffFlags flags;
   guint n_usretc;
+  guint n_tmpfilesd;
 
   char *from;
   char *to;
@@ -162,6 +163,8 @@ diff_one_path (CommitDiff        *diff,
       diff->flags |= COMMIT_DIFF_FLAGS_ETC;
       diff->n_usretc++;
     }
+  else if (g_str_has_prefix (path, "/usr/lib/tmpfiles.d"))
+    diff->n_tmpfilesd++;
   else if (path_is_boot (path))
     diff->flags |= COMMIT_DIFF_FLAGS_BOOT;
   else if (path_is_rootfs (path))
@@ -449,6 +452,76 @@ checkout_add_usr (OstreeRepo *repo,
   return TRUE;
 }
 
+/* Even when doing a pure "add" there are some things we need to actually
+ * replace:
+ *
+ *  - rpm database
+ *  - /usr/lib/{passwd,group}
+ *
+ * This function can swap in a new file/directory.
+ */
+static gboolean
+replace_subpath (OstreeRepo *repo,
+                 int deployment_dfd,
+                 GLnxTmpDir *tmpdir,
+                 const char *target_csum,
+                 const char *subpath,
+                 GCancellable *cancellable,
+                 GError **error)
+{
+  /* The subpath for ostree_repo_checkout_at() must be absolute, but
+   * our real filesystem paths must be relative.
+   */
+  g_assert_cmpint (*subpath, ==, '/');
+  const char *relsubpath = subpath += strspn (subpath, "/");
+  const char *bname = glnx_basename (relsubpath);
+
+  /* See if it exists, if it does gather stat info; we need to handle
+   * directories differently from non-dirs.
+   */
+  struct stat stbuf;
+  if (!glnx_fstatat_allow_noent (deployment_dfd, relsubpath, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+    return FALSE;
+  if (errno == ENOENT)
+    return TRUE;  /* Do nothing if the path doesn't exist */
+
+  OstreeRepoCheckoutAtOptions replace_checkout_opts = { .mode = OSTREE_REPO_CHECKOUT_MODE_NONE,
+                                                        .no_copy_fallback = TRUE,
+                                                        .subpath = subpath };
+  /* We need to differentiate nondirs vs dirs; for two reasons.  First,
+   * see the /etc path code - ostree_repo_checkout_at() has
+   * some legacy bits around checking out individual files.
+   *
+   * Second, for directories we want RENAME_EXCHANGE if at all possible, but for
+   * non-dirs there's no reason not to just use plain old renameat() which will
+   * also work atomically even on old kernels (e.g. CentOS7). For some critical
+   * files like /usr/lib/passwd we really do want atomicity.
+   */
+  const gboolean target_is_nondirectory = !S_ISDIR (stbuf.st_mode);
+  if (target_is_nondirectory)
+    {
+      if (!ostree_repo_checkout_at (repo, &replace_checkout_opts, tmpdir->fd, ".",
+                                    target_csum, cancellable, error))
+        return FALSE;
+      if (!glnx_renameat (tmpdir->fd, bname, deployment_dfd, relsubpath, error))
+        return FALSE;
+    }
+  else
+    {
+      if (!ostree_repo_checkout_at (repo, &replace_checkout_opts, tmpdir->fd, bname,
+                                    target_csum, cancellable, error))
+        return FALSE;
+
+      if (glnx_renameat2_exchange (tmpdir->fd, bname, deployment_dfd, relsubpath) < 0)
+        return glnx_throw_errno_prefix (error, "rename(..., RENAME_EXCHANGE) for %s", subpath);
+      /* And nuke the old one */
+      if (!glnx_shutil_rm_rf_at (tmpdir->fd, bname, cancellable, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
 /* Update the origin for @booted with new livefs state */
 static gboolean
 write_livefs_state (OstreeSysroot    *sysroot,
@@ -473,8 +546,6 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
                                   GCancellable *cancellable,
                                   GError **error)
 {
-  static const char orig_rpmdb_path[] = "usr/share/rpm.rpmostree-orig";
-
   /* Initial setup - load sysroot, repo, and booted deployment */
   glnx_unref_object OstreeRepo *repo = NULL;
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
@@ -628,28 +699,63 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
   if (!checkout_add_usr (repo, deployment_dfd, diff, target_csum, cancellable, error))
     return FALSE;
 
-  /* Start replacing the rpmdb. First, ensure the temporary dir for the new
-     version doesn't exist */
-  if (!glnx_shutil_rm_rf_at (deployment_dfd, orig_rpmdb_path, cancellable, error))
-    return FALSE;
-  /* Check out the new rpmdb */
-  { OstreeRepoCheckoutAtOptions rpmdb_checkout_opts = { .mode = OSTREE_REPO_CHECKOUT_MODE_NONE,
-                                                        .no_copy_fallback = TRUE,
-                                                        .subpath = "/usr/share/rpm" };
-
-
-    if (!ostree_repo_checkout_at (repo, &rpmdb_checkout_opts, deployment_dfd, orig_rpmdb_path,
-                                  target_csum, cancellable, error))
+  /* And files that we always need to replace; the rpmdb, /usr/lib/passwd. We
+   * make a tmpdir just for this since it's a more convenient place to put
+   * temporary files/dirs without generating tempnames.
+   */
+  { g_auto(GLnxTmpDir) replace_tmpdir = { 0, };
+    if (!glnx_mkdtempat (ostree_repo_get_dfd (repo), "tmp/rpmostree-livefs.XXXXXX", 0700,
+                         &replace_tmpdir, error))
       return FALSE;
+
+    const char *replace_paths[] = { "/usr/share/rpm", "/usr/lib/passwd", "/usr/lib/group" };
+    for (guint i = 0; i < G_N_ELEMENTS(replace_paths); i++)
+      {
+        const char *replace_path = replace_paths[i];
+        if (!replace_subpath (repo, deployment_dfd, &replace_tmpdir,
+                              target_csum, replace_path,
+                              cancellable, error))
+          return FALSE;
+      }
   }
-  /* Now, RENAME_EXCHANGE the two */
-  if (glnx_renameat2_exchange (deployment_dfd, "usr/share/rpm", deployment_dfd, orig_rpmdb_path) < 0)
-    return glnx_throw_errno_prefix (error, "%s", "rename(..., RENAME_EXCHANGE) for rpmdb");
-  /* And nuke the old one */
-  if (!glnx_shutil_rm_rf_at (deployment_dfd, orig_rpmdb_path, cancellable, error))
-    return FALSE;
 
   rpmostree_output_task_end ("done");
+
+  if (diff->n_tmpfilesd > 0)
+    {
+      const char *tmpfiles_prefixes[] = { "/run/", "/var/"};
+      const char *tmpfiles_argv[] = { "systemd-tmpfiles", "--create",
+                                      "--prefix", NULL, NULL };
+
+      rpmostree_output_task_begin ("Running systemd-tmpfiles for /run,/var");
+
+      for (guint i = 0; i < G_N_ELEMENTS (tmpfiles_prefixes); i++)
+        {
+          const char *prefix = tmpfiles_prefixes[i];
+          GLNX_AUTO_PREFIX_ERROR ("Executing systemd-tmpfiles", error);
+          tmpfiles_argv[G_N_ELEMENTS(tmpfiles_argv)-2] = prefix;
+          g_autoptr(GSubprocess) subproc = g_subprocess_newv ((const char *const*)tmpfiles_argv,
+                                                              G_SUBPROCESS_FLAGS_STDERR_PIPE |
+                                                              G_SUBPROCESS_FLAGS_STDOUT_SILENCE,
+                                                              error);
+          if (!subproc)
+            return FALSE;
+          g_autofree char *stderr_buf = NULL;
+          if (!g_subprocess_communicate_utf8 (subproc, NULL, cancellable,
+                                              NULL, &stderr_buf, error))
+            return FALSE;
+          if (!g_subprocess_get_successful (subproc))
+            {
+              /* Only dump stderr if it actually failed; otherwise we know
+               * there are (harmless) warnings, no need to bother everyone.
+               */
+              sd_journal_print (LOG_ERR, "systemd-tmpfiles failed: %s", stderr_buf);
+              return FALSE;
+            }
+        }
+
+      rpmostree_output_task_end ("done");
+    }
 
   if (requires_etc_merge)
     {
