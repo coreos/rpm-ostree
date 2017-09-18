@@ -21,7 +21,8 @@ pkg_upgrade
 pkg_install_builddeps rpm-ostree
 # Mostly dependencies for tests
 pkg_install ostree{,-devel,-grub2} createrepo_c /usr/bin/jq PyYAML clang \
-    libubsan libasan libtsan elfutils fuse sudo python-gobject-base
+    libubsan libasan libtsan elfutils fuse sudo python-gobject-base \
+    selinux-policy-devel
 # For ex-container tests
 pkg_install_if_os fedora parallel
 
