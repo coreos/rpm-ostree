@@ -336,6 +336,11 @@ vm_build_rpm() {
     vm_send_test_repo 0 # XXX use rsync
 }
 
+vm_build_selinux_rpm() {
+    build_selinux_rpm "$@"
+    vm_send_test_repo 0 # XXX use rsync
+}
+
 vm_get_journal_cursor() {
   vm_cmd journalctl -o json -n 1 | jq -r '.["__CURSOR"]'
 }

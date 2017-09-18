@@ -488,3 +488,44 @@ baseurl=file:///$PWD/yumrepo
 EOF
     fi
 }
+
+# build an SELinux package ready to be installed -- really, we just support file
+# context entries for now, though it's enough to test policy changes
+# $1 - package name
+# $2+ - pairs of file path regex and context types
+build_selinux_rpm() {
+    local name=$1; shift
+
+    local module_dir=$test_tmpdir/policies/$name
+    mkdir -p $module_dir
+    local module_te=$module_dir/$name.te
+    local module_fc=$module_dir/$name.fc
+
+    # also declare a type associated with the app; any non-trivial SELinux
+    # package will have some type enforcement rules that will require policy
+    # recompilation
+    cat > $module_te <<EOF
+policy_module(${name}, 1.0.0)
+type ${name}_t;
+EOF
+
+    echo -n "" > $module_fc
+
+    while [ $# -ne 0 ]; do
+        local fc_regex=$1; shift
+        local fc_type=$1; shift
+        local fc_label="gen_context(system_u:object_r:$fc_type,s0)"
+        echo "$fc_regex -- $fc_label" >> $module_fc
+    done
+
+    make -C $module_dir -f /usr/share/selinux/devel/Makefile $name.pp
+
+    # We point the spec file directly at our pp. This is a bit underhanded, but
+    # it's cleaner than copying it in and using e.g. Source0 or something.
+    local pp=$(realpath $module_dir/$name.pp)
+    local install_dir=/usr/share/selinux/packages
+    build_rpm $name install "mkdir -p %{buildroot}${install_dir}
+                             install ${pp} %{buildroot}${install_dir}" \
+                    post "semodule -n -i ${install_dir}/${name}.pp" \
+                    files "${install_dir}/${name}.pp"
+}

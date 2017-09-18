@@ -2346,7 +2346,8 @@ rpmostree_context_relabel (RpmOstreeContext *self,
   rpmostree_output_percent_progress_end ();
 
   sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_SELINUX_RELABEL),
-                   "MESSAGE=Relabeled %u/%u pkgs, %u files changed", n_changed_pkgs, n_to_relabel, n_changed_files,
+                   "MESSAGE=Relabeled %u/%u pkgs, %u file%s changed", n_changed_pkgs,
+                   n_to_relabel, n_changed_files, _NS(n_changed_files),
                    "RELABELED_PKGS=%u/%u", n_changed_pkgs, n_to_relabel,
                    "RELABELED_N_CHANGED_FILES=%u", n_changed_files,
                    NULL);
