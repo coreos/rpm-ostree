@@ -16,6 +16,15 @@ pysetjsonmember "units" '["tuned.service"]'
 pysetjsonmember "add-files" '[["foo.txt", "/usr/etc/foo.txt"],
                               ["baz.txt", "/usr/share/baz.txt"],
                               ["bar.txt", "/etc/bar.txt"]]'
+pysetjsonmember "postprocess-script" \"$PWD/postprocess.sh\"
+cat > postprocess.sh << EOF
+#!/bin/bash
+set -xeuo pipefail
+echo misc-tweaks-postprocess-done > /usr/share/misc-tweaks-postprocess-done.txt
+cp -a /usr/etc/foo.txt /usr/share/misc-tweaks-foo.txt
+EOF
+chmod a+x postprocess.sh
+
 pysetjsonmember "remove-files" '["etc/hosts"]'
 pysetjsonmember "remove-from-packages" '[["setup", "/etc/hosts\..*"]]'
 rnd=$RANDOM
@@ -52,6 +61,9 @@ ostree --repo=${repobuild} cat ${treeref} /usr/etc/bar.txt > out.txt
 assert_file_has_content out.txt bar
 ostree --repo=${repobuild} cat ${treeref} /usr/share/baz.txt > out.txt
 assert_file_has_content out.txt baz
+# https://github.com/projectatomic/rpm-ostree/pull/997
+ostree --repo=${repobuild} cat ${treeref} /usr/share/misc-tweaks-foo.txt > out.txt
+assert_file_has_content out.txt $rnd
 echo "ok add-files"
 
 ostree --repo=${repobuild} ls ${treeref} /usr/etc > out.txt

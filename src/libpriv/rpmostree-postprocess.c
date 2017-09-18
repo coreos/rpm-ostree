@@ -1225,18 +1225,15 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   return TRUE;
 }
 
-/**
- * rpmostree_copy_additional_files:
- *
- * Copy external files, if specified in the configuration file, from
+/* Copy external files, if specified in the configuration file, from
  * the context directory to the rootfs.
  */
-gboolean
-rpmostree_copy_additional_files (int            rootfs_dfd,
-                                 GFile         *context_directory,
-                                 JsonObject    *treefile,
-                                 GCancellable  *cancellable,
-                                 GError       **error)
+static gboolean
+copy_additional_files (int            rootfs_dfd,
+                       GFile         *context_directory,
+                       JsonObject    *treefile,
+                       GCancellable  *cancellable,
+                       GError       **error)
 {
   guint len;
   JsonArray *add = NULL;
@@ -1580,6 +1577,10 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
           return FALSE;
       }
   }
+
+  /* Copy in additional files before postprocessing */
+  if (!copy_additional_files (rootfs_fd, context_directory, treefile, cancellable, error))
+    return FALSE;
 
   const char *postprocess_script = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "postprocess-script",

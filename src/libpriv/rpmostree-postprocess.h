@@ -78,9 +78,3 @@ rpmostree_commit (int            rootfs_dfd,
                   char         **out_new_revision,
                   GCancellable  *cancellable,
                   GError       **error);
-gboolean
-rpmostree_copy_additional_files (int            rootfs_dfd,
-                                 GFile         *context_directory,
-                                 JsonObject    *treefile,
-                                 GCancellable  *cancellable,
-                                 GError       **error);
