@@ -90,6 +90,11 @@ void rpmostree_diff_print (OstreeRepo *repo,
                            GPtrArray *modified_new);
 
 gboolean
+rpmostree_str_has_prefix_in_strv (const char *str,
+                                  char      **strv,
+                                  int         n);
+
+gboolean
 rpmostree_str_has_prefix_in_ptrarray (const char *str,
                                       GPtrArray  *prefixes);
 
