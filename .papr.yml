@@ -18,13 +18,11 @@ cluster:
   container:
     image: registry.fedoraproject.org/fedora:26
 
-# https://bugzilla.redhat.com/show_bug.cgi?id=1483553
-#packages:
-#  - git
-#  - rsync
-
 env:
   HOSTS: vmcheck1 vmcheck2 vmcheck3
+  # TODO use -fsanitize=address
+  CFLAGS: '-fsanitize=undefined -fsanitize-undefined-trap-on-error -O2 -Wp,-D_FORTIFY_SOURCE=2'
+  ASAN_OPTIONS: 'detect_leaks=0'  # Right now we're not fully clean, but this gets us use-after-free etc
   CI_PKGS: rsync
 
 tests:
@@ -37,6 +35,7 @@ timeout: 60m
 
 artifacts:
   - test-suite.log
+  - config.log
   - vmcheck
 
 ---
@@ -58,6 +57,11 @@ cluster:
   container:
     # FIXME remove this version binding when rpm-md repos are updated
     image: registry.centos.org/centos/centos:7.3.1611
+
+# We only want the sanitizers on Fedora
+env:
+    HOSTS: vmcheck1 vmcheck2 vmcheck3
+    CFLAGS: ''
 
 extra-repos:
   - name: atomic-centos-continuous
