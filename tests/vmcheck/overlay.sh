@@ -55,6 +55,10 @@ if ! ostree commit --help | grep -q -e --selinux-policy; then
 fi
 # ✀✀✀ END hack to get --selinux-policy ✀✀✀
 
+# ✀✀✀ BEGIN tmp hack for https://github.com/projectatomic/rpm-ostree/pull/999
+rm -vrf vmcheck/usr/etc/selinux/targeted/semanage.*.LOCK
+# ✀✀✀ END tmp hack
+
 ostree refs --delete vmcheck || true
 ostree commit -b vmcheck --link-checkout-speedup \
   --selinux-policy=vmcheck --tree=dir=vmcheck

@@ -371,16 +371,25 @@ rpmostree_file_get_path_cached (GFile *file)
 }
 
 gboolean
-rpmostree_str_has_prefix_in_ptrarray (const char *str,
-                                      GPtrArray  *prefixes)
+rpmostree_str_has_prefix_in_strv (const char *str,
+                                  char      **prefixes,
+                                  int         n)
 {
-  for (guint j = 0; j < prefixes->len; j++)
+  if (n < 0)
+    n = g_strv_length (prefixes);
+  for (int i = 0; i < n; i++)
     {
-      const char *prefix = prefixes->pdata[j];
-      if (g_str_has_prefix (str, prefix))
+      if (g_str_has_prefix (str, prefixes[i]))
         return TRUE;
     }
   return FALSE;
+}
+
+gboolean
+rpmostree_str_has_prefix_in_ptrarray (const char *str,
+                                      GPtrArray  *prefixes)
+{
+  return rpmostree_str_has_prefix_in_strv (str, (char**)prefixes->pdata, prefixes->len);
 }
 
 /* Like g_strv_contains() but for ptrarray */

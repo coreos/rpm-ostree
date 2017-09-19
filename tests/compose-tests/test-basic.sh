@@ -48,3 +48,8 @@ ostree --repo=${repobuild} ls  ${treeref} /tmp > ls.txt
 assert_file_has_content ls.txt 'l00777 0 0      0 /tmp -> sysroot/tmp'
 echo "ok /tmp"
 
+ostree --repo=${repobuild} ls ${treeref} /usr/share/rpm > ls.txt
+assert_not_file_has_content ls.txt '__db' 'lock'
+ostree --repo=${repobuild} ls -R ${treeref} /usr/etc/selinux > ls.txt
+assert_not_file_has_content ls.txt 'LOCK'
+echo "ok no leftover files"
