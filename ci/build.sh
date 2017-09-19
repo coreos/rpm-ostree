@@ -18,12 +18,9 @@ elif [ "$id" == centos ]; then
 fi
 
 pkg_upgrade
-
-install_builddeps rpm-ostree
-
-yum install -y /usr/bin/g-ir-scanner # Accidentally omitted
+pkg_install_builddeps rpm-ostree
 # Mostly dependencies for tests
-yum install -y ostree{,-devel,-grub2} createrepo_c /usr/bin/jq PyYAML clang \
+pkg_install ostree{,-devel,-grub2} createrepo_c /usr/bin/jq PyYAML clang \
     libubsan libasan libtsan elfutils fuse sudo python-gobject-base
 
 if [ -n "${CI_PKGS:-}" ]; then
@@ -33,5 +30,5 @@ fi
 # create an unprivileged user for testing
 adduser testuser
 
-rpm -q ostree{,-devel,-grub2}
+export LSAN_OPTIONS=verbosity=1:log_threads=1
 build --enable-installed-tests --enable-gtk-doc
