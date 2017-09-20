@@ -255,9 +255,6 @@ run_script_in_bwrap_container (int rootfs_fd,
                                /* Scripts can see a /var with compat links like alternatives */
                                "--ro-bind", "./var", "/var",
                                "--tmpfs", "/var/tmp",
-                               /* Allow RPM scripts to change the /etc defaults; note we use bind
-                                * to ensure symlinks work, see https://github.com/projectatomic/rpm-ostree/pull/640 */
-                               "--bind", "./usr/etc", "/etc",
                                NULL);
   if (!bwrap)
     goto out;
