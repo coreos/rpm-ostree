@@ -1160,6 +1160,13 @@ cleanup_selinux_lockfiles (int            rootfs_fd,
                            GCancellable  *cancellable,
                            GError       **error)
 {
+  struct stat stbuf;
+  if (!glnx_fstatat_allow_noent (rootfs_fd, "usr/etc/selinux", &stbuf, 0, error))
+    return FALSE;
+
+  if (errno == ENOENT)
+    return TRUE; /* Note early return */
+
   /* really we only have to do this for the active policy, but let's scan all the dirs */
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
   if (!glnx_dirfd_iterator_init_at (rootfs_fd, "usr/etc/selinux", FALSE, &dfd_iter, error))
