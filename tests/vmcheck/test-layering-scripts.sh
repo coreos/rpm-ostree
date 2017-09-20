@@ -168,3 +168,18 @@ fi
 vm_cmd test -f /home/testuser/somedata -a -f /etc/fstab -a -f /tmp/sometmpfile -a -f /var/tmp/sometmpfile
 # This is the error today, we may improve it later
 assert_file_has_content err.txt 'error: sanitycheck: Executing bwrap(/usr/bin/true)'
+
+vm_build_rpm etc-mutate post "truncate -s 0 /etc/selinux/config"
+if vm_rpmostree install etc-mutate; then
+  assert_not_reached "successfully installed etc-mutate?"
+fi
+
+vm_build_rpm etc-copy post "cp /etc/selinux/config{,.new}
+                            echo '# etc-copy comment' >> /etc/selinux/config.new
+                            mv /etc/selinux/config{.new,}"
+vm_rpmostree install etc-copy
+root=$(vm_get_deployment_root 0)
+vm_cmd cat $root/etc/selinux/config > new-config.txt
+assert_file_has_content new-config.txt etc-copy
+vm_rpmostree cleanup -p
+echo "ok etc rofiles"

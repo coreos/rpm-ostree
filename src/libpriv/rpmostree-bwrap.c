@@ -166,6 +166,12 @@ setup_rofiles_usr (RpmOstreeBwrap *bwrap,
 
   rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", rofiles_mntpath, "/usr", NULL);
 
+  /* also mount /etc from the rofiles mount to allow RPM scripts to change defaults, while
+   * still being protected; note we use bind to ensure symlinks work, see:
+   * https://github.com/projectatomic/rpm-ostree/pull/640 */
+  const char *rofiles_etc_mntpath = glnx_strjoina (rofiles_mntpath, "/etc");
+  rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", rofiles_etc_mntpath, "/etc", NULL);
+
   return TRUE;
 }
 
