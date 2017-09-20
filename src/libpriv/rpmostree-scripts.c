@@ -179,13 +179,28 @@ rpmostree_script_txn_validate (DnfPackage    *package,
   return TRUE;
 }
 
-static void
-script_child_setup_stdin (gpointer data)
-{
-  int fd = GPOINTER_TO_INT (data);
+struct ChildSetupData {
+  gboolean all_fds_initialized;
+  int stdin_fd;
+  int stdout_fd;
+  int stderr_fd;
+};
 
-  if (dup2 (fd, 0) < 0)
-    err (1, "dup2");
+static void
+script_child_setup (gpointer opaque)
+{
+  struct ChildSetupData *data = opaque;
+
+  /* make it really obvious for new users that we expect all fds to be initialized or -1 */
+  if (!data || !data->all_fds_initialized)
+    return;
+
+  if (data->stdin_fd >= 0 && dup2 (data->stdin_fd, STDIN_FILENO) < 0)
+    err (1, "dup2(stdin)");
+  if (data->stdout_fd >= 0 && dup2 (data->stdout_fd, STDOUT_FILENO) < 0)
+    err (1, "dup2(stdout)");
+  if (data->stderr_fd >= 0 && dup2 (data->stderr_fd, STDERR_FILENO) < 0)
+    err (1, "dup2(stderr)");
 }
 
 /* Lowest level script handler in this file; create a bwrap instance and run it
@@ -209,6 +224,8 @@ run_script_in_bwrap_container (int rootfs_fd,
   const char *postscript_path_host = postscript_path_container + 1;
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   gboolean created_var_tmp = FALSE;
+  glnx_fd_close int stdout_fd = -1;
+  glnx_fd_close int stderr_fd = -1;
 
   /* TODO - Create a pipe and send this to bwrap so it's inside the
    * tmpfs.  Note the +1 on the path to skip the leading /.
@@ -259,8 +276,26 @@ run_script_in_bwrap_container (int rootfs_fd,
   if (!bwrap)
     goto out;
 
-  if (stdin_fd >= 0)
-    rpmostree_bwrap_set_child_setup (bwrap, script_child_setup_stdin, GINT_TO_POINTER (stdin_fd));
+
+  struct ChildSetupData data = { .stdin_fd = stdin_fd };
+
+  const char *id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
+  data.stdout_fd = stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
+  if (stdout_fd < 0)
+    {
+      glnx_throw_errno_prefix (error, "While creating stdout stream fd");
+      goto out;
+    }
+
+  data.stderr_fd = stderr_fd = sd_journal_stream_fd (id, LOG_ERR, 0);
+  if (stderr_fd < 0)
+    {
+      glnx_throw_errno_prefix (error, "While creating stderr stream fd");
+      goto out;
+    }
+
+  data.all_fds_initialized = TRUE;
+  rpmostree_bwrap_set_child_setup (bwrap, script_child_setup, &data);
 
   rpmostree_bwrap_append_child_argv (bwrap,
                                      interp,
@@ -268,10 +303,16 @@ run_script_in_bwrap_container (int rootfs_fd,
                                      script_arg,
                                      NULL);
 
-  if (!rpmostree_bwrap_run (bwrap, error))
-    goto out;
+  ret = rpmostree_bwrap_run (bwrap, error);
 
-  ret = TRUE;
+  if (!ret && error)
+    {
+      g_assert (*error);
+      g_autofree char *errmsg = (*error)->message;
+      (*error)->message =
+        g_strdup_printf ("%s. Run `journalctl -t '%s'` for more information.", errmsg, id);
+    }
+
  out:
   (void) unlinkat (rootfs_fd, postscript_path_host, 0);
   if (created_var_tmp)

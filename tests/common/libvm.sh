@@ -339,3 +339,14 @@ vm_build_rpm() {
     build_rpm "$@"
     vm_send_test_repo 0 # XXX use rsync
 }
+
+vm_get_journal_cursor() {
+  vm_cmd journalctl -o json -n 1 | jq -r '.["__CURSOR"]'
+}
+
+vm_assert_journal_has_content() {
+  from_cursor=$1; shift
+  # add an extra helping of quotes for hungry ssh
+  vm_cmd journalctl --after-cursor "'$from_cursor'" > tmp-journal.txt
+  assert_file_has_content tmp-journal.txt "$@"
+}
