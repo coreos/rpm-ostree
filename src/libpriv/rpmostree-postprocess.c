@@ -1111,6 +1111,86 @@ rpmostree_rootfs_prepare_links (int           rootfs_fd,
   return TRUE;
 }
 
+static gboolean
+cleanup_leftover_files (int            rootfs_fd,
+                        const char    *subpath,
+                        const char    *files[],
+                        const char    *prefixes[],
+                        GCancellable  *cancellable,
+                        GError       **error)
+{
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  if (!glnx_dirfd_iterator_init_at (rootfs_fd, subpath, TRUE, &dfd_iter, error))
+    return glnx_prefix_error (error, "Opening %s", subpath);
+
+  while (TRUE)
+    {
+      struct dirent *dent = NULL;
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
+        return FALSE;
+      if (!dent)
+        break;
+      if (dent->d_type != DT_REG)
+        continue;
+
+      const char *name = dent->d_name;
+
+      const gboolean in_files = (files != NULL && g_strv_contains (files, name));
+      const gboolean has_prefix =
+        (prefixes != NULL && rpmostree_str_has_prefix_in_strv (name, (char**)prefixes, -1));
+
+      if (!in_files && !has_prefix)
+        continue;
+
+      if (unlinkat (dfd_iter.fd, name, 0) < 0)
+        return glnx_throw_errno_prefix (error, "Unlinking %s: ", name);
+    }
+
+  return TRUE;
+}
+
+static const char *selinux_leftover_files[] = { "semanage.trans.LOCK",
+                                                "semanage.read.LOCK", NULL };
+static const char *rpmdb_leftover_files[] = { ".dbenv.lock",
+                                              ".rpm.lock", NULL };
+static const char *rpmdb_leftover_prefixes[] = { "__db.", NULL };
+
+static gboolean
+cleanup_selinux_lockfiles (int            rootfs_fd,
+                           GCancellable  *cancellable,
+                           GError       **error)
+{
+  struct stat stbuf;
+  if (!glnx_fstatat_allow_noent (rootfs_fd, "usr/etc/selinux", &stbuf, 0, error))
+    return FALSE;
+
+  if (errno == ENOENT)
+    return TRUE; /* Note early return */
+
+  /* really we only have to do this for the active policy, but let's scan all the dirs */
+  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+  if (!glnx_dirfd_iterator_init_at (rootfs_fd, "usr/etc/selinux", FALSE, &dfd_iter, error))
+    return glnx_prefix_error (error, "Opening /usr/etc/selinux");
+
+  while (TRUE)
+    {
+      struct dirent *dent = NULL;
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
+        return FALSE;
+      if (!dent)
+        break;
+      if (dent->d_type != DT_DIR)
+        continue;
+
+      const char *name = dent->d_name;
+      if (!cleanup_leftover_files (dfd_iter.fd, name, selinux_leftover_files, NULL,
+                                   cancellable, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
 /**
  * rpmostree_rootfs_postprocess_common:
  *
@@ -1129,32 +1209,12 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   if (!rename_if_exists (rootfs_fd, "etc", "usr/etc", error))
     return FALSE;
 
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  if (!glnx_dirfd_iterator_init_at (rootfs_fd, "usr/share/rpm", TRUE, &dfd_iter, error))
-    return glnx_prefix_error (error, "Opening usr/share/rpm");
+  if (!cleanup_leftover_files (rootfs_fd, "usr/share/rpm", rpmdb_leftover_files,
+                               rpmdb_leftover_prefixes, cancellable, error))
+    return FALSE;
 
-  while (TRUE)
-    {
-      struct dirent *dent = NULL;
-      const char *name;
-
-      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
-        return FALSE;
-      if (!dent)
-        break;
-      if (dent->d_type != DT_REG)
-        continue;
-
-      name = dent->d_name;
-
-      if (!(g_str_has_prefix (name, "__db.") ||
-            strcmp (name, ".dbenv.lock") == 0 ||
-            strcmp (name, ".rpm.lock") == 0))
-        continue;
-
-      if (unlinkat (dfd_iter.fd, name, 0) < 0)
-        return glnx_throw_errno_prefix (error, "Unlinking %s: ", name);
-    }
+  if (!cleanup_selinux_lockfiles (rootfs_fd, cancellable, error))
+    return FALSE;
 
   if (!rpmostree_passwd_cleanup (rootfs_fd, cancellable, error))
     return FALSE;
