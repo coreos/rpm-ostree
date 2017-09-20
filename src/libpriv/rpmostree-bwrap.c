@@ -300,7 +300,7 @@ rpmostree_bwrap_set_child_setup (RpmOstreeBwrap *bwrap,
 
 gboolean
 rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
-                     GError **error)
+                     GError        **error)
 {
   int estatus;
   const char *current_lang = getenv ("LANG");
@@ -328,10 +328,11 @@ rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
     const char *errmsg = glnx_strjoina ("Executing bwrap(", bwrap->child_argv0, ")");
     GLNX_AUTO_PREFIX_ERROR (errmsg, error);
 
-    if (!g_spawn_sync (NULL, (char**)bwrap->argv->pdata, (char**) bwrap_env, G_SPAWN_SEARCH_PATH,
-                       bwrap_child_setup, bwrap,
-                       NULL, NULL, &estatus, error))
+    if (!g_spawn_sync (NULL, (char**)bwrap->argv->pdata, (char**) bwrap_env,
+                       G_SPAWN_SEARCH_PATH, bwrap_child_setup, bwrap, NULL, NULL,
+                       &estatus, error))
       return FALSE;
+
     if (!g_spawn_check_exit_status (estatus, error))
       return FALSE;
   }

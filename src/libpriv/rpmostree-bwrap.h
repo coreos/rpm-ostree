@@ -50,6 +50,7 @@ void rpmostree_bwrap_set_child_setup (RpmOstreeBwrap *bwrap,
                                       GSpawnChildSetupFunc func,
                                       gpointer             data);
 
-gboolean rpmostree_bwrap_run (RpmOstreeBwrap *bwrap, GError **error);
+gboolean rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
+                              GError        **error);
 
 gboolean rpmostree_bwrap_selftest (GError **error);
