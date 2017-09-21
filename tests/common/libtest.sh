@@ -342,6 +342,19 @@ ensure_dbus ()
     fi
 }
 
+# https://github.com/ostreedev/ostree/commit/47b4dd1b38e422254afa67756873957c25aeab6d
+# Unfortunately, introspection uses dlopen(), which doesn't quite
+# work when the DSO is compiled with ASAN but the outer executable
+# isn't.
+skip_one_with_asan () {
+    if test -n "${BUILDOPT_ASAN:-}"; then
+        echo "ok # SKIP - built with ASAN"
+        return 0
+    else
+        return 1
+    fi
+}
+
 assert_status_file_jq() {
     status_file=$1; shift
     for expression in "$@"; do

@@ -15,7 +15,7 @@ AM_TESTS_ENVIRONMENT += \
 	GI_TYPELIB_PATH=$$(cd $(top_builddir) && pwd)$${GI_TYPELIB_PATH:+:$$GI_TYPELIB_PATH} \
 	$(NULL)
 if BUILDOPT_ASAN
-AM_TESTS_ENVIRONMENT += ASAN_OPTIONS=detect_leaks=false
+AM_TESTS_ENVIRONMENT += BUILDOPT_ASAN=yes ASAN_OPTIONS=detect_leaks=false
 endif
 
 testbin_cppflags = $(AM_CPPFLAGS) -I $(srcdir)/src/libpriv -I $(srcdir)/libglnx -I $(srcdir)/tests/common

@@ -202,7 +202,8 @@ fi
 assert_file_has_content err.txt 'Unknown.*command'
 echo "ok error on unknown command"
 
-cat >test-rpmostree-gi-arch <<EOF
+if ! skip_one_with_asan; then
+    cat >test-rpmostree-gi-arch <<EOF
 #!/usr/bin/python2
 import gi
 gi.require_version("RpmOstree", "1.0")
@@ -210,14 +211,17 @@ from gi.repository import RpmOstree
 assert RpmOstree.get_basearch() == 'x86_64'
 assert RpmOstree.varsubst_basearch('http://example.com/foo/\${basearch}/bar') == 'http://example.com/foo/x86_64/bar'
 EOF
-chmod a+x test-rpmostree-gi-arch
-case $(arch) in
-    x86_64) ./test-rpmostree-gi-arch;;
-    *) echo "Skipping RPM architecture test on $(arch)"
-esac
-echo "ok rpmostree arch"
+    chmod a+x test-rpmostree-gi-arch
+    case $(arch) in
+        x86_64) ./test-rpmostree-gi-arch
+                echo "ok rpmostree arch"
+                ;;
+        *) echo "ok # SKIP Skipping RPM architecture test on $(arch)"
+    esac
+fi
 
-cat >test-rpmostree-gi <<EOF
+if ! skip_one_with_asan; then
+    cat >test-rpmostree-gi <<EOF
 #!/usr/bin/python2
 import gi
 gi.require_version("RpmOstree", "1.0")
@@ -226,6 +230,7 @@ assert RpmOstree.check_version(2017, 6)
 # If this fails for you, please come back in a time machine and say hi
 assert not RpmOstree.check_version(3000, 1)
 EOF
-chmod a+x test-rpmostree-gi
-./test-rpmostree-gi
-echo "ok rpmostree version"
+    chmod a+x test-rpmostree-gi
+    ./test-rpmostree-gi
+    echo "ok rpmostree version"
+fi
