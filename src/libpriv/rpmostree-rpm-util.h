@@ -143,6 +143,15 @@ typedef enum {
   PKG_NEVRA_FLAGS_ARCH = (1 << 3)
 } RpmOstreePkgNevraFlags;
 
+void
+rpmostree_custom_nevra (GString    *buffer,
+                        const char *name,
+                        uint64_t    epoch,
+                        const char *version,
+                        const char *release,
+                        const char *arch,
+                        RpmOstreePkgNevraFlags flags);
+
 char *
 rpmostree_custom_nevra_strdup (const char *name,
                                uint64_t    epoch,
