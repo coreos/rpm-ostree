@@ -60,6 +60,7 @@ cluster:
 
 # We only want the sanitizers on Fedora
 env:
+    HOSTS: vmcheck1 vmcheck2 vmcheck3
     CFLAGS: ''
 
 extra-repos:
