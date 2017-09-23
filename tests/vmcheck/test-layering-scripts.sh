@@ -174,6 +174,13 @@ if vm_rpmostree install etc-mutate; then
   assert_not_reached "successfully installed etc-mutate?"
 fi
 
+# Ensure this is reset; at least in the Vagrant box with
+# fedora-atomic:fedora/26/x86_64/atomic-host
+# Version: 26.131 (2017-09-19 22:29:04)
+# Commit: 98088cb6ed2a4b3f7e4e7bf6d34f9e137c296bc43640b4c1967631f22fe1802f
+# it starts out modified - the modification is just deletion of trailing
+# whitespace.
+vm_cmd cp /{usr/,}etc/selinux/config
 vm_build_rpm etc-copy post "cp /etc/selinux/config{,.new}
                             echo '# etc-copy comment' >> /etc/selinux/config.new
                             mv /etc/selinux/config{.new,}"
