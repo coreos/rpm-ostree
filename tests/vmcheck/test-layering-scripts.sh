@@ -168,3 +168,25 @@ fi
 vm_cmd test -f /home/testuser/somedata -a -f /etc/fstab -a -f /tmp/sometmpfile -a -f /var/tmp/sometmpfile
 # This is the error today, we may improve it later
 assert_file_has_content err.txt 'error: sanitycheck: Executing bwrap(/usr/bin/true)'
+
+vm_build_rpm etc-mutate post "truncate -s 0 /etc/selinux/config"
+if vm_rpmostree install etc-mutate; then
+  assert_not_reached "successfully installed etc-mutate?"
+fi
+
+# Ensure this is reset; at least in the Vagrant box with
+# fedora-atomic:fedora/26/x86_64/atomic-host
+# Version: 26.131 (2017-09-19 22:29:04)
+# Commit: 98088cb6ed2a4b3f7e4e7bf6d34f9e137c296bc43640b4c1967631f22fe1802f
+# it starts out modified - the modification is just deletion of trailing
+# whitespace.
+vm_cmd cp /{usr/,}etc/selinux/config
+vm_build_rpm etc-copy post "cp /etc/selinux/config{,.new}
+                            echo '# etc-copy comment' >> /etc/selinux/config.new
+                            mv /etc/selinux/config{.new,}"
+vm_rpmostree install etc-copy
+root=$(vm_get_deployment_root 0)
+vm_cmd cat $root/etc/selinux/config > new-config.txt
+assert_file_has_content new-config.txt etc-copy
+vm_rpmostree cleanup -p
+echo "ok etc rofiles"
