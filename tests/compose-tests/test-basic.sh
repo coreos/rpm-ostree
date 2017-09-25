@@ -53,3 +53,9 @@ assert_not_file_has_content ls.txt '__db' 'lock'
 ostree --repo=${repobuild} ls -R ${treeref} /usr/etc/selinux > ls.txt
 assert_not_file_has_content ls.txt 'LOCK'
 echo "ok no leftover files"
+
+ostree --repo=${repobuild} cat ${treeref} /usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf > autovar.txt
+# Picked this one at random as an example of something that won't likely be
+# converted to tmpfiles.d upstream.  But if it is, we can change this test.
+assert_file_has_content_literal autovar.txt 'd /var/empty/sshd 0711 0 0 - -'
+echo "ok autovar'

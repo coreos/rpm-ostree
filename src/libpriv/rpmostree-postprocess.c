@@ -520,15 +520,14 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
         }
     }
 
-  /* Append to an existing one for package layering */
-  glnx_fd_close int tmpfiles_fd = openat (dest_rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
-                                          O_WRONLY | O_CREAT | O_APPEND | O_NOCTTY, 0644);
-  if (tmpfiles_fd == -1)
-    return glnx_throw_errno_prefix (error, "openat");
-
-  glnx_unref_object GOutputStream *tmpfiles_out =
-    g_unix_output_stream_new (tmpfiles_fd, FALSE);
-
+  /* Convert /var wholesale to tmpfiles.d. Note that with unified core, this
+   * code should no longer be necessary as we convert packages on import.
+   */
+  g_auto(GLnxTmpfile) tmpf = { 0, };
+  if (!glnx_open_tmpfile_linkable_at (dest_rootfs_dfd, "usr/lib/tmpfiles.d", O_WRONLY | O_CLOEXEC,
+                                      &tmpf, error))
+    return FALSE;
+  g_autoptr(GOutputStream) tmpfiles_out = g_unix_output_stream_new (tmpf.fd, FALSE);
   if (!tmpfiles_out)
     return FALSE;
 
@@ -537,6 +536,11 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
     return FALSE;
 
   if (!g_output_stream_close (tmpfiles_out, cancellable, error))
+    return FALSE;
+
+  if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
+                             dest_rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
+                             error))
     return FALSE;
 
   return TRUE;
