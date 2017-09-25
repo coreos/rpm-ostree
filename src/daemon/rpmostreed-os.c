@@ -1133,6 +1133,70 @@ out:
 
   return TRUE;
 }
+static RpmOstreeTransactionKernelArgFlags
+kernel_arg_flags_from_options (GVariant *options)
+{
+  RpmOstreeTransactionKernelArgFlags ret = 0;
+  g_auto(GVariantDict) dict;
+  g_variant_dict_init (&dict, options);
+
+  if (vardict_lookup_bool (&dict, "import-proc-cmdline", FALSE))
+    ret |= RPMOSTREE_TRANSACTION_KERNEL_ARG_FLAG_IMPORT_CMD;
+
+  return ret;
+}
+
+static gboolean
+os_handle_kernel_args (RPMOSTreeOS *interface,
+                       GDBusMethodInvocation *invocation,
+                       const char * const *kernel_args_added,
+                       const char * const *kernel_args_replaced,
+                       const char * const *kernel_args_deleted,
+                       GVariant *arg_options)
+{
+  RpmostreedOS *self = RPMOSTREED_OS (interface);
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
+  GError *local_error = NULL;
+
+  transaction = merge_compatible_txn (self, invocation);
+  if (transaction)
+    goto out;
+
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
+    goto out;
+  const char *osname = rpmostree_os_get_name (interface);
+
+  transaction = rpmostreed_transaction_new_kernel_arg (invocation,
+                                                       ot_sysroot,
+                                                       osname,
+                                                       kernel_args_added,
+                                                       kernel_args_replaced,
+                                                       kernel_args_deleted,
+                                                       kernel_arg_flags_from_options (arg_options),
+                                                       cancellable,
+                                                       &local_error);
+  if (transaction == NULL)
+    goto out;
+
+  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+
+out:
+  if (local_error != NULL)
+    g_dbus_method_invocation_take_error (invocation, local_error);
+  else
+    {
+      const char *client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_kernel_args (interface, invocation, client_address);
+    }
+
+  return TRUE;
+}
 
 static gboolean
 os_handle_cleanup (RPMOSTreeOS *interface,
@@ -1595,6 +1659,7 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_refresh_md                 = os_handle_refresh_md;
   iface->handle_pkg_change                 = os_handle_pkg_change;
   iface->handle_set_initramfs_state        = os_handle_set_initramfs_state;
+  iface->handle_kernel_args                = os_handle_kernel_args;
   iface->handle_cleanup                    = os_handle_cleanup;
   iface->handle_update_deployment          = os_handle_update_deployment;
   iface->handle_get_cached_rebase_rpm_diff = os_handle_get_cached_rebase_rpm_diff;
