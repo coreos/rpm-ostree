@@ -642,13 +642,22 @@ rpmostree_passwd_migrate_except_root (int            rootfs_dfd,
 {
   GLNX_AUTO_PREFIX_ERROR ("passwd migration", error);
   const char *name = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD ? "passwd" : "group";
+  struct stat stbuf;
+  const char *etc_path;
 
-  const char *src_path = glnx_strjoina ("etc/", name);
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, "usr/etc", &stbuf, 0, error))
+    return FALSE;
+  if (errno == ENOENT)
+    etc_path = "etc";
+  else
+    etc_path = "usr/etc";
+
+  const char *src_path = glnx_strjoina (etc_path, "/", name);
   g_autoptr(FILE) src_stream = open_file_stream_read_at (rootfs_dfd, src_path, error);
   if (!src_stream)
     return FALSE;
 
-  const char *etctmp_path = glnx_strjoina ("etc/", name, ".tmp");
+  const char *etctmp_path = glnx_strjoina (etc_path, "/", name, ".tmp");
   g_autoptr(FILE) etcdest_stream = open_file_stream_write_at (rootfs_dfd, etctmp_path, "w", error);
   if (!etcdest_stream)
     return FALSE;

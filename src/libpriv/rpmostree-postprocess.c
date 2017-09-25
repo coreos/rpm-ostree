@@ -99,6 +99,37 @@ run_bwrap_mutably (int           rootfs_fd,
   return TRUE;
 }
 
+static gboolean
+rename_if_exists (int         src_dfd,
+                  const char *from,
+                  int         dest_dfd,
+                  const char *to,
+                  GError    **error)
+{
+  struct stat stbuf;
+  const char *errmsg = glnx_strjoina ("renaming ", from);
+  GLNX_AUTO_PREFIX_ERROR (errmsg, error);
+
+  if (!glnx_fstatat_allow_noent (src_dfd, from, &stbuf, 0, error))
+    return FALSE;
+  if (errno == 0)
+    {
+      if (renameat (src_dfd, from, dest_dfd, to) < 0)
+        {
+          /* Handle empty directory in legacy location */
+          if (errno == EEXIST)
+            {
+              if (unlinkat (src_dfd, from, AT_REMOVEDIR) < 0)
+                return glnx_throw_errno_prefix (error, "rmdirat(%s)", from);
+            }
+          else
+            return glnx_throw_errno_prefix (error, "renameat(%s)", to);
+        }
+    }
+
+  return TRUE;
+}
+
 typedef struct {
   const char *target;
   const char *src;
@@ -257,7 +288,7 @@ process_kernel_and_initramfs (int            rootfs_dfd,
    * /usr/lib/ostree-boot; this will also take care of moving the kernel in legacy
    * paths (CentOS, Fedora <= 24), etc.
    */
-  if (!glnx_renameat (rootfs_dfd, "boot", rootfs_dfd, "usr/lib/ostree-boot", error))
+  if (!rename_if_exists (rootfs_dfd, "boot", rootfs_dfd, "usr/lib/ostree-boot", error))
     return FALSE;
 
   /* Find the kernel in the source root (at this point one of usr/lib/modules or
@@ -720,7 +751,7 @@ replace_nsswitch (int            dfd,
                   GError       **error)
 {
   g_autofree char *nsswitch_contents =
-    glnx_file_get_contents_utf8_at (dfd, "etc/nsswitch.conf", NULL,
+    glnx_file_get_contents_utf8_at (dfd, "usr/etc/nsswitch.conf", NULL,
                                     cancellable, error);
   if (!nsswitch_contents)
     return FALSE;
@@ -730,7 +761,7 @@ replace_nsswitch (int            dfd,
   if (!new_nsswitch_contents)
     return FALSE;
 
-  if (!glnx_file_replace_contents_at (dfd, "etc/nsswitch.conf",
+  if (!glnx_file_replace_contents_at (dfd, "usr/etc/nsswitch.conf",
                                       (guint8*)new_nsswitch_contents, -1,
                                       GLNX_FILE_REPLACE_NODATASYNC,
                                       cancellable, error))
@@ -776,7 +807,7 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
 
   { g_autofree char *orig_contents = NULL;
     g_autofree char *contents = NULL;
-    const char *semanage_path = "etc/selinux/semanage.conf";
+    const char *semanage_path = "usr/etc/selinux/semanage.conf";
 
     orig_contents = glnx_file_get_contents_utf8_at (rootfs_dfd, semanage_path, NULL,
                                                     cancellable, error);
@@ -791,7 +822,7 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
       return glnx_prefix_error (error, "Replacing %s", semanage_path);
   }
 
-  etc_policy_location = glnx_strjoina ("etc/selinux/", name);
+  etc_policy_location = glnx_strjoina ("usr/etc/selinux/", name);
   if (!glnx_opendirat (rootfs_dfd, etc_policy_location, TRUE, &etc_selinux_dfd, error))
     return FALSE;
 
@@ -880,11 +911,9 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
     }
 
   /* We take /usr from the yum content */
-  g_print ("Moving /usr and /etc to target\n");
+  g_print ("Moving /usr to target\n");
   if (!glnx_renameat (src_rootfs_fd, "usr", target_root_dfd, "usr", error))
     return FALSE;
-  if (!glnx_renameat (src_rootfs_fd, "etc", target_root_dfd, "etc", error))
-    return glnx_throw_errno_prefix (error, "renameat");
 
   if (!rpmostree_rootfs_prepare_links (target_root_dfd, cancellable, error))
     return FALSE;
@@ -948,7 +977,7 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
        * rename the source /boot to the target, and will handle everything after
        * that in the target root.
        */
-      if (!glnx_renameat (src_rootfs_fd, "boot", target_root_dfd, "boot", error))
+      if (!rename_if_exists (src_rootfs_fd, "boot", target_root_dfd, "boot", error))
         return FALSE;
 
       if (!process_kernel_and_initramfs (target_root_dfd, treefile,
@@ -1002,36 +1031,6 @@ handle_remove_files_from_package (int               rootfs_fd,
                     return FALSE;
                 }
             }
-        }
-    }
-
-  return TRUE;
-}
-
-static gboolean
-rename_if_exists (int         dfd,
-                  const char *from,
-                  const char *to,
-                  GError    **error)
-{
-  struct stat stbuf;
-  const char *errmsg = glnx_strjoina ("renaming ", from);
-  GLNX_AUTO_PREFIX_ERROR (errmsg, error);
-
-  if (!glnx_fstatat_allow_noent (dfd, from, &stbuf, 0, error))
-    return FALSE;
-  if (errno == 0)
-    {
-      if (renameat (dfd, from, dfd, to) < 0)
-        {
-          /* Handle empty directory in legacy location */
-          if (errno == EEXIST)
-            {
-              if (unlinkat (dfd, from, AT_REMOVEDIR) < 0)
-                return glnx_throw_errno_prefix (error, "rmdirat(%s)", from);
-            }
-          else
-            return glnx_throw_errno_prefix (error, "renameat(%s)", to);
         }
     }
 
@@ -1210,7 +1209,7 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
                                      GCancellable *cancellable,
                                      GError       **error)
 {
-  if (!rename_if_exists (rootfs_fd, "etc", "usr/etc", error))
+  if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
   if (!cleanup_leftover_files (rootfs_fd, "usr/share/rpm", rpmdb_leftover_files,
@@ -1341,6 +1340,9 @@ mutate_os_release (const char    *contents,
   return g_string_free (new_contents, FALSE);
 }
 
+/* Move etc -> usr/etc in the rootfs, and run through treefile
+ * postprocessing.
+ */
 gboolean
 rpmostree_treefile_postprocessing (int            rootfs_fd,
                                    GFile         *context_directory,
@@ -1350,6 +1352,9 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
                                    GCancellable  *cancellable,
                                    GError       **error)
 {
+  if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
+    return FALSE;
+
   JsonArray *units = NULL;
   if (json_object_has_member (treefile, "units"))
     units = json_object_get_array_member (treefile, "units");
@@ -1363,10 +1368,10 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   {
     glnx_fd_close int multiuser_wants_dfd = -1;
 
-    if (!glnx_shutil_mkdir_p_at (rootfs_fd, "etc/systemd/system/multi-user.target.wants", 0755,
+    if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/etc/systemd/system/multi-user.target.wants", 0755,
                                  cancellable, error))
       return FALSE;
-    if (!glnx_opendirat (rootfs_fd, "etc/systemd/system/multi-user.target.wants", TRUE,
+    if (!glnx_opendirat (rootfs_fd, "usr/etc/systemd/system/multi-user.target.wants", TRUE,
                          &multiuser_wants_dfd, error))
       return FALSE;
 
@@ -1418,7 +1423,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
       g_autofree char *dest_default_target_path =
         g_strconcat ("/usr/lib/systemd/system/", default_target, NULL);
 
-      static const char default_target_path[] = "etc/systemd/system/default.target";
+      static const char default_target_path[] = "usr/etc/systemd/system/default.target";
       (void) unlinkat (rootfs_fd, default_target_path, 0);
 
       if (symlinkat (dest_default_target_path, rootfs_fd, default_target_path) < 0)
@@ -1434,6 +1439,13 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   else
     len = 0;
 
+  /* Put /etc back for backwards compatibility */
+  if (len > 0)
+    {
+      if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
+        return FALSE;
+    }
+  /* Process the remove-files element */
   for (guint i = 0; i < len; i++)
     {
       const char *val = _rpmostree_jsonutil_array_require_string_element (remove, i, error);
@@ -1447,6 +1459,12 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 
       g_print ("Deleting: %s\n", val);
       if (!glnx_shutil_rm_rf_at (rootfs_fd, val, cancellable, error))
+        return FALSE;
+    }
+  if (len > 0)
+    {
+      /* And put /etc back to /usr/etc */
+      if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
         return FALSE;
     }
 
@@ -1477,12 +1495,20 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
                                            cancellable, error))
         return glnx_prefix_error (error, "Reading package set");
 
+      /* Backwards compatibility */
+      if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
+        return FALSE;
+
       for (guint i = 0; i < len; i++)
         {
           JsonArray *elt = json_array_get_array_element (remove, i);
           if (!handle_remove_files_from_package (rootfs_fd, refsack, elt, cancellable, error))
             return FALSE;
         }
+
+      /* Backwards compatibility */
+      if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
+        return FALSE;
     }
 
   {
@@ -1502,7 +1528,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
       {
         /* let's try to find the first non-symlink */
         const char *os_release[] = {
-          "etc/os-release",
+          "usr/etc/os-release",
           "usr/lib/os-release",
           "usr/lib/os.release.d/os-release-fedora"
         };
@@ -1593,7 +1619,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
  * Walk over the root filesystem and perform some core conversions
  * from RPM conventions to OSTree conventions.  For example:
  *
- *  * Move /etc to /usr/etc
  *  * Checksum the kernel in /boot
  *  * Migrate content in /var to systemd-tmpfiles
  */
