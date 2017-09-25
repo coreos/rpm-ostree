@@ -744,7 +744,8 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
           if (!g_subprocess_communicate_utf8 (subproc, NULL, cancellable,
                                               NULL, &stderr_buf, error))
             return FALSE;
-          if (!g_subprocess_get_successful (subproc))
+          int estatus = g_subprocess_get_exit_status (subproc);
+          if (!g_spawn_check_exit_status (estatus, error))
             {
               /* Only dump stderr if it actually failed; otherwise we know
                * there are (harmless) warnings, no need to bother everyone.
