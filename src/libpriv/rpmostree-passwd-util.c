@@ -34,10 +34,6 @@
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-passwd-util.h"
 
-/* FIXME: */
-#define OSTREE_GIO_FAST_QUERYINFO ("standard::name,standard::type,standard::size,standard::is-symlink,standard::symlink-target," \
-                                   "unix::device,unix::inode,unix::mode,unix::uid,unix::gid,unix::rdev")
-
 #include "libglnx.h"
 
 /* Recursively search a directory for a subpath
