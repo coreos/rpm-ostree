@@ -32,6 +32,8 @@ static RpmOstreeCommand ex_subcommands[] = {
     "unpack RPM into local OSTree repo", rpmostree_ex_builtin_unpack },
   { "container", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Assemble local unprivileged containers", rpmostree_builtin_container },
+  { "kargs", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    "Query or Modify the kernel arguments", rpmostree_ex_builtin_kargs },
   { NULL, 0, NULL, NULL }
 };
 

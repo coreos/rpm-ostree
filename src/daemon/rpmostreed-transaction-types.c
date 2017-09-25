@@ -1389,3 +1389,96 @@ rpmostreed_transaction_new_refresh_md (GDBusMethodInvocation *invocation,
   return (RpmostreedTransaction *) self;
 
 }
+
+/* ================================KernelArg================================ */
+
+typedef struct {
+  RpmostreedTransaction parent;
+  char  *osname;
+  char **kernel_args_added;
+  char **kernel_args_deleted;
+  char **kernel_args_replaced;
+  RpmOstreeTransactionKernelArgFlags flags;
+} KernelArgTransaction;
+
+typedef RpmostreedTransactionClass KernelArgTransactionClass;
+
+GType kernel_arg_transaction_get_type (void);
+
+G_DEFINE_TYPE (KernelArgTransaction,
+               kernel_arg_transaction,
+               RPMOSTREED_TYPE_TRANSACTION)
+
+static void
+kernel_arg_transaction_finalize (GObject *object)
+{
+  KernelArgTransaction *self;
+
+  self = (KernelArgTransaction *) object;
+  g_free (self->osname);
+  g_strfreev (self->kernel_args_added);
+  g_strfreev (self->kernel_args_deleted);
+  g_strfreev (self->kernel_args_replaced);
+
+  G_OBJECT_CLASS (kernel_arg_transaction_parent_class)->finalize (object);
+}
+
+static gboolean
+kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
+                                GCancellable *cancellable,
+                                GError **error)
+{
+
+
+  return TRUE;
+}
+
+static void
+kernel_arg_transaction_class_init (KernelArgTransactionClass *class)
+{
+  GObjectClass *object_class;
+
+  object_class = G_OBJECT_CLASS (class);
+  object_class->finalize = kernel_arg_transaction_finalize;
+
+  class->execute = kernel_arg_transaction_execute;
+}
+
+static void
+kernel_arg_transaction_init (KernelArgTransaction *self)
+{
+}
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_kernel_arg (GDBusMethodInvocation *invocation,
+                                       OstreeSysroot         *sysroot,
+                                       const char            *osname,
+                                       const char * const *kernel_args_added,
+                                       const char * const *kernel_args_replaced,
+                                       const char * const *kernel_args_deleted,
+                                       RpmOstreeTransactionKernelArgFlags flags,
+                                       GCancellable          *cancellable,
+                                       GError               **error)
+{
+  KernelArgTransaction *self;
+
+  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
+  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+
+  self = g_initable_new (kernel_arg_transaction_get_type (),
+                         cancellable, error,
+                         "invocation", invocation,
+                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
+                         NULL);
+
+  if (self != NULL)
+    {
+      self->osname = g_strdup (osname);
+      self->kernel_args_added = strdupv_canonicalize (kernel_args_added);
+      self->kernel_args_replaced = strdupv_canonicalize (kernel_args_replaced);
+      self->kernel_args_deleted = strdupv_canonicalize (kernel_args_deleted);
+      self->flags = flags;
+    }
+
+  return (RpmostreedTransaction *) self;
+}
