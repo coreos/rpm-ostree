@@ -1705,7 +1705,7 @@ import_one_package (RpmOstreeContext *self,
   OstreeRepo *ostreerepo = get_pkgcache_repo (self);
   g_autofree char *ostree_commit = NULL;
   glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
-  g_autofree char *pkg_path;
+  g_autofree char *pkg_path = NULL;
   DnfRepo *pkg_repo;
 
   int flags = 0;
