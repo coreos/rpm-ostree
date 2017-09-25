@@ -31,10 +31,6 @@
 
 #include <rpm/rpmts.h>
 
-/* FIXME: */
-#define OSTREE_GIO_FAST_QUERYINFO ("standard::name,standard::type,standard::size,standard::is-symlink,standard::symlink-target," \
-                                   "unix::device,unix::inode,unix::mode,unix::uid,unix::gid,unix::rdev")
-
 static inline void
 cleanup_rpmtdFreeData (rpmtd *tdp)
 {
