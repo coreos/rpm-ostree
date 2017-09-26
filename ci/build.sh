@@ -10,11 +10,11 @@ dn=$(dirname $0)
 id=$(. /etc/os-release && echo $ID)
 version_id=$(. /etc/os-release && echo $VERSION_ID)
 if [ "$id" == fedora ] && [ "$version_id" == 26 ]; then
-    echo -e '[fahc]\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/fahc/rdgo/build/\ngpgcheck=0\n' > /etc/yum.repos.d/fahc.repo
+    echo -e '[fahc]\nmetadata_expire=1m\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/fahc/rdgo/build/\ngpgcheck=0\n' > /etc/yum.repos.d/fahc.repo
     # Until we fix https://github.com/rpm-software-management/libdnf/pull/149
     sed -i -e 's,metadata_expire=6h,exclude=ostree ostree-devel ostree-libs ostree-grub2\nmetadata_expire=6h,' /etc/yum.repos.d/fedora-updates.repo
 elif [ "$id" == centos ]; then
-    echo -e '[cahc]\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/build\ngpgcheck=0\n' > /etc/yum.repos.d/cahc.repo
+    echo -e '[cahc]\nmetdata_expire=1m\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/build\ngpgcheck=0\n' > /etc/yum.repos.d/cahc.repo
 fi
 
 pkg_upgrade
