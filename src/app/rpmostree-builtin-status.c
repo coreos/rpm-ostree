@@ -144,14 +144,15 @@ lookup_array_and_canonicalize (GVariantDict *dict,
   return g_steal_pointer (&ret);
 }
 
-static char*
-gv_nevra_to_evr (GVariant *gv_nevra)
+static void
+gv_nevra_to_evr (GString  *buffer,
+                 GVariant *gv_nevra)
 {
   guint64 epoch;
   const char *version, *release;
   g_variant_get (gv_nevra, "(sst&s&ss)", NULL, NULL, &epoch, &version, &release, NULL);
-  return rpmostree_custom_nevra_strdup (NULL, epoch, version, release, NULL,
-                                        PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE);
+  rpmostree_custom_nevra (buffer, NULL, epoch, version, release, NULL,
+                          PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE);
 }
 
 /* We will have an optimized path for the case where there are just
@@ -486,6 +487,10 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       if (origin_base_local_replacements)
         {
           g_autoptr(GString) str = g_string_new ("");
+          g_autoptr(GHashTable) grouped_diffs =
+            g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                                   (GDestroyNotify)g_ptr_array_unref);
+
           const guint n = g_variant_n_children (origin_base_local_replacements);
           for (guint i = 0; i < n; i++)
             {
@@ -498,25 +503,54 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
               g_variant_get_child (gv_nevra_new, 1, "&s", &name_new);
               g_variant_get_child (gv_nevra_old, 1, "&s", &name_old);
 
-              if (str->len)
-                g_string_append (str, ", ");
-
               /* if pkgnames match, print a nicer version like treediff */
               if (g_str_equal (name_new, name_old))
                 {
-                  g_autofree char *old_evr = gv_nevra_to_evr (gv_nevra_old);
-                  g_autofree char *new_evr = gv_nevra_to_evr (gv_nevra_new);
-                  g_string_append_printf (str, "%s %s -> %s", name_new, old_evr, new_evr);
+                  /* let's just use str as a scratchpad to avoid excessive mallocs; the str
+                   * needs to be stretched anyway for the final output */
+                  gsize original_size = str->len;
+                  gv_nevra_to_evr (str, gv_nevra_old);
+                  g_string_append (str, " -> ");
+                  gv_nevra_to_evr (str, gv_nevra_new);
+                  const char *diff = str->str + original_size;
+                  GPtrArray *pkgs = g_hash_table_lookup (grouped_diffs, diff);
+                  if (!pkgs)
+                    {
+                      pkgs = g_ptr_array_new_with_free_func (g_free);
+                      g_hash_table_insert (grouped_diffs, g_strdup (diff), pkgs);
+                    }
+                  g_ptr_array_add (pkgs, g_strdup (name_new));
+                  g_string_truncate (str, original_size);
                 }
               else
                 {
+                  if (str->len)
+                    g_string_append (str, ", ");
+
                   const char *nevra_old;
                   g_variant_get_child (gv_nevra_old, 0, "&s", &nevra_old);
                   g_string_append_printf (str, "%s -> %s", nevra_old, nevra_new);
                 }
               g_ptr_array_add (active_replacements, g_strdup (nevra_new));
             }
+
+          GLNX_HASH_TABLE_FOREACH_KV (grouped_diffs, const char*, diff, GPtrArray*, pkgs)
+            {
+              if (str->len)
+                g_string_append (str, ", ");
+              for (guint i = 0, n = pkgs->len; i < n; i++)
+                {
+                  const char *pkgname = g_ptr_array_index (pkgs, i);
+                  if (i > 0)
+                    g_string_append_c (str, ' ');
+                  g_string_append (str, pkgname);
+                }
+              g_string_append_c (str, ' ');
+              g_string_append (str, diff);
+            }
+
           g_ptr_array_add (active_replacements, NULL);
+
           if (str->len)
             print_kv ("ReplacedBasePackages", max_key_len, str->str);
         }

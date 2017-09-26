@@ -81,6 +81,40 @@ pkg_envra_strdup (Header h1)
   return envra;
 }
 
+void
+rpmostree_custom_nevra (GString    *buffer,
+                        const char *name,
+                        uint64_t    epoch,
+                        const char *version,
+                        const char *release,
+                        const char *arch,
+                        RpmOstreePkgNevraFlags flags)
+{
+  gsize original_len = buffer->len;
+
+  if (flags & PKG_NEVRA_FLAGS_NAME)
+    g_string_append (buffer, name);
+
+  if (flags & (PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
+               PKG_NEVRA_FLAGS_VERSION_RELEASE))
+    {
+      if (buffer->len > original_len)
+        g_string_append_c (buffer, '-');
+
+      if ((flags & PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE) && (epoch > 0))
+        g_string_append_printf (buffer, "%" PRIu64 ":", epoch);
+
+      g_string_append_printf (buffer, "%s-%s", version, release);
+    }
+
+  if (flags & PKG_NEVRA_FLAGS_ARCH)
+    {
+      if (buffer->len > original_len)
+        g_string_append_c (buffer, '.');
+      g_string_append (buffer, arch);
+    }
+}
+
 char *
 rpmostree_custom_nevra_strdup (const char *name,
                                uint64_t    epoch,
@@ -90,29 +124,7 @@ rpmostree_custom_nevra_strdup (const char *name,
                                RpmOstreePkgNevraFlags flags)
 {
   GString *nevra = g_string_new ("");
-
-  if (flags & PKG_NEVRA_FLAGS_NAME)
-    g_string_append (nevra, name);
-
-  if (flags & (PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
-               PKG_NEVRA_FLAGS_VERSION_RELEASE))
-    {
-      if (nevra->len)
-        g_string_append_c (nevra, '-');
-
-      if ((flags & PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE) && (epoch > 0))
-        g_string_append_printf (nevra, "%" PRIu64 ":", epoch);
-
-      g_string_append_printf (nevra, "%s-%s", version, release);
-    }
-
-  if (flags & PKG_NEVRA_FLAGS_ARCH)
-    {
-      if (nevra->len)
-        g_string_append_c (nevra, '.');
-      g_string_append (nevra, arch);
-    }
-
+  rpmostree_custom_nevra (nevra, name, epoch, version, release, arch, flags);
   return g_string_free (nevra, FALSE);
 }
 
