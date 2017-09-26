@@ -97,7 +97,7 @@ vm_assert_status_jq \
 assert_replaced_local_pkg foo-1.0-1.x86_64 foo-2.0-1.x86_64
 assert_replaced_local_pkg fooext-1.0-1.x86_64 fooext-2.0-1.x86_64
 vm_cmd rpm-ostree status > status.txt
-assert_file_has_content_literal status.txt 'foo fooext 1.0-1 -> 2.0-1'
+assert_file_has_content status.txt '\(foo fooext\|fooext foo\) 1\.0-1 -> 2\.0-1'
 echo "ok override replace foo and fooext"
 
 # replace bar with older version
@@ -110,7 +110,7 @@ assert_replaced_local_pkg foo-1.0-1.x86_64 foo-2.0-1.x86_64
 assert_replaced_local_pkg fooext-1.0-1.x86_64 fooext-2.0-1.x86_64
 assert_replaced_local_pkg bar-1.0-1.x86_64 bar-0.9-1.x86_64
 vm_cmd rpm-ostree status > status.txt
-assert_file_has_content_literal status.txt 'foo fooext 1.0-1 -> 2.0-1'
+assert_file_has_content status.txt '\(foo fooext\|fooext foo\) 1\.0-1 -> 2\.0-1'
 assert_file_has_content_literal status.txt 'bar 1.0-1 -> 0.9-1'
 echo "ok override replace bar"
 
