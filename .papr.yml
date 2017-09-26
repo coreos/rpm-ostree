@@ -142,3 +142,6 @@ tests:
   - git clone https://github.com/projectatomic/atomic-host-tests
   - make vmoverlay HOSTS=testnode
   - cd atomic-host-tests && ./.test_director
+
+artifacts:
+  - atomic-host-tests/tests/improved-sanity-test/improved-sanity-test-testnode-journal
