@@ -58,4 +58,4 @@ ostree --repo=${repobuild} cat ${treeref} /usr/lib/tmpfiles.d/rpm-ostree-1-autov
 # Picked this one at random as an example of something that won't likely be
 # converted to tmpfiles.d upstream.  But if it is, we can change this test.
 assert_file_has_content_literal autovar.txt 'd /var/cache 0755 0 0 - -'
-echo "ok autovar'
+echo "ok autovar"
