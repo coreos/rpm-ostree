@@ -151,8 +151,8 @@ gv_nevra_to_evr (GString  *buffer,
   guint64 epoch;
   const char *version, *release;
   g_variant_get (gv_nevra, "(sst&s&ss)", NULL, NULL, &epoch, &version, &release, NULL);
-  rpmostree_custom_nevra_g_string (buffer, NULL, epoch, version, release, NULL,
-                                   PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE);
+  rpmostree_custom_nevra (buffer, NULL, epoch, version, release, NULL,
+                          PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE);
 }
 
 /* We will have an optimized path for the case where there are just
