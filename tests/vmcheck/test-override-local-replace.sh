@@ -24,7 +24,7 @@ set -e
 
 set -x
 
-REPO=/tmp/vmcheck/yumrepo/packages/x86_64
+YUMREPO=/tmp/vmcheck/yumrepo/packages/x86_64
 
 # create a new vmcheck commit which has foo and bar in it already
 
@@ -83,30 +83,35 @@ assert_replaced_local_pkg() {
 
 # try to replace foo without replacing the extension
 vm_build_rpm foo version 2.0
-if vm_rpmostree ex override replace $REPO/foo-2.0-1.x86_64.rpm 2>err.txt; then
+if vm_rpmostree ex override replace $YUMREPO/foo-2.0-1.x86_64.rpm 2>err.txt; then
   assert_not_reached "successfully replaced foo without fooext?"
 fi
 assert_file_has_content err.txt "fooext"
 echo "ok failed to replace foo without fooext"
 
 vm_build_rpm fooext version 2.0 requires "foo = 2.0-1"
-vm_rpmostree ex override replace $REPO/foo{,ext}-2.0-1.x86_64.rpm
+vm_rpmostree ex override replace $YUMREPO/foo{,ext}-2.0-1.x86_64.rpm
 vm_assert_status_jq \
   '.deployments[0]["base-local-replacements"]|length == 2' \
   '.deployments[0]["requested-base-local-replacements"]|length == 2'
 assert_replaced_local_pkg foo-1.0-1.x86_64 foo-2.0-1.x86_64
 assert_replaced_local_pkg fooext-1.0-1.x86_64 fooext-2.0-1.x86_64
+vm_cmd rpm-ostree status > status.txt
+assert_file_has_content_literal status.txt 'foo fooext 1.0-1 -> 2.0-1'
 echo "ok override replace foo and fooext"
 
 # replace bar with older version
 vm_build_rpm bar version 0.9
-vm_rpmostree ex override replace $REPO/bar-0.9-1.x86_64.rpm
+vm_rpmostree ex override replace $YUMREPO/bar-0.9-1.x86_64.rpm
 vm_assert_status_jq \
   '.deployments[0]["base-local-replacements"]|length == 3' \
   '.deployments[0]["requested-base-local-replacements"]|length == 3'
 assert_replaced_local_pkg foo-1.0-1.x86_64 foo-2.0-1.x86_64
 assert_replaced_local_pkg fooext-1.0-1.x86_64 fooext-2.0-1.x86_64
 assert_replaced_local_pkg bar-1.0-1.x86_64 bar-0.9-1.x86_64
+vm_cmd rpm-ostree status > status.txt
+assert_file_has_content_literal status.txt 'foo fooext 1.0-1 -> 2.0-1'
+assert_file_has_content_literal status.txt 'bar 1.0-1 -> 0.9-1'
 echo "ok override replace bar"
 
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
@@ -138,7 +143,7 @@ vm_rpmostree cleanup -p
 # test inactive replacements
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
 vm_rpmostree upgrade
-vm_rpmostree ex override replace $REPO/bar-0.9-1.x86_64.rpm
+vm_rpmostree ex override replace $YUMREPO/bar-0.9-1.x86_64.rpm
 vm_assert_status_jq \
   '.deployments[0]["base-local-replacements"]|length == 1' \
   '.deployments[0]["requested-base-local-replacements"]|length == 1'
@@ -164,8 +169,8 @@ vm_rpmostree cleanup -p
 vm_build_rpm baz
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
 vm_rpmostree upgrade
-vm_rpmostree ex override replace $REPO/bar-0.9-1.x86_64.rpm \
-                       --install $REPO/baz-1.0-1.x86_64.rpm
+vm_rpmostree ex override replace $YUMREPO/bar-0.9-1.x86_64.rpm \
+                       --install $YUMREPO/baz-1.0-1.x86_64.rpm
 vm_assert_status_jq \
   '.deployments[0]["base-local-replacements"]|length == 1' \
   '.deployments[0]["requested-base-local-replacements"]|length == 1' \
