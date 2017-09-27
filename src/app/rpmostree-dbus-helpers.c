@@ -140,9 +140,6 @@ rpmostree_load_sysroot (gchar *sysroot,
 {
   const char *bus_name = NULL;
   glnx_unref_object GDBusConnection *connection = NULL;
-  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GVariantBuilder) options_builder =
-    g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
   _cleanup_peer_ GPid peer_pid = 0;
 
   connection = get_connection_for_path (sysroot, force_peer, &peer_pid,
@@ -152,15 +149,6 @@ rpmostree_load_sysroot (gchar *sysroot,
 
   if (g_dbus_connection_get_unique_name (connection) != NULL)
     bus_name = BUS_NAME;
-
-  sysroot_proxy = rpmostree_sysroot_proxy_new_sync (connection,
-                                                    G_DBUS_PROXY_FLAGS_NONE,
-                                                    bus_name,
-                                                    "/org/projectatomic/rpmostree1/Sysroot",
-                                                    NULL,
-                                                    error);
-  if (sysroot_proxy == NULL)
-    return FALSE;
 
   /* Try to register if we can; it doesn't matter much now since the daemon doesn't
    * auto-exit, though that might change in the future. But only register if we're active or
@@ -178,13 +166,51 @@ rpmostree_load_sysroot (gchar *sysroot,
         should_register = FALSE;
     }
 
-  if (should_register)
+  /* First, call RegisterClient directly for the well-known name, to
+   * cause bus activation and allow race-free idle exit.
+   * https://github.com/projectatomic/rpm-ostree/pull/606
+   * If we get unlucky and try to talk to the daemon in FLUSHING
+   * state, then it won't reply, and we should try again.
+   */
+  static const char sysroot_objpath[] = "/org/projectatomic/rpmostree1/Sysroot";
+  while (should_register)
     {
-      if (!rpmostree_sysroot_call_register_client_sync (sysroot_proxy,
-                                                        g_variant_builder_end (options_builder),
-                                                        cancellable, error))
-        return FALSE;
+      g_autoptr(GError) local_error = NULL;
+      g_autoptr(GVariantBuilder) options_builder =
+        g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+      g_autoptr(GVariant) res =
+        g_dbus_connection_call_sync (connection, bus_name, sysroot_objpath,
+                                     "org.projectatomic.rpmostree1.Sysroot",
+                                     "RegisterClient",
+                                     g_variant_new ("(@a{sv})", g_variant_builder_end (options_builder)),
+                                     (GVariantType*)"()",
+                                     G_DBUS_CALL_FLAGS_NONE, -1,
+                                     cancellable, &local_error);
+      if (res)
+        break;  /* Success! */
+
+      if (g_dbus_error_is_remote_error (local_error))
+        {
+          g_autofree char *remote_err = g_dbus_error_get_remote_error (local_error);
+          /* If this is true, we caught the daemon after it was doing an
+           * idle exit, but while it still owned the name. Retry.
+           */
+          if (g_str_equal (remote_err, "org.freedesktop.DBus.Error.NoReply"))
+            continue;
+          /* Otherwise, fall through */
+        }
+
+      /* Something else went wrong */
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
     }
+
+  glnx_unref_object RPMOSTreeSysroot *sysroot_proxy =
+    rpmostree_sysroot_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_NONE,
+                                      bus_name, "/org/projectatomic/rpmostree1/Sysroot",
+                                      NULL, error);
+  if (sysroot_proxy == NULL)
+    return FALSE;
 
   *out_sysroot_proxy = g_steal_pointer (&sysroot_proxy);
   *out_peer_pid = peer_pid; peer_pid = 0;
