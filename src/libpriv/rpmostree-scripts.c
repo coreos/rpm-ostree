@@ -180,6 +180,7 @@ rpmostree_script_txn_validate (DnfPackage    *package,
 }
 
 struct ChildSetupData {
+  /* note fds are *not* owned */
   gboolean all_fds_initialized;
   int stdin_fd;
   int stdout_fd;
@@ -303,16 +304,19 @@ run_script_in_bwrap_container (int rootfs_fd,
                                      script_arg,
                                      NULL);
 
-  ret = rpmostree_bwrap_run (bwrap, error);
-
-  if (!ret && error)
+  if (!rpmostree_bwrap_run (bwrap, error))
     {
-      g_assert (*error);
-      g_autofree char *errmsg = (*error)->message;
-      (*error)->message =
-        g_strdup_printf ("%s. Run `journalctl -t '%s'` for more information.", errmsg, id);
+      if (error)
+        {
+          g_assert (*error);
+          g_autofree char *errmsg = (*error)->message;
+          (*error)->message =
+            g_strdup_printf ("%s; run `journalctl -t '%s'` for more information", errmsg, id);
+        }
+      goto out;
     }
 
+  ret = TRUE;
  out:
   (void) unlinkat (rootfs_fd, postscript_path_host, 0);
   if (created_var_tmp)

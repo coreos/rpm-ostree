@@ -349,4 +349,5 @@ vm_assert_journal_has_content() {
   # add an extra helping of quotes for hungry ssh
   vm_cmd journalctl --after-cursor "'$from_cursor'" > tmp-journal.txt
   assert_file_has_content tmp-journal.txt "$@"
+  rm -f tmp-journal.txt
 }

@@ -150,6 +150,6 @@ cursor=$(vm_get_journal_cursor)
 if vm_rpmostree install bad-post &> err.txt; then
   assert_not_reached "installing pkg with failing post unexpectedly succeeded"
 fi
-assert_file_has_content err.txt "Run.*journalctl.*for more information"
+assert_file_has_content err.txt "run.*journalctl.*for more information"
 vm_assert_journal_has_content $cursor 'rpm-ostree(bad-post.post).*a bad post'
 echo "ok script output prefixed in journal"
