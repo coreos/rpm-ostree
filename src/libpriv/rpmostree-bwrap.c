@@ -238,13 +238,9 @@ rpmostree_bwrap_new (int rootfs_fd,
       g_autofree char *srcpath = NULL;
       g_autofree char *destpath = NULL;
 
-      if (fstatat (rootfs_fd, subdir, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
-        {
-          if (errno != ENOENT)
-            return glnx_null_throw_errno_prefix (error, "fstatat");
-          continue;
-        }
-      else if (!S_ISLNK (stbuf.st_mode))
+      if (!glnx_fstatat_allow_noent (rootfs_fd, subdir, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+        return FALSE;
+      if (errno == ENOENT || !S_ISLNK (stbuf.st_mode))
         continue;
 
       srcpath = g_strconcat ("usr/", subdir, NULL);

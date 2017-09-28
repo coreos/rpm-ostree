@@ -1104,12 +1104,10 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
       const char *src = glnx_strjoina ("usr/etc/", file);
       const char *tmp = glnx_strjoina ("usr/etc/", file, ".tmp");
 
-      if (fstatat (rootfs_dfd, src, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
-        {
-          if (errno != ENOENT)
-            return glnx_throw_errno_prefix (error, "fstatat");
-          continue;
-        }
+      if (!glnx_fstatat_allow_noent (rootfs_dfd, src, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+        return FALSE;
+      if (errno == ENOENT)
+        continue;
 
       if (!glnx_file_copy_at (rootfs_dfd, src, NULL,
                               rootfs_dfd, tmp,
