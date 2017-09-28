@@ -653,12 +653,9 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
   else
     policy_path = "usr/etc/selinux";
 
-  if (TEMP_FAILURE_RETRY (fstatat (dfd, policy_path, &stbuf, AT_SYMLINK_NOFOLLOW)) != 0)
-    {
-      if (errno != ENOENT)
-        return glnx_throw_errno_prefix (error, "fstatat");
-    }
-  else
+  if (!glnx_fstatat_allow_noent (dfd, policy_path, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+    return FALSE;
+  if (errno == 0)
     {
       if (!workaround_selinux_cross_labeling_recurse (dfd, policy_path,
                                                       cancellable, error))
@@ -932,12 +929,11 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
     for (i = 0; i < G_N_ELEMENTS (toplevel_links); i++)
       {
         struct stat stbuf;
-        if (fstatat (src_rootfs_fd, toplevel_links[i], &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
-          {
-            if (errno == ENOENT)
-              continue;
-            return glnx_throw_errno_prefix (error, "fstatat");
-          }
+        if (!glnx_fstatat_allow_noent (src_rootfs_fd, toplevel_links[i], &stbuf,
+                                       AT_SYMLINK_NOFOLLOW, error))
+          return FALSE;
+        if (errno == ENOENT)
+          continue;
 
         if (!glnx_renameat (src_rootfs_fd, toplevel_links[i],
                             target_root_dfd, toplevel_links[i], error))
@@ -1058,12 +1054,9 @@ rpmostree_rootfs_symlink_emptydir_at (int rootfs_fd,
         return FALSE;
     }
 
-  if (fstatat (rootfs_fd, src, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
-    {
-      if (errno != ENOENT)
-        return glnx_throw_errno_prefix (error, "fstatat");
-    }
-  else
+  if (!glnx_fstatat_allow_noent (rootfs_fd, src, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+    return FALSE;
+  if (errno == 0)
     {
       if (S_ISLNK (stbuf.st_mode))
         make_symlink = FALSE;

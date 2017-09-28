@@ -1986,12 +1986,10 @@ delete_package_from_root (RpmOstreeContext *self,
         continue;
 
       struct stat stbuf;
-      if (fstatat (rootfs_dfd, fn, &stbuf, AT_SYMLINK_NOFOLLOW) != 0)
-        {
-          if (errno == ENOENT)
-            continue; /* a job well done */
-          return glnx_throw_errno_prefix (error, "fstatat(%s)", fn);
-        }
+      if (!glnx_fstatat_allow_noent (rootfs_dfd, fn, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+        return FALSE;
+      if (errno == ENOENT)
+        continue; /* a job well done */
 
       if (!glnx_shutil_rm_rf_at (rootfs_dfd, fn, cancellable, error))
         return FALSE;
