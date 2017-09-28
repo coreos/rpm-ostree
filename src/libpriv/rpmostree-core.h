@@ -37,13 +37,10 @@ G_DECLARE_FINAL_TYPE (RpmOstreeTreespec, rpmostree_treespec, RPMOSTREE, TREESPEC
 RpmOstreeContext *rpmostree_context_new_system (GCancellable *cancellable,
                                                 GError **error);
 
-RpmOstreeContext *rpmostree_context_new_compose (int basedir_dfd,
-                                                 GCancellable *cancellable,
-                                                 GError **error);
-
-RpmOstreeContext *rpmostree_context_new_unprivileged (int basedir_dfd,
-                                                      GCancellable *cancellable,
-                                                      GError **error);
+RpmOstreeContext *rpmostree_context_new_tree (int basedir_dfd,
+                                              OstreeRepo  *repo,
+                                              GCancellable *cancellable,
+                                              GError **error);
 
 DnfContext * rpmostree_context_get_hif (RpmOstreeContext *self);
 

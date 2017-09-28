@@ -82,6 +82,10 @@ roc_context_init (ROContainerContext *rocctx,
   if (!rocctx->repo)
     return FALSE;
 
+  OstreeRepoMode mode = ostree_repo_get_mode (rocctx->repo);
+  if (mode != OSTREE_REPO_MODE_BARE_USER_ONLY)
+    return glnx_throw (error, "container repos are now required to be in bare-user-only mode");
+
   if (!glnx_opendirat (rocctx->userroot_dfd, "roots", TRUE, &rocctx->roots_dfd, error))
     return FALSE;
 
@@ -97,7 +101,8 @@ roc_context_prepare_for_root (ROContainerContext *rocctx,
                               GCancellable       *cancellable,
                               GError            **error)
 {
-  rocctx->ctx = rpmostree_context_new_unprivileged (rocctx->userroot_dfd, NULL, error);
+  rocctx->ctx = rpmostree_context_new_tree (rocctx->userroot_dfd, rocctx->repo,
+                                            cancellable, error);
   if (!rocctx->ctx)
     return FALSE;
 
@@ -153,7 +158,7 @@ rpmostree_container_builtin_init (int             argc,
     }
 
   rocctx->repo = ostree_repo_create_at (rocctx->userroot_dfd, "repo",
-                                        OSTREE_REPO_MODE_BARE_USER, NULL,
+                                        OSTREE_REPO_MODE_BARE_USER_ONLY, NULL,
                                         cancellable, error);
   if (!rocctx->repo)
     return FALSE;

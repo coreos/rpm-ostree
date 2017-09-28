@@ -347,18 +347,21 @@ rpmostree_context_new_system (GCancellable *cancellable,
   return self;
 }
 
-static RpmOstreeContext *
-rpmostree_context_new_internal (int           userroot_dfd,
-                                gboolean      unprivileged,
-                                GCancellable *cancellable,
-                                GError      **error)
+/* Create a context that assembles a new filesystem tree, possibly without root
+ * privileges. Some behavioral distinctions are made by looking at the undelying
+ * OstreeRepoMode.  In particular, an OSTREE_REPO_MODE_BARE_USER_ONLY repo
+ * is assumed to be for unprivileged containers/buildroots.
+ */
+RpmOstreeContext *
+rpmostree_context_new_tree (int               userroot_dfd,
+                            OstreeRepo       *repo,
+                            GCancellable     *cancellable,
+                            GError          **error)
 {
   g_autoptr(RpmOstreeContext) ret =
     rpmostree_context_new_system (cancellable, error);
   if (!ret)
     return NULL;
-
-  ret->unprivileged = unprivileged;
 
   { g_autofree char *reposdir = glnx_fdrel_abspath (userroot_dfd, "rpmmd.repos.d");
     dnf_context_set_repo_dir (ret->hifctx, reposdir);
@@ -377,33 +380,9 @@ rpmostree_context_new_internal (int           userroot_dfd,
   }
 
   /* open user root repo if exists (container path) */
-  struct stat stbuf;
-  if (!glnx_fstatat_allow_noent (userroot_dfd, "repo", &stbuf, 0, error))
-    return NULL;
-  if (errno == 0)
-    {
-      ret->ostreerepo = ostree_repo_open_at (userroot_dfd, "repo", cancellable, error);
-      if (!ret->ostreerepo)
-        return NULL;
-    }
+  ret->ostreerepo = repo ? g_object_ref (repo) : NULL;
 
   return g_steal_pointer (&ret);
-}
-
-RpmOstreeContext *
-rpmostree_context_new_compose (int basedir_dfd,
-                               GCancellable *cancellable,
-                               GError **error)
-{
-  return rpmostree_context_new_internal (basedir_dfd, FALSE, cancellable, error);
-}
-
-RpmOstreeContext *
-rpmostree_context_new_unprivileged (int basedir_dfd,
-                                    GCancellable *cancellable,
-                                    GError **error)
-{
-  return rpmostree_context_new_internal (basedir_dfd, TRUE, cancellable, error);
 }
 
 static gboolean
@@ -1768,9 +1747,6 @@ import_one_package (RpmOstreeContext *self,
   /* Verify signatures if enabled */
   if (!dnf_transaction_gpgcheck_package (dnf_context_get_transaction (hifctx), pkg, error))
     return FALSE;
-
-  if (self->unprivileged)
-    flags |= RPMOSTREE_UNPACKER_FLAGS_UNPRIVILEGED;
 
   /* Only set SKIP_EXTRANEOUS for packages we know need it, so that
    * people doing custom composes don't have files silently discarded.
