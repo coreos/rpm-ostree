@@ -280,19 +280,26 @@ run_script_in_bwrap_container (int rootfs_fd,
 
   struct ChildSetupData data = { .stdin_fd = stdin_fd };
 
+  /* Only try to log to the journal if we're running in the system
+   * context; for unprivileged container builds we don't want to log
+   * to the journal, even if we have privileges to do so.
+   */
   const char *id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
-  data.stdout_fd = stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
-  if (stdout_fd < 0)
+  if (getuid () == 0)
     {
-      glnx_throw_errno_prefix (error, "While creating stdout stream fd");
-      goto out;
-    }
+      data.stdout_fd = stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
+      if (stdout_fd < 0)
+        {
+          glnx_throw_errno_prefix (error, "While creating stdout stream fd");
+          goto out;
+        }
 
-  data.stderr_fd = stderr_fd = sd_journal_stream_fd (id, LOG_ERR, 0);
-  if (stderr_fd < 0)
-    {
-      glnx_throw_errno_prefix (error, "While creating stderr stream fd");
-      goto out;
+      data.stderr_fd = stderr_fd = sd_journal_stream_fd (id, LOG_ERR, 0);
+      if (stderr_fd < 0)
+        {
+          glnx_throw_errno_prefix (error, "While creating stderr stream fd");
+          goto out;
+        }
     }
 
   data.all_fds_initialized = TRUE;
