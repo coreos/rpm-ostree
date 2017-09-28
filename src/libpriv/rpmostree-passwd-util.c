@@ -625,10 +625,10 @@ open_file_stream_write_at (int dfd,
 }
 
 /*
- * This function is taking the /etc/passwd generated in the install
- * root, and splitting it into two streams: a new /etc/passwd that
- * just contains the root entry, and /usr/lib/passwd which contains
- * everything else.
+ * This function is taking the /etc/passwd generated in the install root (really
+ * in /usr/etc at this point), and splitting it into two streams: a new
+ * /etc/passwd that just contains the root entry, and /usr/lib/passwd which
+ * contains everything else.
  *
  * The implementation is kind of horrible because I wanted to avoid
  * duplicating the user/group code.
@@ -643,12 +643,12 @@ rpmostree_passwd_migrate_except_root (int            rootfs_dfd,
   GLNX_AUTO_PREFIX_ERROR ("passwd migration", error);
   const char *name = kind == RPM_OSTREE_PASSWD_MIGRATE_PASSWD ? "passwd" : "group";
 
-  const char *src_path = glnx_strjoina ("etc/", name);
+  const char *src_path = glnx_strjoina ("usr/etc/", name);
   g_autoptr(FILE) src_stream = open_file_stream_read_at (rootfs_dfd, src_path, error);
   if (!src_stream)
     return FALSE;
 
-  const char *etctmp_path = glnx_strjoina ("etc/", name, ".tmp");
+  const char *etctmp_path = glnx_strjoina ("usr/etc/", name, ".tmp");
   g_autoptr(FILE) etcdest_stream = open_file_stream_write_at (rootfs_dfd, etctmp_path, "w", error);
   if (!etcdest_stream)
     return FALSE;

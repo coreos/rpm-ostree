@@ -934,9 +934,6 @@ impl_compose_tree (const char      *treefile_pathstr,
                                             cancellable, error))
     return glnx_prefix_error (error, "Preparing rootfs for commit");
 
-  if (!rpmostree_copy_additional_files (rootfs_fd, self->treefile_context_dirs->pdata[0], treefile, cancellable, error))
-    return FALSE;
-
   g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile);
   if (!rpmostree_check_passwd (self->repo, rootfs_fd, treefile_dirpath, treefile,
                                self->previous_checksum,
