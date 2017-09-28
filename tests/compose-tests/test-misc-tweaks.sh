@@ -13,11 +13,15 @@ pysetjsonmember "default_target" '"multi-user.target"'
 pyappendjsonmember "packages" '["tuned"]'
 pysetjsonmember "units" '["tuned.service"]'
 # And test adding/removing files
-pysetjsonmember "add-files" '[["foo.txt", "/usr/etc/foo.txt"]]'
+pysetjsonmember "add-files" '[["foo.txt", "/usr/etc/foo.txt"],
+                              ["baz.txt", "/usr/share/baz.txt"],
+                              ["bar.txt", "/etc/bar.txt"]]'
 pysetjsonmember "remove-files" '["etc/hosts"]'
 pysetjsonmember "remove-from-packages" '[["setup", "/etc/hosts\..*"]]'
 rnd=$RANDOM
 echo $rnd > composedata/foo.txt
+echo bar > composedata/bar.txt
+echo baz > composedata/baz.txt
 # Test tmp-is-dir
 pysetjsonmember "tmp-is-dir" 'True'
 
@@ -44,6 +48,10 @@ echo "ok enable units"
 # Tests for files
 ostree --repo=${repobuild} cat ${treeref} /usr/etc/foo.txt > out.txt
 assert_file_has_content out.txt $rnd
+ostree --repo=${repobuild} cat ${treeref} /usr/etc/bar.txt > out.txt
+assert_file_has_content out.txt bar
+ostree --repo=${repobuild} cat ${treeref} /usr/share/baz.txt > out.txt
+assert_file_has_content out.txt baz
 echo "ok add-files"
 
 ostree --repo=${repobuild} ls ${treeref} /usr/etc > out.txt
