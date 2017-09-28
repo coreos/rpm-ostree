@@ -38,12 +38,10 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeUnpacker, g_object_unref)
 
 /**
  * RpmOstreeUnpackerFlags:
- * @RPMOSTREE_UNPACKER_FLAGS_UNPRIVILEGED: Ignore file ownership and setuid modes
  * @RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS: Skip files/directories outside of supported ostree-compliant paths rather than erroring out
  */
 typedef enum {
-  RPMOSTREE_UNPACKER_FLAGS_UNPRIVILEGED =  (1 << 0),
-  RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS =  (1 << 1),
+  RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS =  (1 << 0),
 } RpmOstreeUnpackerFlags;
 
 RpmOstreeUnpacker*

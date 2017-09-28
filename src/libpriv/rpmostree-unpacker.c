@@ -713,7 +713,11 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
   cb_data fdata = { self, &cb_error };
 
   OstreeRepoCommitFilter filter;
-  if ((self->flags & RPMOSTREE_UNPACKER_FLAGS_UNPRIVILEGED) > 0)
+  /* This logic replaces our old UNPRIVILEGED flag; we now assume bare-user-only
+   * is unprivileged, anything else is a compose.
+   */
+  const gboolean unprivileged = ostree_repo_get_mode (repo) == OSTREE_REPO_MODE_BARE_USER_ONLY;
+  if (unprivileged)
     filter = unprivileged_filter_cb;
   else
     filter = compose_filter_cb;
@@ -721,6 +725,8 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
   /* If changing this, also look at changing rpmostree-postprocess.c */
   OstreeRepoCommitModifierFlags modifier_flags =
     OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
+  if (unprivileged)
+    modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CANONICAL_PERMISSIONS;
   g_autoptr(OstreeRepoCommitModifier) modifier =
     ostree_repo_commit_modifier_new (modifier_flags, filter, &fdata, NULL);
   ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb,
