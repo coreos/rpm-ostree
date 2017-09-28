@@ -278,7 +278,9 @@ run_script_in_bwrap_container (int rootfs_fd,
     goto out;
 
 
-  struct ChildSetupData data = { .stdin_fd = stdin_fd };
+  struct ChildSetupData data = { .stdin_fd = stdin_fd,
+                                 .stdout_fd = -1,
+                                 .stderr_fd = -1, };
 
   /* Only try to log to the journal if we're running in the system
    * context; for unprivileged container builds we don't want to log
