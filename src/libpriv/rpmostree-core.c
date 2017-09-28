@@ -96,19 +96,22 @@ qsort_cmpstr (const void*ap, const void *bp, gpointer data)
   return strcmp (a, b);
 }
 
+/* Handle converting "treespec" bits to GVariant.
+ * Look for @key in @keyfile (under the section "tree"), and
+ * if found, strip leading/trailing whitespace from each entry,
+ * sort them, and add it to @builder under the same key name.
+ * If there are no entries for it, and @notfound_key is provided,
+ * set @notfound_key in the variant to TRUE.
+ */
 static void
 add_canonicalized_string_array (GVariantBuilder *builder,
                                 const char *key,
                                 const char *notfound_key,
                                 GKeyFile *keyfile)
 {
-  g_auto(GStrv) input = NULL;
   g_autoptr(GHashTable) set = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  g_autofree char **sorted = NULL;
-  guint count;
-  char **iter;
 
-  input = g_key_file_get_string_list (keyfile, "tree", key, NULL, NULL);
+  g_auto(GStrv) input = g_key_file_get_string_list (keyfile, "tree", key, NULL, NULL);
   if (!(input && *input))
     {
       if (notfound_key)
@@ -118,14 +121,17 @@ add_canonicalized_string_array (GVariantBuilder *builder,
         }
     }
 
-  for (iter = input; iter && *iter; iter++)
+  /* Iterate over strings, strip leading/trailing whitespace */
+  for (char ** iter = input; iter && *iter; iter++)
     {
       g_autofree char *stripped = g_strdup (*iter);
       g_strchug (g_strchomp (stripped));
       g_hash_table_add (set, g_steal_pointer (&stripped));
     }
 
-  sorted = (char**)g_hash_table_get_keys_as_array (set, &count);
+  /* Ensure sorted */
+  guint count;
+  g_autofree char **sorted = (char**)g_hash_table_get_keys_as_array (set, &count);
   if (count > 1)
     g_qsort_with_data (sorted, count, sizeof (void*), qsort_cmpstr, NULL);
 
@@ -477,6 +483,9 @@ rpmostree_dnfcontext_get_varsubsts (DnfContext *context)
   return r;
 }
 
+/* Look for a repo named @reponame, and ensure it is enabled for package
+ * downloads.
+ */
 static gboolean
 enable_one_repo (GPtrArray           *sources,
                  const char          *reponame,
@@ -497,6 +506,7 @@ enable_one_repo (GPtrArray           *sources,
   return glnx_throw (error, "Unknown rpm-md repository: %s", reponame);
 }
 
+/* Enable all repos in @enabled_repos, and disable everything else */
 static gboolean
 context_repos_enable_only (RpmOstreeContext    *context,
                            const char    *const *enabled_repos,
@@ -563,6 +573,9 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   dnf_context_set_install_root (self->hifctx, install_root);
   dnf_context_set_source_root (self->hifctx, source_root);
 
+  /* Set the RPM _install_langs macro, which gets processed by librpm; this is
+   * currently only referenced in the traditional or non-"unified core" code.
+   */
   if (g_variant_dict_lookup (self->spec->dict, "instlangs", "^a&s", &instlangs))
     {
       g_autoptr(GString) opt = g_string_new ("");
@@ -625,7 +638,6 @@ rpmostree_context_setup (RpmOstreeContext    *self,
 
   return TRUE;
 }
-
 
 static void
 on_hifstate_percentage_changed (DnfState   *hifstate,
@@ -696,6 +708,9 @@ get_package_relpath (DnfPackage *pkg)
   return get_nevra_relpath (dnf_package_get_nevra (pkg));
 }
 
+/* We maintain a temporary copy on disk of the RPM header value; librpm will
+ * load this dynamically as the txn progresses.
+ */
 static gboolean
 checkout_pkg_metadata (RpmOstreeContext *self,
                        const char       *nevra,
@@ -703,15 +718,13 @@ checkout_pkg_metadata (RpmOstreeContext *self,
                        GCancellable     *cancellable,
                        GError          **error)
 {
-  g_autofree char *path = NULL;
-  struct stat stbuf;
-
   if (!rpmostree_context_ensure_tmpdir (self, "metarpm", error))
     return FALSE;
 
   /* give it a .rpm extension so we can fool the libdnf stack */
-  path = get_nevra_relpath (nevra);
+  g_autofree char *path = get_nevra_relpath (nevra);
 
+  struct stat stbuf;
   if (!glnx_fstatat_allow_noent (self->tmpdir.fd, path, &stbuf, 0, error))
     return FALSE;
   /* we may have already written the header out for this one */
@@ -900,6 +913,7 @@ rpmostree_get_nevra_from_pkgcache (OstreeRepo  *repo,
   return TRUE;
 }
 
+/* Initiate download of rpm-md */
 gboolean
 rpmostree_context_download_metadata (RpmOstreeContext *self,
                                      GCancellable     *cancellable,
@@ -917,6 +931,9 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
     }
   rpmostree_output_message ("%s", enabled_repos->str);
 
+  /* Update each repo individually, and print its timestamp, so users can keep
+   * track of repo up-to-dateness more easily.
+   */
   for (guint i = 0; i < rpmmd_repos->len; i++)
     {
       DnfRepo *repo = rpmmd_repos->pdata[i];
@@ -958,6 +975,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
                                 repo_ts_str);
     }
 
+  /* The _setup_sack function among other things imports the metadata into libsolv */
   { g_autoptr(DnfState) hifstate = dnf_state_new ();
     guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                              G_CALLBACK (on_hifstate_percentage_changed),
@@ -975,6 +993,9 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
   return TRUE;
 }
 
+/* Quote/squash all non-(alphanumeric plus `.` and `-`); this
+ * is used to map RPM package NEVRAs into ostree branch names.
+ */
 static void
 append_quoted (GString *r, const char *value)
 {
@@ -1005,6 +1026,7 @@ append_quoted (GString *r, const char *value)
     }
 }
 
+/* Return the ostree cache branch for a nevra */
 static char *
 cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch)
 {
@@ -1026,6 +1048,7 @@ cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch)
   return g_string_free (r, FALSE);
 }
 
+/* Return the ostree cache branch from a Header */
 char *
 rpmostree_get_cache_branch_header (Header hdr)
 {
@@ -1035,6 +1058,7 @@ rpmostree_get_cache_branch_header (Header hdr)
   return cache_branch_for_n_evr_a (name, evr, arch);
 }
 
+/* Return the ostree cache branch from a libdnf Package */
 char *
 rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
 {
@@ -1121,6 +1145,10 @@ pkg_is_cached (DnfPackage *pkg)
   return g_file_test (dnf_package_get_filename (pkg), G_FILE_TEST_EXISTS);
 }
 
+/* Given @pkg, return its state in the pkgcache repo. It could be not present,
+ * or present but have been imported with a different SELinux policy version
+ * (and hence in need of relabeling).
+ */
 static gboolean
 find_pkg_in_ostree (OstreeRepo     *repo,
                     DnfPackage     *pkg,
@@ -1260,6 +1288,7 @@ sort_packages (RpmOstreeContext *self,
   return TRUE;
 }
 
+/* Set @error with a string containing an error relating to @pkgs */
 static gboolean
 throw_package_list (GError **error, const char *suffix, GPtrArray *pkgs)
 {
@@ -1304,22 +1333,20 @@ gv_nevra_hash (gconstpointer v)
   return g_str_hash (g_variant_get_string (nevra, NULL));
 }
 
+/* We need to make sure that only the pkgs in the base allowed to be
+ * removed are removed. The issue is that marking a package for DNF_INSTALL
+ * could uninstall a base pkg if it's an update or obsoletes it. There doesn't
+ * seem to be a way to tell libsolv to not touch some pkgs in the base layer,
+ * so we just inspect its solution in retrospect. libdnf has the concept of
+ * protected packages, but it still allows updating protected packages.
+ */
 static gboolean
 check_goal_solution (RpmOstreeContext *self,
                      GPtrArray        *removed_pkgnames,
                      GPtrArray        *replaced_nevras,
                      GError          **error)
 {
-  /* Now we need to make sure that only the pkgs in the base allowed to be
-   * removed are removed. The issue is that marking a package for DNF_INSTALL
-   * could uninstall a base pkg if it's an update or obsoletes it. There doesn't
-   * seem to be a way to tell libsolv to not touch some pkgs in the base layer,
-   * so we just inspect its solution in retrospect. libdnf has the concept of
-   * protected packages, but it still allows updating protected packages. */
-
   HyGoal goal = dnf_context_get_goal (self->hifctx);
-
-  g_autoptr(GPtrArray) packages = NULL;
 
   /* all strings are owned by pool */
   g_autoptr(GPtrArray) forbidden = g_ptr_array_new ();
@@ -1327,9 +1354,9 @@ check_goal_solution (RpmOstreeContext *self,
   g_assert (!self->pkgs_to_remove);
   self->pkgs_to_remove = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
                                                 (GDestroyNotify)g_variant_unref);
-  packages = dnf_goal_get_packages (goal,
-                                    DNF_PACKAGE_INFO_REMOVE,
-                                    DNF_PACKAGE_INFO_OBSOLETE, -1);
+  g_autoptr(GPtrArray) packages = dnf_goal_get_packages (goal,
+                                                         DNF_PACKAGE_INFO_REMOVE,
+                                                         DNF_PACKAGE_INFO_OBSOLETE, -1);
   for (guint i = 0; i < packages->len; i++)
     {
       DnfPackage *pkg = packages->pdata[i];
@@ -1376,6 +1403,7 @@ check_goal_solution (RpmOstreeContext *self,
                                                  (GDestroyNotify)g_variant_unref,
                                                  (GDestroyNotify)g_variant_unref);
 
+  /* Look at UPDATE and DOWNGRADE, and see whether they're doing what we expect */
   g_ptr_array_unref (packages);
   packages = dnf_goal_get_packages (goal,
                                     DNF_PACKAGE_INFO_UPDATE,
@@ -1477,6 +1505,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   HyGoal goal = dnf_context_get_goal (hifctx);
 
+  /* Handle packages to remove */
   g_autoptr(GPtrArray) removed_pkgnames = g_ptr_array_new ();
   for (char **it = removed_base_pkgnames; it && *it; it++)
     {
@@ -1487,6 +1516,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       g_ptr_array_add (removed_pkgnames, (gpointer)pkgname);
     }
 
+  /* Handle packages to replace */
   g_autoptr(GPtrArray) replaced_nevras = g_ptr_array_new ();
   for (char **it = cached_replace_pkgs; it && *it; it++)
     {
@@ -1501,6 +1531,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       g_ptr_array_add (replaced_nevras, (gpointer)nevra);
     }
 
+  /* For each new local package, tell libdnf to add it to the goal */
   for (char **it = cached_pkgnames; it && *it; it++)
     {
       const char *nevra = *it;
@@ -1512,6 +1543,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
         return FALSE;
     }
 
+  /* Loop over each named package, and tell libdnf to add it to the goal */
   for (char **it = pkgnames; it && *it; it++)
     {
       const char *pkgname = *it;
@@ -1519,6 +1551,10 @@ rpmostree_context_prepare (RpmOstreeContext *self,
         return FALSE;
     }
 
+  /* A lot of code to simply log a message to the systemd journal with the state
+   * of the rpm-md repos. This is intended to aid system admins with determining
+   * system ""up-to-dateness"".
+   */
   { g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (hifctx, DNF_REPO_ENABLED_PACKAGES);
     g_autoptr(GString) enabled_repos = g_string_new ("");
     g_autoptr(GString) enabled_repos_solvables = g_string_new ("");
