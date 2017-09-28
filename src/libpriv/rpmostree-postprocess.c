@@ -1273,6 +1273,17 @@ rpmostree_copy_additional_files (int            rootfs_dfd,
       dest += strspn (dest, "/");
       if (!*dest)
         return glnx_throw (error, "Invalid destination in add-files");
+      /* At this point on the filesystem level, the /etc content is already in
+       * /usr/etc. But let's be nice and allow people to use add-files into /etc
+       * and have it appear in /usr/etc; in most cases we want /usr/etc to just
+       * be a libostree implementation detail.
+       */
+      g_autofree char *dest_owned = NULL;
+      if (g_str_has_prefix (dest, "etc/"))
+        {
+          dest_owned = g_strconcat ("usr/", dest, NULL);
+          dest = dest_owned;
+        }
 
       g_print ("Adding file '%s'\n", dest);
 
