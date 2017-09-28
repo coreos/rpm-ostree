@@ -234,15 +234,13 @@ rpmostree_container_builtin_assemble (int             argc,
   const char *target_rootdir = glnx_strjoina (name, ".0");
 
   struct stat stbuf;
-  if (fstatat (rocctx->roots_dfd, target_rootdir, &stbuf, AT_SYMLINK_NOFOLLOW) < 0)
+  if (!glnx_fstatat_allow_noent (rocctx->roots_dfd, target_rootdir, &stbuf,
+                                 AT_SYMLINK_NOFOLLOW, error))
     {
-      if (errno != ENOENT)
-        {
-          glnx_set_error_from_errno (error);
-          return EXIT_FAILURE;
-        }
+      glnx_set_error_from_errno (error);
+      return EXIT_FAILURE;
     }
-  else
+  if (errno == 0)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Tree %s already exists", target_rootdir);
