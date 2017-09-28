@@ -939,6 +939,10 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
       DnfRepo *repo = rpmmd_repos->pdata[i];
       g_autoptr(DnfState) hifstate = dnf_state_new ();
 
+      /* Until libdnf speaks GCancellable: https://github.com/projectatomic/rpm-ostree/issues/897 */
+      if (g_cancellable_set_error_if_cancelled (cancellable, error))
+        return FALSE;
+
       gboolean did_update = FALSE;
       if (!dnf_repo_check(repo,
                           dnf_context_get_cache_age (self->hifctx),
@@ -974,6 +978,9 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
                                 dnf_repo_get_id (repo), !did_update ? " (cached)" : "",
                                 repo_ts_str);
     }
+
+  if (g_cancellable_set_error_if_cancelled (cancellable, error))
+    return FALSE;
 
   /* The _setup_sack function among other things imports the metadata into libsolv */
   { g_autoptr(DnfState) hifstate = dnf_state_new ();
