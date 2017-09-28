@@ -473,9 +473,6 @@ import_local_rpm (OstreeRepo    *parent,
                   GError       **error)
 {
   g_autoptr(OstreeRepo) pkgcache_repo = NULL;
-  g_autoptr(OstreeSePolicy) policy = NULL;
-  g_autoptr(RpmOstreeUnpacker) unpacker = NULL;
-  g_autofree char *nevra = NULL;
 
   /* It might seem risky to rely on the cache as the source of truth for local
    * RPMs. However, the core will never re-import the same NEVRA if it's already
@@ -492,11 +489,11 @@ import_local_rpm (OstreeRepo    *parent,
   glnx_fd_close int rootfs_dfd = -1;
   if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_dfd, error))
     return FALSE;
-  policy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
+  g_autoptr(OstreeSePolicy) policy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
   if (policy == NULL)
     return FALSE;
 
-  unpacker = rpmostree_unpacker_new_fd (fd, NULL, 0, error);
+  g_autoptr(RpmOstreeUnpacker) unpacker = rpmostree_unpacker_new_fd (fd, NULL, 0, error);
   if (unpacker == NULL)
     return FALSE;
 
@@ -504,7 +501,7 @@ import_local_rpm (OstreeRepo    *parent,
                                             NULL, cancellable, error))
     return FALSE;
 
-  nevra = rpmostree_unpacker_get_nevra (unpacker);
+  g_autofree char *nevra = rpmostree_unpacker_get_nevra (unpacker);
   *sha256_nevra = g_strconcat (rpmostree_unpacker_get_header_sha256 (unpacker),
                                ":", nevra, NULL);
 
@@ -965,17 +962,16 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    GCancellable *cancellable,
                                    GError **error)
 {
-  DeployTransaction *self;
-
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
   g_return_val_if_fail (osname != NULL, NULL);
 
-  self = g_initable_new (deploy_transaction_get_type (),
-                         cancellable, error,
-                         "invocation", invocation,
-                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
-                         NULL);
+  DeployTransaction *self =
+    g_initable_new (deploy_transaction_get_type (),
+                    cancellable, error,
+                    "invocation", invocation,
+                    "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
+                    NULL);
 
   if (self != NULL)
     {
@@ -1032,25 +1028,19 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
                             GCancellable *cancellable,
                             GError **error)
 {
-  InitramfsStateTransaction *self;
-  OstreeSysroot *sysroot;
-  g_autoptr(RpmOstreeSysrootUpgrader) upgrader = NULL;
-  g_autoptr(RpmOstreeOrigin) origin = NULL;
-  const char *const* current_initramfs_args = NULL;
-  gboolean current_regenerate;
 
-  self = (InitramfsStateTransaction *) transaction;
+  InitramfsStateTransaction *self = (InitramfsStateTransaction *) transaction;
+  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-  sysroot = rpmostreed_transaction_get_sysroot (transaction);
-
-  upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, 0,
-                                             cancellable, error);
+  g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, 0,
+                                    cancellable, error);
   if (upgrader == NULL)
     return FALSE;
 
-  origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
-  current_regenerate = rpmostree_origin_get_regenerate_initramfs (origin);
-  current_initramfs_args = rpmostree_origin_get_initramfs_args (origin);
+  g_autoptr(RpmOstreeOrigin) origin = rpmostree_sysroot_upgrader_dup_origin (upgrader);
+  gboolean current_regenerate = rpmostree_origin_get_regenerate_initramfs (origin);
+  const char *const* current_initramfs_args = rpmostree_origin_get_initramfs_args (origin);
 
   /* We don't deep-compare the args right now, we assume if you were using them
    * you want to rerun. This can be important if you edited a config file, which
@@ -1159,10 +1149,9 @@ remove_directory_content_if_exists (int dfd,
                                     GCancellable *cancellable,
                                     GError **error)
 {
-  glnx_fd_close int fd = -1;
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
 
-  fd = glnx_opendirat_with_errno (dfd, path, TRUE);
+  glnx_fd_close int fd = glnx_opendirat_with_errno (dfd, path, TRUE);
   if (fd < 0)
     {
       if (errno != ENOENT)
@@ -1195,12 +1184,11 @@ cleanup_transaction_execute (RpmostreedTransaction *transaction,
                              GError **error)
 {
   CleanupTransaction *self = (CleanupTransaction *) transaction;
-  OstreeSysroot *sysroot;
-  g_autoptr(OstreeRepo) repo = NULL;
   const gboolean cleanup_pending = (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_PENDING_DEPLOY) > 0;
   const gboolean cleanup_rollback = (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY) > 0;
 
-  sysroot = rpmostreed_transaction_get_sysroot (transaction);
+  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+  g_autoptr(OstreeRepo) repo = NULL;
   if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
     return FALSE;
 
@@ -1265,16 +1253,15 @@ rpmostreed_transaction_new_cleanup (GDBusMethodInvocation *invocation,
                                     GCancellable          *cancellable,
                                     GError               **error)
 {
-  CleanupTransaction *self;
-
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
 
-  self = g_initable_new (cleanup_transaction_get_type (),
-                         cancellable, error,
-                         "invocation", invocation,
-                         "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
-                         NULL);
+  CleanupTransaction *self =
+    g_initable_new (cleanup_transaction_get_type (),
+                    cancellable, error,
+                    "invocation", invocation,
+                    "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
+                    NULL);
 
   if (self != NULL)
     {
