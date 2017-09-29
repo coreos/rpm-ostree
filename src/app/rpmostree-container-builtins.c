@@ -42,7 +42,10 @@ static GOptionEntry init_option_entries[] = {
   { NULL }
 };
 
+static gboolean opt_cache_only;
+
 static GOptionEntry assemble_option_entries[] = {
+  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Assume cache is present, do not attempt to update it", NULL },
   { NULL }
 };
 
@@ -249,6 +252,10 @@ rpmostree_container_builtin_assemble (int             argc,
 
   if (!roc_context_prepare_for_root (rocctx, treespec, cancellable, error))
     return EXIT_FAILURE;
+
+  DnfContext *dnfctx = rpmostree_context_get_hif (rocctx->ctx);
+  if (opt_cache_only)
+    dnf_context_set_cache_age (dnfctx, G_MAXUINT);
 
   /* --- Resolving dependencies --- */
   if (!rpmostree_context_prepare (rocctx->ctx, cancellable, error))
