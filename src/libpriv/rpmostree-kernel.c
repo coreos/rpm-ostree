@@ -456,7 +456,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
 
   rpmostree_bwrap_set_child_setup (bwrap, dracut_child_setup, GINT_TO_POINTER (tmpf.fd));
 
-  if (!rpmostree_bwrap_run (bwrap, error))
+  if (!rpmostree_bwrap_run (bwrap, cancellable, error))
     goto out;
 
   if (rebuild_from_initramfs)

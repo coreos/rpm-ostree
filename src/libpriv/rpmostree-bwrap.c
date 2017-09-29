@@ -294,44 +294,62 @@ rpmostree_bwrap_set_child_setup (RpmOstreeBwrap *bwrap,
   bwrap->child_setup_data = data;
 }
 
+/* Execute @bwrap - must have been configured. After executing this method, the
+ * @bwrap instance cannot be run again.
+ */
 gboolean
 rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
+                     GCancellable   *cancellable,
                      GError        **error)
 {
-  int estatus;
-  const char *current_lang = getenv ("LANG");
-
   g_assert (!bwrap->executed);
   bwrap->executed = TRUE;
 
+  const char *current_lang = getenv ("LANG");
   if (!current_lang)
     current_lang = "C";
 
-  {
-    const char *lang_var = glnx_strjoina ("LANG=", current_lang);
-    /* This is similar to what systemd does, except:
-     *  - We drop /usr/local, since scripts shouldn't see it.
-     *  - We pull in the current process' LANG, since that's what people
-     *    have historically expected from RPM scripts.
-     */
-    const char *bwrap_env[] = {"PATH=/usr/sbin:/usr/bin",
-                               lang_var,
-                               NULL};
+  const char *lang_var = glnx_strjoina ("LANG=", current_lang);
+  /* This is similar to what systemd does, except:
+   *  - We drop /usr/local, since scripts shouldn't see it.
+   *  - We pull in the current process' LANG, since that's what people
+   *    have historically expected from RPM scripts.
+   */
+  const char *bwrap_env[] = {"PATH=/usr/sbin:/usr/bin", lang_var, NULL};
 
-    /* Add the final NULL */
-    g_ptr_array_add (bwrap->argv, NULL);
+  /* Set up our error message */
+  const char *errmsg = glnx_strjoina ("Executing bwrap(", bwrap->child_argv0, ")");
+  GLNX_AUTO_PREFIX_ERROR (errmsg, error);
 
-    const char *errmsg = glnx_strjoina ("Executing bwrap(", bwrap->child_argv0, ")");
-    GLNX_AUTO_PREFIX_ERROR (errmsg, error);
+  /* Add the final NULL */
+  g_ptr_array_add (bwrap->argv, NULL);
 
-    if (!g_spawn_sync (NULL, (char**)bwrap->argv->pdata, (char**) bwrap_env,
-                       G_SPAWN_SEARCH_PATH, bwrap_child_setup, bwrap, NULL, NULL,
-                       &estatus, error))
+  g_autoptr(GSubprocessLauncher) launcher =
+    g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_NONE);
+  g_subprocess_launcher_set_environ (launcher, (char**)bwrap_env);
+  g_subprocess_launcher_set_child_setup (launcher, bwrap_child_setup, bwrap, NULL);
+  g_autoptr(GSubprocess) subproc =
+    g_subprocess_launcher_spawnv (launcher, (const char *const*)bwrap->argv->pdata,
+                                  error);
+  if (!subproc)
+    return FALSE;
+  if (!g_subprocess_wait (subproc, cancellable, error))
+    {
+      /* Now, it's possible @cancellable has been set, which means the process
+       * hasn't terminated yet. AFAIK that should be the only cause for the
+       * process not having exited now, but regardless we just check
+       * g_subprocess_get_if_exited() to be safe. If the process is still
+       * alive, we kill it explicitly so it doesn't leak. Right now we run
+       * bwrap --die-with-parent, but until we do the whole txn as a
+       * subprocess, the script would leak until rpm-ostreed exited.
+       */
+      if (!g_subprocess_get_if_exited (subproc))
+        g_subprocess_force_exit (subproc);
       return FALSE;
-
-    if (!g_spawn_check_exit_status (estatus, error))
-      return FALSE;
-  }
+    }
+  int estatus = g_subprocess_get_exit_status (subproc);
+  if (!g_spawn_check_exit_status (estatus, error))
+    return FALSE;
 
   return TRUE;
 }
@@ -352,7 +370,7 @@ rpmostree_bwrap_selftest (GError **error)
 
   rpmostree_bwrap_append_child_argv (bwrap, "true", NULL);
 
-  if (!rpmostree_bwrap_run (bwrap, error))
+  if (!rpmostree_bwrap_run (bwrap, NULL, error))
     {
       g_prefix_error (error, "bwrap test failed, see <https://github.com/projectatomic/rpm-ostree/pull/429>: ");
       return FALSE;

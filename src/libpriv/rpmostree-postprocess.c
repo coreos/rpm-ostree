@@ -57,7 +57,8 @@ static gboolean
 run_bwrap_mutably (int           rootfs_fd,
                    const char   *binpath,
                    char        **child_argv,
-                   GError     **error)
+                   GCancellable *cancellable,
+                   GError      **error)
 {
   struct stat stbuf;
   const char *etc_bind;
@@ -93,7 +94,7 @@ run_bwrap_mutably (int           rootfs_fd,
       }
   }
 
-  if (!rpmostree_bwrap_run (bwrap, error))
+  if (!rpmostree_bwrap_run (bwrap, cancellable, error))
     return FALSE;
 
   return TRUE;
@@ -324,7 +325,7 @@ process_kernel_and_initramfs (int            rootfs_dfd,
    */
   {
     char *child_argv[] = { "depmod", (char*)kver, NULL };
-    if (!run_bwrap_mutably (rootfs_dfd, "depmod", child_argv, error))
+    if (!run_bwrap_mutably (rootfs_dfd, "depmod", child_argv, cancellable, error))
       return FALSE;
   }
 
@@ -1605,7 +1606,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 
       {
         char *child_argv[] = { binpath, NULL };
-        if (!run_bwrap_mutably (rootfs_fd, binpath, child_argv, error))
+        if (!run_bwrap_mutably (rootfs_fd, binpath, child_argv, cancellable, error))
           return glnx_prefix_error (error, "While executing postprocessing script '%s'", bn);
       }
 

@@ -340,6 +340,24 @@ vm_get_journal_cursor() {
   vm_cmd journalctl -o json -n 1 | jq -r '.["__CURSOR"]'
 }
 
+# Wait for a message logged after $cursor matching a regexp to appear
+vm_wait_content_after_cursor() {
+    from_cursor=$1; shift
+    regex=$1; shift
+    cat > wait.sh <<EOF
+#!/usr/bin/bash
+set -xeuo pipefail
+while true; do
+  if journalctl --after-cursor "${from_cursor}" | grep -q -e "${regex}"; then
+    break
+  else
+    sleep 1
+  fi
+done
+EOF
+    vm_cmdfile wait.sh
+}
+
 vm_assert_journal_has_content() {
   from_cursor=$1; shift
   # add an extra helping of quotes for hungry ssh
