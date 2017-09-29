@@ -4,6 +4,7 @@ set -euo pipefail
 dn=$(cd $(dirname $0) && pwd)
 
 export topsrcdir=$(cd $dn/.. && pwd)
+. ${dn}/common/libcomposetest.sh
 
 # avoid refetching yum metadata everytime
 export RPMOSTREE_USE_CACHED_METADATA=1
@@ -48,16 +49,7 @@ ostree --repo=${repobuild} init --mode=bare-user
 mkdir -p ${test_compose_datadir}/cache
 
 echo "Preparing compose tests..." | tee -a ${LOG}
-
-# take the host repo if it matches our target tree
-if [ -n "${RPMOSTREE_COMPOSE_TEST_USE_HOST_REPO:-}" ]; then
-  # NB: when bumping 26 here, also bump fedora.repo, .papr.yml
-  (source /etc/os-release;
-   if [ "$ID" == "fedora" ] && [ "$VERSION_ID" == "26" ]; then
-     echo "Taking stable Fedora repo file from test env."
-     cp -fv /etc/yum.repos.d/fedora.repo ${dn}/composedata
-   fi) &>> ${LOG}
-fi
+setup_rpmmd_repos ${dn}/composedata
 
 # Delete the default ref, since we want to use subrefs of it
 compose_prepargs=
