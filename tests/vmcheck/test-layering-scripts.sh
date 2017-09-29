@@ -159,6 +159,33 @@ if vm_rpmostree install rofiles-violation; then
     assert_not_reached "installed test-post-rofiles-violation!"
 fi
 
+# Test cancellation via having a script hang
+cursor=$(vm_get_journal_cursor)
+vm_build_rpm post-that-hangs \
+             post "echo entering post-that-hangs-infloop 1>&2; while true; do sleep 1h; done"
+# Enable job control so we can do a background job, then foreground.
+set -m
+nohup $SSH -t -t rpm-ostree install post-that-hangs &
+if ! vm_wait_content_after_cursor "${cursor}" "entering post-that-hangs-infloop"; then
+    kill -s INT %1
+    fg %1 || true
+    exit 1
+fi
+# Explicitly kill the client process in the VM; I originally tried to kill the
+# ssh binary and have it propagate the signal, on our side but couldn't figure
+# out how to make that work.
+vm_cmd pkill --signal INT -f "'rpm-ostree install post-that-hangs'"
+# But do also kill the ssh binary on our side
+kill -s INT %1
+# And wait for that to complete so it doesn't hang the shell
+fg %1 || true
+set +m
+# Wait for our expected result
+vm_wait_content_after_cursor "${cursor}" "Txn.*failed.*Running %post for post-that-hangs"
+# Forcibly restart now to avoid any races with the txn finally exiting
+vm_cmd systemctl restart rpm-ostreed
+
+# Test rm -rf /!
 vm_cmd 'useradd testuser || true'
 vm_cmd touch /home/testuser/somedata /tmp/sometmpfile /var/tmp/sometmpfile
 vm_build_rpm rmrf post "rm --no-preserve-root -rf / &>/dev/null || true"

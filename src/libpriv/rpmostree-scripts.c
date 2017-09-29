@@ -313,7 +313,7 @@ run_script_in_bwrap_container (int rootfs_fd,
                                      script_arg,
                                      NULL);
 
-  if (!rpmostree_bwrap_run (bwrap, error))
+  if (!rpmostree_bwrap_run (bwrap, cancellable, error))
     {
       if (error)
         {
@@ -819,7 +819,7 @@ rpmostree_deployment_sanitycheck (int           rootfs_fd,
   if (!bwrap)
     return FALSE;
   rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/true", NULL);
-  if (!rpmostree_bwrap_run (bwrap, error))
+  if (!rpmostree_bwrap_run (bwrap, cancellable, error))
     return FALSE;
   sd_journal_print (LOG_INFO, "sanitycheck(/usr/bin/true) successful");
   return TRUE;

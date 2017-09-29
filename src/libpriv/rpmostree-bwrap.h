@@ -51,6 +51,7 @@ void rpmostree_bwrap_set_child_setup (RpmOstreeBwrap *bwrap,
                                       gpointer             data);
 
 gboolean rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
+                              GCancellable   *cancellable,
                               GError        **error);
 
 gboolean rpmostree_bwrap_selftest (GError **error);

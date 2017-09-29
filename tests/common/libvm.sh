@@ -345,6 +345,30 @@ vm_get_journal_cursor() {
   vm_cmd journalctl -o json -n 1 | jq -r '.["__CURSOR"]'
 }
 
+# Wait for a message logged after $cursor matching a regexp to appear
+vm_wait_content_after_cursor() {
+    from_cursor=$1; shift
+    regex=$1; shift
+    cat > wait.sh <<EOF
+#!/usr/bin/bash
+set -xeuo pipefail
+tmpf=\$(mktemp /var/tmp/journal.XXXXXX)
+for x in \$(seq 60); do
+  journalctl -u rpm-ostreed --after-cursor "${from_cursor}" > \${tmpf}
+  if grep -q -e "${regex}" \${tmpf}; then
+    exit 0
+  else
+    cat \${tmpf}
+    sleep 1
+  fi
+done
+echo "timed out after 60s" 1>&2
+journalctl -u rpm-ostreed --after-cursor "${from_cursor}" | tail -100
+exit 1
+EOF
+    vm_cmdfile wait.sh
+}
+
 vm_assert_journal_has_content() {
   from_cursor=$1; shift
   # add an extra helping of quotes for hungry ssh
