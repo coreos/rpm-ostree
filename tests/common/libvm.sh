@@ -45,10 +45,6 @@ vm_rsync() {
     fi
     rsync -az --no-owner --no-group -e "$rsyncopts" \
               --exclude .git/ . $VM:/var/roothome/sync
-    if test -n "${VMCHECK_INSTTREE:-}"; then
-        rsync -az --no-owner --no-group -e "$rsyncopts" \
-              ${VMCHECK_INSTTREE}/ $VM:/var/roothome/sync/insttree/
-    fi
     popd
   fi
 }
