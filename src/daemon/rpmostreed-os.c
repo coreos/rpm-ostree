@@ -76,7 +76,7 @@ sysroot_changed (RpmostreedSysroot *sysroot,
 
   if (!rpmostreed_os_load_internals (self, error))
       goto out;
-  
+
  out:
   if (local_error)
     g_warning ("%s", local_error->message);
@@ -123,7 +123,8 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
     {
       g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rebase");
     }
-  else if (g_strcmp0 (method_name, "SetInitramfsState") == 0)
+  else if (g_strcmp0 (method_name, "SetInitramfsState") == 0 ||
+           g_strcmp0 (method_name, "KernelArgs") == 0)
     {
       g_ptr_array_add (actions, "org.projectatomic.rpmostree1.bootconfig");
     }
@@ -1434,7 +1435,7 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
   origin = rpmostree_origin_parse_deployment (base_deployment, error);
   if (!origin)
     goto out;
- 
+
   base_checksum = ostree_deployment_get_csum (base_deployment);
 
   if (!rpmostreed_parse_revision (arg_revision,
@@ -1695,7 +1696,7 @@ rpmostreed_os_new (OstreeSysroot *sysroot,
     if (!rpmostreed_os_load_internals (obj, &local_error))
       g_warning ("%s", local_error->message);
   }
-  
+
   rpmostreed_daemon_publish (rpmostreed_daemon_get (), path, FALSE, obj);
 
   return RPMOSTREE_OS (obj);
