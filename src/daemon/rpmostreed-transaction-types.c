@@ -33,6 +33,7 @@
 #include "rpmostree-core.h"
 #include "rpmostree-unpacker.h"
 #include "rpmostreed-utils.h"
+#include "rpmostree-kargs-process.h"
 
 static gboolean
 change_origin_refspec (OstreeSysroot *sysroot,
@@ -1428,9 +1429,77 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
                                 GCancellable *cancellable,
                                 GError **error)
 {
+  KernelArgTransaction *self = (KernelArgTransaction *) transaction;
+  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
+  /* Set this boolean to have a default value */
+  gboolean import_from_cmd = FALSE;
 
-  return TRUE;
+  if (self->flags & RPMOSTREE_TRANSACTION_KERNEL_ARG_FLAG_IMPORT_CMD)
+    import_from_cmd = TRUE;
+
+  __attribute__((cleanup(_ostree_kernel_args_cleanup))) OstreeKernelArgs *kargs = _ostree_kernel_args_new ();
+  g_autoptr(RpmOstreeSysrootUpgrader) upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, 0,
+                                                                                 cancellable, error);
+
+  /* We need the upgrader to perform the deployment */
+  if (upgrader == NULL)
+    return FALSE;
+
+  /* Will first merge existing Kernel Arguments from
+   * either two places, one from old deployment,
+   * or the other from the current kernel arguments */
+  if (import_from_cmd)
+    {
+      if (!_ostree_kernel_args_append_proc_cmdline (kargs, cancellable, error))
+        return FALSE;
+    }
+  else
+    {
+      /* We will default to merge if import option is not specified */
+      OstreeDeployment *default_deployment = rpmostree_sysroot_upgrader_get_merge_deployment (upgrader);
+      OstreeBootconfigParser *bootconfig = ostree_deployment_get_bootconfig (default_deployment);
+
+      g_auto(GStrv) previous_args = g_strsplit (ostree_bootconfig_parser_get (bootconfig, "options"), " ", -1);
+      _ostree_kernel_args_append_argv (kargs, previous_args);
+    }
+
+  /* When none of the arguments are present, we print out the merged/current kernel arguments and leave */
+  if (!(self->kernel_args_added) && !(self->kernel_args_deleted)
+      && !(self->kernel_args_replaced))
+    {
+      g_autofree gchar* kargs_str = _ostree_kernel_args_to_string (kargs);
+      rpmostreed_transaction_emit_message_printf(transaction,
+                                                 "The kernel arguments are:\n %s",
+                                                 kargs_str);
+      return TRUE;
+    }
+
+  if (self->kernel_args_deleted)
+    {
+      /* Delete all the entries included in the kernel args */
+      for (char **iter = self->kernel_args_deleted; iter && *iter; iter++)
+        {
+          const char*  arg =  *iter;
+          if (!_ostree_kernel_args_delete(kargs, arg, error))
+            return FALSE;
+        }
+    }
+  else
+    {
+      if (self->kernel_args_replaced)
+        {
+          /* Waiting to be implemented */
+        }
+
+      if (self->kernel_args_added)
+        _ostree_kernel_args_append_argv (kargs, self->kernel_args_added);
+    }
+
+  /* After all the arguments are processed earlier, we convert it to a string list*/
+  g_auto(GStrv) kargs_strv = _ostree_kernel_args_to_strv (kargs);
+  return rpmostree_sysroot_upgrader_deploy_set_kargs (upgrader, kargs_strv,
+                                                      cancellable, error);
 }
 
 static void

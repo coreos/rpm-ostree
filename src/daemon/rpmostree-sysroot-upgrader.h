@@ -117,4 +117,9 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader  *self,
                                    GCancellable           *cancellable,
                                    GError                **error);
 
+gboolean
+rpmostree_sysroot_upgrader_deploy_set_kargs (RpmOstreeSysrootUpgrader *self,
+                                             char                    **kernel_args,
+                                             GCancellable             *cancellable,
+                                             GError                  **error);
 G_END_DECLS
