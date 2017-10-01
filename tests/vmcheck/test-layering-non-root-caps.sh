@@ -17,7 +17,7 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-set -e
+set -euo pipefail
 
 . ${commondir}/libtest.sh
 . ${commondir}/libvm.sh
@@ -92,41 +92,45 @@ fi
 echo "ok all files layered"
 
 check_user() {
-  user=$(vm_cmd stat -c '%U' $1)
+  local user=$(vm_cmd stat -c '%U' $1)
   if [[ $user != $2 ]]; then
     assert_not_reached "expected user $2 on file $1 but got $user"
   fi
 }
 
 check_group() {
-  group=$(vm_cmd stat -c '%G' $1)
+  local group=$(vm_cmd stat -c '%G' $1)
   if [[ $group != $2 ]]; then
     assert_not_reached "expected group $2 on file $1 but got $group"
   fi
 }
 
 check_fcap() {
-  fcap=$(vm_cmd getcap $1)
-  fcap=${fcap#* = } # trim filename
+  local fcap=$(vm_cmd getcap $1)
+  local fcap=${fcap#* = } # trim filename
   if [[ $fcap != $2 ]]; then
     assert_not_reached "expected fcaps $2 on file $1 but got $fcap"
   fi
 }
 
 check_file() {
-  check_user $1 $2
-  check_group $1 $3
-  check_fcap $1 $4
+  local file=$1; shift
+  local user=$1; shift
+  local group=$1; shift
+  local fcap=${1:-}
+  check_user  "$file" "$user"
+  check_group "$file" "$group"
+  check_fcap  "$file" "$fcap"
 }
 
-check_file /usr/bin/nrc-none.sh root root ""
-check_file /usr/bin/nrc-user.sh nrcuser root ""
-check_file /usr/bin/nrc-user-link.sh nrcuser root ""
-check_file /usr/bin/nrc-group.sh root nrcgroup ""
+check_file /usr/bin/nrc-none.sh root root
+check_file /usr/bin/nrc-user.sh nrcuser root
+check_file /usr/bin/nrc-user-link.sh nrcuser root
+check_file /usr/bin/nrc-group.sh root nrcgroup
 check_file /usr/bin/nrc-caps.sh root root "cap_net_bind_service+ep"
 check_file /usr/bin/nrc-caps-setuid.sh root root "cap_net_bind_service+ep"
 vm_cmd test -u /usr/bin/nrc-caps-setuid.sh
-check_file /usr/bin/nrc-usergroup.sh nrcuser nrcgroup ""
+check_file /usr/bin/nrc-usergroup.sh nrcuser nrcgroup
 check_file /usr/bin/nrc-usergroupcaps.sh nrcuser nrcgroup "cap_net_bind_service+ep"
 check_file /usr/bin/nrc-usergroupcaps-setuid.sh nrcuser nrcgroup "cap_net_bind_service+ep"
 vm_cmd test -u /usr/bin/nrc-usergroupcaps-setuid.sh
