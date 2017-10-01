@@ -1793,8 +1793,8 @@ import_one_package (RpmOstreeContext *self,
    */
   if (!pkg_is_local (pkg))
     {
-      if (TEMP_FAILURE_RETRY (unlinkat (AT_FDCWD, pkg_path, 0)) < 0)
-        return glnx_throw_errno_prefix (error, "Deleting %s", pkg_path);
+      if (!glnx_unlinkat (AT_FDCWD, pkg_path, 0, error))
+        return FALSE;
     }
 
   if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostreerepo, sepolicy,
@@ -3096,9 +3096,9 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
       if (have_systemctl)
         {
-          if (renameat (tmprootfs_dfd, "usr/bin/systemctl.rpmostreesave",
-                        tmprootfs_dfd, "usr/bin/systemctl") < 0)
-            return glnx_throw_errno_prefix (error, "renameat(usr/bin/systemctl)");
+          if (!glnx_renameat (tmprootfs_dfd, "usr/bin/systemctl.rpmostreesave",
+                              tmprootfs_dfd, "usr/bin/systemctl", error))
+            return FALSE;
         }
 
       if (have_passwd)
