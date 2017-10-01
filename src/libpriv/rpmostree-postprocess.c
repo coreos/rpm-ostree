@@ -119,8 +119,8 @@ rename_if_exists (int         src_dfd,
           /* Handle empty directory in legacy location */
           if (errno == EEXIST)
             {
-              if (unlinkat (src_dfd, from, AT_REMOVEDIR) < 0)
-                return glnx_throw_errno_prefix (error, "rmdirat(%s)", from);
+              if (!glnx_unlinkat (src_dfd, from, AT_REMOVEDIR, error))
+                return FALSE;
             }
           else
             return glnx_throw_errno_prefix (error, "renameat(%s)", to);
@@ -466,8 +466,8 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
       if (filetype_c == 'd')
         {
           struct stat stbuf;
-          if (TEMP_FAILURE_RETRY (fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW)) != 0)
-            return glnx_throw_errno_prefix (error, "fstatat");
+          if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+            return FALSE;
 
           g_string_append_printf (tmpfiles_d_buf, " 0%02o", stbuf.st_mode & ~S_IFMT);
           g_string_append_printf (tmpfiles_d_buf, " %d %d - -", stbuf.st_uid, stbuf.st_gid);
@@ -618,8 +618,8 @@ workaround_selinux_cross_labeling_recurse (int            dfd,
           const char *lastdot;
           g_autofree char *nonbin_name = NULL;
 
-          if (TEMP_FAILURE_RETRY (fstatat (dfd_iter.fd, name, &stbuf, AT_SYMLINK_NOFOLLOW)) != 0)
-            return glnx_throw_errno_prefix (error, "fstat");
+          if (!glnx_fstatat (dfd_iter.fd, name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+            return FALSE;
 
           lastdot = strrchr (name, '.');
           g_assert (lastdot);
@@ -1062,8 +1062,8 @@ rpmostree_rootfs_symlink_emptydir_at (int rootfs_fd,
         make_symlink = FALSE;
       else if (S_ISDIR (stbuf.st_mode))
         {
-          if (unlinkat (rootfs_fd, src, AT_REMOVEDIR) < 0)
-            return glnx_throw_errno_prefix (error, "Removing %s", src);
+          if (!glnx_unlinkat (rootfs_fd, src, AT_REMOVEDIR, error))
+            return FALSE;
         }
     }
 
@@ -1138,8 +1138,8 @@ cleanup_leftover_files (int            rootfs_fd,
       if (!in_files && !has_prefix)
         continue;
 
-      if (unlinkat (dfd_iter.fd, name, 0) < 0)
-        return glnx_throw_errno_prefix (error, "Unlinking %s: ", name);
+      if (!glnx_unlinkat (dfd_iter.fd, name, 0, error))
+        return FALSE;
     }
 
   return TRUE;
@@ -1609,8 +1609,8 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
           return glnx_prefix_error (error, "While executing postprocessing script '%s'", bn);
       }
 
-      if (unlinkat (rootfs_fd, target_binpath, 0) < 0)
-        return glnx_throw_errno_prefix (error, "unlinkat(%s)", target_binpath);
+      if (!glnx_unlinkat (rootfs_fd, target_binpath, 0, error))
+        return FALSE;
 
       g_print ("Finished postprocessing script '%s'\n", bn);
     }
@@ -1779,11 +1779,8 @@ count_filesizes (int dfd,
         {
           struct stat stbuf;
 
-          if (fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW) != 0)
-            {
-              glnx_set_prefix_error_from_errno (error, "%s", "fstatat");
-              return FALSE;
-            }
+          if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+            return FALSE;
 
           (*out_n_bytes) += stbuf.st_size;
         }
