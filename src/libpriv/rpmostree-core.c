@@ -3289,6 +3289,20 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
 
     ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
 
+    /* if we're SELinux aware, then reload the final policy from the tmprootfs in case it
+     * was changed by a scriptlet; this covers the foobar/foobar-selinux path */
+    if (self->sepolicy)
+      {
+        g_autoptr(OstreeSePolicy) final_sepolicy = NULL;
+        if (!rpmostree_prepare_rootfs_get_sepolicy (tmprootfs_dfd, &final_sepolicy,
+                                                    cancellable, error))
+          return FALSE;
+
+        /* takes a ref */
+        ostree_repo_commit_modifier_set_sepolicy (commit_modifier, final_sepolicy);
+      }
+
+
     mtree = ostree_mutable_tree_new ();
 
     if (!ostree_repo_write_dfd_to_mtree (self->ostreerepo, tmprootfs_dfd, ".",
