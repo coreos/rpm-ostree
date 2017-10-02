@@ -87,8 +87,9 @@ vm_build_rpm baz
 vm_rpmostree install baz
 root=$(vm_get_deployment_root 0)
 assert_actual_label $root/usr/bin/baz bin_t
-vm_rpmostree upgrade > out.txt
-assert_file_has_content out.txt 'Relabeling 1 package'
+cursor=$(vm_get_journal_cursor)
+vm_rpmostree upgrade
+vm_assert_journal_has_content $cursor 'Relabeled 1/1 pkg, 1 file changed'
 root=$(vm_get_deployment_root 0)
 assert_actual_label $root/usr/bin/baz install_exec_t
 echo "ok relabel"
