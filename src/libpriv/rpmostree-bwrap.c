@@ -337,14 +337,14 @@ rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
     {
       /* Now, it's possible @cancellable has been set, which means the process
        * hasn't terminated yet. AFAIK that should be the only cause for the
-       * process not having exited now, but regardless we just check
-       * g_subprocess_get_if_exited() to be safe. If the process is still
-       * alive, we kill it explicitly so it doesn't leak. Right now we run
-       * bwrap --die-with-parent, but until we do the whole txn as a
-       * subprocess, the script would leak until rpm-ostreed exited.
+       * process not having exited now, but we just kill the process regardless
+       * on error here.  The GSubprocess code ignores the request if we've
+       * already reaped it.
+       *
+       * Right now we run bwrap --die-with-parent, but until we do the whole txn
+       * as a subprocess, the script would leak until rpm-ostreed exited.
        */
-      if (!g_subprocess_get_if_exited (subproc))
-        g_subprocess_force_exit (subproc);
+      g_subprocess_force_exit (subproc);
       return FALSE;
     }
   int estatus = g_subprocess_get_exit_status (subproc);
