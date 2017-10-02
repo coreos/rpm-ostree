@@ -126,10 +126,12 @@ required: false
 host:
   distro: fedora/26/atomic
 
+# We're not doing this bit yet since it breaks unless we use metalinks
+# because f27 isn't released yet and released content is in a separate path.
+# -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
+# -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
 tests:
   - docker run --privileged --rm
-    -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
-    -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
     registry.fedoraproject.org/fedora:26 /bin/sh -c
     "./ci/build.sh && make install && adduser unpriv && setfacl -m u:unpriv:rwX . && runuser -u unpriv ./tests/ex-container"
