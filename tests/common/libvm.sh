@@ -347,13 +347,15 @@ vm_wait_content_after_cursor() {
     cat > wait.sh <<EOF
 #!/usr/bin/bash
 set -xeuo pipefail
-while true; do
+for x in $(seq 60); do
   if journalctl --after-cursor "${from_cursor}" | grep -q -e "${regex}"; then
-    break
+    exit 0
   else
     sleep 1
   fi
 done
+echo "timed out after 60s" 1>&2
+exit 1
 EOF
     vm_cmdfile wait.sh
 }
