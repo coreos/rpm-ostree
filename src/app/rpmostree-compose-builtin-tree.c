@@ -749,7 +749,7 @@ impl_compose_tree (const char      *treefile_pathstr,
   if (fchdir (self->workdir_dfd) != 0)
     return glnx_throw_errno_prefix (error, "fchdir");
 
-  self->corectx = rpmostree_context_new_compose (self->cachedir_dfd, cancellable, error);
+  self->corectx = rpmostree_context_new_tree (self->cachedir_dfd, self->repo, cancellable, error);
   if (!self->corectx)
     return FALSE;
 

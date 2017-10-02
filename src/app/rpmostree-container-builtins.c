@@ -42,7 +42,10 @@ static GOptionEntry init_option_entries[] = {
   { NULL }
 };
 
+static gboolean opt_cache_only;
+
 static GOptionEntry assemble_option_entries[] = {
+  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Assume cache is present, do not attempt to update it", NULL },
   { NULL }
 };
 
@@ -79,6 +82,10 @@ roc_context_init (ROContainerContext *rocctx,
   if (!rocctx->repo)
     return FALSE;
 
+  OstreeRepoMode mode = ostree_repo_get_mode (rocctx->repo);
+  if (mode != OSTREE_REPO_MODE_BARE_USER_ONLY)
+    return glnx_throw (error, "container repos are now required to be in bare-user-only mode");
+
   if (!glnx_opendirat (rocctx->userroot_dfd, "roots", TRUE, &rocctx->roots_dfd, error))
     return FALSE;
 
@@ -94,7 +101,8 @@ roc_context_prepare_for_root (ROContainerContext *rocctx,
                               GCancellable       *cancellable,
                               GError            **error)
 {
-  rocctx->ctx = rpmostree_context_new_unprivileged (rocctx->userroot_dfd, NULL, error);
+  rocctx->ctx = rpmostree_context_new_tree (rocctx->userroot_dfd, rocctx->repo,
+                                            cancellable, error);
   if (!rocctx->ctx)
     return FALSE;
 
@@ -150,7 +158,7 @@ rpmostree_container_builtin_init (int             argc,
     }
 
   rocctx->repo = ostree_repo_create_at (rocctx->userroot_dfd, "repo",
-                                        OSTREE_REPO_MODE_BARE_USER, NULL,
+                                        OSTREE_REPO_MODE_BARE_USER_ONLY, NULL,
                                         cancellable, error);
   if (!rocctx->repo)
     return FALSE;
@@ -249,6 +257,10 @@ rpmostree_container_builtin_assemble (int             argc,
 
   if (!roc_context_prepare_for_root (rocctx, treespec, cancellable, error))
     return EXIT_FAILURE;
+
+  DnfContext *dnfctx = rpmostree_context_get_hif (rocctx->ctx);
+  if (opt_cache_only)
+    dnf_context_set_cache_age (dnfctx, G_MAXUINT);
 
   /* --- Resolving dependencies --- */
   if (!rpmostree_context_prepare (rocctx->ctx, cancellable, error))
