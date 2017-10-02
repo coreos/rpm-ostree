@@ -1,0 +1,38 @@
+#!/bin/bash
+# Tests for `rpm-ostree ex container`.
+set -xeuo pipefail
+
+dn=$(cd $(dirname $0) && pwd)
+export topsrcdir=$(cd $dn/.. && pwd)
+. ${dn}/common/libtest-core.sh
+. ${dn}/common/libcomposetest.sh
+
+if test "$(id -u)" = 0; then
+    fatal "Don't run $0 as root"
+fi
+
+LOGDIR=${LOGDIR:-$(pwd)/ex-compose-logs}
+
+tmpdir=$(mktemp -d /var/tmp/rpm-ostree-container.XXXXXX)
+touch ${tmpdir}/.tmpdir
+cleanup_tmp() {
+    # This sanity check ensures we don't delete something else
+    if test -z "${TEST_SKIP_CLEANUP:-}" && test -f ${tmpdir}/.tmpdir; then
+        rm -rf ${tmpdir}
+    fi
+}
+trap cleanup_tmp EXIT
+
+cd ${tmpdir}
+rpm-ostree ex container init
+# Need 27 due to http://bugzilla.redhat.com/1478172 only built there
+setup_rpmmd_repos ${tmpdir}/rpmmd.repos.d 27
+
+echo "Results in ${LOGDIR}"
+rm ${LOGDIR} -rf
+mkdir -p ${LOGDIR}
+
+# Ideally pass $(cwd) down into parallel somehow
+export test_tmpdir=${tmpdir}
+ls ${dn}/ex-container-tests/test-*.sh | sort |
+    parallel --tag --halt soon,fail=1 --joblog joblog --results ${LOGDIR} --line-buffer {}
