@@ -166,7 +166,11 @@ vm_build_rpm post-that-hangs \
 # Enable job control so we can do a background job, then foreground.
 set -m
 nohup $SSH -t -t rpm-ostree install post-that-hangs &
-vm_wait_content_after_cursor "${cursor}" "entering post-that-hangs-infloop"
+if ! vm_wait_content_after_cursor "${cursor}" "entering post-that-hangs-infloop"; then
+    kill -s INT %1
+    fg %1 || true
+    exit 1
+fi
 # Explicitly kill the client process in the VM; I originally tried to kill the
 # ssh binary and have it propagate the signal, on our side but couldn't figure
 # out how to make that work.

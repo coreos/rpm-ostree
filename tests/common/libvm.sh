@@ -347,7 +347,7 @@ vm_wait_content_after_cursor() {
     cat > wait.sh <<EOF
 #!/usr/bin/bash
 set -xeuo pipefail
-for x in $(seq 60); do
+for x in \$(seq 60); do
   if journalctl --after-cursor "${from_cursor}" | grep -q -e "${regex}"; then
     exit 0
   else
