@@ -75,6 +75,15 @@ rpmostree_builtin_rollback (int             argc,
                                 cancellable, &os_proxy, error))
     return EXIT_FAILURE;
 
+  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+  g_autoptr(GVariant) options =
+    rpmostree_get_options_variant (opt_reboot,
+                                   FALSE,   /* allow-downgrade */
+                                   FALSE,
+                                   FALSE,  /* no-pull-base */
+                                   FALSE,  /* dry-run */
+                                   FALSE); /* no-overrides */
+
   if (!rpmostree_os_call_rollback_sync (os_proxy,
                                         get_args_variant (),
                                         &transaction_address,
@@ -82,24 +91,9 @@ rpmostree_builtin_rollback (int             argc,
                                         error))
     return EXIT_FAILURE;
 
-  if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
-                                                transaction_address,
-                                                cancellable,
-                                                error))
-    return EXIT_FAILURE;
-
-  if (!opt_reboot)
-    {
-      /* do diff without dbus: https://github.com/projectatomic/rpm-ostree/pull/116 */
-      const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-      if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
-                                                           cancellable,
-                                                           error))
-        return EXIT_FAILURE;
-
-      g_print ("Run \"systemctl reboot\" to start a reboot\n");
-    }
-
-
-  return EXIT_SUCCESS;
+  return rpmostree_transaction_client_run (sysroot_proxy, os_proxy,
+                                           options, FALSE,
+                                           transaction_address,
+                                           previous_deployment,
+                                           cancellable, error);
 }
