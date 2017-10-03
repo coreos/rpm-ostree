@@ -390,7 +390,7 @@ on_idle_exit (void *data)
 
   g_clear_pointer (&self->idle_exit_source, (GDestroyNotify)g_source_unref);
 
-  sd_notifyf (0, "STOPPING=1\nSTATUS=Exiting due to idle");
+  sd_notifyf (0, "STATUS=Exiting due to idle");
   self->running = FALSE;
   g_main_context_wakeup (NULL);
 

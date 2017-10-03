@@ -369,7 +369,7 @@ rpmostree_builtin_start_daemon (int             argc,
        * FLUSHING right now, let's just forcibly do so if it hasn't been done
        * already.
        */
-      if (appstate <= APPSTATE_FLUSHING)
+      if (appstate < APPSTATE_FLUSHING)
         state_transition (APPSTATE_FLUSHING);
       g_dbus_connection_call (bus,
                               "org.freedesktop.DBus", "/org/freedesktop/DBus",
