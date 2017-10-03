@@ -355,6 +355,7 @@ for x in \$(seq 60); do
   fi
 done
 echo "timed out after 60s" 1>&2
+journalctl -u rpm-ostreed --after-cursor "${from_cursor}" | tail -100
 exit 1
 EOF
     vm_cmdfile wait.sh
