@@ -347,10 +347,13 @@ vm_wait_content_after_cursor() {
     cat > wait.sh <<EOF
 #!/usr/bin/bash
 set -xeuo pipefail
+tmpf=$(mktemp /var/tmp/journal.XXXXXX)
 for x in \$(seq 60); do
-  if journalctl --after-cursor "${from_cursor}" | grep -q -e "${regex}"; then
+  journalctl -u rpm-ostreed --after-cursor "${from_cursor}" > ${tmpf}
+  if grep -q -e "${regex}" ${tmpf}; then
     exit 0
   else
+    cat ${tmpf}
     sleep 1
   fi
 done
