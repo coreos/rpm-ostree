@@ -730,7 +730,7 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
   if (!replacing)
     {
       if (!adds_packages)
-        return glnx_throw (error, "No packages added; live updates not currently supported for modifications or deletions");
+        return glnx_throw (error, "No packages added, and replacement not enabled");
       if (modifies_packages)
         return glnx_throw (error, "livefs update modifies/replaces packages and replacement not enabled");
       else if ((diff->flags & COMMIT_DIFF_FLAGS_REPLACEMENT) > 0)
