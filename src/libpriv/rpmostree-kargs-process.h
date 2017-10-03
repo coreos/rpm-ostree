@@ -42,6 +42,16 @@ void _ostree_kernel_args_append_argv_filtered (OstreeKernelArgs  *kargs,
                                                char **argv,
                                                char **prefixes);
 
+gboolean _ostree_kernel_args_delete (OstreeKernelArgs *kargs,
+                                     const char       *arg,
+                                     GError           **error);
+
+
+gboolean _ostree_kernel_args_delete_key_entry (OstreeKernelArgs *kargs,
+                                               char             *key,
+                                               GError          **error);
+
+
 gboolean _ostree_kernel_args_append_proc_cmdline (OstreeKernelArgs *kargs,
                                                   GCancellable     *cancellable,
                                                   GError          **error);

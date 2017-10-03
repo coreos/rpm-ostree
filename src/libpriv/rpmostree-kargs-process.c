@@ -33,7 +33,7 @@ static char *
 split_keyeq (char *arg)
 {
   char *eq;
-      
+
   eq = strchr (arg, '=');
   if (eq)
     {
@@ -95,6 +95,175 @@ _ostree_kernel_args_cleanup (void *loc)
 {
   _ostree_kernel_arg_autofree (*((OstreeKernelArgs**)loc));
 }
+
+
+/*
+ * _ostree_ptr_array_find
+ *  @array: a GPtrArray instance
+ *  @val: a string value
+ *  @out_index: the returned index
+ *
+ *  Note: This is a temp replacement for 'g_ptr_array_find_with_equal_func'
+ *  since that function was recently introduced in Glib (version 2.54),
+ *  the version is still not updated upstream yet,  thus tempoarily using
+ *  this as a replacement
+ *
+ *  Returns: False if can not find the index
+ *
+ **/
+static
+gboolean _ostree_ptr_array_find (GPtrArray       *array,
+                        const char      *val,
+                        int             *out_index)
+{
+
+  for (int counter = 0; counter < array->len; counter++)
+    {
+      const char *temp_val = array->pdata[counter];
+      if  (g_str_equal (val, temp_val))
+        {
+          *out_index = counter;
+          return TRUE;
+        }
+
+    }
+    return FALSE;
+}
+
+
+/*
+ *  _ostree_kernel_args_delete:
+ *  @kargs: a OstreeKernelArgs instance
+ *  @arg: key or key/value pair for deletion
+ *  @error: an GError instance
+ *
+ *  There are few scenarios being handled for deletion:
+ *
+ *  1: for input arg with a single key(i.e without = for split),
+ *  the key/value pair will be deleted if there is only
+ *  one value that is associated with the key
+ *
+ *  2: for input arg wth key/value pair, the specific key
+ *  value pair will be deleted from the pointer array
+ *  if those exist.
+ *
+ *  3: If the found key has only one value
+ *  associated with it, the key entry in the table will also
+ *  be removed, and the key will be removed from order table
+ *
+ *  Returns: False if an error is set,
+ *
+ **/
+gboolean
+_ostree_kernel_args_delete (OstreeKernelArgs *kargs,
+                            const char       *arg,
+                            GError           **error)
+{
+  /* Make a duplicate of the passed in arg for manipulation */
+  g_autofree char *duped = g_strdup (arg);
+  const char *val = split_keyeq (duped);
+
+  GPtrArray *values = g_hash_table_lookup (kargs->table, duped);
+
+  if (!values)
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                           "The key is not found, type rpm-ostree ex kargs to see what args are there");
+      return FALSE;
+    }
+
+  /* if the value is empty, directly check if we can remove the key */
+  if (!*val)
+    {
+
+      if (values->len == 1)
+        return _ostree_kernel_args_delete_key_entry (kargs, duped, error);
+      else
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "Unable to delete %s with multiple values associated with it, try delete by key=value format", duped);
+          return FALSE;
+        }
+    }
+
+  int value_index;
+  /* See if the value exist in the values array,
+   * if it is, we return its index */
+  if (!_ostree_ptr_array_find (values, val,
+                               &value_index))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "There is no %s value for key %s",
+                   val, duped);
+      return FALSE;
+    }
+
+  /* We confirmed the last entry is valid to remove
+   * we remove the entry from table, and remove the entry
+   * from order array */
+  if (values->len == 1)
+    return _ostree_kernel_args_delete_key_entry (kargs, duped, error);
+
+  if (!g_ptr_array_remove_index (values, value_index))
+    {
+      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                          "Remove failure happens");
+      return FALSE;
+    }
+
+  return TRUE;
+
+}
+
+/*
+ * _ostree_kernel_args_delete_key_entry
+ * @kargs: an OstreeKernelArgs intanc
+ * @key: the key to remove
+ * @error: an GError instance
+ *
+ * This function removes the key entry from the hashtable
+ * as well from the order pointer array inside kargs
+ *
+ * Note: since both table and order inside kernel args
+ * are with free function, no extra free functions are
+ * being called as they are done automatically by GLib
+ *
+ * Returns: False if key does not exist/ key has mutliple
+ * values associated with it
+ **/
+gboolean
+_ostree_kernel_args_delete_key_entry (OstreeKernelArgs *kargs,
+                                      char             *key,
+                                      GError          **error)
+{
+  if (!g_hash_table_remove(kargs->table, key))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Failed to remove %s from hashtable",
+                   key);
+      return FALSE;
+    }
+
+  /* Then remove the key from order table */
+  int key_index;
+  if (!_ostree_ptr_array_find (kargs->order, key,
+                              &key_index))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Failed to find %s in the array",
+                   key);
+      return FALSE;
+    }
+  if (!g_ptr_array_remove_index (kargs->order, key_index))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Failed to remove %s from order array",
+                   key);
+      return FALSE;
+    }
+  return TRUE;
+}
+
 
 void
 _ostree_kernel_args_replace_take (OstreeKernelArgs   *kargs,
@@ -232,7 +401,7 @@ _ostree_kernel_args_parse_append (OstreeKernelArgs *kargs,
 
   if (!options)
     return;
-  
+
   args = g_strsplit (options, " ", -1);
   for (iter = args; *iter; iter++)
     {
