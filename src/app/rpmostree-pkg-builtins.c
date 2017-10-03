@@ -71,6 +71,7 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
                                 cancellable, &os_proxy, error))
     return EXIT_FAILURE;
 
+  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
   g_autoptr(GVariant) options =
     rpmostree_get_options_variant (opt_reboot,
                                    FALSE,   /* allow-downgrade */
@@ -115,29 +116,11 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
         return EXIT_FAILURE;
     }
 
-  if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
-                                                transaction_address,
-                                                cancellable,
-                                                error))
-    return EXIT_FAILURE;
-
-  if (opt_dry_run)
-    {
-      g_print ("Exiting because of '--dry-run' option\n");
-    }
-  else if (!opt_reboot)
-    {
-      /* install/uninstall currently always results in a new deployment */
-      const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-      if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
-                                                           cancellable,
-                                                           error))
-        return EXIT_FAILURE;
-
-      g_print ("Run \"systemctl reboot\" to start a reboot\n");
-    }
-
-  return EXIT_SUCCESS;
+  return rpmostree_transaction_client_run (sysroot_proxy, os_proxy,
+                                           options, FALSE,
+                                           transaction_address,
+                                           previous_deployment,
+                                           cancellable, error);
 }
 
 int
