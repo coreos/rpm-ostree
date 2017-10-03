@@ -172,8 +172,6 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
   const char *bold_suffix = is_tty ? "\x1b[0m" : "";
   const char *red_prefix = is_tty ? "\x1b[31m" : "";
   const char *red_suffix = is_tty ? "\x1b[22m" : "";
-  GVariant* txn = get_active_txn (sysroot_proxy);
-  const char *txn_path = rpmostree_sysroot_get_active_transaction_path (sysroot_proxy);
 
   /* First, gather global state */
   gboolean have_any_live_overlay = FALSE;
@@ -198,29 +196,15 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       have_any_live_overlay = have_any_live_overlay || have_live_changes;
     }
 
-  if (txn && txn_path)
-    {
-      const char *method, *sender, *path;
-      g_variant_get (txn, "(&s&s&s)", &method, &sender, &path);
+  glnx_unref_object RPMOSTreeTransaction *txn_proxy = NULL;
+  if (!rpmostree_transaction_connect_active (sysroot_proxy, NULL, &txn_proxy,
+                                             cancellable, error))
+    return FALSE;
 
-      /* Things currently could race here if the transaction completes after we get the
-       * path.  For now, just ignore errors.  TODO: A more correct fix would involve a loop
-       * on watching the path property, trying a connection, and re-reading the value
-       * and only erroring out if the property hasn't changed.
-       */
-      /* gdbus-codegen started generating autocleanups from 2.50 */
-      glnx_unref_object RPMOSTreeTransactionProxy *txn_proxy =
-        (RPMOSTreeTransactionProxy*)rpmostree_transaction_connect (txn_path, NULL, NULL);
-      if (txn_proxy)
-        {
-          const char *title = rpmostree_transaction_get_title ((RPMOSTreeTransaction*)txn_proxy);
-          g_print ("State: transaction: %s\n", title);
-        }
-      /* Print the address if verbose, *or* if we somehow failed to get
-       * the txn, so we aren't masking errors.
-       */
-      if (opt_verbose || (path && !txn_proxy))
-        g_print ("TransactionAddress: %s %s %s\n", method, sender, path);
+  if (txn_proxy)
+    {
+      const char *title = rpmostree_transaction_get_title (txn_proxy);
+      g_print ("State: transaction: %s\n", title);
     }
   else
     g_print ("State: idle\n");

@@ -557,13 +557,32 @@ on_sigint (gpointer user_data)
   return TRUE;
 }
 
-/* Connect to the transaction bus address and return a proxy for the transaction
- * object.
+static gboolean
+set_variable_false (gpointer data)
+{
+  gboolean *donep = data;
+  *donep = TRUE;
+  g_main_context_wakeup (NULL);
+  return FALSE;
+}
+
+/* We explicitly run the loop so we receive DBus messages,
+ * in particular notification of a new txn.
  */
-RPMOSTreeTransaction *
-rpmostree_transaction_connect (const char *transaction_address,
-                               GCancellable *cancellable,
-                               GError      **error)
+static void
+spin_mainloop_for_a_second (void)
+{
+  gboolean done = FALSE;
+
+  g_timeout_add_seconds (1, set_variable_false, &done);
+  while (!done)
+    g_main_context_iteration (NULL, TRUE);
+}
+
+static RPMOSTreeTransaction *
+transaction_connect (const char *transaction_address,
+                     GCancellable *cancellable,
+                     GError      **error)
 {
   g_autoptr(GDBusConnection) peer_connection =
     g_dbus_connection_new_for_address_sync (transaction_address,
@@ -578,6 +597,58 @@ rpmostree_transaction_connect (const char *transaction_address,
                                                NULL, "/", cancellable, error);
 }
 
+/* Connect to the active transaction if one exists.  Because this is
+ * currently racy, we use a retry loop for up to ~5 seconds.
+ */
+gboolean
+rpmostree_transaction_connect_active (RPMOSTreeSysroot *sysroot_proxy,
+                                      char                 **out_path,
+                                      RPMOSTreeTransaction **out_txn,
+                                      GCancellable *cancellable,
+                                      GError      **error)
+{
+  /* We don't want to loop infinitely if something is going wrong with e.g.
+   * permissions.
+   */
+  guint n_tries = 0;
+  const guint max_tries = 5;
+  g_autoptr(GError) txn_connect_error = NULL;
+
+  for (n_tries = 0; n_tries < max_tries; n_tries++)
+    {
+      const char *txn_path = rpmostree_sysroot_get_active_transaction_path (sysroot_proxy);
+      if (!txn_path || !*txn_path)
+        {
+          /* No active txn?  We're done */
+          if (out_path)
+            *out_path = NULL;
+          *out_txn = NULL;
+          return TRUE;
+        }
+
+      /* Keep track of the last error so we have something to return */
+      g_clear_error (&txn_connect_error);
+      RPMOSTreeTransaction *txn =
+        transaction_connect (txn_path, cancellable, &txn_connect_error);
+      if (txn)
+        {
+          if (out_path)
+            *out_path = g_strdup (txn_path);
+          *out_txn = txn;
+          return TRUE;
+        }
+      else
+        spin_mainloop_for_a_second ();
+    }
+
+  g_propagate_error (error, g_steal_pointer (&txn_connect_error));
+  return FALSE;
+}
+
+/* Transactions need an explicit Start call so we can set up watches for signals
+ * beforehand and avoid losing information.  We monitor the transaction,
+ * printing output it sends, and handle Ctrl-C, etc.
+ */
 gboolean
 rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
                                          const char *transaction_address,
@@ -622,7 +693,7 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
                         tp);
     }
 
-  transaction = rpmostree_transaction_connect (transaction_address, cancellable, error);
+  transaction = transaction_connect (transaction_address, cancellable, error);
   if (!transaction)
     goto out;
 
@@ -653,7 +724,6 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
    *       But that requires having a printable description of the
    *       operation.  Maybe just add a string arg to this function?
    */
-
   g_main_loop_run (tp->loop);
 
   g_cancellable_disconnect (cancellable, cancel_handler);
@@ -679,7 +749,6 @@ out:
   transaction_progress_free (tp);
   return success;
 }
-
 
 void
 rpmostree_print_signatures (GVariant *variant,
