@@ -186,25 +186,23 @@ rpmostree_load_sysroot (gchar *sysroot,
                                      (GVariantType*)"()",
                                      G_DBUS_CALL_FLAGS_NONE, -1,
                                      cancellable, &local_error);
-      if (res)
+      if (!res)
         break;  /* Success! */
-      else
-        {
-          if (g_dbus_error_is_remote_error (local_error))
-            {
-              g_autofree char *remote_err = g_dbus_error_get_remote_error (local_error);
-              /* If this is true, we caught the daemon after it was doing an
-               * idle exit, but while it still owned the name. Retry.
-               */
-              if (g_str_equal (remote_err, "org.freedesktop.DBus.Error.NoReply"))
-                continue;
-              /* Otherwise, fall through */
-            }
 
-          /* Something else went wrong */
-          g_propagate_error (error, g_steal_pointer (&local_error));
-          return FALSE;
+      if (g_dbus_error_is_remote_error (local_error))
+        {
+          g_autofree char *remote_err = g_dbus_error_get_remote_error (local_error);
+          /* If this is true, we caught the daemon after it was doing an
+           * idle exit, but while it still owned the name. Retry.
+           */
+          if (g_str_equal (remote_err, "org.freedesktop.DBus.Error.NoReply"))
+            continue;
+          /* Otherwise, fall through */
         }
+
+      /* Something else went wrong */
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
     }
 
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy =
