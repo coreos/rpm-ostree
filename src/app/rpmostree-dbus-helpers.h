@@ -57,8 +57,11 @@ rpmostree_load_os_proxies                    (RPMOSTreeSysroot *sysroot_proxy,
                                               RPMOSTreeOS **out_os_proxy,
                                               RPMOSTreeOSExperimental **out_osexperimental_proxy,
                                               GError **error);
-RPMOSTreeTransaction *
-rpmostree_transaction_connect                (const char *transaction_address,
+
+gboolean
+rpmostree_transaction_connect_active         (RPMOSTreeSysroot *sysroot_proxy,
+                                              char                 **out_path,
+                                              RPMOSTreeTransaction **out_txn,
                                               GCancellable *cancellable,
                                               GError      **error);
 
