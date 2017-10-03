@@ -186,7 +186,7 @@ rpmostree_load_sysroot (gchar *sysroot,
                                      (GVariantType*)"()",
                                      G_DBUS_CALL_FLAGS_NONE, -1,
                                      cancellable, &local_error);
-      if (!res)
+      if (res)
         break;  /* Success! */
 
       if (g_dbus_error_is_remote_error (local_error))
