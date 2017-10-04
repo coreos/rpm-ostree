@@ -1272,3 +1272,118 @@ rpmostreed_transaction_new_cleanup (GDBusMethodInvocation *invocation,
   return (RpmostreedTransaction *) self;
 
 }
+
+/* ================================ RefreshMd ================================ */
+
+typedef struct {
+  RpmostreedTransaction parent;
+  char *osname;
+  RpmOstreeTransactionRefreshMdFlags flags;
+} RefreshMdTransaction;
+
+typedef RpmostreedTransactionClass RefreshMdTransactionClass;
+
+GType refresh_md_transaction_get_type (void);
+
+G_DEFINE_TYPE (RefreshMdTransaction,
+               refresh_md_transaction,
+               RPMOSTREED_TYPE_TRANSACTION)
+
+static void
+refresh_md_transaction_finalize (GObject *object)
+{
+  RefreshMdTransaction *self;
+
+  self = (RefreshMdTransaction *) object;
+  g_free (self->osname);
+
+  G_OBJECT_CLASS (refresh_md_transaction_parent_class)->finalize (object);
+}
+
+static gboolean
+refresh_md_transaction_execute (RpmostreedTransaction *transaction,
+                                GCancellable *cancellable,
+                                GError **error)
+{
+  RefreshMdTransaction *self = (RefreshMdTransaction *) transaction;
+  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+
+  g_autoptr(OstreeDeployment) cfg_merge_deployment =
+    ostree_sysroot_get_merge_deployment (sysroot, self->osname);
+  g_autoptr(OstreeDeployment) origin_merge_deployment =
+    rpmostree_syscore_get_origin_merge_deployment (sysroot, self->osname);
+
+  /* but set the source root to be the origin merge deployment's so we pick up releasever */
+  const char *sysroot_path = gs_file_get_path_cached (ostree_sysroot_get_path (sysroot));
+  g_autofree char *origin_deployment_dirpath =
+    ostree_sysroot_get_deployment_dirpath (sysroot, origin_merge_deployment);
+  g_autofree char *origin_deployment_root =
+    g_build_filename (sysroot_path, origin_deployment_dirpath, NULL);
+
+  g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_system (cancellable, error);
+
+  /* We could bypass rpmostree_context_setup() here and call dnf_context_setup() ourselves
+   * since we're not actually going to perform any installation. Though it does provide us
+   * with the right semantics for install/source_root. So let's just play the game and
+   * provide a dummy treespec. */
+  if (!rpmostree_context_setup (ctx, NULL, origin_deployment_root, NULL, cancellable, error))
+    return FALSE;
+
+  if (self->flags & RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE)
+    {
+      DnfContext *hifctx = rpmostree_context_get_hif (ctx);
+      dnf_context_set_cache_age (hifctx, 0);
+    }
+
+  /* point libdnf to our repos dir */
+  rpmostree_context_configure_from_deployment (ctx, sysroot, cfg_merge_deployment);
+
+  if (!rpmostree_context_download_metadata (ctx, cancellable, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+static void
+refresh_md_transaction_class_init (CleanupTransactionClass *class)
+{
+  GObjectClass *object_class;
+
+  object_class = G_OBJECT_CLASS (class);
+  object_class->finalize = refresh_md_transaction_finalize;
+
+  class->execute = refresh_md_transaction_execute;
+}
+
+static void
+refresh_md_transaction_init (RefreshMdTransaction *self)
+{
+}
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_refresh_md (GDBusMethodInvocation *invocation,
+                                       OstreeSysroot         *sysroot,
+                                       RpmOstreeTransactionRefreshMdFlags flags,
+                                       const char            *osname,
+                                       GCancellable          *cancellable,
+                                       GError               **error)
+{
+  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
+  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+
+  RefreshMdTransaction *self =
+    g_initable_new (refresh_md_transaction_get_type (),
+                    cancellable, error,
+                    "invocation", invocation,
+                    "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
+                    NULL);
+
+  if (self != NULL)
+    {
+      self->osname = g_strdup (osname);
+      self->flags = flags;
+    }
+
+  return (RpmostreedTransaction *) self;
+
+}

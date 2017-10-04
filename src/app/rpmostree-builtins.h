@@ -68,6 +68,7 @@ BUILTINPROTO(cleanup);
 BUILTINPROTO(rollback);
 BUILTINPROTO(initramfs);
 BUILTINPROTO(status);
+BUILTINPROTO(refresh_md);
 BUILTINPROTO(db);
 BUILTINPROTO(internals);
 BUILTINPROTO(container);
