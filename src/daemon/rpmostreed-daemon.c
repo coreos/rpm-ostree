@@ -451,7 +451,7 @@ update_status (RpmostreedDaemon *self)
       guint64 readytime = g_source_get_ready_time (self->idle_exit_source);
       guint64 curtime = g_source_get_time (self->idle_exit_source);
       guint64 timeout_micros = readytime - curtime;
-      if (timeout_micros < 0)
+      if (readytime < curtime)
         timeout_micros = 0;
 
       g_assert (currently_idle && self->idle_exit_source);
