@@ -570,7 +570,7 @@ replace_usr (OstreeRepo *repo,
    * rename(). If so, `RENAME_EXCHANGE`; the old content will be rm-rf'd since
    * it will be moved to the tmpdir.
    */
-  g_autoptr(GHashTable) seen_new_children = g_hash_table_new (g_str_hash, g_str_equal);
+  g_autoptr(GHashTable) seen_new_children = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
   g_auto(GLnxDirFdIterator) dfd_iter = { FALSE, };
   if (!glnx_dirfd_iterator_init_at (tmpdir->fd, "usr", TRUE, &dfd_iter, error))
     return FALSE;
