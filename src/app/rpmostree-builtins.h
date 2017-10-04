@@ -68,6 +68,7 @@ BUILTINPROTO(cleanup);
 BUILTINPROTO(rollback);
 BUILTINPROTO(initramfs);
 BUILTINPROTO(status);
+BUILTINPROTO(makecache);
 BUILTINPROTO(db);
 BUILTINPROTO(internals);
 BUILTINPROTO(container);

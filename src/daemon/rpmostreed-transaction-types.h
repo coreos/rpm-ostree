@@ -110,3 +110,15 @@ rpmostreed_transaction_new_livefs (GDBusMethodInvocation *invocation,
                                    RpmOstreeTransactionLiveFsFlags flags,
                                    GCancellable          *cancellable,
                                    GError               **error);
+
+typedef enum {
+  RPMOSTREE_TRANSACTION_MAKE_CACHE_FLAG_FORCE = (1 << 0),
+} RpmOstreeTransactionMakeCacheFlags;
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_make_cache (GDBusMethodInvocation *invocation,
+                                       OstreeSysroot         *sysroot,
+                                       RpmOstreeTransactionMakeCacheFlags flags,
+                                       const char            *osname,
+                                       GCancellable          *cancellable,
+                                       GError               **error);

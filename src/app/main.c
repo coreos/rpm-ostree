@@ -74,6 +74,9 @@ static RpmOstreeCommand commands[] = {
   { "uninstall", 0,
     "Remove one or more overlay packages",
     rpmostree_builtin_uninstall },
+  { "makecache", 0,
+    "Generate rpm repo metadata",
+    rpmostree_builtin_makecache },
   /* Legacy aliases */
   { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     NULL, rpmostree_builtin_install },
