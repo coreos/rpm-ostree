@@ -71,6 +71,16 @@ rpmostree_transaction_get_response_sync      (RPMOSTreeSysroot *sysroot_proxy,
                                               GCancellable *cancellable,
                                               GError **error);
 
+int /* Returns an exit status */
+rpmostree_transaction_client_run             (RPMOSTreeSysroot *sysroot_proxy,
+                                              RPMOSTreeOS      *os_proxy,
+                                              GVariant         *options,
+                                              gboolean          exit_unchanged_77,
+                                              const char *transaction_address,
+                                              GVariant         *previous_deployment,
+                                              GCancellable *cancellable,
+                                              GError **error);
+
 void
 rpmostree_print_signatures                   (GVariant *variant,
                                               const gchar *sep,

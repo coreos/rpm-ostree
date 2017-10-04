@@ -110,6 +110,7 @@ rpmostree_builtin_rebase (int             argc,
         new_provided_refspec = opt_branch;
     }
 
+  g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
   g_autoptr(GVariant) options =
     rpmostree_get_options_variant (opt_reboot,
                                    TRUE,   /* allow-downgrade */
@@ -159,24 +160,9 @@ rpmostree_builtin_rebase (int             argc,
         return EXIT_FAILURE;
     }
 
-  if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
-                                                transaction_address,
-                                                cancellable,
-                                                error))
-    return EXIT_FAILURE;
-
-  if (!opt_reboot)
-    {
-      /* rebase operations always result in a new default deployment since we
-       * error if the refspec doesn't change */
-      const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
-      if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
-                                                           cancellable,
-                                                           error))
-        return EXIT_FAILURE;
-
-      g_print ("Run \"systemctl reboot\" to start a reboot\n");
-    }
-
-  return EXIT_SUCCESS;
+  return rpmostree_transaction_client_run (sysroot_proxy, os_proxy,
+                                           options, FALSE,
+                                           transaction_address,
+                                           previous_deployment,
+                                           cancellable, error);
 }
