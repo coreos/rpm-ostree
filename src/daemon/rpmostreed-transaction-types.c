@@ -1495,7 +1495,7 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
     {
       g_autofree gchar* kargs_str = _ostree_kernel_args_to_string (kargs);
       rpmostreed_transaction_emit_message_printf(transaction,
-                                                 "The kernel arguments are:\n %s",
+                                                 "The kernel arguments are:\n%s",
                                                  kargs_str);
       return TRUE;
     }
