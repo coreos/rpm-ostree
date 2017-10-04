@@ -136,8 +136,12 @@ echo "ok livefs redeploy booted commit"
 reset
 vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
 vm_rpmostree ex livefs
-# Picked a file that should be around, but harmless to change for testing
+# Picked a file that should be around, but harmless to change for testing.  The
+# first is available on Fedora, the second on CentOS (and newer too).
 dummy_file_to_modify=usr/share/licenses/ostree/COPYING
+if ! vm_cmd test -f /${dummy_file_to_modify}; then
+    dummy_file_to_modify=usr/share/ostree/trusted.gpg.d/README-gpg
+fi
 vm_cmd test -f /${dummy_file_to_modify}
 generate_upgrade() {
     # Create a modified vmcheck commit
