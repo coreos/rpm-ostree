@@ -153,3 +153,53 @@ fi
 assert_file_has_content err.txt "run.*journalctl.*for more information"
 vm_assert_journal_has_content $cursor 'rpm-ostree(bad-post.post).*a bad post'
 echo "ok script output prefixed in journal"
+
+# check makecache/-C functionality
+
+# local repos are always cached, so let's start up an http server for the same
+# vmcheck repo
+start_http_repo() {
+  # just use a runtime service unit
+  cat > vmcheck-httpd.service << EOF
+[Service]
+# use py2 for CentOS
+ExecStart=/usr/bin/python -m SimpleHTTPServer 8888
+WorkingDirectory=/tmp
+EOF
+  vm_send /run/systemd/system vmcheck-httpd.service
+  vm_cmd systemctl start vmcheck-httpd.service
+  cat > vmcheck-http.repo << EOF
+[vmcheck-http]
+name=vmcheck-http
+baseurl=http://localhost:8888/vmcheck/yumrepo
+gpgcheck=0
+EOF
+  vm_send /etc/yum.repos.d vmcheck-http.repo
+  # NB: the EXIT trap is used by libtest, but not the ERR trap
+  trap stop_http_repo ERR
+}
+
+stop_http_repo() {
+  vm_cmd systemctl stop vmcheck-httpd.service
+  vm_cmd rm -f /run/systemd/system/vmcheck-httpd.service
+}
+
+start_http_repo
+vm_rpmostree cleanup -rpmb
+vm_cmd rm -f /etc/yum.repos.d/vmcheck.repo
+vm_build_rpm_repo_mode skip makecache-old-pkg
+vm_rpmostree makecache
+vm_build_rpm_repo_mode skip makecache-new-pkg
+vm_rpmostree makecache # shouldn't do anything since it hasn't expired yet
+if ! vm_rpmostree install -C makecache-old-pkg --dry-run; then
+  assert_not_reached "failed to dry-run install old pkg from cached rpmmd"
+fi
+if vm_rpmostree install -C makecache-new-pkg --dry-run; then
+  assert_not_reached "successfully dry-run installed new pkg from cached rpmmd?"
+fi
+vm_rpmostree makecache -f
+if ! vm_rpmostree install -C makecache-new-pkg --dry-run; then
+  assert_not_reached "failed to dry-run install new pkg from cached rpmmd?"
+fi
+stop_http_repo
+echo "ok makecache and --cache-only"
