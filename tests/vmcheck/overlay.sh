@@ -59,7 +59,6 @@ fi
 rm -vrf vmcheck/usr/etc/selinux/targeted/semanage.*.LOCK
 # ✀✀✀ END tmp hack
 
-ostree refs --delete vmcheck || true
-ostree commit -b vmcheck --link-checkout-speedup \
+ostree commit --parent=none -b vmcheck --link-checkout-speedup \
   --selinux-policy=vmcheck --tree=dir=vmcheck
 ostree admin deploy vmcheck
