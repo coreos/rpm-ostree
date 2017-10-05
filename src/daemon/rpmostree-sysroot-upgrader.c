@@ -774,27 +774,9 @@ prepare_context_for_assembly (RpmOstreeSysrootUpgrader *self,
                               GCancellable             *cancellable,
                               GError                  **error)
 {
-  DnfContext *hifctx = rpmostree_context_get_hif (self->ctx);
-
-  const char *sysroot_path =
-    gs_file_get_path_cached (ostree_sysroot_get_path (self->sysroot));
-  g_autofree char *merge_deployment_dirpath =
-    ostree_sysroot_get_deployment_dirpath (self->sysroot,
-                                           self->cfg_merge_deployment);
-  g_autofree char *merge_deployment_root =
-    g_build_filename (sysroot_path, merge_deployment_dirpath, NULL);
-
-  g_autofree char *reposdir = g_build_filename (merge_deployment_root,
-                                                "etc/yum.repos.d", NULL);
-  g_autofree char *passwddir = g_build_filename (merge_deployment_root,
-                                                 "etc", NULL);
-
-  /* point libhif to the yum.repos.d and os-release of the merge deployment */
-  dnf_context_set_repo_dir (hifctx, reposdir);
-  dnf_context_set_source_root (hifctx, tmprootfs);
-
-  /* point the core to the passwd & group of the merge deployment */
-  rpmostree_context_set_passwd_dir (self->ctx, passwddir);
+  /* make sure yum repos and passwd used are from our cfg merge */
+  rpmostree_context_configure_from_deployment (self->ctx, self->sysroot,
+                                               self->cfg_merge_deployment);
 
   /* load the sepolicy to use during import */
   glnx_unref_object OstreeSePolicy *sepolicy = NULL;
