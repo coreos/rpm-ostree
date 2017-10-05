@@ -123,6 +123,13 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
     {
       g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rebase");
     }
+  else if (g_strcmp0 (method_name, "GetDeploymentBootConfig") == 0)
+    {
+      /* Note: early return here because no need authentication
+       * for this method
+       */
+      return TRUE;
+    }
   else if (g_strcmp0 (method_name, "SetInitramfsState") == 0 ||
            g_strcmp0 (method_name, "KernelArgs") == 0)
     {
@@ -1141,8 +1148,8 @@ kernel_arg_flags_from_options (GVariant *options)
   g_auto(GVariantDict) dict;
   g_variant_dict_init (&dict, options);
 
-  if (vardict_lookup_bool (&dict, "import-proc-cmdline", FALSE))
-    ret |= RPMOSTREE_TRANSACTION_KERNEL_ARG_FLAG_IMPORT_CMD;
+  if (vardict_lookup_bool (&dict, "reboot", FALSE))
+    ret |= RPMOSTREE_TRANSACTION_KERNEL_ARG_FLAG_REBOOT;
 
   return ret;
 }
@@ -1150,6 +1157,7 @@ kernel_arg_flags_from_options (GVariant *options)
 static gboolean
 os_handle_kernel_args (RPMOSTreeOS *interface,
                        GDBusMethodInvocation *invocation,
+                       const char * existing_kernel_args,
                        const char * const *kernel_args_added,
                        const char * const *kernel_args_replaced,
                        const char * const *kernel_args_deleted,
@@ -1176,6 +1184,7 @@ os_handle_kernel_args (RPMOSTreeOS *interface,
   transaction = rpmostreed_transaction_new_kernel_arg (invocation,
                                                        ot_sysroot,
                                                        osname,
+                                                       existing_kernel_args,
                                                        kernel_args_added,
                                                        kernel_args_replaced,
                                                        kernel_args_deleted,
@@ -1195,6 +1204,83 @@ out:
       const char *client_address = rpmostreed_transaction_get_client_address (transaction);
       rpmostree_os_complete_kernel_args (interface, invocation, client_address);
     }
+
+  return TRUE;
+}
+
+static gboolean
+os_handle_get_deployment_boot_config (RPMOSTreeOS *interface,
+                                      GDBusMethodInvocation *invocation,
+                                      const char *arg_deploy_index,
+                                      gboolean is_pending)
+{
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  GError *local_error = NULL;
+  g_autoptr(GCancellable) cancellable = NULL;
+  glnx_unref_object OstreeDeployment *target_deployment  = NULL;
+  GVariantDict boot_config_dict;
+  GVariant *boot_config_result = NULL;
+
+  /* Load the sysroot */
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
+    goto out;
+  const char* osname = rpmostree_os_get_name (interface);
+  if (!*arg_deploy_index || arg_deploy_index[0] == '\0')
+    {
+      if (is_pending)
+        target_deployment = rpmostree_syscore_get_origin_merge_deployment (ot_sysroot, osname);
+      else
+        target_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, osname);
+      if (target_deployment  == NULL)
+        {
+          local_error = g_error_new (G_IO_ERROR, G_IO_ERROR_FAILED,
+                                     "No deployments found for os %s", osname);
+          goto out;
+        }
+    }
+  else
+    {
+      /* If the deploy_index is speicified, we ignore the pending option */
+      target_deployment = rpmostreed_deployment_get_for_index (ot_sysroot, arg_deploy_index,
+                                                               &local_error);
+      if (target_deployment == NULL)
+        goto out;
+    }
+  OstreeBootconfigParser *bootconfig = ostree_deployment_get_bootconfig (target_deployment);
+
+  /* Note because boot config is a private structure.. currently I have no good way
+   * other than specifying all the content directly */
+  const char *bootconfig_keys[] = {
+    "title",
+    "linux",
+    "initrd",
+    "options",
+    OSTREE_COMMIT_META_KEY_VERSION,
+    NULL
+  };
+  /* We initalize a dictionary and put key/value pair in bootconfig into it */
+  g_variant_dict_init (&boot_config_dict, NULL);
+
+  /* We loop through the key  and add each key/value pair value into the variant dict */
+  for (char **iter = (char **)bootconfig_keys; iter && *iter; iter++)
+    {
+      const char *key = *iter;
+      const char *value = ostree_bootconfig_parser_get (bootconfig, key);
+
+      g_variant_dict_insert (&boot_config_dict, key, "s", value);
+    }
+  boot_config_result = g_variant_dict_end (&boot_config_dict);
+
+out:
+  if (local_error != NULL)
+    g_dbus_method_invocation_take_error (invocation, local_error);
+  else
+    g_dbus_method_invocation_return_value (invocation,
+                                           g_variant_new ("(@a{sv})", boot_config_result));
 
   return TRUE;
 }
@@ -1661,6 +1747,7 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_pkg_change                 = os_handle_pkg_change;
   iface->handle_set_initramfs_state        = os_handle_set_initramfs_state;
   iface->handle_kernel_args                = os_handle_kernel_args;
+  iface->handle_get_deployment_boot_config = os_handle_get_deployment_boot_config;
   iface->handle_cleanup                    = os_handle_cleanup;
   iface->handle_update_deployment          = os_handle_update_deployment;
   iface->handle_get_cached_rebase_rpm_diff = os_handle_get_cached_rebase_rpm_diff;
