@@ -41,6 +41,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeSysrootUpgrader, g_object_unref)
  * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED: Do not error if the origin has an unconfigured-state key
  * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER: Do not error if the new deployment was composed earlier than the current deployment
  * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN: Don't deploy new base. If layering packages, only print the transaction
+ * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN: Don't update rpmmd cache.
  *
  * Flags controlling operation of an #RpmOstreeSysrootUpgrader.
  */
@@ -48,7 +49,8 @@ typedef enum {
   RPMOSTREE_SYSROOT_UPGRADER_FLAGS_NONE                 = (1 << 0),
   RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED  = (1 << 1),
   RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER          = (1 << 2),
-  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN              = (1 << 3)
+  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN              = (1 << 3),
+  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_RPMMD_CACHE_ONLY     = (1 << 4)
 } RpmOstreeSysrootUpgraderFlags;
 
 /* _NONE means we're doing pure ostree, no client-side computation.

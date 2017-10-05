@@ -1065,6 +1065,7 @@ get_modifiers_variant (const char   *set_refspec,
 GVariant*
 rpmostree_get_options_variant (gboolean reboot,
                                gboolean allow_downgrade,
+                               gboolean cache_only,
                                gboolean skip_purge,
                                gboolean no_pull_base,
                                gboolean dry_run,
@@ -1074,6 +1075,7 @@ rpmostree_get_options_variant (gboolean reboot,
   g_variant_dict_init (&dict, NULL);
   g_variant_dict_insert (&dict, "reboot", "b", reboot);
   g_variant_dict_insert (&dict, "allow-downgrade", "b", allow_downgrade);
+  g_variant_dict_insert (&dict, "rpmmd-cache-only", "b", cache_only);
   g_variant_dict_insert (&dict, "skip-purge", "b", skip_purge);
   g_variant_dict_insert (&dict, "no-pull-base", "b", no_pull_base);
   g_variant_dict_insert (&dict, "dry-run", "b", dry_run);

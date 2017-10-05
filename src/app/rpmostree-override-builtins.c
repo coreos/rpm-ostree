@@ -60,6 +60,7 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
   g_autoptr(GVariant) options =
     rpmostree_get_options_variant (opt_reboot,
                                    FALSE,   /* allow-downgrade */
+                                   FALSE,   /* cache-only */
                                    FALSE,   /* skip-purge */
                                    TRUE,    /* no-pull-base */
                                    opt_dry_run,
