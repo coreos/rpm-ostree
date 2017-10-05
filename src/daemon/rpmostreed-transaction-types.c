@@ -1489,7 +1489,12 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
     {
       if (self->kernel_args_replaced)
         {
-          /* Waiting to be implemented */
+          for (char **iter = self->kernel_args_replaced; iter && *iter; iter++)
+            {
+              const char *arg = *iter;
+              if (!_ostree_kernel_args_new_replace (kargs, arg, error))
+                return FALSE;
+            }
         }
 
       if (self->kernel_args_added)
