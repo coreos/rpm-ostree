@@ -153,3 +153,48 @@ fi
 assert_file_has_content err.txt "run.*journalctl.*for more information"
 vm_assert_journal_has_content $cursor 'rpm-ostree(bad-post.post).*a bad post'
 echo "ok script output prefixed in journal"
+
+# check refresh-md/-C functionality
+
+# local repos are always cached, so let's start up an http server for the same
+# vmcheck repo
+start_http_repo() {
+  # CentOS systemd is too old for -p WorkingDirectory
+  vm_cmd systemd-run --unit vmcheck-httpd sh -c \
+    "'cd /tmp && python -m SimpleHTTPServer 8888'"
+  cat > vmcheck-http.repo << EOF
+[vmcheck-http]
+name=vmcheck-http
+baseurl=http://localhost:8888/vmcheck/yumrepo
+gpgcheck=0
+EOF
+  vm_send /etc/yum.repos.d vmcheck-http.repo
+}
+
+stop_http_repo() {
+  vm_cmd systemctl stop vmcheck-httpd.service
+}
+
+# NB: the EXIT trap is used by libtest, but not the ERR trap
+trap stop_http_repo ERR
+set -E # inherit trap
+start_http_repo
+vm_rpmostree cleanup -rpmb
+vm_cmd rm -f /etc/yum.repos.d/vmcheck.repo
+vm_build_rpm_repo_mode skip refresh-md-old-pkg
+vm_rpmostree refresh-md
+vm_build_rpm_repo_mode skip refresh-md-new-pkg
+vm_rpmostree refresh-md # shouldn't do anything since it hasn't expired yet
+if ! vm_rpmostree install -C refresh-md-old-pkg --dry-run; then
+  assert_not_reached "failed to dry-run install old pkg from cached rpmmd"
+fi
+if vm_rpmostree install -C refresh-md-new-pkg --dry-run; then
+  assert_not_reached "successfully dry-run installed new pkg from cached rpmmd?"
+fi
+vm_rpmostree refresh-md -f
+if ! vm_rpmostree install -C refresh-md-new-pkg --dry-run; then
+  assert_not_reached "failed to dry-run install new pkg from cached rpmmd?"
+fi
+set +E
+stop_http_repo
+echo "ok refresh-md and --cache-only"
