@@ -546,6 +546,8 @@ deploy_flags_from_options (GVariant *options,
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN;
   if (vardict_lookup_bool (&dict, "no-overrides", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES;
+  if (vardict_lookup_bool (&dict, "rpmmd-cache-only", FALSE))
+    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_RPMMD_CACHE_ONLY;
   return ret;
 }
 

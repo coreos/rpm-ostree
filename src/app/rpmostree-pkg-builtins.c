@@ -34,11 +34,13 @@ static gboolean opt_reboot;
 static gboolean opt_dry_run;
 static gchar **opt_install;
 static gchar **opt_uninstall;
+static gboolean opt_cache_only;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after upgrade is prepared", NULL },
   { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction", NULL },
+  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not update repo metadata cache", NULL },
   { NULL }
 };
 
@@ -75,6 +77,7 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
   g_autoptr(GVariant) options =
     rpmostree_get_options_variant (opt_reboot,
                                    FALSE,   /* allow-downgrade */
+                                   opt_cache_only,
                                    FALSE,   /* skip-purge */
                                    TRUE,    /* no-pull-base */
                                    opt_dry_run,

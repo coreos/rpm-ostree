@@ -99,6 +99,7 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
 GVariant*
 rpmostree_get_options_variant (gboolean reboot,
                                gboolean allow_downgrade,
+                               gboolean cache_only,
                                gboolean skip_purge,
                                gboolean no_pull_base,
                                gboolean dry_run,

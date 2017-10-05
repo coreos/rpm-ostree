@@ -558,7 +558,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN;
-  gboolean no_overrides =
+  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_RPMMD_CACHE_ONLY)
+    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_RPMMD_CACHE_ONLY;
+  const gboolean no_overrides =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES) > 0);
 
   /* this should have been checked already */

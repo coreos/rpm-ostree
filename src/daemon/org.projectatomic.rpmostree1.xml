@@ -260,6 +260,8 @@
          "no-overrides" (type 'b')
             Remove all active overrides. Not valid if any override
             modifiers are specified.
+         "rpmmd-cache-only" (type 'b')
+            Do not update rpmmd repo metadata cache.
     -->
     <method name="UpdateDeployment">
       <arg type="a{sv}" name="modifiers" direction="in"/>

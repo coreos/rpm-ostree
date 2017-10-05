@@ -814,6 +814,12 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
                                 cancellable, error))
     return FALSE;
 
+  if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_RPMMD_CACHE_ONLY)
+    {
+      DnfContext *hifctx = rpmostree_context_get_hif (self->ctx);
+      dnf_context_set_cache_age (hifctx, G_MAXUINT);
+    }
+
   g_autoptr(OstreeRepo) pkgcache_repo = NULL;
   if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
     return FALSE;
