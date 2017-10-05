@@ -36,15 +36,19 @@ vm_setup() {
   export SCP="scp $sshopts"
 }
 
+# rsync wrapper that sets up authentication
+vm_raw_rsync() {
+  local rsyncopts="ssh -o User=root"
+  if [ -f ${topsrcdir}/ssh-config ]; then
+    rsyncopts="$rsyncopts -F '${topsrcdir}/ssh-config'"
+  fi
+  rsync -az --no-owner --no-group -e "$rsyncopts" "$@"
+}
+
 vm_rsync() {
   if ! test -f .vagrant/using_sshfs; then
     pushd ${topsrcdir}
-    local rsyncopts="ssh -o User=root"
-    if [ -f ssh-config ]; then
-      rsyncopts="$rsyncopts -F ssh-config"
-    fi
-    rsync -az --no-owner --no-group -e "$rsyncopts" \
-              --exclude .git/ . $VM:/var/roothome/sync
+    vm_raw_rsync --exclude .git/ . $VM:/var/roothome/sync
     popd
   fi
 }
@@ -99,10 +103,14 @@ vm_send() {
 }
 
 # copy the test repo to the vm
+# $1  - repo file mode: nogpgcheck (default), gpgcheck, skip (don't send)
 vm_send_test_repo() {
-  gpgcheck=${1:-0}
-  vm_cmd rm -rf /tmp/vmcheck
-  vm_send /tmp/vmcheck ${test_tmpdir}/yumrepo
+  mode=${1:-nogpgcheck}
+  vm_raw_rsync --delete ${test_tmpdir}/yumrepo $VM:/tmp/vmcheck
+
+  if [[ $mode == skip ]]; then
+    return
+  fi
 
   cat > vmcheck.repo << EOF
 [test-repo]
@@ -110,12 +118,13 @@ name=test-repo
 baseurl=file:///tmp/vmcheck/yumrepo
 EOF
 
-  if [ $gpgcheck -eq 1 ]; then
+  if [[ $mode == gpgcheck ]]; then
       cat >> vmcheck.repo <<EOF
 gpgcheck=1
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora-25-primary
 EOF
   else
+      assert_streq "$mode" nogpgcheck
       echo "Enabling vmcheck.repo without GPG"
       echo 'gpgcheck=0' >> vmcheck.repo
   fi
@@ -333,12 +342,19 @@ vm_assert_status_jq() {
 # Like build_rpm, but also sends it to the VM
 vm_build_rpm() {
     build_rpm "$@"
-    vm_send_test_repo 0 # XXX use rsync
+    vm_send_test_repo
+}
+
+# Like vm_build_rpm but takes a yumrepo mode
+vm_build_rpm_repo_mode() {
+    mode=$1; shift
+    build_rpm "$@"
+    vm_send_test_repo $mode
 }
 
 vm_build_selinux_rpm() {
     build_selinux_rpm "$@"
-    vm_send_test_repo 0 # XXX use rsync
+    vm_send_test_repo
 }
 
 vm_get_journal_cursor() {

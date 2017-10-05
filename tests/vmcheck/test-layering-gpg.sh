@@ -29,8 +29,7 @@ vm_clean_caches
 # make sure the package is not already layered
 vm_assert_layered_pkg foo absent
 
-vm_build_rpm foo version 4.5 release 6
-vm_send_test_repo 1 # resend repo with gpg checking on
+vm_build_rpm_repo_mode gpgcheck foo version 4.5 release 6
 if vm_rpmostree pkg-add foo-4.5 2>err.txt; then
     assert_not_reached "Installed unsigned package"
 fi
