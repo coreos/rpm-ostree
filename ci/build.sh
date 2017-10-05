@@ -34,4 +34,8 @@ fi
 adduser testuser
 
 export LSAN_OPTIONS=verbosity=1:log_threads=1
-build --enable-installed-tests --enable-gtk-doc
+BWRAP=/usr/bin/bwrap
+if [ "$id" == centos ]; then
+  BWRAP=/usr/lib64/rpm-ostree/bwrap
+fi
+build --enable-installed-tests --enable-gtk-doc --with-bubblewrap=$BWRAP
