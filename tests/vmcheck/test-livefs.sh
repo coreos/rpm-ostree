@@ -152,6 +152,7 @@ cd /ostree/repo/tmp
 rm vmcheck -rf
 ostree checkout vmcheck vmcheck --fsync=0
 (date; echo "JUST KIDDING DO WHATEVER") >vmcheck/${dummy_file_to_modify}.new && mv vmcheck/${dummy_file_to_modify}{.new,}
+$@
 ostree commit -b vmcheck --tree=dir=vmcheck --link-checkout-speedup
 rm vmcheck -rf
 EOF
@@ -167,7 +168,7 @@ vm_assert_status_jq '.deployments|length == 3' '.deployments[0]["live-replaced"]
 echo "ok livefs not carried over across upgrades"
 
 reset
-generate_upgrade
+generate_upgrade "mkdir -p vmcheck/usr/newsubdir && date > vmcheck/usr/newsubdir/date.txt"
 vm_rpmostree upgrade
 vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]|not'
@@ -187,5 +188,8 @@ vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]
 vm_rpmostree ex livefs --replace
 vm_cmd cat /${dummy_file_to_modify} > dummyfile.txt
 assert_file_has_content dummyfile.txt "JUST KIDDING DO WHATEVER"
+vm_cmd test -f /usr/newsubdir/date.txt
+vm_assert_status_jq '.deployments|length == 3' '.deployments[0]["live-replaced"]|not' \
+                    '.deployments[1]["live-replaced"]' '.deployments[1]["booted"]'
 echo "ok modifications"
 

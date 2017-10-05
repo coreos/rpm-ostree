@@ -526,11 +526,12 @@ replace_subpath (OstreeRepo *repo,
  * all of it. We could do a diff, but doing that precisely and quickly depends
  * on https://github.com/ostreedev/ostree/issues/1224
  *
- * In this approach, we iterate over and exchange subdirectories. Some issues
- * here are processes that hold directory fds open will have those invalidated,
- * even if they shouldn't otherwise be affected. Another issue is that if the
- * kernel is too old to have `RENAME_EXCHANGE`, we'll have e.g. `/usr/bin` be
- * temporarily broken.
+ * In this approach, we iterate over and exchange just the subdirectories of
+ * /usr (not recursively, as exchanging the toplevels accomplishes that). Some
+ * issues here are processes that hold directory fds open will have those
+ * invalidated, even if they shouldn't otherwise be affected. Another issue is
+ * that if the kernel is too old to have `RENAME_EXCHANGE`, we'll have e.g.
+ * `/usr/bin` be temporarily broken.
  *
  * Yet another issue is that doing things all at once makes it much more likely
  * that we'll e.g. replace code for a program before updating a shared library
@@ -541,6 +542,8 @@ replace_subpath (OstreeRepo *repo,
  * On the other hand, this handles tricky cases like replacing a directory with
  * a regfile or symlink.
  *
+ * Probably what we really want is to have a lightweight replacement path that
+ * handles simple updates (e.g. 1-5 packages which just change file content).
  */
 static gboolean
 replace_usr (OstreeRepo *repo,
