@@ -60,6 +60,11 @@ gboolean rpmostree_context_setup (RpmOstreeContext     *self,
                                   GCancellable  *cancellable,
                                   GError       **error);
 
+void
+rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
+                                             OstreeSysroot    *sysroot,
+                                             OstreeDeployment *cfg_deployment);
+
 void rpmostree_context_set_is_empty (RpmOstreeContext *self);
 
 void rpmostree_context_set_repos (RpmOstreeContext *self,
@@ -67,8 +72,6 @@ void rpmostree_context_set_repos (RpmOstreeContext *self,
                                   OstreeRepo       *pkgcache_repo);
 void rpmostree_context_set_sepolicy (RpmOstreeContext *self,
                                      OstreeSePolicy   *sepolicy);
-void rpmostree_context_set_passwd_dir (RpmOstreeContext *self,
-                                       const char *passwd_dir);
 
 void rpmostree_dnf_add_checksum_goal (GChecksum *checksum, HyGoal goal);
 char *rpmostree_context_get_state_sha512 (RpmOstreeContext *self);

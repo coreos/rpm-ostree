@@ -403,6 +403,28 @@ rpmostree_context_ensure_tmpdir (RpmOstreeContext *self,
   return TRUE;
 }
 
+/* Pick up repos dir and passwd from @cfg_deployment. */
+void
+rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
+                                             OstreeSysroot    *sysroot,
+                                             OstreeDeployment *cfg_deployment)
+{
+  const char *sysroot_path = gs_file_get_path_cached (ostree_sysroot_get_path (sysroot));
+  g_autofree char *cfg_deployment_dirpath =
+    ostree_sysroot_get_deployment_dirpath (sysroot, cfg_deployment);
+  g_autofree char *cfg_deployment_root =
+    g_build_filename (sysroot_path, cfg_deployment_dirpath, NULL);
+
+  g_autofree char *reposdir = g_build_filename (cfg_deployment_root, "etc/yum.repos.d", NULL);
+
+  /* point libhif to the yum.repos.d and os-release of the merge deployment */
+  dnf_context_set_repo_dir (self->hifctx, reposdir);
+
+  /* point the core to the passwd & group of the merge deployment */
+  g_assert (!self->passwd_dir);
+  self->passwd_dir = g_build_filename (cfg_deployment_root, "etc", NULL);
+}
+
 /* Use this if no packages will be installed, and we just want a "dummy" run.
  */
 void
@@ -436,14 +458,6 @@ rpmostree_context_set_sepolicy (RpmOstreeContext *self,
                                 OstreeSePolicy   *sepolicy)
 {
   g_set_object (&self->sepolicy, sepolicy);
-}
-
-void
-rpmostree_context_set_passwd_dir (RpmOstreeContext *self,
-                                  const char *passwd_dir)
-{
-  g_clear_pointer (&self->passwd_dir, g_free);
-  self->passwd_dir = g_strdup (passwd_dir);
 }
 
 DnfContext *
