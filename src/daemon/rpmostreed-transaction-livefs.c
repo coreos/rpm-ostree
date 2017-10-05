@@ -522,6 +522,109 @@ replace_subpath (OstreeRepo *repo,
   return TRUE;
 }
 
+/* The sledgehammer 🔨 approach. Because /usr is a mount point, we can't replace
+ * all of it. We could do a diff, but doing that precisely and quickly depends
+ * on https://github.com/ostreedev/ostree/issues/1224
+ *
+ * In this approach, we iterate over and exchange just the subdirectories of
+ * /usr (not recursively, as exchanging the toplevels accomplishes that). Some
+ * issues here are processes that hold directory fds open will have those
+ * invalidated, even if they shouldn't otherwise be affected. Another issue is
+ * that if the kernel is too old to have `RENAME_EXCHANGE`, we'll have e.g.
+ * `/usr/bin` be temporarily broken.
+ *
+ * Yet another issue is that doing things all at once makes it much more likely
+ * that we'll e.g. replace code for a program before updating a shared library
+ * it depends on. There's really no fixing that problem in general, but we could
+ * minimize the race window in the same way package systems tend to do by doing
+ * the filesystem tree replacements in package reverse dependency order.
+ *
+ * On the other hand, this handles tricky cases like replacing a directory with
+ * a regfile or symlink.
+ *
+ * Probably what we really want is to have a lightweight replacement path that
+ * handles simple updates (e.g. 1-5 packages which just change file content).
+ */
+static gboolean
+replace_usr (OstreeRepo *repo,
+             int deployment_dfd,
+             GLnxTmpDir *tmpdir,
+             CommitDiff *diff,
+             const char *target_csum,
+             GCancellable *cancellable,
+             GError **error)
+{
+  /* Grab a reference to the current /usr */
+  glnx_fd_close int deployment_usr_dfd = -1;
+  if (!glnx_opendirat (deployment_dfd, "usr", TRUE, &deployment_usr_dfd, error))
+    return FALSE;
+
+  /* Check out our new /usr */
+  OstreeRepoCheckoutAtOptions usr_checkout_opts = { .mode = OSTREE_REPO_CHECKOUT_MODE_NONE,
+                                                    .overwrite_mode = OSTREE_REPO_CHECKOUT_OVERWRITE_NONE,
+                                                    .no_copy_fallback = TRUE,
+                                                    .subpath = "/usr" };
+
+  if (!ostree_repo_checkout_at (repo, &usr_checkout_opts, tmpdir->fd, "usr",
+                                target_csum, cancellable, error))
+    return FALSE;
+
+  /* Iterate over new /usr, see whether the context exists. If not, just
+   * rename(). If so, `RENAME_EXCHANGE`; the old content will be rm-rf'd since
+   * it will be moved to the tmpdir.
+   */
+  g_autoptr(GHashTable) seen_new_children = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  g_auto(GLnxDirFdIterator) dfd_iter = { FALSE, };
+  if (!glnx_dirfd_iterator_init_at (tmpdir->fd, "usr", TRUE, &dfd_iter, error))
+    return FALSE;
+  while (TRUE)
+    {
+      struct dirent *dent = NULL;
+      if (!glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, cancellable, error))
+        return FALSE;
+      if (dent == NULL)
+        break;
+      const char *name = dent->d_name;
+      /* Keep track of what entries are in the new /usr */
+      g_hash_table_add (seen_new_children, g_strdup (name));
+      struct stat stbuf;
+      if (!glnx_fstatat_allow_noent (deployment_usr_dfd, name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+        return FALSE;
+      if (errno == ENOENT)
+        {
+          if (!glnx_renameat (dfd_iter.fd, name, deployment_usr_dfd, name, error))
+            return FALSE;
+        }
+      else
+        {
+          if (glnx_renameat2_exchange (dfd_iter.fd, name, deployment_usr_dfd, name) < 0)
+            return glnx_throw_errno_prefix (error, "rename(..., RENAME_EXCHANGE) for %s", name);
+        }
+    }
+
+  /* Iterate over the old /usr, and delete anything that isn't in the new dir */
+  glnx_dirfd_iterator_clear (&dfd_iter);
+  if (!glnx_dirfd_iterator_init_at (deployment_usr_dfd, ".", TRUE, &dfd_iter, error))
+    return FALSE;
+  while (TRUE)
+    {
+      struct dirent *dent = NULL;
+      if (!glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, cancellable, error))
+        return FALSE;
+      if (dent == NULL)
+        break;
+      const char *name = dent->d_name;
+      /* See whether this was in the new /usr */
+      if (g_hash_table_contains (seen_new_children, name))
+        continue;
+      /* If not, delete it */
+      if (!glnx_shutil_rm_rf_at (dfd_iter.fd, name, cancellable, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
 /* Update the origin for @booted with new livefs state */
 static gboolean
 write_livefs_state (OstreeSysroot    *sysroot,
@@ -623,42 +726,38 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
   const gboolean requires_etc_merge = (diff->flags & COMMIT_DIFF_FLAGS_ETC) > 0;
   const gboolean adds_packages = diff->added_pkgs->len > 0;
   const gboolean modifies_packages = diff->removed_pkgs->len > 0 || diff->modified_pkgs_new->len > 0;
-  if (!adds_packages)
-    return glnx_throw (error, "No packages added; live updates not currently supported for modifications or deletions");
+  if ((diff->flags & COMMIT_DIFF_FLAGS_ROOTFS) > 0)
+    return glnx_throw (error, "livefs update would modify non-/usr content");
   /* Is this a dry run? */
  /* Error out in various cases if we're not doing a replacement */
   if (!replacing)
     {
+      if (!adds_packages)
+        return glnx_throw (error, "No packages added, and replacement not enabled");
       if (modifies_packages)
-        return glnx_throw (error, "livefs update modifies/replaces packages");
+        return glnx_throw (error, "livefs update modifies/replaces packages and replacement not enabled");
       else if ((diff->flags & COMMIT_DIFF_FLAGS_REPLACEMENT) > 0)
         return glnx_throw (error, "livefs update would replace files in /usr, and replacement not enabled");
-      else if ((diff->flags & COMMIT_DIFF_FLAGS_ROOTFS) > 0)
-        return glnx_throw (error, "livefs update would modify non-/usr content");
     }
-  else
-    return glnx_throw (error, "Replacement mode not implemented yet");
   if ((self->flags & RPMOSTREE_TRANSACTION_LIVEFS_FLAG_DRY_RUN) > 0)
     {
       rpmostree_output_message ("livefs OK (dry run)");
       /* Note early return */
       return TRUE;
     }
- 
+
   g_autoptr(GString) journal_msg = g_string_new ("");
   g_string_append_printf (journal_msg, "Starting livefs for commit %s", target_csum);
   if (resuming_overlay)
     g_string_append (journal_msg, " (resuming)");
 
-  /* We don't currently support replacement mode
   if (replacing)
     g_string_append_printf (journal_msg, " replacement; %u/%u/%u pkgs (added, removed, modified); %u/%u/%u files",
                             diff->added_pkgs->len, diff->removed_pkgs->len, diff->modified_pkgs_old->len,
                             diff->added->len, diff->removed->len, diff->modified->len);
   else
-  */
-  g_string_append_printf (journal_msg, " addition; %u pkgs, %u files",
-                          diff->added_pkgs->len, diff->added->len);
+    g_string_append_printf (journal_msg, " addition; %u pkgs, %u files",
+                            diff->added_pkgs->len, diff->added->len);
 
   if (replacing_overlay)
     g_string_append_printf (journal_msg, "; replacing %s", replacing_overlay);
@@ -694,32 +793,45 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
   if (!write_livefs_state (sysroot, booted_deployment, target_csum, live_replaced, error))
     return FALSE;
 
-  rpmostree_output_task_begin ("Overlaying /usr");
-
-  if (!checkout_add_usr (repo, deployment_dfd, diff, target_csum, cancellable, error))
+  g_auto(GLnxTmpDir) replace_tmpdir = { 0, };
+  if (!glnx_mkdtempat (ostree_repo_get_dfd (repo), "tmp/rpmostree-livefs.XXXXXX", 0700,
+                       &replace_tmpdir, error))
     return FALSE;
 
-  /* And files that we always need to replace; the rpmdb, /usr/lib/passwd. We
-   * make a tmpdir just for this since it's a more convenient place to put
-   * temporary files/dirs without generating tempnames.
-   */
-  { g_auto(GLnxTmpDir) replace_tmpdir = { 0, };
-    if (!glnx_mkdtempat (ostree_repo_get_dfd (repo), "tmp/rpmostree-livefs.XXXXXX", 0700,
-                         &replace_tmpdir, error))
-      return FALSE;
+  if (!replacing)
+    {
+      rpmostree_output_task_begin ("Overlaying /usr");
+      if (!checkout_add_usr (repo, deployment_dfd, diff, target_csum, cancellable, error))
+        return FALSE;
 
-    const char *replace_paths[] = { "/usr/share/rpm", "/usr/lib/passwd", "/usr/lib/group" };
-    for (guint i = 0; i < G_N_ELEMENTS(replace_paths); i++)
-      {
-        const char *replace_path = replace_paths[i];
-        if (!replace_subpath (repo, deployment_dfd, &replace_tmpdir,
-                              target_csum, replace_path,
-                              cancellable, error))
-          return FALSE;
-      }
-  }
+      /* And files that we always need to replace; the rpmdb, /usr/lib/passwd. We
+       * make a tmpdir just for this since it's a more convenient place to put
+       * temporary files/dirs without generating tempnames.
+       */
+      const char *replace_paths[] = { "/usr/share/rpm", "/usr/lib/passwd", "/usr/lib/group" };
+      for (guint i = 0; i < G_N_ELEMENTS(replace_paths); i++)
+        {
+          const char *replace_path = replace_paths[i];
+          if (!replace_subpath (repo, deployment_dfd, &replace_tmpdir,
+                                target_csum, replace_path,
+                                cancellable, error))
+            return FALSE;
+        }
 
-  rpmostree_output_task_end ("done");
+      rpmostree_output_task_end ("done");
+    }
+  else
+    {
+      /* Hold my beer 🍺, we're going loop over /usr and RENAME_EXCHANGE things
+       * that were modified.
+       */
+      rpmostree_output_task_begin ("Replacing /usr");
+      if (!replace_usr (repo, deployment_dfd, &replace_tmpdir,
+                        diff, target_csum,
+                        cancellable, error))
+        return FALSE;
+      rpmostree_output_task_end ("done");
+    }
 
   if (diff->n_tmpfilesd > 0)
     {

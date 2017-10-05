@@ -136,6 +136,13 @@ echo "ok livefs redeploy booted commit"
 reset
 vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
 vm_rpmostree ex livefs
+# Picked a file that should be around, but harmless to change for testing.  The
+# first is available on Fedora, the second on CentOS (and newer too).
+dummy_file_to_modify=usr/share/licenses/ostree/COPYING
+if ! vm_cmd test -f /${dummy_file_to_modify}; then
+    dummy_file_to_modify=usr/share/ostree/trusted.gpg.d/README-gpg
+fi
+vm_cmd test -f /${dummy_file_to_modify}
 generate_upgrade() {
     # Create a modified vmcheck commit
     cat >t.sh<<EOF
@@ -144,9 +151,8 @@ set -xeuo pipefail
 cd /ostree/repo/tmp
 rm vmcheck -rf
 ostree checkout vmcheck vmcheck --fsync=0
-(cat vmcheck/usr/bin/ls; echo more stuff) > vmcheck/usr/bin/ls.new
-chmod a+x vmcheck/usr/bin/ls.new
-mv vmcheck/usr/bin/ls{.new,}
+(date; echo "JUST KIDDING DO WHATEVER") >vmcheck/${dummy_file_to_modify}.new && mv vmcheck/${dummy_file_to_modify}{.new,}
+$@
 ostree commit -b vmcheck --tree=dir=vmcheck --link-checkout-speedup
 rm vmcheck -rf
 EOF
@@ -162,7 +168,7 @@ vm_assert_status_jq '.deployments|length == 3' '.deployments[0]["live-replaced"]
 echo "ok livefs not carried over across upgrades"
 
 reset
-generate_upgrade
+generate_upgrade "mkdir -p vmcheck/usr/newsubdir && date > vmcheck/usr/newsubdir/date.txt"
 vm_rpmostree upgrade
 vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]|not'
@@ -171,5 +177,19 @@ if vm_rpmostree ex livefs -n &> livefs-analysis.txt; then
 fi
 vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]|not'
-assert_file_has_content livefs-analysis.txt 'live updates not currently supported for modifications'
+assert_file_has_content livefs-analysis.txt 'No packages added.*replacement not enabled'
 echo "ok no modifications"
+
+# And now replacement
+vm_rpmostree ex livefs -n --replace &> livefs-analysis.txt
+assert_file_has_content livefs-analysis.txt 'livefs OK (dry run)'
+vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
+                    '.deployments[1]["live-replaced"]|not'
+vm_rpmostree ex livefs --replace
+vm_cmd cat /${dummy_file_to_modify} > dummyfile.txt
+assert_file_has_content dummyfile.txt "JUST KIDDING DO WHATEVER"
+vm_cmd test -f /usr/newsubdir/date.txt
+vm_assert_status_jq '.deployments|length == 3' '.deployments[0]["live-replaced"]|not' \
+                    '.deployments[1]["live-replaced"]' '.deployments[1]["booted"]'
+echo "ok modifications"
+
