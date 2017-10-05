@@ -545,7 +545,14 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   /* This exists (as a canonically empty dir) at least on RHEL7+ */
   static const char emptydir_path[] = "/usr/share/empty";
 
-  self->spec = g_object_ref (spec);
+  /* allow NULL for treespec, but canonicalize to an empty keyfile for cleaner queries */
+  if (!spec)
+    {
+      g_autoptr(GKeyFile) kf = g_key_file_new ();
+      self->spec = rpmostree_treespec_new_from_keyfile (kf, NULL);
+    }
+  else
+    self->spec = g_object_ref (spec);
 
   g_variant_dict_lookup (self->spec->dict, "releasever", "&s", &releasever);
 
