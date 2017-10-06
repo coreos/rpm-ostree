@@ -105,7 +105,9 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
            g_strcmp0 (method_name, "GetCachedUpdateRpmDiff") == 0 ||
            g_strcmp0 (method_name, "DownloadUpdateRpmDiff") == 0 ||
            g_strcmp0 (method_name, "GetCachedRebaseRpmDiff") == 0 ||
-           g_strcmp0 (method_name, "DownloadRebaseRpmDiff") == 0)
+           g_strcmp0 (method_name, "DownloadRebaseRpmDiff") == 0 ||
+           g_strcmp0 (method_name, "MakeCache") == 0)
+
     {
       g_ptr_array_add (actions, "org.projectatomic.rpmostree1.repo-refresh");
     }
@@ -137,10 +139,6 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
   else if (g_strcmp0 (method_name, "PkgChange") == 0)
     {
       g_ptr_array_add (actions, "org.projectatomic.rpmostree1.install-uninstall-packages");
-    }
-  else if (g_strcmp0 (method_name, "MakeCache") == 0)
-    {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.makecache");
     }
   else if (g_strcmp0 (method_name, "UpdateDeployment") == 0)
     {

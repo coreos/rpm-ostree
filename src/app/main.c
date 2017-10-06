@@ -74,7 +74,7 @@ static RpmOstreeCommand commands[] = {
   { "uninstall", 0,
     "Remove one or more overlay packages",
     rpmostree_builtin_uninstall },
-  { "makecache", 0,
+  { "refresh-md", 0,
     "Generate rpm repo metadata",
     rpmostree_builtin_makecache },
   /* Legacy aliases */
@@ -85,6 +85,8 @@ static RpmOstreeCommand commands[] = {
   { "rpm", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
            RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     NULL, rpmostree_builtin_db },
+  { "makecache", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+    NULL, rpmostree_builtin_makecache },
   /* Hidden */
   { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
           RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
