@@ -1623,46 +1623,23 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 /**
  * rpmostree_prepare_rootfs_for_commit:
  *
- * Walk over the root filesystem and perform some core conversions
- * from RPM conventions to OSTree conventions.  For example:
+ * Initialize a basic root filesystem in @target_root_dfd, then walk over the
+ * root filesystem in @src_rootfs_fd and take the basic content and perform some
+ * core conversions from RPM conventions to OSTree conventions. For example:
  *
- *  * Checksum the kernel in /boot
+ *  * Checksum the kernel in /boot (and move kernel /usr/lib/modules)
  *  * Migrate content in /var to systemd-tmpfiles
  */
 gboolean
-rpmostree_prepare_rootfs_for_commit (int            workdir_dfd,
-                                     int           *inout_rootfs_fd,
-                                     const char    *rootfs_name,
+rpmostree_prepare_rootfs_for_commit (int            src_rootfs_dfd,
+                                     int            target_rootfs_dfd,
                                      JsonObject    *treefile,
                                      GCancellable  *cancellable,
                                      GError       **error)
 {
-  const char *temp_new_root = "tmp-new-rootfs";
-  glnx_fd_close int target_root_dfd = -1;
-
-  if (!glnx_ensure_dir (workdir_dfd, temp_new_root, 0755, error))
-    return FALSE;
-
-  if (!glnx_opendirat (workdir_dfd, temp_new_root, TRUE,
-                       &target_root_dfd, error))
-    return FALSE;
-
-  if (!create_rootfs_from_pkgroot_content (target_root_dfd, *inout_rootfs_fd, treefile,
+  if (!create_rootfs_from_pkgroot_content (target_rootfs_dfd, src_rootfs_dfd, treefile,
                                            cancellable, error))
     return glnx_prefix_error (error, "Finalizing rootfs");
-
-  (void) close (*inout_rootfs_fd);
-
-  if (!glnx_shutil_rm_rf_at (workdir_dfd, rootfs_name, cancellable, error))
-    return FALSE;
-
-  if (!glnx_renameat (workdir_dfd, temp_new_root,
-                      workdir_dfd, rootfs_name, error))
-    return FALSE;
-
-  *inout_rootfs_fd = target_root_dfd;
-  target_root_dfd = -1;  /* Transfer ownership */
-
   return TRUE;
 }
 

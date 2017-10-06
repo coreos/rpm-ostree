@@ -924,10 +924,36 @@ impl_compose_tree (const char      *treefile_pathstr,
                                           next_version, cancellable, error))
     return glnx_prefix_error (error, "Postprocessing");
 
-  if (!rpmostree_prepare_rootfs_for_commit (self->workdir_dfd, &rootfs_fd, rootfs_name,
-                                            treefile,
-                                            cancellable, error))
-    return glnx_prefix_error (error, "Preparing rootfs for commit");
+  /* Until here, we targeted "rootfs.tmp" in the working directory. Most
+   * user-configured postprocessing has run. Now, we need to perform required
+   * conversions like handling /boot. We generate a new directory "rootfs" that
+   * has just what we want using "rootfs.tmp", as a source. This implicitly
+   * discards anything else that happens to be in rootfs.tmp, like the `/dev`
+   * nodes we create for example.
+   */
+  const char final_rootfs_name[] = "rootfs";
+  if (!glnx_shutil_rm_rf_at (self->workdir_dfd, final_rootfs_name, cancellable, error))
+    return FALSE;
+  if (!glnx_ensure_dir (self->workdir_dfd, final_rootfs_name, 0755, error))
+    return FALSE;
+  { glnx_fd_close int target_rootfs_dfd = -1;
+    if (!glnx_opendirat (self->workdir_dfd, final_rootfs_name, TRUE,
+                         &target_rootfs_dfd, error))
+      return FALSE;
+
+    if (!rpmostree_prepare_rootfs_for_commit (rootfs_fd, target_rootfs_dfd,
+                                              treefile,
+                                              cancellable, error))
+      return glnx_prefix_error (error, "Preparing rootfs for commit");
+
+    (void) close (glnx_steal_fd (&rootfs_fd));
+
+    /* Remove the old root, then retarget rootfs_dfd to the final one */
+    if (!glnx_shutil_rm_rf_at (self->workdir_dfd, rootfs_name, cancellable, error))
+      return FALSE;
+
+    rootfs_fd = glnx_steal_fd (&target_rootfs_dfd);
+  }
 
   g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile_path);
   if (!rpmostree_check_passwd (self->repo, rootfs_fd, treefile_dirpath, treefile,
