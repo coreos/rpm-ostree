@@ -432,16 +432,12 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
   while (TRUE)
     {
       struct dirent *dent = NULL;
-      GString *tmpfiles_d_buf;
-      g_autofree char *tmpfiles_d_line = NULL;
-      char filetype_c;
-
       if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
         return FALSE;
-
       if (!dent)
         break;
 
+      char filetype_c;
       switch (dent->d_type)
         {
         case DT_DIR:
@@ -459,7 +455,7 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
           continue;
         }
 
-      tmpfiles_d_buf = g_string_new ("");
+      g_autoptr(GString) tmpfiles_d_buf = g_string_new ("");
       g_string_append_c (tmpfiles_d_buf, filetype_c);
       g_string_append_c (tmpfiles_d_buf, ' ');
       g_string_append (tmpfiles_d_buf, prefix->str);
@@ -506,10 +502,8 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
 
       g_string_append_c (tmpfiles_d_buf, '\n');
 
-      tmpfiles_d_line = g_string_free (tmpfiles_d_buf, FALSE);
-
-      if (!g_output_stream_write_all (tmpfiles_out, tmpfiles_d_line,
-                                      strlen (tmpfiles_d_line), &bytes_written,
+      if (!g_output_stream_write_all (tmpfiles_out, tmpfiles_d_buf->str,
+                                      tmpfiles_d_buf->len, &bytes_written,
                                       cancellable, error))
         return FALSE;
     }
