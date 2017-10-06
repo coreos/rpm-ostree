@@ -159,8 +159,9 @@ echo "ok script output prefixed in journal"
 # local repos are always cached, so let's start up an http server for the same
 # vmcheck repo
 start_http_repo() {
-  vm_cmd systemd-run --unit vmcheck-httpd --property WorkingDirectory=/tmp \
-    python -m SimpleHTTPServer 8888
+  # CentOS systemd is too old for -p WorkingDirectory
+  vm_cmd systemd-run --unit vmcheck-httpd sh -c \
+    'cd /tmp && python -m SimpleHTTPServer 8888'
   cat > vmcheck-http.repo << EOF
 [vmcheck-http]
 name=vmcheck-http
