@@ -95,7 +95,7 @@ typedef struct {
   GPtrArray *treefile_context_dirs;
 
   RpmOstreeContext *corectx;
-  GFile *treefile;
+  GFile *treefile_path;
   GFile *previous_root;
   GLnxTmpDir workdir_tmp;
   int workdir_dfd;
@@ -112,7 +112,7 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
 {
   g_clear_pointer (&ctx->treefile_context_dirs, (GDestroyNotify)g_ptr_array_unref);
   g_clear_object (&ctx->corectx);
-  g_clear_object (&ctx->treefile);
+  g_clear_object (&ctx->treefile_path);
   g_clear_object (&ctx->previous_root);
   /* Only close workdir_dfd if it's not owned by the tmpdir */
   if (!ctx->workdir_tmp.initialized && ctx->workdir_dfd != -1)
@@ -458,7 +458,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     return FALSE;
 
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
-  g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile);
+  g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile_path);
   gboolean generate_from_previous = TRUE;
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treedata,
                                                                "preserve-passwd",
@@ -690,7 +690,7 @@ impl_compose_tree (const char      *treefile_pathstr,
   if (!self->repo)
     return FALSE;
 
-  self->treefile = g_file_new_for_path (treefile_pathstr);
+  self->treefile_path = g_file_new_for_path (treefile_pathstr);
 
   if (opt_cachedir)
     {
@@ -752,7 +752,7 @@ impl_compose_tree (const char      *treefile_pathstr,
 
   glnx_unref_object JsonParser *treefile_parser = json_parser_new ();
   if (!json_parser_load_from_file (treefile_parser,
-                                   gs_file_get_path_cached (self->treefile),
+                                   gs_file_get_path_cached (self->treefile_path),
                                    error))
     return FALSE;
 
@@ -761,7 +761,7 @@ impl_compose_tree (const char      *treefile_pathstr,
     return glnx_throw (error, "Treefile root is not an object");
   JsonObject *treefile = json_node_get_object (treefile_rootval);
 
-  if (!process_includes (self, self->treefile, 0, treefile,
+  if (!process_includes (self, self->treefile_path, 0, treefile,
                          cancellable, error))
     return FALSE;
 
@@ -929,7 +929,7 @@ impl_compose_tree (const char      *treefile_pathstr,
                                             cancellable, error))
     return glnx_prefix_error (error, "Preparing rootfs for commit");
 
-  g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile);
+  g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile_path);
   if (!rpmostree_check_passwd (self->repo, rootfs_fd, treefile_dirpath, treefile,
                                self->previous_checksum,
                                cancellable, error))
