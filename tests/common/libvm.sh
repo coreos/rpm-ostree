@@ -106,7 +106,8 @@ vm_send() {
 # $1  - repo file mode: nogpgcheck (default), gpgcheck, skip (don't send)
 vm_send_test_repo() {
   mode=${1:-nogpgcheck}
-  vm_raw_rsync --delete ${test_tmpdir}/yumrepo $VM:/tmp/vmcheck
+  # note we use -c here because we might be called twice within a second
+  vm_raw_rsync -c --delete ${test_tmpdir}/yumrepo $VM:/tmp/vmcheck
 
   if [[ $mode == skip ]]; then
     return

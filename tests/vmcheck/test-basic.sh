@@ -168,30 +168,32 @@ baseurl=http://localhost:8888/vmcheck/yumrepo
 gpgcheck=0
 EOF
   vm_send /etc/yum.repos.d vmcheck-http.repo
-  # NB: the EXIT trap is used by libtest, but not the ERR trap
-  trap stop_http_repo ERR
 }
 
 stop_http_repo() {
   vm_cmd systemctl stop vmcheck-httpd.service
 }
 
+# NB: the EXIT trap is used by libtest, but not the ERR trap
+trap stop_http_repo ERR
+set -E # inherit trap
 start_http_repo
 vm_rpmostree cleanup -rpmb
 vm_cmd rm -f /etc/yum.repos.d/vmcheck.repo
-vm_build_rpm_repo_mode skip makecache-old-pkg
+vm_build_rpm_repo_mode skip refresh-md-old-pkg
 vm_rpmostree refresh-md
-vm_build_rpm_repo_mode skip makecache-new-pkg
+vm_build_rpm_repo_mode skip refresh-md-new-pkg
 vm_rpmostree refresh-md # shouldn't do anything since it hasn't expired yet
-if ! vm_rpmostree install -C makecache-old-pkg --dry-run; then
+if ! vm_rpmostree install -C refresh-md-old-pkg --dry-run; then
   assert_not_reached "failed to dry-run install old pkg from cached rpmmd"
 fi
-if vm_rpmostree install -C makecache-new-pkg --dry-run; then
+if vm_rpmostree install -C refresh-md-new-pkg --dry-run; then
   assert_not_reached "successfully dry-run installed new pkg from cached rpmmd?"
 fi
 vm_rpmostree refresh-md -f
-if ! vm_rpmostree install -C makecache-new-pkg --dry-run; then
+if ! vm_rpmostree install -C refresh-md-new-pkg --dry-run; then
   assert_not_reached "failed to dry-run install new pkg from cached rpmmd?"
 fi
+set +E
 stop_http_repo
 echo "ok refresh-md and --cache-only"
