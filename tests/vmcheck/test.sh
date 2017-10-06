@@ -167,6 +167,9 @@ for tf in $(find . -name 'test-*.sh' | sort); do
     # and put back our tmp repo
     vm_cmd rm /etc/yum.repos.d -rf
     vm_cmd cp -r /etc/yum.repos.d{.tmp,}
+
+    # and clean up our test repo
+    vm_cmd rm -rf /tmp/vmcheck
 done
 
 
