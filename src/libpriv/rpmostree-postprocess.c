@@ -869,18 +869,6 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
                                                                error))
     return FALSE;
 
-  /* Initialize target root */
-  g_print ("Initializing rootfs\n");
-  gboolean tmp_is_dir = FALSE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
-                                                               "tmp-is-dir",
-                                                               &tmp_is_dir,
-                                                               error))
-    return FALSE;
-
-  if (!init_rootfs (target_root_dfd, tmp_is_dir, cancellable, error))
-    return FALSE;
-
   g_print ("Migrating /etc/passwd to /usr/lib/\n");
   if (!rpmostree_passwd_migrate_except_root (src_rootfs_fd, RPM_OSTREE_PASSWD_MIGRATE_PASSWD, NULL,
                                              cancellable, error))
@@ -1637,6 +1625,18 @@ rpmostree_prepare_rootfs_for_commit (int            src_rootfs_dfd,
                                      GCancellable  *cancellable,
                                      GError       **error)
 {
+  /* Initialize target root */
+  g_print ("Initializing rootfs\n");
+  gboolean tmp_is_dir = FALSE;
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
+                                                               "tmp-is-dir",
+                                                               &tmp_is_dir,
+                                                               error))
+    return FALSE;
+  if (!init_rootfs (target_rootfs_dfd, tmp_is_dir, cancellable, error))
+    return FALSE;
+
+  /* And call into the bigger postprocessing function */
   if (!create_rootfs_from_pkgroot_content (target_rootfs_dfd, src_rootfs_dfd, treefile,
                                            cancellable, error))
     return glnx_prefix_error (error, "Finalizing rootfs");
