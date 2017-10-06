@@ -454,6 +454,8 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
           g_print ("Ignoring non-directory/non-symlink '%s/%s'\n",
                    prefix->str,
                    dent->d_name);
+          if (!glnx_unlinkat (dfd_iter.fd, dent->d_name, 0, error))
+            return FALSE;
           continue;
         }
 
@@ -495,7 +497,12 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
             return FALSE;
           g_string_append (tmpfiles_d_buf, " - - - - ");
           g_string_append (tmpfiles_d_buf, link);
+
         }
+
+      if (!glnx_unlinkat (dfd_iter.fd, dent->d_name,
+                          dent->d_type == DT_DIR ? AT_REMOVEDIR : 0, error))
+        return FALSE;
 
       g_string_append_c (tmpfiles_d_buf, '\n');
 
