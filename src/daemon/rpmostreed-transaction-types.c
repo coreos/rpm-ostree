@@ -1275,39 +1275,39 @@ rpmostreed_transaction_new_cleanup (GDBusMethodInvocation *invocation,
 
 }
 
-/* ================================ MakeCache ================================ */
+/* ================================ RefreshMd ================================ */
 
 typedef struct {
   RpmostreedTransaction parent;
   char *osname;
-  RpmOstreeTransactionMakeCacheFlags flags;
-} MakeCacheTransaction;
+  RpmOstreeTransactionRefreshMdFlags flags;
+} RefreshMdTransaction;
 
-typedef RpmostreedTransactionClass MakeCacheTransactionClass;
+typedef RpmostreedTransactionClass RefreshMdTransactionClass;
 
-GType make_cache_transaction_get_type (void);
+GType refresh_md_transaction_get_type (void);
 
-G_DEFINE_TYPE (MakeCacheTransaction,
-               make_cache_transaction,
+G_DEFINE_TYPE (RefreshMdTransaction,
+               refresh_md_transaction,
                RPMOSTREED_TYPE_TRANSACTION)
 
 static void
-make_cache_transaction_finalize (GObject *object)
+refresh_md_transaction_finalize (GObject *object)
 {
-  MakeCacheTransaction *self;
+  RefreshMdTransaction *self;
 
-  self = (MakeCacheTransaction *) object;
+  self = (RefreshMdTransaction *) object;
   g_free (self->osname);
 
-  G_OBJECT_CLASS (make_cache_transaction_parent_class)->finalize (object);
+  G_OBJECT_CLASS (refresh_md_transaction_parent_class)->finalize (object);
 }
 
 static gboolean
-make_cache_transaction_execute (RpmostreedTransaction *transaction,
+refresh_md_transaction_execute (RpmostreedTransaction *transaction,
                                 GCancellable *cancellable,
                                 GError **error)
 {
-  MakeCacheTransaction *self = (MakeCacheTransaction *) transaction;
+  RefreshMdTransaction *self = (RefreshMdTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
   g_autoptr(OstreeDeployment) cfg_merge_deployment =
@@ -1331,7 +1331,7 @@ make_cache_transaction_execute (RpmostreedTransaction *transaction,
   if (!rpmostree_context_setup (ctx, NULL, origin_deployment_root, NULL, cancellable, error))
     return FALSE;
 
-  if (self->flags & RPMOSTREE_TRANSACTION_MAKE_CACHE_FLAG_FORCE)
+  if (self->flags & RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE)
     {
       DnfContext *hifctx = rpmostree_context_get_hif (ctx);
       dnf_context_set_cache_age (hifctx, 0);
@@ -1347,25 +1347,25 @@ make_cache_transaction_execute (RpmostreedTransaction *transaction,
 }
 
 static void
-make_cache_transaction_class_init (CleanupTransactionClass *class)
+refresh_md_transaction_class_init (CleanupTransactionClass *class)
 {
   GObjectClass *object_class;
 
   object_class = G_OBJECT_CLASS (class);
-  object_class->finalize = make_cache_transaction_finalize;
+  object_class->finalize = refresh_md_transaction_finalize;
 
-  class->execute = make_cache_transaction_execute;
+  class->execute = refresh_md_transaction_execute;
 }
 
 static void
-make_cache_transaction_init (MakeCacheTransaction *self)
+refresh_md_transaction_init (RefreshMdTransaction *self)
 {
 }
 
 RpmostreedTransaction *
-rpmostreed_transaction_new_make_cache (GDBusMethodInvocation *invocation,
+rpmostreed_transaction_new_refresh_md (GDBusMethodInvocation *invocation,
                                        OstreeSysroot         *sysroot,
-                                       RpmOstreeTransactionMakeCacheFlags flags,
+                                       RpmOstreeTransactionRefreshMdFlags flags,
                                        const char            *osname,
                                        GCancellable          *cancellable,
                                        GError               **error)
@@ -1373,8 +1373,8 @@ rpmostreed_transaction_new_make_cache (GDBusMethodInvocation *invocation,
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
 
-  MakeCacheTransaction *self =
-    g_initable_new (make_cache_transaction_get_type (),
+  RefreshMdTransaction *self =
+    g_initable_new (refresh_md_transaction_get_type (),
                     cancellable, error,
                     "invocation", invocation,
                     "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),

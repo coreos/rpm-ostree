@@ -76,7 +76,7 @@ static RpmOstreeCommand commands[] = {
     rpmostree_builtin_uninstall },
   { "refresh-md", 0,
     "Generate rpm repo metadata",
-    rpmostree_builtin_makecache },
+    rpmostree_builtin_refresh_md },
   /* Legacy aliases */
   { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     NULL, rpmostree_builtin_install },
@@ -86,7 +86,7 @@ static RpmOstreeCommand commands[] = {
            RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     NULL, rpmostree_builtin_db },
   { "makecache", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    NULL, rpmostree_builtin_makecache },
+    NULL, rpmostree_builtin_refresh_md },
   /* Hidden */
   { "ex", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
           RPM_OSTREE_BUILTIN_FLAG_HIDDEN,

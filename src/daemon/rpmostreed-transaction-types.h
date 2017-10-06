@@ -113,13 +113,13 @@ rpmostreed_transaction_new_livefs (GDBusMethodInvocation *invocation,
                                    GError               **error);
 
 typedef enum {
-  RPMOSTREE_TRANSACTION_MAKE_CACHE_FLAG_FORCE = (1 << 0),
-} RpmOstreeTransactionMakeCacheFlags;
+  RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE = (1 << 0),
+} RpmOstreeTransactionRefreshMdFlags;
 
 RpmostreedTransaction *
-rpmostreed_transaction_new_make_cache (GDBusMethodInvocation *invocation,
+rpmostreed_transaction_new_refresh_md (GDBusMethodInvocation *invocation,
                                        OstreeSysroot         *sysroot,
-                                       RpmOstreeTransactionMakeCacheFlags flags,
+                                       RpmOstreeTransactionRefreshMdFlags flags,
                                        const char            *osname,
                                        GCancellable          *cancellable,
                                        GError               **error);

@@ -47,11 +47,11 @@ get_args_variant (void)
 }
 
 int
-rpmostree_builtin_makecache (int             argc,
-                             char          **argv,
-                             RpmOstreeCommandInvocation *invocation,
-                             GCancellable   *cancellable,
-                             GError        **error)
+rpmostree_builtin_refresh_md (int             argc,
+                              char          **argv,
+                              RpmOstreeCommandInvocation *invocation,
+                              GCancellable   *cancellable,
+                              GError        **error)
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
@@ -80,7 +80,7 @@ rpmostree_builtin_makecache (int             argc,
                                 cancellable, &os_proxy, error))
     return EXIT_FAILURE;
 
-  if (!rpmostree_os_call_make_cache_sync (os_proxy,
+  if (!rpmostree_os_call_refresh_md_sync (os_proxy,
                                           get_args_variant (),
                                           &transaction_address,
                                           cancellable,
