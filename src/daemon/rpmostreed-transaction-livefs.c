@@ -124,7 +124,7 @@ path_is_usretc (const char *path)
 static gboolean
 path_is_rpmdb (const char *path)
 {
-  return g_str_has_prefix (path, "/usr/share/rpm/");
+  return g_str_has_prefix (path, "/" RPMOSTREE_RPMDB_LOCATION "/");
 }
 
 static gboolean
@@ -808,7 +808,7 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
        * make a tmpdir just for this since it's a more convenient place to put
        * temporary files/dirs without generating tempnames.
        */
-      const char *replace_paths[] = { "/usr/share/rpm", "/usr/lib/passwd", "/usr/lib/group" };
+      const char *replace_paths[] = { "/" RPMOSTREE_RPMDB_LOCATION, "/usr/lib/passwd", "/usr/lib/group" };
       for (guint i = 0; i < G_N_ELEMENTS(replace_paths); i++)
         {
           const char *replace_path = replace_paths[i];
