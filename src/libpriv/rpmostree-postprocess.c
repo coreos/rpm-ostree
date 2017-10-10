@@ -42,6 +42,7 @@
 #include "rpmostree-bwrap.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-util.h"
 
@@ -1195,7 +1196,7 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
-  if (!cleanup_leftover_files (rootfs_fd, "usr/share/rpm", rpmdb_leftover_files,
+  if (!cleanup_leftover_files (rootfs_fd, RPMOSTREE_RPMDB_LOCATION, rpmdb_leftover_files,
                                rpmdb_leftover_prefixes, cancellable, error))
     return FALSE;
 
@@ -1472,7 +1473,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
    * */
   if (!glnx_shutil_rm_rf_at (rootfs_fd, "var/lib/rpm", cancellable, error))
     return FALSE;
-  if (symlinkat ("../../usr/share/rpm", rootfs_fd, "var/lib/rpm") < 0)
+  if (symlinkat ("../../" RPMOSTREE_RPMDB_LOCATION, rootfs_fd, "var/lib/rpm") < 0)
     return glnx_throw_errno_prefix (error, "symlinkat(%s)", "var/lib/rpm");
 
   if (json_object_has_member (treefile, "remove-from-packages"))

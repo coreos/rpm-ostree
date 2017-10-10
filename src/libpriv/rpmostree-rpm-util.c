@@ -22,6 +22,7 @@
 
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-output.h"
+#include "rpmostree-core.h"
 
 #include <inttypes.h>
 #include <fnmatch.h>
@@ -777,16 +778,16 @@ checkout_only_rpmdb (OstreeRepo       *repo,
   /* Check out the database (via copy) */
   OstreeRepoCheckoutAtOptions checkout_options = { 0, };
   checkout_options.mode = OSTREE_REPO_CHECKOUT_MODE_USER;
-  checkout_options.subpath = "usr/share/rpm";
+  checkout_options.subpath = RPMOSTREE_RPMDB_LOCATION;
   if (!ostree_repo_checkout_at (repo, &checkout_options, tmpdir->fd,
-                                "usr/share/rpm", commit,
+                                RPMOSTREE_RPMDB_LOCATION, commit,
                                 cancellable, error))
     return FALSE;
 
   /* And make a compat symlink to keep rpm happy */
   if (!glnx_shutil_mkdir_p_at (tmpdir->fd, "var/lib", 0777, cancellable, error))
     return FALSE;
-  if (symlinkat ("../../usr/share/rpm", tmpdir->fd, "var/lib/rpm") == -1)
+  if (symlinkat ("../../" RPMOSTREE_RPMDB_LOCATION, tmpdir->fd, "var/lib/rpm") == -1)
     return glnx_throw_errno_prefix (error, "symlinkat");
 
   return TRUE;

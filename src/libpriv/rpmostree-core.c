@@ -595,7 +595,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
     }
 
   /* This is what we use as default. */
-  dnf_context_set_rpm_macro (self->hifctx, "_dbpath", "/usr/share/rpm");
+  dnf_context_set_rpm_macro (self->hifctx, "_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
 
   if (!dnf_context_setup (self->hifctx, cancellable, error))
     return FALSE;
@@ -2741,7 +2741,7 @@ run_all_transfiletriggers (RpmOstreeContext *self,
    * otherwise librpm will whine on our stderr.
    */
   struct stat stbuf;
-  if (!glnx_fstatat_allow_noent (rootfs_dfd, "usr/share/rpm", &stbuf, AT_SYMLINK_NOFOLLOW, error))
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, RPMOSTREE_RPMDB_LOCATION, &stbuf, AT_SYMLINK_NOFOLLOW, error))
     return FALSE;
   if (errno == 0)
     {
@@ -2794,7 +2794,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
   /* First for the ordering TS, set the dbpath to relative, which will also gain
    * the root dir.
    */
-  set_rpm_macro_define ("_dbpath", "/usr/share/rpm");
+  set_rpm_macro_define ("_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
 
   /* Don't verify checksums here (we should have done this on ostree
    * import).  Also, avoid updating the database or anything by
@@ -3116,7 +3116,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 
   rpmostree_output_task_begin ("Writing rpmdb");
 
-  if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "usr/share/rpm", 0755, cancellable, error))
+  if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, RPMOSTREE_RPMDB_LOCATION, 0755, cancellable, error))
     return FALSE;
 
   /* Now, we use the separate rpmdb ts which *doesn't* have a rootdir set,
@@ -3127,12 +3127,12 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
    * Instead, this rpmts has the dbpath as absolute.
    */
   { g_autofree char *rpmdb_abspath = glnx_fdrel_abspath (tmprootfs_dfd,
-                                                         "usr/share/rpm");
+                                                         RPMOSTREE_RPMDB_LOCATION);
 
     /* if we were passed an existing tmprootfs, and that tmprootfs already has
      * an rpmdb, we have to make sure to break its hardlinks as librpm mutates
      * the db in place */
-    if (!break_hardlinks_at (tmprootfs_dfd, "usr/share/rpm", cancellable, error))
+    if (!break_hardlinks_at (tmprootfs_dfd, RPMOSTREE_RPMDB_LOCATION, cancellable, error))
       return FALSE;
 
     set_rpm_macro_define ("_dbpath", rpmdb_abspath);
