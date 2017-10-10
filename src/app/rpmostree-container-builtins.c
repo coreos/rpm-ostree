@@ -32,6 +32,7 @@
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
 #include "rpmostree-libbuiltin.h"
+#include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-unpacker.h"
 
@@ -287,6 +288,9 @@ rpmostree_container_builtin_assemble (int             argc,
                                             NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
                                             &commit, cancellable, error))
       return EXIT_FAILURE;
+
+    if (!rpmostree_rootfs_postprocess_container (tmpdir.fd, cancellable, error))
+      return EXIT_FAILURE;
   }
 
   g_print ("Checking out %s @ %s...\n", name, commit);
@@ -475,6 +479,9 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
                                             NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
                                             &new_commit_checksum,
                                             cancellable, error))
+      return EXIT_FAILURE;
+
+    if (!rpmostree_rootfs_postprocess_container (tmpdir.fd, cancellable, error))
       return EXIT_FAILURE;
   }
 
