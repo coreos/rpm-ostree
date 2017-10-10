@@ -1661,7 +1661,8 @@ rpmostree_rootfs_postprocess_container (int           rootfs_fd,
       const char *path = shadow_paths[i];
       if (!glnx_fstatat_allow_noent (rootfs_fd, path, &stbuf, AT_SYMLINK_NOFOLLOW, error))
         return FALSE;
-      if (!S_ISREG (stbuf.st_mode))
+      /* Silently ignore if it's not there, or isn't a regular file for some reason */
+      if (errno == ENOENT || !S_ISREG (stbuf.st_mode))
         continue;
       if (fchmodat (rootfs_fd, path, stbuf.st_mode | S_IRUSR, 0) < 0)
         return glnx_throw_errno_prefix (error, "fchmodat");
