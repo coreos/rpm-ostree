@@ -162,7 +162,7 @@ _ostree_kernel_arg_query_status (OstreeKernelArgs         *kargs,
   /* For replaced, it is a special case, we allow
    * key=value=new_value, thus, this split is to
    * disgard the new value if there is one */
-  split_keyeq (val);
+  const char *replaced_val = split_keyeq (val);
 
   GPtrArray *values = g_hash_table_lookup (kargs->table, duped);
 
@@ -192,7 +192,10 @@ _ostree_kernel_arg_query_status (OstreeKernelArgs         *kargs,
           *out_query_flag = OSTREE_KERNEL_ARG_REPLACE_NO_SECOND_SPLIT;
           return TRUE;
         }
-      else if (!*val && values->len !=1)
+      /* Handle both no value case, and the case when inputting
+         key=value for a replacement */
+      else if ((!*val || (is_replaced && !*replaced_val)) &&
+               values->len !=1)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Unable to %s %s with multiple values associated with it, see rpm-ostree ex kargs -h for usage",
