@@ -96,6 +96,7 @@ typedef struct {
 
   RpmOstreeContext *corectx;
   GFile *treefile_path;
+  GHashTable *metadata;
   GFile *previous_root;
   GLnxTmpDir workdir_tmp;
   int workdir_dfd;
@@ -113,6 +114,7 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_clear_pointer (&ctx->treefile_context_dirs, (GDestroyNotify)g_ptr_array_unref);
   g_clear_object (&ctx->corectx);
   g_clear_object (&ctx->treefile_path);
+  g_clear_pointer (&ctx->metadata, g_hash_table_unref);
   g_clear_object (&ctx->previous_root);
   /* Only close workdir_dfd if it's not owned by the tmpdir */
   if (!ctx->workdir_tmp.initialized && ctx->workdir_dfd != -1)
@@ -707,37 +709,33 @@ impl_compose_tree (const char      *treefile_pathstr,
         return glnx_throw_errno_prefix (error, "fcntl");
     }
 
-  g_autoptr(GHashTable) metadata_hash = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_variant_unref);
+  self->metadata = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_variant_unref);
   if (opt_metadata_json)
     {
       glnx_unref_object JsonParser *jparser = json_parser_new ();
-      JsonNode *metarootval = NULL; /* unowned */
-      g_autoptr(GVariant) jsonmetav = NULL;
-      GVariantIter viter;
-
       if (!json_parser_load_from_file (jparser, opt_metadata_json, error))
         return FALSE;
 
-      metarootval = json_parser_get_root (jparser);
-
-      jsonmetav = json_gvariant_deserialize (metarootval, "a{sv}", error);
+      JsonNode *metarootval = json_parser_get_root (jparser);
+      g_autoptr(GVariant) jsonmetav = json_gvariant_deserialize (metarootval, "a{sv}", error);
       if (!jsonmetav)
         {
           g_prefix_error (error, "Parsing %s: ", opt_metadata_json);
           return FALSE;
         }
 
+      GVariantIter viter;
       g_variant_iter_init (&viter, jsonmetav);
       { char *key;
         GVariant *value;
         while (g_variant_iter_loop (&viter, "{sv}", &key, &value))
-          g_hash_table_replace (metadata_hash, g_strdup (key), g_variant_ref (value));
+          g_hash_table_replace (self->metadata, g_strdup (key), g_variant_ref (value));
       }
     }
 
   if (opt_metadata_strings)
     {
-      if (!parse_metadata_keyvalue_strings (opt_metadata_strings, metadata_hash, error))
+      if (!parse_metadata_keyvalue_strings (opt_metadata_strings, self->metadata, error))
         return FALSE;
     }
 
@@ -817,7 +815,7 @@ impl_compose_tree (const char      *treefile_pathstr,
   g_autofree char *next_version = NULL;
   if (json_object_has_member (treefile, "automatic_version_prefix") &&
       /* let --add-metadata-string=version=... take precedence */
-      !g_hash_table_contains (metadata_hash, "version"))
+      !g_hash_table_contains (self->metadata, "version"))
     {
       g_autoptr(GVariant) variant = NULL;
       g_autofree char *last_version = NULL;
@@ -836,12 +834,12 @@ impl_compose_tree (const char      *treefile_pathstr,
         }
 
       next_version = _rpmostree_util_next_version (ver_prefix, last_version);
-      g_hash_table_insert (metadata_hash, g_strdup ("version"),
+      g_hash_table_insert (self->metadata, g_strdup ("version"),
                            g_variant_ref_sink (g_variant_new_string (next_version)));
     }
   else
     {
-      GVariant *v = g_hash_table_lookup (metadata_hash, "version");
+      GVariant *v = g_hash_table_lookup (self->metadata, "version");
       if (v)
         {
           g_assert (g_variant_is_of_type (v, G_VARIANT_TYPE_STRING));
@@ -967,7 +965,7 @@ impl_compose_tree (const char      *treefile_pathstr,
     glnx_prefix_error (error, "Handling group db");
 
   /* Insert our input hash */
-  g_hash_table_replace (metadata_hash, g_strdup ("rpmostree.inputhash"),
+  g_hash_table_replace (self->metadata, g_strdup ("rpmostree.inputhash"),
                         g_variant_ref_sink (g_variant_new_string (new_inputhash)));
 
   const char *gpgkey = NULL;
@@ -981,7 +979,7 @@ impl_compose_tree (const char      *treefile_pathstr,
   /* Convert metadata hash to GVariant */
   g_autoptr(GVariant) metadata = NULL;
   { g_autoptr(GVariantBuilder) metadata_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
-    GLNX_HASH_TABLE_FOREACH_KV (metadata_hash, const char*, strkey, GVariant*, v)
+    GLNX_HASH_TABLE_FOREACH_KV (self->metadata, const char*, strkey, GVariant*, v)
       g_variant_builder_add (metadata_builder, "{sv}", strkey, v);
 
     metadata = g_variant_ref_sink (g_variant_builder_end (metadata_builder));
