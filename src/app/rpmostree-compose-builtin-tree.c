@@ -100,6 +100,7 @@ typedef struct {
   GFile *previous_root;
   GLnxTmpDir workdir_tmp;
   int workdir_dfd;
+  int rootfs_dfd;
   int cachedir_dfd;
   OstreeRepo *repo;
   char *ref;
@@ -120,6 +121,8 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   if (!ctx->workdir_tmp.initialized && ctx->workdir_dfd != -1)
     (void) close (ctx->workdir_dfd);
   glnx_tmpdir_clear (&ctx->workdir_tmp);
+  if (ctx->rootfs_dfd != -1)
+    (void) close (ctx->rootfs_dfd);
   if (ctx->cachedir_dfd != -1)
     (void) close (ctx->cachedir_dfd);
   g_clear_object (&ctx->repo);
@@ -666,6 +669,9 @@ impl_compose_tree (const char      *treefile_pathstr,
   g_autoptr(RpmOstreeTreeComposeContext) self = g_new0 (RpmOstreeTreeComposeContext, 1);
   g_autoptr(GError) temp_error = NULL;
 
+  /* Init fds to -1 */
+  self->workdir_dfd = self->rootfs_dfd = self->cachedir_dfd = -1;
+
   /* Test whether or not bwrap is going to work - we will fail inside e.g. a Docker
    * container without --privileged or userns exposed.
    */
@@ -807,9 +813,8 @@ impl_compose_tree (const char      *treefile_pathstr,
   if (mkdirat (self->workdir_dfd, rootfs_name, 0755) < 0)
     return glnx_throw_errno_prefix (error, "mkdirat(%s)", rootfs_name);
 
-  glnx_fd_close int rootfs_fd = -1;
   if (!glnx_opendirat (self->workdir_dfd, rootfs_name, TRUE,
-                       &rootfs_fd, error))
+                       &self->rootfs_dfd, error))
     return FALSE;
 
   g_autofree char *next_version = NULL;
@@ -882,7 +887,7 @@ impl_compose_tree (const char      *treefile_pathstr,
   g_autofree char *new_inputhash = NULL;
   { gboolean unmodified = FALSE;
 
-    if (!install_packages_in_root (self, treefile, rootfs_fd,
+    if (!install_packages_in_root (self, treefile, self->rootfs_dfd,
                                    (char**)packages->pdata,
                                    opt_force_nocache ? NULL : &unmodified,
                                    &new_inputhash,
@@ -917,7 +922,7 @@ impl_compose_tree (const char      *treefile_pathstr,
     return FALSE;
 
   /* Start postprocessing */
-  if (!rpmostree_treefile_postprocessing (rootfs_fd, self->treefile_context_dirs->pdata[0],
+  if (!rpmostree_treefile_postprocessing (self->rootfs_dfd, self->treefile_context_dirs->pdata[0],
                                           self->serialized_treefile, treefile,
                                           next_version, cancellable, error))
     return glnx_prefix_error (error, "Postprocessing");
@@ -939,27 +944,27 @@ impl_compose_tree (const char      *treefile_pathstr,
                          &target_rootfs_dfd, error))
       return FALSE;
 
-    if (!rpmostree_prepare_rootfs_for_commit (rootfs_fd, target_rootfs_dfd,
+    if (!rpmostree_prepare_rootfs_for_commit (self->rootfs_dfd, target_rootfs_dfd,
                                               treefile,
                                               cancellable, error))
       return glnx_prefix_error (error, "Preparing rootfs for commit");
 
-    (void) close (glnx_steal_fd (&rootfs_fd));
+    (void) close (glnx_steal_fd (&self->rootfs_dfd));
 
     /* Remove the old root, then retarget rootfs_dfd to the final one */
     if (!glnx_shutil_rm_rf_at (self->workdir_dfd, rootfs_name, cancellable, error))
       return FALSE;
 
-    rootfs_fd = glnx_steal_fd (&target_rootfs_dfd);
+    self->rootfs_dfd = glnx_steal_fd (&target_rootfs_dfd);
   }
 
   g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile_path);
-  if (!rpmostree_check_passwd (self->repo, rootfs_fd, treefile_dirpath, treefile,
+  if (!rpmostree_check_passwd (self->repo, self->rootfs_dfd, treefile_dirpath, treefile,
                                self->previous_checksum,
                                cancellable, error))
     return glnx_prefix_error (error, "Handling passwd db");
 
-  if (!rpmostree_check_groups (self->repo, rootfs_fd, treefile_dirpath, treefile,
+  if (!rpmostree_check_groups (self->repo, self->rootfs_dfd, treefile_dirpath, treefile,
                                self->previous_checksum,
                                cancellable, error))
     glnx_prefix_error (error, "Handling group db");
@@ -997,7 +1002,7 @@ impl_compose_tree (const char      *treefile_pathstr,
   }
 
   g_autofree char *new_revision = NULL;
-  if (!rpmostree_commit (rootfs_fd, self->repo, self->ref, opt_write_commitid_to,
+  if (!rpmostree_commit (self->rootfs_dfd, self->repo, self->ref, opt_write_commitid_to,
                          metadata, gpgkey, selinux, NULL,
                          &new_revision,
                          cancellable, error))
