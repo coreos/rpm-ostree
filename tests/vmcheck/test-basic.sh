@@ -162,6 +162,8 @@ start_http_repo() {
   # CentOS systemd is too old for -p WorkingDirectory
   vm_cmd systemd-run --unit vmcheck-httpd sh -c \
     "'cd /tmp && python -m SimpleHTTPServer 8888'"
+  # Ideally systemd-run would support .socket units or something
+  vm_cmd /bin/bash -c "'while ! curl --head http://127.0.0.1:8888 1>/dev/null 2>/dev/null; do sleep 0.1; done'"
   cat > vmcheck-http.repo << EOF
 [vmcheck-http]
 name=vmcheck-http
