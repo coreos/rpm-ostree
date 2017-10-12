@@ -58,20 +58,29 @@ static gboolean opt_dry_run;
 static gboolean opt_print_only;
 static char *opt_write_commitid_to;
 
-static GOptionEntry option_entries[] = {
-  { "add-metadata-string", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_strings, "Append given key and value (in string format) to metadata", "KEY=VALUE" },
-  { "add-metadata-from-json", 0, 0, G_OPTION_ARG_STRING, &opt_metadata_json, "Parse the given JSON file as object, convert to GVariant, append to OSTree commit", "JSON" },
-  { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
-  { "workdir-tmpfs", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
-  { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
-  { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
+static GOptionEntry install_option_entries[] = {
   { "force-nocache", 0, 0, G_OPTION_ARG_NONE, &opt_force_nocache, "Always create a new OSTree commit, even if nothing appears to have changed", NULL },
   { "cache-only", 0, 0, G_OPTION_ARG_NONE, &opt_cache_only, "Assume cache is present, do not attempt to update it", NULL },
-  { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
+  { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
-  { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if a new commit was created", "FILE" },
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
+  { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
+  { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
   { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
+  { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if a new commit was created", "FILE" },
+  { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
+  { "workdir-tmpfs", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
+  { NULL }
+};
+
+static GOptionEntry postprocess_option_entries[] = {
+  { NULL }
+};
+
+static GOptionEntry commit_option_entries[] = {
+  { "add-metadata-string", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_strings, "Append given key and value (in string format) to metadata", "KEY=VALUE" },
+  { "add-metadata-from-json", 0, 0, G_OPTION_ARG_STRING, &opt_metadata_json, "Parse the given JSON file as object, convert to GVariant, append to OSTree commit", "JSON" },
+  { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
   { "write-commitid-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_commitid_to, "File to write the composed commitid to instead of updating the ref", "FILE" },
   { NULL }
 };
@@ -757,22 +766,33 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
                          cancellable, error))
     return FALSE;
 
+
+  g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_hif (self->corectx));
+  const char *input_ref = _rpmostree_jsonutil_object_require_string_member (self->treefile, "ref", error);
+  if (!input_ref)
+    return FALSE;
+  self->ref = _rpmostree_varsubst_string (input_ref, varsubsts, error);
+  if (!self->ref)
+    return FALSE;
+
   *out_context = g_steal_pointer (&self);
   return TRUE;
 }
 
 static gboolean
-impl_compose_tree (const char      *treefile_pathstr,
+impl_install_tree (RpmOstreeTreeComposeContext *self,
+                   gboolean        *out_changed,
                    GCancellable    *cancellable,
                    GError         **error)
 {
-  g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
-  if (!rpm_ostree_compose_context_new (treefile_pathstr, &self, cancellable, error))
-    return FALSE;
-
   /* FIXME - is this still necessary? */
   if (fchdir (self->workdir_dfd) != 0)
     return glnx_throw_errno_prefix (error, "fchdir");
+
+  /* Set this early here, so we only have to set it one more time in the
+   * complete exit path too.
+   */
+  *out_changed = FALSE;
 
   if (opt_print_only)
     {
@@ -786,16 +806,6 @@ impl_compose_tree (const char      *treefile_pathstr,
       /* Note early return */
       return TRUE;
     }
-
-  g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_hif (self->corectx));
-
-  { const char *input_ref = _rpmostree_jsonutil_object_require_string_member (self->treefile, "ref", error);
-    if (!input_ref)
-      return FALSE;
-    self->ref = _rpmostree_varsubst_string (input_ref, varsubsts, error);
-    if (!self->ref)
-      return FALSE;
-  }
 
   /* Read the previous commit */
   { g_autoptr(GError) temp_error = NULL;
@@ -984,6 +994,15 @@ impl_compose_tree (const char      *treefile_pathstr,
   g_hash_table_replace (self->metadata, g_strdup ("rpmostree.inputhash"),
                         g_variant_ref_sink (g_variant_new_string (new_inputhash)));
 
+  *out_changed = TRUE;
+  return TRUE;
+}
+
+static gboolean
+impl_commit_tree (RpmOstreeTreeComposeContext *self,
+                  GCancellable    *cancellable,
+                  GError         **error)
+{
   const char *gpgkey = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "gpg_key", &gpgkey, error))
     return FALSE;
@@ -1012,6 +1031,13 @@ impl_compose_tree (const char      *treefile_pathstr,
       }
   }
 
+  if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
+    return EXIT_FAILURE;
+  if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile,
+                                    cancellable, error))
+    return EXIT_FAILURE;
+
+  /* The penultimate step, just basically `ostree commit` */
   g_autofree char *new_revision = NULL;
   if (!rpmostree_commit (self->rootfs_dfd, self->repo, self->ref, opt_write_commitid_to,
                          metadata, gpgkey, selinux, NULL,
@@ -1021,22 +1047,127 @@ impl_compose_tree (const char      *treefile_pathstr,
 
   g_print ("%s => %s\n", self->ref, new_revision);
 
-  if (!process_touch_if_changed (error))
-    return FALSE;
-
   return TRUE;
 }
 
 int
-rpmostree_compose_builtin_tree (int             argc,
-                                char          **argv,
-                                RpmOstreeCommandInvocation *invocation,
-                                GCancellable   *cancellable,
-                                GError        **error)
+rpmostree_compose_builtin_install (int             argc,
+                                   char          **argv,
+                                   RpmOstreeCommandInvocation *invocation,
+                                   GCancellable   *cancellable,
+                                   GError        **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE");
+  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE DESTDIR");
   if (!rpmostree_option_context_parse (context,
-                                       option_entries,
+                                       install_option_entries,
+                                       &argc, &argv,
+                                       invocation,
+                                       cancellable,
+                                       NULL, NULL, NULL, NULL,
+                                       error))
+    return EXIT_FAILURE;
+
+  if (argc != 3)
+   {
+      rpmostree_usage_error (context, "TREEFILE and DESTDIR required", error);
+      return EXIT_FAILURE;
+    }
+
+  if (!opt_repo)
+    {
+      rpmostree_usage_error (context, "--repo must be specified", error);
+      return EXIT_FAILURE;
+    }
+
+  if (opt_workdir)
+    {
+      rpmostree_usage_error (context, "--workdir is ignored with install-root", error);
+      return EXIT_FAILURE;
+    }
+
+  const char *treefile_path = argv[1];
+  /* Destination is turned into workdir */
+  const char *destdir = argv[2];
+  opt_workdir = g_strdup (destdir);
+
+  g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
+  if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
+    return FALSE;
+  gboolean changed;
+  if (!impl_install_tree (self, &changed, cancellable, error))
+    return EXIT_FAILURE;
+  /* Keep the dir around */
+  g_print ("rootfs: %s/rootfs\n", self->workdir_tmp.path);
+  glnx_tmpdir_unset (&self->workdir_tmp);
+
+  return EXIT_SUCCESS;
+}
+
+int
+rpmostree_compose_builtin_postprocess (int             argc,
+                                       char          **argv,
+                                       RpmOstreeCommandInvocation *invocation,
+                                       GCancellable   *cancellable,
+                                       GError        **error)
+{
+  g_autoptr(GOptionContext) context = g_option_context_new ("postprocess ROOTFS [TREEFILE]");
+  if (!rpmostree_option_context_parse (context,
+                                       postprocess_option_entries,
+                                       &argc, &argv,
+                                       invocation,
+                                       cancellable,
+                                       NULL, NULL, NULL, NULL,
+                                       error))
+    return EXIT_FAILURE;
+
+  if (argc < 2 || argc > 3)
+    {
+      rpmostree_usage_error (context, "ROOTFS must be specified", error);
+      return EXIT_FAILURE;
+    }
+
+  const char *rootfs_path = argv[1];
+  /* Here we *optionally* process a treefile; some things like `tmp-is-dir` and
+   * `boot_location` are configurable and relevant here, but a lot of users
+   * will also probably be OK with the defaults, and part of the idea here is
+   * to avoid at least some of the use cases requiring a treefile.
+   */
+  const char *treefile_path = argc > 2 ? argv[2] : NULL;
+  glnx_unref_object JsonParser *treefile_parser = NULL;
+  JsonObject *treefile = NULL; /* Owned by parser */
+  if (treefile_path)
+    {
+      treefile_parser = json_parser_new ();
+      if (!json_parser_load_from_file (treefile_parser, treefile_path, error))
+        return EXIT_FAILURE;
+
+      JsonNode *treefile_rootval = json_parser_get_root (treefile_parser);
+      if (!JSON_NODE_HOLDS_OBJECT (treefile_rootval))
+        return glnx_throw (error, "Treefile root is not an object"), EXIT_FAILURE;
+      treefile = json_node_get_object (treefile_rootval);
+    }
+
+  glnx_fd_close int rootfs_dfd = -1;
+  if (!glnx_opendirat (AT_FDCWD, rootfs_path, TRUE, &rootfs_dfd, error))
+    return EXIT_FAILURE;
+  if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
+    return EXIT_FAILURE;
+  if (!rpmostree_postprocess_final (rootfs_dfd, treefile,
+                                    cancellable, error))
+    return EXIT_FAILURE;
+  return EXIT_SUCCESS;
+}
+
+int
+rpmostree_compose_builtin_commit (int             argc,
+                                  char          **argv,
+                                  RpmOstreeCommandInvocation *invocation,
+                                  GCancellable   *cancellable,
+                                  GError        **error)
+{
+  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE ROOTFS");
+  if (!rpmostree_option_context_parse (context,
+                                       commit_option_entries,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
@@ -1056,8 +1187,68 @@ rpmostree_compose_builtin_tree (int             argc,
       return EXIT_FAILURE;
     }
 
-  if (!impl_compose_tree (argv[1], cancellable, error))
+  const char *treefile_path = argv[1];
+  const char *rootfs_path = argv[2];
+
+  g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
+  if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
     return EXIT_FAILURE;
+  if (!glnx_opendirat (AT_FDCWD, rootfs_path, TRUE, &self->rootfs_dfd, error))
+    return EXIT_FAILURE;
+  if (!impl_commit_tree (self, cancellable, error))
+     return EXIT_FAILURE;
+  return EXIT_SUCCESS;
+}
+
+int
+rpmostree_compose_builtin_tree (int             argc,
+                                char          **argv,
+                                RpmOstreeCommandInvocation *invocation,
+                                GCancellable   *cancellable,
+                                GError        **error)
+{
+  g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE");
+  g_option_context_add_main_entries (context, install_option_entries, NULL);
+  g_option_context_add_main_entries (context, postprocess_option_entries, NULL);
+  if (!rpmostree_option_context_parse (context,
+                                       commit_option_entries,
+                                       &argc, &argv,
+                                       invocation,
+                                       cancellable,
+                                       NULL, NULL, NULL, NULL,
+                                       error))
+    return EXIT_FAILURE;
+
+  if (argc < 2)
+    {
+      rpmostree_usage_error (context, "TREEFILE must be specified", error);
+      return EXIT_FAILURE;
+    }
+
+  if (!opt_repo)
+    {
+      rpmostree_usage_error (context, "--repo must be specified", error);
+      return EXIT_FAILURE;
+    }
+
+  const char *treefile_path = argv[1];
+
+  g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
+  if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
+    return EXIT_FAILURE;
+  gboolean changed;
+  if (!impl_install_tree (self, &changed, cancellable, error))
+    return EXIT_FAILURE;
+  if (changed)
+    {
+      /* Do the ostree commit */
+      if (!impl_commit_tree (self, cancellable, error))
+        return EXIT_FAILURE;
+      /* Finally process the --touch-if-changed option  */
+      if (!process_touch_if_changed (error))
+        return FALSE;
+    }
+
 
   return EXIT_SUCCESS;
 }

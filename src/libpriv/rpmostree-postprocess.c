@@ -856,12 +856,24 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
 /* All "final" processing; things that are really required to use
  * rpm-ostree on the target host.
  */
-static gboolean
-postprocess_final (int            rootfs_dfd,
-                   JsonObject    *treefile,
-                   GCancellable  *cancellable,
-                   GError       **error)
+gboolean
+rpmostree_postprocess_final (int            rootfs_dfd,
+                             JsonObject    *treefile,
+                             GCancellable  *cancellable,
+                             GError       **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Finalizing rootfs", error);
+
+  /* Use installation of the tmpfiles integration as an "idempotence" marker to
+   * avoid doing postprocessing twice, which can happen when mixing `compose
+   * postprocess-root` with `compose commit`.
+   */
+  const char tmpfiles_integration_path[] = "usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf";
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, tmpfiles_integration_path, NULL, AT_SYMLINK_NOFOLLOW, error))
+    return FALSE;
+  if (errno == 0)
+    return TRUE;
+
   gboolean selinux = TRUE;
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
                                                                "selinux",
@@ -926,7 +938,7 @@ postprocess_final (int            rootfs_dfd,
     return FALSE;
 
   if (!glnx_file_copy_at (pkglibdir_dfd, "rpm-ostree-0-integration.conf", NULL,
-                          rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf",
+                          rootfs_dfd, tmpfiles_integration_path,
                           GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
                           cancellable, error))
     return FALSE;
@@ -1664,10 +1676,6 @@ rpmostree_prepare_rootfs_for_commit (int            src_rootfs_dfd,
       }
   }
 
-  /* And call into the final postprocessing function */
-  if (!postprocess_final (target_rootfs_dfd, treefile,
-                          cancellable, error))
-    return glnx_prefix_error (error, "Finalizing rootfs");
   return TRUE;
 }
 

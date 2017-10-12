@@ -66,6 +66,12 @@ rpmostree_prepare_rootfs_for_commit (int            src_rootfs_dfd,
                                      GError       **error);
 
 gboolean
+rpmostree_postprocess_final (int            rootfs_dfd,
+                             JsonObject    *treefile,
+                             GCancellable  *cancellable,
+                             GError       **error);
+
+gboolean
 rpmostree_commit (int            rootfs_dfd,
                   OstreeRepo    *repo,
                   const char    *refname,
