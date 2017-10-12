@@ -404,7 +404,7 @@ update_status (RpmostreedDaemon *self)
   gboolean have_active_txn = FALSE;
   const char *method, *sender, *path;
   const guint n_clients = g_hash_table_size (self->bus_clients);
-  gboolean currently_idle;
+  gboolean currently_idle = FALSE;
 
   g_object_get (rpmostreed_sysroot_get (), "active-transaction", &active_txn, NULL);
 
@@ -415,7 +415,8 @@ update_status (RpmostreedDaemon *self)
         have_active_txn = TRUE;
     }
 
-  currently_idle = !have_active_txn && n_clients == 0;
+  if (!getenv ("RPMOSTREE_DEBUG_DISABLE_DAEMON_IDLE_EXIT"))
+    currently_idle = !have_active_txn && n_clients == 0;
 
   if (currently_idle && !self->idle_exit_source)
     {
@@ -446,7 +447,7 @@ update_status (RpmostreedDaemon *self)
     }
   else if (n_clients > 0)
     sd_notifyf (0, "STATUS=clients=%u; idle", n_clients);
-  else
+  else if (currently_idle)
     {
       guint64 readytime = g_source_get_ready_time (self->idle_exit_source);
       guint64 curtime = g_source_get_time (self->idle_exit_source);

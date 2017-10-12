@@ -32,12 +32,22 @@ fi
 
 restorecon -v /usr/bin/{rpm-,}ostree /usr/libexec/rpm-ostreed
 
+overrides_dir=/etc/systemd/system/rpm-ostreed.service.d
+mkdir -p $overrides_dir
+
 # For our test suite at least, to catch things like
 # https://github.com/projectatomic/rpm-ostree/issues/826
-mkdir -p /etc/systemd/system/rpm-ostreed.service.d
-cat > /etc/systemd/system/rpm-ostreed.service.d/fatal-warnings.conf << EOF
+cat > $overrides_dir/fatal-warnings.conf << EOF
 [Service]
 Environment=G_DEBUG=fatal-warnings
+EOF
+
+# In the developer workflow, it's just not helpful to
+# have the daemon auto-exit. But let's keep it as a separate
+# override file to make it easy to drop if needed.
+cat > $overrides_dir/no-idle-exit.conf << EOF
+[Service]
+Environment=RPMOSTREE_DEBUG_DISABLE_DAEMON_IDLE_EXIT=1
 EOF
 
 systemctl daemon-reload
