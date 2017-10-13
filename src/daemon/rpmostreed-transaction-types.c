@@ -794,8 +794,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                                                RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL,
                                                error))
             return FALSE;
-
-          rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
           changed = TRUE;
         }
     }
