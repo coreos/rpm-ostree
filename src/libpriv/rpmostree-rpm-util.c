@@ -961,8 +961,8 @@ rpmostree_print_transaction (DnfContext   *hifctx)
 
   { g_autoptr(GPtrArray) packages = NULL;
     packages = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
-                                    DNF_PACKAGE_INFO_REMOVE,
-                                    DNF_PACKAGE_INFO_OBSOLETE,
+                                      DNF_PACKAGE_INFO_REMOVE,
+                                      DNF_PACKAGE_INFO_OBSOLETE,
                                       -1);
 
     if (packages->len > 0)
@@ -1058,13 +1058,16 @@ rpmostree_get_repodata_chksum_repr (DnfPackage *pkg,
   g_autofree char *chksum = NULL;
   const unsigned char *chksum_raw = NULL;
 
-  chksum_raw = dnf_package_get_chksum (pkg, &chksum_type);
+  /* for rpmdb packages, use the hdr checksum */
+  if (dnf_package_installed (pkg))
+    chksum_raw = dnf_package_get_hdr_chksum (pkg, &chksum_type);
+  else
+    chksum_raw = dnf_package_get_chksum (pkg, &chksum_type);
   if (chksum_raw)
     chksum = hy_chksum_str (chksum_raw, chksum_type);
 
   if (chksum == NULL)
-    return glnx_throw (error, "Couldn't get chksum for pkg %s",
-                       dnf_package_get_nevra(pkg));
+    return glnx_throw (error, "Couldn't get chksum for pkg %s", dnf_package_get_nevra(pkg));
 
   *out_chksum_repr =
     g_strconcat (hy_chksum_name (chksum_type), ":", chksum, NULL);
