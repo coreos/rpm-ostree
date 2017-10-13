@@ -104,6 +104,11 @@ rpmostree_sysroot_upgrader_prep_layering (RpmOstreeSysrootUpgrader *self,
                                           GError                  **error);
 
 gboolean
+rpmostree_sysroot_upgrader_import_pkgs (RpmOstreeSysrootUpgrader *self,
+                                        GCancellable             *cancellable,
+                                        GError                  **error);
+
+gboolean
 rpmostree_sysroot_upgrader_pull_repos (RpmOstreeSysrootUpgrader  *self,
                                        const char             *dir_to_pull,
                                        OstreeRepoPullFlags     flags,

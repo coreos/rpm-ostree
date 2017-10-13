@@ -77,6 +77,7 @@ struct RpmOstreeSysrootUpgrader {
   gboolean layering_initialized; /* Whether layering_type is known */
   RpmOstreeSysrootUpgraderLayeringType layering_type;
   gboolean layering_changed; /* Whether changes to layering should result in a new commit */
+  gboolean pkgs_imported; /* Whether pkgs to be layered have been downloaded & imported */
   char *base_revision; /* Non-layered replicated commit */
   char *final_revision; /* Computed by layering; if NULL, only using base_revision */
 };
@@ -877,22 +878,21 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   return TRUE;
 }
 
-/* Download packages, overlay, run scripts, and commit final rootfs to ostree */
+/* Overlay pkgs, run scripts, and commit final rootfs to ostree */
 static gboolean
 perform_local_assembly (RpmOstreeSysrootUpgrader *self,
                         GCancellable             *cancellable,
                         GError                  **error)
 {
+  g_assert (self->layering_initialized);
+  g_assert (self->pkgs_imported);
+
   /* If we computed no layering is required, we're done */
   if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_NONE)
     return TRUE;
 
   if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
     {
-      if (!rpmostree_context_download (self->ctx, cancellable, error))
-        return FALSE;
-      if (!rpmostree_context_import (self->ctx, cancellable, error))
-        return FALSE;
       if (!rpmostree_context_relabel (self->ctx, cancellable, error))
         return FALSE;
 
@@ -1029,6 +1029,30 @@ rpmostree_sysroot_upgrader_prep_layering (RpmOstreeSysrootUpgrader *self,
   return TRUE;
 }
 
+gboolean
+rpmostree_sysroot_upgrader_import_pkgs (RpmOstreeSysrootUpgrader *self,
+                                        GCancellable             *cancellable,
+                                        GError                  **error)
+{
+  g_assert (self->layering_initialized);
+  g_assert (!self->pkgs_imported);
+  self->pkgs_imported = TRUE;
+
+  /* any layering actually required? */
+  if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_NONE)
+    return TRUE;
+
+  if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
+    {
+      if (!rpmostree_context_download (self->ctx, cancellable, error))
+        return FALSE;
+      if (!rpmostree_context_import (self->ctx, cancellable, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
 /**
  * rpmostree_sysroot_upgrader_deploy:
  * @self: Self
@@ -1058,7 +1082,13 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                                      cancellable, error))
         return FALSE;
     }
-  g_assert (self->layering_initialized);
+
+  if (!self->pkgs_imported)
+    {
+      if (!rpmostree_sysroot_upgrader_import_pkgs (self, cancellable, error))
+        return FALSE;
+    }
+
   /* Generate the final ostree commit */
   if (!perform_local_assembly (self, cancellable, error))
     return FALSE;

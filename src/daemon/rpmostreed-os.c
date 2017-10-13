@@ -548,6 +548,8 @@ deploy_flags_from_options (GVariant *options,
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES;
   if (vardict_lookup_bool (&dict, "cache-only", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_CACHE_ONLY;
+  if (vardict_lookup_bool (&dict, "download-only", FALSE))
+    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY;
   return ret;
 }
 
@@ -648,6 +650,9 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
       vardict_lookup_bool (&options_dict, "no-pull-base", FALSE))
     return glnx_null_throw (error, "Can't specify no-pull-base if setting a "
                                    "new refspec or revision");
+  if (vardict_lookup_bool (&options_dict, "cache-only", FALSE) &&
+      vardict_lookup_bool (&options_dict, "download-only", FALSE))
+    return glnx_null_throw (error, "Can't specify cache-only and download-only");
   if (override_replace_pkgs)
     return glnx_null_throw (error, "Non-local replacement overrides not implemented yet");
 

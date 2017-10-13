@@ -35,6 +35,7 @@ static gboolean opt_dry_run;
 static gchar **opt_install;
 static gchar **opt_uninstall;
 static gboolean opt_cache_only;
+static gboolean opt_download_only;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -51,6 +52,7 @@ static GOptionEntry uninstall_option_entry[] = {
 static GOptionEntry install_option_entry[] = {
   { "uninstall", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_uninstall, "Uninstall a package", "PKG" },
   { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and RPM data", NULL },
+  { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and rpmmd data, don't deploy", NULL },
   { NULL }
 };
 
@@ -78,6 +80,7 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
     rpmostree_get_options_variant (opt_reboot,
                                    FALSE,   /* allow-downgrade */
                                    opt_cache_only,
+                                   opt_download_only,
                                    FALSE,   /* skip-purge */
                                    TRUE,    /* no-pull-base */
                                    opt_dry_run,

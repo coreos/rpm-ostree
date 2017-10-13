@@ -50,7 +50,7 @@ if [[ $origin != vmcheck ]]; then
 fi
 
 # delete whatever tmp refs the previous testsuite runs may have created
-vm_cmd ostree refs vmcheck_tmp --delete
+vm_cmd ostree refs vmcheck_tmp vmcheck_remote --delete
 
 # we bring our own test repo and test packages, so let's neuter any repo that
 # comes with the distro to help speed up rpm-ostree metadata fetching since we
@@ -145,7 +145,7 @@ for tf in $(find . -name 'test-*.sh' | sort); do
 
     # nuke all vmcheck and vmcheck_tmp refs and recreate vmcheck from orig
     echo "Restoring original vmcheck commit" >> ${LOG}
-    vm_cmd ostree refs vmcheck vmcheck_tmp --delete
+    vm_cmd ostree refs vmcheck vmcheck_tmp vmcheck_remote --delete
     vm_cmd ostree refs vmcheck_orig --create vmcheck &>> ${LOG}
 
     # go back to the original vmcheck deployment if needed
@@ -168,8 +168,9 @@ for tf in $(find . -name 'test-*.sh' | sort); do
     vm_cmd rm /etc/yum.repos.d -rf
     vm_cmd cp -r /etc/yum.repos.d{.tmp,}
 
-    # and clean up our test repo
-    vm_cmd rm -rf /tmp/vmcheck
+    # and clean up any leftovers from our tmp
+    osname=$(vm_get_booted_deployment_info osname)
+    vm_cmd rm -rf /ostree/deploy/$osname/var/tmp/vmcheck
 done
 
 
