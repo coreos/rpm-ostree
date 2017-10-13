@@ -40,17 +40,17 @@ static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after upgrade is prepared", NULL },
   { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction", NULL },
-  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not update repo metadata cache", NULL },
-  { NULL }
-};
-
-static GOptionEntry install_option_entry[] = {
-  { "install", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_install, "Install a package", "PKG" },
   { NULL }
 };
 
 static GOptionEntry uninstall_option_entry[] = {
+  { "install", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_install, "Install a package", "PKG" },
+  { NULL }
+};
+
+static GOptionEntry install_option_entry[] = {
   { "uninstall", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_uninstall, "Uninstall a package", "PKG" },
+  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not update repo metadata cache", NULL },
   { NULL }
 };
 
@@ -139,7 +139,7 @@ rpmostree_builtin_install (int            argc,
 
   context = g_option_context_new ("PACKAGE [PACKAGE...]");
 
-  g_option_context_add_main_entries (context, uninstall_option_entry, NULL);
+  g_option_context_add_main_entries (context, install_option_entry, NULL);
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
@@ -182,7 +182,7 @@ rpmostree_builtin_uninstall (int            argc,
 
   context = g_option_context_new ("PACKAGE [PACKAGE...]");
 
-  g_option_context_add_main_entries (context, install_option_entry, NULL);
+  g_option_context_add_main_entries (context, uninstall_option_entry, NULL);
 
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
