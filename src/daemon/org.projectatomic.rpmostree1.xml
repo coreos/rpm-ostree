@@ -263,6 +263,12 @@
             modifiers are specified.
          "cache-only" (type 'b')
             Do not update rpmmd repo metadata cache or ostree refspec.
+            Not valid if "download-only" is specified.
+         "download-only" (type 'b')
+            Update rpmmd repo metadata cache and ostree refspec. Do not
+            perform any deployments. This is like "dry-run" except that
+            the latter does not download and import packages. Not valid
+            if "cache-only" is specified.
     -->
     <method name="UpdateDeployment">
       <arg type="a{sv}" name="modifiers" direction="in"/>

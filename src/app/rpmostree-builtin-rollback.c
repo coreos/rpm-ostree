@@ -81,6 +81,7 @@ rpmostree_builtin_rollback (int             argc,
     rpmostree_get_options_variant (opt_reboot,
                                    FALSE,  /* allow-downgrade */
                                    FALSE,  /* cache-only */
+                                   FALSE,  /* download-only */
                                    FALSE,  /* skip-purge */
                                    FALSE,  /* no-pull-base */
                                    FALSE,  /* dry-run */

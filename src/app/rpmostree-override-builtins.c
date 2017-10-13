@@ -66,6 +66,7 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
     rpmostree_get_options_variant (opt_reboot,
                                    FALSE,   /* allow-downgrade */
                                    cache_only,
+                                   FALSE,   /* download-only */
                                    FALSE,   /* skip-purge */
                                    TRUE,    /* no-pull-base */
                                    opt_dry_run,

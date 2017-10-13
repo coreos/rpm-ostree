@@ -894,11 +894,26 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     return FALSE;
   changed = changed || layering_changed;
 
+  if (layering_changed)
+    {
+      if (!rpmostree_sysroot_upgrader_import_pkgs (upgrader, cancellable, error))
+        return FALSE;
+    }
+
+  /* XXX: check if this is needed */
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
   /* TODO - better logic for "changed" based on deployments */
   if (changed || self->refspec)
     {
+      /* Note early return; we stop short of actually writing the deployment */
+      if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY)
+        {
+          /* XXX: improve msg here; e.g. cache will be blown on next operation? */
+          rpmostreed_transaction_emit_message_printf (transaction, "Downloaded.");
+          return TRUE;
+        }
+
       if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
         return FALSE;
 
