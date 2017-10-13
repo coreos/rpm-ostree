@@ -393,3 +393,31 @@ vm_assert_journal_has_content() {
   assert_file_has_content tmp-journal.txt "$@"
   rm -f tmp-journal.txt
 }
+
+# $1 - service name
+# $2 - dir to serve
+# $3 - port to serve on
+vm_start_httpd() {
+  local name=$1; shift
+  local dir=$1; shift
+  local port=$1; shift
+
+  # CentOS systemd is too old for -p WorkingDirectory
+  vm_cmd systemd-run --unit $name sh -c \
+    "'cd $dir && python -m SimpleHTTPServer $port'"
+
+  # NB: the EXIT trap is used by libtest, but not the ERR trap
+  trap "vm_stop_httpd $name" ERR
+  set -E # inherit trap
+
+  # Ideally systemd-run would support .socket units or something
+  vm_cmd 'while ! curl --head http://127.0.0.1:8888 &>/dev/null; do sleep 1; done'
+}
+
+# $1 - service name
+vm_stop_httpd() {
+  local name=$1; shift
+  vm_cmd systemctl stop $name
+  set +E
+  trap - ERR
+}

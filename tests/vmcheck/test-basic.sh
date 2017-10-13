@@ -158,29 +158,15 @@ echo "ok script output prefixed in journal"
 
 # local repos are always cached, so let's start up an http server for the same
 # vmcheck repo
-start_http_repo() {
-  # CentOS systemd is too old for -p WorkingDirectory
-  vm_cmd systemd-run --unit vmcheck-httpd sh -c \
-    "'cd /tmp && python -m SimpleHTTPServer 8888'"
-  # Ideally systemd-run would support .socket units or something
-  vm_cmd /bin/bash -c "'while ! curl --head http://127.0.0.1:8888 1>/dev/null 2>/dev/null; do sleep 0.1; done'"
-  cat > vmcheck-http.repo << EOF
+vm_start_httpd vmcheck /tmp 8888
+cat > vmcheck-http.repo << EOF
 [vmcheck-http]
 name=vmcheck-http
 baseurl=http://localhost:8888/vmcheck/yumrepo
 gpgcheck=0
 EOF
-  vm_send /etc/yum.repos.d vmcheck-http.repo
-}
+vm_send /etc/yum.repos.d vmcheck-http.repo
 
-stop_http_repo() {
-  vm_cmd systemctl stop vmcheck-httpd.service
-}
-
-# NB: the EXIT trap is used by libtest, but not the ERR trap
-trap stop_http_repo ERR
-set -E # inherit trap
-start_http_repo
 vm_rpmostree cleanup -rpmb
 vm_cmd rm -f /etc/yum.repos.d/vmcheck.repo
 vm_build_rpm_repo_mode skip refresh-md-old-pkg
@@ -197,6 +183,5 @@ vm_rpmostree refresh-md -f
 if ! vm_rpmostree install -C refresh-md-new-pkg --dry-run; then
   assert_not_reached "failed to dry-run install new pkg from cached rpmmd?"
 fi
-set +E
-stop_http_repo
+vm_stop_httpd vmcheck
 echo "ok refresh-md and --cache-only"
