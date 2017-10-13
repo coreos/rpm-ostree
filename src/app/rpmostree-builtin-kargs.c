@@ -38,9 +38,9 @@ static char  *opt_deployid;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operation on provided OSNAME", "OSNAME" },
-  { "deployid", 0, 0, G_OPTION_ARG_STRING, &opt_deployid, "Modify the kernel args from a specific deployment based on id. Id is in the form of osname-checksum.deployserialnum", "DEPLOYID"},
+  { "deployid", 0, 0, G_OPTION_ARG_STRING, &opt_deployid, "Modify the kernel args from a specific deployment based on id. Id is in the form of 'osname-checksum.deployserialnum' ", "DEPLOYID"},
   { "reboot", 0, 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after kernel arguments are modified", NULL},
-  { "append", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_append_strings, "Append kernel argument; useful with e.g. console= that can be used multiple times, empty value is allowed", "KEY=VALUE" },
+  { "append", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_append_strings, "Append kernel argument; useful with e.g. console= that can be used multiple times. empty value for a argument is allowed", "KEY=VALUE" },
   { "replace", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_replace_strings, "Replace existing kernel argument, the user is also able to replace KEY=VALUE for a single key/value pair ", "KEY=VALUE=NEWVALUE" },
   { "delete", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_delete_strings, "Delete a specific kernel argument value or can delete the entire key for a single key/value pair", "KEY=VALUE"},
   { "import-proc-cmdline", 0, 0, G_OPTION_ARG_NONE, &opt_import_proc_cmdline, "Instead of modifying old kernel arguments, we modify args from current /proc/cmdline (the booted deployment)", NULL },
@@ -115,7 +115,7 @@ rpmostree_ex_builtin_kargs (int            argc,
   if (opt_import_proc_cmdline && opt_osname)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Cannot specify an osname and --import-from-proc-cmdline");
+                   "Cannot specify both osname and --import-from-proc-cmdline");
       return EXIT_FAILURE;
     }
   if (!(opt_kernel_delete_strings) && !(opt_kernel_append_strings)
@@ -125,7 +125,7 @@ rpmostree_ex_builtin_kargs (int            argc,
   if (opt_reboot && display_kernel_args)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Canno reboot when kernel arguments not changed");
+                   "Cannot reboot when kernel arguments not changed");
       return EXIT_FAILURE;
     }
 
@@ -134,7 +134,7 @@ rpmostree_ex_builtin_kargs (int            argc,
                                 cancellable, &os_proxy, error))
     return EXIT_FAILURE;
 
-  /* The proc cmdline is the kernel args fromcurrent/booted deployment */
+  /* The proc cmdline is the kernel args from booted deployment */
   /* if this option is not specified, we will default to find the first */
   /* pending  deployment that matches the osname if there is one */
   gboolean is_pending = !opt_import_proc_cmdline;
