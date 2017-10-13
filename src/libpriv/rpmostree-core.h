@@ -78,8 +78,14 @@ void rpmostree_context_set_repos (RpmOstreeContext *self,
 void rpmostree_context_set_sepolicy (RpmOstreeContext *self,
                                      OstreeSePolicy   *sepolicy);
 
-void rpmostree_dnf_add_checksum_goal (GChecksum *checksum, HyGoal goal);
-char *rpmostree_context_get_state_sha512 (RpmOstreeContext *self);
+gboolean rpmostree_dnf_add_checksum_goal (GChecksum  *checksum,
+                                          HyGoal      goal,
+                                          OstreeRepo *pkgcache_repo,
+                                          GError    **error);
+
+gboolean rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
+                                             char            **out_checksum,
+                                             GError          **error);
 
 char *rpmostree_get_cache_branch_header (Header hdr);
 char *rpmostree_get_cache_branch_pkg (DnfPackage *pkg);
