@@ -1621,6 +1621,28 @@ compare_pkgs (gconstpointer ap,
   return dnf_package_cmp (*a, *b);
 }
 
+/* XXX: push this into libdnf */
+static const char*
+convert_dnf_action_to_string (DnfStateAction action)
+{
+  switch (action)
+    {
+    case DNF_STATE_ACTION_INSTALL:
+      return "install";
+    case DNF_STATE_ACTION_UPDATE:
+      return "update";
+    case DNF_STATE_ACTION_DOWNGRADE:
+      return "downgrade";
+    case DNF_STATE_ACTION_REMOVE:
+      return "remove";
+    case DNF_STATE_ACTION_OBSOLETE:
+      return "obsolete";
+    default:
+      g_assert_not_reached ();
+    }
+  return NULL; /* satisfy static analysis tools */
+}
+
 /* Generate a checksum from a goal in a repeatable fashion - we checksum an ordered array of
  * the checksums of individual packages as well as the associated action. We *used* to just
  * checksum the NEVRAs but that breaks with RPM gpg signatures.
@@ -1643,7 +1665,8 @@ rpmostree_dnf_add_checksum_goal (GChecksum   *checksum,
     {
       DnfPackage *pkg = pkglist->pdata[i];
       DnfStateAction action = dnf_package_get_action (pkg);
-      g_checksum_update (checksum, (guint8*)&action, sizeof (DnfStateAction));
+      const char *action_str = convert_dnf_action_to_string (action);
+      g_checksum_update (checksum, (guint8*)action_str, strlen (action_str));
 
       g_autofree char* chksum_repr = NULL;
       g_assert (rpmostree_get_repodata_chksum_repr (pkg, &chksum_repr, NULL));
