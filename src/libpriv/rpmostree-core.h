@@ -44,6 +44,9 @@ RpmOstreeContext *rpmostree_context_new_tree (int basedir_dfd,
                                               GCancellable *cancellable,
                                               GError **error);
 
+void rpmostree_context_set_pkgcache_only (RpmOstreeContext *self,
+                                          gboolean          pkgcache_only);
+
 DnfContext * rpmostree_context_get_hif (RpmOstreeContext *self);
 
 RpmOstreeTreespec *rpmostree_treespec_new_from_keyfile (GKeyFile *keyfile, GError  **error);

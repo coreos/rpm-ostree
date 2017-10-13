@@ -43,7 +43,7 @@ static GOptionEntry option_entries[] = {
   { "remote", 'm', 0, G_OPTION_ARG_STRING, &opt_remote, "Rebase to current branch name using REMOTE; may also be combined with --branch", "REMOTE" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after rebase is finished", NULL },
   { "skip-purge", 0, 0, G_OPTION_ARG_NONE, &opt_skip_purge, "Keep previous refspec after rebase", NULL },
-  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not update repo metadata cache", NULL },
+  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and rpmmd data", NULL },
   { NULL }
 };
 

@@ -40,7 +40,7 @@ static GOptionEntry option_entries[] = {
    *     A --preview option would work for both commands if we wanted to
    *     deprecate --check-diff. */
   { "preview", 0, 0, G_OPTION_ARG_NONE, &opt_preview, "Just preview package differences", NULL },
-  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not update repo metadata cache", NULL },
+  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and rpmmd data", NULL },
   { NULL }
 };
 
