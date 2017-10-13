@@ -93,7 +93,10 @@ if ! vm_cmd "findmnt / -no PROPAGATION" | grep shared; then
     assert_not_reached "root is not mounted shared"
 fi
 
+# test pkg-remove and simultaneously check that it's done without reaching repos
+vm_cmd mv /tmp/vmcheck/yumrepo{,.bak}
 vm_rpmostree pkg-remove foo-1.0
+vm_cmd mv /tmp/vmcheck/yumrepo{.bak,}
 echo "ok pkg-remove foo"
 
 vm_reboot

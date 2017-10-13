@@ -206,6 +206,11 @@ rpmostree_builtin_uninstall (int            argc,
   argv++; argc--;
   argv[argc] = NULL;
 
+  /* If we don't also have to install pkgs, perform uninstalls offline; users don't expect
+   * the "auto-update" behaviour here. */
+  if (!opt_install)
+    opt_cache_only = TRUE;
+
   return pkg_change (sysroot_proxy,
                      (const char *const*)opt_install,
                      (const char *const*)argv,
