@@ -1612,42 +1612,42 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   return TRUE;
 }
 
-/* Generate a checksum from a goal in a repeatable fashion -
- * we checksum an ordered array of the checksums of individual
- * packages.  We *used* to just checksum the NEVRAs but that
- * breaks with RPM gpg signatures.
+static int
+compare_pkgs (gconstpointer ap,
+              gconstpointer bp)
+{
+  DnfPackage **a = (gpointer)ap;
+  DnfPackage **b = (gpointer)bp;
+  return dnf_package_cmp (*a, *b);
+}
+
+/* Generate a checksum from a goal in a repeatable fashion - we checksum an ordered array of
+ * the checksums of individual packages as well as the associated action. We *used* to just
+ * checksum the NEVRAs but that breaks with RPM gpg signatures.
  *
- * This can be used to efficiently see if the goal has changed from a
- * previous one.
- *
- * It can also handle goals in which only dummy header-only pkgs are
- * available. In such cases, it uses the ostree checksum of the pkg
- * instead.
+ * This can be used to efficiently see if the goal has changed from a previous one.
  */
 void
 rpmostree_dnf_add_checksum_goal (GChecksum   *checksum,
                                  HyGoal       goal)
 {
-  g_autoptr(GPtrArray) pkglist = NULL;
-  guint i;
-  g_autoptr(GPtrArray) pkg_checksums = g_ptr_array_new_with_free_func (g_free);
-
-  pkglist = hy_goal_list_installs (goal, NULL);
+  g_autoptr(GPtrArray) pkglist = dnf_goal_get_packages (goal, DNF_PACKAGE_INFO_INSTALL,
+                                                              DNF_PACKAGE_INFO_UPDATE,
+                                                              DNF_PACKAGE_INFO_DOWNGRADE,
+                                                              DNF_PACKAGE_INFO_REMOVE,
+                                                              DNF_PACKAGE_INFO_OBSOLETE,
+                                                              -1);
   g_assert (pkglist);
-  for (i = 0; i < pkglist->len; i++)
+  g_ptr_array_sort (pkglist, compare_pkgs);
+  for (guint i = 0; i < pkglist->len; i++)
     {
       DnfPackage *pkg = pkglist->pdata[i];
+      DnfStateAction action = dnf_package_get_action (pkg);
+      g_checksum_update (checksum, (guint8*)&action, sizeof (DnfStateAction));
+
       g_autofree char* chksum_repr = NULL;
       g_assert (rpmostree_get_repodata_chksum_repr (pkg, &chksum_repr, NULL));
-      g_ptr_array_add (pkg_checksums, g_steal_pointer (&chksum_repr));
-    }
-
-  g_ptr_array_sort (pkg_checksums, rpmostree_ptrarray_sort_compare_strings);
-
-  for (guint i = 0; i < pkg_checksums->len; i++)
-    {
-      const char *pkg_checksum = pkg_checksums->pdata[i];
-      g_checksum_update (checksum, (guint8*)pkg_checksum, strlen (pkg_checksum));
+      g_checksum_update (checksum, (guint8*)chksum_repr, strlen (chksum_repr));
     }
 }
 
