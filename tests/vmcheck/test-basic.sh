@@ -173,15 +173,12 @@ vm_build_rpm_repo_mode skip refresh-md-old-pkg
 vm_rpmostree refresh-md
 vm_build_rpm_repo_mode skip refresh-md-new-pkg
 vm_rpmostree refresh-md # shouldn't do anything since it hasn't expired yet
-if ! vm_rpmostree install -C refresh-md-old-pkg --dry-run; then
-  assert_not_reached "failed to dry-run install old pkg from cached rpmmd"
-fi
-if vm_rpmostree install -C refresh-md-new-pkg --dry-run; then
+if vm_rpmostree install refresh-md-new-pkg --dry-run; then
   assert_not_reached "successfully dry-run installed new pkg from cached rpmmd?"
 fi
 vm_rpmostree refresh-md -f
-if ! vm_rpmostree install -C refresh-md-new-pkg --dry-run; then
+if ! vm_rpmostree install refresh-md-new-pkg --dry-run; then
   assert_not_reached "failed to dry-run install new pkg from cached rpmmd?"
 fi
 vm_stop_httpd vmcheck
-echo "ok refresh-md and --cache-only"
+echo "ok refresh-md"

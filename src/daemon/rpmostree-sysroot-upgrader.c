@@ -382,11 +382,13 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
 
   const gboolean allow_older =
     (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER) > 0;
+  const gboolean synthetic =
+    (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL) > 0;
 
   const char *override_commit = rpmostree_origin_get_override_commit (self->origin);
 
   g_assert (self->origin_merge_deployment);
-  if (origin_remote)
+  if (origin_remote && !synthetic)
     {
       g_autoptr(GVariantBuilder) optbuilder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
       if (dir_to_pull && *dir_to_pull)
@@ -428,8 +430,8 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
   gboolean changed = !g_str_equal (new_base_rev, self->base_revision);
   if (changed)
     {
-      /* check timestamps here too in case the commit was already pulled (or the
-       * refspec is local) */
+      /* check timestamps here too in case the commit was already pulled, or the pull was
+       * synthetic, or the refspec is local */
       if (!allow_older)
         {
           if (!ostree_sysroot_upgrader_check_timestamps (self->repo, self->base_revision,
@@ -785,6 +787,10 @@ prepare_context_for_assembly (RpmOstreeSysrootUpgrader *self,
     return FALSE;
 
   rpmostree_context_set_sepolicy (self->ctx, sepolicy);
+
+  if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY)
+    rpmostree_context_set_pkgcache_only (self->ctx, TRUE);
+
   return TRUE;
 }
 
@@ -813,12 +819,6 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (!rpmostree_context_setup (self->ctx, tmprootfs_abspath, tmprootfs_abspath, treespec,
                                 cancellable, error))
     return FALSE;
-
-  if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_RPMMD_CACHE_ONLY)
-    {
-      DnfContext *hifctx = rpmostree_context_get_hif (self->ctx);
-      dnf_context_set_cache_age (hifctx, G_MAXUINT);
-    }
 
   g_autoptr(OstreeRepo) pkgcache_repo = NULL;
   if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))

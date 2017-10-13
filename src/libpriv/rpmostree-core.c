@@ -243,6 +243,7 @@ struct _RpmOstreeContext {
 
   RpmOstreeTreespec *spec;
   gboolean empty;
+  gboolean pkgcache_only;
   DnfContext *hifctx;
   OstreeRepo *ostreerepo;
   OstreeRepo *pkgcache_repo;
@@ -401,6 +402,15 @@ rpmostree_context_ensure_tmpdir (RpmOstreeContext *self,
     return FALSE;
 
   return TRUE;
+}
+
+void
+rpmostree_context_set_pkgcache_only (RpmOstreeContext *self,
+                                     gboolean          pkgcache_only)
+{
+  /* if called, must always be before setup() */
+  g_assert (!self->spec);
+  self->pkgcache_only = pkgcache_only;
 }
 
 /* Pick up repos dir and passwd from @cfg_deployment. */
@@ -600,13 +610,22 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   if (!dnf_context_setup (self->hifctx, cancellable, error))
     return FALSE;
 
-  /* NB: missing "repos" --> let hif figure it out for itself */
-  if (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos))
-    if (!context_repos_enable_only (self, (const char *const*)enabled_repos, error))
-      return FALSE;
+  /* disable all repos in pkgcache-only mode, otherwise obey "repos" key */
+  if (self->pkgcache_only)
+    {
+      if (!context_repos_enable_only (self, NULL, error))
+        return FALSE;
+    }
+  else
+    {
+      /* NB: missing "repos" --> let hif figure it out for itself */
+      if (g_variant_dict_lookup (self->spec->dict, "repos", "^a&s", &enabled_repos))
+        if (!context_repos_enable_only (self, (const char *const*)enabled_repos, error))
+          return FALSE;
+    }
 
   g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (self->hifctx, DNF_REPO_ENABLED_PACKAGES);
-  if (repos->len == 0)
+  if (repos->len == 0 && !self->pkgcache_only)
     {
       /* To be nice, let's only make this fatal if "packages" is empty (e.g. if
        * we're only installing local RPMs. Missing deps will cause the regular
@@ -616,6 +635,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
           g_strv_length (pkgs) > 0)
         return glnx_throw (error, "No enabled repositories");
     }
+
   /* Ensure that each repo that's enabled is marked as required; this should be
    * the default, but we make sure.  This is a bit of a messy topic, but for
    * rpm-ostree we're being more strict about requiring repos.
@@ -807,8 +827,7 @@ rpmostree_find_cache_branch_by_nevra (OstreeRepo    *pkgcache,
 
   g_autoptr(GHashTable) refs = NULL;
   if (!ostree_repo_list_refs_ext (pkgcache, "rpmostree/pkg", &refs,
-                                  OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable,
-                                  error))
+                                  OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
     return FALSE;
 
   GLNX_HASH_TABLE_FOREACH (refs, const char*, ref)
@@ -872,8 +891,7 @@ checkout_pkg_metadata_by_nevra (RpmOstreeContext *self,
                                            &header, cancellable, error))
     return FALSE;
 
-  return checkout_pkg_metadata (self, nevra, header,
-                                cancellable, error);
+  return checkout_pkg_metadata (self, nevra, header, cancellable, error);
 }
 
 /* Fetches decomposed NEVRA information from pkgcache for a given nevra string. Requires the
@@ -921,7 +939,21 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 {
   g_assert (!self->empty);
 
-  g_autoptr(GPtrArray) rpmmd_repos = get_enabled_rpmmd_repos (self->hifctx, DNF_REPO_ENABLED_PACKAGES);
+  g_autoptr(GPtrArray) rpmmd_repos =
+    get_enabled_rpmmd_repos (self->hifctx, DNF_REPO_ENABLED_PACKAGES);
+
+  if (self->pkgcache_only)
+    {
+      g_assert_cmpint (rpmmd_repos->len, ==, 0);
+
+      /* this is essentially a no-op */
+      g_autoptr(DnfState) hifstate = dnf_state_new ();
+      if (!dnf_context_setup_sack (self->hifctx, hifstate, error))
+        return FALSE;
+
+      /* Note early return; no repos to fetch. */
+      return TRUE;
+    }
 
   g_autoptr(GString) enabled_repos = g_string_new ("Enabled rpm-md repositories:");
   for (guint i = 0; i < rpmmd_repos->len; i++)
@@ -1507,13 +1539,57 @@ install_pkg_from_cache (RpmOstreeContext *self,
   /* This is the great lie: we make libdnf et al. think that they're dealing with a full
    * RPM, all while crossing our fingers that they don't try to look past the header.
    * Ideally, it would be best if libdnf could learn to treat the pkgcache repo as another
-   * DnfRepo. */
+   * DnfRepo. We could do this all in-memory though it doesn't seem like libsolv has an
+   * appropriate API for this. */
   g_autofree char *rpm = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir.path, nevra);
   DnfPackage *pkg = dnf_sack_add_cmdline_package (dnf_context_get_sack (self->hifctx), rpm);
   if (!pkg)
     return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
 
   hy_goal_install (dnf_context_get_goal (self->hifctx), pkg);
+  return TRUE;
+}
+
+/* This is a hacky way to bridge the gap between libdnf and our pkgcache. We extract the
+ * metarpm for every RPM in our cache and present that as the cmdline repo to libdnf. But we
+ * do still want all the niceties of the libdnf stack, e.g. HyGoal, libsolv depsolv, etc...
+ */
+static gboolean
+add_remaining_pkgcache_pkgs (RpmOstreeContext *self,
+                             GHashTable       *already_added,
+                             GCancellable     *cancellable,
+                             GError          **error)
+{
+  g_assert (self->pkgcache_repo);
+  g_assert (self->pkgcache_only);
+
+  DnfSack *sack = dnf_context_get_sack (self->hifctx);
+  g_assert (sack);
+
+  g_autoptr(GHashTable) refs = NULL;
+  if (!ostree_repo_list_refs_ext (self->pkgcache_repo, "rpmostree/pkg", &refs,
+                                  OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
+    return FALSE;
+
+  GLNX_HASH_TABLE_FOREACH (refs, const char*, ref)
+    {
+      g_autofree char *nevra = rpmostree_cache_branch_to_nevra (ref);
+      if (g_hash_table_contains (already_added, nevra))
+        continue;
+
+      g_autoptr(GVariant) header = NULL;
+      if (!get_header_variant (self->pkgcache_repo, ref, &header, cancellable, error))
+        return FALSE;
+
+      if (!checkout_pkg_metadata (self, nevra, header, cancellable, error))
+        return FALSE;
+
+      g_autofree char *rpm = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir.path, nevra);
+      DnfPackage *pkg = dnf_sack_add_cmdline_package (sack, rpm);
+      if (!pkg)
+        return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
+    }
+
   return TRUE;
 }
 
@@ -1562,6 +1638,9 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       g_ptr_array_add (removed_pkgnames, (gpointer)pkgname);
     }
 
+  /* track cached pkgs already added to the sack so far */
+  g_autoptr(GHashTable) already_added = g_hash_table_new (g_str_hash, g_str_equal);
+
   /* Handle packages to replace */
   g_autoptr(GPtrArray) replaced_nevras = g_ptr_array_new ();
   for (char **it = cached_replace_pkgs; it && *it; it++)
@@ -1575,6 +1654,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
         return FALSE;
 
       g_ptr_array_add (replaced_nevras, (gpointer)nevra);
+      g_hash_table_add (already_added, (gpointer)nevra);
     }
 
   /* For each new local package, tell libdnf to add it to the goal */
@@ -1586,6 +1666,18 @@ rpmostree_context_prepare (RpmOstreeContext *self,
         return FALSE;
 
       if (!install_pkg_from_cache (self, nevra, sha256, cancellable, error))
+        return FALSE;
+
+      g_hash_table_add (already_added, (gpointer)nevra);
+    }
+
+  /* If we're in cache-only mode, add all the remaining pkgs now. We do this *after* the
+   * replace & local pkgs since they already handle a subset of the cached pkgs and have
+   * SHA256 checks. But we do it *before* dnf_context_install() since those subjects are not
+   * directly linked to a cached pkg, so we need to teach libdnf about them beforehand. */
+  if (self->pkgcache_only)
+    {
+      if (!add_remaining_pkgcache_pkgs (self, already_added, cancellable, error))
         return FALSE;
     }
 

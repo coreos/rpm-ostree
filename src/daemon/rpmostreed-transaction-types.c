@@ -558,10 +558,19 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN;
-  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_RPMMD_CACHE_ONLY)
-    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_RPMMD_CACHE_ONLY;
   const gboolean no_overrides =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES) > 0);
+
+  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_CACHE_ONLY)
+    {
+      /* practically, we could unite those two into a single flag, though it's nice to be
+       * able to keep them separate as well */
+
+      /* don't pull, just resolve ref locally and timestamp check */
+      upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL;
+      /* turn on rpmmd cache only in the upgrader */
+      upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY;
+    }
 
   /* this should have been checked already */
   if (no_overrides)
@@ -803,7 +812,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 
   /* Mainly for the `install` and `override` commands */
-  if (!(self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE))
+  const gboolean no_pull_base =
+    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE) > 0);
+
+  if (!no_pull_base)
     {
       gboolean base_changed;
 
