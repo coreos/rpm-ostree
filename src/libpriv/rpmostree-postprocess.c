@@ -513,8 +513,7 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
 }
 
 static gboolean
-convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
-                           int            dest_rootfs_dfd,
+convert_var_to_tmpfiles_d (int            rootfs_dfd,
                            GCancellable  *cancellable,
                            GError       **error)
 {
@@ -532,7 +531,7 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
     "log/btmp",
   };
 
-  if (!glnx_opendirat (src_rootfs_dfd, "var", TRUE, &var_dfd, error))
+  if (!glnx_opendirat (rootfs_dfd, "var", TRUE, &var_dfd, error))
     return FALSE;
 
   /* We never want to traverse into /run when making tmpfiles since it's a tmpfs */
@@ -558,7 +557,7 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
    * code should no longer be necessary as we convert packages on import.
    */
   g_auto(GLnxTmpfile) tmpf = { 0, };
-  if (!glnx_open_tmpfile_linkable_at (dest_rootfs_dfd, "usr/lib/tmpfiles.d", O_WRONLY | O_CLOEXEC,
+  if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, "usr/lib/tmpfiles.d", O_WRONLY | O_CLOEXEC,
                                       &tmpf, error))
     return FALSE;
   g_autoptr(GOutputStream) tmpfiles_out = g_unix_output_stream_new (tmpf.fd, FALSE);
@@ -566,14 +565,14 @@ convert_var_to_tmpfiles_d (int            src_rootfs_dfd,
     return FALSE;
 
   g_autoptr(GString) prefix = g_string_new ("/var");
-  if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, src_rootfs_dfd, prefix, cancellable, error))
+  if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, rootfs_dfd, prefix, cancellable, error))
     return FALSE;
 
   if (!g_output_stream_close (tmpfiles_out, cancellable, error))
     return FALSE;
 
   if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
-                             dest_rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
+                             rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
                              error))
     return FALSE;
 
@@ -848,13 +847,14 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
   return TRUE;
 }
 
-/* Prepare a root filesystem, taking mainly the contents of /usr from pkgroot */
+/* All "final" processing; things that are really required to use
+ * rpm-ostree on the target host.
+ */
 static gboolean
-create_rootfs_from_pkgroot_content (int            target_root_dfd,
-                                    int            src_rootfs_fd,
-                                    JsonObject    *treefile,
-                                    GCancellable  *cancellable,
-                                    GError       **error)
+postprocess_final (int            rootfs_dfd,
+                   JsonObject    *treefile,
+                   GCancellable  *cancellable,
+                   GError       **error)
 {
   gboolean selinux = TRUE;
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
@@ -870,8 +870,8 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
                                                                error))
     return FALSE;
 
-  g_print ("Migrating /etc/passwd to /usr/lib/\n");
-  if (!rpmostree_passwd_migrate_except_root (src_rootfs_fd, RPM_OSTREE_PASSWD_MIGRATE_PASSWD, NULL,
+  g_print ("Migrating /usr/etc/passwd to /usr/lib/\n");
+  if (!rpmostree_passwd_migrate_except_root (rootfs_dfd, RPM_OSTREE_PASSWD_MIGRATE_PASSWD, NULL,
                                              cancellable, error))
     return FALSE;
 
@@ -882,55 +882,29 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
       preserve_groups_set = _rpmostree_jsonutil_jsarray_strings_to_set (etc_group_members);
     }
 
-  g_print ("Migrating /etc/group to /usr/lib/\n");
-  if (!rpmostree_passwd_migrate_except_root (src_rootfs_fd, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
+  g_print ("Migrating /usr/etc/group to /usr/lib/\n");
+  if (!rpmostree_passwd_migrate_except_root (rootfs_dfd, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
                                              preserve_groups_set,
                                              cancellable, error))
     return FALSE;
 
   /* NSS configuration to look at the new files */
-  if (!replace_nsswitch (src_rootfs_fd, cancellable, error))
+  if (!replace_nsswitch (rootfs_dfd, cancellable, error))
     return glnx_prefix_error (error, "nsswitch replacement");
 
   if (selinux)
     {
-      if (!postprocess_selinux_policy_store_location (src_rootfs_fd, cancellable, error))
+      if (!postprocess_selinux_policy_store_location (rootfs_dfd, cancellable, error))
         return glnx_prefix_error (error, "SELinux postprocess");
     }
 
-  /* We take /usr from the yum content */
-  g_print ("Moving /usr to target\n");
-  if (!glnx_renameat (src_rootfs_fd, "usr", target_root_dfd, "usr", error))
+  if (!convert_var_to_tmpfiles_d (rootfs_dfd, cancellable, error))
     return FALSE;
 
-  if (!rpmostree_rootfs_prepare_links (target_root_dfd, cancellable, error))
+  if (!rpmostree_rootfs_prepare_links (rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostree_rootfs_postprocess_common (target_root_dfd, cancellable, error))
+  if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;
-
-  if (!convert_var_to_tmpfiles_d (src_rootfs_fd, target_root_dfd, cancellable, error))
-    return FALSE;
-
-  /* Also carry along toplevel compat links */
-  g_print ("Copying toplevel compat symlinks\n");
-  {
-    guint i;
-    const char *toplevel_links[] = { "lib", "lib64", "lib32",
-                                     "bin", "sbin" };
-    for (i = 0; i < G_N_ELEMENTS (toplevel_links); i++)
-      {
-        struct stat stbuf;
-        if (!glnx_fstatat_allow_noent (src_rootfs_fd, toplevel_links[i], &stbuf,
-                                       AT_SYMLINK_NOFOLLOW, error))
-          return FALSE;
-        if (errno == ENOENT)
-          continue;
-
-        if (!glnx_renameat (src_rootfs_fd, toplevel_links[i],
-                            target_root_dfd, toplevel_links[i], error))
-          return FALSE;
-      }
-  }
 
   g_print ("Adding rpm-ostree-0-integration.conf\n");
   /* This is useful if we're running in an uninstalled configuration, e.g.
@@ -942,11 +916,11 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
   if (!glnx_opendirat (AT_FDCWD, pkglibdir_path, TRUE, &pkglibdir_dfd, error))
     return FALSE;
 
-  if (!glnx_shutil_mkdir_p_at (target_root_dfd, "usr/lib/tmpfiles.d", 0755, cancellable, error))
+  if (!glnx_shutil_mkdir_p_at (rootfs_dfd, "usr/lib/tmpfiles.d", 0755, cancellable, error))
     return FALSE;
 
   if (!glnx_file_copy_at (pkglibdir_dfd, "rpm-ostree-0-integration.conf", NULL,
-                          target_root_dfd, "usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf",
+                          rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf",
                           GLNX_FILE_COPY_NOXATTRS, /* Don't take selinux label */
                           cancellable, error))
     return FALSE;
@@ -957,17 +931,10 @@ create_rootfs_from_pkgroot_content (int            target_root_dfd,
       g_print ("Preparing kernel\n");
 
       /* OSTree needs to own this */
-      if (!glnx_shutil_rm_rf_at (src_rootfs_fd, "boot/loader", cancellable, error))
+      if (!glnx_shutil_rm_rf_at (rootfs_dfd, "boot/loader", cancellable, error))
         return FALSE;
 
-      /* The kernel may be in the source rootfs /boot; to handle that, we always
-       * rename the source /boot to the target, and will handle everything after
-       * that in the target root.
-       */
-      if (!rename_if_exists (src_rootfs_fd, "boot", target_root_dfd, "boot", error))
-        return FALSE;
-
-      if (!process_kernel_and_initramfs (target_root_dfd, treefile,
+      if (!process_kernel_and_initramfs (rootfs_dfd, treefile,
                                          cancellable, error))
         return glnx_prefix_error (error, "During kernel processing");
     }
@@ -1634,12 +1601,48 @@ rpmostree_prepare_rootfs_for_commit (int            src_rootfs_dfd,
                                                                &tmp_is_dir,
                                                                error))
     return FALSE;
+  /* Make an empty root */
   if (!init_rootfs (target_rootfs_dfd, tmp_is_dir, cancellable, error))
     return FALSE;
 
-  /* And call into the bigger postprocessing function */
-  if (!create_rootfs_from_pkgroot_content (target_rootfs_dfd, src_rootfs_dfd, treefile,
-                                           cancellable, error))
+  g_print ("Moving /usr to target\n");
+  if (!glnx_renameat (src_rootfs_dfd, "usr", target_rootfs_dfd, "usr", error))
+    return FALSE;
+
+  /* The kernel may be in the source rootfs /boot; to handle that, we always
+   * rename the source /boot to the target, and will handle everything after
+   * that in the target root.
+   */
+  if (!rename_if_exists (src_rootfs_dfd, "boot", target_rootfs_dfd, "boot", error))
+    return FALSE;
+
+  /* And grab /var - we'll convert to tmpfiles.d later */
+  if (!rename_if_exists (src_rootfs_dfd, "var", target_rootfs_dfd, "var", error))
+    return FALSE;
+
+  /* Also carry along toplevel compat links */
+  g_print ("Copying toplevel compat symlinks\n");
+  {
+    const char *toplevel_links[] = { "lib", "lib64", "lib32",
+                                     "bin", "sbin" };
+    for (guint i = 0; i < G_N_ELEMENTS (toplevel_links); i++)
+      {
+        struct stat stbuf;
+        if (!glnx_fstatat_allow_noent (src_rootfs_dfd, toplevel_links[i], &stbuf,
+                                       AT_SYMLINK_NOFOLLOW, error))
+          return FALSE;
+        if (errno == ENOENT)
+          continue;
+
+        if (!glnx_renameat (src_rootfs_dfd, toplevel_links[i],
+                            target_rootfs_dfd, toplevel_links[i], error))
+          return FALSE;
+      }
+  }
+
+  /* And call into the final postprocessing function */
+  if (!postprocess_final (target_rootfs_dfd, treefile,
+                          cancellable, error))
     return glnx_prefix_error (error, "Finalizing rootfs");
   return TRUE;
 }
