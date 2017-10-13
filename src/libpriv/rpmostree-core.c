@@ -1177,11 +1177,11 @@ commit_has_matching_sepolicy (OstreeRepo     *repo,
 }
 
 static gboolean
-commit_has_matching_repodata_chksum_repr (OstreeRepo  *repo,
-                                          const char  *rev,
-                                          const char  *expected,
-                                          gboolean    *out_matches,
-                                          GError     **error)
+get_pkgcache_repodata_chksum_repr (OstreeRepo  *repo,
+                                   const char  *rev,
+                                   char       **out_chksum_repr,
+                                   gboolean     allow_noent,
+                                   GError     **error)
 {
   g_autoptr(GVariant) commit = NULL;
   if (!ostree_repo_load_commit (repo, rev, &commit, NULL, error))
@@ -1189,21 +1189,42 @@ commit_has_matching_repodata_chksum_repr (OstreeRepo  *repo,
 
   g_assert (commit);
 
-  g_autofree char *actual = NULL;
+  g_autofree char *chksum_repr = NULL;
   g_autoptr(GError) tmp_error = NULL;
-  if (!get_commit_repodata_chksum_repr (commit, &actual, &tmp_error))
+  if (!get_commit_repodata_chksum_repr (commit, &chksum_repr, &tmp_error))
     {
-      /* never match pkgs unpacked with older versions that didn't embed csum */
-      if (g_error_matches (tmp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+      if (g_error_matches (tmp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND) && allow_noent)
         {
-          *out_matches = FALSE;
+          *out_chksum_repr = NULL;
           return TRUE;
         }
       g_propagate_error (error, g_steal_pointer (&tmp_error));
       return FALSE;
     }
 
-  *out_matches = g_str_equal (expected, actual);
+  *out_chksum_repr = g_steal_pointer (&chksum_repr);
+  return TRUE;
+}
+
+static gboolean
+commit_has_matching_repodata_chksum_repr (OstreeRepo  *repo,
+                                          const char  *rev,
+                                          const char  *expected,
+                                          gboolean    *out_matches,
+                                          GError     **error)
+{
+  g_autofree char *chksum_repr = NULL;
+  if (!get_pkgcache_repodata_chksum_repr (repo, rev, &chksum_repr, TRUE, error))
+    return FALSE;
+
+  /* never match pkgs unpacked with older versions that didn't embed chksum_repr */
+  if (chksum_repr == NULL)
+    {
+      *out_matches = FALSE;
+      return TRUE;
+    }
+
+  *out_matches = g_str_equal (expected, chksum_repr);
   return TRUE;
 }
 
@@ -1741,9 +1762,11 @@ convert_dnf_action_to_string (DnfStateAction action)
  *
  * This can be used to efficiently see if the goal has changed from a previous one.
  */
-void
+gboolean
 rpmostree_dnf_add_checksum_goal (GChecksum   *checksum,
-                                 HyGoal       goal)
+                                 HyGoal       goal,
+                                 OstreeRepo  *pkgcache,
+                                 GError     **error)
 {
   g_autoptr(GPtrArray) pkglist = dnf_goal_get_packages (goal, DNF_PACKAGE_INFO_INSTALL,
                                                               DNF_PACKAGE_INFO_UPDATE,
@@ -1760,22 +1783,60 @@ rpmostree_dnf_add_checksum_goal (GChecksum   *checksum,
       const char *action_str = convert_dnf_action_to_string (action);
       g_checksum_update (checksum, (guint8*)action_str, strlen (action_str));
 
+      /* For pkgs that were added from the pkgcache repo (e.g. local RPMs and replacement
+       * overrides), make sure to pick up the SHA256 from the pkg metadata, rather than what
+       * libsolv figured out (which is based on our chopped off fake RPM, which clearly will
+       * not match what's in the repo). This ensures that two goals are equivalent whether
+       * the same RPM comes from a yum repo or from the pkgcache. */
+      const char *reponame = NULL;
+      if (pkgcache)
+        reponame = dnf_package_get_reponame (pkg);
+      if (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) == 0)
+        {
+          g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
+          g_autofree char *cached_rev = NULL;
+          if (!ostree_repo_resolve_rev (pkgcache, cachebranch, FALSE, &cached_rev, error))
+            return FALSE;
+
+          g_autofree char *chksum_repr = NULL;
+          if (!get_pkgcache_repodata_chksum_repr (pkgcache, cached_rev, &chksum_repr,
+                                                  TRUE, error))
+            return FALSE;
+
+          if (chksum_repr)
+            {
+              g_checksum_update (checksum, (guint8*)chksum_repr, strlen (chksum_repr));
+              continue;
+            }
+        }
+
       g_autofree char* chksum_repr = NULL;
       g_assert (rpmostree_get_repodata_chksum_repr (pkg, &chksum_repr, NULL));
       g_checksum_update (checksum, (guint8*)chksum_repr, strlen (chksum_repr));
     }
+
+  return TRUE;
 }
 
-char *
-rpmostree_context_get_state_sha512 (RpmOstreeContext *self)
+gboolean
+rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
+                                    char            **out_checksum,
+                                    GError          **error)
 {
   g_autoptr(GChecksum) state_checksum = g_checksum_new (G_CHECKSUM_SHA512);
   g_checksum_update (state_checksum, g_variant_get_data (self->spec->spec),
                      g_variant_get_size (self->spec->spec));
 
   if (!self->empty)
-    rpmostree_dnf_add_checksum_goal (state_checksum, dnf_context_get_goal (self->hifctx));
-  return g_strdup (g_checksum_get_string (state_checksum));
+    {
+      if (!rpmostree_dnf_add_checksum_goal (state_checksum,
+                                            dnf_context_get_goal (self->hifctx),
+                                            get_pkgcache_repo (self), error))
+        return FALSE;
+    }
+
+  *out_checksum = g_strdup (g_checksum_get_string (state_checksum));
+  return TRUE;
 }
 
 static GHashTable *
@@ -3414,7 +3475,8 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
         g_assert_not_reached ();
       }
 
-    state_checksum = rpmostree_context_get_state_sha512 (self);
+    if (!rpmostree_context_get_state_sha512 (self, &state_checksum, error))
+      return FALSE;
 
     g_variant_builder_add (&metadata_builder, "{sv}",
                            "rpmostree.state-sha512",

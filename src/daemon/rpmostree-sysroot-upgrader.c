@@ -866,7 +866,9 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
       if (!previous_sha512_v)
         return FALSE;
       const char *previous_state_sha512 = g_variant_get_string (previous_sha512_v, NULL);
-      g_autofree char *new_state_sha512 = rpmostree_context_get_state_sha512 (self->ctx);
+      g_autofree char *new_state_sha512 = NULL;
+      if (!rpmostree_context_get_state_sha512 (self->ctx, &new_state_sha512, error))
+        return FALSE;
 
       self->layering_changed = strcmp (previous_state_sha512, new_state_sha512) != 0;
     }

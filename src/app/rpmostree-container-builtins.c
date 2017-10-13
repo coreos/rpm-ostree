@@ -450,7 +450,10 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
 
   rpmostree_print_transaction (rpmostree_context_get_hif (rocctx->ctx));
 
-  { g_autofree char *new_state_sha512 = rpmostree_context_get_state_sha512 (rocctx->ctx);
+  {
+    g_autofree char *new_state_sha512 = NULL;
+    if (!rpmostree_context_get_state_sha512 (rocctx->ctx, &new_state_sha512, error))
+      return EXIT_FAILURE;
 
     if (strcmp (new_state_sha512, previous_state_sha512) == 0)
       {
