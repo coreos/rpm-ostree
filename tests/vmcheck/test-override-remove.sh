@@ -56,6 +56,12 @@ if ! vm_has_packages foo bar; then
 fi
 echo "ok setup"
 
+# And now we move the local cache; this will force an error if we ever try to
+# reach the repo. This implicitly tests that `override remove/reset` operate in
+# cache-only mode.
+vm_rpmostree cleanup --repomd
+vm_cmd mv /tmp/vmcheck/yumrepo{,.bak}
+
 # funky jq syntax: see test-override-local-replace.sh for an explanation of how
 # this works. the only difference here is the [.0] which we use to access the
 # nevra of each gv_nevra element.
@@ -71,7 +77,7 @@ vm_assert_status_jq \
 echo "ok override remove foo and bar"
 
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
-vm_rpmostree upgrade
+vm_rpmostree upgrade --cache-only
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 2' \
   '[.deployments[0]["base-removals"][][.0]]|index("foo-1.0-1.x86_64") >= 0' \
@@ -103,7 +109,7 @@ vm_assert_status_jq \
   '.deployments[0]["requested-base-removals"]|length == 1' \
   '.deployments[0]["requested-base-removals"]|index("foo") >= 0'
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo_and_bar
-vm_rpmostree upgrade
+vm_rpmostree upgrade --cache-only
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 0' \
   '.deployments[0]["requested-base-removals"]|length == 1' \
@@ -112,7 +118,7 @@ echo "ok override remove requested but not applied"
 
 # check that upgrading again to a base with foo turns the override back on
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
-vm_rpmostree upgrade
+vm_rpmostree upgrade --cache-only
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 1' \
   '[.deployments[0]["base-removals"][][.0]]|index("foo-1.0-1.x86_64") >= 0' \
@@ -120,6 +126,10 @@ vm_assert_status_jq \
   '.deployments[0]["requested-base-removals"]|index("foo") >= 0'
 echo "ok override remove re-applied"
 vm_rpmostree cleanup -p
+
+# Restore the local yum repo.
+vm_cmd mv /tmp/vmcheck/yumrepo{.bak,}
+echo "ok override remove/reset operate offline"
 
 # a few error checks
 

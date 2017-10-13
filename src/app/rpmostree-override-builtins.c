@@ -57,10 +57,15 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
                                 cancellable, &os_proxy, error))
     return EXIT_FAILURE;
 
+  /* Perform uninstalls offline; users don't expect the "auto-update" behaviour here. But
+   * note we might still need to fetch pkgs in the local replacement case (e.g. the
+   * replacing pkg has an additional out-of-tree dep). */
+  const gboolean cache_only = (override_replace == NULL);
+
   g_autoptr(GVariant) options =
     rpmostree_get_options_variant (opt_reboot,
                                    FALSE,   /* allow-downgrade */
-                                   FALSE,   /* cache-only */
+                                   cache_only,
                                    FALSE,   /* skip-purge */
                                    TRUE,    /* no-pull-base */
                                    opt_dry_run,
