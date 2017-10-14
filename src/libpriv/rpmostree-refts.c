@@ -58,6 +58,6 @@ rpmostree_refts_unref (RpmOstreeRefTs *rts)
   if (!g_atomic_int_dec_and_test (&rts->refcount))
     return;
   rpmtsFree (rts->ts);
-  glnx_tmpdir_clear (&rts->tmpdir);
+  (void)glnx_tmpdir_delete (&rts->tmpdir, NULL, NULL);
   g_free (rts);
 }

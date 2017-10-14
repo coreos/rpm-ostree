@@ -55,6 +55,6 @@ rpmostree_refsack_unref (RpmOstreeRefSack *rsack)
   /* The sack might point to a temporarily allocated rpmdb copy, if so,
    * prune it now.
    */
-  glnx_tmpdir_clear (&rsack->tmpdir);
+  (void)glnx_tmpdir_delete (&rsack->tmpdir, NULL, NULL);
   g_free (rsack);
 }

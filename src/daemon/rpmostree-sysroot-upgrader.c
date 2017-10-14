@@ -200,7 +200,7 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   if (self->tmprootfs_dfd != -1)
     (void)close (self->tmprootfs_dfd);
 
-  glnx_tmpdir_clear (&self->metatmpdir);
+  (void)glnx_tmpdir_delete (&self->metatmpdir, NULL, NULL);
 
   g_clear_pointer (&self->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
 
