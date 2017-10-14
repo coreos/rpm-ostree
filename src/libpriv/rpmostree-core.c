@@ -284,7 +284,7 @@ rpmostree_context_finalize (GObject *object)
   g_clear_pointer (&rctx->pkgs_to_remove, g_hash_table_unref);
   g_clear_pointer (&rctx->pkgs_to_replace, g_hash_table_unref);
 
-  glnx_tmpdir_clear (&rctx->tmpdir);
+  (void)glnx_tmpdir_delete (&rctx->tmpdir, NULL, NULL);
 
   G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
 }

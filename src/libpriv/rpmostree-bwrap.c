@@ -96,7 +96,7 @@ rpmostree_bwrap_unref (RpmOstreeBwrap *bwrap)
       if (tmp_error)
         sd_journal_print (LOG_WARNING, "%s", tmp_error->message);
     }
-  glnx_tmpdir_clear (&bwrap->rofiles_mnt);
+  (void)glnx_tmpdir_delete (&bwrap->rofiles_mnt, NULL, NULL);
 
   g_ptr_array_unref (bwrap->argv);
   g_free (bwrap);

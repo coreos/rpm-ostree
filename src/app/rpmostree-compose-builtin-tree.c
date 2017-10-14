@@ -124,7 +124,7 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   /* Only close workdir_dfd if it's not owned by the tmpdir */
   if (!ctx->workdir_tmp.initialized && ctx->workdir_dfd != -1)
     (void) close (ctx->workdir_dfd);
-  glnx_tmpdir_clear (&ctx->workdir_tmp);
+  (void)glnx_tmpdir_delete (&ctx->workdir_tmp, NULL, NULL);
   if (ctx->rootfs_dfd != -1)
     (void) close (ctx->rootfs_dfd);
   if (ctx->cachedir_dfd != -1)
