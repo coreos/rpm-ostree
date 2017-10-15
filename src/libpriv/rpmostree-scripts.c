@@ -738,6 +738,7 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
       g_autoptr(FILE) tmpf_file = fdopen (matching_files_tmpf.fd, "w");
       if (!tmpf_file)
         return glnx_throw_errno_prefix (error, "fdopen");
+      matching_files_tmpf.fd = -1; /* Transferred */
 
       g_autoptr(GString) patterns_joined = g_string_new ("");
       guint n_total_matched = 0;
@@ -766,14 +767,14 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
         return FALSE;
       /* Now, point back to the beginning so the script reads it from the start
          as stdin */
-      if (lseek (matching_files_tmpf.fd, 0, SEEK_SET) < 0)
+      if (lseek (fileno (tmpf_file), 0, SEEK_SET) < 0)
         return glnx_throw_errno_prefix (error, "lseek");
 
       /* Run it, and log the result */
       guint64 start_time_ms = g_get_monotonic_time () / 1000;
       if (!run_script_in_bwrap_container (rootfs_fd, pkg_name,
                                           "%transfiletriggerin", interp, script, NULL,
-                                          matching_files_tmpf.fd, cancellable, error))
+                                          fileno (tmpf_file), cancellable, error))
         return FALSE;
       guint64 end_time_ms = g_get_monotonic_time () / 1000;
       guint64 elapsed_ms = end_time_ms - start_time_ms;
