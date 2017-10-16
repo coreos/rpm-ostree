@@ -1795,7 +1795,7 @@ rpmostree_dnf_add_checksum_goal (GChecksum   *checksum,
         {
           g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
           g_autofree char *cached_rev = NULL;
-          if (!ostree_repo_resolve_rev (pkgcache, cachebranch, TRUE, &cached_rev, error))
+          if (!ostree_repo_resolve_rev (pkgcache, cachebranch, FALSE, &cached_rev, error))
             return FALSE;
 
           g_autofree char *chksum_repr = NULL;
