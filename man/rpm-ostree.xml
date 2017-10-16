@@ -188,6 +188,14 @@ Boston, MA 02111-1307, USA.
             perform the operation without trying to download the target
             tree from the remote nor the latest packages.
           </para>
+
+          <para>
+            <option>--download-only</option> to only download the target
+            ostree and layered RPMs without actually performing the
+            deployment. This can be used with a subsequent
+            <option>--cache-only</option> invocation to perform the
+            operation completely offline.
+          </para>
         </listitem>
       </varlistentry>
 
@@ -217,6 +225,14 @@ Boston, MA 02111-1307, USA.
             <option>--cache-only</option> or <command>-C</command> to
             perform the operation without trying to download the latest
             packages.
+          </para>
+
+          <para>
+            <option>--download-only</option> to only download the target
+            layered RPMs without actually performing the deployment.
+            This can be used with a subsequent
+            <option>--cache-only</option> invocation to perform the
+            operation completely offline.
           </para>
         </listitem>
       </varlistentry>
@@ -281,6 +297,14 @@ Boston, MA 02111-1307, USA.
             <option>--cache-only</option> or <command>-C</command> to
             perform the rebase without trying to download the target
             tree from the remote nor the latest packages.
+          </para>
+
+          <para>
+            <option>--download-only</option> to only download the target
+            ostree and layered RPMs without actually performing the
+            deployment. This can be used with a subsequent
+            <option>--cache-only</option> invocation to perform the
+            operation completely offline.
           </para>
 
         </listitem>
@@ -373,6 +397,14 @@ Boston, MA 02111-1307, USA.
             <option>--cache-only</option> or <command>-C</command> to
             perform the upgrade without trying to download the latest
             tree from the remote nor the latest packages.
+          </para>
+
+          <para>
+            <option>--download-only</option> to only download the target
+            ostree and layered RPMs without actually performing the
+            deployment. This can be used with a subsequent
+            <option>--cache-only</option> invocation to perform the
+            operation completely offline.
           </para>
         </listitem>
       </varlistentry>
