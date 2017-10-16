@@ -2434,7 +2434,7 @@ relabel_one_package (RpmOstreeContext *self,
     glnx_unref_object OstreeMutableTree *mtree = ostree_mutable_tree_new ();
 
     g_autoptr(OstreeRepoCommitModifier) modifier =
-      ostree_repo_commit_modifier_new (OSTREE_REPO_COMMIT_MODIFIER_FLAGS_NONE,
+      ostree_repo_commit_modifier_new (OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CONSUME,
                                        NULL, NULL, NULL);
 
     ostree_repo_commit_modifier_set_devino_cache (modifier, cache);
