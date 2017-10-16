@@ -184,9 +184,9 @@ Boston, MA 02111-1307, USA.
           </para>
 
           <para>
-            <option>--cache-only</option> to perform the operation
-            without trying to download the target tree from the remote
-            nor the latest packages.
+            <option>--cache-only</option> or <command>-C</command> to
+            perform the operation without trying to download the target
+            tree from the remote nor the latest packages.
           </para>
         </listitem>
       </varlistentry>
@@ -214,8 +214,9 @@ Boston, MA 02111-1307, USA.
           </para>
 
           <para>
-            <option>--cache-only</option> to perform the operation
-            without trying to download the latest packages.
+            <option>--cache-only</option> or <command>-C</command> to
+            perform the operation without trying to download the latest
+            packages.
           </para>
         </listitem>
       </varlistentry>
@@ -277,9 +278,9 @@ Boston, MA 02111-1307, USA.
           </para>
 
           <para>
-            <option>--cache-only</option> to perform the rebase without
-            trying to download the target tree from the remote nor the
-            latest packages.
+            <option>--cache-only</option> or <command>-C</command> to
+            perform the rebase without trying to download the target
+            tree from the remote nor the latest packages.
           </para>
 
         </listitem>
@@ -369,9 +370,9 @@ Boston, MA 02111-1307, USA.
           </para>
 
           <para>
-            <option>--cache-only</option> to perform the upgrade without
-            trying to download the latest tree from the remote nor the
-            latest packages.
+            <option>--cache-only</option> or <command>-C</command> to
+            perform the upgrade without trying to download the latest
+            tree from the remote nor the latest packages.
           </para>
         </listitem>
       </varlistentry>
