@@ -1856,8 +1856,12 @@ rpmostree_commit (int            rootfs_fd,
   /* We may make this configurable if someone complains about including some
    * unlabeled content, but I think the fix for that is to ensure that policy is
    * labeling it.
+   *
+   * Also right now we unconditionally use the CONSUME flag, but this will need
+   * to change for the split compose/commit root patches.
    */
-  OstreeRepoCommitModifierFlags modifier_flags = OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED;
+  OstreeRepoCommitModifierFlags modifier_flags = OSTREE_REPO_COMMIT_MODIFIER_FLAGS_ERROR_ON_UNLABELED |
+    OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CONSUME;
   /* If changing this, also look at changing rpmostree-unpacker.c */
   g_autoptr(OstreeRepoCommitModifier) commit_modifier =
     ostree_repo_commit_modifier_new (modifier_flags, NULL, NULL, NULL);
