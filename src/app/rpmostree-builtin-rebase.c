@@ -36,6 +36,7 @@ static gboolean opt_skip_purge;
 static char * opt_branch;
 static char * opt_remote;
 static gboolean opt_cache_only;
+static gboolean opt_download_only;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -43,7 +44,8 @@ static GOptionEntry option_entries[] = {
   { "remote", 'm', 0, G_OPTION_ARG_STRING, &opt_remote, "Rebase to current branch name using REMOTE; may also be combined with --branch", "REMOTE" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after rebase is finished", NULL },
   { "skip-purge", 0, 0, G_OPTION_ARG_NONE, &opt_skip_purge, "Keep previous refspec after rebase", NULL },
-  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not update repo metadata cache", NULL },
+  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and RPM data", NULL },
+  { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
   { NULL }
 };
 
@@ -117,6 +119,7 @@ rpmostree_builtin_rebase (int             argc,
     rpmostree_get_options_variant (opt_reboot,
                                    TRUE,   /* allow-downgrade */
                                    opt_cache_only,
+                                   opt_download_only,
                                    opt_skip_purge,
                                    FALSE,  /* no-pull-base */
                                    FALSE,  /* dry-run */

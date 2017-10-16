@@ -558,10 +558,19 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN;
-  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_RPMMD_CACHE_ONLY)
-    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_RPMMD_CACHE_ONLY;
   const gboolean no_overrides =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES) > 0);
+
+  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_CACHE_ONLY)
+    {
+      /* practically, we could unite those two into a single flag, though it's nice to be
+       * able to keep them separate as well */
+
+      /* don't pull, just resolve ref locally and timestamp check */
+      upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL;
+      /* turn on rpmmd cache only in the upgrader */
+      upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY;
+    }
 
   /* this should have been checked already */
   if (no_overrides)
@@ -803,7 +812,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 
   /* Mainly for the `install` and `override` commands */
-  if (!(self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE))
+  const gboolean no_pull_base =
+    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE) > 0);
+
+  if (!no_pull_base)
     {
       gboolean base_changed;
 
@@ -882,11 +894,26 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     return FALSE;
   changed = changed || layering_changed;
 
+  if (layering_changed)
+    {
+      if (!rpmostree_sysroot_upgrader_import_pkgs (upgrader, cancellable, error))
+        return FALSE;
+    }
+
+  /* XXX: check if this is needed */
   rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
   /* TODO - better logic for "changed" based on deployments */
   if (changed || self->refspec)
     {
+      /* Note early return; we stop short of actually writing the deployment */
+      if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY)
+        {
+          /* XXX: improve msg here; e.g. cache will be blown on next operation? */
+          rpmostreed_transaction_emit_message_printf (transaction, "Downloaded.");
+          return TRUE;
+        }
+
       if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
         return FALSE;
 

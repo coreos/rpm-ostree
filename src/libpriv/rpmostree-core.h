@@ -44,6 +44,9 @@ RpmOstreeContext *rpmostree_context_new_tree (int basedir_dfd,
                                               GCancellable *cancellable,
                                               GError **error);
 
+void rpmostree_context_set_pkgcache_only (RpmOstreeContext *self,
+                                          gboolean          pkgcache_only);
+
 DnfContext * rpmostree_context_get_hif (RpmOstreeContext *self);
 
 RpmOstreeTreespec *rpmostree_treespec_new_from_keyfile (GKeyFile *keyfile, GError  **error);
@@ -75,8 +78,14 @@ void rpmostree_context_set_repos (RpmOstreeContext *self,
 void rpmostree_context_set_sepolicy (RpmOstreeContext *self,
                                      OstreeSePolicy   *sepolicy);
 
-void rpmostree_dnf_add_checksum_goal (GChecksum *checksum, HyGoal goal);
-char *rpmostree_context_get_state_sha512 (RpmOstreeContext *self);
+gboolean rpmostree_dnf_add_checksum_goal (GChecksum  *checksum,
+                                          HyGoal      goal,
+                                          OstreeRepo *pkgcache_repo,
+                                          GError    **error);
+
+gboolean rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
+                                             char            **out_checksum,
+                                             GError          **error);
 
 char *rpmostree_get_cache_branch_header (Header hdr);
 char *rpmostree_get_cache_branch_pkg (DnfPackage *pkg);

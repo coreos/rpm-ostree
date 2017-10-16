@@ -76,10 +76,12 @@ rpmostree_builtin_rollback (int             argc,
     return EXIT_FAILURE;
 
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
+  /* really, rollback only supports the "reboot" option; all others are ignored */
   g_autoptr(GVariant) options =
     rpmostree_get_options_variant (opt_reboot,
                                    FALSE,  /* allow-downgrade */
                                    FALSE,  /* cache-only */
+                                   FALSE,  /* download-only */
                                    FALSE,  /* skip-purge */
                                    FALSE,  /* no-pull-base */
                                    FALSE,  /* dry-run */

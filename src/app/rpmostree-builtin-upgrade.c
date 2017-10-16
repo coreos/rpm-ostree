@@ -38,6 +38,7 @@ static gboolean opt_preview;
 static gboolean opt_check;
 static gboolean opt_upgrade_unchanged_exit_77;
 static gboolean opt_cache_only;
+static gboolean opt_download_only;
 
 /* "check-diff" is deprecated, replaced by "preview" */
 static GOptionEntry option_entries[] = {
@@ -47,7 +48,8 @@ static GOptionEntry option_entries[] = {
   { "check-diff", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_preview, "Check for upgrades and print package diff only", NULL },
   { "preview", 0, 0, G_OPTION_ARG_NONE, &opt_preview, "Just preview package differences", NULL },
   { "check", 0, 0, G_OPTION_ARG_NONE, &opt_check, "Just check if an upgrade is available", NULL },
-  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not update repo metadata cache", NULL },
+  { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and RPM data", NULL },
+  { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
   { "upgrade-unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_upgrade_unchanged_exit_77, "If no upgrade is available, exit 77", NULL },
   { NULL }
 };
@@ -124,6 +126,7 @@ rpmostree_builtin_upgrade (int             argc,
         rpmostree_get_options_variant (opt_reboot,
                                        opt_allow_downgrade,
                                        opt_cache_only,
+                                       opt_download_only,
                                        FALSE,  /* skip-purge */
                                        FALSE,  /* no-pull-base */
                                        FALSE,  /* dry-run */

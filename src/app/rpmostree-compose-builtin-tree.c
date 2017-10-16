@@ -195,7 +195,8 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
   /* FIXME; we should also hash the post script */
 
   /* Hash in each package */
-  rpmostree_dnf_add_checksum_goal (checksum, goal);
+  if (!rpmostree_dnf_add_checksum_goal (checksum, goal, NULL, error))
+    return FALSE;
 
   *out_checksum = g_strdup (g_checksum_get_string (checksum));
   return TRUE;

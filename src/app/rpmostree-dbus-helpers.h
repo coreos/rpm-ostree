@@ -100,6 +100,7 @@ GVariant*
 rpmostree_get_options_variant (gboolean reboot,
                                gboolean allow_downgrade,
                                gboolean cache_only,
+                               gboolean download_only,
                                gboolean skip_purge,
                                gboolean no_pull_base,
                                gboolean dry_run,
