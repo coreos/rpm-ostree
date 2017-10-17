@@ -198,6 +198,39 @@ symlink_at_replace (const char    *oldpath,
   return TRUE;
 }
 
+/* Download and import rpms, then generate a rootfs, and commit it */
+static gboolean
+download_rpms_and_assemble_commit (ROContainerContext *rocctx,
+                                   char              **out_commit,
+                                   GCancellable       *cancellable,
+                                   GError            **error)
+{
+  /* --- Download as necessary --- */
+  if (!rpmostree_context_download (rocctx->ctx, cancellable, error))
+    return FALSE;
+
+  /* --- Import as necessary --- */
+  if (!rpmostree_context_import (rocctx->ctx, cancellable, error))
+    return FALSE;
+
+  g_auto(GLnxTmpDir) tmpdir = { 0, };
+  if (!glnx_mkdtempat (rocctx->userroot_dfd, "tmp/rpmostree-commit-XXXXXX", 0755,
+                       &tmpdir, error))
+    return FALSE;
+
+  g_autofree char *ret_commit = NULL;
+  if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir.fd, NULL,
+                                          NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
+                                          &ret_commit, cancellable, error))
+    return FALSE;
+
+  if (!rpmostree_rootfs_postprocess_container (tmpdir.fd, cancellable, error))
+    return FALSE;
+
+  *out_commit = g_steal_pointer (&ret_commit);
+  return TRUE;
+}
+
 int
 rpmostree_container_builtin_assemble (int             argc,
                                       char          **argv,
@@ -268,30 +301,9 @@ rpmostree_container_builtin_assemble (int             argc,
 
   rpmostree_print_transaction (rpmostree_context_get_hif (rocctx->ctx));
 
-  /* --- Download as necessary --- */
-  if (!rpmostree_context_download (rocctx->ctx, cancellable, error))
-    return EXIT_FAILURE;
-
-  /* --- Import as necessary --- */
-  if (!rpmostree_context_import (rocctx->ctx, cancellable, error))
-    return EXIT_FAILURE;
-
   g_autofree char *commit = NULL;
-  { g_auto(GLnxTmpDir) tmpdir = { 0, };
-
-    if (!glnx_mkdtempat (rocctx->userroot_dfd, "tmp/rpmostree-commit-XXXXXX", 0755,
-                         &tmpdir, error))
-      return EXIT_FAILURE;
-
-    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir.fd, NULL,
-                                            NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
-                                            &commit, cancellable, error))
-      return EXIT_FAILURE;
-
-    if (!rpmostree_rootfs_postprocess_container (tmpdir.fd, cancellable, error))
-      return EXIT_FAILURE;
-  }
-
+  if (!download_rpms_and_assemble_commit (rocctx, &commit, cancellable, error))
+    return EXIT_FAILURE;
   g_print ("Checking out %s @ %s...\n", name, commit);
 
   { OstreeRepoCheckoutAtOptions opts = { OSTREE_REPO_CHECKOUT_MODE_USER,
@@ -462,30 +474,9 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
       }
   }
 
-  /* --- Download as necessary --- */
-  if (!rpmostree_context_download (rocctx->ctx, cancellable, error))
-    return EXIT_FAILURE;
-
-  /* --- Import as necessary --- */
-  if (!rpmostree_context_import (rocctx->ctx, cancellable, error))
-    return EXIT_FAILURE;
-
   g_autofree char *new_commit_checksum = NULL;
-  { g_auto(GLnxTmpDir) tmpdir = { 0, };
-
-    if (!glnx_mkdtempat (rocctx->userroot_dfd, "tmp/rpmostree-commit-XXXXXX", 0755,
-                         &tmpdir, error))
-      return EXIT_FAILURE;
-
-    if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir.fd, NULL,
-                                            NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
-                                            &new_commit_checksum,
-                                            cancellable, error))
-      return EXIT_FAILURE;
-
-    if (!rpmostree_rootfs_postprocess_container (tmpdir.fd, cancellable, error))
-      return EXIT_FAILURE;
-  }
+  if (!download_rpms_and_assemble_commit (rocctx, &new_commit_checksum, cancellable, error))
+    return EXIT_FAILURE;
 
   g_print ("Checking out %s @ %s...\n", name, new_commit_checksum);
 
