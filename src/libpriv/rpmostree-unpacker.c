@@ -336,7 +336,7 @@ rpmostree_unpacker_new_at (int dfd, const char *path,
                            RpmOstreeUnpackerFlags flags,
                            GError **error)
 {
-  glnx_fd_close int fd = -1;
+  glnx_autofd int fd = -1;
   if (!glnx_openat_rdonly (dfd, path, TRUE, &fd, error))
     return FALSE;
 

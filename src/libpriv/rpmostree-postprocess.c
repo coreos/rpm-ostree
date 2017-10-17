@@ -200,7 +200,7 @@ hardlink_recurse (int                src_dfd,
                   GError            **error)
 {
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  glnx_fd_close int dest_target_dfd = -1;
+  glnx_autofd int dest_target_dfd = -1;
 
   if (!glnx_dirfd_iterator_init_at (src_dfd, src_path, TRUE, &dfd_iter, error))
     return FALSE;
@@ -264,7 +264,7 @@ process_kernel_and_initramfs (int            rootfs_dfd,
    * on systemd itself having set up the machine id from its %post,
    * so we need to read it.  We'll reset the machine ID after this.
    */
-  { glnx_fd_close int fd = openat (rootfs_dfd, "usr/etc/machine-id", O_RDONLY | O_CLOEXEC);
+  { glnx_autofd int fd = openat (rootfs_dfd, "usr/etc/machine-id", O_RDONLY | O_CLOEXEC);
     if (fd < 0)
       {
         if (errno != ENOENT)
@@ -517,7 +517,7 @@ convert_var_to_tmpfiles_d (int            rootfs_dfd,
                            GCancellable  *cancellable,
                            GError       **error)
 {
-  glnx_fd_close int var_dfd = -1;
+  glnx_autofd int var_dfd = -1;
   /* List of files that are known to possibly exist, but in practice
    * things work fine if we simply ignore them.  Don't add something
    * to this list unless you've verified it's handled correctly at
@@ -781,7 +781,7 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
   const char *etc_policy_location = NULL;
   struct stat stbuf;
   const char *name;
-  glnx_fd_close int etc_selinux_dfd = -1;
+  glnx_autofd int etc_selinux_dfd = -1;
 
   if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_dfd, &sepolicy, cancellable, error))
     return FALSE;
@@ -911,7 +911,7 @@ postprocess_final (int            rootfs_dfd,
    * during tests. */
   const char *pkglibdir_path
     = g_getenv("RPMOSTREE_UNINSTALLED_PKGLIBDIR") ?: PKGLIBDIR;
-  glnx_fd_close int pkglibdir_dfd = -1;
+  glnx_autofd int pkglibdir_dfd = -1;
 
   if (!glnx_opendirat (AT_FDCWD, pkglibdir_path, TRUE, &pkglibdir_dfd, error))
     return FALSE;
@@ -1196,7 +1196,7 @@ copy_additional_files (int            rootfs_dfd,
   else
     return TRUE; /* Early return */
 
-  glnx_fd_close int context_dfd = -1;
+  glnx_autofd int context_dfd = -1;
   if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (context_directory), TRUE,
                        &context_dfd, error))
     return FALSE;
@@ -1325,7 +1325,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
     len = 0;
 
   {
-    glnx_fd_close int multiuser_wants_dfd = -1;
+    glnx_autofd int multiuser_wants_dfd = -1;
 
     if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/etc/systemd/system/multi-user.target.wants", 0755,
                                  cancellable, error))

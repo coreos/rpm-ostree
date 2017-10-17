@@ -1117,7 +1117,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
     {
       g_autofree char *deployment_path =
         ostree_sysroot_get_deployment_dirpath (self->sysroot, new_deployment);
-      glnx_fd_close int deployment_dfd = -1;
+      glnx_autofd int deployment_dfd = -1;
       if (!glnx_opendirat (ostree_sysroot_get_fd (self->sysroot), deployment_path, TRUE,
                            &deployment_dfd, error))
         return FALSE;

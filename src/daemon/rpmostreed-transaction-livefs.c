@@ -192,7 +192,7 @@ copy_new_config_files (OstreeRepo          *repo,
   if (ostree_sepolicy_get_name (sepolicy) != NULL)
     etc_co_opts.sepolicy = sepolicy;
 
-  glnx_fd_close int deployment_etc_dfd = -1;
+  glnx_autofd int deployment_etc_dfd = -1;
   if (!glnx_opendirat (new_deployment_dfd, "etc", TRUE, &deployment_etc_dfd, error))
     return FALSE;
 
@@ -240,7 +240,7 @@ copy_new_config_files (OstreeRepo          *repo,
        * the comment in ostree-repo-checkout.c:checkout_tree_at().
        */
       /* First, get the destination parent dfd */
-      glnx_fd_close int dest_dfd = -1;
+      glnx_autofd int dest_dfd = -1;
       g_autofree char *dnbuf = g_strdup (sub_etc_relpath);
       const char *dn = dirname (dnbuf);
       if (!glnx_opendirat (deployment_etc_dfd, dn, TRUE, &dest_dfd, error))
@@ -555,7 +555,7 @@ replace_usr (OstreeRepo *repo,
              GError **error)
 {
   /* Grab a reference to the current /usr */
-  glnx_fd_close int deployment_usr_dfd = -1;
+  glnx_autofd int deployment_usr_dfd = -1;
   if (!glnx_opendirat (deployment_dfd, "usr", TRUE, &deployment_usr_dfd, error))
     return FALSE;
 
@@ -681,7 +681,7 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
 
   /* Open a fd for the booted deployment */
   g_autofree char *deployment_path = ostree_sysroot_get_deployment_dirpath (sysroot, booted_deployment);
-  glnx_fd_close int deployment_dfd = -1;
+  glnx_autofd int deployment_dfd = -1;
   if (!glnx_opendirat (ostree_sysroot_get_fd (sysroot), deployment_path, TRUE,
                        &deployment_dfd, error))
     return FALSE;

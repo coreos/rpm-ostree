@@ -225,8 +225,8 @@ run_script_in_bwrap_container (int rootfs_fd,
   const char *postscript_path_host = postscript_path_container + 1;
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   gboolean created_var_tmp = FALSE;
-  glnx_fd_close int stdout_fd = -1;
-  glnx_fd_close int stderr_fd = -1;
+  glnx_autofd int stdout_fd = -1;
+  glnx_autofd int stderr_fd = -1;
 
   /* TODO - Create a pipe and send this to bwrap so it's inside the
    * tmpfs.  Note the +1 on the path to skip the leading /.
@@ -493,7 +493,7 @@ write_subdir (int dfd, const char *path,
    * appear we should probably push to libglnx.
    */
   g_assert (*path != '/');
-  glnx_fd_close int target_dfd = glnx_opendirat_with_errno (dfd, path, TRUE);
+  glnx_autofd int target_dfd = glnx_opendirat_with_errno (dfd, path, TRUE);
   if (target_dfd < 0)
     {
       if (errno != ENOENT)

@@ -358,7 +358,7 @@ rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
 gboolean
 rpmostree_bwrap_selftest (GError **error)
 {
-  glnx_fd_close int host_root_dfd = -1;
+  glnx_autofd int host_root_dfd = -1;
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
 
   if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &host_root_dfd, error))

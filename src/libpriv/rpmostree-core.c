@@ -2600,7 +2600,7 @@ get_package_metainfo (RpmOstreeContext *self,
                       rpmfi *out_fi,
                       GError **error)
 {
-  glnx_fd_close int metadata_fd = -1;
+  glnx_autofd int metadata_fd = -1;
   if (!glnx_openat_rdonly (self->tmpdir.fd, path, TRUE, &metadata_fd, error))
     return FALSE;
 
