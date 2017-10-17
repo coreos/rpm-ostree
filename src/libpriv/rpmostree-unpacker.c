@@ -529,7 +529,7 @@ typedef struct
  * https://bugzilla.redhat.com/show_bug.cgi?id=517575
  */
 static void
-workaround_fedora_rpm_permissions (GFileInfo *file_info)
+ensure_directories_user_writable (GFileInfo *file_info)
 {
   if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_DIRECTORY)
     {
@@ -652,7 +652,7 @@ compose_filter_cb (OstreeRepo         *repo,
         }
     }
 
-  workaround_fedora_rpm_permissions (file_info);
+  ensure_directories_user_writable (file_info);
 
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
@@ -663,7 +663,21 @@ unprivileged_filter_cb (OstreeRepo         *repo,
                         GFileInfo          *file_info,
                         gpointer            user_data)
 {
-  workaround_fedora_rpm_permissions (file_info);
+  /* First, the common directory workaround */
+  ensure_directories_user_writable (file_info);
+
+  /* For unprivileged unpacks, ensure that all files are at least user-readable.
+   * this is (AFAIK) just limited to /usr/etc/{,g}shadow.
+   * See also: https://github.com/projectatomic/rpm-ostree/pull/1046
+   * AKA commit 334f0b89be271cbe2b9973ebc7eab50f955517e8
+   */
+  if (g_file_info_get_file_type (file_info) == G_FILE_TYPE_REGULAR)
+    {
+      guint32 mode = g_file_info_get_attribute_uint32 (file_info, "unix::mode");
+      mode |= S_IRUSR;
+      g_file_info_set_attribute_uint32 (file_info, "unix::mode", mode);
+    }
+
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
 
