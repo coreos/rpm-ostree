@@ -486,7 +486,7 @@ import_local_rpm (OstreeRepo    *parent,
 
   /* let's just use the current sepolicy -- we'll just relabel it if the new
    * base turns out to have a different one */
-  glnx_fd_close int rootfs_dfd = -1;
+  glnx_autofd int rootfs_dfd = -1;
   if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_dfd, error))
     return FALSE;
   g_autoptr(OstreeSePolicy) policy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
@@ -1178,7 +1178,7 @@ remove_directory_content_if_exists (int dfd,
 {
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
 
-  glnx_fd_close int fd = glnx_opendirat_with_errno (dfd, path, TRUE);
+  glnx_autofd int fd = glnx_opendirat_with_errno (dfd, path, TRUE);
   if (fd < 0)
     {
       if (errno != ENOENT)

@@ -966,7 +966,7 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
         g_ptr_array_add (repo_pkgs, g_strdup (*pkg));
       else
         {
-          glnx_fd_close int fd = -1;
+          glnx_autofd int fd = -1;
           if (!glnx_openat_rdonly (AT_FDCWD, *pkg, TRUE, &fd, error))
             return FALSE;
 

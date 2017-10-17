@@ -592,7 +592,7 @@ open_file_stream_read_at (int dfd,
                           const char *path,
                           GError **error)
 {
-  glnx_fd_close int fd = -1;
+  glnx_autofd int fd = -1;
   if (!glnx_openat_rdonly (dfd, path, TRUE, &fd, error))
     return FALSE;
   FILE *ret = fdopen (fd, "r");
@@ -613,7 +613,7 @@ open_file_stream_write_at (int dfd,
   /* Explicitly use 0664 rather than 0666 as fopen() does since IMO if one wants
    * a world-writable file, do it explicitly.
    */
-  glnx_fd_close int fd = openat (dfd, path, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOCTTY, 0664);
+  glnx_autofd int fd = openat (dfd, path, O_WRONLY | O_CREAT | O_CLOEXEC | O_NOCTTY, 0664);
   if (fd < 0)
     return glnx_null_throw_errno_prefix (error, "openat(%s)", path);
   FILE *ret = fdopen (fd, mode);

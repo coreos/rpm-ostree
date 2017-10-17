@@ -246,7 +246,7 @@ libcontainer_prep_dev (int         rootfs_dfd,
                        GError    **error)
 {
 
-  glnx_fd_close int src_fd = openat (AT_FDCWD, "/dev", O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY);
+  glnx_autofd int src_fd = openat (AT_FDCWD, "/dev", O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY);
   if (src_fd == -1)
     return glnx_throw_errno (error);
 
@@ -256,7 +256,7 @@ libcontainer_prep_dev (int         rootfs_dfd,
         return glnx_throw_errno (error);
     }
 
-  glnx_fd_close int dest_fd = openat (rootfs_dfd, "dev", O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY);
+  glnx_autofd int dest_fd = openat (rootfs_dfd, "dev", O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY);
   if (dest_fd == -1)
     return glnx_throw_errno (error);
 
@@ -658,7 +658,7 @@ process_touch_if_changed (GError **error)
   if (!opt_touch_if_changed)
     return TRUE;
 
-  glnx_fd_close int fd = open (opt_touch_if_changed, O_CREAT|O_WRONLY|O_NOCTTY, 0644);
+  glnx_autofd int fd = open (opt_touch_if_changed, O_CREAT|O_WRONLY|O_NOCTTY, 0644);
   if (fd == -1)
     return glnx_throw_errno_prefix (error, "Updating '%s'", opt_touch_if_changed);
   if (futimens (fd, NULL) == -1)
@@ -964,7 +964,7 @@ impl_compose_tree (const char      *treefile_pathstr,
     return FALSE;
   if (!glnx_ensure_dir (self->workdir_dfd, final_rootfs_name, 0755, error))
     return FALSE;
-  { glnx_fd_close int target_rootfs_dfd = -1;
+  { glnx_autofd int target_rootfs_dfd = -1;
     if (!glnx_opendirat (self->workdir_dfd, final_rootfs_name, TRUE,
                          &target_rootfs_dfd, error))
       return FALSE;

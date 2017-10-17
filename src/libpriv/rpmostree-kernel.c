@@ -53,7 +53,7 @@ find_kernel_and_initramfs_in_bootdir (int          rootfs_dfd,
                                       GError     **error)
 {
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  glnx_fd_close int dfd = -1;
+  glnx_autofd int dfd = -1;
   g_autofree char* ret_kernel = NULL;
   g_autofree char* ret_initramfs = NULL;
 
