@@ -1008,12 +1008,10 @@ rootfs_has_usrlib_passwd (int rootfs_dfd,
                        gboolean *out_have_passwd,
                        GError **error)
 {
-  struct stat stbuf;
-
   /* Does this rootfs have a usr/lib/passwd?  We might be doing a
    * container or something else.
    */
-  if (!glnx_fstatat_allow_noent (rootfs_dfd, "usr/lib/passwd", &stbuf, 0, error))
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, "usr/lib/passwd", NULL, 0, error))
     return FALSE;
   *out_have_passwd = (errno == 0);
   return TRUE;
@@ -1099,12 +1097,11 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
    */
   for (guint i = 0; i < G_N_ELEMENTS (pwgrp_shadow_files); i++)
     {
-      struct stat stbuf;
       const char *file = pwgrp_shadow_files[i];
       const char *src = glnx_strjoina ("usr/etc/", file);
       const char *tmp = glnx_strjoina ("usr/etc/", file, ".tmp");
 
-      if (!glnx_fstatat_allow_noent (rootfs_dfd, src, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+      if (!glnx_fstatat_allow_noent (rootfs_dfd, src, NULL, AT_SYMLINK_NOFOLLOW, error))
         return FALSE;
       if (errno == ENOENT)
         continue;

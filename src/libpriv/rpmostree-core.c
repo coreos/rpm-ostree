@@ -744,8 +744,7 @@ checkout_pkg_metadata (RpmOstreeContext *self,
   /* give it a .rpm extension so we can fool the libdnf stack */
   g_autofree char *path = get_nevra_relpath (nevra);
 
-  struct stat stbuf;
-  if (!glnx_fstatat_allow_noent (self->tmpdir.fd, path, &stbuf, 0, error))
+  if (!glnx_fstatat_allow_noent (self->tmpdir.fd, path, NULL, 0, error))
     return FALSE;
   /* we may have already written the header out for this one */
   if (errno == 0)
@@ -2158,8 +2157,7 @@ delete_package_from_root (RpmOstreeContext *self,
       if (rpmostree_str_has_prefix_in_ptrarray (fn, deleted_dirs))
         continue;
 
-      struct stat stbuf;
-      if (!glnx_fstatat_allow_noent (rootfs_dfd, fn, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+      if (!glnx_fstatat_allow_noent (rootfs_dfd, fn, NULL, AT_SYMLINK_NOFOLLOW, error))
         return FALSE;
       if (errno == ENOENT)
         continue; /* a job well done */
@@ -2916,8 +2914,7 @@ run_all_transfiletriggers (RpmOstreeContext *self,
   /* Triggers from base packages, but only if we already have an rpmdb,
    * otherwise librpm will whine on our stderr.
    */
-  struct stat stbuf;
-  if (!glnx_fstatat_allow_noent (rootfs_dfd, RPMOSTREE_RPMDB_LOCATION, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, RPMOSTREE_RPMDB_LOCATION, NULL, AT_SYMLINK_NOFOLLOW, error))
     return FALSE;
   if (errno == 0)
     {

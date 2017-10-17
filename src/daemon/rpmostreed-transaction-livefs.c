@@ -587,8 +587,7 @@ replace_usr (OstreeRepo *repo,
       const char *name = dent->d_name;
       /* Keep track of what entries are in the new /usr */
       g_hash_table_add (seen_new_children, g_strdup (name));
-      struct stat stbuf;
-      if (!glnx_fstatat_allow_noent (deployment_usr_dfd, name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+      if (!glnx_fstatat_allow_noent (deployment_usr_dfd, name, NULL, AT_SYMLINK_NOFOLLOW, error))
         return FALSE;
       if (errno == ENOENT)
         {

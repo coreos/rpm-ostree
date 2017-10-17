@@ -61,13 +61,12 @@ run_bwrap_mutably (int           rootfs_fd,
                    GCancellable *cancellable,
                    GError      **error)
 {
-  struct stat stbuf;
   const char *etc_bind;
 
   /* This gets called both by treecompose, where in the non-unified path we just
    * have /etc, and in kernel postprocessing where we have usr/etc.
    */
-  if (!glnx_fstatat_allow_noent (rootfs_fd, "etc", &stbuf, 0, error))
+  if (!glnx_fstatat_allow_noent (rootfs_fd, "etc", NULL, 0, error))
     return FALSE;
   if (errno == ENOENT)
     etc_bind = "usr/etc";
@@ -108,11 +107,10 @@ rename_if_exists (int         src_dfd,
                   const char *to,
                   GError    **error)
 {
-  struct stat stbuf;
   const char *errmsg = glnx_strjoina ("renaming ", from);
   GLNX_AUTO_PREFIX_ERROR (errmsg, error);
 
-  if (!glnx_fstatat_allow_noent (src_dfd, from, &stbuf, 0, error))
+  if (!glnx_fstatat_allow_noent (src_dfd, from, NULL, 0, error))
     return FALSE;
   if (errno == 0)
     {
@@ -642,20 +640,19 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
                                        GCancellable  *cancellable,
                                        GError       **error)
 {
-  struct stat stbuf;
   const char *policy_path;
 
   /* Handle the policy being in both /usr/etc and /etc since
    * this function can be called at different points.
    */
-  if (!glnx_fstatat_allow_noent (dfd, "usr/etc", &stbuf, 0, error))
+  if (!glnx_fstatat_allow_noent (dfd, "usr/etc", NULL, 0, error))
     return FALSE;
   if (errno == ENOENT)
     policy_path = "etc/selinux";
   else
     policy_path = "usr/etc/selinux";
 
-  if (!glnx_fstatat_allow_noent (dfd, policy_path, &stbuf, AT_SYMLINK_NOFOLLOW, error))
+  if (!glnx_fstatat_allow_noent (dfd, policy_path, NULL, AT_SYMLINK_NOFOLLOW, error))
     return FALSE;
   if (errno == 0)
     {
@@ -779,7 +776,6 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
   glnx_unref_object OstreeSePolicy *sepolicy = NULL;
   const char *var_policy_location = NULL;
   const char *etc_policy_location = NULL;
-  struct stat stbuf;
   const char *name;
   glnx_autofd int etc_selinux_dfd = -1;
 
@@ -792,7 +788,7 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
 
   var_policy_location = glnx_strjoina ("var/lib/selinux/", name);
   const char *modules_location = glnx_strjoina (var_policy_location, "/active/modules");
-  if (!glnx_fstatat_allow_noent (rootfs_dfd, modules_location, &stbuf, 0, error))
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, modules_location, NULL, 0, error))
     return FALSE;
   if (errno == ENOENT)
     {
@@ -1114,8 +1110,7 @@ cleanup_selinux_lockfiles (int            rootfs_fd,
                            GCancellable  *cancellable,
                            GError       **error)
 {
-  struct stat stbuf;
-  if (!glnx_fstatat_allow_noent (rootfs_fd, "usr/etc/selinux", &stbuf, 0, error))
+  if (!glnx_fstatat_allow_noent (rootfs_fd, "usr/etc/selinux", NULL, 0, error))
     return FALSE;
 
   if (errno == ENOENT)
@@ -1627,8 +1622,7 @@ rpmostree_prepare_rootfs_for_commit (int            src_rootfs_dfd,
                                      "bin", "sbin" };
     for (guint i = 0; i < G_N_ELEMENTS (toplevel_links); i++)
       {
-        struct stat stbuf;
-        if (!glnx_fstatat_allow_noent (src_rootfs_dfd, toplevel_links[i], &stbuf,
+        if (!glnx_fstatat_allow_noent (src_rootfs_dfd, toplevel_links[i], NULL,
                                        AT_SYMLINK_NOFOLLOW, error))
           return FALSE;
         if (errno == ENOENT)
