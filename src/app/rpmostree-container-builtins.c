@@ -242,8 +242,7 @@ rpmostree_container_builtin_assemble (int             argc,
 
   const char *target_rootdir = glnx_strjoina (name, ".0");
 
-  struct stat stbuf;
-  if (!glnx_fstatat_allow_noent (rocctx->roots_dfd, target_rootdir, &stbuf,
+  if (!glnx_fstatat_allow_noent (rocctx->roots_dfd, target_rootdir, NULL,
                                  AT_SYMLINK_NOFOLLOW, error))
     {
       glnx_set_error_from_errno (error);
