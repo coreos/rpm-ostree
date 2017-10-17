@@ -76,21 +76,6 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-/* FIXME: This is a copy of ot_admin_checksum_version */
-static char *
-checksum_version (GVariant *checksum)
-{
-  g_autoptr(GVariant) metadata = NULL;
-  const char *ret = NULL;
-
-  metadata = g_variant_get_child_value (checksum, 0);
-
-  if (!g_variant_lookup (metadata, "version", "&s", &ret))
-    return NULL;
-
-  return g_strdup (ret);
-}
-
 typedef struct {
   GPtrArray *treefile_context_dirs;
 
@@ -845,31 +830,32 @@ impl_compose_tree (const char      *treefile_pathstr,
   g_autofree char *next_version = NULL;
   if (json_object_has_member (self->treefile, "automatic_version_prefix") &&
       /* let --add-metadata-string=version=... take precedence */
-      !g_hash_table_contains (self->metadata, "version"))
+      !g_hash_table_contains (self->metadata, OSTREE_COMMIT_META_KEY_VERSION))
     {
-      g_autoptr(GVariant) variant = NULL;
-      g_autofree char *last_version = NULL;
       const char *ver_prefix =
         _rpmostree_jsonutil_object_require_string_member (self->treefile, "automatic_version_prefix", error);
       if (!ver_prefix)
         return FALSE;
 
+      g_autofree char *last_version = NULL;
       if (self->previous_checksum)
         {
+          g_autoptr(GVariant) previous_commit = NULL;
           if (!ostree_repo_load_variant (self->repo, OSTREE_OBJECT_TYPE_COMMIT,
-                                         self->previous_checksum, &variant, error))
+                                         self->previous_checksum, &previous_commit, error))
             return FALSE;
 
-          last_version = checksum_version (variant);
+          g_autoptr(GVariant) previous_metadata = g_variant_get_child_value (previous_commit, 0);
+          (void)g_variant_lookup (previous_metadata, OSTREE_COMMIT_META_KEY_VERSION, "s", &last_version);
         }
 
       next_version = _rpmostree_util_next_version (ver_prefix, last_version);
-      g_hash_table_insert (self->metadata, g_strdup ("version"),
+      g_hash_table_insert (self->metadata, g_strdup (OSTREE_COMMIT_META_KEY_VERSION),
                            g_variant_ref_sink (g_variant_new_string (next_version)));
     }
   else
     {
-      GVariant *v = g_hash_table_lookup (self->metadata, "version");
+      GVariant *v = g_hash_table_lookup (self->metadata, OSTREE_COMMIT_META_KEY_VERSION);
       if (v)
         {
           g_assert (g_variant_is_of_type (v, G_VARIANT_TYPE_STRING));
