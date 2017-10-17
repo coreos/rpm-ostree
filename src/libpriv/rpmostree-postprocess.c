@@ -1647,33 +1647,6 @@ rpmostree_prepare_rootfs_for_commit (int            src_rootfs_dfd,
   return TRUE;
 }
 
-/* Run through a standard set of postprocessing for "container"
- * flows as used by `ex container`.  Currently:
- *
- *  - Make /usr/etc/{g,}shadow user readable
- *    See https://github.com/projectatomic/rpm-ostree/issues/1045
- */
-gboolean
-rpmostree_rootfs_postprocess_container (int           rootfs_fd,
-                                        GCancellable *cancellable,
-                                        GError       **error)
-{
-  const char *shadow_paths[] = { "usr/etc/shadow", "usr/etc/gshadow" };
-  for (guint i = 0; i < G_N_ELEMENTS (shadow_paths); i++)
-    {
-      struct stat stbuf;
-      const char *path = shadow_paths[i];
-      if (!glnx_fstatat_allow_noent (rootfs_fd, path, &stbuf, AT_SYMLINK_NOFOLLOW, error))
-        return FALSE;
-      /* Silently ignore if it's not there, or isn't a regular file for some reason */
-      if (errno == ENOENT || !S_ISREG (stbuf.st_mode))
-        continue;
-      if (fchmodat (rootfs_fd, path, stbuf.st_mode | S_IRUSR, 0) < 0)
-        return glnx_throw_errno_prefix (error, "fchmodat");
-    }
-  return TRUE;
-}
-
 struct CommitThreadData {
   volatile gint done;
   off_t n_bytes;

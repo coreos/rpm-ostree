@@ -224,9 +224,6 @@ download_rpms_and_assemble_commit (ROContainerContext *rocctx,
                                           &ret_commit, cancellable, error))
     return FALSE;
 
-  if (!rpmostree_rootfs_postprocess_container (tmpdir.fd, cancellable, error))
-    return FALSE;
-
   *out_commit = g_steal_pointer (&ret_commit);
   return TRUE;
 }
