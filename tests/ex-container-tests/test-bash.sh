@@ -14,5 +14,6 @@ repos=fedora;
 EOF
 
 rpm-ostree ex container assemble bash.conf
+ostree --repo=repo fsck -q
 ostree --repo=repo ls bash /usr/etc/shadow > shadowls.txt
 assert_file_has_content shadowls.txt '^-00400 .*/usr/etc/shadow'
