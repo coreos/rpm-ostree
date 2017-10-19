@@ -216,6 +216,8 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
     {
       g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
       g_autoptr(GVariantDict) dict = NULL;
+      g_autoptr(GVariantDict) commit_meta_dict = NULL;
+      g_autoptr(GVariantDict) layered_commit_meta_dict = NULL;
       gboolean is_locally_assembled = FALSE;
       g_autofree const gchar **origin_packages = NULL;
       g_autofree const gchar **origin_requested_packages = NULL;
@@ -306,6 +308,23 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       g_variant_dict_lookup (dict, "base-checksum", "&s", &base_checksum);
       if (base_checksum != NULL)
         is_locally_assembled = TRUE;
+
+      /* Load the commit metadata into a dict */
+      { g_autoptr(GVariant) commit_meta_v = NULL;
+        g_assert (g_variant_dict_lookup (dict, "base-commit-meta", "a{sv}", &commit_meta_v));
+        commit_meta_dict = g_variant_dict_new (commit_meta_v);
+      }
+      if (is_locally_assembled)
+        {
+          g_autoptr(GVariant) layered_commit_meta_v = NULL;
+          g_assert (g_variant_dict_lookup (dict, "layered-commit-meta", "@a{sv}", &layered_commit_meta_v));
+          layered_commit_meta_dict = g_variant_dict_new (layered_commit_meta_v);
+        }
+
+      const gchar *source_title = NULL;
+      g_variant_dict_lookup (commit_meta_dict, OSTREE_COMMIT_META_KEY_SOURCE_TITLE, "&s", &source_title);
+      if (source_title)
+        g_print ("  %s %s\n", libsd_special_glyph (TREE_RIGHT), source_title);
 
       if (is_locally_assembled)
         g_assert (g_variant_dict_lookup (dict, "base-timestamp", "t", &t));

@@ -32,7 +32,7 @@ vm_assert_status_jq \
   '.deployments[0]["requested-local-packages"]' \
   '.deployments[0]["base-removals"]' \
   '.deployments[0]["requested-base-removals"]' \
-  '.deployments[0]["base-commit-meta"]' \
+  '.deployments[0]["base-commit-meta"]["ostree.source-title"]|contains("overlay")' \
   '.deployments[0]["layered-commit-meta"]|not'
 echo "ok empty pkg arrays, and commit meta correct in status json"
 
