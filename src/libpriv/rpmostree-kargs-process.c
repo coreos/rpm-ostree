@@ -274,8 +274,7 @@ _ostree_kernel_args_new_replace (OstreeKernelArgs *kargs,
   g_free (old_element);
   old_element = NULL;
 
-  /* Then we assign the index to the new value, not sure if it works
-   * if it does not let me know */
+  /* Then we assign the index to the new value */
   g_ptr_array_index (values, value_index) = g_strdup (possible_new_val);
 
   return TRUE;

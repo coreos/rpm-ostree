@@ -1448,7 +1448,7 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
       for (char **iter = self->kernel_args_deleted; iter && *iter; iter++)
         {
           const char*  arg =  *iter;
-          if (!_ostree_kernel_args_delete(kargs, arg, error))
+          if (!_ostree_kernel_args_delete (kargs, arg, error))
             return FALSE;
         }
     }
