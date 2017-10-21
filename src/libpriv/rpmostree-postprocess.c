@@ -273,14 +273,19 @@ process_kernel_and_initramfs (int            rootfs_dfd,
         g_autofree char *old_machine_id = glnx_fd_readall_utf8 (fd, NULL, cancellable, error);
         if (!old_machine_id)
           return FALSE;
-        if (strlen (old_machine_id) != 33)
-          return glnx_throw (error, "invalid machine ID '%.33s'", old_machine_id);
-        /* Trim newline */
-        old_machine_id[32] = '\0';
+        size_t len = strlen (old_machine_id);
+        /* Length might already be zero when starting from e.g. Fedora container base image */
+        if (len > 0)
+          {
+            if (len != 33)
+              return glnx_throw (error, "invalid machine ID '%.33s'", old_machine_id);
+            /* Trim newline */
+            old_machine_id[32] = '\0';
 
-        const char *boot_machineid_dir = glnx_strjoina ("boot/", old_machine_id);
-        if (!glnx_shutil_rm_rf_at (rootfs_dfd, boot_machineid_dir, cancellable, error))
-          return FALSE;
+            const char *boot_machineid_dir = glnx_strjoina ("boot/", old_machine_id);
+            if (!glnx_shutil_rm_rf_at (rootfs_dfd, boot_machineid_dir, cancellable, error))
+              return FALSE;
+          }
       }
   }
 
