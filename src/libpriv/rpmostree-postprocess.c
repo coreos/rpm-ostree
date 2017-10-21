@@ -1157,8 +1157,12 @@ cleanup_selinux_lockfiles (int            rootfs_fd,
  * from RPM conventions to OSTree conventions.  For example:
  *
  *  - Move /etc to /usr/etc
+ *  - Move /var/lib/rpm to /usr/share/rpm
  *  - Clean up RPM db leftovers
  *  - Clean /usr/etc/passwd- backup files and such
+ *
+ * This function is idempotent; it may be called multiple times with
+ * no further effect after the first.
  */
 gboolean
 rpmostree_rootfs_postprocess_common (int           rootfs_fd,
@@ -1167,6 +1171,22 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
 {
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
+
+  if (!glnx_fstatat_allow_noent (rootfs_fd, RPMOSTREE_RPMDB_LOCATION, NULL, AT_SYMLINK_NOFOLLOW, error))
+    return FALSE;
+  if (errno == ENOENT)
+    {
+      struct stat stbuf;
+      if (!glnx_fstatat_allow_noent (rootfs_fd, "var/lib/rpm", &stbuf, AT_SYMLINK_NOFOLLOW, error))
+        return FALSE;
+      if (errno == 0 && S_ISDIR(stbuf.st_mode))
+        {
+          if (!rename_if_exists (rootfs_fd, "var/lib/rpm", rootfs_fd, RPMOSTREE_RPMDB_LOCATION, error))
+            return FALSE;
+          if (symlinkat ("../../" RPMOSTREE_RPMDB_LOCATION, rootfs_fd, "var/lib/rpm") < 0)
+            return glnx_throw_errno_prefix (error, "symlinkat(%s)", "var/lib/rpm");
+        }
+    }
 
   if (!cleanup_leftover_files (rootfs_fd, RPMOSTREE_RPMDB_LOCATION, rpmdb_leftover_files,
                                rpmdb_leftover_prefixes, cancellable, error))
