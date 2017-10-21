@@ -32,16 +32,18 @@ _rpmostree_jsonutil_object_get_optional_string_member (JsonObject     *object,
                                                        const char    **out_value,
                                                        GError        **error)
 {
-  JsonNode *node = json_object_get_member (object, member_name);
+  *out_value = NULL;
 
+  if (!object)
+    return TRUE;
+
+  JsonNode *node = json_object_get_member (object, member_name);
   if (node != NULL)
     {
       *out_value = json_node_get_string (node);
       if (!*out_value)
         return glnx_throw (error, "Member '%s' is not a string", member_name);
     }
-  else
-    *out_value = NULL;
 
   return TRUE;
 }
@@ -78,8 +80,14 @@ _rpmostree_jsonutil_object_get_optional_int_member (JsonObject     *object,
                                                     gboolean       *found,
                                                     GError        **error)
 {
-  JsonNode *node = json_object_get_member (object, member_name);
+  if (found)
+    *found = FALSE;
+  *out_value = 0;
 
+  if (!object)
+    return TRUE;
+
+  JsonNode *node = json_object_get_member (object, member_name);
   if (node != NULL)
     {
       if (!_jsonutil_node_check_int (node))
@@ -87,12 +95,6 @@ _rpmostree_jsonutil_object_get_optional_int_member (JsonObject     *object,
       if (found)
         *found = TRUE;
       *out_value = json_node_get_int (node);
-    }
-  else
-    {
-      if (found)
-        *found = FALSE;
-      *out_value = 0;
     }
 
   return TRUE;
@@ -118,8 +120,10 @@ _rpmostree_jsonutil_object_get_optional_boolean_member (JsonObject     *object,
                                                        gboolean       *out_value,
                                                        GError        **error)
 {
-  JsonNode *node = json_object_get_member (object, member_name);
+  if (!object)
+    return TRUE;
 
+  JsonNode *node = json_object_get_member (object, member_name);
   if (node != NULL)
     {
       if (json_node_get_value_type (node) != G_TYPE_BOOLEAN)

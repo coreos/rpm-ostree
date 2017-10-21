@@ -359,7 +359,7 @@ process_kernel_and_initramfs (int            rootfs_dfd,
 
   /* Run dracut with our chosen arguments (commonly at least --no-hostonly) */
   g_autoptr(GPtrArray) dracut_argv = g_ptr_array_new ();
-  if (json_object_has_member (treefile, "initramfs-args"))
+  if (treefile && json_object_has_member (treefile, "initramfs-args"))
     {
       JsonArray *initramfs_args = json_object_get_array_member (treefile, "initramfs-args");
       guint len = json_array_get_length (initramfs_args);
@@ -371,6 +371,11 @@ process_kernel_and_initramfs (int            rootfs_dfd,
             return FALSE;
           g_ptr_array_add (dracut_argv, (char*)arg);
         }
+    }
+  else
+    {
+      /* Default to this for treecomposes */
+      g_ptr_array_add (dracut_argv, (char*)"--no-hostonly");
     }
   g_ptr_array_add (dracut_argv, NULL);
 
@@ -872,7 +877,7 @@ postprocess_final (int            rootfs_dfd,
     return FALSE;
 
   g_autoptr(GHashTable) preserve_groups_set = NULL;
-  if (json_object_has_member (treefile, "etc-group-members"))
+  if (treefile && json_object_has_member (treefile, "etc-group-members"))
     {
       JsonArray *etc_group_members = json_object_get_array_member (treefile, "etc-group-members");
       preserve_groups_set = _rpmostree_jsonutil_jsarray_strings_to_set (etc_group_members);
