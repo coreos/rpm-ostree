@@ -67,7 +67,8 @@ It supports the following parameters:
  * `initramfs-args`: Array of strings, optional.  Passed to the
     initramfs generation program (presently `dracut`).  An example use
     case for this with Dracut is `--filesystems xfs,ext4` to ensure
-    specific filesystem drivers are included.
+    specific filesystem drivers are included.  If not specified,
+    `--no-hostonly` will be used.
 
  * `remove-files`: Array of files to delete from the generated tree.
 
