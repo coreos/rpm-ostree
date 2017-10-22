@@ -3479,9 +3479,12 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
                            "rpmostree.state-sha512",
                            g_variant_new_string (state_checksum));
 
-    commit_modifier =
-      ostree_repo_commit_modifier_new (OSTREE_REPO_COMMIT_MODIFIER_FLAGS_NONE,
-                                       NULL, NULL, NULL);
+    OstreeRepoCommitModifierFlags modflags = OSTREE_REPO_COMMIT_MODIFIER_FLAGS_NONE;
+    /* For ex-container (bare-user-only), we always need canonical permissions */
+    if (ostree_repo_get_mode (self->ostreerepo) == OSTREE_REPO_MODE_BARE_USER_ONLY)
+      modflags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CANONICAL_PERMISSIONS;
+
+    commit_modifier = ostree_repo_commit_modifier_new (modflags, NULL, NULL, NULL);
 
     ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
 
