@@ -31,8 +31,10 @@ vm_assert_status_jq \
   '.deployments[0]["requested-packages"]' \
   '.deployments[0]["requested-local-packages"]' \
   '.deployments[0]["base-removals"]' \
-  '.deployments[0]["requested-base-removals"]'
-echo "ok empty pkg arrays in status json"
+  '.deployments[0]["requested-base-removals"]' \
+  '.deployments[0]["base-commit-meta"]' \
+  '.deployments[0]["layered-commit-meta"]|not'
+echo "ok empty pkg arrays, and commit meta correct in status json"
 
 # Be sure an unprivileged user exists and that we can SSH into it. This is a bit
 # underhanded, but we need a bona fide user session to verify non-priv status,

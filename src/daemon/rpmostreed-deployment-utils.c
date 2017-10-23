@@ -231,27 +231,35 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
                                               &replaced_base_pkgs, error))
     return NULL;
 
+  g_autoptr(GVariant) base_commit = NULL;
   if (is_layered)
     {
-      g_autoptr(GVariant) base_commit = NULL;
-
-      if (!ostree_repo_load_variant (repo,
-                                     OSTREE_OBJECT_TYPE_COMMIT,
-                                     base_checksum,
-                                     &base_commit,
-                                     error))
+      if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
+                                     base_checksum, &base_commit, error))
         return NULL;
 
       g_variant_dict_insert (&dict, "base-checksum", "s", base_checksum);
       variant_add_commit_details (&dict, "base-", base_commit);
       /* for layered commits, check if their base commit has end of life attribute */
       variant_add_metadata_attribute (&dict, OSTREE_COMMIT_META_KEY_ENDOFLIFE, "endoflife", base_commit);
+
+      /* See below for base commit metadata */
+      g_autoptr(GVariant) layered_metadata = g_variant_get_child_value (commit, 0);
+      g_variant_dict_insert (&dict, "layered-commit-meta", "@a{sv}", layered_metadata);
     }
   else
     {
+      base_commit = g_variant_ref (commit);
       base_checksum = g_strdup (csum);
       variant_add_metadata_attribute (&dict, OSTREE_COMMIT_META_KEY_ENDOFLIFE, "endoflife", commit);
     }
+
+  /* We used to bridge individual keys, but that was annoying; just pass through all
+   * of the commit metadata.
+   */
+  { g_autoptr(GVariant) base_meta = g_variant_get_child_value (commit, 0);
+    g_variant_dict_insert (&dict, "base-commit-meta", "@a{sv}", base_meta);
+  }
 
   sigs = rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &gpg_enabled);
   variant_add_commit_details (&dict, NULL, commit);

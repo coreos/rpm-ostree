@@ -63,7 +63,9 @@ echo "ok pkg-add foo"
 vm_reboot
 vm_assert_status_jq \
   '.deployments[0]["base-checksum"]' \
-  '.deployments[0]["pending-base-checksum"]|not'
+  '.deployments[0]["pending-base-checksum"]|not' \
+  '.deployments[0]["base-commit-meta"]' \
+  '.deployments[0]["layered-commit-meta"]["rpmostree.clientlayer_version"] == 2'
 
 vm_assert_layered_pkg foo-1.0 present
 echo "ok pkg foo added"
