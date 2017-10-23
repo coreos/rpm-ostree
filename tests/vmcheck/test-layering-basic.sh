@@ -52,8 +52,10 @@ vm_build_rpm foo
 vm_rpmostree pkg-add foo-1.0
 vm_cmd ostree --repo=/sysroot/ostree/repo/extensions/rpmostree/pkgcache refs |grep /foo/> refs.txt
 pkgref=$(head -1 refs.txt)
+# Verify we have a mapping from pkg-in-ostree → rpmmd-repo info
 vm_cmd ostree --repo=/sysroot/ostree/repo/extensions/rpmostree/pkgcache show --print-metadata-key rpmostree.repo ${pkgref} >refdata.txt
 assert_file_has_content refdata.txt 'id.*test-repo'
+assert_file_has_content refdata.txt 'timestamp'
 rm -f refs.txt refdata.txt
 # This will cover things like us failing to break hardlinks for the rpmdb,
 # as well as rofiles-fuse
