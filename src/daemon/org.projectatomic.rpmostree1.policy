@@ -87,7 +87,7 @@
 
   <action id="org.projectatomic.rpmostree1.bootconfig">
     <description>Change boot configuration</description>
-    <message>Authentication is required to change boot configuration</message>
+    <message>Authentication is required to change/view boot configuration</message>
     <icon_name>package-x-generic</icon_name>
     <defaults>
       <allow_any>auth_admin</allow_any>

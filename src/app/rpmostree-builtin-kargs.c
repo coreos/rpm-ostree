@@ -35,11 +35,11 @@ static char **opt_kernel_delete_strings;
 static char **opt_kernel_append_strings;
 static char **opt_kernel_replace_strings;
 static char  *opt_osname;
-static char  *opt_deployid;
+static char  *opt_deploy_index;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operation on provided OSNAME", "OSNAME" },
-  { "deployid", 0, 0, G_OPTION_ARG_STRING, &opt_deployid, "Modify the kernel args from a specific deployment based on id. Id is in the form of 'osname-checksum.deployserialnum' ", "DEPLOYID"},
+  { "deploy-index", 0, 0, G_OPTION_ARG_STRING, &opt_deploy_index, "Modify the kernel args from a specific deployment based on index. Index is in the form of a number (e.g 0 means the first deployment in the list). The order of deployments can be seen via rpm-ostree status", "INDEX"},
   { "reboot", 0, 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after kernel arguments are modified", NULL},
   { "append", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_append_strings, "Append kernel argument; useful with e.g. console= that can be used multiple times. empty value for an argument is allowed", "KEY=VALUE" },
   { "replace", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_replace_strings, "Replace existing kernel argument, the user is also able to replace an argument with KEY=VALUE if only one value exist for that argument ", "KEY=VALUE=NEWVALUE" },
@@ -52,12 +52,13 @@ static GOptionEntry option_entries[] = {
 };
 
 static GVariant *
-get_kargs_option_variant (void)
+get_kargs_option_variant (gboolean is_authorized_prior)
 {
   GVariantDict dict;
 
   g_variant_dict_init (&dict, NULL);
   g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
+  g_variant_dict_insert (&dict, "authorized", "b", is_authorized_prior);
 
   return g_variant_dict_end (&dict);
 }
@@ -109,7 +110,7 @@ rpmostree_ex_builtin_kargs (int            argc,
                    "Cannot specify both --delete and --append");
       return EXIT_FAILURE;
     }
-  if (opt_import_proc_cmdline && opt_deployid)
+  if (opt_import_proc_cmdline && opt_deploy_index)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Canno specify both --import-from-proc-cmdline and --deployid");
@@ -143,10 +144,16 @@ rpmostree_ex_builtin_kargs (int            argc,
    */
   gboolean is_pending = !opt_import_proc_cmdline;
 
-  const char* deploy_str = opt_deployid ?: "";
+  /* Here we still keep the index as a string,
+   * so that we can tell whether user has
+   * input a index option, then in the backend,
+   * we will parse the string into a number if
+   * the index option is there
+   */
+  const char* deploy_index_str = opt_deploy_index ?: "";
   g_autoptr(GVariant) boot_config = NULL;
   if (!rpmostree_os_call_get_deployment_boot_config_sync (os_proxy,
-                                                          deploy_str,
+                                                          deploy_index_str,
                                                           is_pending,
                                                           &boot_config,
                                                           cancellable,
@@ -185,7 +192,7 @@ rpmostree_ex_builtin_kargs (int            argc,
                                            (const char* const*) opt_kernel_append_strings,
                                            (const char* const*) opt_kernel_replace_strings,
                                            (const char* const*) opt_kernel_delete_strings,
-                                           get_kargs_option_variant (),
+                                           get_kargs_option_variant (TRUE),
                                            &transaction_address,
                                            cancellable,
                                            error))
@@ -197,7 +204,7 @@ rpmostree_ex_builtin_kargs (int            argc,
                                                 error))
     return EXIT_FAILURE;
 
-  g_print("The kernel arguments are now modified \n");
+  g_print("Kernel arguments updated.\nRun \"systemctl reboot\" to start a reboot\n");
 
   return EXIT_SUCCESS;
 }

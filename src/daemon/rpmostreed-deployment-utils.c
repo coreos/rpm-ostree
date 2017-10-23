@@ -23,6 +23,7 @@
 #include "rpmostree-util.h"
 #include "rpmostree-sysroot-core.h"
 #include "rpmostreed-utils.h"
+#include "rpmostreed-errors.h"
 
 #include <libglnx.h>
 
@@ -53,6 +54,54 @@ rpmostreed_deployment_get_for_id (OstreeSysroot *sysroot,
     }
 
   return NULL;
+}
+
+
+/* rpmostreed_deployment_get_for_index:
+ *
+ * sysroot: A #OstreeSysroot instance
+ * index: string index being parsed
+ * error: a #GError instance
+ *
+ * Get a deployment based on a string index,
+ * the string is parsed and checked. Then
+ * the deployment at the parsed index will be
+ * returned.
+ *
+ * returns: NULL if an error is being made
+ */
+OstreeDeployment *
+rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot,
+                                     const gchar   *index,
+                                     GError       **error)
+{
+  g_autoptr(GError) local_error = NULL;
+  int deployment_index = -1;
+  for (int counter = 0; counter < strlen(index); counter++)
+    {
+      if (!g_ascii_isdigit (index[counter]))
+        {
+          local_error = g_error_new (RPM_OSTREED_ERROR,
+                                     RPM_OSTREED_ERROR_FAILED,
+                                     "Invalid deployment index %s, must be a number and >= 0",
+                                     index);
+          g_propagate_error (error, g_steal_pointer (&local_error));
+          return NULL;
+        }
+    }
+  deployment_index = atoi (index);
+
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
+  if (deployment_index >= deployments->len)
+    {
+      local_error = g_error_new (RPM_OSTREED_ERROR,
+                                 RPM_OSTREED_ERROR_FAILED,
+                                 "Out of range deployment index %d, expected < %d",
+                                 deployment_index, deployments->len);
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return NULL;
+    }
+  return g_object_ref (deployments->pdata[deployment_index]);
 }
 
 static GVariant *

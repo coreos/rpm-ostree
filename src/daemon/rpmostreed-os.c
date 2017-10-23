@@ -127,7 +127,29 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
            g_strcmp0 (method_name, "KernelArgs") == 0 ||
            g_strcmp0 (method_name, "GetDeploymentBootConfig") == 0)
     {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.bootconfig");
+      if (g_strcmp0 (method_name, "KernelArgs") != 0)
+        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.bootconfig");
+      else
+        {
+          /* Note: kernel arg is handled differently because
+           * there might be os related methods being called prior
+           * to changing kernel args. Therefore, users should not
+           * go through authentication again if authentication
+           * is already done prior in accessing the boot configuration
+           */
+          g_autoptr(GVariant) options = g_variant_get_child_value (parameters, 4);
+          g_auto(GVariantDict) options_dict;
+          g_variant_dict_init (&options_dict, options);
+          gboolean is_authorized_prior = vardict_lookup_bool (&options_dict, "authorized", FALSE);
+          /* Note: an early return happens here to skip password verification
+           * that has already been done earlier
+           */
+          if (is_authorized_prior)
+            return is_authorized_prior;
+          else
+            g_ptr_array_add (actions, "org.projectatomic.rpmostree1.bootconfig");
+        }
+
     }
   else if (g_strcmp0 (method_name, "Cleanup") == 0)
     {
@@ -1200,7 +1222,7 @@ out:
 static gboolean
 os_handle_get_deployment_boot_config (RPMOSTreeOS *interface,
                                       GDBusMethodInvocation *invocation,
-                                      const char *arg_deployid,
+                                      const char *arg_deploy_index,
                                       gboolean is_pending)
 {
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
@@ -1218,7 +1240,7 @@ os_handle_get_deployment_boot_config (RPMOSTreeOS *interface,
                                       &local_error))
     goto out;
   const char* osname = rpmostree_os_get_name (interface);
-  if (!*arg_deployid || arg_deployid[0] == '\0')
+  if (!*arg_deploy_index || arg_deploy_index[0] == '\0')
     {
       if (is_pending)
         target_deployment = rpmostree_syscore_get_origin_merge_deployment (ot_sysroot, osname);
@@ -1233,16 +1255,11 @@ os_handle_get_deployment_boot_config (RPMOSTreeOS *interface,
     }
   else
     {
-      /* If arg_deployid is specified, we ignore pending option */
-      target_deployment = rpmostreed_deployment_get_for_id (ot_sysroot, arg_deployid);
+      /* If the deploy_index is speicified, we ignore the pending option */
+      target_deployment = rpmostreed_deployment_get_for_index (ot_sysroot, arg_deploy_index,
+                                                               &local_error);
       if (target_deployment == NULL)
-        {
-          local_error = g_error_new (RPM_OSTREED_ERROR,
-                                     RPM_OSTREED_ERROR_FAILED,
-                                     "Invalid deployment id %s",
-                                     arg_deployid);
-          goto out;
-        }
+        goto out;
     }
   OstreeBootconfigParser *bootconfig = ostree_deployment_get_bootconfig (target_deployment);
 
