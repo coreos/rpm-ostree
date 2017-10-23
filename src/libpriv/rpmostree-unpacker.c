@@ -413,8 +413,16 @@ get_lead_sig_header_as_bytes (RpmOstreeUnpacker *self,
   return TRUE;
 }
 
+/* Generate per-package metadata; for now this is just the id of the repo
+ * where it originated, and the timestamp, which we can use for up-to-date
+ * checks.  This is a bit like what the `yumdb` in /var/lib/yum
+ * does.  See also
+ * https://github.com/rpm-software-management/libdnf/pull/199/
+ * https://github.com/projectatomic/rpm-ostree/issues/774
+ * https://github.com/projectatomic/rpm-ostree/pull/1072
+ */
 static GVariant *
-repo_metadata_to_variant (DnfRepo *repo)
+repo_metadata_for_package (DnfRepo *repo)
 {
   g_auto(GVariantBuilder) builder;
   g_variant_builder_init (&builder, (GVariantType*)"a{sv}");
@@ -424,6 +432,8 @@ repo_metadata_to_variant (DnfRepo *repo)
    */
   g_variant_builder_add (&builder, "{sv}",
                          "id", g_variant_new_string (dnf_repo_get_id (repo)));
+  g_variant_builder_add (&builder, "{sv}",
+                         "timestamp", g_variant_new_uint64 (dnf_repo_get_timestamp_generated (repo)));
 
   return g_variant_builder_end (&builder);
 }
@@ -501,7 +511,7 @@ build_metadata_variant (RpmOstreeUnpacker *self,
       if (repo)
         {
           g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.repo",
-                                 repo_metadata_to_variant (repo));
+                                 repo_metadata_for_package (repo));
         }
 
       /* include a checksum of the RPM as a whole; the actual algo used depends
