@@ -311,7 +311,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
 
       /* Load the commit metadata into a dict */
       { g_autoptr(GVariant) commit_meta_v = NULL;
-        g_assert (g_variant_dict_lookup (dict, "base-commit-meta", "a{sv}", &commit_meta_v));
+        g_assert (g_variant_dict_lookup (dict, "base-commit-meta", "@a{sv}", &commit_meta_v));
         commit_meta_dict = g_variant_dict_new (commit_meta_v);
       }
       if (is_locally_assembled)
