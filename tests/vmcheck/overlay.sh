@@ -21,12 +21,18 @@ set -x
 
 # And then this code path in the VM
 
-# get csum of current default deployment
+# get csum and origin of current default deployment
 commit=$(rpm-ostree status --json | \
   python -c '
 import sys, json;
 deployment = json.load(sys.stdin)["deployments"][0]
 print deployment["checksum"]
+exit()')
+origin=$(rpm-ostree status --json | \
+  python -c '
+import sys, json;
+deployment = json.load(sys.stdin)["deployments"][0]
+print deployment["origin"]
 exit()')
 
 if [[ -z $commit ]] || ! ostree rev-parse $commit; then
@@ -59,6 +65,6 @@ fi
 rm -vrf vmcheck/usr/etc/selinux/targeted/semanage.*.LOCK
 # ✀✀✀ END tmp hack
 
-ostree commit --parent=none -b vmcheck --link-checkout-speedup \
+ostree commit --parent=none -b vmcheck --add-metadata-string=ostree.source-title="Dev overlay on ${origin}" --add-metadata-string=rpmostree.original-origin=${origin} --link-checkout-speedup \
   --selinux-policy=vmcheck --tree=dir=vmcheck
 ostree admin deploy vmcheck
