@@ -55,8 +55,7 @@ cluster:
     - name: vmcheck3
       distro: centos/7/atomic
   container:
-    # FIXME remove this version binding when rpm-md repos are updated
-    image: registry.centos.org/centos/centos:7.3.1611
+    image: registry.centos.org/centos/centos:7
 
 # We only want the sanitizers on Fedora
 env:
