@@ -3567,38 +3567,3 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
     *out_commit = g_steal_pointer (&ret_commit_checksum);
   return TRUE;
 }
-
-gboolean
-rpmostree_context_assemble_commit (RpmOstreeContext      *self,
-                                   int                    tmprootfs_dfd,
-                                   OstreeRepoDevInoCache *devino_cache,
-                                   const char            *parent,
-                                   RpmOstreeAssembleType  assemble_type,
-                                   char                 **out_commit,
-                                   GCancellable          *cancellable,
-                                   GError               **error)
-{
-  g_autoptr(OstreeRepoDevInoCache) devino_owned = NULL;
-
-  /* Auto-synthesize a cache if not provided */
-  if (devino_cache == NULL)
-    devino_cache = devino_owned = ostree_repo_devino_cache_new ();
-  else
-    devino_cache = devino_owned = ostree_repo_devino_cache_ref (devino_cache);
-
-  if (!rpmostree_context_assemble_tmprootfs (self, tmprootfs_dfd, devino_cache,
-                                             cancellable, error))
-    return FALSE;
-
-
-  if (!rpmostree_rootfs_postprocess_common (tmprootfs_dfd, cancellable, error))
-    return FALSE;
-
-  if (!rpmostree_context_commit_tmprootfs (self, tmprootfs_dfd, devino_cache,
-                                           parent, assemble_type,
-                                           out_commit,
-                                           cancellable, error))
-    return FALSE;
-
-  return TRUE;
-}
