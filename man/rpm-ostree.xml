@@ -106,10 +106,12 @@ Boston, MA 02111-1307, USA.
 
         <listitem>
           <para>
-            Entrypoint for tree composition; most typically used on
-            servers to prepare trees for replication by client systems.
-            Currently has two subcommands, <literal>tree</literal> and
-            <literal>sign</literal>.
+            Entrypoint for tree composition; most typically used on servers to
+            prepare trees for replication by client systems. The
+            <literal>tree</literal> subcommand processes a treefile, installs
+            packages, and commits the result to an OSTree repository. There are
+            also split commands <literal>install</literal>,
+            <literal>postprocess</literal>, and <literal>commit</literal>.
           </para>
         </listitem>
       </varlistentry>
