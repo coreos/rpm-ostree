@@ -500,10 +500,10 @@ build_metadata_variant (RpmOstreeUnpacker *self,
                          g_variant_new_uint32 (1));
 
   /* Originally we just had unpack_version = 1, let's add a minor version for
-   * compatible increments.
+   * compatible increments.  Bumped 4 → 5 for timestamp.
    */
   g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.unpack_minor_version",
-                         g_variant_new_uint32 (4));
+                         g_variant_new_uint32 (5));
 
   if (self->pkg)
     {
