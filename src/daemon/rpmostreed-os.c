@@ -123,33 +123,19 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
     {
       g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rebase");
     }
-  else if (g_strcmp0 (method_name, "SetInitramfsState") == 0 ||
-           g_strcmp0 (method_name, "KernelArgs") == 0 ||
-           g_strcmp0 (method_name, "GetDeploymentBootConfig") == 0)
+  else if (g_strcmp0 (method_name, "GetDeploymentBootConfig") == 0)
     {
-      if (g_strcmp0 (method_name, "KernelArgs") != 0)
-        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.bootconfig");
-      else
-        {
-          /* Note: kernel arg is handled differently because
-           * there might be os related methods being called prior
-           * to changing kernel args. Therefore, users should not
-           * go through authentication again if authentication
-           * is already done prior in accessing the boot configuration
-           */
-          g_autoptr(GVariant) options = g_variant_get_child_value (parameters, 4);
-          g_auto(GVariantDict) options_dict;
-          g_variant_dict_init (&options_dict, options);
-          gboolean is_authorized_prior = vardict_lookup_bool (&options_dict, "authorized", FALSE);
-          /* Note: an early return happens here to skip password verification
-           * that has already been done earlier
-           */
-          if (is_authorized_prior)
-            return is_authorized_prior;
-          else
-            g_ptr_array_add (actions, "org.projectatomic.rpmostree1.bootconfig");
-        }
-
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.viewbootconfig");
+    }
+  else if (g_strcmp0 (method_name, "SetInitramfsState") == 0 ||
+           g_strcmp0 (method_name, "KernelArgs") == 0)
+    {
+      /* Note: if user is authenticated to viewbootconfig action earlier,
+       * it implies that they will be temporarily authenticated to change bootconfig
+       * action too. This avoids duplicate authentication for functions like
+       * changing kernel arguments.
+       */
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.changebootconfig");
     }
   else if (g_strcmp0 (method_name, "Cleanup") == 0)
     {

@@ -39,7 +39,7 @@ static char  *opt_deploy_index;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operation on provided OSNAME", "OSNAME" },
-  { "deploy-index", 0, 0, G_OPTION_ARG_STRING, &opt_deploy_index, "Modify the kernel args from a specific deployment based on index. Index is in the form of a number (e.g 0 means the first deployment in the list). The order of deployments can be seen via rpm-ostree status", "INDEX"},
+  { "deploy-index", 0, 0, G_OPTION_ARG_STRING, &opt_deploy_index, "Modify the kernel args from a specific deployment based on index. Index is in the form of a number (e.g 0 means the first deployment in the list)", "INDEX"},
   { "reboot", 0, 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after kernel arguments are modified", NULL},
   { "append", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_append_strings, "Append kernel argument; useful with e.g. console= that can be used multiple times. empty value for an argument is allowed", "KEY=VALUE" },
   { "replace", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_replace_strings, "Replace existing kernel argument, the user is also able to replace an argument with KEY=VALUE if only one value exist for that argument ", "KEY=VALUE=NEWVALUE" },
@@ -52,13 +52,12 @@ static GOptionEntry option_entries[] = {
 };
 
 static GVariant *
-get_kargs_option_variant (gboolean is_authorized_prior)
+get_kargs_option_variant (void)
 {
   GVariantDict dict;
 
   g_variant_dict_init (&dict, NULL);
   g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
-  g_variant_dict_insert (&dict, "authorized", "b", is_authorized_prior);
 
   return g_variant_dict_end (&dict);
 }
@@ -192,7 +191,7 @@ rpmostree_ex_builtin_kargs (int            argc,
                                            (const char* const*) opt_kernel_append_strings,
                                            (const char* const*) opt_kernel_replace_strings,
                                            (const char* const*) opt_kernel_delete_strings,
-                                           get_kargs_option_variant (TRUE),
+                                           get_kargs_option_variant (),
                                            &transaction_address,
                                            cancellable,
                                            error))
