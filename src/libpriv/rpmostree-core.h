@@ -157,12 +157,3 @@ gboolean rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
                                              char                 **out_commit,
                                              GCancellable          *cancellable,
                                              GError               **error);
-/* Wrapper for both of the above */
-gboolean rpmostree_context_assemble_commit (RpmOstreeContext      *self,
-                                            int                    tmprootfs_dfd,
-                                            OstreeRepoDevInoCache *devino_cache,
-                                            const char            *parent,
-                                            RpmOstreeAssembleType  assemble_type,
-                                            char                 **out_commit,
-                                            GCancellable          *cancellable,
-                                            GError               **error);

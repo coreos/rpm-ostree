@@ -218,10 +218,18 @@ download_rpms_and_assemble_commit (ROContainerContext *rocctx,
                        &tmpdir, error))
     return FALSE;
 
+  g_autoptr(OstreeRepoDevInoCache) devino_cache = ostree_repo_devino_cache_new ();
+  if (!rpmostree_context_assemble_tmprootfs (rocctx->ctx, tmpdir.fd, devino_cache,
+                                             cancellable, error))
+    return FALSE;
+
+  if (!rpmostree_rootfs_postprocess_common (tmpdir.fd, cancellable, error))
+    return FALSE;
+
   g_autofree char *ret_commit = NULL;
-  if (!rpmostree_context_assemble_commit (rocctx->ctx, tmpdir.fd, NULL,
-                                          NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
-                                          &ret_commit, cancellable, error))
+  if (!rpmostree_context_commit_tmprootfs (rocctx->ctx, tmpdir.fd, devino_cache,
+                                           NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
+                                           &ret_commit, cancellable, error))
     return FALSE;
 
   *out_commit = g_steal_pointer (&ret_commit);
