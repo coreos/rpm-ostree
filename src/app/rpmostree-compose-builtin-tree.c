@@ -1099,9 +1099,7 @@ rpmostree_compose_builtin_install (int             argc,
   gboolean changed;
   if (!impl_install_tree (self, &changed, cancellable, error))
     return EXIT_FAILURE;
-  /* Keep the dir around */
-  g_print ("rootfs: %s/rootfs\n", self->workdir_tmp.path);
-  glnx_tmpdir_unset (&self->workdir_tmp);
+  g_print ("rootfs: %s/rootfs\n", destdir);
 
   return EXIT_SUCCESS;
 }
