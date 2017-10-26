@@ -979,17 +979,6 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     self->rootfs_dfd = glnx_steal_fd (&target_rootfs_dfd);
   }
 
-  g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile_path);
-  if (!rpmostree_check_passwd (self->repo, self->rootfs_dfd, treefile_dirpath, self->treefile,
-                               self->previous_checksum,
-                               cancellable, error))
-    return glnx_prefix_error (error, "Handling passwd db");
-
-  if (!rpmostree_check_groups (self->repo, self->rootfs_dfd, treefile_dirpath, self->treefile,
-                               self->previous_checksum,
-                               cancellable, error))
-    glnx_prefix_error (error, "Handling group db");
-
   /* Insert our input hash */
   g_hash_table_replace (self->metadata, g_strdup ("rpmostree.inputhash"),
                         g_variant_ref_sink (g_variant_new_string (new_inputhash)));
@@ -1036,6 +1025,20 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile,
                                     cancellable, error))
     return EXIT_FAILURE;
+
+  if (self->treefile)
+    {
+      g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile_path);
+      if (!rpmostree_check_passwd (self->repo, self->rootfs_dfd, treefile_dirpath, self->treefile,
+                                   self->previous_checksum,
+                                   cancellable, error))
+        return glnx_prefix_error (error, "Handling passwd db");
+
+      if (!rpmostree_check_groups (self->repo, self->rootfs_dfd, treefile_dirpath, self->treefile,
+                                   self->previous_checksum,
+                                   cancellable, error))
+        glnx_prefix_error (error, "Handling group db");
+    }
 
   /* The penultimate step, just basically `ostree commit` */
   g_autofree char *new_revision = NULL;
