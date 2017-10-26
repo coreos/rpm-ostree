@@ -125,17 +125,15 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
     }
   else if (g_strcmp0 (method_name, "GetDeploymentBootConfig") == 0)
     {
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.viewbootconfig");
+      /* Note: early return here because no need authentication
+       * for this method
+       */
+      return TRUE;
     }
   else if (g_strcmp0 (method_name, "SetInitramfsState") == 0 ||
            g_strcmp0 (method_name, "KernelArgs") == 0)
     {
-      /* Note: if user is authenticated to viewbootconfig action earlier,
-       * it implies that they will be temporarily authenticated to change bootconfig
-       * action too. This avoids duplicate authentication for functions like
-       * changing kernel arguments.
-       */
-      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.changebootconfig");
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.bootconfig");
     }
   else if (g_strcmp0 (method_name, "Cleanup") == 0)
     {

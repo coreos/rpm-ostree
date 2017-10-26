@@ -85,19 +85,7 @@
     </defaults>
   </action>
 
-  <action id="org.projectatomic.rpmostree1.viewbootconfig">
-    <description> View boot configuration </description>
-    <message> Authentication is required to view boot configuration</message>
-    <icon_name> package-x-generic</icon_name>
-    <defaults>
-      <allow_any>auth_admin_keep</allow_any>
-      <allow_inactive>auth_admin_keep</allow_inactive>
-      <allow_active>auth_admin_keep</allow_active>
-    </defaults>
-    <annotate key="org.freedesktop.policykit.imply">org.projectatomic.rpmostree1.changebootconfig</annotate>
-  </action>
-
-  <action id="org.projectatomic.rpmostree1.changebootconfig">
+  <action id="org.projectatomic.rpmostree1.bootconfig">
     <description>Change boot configuration</description>
     <message>Authentication is required to change boot configuration</message>
     <icon_name>package-x-generic</icon_name>

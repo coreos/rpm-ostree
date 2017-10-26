@@ -1433,7 +1433,7 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   KernelArgTransaction *self = (KernelArgTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
-
+  /* Read in the existing kernel args and convert those to an #OstreeKernelArg instance for API usage */
   __attribute__((cleanup(_ostree_kernel_args_cleanup))) OstreeKernelArgs *kargs = _ostree_kernel_args_from_string (self->existing_kernel_args);
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, 0,
                                                                                  cancellable, error);
