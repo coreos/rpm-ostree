@@ -15,5 +15,10 @@
     "packages-ppc64le": ["grub2", "ostree-grub2"],
 
     "packages-x86_64": ["grub2", "grub2-efi", "ostree-grub2",
-                         "efibootmgr", "shim"]
+                        "efibootmgr", "shim"],
+
+    "ignore-removed-users": ["root"],
+    "ignore-removed-groups": ["root"],
+    "check-passwd": { "type": "file", "filename": "passwd" },
+    "check-groups": { "type": "file", "filename": "group" }
 }
