@@ -1092,7 +1092,7 @@ rpmostree_compose_builtin_install (int             argc,
 
   g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
   if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
-    return FALSE;
+    return EXIT_FAILURE;
   gboolean changed;
   if (!impl_install_tree (self, &changed, cancellable, error))
     return EXIT_FAILURE;
@@ -1246,7 +1246,7 @@ rpmostree_compose_builtin_tree (int             argc,
         return EXIT_FAILURE;
       /* Finally process the --touch-if-changed option  */
       if (!process_touch_if_changed (error))
-        return FALSE;
+        return EXIT_FAILURE;
     }
 
 
