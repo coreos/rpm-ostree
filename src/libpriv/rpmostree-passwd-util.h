@@ -63,6 +63,16 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                          GCancellable    *cancellable,
                                          GError         **error);
 
+typedef struct RpmOstreePasswdDB RpmOstreePasswdDB;
+RpmOstreePasswdDB *
+rpmostree_passwddb_open (int rootfs, GCancellable *cancellable, GError **error);
+const char *
+rpmostree_passwddb_lookup_user (RpmOstreePasswdDB *db, uid_t uid);
+const char *
+rpmostree_passwddb_lookup_group (RpmOstreePasswdDB *db, gid_t gid);
+void
+rpmostree_passwddb_free (RpmOstreePasswdDB *db);
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreePasswdDB, rpmostree_passwddb_free)
 
 gboolean
 rpmostree_passwd_cleanup (int rootfs_dfd, GCancellable *cancellable, GError **error);
