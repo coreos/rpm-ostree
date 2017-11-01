@@ -55,6 +55,8 @@ RpmOstreeTreespec *rpmostree_treespec_new (GVariant   *variant);
 
 GHashTable *rpmostree_dnfcontext_get_varsubsts (DnfContext *context);
 
+GVariant *rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext  *self);
+
 GVariant *rpmostree_treespec_to_variant (RpmOstreeTreespec *spec);
 const char *rpmostree_treespec_get_ref (RpmOstreeTreespec *spec);
 
