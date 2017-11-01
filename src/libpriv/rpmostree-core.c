@@ -476,6 +476,35 @@ rpmostree_context_get_hif (RpmOstreeContext *self)
   return self->hifctx;
 }
 
+/* Add rpmmd repo information, since it's very useful for determining
+ * state.  See also:
+ *
+ * - https://github.com/projectatomic/rpm-ostree/issues/774
+ * - The repo_metadata_for_package() function in rpmostree-unpacker.c
+
+ * This returns a value of key of type aa{sv} - the key should be
+ * `rpmostree.rpmmd-repos`.
+ */
+GVariant *
+rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext  *self)
+{
+  g_auto(GVariantBuilder) repo_list_builder;
+  g_variant_builder_init (&repo_list_builder, (GVariantType*)"aa{sv}");
+  g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (self->hifctx, DNF_REPO_ENABLED_PACKAGES);
+  for (guint i = 0; i < repos->len; i++)
+    {
+      g_auto(GVariantBuilder) repo_builder;
+      g_variant_builder_init (&repo_builder, (GVariantType*)"a{sv}");
+      DnfRepo *repo = repos->pdata[i];
+      const char *id = dnf_repo_get_id (repo);
+     g_variant_builder_add (&repo_builder, "{sv}", "id", g_variant_new_string (id));
+      guint64 ts = dnf_repo_get_timestamp_generated (repo);
+      g_variant_builder_add (&repo_builder, "{sv}", "timestamp", g_variant_new_uint64 (ts));
+      g_variant_builder_add (&repo_list_builder, "@a{sv}", g_variant_builder_end (&repo_builder));
+    }
+  return g_variant_ref_sink (g_variant_builder_end (&repo_list_builder));
+}
+
 GHashTable *
 rpmostree_dnfcontext_get_varsubsts (DnfContext *context)
 {
