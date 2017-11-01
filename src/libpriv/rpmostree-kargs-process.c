@@ -156,29 +156,32 @@ _ostree_kernel_arg_query_status (OstreeKernelArgs         *kargs,
                                  int                      *out_index,
                                  GError                   **error)
 {
-  g_autofree char *duped = g_strdup (arg);
-  g_autofree char *val = g_strdup (split_keyeq (duped));
+  g_autofree char *arg_owned = g_strdup (arg);
+  g_autofree char *val = g_strdup (split_keyeq (arg_owned));
 
   /* For replaced, it is a special case, we allow
    * key=value=new_value, thus, this split is to
-   * disgard the new value if there is one */
+   * discard the new value if there is one */
   const char *replaced_val = split_keyeq (val);
+  const gboolean key_only = !*val;
 
-  GPtrArray *values = g_hash_table_lookup (kargs->table, duped);
+  GPtrArray *values = g_hash_table_lookup (kargs->table, arg_owned);
 
   if (!values)
     {
-      g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                           "The key is not found, type rpm-ostree ex kargs to see what args are there");
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                   "Failed to find kernel argument '%s'", arg_owned);
       return FALSE;
     }
+
+  const gboolean single_value = values->len == 1;
 
   /* See if the value is inside the value list */
   if (!_ostree_ptr_array_find (values, val, out_index))
     {
       /* Both replace and delete support empty value handlation
        * thus adding a condition here to handle it separately */
-      if (!*val && values->len ==1)
+      if (key_only && single_value)
         {
           *out_query_flag = OSTREE_KERNEL_ARG_KEY_ONE_VALUE;
           return TRUE;
@@ -187,32 +190,32 @@ _ostree_kernel_arg_query_status (OstreeKernelArgs         *kargs,
        * there is only one single key, and the second val
        * will now represent the new value (no second split
        * will happen this case) */
-      else if (val && is_replaced && values->len == 1)
+      else if (is_replaced && single_value && !key_only)
         {
           *out_query_flag = OSTREE_KERNEL_ARG_REPLACE_NO_SECOND_SPLIT;
           return TRUE;
         }
       /* Handle both no value case, and the case when inputting
          key=value for a replacement */
-      else if ((!*val || (is_replaced && !*replaced_val)) &&
-               values->len !=1)
+      else if ((key_only || (is_replaced && !*replaced_val)) &&
+               !single_value)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "Unable to %s %s with multiple values associated with it, see rpm-ostree ex kargs -h for usage",
-                       is_replaced ? "replace" : "delete", duped);
+                       "Unable to %s argument '%s' with multiple values",
+                       is_replaced ? "replace" : "delete", arg_owned);
           return FALSE;
         }
       else
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "There is no %s value for key %s",
-                       val, duped);
+                       val, arg_owned);
           return FALSE;
         }
     }
 
   /* We set the flag based on values len, used by replace or delete for better case handling */
-  if (values->len == 1)
+  if (single_value)
     *out_query_flag = OSTREE_KERNEL_ARG_KEY_ONE_VALUE;
   else
     *out_query_flag = OSTREE_KERNEL_ARG_FOUND_KEY_MULTI_VALUE;
@@ -259,20 +262,19 @@ _ostree_kernel_args_new_replace (OstreeKernelArgs *kargs,
                                         TRUE, &value_index, error))
     return FALSE;
 
-  g_autofree char *duped = g_strdup (arg);
-  g_autofree char *old_val = g_strdup (split_keyeq (duped));
+  g_autofree char *arg_owned = g_strdup (arg);
+  g_autofree char *old_val = g_strdup (split_keyeq (arg_owned));
   const char *possible_new_val = (query_flag == OSTREE_KERNEL_ARG_REPLACE_NO_SECOND_SPLIT) ? old_val : split_keyeq (old_val);
 
   /* Similar to the delete operations, we verified in the function
    * earlier that the arguments are valid, thus no check
    * performed here */
-  GPtrArray *values = g_hash_table_lookup (kargs->table, duped);
+  GPtrArray *values = g_hash_table_lookup (kargs->table, arg_owned);
 
   /* We find the old one, we free the old memory,
    * then put new one back in */
   char *old_element = (char *)g_ptr_array_index (values, value_index);
-  g_free (old_element);
-  old_element = NULL;
+  g_free (g_steal_pointer (&old_element));
 
   /* Then we assign the index to the new value */
   g_ptr_array_index (values, value_index) = g_strdup (possible_new_val);
@@ -310,7 +312,6 @@ _ostree_kernel_args_delete (OstreeKernelArgs *kargs,
                             const char       *arg,
                             GError           **error)
 {
-  /* Make a duplicate of the passed in arg for manipulation */
   OstreeKernelArgQueryFlag query_flag = 0;
   int value_index;
 
@@ -319,14 +320,14 @@ _ostree_kernel_args_delete (OstreeKernelArgs *kargs,
     return FALSE;
 
   /* We then know the arg can be found and is valid currently */
-  g_autofree char *duped = g_strdup (arg);
-  split_keyeq (duped);
+  g_autofree char *arg_owned = g_strdup (arg);
+  split_keyeq (arg_owned);
 
-  GPtrArray *values = g_hash_table_lookup (kargs->table, duped);
+  GPtrArray *values = g_hash_table_lookup (kargs->table, arg_owned);
 
   /* This tells us to delete that key directly */
   if (query_flag == OSTREE_KERNEL_ARG_KEY_ONE_VALUE)
-    return _ostree_kernel_args_delete_key_entry (kargs, duped, error);
+    return _ostree_kernel_args_delete_key_entry (kargs, arg_owned, error);
   else if (query_flag == OSTREE_KERNEL_ARG_FOUND_KEY_MULTI_VALUE)
     {
       g_ptr_array_remove_index (values, value_index);
@@ -363,28 +364,15 @@ _ostree_kernel_args_delete_key_entry (OstreeKernelArgs *kargs,
   if (!g_hash_table_remove (kargs->table, key))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Failed to remove %s from hashtable",
+                   "Failed to find kernel argument '%s'",
                    key);
       return FALSE;
     }
 
   /* Then remove the key from order table */
   int key_index;
-  if (!_ostree_ptr_array_find (kargs->order, key,
-                              &key_index))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Failed to find %s in the array",
-                   key);
-      return FALSE;
-    }
-  if (!g_ptr_array_remove_index (kargs->order, key_index))
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                   "Failed to remove %s from order array",
-                   key);
-      return FALSE;
-    }
+  g_assert (_ostree_ptr_array_find (kargs->order, key, &key_index));
+  g_assert (g_ptr_array_remove_index (kargs->order, key_index));
   return TRUE;
 }
 
