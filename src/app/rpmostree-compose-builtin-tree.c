@@ -934,6 +934,13 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
       }
   }
 
+  /* Bind metadata from the libdnf context */
+  if (!g_hash_table_contains (self->metadata, "rpmostree.rpmmd-repos"))
+    {
+      g_hash_table_insert (self->metadata, g_strdup ("rpmostree.rpmmd-repos"),
+                           rpmostree_context_get_rpmmd_repo_commit_metadata (self->corectx));
+    }
+
   /* Destroy this now so the libdnf stack won't have any references
    * into the filesystem before we manipulate it.
    */
