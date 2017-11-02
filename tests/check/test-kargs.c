@@ -10,7 +10,6 @@
 #include "rpmostree-core.h"
 #include "libtest.h"
 #include "rpmostree-kargs-process.h"
-#include "rpmostreed-deployment-utils.c"
 
 static gboolean
 check_string_existance (OstreeKernelArgs *karg,
