@@ -113,11 +113,13 @@ _ostree_kernel_args_cleanup (void *loc)
  *  Returns: False if can not find the string value in the array
  *
  **/
-static
-gboolean _ostree_ptr_array_find (GPtrArray       *array,
-                                 const char      *val,
-                                 int             *out_index)
+gboolean
+_ostree_ptr_array_find (GPtrArray       *array,
+                        const char      *val,
+                        int             *out_index)
 {
+  if (out_index == NULL)
+    return FALSE;
   for (int counter = 0; counter < array->len; counter++)
     {
       const char *temp_val = array->pdata[counter];
@@ -129,6 +131,25 @@ gboolean _ostree_ptr_array_find (GPtrArray       *array,
     }
     *out_index = 0; /* default to zero if not found */
     return FALSE;
+}
+
+/* Note: this function is newly added to the API */
+GHashTable*
+_ostree_kernel_arg_get_kargs_table (OstreeKernelArgs *kargs)
+{
+
+  if (kargs != NULL)
+    return kargs->table;
+  return NULL;
+}
+
+/* Note: this function is newly added to the API */
+GPtrArray*
+_ostree_kernel_arg_get_key_array (OstreeKernelArgs *kargs)
+{
+  if (kargs != NULL)
+    return kargs->order;
+  return NULL;
 }
 
 /*
@@ -190,7 +211,7 @@ _ostree_kernel_arg_query_status (OstreeKernelArgs         *kargs,
        * there is only one single key, and the second val
        * will now represent the new value (no second split
        * will happen this case) */
-      else if (is_replaced && single_value && !key_only)
+      else if (is_replaced && single_value && !*replaced_val)
         {
           *out_query_flag = OSTREE_KERNEL_ARG_REPLACE_NO_SECOND_SPLIT;
           return TRUE;

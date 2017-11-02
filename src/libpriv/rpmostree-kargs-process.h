@@ -40,6 +40,11 @@ typedef enum {
   OSTREE_KERNEL_ARG_REPLACE_NO_SECOND_SPLIT = (1 << 2),
 } OstreeKernelArgQueryFlag;
 
+GHashTable* _ostree_kernel_arg_get_kargs_table (OstreeKernelArgs *kargs);
+GPtrArray* _ostree_kernel_arg_get_key_array (OstreeKernelArgs *kargs);
+
+gboolean _ostree_ptr_array_find (GPtrArray *array, const char *arg, int *out_index);
+
 OstreeKernelArgs *_ostree_kernel_args_new (void);
 void _ostree_kernel_args_free (OstreeKernelArgs *kargs);
 void _ostree_kernel_args_cleanup (void *loc);
