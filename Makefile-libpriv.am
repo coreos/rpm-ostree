@@ -51,6 +51,8 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-output.h \
 	src/libpriv/rpmostree-kargs-process.c \
 	src/libpriv/rpmostree-kargs-process.h \
+	src/libpriv/rpmostree-editor.c \
+	src/libpriv/rpmostree-editor.h \
 	src/libpriv/libsd-locale-util.c \
 	src/libpriv/libsd-locale-util.h \
 	$(NULL)
