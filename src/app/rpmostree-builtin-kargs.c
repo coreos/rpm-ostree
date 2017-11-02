@@ -23,12 +23,11 @@
 #include "rpmostree-ex-builtins.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-dbus-helpers.h"
-
+#include "rpmostree-editor.h"
+#include "rpmostree-kargs-process.h"
 #include <libglnx.h>
 
-/* TODO uncomment this when editor functionality is done
- *  static gboolean opt_editor;
- */
+static gboolean opt_editor;
 static gboolean opt_import_proc_cmdline;
 static gboolean opt_reboot;
 static char **opt_kernel_delete_strings;
@@ -45,9 +44,7 @@ static GOptionEntry option_entries[] = {
   { "replace", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_replace_strings, "Replace existing kernel argument, the user is also able to replace an argument with KEY=VALUE if only one value exist for that argument ", "KEY=VALUE=NEWVALUE" },
   { "delete", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_delete_strings, "Delete a specific kernel argument key/val pair or an entire argument with a single key/value pair", "KEY=VALUE"},
   { "import-proc-cmdline", 0, 0, G_OPTION_ARG_NONE, &opt_import_proc_cmdline, "Instead of modifying old kernel arguments, we modify args from current /proc/cmdline (the booted deployment)", NULL },
-  /* TODO: Add back the editor option once we decided how to handle the similar API from ostree
-   * { "editor", 0, 0, G_OPTION_ARG_NONE, &opt_editor, "Pops up an editor for users to change arguments", NULL },
-   */
+  { "editor", 0, 0, G_OPTION_ARG_NONE, &opt_editor, "Pops up an editor for users to change kernel arguments", NULL },
   { NULL }
 };
 
@@ -61,6 +58,104 @@ get_kargs_option_variant (void)
 
   return g_variant_dict_end (&dict);
 }
+
+/* This shares the similar logic from 'deployment_bootconfigs_equal'
+ * in ostree-sysroot-deploy.c. That is, the ostree argument
+ * inside the string gets swapped out to empty. Then, the
+ * other terms inside the kernel args are getting compared
+ */
+static gboolean
+kernel_arg_string_equal (const char* a_kernel_arg_string,
+                         const char* b_kernel_arg_string)
+{
+  __attribute__((cleanup(_ostree_kernel_args_cleanup))) OstreeKernelArgs *a_kargs = _ostree_kernel_args_from_string (a_kernel_arg_string);
+  _ostree_kernel_args_replace (a_kargs, "ostree");
+  g_autofree char* a_kernel_arg_string_without_ostree = _ostree_kernel_args_to_string (a_kargs);
+
+  __attribute__((cleanup(_ostree_kernel_args_cleanup))) OstreeKernelArgs *b_kargs = _ostree_kernel_args_from_string (b_kernel_arg_string);
+  _ostree_kernel_args_replace (b_kargs, "ostree");
+  g_autofree char* b_kernel_arg_string_without_ostree = _ostree_kernel_args_to_string (b_kargs);
+  if (strcmp (a_kernel_arg_string_without_ostree, b_kernel_arg_string_without_ostree) != 0)
+    return FALSE;
+  return TRUE;
+}
+
+/*
+ * This function shares a similar logic as the commit_editor
+ * function in ostree code base. It takes old kernel arguments
+ * and display to user through an editor. Then, then user
+ * is able to modify those args.
+ */
+static gboolean
+kernel_arg_handle_editor (const char     *input_kernel_arg,
+                          const char    **out_kernel_arg,
+                          GCancellable   *cancellable,
+                          GError        **error)
+{
+  g_autofree char *chomped_input = g_strchomp (g_strdup (input_kernel_arg));
+  g_autofree char *input_string = g_strdup_printf ("\n"
+      "# Please enter the kernel arguments. Each kernel argument"
+      "# should be in the form of key=value.\n"
+      "# Lines starting with '#' will be ignored. Each key=value pair should be \n"
+      "# separated by spaces, and multiple value associated with one key is allowed. \n"
+      "# Also, please note that any changes to existing ostree argument will not be \n"
+      "# effective as they are usually regenerated when bootconfig changes \n"
+      "%s\n", chomped_input);
+
+  /* Note: the repo here is NULL, as we don't really require it
+   * for the edtior process
+   */
+  g_autofree char *out_editor_string = ot_editor_prompt (NULL, input_string,
+                                                         cancellable, error);
+  if (out_editor_string == NULL)
+    return FALSE;
+
+  /* We now process the editor output, we ignore lines starting with #
+   * and we assume the kernel arguments are usually in one line.
+   */
+  g_auto(GStrv) lines = g_strsplit(out_editor_string, "\n", -1);
+  guint num_lines = g_strv_length (lines);
+  g_autoptr(GString) kernel_arg_buf = g_string_new ("");
+  for (guint i = 0; i < num_lines; i++)
+    {
+      /* remove leading and trailing spaces */
+      g_strchomp (lines[i]);
+      g_strchug (lines[i]);
+      /* comments and blank lines are skipped */
+      if (lines[i][0] == '#')
+        continue;
+      if (lines[i][0] == '\0')
+        continue;
+
+      g_string_append (kernel_arg_buf, lines[i]);
+
+      /* we append a space to every line except the last
+       * because there could be a case where user have
+       * args that are in multiple lines
+       */
+      g_string_append (kernel_arg_buf, " ");
+    }
+  g_strchomp (kernel_arg_buf->str);
+  /* We do not allow empty kernel arg string */
+  if (!strcmp (kernel_arg_buf->str, ""))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "The kernel arguments can not be empty");
+      return FALSE;
+    }
+  /* Notify the user that nothing has been changed */
+  if (kernel_arg_string_equal (chomped_input, kernel_arg_buf->str))
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "The kernel arguments remained the same");
+      return FALSE;
+    }
+
+  *out_kernel_arg = g_string_free (g_steal_pointer (&kernel_arg_buf), FALSE);
+
+  return TRUE;
+}
+
 
 int
 rpmostree_ex_builtin_kargs (int            argc,
@@ -84,18 +179,16 @@ rpmostree_ex_builtin_kargs (int            argc,
                                        error))
     return EXIT_FAILURE;
 
-  /* TODO: uncomment these lines when finish implementing editor feature
-   *
-   * if (opt_editor && (opt_import_proc || opt_kernel_delete_strings ||
-   *   opt_kernel_replace_strings ||  opt_kernel_append_strings))
-   *  {
-   *    We want editor command to achieve all the other functionalities
-   *   Thus erroring out ahead of time when multiple options exist
-   *   g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-   *                "Cannot specify --editor with other options");
-   *   return EXIT_FAILURE;
-   * }
-   */
+   if (opt_editor && (opt_kernel_delete_strings ||
+       opt_kernel_replace_strings ||  opt_kernel_append_strings))
+     {
+      /* We want editor command to achieve all these functionalities
+       * Thus erroring out ahead of time when these strings exist
+       */
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Editor command is already enough to modify the kernel arguments");
+      return EXIT_FAILURE;
+    }
 
   if (opt_kernel_delete_strings && opt_kernel_replace_strings)
     {
@@ -112,7 +205,7 @@ rpmostree_ex_builtin_kargs (int            argc,
   if (opt_import_proc_cmdline && opt_deploy_index)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Canno specify both --import-from-proc-cmdline and --deployid");
+                   "Cannot specify both --import-from-proc-cmdline and --deployid");
       return EXIT_FAILURE;
     }
   if (opt_import_proc_cmdline && opt_osname)
@@ -122,7 +215,7 @@ rpmostree_ex_builtin_kargs (int            argc,
       return EXIT_FAILURE;
     }
   if (!(opt_kernel_delete_strings) && !(opt_kernel_append_strings)
-      && !(opt_kernel_replace_strings))
+      && !(opt_kernel_replace_strings) && !(opt_editor))
     display_kernel_args = TRUE;
 
   if (opt_reboot && display_kernel_args)
@@ -160,42 +253,90 @@ rpmostree_ex_builtin_kargs (int            argc,
     return EXIT_FAILURE;
 
   /* We extract the existing kernel arguments from the boot configuration */
-  const char *existing_kernel_arg_string = NULL;
+  const char *old_kernel_arg_string = NULL;
   if (!g_variant_lookup (boot_config, "options",
-                         "&s", &existing_kernel_arg_string))
+                         "&s", &old_kernel_arg_string))
     return EXIT_FAILURE;
 
   if (display_kernel_args)
     {
       g_print("The kernel arguments are:\n%s\n",
-              existing_kernel_arg_string);
+              old_kernel_arg_string);
       return EXIT_SUCCESS;
     }
 
   g_autofree char *transaction_address = NULL;
   char *empty_strv[] = {NULL};
 
-  /* dbus does not allow NULL to mean the empty string array,
-   * assign them to be empty string array here to prevent erroring out
-   */
-  if (!opt_kernel_replace_strings)
-    opt_kernel_replace_strings = empty_strv;
-  if (!opt_kernel_append_strings)
-    opt_kernel_append_strings = empty_strv;
-  if (!opt_kernel_delete_strings)
-    opt_kernel_delete_strings = empty_strv;
+  if (opt_editor)
+    {
+      /* We track the kernel arg instance before the editor */
+      const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
+      g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
+      g_autoptr(OstreeSysroot) before_sysroot = ostree_sysroot_new (sysroot_file);
+      if (!ostree_sysroot_load (before_sysroot, cancellable, error))
+        return FALSE;
 
-  /* call the generearted dbus-function */
-  if (!rpmostree_os_call_kernel_args_sync (os_proxy,
-                                           existing_kernel_arg_string,
-                                           (const char* const*) opt_kernel_append_strings,
-                                           (const char* const*) opt_kernel_replace_strings,
-                                           (const char* const*) opt_kernel_delete_strings,
-                                           get_kargs_option_variant (),
-                                           &transaction_address,
+      const char* current_kernel_arg_string = NULL;
+      if (!kernel_arg_handle_editor (old_kernel_arg_string, &current_kernel_arg_string,
+                                     cancellable, error))
+        return EXIT_FAILURE;
+      gboolean out_changed = FALSE;
+
+      /* Here we load the sysroot again, if the sysroot
+       * has been changed since then, we directly error
+       * out.
+       */
+      if (!ostree_sysroot_load_if_changed (before_sysroot,
+                                           &out_changed,
                                            cancellable,
                                            error))
-    return EXIT_FAILURE;
+        return EXIT_FAILURE;
+      if (out_changed)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                       "Bootconfig has already been changed since then, please retry the editor");
+          return EXIT_FAILURE;
+        }
+      /* We use the user defined kernel args as existing arguments here
+       * and kept other strvs empty, because the existing kernel arguments
+       * is already enough for the update
+       */
+      if (!rpmostree_os_call_kernel_args_sync (os_proxy,
+                                               current_kernel_arg_string,
+                                               (const char* const*) empty_strv,
+                                               (const char* const*) empty_strv,
+                                               (const char* const*) empty_strv,
+                                               get_kargs_option_variant (),
+                                               &transaction_address,
+                                               cancellable,
+                                               error))
+        return EXIT_FAILURE;
+    }
+  else
+    {
+      /* dbus does not allow NULL to mean the empty string array,
+       * assign them to be empty string array here to prevent erroring out
+       */
+      if (!opt_kernel_replace_strings)
+        opt_kernel_replace_strings = empty_strv;
+      if (!opt_kernel_append_strings)
+        opt_kernel_append_strings = empty_strv;
+      if (!opt_kernel_delete_strings)
+        opt_kernel_delete_strings = empty_strv;
+
+      /* call the generearted dbus-function */
+      if (!rpmostree_os_call_kernel_args_sync (os_proxy,
+                                               old_kernel_arg_string,
+                                               (const char* const*) opt_kernel_append_strings,
+                                               (const char* const*) opt_kernel_replace_strings,
+                                               (const char* const*) opt_kernel_delete_strings,
+                                               get_kargs_option_variant (),
+                                               &transaction_address,
+                                               cancellable,
+                                               error))
+        return EXIT_FAILURE;
+    }
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
