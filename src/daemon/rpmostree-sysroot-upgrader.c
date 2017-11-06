@@ -80,6 +80,8 @@ struct RpmOstreeSysrootUpgrader {
   gboolean pkgs_imported; /* Whether pkgs to be layered have been downloaded & imported */
   char *base_revision; /* Non-layered replicated commit */
   char *final_revision; /* Computed by layering; if NULL, only using base_revision */
+
+  char **kargs_strv; /* Kernel argument list to be written into deployment  */
 };
 
 enum {
@@ -214,7 +216,7 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   g_clear_pointer (&self->origin, (GDestroyNotify)rpmostree_origin_unref);
   g_free (self->base_revision);
   g_free (self->final_revision);
-
+  g_strfreev (self->kargs_strv);
   g_clear_pointer (&self->overlay_packages, (GDestroyNotify)g_ptr_array_unref);
   g_clear_pointer (&self->override_remove_packages, (GDestroyNotify)g_ptr_array_unref);
 
@@ -1056,6 +1058,31 @@ rpmostree_sysroot_upgrader_import_pkgs (RpmOstreeSysrootUpgrader *self,
 }
 
 /**
+ * rpmostree_sysroot_upgrader_deploy_set_kargs:
+ * @self: Self
+ * @kernel_args: A list of strings representing kernel_arguments
+ * @cancellable: Cancellable
+ * @error: Error
+ *
+ * A wrapper function that collects the kernel arguments then call the rpmostree_sysroot_upgrader_deploy
+ * to write a pending deployment to the disk
+ *
+ * Returns: FALSE if rpmostree_sysroot_upgrader_deploy fails
+ *
+ */
+gboolean
+rpmostree_sysroot_upgrader_deploy_set_kargs (RpmOstreeSysrootUpgrader *self,
+                                             char                    **kernel_args,
+                                             GCancellable             *cancellable,
+                                             GError                  **error)
+{
+  /* Set the attribute kargs directly, not sure whether or not to have a setter */
+  /* Because .. currently pretty much here is the only place that we set it */
+  self->kargs_strv = g_strdupv (kernel_args);
+  return rpmostree_sysroot_upgrader_deploy (self, cancellable, error);
+}
+
+/**
  * rpmostree_sysroot_upgrader_deploy:
  * @self: Self
  * @cancellable: Cancellable
@@ -1104,7 +1131,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   if (!ostree_sysroot_deploy_tree (self->sysroot, self->osname,
                                    target_revision, origin,
                                    self->cfg_merge_deployment,
-                                   NULL,
+                                   self->kargs_strv,
                                    &new_deployment,
                                    cancellable, error))
     return FALSE;

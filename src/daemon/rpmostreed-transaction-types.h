@@ -124,3 +124,19 @@ rpmostreed_transaction_new_refresh_md (GDBusMethodInvocation *invocation,
                                        const char            *osname,
                                        GCancellable          *cancellable,
                                        GError               **error);
+typedef enum {
+  RPMOSTREE_TRANSACTION_KERNEL_ARG_FLAG_REBOOT = (1 << 0),
+} RpmOstreeTransactionKernelArgFlags;
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_kernel_arg (GDBusMethodInvocation *invocation,
+                                       OstreeSysroot         *sysroot,
+                                       const char *           osname,
+                                       const char *           existing_kernel_args,
+                                       const char * const *kernel_args_added,
+                                       const char * const *kernel_args_replaced,
+                                       const char * const *kernel_args_deleted,
+                                       RpmOstreeTransactionKernelArgFlags flags,
+                                       GCancellable          *cancellable,
+                                       GError               **error);
+

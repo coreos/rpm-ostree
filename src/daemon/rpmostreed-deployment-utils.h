@@ -27,6 +27,10 @@ char *          rpmostreed_deployment_generate_id (OstreeDeployment *deployment)
 OstreeDeployment *
                 rpmostreed_deployment_get_for_id (OstreeSysroot *sysroot,
                                                   const gchar *deploy_id);
+OstreeDeployment *
+                rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot,
+                                                     const gchar   *index,
+                                                     GError       **error);
 
 GVariant *      rpmostreed_deployment_generate_blank_variant (void);
 
