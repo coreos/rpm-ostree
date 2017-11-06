@@ -1857,11 +1857,11 @@ rpmostree_commit (int            rootfs_fd,
                   GCancellable  *cancellable,
                   GError       **error)
 {
-  /* hardcode targeted policy for now */
   g_autoptr(OstreeSePolicy) sepolicy = NULL;
   if (enable_selinux)
     {
-      if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_fd, &sepolicy, cancellable, error))
+      sepolicy = ostree_sepolicy_new_at (rootfs_fd, cancellable, error);
+      if (!sepolicy)
         return FALSE;
     }
 
