@@ -95,8 +95,8 @@ rpmostree_ex_builtin_unpack (int             argc,
       glnx_autofd int rootfs_dfd = -1;
       if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &rootfs_dfd, error))
         goto out;
-      if (!rpmostree_prepare_rootfs_get_sepolicy (rootfs_dfd, &sepolicy,
-                                                  cancellable, error))
+      sepolicy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
+      if (!sepolicy)
         goto out;
     }
 
