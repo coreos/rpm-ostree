@@ -1,14 +1,5 @@
 #include "config.h"
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include <glib-unix.h>
 #include "libglnx.h"
-#include "rpmostree-util.h"
-#include "rpmostree-core.h"
-#include "libtest.h"
 #include "rpmostree-kargs-process.h"
 
 static gboolean
