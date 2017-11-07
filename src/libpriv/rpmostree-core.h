@@ -77,6 +77,8 @@ void rpmostree_context_set_is_empty (RpmOstreeContext *self);
 void rpmostree_context_set_repos (RpmOstreeContext *self,
                                   OstreeRepo       *base_repo,
                                   OstreeRepo       *pkgcache_repo);
+void rpmostree_context_set_devino_cache (RpmOstreeContext *self,
+                                         OstreeRepoDevInoCache *devino_cache);
 void rpmostree_context_set_sepolicy (RpmOstreeContext *self,
                                      OstreeSePolicy   *sepolicy);
 
@@ -148,12 +150,10 @@ typedef enum {
 /* devino_cache can be NULL if no previous cache established */
 gboolean rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
                                                int                    tmprootfs_dfd,
-                                               OstreeRepoDevInoCache *devino_cache,
                                                GCancellable          *cancellable,
                                                GError               **error);
 gboolean rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
                                              int                    tmprootfs_dfd,
-                                             OstreeRepoDevInoCache *devino_cache,
                                              const char            *parent,
                                              RpmOstreeAssembleType  assemble_type,
                                              char                 **out_commit,
