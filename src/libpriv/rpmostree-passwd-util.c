@@ -1064,9 +1064,9 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
   for (guint i = 0; i < G_N_ELEMENTS (usrlib_pwgrp_files); i++)
     {
       const char *file = usrlib_pwgrp_files[i];
-      const char *usrlibfile = glnx_strjoina ("usr/lib/", file);
-      const char *usretcfile = glnx_strjoina ("usr/etc/", file);
-      const char *usrlibfiletmp = glnx_strjoina ("usr/lib/", file, ".tmp");
+      g_autofree char *usrlibfile = g_strconcat ("usr/lib/", file, NULL);
+      g_autofree char *usretcfile = g_strconcat ("usr/etc/", file, NULL);
+      g_autofree char *usrlibfiletmp = g_strconcat ("usr/lib/", file, ".tmp", NULL);
 
       /* Retain the current copies in /etc as backups */
       if (!glnx_renameat (rootfs_dfd, usretcfile, rootfs_dfd,
