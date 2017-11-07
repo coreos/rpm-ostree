@@ -116,13 +116,10 @@ roc_context_prepare_for_root (ROContainerContext *rocctx,
 static void
 roc_context_deinit (ROContainerContext *rocctx)
 {
-  if (rocctx->userroot_dfd != -1)
-    (void) close (rocctx->userroot_dfd);
+  glnx_close_fd (&rocctx->userroot_dfd);
   g_clear_object (&rocctx->repo);
-  if (rocctx->roots_dfd != -1)
-    (void) close (rocctx->roots_dfd);
-  if (rocctx->rpmmd_dfd != -1)
-    (void) close (rocctx->rpmmd_dfd);
+  glnx_close_fd (&rocctx->roots_dfd);
+  glnx_close_fd (&rocctx->rpmmd_dfd);
   g_clear_object (&rocctx->ctx);
 }
 
