@@ -151,7 +151,7 @@ AM_CONDITIONAL(BUILDOPT_INSTALL_TESTS, test x$enable_installed_tests = xyes)
 
 AC_ARG_ENABLE(new-name,
               AS_HELP_STRING([--enable-new-name],
-                             [Install additionally as nts (default: no)]),,
+                             [Install additionally as yum-img (default: no)]),,
               [enable_new_name=no])
 AM_CONDITIONAL(BUILDOPT_NEW_NAME, test x$enable_new_name = xyes)
 
@@ -207,7 +207,7 @@ echo "
     $PACKAGE $VERSION
 
     built with modern RPM (e.g. Fedora 25+): $have_modern_rpm
-    nts name:                                $enable_new_name
+    yum-img name:                            $enable_new_name
     compose tooling:                         $enable_compose_tooling
     introspection:                           $found_introspection
     bubblewrap:                              $with_bubblewrap
