@@ -615,7 +615,7 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self,
 
   g_autoptr(GPtrArray) inactive_replacements = g_ptr_array_new ();
   g_autoptr(OstreeRepo) pkgcache_repo = NULL;
-  if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
+  if (!rpmostree_syscore_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
     return FALSE;
 
   GLNX_HASH_TABLE_FOREACH_KV (local_replacements, const char*, nevra, const char*, sha256)
@@ -690,7 +690,7 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
         return FALSE;
 
       g_autoptr(OstreeRepo) pkgcache_repo = NULL;
-      if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
+      if (!rpmostree_syscore_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
         return FALSE;
 
       GLNX_HASH_TABLE_FOREACH_KV (local_pkgs, const char*, nevra, const char*, sha256)
@@ -824,7 +824,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
     return FALSE;
 
   g_autoptr(OstreeRepo) pkgcache_repo = NULL;
-  if (!rpmostree_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
+  if (!rpmostree_syscore_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
     return FALSE;
 
   rpmostree_context_set_repos (self->ctx, self->repo, pkgcache_repo);
