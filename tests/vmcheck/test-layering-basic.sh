@@ -35,7 +35,7 @@ vm_assert_status_jq \
   '.deployments[0]["base-checksum"]|not' \
   '.deployments[0]["pending-base-checksum"]|not'
 
-# make sure installing in /opt fails
+# make sure installing in /opt and /usr/local fails
 
 vm_build_rpm test-opt \
   files /opt/app \
@@ -46,7 +46,18 @@ if vm_rpmostree install test-opt-1.0 2>err.txt; then
 fi
 assert_file_has_content err.txt "See https://github.com/projectatomic/rpm-ostree/issues/233"
 
-echo "ok failed to install in opt"
+# https://developer.download.nvidia.com/compute/cuda/repos/rhel7/x86_64/cuda-license-9-0-9.0.176-1.x86_64.rpm
+# was known to do this.
+vm_build_rpm test-usrlocal \
+             files /usr/local/bin/foo \
+             install "mkdir -p %{buildroot}/usr/local/bin/
+                      touch %{buildroot}/usr/local/bin/foo"
+if vm_rpmostree install test-usrlocal-1.0 2>err.txt; then
+    assert_not_reached "Was able to install a package in /usr/local/"
+fi
+assert_file_has_content err.txt "See https://github.com/projectatomic/rpm-ostree/issues/233"
+
+echo "ok failed to install in /opt and /usr/local"
 
 vm_build_rpm foo
 vm_rpmostree pkg-add foo-1.0
