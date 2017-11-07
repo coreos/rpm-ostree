@@ -266,6 +266,27 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
+        <term><command>override</command></term>
+
+        <listitem>
+          <para>
+            <command>remove</command> Remove a package from the base
+            tree.  Note that this is similar to layering in that
+            the original base is retained.
+          </para>
+
+          <para>
+            <command>replace</command> Replace a package in the base tree.
+          </para>
+
+          <para>
+            <command>reset</command> Undo a <literal>remove</literal> or
+            <literal>replace</literal> operation.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><command>rebase</command></term>
 
         <listitem>
