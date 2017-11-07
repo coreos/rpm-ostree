@@ -306,6 +306,7 @@ rpmostree_context_class_init (RpmOstreeContextClass *klass)
 static void
 rpmostree_context_init (RpmOstreeContext *self)
 {
+  self->tmprootfs_dfd = -1;
 }
 
 static void
