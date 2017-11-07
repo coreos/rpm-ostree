@@ -903,10 +903,10 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
       g_clear_pointer (&self->final_revision, g_free);
 
       rpmostree_context_set_devino_cache (self->ctx, self->devino_cache);
+      rpmostree_context_set_tmprootfs_dfd (self->ctx, self->tmprootfs_dfd);
 
       /* --- override/overlay and commit --- */
-      if (!rpmostree_context_assemble_tmprootfs (self->ctx, self->tmprootfs_dfd,
-                                                 cancellable, error))
+      if (!rpmostree_context_assemble (self->ctx, cancellable, error))
         return FALSE;
     }
 
@@ -948,11 +948,9 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
       rpmostree_output_task_end ("done");
     }
 
-  if (!rpmostree_context_commit_tmprootfs (self->ctx, self->tmprootfs_dfd,
-                                           self->base_revision,
-                                           RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
-                                           &self->final_revision,
-                                           cancellable, error))
+  if (!rpmostree_context_commit (self->ctx, self->base_revision,
+                                 RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
+                                 &self->final_revision, cancellable, error))
     return FALSE;
 
   /* Ensure we aren't holding any references to the tmpdir now that we're done;
