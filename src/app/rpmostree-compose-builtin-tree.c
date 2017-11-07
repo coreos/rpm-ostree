@@ -116,13 +116,11 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_clear_pointer (&ctx->metadata, g_hash_table_unref);
   g_clear_object (&ctx->previous_root);
   /* Only close workdir_dfd if it's not owned by the tmpdir */
-  if (!ctx->workdir_tmp.initialized && ctx->workdir_dfd != -1)
-    (void) close (ctx->workdir_dfd);
+  if (!ctx->workdir_tmp.initialized)
+    glnx_close_fd (&ctx->workdir_dfd);
   (void)glnx_tmpdir_delete (&ctx->workdir_tmp, NULL, NULL);
-  if (ctx->rootfs_dfd != -1)
-    (void) close (ctx->rootfs_dfd);
-  if (ctx->cachedir_dfd != -1)
-    (void) close (ctx->cachedir_dfd);
+  glnx_close_fd (&ctx->rootfs_dfd);
+  glnx_close_fd (&ctx->cachedir_dfd);
   g_clear_object (&ctx->repo);
   g_free (ctx->ref);
   g_free (ctx->previous_checksum);
@@ -977,7 +975,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
                                               cancellable, error))
       return glnx_prefix_error (error, "Preparing rootfs for commit");
 
-    (void) close (glnx_steal_fd (&self->rootfs_dfd));
+    glnx_close_fd (&self->rootfs_dfd);
 
     /* Remove the old root, then retarget rootfs_dfd to the final one */
     if (!glnx_shutil_rm_rf_at (self->workdir_dfd, rootfs_name, cancellable, error))

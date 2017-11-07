@@ -200,8 +200,7 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
 
   g_clear_pointer (&self->rsack, rpmostree_refsack_unref);
   g_clear_object (&self->ctx);
-  if (self->tmprootfs_dfd != -1)
-    (void)close (self->tmprootfs_dfd);
+  glnx_close_fd (&self->tmprootfs_dfd);
 
   (void)glnx_tmpdir_delete (&self->metatmpdir, NULL, NULL);
 
@@ -960,8 +959,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
    * bits in the compose and container path.
    */
   g_clear_object (&self->ctx);
-  (void) close (self->tmprootfs_dfd);
-  self->tmprootfs_dfd = -1;
+  glnx_close_fd (&self->tmprootfs_dfd);
 
   return TRUE;
 }

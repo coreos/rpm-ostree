@@ -86,8 +86,8 @@ rpmostree_unpacker_finalize (GObject *object)
     archive_read_free (self->archive); 
   if (self->fi)
     (void) rpmfiFree (self->fi);
-  if (self->owns_fd && self->fd != -1)
-    (void) close (self->fd);
+  if (self->owns_fd)
+    glnx_close_fd (&self->fd);
   g_string_free (self->tmpfiles_d, TRUE);
   g_free (self->ostree_branch);
 
