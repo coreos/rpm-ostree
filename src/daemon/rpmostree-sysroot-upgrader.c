@@ -895,15 +895,15 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_NONE)
     return TRUE;
 
+  rpmostree_context_set_devino_cache (self->ctx, self->devino_cache);
+  rpmostree_context_set_tmprootfs_dfd (self->ctx, self->tmprootfs_dfd);
+
   if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
     {
       if (!rpmostree_context_relabel (self->ctx, cancellable, error))
         return FALSE;
 
       g_clear_pointer (&self->final_revision, g_free);
-
-      rpmostree_context_set_devino_cache (self->ctx, self->devino_cache);
-      rpmostree_context_set_tmprootfs_dfd (self->ctx, self->tmprootfs_dfd);
 
       /* --- override/overlay and commit --- */
       if (!rpmostree_context_assemble (self->ctx, cancellable, error))
