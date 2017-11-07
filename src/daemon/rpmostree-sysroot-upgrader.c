@@ -902,9 +902,10 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
 
       g_clear_pointer (&self->final_revision, g_free);
 
+      rpmostree_context_set_devino_cache (self->ctx, self->devino_cache);
+
       /* --- override/overlay and commit --- */
       if (!rpmostree_context_assemble_tmprootfs (self->ctx, self->tmprootfs_dfd,
-                                                 self->devino_cache,
                                                  cancellable, error))
         return FALSE;
     }
@@ -947,7 +948,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
       rpmostree_output_task_end ("done");
     }
 
-  if (!rpmostree_context_commit_tmprootfs (self->ctx, self->tmprootfs_dfd, self->devino_cache,
+  if (!rpmostree_context_commit_tmprootfs (self->ctx, self->tmprootfs_dfd,
                                            self->base_revision,
                                            RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING,
                                            &self->final_revision,
