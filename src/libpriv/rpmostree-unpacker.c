@@ -608,7 +608,8 @@ path_is_ostree_compliant (const char *path)
   g_assert (*path == '/');
   path++;
   return (*path == '\0' ||
-          g_str_equal (path, "usr")   || g_str_has_prefix (path, "usr/")  ||
+          g_str_equal (path, "usr")   || (g_str_has_prefix (path, "usr/")
+                                          && !g_str_has_prefix (path, "usr/local/")) ||
           g_str_equal (path, "bin")   || g_str_has_prefix (path, "bin/")  ||
           g_str_equal (path, "sbin")  || g_str_has_prefix (path, "sbin/") ||
           g_str_equal (path, "lib")   || g_str_has_prefix (path, "lib/")  ||
