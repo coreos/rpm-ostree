@@ -77,6 +77,8 @@ void rpmostree_context_set_is_empty (RpmOstreeContext *self);
 void rpmostree_context_set_repos (RpmOstreeContext *self,
                                   OstreeRepo       *base_repo,
                                   OstreeRepo       *pkgcache_repo);
+void rpmostree_context_set_devino_cache (RpmOstreeContext *self,
+                                         OstreeRepoDevInoCache *devino_cache);
 void rpmostree_context_set_sepolicy (RpmOstreeContext *self,
                                      OstreeSePolicy   *sepolicy);
 
@@ -144,18 +146,18 @@ typedef enum {
   RPMOSTREE_ASSEMBLE_TYPE_CLIENT_LAYERING
 } RpmOstreeAssembleType;
 
+void rpmostree_context_set_tmprootfs_dfd (RpmOstreeContext *self,
+                                          int               dfd);
+int rpmostree_context_get_tmprootfs_dfd  (RpmOstreeContext *self);
+
 /* NB: tmprootfs_dfd is allowed to have pre-existing data */
 /* devino_cache can be NULL if no previous cache established */
-gboolean rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
-                                               int                    tmprootfs_dfd,
-                                               OstreeRepoDevInoCache *devino_cache,
-                                               GCancellable          *cancellable,
-                                               GError               **error);
-gboolean rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
-                                             int                    tmprootfs_dfd,
-                                             OstreeRepoDevInoCache *devino_cache,
-                                             const char            *parent,
-                                             RpmOstreeAssembleType  assemble_type,
-                                             char                 **out_commit,
-                                             GCancellable          *cancellable,
-                                             GError               **error);
+gboolean rpmostree_context_assemble (RpmOstreeContext      *self,
+                                     GCancellable          *cancellable,
+                                     GError               **error);
+gboolean rpmostree_context_commit (RpmOstreeContext      *self,
+                                   const char            *parent,
+                                   RpmOstreeAssembleType  assemble_type,
+                                   char                 **out_commit,
+                                   GCancellable          *cancellable,
+                                   GError               **error);

@@ -247,6 +247,7 @@ struct _RpmOstreeContext {
   DnfContext *hifctx;
   OstreeRepo *ostreerepo;
   OstreeRepo *pkgcache_repo;
+  OstreeRepoDevInoCache *devino_cache;
   gboolean unprivileged;
   OstreeSePolicy *sepolicy;
   char *passwd_dir;
@@ -259,6 +260,9 @@ struct _RpmOstreeContext {
   GHashTable *pkgs_to_replace; /* new gv_nevra --> old gv_nevra */
 
   GLnxTmpDir tmpdir;
+
+  int tmprootfs_dfd; /* Borrowed */
+  GLnxTmpDir repo_tmpdir; /* Used to assemble+commit if no base rootfs provided */
 };
 
 G_DEFINE_TYPE (RpmOstreeContext, rpmostree_context, G_TYPE_OBJECT)
@@ -273,6 +277,7 @@ rpmostree_context_finalize (GObject *object)
 
   g_clear_object (&rctx->pkgcache_repo);
   g_clear_object (&rctx->ostreerepo);
+  g_clear_pointer (&rctx->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
 
   g_clear_object (&rctx->sepolicy);
 
@@ -286,6 +291,7 @@ rpmostree_context_finalize (GObject *object)
   g_clear_pointer (&rctx->pkgs_to_replace, g_hash_table_unref);
 
   (void)glnx_tmpdir_delete (&rctx->tmpdir, NULL, NULL);
+  (void)glnx_tmpdir_delete (&rctx->repo_tmpdir, NULL, NULL);
 
   G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
 }
@@ -300,6 +306,7 @@ rpmostree_context_class_init (RpmOstreeContextClass *klass)
 static void
 rpmostree_context_init (RpmOstreeContext *self)
 {
+  self->tmprootfs_dfd = -1;
 }
 
 static void
@@ -468,6 +475,15 @@ rpmostree_context_set_sepolicy (RpmOstreeContext *self,
                                 OstreeSePolicy   *sepolicy)
 {
   g_set_object (&self->sepolicy, sepolicy);
+}
+
+void
+rpmostree_context_set_devino_cache (RpmOstreeContext *self,
+                                    OstreeRepoDevInoCache *devino_cache)
+{
+  if (self->devino_cache)
+    ostree_repo_devino_cache_unref (self->devino_cache);
+  self->devino_cache = devino_cache ? ostree_repo_devino_cache_ref (devino_cache) : NULL;
 }
 
 DnfContext *
@@ -2977,13 +2993,42 @@ run_all_transfiletriggers (RpmOstreeContext *self,
   return TRUE;
 }
 
-gboolean
-rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
-                                      int                    tmprootfs_dfd,
-                                      OstreeRepoDevInoCache *devino_cache,
-                                      GCancellable          *cancellable,
-                                      GError               **error)
+/* Set the root directory fd used for assemble(); used
+ * by the sysroot upgrader for the base tree.  This is optional;
+ * assemble() will use a tmpdir if not provided.
+ */
+void
+rpmostree_context_set_tmprootfs_dfd (RpmOstreeContext *self,
+                                     int               dfd)
 {
+  g_assert_cmpint (self->tmprootfs_dfd, ==, -1);
+  self->tmprootfs_dfd = dfd;
+}
+
+int
+rpmostree_context_get_tmprootfs_dfd  (RpmOstreeContext *self)
+{
+  return self->tmprootfs_dfd;
+}
+
+gboolean
+rpmostree_context_assemble (RpmOstreeContext      *self,
+                            GCancellable          *cancellable,
+                            GError               **error)
+{
+  /* Synthesize a tmpdir if we weren't provided a base */
+  if (self->tmprootfs_dfd == -1)
+    {
+      g_assert (!self->repo_tmpdir.initialized);
+      int repo_dfd = ostree_repo_get_dfd (self->ostreerepo); /* Borrowed */
+      if (!glnx_mkdtempat (repo_dfd, "tmp/rpmostree-assemble-XXXXXX", 0700,
+                           &self->repo_tmpdir, error))
+        return FALSE;
+      self->tmprootfs_dfd = self->repo_tmpdir.fd;
+    }
+
+  int tmprootfs_dfd = self->tmprootfs_dfd; /* Alias to avoid bigger diff */
+
   DnfContext *hifctx = self->hifctx;
   TransactionData tdata = { 0, NULL };
   g_autoptr(GHashTable) pkg_to_ostree_commit =
@@ -3089,7 +3134,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
   if (filesystem_package)
     {
       if (!checkout_package_into_root (self, filesystem_package,
-                                       tmprootfs_dfd, ".", devino_cache,
+                                       tmprootfs_dfd, ".", self->devino_cache,
                                        g_hash_table_lookup (pkg_to_ostree_commit,
                                                             filesystem_package),
                                        cancellable, error))
@@ -3130,7 +3175,7 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
       if (pkg == filesystem_package)
         continue;
 
-      if (!checkout_package_into_root (self, pkg, tmprootfs_dfd, ".", devino_cache,
+      if (!checkout_package_into_root (self, pkg, tmprootfs_dfd, ".", self->devino_cache,
                                        g_hash_table_lookup (pkg_to_ostree_commit, pkg),
                                        cancellable, error))
         return FALSE;
@@ -3401,14 +3446,12 @@ rpmostree_context_assemble_tmprootfs (RpmOstreeContext      *self,
 }
 
 gboolean
-rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
-                                    int                    tmprootfs_dfd,
-                                    OstreeRepoDevInoCache *devino_cache,
-                                    const char            *parent,
-                                    RpmOstreeAssembleType  assemble_type,
-                                    char                 **out_commit,
-                                    GCancellable          *cancellable,
-                                    GError               **error)
+rpmostree_context_commit (RpmOstreeContext      *self,
+                          const char            *parent,
+                          RpmOstreeAssembleType  assemble_type,
+                          char                 **out_commit,
+                          GCancellable          *cancellable,
+                          GError               **error)
 {
   g_autoptr(OstreeRepoCommitModifier) commit_modifier = NULL;
   g_autofree char *ret_commit_checksum = NULL;
@@ -3515,14 +3558,15 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
 
     commit_modifier = ostree_repo_commit_modifier_new (modflags, NULL, NULL, NULL);
 
-    ostree_repo_commit_modifier_set_devino_cache (commit_modifier, devino_cache);
+    if (self->devino_cache)
+      ostree_repo_commit_modifier_set_devino_cache (commit_modifier, self->devino_cache);
 
     /* if we're SELinux aware, then reload the final policy from the tmprootfs in case it
      * was changed by a scriptlet; this covers the foobar/foobar-selinux path */
     if (self->sepolicy)
       {
         g_autoptr(OstreeSePolicy) final_sepolicy = NULL;
-        if (!rpmostree_prepare_rootfs_get_sepolicy (tmprootfs_dfd, &final_sepolicy,
+        if (!rpmostree_prepare_rootfs_get_sepolicy (self->tmprootfs_dfd, &final_sepolicy,
                                                     cancellable, error))
           return FALSE;
 
@@ -3533,7 +3577,7 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
 
     mtree = ostree_mutable_tree_new ();
 
-    if (!ostree_repo_write_dfd_to_mtree (self->ostreerepo, tmprootfs_dfd, ".",
+    if (!ostree_repo_write_dfd_to_mtree (self->ostreerepo, self->tmprootfs_dfd, ".",
                                          mtree, commit_modifier,
                                          cancellable, error))
       return FALSE;
@@ -3591,6 +3635,10 @@ rpmostree_context_commit_tmprootfs (RpmOstreeContext      *self,
   }
 
   rpmostree_output_task_end ("done");
+
+  self->tmprootfs_dfd = -1;
+  if (!glnx_tmpdir_delete (&self->repo_tmpdir, cancellable, error))
+    return FALSE;
 
   if (out_commit)
     *out_commit = g_steal_pointer (&ret_commit_checksum);

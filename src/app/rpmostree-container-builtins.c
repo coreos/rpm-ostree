@@ -213,23 +213,16 @@ download_rpms_and_assemble_commit (ROContainerContext *rocctx,
   if (!rpmostree_context_import (rocctx->ctx, cancellable, error))
     return FALSE;
 
-  g_auto(GLnxTmpDir) tmpdir = { 0, };
-  if (!glnx_mkdtempat (rocctx->userroot_dfd, "tmp/rpmostree-commit-XXXXXX", 0755,
-                       &tmpdir, error))
+  if (!rpmostree_context_assemble (rocctx->ctx, cancellable, error))
     return FALSE;
 
-  g_autoptr(OstreeRepoDevInoCache) devino_cache = ostree_repo_devino_cache_new ();
-  if (!rpmostree_context_assemble_tmprootfs (rocctx->ctx, tmpdir.fd, devino_cache,
-                                             cancellable, error))
-    return FALSE;
-
-  if (!rpmostree_rootfs_postprocess_common (tmpdir.fd, cancellable, error))
+  if (!rpmostree_rootfs_postprocess_common (rpmostree_context_get_tmprootfs_dfd (rocctx->ctx),
+                                            cancellable, error))
     return FALSE;
 
   g_autofree char *ret_commit = NULL;
-  if (!rpmostree_context_commit_tmprootfs (rocctx->ctx, tmpdir.fd, devino_cache,
-                                           NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
-                                           &ret_commit, cancellable, error))
+  if (!rpmostree_context_commit (rocctx->ctx, NULL, RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,
+                                 &ret_commit, cancellable, error))
     return FALSE;
 
   *out_commit = g_steal_pointer (&ret_commit);
