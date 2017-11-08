@@ -482,7 +482,7 @@ import_local_rpm (OstreeRepo    *parent,
    * need relabeling and that's OK.
    * */
 
-  if (!rpmostree_get_pkgcache_repo (parent, &pkgcache_repo, cancellable, error))
+  if (!rpmostree_syscore_get_pkgcache_repo (parent, &pkgcache_repo, cancellable, error))
     return FALSE;
 
   /* let's just use the current sepolicy -- we'll just relabel it if the new

@@ -518,28 +518,6 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
 }
 
 gboolean
-rpmostree_get_pkgcache_repo (OstreeRepo   *parent,
-                             OstreeRepo  **out_pkgcache,
-                             GCancellable *cancellable,
-                             GError      **error)
-{
-  if (!glnx_shutil_mkdir_p_at (ostree_repo_get_dfd (parent),
-                               "extensions/rpmostree", 0755,
-                               cancellable, error))
-    return FALSE;
-  g_autoptr(OstreeRepo) pkgcache =
-    ostree_repo_create_at (ostree_repo_get_dfd (parent),
-                           "extensions/rpmostree/pkgcache",
-                           OSTREE_REPO_MODE_BARE, NULL,
-                           cancellable, error);
-  if (!pkgcache)
-    return FALSE;
-
-  *out_pkgcache = g_steal_pointer (&pkgcache);
-  return TRUE;
-}
-
-gboolean
 rpmostree_decompose_sha256_nevra (const char **nevra, /* gets incremented */
                                   char       **out_sha256,
                                   GError     **error)

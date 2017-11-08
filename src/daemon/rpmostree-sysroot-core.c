@@ -142,6 +142,31 @@ add_package_refs_to_set (RpmOstreeRefSack *rsack,
   return TRUE;
 }
 
+/* The pkgcache is in extensions/; see also
+ * https://github.com/projectatomic/rpm-ostree/pull/1055
+ */
+gboolean
+rpmostree_syscore_get_pkgcache_repo (OstreeRepo   *parent,
+                                     OstreeRepo  **out_pkgcache,
+                                     GCancellable *cancellable,
+                                     GError      **error)
+{
+  if (!glnx_shutil_mkdir_p_at (ostree_repo_get_dfd (parent),
+                               "extensions/rpmostree", 0755,
+                               cancellable, error))
+    return FALSE;
+  g_autoptr(OstreeRepo) pkgcache =
+    ostree_repo_create_at (ostree_repo_get_dfd (parent),
+                           "extensions/rpmostree/pkgcache",
+                           OSTREE_REPO_MODE_BARE, NULL,
+                           cancellable, error);
+  if (!pkgcache)
+    return FALSE;
+
+  *out_pkgcache = g_steal_pointer (&pkgcache);
+  return TRUE;
+}
+
 /* Loop over all deployments, gathering all referenced NEVRAs for
  * layered packages.  Then delete any cached pkg refs that aren't in
  * that set.
@@ -157,7 +182,7 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   g_autoptr(OstreeRepo) pkgcache_repo = NULL;
-  if (!rpmostree_get_pkgcache_repo (repo, &pkgcache_repo, cancellable, error))
+  if (!rpmostree_syscore_get_pkgcache_repo (repo, &pkgcache_repo, cancellable, error))
     return FALSE;
 
   g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
