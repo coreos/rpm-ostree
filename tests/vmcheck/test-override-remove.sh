@@ -66,7 +66,7 @@ vm_cmd mv /tmp/vmcheck/yumrepo{,.bak}
 # this works. the only difference here is the [.0] which we use to access the
 # nevra of each gv_nevra element.
 
-vm_rpmostree ex override remove foo bar
+vm_rpmostree override remove foo bar
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 2' \
   '[.deployments[0]["base-removals"][][.0]]|index("foo-1.0-1.x86_64") >= 0' \
@@ -87,7 +87,7 @@ vm_assert_status_jq \
   '.deployments[0]["requested-base-removals"]|index("bar") >= 0'
 echo "ok override remove carried through upgrade"
 
-vm_rpmostree ex override reset foo
+vm_rpmostree override reset foo
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 1' \
   '[.deployments[0]["base-removals"][][.0]]|index("bar-1.0-1.x86_64") >= 0' \
@@ -95,14 +95,14 @@ vm_assert_status_jq \
   '.deployments[0]["requested-base-removals"]|index("bar") >= 0'
 echo "ok override reset foo"
 
-vm_rpmostree ex override reset --all
+vm_rpmostree override reset --all
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 0' \
   '.deployments[0]["requested-base-removals"]|length == 0'
 echo "ok override reset --all"
 
 # check that upgrading to a base without foo works
-vm_rpmostree ex override remove foo
+vm_rpmostree override remove foo
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 1' \
   '[.deployments[0]["base-removals"][][.0]]|index("foo-1.0-1.x86_64") >= 0' \
@@ -133,13 +133,13 @@ echo "ok override remove/reset operate offline"
 
 # a few error checks
 
-if vm_rpmostree ex override remove non-existent-package; then
+if vm_rpmostree override remove non-existent-package; then
   assert_not_reached "override remove non-existent-package succeeded?"
 fi
 echo "ok override remove non-existent-package fails"
 
 vm_rpmostree install foo
-if vm_rpmostree ex override remove foo; then
+if vm_rpmostree override remove foo; then
   assert_not_reached "override remove layered pkg foo succeeded?"
 fi
 vm_rpmostree cleanup -p
@@ -149,7 +149,7 @@ echo "ok override remove layered pkg foo fails"
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
 
 vm_rpmostree upgrade
-vm_rpmostree ex override remove foo
+vm_rpmostree override remove foo
 if vm_rpmostree install foo; then
   assert_not_reached "tried to layer pkg removed by override"
 fi
@@ -163,7 +163,7 @@ echo "ok can't layer pkg removed by override"
 
 vm_build_rpm foo-ext requires "foo = 1.0-1"
 vm_rpmostree upgrade --install foo-ext
-if vm_rpmostree ex override remove foo; then
+if vm_rpmostree override remove foo; then
   assert_not_reached "override remove base pkg needed by layered pkg succeeded?"
 fi
 vm_rpmostree cleanup -p

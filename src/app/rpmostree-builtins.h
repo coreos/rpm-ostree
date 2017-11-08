@@ -74,6 +74,7 @@ BUILTINPROTO(internals);
 BUILTINPROTO(container);
 BUILTINPROTO(install);
 BUILTINPROTO(uninstall);
+BUILTINPROTO(override);
 BUILTINPROTO(start_daemon);
 BUILTINPROTO(ex);
 

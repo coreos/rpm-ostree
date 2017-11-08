@@ -140,7 +140,7 @@ $REMOTE_OSTREE commit -b vmcheck --tree=ref=$pending
 vm_rpmostree cleanup -prmb
 vm_rpmostree rebase --remote vmcheck_remote
 vm_build_rpm_repo_mode skip foobar version 2.0
-vm_rpmostree ex override replace $YUMREPO/foobar-2.0-1.x86_64.rpm
+vm_rpmostree override replace $YUMREPO/foobar-2.0-1.x86_64.rpm
 csum=$($REMOTE_OSTREE commit -b vmcheck --tree=ref=vmcheck)
 vm_rpmostree upgrade --download-only
 vm_assert_status_jq \

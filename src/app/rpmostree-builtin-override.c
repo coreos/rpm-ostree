@@ -37,9 +37,9 @@ static RpmOstreeCommand override_subcommands[] = {
 };
 
 int
-rpmostree_ex_builtin_override (int argc, char **argv,
-                               RpmOstreeCommandInvocation *invocation,
-                               GCancellable *cancellable, GError **error)
+rpmostree_builtin_override (int argc, char **argv,
+                            RpmOstreeCommandInvocation *invocation,
+                            GCancellable *cancellable, GError **error)
 {
   return rpmostree_handle_subcommand (argc, argv, override_subcommands,
                                       invocation, cancellable, error);

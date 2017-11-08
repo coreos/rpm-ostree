@@ -74,6 +74,8 @@ static RpmOstreeCommand commands[] = {
   { "uninstall", 0,
     "Remove one or more overlay packages",
     rpmostree_builtin_uninstall },
+  { "override", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "Manage base overrides", rpmostree_builtin_override },
   { "refresh-md", 0,
     "Generate rpm repo metadata",
     rpmostree_builtin_refresh_md },
