@@ -23,6 +23,7 @@
 #include <gio/gio.h>
 #include <systemd/sd-journal.h>
 #include "rpmostree-output.h"
+#include "rpmostree-util.h"
 #include "rpmostree-bwrap.h"
 #include <err.h>
 #include <systemd/sd-journal.h>
@@ -282,12 +283,14 @@ run_script_in_bwrap_container (int rootfs_fd,
                                  .stdout_fd = -1,
                                  .stderr_fd = -1, };
 
-  /* Only try to log to the journal if we're running in the system
-   * context; for unprivileged container builds we don't want to log
-   * to the journal, even if we have privileges to do so.
+  /* Only try to log to the journal if we're already set up that way (normally
+   * rpm-ostreed for host system management). Otherwise we might be in a Docker
+   * container, or directly on a host system being executed unprivileged
+   * via `ex container`, and in these cases we want to output to stdout, which
+   * is where other output will go.
    */
   const char *id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
-  if (getuid () == 0)
+  if (rpmostree_stdout_is_journal ())
     {
       data.stdout_fd = stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
       if (stdout_fd < 0)
