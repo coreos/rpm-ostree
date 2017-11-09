@@ -172,3 +172,8 @@ rpmostree_repo_auto_transaction_start (RpmOstreeRepoAutoTransaction     *autotxn
   return TRUE;
 }
 G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RpmOstreeRepoAutoTransaction, rpmostree_repo_auto_transaction_cleanup)
+
+gboolean
+rpmostree_variant_bsearch_str (GVariant   *array,
+                               const char *str,
+                               int        *out_pos);

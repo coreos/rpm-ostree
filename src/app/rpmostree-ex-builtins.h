@@ -34,6 +34,8 @@ BUILTINPROTO(unpack);
 BUILTINPROTO(livefs);
 BUILTINPROTO(override);
 BUILTINPROTO(kargs);
+BUILTINPROTO(commit2jigdo);
+BUILTINPROTO(jigdo2commit);
 
 #undef BUILTINPROTO
 
