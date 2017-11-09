@@ -2082,11 +2082,12 @@ checkout_package (OstreeRepo   *repo,
                   const char   *path,
                   OstreeRepoDevInoCache *devino_cache,
                   const char   *pkg_commit,
+                  OstreeRepoCheckoutOverwriteMode ovwmode,
                   GCancellable *cancellable,
                   GError      **error)
 {
   OstreeRepoCheckoutAtOptions opts = { OSTREE_REPO_CHECKOUT_MODE_USER,
-                                       OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL, };
+                                       ovwmode, };
 
   /* We want the checkout to match the repo type so that we get hardlinks. */
   if (ostree_repo_get_mode (repo) == OSTREE_REPO_MODE_BARE)
@@ -2111,6 +2112,7 @@ checkout_package_into_root (RpmOstreeContext *self,
                             const char   *path,
                             OstreeRepoDevInoCache *devino_cache,
                             const char   *pkg_commit,
+                            OstreeRepoCheckoutOverwriteMode ovwmode,
                             GCancellable *cancellable,
                             GError      **error)
 {
@@ -2127,7 +2129,7 @@ checkout_package_into_root (RpmOstreeContext *self,
     }
 
   if (!checkout_package (pkgcache_repo, pkg, dfd, path,
-                         devino_cache, pkg_commit,
+                         devino_cache, pkg_commit, ovwmode,
                          cancellable, error))
     return FALSE;
 
@@ -2404,7 +2406,8 @@ relabel_one_package (RpmOstreeContext *self,
   g_autoptr(OstreeRepoDevInoCache) cache = ostree_repo_devino_cache_new ();
 
   if (!checkout_package (repo, pkg, tmpdir_dfd, pkg_dirname, cache,
-                         commit_csum, cancellable, error))
+                         commit_csum, OSTREE_REPO_CHECKOUT_OVERWRITE_NONE,
+                         cancellable, error))
     return FALSE;
 
   /* This is where the magic happens. We traverse the tree and relabel stuff,
@@ -2975,7 +2978,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   TransactionData tdata = { 0, NULL };
   g_autoptr(GHashTable) pkg_to_ostree_commit =
     g_hash_table_new_full (NULL, NULL, (GDestroyNotify)g_object_unref, (GDestroyNotify)g_free);
-  DnfPackage *filesystem_package = NULL;   /* It's special... */
+  DnfPackage *filesystem_package = NULL;   /* It's special, see below */
+  DnfPackage *setup_package = NULL;   /* Also special due to composes needing to inject /etc/passwd */
 
   g_auto(rpmts) ordering_ts = rpmtsCreate ();
   rpmtsSetRootDir (ordering_ts, dnf_context_get_install_root (hifctx));
@@ -3040,6 +3044,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
       if (strcmp (dnf_package_get_name (pkg), "filesystem") == 0)
         filesystem_package = g_object_ref (pkg);
+      else if (strcmp (dnf_package_get_name (pkg), "setup") == 0)
+        setup_package = g_object_ref (pkg);
     }
 
   { DECLARE_RPMSIGHANDLER_RESET;
@@ -3079,6 +3085,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                        tmprootfs_dfd, ".", self->devino_cache,
                                        g_hash_table_lookup (pkg_to_ostree_commit,
                                                             filesystem_package),
+                                       OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL,
                                        cancellable, error))
         return FALSE;
     }
@@ -3117,9 +3124,17 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       if (pkg == filesystem_package)
         continue;
 
+      /* The "setup" package currently contains /etc/passwd; in the treecompose
+       * case we need to inject that beforehand, so use "add files" just for
+       * that.
+       */
+      OstreeRepoCheckoutOverwriteMode ovwmode =
+        (pkg == setup_package) ? OSTREE_REPO_CHECKOUT_OVERWRITE_ADD_FILES :
+        OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL;
+
       if (!checkout_package_into_root (self, pkg, tmprootfs_dfd, ".", self->devino_cache,
                                        g_hash_table_lookup (pkg_to_ostree_commit, pkg),
-                                       cancellable, error))
+                                       ovwmode, cancellable, error))
         return FALSE;
     }
 
