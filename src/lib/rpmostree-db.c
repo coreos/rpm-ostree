@@ -39,24 +39,19 @@
 static GPtrArray *
 query_all_packages_in_sack (RpmOstreeRefSack *rsack)
 {
-  hy_autoquery HyQuery hquery = NULL;
-  g_autoptr(GPtrArray) pkglist = NULL;
-  GPtrArray *result;
-  int i, c;
-
-  hquery = hy_query_create (rsack->sack);
+  hy_autoquery HyQuery hquery = hy_query_create (rsack->sack);
   hy_query_filter (hquery, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
-  pkglist = hy_query_run (hquery);
+  g_autoptr(GPtrArray) pkglist = hy_query_run (hquery);
 
-  result = g_ptr_array_new_with_free_func (g_object_unref);
-  
-  c = pkglist->len;
-  for (i = 0; i < c; i++)
+  g_autoptr(GPtrArray) result = g_ptr_array_new_with_free_func (g_object_unref);
+
+  const guint c = pkglist->len;
+  for (guint i = 0; i < c; i++)
     {
       DnfPackage *pkg = pkglist->pdata[i];
       g_ptr_array_add (result, _rpm_ostree_package_new (rsack, pkg));
     }
-  
+
   return g_steal_pointer (&result);
 }
 
@@ -78,10 +73,8 @@ rpm_ostree_db_query_all (OstreeRepo                *repo,
                          GCancellable              *cancellable,
                          GError                   **error)
 {
-  g_autoptr(RpmOstreeRefSack) rsack = NULL;
-
-  rsack = rpmostree_get_refsack_for_commit (repo, ref, cancellable, error);
-
+  g_autoptr(RpmOstreeRefSack) rsack =
+    rpmostree_get_refsack_for_commit (repo, ref, cancellable, error);
   return query_all_packages_in_sack (rsack);
 }
 
@@ -121,98 +114,86 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
                     GCancellable             *cancellable,
                     GError                  **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(RpmOstreeRefSack) orig_sack = NULL;
-  g_autoptr(RpmOstreeRefSack) new_sack = NULL;
-  g_autoptr(GPtrArray) orig_pkglist = NULL;
-  g_autoptr(GPtrArray) new_pkglist = NULL;
   g_autoptr(GPtrArray) ret_removed = g_ptr_array_new_with_free_func (g_object_unref);
   g_autoptr(GPtrArray) ret_added = g_ptr_array_new_with_free_func (g_object_unref);
   g_autoptr(GPtrArray) ret_modified_old = g_ptr_array_new_with_free_func (g_object_unref);
   g_autoptr(GPtrArray) ret_modified_new = g_ptr_array_new_with_free_func (g_object_unref);
-  guint i;
 
   g_return_val_if_fail (out_removed != NULL && out_added != NULL &&
                         out_modified_old != NULL && out_modified_new != NULL, FALSE);
 
-  orig_sack = rpmostree_get_refsack_for_commit (repo, orig_ref, cancellable, error);
+  g_autoptr(RpmOstreeRefSack) orig_sack =
+    rpmostree_get_refsack_for_commit (repo, orig_ref, cancellable, error);
   if (!orig_sack)
-    goto out;
+    return FALSE;
 
+  g_autoptr(GPtrArray) orig_pkglist = NULL;
   { hy_autoquery HyQuery query = hy_query_create (orig_sack->sack);
     hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
     orig_pkglist = hy_query_run (query);
   }
 
-  new_sack = rpmostree_get_refsack_for_commit (repo, new_ref, cancellable, error);
+  g_autoptr(RpmOstreeRefSack) new_sack =
+    rpmostree_get_refsack_for_commit (repo, new_ref, cancellable, error);
   if (!new_sack)
-    goto out;
+    return FALSE;
 
+  g_autoptr(GPtrArray) new_pkglist = NULL;
   { hy_autoquery HyQuery query = hy_query_create (new_sack->sack);
     hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
     new_pkglist = hy_query_run (query);
   }
 
-  for (i = 0; i < new_pkglist->len; i++)
+  for (guint i = 0; i < new_pkglist->len; i++)
     {
       DnfPackage *pkg = new_pkglist->pdata[i];
-      hy_autoquery HyQuery query = NULL;
-      g_autoptr(GPtrArray) pkglist = NULL;
-      guint count;
-      DnfPackage *oldpkg;
-      
-      query = hy_query_create (orig_sack->sack);
+
+      hy_autoquery HyQuery query = hy_query_create (orig_sack->sack);
       hy_query_filter (query, HY_PKG_NAME, HY_EQ, dnf_package_get_name (pkg));
       hy_query_filter (query, HY_PKG_EVR, HY_NEQ, dnf_package_get_evr (pkg));
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
-      pkglist = hy_query_run (query);
+      g_autoptr(GPtrArray) pkglist = hy_query_run (query);
 
-      count = pkglist->len;
+      guint count = pkglist->len;
       if (count > 0)
         {
           /* See comment above about transitions from N -> 1 */
-          oldpkg = pkglist->pdata[0];
-          
+          DnfPackage *oldpkg = pkglist->pdata[0];
+
           g_ptr_array_add (ret_modified_old, _rpm_ostree_package_new (orig_sack, oldpkg));
           g_ptr_array_add (ret_modified_new, _rpm_ostree_package_new (new_sack, pkg));
         }
     }
 
-  for (i = 0; i < orig_pkglist->len; i++)
+  for (guint i = 0; i < orig_pkglist->len; i++)
     {
       DnfPackage *pkg = orig_pkglist->pdata[i];
-      hy_autoquery HyQuery query = NULL;
-      g_autoptr(GPtrArray) pkglist = NULL;
-      
-      query = hy_query_create (new_sack->sack);
+
+      hy_autoquery HyQuery query = hy_query_create (new_sack->sack);
       hy_query_filter (query, HY_PKG_NAME, HY_EQ, dnf_package_get_name (pkg));
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
-      pkglist = hy_query_run (query);
+      g_autoptr(GPtrArray) pkglist = hy_query_run (query);
 
       if (pkglist->len == 0)
         g_ptr_array_add (ret_removed, _rpm_ostree_package_new (orig_sack, pkg));
     }
 
-  for (i = 0; i < new_pkglist->len; i++)
+  for (guint i = 0; i < new_pkglist->len; i++)
     {
       DnfPackage *pkg = new_pkglist->pdata[i];
-      hy_autoquery HyQuery query = NULL;
-      g_autoptr(GPtrArray) pkglist = NULL;
-      
-      query = hy_query_create (orig_sack->sack);
+
+      hy_autoquery HyQuery query = hy_query_create (orig_sack->sack);
       hy_query_filter (query, HY_PKG_NAME, HY_EQ, dnf_package_get_name (pkg));
       hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
-      pkglist = hy_query_run (query);
+      g_autoptr(GPtrArray) pkglist = hy_query_run (query);
 
       if (pkglist->len == 0)
         g_ptr_array_add (ret_added, _rpm_ostree_package_new (new_sack, pkg));
     }
 
-  ret = TRUE;
   *out_removed = g_steal_pointer (&ret_removed);
   *out_added = g_steal_pointer (&ret_added);
   *out_modified_old = g_steal_pointer (&ret_modified_old);
   *out_modified_new = g_steal_pointer (&ret_modified_new);
- out:
-  return ret;
+  return TRUE;
 }
