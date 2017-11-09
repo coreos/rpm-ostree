@@ -92,6 +92,7 @@ gboolean rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
                                              char            **out_checksum,
                                              GError          **error);
 
+char * rpmostree_get_cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch);
 char *rpmostree_get_cache_branch_header (Header hdr);
 char *rpmostree_get_cache_branch_pkg (DnfPackage *pkg);
 
@@ -130,13 +131,33 @@ gboolean rpmostree_context_prepare (RpmOstreeContext     *self,
                                     GCancellable   *cancellable,
                                     GError        **error);
 
+/* Alternative to _prepare() for non-depsolve cases like jigdo */
+gboolean rpmostree_context_set_packages (RpmOstreeContext *self,
+                                         GPtrArray        *packages,
+                                         GCancellable     *cancellable,
+                                         GError          **error);
+
+GPtrArray *rpmostree_context_get_packages_to_import (RpmOstreeContext *self);
+
 gboolean rpmostree_context_download (RpmOstreeContext *self,
                                      GCancellable     *cancellable,
                                      GError           **error);
 
+gboolean
+rpmostree_context_consume_package (RpmOstreeContext  *self,
+                                   DnfPackage        *package,
+                                   int               *out_fd,
+                                   GError           **error);
+
 gboolean rpmostree_context_import (RpmOstreeContext *self,
                                    GCancellable     *cancellable,
                                    GError          **error);
+
+gboolean rpmostree_context_import_jigdo (RpmOstreeContext *self,
+                                         GVariant         *xattr_table,
+                                         GHashTable       *pkg_to_xattrs,
+                                         GCancellable     *cancellable,
+                                         GError          **error);
 
 gboolean rpmostree_context_relabel (RpmOstreeContext *self,
                                     GCancellable     *cancellable,

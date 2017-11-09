@@ -864,6 +864,8 @@ rpmostree_find_cache_branch_by_nevra (OstreeRepo    *pkgcache,
 {
   /* there's no safe way to convert a nevra string to its cache branch, so let's
    * just do a dumb lookup */
+  /* TODO: parse the refs once at core init, this function is itself
+   * called in loops */
 
   g_autoptr(GHashTable) refs = NULL;
   if (!ostree_repo_list_refs_ext (pkgcache, "rpmostree/pkg", &refs,
@@ -1145,8 +1147,8 @@ append_quoted (GString *r, const char *value)
 }
 
 /* Return the ostree cache branch for a nevra */
-static char *
-cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch)
+char *
+rpmostree_get_cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch)
 {
   GString *r = g_string_new ("rpmostree/pkg/");
   append_quoted (r, name);
@@ -1173,16 +1175,16 @@ rpmostree_get_cache_branch_header (Header hdr)
   g_autofree char *name = headerGetAsString (hdr, RPMTAG_NAME);
   g_autofree char *evr = headerGetAsString (hdr, RPMTAG_EVR);
   g_autofree char *arch = headerGetAsString (hdr, RPMTAG_ARCH);
-  return cache_branch_for_n_evr_a (name, evr, arch);
+  return rpmostree_get_cache_branch_for_n_evr_a (name, evr, arch);
 }
 
 /* Return the ostree cache branch from a libdnf Package */
 char *
 rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
 {
-  return cache_branch_for_n_evr_a (dnf_package_get_name (pkg),
-                                   dnf_package_get_evr (pkg),
-                                   dnf_package_get_arch (pkg));
+  return rpmostree_get_cache_branch_for_n_evr_a (dnf_package_get_name (pkg),
+                                                 dnf_package_get_evr (pkg),
+                                                 dnf_package_get_arch (pkg));
 }
 
 static gboolean
@@ -1362,6 +1364,8 @@ find_pkg_in_ostree (RpmOstreeContext *self,
  * which ones we'll need to import, and which ones we'll need to relabel */
 static gboolean
 sort_packages (RpmOstreeContext *self,
+               GPtrArray        *packages,
+               GCancellable     *cancellable,
                GError          **error)
 {
   DnfContext *dnfctx = self->dnfctx;
@@ -1374,13 +1378,13 @@ sort_packages (RpmOstreeContext *self,
   self->pkgs_to_relabel = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
 
   GPtrArray *sources = dnf_context_get_repos (dnfctx);
-  g_autoptr(GPtrArray) packages = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
-                                                         DNF_PACKAGE_INFO_INSTALL,
-                                                         DNF_PACKAGE_INFO_UPDATE,
-                                                         DNF_PACKAGE_INFO_DOWNGRADE, -1);
   for (guint i = 0; i < packages->len; i++)
     {
       DnfPackage *pkg = packages->pdata[i];
+
+      if (g_cancellable_set_error_if_cancelled (cancellable, error))
+        return FALSE;
+
       const char *reponame = dnf_package_get_reponame (pkg);
       gboolean is_locally_cached =
         (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) == 0);
@@ -1787,8 +1791,16 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   /* XXX: consider a --allow-uninstall switch? */
   if (!dnf_goal_depsolve (goal, DNF_INSTALL | DNF_ALLOW_UNINSTALL, error) ||
-      !check_goal_solution (self, removed_pkgnames, replaced_nevras, error) ||
-      !sort_packages (self, error))
+      !check_goal_solution (self, removed_pkgnames, replaced_nevras, error))
+    {
+      rpmostree_output_task_end ("failed");
+      return FALSE;
+    }
+  g_autoptr(GPtrArray) packages = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
+                                                         DNF_PACKAGE_INFO_INSTALL,
+                                                         DNF_PACKAGE_INFO_UPDATE,
+                                                         DNF_PACKAGE_INFO_DOWNGRADE, -1);
+  if (!sort_packages (self, packages, cancellable, error))
     {
       rpmostree_output_task_end ("failed");
       return FALSE;
@@ -1796,6 +1808,29 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   rpmostree_output_task_end ("done");
   return TRUE;
+}
+
+/* Rather than doing a depsolve, directly set which packages
+ * are required.  Will be used by jigdo.
+ */
+gboolean
+rpmostree_context_set_packages (RpmOstreeContext *self,
+                                GPtrArray        *packages,
+                                GCancellable     *cancellable,
+                                GError          **error)
+{
+  g_clear_pointer (&self->pkgs_to_download, (GDestroyNotify)g_ptr_array_unref);
+  g_clear_pointer (&self->pkgs_to_import, (GDestroyNotify)g_ptr_array_unref);
+  g_clear_pointer (&self->pkgs_to_relabel, (GDestroyNotify)g_ptr_array_unref);
+  return sort_packages (self, packages, cancellable, error);
+}
+
+/* Returns a reference to the set of packages that will be imported */
+GPtrArray *
+rpmostree_context_get_packages_to_import (RpmOstreeContext *self)
+{
+  g_assert (self->pkgs_to_import);
+  return g_ptr_array_ref (self->pkgs_to_import);
 }
 
 static int
@@ -1993,23 +2028,13 @@ import_one_package (RpmOstreeContext *self,
                     DnfContext     *dnfctx,
                     DnfPackage     *pkg,
                     OstreeSePolicy *sepolicy,
+                    GVariant       *jigdo_xattr_table,
+                    GVariant       *jigdo_xattrs,
                     GCancellable   *cancellable,
                     GError        **error)
 {
-  DnfRepo *pkg_repo = dnf_package_get_repo (pkg);
-  g_autofree char *pkg_path = NULL;
-  if (pkg_is_local (pkg))
-    pkg_path = g_strdup (dnf_package_get_filename (pkg));
-  else
-    {
-      const char *pkg_location = dnf_package_get_location (pkg);
-      pkg_path =
-        g_build_filename (dnf_repo_get_location (pkg_repo),
-                          "packages", glnx_basename (pkg_location), NULL);
-    }
-
-  /* Verify signatures if enabled */
-  if (!dnf_transaction_gpgcheck_package (dnf_context_get_transaction (dnfctx), pkg, error))
+  glnx_fd_close int fd = -1;
+  if (!rpmostree_context_consume_package (self, pkg, &fd, error))
     return FALSE;
 
   /* Only set SKIP_EXTRANEOUS for packages we know need it, so that
@@ -2030,19 +2055,14 @@ import_one_package (RpmOstreeContext *self,
   }
 
   /* TODO - tweak the unpacker flags for containers */
-  g_autoptr(RpmOstreeImporter) unpacker = rpmostree_importer_new_at (AT_FDCWD, pkg_path, pkg, flags, error);
+  g_autoptr(RpmOstreeImporter) unpacker = rpmostree_importer_new_fd (fd, pkg, flags, error);
   if (!unpacker)
     return FALSE;
 
-  /* And delete it now; this does mean if we fail it'll have been
-   * deleted and hence more annoying to debug, but in practice people
-   * should be able to redownload, and if the error was something like
-   * ENOSPC, deleting it was the right move I'd say.
-   */
-  if (!pkg_is_local (pkg))
+  if (jigdo_xattrs)
     {
-      if (!glnx_unlinkat (AT_FDCWD, pkg_path, 0, error))
-        return FALSE;
+      g_assert (!sepolicy);
+      rpmostree_importer_set_jigdo_mode (unpacker, jigdo_xattr_table, jigdo_xattrs);
     }
 
   OstreeRepo *ostreerepo = get_pkgcache_repo (self);
@@ -2064,9 +2084,11 @@ dnf_state_assert_done (DnfState *hifstate)
 }
 
 gboolean
-rpmostree_context_import (RpmOstreeContext *self,
-                          GCancellable     *cancellable,
-                          GError          **error)
+rpmostree_context_import_jigdo (RpmOstreeContext *self,
+                                GVariant         *jigdo_xattr_table,
+                                GHashTable       *jigdo_pkg_to_xattrs,
+                                GCancellable     *cancellable,
+                                GError          **error)
 {
   DnfContext *dnfctx = self->dnfctx;
   const int n = self->pkgs_to_import->len;
@@ -2075,6 +2097,7 @@ rpmostree_context_import (RpmOstreeContext *self,
 
   OstreeRepo *repo = get_pkgcache_repo (self);
   g_return_val_if_fail (repo != NULL, FALSE);
+  g_return_val_if_fail (jigdo_pkg_to_xattrs == NULL || self->sepolicy == NULL, FALSE);
 
   if (!dnf_transaction_import_keys (dnf_context_get_transaction (dnfctx), error))
     return FALSE;
@@ -2094,8 +2117,16 @@ rpmostree_context_import (RpmOstreeContext *self,
     for (guint i = 0; i < self->pkgs_to_import->len; i++)
       {
         DnfPackage *pkg = self->pkgs_to_import->pdata[i];
-        if (!import_one_package (self, dnfctx, pkg,
-                                 self->sepolicy, cancellable, error))
+        GVariant *jigdo_xattrs = NULL;
+        if (jigdo_pkg_to_xattrs)
+          {
+            jigdo_xattrs = g_hash_table_lookup (jigdo_pkg_to_xattrs, pkg);
+            if (!jigdo_xattrs)
+              g_error ("Failed to find jigdo xattrs for %s", dnf_package_get_nevra (pkg));
+          }
+        if (!import_one_package (self, dnfctx, pkg, self->sepolicy,
+                                 jigdo_xattr_table, jigdo_xattrs,
+                                 cancellable, error))
           return FALSE;
         dnf_state_assert_done (hifstate);
       }
@@ -2113,6 +2144,59 @@ rpmostree_context_import (RpmOstreeContext *self,
                    "MESSAGE=Imported %u pkg%s", n, _NS(n),
                    "IMPORTED_N_PKGS=%u", n, NULL);
 
+  return TRUE;
+}
+
+gboolean
+rpmostree_context_import (RpmOstreeContext *self,
+                          GCancellable     *cancellable,
+                          GError          **error)
+{
+  return rpmostree_context_import_jigdo (self, NULL, NULL, cancellable, error);
+}
+
+/* Given a single package, verify its GPG signature (if enabled), open a file
+ * descriptor for it, and delete the on-disk downloaded copy.
+ */
+gboolean
+rpmostree_context_consume_package (RpmOstreeContext  *self,
+                                   DnfPackage        *pkg,
+                                   int               *out_fd,
+                                   GError           **error)
+{
+  /* Verify signatures if enabled */
+  if (!dnf_transaction_gpgcheck_package (dnf_context_get_transaction (self->dnfctx), pkg, error))
+    return FALSE;
+
+  DnfRepo *pkg_repo = dnf_package_get_repo (pkg);
+  g_autofree char *pkg_path = NULL;
+  const gboolean is_local = pkg_is_local (pkg);
+  if (is_local)
+    pkg_path = g_strdup (dnf_package_get_filename (pkg));
+  else
+    {
+      const char *pkg_location = dnf_package_get_location (pkg);
+      pkg_path =
+        g_build_filename (dnf_repo_get_location (pkg_repo),
+                          "packages", glnx_basename (pkg_location), NULL);
+    }
+
+  glnx_autofd int fd = -1;
+  if (!glnx_openat_rdonly (AT_FDCWD, pkg_path, TRUE, &fd, error))
+    return FALSE;
+
+  /* And delete it now; this does mean if we fail it'll have been
+   * deleted and hence more annoying to debug, but in practice people
+   * should be able to redownload, and if the error was something like
+   * ENOSPC, deleting it was the right move I'd say.
+   */
+  if (!pkg_is_local (pkg))
+    {
+      if (!glnx_unlinkat (AT_FDCWD, pkg_path, 0, error))
+        return FALSE;
+    }
+
+  *out_fd = glnx_steal_fd (&fd);
   return TRUE;
 }
 

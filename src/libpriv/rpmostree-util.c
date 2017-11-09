@@ -837,3 +837,54 @@ rpmostree_diff_print (GPtrArray *removed,
       g_print ("  %s\n", nevra);
     }
 }
+
+/* Copy of ot_variant_bsearch_str() from libostree
+ * @array: A GVariant array whose first element must be a string
+ * @str: Search for this string
+ * @out_pos: Output position
+ *
+ * Binary search in a GVariant array, which must be of the form 'a(s...)',
+ * where '...' may be anything.  The array elements must be sorted.
+ *
+ * Returns: %TRUE iff found
+ */
+gboolean
+rpmostree_variant_bsearch_str (GVariant   *array,
+                               const char *str,
+                               int        *out_pos)
+{
+  const gsize n = g_variant_n_children (array);
+  if (n == 0)
+    return FALSE;
+
+  gsize imax = n - 1;
+  gsize imin = 0;
+  gsize imid = -1;
+  while (imax >= imin)
+    {
+      const char *cur;
+
+      imid = (imin + imax) / 2;
+
+      g_autoptr(GVariant) child = g_variant_get_child_value (array, imid);
+      g_variant_get_child (child, 0, "&s", &cur, NULL);
+
+      int cmp = strcmp (cur, str);
+      if (cmp < 0)
+        imin = imid + 1;
+      else if (cmp > 0)
+        {
+          if (imid == 0)
+            break;
+          imax = imid - 1;
+        }
+      else
+        {
+          *out_pos = imid;
+          return TRUE;
+        }
+    }
+
+  *out_pos = imid;
+  return FALSE;
+}

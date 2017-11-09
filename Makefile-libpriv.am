@@ -45,6 +45,9 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-rpm-util.h \
 	src/libpriv/rpmostree-importer.c \
 	src/libpriv/rpmostree-importer.h \
+	src/libpriv/rpmostree-jigdo-assembler.c \
+	src/libpriv/rpmostree-jigdo-assembler.h \
+	src/libpriv/rpmostree-jigdo-core.h \
 	src/libpriv/rpmostree-unpacker-core.c \
 	src/libpriv/rpmostree-unpacker-core.h \
 	src/libpriv/rpmostree-output.c \
@@ -55,6 +58,8 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-editor.h \
 	src/libpriv/libsd-locale-util.c \
 	src/libpriv/libsd-locale-util.h \
+	src/libpriv/rpmostree-libarchive-input-stream.c \
+	src/libpriv/rpmostree-libarchive-input-stream.h \
 	$(NULL)
 
 librpmostreepriv_la_CFLAGS = \
