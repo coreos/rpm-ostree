@@ -3208,8 +3208,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         }
       rpmostree_output_task_end ("%u done", n_pre_scripts_run);
 
-      if (have_passwd &&
-          faccessat (tmprootfs_dfd, "usr/etc/passwd", F_OK, 0) == 0)
+      if (faccessat (tmprootfs_dfd, "usr/etc/passwd", F_OK, 0) == 0)
         {
           g_autofree char *contents =
             glnx_file_get_contents_utf8_at (tmprootfs_dfd, "usr/etc/passwd",
@@ -3225,8 +3224,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
             }
         }
 
-      if (have_passwd &&
-          faccessat (tmprootfs_dfd, "usr/etc/group", F_OK, 0) == 0)
+      if (faccessat (tmprootfs_dfd, "usr/etc/group", F_OK, 0) == 0)
         {
           g_autofree char *contents =
             glnx_file_get_contents_utf8_at (tmprootfs_dfd, "usr/etc/group",
