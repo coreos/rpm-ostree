@@ -24,6 +24,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <ostree.h>
+#include "libglnx.h"
 
 #define _N(single, plural, n) ( (n) == 1 ? (single) : (plural) )
 #define _NS(n) _N("", "s", n)
@@ -121,6 +122,13 @@ rpmostree_decompose_sha256_nevra (const char **nevra,
 
 char *
 rpmostree_cache_branch_to_nevra (const char *cachebranch);
+
+gboolean
+rpmostree_break_hardlink (int           dfd,
+                          const char   *path,
+                          GLnxFileCopyFlags copyflags,
+                          GCancellable *cancellable,
+                          GError      **error);
 
 /* https://github.com/ostreedev/ostree/pull/1132 */
 typedef OstreeRepo _OstreeRepoAutoTransaction;

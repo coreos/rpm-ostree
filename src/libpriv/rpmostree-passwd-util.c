@@ -1064,9 +1064,9 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
   for (guint i = 0; i < G_N_ELEMENTS (usrlib_pwgrp_files); i++)
     {
       const char *file = usrlib_pwgrp_files[i];
-      const char *usrlibfile = glnx_strjoina ("usr/lib/", file);
-      const char *usretcfile = glnx_strjoina ("usr/etc/", file);
-      const char *usrlibfiletmp = glnx_strjoina ("usr/lib/", file, ".tmp");
+      g_autofree char *usrlibfile = g_strconcat ("usr/lib/", file, NULL);
+      g_autofree char *usretcfile = g_strconcat ("usr/etc/", file, NULL);
+      g_autofree char *usrlibfiletmp = g_strconcat ("usr/lib/", file, ".tmp", NULL);
 
       /* Retain the current copies in /etc as backups */
       if (!glnx_renameat (rootfs_dfd, usretcfile, rootfs_dfd,
@@ -1098,20 +1098,15 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
   for (guint i = 0; i < G_N_ELEMENTS (pwgrp_shadow_files); i++)
     {
       const char *file = pwgrp_shadow_files[i];
-      const char *src = glnx_strjoina ("usr/etc/", file);
-      const char *tmp = glnx_strjoina ("usr/etc/", file, ".tmp");
+      g_autofree char *src = g_strconcat ("usr/etc/", file, NULL);
 
       if (!glnx_fstatat_allow_noent (rootfs_dfd, src, NULL, AT_SYMLINK_NOFOLLOW, error))
         return FALSE;
       if (errno == ENOENT)
         continue;
 
-      if (!glnx_file_copy_at (rootfs_dfd, src, NULL,
-                              rootfs_dfd, tmp,
-                              GLNX_FILE_COPY_OVERWRITE | GLNX_FILE_COPY_NOXATTRS,
-                              cancellable, error))
-        return FALSE;
-      if (!glnx_renameat (rootfs_dfd, tmp, rootfs_dfd, src, error))
+      if (!rpmostree_break_hardlink (rootfs_dfd, src, GLNX_FILE_COPY_NOXATTRS,
+                                     cancellable, error))
         return FALSE;
     }
 

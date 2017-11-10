@@ -2217,65 +2217,6 @@ delete_package_from_root (RpmOstreeContext *self,
   return TRUE;
 }
 
-/* Given a path to a file/symlink, make a copy (reflink if possible)
- * of it if it's a hard link.  We need this for three places right now:
- *  - The RPM database
- *  - SELinux policy "denormalization" where a label changes
- *  - Upon applying rpmfi overrides during assembly
- */
-static gboolean
-break_single_hardlink_at (int           dfd,
-                          const char   *path,
-                          GCancellable *cancellable,
-                          GError      **error)
-{
-  struct stat stbuf;
-
-  if (!glnx_fstatat (dfd, path, &stbuf, AT_SYMLINK_NOFOLLOW, error))
-    return FALSE;
-
-  if (!S_ISLNK (stbuf.st_mode) && !S_ISREG (stbuf.st_mode))
-    return glnx_throw (error, "Unsupported type for entry '%s'", path);
-
-  if (stbuf.st_nlink > 1)
-    {
-      guint count;
-      gboolean copy_success = FALSE;
-      char *path_tmp = glnx_strjoina (path, ".XXXXXX");
-
-      for (count = 0; count < 100; count++)
-        {
-          g_autoptr(GError) tmp_error = NULL;
-
-          glnx_gen_temp_name (path_tmp);
-
-          if (!glnx_file_copy_at (dfd, path, &stbuf, dfd, path_tmp, 0,
-                                  cancellable, &tmp_error))
-            {
-              if (g_error_matches (tmp_error, G_IO_ERROR, G_IO_ERROR_EXISTS))
-                continue;
-              g_propagate_error (error, g_steal_pointer (&tmp_error));
-              return FALSE;
-            }
-
-          copy_success = TRUE;
-          break;
-        }
-
-      if (!copy_success)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_EXISTS,
-                       "Exceeded limit of %u file creation attempts", count);
-          return FALSE;
-        }
-
-      if (!glnx_renameat (dfd, path_tmp, dfd, path, error))
-        return FALSE;
-    }
-
-  return TRUE;
-}
-
 /* Given a directory referred to by @dfd and @dirpath, ensure that physical (or
  * reflink'd) copies of all files are done. */
 static gboolean
@@ -2295,7 +2236,7 @@ break_hardlinks_at (int             dfd,
         return FALSE;
       if (dent == NULL)
         break;
-      if (!break_single_hardlink_at (dfd_iter.fd, dent->d_name,
+      if (!rpmostree_break_hardlink (dfd_iter.fd, dent->d_name, 0,
                                      cancellable, error))
         return FALSE;
     }
@@ -2404,7 +2345,7 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
       if (g_strcmp0 (cur_label, new_label) != 0)
         {
           if (dent->d_type != DT_DIR)
-            if (!break_single_hardlink_at (dfd_iter.fd, dent->d_name,
+            if (!rpmostree_break_hardlink (dfd_iter.fd, dent->d_name, 0,
                                            cancellable, error))
               return FALSE;
 
@@ -2818,7 +2759,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
 
       if (!S_ISDIR (stbuf.st_mode))
         {
-          if (!break_single_hardlink_at (tmprootfs_dfd, fn, cancellable, error))
+          if (!rpmostree_break_hardlink (tmprootfs_dfd, fn, 0, cancellable, error))
             return FALSE;
         }
 
