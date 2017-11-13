@@ -33,7 +33,7 @@ prepare_compose_test() {
     export treeref=fedora/stable/x86_64/${name}
 }
 
-compose_base_argv="--repo=${repobuild} --cache-only --cachedir=${test_compose_datadir}/cache"
+compose_base_argv="--repo ${repobuild} --cache-only --cachedir=${test_compose_datadir}/cache"
 runcompose() {
     rpm-ostree compose tree ${compose_base_argv} ${treefile} "$@"
     ostree --repo=${repo} pull-local ${repobuild}

@@ -58,13 +58,18 @@ static gboolean opt_dry_run;
 static gboolean opt_print_only;
 static char *opt_write_commitid_to;
 
+/* shared by both install & commit */
+static GOptionEntry common_option_entries[] = {
+  { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
+  { NULL }
+};
+
 static GOptionEntry install_option_entries[] = {
   { "force-nocache", 0, 0, G_OPTION_ARG_NONE, &opt_force_nocache, "Always create a new OSTree commit, even if nothing appears to have changed", NULL },
   { "cache-only", 0, 0, G_OPTION_ARG_NONE, &opt_cache_only, "Assume cache is present, do not attempt to update it", NULL },
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
-  { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
   { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
   { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
   { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if a new commit was created", "FILE" },
@@ -80,7 +85,6 @@ static GOptionEntry postprocess_option_entries[] = {
 static GOptionEntry commit_option_entries[] = {
   { "add-metadata-string", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_strings, "Append given key and value (in string format) to metadata", "KEY=VALUE" },
   { "add-metadata-from-json", 0, 0, G_OPTION_ARG_STRING, &opt_metadata_json, "Parse the given JSON file as object, convert to GVariant, append to OSTree commit", "JSON" },
-  { "repo", 'r', 0, G_OPTION_ARG_STRING, &opt_repo, "Path to OSTree repository", "REPO" },
   { "write-commitid-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_commitid_to, "File to write the composed commitid to instead of updating the ref", "FILE" },
   { NULL }
 };
@@ -1066,6 +1070,8 @@ rpmostree_compose_builtin_install (int             argc,
                                    GError        **error)
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE DESTDIR");
+  g_option_context_add_main_entries (context, common_option_entries, NULL);
+
   if (!rpmostree_option_context_parse (context,
                                        install_option_entries,
                                        &argc, &argv,
@@ -1172,6 +1178,8 @@ rpmostree_compose_builtin_commit (int             argc,
                                   GError        **error)
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE ROOTFS");
+  g_option_context_add_main_entries (context, common_option_entries, NULL);
+
   if (!rpmostree_option_context_parse (context,
                                        commit_option_entries,
                                        &argc, &argv,
@@ -1214,8 +1222,10 @@ rpmostree_compose_builtin_tree (int             argc,
                                 GError        **error)
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("TREEFILE");
+  g_option_context_add_main_entries (context, common_option_entries, NULL);
   g_option_context_add_main_entries (context, install_option_entries, NULL);
   g_option_context_add_main_entries (context, postprocess_option_entries, NULL);
+
   if (!rpmostree_option_context_parse (context,
                                        commit_option_entries,
                                        &argc, &argv,
