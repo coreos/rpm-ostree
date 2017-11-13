@@ -1056,6 +1056,24 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
   if (!rpmostree_passwd_cleanup (rootfs_dfd, cancellable, error))
     return FALSE;
 
+  /* Break hardlinks for the shadow files, since shadow-utils currently uses
+   * O_RDWR unconditionally.
+   */
+  for (guint i = 0; i < G_N_ELEMENTS (pwgrp_shadow_files); i++)
+    {
+      const char *file = pwgrp_shadow_files[i];
+      g_autofree char *src = g_strconcat ("usr/etc/", file, NULL);
+
+      if (!glnx_fstatat_allow_noent (rootfs_dfd, src, NULL, AT_SYMLINK_NOFOLLOW, error))
+        return FALSE;
+      if (errno == ENOENT)
+        continue;
+
+      if (!rpmostree_break_hardlink (rootfs_dfd, src, GLNX_FILE_COPY_NOXATTRS,
+                                     cancellable, error))
+        return FALSE;
+    }
+
   if (!rootfs_has_usrlib_passwd (rootfs_dfd, out_have_passwd, error))
     return FALSE;
   if (!*out_have_passwd)
@@ -1081,33 +1099,18 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
         return FALSE;
 
       /* Copy the merge's passwd/group to usr/lib (breaking hardlinks) */
-      if (!glnx_file_copy_at (AT_FDCWD,
-                              glnx_strjoina (merge_passwd_dir, "/", file), NULL,
-                              rootfs_dfd, usrlibfiletmp,
-                              GLNX_FILE_COPY_OVERWRITE | GLNX_FILE_COPY_NOXATTRS,
-                              cancellable, error))
-        return FALSE;
+      if (merge_passwd_dir)
+        {
+          if (!glnx_file_copy_at (AT_FDCWD,
+                                  glnx_strjoina (merge_passwd_dir, "/", file), NULL,
+                                  rootfs_dfd, usrlibfiletmp,
+                                  GLNX_FILE_COPY_OVERWRITE | GLNX_FILE_COPY_NOXATTRS,
+                                  cancellable, error))
+            return FALSE;
 
-      if (!glnx_renameat (rootfs_dfd, usrlibfiletmp, rootfs_dfd, usrlibfile, error))
-        return FALSE;
-    }
-
-  /* And break hardlinks for the shadow files, since we don't have
-   * them in /usr/lib right now.
-   */
-  for (guint i = 0; i < G_N_ELEMENTS (pwgrp_shadow_files); i++)
-    {
-      const char *file = pwgrp_shadow_files[i];
-      g_autofree char *src = g_strconcat ("usr/etc/", file, NULL);
-
-      if (!glnx_fstatat_allow_noent (rootfs_dfd, src, NULL, AT_SYMLINK_NOFOLLOW, error))
-        return FALSE;
-      if (errno == ENOENT)
-        continue;
-
-      if (!rpmostree_break_hardlink (rootfs_dfd, src, GLNX_FILE_COPY_NOXATTRS,
-                                     cancellable, error))
-        return FALSE;
+          if (!glnx_renameat (rootfs_dfd, usrlibfiletmp, rootfs_dfd, usrlibfile, error))
+            return FALSE;
+        }
     }
 
   return TRUE;
