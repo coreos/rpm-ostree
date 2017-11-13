@@ -30,7 +30,7 @@ if ENABLE_GTK_DOC
 SUBDIRS += api-doc
 endif
 
-RPM_OSTREE_GITREV=$(shell if command -v git >/dev/null 2>&1 && test -d $(srcdir)/.git; then git describe --abbrev=42 --tags --always HEAD; fi)
+RPM_OSTREE_GITREV=$(shell if command -v git >/dev/null 2>&1 && test -e $(srcdir)/.git; then git describe --abbrev=42 --tags --always HEAD; fi)
 
 ACLOCAL_AMFLAGS += -I m4 ${ACLOCAL_FLAGS}
 AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
