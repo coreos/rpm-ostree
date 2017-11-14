@@ -59,6 +59,11 @@ rpmostree_prepare_rootfs_get_sepolicy (int            dfd,
                                        GError       **error);
 
 gboolean
+rpmostree_rootfs_fixup_selinux_store_root (int rootfs_dfd,
+                                           GCancellable *cancellable,
+                                           GError       **error);
+
+gboolean
 rpmostree_prepare_rootfs_for_commit (int            src_rootfs_dfd,
                                      int            target_rootfs_dfd,
                                      JsonObject    *treefile,
