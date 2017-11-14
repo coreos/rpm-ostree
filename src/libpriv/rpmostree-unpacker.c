@@ -616,6 +616,8 @@ path_is_ostree_compliant (const char *path)
           g_str_equal (path, "lib64") || g_str_has_prefix (path, "lib64/"));
 }
 
+#define VAR_SELINUX_TARGETED_PATH "var/lib/selinux/targeted/"
+
 static OstreeRepoCommitFilterResult
 compose_filter_cb (OstreeRepo         *repo,
                    const char         *path,
@@ -636,7 +638,9 @@ compose_filter_cb (OstreeRepo         *repo,
   get_rpmfi_override (self, path, &user, &group, NULL);
 
   /* convert /run and /var entries to tmpfiles.d */
-  if (g_str_has_prefix (path, "/run/") ||
+  if (g_str_has_prefix (path, "/" VAR_SELINUX_TARGETED_PATH))
+    ; /* Handled by pathname translation */
+  else if (g_str_has_prefix (path, "/run/") ||
       g_str_has_prefix (path, "/var/"))
     {
       append_tmpfiles_d (self, path, file_info,
@@ -722,6 +726,13 @@ handle_translate_pathname (OstreeRepo   *repo,
     return g_strconcat ("usr/", path, NULL);
   else if (g_str_has_prefix (path, "boot/"))
     return g_strconcat ("usr/lib/ostree-boot/", path + strlen ("boot/"), NULL);
+  /* Special hack for https://bugzilla.redhat.com/show_bug.cgi?id=1290659
+   * See also commit 4a86bdd19665700fa308461510c9decd63e31a03
+   * and rpmostree_postprocess_selinux_policy_store_location().
+   */
+  else if (g_str_has_prefix (path, VAR_SELINUX_TARGETED_PATH))
+    return g_strconcat ("usr/etc/selinux/targeted/", path + strlen (VAR_SELINUX_TARGETED_PATH), NULL);
+
   return NULL;
 }
 

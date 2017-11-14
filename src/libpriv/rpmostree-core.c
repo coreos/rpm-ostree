@@ -3180,6 +3180,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
             return glnx_throw_errno_prefix (error, "symlinkat(usr/bin/systemctl)");
         }
 
+      /* Necessary for unified core to work with semanage calls in %post, like container-selinux */
+      if (!rpmostree_rootfs_prepare_selinux (tmprootfs_dfd, cancellable, error))
+        return FALSE;
+
       /* We're technically deviating from RPM here by running all the %pre's
        * beforehand, rather than each package's %pre & %post in order. Though I
        * highly doubt this should cause any issues. The advantage of doing it
