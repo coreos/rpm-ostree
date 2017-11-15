@@ -1300,21 +1300,21 @@ find_pkg_in_ostree (OstreeRepo     *repo,
                     gboolean       *out_selinux_match,
                     GError        **error)
 {
-  gboolean in_ostree = FALSE;
-  gboolean selinux_match = FALSE;
-  g_autofree char *cached_rev = NULL;
-  g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
+  /* Init output here, since we have several early returns */
+  *out_in_ostree = *out_selinux_match = FALSE;
 
   /* NB: we're not using a pkgcache yet in the compose path */
   if (repo == NULL)
-    goto done; /* Note early happy return */
+    return TRUE; /* Note early return */
 
+  g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
+  g_autofree char *cached_rev = NULL;
   if (!ostree_repo_resolve_rev (repo, cachebranch, TRUE,
                                 &cached_rev, error))
     return FALSE;
 
   if (!cached_rev)
-    goto done; /* Note early happy return */
+    return TRUE; /* Note early return */
 
   /* NB: we do an exception for LocalPackages here; we've already checked that
    * its cache is valid and matches what's in the origin. We never want to fetch
@@ -1336,20 +1336,18 @@ find_pkg_in_ostree (OstreeRepo     *repo,
         return FALSE;
 
       if (!same_pkg_chksum)
-        goto done; /* Note early happy return */
+        return TRUE; /* Note early return */
     }
 
-  in_ostree = TRUE;
+  /* We found an import, let's load the sepolicy state */
+  *out_in_ostree = TRUE;
   if (sepolicy)
     {
       if (!commit_has_matching_sepolicy (repo, cached_rev, sepolicy,
-                                         &selinux_match, error))
+                                         out_selinux_match, error))
         return FALSE;
     }
 
-done:
-  *out_in_ostree = in_ostree;
-  *out_selinux_match = selinux_match;
   return TRUE;
 }
 
