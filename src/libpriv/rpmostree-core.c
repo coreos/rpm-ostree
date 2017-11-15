@@ -1198,19 +1198,13 @@ pkg_is_local (DnfPackage *pkg)
 }
 
 static gboolean
-commit_has_matching_sepolicy (OstreeRepo     *repo,
-                              const char     *head,
+commit_has_matching_sepolicy (GVariant       *commit,
                               OstreeSePolicy *sepolicy,
                               gboolean       *out_matches,
                               GError        **error)
 {
   const char *sepolicy_csum_wanted = ostree_sepolicy_get_csum (sepolicy);
-  g_autoptr(GVariant) commit = NULL;
   g_autofree char *sepolicy_csum = NULL;
-
-  if (!ostree_repo_load_commit (repo, head, &commit, NULL, error))
-    return FALSE;
-  g_assert (commit);
 
   if (!get_commit_sepolicy_csum (commit, &sepolicy_csum, error))
     return FALSE;
@@ -1221,18 +1215,11 @@ commit_has_matching_sepolicy (OstreeRepo     *repo,
 }
 
 static gboolean
-get_pkgcache_repodata_chksum_repr (OstreeRepo  *repo,
-                                   const char  *rev,
+get_pkgcache_repodata_chksum_repr (GVariant    *commit,
                                    char       **out_chksum_repr,
                                    gboolean     allow_noent,
                                    GError     **error)
 {
-  g_autoptr(GVariant) commit = NULL;
-  if (!ostree_repo_load_commit (repo, rev, &commit, NULL, error))
-    return FALSE;
-
-  g_assert (commit);
-
   g_autofree char *chksum_repr = NULL;
   g_autoptr(GError) tmp_error = NULL;
   if (!get_commit_repodata_chksum_repr (commit, &chksum_repr, &tmp_error))
@@ -1251,14 +1238,13 @@ get_pkgcache_repodata_chksum_repr (OstreeRepo  *repo,
 }
 
 static gboolean
-commit_has_matching_repodata_chksum_repr (OstreeRepo  *repo,
-                                          const char  *rev,
+commit_has_matching_repodata_chksum_repr (GVariant    *commit,
                                           const char  *expected,
                                           gboolean    *out_matches,
                                           GError     **error)
 {
   g_autofree char *chksum_repr = NULL;
-  if (!get_pkgcache_repodata_chksum_repr (repo, rev, &chksum_repr, TRUE, error))
+  if (!get_pkgcache_repodata_chksum_repr (commit, &chksum_repr, TRUE, error))
     return FALSE;
 
   /* never match pkgs unpacked with older versions that didn't embed chksum_repr */
@@ -1316,6 +1302,11 @@ find_pkg_in_ostree (OstreeRepo     *repo,
   if (!cached_rev)
     return TRUE; /* Note early return */
 
+  g_autoptr(GVariant) commit = NULL;
+  if (!ostree_repo_load_commit (repo, cached_rev, &commit, NULL, error))
+    return FALSE;
+  g_assert (commit);
+
   /* NB: we do an exception for LocalPackages here; we've already checked that
    * its cache is valid and matches what's in the origin. We never want to fetch
    * newer versions of LocalPackages from the repos. But we do want to check
@@ -1330,7 +1321,7 @@ find_pkg_in_ostree (OstreeRepo     *repo,
         return FALSE;
 
       gboolean same_pkg_chksum = FALSE;
-      if (!commit_has_matching_repodata_chksum_repr (repo, cached_rev,
+      if (!commit_has_matching_repodata_chksum_repr (commit,
                                                      expected_chksum_repr,
                                                      &same_pkg_chksum, error))
         return FALSE;
@@ -1343,7 +1334,7 @@ find_pkg_in_ostree (OstreeRepo     *repo,
   *out_in_ostree = TRUE;
   if (sepolicy)
     {
-      if (!commit_has_matching_sepolicy (repo, cached_rev, sepolicy,
+      if (!commit_has_matching_sepolicy (commit, sepolicy,
                                          out_selinux_match, error))
         return FALSE;
     }
@@ -1840,9 +1831,12 @@ rpmostree_dnf_add_checksum_goal (GChecksum   *checksum,
           if (!ostree_repo_resolve_rev (pkgcache, cachebranch, FALSE, &cached_rev, error))
             return FALSE;
 
+          g_autoptr(GVariant) commit = NULL;
+          if (!ostree_repo_load_commit (pkgcache, cached_rev, &commit, NULL, error))
+            return FALSE;
+
           g_autofree char *chksum_repr = NULL;
-          if (!get_pkgcache_repodata_chksum_repr (pkgcache, cached_rev, &chksum_repr,
-                                                  TRUE, error))
+          if (!get_pkgcache_repodata_chksum_repr (commit, &chksum_repr, TRUE, error))
             return FALSE;
 
           if (chksum_repr)
@@ -2865,10 +2859,13 @@ add_install (RpmOstreeContext *self,
                                 &cached_rev, error))
     return FALSE;
 
+  g_autoptr(GVariant) commit = NULL;
+  if (!ostree_repo_load_commit (pkgcache_repo, cached_rev, &commit, NULL, error))
+    return FALSE;
+
   if (self->sepolicy)
     {
-      if (!commit_has_matching_sepolicy (pkgcache_repo, cached_rev,
-                                         self->sepolicy, &sepolicy_matches,
+      if (!commit_has_matching_sepolicy (commit, self->sepolicy, &sepolicy_matches,
                                          error))
         return FALSE;
 
