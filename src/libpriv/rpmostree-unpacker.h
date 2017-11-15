@@ -39,9 +39,11 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeUnpacker, g_object_unref)
 /**
  * RpmOstreeUnpackerFlags:
  * @RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS: Skip files/directories outside of supported ostree-compliant paths rather than erroring out
+ * @RPMOSTREE_UNPACKER_FLAGS_NODOCS: Skip documentation files
  */
 typedef enum {
   RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS =  (1 << 0),
+  RPMOSTREE_UNPACKER_FLAGS_NODOCS =  (1 << 1),
 } RpmOstreeUnpackerFlags;
 
 RpmOstreeUnpacker*

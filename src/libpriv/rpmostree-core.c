@@ -1279,13 +1279,14 @@ pkg_is_cached (DnfPackage *pkg)
  * (and hence in need of relabeling).
  */
 static gboolean
-find_pkg_in_ostree (OstreeRepo     *repo,
+find_pkg_in_ostree (RpmOstreeContext *self,
                     DnfPackage     *pkg,
                     OstreeSePolicy *sepolicy,
                     gboolean       *out_in_ostree,
                     gboolean       *out_selinux_match,
                     GError        **error)
 {
+  OstreeRepo *repo = get_pkgcache_repo (self);
   /* Init output here, since we have several early returns */
   *out_in_ostree = *out_selinux_match = FALSE;
 
@@ -1306,6 +1307,8 @@ find_pkg_in_ostree (OstreeRepo     *repo,
   if (!ostree_repo_load_commit (repo, cached_rev, &commit, NULL, error))
     return FALSE;
   g_assert (commit);
+  g_autoptr(GVariant) metadata = g_variant_get_child_value (commit, 0);
+  g_autoptr(GVariantDict) metadata_dict = g_variant_dict_new (metadata);
 
   /* NB: we do an exception for LocalPackages here; we've already checked that
    * its cache is valid and matches what's in the origin. We never want to fetch
@@ -1328,6 +1331,23 @@ find_pkg_in_ostree (OstreeRepo     *repo,
 
       if (!same_pkg_chksum)
         return TRUE; /* Note early return */
+
+      /* We need to handle things like the nodocs flag changing; in that case we
+       * have to redownload.
+       */
+      gboolean global_docs;
+      g_variant_dict_lookup (self->spec->dict, "documentation", "b", &global_docs);
+      const gboolean global_nodocs = !global_docs;
+
+      gboolean pkgcache_commit_is_nodocs;
+      if (!g_variant_dict_lookup (metadata_dict, "rpmostree.nodocs", "b", &pkgcache_commit_is_nodocs))
+        pkgcache_commit_is_nodocs = FALSE;
+
+      /* We treat a mismatch of documentation state as simply not being
+       * imported at all.
+       */
+      if (global_nodocs != pkgcache_commit_is_nodocs)
+        return TRUE;
     }
 
   /* We found an import, let's load the sepolicy state */
@@ -1401,7 +1421,7 @@ sort_packages (RpmOstreeContext *self,
         gboolean selinux_match = FALSE;
         gboolean cached = pkg_is_cached (pkg);
 
-        if (!find_pkg_in_ostree (get_pkgcache_repo (self), pkg, self->sepolicy,
+        if (!find_pkg_in_ostree (self, pkg, self->sepolicy,
                                  &in_ostree, &selinux_match, error))
           return FALSE;
 
@@ -1989,6 +2009,12 @@ import_one_package (RpmOstreeContext *self,
   if (g_str_equal (pkg_name, "filesystem") ||
       g_str_equal (pkg_name, "rootfiles"))
     flags |= RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS;
+
+  { gboolean docs;
+    g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs);
+    if (!docs)
+      flags |= RPMOSTREE_UNPACKER_FLAGS_NODOCS;
+  }
 
   /* TODO - tweak the unpacker flags for containers */
   unpacker = rpmostree_unpacker_new_at (AT_FDCWD, pkg_path, pkg, flags, error);

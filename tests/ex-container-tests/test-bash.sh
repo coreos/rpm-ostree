@@ -17,3 +17,16 @@ rpm-ostree ex container assemble bash.conf
 ostree --repo=repo fsck -q
 ostree --repo=repo ls bash /usr/etc/shadow > shadowls.txt
 assert_file_has_content shadowls.txt '^-00400 .*/usr/etc/shadow'
+ostree --repo=repo ls bash /usr/share/doc/bash/README >/dev/null
+
+cat >bash-nodocs.conf <<EOF
+[tree]
+ref=bash-nodocs
+packages=coreutils;bash;
+repos=fedora;
+documentation=false;
+EOF
+
+rpm-ostree ex container assemble bash-nodocs.conf
+ostree --repo=repo ls bash-nodocs /usr/share/doc/bash >docs.txt
+assert_not_file_has_content docs.txt README
