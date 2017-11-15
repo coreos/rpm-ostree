@@ -58,6 +58,7 @@ struct RpmOstreeUnpacker
   rpmfi fi;
   off_t cpio_offset;
   GHashTable *rpmfi_overrides;
+  GHashTable *doc_files;
   GString *tmpfiles_d;
   RpmOstreeUnpackerFlags flags;
   DnfPackage *pkg;
@@ -91,7 +92,8 @@ rpmostree_unpacker_finalize (GObject *object)
   g_string_free (self->tmpfiles_d, TRUE);
   g_free (self->ostree_branch);
 
-  g_hash_table_unref (self->rpmfi_overrides);
+  g_clear_pointer (&self->rpmfi_overrides, (GDestroyNotify)g_hash_table_unref);
+  g_clear_pointer (&self->doc_files, (GDestroyNotify)g_hash_table_unref);
 
   g_free (self->hdr_sha256);
 
@@ -250,22 +252,30 @@ build_rpmfi_overrides (RpmOstreeUnpacker *self)
   /* Right now as I understand it, we need the owner user/group and
    * possibly filesystem capabilities from the header.
    *
-   * Otherwise we can just use the CPIO data.
+   * Otherwise we can just use the CPIO data.  Though for handling
+   * NODOCS, we gather a hashset of the files with doc flags.
    */
+  const gboolean docs_are_filtered = self->doc_files != NULL;
   while ((i = rpmfiNext (self->fi)) >= 0)
     {
       const char *user = rpmfiFUser (self->fi);
       const char *group = rpmfiFGroup (self->fi);
       const char *fcaps = rpmfiFCaps (self->fi);
       const char *fn = rpmfiFN (self->fi);
+      rpmfileAttrs fattrs = rpmfiFFlags (self->fi);
 
-      if ((user == NULL || g_str_equal (user, "root")) &&
-          (user == NULL || g_str_equal (group, "root")) &&
-          (fcaps == NULL || fcaps[0] == '\0'))
-        continue;
+      const gboolean user_is_root = (user == NULL || g_str_equal (user, "root"));
+      const gboolean group_is_root = (group == NULL || g_str_equal (group, "root"));
+      const gboolean fcaps_is_unset = (fcaps == NULL || fcaps[0] == '\0');
+      if (!(user_is_root && group_is_root && fcaps_is_unset))
+        {
+          g_hash_table_insert (self->rpmfi_overrides, g_strdup (fn),
+                               GINT_TO_POINTER (i));
+        }
 
-      g_hash_table_insert (self->rpmfi_overrides, g_strdup (fn),
-                           GINT_TO_POINTER (i));
+      const gboolean is_doc = (fattrs & RPMFILE_DOC) > 0;
+      if (docs_are_filtered && is_doc)
+        g_hash_table_add (self->doc_files, g_strdup (fn));
     }
 }
 
@@ -308,6 +318,9 @@ rpmostree_unpacker_new_fd (int fd,
   ret->cpio_offset = cpio_offset;
   ret->pkg = pkg ? g_object_ref (pkg) : NULL;
 
+  if (flags & RPMOSTREE_UNPACKER_FLAGS_NODOCS)
+    ret->doc_files = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                            g_free, NULL);
   build_rpmfi_overrides (ret);
 
  out:
@@ -500,10 +513,10 @@ build_metadata_variant (RpmOstreeUnpacker *self,
                          g_variant_new_uint32 (1));
 
   /* Originally we just had unpack_version = 1, let's add a minor version for
-   * compatible increments.  Bumped 4 → 5 for timestamp.
+   * compatible increments.  Bumped 4 → 5 for timestamp, and 5 → 6 for docs.
    */
   g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.unpack_minor_version",
-                         g_variant_new_uint32 (5));
+                         g_variant_new_uint32 (6));
 
   if (self->pkg)
     {
@@ -523,6 +536,13 @@ build_metadata_variant (RpmOstreeUnpacker *self,
       g_variant_builder_add (&metadata_builder, "{sv}",
                              "rpmostree.repodata_checksum",
                              g_variant_new_string (chksum_repr));
+    }
+
+  if (self->doc_files)
+    {
+      g_variant_builder_add (&metadata_builder, "{sv}",
+                             "rpmostree.nodocs",
+                             g_variant_new_boolean (TRUE));
     }
 
   *out_variant = g_variant_builder_end (&metadata_builder);
@@ -635,6 +655,11 @@ compose_filter_cb (OstreeRepo         *repo,
 
   gboolean error_was_set = (error && *error != NULL);
 
+  /* Are we filtering out docs?  Let's check that first */
+  if (self->doc_files && g_hash_table_contains (self->doc_files, path))
+    return OSTREE_REPO_COMMIT_FILTER_SKIP;
+
+  /* Lookup any rpmfi overrides (was parsed from the header) */
   get_rpmfi_override (self, path, &user, &group, NULL);
 
   /* convert /run and /var entries to tmpfiles.d */
@@ -678,6 +703,11 @@ unprivileged_filter_cb (OstreeRepo         *repo,
                         GFileInfo          *file_info,
                         gpointer            user_data)
 {
+  RpmOstreeUnpacker *self = ((cb_data*)user_data)->self;
+  /* Are we filtering out docs?  Let's check that first */
+  if (self->doc_files && g_hash_table_contains (self->doc_files, path))
+    return OSTREE_REPO_COMMIT_FILTER_SKIP;
+
   /* First, the common directory workaround */
   ensure_directories_user_writable (file_info);
 
