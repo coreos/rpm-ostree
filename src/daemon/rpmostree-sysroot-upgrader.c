@@ -847,7 +847,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN)
     {
       if (have_packages)
-        rpmostree_print_transaction (rpmostree_context_get_hif (self->ctx));
+        rpmostree_print_transaction (rpmostree_context_get_dnf (self->ctx));
     }
 
   /* If the current state has layering, compare the depsolved set for changes. */
