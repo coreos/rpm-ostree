@@ -57,6 +57,7 @@ rpmostree_passwd_migrate_except_root (int            rootfs_dfd,
 gboolean
 rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                          int              rootfs_dfd,
+                                         const char      *dest,
                                          GFile           *treefile_dirpath,
                                          GFile           *previous_root,
                                          JsonObject      *treedata,
@@ -80,7 +81,7 @@ rpmostree_passwd_cleanup (int rootfs_dfd, GCancellable *cancellable, GError **er
 gboolean
 rpmostree_passwd_prepare_rpm_layering (int       rootfs_dfd,
                                        const char        *merge_passwd_dir,
-                                       gboolean          *out_have_passwd,
+                                       gboolean          *out_have_usrlib_passwd,
                                        GCancellable      *cancellable,
                                        GError  **error);
 
