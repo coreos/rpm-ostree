@@ -329,9 +329,9 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     return FALSE;
 #endif
 
-  DnfContext *hifctx = rpmostree_context_get_hif (self->corectx);
+  DnfContext *dnfctx = rpmostree_context_get_dnf (self->corectx);
   if (opt_proxy)
-    dnf_context_set_http_proxy (hifctx, opt_proxy);
+    dnf_context_set_http_proxy (dnfctx, opt_proxy);
 
   /* Hack this here... see https://github.com/rpm-software-management/libhif/issues/53
    * but in the future we won't be using librpm at all for unpack/scripts, so it won't
@@ -340,24 +340,24 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   { const char *debuglevel = getenv ("RPMOSTREE_RPM_VERBOSITY");
     if (!debuglevel)
       debuglevel = "info";
-    dnf_context_set_rpm_verbosity (hifctx, debuglevel);
+    dnf_context_set_rpm_verbosity (dnfctx, debuglevel);
     rpmlogSetFile(NULL);
   }
 
   GFile *contextdir = self->treefile_context_dirs->pdata[0];
-  dnf_context_set_repo_dir (hifctx, gs_file_get_path_cached (contextdir));
+  dnf_context_set_repo_dir (dnfctx, gs_file_get_path_cached (contextdir));
 
   /* By default, retain packages in addition to metadata with --cachedir */
   if (opt_cachedir)
-    dnf_context_set_keep_cache (hifctx, TRUE);
+    dnf_context_set_keep_cache (dnfctx, TRUE);
   /* For compose, always try to refresh metadata; we're used in build servers
    * where fetching should be cheap. Otherwise, if --cache-only is set, it's
    * likely an offline developer laptop case, so never refresh.
    */
   if (!opt_cache_only)
-    dnf_context_set_cache_age (hifctx, 0);
+    dnf_context_set_cache_age (dnfctx, 0);
   else
-    dnf_context_set_cache_age (hifctx, G_MAXUINT);
+    dnf_context_set_cache_age (dnfctx, G_MAXUINT);
 
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
   g_key_file_set_string (treespec, "tree", "ref", self->ref);
@@ -415,7 +415,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (!rpmostree_context_prepare (self->corectx, cancellable, error))
     return FALSE;
 
-  rpmostree_print_transaction (hifctx);
+  rpmostree_print_transaction (dnfctx);
 
   JsonArray *add_files = NULL;
   if (json_object_has_member (treedata, "add-files"))
@@ -423,7 +423,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 
   /* FIXME - just do a depsolve here before we compute download requirements */
   g_autofree char *ret_new_inputhash = NULL;
-  if (!compute_checksum_from_treefile_and_goal (self, dnf_context_get_goal (hifctx),
+  if (!compute_checksum_from_treefile_and_goal (self, dnf_context_get_goal (dnfctx),
                                                 contextdir, add_files,
                                                 &ret_new_inputhash, error))
     return FALSE;
@@ -513,8 +513,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     if (!libcontainer_prep_dev (rootfs_dfd, error))
       return FALSE;
 
-    if (!dnf_transaction_commit (dnf_context_get_transaction (hifctx),
-                                 dnf_context_get_goal (hifctx),
+    if (!dnf_transaction_commit (dnf_context_get_transaction (dnfctx),
+                                 dnf_context_get_goal (dnfctx),
                                  hifstate,
                                  error))
       return FALSE;
@@ -769,7 +769,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     return FALSE;
 
 
-  g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_hif (self->corectx));
+  g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_dnf (self->corectx));
   const char *input_ref = _rpmostree_jsonutil_object_require_string_member (self->treefile, "ref", error);
   if (!input_ref)
     return FALSE;
@@ -885,7 +885,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
   if (!_rpmostree_jsonutil_append_string_array_to (self->treefile, "packages", packages, error))
     return FALSE;
 
-  { g_autofree char *thisarch_packages = g_strconcat ("packages-", dnf_context_get_base_arch (rpmostree_context_get_hif (self->corectx)), NULL);
+  { g_autofree char *thisarch_packages = g_strconcat ("packages-", dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx)), NULL);
 
     if (json_object_has_member (self->treefile, thisarch_packages))
       {

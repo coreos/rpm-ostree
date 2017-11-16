@@ -1359,8 +1359,8 @@ refresh_md_transaction_execute (RpmostreedTransaction *transaction,
 
   if (self->flags & RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE)
     {
-      DnfContext *hifctx = rpmostree_context_get_hif (ctx);
-      dnf_context_set_cache_age (hifctx, 0);
+      DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
+      dnf_context_set_cache_age (dnfctx, 0);
     }
 
   /* point libdnf to our repos dir */
