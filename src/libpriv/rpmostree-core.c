@@ -690,7 +690,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
 
   { gboolean docs;
 
-    g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs);
+    g_assert (g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs));
 
     if (!docs)
         dnf_transaction_set_flags (dnf_context_get_transaction (self->hifctx),
@@ -2011,7 +2011,7 @@ import_one_package (RpmOstreeContext *self,
     flags |= RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS;
 
   { gboolean docs;
-    g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs);
+    g_assert (g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs));
     if (!docs)
       flags |= RPMOSTREE_UNPACKER_FLAGS_NODOCS;
   }
