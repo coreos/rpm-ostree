@@ -34,5 +34,8 @@ mkdir -p ${LOGDIR}
 
 # Ideally pass $(cwd) down into parallel somehow
 export test_tmpdir=${tmpdir}
+# We use -j 1 since we can't actually be parallel at the moment due
+# to locking issues with metadata downloads at least.  Down the line
+# we should try to do a dry run pull first like the compose tests do.
 ls ${dn}/ex-container-tests/test-*.sh | sort |
-    parallel --tag --halt soon,fail=1 --joblog joblog --results ${LOGDIR} --line-buffer {}
+    parallel -j 1 --tag --halt soon,fail=1 --joblog joblog --results ${LOGDIR} --line-buffer {}
