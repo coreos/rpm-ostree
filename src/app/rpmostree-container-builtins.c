@@ -286,7 +286,7 @@ rpmostree_container_builtin_assemble (int             argc,
   if (!roc_context_prepare_for_root (rocctx, treespec, cancellable, error))
     return EXIT_FAILURE;
 
-  DnfContext *dnfctx = rpmostree_context_get_hif (rocctx->ctx);
+  DnfContext *dnfctx = rpmostree_context_get_dnf (rocctx->ctx);
   if (opt_cache_only)
     dnf_context_set_cache_age (dnfctx, G_MAXUINT);
 
@@ -294,7 +294,7 @@ rpmostree_container_builtin_assemble (int             argc,
   if (!rpmostree_context_prepare (rocctx->ctx, cancellable, error))
     return EXIT_FAILURE;
 
-  rpmostree_print_transaction (rpmostree_context_get_hif (rocctx->ctx));
+  rpmostree_print_transaction (rpmostree_context_get_dnf (rocctx->ctx));
 
   g_autofree char *commit = NULL;
   if (!download_rpms_and_assemble_commit (rocctx, &commit, cancellable, error))
@@ -454,7 +454,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
   if (!rpmostree_context_prepare (rocctx->ctx, cancellable, error))
     return EXIT_FAILURE;
 
-  rpmostree_print_transaction (rpmostree_context_get_hif (rocctx->ctx));
+  rpmostree_print_transaction (rpmostree_context_get_dnf (rocctx->ctx));
 
   {
     g_autofree char *new_state_sha512 = NULL;

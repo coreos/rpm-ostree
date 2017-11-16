@@ -244,7 +244,7 @@ struct _RpmOstreeContext {
   RpmOstreeTreespec *spec;
   gboolean empty;
   gboolean pkgcache_only;
-  DnfContext *hifctx;
+  DnfContext *dnfctx;
   OstreeRepo *ostreerepo;
   OstreeRepo *pkgcache_repo;
   OstreeRepoDevInoCache *devino_cache;
@@ -273,7 +273,7 @@ rpmostree_context_finalize (GObject *object)
   RpmOstreeContext *rctx = RPMOSTREE_CONTEXT (object);
 
   g_clear_object (&rctx->spec);
-  g_clear_object (&rctx->hifctx);
+  g_clear_object (&rctx->dnfctx);
 
   g_clear_object (&rctx->pkgcache_repo);
   g_clear_object (&rctx->ostreerepo);
@@ -334,23 +334,23 @@ rpmostree_context_new_system (GCancellable *cancellable,
   rpmsqSetInterruptSafety (FALSE);
 #endif
 
-  self->hifctx = dnf_context_new ();
+  self->dnfctx = dnf_context_new ();
   DECLARE_RPMSIGHANDLER_RESET;
-  dnf_context_set_http_proxy (self->hifctx, g_getenv ("http_proxy"));
+  dnf_context_set_http_proxy (self->dnfctx, g_getenv ("http_proxy"));
 
-  dnf_context_set_repo_dir (self->hifctx, "/etc/yum.repos.d");
+  dnf_context_set_repo_dir (self->dnfctx, "/etc/yum.repos.d");
   /* TODO: re cache_age https://github.com/rpm-software-management/libdnf/issues/291
    * We override the one-week default since it's too slow for Fedora.
    */
-  dnf_context_set_cache_age (self->hifctx, 60 * 60 * 24);
-  dnf_context_set_cache_dir (self->hifctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_REPOMD);
-  dnf_context_set_solv_dir (self->hifctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_SOLV);
-  dnf_context_set_lock_dir (self->hifctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
-  dnf_context_set_user_agent (self->hifctx, PACKAGE_NAME "/" PACKAGE_VERSION);
+  dnf_context_set_cache_age (self->dnfctx, 60 * 60 * 24);
+  dnf_context_set_cache_dir (self->dnfctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_REPOMD);
+  dnf_context_set_solv_dir (self->dnfctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_SOLV);
+  dnf_context_set_lock_dir (self->dnfctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
+  dnf_context_set_user_agent (self->dnfctx, PACKAGE_NAME "/" PACKAGE_VERSION);
 
-  dnf_context_set_check_disk_space (self->hifctx, FALSE);
-  dnf_context_set_check_transaction (self->hifctx, FALSE);
-  dnf_context_set_yumdb_enabled (self->hifctx, FALSE);
+  dnf_context_set_check_disk_space (self->dnfctx, FALSE);
+  dnf_context_set_check_transaction (self->dnfctx, FALSE);
+  dnf_context_set_yumdb_enabled (self->dnfctx, FALSE);
 
   return self;
 }
@@ -372,19 +372,19 @@ rpmostree_context_new_tree (int               userroot_dfd,
     return NULL;
 
   { g_autofree char *reposdir = glnx_fdrel_abspath (userroot_dfd, "rpmmd.repos.d");
-    dnf_context_set_repo_dir (ret->hifctx, reposdir);
+    dnf_context_set_repo_dir (ret->dnfctx, reposdir);
   }
   { const char *cache_rpmmd = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_REPOMD);
     g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_rpmmd);
-    dnf_context_set_cache_dir (ret->hifctx, cachedir);
+    dnf_context_set_cache_dir (ret->dnfctx, cachedir);
   }
   { const char *cache_solv = glnx_strjoina ("cache/", RPMOSTREE_DIR_CACHE_SOLV);
     g_autofree char *cachedir = glnx_fdrel_abspath (userroot_dfd, cache_solv);
-    dnf_context_set_solv_dir (ret->hifctx, cachedir);
+    dnf_context_set_solv_dir (ret->dnfctx, cachedir);
   }
   { const char *lock = glnx_strjoina ("cache/", RPMOSTREE_DIR_LOCK);
     g_autofree char *lockdir = glnx_fdrel_abspath (userroot_dfd, lock);
-    dnf_context_set_lock_dir (ret->hifctx, lockdir);
+    dnf_context_set_lock_dir (ret->dnfctx, lockdir);
   }
 
   /* open user root repo if exists (container path) */
@@ -435,7 +435,7 @@ rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
   g_autofree char *reposdir = g_build_filename (cfg_deployment_root, "etc/yum.repos.d", NULL);
 
   /* point libhif to the yum.repos.d and os-release of the merge deployment */
-  dnf_context_set_repo_dir (self->hifctx, reposdir);
+  dnf_context_set_repo_dir (self->dnfctx, reposdir);
 
   /* point the core to the passwd & group of the merge deployment */
   g_assert (!self->passwd_dir);
@@ -487,9 +487,9 @@ rpmostree_context_set_devino_cache (RpmOstreeContext *self,
 }
 
 DnfContext *
-rpmostree_context_get_hif (RpmOstreeContext *self)
+rpmostree_context_get_dnf (RpmOstreeContext *self)
 {
-  return self->hifctx;
+  return self->dnfctx;
 }
 
 /* Add rpmmd repo information, since it's very useful for determining
@@ -506,7 +506,7 @@ rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext  *self)
 {
   g_auto(GVariantBuilder) repo_list_builder;
   g_variant_builder_init (&repo_list_builder, (GVariantType*)"aa{sv}");
-  g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (self->hifctx, DNF_REPO_ENABLED_PACKAGES);
+  g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
   for (guint i = 0; i < repos->len; i++)
     {
       g_auto(GVariantBuilder) repo_builder;
@@ -560,7 +560,7 @@ context_repos_enable_only (RpmOstreeContext    *context,
                            const char    *const *enabled_repos,
                            GError       **error)
 {
-  GPtrArray *sources = dnf_context_get_repos (context->hifctx);
+  GPtrArray *sources = dnf_context_get_repos (context->dnfctx);
   for (guint i = 0; i < sources->len; i++)
     {
       DnfRepo *src = sources->pdata[i];
@@ -620,13 +620,13 @@ rpmostree_context_setup (RpmOstreeContext    *self,
        * treecompose/container, we currently require using .repo files which
        * don't reference $releasever.
        */
-      dnf_context_set_release_ver (self->hifctx, releasever ?: "rpmostree-unset-releasever");
+      dnf_context_set_release_ver (self->dnfctx, releasever ?: "rpmostree-unset-releasever");
     }
   else if (releasever)
-    dnf_context_set_release_ver (self->hifctx, releasever);
+    dnf_context_set_release_ver (self->dnfctx, releasever);
 
-  dnf_context_set_install_root (self->hifctx, install_root);
-  dnf_context_set_source_root (self->hifctx, source_root);
+  dnf_context_set_install_root (self->dnfctx, install_root);
+  dnf_context_set_source_root (self->dnfctx, source_root);
 
   /* Set the RPM _install_langs macro, which gets processed by librpm; this is
    * currently only referenced in the traditional or non-"unified core" code.
@@ -646,13 +646,13 @@ rpmostree_context_setup (RpmOstreeContext    *self,
           g_string_append (opt, v);
         }
 
-      dnf_context_set_rpm_macro (self->hifctx, "_install_langs", opt->str);
+      dnf_context_set_rpm_macro (self->dnfctx, "_install_langs", opt->str);
     }
 
   /* This is what we use as default. */
-  dnf_context_set_rpm_macro (self->hifctx, "_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
+  dnf_context_set_rpm_macro (self->dnfctx, "_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
 
-  if (!dnf_context_setup (self->hifctx, cancellable, error))
+  if (!dnf_context_setup (self->dnfctx, cancellable, error))
     return FALSE;
 
   /* disable all repos in pkgcache-only mode, otherwise obey "repos" key */
@@ -669,7 +669,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
           return FALSE;
     }
 
-  g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (self->hifctx, DNF_REPO_ENABLED_PACKAGES);
+  g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
   if (repos->len == 0 && !self->pkgcache_only)
     {
       /* To be nice, let's only make this fatal if "packages" is empty (e.g. if
@@ -693,7 +693,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
     g_assert (g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs));
 
     if (!docs)
-        dnf_transaction_set_flags (dnf_context_get_transaction (self->hifctx),
+        dnf_transaction_set_flags (dnf_context_get_transaction (self->dnfctx),
                                    DNF_TRANSACTION_FLAG_NODOCS);
   }
 
@@ -984,7 +984,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
   g_assert (!self->empty);
 
   g_autoptr(GPtrArray) rpmmd_repos =
-    get_enabled_rpmmd_repos (self->hifctx, DNF_REPO_ENABLED_PACKAGES);
+    get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
 
   if (self->pkgcache_only)
     {
@@ -992,7 +992,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 
       /* this is essentially a no-op */
       g_autoptr(DnfState) hifstate = dnf_state_new ();
-      if (!dnf_context_setup_sack (self->hifctx, hifstate, error))
+      if (!dnf_context_setup_sack (self->dnfctx, hifstate, error))
         return FALSE;
 
       /* Note early return; no repos to fetch. */
@@ -1021,7 +1021,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 
       gboolean did_update = FALSE;
       if (!dnf_repo_check(repo,
-                          dnf_context_get_cache_age (self->hifctx),
+                          dnf_context_get_cache_age (self->dnfctx),
                           hifstate,
                           NULL))
         {
@@ -1067,7 +1067,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
      * the line we should really improve the libdnf API around all of this.
      */
     DECLARE_RPMSIGHANDLER_RESET;
-    if (!dnf_context_setup_sack (self->hifctx, hifstate, error))
+    if (!dnf_context_setup_sack (self->dnfctx, hifstate, error))
       return FALSE;
     g_signal_handler_disconnect (hifstate, progress_sigid);
     rpmostree_output_percent_progress_end ();
@@ -1077,7 +1077,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
    * of the rpm-md repos. This is intended to aid system admins with determining
    * system ""up-to-dateness"".
    */
-  { g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (self->hifctx, DNF_REPO_ENABLED_PACKAGES);
+  { g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
     g_autoptr(GString) enabled_repos = g_string_new ("");
     g_autoptr(GString) enabled_repos_solvables = g_string_new ("");
     g_autoptr(GString) enabled_repos_timestamps = g_string_new ("");
@@ -1105,7 +1105,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 
     sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_PKG_REPOS),
                      "MESSAGE=Preparing pkg txn; enabled repos: [%s] solvables: %u", enabled_repos->str, total_solvables,
-                     "SACK_N_SOLVABLES=%i", dnf_sack_count (dnf_context_get_sack (self->hifctx)),
+                     "SACK_N_SOLVABLES=%i", dnf_sack_count (dnf_context_get_sack (self->dnfctx)),
                      "ENABLED_REPOS=[%s]", enabled_repos->str,
                      "ENABLED_REPOS_SOLVABLES=[%s]", enabled_repos_solvables->str,
                      "ENABLED_REPOS_TIMESTAMPS=[%s]", enabled_repos_timestamps->str,
@@ -1368,7 +1368,7 @@ static gboolean
 sort_packages (RpmOstreeContext *self,
                GError          **error)
 {
-  DnfContext *hifctx = self->hifctx;
+  DnfContext *dnfctx = self->dnfctx;
 
   g_assert (!self->pkgs_to_download);
   self->pkgs_to_download = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
@@ -1377,8 +1377,8 @@ sort_packages (RpmOstreeContext *self,
   g_assert (!self->pkgs_to_relabel);
   self->pkgs_to_relabel = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
 
-  GPtrArray *sources = dnf_context_get_repos (hifctx);
-  g_autoptr(GPtrArray) packages = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+  GPtrArray *sources = dnf_context_get_repos (dnfctx);
+  g_autoptr(GPtrArray) packages = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
                                                          DNF_PACKAGE_INFO_INSTALL,
                                                          DNF_PACKAGE_INFO_UPDATE,
                                                          DNF_PACKAGE_INFO_DOWNGRADE, -1);
@@ -1498,7 +1498,7 @@ check_goal_solution (RpmOstreeContext *self,
                      GPtrArray        *replaced_nevras,
                      GError          **error)
 {
-  HyGoal goal = dnf_context_get_goal (self->hifctx);
+  HyGoal goal = dnf_context_get_goal (self->dnfctx);
 
   /* all strings are owned by pool */
   g_autoptr(GPtrArray) forbidden = g_ptr_array_new ();
@@ -1616,11 +1616,11 @@ install_pkg_from_cache (RpmOstreeContext *self,
    * DnfRepo. We could do this all in-memory though it doesn't seem like libsolv has an
    * appropriate API for this. */
   g_autofree char *rpm = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir.path, nevra);
-  DnfPackage *pkg = dnf_sack_add_cmdline_package (dnf_context_get_sack (self->hifctx), rpm);
+  DnfPackage *pkg = dnf_sack_add_cmdline_package (dnf_context_get_sack (self->dnfctx), rpm);
   if (!pkg)
     return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
 
-  hy_goal_install (dnf_context_get_goal (self->hifctx), pkg);
+  hy_goal_install (dnf_context_get_goal (self->dnfctx), pkg);
   return TRUE;
 }
 
@@ -1637,7 +1637,7 @@ add_remaining_pkgcache_pkgs (RpmOstreeContext *self,
   g_assert (self->pkgcache_repo);
   g_assert (self->pkgcache_only);
 
-  DnfSack *sack = dnf_context_get_sack (self->hifctx);
+  DnfSack *sack = dnf_context_get_sack (self->dnfctx);
   g_assert (sack);
 
   g_autoptr(GHashTable) refs = NULL;
@@ -1675,7 +1675,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 {
   g_assert (!self->empty);
 
-  DnfContext *hifctx = self->hifctx;
+  DnfContext *dnfctx = self->dnfctx;
   g_autofree char **pkgnames = NULL;
   g_assert (g_variant_dict_lookup (self->spec->dict, "packages",
                                    "^a&s", &pkgnames));
@@ -1693,20 +1693,20 @@ rpmostree_context_prepare (RpmOstreeContext *self,
                                    "^a&s", &removed_base_pkgnames));
 
   /* setup sack if not yet set up */
-  if (dnf_context_get_sack (hifctx) == NULL)
+  if (dnf_context_get_sack (dnfctx) == NULL)
     {
       if (!rpmostree_context_download_metadata (self, cancellable, error))
         return FALSE;
     }
 
-  HyGoal goal = dnf_context_get_goal (hifctx);
+  HyGoal goal = dnf_context_get_goal (dnfctx);
 
   /* Handle packages to remove */
   g_autoptr(GPtrArray) removed_pkgnames = g_ptr_array_new ();
   for (char **it = removed_base_pkgnames; it && *it; it++)
     {
       const char *pkgname = *it;
-      if (!dnf_context_remove (hifctx, pkgname, error))
+      if (!dnf_context_remove (dnfctx, pkgname, error))
         return FALSE;
 
       g_ptr_array_add (removed_pkgnames, (gpointer)pkgname);
@@ -1759,7 +1759,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   for (char **it = pkgnames; it && *it; it++)
     {
       const char *pkgname = *it;
-      if (!dnf_context_install (hifctx, pkgname, error))
+      if (!dnf_context_install (dnfctx, pkgname, error))
         return FALSE;
     }
 
@@ -1886,7 +1886,7 @@ rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
   if (!self->empty)
     {
       if (!rpmostree_dnf_add_checksum_goal (state_checksum,
-                                            dnf_context_get_goal (self->hifctx),
+                                            dnf_context_get_goal (self->dnfctx),
                                             get_pkgcache_repo (self), error))
         return FALSE;
     }
@@ -1971,7 +1971,7 @@ rpmostree_context_download (RpmOstreeContext *self,
 
 static gboolean
 import_one_package (RpmOstreeContext *self,
-                    DnfContext     *hifctx,
+                    DnfContext     *dnfctx,
                     DnfPackage     *pkg,
                     OstreeSePolicy *sepolicy,
                     GCancellable   *cancellable,
@@ -1998,7 +1998,7 @@ import_one_package (RpmOstreeContext *self,
     }
 
   /* Verify signatures if enabled */
-  if (!dnf_transaction_gpgcheck_package (dnf_context_get_transaction (hifctx), pkg, error))
+  if (!dnf_transaction_gpgcheck_package (dnf_context_get_transaction (dnfctx), pkg, error))
     return FALSE;
 
   /* Only set SKIP_EXTRANEOUS for packages we know need it, so that
@@ -2053,7 +2053,7 @@ rpmostree_context_import (RpmOstreeContext *self,
                           GCancellable     *cancellable,
                           GError          **error)
 {
-  DnfContext *hifctx = self->hifctx;
+  DnfContext *dnfctx = self->dnfctx;
   guint progress_sigid;
   int n = self->pkgs_to_import->len;
 
@@ -2062,7 +2062,7 @@ rpmostree_context_import (RpmOstreeContext *self,
 
   g_return_val_if_fail (get_pkgcache_repo (self) != NULL, FALSE);
 
-  if (!dnf_transaction_import_keys (dnf_context_get_transaction (hifctx), error))
+  if (!dnf_transaction_import_keys (dnf_context_get_transaction (dnfctx), error))
     return FALSE;
 
   {
@@ -2075,7 +2075,7 @@ rpmostree_context_import (RpmOstreeContext *self,
     for (guint i = 0; i < self->pkgs_to_import->len; i++)
       {
         DnfPackage *pkg = self->pkgs_to_import->pdata[i];
-        if (!import_one_package (self, hifctx, pkg,
+        if (!import_one_package (self, dnfctx, pkg,
                                  self->sepolicy, cancellable, error))
           return FALSE;
         dnf_state_assert_done (hifstate);
@@ -2995,7 +2995,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   int tmprootfs_dfd = self->tmprootfs_dfd; /* Alias to avoid bigger diff */
 
-  DnfContext *hifctx = self->hifctx;
+  DnfContext *dnfctx = self->dnfctx;
   TransactionData tdata = { 0, NULL };
   g_autoptr(GHashTable) pkg_to_ostree_commit =
     g_hash_table_new_full (NULL, NULL, (GDestroyNotify)g_object_unref, (GDestroyNotify)g_free);
@@ -3003,7 +3003,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   DnfPackage *setup_package = NULL;   /* Also special due to composes needing to inject /etc/passwd */
 
   g_auto(rpmts) ordering_ts = rpmtsCreate ();
-  rpmtsSetRootDir (ordering_ts, dnf_context_get_install_root (hifctx));
+  rpmtsSetRootDir (ordering_ts, dnf_context_get_install_root (dnfctx));
 
   /* First for the ordering TS, set the dbpath to relative, which will also gain
    * the root dir.
@@ -3017,18 +3017,18 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   rpmtsSetVSFlags (ordering_ts, _RPMVSF_NOSIGNATURES | _RPMVSF_NODIGESTS | RPMTRANS_FLAG_TEST);
 
   g_autoptr(GPtrArray) overlays =
-    dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+    dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
                            DNF_PACKAGE_INFO_INSTALL,
                            -1);
 
   g_autoptr(GPtrArray) overrides_replace =
-    dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+    dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
                            DNF_PACKAGE_INFO_UPDATE,
                            DNF_PACKAGE_INFO_DOWNGRADE,
                            -1);
 
   g_autoptr(GPtrArray) overrides_remove =
-    dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+    dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
                            DNF_PACKAGE_INFO_REMOVE,
                            DNF_PACKAGE_INFO_OBSOLETE,
                            -1);

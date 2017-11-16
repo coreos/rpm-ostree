@@ -939,12 +939,12 @@ print_pkglist (GPtrArray *pkglist)
 }
 
 void
-rpmostree_print_transaction (DnfContext   *hifctx)
+rpmostree_print_transaction (DnfContext   *dnfctx)
 {
   gboolean empty = TRUE;
 
   { g_autoptr(GPtrArray) packages = NULL;
-    packages = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+    packages = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
                                       DNF_PACKAGE_INFO_INSTALL,
                                       DNF_PACKAGE_INFO_REINSTALL,
                                       DNF_PACKAGE_INFO_DOWNGRADE,
@@ -960,7 +960,7 @@ rpmostree_print_transaction (DnfContext   *hifctx)
   }
 
   { g_autoptr(GPtrArray) packages = NULL;
-    packages = dnf_goal_get_packages (dnf_context_get_goal (hifctx),
+    packages = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
                                       DNF_PACKAGE_INFO_REMOVE,
                                       DNF_PACKAGE_INFO_OBSOLETE,
                                       -1);
