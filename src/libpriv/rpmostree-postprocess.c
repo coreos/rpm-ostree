@@ -787,6 +787,41 @@ replace_nsswitch (int            dfd,
   return TRUE;
 }
 
+/* Change the policy store location.
+ * Part of SELinux in Fedora >= 24: https://bugzilla.redhat.com/show_bug.cgi?id=1290659
+ */
+gboolean
+rpmostree_rootfs_fixup_selinux_store_root (int rootfs_dfd,
+                                           GCancellable *cancellable,
+                                           GError **error)
+{
+  const char *semanage_path = "usr/etc/selinux/semanage.conf";
+
+  /* Check if the config file exists; if not, do nothing silently */
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, semanage_path, NULL, AT_SYMLINK_NOFOLLOW, error))
+    return FALSE;
+  if (errno == ENOENT)
+    return TRUE;
+
+  g_autofree char *orig_contents =
+    glnx_file_get_contents_utf8_at (rootfs_dfd, semanage_path, NULL,
+                                    cancellable, error);
+  if (orig_contents == NULL)
+    return glnx_prefix_error (error, "Opening %s", semanage_path);
+
+  static const char new_store_root[] = "\nstore-root=/etc/selinux\n";
+  if (strstr (orig_contents, new_store_root) == NULL)
+    {
+      g_autofree char *new_contents = g_strconcat (orig_contents, new_store_root, NULL);
+      if (!glnx_file_replace_contents_at (rootfs_dfd, semanage_path,
+                                          (guint8*)new_contents, -1, 0,
+                                          cancellable, error))
+        return glnx_prefix_error (error, "Replacing %s", semanage_path);
+    }
+
+  return TRUE;
+}
+
 /* SELinux in Fedora >= 24: https://bugzilla.redhat.com/show_bug.cgi?id=1290659 */
 static gboolean
 postprocess_selinux_policy_store_location (int rootfs_dfd,
@@ -821,22 +856,8 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
     }
   g_print ("SELinux policy in /var, enabling workaround\n");
 
-  { g_autofree char *orig_contents = NULL;
-    g_autofree char *contents = NULL;
-    const char *semanage_path = "usr/etc/selinux/semanage.conf";
-
-    orig_contents = glnx_file_get_contents_utf8_at (rootfs_dfd, semanage_path, NULL,
-                                                    cancellable, error);
-    if (orig_contents == NULL)
-      return glnx_prefix_error (error, "Opening %s", semanage_path);
-
-    contents = g_strconcat (orig_contents, "\nstore-root=/etc/selinux\n", NULL);
-
-    if (!glnx_file_replace_contents_at (rootfs_dfd, semanage_path,
-                                        (guint8*)contents, -1, 0,
-                                        cancellable, error))
-      return glnx_prefix_error (error, "Replacing %s", semanage_path);
-  }
+  if (!rpmostree_rootfs_fixup_selinux_store_root (rootfs_dfd, cancellable, error))
+    return FALSE;
 
   etc_policy_location = glnx_strjoina ("usr/etc/selinux/", name);
   if (!glnx_opendirat (rootfs_dfd, etc_policy_location, TRUE, &etc_selinux_dfd, error))
