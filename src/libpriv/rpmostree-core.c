@@ -2700,6 +2700,14 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
                        GCancellable  *cancellable,
                        GError       **error)
 {
+  /* In an unprivileged case, we can't do this on the real filesystem. For `ex
+   * container`, we want to completely ignore uid/gid.
+   *
+   * TODO: For non-root `--ex-unified-core` we need to do it as a commit modifier.
+   */
+  if (getuid () != 0)
+    return TRUE;  /* 🔚 Early return */
+
   int i;
   g_auto(rpmfi) fi = NULL;
   gboolean emitted_nonusr_warning = FALSE;
