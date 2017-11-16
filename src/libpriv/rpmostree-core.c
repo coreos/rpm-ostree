@@ -3207,7 +3207,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         }
 
       /* Necessary for unified core to work with semanage calls in %post, like container-selinux */
-      if (!rpmostree_rootfs_prepare_selinux (tmprootfs_dfd, cancellable, error))
+      if (!rpmostree_rootfs_fixup_selinux_store_root (tmprootfs_dfd, cancellable, error))
         return FALSE;
 
       /* We're technically deviating from RPM here by running all the %pre's

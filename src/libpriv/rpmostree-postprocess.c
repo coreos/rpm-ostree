@@ -791,9 +791,9 @@ replace_nsswitch (int            dfd,
  * Part of SELinux in Fedora >= 24: https://bugzilla.redhat.com/show_bug.cgi?id=1290659
  */
 gboolean
-rpmostree_rootfs_prepare_selinux (int rootfs_dfd,
-                                  GCancellable *cancellable,
-                                  GError **error)
+rpmostree_rootfs_fixup_selinux_store_root (int rootfs_dfd,
+                                           GCancellable *cancellable,
+                                           GError **error)
 {
   const char *semanage_path = "usr/etc/selinux/semanage.conf";
 
@@ -856,7 +856,7 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
     }
   g_print ("SELinux policy in /var, enabling workaround\n");
 
-  if (!rpmostree_rootfs_prepare_selinux (rootfs_dfd, cancellable, error))
+  if (!rpmostree_rootfs_fixup_selinux_store_root (rootfs_dfd, cancellable, error))
     return FALSE;
 
   etc_policy_location = glnx_strjoina ("usr/etc/selinux/", name);

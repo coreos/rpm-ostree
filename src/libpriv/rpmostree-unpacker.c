@@ -666,7 +666,7 @@ compose_filter_cb (OstreeRepo         *repo,
   if (g_str_has_prefix (path, "/" VAR_SELINUX_TARGETED_PATH))
     ; /* Handled by pathname translation */
   else if (g_str_has_prefix (path, "/run/") ||
-      g_str_has_prefix (path, "/var/"))
+           g_str_has_prefix (path, "/var/"))
     {
       append_tmpfiles_d (self, path, file_info,
                          user ?: "root", group ?: "root");
