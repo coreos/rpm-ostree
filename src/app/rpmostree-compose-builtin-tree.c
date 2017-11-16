@@ -514,8 +514,6 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     {
       if (!rpmostree_context_import (self->corectx, cancellable, error))
         return FALSE;
-      if (!rpmostree_context_relabel (self->corectx, cancellable, error))
-        return FALSE;
       rpmostree_context_set_tmprootfs_dfd (self->corectx, rootfs_dfd);
       if (!rpmostree_context_assemble (self->corectx, cancellable, error))
         return FALSE;
