@@ -61,6 +61,7 @@ struct RpmOstreeUnpacker
   GHashTable *doc_files;
   GString *tmpfiles_d;
   RpmOstreeUnpackerFlags flags;
+  gboolean unpacking_as_nonroot;
   DnfPackage *pkg;
   char *hdr_sha256;
 
@@ -314,6 +315,7 @@ rpmostree_unpacker_new_fd (int fd,
   ret->fi = g_steal_pointer (&fi);
   ret->archive = g_steal_pointer (&archive);
   ret->flags = flags;
+  ret->unpacking_as_nonroot = (getuid () != 0);
   ret->hdr = g_steal_pointer (&hdr);
   ret->cpio_offset = cpio_offset;
   ret->pkg = pkg ? g_object_ref (pkg) : NULL;
@@ -650,9 +652,6 @@ compose_filter_cb (OstreeRepo         *repo,
   const char *user = NULL;
   const char *group = NULL;
 
-  guint32 uid = g_file_info_get_attribute_uint32 (file_info, "unix::uid");
-  guint32 gid = g_file_info_get_attribute_uint32 (file_info, "unix::gid");
-
   gboolean error_was_set = (error && *error != NULL);
 
   /* Are we filtering out docs?  Let's check that first */
@@ -661,6 +660,33 @@ compose_filter_cb (OstreeRepo         *repo,
 
   /* Lookup any rpmfi overrides (was parsed from the header) */
   get_rpmfi_override (self, path, &user, &group, NULL);
+
+  if (self->unpacking_as_nonroot)
+    {
+      /* In the unprivileged case, libarchive returns our own uid by default.
+       * Let's ensure the object is always owned by 0/0, since we apply rpm
+       * header uid/gid at checkout time anyways.
+       *
+       * Note that for `ex container` we use
+       * OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CANONICAL_PERMISSIONS, which forces
+       * this, and that path also doesn't use this function, it uses
+       * unprivileged_filter_cb.
+       */
+      g_file_info_set_attribute_uint32 (file_info, "unix::uid", 0);
+      g_file_info_set_attribute_uint32 (file_info, "unix::gid", 0);
+    }
+  else
+    {
+      /* sanity check that RPM isn't using CPIO id fields */
+      const guint32 uid = g_file_info_get_attribute_uint32 (file_info, "unix::uid");
+      const guint32 gid = g_file_info_get_attribute_uint32 (file_info, "unix::gid");
+      if (uid != 0 || gid != 0)
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
+                       "RPM had unexpected non-root owned path \"%s\", marked as %u:%u)", path, uid, gid);
+          return OSTREE_REPO_COMMIT_FILTER_SKIP;
+        }
+    }
 
   /* convert /run and /var entries to tmpfiles.d */
   if (g_str_has_prefix (path, "/" VAR_SELINUX_TARGETED_PATH))
@@ -674,15 +700,8 @@ compose_filter_cb (OstreeRepo         *repo,
     }
   else if (!error_was_set)
     {
-      /* sanity check that RPM isn't using CPIO id fields */
-      if (uid != 0 || gid != 0)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       "RPM had unexpected non-root owned path \"%s\", marked as %u:%u)", path, uid, gid);
-          return OSTREE_REPO_COMMIT_FILTER_SKIP;
-        }
       /* And ensure the RPM installs into supported paths */
-      else if (!path_is_ostree_compliant (path))
+      if (!path_is_ostree_compliant (path))
         {
           if ((self->flags & RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS) == 0)
             g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
