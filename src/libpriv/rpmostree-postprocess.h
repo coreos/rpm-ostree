@@ -34,6 +34,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
                                    GBytes        *serialized_treefile,
                                    JsonObject    *treefile,
                                    const char    *next_version,
+                                   gboolean       unified_core_mode,
                                    GCancellable  *cancellable,
                                    GError       **error);
 
@@ -73,6 +74,7 @@ rpmostree_prepare_rootfs_for_commit (int            src_rootfs_dfd,
 gboolean
 rpmostree_postprocess_final (int            rootfs_dfd,
                              JsonObject    *treefile,
+                             gboolean       unified_core_mode,
                              GCancellable  *cancellable,
                              GError       **error);
 

@@ -873,6 +873,7 @@ concat_passwd_file (int              rootfs_fd,
 
 static gboolean
 _data_from_json (int              rootfs_dfd,
+                 const char      *dest,
                  GFile           *treefile_dirpath,
                  JsonObject      *treedata,
                  RpmOstreePasswdMigrateKind kind,
@@ -921,7 +922,7 @@ _data_from_json (int              rootfs_dfd,
   *out_found = TRUE;
 
   const char *filebasename = passwd ? "passwd" : "group";
-  const char *target_etc_filename = glnx_strjoina ("etc/", filebasename);
+  const char *target_etc_filename = glnx_strjoina (dest, filebasename);
   g_autoptr(FILE) dest_stream = open_file_stream_write_at (rootfs_dfd, target_etc_filename, "w", error);
   if (!dest_stream)
     return FALSE;
@@ -937,6 +938,7 @@ _data_from_json (int              rootfs_dfd,
 gboolean
 rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                          int              rootfs_dfd,
+                                         const char      *dest,
                                          GFile           *treefile_dirpath,
                                          GFile           *previous_root,
                                          JsonObject      *treedata,
@@ -952,10 +954,10 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
    * is really hard because filesystem depends on setup which installs
    * the files...
    */
-  if (!glnx_ensure_dir (rootfs_dfd, "etc", 0755, error))
+  if (!glnx_shutil_mkdir_p_at (rootfs_dfd, dest, 0755, cancellable, error))
     return FALSE;
 
-  if (!_data_from_json (rootfs_dfd, treefile_dirpath,
+  if (!_data_from_json (rootfs_dfd, dest, treefile_dirpath,
                         treedata, RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
                         &found_passwd_data, cancellable, error))
     return FALSE;
@@ -969,7 +971,7 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                               cancellable, error))
     return FALSE;
 
-  if (!_data_from_json (rootfs_dfd, treefile_dirpath,
+  if (!_data_from_json (rootfs_dfd, dest, treefile_dirpath,
                         treedata, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
                         &found_groups_data, cancellable, error))
     return FALSE;

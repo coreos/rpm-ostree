@@ -51,13 +51,14 @@ typedef enum {
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW
 } RpmOstreePostprocessBootLocation;
 
-/* This bwrap case is for treecompose which isn't yet operating on
- * hardlinks, so we just bind mount things mutably.
+/* The "unified_core_mode" flag controls whether or not we use rofiles-fuse,
+ * just like pkg layering.
  */
 static gboolean
 run_bwrap_mutably (int           rootfs_fd,
                    const char   *binpath,
                    char        **child_argv,
+                   gboolean      unified_core_mode,
                    GCancellable *cancellable,
                    GError      **error)
 {
@@ -74,7 +75,10 @@ run_bwrap_mutably (int           rootfs_fd,
     etc_bind = "etc";
 
   g_autoptr(RpmOstreeBwrap) bwrap =
-    rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_MUTATE_FREELY, error,
+    rpmostree_bwrap_new (rootfs_fd,
+                         unified_core_mode ? RPMOSTREE_BWRAP_MUTATE_ROFILES :
+                                             RPMOSTREE_BWRAP_MUTATE_FREELY,
+                         error,
                          "--bind", "var", "/var",
                          "--bind", etc_bind, "/etc",
                          NULL);
@@ -253,6 +257,7 @@ hardlink_recurse (int                src_dfd,
 static gboolean
 process_kernel_and_initramfs (int            rootfs_dfd,
                               JsonObject    *treefile,
+                              gboolean       unified_core_mode,
                               GCancellable  *cancellable,
                               GError       **error)
 {
@@ -329,7 +334,7 @@ process_kernel_and_initramfs (int            rootfs_dfd,
    */
   {
     char *child_argv[] = { "depmod", (char*)kver, NULL };
-    if (!run_bwrap_mutably (rootfs_dfd, "depmod", child_argv, cancellable, error))
+    if (!run_bwrap_mutably (rootfs_dfd, "depmod", child_argv, unified_core_mode, cancellable, error))
       return FALSE;
   }
 
@@ -891,6 +896,7 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
 gboolean
 rpmostree_postprocess_final (int            rootfs_dfd,
                              JsonObject    *treefile,
+                             gboolean       unified_core_mode,
                              GCancellable  *cancellable,
                              GError       **error)
 {
@@ -984,7 +990,7 @@ rpmostree_postprocess_final (int            rootfs_dfd,
       if (!glnx_shutil_rm_rf_at (rootfs_dfd, "boot/loader", cancellable, error))
         return FALSE;
 
-      if (!process_kernel_and_initramfs (rootfs_dfd, treefile,
+      if (!process_kernel_and_initramfs (rootfs_dfd, treefile, unified_core_mode,
                                          cancellable, error))
         return glnx_prefix_error (error, "During kernel processing");
     }
@@ -1377,6 +1383,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
                                    GBytes        *serialized_treefile,
                                    JsonObject    *treefile,
                                    const char    *next_version,
+                                   gboolean       unified_core_mode,
                                    GCancellable  *cancellable,
                                    GError       **error)
 {
@@ -1632,7 +1639,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 
       {
         char *child_argv[] = { binpath, NULL };
-        if (!run_bwrap_mutably (rootfs_fd, binpath, child_argv, cancellable, error))
+        if (!run_bwrap_mutably (rootfs_fd, binpath, child_argv, unified_core_mode, cancellable, error))
           return glnx_prefix_error (error, "While executing postprocessing script '%s'", bn);
       }
 

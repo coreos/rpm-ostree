@@ -48,6 +48,7 @@ static gboolean opt_workdir_tmpfs;
 static char *opt_cachedir;
 static gboolean opt_force_nocache;
 static gboolean opt_cache_only;
+static gboolean opt_ex_unified_core;
 static char *opt_proxy;
 static char *opt_output_repodata_dir;
 static char **opt_metadata_strings;
@@ -68,6 +69,7 @@ static GOptionEntry install_option_entries[] = {
   { "force-nocache", 0, 0, G_OPTION_ARG_NONE, &opt_force_nocache, "Always create a new OSTree commit, even if nothing appears to have changed", NULL },
   { "cache-only", 0, 0, G_OPTION_ARG_NONE, &opt_cache_only, "Assume cache is present, do not attempt to update it", NULL },
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
+  { "ex-unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_ex_unified_core, "Use new \"unified core\" codepath", NULL },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
   { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
@@ -101,6 +103,8 @@ typedef struct {
   int rootfs_dfd;
   int cachedir_dfd;
   OstreeRepo *repo;
+  OstreeRepo *pkgcache_repo;
+  OstreeRepoDevInoCache *devino_cache;
   char *ref;
   char *previous_checksum;
 
@@ -126,6 +130,8 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   glnx_close_fd (&ctx->rootfs_dfd);
   glnx_close_fd (&ctx->cachedir_dfd);
   g_clear_object (&ctx->repo);
+  g_clear_object (&ctx->pkgcache_repo);
+  g_clear_pointer (&ctx->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
   g_free (ctx->ref);
   g_free (ctx->previous_checksum);
   g_clear_object (&ctx->treefile_parser);
@@ -319,16 +325,6 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                           GCancellable    *cancellable,
                           GError         **error)
 {
-  /* TODO - uncomment this once we have SELinux working */
-#if 0
-  g_autoptr(OstreeRepo) cache_repo =
-    ostree_repo_create_at (self->cachedir_dfd, "repo",
-                           OSTREE_REPO_MODE_BARE_USER, NULL,
-                           cancellable, error);
-  if (!cache_repo)
-    return FALSE;
-#endif
-
   DnfContext *dnfctx = rpmostree_context_get_dnf (self->corectx);
   if (opt_proxy)
     dnf_context_set_http_proxy (dnfctx, opt_proxy);
@@ -347,8 +343,10 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   GFile *contextdir = self->treefile_context_dirs->pdata[0];
   dnf_context_set_repo_dir (dnfctx, gs_file_get_path_cached (contextdir));
 
-  /* By default, retain packages in addition to metadata with --cachedir */
-  if (opt_cachedir)
+  /* By default, retain packages in addition to metadata with --cachedir, unless
+   * we're doing unified core, in which case the pkgcache repo is the cache.
+   */
+  if (opt_cachedir && !opt_ex_unified_core)
     dnf_context_set_keep_cache (dnfctx, TRUE);
   /* For compose, always try to refresh metadata; we're used in build servers
    * where fetching should be cheap. Otherwise, if --cache-only is set, it's
@@ -411,6 +409,35 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                                   cancellable, error))
       return FALSE;
   }
+
+  /* For unified core, we have a pkgcache repo. This may be auto-created under
+   * the workdir, or live explicitly in the dir for --cache.
+   */
+  glnx_autofd int host_rootfs_dfd = -1;
+  if (opt_ex_unified_core)
+    {
+      int pkgcache_dfd = self->cachedir_dfd != -1 ? self->cachedir_dfd : self->workdir_dfd;
+      self->pkgcache_repo = ostree_repo_create_at (pkgcache_dfd, "pkgcache-repo",
+                                                   OSTREE_REPO_MODE_BARE_USER, NULL,
+                                                   cancellable, error);
+      if (!self->pkgcache_repo)
+        return FALSE;
+      rpmostree_context_set_repos (self->corectx, self->repo, self->pkgcache_repo);
+      self->devino_cache = ostree_repo_devino_cache_new ();
+
+      /* Ensure that the imported packages are labeled with *a* policy if
+       * possible, even if it's not the final one. This helps avoid duplicating
+       * all of the content.
+       */
+      if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &host_rootfs_dfd, error))
+        return FALSE;
+      g_autoptr(OstreeSePolicy) sepolicy = ostree_sepolicy_new_at (host_rootfs_dfd, cancellable, error);
+      if (!sepolicy)
+        return FALSE;
+      if (ostree_sepolicy_get_name (sepolicy) == NULL)
+        return glnx_throw (error, "Unable to load SELinux policy from /");
+      rpmostree_context_set_sepolicy (self->corectx, sepolicy);
+    }
 
   if (!rpmostree_context_prepare (self->corectx, cancellable, error))
     return FALSE;
@@ -475,52 +502,77 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 
   if (generate_from_previous)
     {
-      if (!rpmostree_generate_passwd_from_previous (self->repo, rootfs_dfd,
+      const char *dest = opt_ex_unified_core ? "usr/etc/" : "etc/";
+      if (!rpmostree_generate_passwd_from_previous (self->repo, rootfs_dfd, dest,
                                                     treefile_dirpath,
                                                     self->previous_root, treedata,
                                                     cancellable, error))
         return FALSE;
     }
 
-  /* Before we install packages, drop a file to suppress the kernel.rpm dracut run.
-   * <https://github.com/systemd/systemd/pull/4174> */
-  const char *kernel_installd_path = "usr/lib/kernel/install.d";
-  if (!glnx_shutil_mkdir_p_at (rootfs_dfd, kernel_installd_path, 0755, cancellable, error))
-    return FALSE;
-  const char skip_kernel_install_data[] = "#!/usr/bin/sh\nexit 77\n";
-  const char *kernel_skip_path = glnx_strjoina (kernel_installd_path, "/00-rpmostree-skip.install");
-  if (!glnx_file_replace_contents_with_perms_at (rootfs_dfd, kernel_skip_path,
-                                                 (guint8*)skip_kernel_install_data,
-                                                 strlen (skip_kernel_install_data),
-                                                 0755, 0, 0,
-                                                 GLNX_FILE_REPLACE_NODATASYNC,
-                                                 cancellable, error))
-    return FALSE;
+  if (opt_ex_unified_core)
+    {
+      if (!rpmostree_context_import (self->corectx, cancellable, error))
+        return FALSE;
+      if (!rpmostree_context_relabel (self->corectx, cancellable, error))
+        return FALSE;
+      rpmostree_context_set_tmprootfs_dfd (self->corectx, rootfs_dfd);
+      if (!rpmostree_context_assemble (self->corectx, cancellable, error))
+        return FALSE;
 
-  /* Now actually run through librpm to install the packages.  Note this bit
-   * will be replaced in the future with a unified core:
-   * https://github.com/projectatomic/rpm-ostree/issues/729
-   */
-  { g_auto(GLnxConsoleRef) console = { 0, };
-    g_autoptr(DnfState) hifstate = dnf_state_new ();
+      /* Now reload the policy from the tmproot, and relabel the pkgcache - this
+       * is the same thing done in rpmostree_context_commit(). But here we want
+       * to ensure our pkgcache labels are accurate, since that will
+       * be important for the ostree-jigdo work.
+       */
+      g_autoptr(OstreeSePolicy) sepolicy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
+      rpmostree_context_set_sepolicy (self->corectx, sepolicy);
 
-    guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                             G_CALLBACK (on_hifstate_percentage_changed),
-                                             "Installing packages:");
+      if (!rpmostree_context_relabel (self->corectx, cancellable, error))
+        return FALSE;
+    }
+  else
+    {
+      /* The non-unified core path */
 
-    glnx_console_lock (&console);
+      /* Before we install packages, drop a file to suppress the kernel.rpm dracut run.
+       * <https://github.com/systemd/systemd/pull/4174> */
+      const char *kernel_installd_path = "usr/lib/kernel/install.d";
+      if (!glnx_shutil_mkdir_p_at (rootfs_dfd, kernel_installd_path, 0755, cancellable, error))
+        return FALSE;
+      const char skip_kernel_install_data[] = "#!/usr/bin/sh\nexit 77\n";
+      const char *kernel_skip_path = glnx_strjoina (kernel_installd_path, "/00-rpmostree-skip.install");
+      if (!glnx_file_replace_contents_with_perms_at (rootfs_dfd, kernel_skip_path,
+                                                     (guint8*)skip_kernel_install_data,
+                                                     strlen (skip_kernel_install_data),
+                                                     0755, 0, 0,
+                                                     GLNX_FILE_REPLACE_NODATASYNC,
+                                                     cancellable, error))
+        return FALSE;
 
-    if (!libcontainer_prep_dev (rootfs_dfd, error))
-      return FALSE;
+      /* Now actually run through librpm to install the packages.  Note this bit
+       * will be replaced in the future with a unified core:
+       * https://github.com/projectatomic/rpm-ostree/issues/729
+       */
+      g_auto(GLnxConsoleRef) console = { 0, };
+      g_autoptr(DnfState) hifstate = dnf_state_new ();
 
-    if (!dnf_transaction_commit (dnf_context_get_transaction (dnfctx),
-                                 dnf_context_get_goal (dnfctx),
-                                 hifstate,
-                                 error))
-      return FALSE;
+      guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                               G_CALLBACK (on_hifstate_percentage_changed),
+                                               "Installing packages:");
 
-    g_signal_handler_disconnect (hifstate, progress_sigid);
-  }
+      glnx_console_lock (&console);
+
+      if (!libcontainer_prep_dev (rootfs_dfd, error))
+        return FALSE;
+
+      if (!dnf_transaction_commit (dnf_context_get_transaction (dnfctx),
+                                   dnf_context_get_goal (dnfctx),
+                                   hifstate, error))
+        return FALSE;
+
+      g_signal_handler_disconnect (hifstate, progress_sigid);
+    }
 
   if (out_unmodified)
     *out_unmodified = FALSE;
@@ -682,9 +734,32 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   if (!rpmostree_bwrap_selftest (error))
     return FALSE;
 
+  self->repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
+  if (!self->repo)
+    return FALSE;
+
   if (opt_workdir_tmpfs)
     g_print ("note: --workdir-tmpfs is deprecated and will be ignored\n");
-  if (!opt_workdir)
+  if (opt_ex_unified_core)
+    {
+      if (opt_workdir)
+        g_printerr ("note: --workdir is ignored for --ex-unified-core\n");
+
+      /* For unified core, our workdir must be underneath the repo tmp/
+       * in order to use hardlinks.  We also really want a bare-user repo.
+       * We hard require that for now, but down the line we may automatically
+       * do a pull-local from the bare-user repo to the archive.
+       */
+      if (ostree_repo_get_mode (self->repo) != OSTREE_REPO_MODE_BARE_USER)
+        return glnx_throw (error, "--ex-unified-core requires a bare-user repository");
+      if (!glnx_mkdtempat (ostree_repo_get_dfd (self->repo), "tmp/rpm-ostree-compose.XXXXXX", 0700,
+                           &self->workdir_tmp, error))
+        return FALSE;
+      /* Note special handling of this aliasing in _finalize() */
+      self->workdir_dfd = self->workdir_tmp.fd;
+
+    }
+  else if (!opt_workdir)
     {
       if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &self->workdir_tmp, error))
         return FALSE;
@@ -698,9 +773,6 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     }
 
   self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-  self->repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
-  if (!self->repo)
-    return FALSE;
 
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
 
@@ -787,6 +859,14 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
                    GCancellable    *cancellable,
                    GError         **error)
 {
+  if (getuid () != 0)
+    {
+      if (!opt_ex_unified_core)
+        return glnx_throw (error, "This command requires root privileges");
+      g_printerr ("NOTICE: Running this command as non-root is currently known not to work completely.\n");
+      g_printerr ("NOTICE: Proceeding anyways.\n");
+    }
+
   /* FIXME - is this still necessary? */
   if (fchdir (self->workdir_dfd) != 0)
     return glnx_throw_errno_prefix (error, "fchdir");
@@ -954,7 +1034,8 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
   /* Start postprocessing */
   if (!rpmostree_treefile_postprocessing (self->rootfs_dfd, self->treefile_context_dirs->pdata[0],
                                           self->serialized_treefile, self->treefile,
-                                          next_version, cancellable, error))
+                                          next_version, opt_ex_unified_core,
+                                          cancellable, error))
     return glnx_prefix_error (error, "Postprocessing");
 
   /* Until here, we targeted "rootfs.tmp" in the working directory. Most
@@ -1031,7 +1112,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
 
   if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
     return EXIT_FAILURE;
-  if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile,
+  if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile, opt_ex_unified_core,
                                     cancellable, error))
     return EXIT_FAILURE;
 
@@ -1164,7 +1245,7 @@ rpmostree_compose_builtin_postprocess (int             argc,
     return EXIT_FAILURE;
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return EXIT_FAILURE;
-  if (!rpmostree_postprocess_final (rootfs_dfd, treefile,
+  if (!rpmostree_postprocess_final (rootfs_dfd, treefile, opt_ex_unified_core,
                                     cancellable, error))
     return EXIT_FAILURE;
   return EXIT_SUCCESS;
