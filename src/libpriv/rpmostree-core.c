@@ -810,25 +810,21 @@ get_header_variant (OstreeRepo       *repo,
                     GError          **error)
 {
   g_autofree char *cached_rev = NULL;
-  g_autoptr(GVariant) pkg_commit = NULL;
-  g_autoptr(GVariant) pkg_meta = NULL;
-  g_autoptr(GVariantDict) pkg_meta_dict = NULL;
-  g_autoptr(GVariant) header = NULL;
 
   if (!ostree_repo_resolve_rev (repo, cachebranch, FALSE,
                                 &cached_rev, error))
     return FALSE;
 
+  g_autoptr(GVariant) pkg_commit = NULL;
   if (!ostree_repo_load_commit (repo, cached_rev, &pkg_commit, NULL, error))
     return FALSE;
 
-  pkg_meta = g_variant_get_child_value (pkg_commit, 0);
-  pkg_meta_dict = g_variant_dict_new (pkg_meta);
+  g_autoptr(GVariant) pkg_meta = g_variant_get_child_value (pkg_commit, 0);
+  g_autoptr(GVariantDict) pkg_meta_dict = g_variant_dict_new (pkg_meta);
 
-  header = _rpmostree_vardict_lookup_value_required (pkg_meta_dict,
-                                                     "rpmostree.metadata",
-                                                     (GVariantType*)"ay",
-                                                     error);
+  g_autoptr(GVariant) header =
+    _rpmostree_vardict_lookup_value_required (pkg_meta_dict, "rpmostree.metadata",
+                                              (GVariantType*)"ay", error);
   if (!header)
     {
       g_autofree char *nevra = rpmostree_cache_branch_to_nevra (cachebranch);
@@ -1898,11 +1894,10 @@ rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
 static GHashTable *
 gather_source_to_packages (RpmOstreeContext *self)
 {
-  guint i;
   g_autoptr(GHashTable) source_to_packages =
     g_hash_table_new_full (NULL, NULL, NULL, (GDestroyNotify)g_ptr_array_unref);
 
-  for (i = 0; i < self->pkgs_to_download->len; i++)
+  for (guint i = 0; i < self->pkgs_to_download->len; i++)
     {
       DnfPackage *pkg = self->pkgs_to_download->pdata[i];
       DnfRepo *src = dnf_package_get_repo (pkg);
@@ -1977,16 +1972,8 @@ import_one_package (RpmOstreeContext *self,
                     GCancellable   *cancellable,
                     GError        **error)
 {
-  OstreeRepo *ostreerepo = get_pkgcache_repo (self);
-  g_autofree char *ostree_commit = NULL;
-  glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
+  DnfRepo *pkg_repo = dnf_package_get_repo (pkg);
   g_autofree char *pkg_path = NULL;
-  DnfRepo *pkg_repo;
-
-  int flags = 0;
-
-  pkg_repo = dnf_package_get_repo (pkg);
-
   if (pkg_is_local (pkg))
     pkg_path = g_strdup (dnf_package_get_filename (pkg));
   else
@@ -2006,6 +1993,8 @@ import_one_package (RpmOstreeContext *self,
    * (This will also likely need to be configurable).
    */
   const char *pkg_name = dnf_package_get_name (pkg);
+
+  int flags = 0;
   if (g_str_equal (pkg_name, "filesystem") ||
       g_str_equal (pkg_name, "rootfiles"))
     flags |= RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS;
@@ -2017,7 +2006,7 @@ import_one_package (RpmOstreeContext *self,
   }
 
   /* TODO - tweak the unpacker flags for containers */
-  unpacker = rpmostree_unpacker_new_at (AT_FDCWD, pkg_path, pkg, flags, error);
+  g_autoptr(RpmOstreeUnpacker) unpacker = rpmostree_unpacker_new_at (AT_FDCWD, pkg_path, pkg, flags, error);
   if (!unpacker)
     return FALSE;
 
@@ -2032,6 +2021,8 @@ import_one_package (RpmOstreeContext *self,
         return FALSE;
     }
 
+  OstreeRepo *ostreerepo = get_pkgcache_repo (self);
+  g_autofree char *ostree_commit = NULL;
   if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostreerepo, sepolicy,
                                             &ostree_commit, cancellable, error))
     return glnx_prefix_error (error, "Unpacking %s",
@@ -2054,9 +2045,7 @@ rpmostree_context_import (RpmOstreeContext *self,
                           GError          **error)
 {
   DnfContext *dnfctx = self->dnfctx;
-  guint progress_sigid;
-  int n = self->pkgs_to_import->len;
-
+  const int n = self->pkgs_to_import->len;
   if (n == 0)
     return TRUE;
 
@@ -2068,9 +2057,9 @@ rpmostree_context_import (RpmOstreeContext *self,
   {
     glnx_unref_object DnfState *hifstate = dnf_state_new ();
     dnf_state_set_number_steps (hifstate, self->pkgs_to_import->len);
-    progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                       G_CALLBACK (on_hifstate_percentage_changed),
-                                       "Importing:");
+    guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                             G_CALLBACK (on_hifstate_percentage_changed),
+                                             "Importing:");
 
     for (guint i = 0; i < self->pkgs_to_import->len; i++)
       {
@@ -2319,12 +2308,6 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
   while (TRUE)
     {
       struct dirent *dent = NULL;
-      g_autofree char *fullpath = NULL;
-
-      const char *cur_label = NULL;
-      g_autofree char *new_label = NULL;
-      g_autoptr(GVariant) cur_xattrs = NULL;
-      g_autoptr(GVariant) new_xattrs = NULL;
 
       if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent,
                                                        cancellable, error))
@@ -2337,18 +2320,19 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
           dent->d_type != DT_LNK)
         continue;
 
+      g_autoptr(GVariant) cur_xattrs = NULL;
       if (!glnx_dfd_name_get_all_xattrs (dfd_iter.fd, dent->d_name, &cur_xattrs,
                                          cancellable, error))
         return FALSE;
 
       /* may return NULL */
-      cur_label = get_selinux_label (cur_xattrs);
+      const char *cur_label = get_selinux_label (cur_xattrs);
 
       /* build the new full path to use for label lookup (we can't just use
        * glnx_fdrel_abspath() since that will just give a new /proc/self/fd/$fd
        * on each recursion) */
-      fullpath = g_build_filename (prefix, dent->d_name, NULL);
-
+      g_autofree char *fullpath = g_build_filename (prefix, dent->d_name, NULL);
+      g_autofree char *new_label = NULL;
       {
         struct stat stbuf;
 
@@ -2369,8 +2353,7 @@ relabel_dir_recurse_at (OstreeRepo        *repo,
                                            cancellable, error))
               return FALSE;
 
-          new_xattrs = set_selinux_label (cur_xattrs, new_label);
-
+          g_autoptr(GVariant) new_xattrs = set_selinux_label (cur_xattrs, new_label);
           if (!glnx_dfd_name_set_all_xattrs (dfd_iter.fd, dent->d_name,
                                              new_xattrs, cancellable, error))
             return FALSE;
@@ -2492,8 +2475,7 @@ rpmostree_context_relabel (RpmOstreeContext *self,
                            GCancellable     *cancellable,
                            GError          **error)
 {
-  guint progress_sigid;
-  int n = self->pkgs_to_relabel->len;
+  const int n = self->pkgs_to_relabel->len;
   OstreeRepo *ostreerepo = get_pkgcache_repo (self);
 
   if (n == 0)
@@ -2507,9 +2489,9 @@ rpmostree_context_relabel (RpmOstreeContext *self,
   g_autofree char *prefix = g_strdup_printf ("Relabeling %d package%s:", n, _NS(n));
 
   dnf_state_set_number_steps (hifstate, self->pkgs_to_relabel->len);
-  progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                     G_CALLBACK (on_hifstate_percentage_changed),
-                                     prefix);
+  guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
+                                           G_CALLBACK (on_hifstate_percentage_changed),
+                                           prefix);
 
   /* Prep a txn and tmpdir for all of the relabels */
   g_autoptr(_OstreeRepoAutoTransaction) txn =
@@ -2711,16 +2693,12 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
   while ((i = rpmfiNext (fi)) >= 0)
     {
       const char *fn = rpmfiFN (fi);
-      g_autofree char *modified_fn = NULL;  /* May be used to override fn */
       const char *user = rpmfiFUser (fi) ?: "root";
       const char *group = rpmfiFGroup (fi) ?: "root";
       const char *fcaps = rpmfiFCaps (fi) ?: '\0';
       rpm_mode_t mode = rpmfiFMode (fi);
       rpmfileAttrs fattrs = rpmfiFFlags (fi);
       const gboolean is_ghost = fattrs & RPMFILE_GHOST;
-      struct stat stbuf;
-      uid_t uid = 0;
-      gid_t gid = 0;
 
       if (g_str_equal (user, "root") &&
           g_str_equal (group, "root"))
@@ -2738,6 +2716,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
       fn += strspn (fn, "/");
       g_assert (fn[0]);
 
+      g_autofree char *modified_fn = NULL;  /* May be used to override fn */
       /* /run and /var paths have already been translated to tmpfiles during
        * unpacking */
       if (g_str_has_prefix (fn, "run/") ||
@@ -2759,6 +2738,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
           continue;
         }
 
+      struct stat stbuf;
       if (fstatat (tmprootfs_dfd, fn, &stbuf, AT_SYMLINK_NOFOLLOW) != 0)
         {
           /* Not early loop skip; in the ghost case, we expect it to not
@@ -2792,6 +2772,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
           return FALSE;
         }
 
+      uid_t uid = 0;
       if (!g_str_equal (user, "root"))
         {
           struct conv_passwd_ent *passwdent =
@@ -2807,6 +2788,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
           uid = passwdent->uid;
         }
 
+      gid_t gid = 0;
       if (!g_str_equal (group, "root"))
         {
           struct conv_group_ent *groupent =
@@ -2824,10 +2806,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
         }
 
       if (fchownat (tmprootfs_dfd, fn, uid, gid, AT_SYMLINK_NOFOLLOW) != 0)
-        {
-          glnx_set_prefix_error_from_errno (error, "fchownat: %s", fn);
-          return FALSE;
-        }
+        return glnx_throw_errno_prefix (error, "fchownat(%s)", fn);
 
       /* the chown clears away file caps, so reapply it here */
       if (fcaps[0] != '\0')
@@ -2842,10 +2821,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
       if (S_ISREG (stbuf.st_mode))
         {
           if (fchmodat (tmprootfs_dfd, fn, stbuf.st_mode, 0) != 0)
-            {
-              glnx_set_prefix_error_from_errno (error, "fchmodat: %s", fn);
-              return FALSE;
-            }
+            return glnx_throw_errno_prefix (error, "fchmodat(%s)", fn);
         }
     }
 
@@ -2879,7 +2855,6 @@ add_install (RpmOstreeContext *self,
   OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
   g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
   g_autofree char *cached_rev = NULL;
-  gboolean sepolicy_matches;
 
   if (!ostree_repo_resolve_rev (pkgcache_repo, cachebranch, FALSE,
                                 &cached_rev, error))
@@ -2889,6 +2864,7 @@ add_install (RpmOstreeContext *self,
   if (!ostree_repo_load_commit (pkgcache_repo, cached_rev, &commit, NULL, error))
     return FALSE;
 
+  gboolean sepolicy_matches;
   if (self->sepolicy)
     {
       if (!commit_has_matching_sepolicy (commit, self->sepolicy, &sepolicy_matches,

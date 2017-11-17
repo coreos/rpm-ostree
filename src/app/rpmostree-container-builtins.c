@@ -410,31 +410,27 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
   g_autofree char *previous_state_sha512 = NULL;
   g_autoptr(GVariant) metadata = NULL;
   g_autoptr(RpmOstreeTreespec) treespec = NULL;
-  { g_autoptr(GVariantDict) metadata_dict = NULL;
-    g_autoptr(GVariant) spec_v = NULL;
-    g_autoptr(GVariant) previous_sha512_v = NULL;
-    g_autoptr(GVariant) commit = NULL;
-
-    if (!ostree_repo_resolve_rev (rocctx->repo, name, FALSE, &commit_checksum, error))
+  { if (!ostree_repo_resolve_rev (rocctx->repo, name, FALSE, &commit_checksum, error))
       return EXIT_FAILURE;
 
+    g_autoptr(GVariant) commit = NULL;
     if (!ostree_repo_load_variant (rocctx->repo, OSTREE_OBJECT_TYPE_COMMIT, commit_checksum,
                                    &commit, error))
       return EXIT_FAILURE;
 
     metadata = g_variant_get_child_value (commit, 0);
-    metadata_dict = g_variant_dict_new (metadata);
+    g_autoptr(GVariantDict) metadata_dict = g_variant_dict_new (metadata);
 
-    spec_v = _rpmostree_vardict_lookup_value_required (metadata_dict, "rpmostree.spec",
-                                                                 (GVariantType*)"a{sv}", error);
+    g_autoptr(GVariant) spec_v =
+      _rpmostree_vardict_lookup_value_required (metadata_dict, "rpmostree.spec",
+                                                (GVariantType*)"a{sv}", error);
     if (!spec_v)
       return EXIT_FAILURE;
 
     treespec = rpmostree_treespec_new (spec_v);
-
-    previous_sha512_v = _rpmostree_vardict_lookup_value_required (metadata_dict,
-                                                                  "rpmostree.state-sha512",
-                                                                  (GVariantType*)"s", error);
+    g_autoptr(GVariant) previous_sha512_v =
+      _rpmostree_vardict_lookup_value_required (metadata_dict, "rpmostree.state-sha512",
+                                                (GVariantType*)"s", error);
     if (!previous_sha512_v)
       return EXIT_FAILURE;
 

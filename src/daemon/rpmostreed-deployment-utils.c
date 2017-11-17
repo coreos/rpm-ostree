@@ -230,28 +230,11 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
                                         OstreeRepo *repo,
                                         GError **error)
 {
-  g_autoptr(GVariant) commit = NULL;
-  g_autoptr(RpmOstreeOrigin) origin = NULL;
-  g_autofree gchar *id = NULL;
-  g_autofree char *base_checksum = NULL;
-
-  GVariant *sigs = NULL; /* floating variant */
-
-  GVariantDict dict;
-
-  const char *refspec;
-  g_autofree char *pending_base_commitrev = NULL;
   const gchar *osname = ostree_deployment_get_osname (deployment);
   const gchar *csum = ostree_deployment_get_csum (deployment);
   gint serial = ostree_deployment_get_deployserial (deployment);
-  gboolean gpg_enabled = FALSE;
-  gboolean is_layered = FALSE;
-  g_autofree char *live_inprogress = NULL;
-  g_autofree char *live_replaced = NULL;
-  g_auto(GStrv) layered_pkgs = NULL;
-  g_autoptr(GVariant) removed_base_pkgs = NULL;
-  g_autoptr(GVariant) replaced_base_pkgs = NULL;
 
+  g_autoptr(GVariant) commit = NULL;
   if (!ostree_repo_load_variant (repo,
                                  OSTREE_OBJECT_TYPE_COMMIT,
                                  csum,
@@ -259,14 +242,14 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
                                  error))
     return NULL;
 
-  id = rpmostreed_deployment_generate_id (deployment);
-
-  origin = rpmostree_origin_parse_deployment (deployment, error);
+  g_autofree gchar *id = rpmostreed_deployment_generate_id (deployment);
+  g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
   if (!origin)
     return NULL;
 
-  refspec = rpmostree_origin_get_refspec (origin);
+  const char *refspec = rpmostree_origin_get_refspec (origin);
 
+  GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
 
   g_variant_dict_insert (&dict, "id", "s", id);
@@ -275,6 +258,11 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   g_variant_dict_insert (&dict, "serial", "i", serial);
   g_variant_dict_insert (&dict, "checksum", "s", csum);
 
+  gboolean is_layered = FALSE;
+  g_autofree char *base_checksum = NULL;
+  g_auto(GStrv) layered_pkgs = NULL;
+  g_autoptr(GVariant) removed_base_pkgs = NULL;
+  g_autoptr(GVariant) replaced_base_pkgs = NULL;
   if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered, &base_checksum,
                                               &layered_pkgs, &removed_base_pkgs,
                                               &replaced_base_pkgs, error))
@@ -310,9 +298,12 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
     g_variant_dict_insert (&dict, "base-commit-meta", "@a{sv}", base_meta);
   }
 
-  sigs = rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &gpg_enabled);
+  /* floating */
+  gboolean gpg_enabled = FALSE;
+  GVariant *sigs = rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &gpg_enabled);
   variant_add_commit_details (&dict, NULL, commit);
 
+  g_autofree char *pending_base_commitrev = NULL;
   if (!ostree_repo_resolve_rev (repo, refspec, TRUE,
                                 &pending_base_commitrev, error))
     return NULL;
@@ -332,6 +323,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
       variant_add_commit_details (&dict, "pending-base-", pending_base_commit);
     }
 
+  g_autofree char *live_inprogress = NULL;
+  g_autofree char *live_replaced = NULL;
   if (!rpmostree_syscore_deployment_get_live (sysroot, deployment, &live_inprogress,
                                               &live_replaced, error))
     return NULL;
