@@ -13,6 +13,9 @@ struct RpmOstreePackageScriptHandler;
 %includes
 %%
 glibc.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
+# We take over depmod/dracut etc.  It's `kernel` in C7 and kernel-core in F25+
+kernel.posttrans, RPMOSTREE_SCRIPT_ACTION_IGNORE
+kernel-core.posttrans, RPMOSTREE_SCRIPT_ACTION_IGNORE
 # Legacy workaround
 glibc-headers.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
 # workaround for old bug?
