@@ -21,7 +21,8 @@ for path in /boot /usr/lib/ostree-boot; do
     assert_file_has_content bootls.txt initramfs-
     echo "ok boot files"
 done
-kver=$(grep /vmlinuz bootls.txt | sed -e 's,.*/vmlinuz-\(.*\)-[0-9a-e].*$,\1,')
+vmlinuz_line=$(grep -o '/vmlinuz.*$')
+kver=$(echo ${vmlinuz_line} | sed -e 's,^/,,' -e 's,-[0-9a-f]*$,,')
 ostree --repo=${repobuild} ls ${treeref} /usr/lib/modules/${kver}/{vmlinuz,initramfs.img} >/dev/null
 
 ostree --repo=${repobuild} ls -R ${treeref} /usr/share/man > manpages.txt
