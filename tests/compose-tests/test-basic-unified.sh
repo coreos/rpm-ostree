@@ -30,3 +30,11 @@ ostree --repo=${repobuild} cat ${treeref} /usr/lib/tmpfiles.d/pkg-chrony.conf > 
 # And this one has a non-root uid
 assert_file_has_content_literal autovar.txt 'd /var/log/chrony 0755 chrony chrony - -'
 echo "ok autovar"
+
+# And redo it to trigger relabeling
+origrev=$(ostree --repo=${repobuild} rev-parse ${treeref})
+runcompose  --force-nocache --ex-unified-core
+newrev=$(ostree --repo=${repobuild} rev-parse ${treeref})
+assert_not_streq "${origrev}" "${newrev}"
+
+echo "ok rerun"
