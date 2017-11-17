@@ -128,13 +128,12 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
 
       /* We append a space to every line except the last
        * because there could be a case where user have
-       * args that are in multiple lines. Also note, we
-       * have -2 here because the editor tends to add a new
-       * line to the file at the end
+       * args that are in multiple lines.
        */
-      if (i < num_lines- 2)
-        g_string_append (kernel_arg_buf,  " ");
+      g_string_append (kernel_arg_buf,  " ");
     }
+
+  g_strchomp (kernel_arg_buf->str);
 
   if (g_strrstr (kernel_arg_buf->str, "ostree"))
     {
