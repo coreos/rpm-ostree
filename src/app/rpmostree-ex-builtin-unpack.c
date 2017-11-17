@@ -34,7 +34,7 @@
 #include "rpmostree-core.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
-#include "rpmostree-unpacker.h"
+#include "rpmostree-importer.h"
 #include "rpmostree-postprocess.h"
 
 #include "libglnx.h"
@@ -56,8 +56,8 @@ rpmostree_ex_builtin_unpack (int             argc,
 {
   int exit_status = EXIT_FAILURE;
   g_autoptr(GOptionContext) context = g_option_context_new ("REPO RPM");
-  RpmOstreeUnpackerFlags flags = 0;
-  glnx_unref_object RpmOstreeUnpacker *unpacker = NULL;
+  RpmOstreeImporterFlags flags = 0;
+  glnx_unref_object RpmOstreeImporter *unpacker = NULL;
   const char *target;
   const char *rpmpath;
   glnx_unref_object OstreeRepo *ostree_repo = NULL;
@@ -85,7 +85,7 @@ rpmostree_ex_builtin_unpack (int             argc,
   if (!ostree_repo)
     goto out;
 
-  unpacker = rpmostree_unpacker_new_at (AT_FDCWD, rpmpath, NULL, flags, error);
+  unpacker = rpmostree_importer_new_at (AT_FDCWD, rpmpath, NULL, flags, error);
   if (!unpacker)
     goto out;
 
@@ -101,11 +101,11 @@ rpmostree_ex_builtin_unpack (int             argc,
     }
 
   {
-    const char *branch = rpmostree_unpacker_get_ostree_branch (unpacker);
+    const char *branch = rpmostree_importer_get_ostree_branch (unpacker);
     g_autofree char *checksum = NULL;
 
-    if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostree_repo, sepolicy,
-                                              &checksum, cancellable, error))
+    if (!rpmostree_importer_run (unpacker, ostree_repo, sepolicy,
+                                 &checksum, cancellable, error))
       goto out;
 
     g_print ("Imported %s to %s -> %s\n", rpmpath, branch, checksum);

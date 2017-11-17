@@ -33,7 +33,6 @@
 #include "rpmostree-postprocess.h"
 #include "rpmostree-output.h"
 #include "rpmostree-scripts.h"
-#include "rpmostree-unpacker.h"
 
 #include "ostree-repo.h"
 

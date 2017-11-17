@@ -32,7 +32,8 @@
 #include <pwd.h>
 #include <grp.h>
 #include <gio/gunixinputstream.h>
-#include "rpmostree-unpacker.h"
+#include "rpmostree-unpacker-core.h"
+#include "rpmostree-importer.h"
 #include "rpmostree-core.h"
 #include "rpmostree-rpm-util.h"
 #include <rpm/rpmlib.h>
@@ -46,9 +47,9 @@
 #include <string.h>
 #include <stdlib.h>
 
-typedef GObjectClass RpmOstreeUnpackerClass;
+typedef GObjectClass RpmOstreeImporterClass;
 
-struct RpmOstreeUnpacker
+struct RpmOstreeImporter
 {
   GObject parent_instance;
   struct archive *archive;
@@ -60,7 +61,7 @@ struct RpmOstreeUnpacker
   GHashTable *rpmfi_overrides;
   GHashTable *doc_files;
   GString *tmpfiles_d;
-  RpmOstreeUnpackerFlags flags;
+  RpmOstreeImporterFlags flags;
   gboolean unpacking_as_nonroot;
   DnfPackage *pkg;
   char *hdr_sha256;
@@ -68,24 +69,16 @@ struct RpmOstreeUnpacker
   char *ostree_branch;
 };
 
-G_DEFINE_TYPE(RpmOstreeUnpacker, rpmostree_unpacker, G_TYPE_OBJECT)
+G_DEFINE_TYPE(RpmOstreeImporter, rpmostree_importer, G_TYPE_OBJECT)
 
 static void
-propagate_libarchive_error (GError      **error,
-                            struct archive *a)
+rpmostree_importer_finalize (GObject *object)
 {
-  g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
-                       archive_error_string (a));
-}
-
-static void
-rpmostree_unpacker_finalize (GObject *object)
-{
-  RpmOstreeUnpacker *self = (RpmOstreeUnpacker*)object;
+  RpmOstreeImporter *self = (RpmOstreeImporter*)object;
   if (self->hdr)
     headerFree (self->hdr);
   if (self->archive)
-    archive_read_free (self->archive); 
+    archive_read_free (self->archive);
   if (self->fi)
     (void) rpmfiFree (self->fi);
   if (self->owns_fd)
@@ -98,85 +91,27 @@ rpmostree_unpacker_finalize (GObject *object)
 
   g_free (self->hdr_sha256);
 
-  G_OBJECT_CLASS (rpmostree_unpacker_parent_class)->finalize (object);
+  G_OBJECT_CLASS (rpmostree_importer_parent_class)->finalize (object);
 }
 
 static void
-rpmostree_unpacker_class_init (RpmOstreeUnpackerClass *klass)
+rpmostree_importer_class_init (RpmOstreeImporterClass *klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
 
-  gobject_class->finalize = rpmostree_unpacker_finalize;
+  gobject_class->finalize = rpmostree_importer_finalize;
 }
 
 static void
-rpmostree_unpacker_init (RpmOstreeUnpacker *self)
+rpmostree_importer_init (RpmOstreeImporter *self)
 {
   self->rpmfi_overrides = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                  g_free, NULL);
   self->tmpfiles_d = g_string_new ("");
 }
 
-typedef int(*archive_setup_func)(struct archive *);
-
-/**
- * rpmostree_rpm2cpio:
- * @fd: An open file descriptor for an RPM package
- * @error: GError
- *
- * Parse CPIO content of @fd via libarchive.  Note that the CPIO data
- * does not capture all relevant filesystem content; for example,
- * filesystem capabilities are part of a separate header, etc.
- */
-static struct archive *
-rpm2cpio (int fd, GError **error)
-{
-  gboolean success = FALSE;
-  struct archive *ret = NULL;
-  guint i;
-
-  ret = archive_read_new ();
-  g_assert (ret);
-
-  /* We only do the subset necessary for RPM */
-  { archive_setup_func archive_setup_funcs[] =
-      { archive_read_support_filter_rpm,
-        archive_read_support_filter_lzma,
-        archive_read_support_filter_gzip,
-        archive_read_support_filter_xz,
-        archive_read_support_filter_bzip2,
-        archive_read_support_format_cpio };
-
-    for (i = 0; i < G_N_ELEMENTS (archive_setup_funcs); i++)
-      {
-        if (archive_setup_funcs[i](ret) != ARCHIVE_OK)
-          {
-            propagate_libarchive_error (error, ret);
-            goto out;
-          }
-      }
-  }
-
-  if (archive_read_open_fd (ret, fd, 10240) != ARCHIVE_OK)
-    {
-      propagate_libarchive_error (error, ret);
-      goto out;
-    }
-
-  success = TRUE;
- out:
-  if (success)
-    return g_steal_pointer (&ret);
-  else
-    {
-      if (ret)
-        (void) archive_read_free (ret);
-      return NULL;
-    }
-}
-
 gboolean
-rpmostree_unpacker_read_metainfo (int fd,
+rpmostree_importer_read_metainfo (int fd,
                                   Header *out_header,
                                   gsize *out_cpio_offset,
                                   rpmfi *out_fi,
@@ -246,7 +181,7 @@ rpmostree_unpacker_read_metainfo (int fd,
 }
 
 static void
-build_rpmfi_overrides (RpmOstreeUnpacker *self)
+build_rpmfi_overrides (RpmOstreeImporter *self)
 {
   int i;
 
@@ -281,7 +216,7 @@ build_rpmfi_overrides (RpmOstreeUnpacker *self)
 }
 
 /*
- * rpmostree_unpacker_new_fd:
+ * rpmostree_importer_new_fd:
  * @fd: Fd
  * @pkg: (optional): Package reference, used for metadata
  * @flags: flags
@@ -291,26 +226,26 @@ build_rpmfi_overrides (RpmOstreeUnpacker *self)
  * specified, will be inspected and metadata such as the
  * origin repo will be added to the final commit.
  */
-RpmOstreeUnpacker *
-rpmostree_unpacker_new_fd (int fd,
+RpmOstreeImporter *
+rpmostree_importer_new_fd (int fd,
                            DnfPackage *pkg,
-                           RpmOstreeUnpackerFlags flags,
+                           RpmOstreeImporterFlags flags,
                            GError **error)
 {
-  RpmOstreeUnpacker *ret = NULL;
+  RpmOstreeImporter *ret = NULL;
   g_auto(Header) hdr = NULL;
   rpmfi fi = NULL;
   struct archive *archive;
   gsize cpio_offset;
 
-  archive = rpm2cpio (fd, error);
+  archive = rpmostree_unpack_rpm2cpio (fd, error);
   if (archive == NULL)
     goto out;
 
-  if (!rpmostree_unpacker_read_metainfo (fd, &hdr, &cpio_offset, &fi, error))
+  if (!rpmostree_importer_read_metainfo (fd, &hdr, &cpio_offset, &fi, error))
     goto out;
 
-  ret = g_object_new (RPMOSTREE_TYPE_UNPACKER, NULL);
+  ret = g_object_new (RPMOSTREE_TYPE_IMPORTER, NULL);
   ret->fd = fd;
   ret->fi = g_steal_pointer (&fi);
   ret->archive = g_steal_pointer (&archive);
@@ -320,7 +255,7 @@ rpmostree_unpacker_new_fd (int fd,
   ret->cpio_offset = cpio_offset;
   ret->pkg = pkg ? g_object_ref (pkg) : NULL;
 
-  if (flags & RPMOSTREE_UNPACKER_FLAGS_NODOCS)
+  if (flags & RPMOSTREE_IMPORTER_FLAGS_NODOCS)
     ret->doc_files = g_hash_table_new_full (g_str_hash, g_str_equal,
                                             g_free, NULL);
   build_rpmfi_overrides (ret);
@@ -334,7 +269,7 @@ rpmostree_unpacker_new_fd (int fd,
 }
 
 /*
- * rpmostree_unpacker_new_at:
+ * rpmostree_importer_new_at:
  * @dfd: Fd
  * @path: Path
  * @pkg: (optional): Package reference, used for metadata
@@ -345,17 +280,17 @@ rpmostree_unpacker_new_fd (int fd,
  * specified, will be inspected and metadata such as the
  * origin repo will be added to the final commit.
  */
-RpmOstreeUnpacker *
-rpmostree_unpacker_new_at (int dfd, const char *path,
+RpmOstreeImporter *
+rpmostree_importer_new_at (int dfd, const char *path,
                            DnfPackage *pkg,
-                           RpmOstreeUnpackerFlags flags,
+                           RpmOstreeImporterFlags flags,
                            GError **error)
 {
   glnx_autofd int fd = -1;
   if (!glnx_openat_rdonly (dfd, path, TRUE, &fd, error))
     return FALSE;
 
-  RpmOstreeUnpacker *ret = rpmostree_unpacker_new_fd (fd, pkg, flags, error);
+  RpmOstreeImporter *ret = rpmostree_importer_new_fd (fd, pkg, flags, error);
   if (ret == NULL)
     return NULL;
 
@@ -366,7 +301,7 @@ rpmostree_unpacker_new_at (int dfd, const char *path,
 }
 
 static void
-get_rpmfi_override (RpmOstreeUnpacker *self,
+get_rpmfi_override (RpmOstreeImporter *self,
                     const char        *path,
                     const char       **out_user,
                     const char       **out_group,
@@ -390,7 +325,7 @@ get_rpmfi_override (RpmOstreeUnpacker *self,
 }
 
 const char *
-rpmostree_unpacker_get_ostree_branch (RpmOstreeUnpacker *self)
+rpmostree_importer_get_ostree_branch (RpmOstreeImporter *self)
 {
   if (!self->ostree_branch)
     self->ostree_branch = rpmostree_get_cache_branch_header (self->hdr);
@@ -399,7 +334,7 @@ rpmostree_unpacker_get_ostree_branch (RpmOstreeUnpacker *self)
 }
 
 static gboolean
-get_lead_sig_header_as_bytes (RpmOstreeUnpacker *self,
+get_lead_sig_header_as_bytes (RpmOstreeImporter *self,
                               GBytes  **out_metadata,
                               GCancellable *cancellable,
                               GError  **error)
@@ -454,7 +389,7 @@ repo_metadata_for_package (DnfRepo *repo)
 }
 
 static gboolean
-build_metadata_variant (RpmOstreeUnpacker *self,
+build_metadata_variant (RpmOstreeImporter *self,
                         OstreeSePolicy    *sepolicy,
                         GVariant         **out_variant,
                         GCancellable      *cancellable,
@@ -493,7 +428,7 @@ build_metadata_variant (RpmOstreeUnpacker *self,
 
   /* include basic NEVRA information so we don't have to write out and read back the header
    * just to get e.g. the pkgname */
-  g_autofree char *nevra = rpmostree_unpacker_get_nevra (self);
+  g_autofree char *nevra = rpmostree_importer_get_nevra (self);
   g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.nevra",
                          g_variant_new ("(sstsss)", nevra,
                                         headerGetString (self->hdr, RPMTAG_NAME),
@@ -553,7 +488,7 @@ build_metadata_variant (RpmOstreeUnpacker *self,
 
 typedef struct
 {
-  RpmOstreeUnpacker  *self;
+  RpmOstreeImporter  *self;
   GError  **error;
 } cb_data;
 
@@ -572,7 +507,7 @@ ensure_directories_user_writable (GFileInfo *file_info)
 }
 
 static void
-append_tmpfiles_d (RpmOstreeUnpacker *self,
+append_tmpfiles_d (RpmOstreeImporter *self,
                    const char *path,
                    GFileInfo *finfo,
                    const char *user,
@@ -597,7 +532,7 @@ append_tmpfiles_d (RpmOstreeUnpacker *self,
   g_string_append_c (tmpfiles_d, filetype_c);
   g_string_append_c (tmpfiles_d, ' ');
   g_string_append (tmpfiles_d, path);
-  
+
   switch (g_file_info_get_file_type (finfo))
     {
     case G_FILE_TYPE_DIRECTORY:
@@ -646,7 +581,7 @@ compose_filter_cb (OstreeRepo         *repo,
                    GFileInfo          *file_info,
                    gpointer            user_data)
 {
-  RpmOstreeUnpacker *self = ((cb_data*)user_data)->self;
+  RpmOstreeImporter *self = ((cb_data*)user_data)->self;
   GError **error = ((cb_data*)user_data)->error;
 
   const char *user = NULL;
@@ -703,7 +638,7 @@ compose_filter_cb (OstreeRepo         *repo,
       /* And ensure the RPM installs into supported paths */
       if (!path_is_ostree_compliant (path))
         {
-          if ((self->flags & RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS) == 0)
+          if ((self->flags & RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS) == 0)
             g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                          "Unsupported path: %s; See %s",
                          path, "https://github.com/projectatomic/rpm-ostree/issues/233");
@@ -722,7 +657,7 @@ unprivileged_filter_cb (OstreeRepo         *repo,
                         GFileInfo          *file_info,
                         gpointer            user_data)
 {
-  RpmOstreeUnpacker *self = ((cb_data*)user_data)->self;
+  RpmOstreeImporter *self = ((cb_data*)user_data)->self;
   /* Are we filtering out docs?  Let's check that first */
   if (self->doc_files && g_hash_table_contains (self->doc_files, path))
     return OSTREE_REPO_COMMIT_FILTER_SKIP;
@@ -751,7 +686,7 @@ xattr_cb (OstreeRepo  *repo,
           GFileInfo   *file_info,
           gpointer     user_data)
 {
-  RpmOstreeUnpacker *self = user_data;
+  RpmOstreeImporter *self = user_data;
   const char *fcaps = NULL;
 
   get_rpmfi_override (self, path, NULL, NULL, &fcaps);
@@ -786,7 +721,7 @@ handle_translate_pathname (OstreeRepo   *repo,
 }
 
 static gboolean
-import_rpm_to_repo (RpmOstreeUnpacker *self,
+import_rpm_to_repo (RpmOstreeImporter *self,
                     OstreeRepo        *repo,
                     OstreeSePolicy    *sepolicy,
                     char             **out_csum,
@@ -891,12 +826,12 @@ import_rpm_to_repo (RpmOstreeUnpacker *self,
 }
 
 gboolean
-rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *self,
-                                     OstreeRepo        *repo,
-                                     OstreeSePolicy    *sepolicy,
-                                     char             **out_csum,
-                                     GCancellable      *cancellable,
-                                     GError           **error)
+rpmostree_importer_run (RpmOstreeImporter *self,
+                        OstreeRepo        *repo,
+                        OstreeSePolicy    *sepolicy,
+                        char             **out_csum,
+                        GCancellable      *cancellable,
+                        GError           **error)
 {
   g_autoptr(_OstreeRepoAutoTransaction) txn =
     _ostree_repo_auto_transaction_start (repo, cancellable, error);
@@ -907,7 +842,7 @@ rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *self,
   if (!import_rpm_to_repo (self, repo, sepolicy, &csum, cancellable, error))
     return FALSE;
 
-  const char *branch = rpmostree_unpacker_get_ostree_branch (self);
+  const char *branch = rpmostree_importer_get_ostree_branch (self);
   ostree_repo_transaction_set_ref (repo, NULL, branch, csum);
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
@@ -919,7 +854,7 @@ rpmostree_unpacker_unpack_to_ostree (RpmOstreeUnpacker *self,
 }
 
 char *
-rpmostree_unpacker_get_nevra (RpmOstreeUnpacker *self)
+rpmostree_importer_get_nevra (RpmOstreeImporter *self)
 {
   if (self->hdr == NULL)
     return NULL;
@@ -930,7 +865,7 @@ rpmostree_unpacker_get_nevra (RpmOstreeUnpacker *self)
 }
 
 const char *
-rpmostree_unpacker_get_header_sha256 (RpmOstreeUnpacker *self)
+rpmostree_importer_get_header_sha256 (RpmOstreeImporter *self)
 {
   return self->hdr_sha256;
 }
