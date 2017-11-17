@@ -5,7 +5,7 @@ set -xeuo pipefail
 dn=$(cd $(dirname $0) && pwd)
 . ${dn}/libcomposetest.sh
 
-prepare_compose_test "basic"
+prepare_compose_test "basic-unified"
 # Test metadata json with objects, arrays, numbers
 cat > metadata.json <<EOF
 {
