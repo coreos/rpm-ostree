@@ -914,26 +914,23 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
 
   if (rpmostree_origin_get_regenerate_initramfs (self->origin))
     {
-      g_auto(GLnxTmpfile) initramfs_tmpf = { 0, };
+      const char *const* add_dracut_argv = rpmostree_origin_get_initramfs_args (self->origin);
+
+      rpmostree_output_task_begin ("Generating initramfs");
+
+      g_autoptr(GVariant) kernel_state = rpmostree_find_kernel (self->tmprootfs_dfd, cancellable, error);
+      if (!kernel_state)
+        return FALSE;
       const char *bootdir;
       const char *kver;
       const char *kernel_path;
       const char *initramfs_path;
-      g_autoptr(GVariant) kernel_state = NULL;
-      const char *const* add_dracut_argv = NULL;
-
-      add_dracut_argv = rpmostree_origin_get_initramfs_args (self->origin);
-
-      rpmostree_output_task_begin ("Generating initramfs");
-
-      kernel_state = rpmostree_find_kernel (self->tmprootfs_dfd, cancellable, error);
-      if (!kernel_state)
-        return FALSE;
       g_variant_get (kernel_state, "(&s&s&sm&s)",
                      &kver, &bootdir,
                      &kernel_path, &initramfs_path);
       g_assert (initramfs_path);
 
+      g_auto(GLnxTmpfile) initramfs_tmpf = { 0, };
       if (!rpmostree_run_dracut (self->tmprootfs_dfd, add_dracut_argv, kver,
                                  initramfs_path, &initramfs_tmpf,
                                  cancellable, error))
