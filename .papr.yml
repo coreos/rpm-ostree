@@ -3,20 +3,20 @@ branches:
     - auto
     - try
 
-context: f26-primary
+context: f27-primary
 
 required: true
 
 cluster:
   hosts:
     - name: vmcheck1
-      distro: fedora/26/atomic
+      distro: fedora/27/atomic
     - name: vmcheck2
-      distro: fedora/26/atomic
+      distro: fedora/27/atomic
     - name: vmcheck3
-      distro: fedora/26/atomic
+      distro: fedora/27/atomic
   container:
-    image: registry.fedoraproject.org/fedora:26
+    image: registry.fedoraproject.org/fedora:27
 
 env:
   HOSTS: vmcheck1 vmcheck2 vmcheck3
