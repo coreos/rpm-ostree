@@ -37,7 +37,7 @@
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-scripts.h"
-#include "rpmostree-unpacker.h"
+#include "rpmostree-importer.h"
 #include "rpmostree-output.h"
 
 #define RPMOSTREE_MESSAGE_COMMIT_STATS SD_ID128_MAKE(e6,37,2e,38,41,21,42,a9,bc,13,b6,32,b3,f8,93,44)
@@ -1997,16 +1997,16 @@ import_one_package (RpmOstreeContext *self,
   int flags = 0;
   if (g_str_equal (pkg_name, "filesystem") ||
       g_str_equal (pkg_name, "rootfiles"))
-    flags |= RPMOSTREE_UNPACKER_FLAGS_SKIP_EXTRANEOUS;
+    flags |= RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS;
 
   { gboolean docs;
     g_assert (g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs));
     if (!docs)
-      flags |= RPMOSTREE_UNPACKER_FLAGS_NODOCS;
+      flags |= RPMOSTREE_IMPORTER_FLAGS_NODOCS;
   }
 
   /* TODO - tweak the unpacker flags for containers */
-  g_autoptr(RpmOstreeUnpacker) unpacker = rpmostree_unpacker_new_at (AT_FDCWD, pkg_path, pkg, flags, error);
+  g_autoptr(RpmOstreeImporter) unpacker = rpmostree_importer_new_at (AT_FDCWD, pkg_path, pkg, flags, error);
   if (!unpacker)
     return FALSE;
 
@@ -2023,8 +2023,8 @@ import_one_package (RpmOstreeContext *self,
 
   OstreeRepo *ostreerepo = get_pkgcache_repo (self);
   g_autofree char *ostree_commit = NULL;
-  if (!rpmostree_unpacker_unpack_to_ostree (unpacker, ostreerepo, sepolicy,
-                                            &ostree_commit, cancellable, error))
+  if (!rpmostree_importer_run (unpacker, ostreerepo, sepolicy,
+                               &ostree_commit, cancellable, error))
     return glnx_prefix_error (error, "Unpacking %s",
                               dnf_package_get_nevra (pkg));
 
@@ -2592,7 +2592,7 @@ get_package_metainfo (RpmOstreeContext *self,
   if (!glnx_openat_rdonly (self->tmpdir.fd, path, TRUE, &metadata_fd, error))
     return FALSE;
 
-  return rpmostree_unpacker_read_metainfo (metadata_fd, out_header, NULL,
+  return rpmostree_importer_read_metainfo (metadata_fd, out_header, NULL,
                                            out_fi, error);
 }
 

@@ -8,7 +8,7 @@
 #include "libglnx.h"
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
-#include "rpmostree-unpacker.h"
+#include "rpmostree-importer.h"
 #include "libtest.h"
 
 static void
@@ -135,13 +135,13 @@ test_variant_to_nevra(void)
   g_assert_no_error (error);
   g_assert (ret);
 
-  g_autoptr(RpmOstreeUnpacker) unpacker = NULL;
+  g_autoptr(RpmOstreeImporter) importer = NULL;
   g_autofree char *foo_rpm = g_strdup_printf ("yumrepo/packages/%s/%s.rpm", arch, nevra);
-  unpacker = rpmostree_unpacker_new_at (AT_FDCWD, foo_rpm, NULL, 0, &error);
+  importer = rpmostree_importer_new_at (AT_FDCWD, foo_rpm, NULL, 0, &error);
   g_assert_no_error (error);
-  g_assert (unpacker);
+  g_assert (importer);
 
-  ret = rpmostree_unpacker_unpack_to_ostree (unpacker, repo, NULL, NULL, NULL, &error);
+  ret = rpmostree_importer_run (importer, repo, NULL, NULL, NULL, &error);
   g_assert_no_error (error);
   g_assert (ret);
 
@@ -176,7 +176,7 @@ main (int   argc,
 
   g_test_add_func ("/utils/varsubst", test_varsubst_string);
   g_test_add_func ("/utils/cachebranch_to_nevra", test_cache_branch_to_nevra);
-  g_test_add_func ("/unpacker/variant_to_nevra", test_variant_to_nevra);
+  g_test_add_func ("/importer/variant_to_nevra", test_variant_to_nevra);
 
   return g_test_run ();
 }
