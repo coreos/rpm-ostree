@@ -31,7 +31,7 @@
 #include "rpmostree-util.h"
 #include "rpmostree-output.h"
 #include "rpmostree-core.h"
-#include "rpmostree-unpacker.h"
+#include "rpmostree-importer.h"
 #include "rpmostreed-utils.h"
 #include "rpmostree-kargs-process.h"
 
@@ -494,16 +494,16 @@ import_local_rpm (OstreeRepo    *parent,
   if (policy == NULL)
     return FALSE;
 
-  g_autoptr(RpmOstreeUnpacker) unpacker = rpmostree_unpacker_new_fd (fd, NULL, 0, error);
+  g_autoptr(RpmOstreeImporter) unpacker = rpmostree_importer_new_fd (fd, NULL, 0, error);
   if (unpacker == NULL)
     return FALSE;
 
-  if (!rpmostree_unpacker_unpack_to_ostree (unpacker, pkgcache_repo, policy,
-                                            NULL, cancellable, error))
+  if (!rpmostree_importer_run (unpacker, pkgcache_repo, policy,
+                               NULL, cancellable, error))
     return FALSE;
 
-  g_autofree char *nevra = rpmostree_unpacker_get_nevra (unpacker);
-  *sha256_nevra = g_strconcat (rpmostree_unpacker_get_header_sha256 (unpacker),
+  g_autofree char *nevra = rpmostree_importer_get_nevra (unpacker);
+  *sha256_nevra = g_strconcat (rpmostree_importer_get_header_sha256 (unpacker),
                                ":", nevra, NULL);
 
   return TRUE;

@@ -34,7 +34,6 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
-#include "rpmostree-unpacker.h"
 
 #include "libglnx.h"
 
