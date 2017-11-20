@@ -115,6 +115,11 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        GError           **error);
 
 gboolean
+rpmostree_migrate_pkgcache_repo (OstreeRepo   *repo,
+                                 GCancellable *cancellable,
+                                 GError      **error);
+
+gboolean
 rpmostree_decompose_sha256_nevra (const char **nevra,
                                   char       **sha256,
                                   GError     **error);

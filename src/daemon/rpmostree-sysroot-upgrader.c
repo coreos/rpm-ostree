@@ -612,15 +612,12 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self,
     g_ptr_array_new_with_free_func (g_free);
 
   g_autoptr(GPtrArray) inactive_replacements = g_ptr_array_new ();
-  g_autoptr(OstreeRepo) pkgcache_repo = NULL;
-  if (!rpmostree_syscore_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
-    return FALSE;
 
   GLNX_HASH_TABLE_FOREACH_KV (local_replacements, const char*, nevra, const char*, sha256)
     {
       /* use the pkgcache because there's no safe way to go from nevra --> pkgname */
       g_autofree char *pkgname = NULL;
-      if (!rpmostree_get_nevra_from_pkgcache (pkgcache_repo, nevra, &pkgname, NULL, NULL,
+      if (!rpmostree_get_nevra_from_pkgcache (self->repo, nevra, &pkgname, NULL, NULL,
                                               NULL, NULL, cancellable, error))
         return FALSE;
 
@@ -688,17 +685,13 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
       if (!initialize_metatmpdir (self, error))
         return FALSE;
 
-      g_autoptr(OstreeRepo) pkgcache_repo = NULL;
-      if (!rpmostree_syscore_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
-        return FALSE;
-
       GLNX_HASH_TABLE_FOREACH_KV (local_pkgs, const char*, nevra, const char*, sha256)
         {
           g_autoptr(GVariant) header = NULL;
           g_autofree char *path =
             g_strdup_printf ("%s/%s.rpm", self->metatmpdir.path, nevra);
 
-          if (!rpmostree_pkgcache_find_pkg_header (pkgcache_repo, nevra, sha256,
+          if (!rpmostree_pkgcache_find_pkg_header (self->repo, nevra, sha256,
                                                    &header, cancellable, error))
             return FALSE;
 
@@ -804,7 +797,7 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
                      GError                  **error)
 {
   g_assert (!self->ctx);
-  self->ctx = rpmostree_context_new_system (cancellable, error);
+  self->ctx = rpmostree_context_new_system (self->repo, cancellable, error);
   g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
 
   if (!prepare_context_for_assembly (self, tmprootfs_abspath, cancellable, error))
@@ -822,12 +815,6 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (!rpmostree_context_setup (self->ctx, tmprootfs_abspath, tmprootfs_abspath, treespec,
                                 cancellable, error))
     return FALSE;
-
-  g_autoptr(OstreeRepo) pkgcache_repo = NULL;
-  if (!rpmostree_syscore_get_pkgcache_repo (self->repo, &pkgcache_repo, cancellable, error))
-    return FALSE;
-
-  rpmostree_context_set_repos (self->ctx, self->repo, pkgcache_repo);
 
   const gboolean have_packages = (self->overlay_packages->len > 0 ||
                                   g_hash_table_size (local_pkgs) > 0 ||

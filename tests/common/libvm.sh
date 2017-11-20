@@ -84,7 +84,7 @@ vm_cmdfile() {
 
 # Delete anything which we might change between runs
 vm_clean_caches() {
-    vm_cmd rm /ostree/repo/extensions/rpmostree/pkgcache/refs/heads/* -rf
+    vm_cmd rm /ostree/repo/refs/heads/rpmostree/pkg/* -rf
 }
 
 # run rpm-ostree in vm
@@ -363,6 +363,8 @@ vm_get_journal_cursor() {
 }
 
 # Wait for a message logged after $cursor matching a regexp to appear
+# $1 - cursor
+# $2 - regex to wait for
 vm_wait_content_after_cursor() {
     from_cursor=$1; shift
     regex=$1; shift
