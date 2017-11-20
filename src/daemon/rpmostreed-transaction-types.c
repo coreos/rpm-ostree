@@ -498,27 +498,20 @@ import_local_rpm (OstreeRepo    *repo,
 }
 
 static gboolean
-import_many_local_rpms (OstreeRepo    *parent,
+import_many_local_rpms (OstreeRepo    *repo,
                         GUnixFDList   *fdl,
                         GPtrArray    **out_pkgs,
                         GCancellable  *cancellable,
                         GError       **error)
 {
-  g_autoptr(OstreeRepo) pkgcache_repo = NULL;
-
-  /* It might seem risky to rely on the cache as the source of truth for local
-   * RPMs. However, the core will never re-import the same NEVRA if it's already
-   * present. To be safe, we do also record the SHA-256 of the RPM header in the
-   * origin. We don't record the checksum of the branch itself, because it may
-   * need relabeling and that's OK.
+  /* Note that we record the SHA-256 of the RPM header in the origin to make sure that e.g.
+   * if we somehow re-import the same NEVRA with different content, we error out. We don't
+   * record the checksum of the branch itself, because it may need relabeling and that's OK.
    * */
-
-  if (!rpmostree_syscore_get_pkgcache_repo (parent, &pkgcache_repo, cancellable, error))
-    return FALSE;
 
   g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
   /* Note use of commit-on-failure */
-  if (!rpmostree_repo_auto_transaction_start (&txn, pkgcache_repo, TRUE, cancellable, error))
+  if (!rpmostree_repo_auto_transaction_start (&txn, repo, TRUE, cancellable, error))
     return FALSE;
 
   g_autoptr(GPtrArray) pkgs = g_ptr_array_new_with_free_func (g_free);
@@ -528,13 +521,13 @@ import_many_local_rpms (OstreeRepo    *parent,
   for (guint i = 0; i < nfds; i++)
     {
       g_autofree char *sha256_nevra = NULL;
-      if (!import_local_rpm (pkgcache_repo, fds[i], &sha256_nevra, cancellable, error))
+      if (!import_local_rpm (repo, fds[i], &sha256_nevra, cancellable, error))
         return FALSE;
 
       g_ptr_array_add (pkgs, g_steal_pointer (&sha256_nevra));
     }
 
-  if (!ostree_repo_commit_transaction (pkgcache_repo, NULL, cancellable, error))
+  if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
     return FALSE;
   txn.initialized = FALSE;
 
@@ -1360,7 +1353,8 @@ refresh_md_transaction_execute (RpmostreedTransaction *transaction,
   g_autofree char *origin_deployment_root =
     g_build_filename (sysroot_path, origin_deployment_dirpath, NULL);
 
-  g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_system (cancellable, error);
+  OstreeRepo *repo = ostree_sysroot_repo (sysroot);
+  g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_system (repo, cancellable, error);
 
   /* We could bypass rpmostree_context_setup() here and call dnf_context_setup() ourselves
    * since we're not actually going to perform any installation. Though it does provide us

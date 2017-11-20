@@ -321,10 +321,14 @@ set_rpm_macro_define (const char *key, const char *value)
 }
 
 RpmOstreeContext *
-rpmostree_context_new_system (GCancellable *cancellable,
+rpmostree_context_new_system (OstreeRepo   *repo,
+                              GCancellable *cancellable,
                               GError      **error)
 {
+  g_return_val_if_fail (repo != NULL, FALSE);
+
   RpmOstreeContext *self = g_object_new (RPMOSTREE_TYPE_CONTEXT, NULL);
+  self->ostreerepo = g_object_ref (repo);
 
   /* We can always be control-c'd at any time; this is new API,
    * otherwise we keep calling _rpmostree_reset_rpm_sighandlers() in
@@ -366,8 +370,7 @@ rpmostree_context_new_tree (int               userroot_dfd,
                             GCancellable     *cancellable,
                             GError          **error)
 {
-  g_autoptr(RpmOstreeContext) ret =
-    rpmostree_context_new_system (cancellable, error);
+  g_autoptr(RpmOstreeContext) ret = rpmostree_context_new_system (repo, cancellable, error);
   if (!ret)
     return NULL;
 
@@ -386,9 +389,6 @@ rpmostree_context_new_tree (int               userroot_dfd,
     g_autofree char *lockdir = glnx_fdrel_abspath (userroot_dfd, lock);
     dnf_context_set_lock_dir (ret->dnfctx, lockdir);
   }
-
-  /* open user root repo if exists (container path) */
-  ret->ostreerepo = repo ? g_object_ref (repo) : NULL;
 
   return g_steal_pointer (&ret);
 }
@@ -927,7 +927,7 @@ checkout_pkg_metadata_by_nevra (RpmOstreeContext *self,
 {
   g_autoptr(GVariant) header = NULL;
 
-  if (!rpmostree_pkgcache_find_pkg_header (self->pkgcache_repo, nevra, sha256,
+  if (!rpmostree_pkgcache_find_pkg_header (get_pkgcache_repo (self), nevra, sha256,
                                            &header, cancellable, error))
     return FALSE;
 
@@ -1629,14 +1629,15 @@ add_remaining_pkgcache_pkgs (RpmOstreeContext *self,
                              GCancellable     *cancellable,
                              GError          **error)
 {
-  g_assert (self->pkgcache_repo);
+  OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
+  g_assert (pkgcache_repo);
   g_assert (self->pkgcache_only);
 
   DnfSack *sack = dnf_context_get_sack (self->dnfctx);
   g_assert (sack);
 
   g_autoptr(GHashTable) refs = NULL;
-  if (!ostree_repo_list_refs_ext (self->pkgcache_repo, "rpmostree/pkg", &refs,
+  if (!ostree_repo_list_refs_ext (pkgcache_repo, "rpmostree/pkg", &refs,
                                   OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
     return FALSE;
 
@@ -1647,7 +1648,7 @@ add_remaining_pkgcache_pkgs (RpmOstreeContext *self,
         continue;
 
       g_autoptr(GVariant) header = NULL;
-      if (!get_header_variant (self->pkgcache_repo, ref, &header, cancellable, error))
+      if (!get_header_variant (pkgcache_repo, ref, &header, cancellable, error))
         return FALSE;
 
       if (!checkout_pkg_metadata (self, nevra, header, cancellable, error))
@@ -2134,6 +2135,10 @@ checkout_package_into_root (RpmOstreeContext *self,
 {
   OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
 
+  /* The below is currently TRUE only in the --ex-unified-core path. We probably want to
+   * migrate that over to always use a separate cache repo eventually, which would allow us
+   * to completely drop the pkgcache_repo/ostreerepo dichotomy in the core. See:
+   * https://github.com/projectatomic/rpm-ostree/pull/1055 */
   if (pkgcache_repo != self->ostreerepo)
     {
       if (!rpmostree_pull_content_only (self->ostreerepo, pkgcache_repo, pkg_commit,
