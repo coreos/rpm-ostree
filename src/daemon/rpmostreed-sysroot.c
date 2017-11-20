@@ -187,24 +187,23 @@ handle_get_os (RPMOSTreeSysroot *object,
                const char *arg_name)
 {
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
-  glnx_unref_object GDBusInterfaceSkeleton *os_interface = NULL;
 
   if (arg_name[0] == '\0')
     {
       rpmostree_sysroot_complete_get_os (object,
                                          invocation,
                                          rpmostree_sysroot_dup_booted (object));
-      goto out;
+      return FALSE;
     }
 
-  os_interface = g_hash_table_lookup (self->os_interfaces, arg_name);
+  g_autoptr(GDBusInterfaceSkeleton) os_interface =
+    g_hash_table_lookup (self->os_interfaces, arg_name);
   if (os_interface != NULL)
     g_object_ref (os_interface);
 
   if (os_interface != NULL)
     {
-      const char *object_path;
-      object_path = g_dbus_interface_skeleton_get_object_path (os_interface);
+      const char *object_path = g_dbus_interface_skeleton_get_object_path (os_interface);
       rpmostree_sysroot_complete_get_os (object, invocation, object_path);
     }
   else
@@ -216,7 +215,6 @@ handle_get_os (RPMOSTreeSysroot *object,
                                              arg_name);
     }
 
-out:
   return TRUE;
 }
 
@@ -270,51 +268,42 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
                                        gboolean *out_changed,
                                        GError **error)
 {
-  gboolean ret = FALSE;
-  OstreeDeployment *booted = NULL; /* owned by sysroot */
-  g_autofree gchar *booted_id = NULL;
-  g_autoptr(GPtrArray) deployments = NULL;
-  g_autoptr(GHashTable) seen_osnames = NULL;
-  GVariantBuilder builder;
-  guint i;
+  /* just set the out var early */
+  if (out_changed)
+    *out_changed = FALSE;
+
   gboolean sysroot_changed;
-  gboolean repo_changed;
-  struct stat repo_new_stat;
-
   if (!ostree_sysroot_load_if_changed (self->ot_sysroot, &sysroot_changed, self->cancellable, error))
-    goto out;
+    return FALSE;
 
-  if (fstat (ostree_repo_get_dfd (self->repo), &repo_new_stat) < 0)
-    {
-      glnx_set_error_from_errno (error);
-      goto out;
-    }
+  struct stat repo_new_stat;
+  if (!glnx_fstat (ostree_repo_get_dfd (self->repo), &repo_new_stat, error))
+    return FALSE;
 
-  repo_changed = !(self->repo_last_stat.st_mtim.tv_sec == repo_new_stat.st_mtim.tv_sec
-                   && self->repo_last_stat.st_mtim.tv_nsec == repo_new_stat.st_mtim.tv_nsec);
+  const gboolean repo_changed =
+    !((self->repo_last_stat.st_mtim.tv_sec  == repo_new_stat.st_mtim.tv_sec) &&
+      (self->repo_last_stat.st_mtim.tv_nsec == repo_new_stat.st_mtim.tv_nsec));
   if (repo_changed)
     self->repo_last_stat = repo_new_stat;
 
   if (!(sysroot_changed || repo_changed))
-    {
-      ret = TRUE;
-      if (out_changed)
-        *out_changed = FALSE;
-      goto out;
-    }
+    return TRUE; /* Note early return */
 
   g_debug ("loading deployments");
+
+  GVariantBuilder builder;
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("aa{sv}"));
 
-  seen_osnames = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
+  g_autoptr(GHashTable) seen_osnames =
+    g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
 
-  /* Updated booted property */
-  booted = ostree_sysroot_get_booted_deployment (self->ot_sysroot);
+  /* Updated booted property; object owned by sysroot */
+  g_autofree gchar *booted_id = NULL;
+  OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (self->ot_sysroot);
   if (booted)
     {
       const gchar *os = ostree_deployment_get_osname (booted);
-      g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH,
-                                                                os, NULL);
+      g_autofree gchar *path = rpmostreed_generate_object_path (BASE_DBUS_PATH, os, NULL);
       rpmostree_sysroot_set_booted (RPMOSTREE_SYSROOT (self), path);
       booted_id = rpmostreed_deployment_generate_id (booted);
     }
@@ -324,24 +313,20 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
     }
 
   /* Add deployment interfaces */
-  deployments = ostree_sysroot_get_deployments (self->ot_sysroot);
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (self->ot_sysroot);
 
-  for (i = 0; deployments != NULL && i < deployments->len; i++)
+  for (guint i = 0; deployments != NULL && i < deployments->len; i++)
     {
-      GVariant *variant;
       OstreeDeployment *deployment = deployments->pdata[i];
-      const char *deployment_os;
-
-      variant = rpmostreed_deployment_generate_variant (self->ot_sysroot, deployment,
-                                                        booted_id, self->repo, error);
+      GVariant *variant =
+        rpmostreed_deployment_generate_variant (self->ot_sysroot, deployment,
+                                                booted_id, self->repo, error);
       if (!variant)
-        {
-          g_prefix_error (error, "Reading deployment %u: ", i);
-          goto out;
-        }
+        return glnx_prefix_error (error, "Reading deployment %u", i);
+
       g_variant_builder_add_value (&builder, variant);
 
-      deployment_os = ostree_deployment_get_osname (deployment);
+      const char *deployment_os = ostree_deployment_get_osname (deployment);
 
       /* Have we not seen this osname instance before?  If so, add it
        * now.
@@ -379,11 +364,9 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
                                      g_variant_builder_end (&builder));
   g_debug ("finished deployments");
 
-  ret = TRUE;
   if (out_changed)
     *out_changed = TRUE;
- out:
-  return ret;
+  return TRUE;
 }
 
 static gboolean
@@ -731,14 +714,10 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
                              GCancellable *cancellable,
                              GError **error)
 {
-  gboolean ret = FALSE;
-  g_autoptr(GFile) sysroot_file = NULL;
-  const char *sysroot_path;
-
   g_return_val_if_fail (self != NULL, FALSE);
 
-  sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (self));
-  sysroot_file = g_file_new_for_path (sysroot_path);
+  const char *sysroot_path = rpmostree_sysroot_get_path (RPMOSTREE_SYSROOT (self));
+  g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
   self->ot_sysroot = ostree_sysroot_new (sysroot_file);
 
   /* This creates and caches an OstreeRepo instance inside
@@ -746,10 +725,10 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
    * calls won't fail.
    */
   if (!ostree_sysroot_get_repo (self->ot_sysroot, &self->repo, cancellable, error))
-    goto out;
+    return FALSE;
 
   if (!sysroot_populate_deployments_unlocked (self, NULL, error))
-    goto out;
+    return FALSE;
 
   if (self->monitor == NULL)
     {
@@ -760,7 +739,7 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
       self->monitor = g_file_monitor (sysroot_deploy, 0, NULL, error);
 
       if (self->monitor == NULL)
-        goto out;
+        return FALSE;
 
       self->sig_changed = g_signal_connect (self->monitor,
                                             "changed",
@@ -768,9 +747,7 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
                                             self);
     }
 
-  ret = TRUE;
-out:
-  return ret;
+  return TRUE;
 }
 
 gboolean
