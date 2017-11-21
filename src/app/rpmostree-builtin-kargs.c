@@ -45,7 +45,7 @@ static GOptionEntry option_entries[] = {
   { "replace", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_replace_strings, "Replace existing kernel argument, the user is also able to replace an argument with KEY=VALUE if only one value exist for that argument ", "KEY=VALUE=NEWVALUE" },
   { "delete", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_delete_strings, "Delete a specific kernel argument key/val pair or an entire argument with a single key/value pair", "KEY=VALUE"},
   { "import-proc-cmdline", 0, 0, G_OPTION_ARG_NONE, &opt_import_proc_cmdline, "Instead of modifying old kernel arguments, we modify args from current /proc/cmdline (the booted deployment)", NULL },
-  { "editor", 0, 0, G_OPTION_ARG_NONE, &opt_editor, "Pops up an editor for users to change kernel arguments", NULL },
+  { "editor", 0, 0, G_OPTION_ARG_NONE, &opt_editor, "Use an editor to modify the kernel arguments", NULL },
   { NULL }
 };
 
@@ -116,8 +116,7 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
     {
       char *line = lines[i];
       /* Remove leading and trailing spaces */
-      g_strchomp (line);
-      g_strchug (line);
+      g_strstrip (line);
 
       /* Comments and blank lines are skipped */
       if (*line == '#')
@@ -133,17 +132,26 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
       g_string_append (kernel_arg_buf,  " ");
     }
 
-  g_strchomp (kernel_arg_buf->str);
+  /* Transfer the ownership to a new string, so we can remove the trailing spaces */
+  g_autofree char *kernel_args_str = g_string_free (g_steal_pointer(&kernel_arg_buf), FALSE);
+  g_strchomp (kernel_args_str);
 
-  if (g_strrstr (kernel_arg_buf->str, "ostree"))
+  g_auto(GStrv) kernel_arg_list = g_strsplit (kernel_args_str, " ", -1);
+
+  for (char ** iterator = kernel_arg_list; iterator && *iterator; iterator++)
     {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Your input contains 'ostree' and that is not going to be handled");
-      return FALSE;
+      const char *curr_kernel_arg = *iterator;
+      /* Check an ostree argument with value and without value case */
+      if (g_str_has_prefix (curr_kernel_arg, "ostree=") || g_str_equal (curr_kernel_arg, "ostree"))
+        {
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                       "You have an 'ostree' argument in your input, that is not going to be handled");
+          return FALSE;
+        }
     }
 
   /* We do not allow empty kernel arg string */
-  if (g_str_equal (kernel_arg_buf->str, ""))
+  if (g_str_equal (kernel_args_str, ""))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "The kernel arguments can not be empty");
@@ -151,14 +159,14 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
     }
 
   /* Notify the user that nothing has been changed */
-  if (g_str_equal (filtered_input, kernel_arg_buf->str))
+  if (g_str_equal (filtered_input, kernel_args_str))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "The kernel arguments remained the same");
       return FALSE;
     }
 
-  *out_kernel_arg = g_string_free (g_steal_pointer (&kernel_arg_buf), FALSE);
+  *out_kernel_arg = g_steal_pointer (&kernel_args_str);
 
   return TRUE;
 }
@@ -193,7 +201,7 @@ rpmostree_ex_builtin_kargs (int            argc,
        * Thus erroring out ahead of time when these strings exist
        */
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Editor command is already enough to modify the kernel arguments");
+                   "Cannot specify --editor with --replace --delete, or --append");
       return EXIT_FAILURE;
     }
 
@@ -267,8 +275,8 @@ rpmostree_ex_builtin_kargs (int            argc,
 
   if (display_kernel_args)
     {
-      g_print("The kernel arguments are:\n%s\n",
-              old_kernel_arg_string);
+      g_print ("The kernel arguments are:\n%s\n",
+               old_kernel_arg_string);
       return EXIT_SUCCESS;
     }
 
@@ -301,25 +309,8 @@ rpmostree_ex_builtin_kargs (int            argc,
         return EXIT_FAILURE;
       if (out_changed)
         {
-          /* We store user's input into a file, and notify the user that bootconfig has already been changed
-           * Also note, we also assume user input is valid. That is the input does not contain
-           * multiple null terminators '\0'.
-           */
-          g_autoptr(GFileIOStream) io = NULL;
-          g_autoptr(GFile) file = g_file_new_tmp (NULL, &io, error);
-          if (file == NULL)
-            return EXIT_FAILURE;
-          GOutputStream *output = g_io_stream_get_output_stream (G_IO_STREAM (io));
-
-          if (!g_output_stream_write_all (output, current_kernel_arg_string, strlen (current_kernel_arg_string), NULL, cancellable, error) ||
-              !g_io_stream_close (G_IO_STREAM (io), cancellable, error))
-            {
-              if (file)
-                (void)g_file_delete (file, NULL, NULL);
-            }
-          else
-            g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                         "Conflict: bootloader configuration changed, Saved changes are in %s", gs_file_get_path_cached (file));
+          g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                       "Conflict: bootloader configuration changed, Saved kernel arguments: \n%s", current_kernel_arg_string);
 
           return EXIT_FAILURE;
         }
