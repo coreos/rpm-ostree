@@ -82,7 +82,7 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
    * there is only one value associated with ostree argument. Thus deleting
    * by one value should not error out here.
    */
-  if (_ostree_kernel_args_get_last_value (temp_kargs, "ostree") != NULL )
+  if (_ostree_kernel_args_get_last_value (temp_kargs, "ostree") != NULL)
     {
       if (!_ostree_kernel_args_delete (temp_kargs, "ostree", error))
         return FALSE;
@@ -133,21 +133,17 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
     }
 
   /* Transfer the ownership to a new string, so we can remove the trailing spaces */
-  g_autofree char *kernel_args_str = g_string_free (g_steal_pointer(&kernel_arg_buf), FALSE);
+  g_autofree char *kernel_args_str = g_string_free (g_steal_pointer (&kernel_arg_buf), FALSE);
   g_strchomp (kernel_args_str);
 
-  g_auto(GStrv) kernel_arg_list = g_strsplit (kernel_args_str, " ", -1);
+  __attribute__((cleanup(_ostree_kernel_args_cleanup))) OstreeKernelArgs *input_kargs = _ostree_kernel_args_from_string (kernel_args_str);
 
-  for (char ** iterator = kernel_arg_list; iterator && *iterator; iterator++)
+  /* We check again to see if the ostree argument got added by the user */
+  if (_ostree_kernel_args_get_last_value (input_kargs, "ostree") != NULL)
     {
-      const char *curr_kernel_arg = *iterator;
-      /* Check an ostree argument with value and without value case */
-      if (g_str_has_prefix (curr_kernel_arg, "ostree=") || g_str_equal (curr_kernel_arg, "ostree"))
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                       "You have an 'ostree' argument in your input, that is not going to be handled");
-          return FALSE;
-        }
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "You have an 'ostree' argument in your input, that is not going to be handled");
+      return FALSE;
     }
 
   /* We do not allow empty kernel arg string */
@@ -201,7 +197,7 @@ rpmostree_ex_builtin_kargs (int            argc,
        * Thus erroring out ahead of time when these strings exist
        */
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Cannot specify --editor with --replace --delete, or --append");
+                   "Cannot specify --editor with --replace, --delete, or --append");
       return EXIT_FAILURE;
     }
 
@@ -310,7 +306,7 @@ rpmostree_ex_builtin_kargs (int            argc,
       if (out_changed)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                       "Conflict: bootloader configuration changed, Saved kernel arguments: \n%s", current_kernel_arg_string);
+                       "Conflict: bootloader configuration changed. Saved kernel arguments: \n%s", current_kernel_arg_string);
 
           return EXIT_FAILURE;
         }
