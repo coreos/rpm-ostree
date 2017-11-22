@@ -148,11 +148,11 @@ branches:
 cluster:
   hosts:
     - name: testnode
-      distro: fedora/26/atomic
+      distro: fedora/27/atomic
   container:
-    image: registry.fedoraproject.org/fedora:26
+    image: registry.fedoraproject.org/fedora:27
 
-context: f26-sanity
+context: f27-sanity
 
 # https://bugzilla.redhat.com/show_bug.cgi?id=1483553
 #packages:
@@ -161,7 +161,7 @@ context: f26-sanity
 #  - rsync
 
 env:
-  CI_PKGS: ansible git rsync
+  CI_PKGS: git rsync python-virtualenv
 
 tests:
   - ci/build.sh
