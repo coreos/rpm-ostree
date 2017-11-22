@@ -29,6 +29,10 @@
 #include <utime.h>
 #include <err.h>
 #include <sys/types.h>
+#include <sys/statvfs.h>
+#include <sys/vfs.h>
+#include <sys/stat.h>
+#include <linux/magic.h>
 #include <pwd.h>
 #include <grp.h>
 #include <unistd.h>
@@ -1872,6 +1876,17 @@ on_progress_timeout (gpointer datap)
   return TRUE;
 }
 
+/* https://pagure.io/atomic-wg/issue/387 */
+static gboolean
+repo_is_on_netfs (OstreeRepo  *repo)
+{
+  int dfd = ostree_repo_get_dfd (repo);
+  struct statfs stbuf;
+  if (fstatfs (dfd, &stbuf) != 0)
+    return FALSE;
+  return stbuf.f_type == NFS_SUPER_MAGIC;
+}
+
 gboolean
 rpmostree_commit (int            rootfs_fd,
                   OstreeRepo    *repo,
@@ -1893,8 +1908,15 @@ rpmostree_commit (int            rootfs_fd,
         return FALSE;
     }
 
-  if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
-    return FALSE;
+  /* See comment above */
+  const gboolean use_txn = getenv ("RPMOSTREE_COMMIT_NO_TXN") == NULL &&
+    !repo_is_on_netfs (repo);
+
+  if (use_txn)
+    {
+      if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
+        return FALSE;
+    }
 
   g_autoptr(OstreeMutableTree) mtree = ostree_mutable_tree_new ();
   /* We may make this configurable if someone complains about including some
@@ -1986,17 +2008,29 @@ rpmostree_commit (int            rootfs_fd,
         return glnx_prefix_error (error, "While writing to '%s'", write_commitid_to);
     }
   else if (refname)
-    ostree_repo_transaction_set_ref (repo, NULL, refname, new_revision);
+    {
+      if (use_txn)
+        ostree_repo_transaction_set_ref (repo, NULL, refname, new_revision);
+      else
+        {
+          if (!ostree_repo_set_ref_immediate (repo, NULL, refname, new_revision,
+                                              cancellable, error))
+            return FALSE;
+        }
+    }
 
-  OstreeRepoTransactionStats stats = { 0, };
-  if (!ostree_repo_commit_transaction (repo, &stats, cancellable, error))
-    return glnx_prefix_error (error, "Commit");
+  if (use_txn)
+    {
+      OstreeRepoTransactionStats stats = { 0, };
+      if (!ostree_repo_commit_transaction (repo, &stats, cancellable, error))
+        return glnx_prefix_error (error, "Commit");
 
-  g_print ("Metadata Total: %u\n", stats.metadata_objects_total);
-  g_print ("Metadata Written: %u\n", stats.metadata_objects_written);
-  g_print ("Content Total: %u\n", stats.content_objects_total);
-  g_print ("Content Written: %u\n", stats.content_objects_written);
-  g_print ("Content Bytes Written: %" G_GUINT64_FORMAT "\n", stats.content_bytes_written);
+      g_print ("Metadata Total: %u\n", stats.metadata_objects_total);
+      g_print ("Metadata Written: %u\n", stats.metadata_objects_written);
+      g_print ("Content Total: %u\n", stats.content_objects_total);
+      g_print ("Content Written: %u\n", stats.content_objects_written);
+      g_print ("Content Bytes Written: %" G_GUINT64_FORMAT "\n", stats.content_bytes_written);
+    }
   if (out_new_revision)
     *out_new_revision = g_steal_pointer (&new_revision);
   return TRUE;
