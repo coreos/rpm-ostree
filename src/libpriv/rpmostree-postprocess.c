@@ -1909,8 +1909,8 @@ rpmostree_commit (int            rootfs_fd,
     }
 
   /* See comment above */
-  const gboolean use_txn = getenv ("RPMOSTREE_COMMIT_NO_TXN") == NULL &&
-    !repo_is_on_netfs (repo);
+  const gboolean use_txn = (getenv ("RPMOSTREE_COMMIT_NO_TXN") == NULL &&
+                            !repo_is_on_netfs (repo));
 
   if (use_txn)
     {
