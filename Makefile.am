@@ -33,7 +33,9 @@ endif
 RPM_OSTREE_GITREV=$(shell if command -v git >/dev/null 2>&1 && test -e $(srcdir)/.git; then git describe --abbrev=42 --tags --always HEAD; fi)
 
 ACLOCAL_AMFLAGS += -I m4 ${ACLOCAL_FLAGS}
+# WITH_SWDB is a hackaround for it being used in libdnf headers
 AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
+	-DWITH_SWDB=0 \
 	-DLIBEXECDIR='"$(libexecdir)"' \
 	-DLOCALEDIR=\"$(datadir)/locale\" \
         -DRPM_OSTREE_FEATURES='"$(RPM_OSTREE_FEATURES)"' \
