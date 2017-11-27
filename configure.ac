@@ -199,6 +199,7 @@ dnl arbitrary path - we don't actually install there.
      -DSYSCONF_INSTALL_DIR:PATH=/usr/libexec/rpm-ostree/etc \
      -DSHARE_INSTALL_PREFIX:PATH=/usr/libexec/rpm-ostree/share \
      -DBUILD_SHARED_LIBS:BOOL=ON \
+     -DWITH_SWDB:BOOL=0 \
      ${cmake_args} ../libdnf) || exit 1
 
 AC_CONFIG_FILES([
