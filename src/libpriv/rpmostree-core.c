@@ -1443,7 +1443,7 @@ throw_package_list (GError **error, const char *suffix, GPtrArray *pkgs)
   if (!error)
     return FALSE; /* Note early simultaneously happy and sad return */
 
-  GString *msg = g_string_new ("The following base packages ");
+  g_autoptr(GString) msg = g_string_new ("The following base packages ");
   g_string_append (msg, suffix);
   g_string_append (msg, ": ");
 
