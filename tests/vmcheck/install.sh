@@ -8,6 +8,9 @@ set -euo pipefail
 
 DESTDIR=${topsrcdir}/insttree
 
+# Chown everything to writable, due to
+# https://bugzilla.redhat.com/show_bug.cgi?id=517575
+if test -d ${DESTDIR}; then chmod -R u+w ${DESTDIR}/; fi
 rm -rf ${DESTDIR}
 mkdir -p ${DESTDIR}
 
@@ -20,8 +23,7 @@ for pkg in ostree{,-libs,-grub2}; do
     # container case, manpages are missing. Ignore that.
     rpm -ql $pkg | grep -vE "^/(etc|usr/share/(doc|man))/" >  list.txt
 
-    # Also chown everything to writable, due to
-    # https://bugzilla.redhat.com/show_bug.cgi?id=517575
+    # See above chown https://bugzilla.redhat.com/show_bug.cgi?id=517575
     chmod -R u+w ${DESTDIR}/
 
     # Note we cant use --ignore-missing-args here since it was added in
