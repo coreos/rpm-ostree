@@ -727,11 +727,6 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
   if (!ostree_sysroot_get_repo (self->ot_sysroot, &self->repo, cancellable, error))
     return FALSE;
 
-  /* Migrate legacy pkgcache repo into system repo. After the first time, this boils down to
-   * one stat() call. */
-  if (!rpmostree_migrate_pkgcache_repo (self->repo, cancellable, error))
-    return FALSE;
-
   if (!sysroot_populate_deployments_unlocked (self, NULL, error))
     return FALSE;
 

@@ -174,17 +174,19 @@ vm_rpmostree install test-pkgcache-migrate-pkg{1,2}
 
 # jury-rig a pkgcache of the olden days
 OLD_PKGCACHE_DIR=/ostree/repo/extensions/rpmostree/pkgcache
-vm_cmd systemctl stop rpm-ostreed
-vm_cmd test ! -d ${OLD_PKGCACHE_DIR}
-vm_cmd mkdir -p ${OLD_PKGCACHE_DIR}
+vm_cmd test -L ${OLD_PKGCACHE_DIR}
+vm_cmd rm ${OLD_PKGCACHE_DIR}
+vm_cmd mkdir ${OLD_PKGCACHE_DIR}
 vm_cmd ostree init --repo ${OLD_PKGCACHE_DIR} --mode=bare
 vm_cmd ostree pull-local --repo ${OLD_PKGCACHE_DIR} /ostree/repo \
   rpmostree/pkg/test-pkgcache-migrate-pkg{1,2}/1.0-1.x86__64
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
 cursor=$(vm_get_journal_cursor)
-vm_cmd systemctl start rpm-ostreed
+vm_rpmostree upgrade | tee output.txt
 vm_wait_content_after_cursor $cursor 'migrated 2 cached packages'
+assert_file_has_content output.txt "Migrating pkgcache"
 for ref in rpmostree/pkg/test-pkgcache-migrate-pkg{1,2}/1.0-1.x86__64; do
   vm_cmd ostree show $ref
 done
-vm_cmd test ! -d ${OLD_PKGCACHE_DIR}
+vm_cmd test -L ${OLD_PKGCACHE_DIR}
 echo "ok migrate pkgcache"

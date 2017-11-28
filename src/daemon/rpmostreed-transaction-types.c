@@ -591,6 +591,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED;
     }
 
+  /* before doing any real work, let's make sure the pkgcache is migrated */
+  OstreeRepo *repo = ostree_sysroot_repo (sysroot);
+  if (!rpmostree_migrate_pkgcache_repo (repo, cancellable, error))
+    return FALSE;
+
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
     rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags,
                                     cancellable, error);
@@ -608,10 +613,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                                   &old_refspec, &new_refspec, error))
         return FALSE;
     }
-
-  g_autoptr(OstreeRepo) repo = NULL;
-  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-    return FALSE;
 
   g_autoptr(OstreeAsyncProgress) progress =
     ostree_async_progress_new ();

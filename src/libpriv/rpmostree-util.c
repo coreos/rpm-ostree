@@ -29,6 +29,7 @@
 
 #include "rpmostree-util.h"
 #include "rpmostree-origin.h"
+#include "rpmostree-output.h"
 #include "rpmostree.h"
 #include "libglnx.h"
 
@@ -532,11 +533,6 @@ do_pkgcache_migration (OstreeRepo    *repo,
                                   OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
     return FALSE;
 
-  /* Always pull in any refs from the pkgcache into the system repo, regardless of whether
-   * the ref already exists there. This ensures that e.g. booting back into a tree with an
-   * older version of rpm-ostree and installing local pkgs will make use of those when it's
-   * time to relayer it again. */
-
   if (g_hash_table_size (pkgcache_refs) == 0)
     {
       *out_n_migrated = 0;
@@ -565,30 +561,44 @@ rpmostree_migrate_pkgcache_repo (OstreeRepo   *repo,
   int repo_dfd = ostree_repo_get_dfd (repo);
 
   struct stat stbuf;
-  if (!glnx_fstatat_allow_noent (repo_dfd, RPMOSTREE_OLD_PKGCACHE_DIR, &stbuf, 0, error))
+  if (!glnx_fstatat_allow_noent (repo_dfd, RPMOSTREE_OLD_PKGCACHE_DIR, &stbuf,
+                                 AT_SYMLINK_NOFOLLOW, error))
     return FALSE;
+
+  if (errno == 0 && S_ISLNK (stbuf.st_mode))
+    return TRUE;
 
   /* if pkgcache exists, we expect it to be valid; we don't want to nuke it just because of
    * a transient error */
   if (errno == 0)
     {
-      g_autoptr(OstreeRepo) pkgcache = ostree_repo_open_at (repo_dfd,
-                                                            RPMOSTREE_OLD_PKGCACHE_DIR,
-                                                            cancellable, error);
-      if (!pkgcache)
-        return FALSE;
+      if (S_ISDIR (stbuf.st_mode))
+        {
+          rpmostree_output_task_begin ("Migrating pkgcache");
 
-      guint n_migrated;
-      if (!do_pkgcache_migration (repo, pkgcache, &n_migrated, cancellable, error))
-        return FALSE;
+          g_autoptr(OstreeRepo) pkgcache = ostree_repo_open_at (repo_dfd,
+                                                                RPMOSTREE_OLD_PKGCACHE_DIR,
+                                                                cancellable, error);
+          if (!pkgcache)
+            return FALSE;
+
+          guint n_migrated;
+          if (!do_pkgcache_migration (repo, pkgcache, &n_migrated, cancellable, error))
+            return FALSE;
+
+          rpmostree_output_task_end ("%u done", n_migrated);
+          if (n_migrated > 0)
+            sd_journal_print (LOG_INFO, "migrated %u cached package%s to system repo",
+                              n_migrated, _NS(n_migrated));
+        }
 
       if (!glnx_shutil_rm_rf_at (repo_dfd, RPMOSTREE_OLD_PKGCACHE_DIR, cancellable, error))
         return FALSE;
-
-      if (n_migrated > 0)
-        sd_journal_print (LOG_INFO, "migrated %u cached package%s to system repo",
-                          n_migrated, _NS(n_migrated));
     }
+
+  /* leave a symlink for compatibility with older rpm-ostree versions */
+  if (symlinkat ("../..", repo_dfd, RPMOSTREE_OLD_PKGCACHE_DIR) < 0)
+    return glnx_throw_errno_prefix (error, "symlinkat");
 
   return TRUE;
 }
