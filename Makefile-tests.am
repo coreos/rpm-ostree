@@ -73,13 +73,13 @@ check-local:
 HOSTS ?= "vmcheck"
 
 vmsync:
-	@if [ -z "$(SKIP_INSTALL)" ]; then \
+	@set -e; if [ -z "$(SKIP_INSTALL)" ]; then \
 		env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/install.sh; \
 	fi; \
 	env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh
 
 vmoverlay:
-	@if [ -z "$(SKIP_VMOVERLAY)" ]; then \
+	@set -e; if [ -z "$(SKIP_VMOVERLAY)" ]; then \
 	  if [ -z "$(SKIP_INSTALL)" ]; then \
 	    env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/install.sh; \
 	  fi; \
