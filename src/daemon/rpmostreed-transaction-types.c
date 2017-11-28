@@ -467,24 +467,12 @@ deploy_transaction_finalize (GObject *object)
 }
 
 static gboolean
-import_local_rpm (OstreeRepo    *parent,
+import_local_rpm (OstreeRepo    *repo,
                   int            fd,
                   char         **sha256_nevra,
                   GCancellable  *cancellable,
                   GError       **error)
 {
-  g_autoptr(OstreeRepo) pkgcache_repo = NULL;
-
-  /* It might seem risky to rely on the cache as the source of truth for local
-   * RPMs. However, the core will never re-import the same NEVRA if it's already
-   * present. To be safe, we do also record the SHA-256 of the RPM header in the
-   * origin. We don't record the checksum of the branch itself, because it may
-   * need relabeling and that's OK.
-   * */
-
-  if (!rpmostree_syscore_get_pkgcache_repo (parent, &pkgcache_repo, cancellable, error))
-    return FALSE;
-
   /* let's just use the current sepolicy -- we'll just relabel it if the new
    * base turns out to have a different one */
   glnx_autofd int rootfs_dfd = -1;
@@ -498,7 +486,7 @@ import_local_rpm (OstreeRepo    *parent,
   if (unpacker == NULL)
     return FALSE;
 
-  if (!rpmostree_importer_run (unpacker, pkgcache_repo, policy,
+  if (!rpmostree_importer_run (unpacker, repo, policy,
                                NULL, cancellable, error))
     return FALSE;
 
@@ -516,6 +504,23 @@ import_many_local_rpms (OstreeRepo    *parent,
                         GCancellable  *cancellable,
                         GError       **error)
 {
+  g_autoptr(OstreeRepo) pkgcache_repo = NULL;
+
+  /* It might seem risky to rely on the cache as the source of truth for local
+   * RPMs. However, the core will never re-import the same NEVRA if it's already
+   * present. To be safe, we do also record the SHA-256 of the RPM header in the
+   * origin. We don't record the checksum of the branch itself, because it may
+   * need relabeling and that's OK.
+   * */
+
+  if (!rpmostree_syscore_get_pkgcache_repo (parent, &pkgcache_repo, cancellable, error))
+    return FALSE;
+
+  g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
+  /* Note use of commit-on-failure */
+  if (!rpmostree_repo_auto_transaction_start (&txn, pkgcache_repo, TRUE, cancellable, error))
+    return FALSE;
+
   g_autoptr(GPtrArray) pkgs = g_ptr_array_new_with_free_func (g_free);
 
   gint nfds = 0;
@@ -523,11 +528,15 @@ import_many_local_rpms (OstreeRepo    *parent,
   for (guint i = 0; i < nfds; i++)
     {
       g_autofree char *sha256_nevra = NULL;
-      if (!import_local_rpm (parent, fds[i], &sha256_nevra, cancellable, error))
+      if (!import_local_rpm (pkgcache_repo, fds[i], &sha256_nevra, cancellable, error))
         return FALSE;
 
       g_ptr_array_add (pkgs, g_steal_pointer (&sha256_nevra));
     }
+
+  if (!ostree_repo_commit_transaction (pkgcache_repo, NULL, cancellable, error))
+    return FALSE;
+  txn.initialized = FALSE;
 
   *out_pkgs = g_steal_pointer (&pkgs);
   return TRUE;

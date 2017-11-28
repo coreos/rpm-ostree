@@ -2049,9 +2049,15 @@ rpmostree_context_import (RpmOstreeContext *self,
   if (n == 0)
     return TRUE;
 
-  g_return_val_if_fail (get_pkgcache_repo (self) != NULL, FALSE);
+  OstreeRepo *repo = get_pkgcache_repo (self);
+  g_return_val_if_fail (repo != NULL, FALSE);
 
   if (!dnf_transaction_import_keys (dnf_context_get_transaction (dnfctx), error))
+    return FALSE;
+
+  g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
+  /* Note use of commit-on-failure */
+  if (!rpmostree_repo_auto_transaction_start (&txn, repo, TRUE, cancellable, error))
     return FALSE;
 
   {
@@ -2073,6 +2079,10 @@ rpmostree_context_import (RpmOstreeContext *self,
     g_signal_handler_disconnect (hifstate, progress_sigid);
     rpmostree_output_percent_progress_end ();
   }
+
+  if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
+    return FALSE;
+  txn.initialized = FALSE;
 
   sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR,
                    SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_PKG_IMPORT),
@@ -2494,9 +2504,8 @@ rpmostree_context_relabel (RpmOstreeContext *self,
                                            prefix);
 
   /* Prep a txn and tmpdir for all of the relabels */
-  g_autoptr(_OstreeRepoAutoTransaction) txn =
-    _ostree_repo_auto_transaction_start (ostreerepo, cancellable, error);
-  if (!txn)
+  g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
+  if (!rpmostree_repo_auto_transaction_start (&txn, ostreerepo, FALSE, cancellable, error))
     return FALSE;
 
   g_auto(GLnxTmpDir) relabel_tmpdir = { 0, };
@@ -3422,9 +3431,8 @@ rpmostree_context_commit (RpmOstreeContext      *self,
 
   rpmostree_output_task_begin ("Writing OSTree commit");
 
-  g_autoptr(_OstreeRepoAutoTransaction) txn =
-    _ostree_repo_auto_transaction_start (self->ostreerepo, cancellable, error);
-  if (!txn)
+  g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
+  if (!rpmostree_repo_auto_transaction_start (&txn, self->ostreerepo, FALSE, cancellable, error))
     return FALSE;
 
   { glnx_unref_object OstreeMutableTree *mtree = NULL;

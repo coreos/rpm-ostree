@@ -135,15 +135,25 @@ test_variant_to_nevra(void)
   g_assert_no_error (error);
   g_assert (ret);
 
-  g_autoptr(RpmOstreeImporter) importer = NULL;
-  g_autofree char *foo_rpm = g_strdup_printf ("yumrepo/packages/%s/%s.rpm", arch, nevra);
-  importer = rpmostree_importer_new_at (AT_FDCWD, foo_rpm, NULL, 0, &error);
-  g_assert_no_error (error);
-  g_assert (importer);
+  { g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
+    /* Note use of commit-on-failure */
+    rpmostree_repo_auto_transaction_start (&txn, repo, TRUE, NULL, &error);
+    g_assert_no_error (error);
 
-  ret = rpmostree_importer_run (importer, repo, NULL, NULL, NULL, &error);
-  g_assert_no_error (error);
-  g_assert (ret);
+    g_autoptr(RpmOstreeImporter) importer = NULL;
+    g_autofree char *foo_rpm = g_strdup_printf ("yumrepo/packages/%s/%s.rpm", arch, nevra);
+    importer = rpmostree_importer_new_at (AT_FDCWD, foo_rpm, NULL, 0, &error);
+    g_assert_no_error (error);
+    g_assert (importer);
+
+    ret = rpmostree_importer_run (importer, repo, NULL, NULL, NULL, &error);
+    g_assert_no_error (error);
+    g_assert (ret);
+
+    ostree_repo_commit_transaction (repo, NULL, NULL, &error);
+    g_assert_no_error (error);
+    txn.initialized = FALSE;
+  }
 
   g_autoptr(GVariant) header = NULL;
   ret = rpmostree_pkgcache_find_pkg_header (repo, nevra, NULL, &header, NULL, &error);
