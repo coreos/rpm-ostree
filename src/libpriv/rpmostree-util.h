@@ -131,22 +131,40 @@ rpmostree_break_hardlink (int           dfd,
                           GError      **error);
 
 /* https://github.com/ostreedev/ostree/pull/1132 */
-typedef OstreeRepo _OstreeRepoAutoTransaction;
+typedef struct {
+  gboolean initialized;
+  gboolean commit_on_failure;
+  OstreeRepo *repo;
+} RpmOstreeRepoAutoTransaction;
+
 static inline void
-_ostree_repo_auto_transaction_cleanup (void *p)
+rpmostree_repo_auto_transaction_cleanup (void *p)
 {
-  OstreeRepo *repo = p;
-  if (repo)
-    (void) ostree_repo_abort_transaction (repo, NULL, NULL);
+  RpmOstreeRepoAutoTransaction *autotxn = p;
+  if (!autotxn->initialized)
+    return;
+
+  /* If e.g. package downloads are cancelled, we still want to (try to) commit
+   * to avoid redownloading.
+   */
+  if (autotxn->commit_on_failure)
+    (void) ostree_repo_commit_transaction (autotxn->repo, NULL, NULL, NULL);
+  else
+    (void) ostree_repo_abort_transaction (autotxn->repo, NULL, NULL);
 }
 
-static inline _OstreeRepoAutoTransaction *
-_ostree_repo_auto_transaction_start (OstreeRepo     *repo,
-                                     GCancellable   *cancellable,
-                                     GError        **error)
+static inline gboolean
+rpmostree_repo_auto_transaction_start (RpmOstreeRepoAutoTransaction     *autotxn,
+                                       OstreeRepo                       *repo,
+                                       gboolean                          commit_on_failure,
+                                       GCancellable                     *cancellable,
+                                       GError                          **error)
 {
   if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
-    return NULL;
-  return (_OstreeRepoAutoTransaction *)repo;
+    return FALSE;
+  autotxn->commit_on_failure = commit_on_failure;
+  autotxn->repo = repo;
+  autotxn->initialized = TRUE;
+  return TRUE;
 }
-G_DEFINE_AUTOPTR_CLEANUP_FUNC (_OstreeRepoAutoTransaction, _ostree_repo_auto_transaction_cleanup)
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RpmOstreeRepoAutoTransaction, rpmostree_repo_auto_transaction_cleanup)

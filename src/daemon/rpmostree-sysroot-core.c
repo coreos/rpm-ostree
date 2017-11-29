@@ -64,9 +64,8 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
                                   cancellable, error))
     return FALSE;
 
-  g_autoptr(_OstreeRepoAutoTransaction) txn =
-    _ostree_repo_auto_transaction_start (repo, cancellable, error);
-  if (!txn)
+  g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
+  if (!rpmostree_repo_auto_transaction_start (&txn, repo, FALSE, cancellable, error))
     return FALSE;
 
   /* delete all the refs */
