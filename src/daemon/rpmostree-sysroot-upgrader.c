@@ -673,8 +673,9 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
                    GCancellable             *cancellable,
                    GError                  **error)
 {
-  /* request (owned by origin) --> providing nevra (owned by rsack) */
-  g_autoptr(GHashTable) inactive_requests = g_hash_table_new (g_str_hash, g_str_equal);
+  /* request (owned by origin) --> providing nevra */
+  g_autoptr(GHashTable) inactive_requests =
+    g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
   g_autoptr(GPtrArray) ret_missing_pkgs = g_ptr_array_new_with_free_func (g_free);
 
   /* Add the local pkgs as if they were installed: since they're unconditionally
@@ -756,7 +757,8 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
       /* Otherwise, it's an inactive request: remember them so we can print a nice notice.
        * Just use the first package as the "providing" pkg. */
       const char *providing_nevra = dnf_package_get_nevra (matches->pdata[0]);
-      g_hash_table_insert (inactive_requests, (gpointer)pattern, (gpointer)providing_nevra);
+      g_hash_table_insert (inactive_requests, (gpointer)pattern,
+                           g_strdup (providing_nevra));
     }
 
   if (g_hash_table_size (inactive_requests) > 0)
