@@ -1496,8 +1496,7 @@ check_goal_solution (RpmOstreeContext *self,
 {
   HyGoal goal = dnf_context_get_goal (self->dnfctx);
 
-  /* all strings are owned by pool */
-  g_autoptr(GPtrArray) forbidden = g_ptr_array_new ();
+  g_autoptr(GPtrArray) forbidden = g_ptr_array_new_with_free_func (g_free);
 
   g_assert (!self->pkgs_to_remove);
   self->pkgs_to_remove = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
@@ -1516,7 +1515,7 @@ check_goal_solution (RpmOstreeContext *self,
         g_hash_table_insert (self->pkgs_to_remove, g_strdup (name),
                                                    gv_nevra_from_pkg (pkg));
       else
-        g_ptr_array_add (forbidden, (gpointer)nevra);
+        g_ptr_array_add (forbidden, g_strdup (nevra));
     }
 
   if (forbidden->len > 0)
@@ -1544,7 +1543,7 @@ check_goal_solution (RpmOstreeContext *self,
   g_assert_cmpint (packages->len, ==, 0);
 
   g_ptr_array_unref (forbidden);
-  forbidden = g_ptr_array_new ();
+  forbidden = g_ptr_array_new_with_free_func (g_free);
 
   g_assert (!self->pkgs_to_replace);
   self->pkgs_to_replace = g_hash_table_new_full (gv_nevra_hash, g_variant_equal,
@@ -1572,7 +1571,7 @@ check_goal_solution (RpmOstreeContext *self,
         g_hash_table_insert (self->pkgs_to_replace, gv_nevra_from_pkg (pkg),
                                                     gv_nevra_from_pkg (old_pkg));
       else
-        g_ptr_array_add (forbidden, (gpointer)old_nevra);
+        g_ptr_array_add (forbidden, g_strdup (old_nevra));
     }
 
   if (forbidden->len > 0)
