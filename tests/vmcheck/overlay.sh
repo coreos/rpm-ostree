@@ -65,6 +65,9 @@ fi
 rm -vrf vmcheck/usr/etc/selinux/targeted/semanage.*.LOCK
 # ✀✀✀ END tmp hack
 
-ostree commit --parent=none -b vmcheck --add-metadata-string=ostree.source-title="Dev overlay on ${origin}" --add-metadata-string=rpmostree.original-origin=${origin} --link-checkout-speedup \
-  --selinux-policy=vmcheck --tree=dir=vmcheck
+ostree commit --parent=none -b vmcheck \
+       --add-metadata-string=ostree.source-title="Dev overlay on ${origin}" \
+       --add-metadata-string=rpmostree.original-origin=${origin} \
+       --link-checkout-speedup --consume \
+       --selinux-policy=vmcheck --tree=dir=vmcheck
 ostree admin deploy vmcheck
