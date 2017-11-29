@@ -595,6 +595,12 @@ rpmostree_migrate_pkgcache_repo (OstreeRepo   *repo,
       if (!glnx_shutil_rm_rf_at (repo_dfd, RPMOSTREE_OLD_PKGCACHE_DIR, cancellable, error))
         return FALSE;
     }
+  else
+    {
+      if (!glnx_shutil_mkdir_p_at (repo_dfd, dirname (strdupa (RPMOSTREE_OLD_PKGCACHE_DIR)),
+                                   0755, cancellable, error))
+        return FALSE;
+    }
 
   /* leave a symlink for compatibility with older rpm-ostree versions */
   if (symlinkat ("../..", repo_dfd, RPMOSTREE_OLD_PKGCACHE_DIR) < 0)
