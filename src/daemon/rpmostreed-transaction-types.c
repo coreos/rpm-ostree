@@ -911,7 +911,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY)
         {
           /* XXX: improve msg here; e.g. cache will be blown on next operation? */
-          rpmostreed_transaction_emit_message_printf (transaction, "Downloaded.");
+          if (changed)
+            rpmostreed_transaction_emit_message_printf (transaction, "Update downloaded.");
+          else
+            rpmostreed_transaction_emit_message_printf (transaction, "No changes.");
           return TRUE;
         }
 
