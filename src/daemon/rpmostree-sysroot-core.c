@@ -180,10 +180,6 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
   g_autoptr(GHashTable) referenced_pkgs = /* cache refs of packages we want to keep */
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
-  g_autoptr(OstreeRepo) pkgcache_repo = NULL;
-  if (!rpmostree_syscore_get_pkgcache_repo (repo, &pkgcache_repo, cancellable, error))
-    return FALSE;
-
   g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
   for (guint i = 0; i < deployments->len; i++)
     {
@@ -219,7 +215,7 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
       GLNX_HASH_TABLE_FOREACH (local_replace, const char*, nevra)
         {
           g_autofree char *cachebranch = NULL;
-          if (!rpmostree_find_cache_branch_by_nevra (pkgcache_repo, nevra, &cachebranch,
+          if (!rpmostree_find_cache_branch_by_nevra (repo, nevra, &cachebranch,
                                                      cancellable, error))
             return FALSE;
 
@@ -228,7 +224,7 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
     }
 
   g_autoptr(GHashTable) current_refs = NULL;
-  if (!ostree_repo_list_refs_ext (pkgcache_repo, "rpmostree/pkg", &current_refs,
+  if (!ostree_repo_list_refs_ext (repo, "rpmostree/pkg", &current_refs,
                                   OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
     return FALSE;
 
@@ -238,15 +234,17 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
       if (g_hash_table_contains (referenced_pkgs, ref))
         continue;
 
-      if (!ostree_repo_set_ref_immediate (pkgcache_repo, NULL, ref, NULL,
+      if (!ostree_repo_set_ref_immediate (repo, NULL, ref, NULL,
                                           cancellable, error))
         return FALSE;
       n_freed++;
     }
 
+  /* note that we're called right after an ostree_sysroot_cleanup(), so the stats reported
+   * accurately reflect pkgcache branches only */
   guint64 freed_space;
   gint n_objects_total, n_objects_pruned;
-  if (!ostree_repo_prune (pkgcache_repo, OSTREE_REPO_PRUNE_FLAGS_REFS_ONLY, 0,
+  if (!ostree_repo_prune (repo, OSTREE_REPO_PRUNE_FLAGS_REFS_ONLY, 0,
                           &n_objects_total, &n_objects_pruned, &freed_space,
                           cancellable, error))
     return FALSE;

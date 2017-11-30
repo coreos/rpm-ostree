@@ -61,10 +61,10 @@ echo "ok failed to install in /opt and /usr/local"
 
 vm_build_rpm foo
 vm_rpmostree pkg-add foo-1.0
-vm_cmd ostree --repo=/sysroot/ostree/repo/extensions/rpmostree/pkgcache refs |grep /foo/> refs.txt
+vm_cmd ostree refs |grep /foo/> refs.txt
 pkgref=$(head -1 refs.txt)
 # Verify we have a mapping from pkg-in-ostree → rpmmd-repo info
-vm_cmd ostree --repo=/sysroot/ostree/repo/extensions/rpmostree/pkgcache show --print-metadata-key rpmostree.repo ${pkgref} >refdata.txt
+vm_cmd ostree show --print-metadata-key rpmostree.repo ${pkgref} >refdata.txt
 assert_file_has_content refdata.txt 'id.*test-repo'
 assert_file_has_content refdata.txt 'timestamp'
 rm -f refs.txt refdata.txt
@@ -166,3 +166,27 @@ vm_cmd cat /usr/lib/ostree-boot/EFI/efi/fedora/fonts/unicode.pf2 > unicode.txt
 assert_file_has_content unicode.txt unicode
 echo "ok failed installed in /boot"
 
+# there should be a couple of pkgs already installed from the tests up above,
+# though let's add our own to be self-contained
+vm_build_rpm test-pkgcache-migrate-pkg1
+vm_build_rpm test-pkgcache-migrate-pkg2
+vm_rpmostree install test-pkgcache-migrate-pkg{1,2}
+
+# jury-rig a pkgcache of the olden days
+OLD_PKGCACHE_DIR=/ostree/repo/extensions/rpmostree/pkgcache
+vm_cmd test -L ${OLD_PKGCACHE_DIR}
+vm_cmd rm ${OLD_PKGCACHE_DIR}
+vm_cmd mkdir ${OLD_PKGCACHE_DIR}
+vm_cmd ostree init --repo ${OLD_PKGCACHE_DIR} --mode=bare
+vm_cmd ostree pull-local --repo ${OLD_PKGCACHE_DIR} /ostree/repo \
+  rpmostree/pkg/test-pkgcache-migrate-pkg{1,2}/1.0-1.x86__64
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
+cursor=$(vm_get_journal_cursor)
+vm_rpmostree upgrade | tee output.txt
+vm_wait_content_after_cursor $cursor 'migrated 2 cached packages'
+assert_file_has_content output.txt "Migrating pkgcache"
+for ref in rpmostree/pkg/test-pkgcache-migrate-pkg{1,2}/1.0-1.x86__64; do
+  vm_cmd ostree show $ref
+done
+vm_cmd test -L ${OLD_PKGCACHE_DIR}
+echo "ok migrate pkgcache"

@@ -36,8 +36,9 @@ G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, G
 #define RPMOSTREE_TYPE_TREESPEC (rpmostree_treespec_get_type ())
 G_DECLARE_FINAL_TYPE (RpmOstreeTreespec, rpmostree_treespec, RPMOSTREE, TREESPEC, GObject)
 
-RpmOstreeContext *rpmostree_context_new_system (GCancellable *cancellable,
-                                                GError **error);
+RpmOstreeContext *rpmostree_context_new_system (OstreeRepo   *repo,
+                                                GCancellable *cancellable,
+                                                GError      **error);
 
 RpmOstreeContext *rpmostree_context_new_tree (int basedir_dfd,
                                               OstreeRepo  *repo,

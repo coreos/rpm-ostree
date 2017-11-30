@@ -25,11 +25,15 @@
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
 #include <gio/gunixoutputstream.h>
+#include <systemd/sd-journal.h>
 
 #include "rpmostree-util.h"
 #include "rpmostree-origin.h"
+#include "rpmostree-output.h"
 #include "rpmostree.h"
 #include "libglnx.h"
+
+#define RPMOSTREE_OLD_PKGCACHE_DIR "extensions/rpmostree/pkgcache"
 
 int
 rpmostree_ptrarray_sort_compare_strings (gconstpointer ap,
@@ -513,6 +517,94 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
           g_variant_ref_sink (g_variant_new_array (G_VARIANT_TYPE ("(vv)"), NULL, 0));
       *out_replaced_base_pkgs = g_steal_pointer (&replaced_base_pkgs);
     }
+
+  return TRUE;
+}
+
+static gboolean
+do_pkgcache_migration (OstreeRepo    *repo,
+                       OstreeRepo    *pkgcache,
+                       guint         *out_n_migrated,
+                       GCancellable  *cancellable,
+                       GError       **error)
+{
+  g_autoptr(GHashTable) pkgcache_refs = NULL;
+  if (!ostree_repo_list_refs_ext (pkgcache, "rpmostree/pkg", &pkgcache_refs,
+                                  OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
+    return FALSE;
+
+  if (g_hash_table_size (pkgcache_refs) == 0)
+    {
+      *out_n_migrated = 0;
+      return TRUE; /* Note early return */
+    }
+
+  g_autofree char **refs_strv =
+    (char **)g_hash_table_get_keys_as_array (pkgcache_refs, NULL);
+
+  /* fd-relative pull API anyone? build the path manually at least to avoid one malloc */
+  g_autofree char *pkgcache_uri =
+    g_strdup_printf ("file:///proc/self/fd/%d", ostree_repo_get_dfd (pkgcache));
+  if (!ostree_repo_pull (repo, pkgcache_uri, refs_strv, OSTREE_REPO_PULL_FLAGS_NONE, NULL,
+                         cancellable, error))
+    return FALSE;
+
+  *out_n_migrated = g_strv_length (refs_strv);
+  return TRUE;
+}
+
+gboolean
+rpmostree_migrate_pkgcache_repo (OstreeRepo   *repo,
+                                 GCancellable *cancellable,
+                                 GError      **error)
+{
+  int repo_dfd = ostree_repo_get_dfd (repo);
+
+  struct stat stbuf;
+  if (!glnx_fstatat_allow_noent (repo_dfd, RPMOSTREE_OLD_PKGCACHE_DIR, &stbuf,
+                                 AT_SYMLINK_NOFOLLOW, error))
+    return FALSE;
+
+  if (errno == 0 && S_ISLNK (stbuf.st_mode))
+    return TRUE;
+
+  /* if pkgcache exists, we expect it to be valid; we don't want to nuke it just because of
+   * a transient error */
+  if (errno == 0)
+    {
+      if (S_ISDIR (stbuf.st_mode))
+        {
+          rpmostree_output_task_begin ("Migrating pkgcache");
+
+          g_autoptr(OstreeRepo) pkgcache = ostree_repo_open_at (repo_dfd,
+                                                                RPMOSTREE_OLD_PKGCACHE_DIR,
+                                                                cancellable, error);
+          if (!pkgcache)
+            return FALSE;
+
+          guint n_migrated;
+          if (!do_pkgcache_migration (repo, pkgcache, &n_migrated, cancellable, error))
+            return FALSE;
+
+          rpmostree_output_task_end ("%u done", n_migrated);
+          if (n_migrated > 0)
+            sd_journal_print (LOG_INFO, "migrated %u cached package%s to system repo",
+                              n_migrated, _NS(n_migrated));
+        }
+
+      if (!glnx_shutil_rm_rf_at (repo_dfd, RPMOSTREE_OLD_PKGCACHE_DIR, cancellable, error))
+        return FALSE;
+    }
+  else
+    {
+      if (!glnx_shutil_mkdir_p_at (repo_dfd, dirname (strdupa (RPMOSTREE_OLD_PKGCACHE_DIR)),
+                                   0755, cancellable, error))
+        return FALSE;
+    }
+
+  /* leave a symlink for compatibility with older rpm-ostree versions */
+  if (symlinkat ("../..", repo_dfd, RPMOSTREE_OLD_PKGCACHE_DIR) < 0)
+    return glnx_throw_errno_prefix (error, "symlinkat");
 
   return TRUE;
 }
