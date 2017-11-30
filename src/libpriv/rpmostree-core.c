@@ -1496,101 +1496,125 @@ check_goal_solution (RpmOstreeContext *self,
 {
   HyGoal goal = dnf_context_get_goal (self->dnfctx);
 
-  g_autoptr(GPtrArray) forbidden = g_ptr_array_new_with_free_func (g_free);
+  /* check that we're not removing anything we didn't expect */
+  { g_autoptr(GPtrArray) forbidden = g_ptr_array_new_with_free_func (g_free);
 
-  g_assert (!self->pkgs_to_remove);
-  self->pkgs_to_remove = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
-                                                (GDestroyNotify)g_variant_unref);
-  g_autoptr(GPtrArray) packages = dnf_goal_get_packages (goal,
-                                                         DNF_PACKAGE_INFO_REMOVE,
-                                                         DNF_PACKAGE_INFO_OBSOLETE, -1);
-  for (guint i = 0; i < packages->len; i++)
-    {
-      DnfPackage *pkg = packages->pdata[i];
-      const char *name = dnf_package_get_name (pkg);
-      const char *nevra = dnf_package_get_nevra (pkg);
+    /* also collect info about those we're removing */
+    g_assert (!self->pkgs_to_remove);
+    self->pkgs_to_remove = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                                                  (GDestroyNotify)g_variant_unref);
+    g_autoptr(GPtrArray) packages = dnf_goal_get_packages (goal,
+                                                           DNF_PACKAGE_INFO_REMOVE,
+                                                           DNF_PACKAGE_INFO_OBSOLETE, -1);
+    for (guint i = 0; i < packages->len; i++)
+      {
+        DnfPackage *pkg = packages->pdata[i];
+        const char *name = dnf_package_get_name (pkg);
+        const char *nevra = dnf_package_get_nevra (pkg);
 
-      /* did we expect this package to be removed? */
-      if (rpmostree_str_ptrarray_contains (removed_pkgnames, name))
-        g_hash_table_insert (self->pkgs_to_remove, g_strdup (name),
-                                                   gv_nevra_from_pkg (pkg));
-      else
-        g_ptr_array_add (forbidden, g_strdup (nevra));
-    }
+        /* did we expect this package to be removed? */
+        if (rpmostree_str_ptrarray_contains (removed_pkgnames, name))
+          g_hash_table_insert (self->pkgs_to_remove, g_strdup (name),
+                                                     gv_nevra_from_pkg (pkg));
+        else
+          g_ptr_array_add (forbidden, g_strdup (nevra));
+      }
 
-  if (forbidden->len > 0)
-    return throw_package_list (error, "would be removed", forbidden);
-
-  g_ptr_array_unref (forbidden);
-  forbidden = g_ptr_array_new ();
+    if (forbidden->len > 0)
+      return throw_package_list (error, "would be removed", forbidden);
+  }
 
   /* check that all the pkgs we expect to remove are marked for removal */
-  for (guint i = 0; i < removed_pkgnames->len; i++)
-    {
-      const char *pkgname = removed_pkgnames->pdata[i];
-      if (!g_hash_table_contains (self->pkgs_to_remove, pkgname))
-        g_ptr_array_add (forbidden, (gpointer)pkgname);
-    }
+  { g_autoptr(GPtrArray) forbidden = g_ptr_array_new ();
 
-  if (forbidden->len > 0)
-    return throw_package_list (error, "are not marked to be removed", forbidden);
+    for (guint i = 0; i < removed_pkgnames->len; i++)
+      {
+        const char *pkgname = removed_pkgnames->pdata[i];
+        if (!g_hash_table_contains (self->pkgs_to_remove, pkgname))
+          g_ptr_array_add (forbidden, (gpointer)pkgname);
+      }
+
+    if (forbidden->len > 0)
+      return throw_package_list (error, "are not marked to be removed", forbidden);
+  }
 
   /* REINSTALLs should never happen since it doesn't make sense in the rpm-ostree flow, and
    * we check very early whether a package is already in the rootfs or not, but let's check
    * for it anyway so that we get a bug report in case it somehow happens. */
-  g_ptr_array_unref (packages);
-  packages = dnf_goal_get_packages (goal, DNF_PACKAGE_INFO_REINSTALL, -1);
-  g_assert_cmpint (packages->len, ==, 0);
-
-  g_ptr_array_unref (forbidden);
-  forbidden = g_ptr_array_new_with_free_func (g_free);
-
-  g_assert (!self->pkgs_to_replace);
-  self->pkgs_to_replace = g_hash_table_new_full (gv_nevra_hash, g_variant_equal,
-                                                 (GDestroyNotify)g_variant_unref,
-                                                 (GDestroyNotify)g_variant_unref);
+  { g_autoptr(GPtrArray) packages =
+      dnf_goal_get_packages (goal, DNF_PACKAGE_INFO_REINSTALL, -1);
+    g_assert_cmpint (packages->len, ==, 0);
+  }
 
   /* Look at UPDATE and DOWNGRADE, and see whether they're doing what we expect */
-  g_ptr_array_unref (packages);
-  packages = dnf_goal_get_packages (goal,
-                                    DNF_PACKAGE_INFO_UPDATE,
-                                    DNF_PACKAGE_INFO_DOWNGRADE, -1);
-  for (guint i = 0; i < packages->len; i++)
-    {
-      DnfPackage *pkg = packages->pdata[i];
-      const char *nevra = dnf_package_get_nevra (pkg);
+  { g_autoptr(GHashTable) forbidden_replacements =
+      g_hash_table_new_full (NULL, NULL, (GDestroyNotify)g_object_unref,
+                                         (GDestroyNotify)g_object_unref);
 
-      /* just pick the first pkg */
-      g_autoptr(GPtrArray) old = hy_goal_list_obsoleted_by_package (goal, pkg);
-      g_assert_cmpint (old->len, >, 0);
-      DnfPackage *old_pkg = old->pdata[0];
-      const char *old_nevra = dnf_package_get_nevra (old_pkg);
+    /* also collect info about those we're replacing */
+    g_assert (!self->pkgs_to_replace);
+    self->pkgs_to_replace = g_hash_table_new_full (gv_nevra_hash, g_variant_equal,
+                                                   (GDestroyNotify)g_variant_unref,
+                                                   (GDestroyNotify)g_variant_unref);
+    g_autoptr(GPtrArray) packages = dnf_goal_get_packages (goal,
+                                                           DNF_PACKAGE_INFO_UPDATE,
+                                                           DNF_PACKAGE_INFO_DOWNGRADE, -1);
+    for (guint i = 0; i < packages->len; i++)
+      {
+        DnfPackage *pkg = packages->pdata[i];
+        const char *nevra = dnf_package_get_nevra (pkg);
 
-      /* did we expect this nevra to replace a base pkg? */
-      if (rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
-        g_hash_table_insert (self->pkgs_to_replace, gv_nevra_from_pkg (pkg),
-                                                    gv_nevra_from_pkg (old_pkg));
-      else
-        g_ptr_array_add (forbidden, g_strdup (old_nevra));
-    }
+        /* just pick the first pkg */
+        g_autoptr(GPtrArray) old = hy_goal_list_obsoleted_by_package (goal, pkg);
+        g_assert_cmpint (old->len, >, 0);
+        DnfPackage *old_pkg = old->pdata[0];
 
-  if (forbidden->len > 0)
-    return throw_package_list (error, "would be replaced", forbidden);
+        /* did we expect this nevra to replace a base pkg? */
+        if (rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
+          g_hash_table_insert (self->pkgs_to_replace, gv_nevra_from_pkg (pkg),
+                                                      gv_nevra_from_pkg (old_pkg));
+        else
+          g_hash_table_insert (forbidden_replacements, g_object_ref (old_pkg),
+                                                       g_object_ref (pkg));
+      }
 
-  g_ptr_array_unref (forbidden);
-  forbidden = g_ptr_array_new_with_free_func (g_free);
+    if (g_hash_table_size (forbidden_replacements) > 0)
+      {
+        rpmostree_output_message ("Forbidden base package replacements:");
+        GLNX_HASH_TABLE_FOREACH_KV (forbidden_replacements, DnfPackage*, old_pkg,
+                                                            DnfPackage*, new_pkg)
+          {
+            const char *old_name = dnf_package_get_name (old_pkg);
+            const char *new_name = dnf_package_get_name (new_pkg);
+            const char *new_repo = dnf_package_get_reponame (new_pkg);
+            if (g_str_equal (old_name, new_name))
+              rpmostree_output_message ("  %s %s -> %s (%s)", old_name,
+                                        dnf_package_get_evr (old_pkg),
+                                        dnf_package_get_evr (new_pkg), new_repo);
+            else
+              rpmostree_output_message ("  %s -> %s (%s)",
+                                        dnf_package_get_nevra (old_pkg),
+                                        dnf_package_get_nevra (new_pkg), new_repo);
+          }
+
+        return glnx_throw (error, "Some base packages would be replaced");
+      }
+  }
 
   /* check that all the pkgs we expect to replace are marked for replacement */
-  GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_replace, GVariant*, new, GVariant*, old)
-    {
-      g_autoptr(GVariant) nevra_v = g_variant_get_child_value (new, 0);
-      const char *nevra = g_variant_get_string (nevra_v, NULL);
-      if (!rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
-        g_ptr_array_add (forbidden, g_strdup (nevra));
-    }
+  { g_autoptr(GPtrArray) forbidden = g_ptr_array_new_with_free_func (g_free);
 
-  if (forbidden->len > 0)
-    return throw_package_list (error, "are not marked to be installed", forbidden);
+    GLNX_HASH_TABLE_FOREACH_KV (self->pkgs_to_replace, GVariant*, new, GVariant*, old)
+      {
+        g_autoptr(GVariant) nevra_v = g_variant_get_child_value (new, 0);
+        const char *nevra = g_variant_get_string (nevra_v, NULL);
+        if (!rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
+          g_ptr_array_add (forbidden, g_strdup (nevra));
+      }
+
+    if (forbidden->len > 0)
+      return throw_package_list (error, "are not marked to be installed", forbidden);
+  }
 
   return TRUE;
 }
