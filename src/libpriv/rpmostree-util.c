@@ -674,8 +674,7 @@ rpmostree_break_hardlink (int           dfd,
 
 /* Given the result of rpm_ostree_db_diff(), print it. */
 void
-rpmostree_diff_print (OstreeRepo *repo,
-                      GPtrArray *removed,
+rpmostree_diff_print (GPtrArray *removed,
                       GPtrArray *added,
                       GPtrArray *modified_old,
                       GPtrArray *modified_new)
