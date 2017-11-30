@@ -1547,7 +1547,9 @@ check_goal_solution (RpmOstreeContext *self,
   }
 
   /* Look at UPDATE and DOWNGRADE, and see whether they're doing what we expect */
-  { g_autoptr(GPtrArray) forbidden = g_ptr_array_new_with_free_func (g_free);
+  { g_autoptr(GHashTable) forbidden_replacements =
+      g_hash_table_new_full (NULL, NULL, (GDestroyNotify)g_object_unref,
+                                         (GDestroyNotify)g_object_unref);
 
     /* also collect info about those we're replacing */
     g_assert (!self->pkgs_to_replace);
@@ -1566,18 +1568,37 @@ check_goal_solution (RpmOstreeContext *self,
         g_autoptr(GPtrArray) old = hy_goal_list_obsoleted_by_package (goal, pkg);
         g_assert_cmpint (old->len, >, 0);
         DnfPackage *old_pkg = old->pdata[0];
-        const char *old_nevra = dnf_package_get_nevra (old_pkg);
 
         /* did we expect this nevra to replace a base pkg? */
         if (rpmostree_str_ptrarray_contains (replaced_nevras, nevra))
           g_hash_table_insert (self->pkgs_to_replace, gv_nevra_from_pkg (pkg),
                                                       gv_nevra_from_pkg (old_pkg));
         else
-          g_ptr_array_add (forbidden, g_strdup (old_nevra));
+          g_hash_table_insert (forbidden_replacements, g_object_ref (old_pkg),
+                                                       g_object_ref (pkg));
       }
 
-    if (forbidden->len > 0)
-      return throw_package_list (error, "would be replaced", forbidden);
+    if (g_hash_table_size (forbidden_replacements) > 0)
+      {
+        rpmostree_output_message ("Forbidden base package replacements:");
+        GLNX_HASH_TABLE_FOREACH_KV (forbidden_replacements, DnfPackage*, old_pkg,
+                                                            DnfPackage*, new_pkg)
+          {
+            const char *old_name = dnf_package_get_name (old_pkg);
+            const char *new_name = dnf_package_get_name (new_pkg);
+            const char *new_repo = dnf_package_get_reponame (new_pkg);
+            if (g_str_equal (old_name, new_name))
+              rpmostree_output_message ("  %s %s -> %s (%s)", old_name,
+                                        dnf_package_get_evr (old_pkg),
+                                        dnf_package_get_evr (new_pkg), new_repo);
+            else
+              rpmostree_output_message ("  %s -> %s (%s)",
+                                        dnf_package_get_nevra (old_pkg),
+                                        dnf_package_get_nevra (new_pkg), new_repo);
+          }
+
+        return glnx_throw (error, "Some base packages would be replaced");
+      }
   }
 
   /* check that all the pkgs we expect to replace are marked for replacement */
