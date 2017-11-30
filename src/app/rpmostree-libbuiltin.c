@@ -110,7 +110,7 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
                                cancellable, error))
         return FALSE;
 
-      rpmostree_diff_print (repo, removed, added, modified_old, modified_new);
+      rpmostree_diff_print (removed, added, modified_old, modified_new);
     }
 
   return TRUE;
