@@ -468,7 +468,7 @@ deploy_transaction_finalize (GObject *object)
 
 static gboolean
 import_local_rpm (OstreeRepo    *repo,
-                  int            fd,
+                  int           *fd,
                   char         **sha256_nevra,
                   GCancellable  *cancellable,
                   GError       **error)
@@ -482,12 +482,11 @@ import_local_rpm (OstreeRepo    *repo,
   if (policy == NULL)
     return FALSE;
 
-  g_autoptr(RpmOstreeImporter) unpacker = rpmostree_importer_new_fd (fd, NULL, 0, error);
+  g_autoptr(RpmOstreeImporter) unpacker = rpmostree_importer_new_take_fd (fd, repo, NULL, 0, policy, error);
   if (unpacker == NULL)
     return FALSE;
 
-  if (!rpmostree_importer_run (unpacker, repo, policy,
-                               NULL, cancellable, error))
+  if (!rpmostree_importer_run (unpacker, NULL, cancellable, error))
     return FALSE;
 
   g_autofree char *nevra = rpmostree_importer_get_nevra (unpacker);
@@ -495,6 +494,25 @@ import_local_rpm (OstreeRepo    *repo,
                                ":", nevra, NULL);
 
   return TRUE;
+}
+
+static void
+ptr_close_fd (gpointer fdp)
+{
+  int fd = GPOINTER_TO_INT (fdp);
+  glnx_close_fd (&fd);
+}
+
+/* GUnixFDList doesn't allow stealing individual members */
+static GPtrArray *
+unixfdlist_to_ptrarray (GUnixFDList *fdl)
+{
+  gint len;
+  gint *fds = g_unix_fd_list_steal_fds (fdl, &len);
+  GPtrArray *ret = g_ptr_array_new_with_free_func ((GDestroyNotify)ptr_close_fd);
+  for (int i = 0; i < len; i++)
+    g_ptr_array_add (ret, GINT_TO_POINTER (fds[i]));
+  return ret;
 }
 
 static gboolean
@@ -516,12 +534,15 @@ import_many_local_rpms (OstreeRepo    *repo,
 
   g_autoptr(GPtrArray) pkgs = g_ptr_array_new_with_free_func (g_free);
 
-  gint nfds = 0;
-  const gint *fds = g_unix_fd_list_peek_fds (fdl, &nfds);
-  for (guint i = 0; i < nfds; i++)
+  g_autoptr(GPtrArray) fds = unixfdlist_to_ptrarray (fdl);
+  for (guint i = 0; i < fds->len; i++)
     {
+      /* Steal fd from the ptrarray */
+      glnx_autofd int fd = GPOINTER_TO_INT (fds->pdata[i]);
+      fds->pdata[i] = GINT_TO_POINTER (-1);
       g_autofree char *sha256_nevra = NULL;
-      if (!import_local_rpm (repo, fds[i], &sha256_nevra, cancellable, error))
+      /* Transfer fd to import */
+      if (!import_local_rpm (repo, &fd, &sha256_nevra, cancellable, error))
         return FALSE;
 
       g_ptr_array_add (pkgs, g_steal_pointer (&sha256_nevra));

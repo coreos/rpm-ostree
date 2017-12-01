@@ -2055,7 +2055,9 @@ import_one_package (RpmOstreeContext *self,
   }
 
   /* TODO - tweak the unpacker flags for containers */
-  g_autoptr(RpmOstreeImporter) unpacker = rpmostree_importer_new_fd (fd, pkg, flags, error);
+  OstreeRepo *ostreerepo = get_pkgcache_repo (self);
+  g_autoptr(RpmOstreeImporter) unpacker =
+    rpmostree_importer_new_take_fd (&fd, ostreerepo, pkg, flags, sepolicy, error);
   if (!unpacker)
     return FALSE;
 
@@ -2065,10 +2067,8 @@ import_one_package (RpmOstreeContext *self,
       rpmostree_importer_set_jigdo_mode (unpacker, jigdo_xattr_table, jigdo_xattrs);
     }
 
-  OstreeRepo *ostreerepo = get_pkgcache_repo (self);
   g_autofree char *ostree_commit = NULL;
-  if (!rpmostree_importer_run (unpacker, ostreerepo, sepolicy,
-                               &ostree_commit, cancellable, error))
+  if (!rpmostree_importer_run (unpacker, &ostree_commit, cancellable, error))
     return glnx_prefix_error (error, "Unpacking %s",
                               dnf_package_get_nevra (pkg));
 
