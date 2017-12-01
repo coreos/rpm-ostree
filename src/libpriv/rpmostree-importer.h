@@ -47,17 +47,12 @@ typedef enum {
 } RpmOstreeImporterFlags;
 
 RpmOstreeImporter*
-rpmostree_importer_new_fd (int fd,
-                           DnfPackage *pkg,
-                           RpmOstreeImporterFlags flags,
-                           GError **error);
-
-RpmOstreeImporter*
-rpmostree_importer_new_at (int dfd,
-                           const char *path,
-                           DnfPackage *pkg, /* for metadata */
-                           RpmOstreeImporterFlags flags,
-                           GError **error);
+rpmostree_importer_new_take_fd (int                     *fd,
+                                OstreeRepo              *repo,
+                                DnfPackage              *pkg,
+                                RpmOstreeImporterFlags   flags,
+                                OstreeSePolicy          *sepolicy,
+                                GError                 **error);
 
 void rpmostree_importer_set_jigdo_mode (RpmOstreeImporter *self,
                                         GVariant *xattr_table,
@@ -75,8 +70,6 @@ rpmostree_importer_get_ostree_branch (RpmOstreeImporter *unpacker);
 
 gboolean
 rpmostree_importer_run (RpmOstreeImporter *unpacker,
-                        OstreeRepo        *repo,
-                        OstreeSePolicy    *sepolicy,
                         char             **out_commit,
                         GCancellable      *cancellable,
                         GError           **error);
