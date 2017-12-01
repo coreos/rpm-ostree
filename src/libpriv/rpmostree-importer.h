@@ -74,6 +74,17 @@ rpmostree_importer_run (RpmOstreeImporter *unpacker,
                         GCancellable      *cancellable,
                         GError           **error);
 
+void
+rpmostree_importer_run_async (RpmOstreeImporter  *unpacker,
+                              GCancellable       *cancellable,
+                              GAsyncReadyCallback callback,
+                              gpointer            user_data);
+
+char *
+rpmostree_importer_run_async_finish (RpmOstreeImporter  *self,
+                                     GAsyncResult       *res,
+                                     GError            **error);
+
 char *
 rpmostree_importer_get_nevra (RpmOstreeImporter *self);
 

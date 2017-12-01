@@ -894,6 +894,41 @@ rpmostree_importer_run (RpmOstreeImporter *self,
   return TRUE;
 }
 
+static void
+import_in_thread (GTask            *task,
+                  gpointer          source,
+                  gpointer          task_data,
+                  GCancellable     *cancellable)
+{
+  GError *local_error = NULL;
+  RpmOstreeImporter *self = source;
+  g_autofree char *rev = NULL;
+
+  if (!rpmostree_importer_run (self, &rev, cancellable, &local_error))
+    g_task_return_error (task, local_error);
+  else
+    g_task_return_pointer (task, g_steal_pointer (&rev), g_free);
+}
+
+void
+rpmostree_importer_run_async (RpmOstreeImporter  *self,
+                              GCancellable       *cancellable,
+                              GAsyncReadyCallback callback,
+                              gpointer            user_data)
+{
+  g_autoptr(GTask) task = g_task_new (self, cancellable, callback, user_data);
+  g_task_run_in_thread (task, import_in_thread);
+}
+
+char *
+rpmostree_importer_run_async_finish (RpmOstreeImporter  *self,
+                                     GAsyncResult       *result,
+                                     GError            **error)
+{
+  g_return_val_if_fail (g_task_is_valid (result, self), FALSE);
+  return g_task_propagate_pointer ((GTask*)result, error);
+}
+
 char *
 rpmostree_importer_get_nevra (RpmOstreeImporter *self)
 {
