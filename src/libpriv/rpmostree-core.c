@@ -3640,27 +3640,38 @@ rpmostree_context_commit (RpmOstreeContext      *self,
     if (ostree_repo_get_mode (self->ostreerepo) == OSTREE_REPO_MODE_BARE_USER_ONLY)
       modflags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CANONICAL_PERMISSIONS;
 
-    commit_modifier = ostree_repo_commit_modifier_new (modflags, NULL, NULL, NULL);
-
-    if (self->devino_cache)
-      ostree_repo_commit_modifier_set_devino_cache (commit_modifier, self->devino_cache);
-
     /* if we're SELinux aware, then reload the final policy from the tmprootfs in case it
      * was changed by a scriptlet; this covers the foobar/foobar-selinux path */
+    g_autoptr(OstreeSePolicy) final_sepolicy = NULL;
     if (self->sepolicy)
       {
-        g_autoptr(OstreeSePolicy) final_sepolicy = NULL;
         if (!rpmostree_prepare_rootfs_get_sepolicy (self->tmprootfs_dfd, &final_sepolicy,
                                                     cancellable, error))
           return FALSE;
 
-        /* takes a ref */
-        ostree_repo_commit_modifier_set_sepolicy (commit_modifier, final_sepolicy);
+        /* If policy didn't change (or SELinux is disabled), then we can treat
+         * the on-disk xattrs as canonical; loading the xattrs is a noticeable
+         * slowdown for commit.
+         */
+        if (ostree_sepolicy_get_name (final_sepolicy) == NULL ||
+            g_strcmp0 (ostree_sepolicy_get_csum (self->sepolicy),
+                       ostree_sepolicy_get_csum (final_sepolicy)) == 0)
+          {
+            if (ostree_repo_get_mode (self->ostreerepo) == OSTREE_REPO_MODE_BARE)
+              modflags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_DEVINO_CANONICAL;
+          }
       }
 
+    commit_modifier = ostree_repo_commit_modifier_new (modflags, NULL, NULL, NULL);
+    if (final_sepolicy)
+      ostree_repo_commit_modifier_set_sepolicy (commit_modifier, final_sepolicy);
+
+    if (self->devino_cache)
+      ostree_repo_commit_modifier_set_devino_cache (commit_modifier, self->devino_cache);
 
     mtree = ostree_mutable_tree_new ();
 
+    const guint64 start_time_ms = g_get_monotonic_time () / 1000;
     if (!ostree_repo_write_dfd_to_mtree (self->ostreerepo, self->tmprootfs_dfd, ".",
                                          mtree, commit_modifier,
                                          cancellable, error))
@@ -3690,6 +3701,8 @@ rpmostree_context_commit (RpmOstreeContext      *self,
         return FALSE;
 
       bytes_written_formatted = g_format_size (stats.content_bytes_written);
+      const guint64 end_time_ms = g_get_monotonic_time () / 1000;
+      const guint64 elapsed_ms = end_time_ms - start_time_ms;
 
       /* TODO: abstract a variant of this into libglnx which does
        *
@@ -3714,6 +3727,7 @@ rpmostree_context_commit (RpmOstreeContext      *self,
                        "OSTREE_METADATA_OBJECTS_WRITTEN=%u", stats.metadata_objects_written,
                        "OSTREE_CONTENT_OBJECTS_WRITTEN=%u", stats.content_objects_written,
                        "OSTREE_CONTENT_BYTES_WRITTEN=%" G_GUINT64_FORMAT, stats.content_bytes_written,
+                       "OSTREE_TXN_ELAPSED_MS=%" G_GUINT64_FORMAT, elapsed_ms,
                        NULL);
     }
   }
