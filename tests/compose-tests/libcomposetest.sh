@@ -30,7 +30,9 @@ prepare_compose_test() {
     name=$1
     shift
     ostree --repo=${repo} init --mode=archive
+    echo 'fsync=false' >> ${repo}/config
     ostree --repo=${repobuild} init --mode=bare-user
+    echo 'fsync=false' >> ${repobuild}/config
     mkdir -p ${test_compose_datadir}/cache
     cp -r ${dn}/../composedata .
     # We use the local RPM package cache
