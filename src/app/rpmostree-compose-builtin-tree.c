@@ -46,6 +46,7 @@
 static char *opt_workdir;
 static gboolean opt_workdir_tmpfs;
 static char *opt_cachedir;
+static gboolean opt_download_only;
 static gboolean opt_force_nocache;
 static gboolean opt_cache_only;
 static gboolean opt_ex_unified_core;
@@ -69,6 +70,7 @@ static GOptionEntry install_option_entries[] = {
   { "force-nocache", 0, 0, G_OPTION_ARG_NONE, &opt_force_nocache, "Always create a new OSTree commit, even if nothing appears to have changed", NULL },
   { "cache-only", 0, 0, G_OPTION_ARG_NONE, &opt_cache_only, "Assume cache is present, do not attempt to update it", NULL },
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
+  { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Like --dry-run, but download RPMs as well; requires --cachedir", NULL },
   { "ex-unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_ex_unified_core, "Use new \"unified core\" codepath", NULL },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
@@ -356,6 +358,11 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     dnf_context_set_cache_age (dnfctx, 0);
   else
     dnf_context_set_cache_age (dnfctx, G_MAXUINT);
+  /* Without specifying --cachedir we'd just toss the data we download, so let's
+   * catch that.
+   */
+  if (opt_download_only && !opt_ex_unified_core && !opt_cachedir)
+    return glnx_throw (error, "--download-only can only be used with --cachedir");
 
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
   g_key_file_set_string (treespec, "tree", "ref", self->ref);
@@ -490,6 +497,9 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   /* --- Downloading packages --- */
   if (!rpmostree_context_download (self->corectx, cancellable, error))
     return FALSE;
+
+  if (opt_download_only)
+    return TRUE; /* 🔚 Early return */
 
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
   g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile_path);
@@ -1006,7 +1016,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
         /* Note early return */
         return TRUE;
       }
-    else if (opt_dry_run)
+    else if (opt_dry_run || opt_download_only)
       {
         g_print ("--dry-run complete");
         if (opt_touch_if_changed)

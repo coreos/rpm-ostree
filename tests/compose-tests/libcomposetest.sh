@@ -23,17 +23,32 @@ pyappendjsonmember() {
     pyeditjson "jd['"$1"'] += $2" < ${treefile} > ${treefile}.new && mv ${treefile}{.new,}
 }
 
+export repo=$(pwd)/repo
+export repobuild=$(pwd)/repo-build
+
 prepare_compose_test() {
     name=$1
     shift
+    ostree --repo=${repo} init --mode=archive
+    ostree --repo=${repobuild} init --mode=bare-user
+    mkdir -p ${test_compose_datadir}/cache
     cp -r ${dn}/../composedata .
+    # We use the local RPM package cache
+    rm -f composedata/*.repo
+    cat > composedata/fedora-local.repo <<EOF
+[fedora-local]
+baseurl=${test_compose_datadir}/cache
+enabled=1
+gpgcheck=0
+EOF
     export treefile=composedata/fedora-${name}.json
     pyeditjson "jd['ref'] += \"/${name}\"" < composedata/fedora-base.json > ${treefile}
+    pysetjsonmember "repos" '["fedora-local"]' ${treefile}
     # FIXME extract from json
     export treeref=fedora/stable/x86_64/${name}
 }
 
-compose_base_argv="--repo ${repobuild} --cache-only --cachedir=${test_compose_datadir}/cache"
+compose_base_argv="--repo ${repobuild}"
 runcompose() {
     rpm-ostree compose tree ${compose_base_argv} ${treefile} "$@"
     ostree --repo=${repo} pull-local ${repobuild}

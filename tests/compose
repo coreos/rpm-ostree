@@ -39,27 +39,18 @@ mkdir -p ${test_compose_datadir}
 datadir_owner=$(stat -c '%u' ${test_compose_datadir})
 test ${uid} = ${datadir_owner}
 
-# Pre-cache RPMs for each test, and share ostree repos between them for efficiency
-repo=${test_compose_datadir}/repo
-export repo
-ostree --repo=${repo} init --mode=archive
-repobuild=${test_compose_datadir}/repo-build
-export repobuild
-ostree --repo=${repobuild} init --mode=bare-user
-mkdir -p ${test_compose_datadir}/cache
-
+# Create a consistent cache of the RPMs
 echo "Preparing compose tests..." | tee -a ${LOG}
-setup_rpmmd_repos ${dn}/composedata
-
-# Delete the default ref, since we want to use subrefs of it
-compose_prepargs=
-if test -n "${RPMOSTREE_COMPOSE_CACHEONLY:-}"; then
-    compose_prepargs="--cache-only"
+tmp_repo=${test_compose_datadir}/tmp-repo
+if test -z "${RPMOSTREE_COMPOSE_CACHEONLY:-}"; then
+    mkdir -p ${test_compose_datadir}/cache
+    setup_rpmmd_repos ${dn}/composedata
+    ostree --repo=${tmp_repo} init --mode=bare-user
+    # We use rpm-ostree in dry-run --cachedir mode
+    rpm-ostree compose --repo=${tmp_repo} tree --download-only --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json &>> ${LOG}
+    (cd ${test_compose_datadir}/cache && createrepo_c .)
 fi
-(set -x
- rm ${repobuild}/refs/heads/* -rf
- rpm-ostree compose --repo=${repobuild} tree --dry-run ${compose_prepargs} --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json
- rm ${repobuild}/refs/heads/* -rf) &>> ${LOG}
+rm ${tmp_repo} -rf
 
 total=0
 pass=0
