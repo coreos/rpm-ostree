@@ -252,8 +252,13 @@ struct _RpmOstreeContext {
   OstreeSePolicy *sepolicy;
   char *passwd_dir;
 
+  gboolean async_running;
+  gboolean async_error_set;
+  GError **async_error;
+  DnfState *async_dnfstate;
   GPtrArray *pkgs_to_download;
   GPtrArray *pkgs_to_import;
+  guint n_async_pkgs_imported;
   GPtrArray *pkgs_to_relabel;
 
   GHashTable *pkgs_to_remove;  /* pkgname --> gv_nevra */
@@ -1374,6 +1379,7 @@ sort_packages (RpmOstreeContext *self,
   self->pkgs_to_download = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
   g_assert (!self->pkgs_to_import);
   self->pkgs_to_import = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+  self->n_async_pkgs_imported = 0;
   g_assert (!self->pkgs_to_relabel);
   self->pkgs_to_relabel = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
 
@@ -1821,6 +1827,7 @@ rpmostree_context_set_packages (RpmOstreeContext *self,
 {
   g_clear_pointer (&self->pkgs_to_download, (GDestroyNotify)g_ptr_array_unref);
   g_clear_pointer (&self->pkgs_to_import, (GDestroyNotify)g_ptr_array_unref);
+  self->n_async_pkgs_imported = 0;
   g_clear_pointer (&self->pkgs_to_relabel, (GDestroyNotify)g_ptr_array_unref);
   return sort_packages (self, packages, cancellable, error);
 }
@@ -2023,64 +2030,35 @@ rpmostree_context_download (RpmOstreeContext *self,
   return TRUE;
 }
 
-static gboolean
-import_one_package (RpmOstreeContext *self,
-                    DnfContext     *dnfctx,
-                    DnfPackage     *pkg,
-                    OstreeSePolicy *sepolicy,
-                    GVariant       *jigdo_xattr_table,
-                    GVariant       *jigdo_xattrs,
-                    GCancellable   *cancellable,
-                    GError        **error)
+static inline void
+dnf_state_assert_done (DnfState *dnfstate)
 {
-  glnx_fd_close int fd = -1;
-  if (!rpmostree_context_consume_package (self, pkg, &fd, error))
-    return FALSE;
-
-  /* Only set SKIP_EXTRANEOUS for packages we know need it, so that
-   * people doing custom composes don't have files silently discarded.
-   * (This will also likely need to be configurable).
-   */
-  const char *pkg_name = dnf_package_get_name (pkg);
-
-  int flags = 0;
-  if (g_str_equal (pkg_name, "filesystem") ||
-      g_str_equal (pkg_name, "rootfiles"))
-    flags |= RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS;
-
-  { gboolean docs;
-    g_assert (g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs));
-    if (!docs)
-      flags |= RPMOSTREE_IMPORTER_FLAGS_NODOCS;
-  }
-
-  /* TODO - tweak the unpacker flags for containers */
-  OstreeRepo *ostreerepo = get_pkgcache_repo (self);
-  g_autoptr(RpmOstreeImporter) unpacker =
-    rpmostree_importer_new_take_fd (&fd, ostreerepo, pkg, flags, sepolicy, error);
-  if (!unpacker)
-    return FALSE;
-
-  if (jigdo_xattrs)
-    {
-      g_assert (!sepolicy);
-      rpmostree_importer_set_jigdo_mode (unpacker, jigdo_xattr_table, jigdo_xattrs);
-    }
-
-  g_autofree char *ostree_commit = NULL;
-  if (!rpmostree_importer_run (unpacker, &ostree_commit, cancellable, error))
-    return glnx_prefix_error (error, "Unpacking %s",
-                              dnf_package_get_nevra (pkg));
-
-  return TRUE;
+  g_assert (dnf_state_done (dnfstate, NULL));
 }
 
-static inline void
-dnf_state_assert_done (DnfState *hifstate)
+static void
+on_async_import_done (GObject                    *obj,
+                      GAsyncResult               *res,
+                      gpointer                    user_data)
 {
-  gboolean r;
-  r = dnf_state_done (hifstate, NULL);
-  g_assert (r);
+  RpmOstreeImporter *importer = (RpmOstreeImporter*) obj;
+  RpmOstreeContext *self = user_data;
+  g_autofree char *rev =
+    rpmostree_importer_run_async_finish (importer, res,
+                                         self->async_error_set ? NULL : self->async_error);
+  if (!rev)
+    {
+      self->async_running = FALSE;
+      self->async_error_set = TRUE;
+    }
+  else
+    {
+      g_assert_cmpint (self->n_async_pkgs_imported, <, self->pkgs_to_import->len);
+      self->n_async_pkgs_imported++;
+      dnf_state_assert_done (self->async_dnfstate);
+      if (self->n_async_pkgs_imported == self->pkgs_to_import->len)
+        self->async_running = FALSE;
+    }
 }
 
 gboolean
@@ -2114,6 +2092,9 @@ rpmostree_context_import_jigdo (RpmOstreeContext *self,
                                              G_CALLBACK (on_hifstate_percentage_changed),
                                              "Importing:");
 
+    self->async_dnfstate = hifstate;
+    self->async_running = TRUE;
+
     for (guint i = 0; i < self->pkgs_to_import->len; i++)
       {
         DnfPackage *pkg = self->pkgs_to_import->pdata[i];
@@ -2124,12 +2105,51 @@ rpmostree_context_import_jigdo (RpmOstreeContext *self,
             if (!jigdo_xattrs)
               g_error ("Failed to find jigdo xattrs for %s", dnf_package_get_nevra (pkg));
           }
-        if (!import_one_package (self, dnfctx, pkg, self->sepolicy,
-                                 jigdo_xattr_table, jigdo_xattrs,
-                                 cancellable, error))
+
+        glnx_fd_close int fd = -1;
+        if (!rpmostree_context_consume_package (self, pkg, &fd, error))
           return FALSE;
-        dnf_state_assert_done (hifstate);
+
+        /* Only set SKIP_EXTRANEOUS for packages we know need it, so that
+         * people doing custom composes don't have files silently discarded.
+         * (This will also likely need to be configurable).
+         */
+        const char *pkg_name = dnf_package_get_name (pkg);
+
+        int flags = 0;
+        if (g_str_equal (pkg_name, "filesystem") ||
+            g_str_equal (pkg_name, "rootfiles"))
+          flags |= RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS;
+
+        { gboolean docs;
+          g_assert (g_variant_dict_lookup (self->spec->dict, "documentation", "b", &docs));
+          if (!docs)
+            flags |= RPMOSTREE_IMPORTER_FLAGS_NODOCS;
+        }
+
+        /* TODO - tweak the unpacker flags for containers */
+        OstreeRepo *ostreerepo = get_pkgcache_repo (self);
+        g_autoptr(RpmOstreeImporter) unpacker =
+          rpmostree_importer_new_take_fd (&fd, ostreerepo, pkg, flags,
+                                          self->sepolicy, error);
+        if (!unpacker)
+          return FALSE;
+
+        if (jigdo_xattrs)
+          {
+            g_assert (!self->sepolicy);
+            rpmostree_importer_set_jigdo_mode (unpacker, jigdo_xattr_table, jigdo_xattrs);
+          }
+
+        rpmostree_importer_run_async (unpacker, cancellable, on_async_import_done, self);
       }
+
+    /* Wait for all of the imports to complete */
+    GMainContext *mainctx = g_main_context_get_thread_default ();
+    while (self->async_running)
+      g_main_context_iteration (mainctx, TRUE);
+    if (self->async_error)
+      return FALSE;
 
     g_signal_handler_disconnect (hifstate, progress_sigid);
     rpmostree_output_percent_progress_end ();
