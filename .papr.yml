@@ -79,9 +79,9 @@ branches:
   - auto
   - try
 
-# NB: when bumping 26 here, also bump fedora.repo, and compose script
+# NB: when bumping 27 here, also bump fedora.repo, and compose script
 
-context: f26-compose
+context: f27-compose
 
 build: false
 
@@ -93,7 +93,7 @@ required: true
 # which we don't have right now; so just provision a VM and do a
 # docker --privileged run.
 host:
-  distro: fedora/26/atomic
+  distro: fedora/27/atomic
 
 # Copy yum.repos.d to get any injected repos from the host, which
 # will point to a closer mirror.  Note we substitute $releasever
@@ -103,7 +103,7 @@ tests:
     -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
-    registry.fedoraproject.org/fedora:26 /bin/sh -c
+    registry.fedoraproject.org/fedora:27 /bin/sh -c
     "./ci/build.sh && make install && ./tests/compose"
 
 artifacts:
@@ -116,23 +116,21 @@ branches:
   - auto
   - try
 
-context: f26-to-27-ex-container
+context: f27-ex-container
 build: false
 timeout: 30m
 required: false
 
-# See the f26-compose context for why we do things this way.
+# See the f27-compose context for why we do things this way.
 host:
-  distro: fedora/26/atomic
+  distro: fedora/27/atomic
 
-# We're not doing this bit yet since it breaks unless we use metalinks
-# because f27 isn't released yet and released content is in a separate path.
-# -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
-# -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
 tests:
   - docker run --privileged --rm
+    -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
+    -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
-    registry.fedoraproject.org/fedora:26 /bin/sh -c
+    registry.fedoraproject.org/fedora:27 /bin/sh -c
     "./ci/build.sh && make install && adduser unpriv && setfacl -m u:unpriv:rwX . && runuser -u unpriv ./tests/ex-container"
 
 artifacts:
