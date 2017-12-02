@@ -93,9 +93,7 @@ rpm_ostree_commit2jigdo_context_free (RpmOstreeCommit2JigdoContext *ctx)
 }
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeCommit2JigdoContext, rpm_ostree_commit2jigdo_context_free)
 
-/* Prepare a context - this does some generic pre-compose initialization from
- * the arguments such as loading the treefile and any specified metadata.
- */
+/* Initialize a commit2jigdo context */
 static gboolean
 rpm_ostree_commit2jigdo_context_new (RpmOstreeCommit2JigdoContext **out_context,
                                      GCancellable  *cancellable,
@@ -133,6 +131,10 @@ add_objid (GHashTable *object_to_objid, const char *checksum, const char *objid)
   g_hash_table_add (objids, g_strdup (objid));
 }
 
+/* One the main tricky things we need to handle when building the objidmap is
+ * that we want to compress the xattr map some by using basenames if possible.
+ * Otherwise we use the full path.
+ */
 typedef struct {
   DnfPackage *package;
   GHashTable *seen_nonunique_objid; /* Set<char *path> */
@@ -218,7 +220,6 @@ build_objid_map_for_tree (RpmOstreeCommit2JigdoContext *self,
             }
           else
             {
-              // g_printerr ("Found nonunique objid: %s %s (%s)\n", dnf_package_get_nevra (package), path, existing_path);
               const char *previous_obj = g_hash_table_lookup (build->seen_path_to_object, existing_path);
               g_assert (previous_obj);
               /* Replace the previous basename with a full path */
@@ -561,6 +562,10 @@ build_objid_map_for_package (RpmOstreeCommit2JigdoContext *self,
         }
       else if (!g_hash_table_contains (self->commit_content_objects, checksum))
         {
+          /* This happens a lot for Fedora Atomic Host today where we disable
+           * documentation. But it will also happen if we modify any files in
+           * postprocessing.
+           */
           self->n_unused_pkg_content_objs++;
         }
       else
@@ -588,18 +593,16 @@ compare_pkgs (gconstpointer ap,
 }
 
 static gboolean
-impl_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
-                   const char                   *provided_commit,
-                   const char                   *oirpm_spec,
-                   const char                   *outputdir,
-                   GCancellable                 *cancellable,
-                   GError                      **error)
+write_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
+                    const char                   *commit,
+                    const char                   *oirpm_spec,
+                    const char                   *outputdir,
+                    GHashTable                   *pkgs_with_content,
+                    GHashTable                   *new_reachable_small,
+                    GHashTable                   *new_big_content_identical,
+                    GCancellable                 *cancellable,
+                    GError                      **error)
 {
-  g_assert_cmpint (*outputdir, ==, '/');
-  g_autofree char *commit = NULL;
-  g_autoptr(GFile) root = NULL;
-  if (!ostree_repo_read_commit (self->repo, provided_commit, &root, &commit, cancellable, error))
-    return FALSE;
   g_autoptr(GVariant) commit_obj = NULL;
   if (!ostree_repo_load_commit (self->repo, commit, &commit_obj, NULL, error))
     return FALSE;
@@ -608,189 +611,6 @@ impl_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
   if (!ostree_repo_read_commit_detached_metadata (self->repo, commit, &commit_detached_meta,
                                                   cancellable, error))
     return FALSE;
-
-  g_print ("Finding reachable objects from target %s...\n", commit);
-  g_autoptr(GHashTable) commit_reachable = NULL;
-  if (!ostree_repo_traverse_commit (self->repo, commit, 0,
-                                    &commit_reachable,
-                                    cancellable, error))
-    return FALSE;
-  GLNX_HASH_TABLE_FOREACH_IT (commit_reachable, it, GVariant *, object,
-                              GVariant *, also_object)
-    {
-      OstreeObjectType objtype;
-      const char *checksum;
-      ostree_object_name_deserialize (object, &checksum, &objtype);
-      if (objtype == OSTREE_OBJECT_TYPE_FILE)
-        g_hash_table_add (self->commit_content_objects, g_strdup (checksum));
-      g_hash_table_iter_remove (&it);
-    }
-  g_print ("%u content objects\n", g_hash_table_size (self->commit_content_objects));
-
-  g_print ("Finding reachable objects from packages...\n");
-  g_autoptr(RpmOstreeRefSack) sack =
-    rpmostree_get_refsack_for_commit (self->repo, commit, cancellable, error);
-  if (!sack)
-    return FALSE;
-
-  hy_autoquery HyQuery hquery = hy_query_create (sack->sack);
-  hy_query_filter (hquery, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
-  g_autoptr(GPtrArray) pkglist = hy_query_run (hquery);
-  g_print ("Building object map from %u packages\n", pkglist->len);
-
-  g_assert_cmpint (pkglist->len, >, 0);
-
-  for (guint i = 0; i < pkglist->len; i++)
-    {
-      DnfPackage *pkg = pkglist->pdata[i];
-      if (!build_objid_map_for_package (self, pkg, cancellable, error))
-        return FALSE;
-    }
-
-  g_print ("%u content objects in packages\n", g_hash_table_size (self->content_object_to_pkg_objid));
-  g_print ("  %u duplicate, %u unused\n",
-           self->n_duplicate_pkg_content_objs, self->n_unused_pkg_content_objs);
-  g_print ("  %u big sizematches, %u/%u nonunique basenames\n",
-           self->duplicate_big_pkgobjects, self->n_nonunique_objid_basenames, self->n_objid_basenames);
-  g_autoptr(GHashTable) new_reachable_big = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  g_autoptr(GHashTable) new_reachable_small = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
-  g_autoptr(GHashTable) pkgs_with_content = g_hash_table_new (NULL, NULL);
-  guint64 pkg_bytes = 0;
-  guint64 oirpm_bytes_small = 0;
-
-  /* Loop over every content object in the final commit, and see whether we
-   * found a package that contains that exact object.  We classify new
-   * objects as either "big" or "small" - for "big" objects we'll try
-   * to heuristically find a content-identical one.
-   */
-  GLNX_HASH_TABLE_FOREACH (self->commit_content_objects, const char *, checksum)
-    {
-      guint32 objsize;
-      if (!query_objsize_assert_32bit (self->repo, checksum, &objsize, error))
-        return FALSE;
-      const gboolean is_big = objsize >= BIG_OBJ_SIZE;
-
-      PkgObjid *pkgobjid = g_hash_table_lookup (self->content_object_to_pkg_objid, checksum);
-      if (!pkgobjid)
-        g_hash_table_add (is_big ? new_reachable_big : new_reachable_small, g_strdup (checksum));
-      else
-        g_hash_table_add (pkgs_with_content, pkgobjid->pkg);
-
-      if (pkgobjid)
-        pkg_bytes += objsize;
-      else if (!is_big)
-        oirpm_bytes_small += objsize;
-      /* We'll account for new big objects later after more analysis */
-    }
-
-  g_print ("%u/%u packages contain objects; %u small, examining %u big objects more closely...\n",
-           g_hash_table_size (pkgs_with_content),
-           pkglist->len,
-           g_hash_table_size (new_reachable_small),
-           g_hash_table_size (new_reachable_big));
-  if (g_hash_table_size (pkgs_with_content) != pkglist->len)
-    {
-      g_print ("Packages without content:\n");
-      for (guint i = 0; i < pkglist->len; i++)
-        {
-          DnfPackage *pkg = pkglist->pdata[i];
-          if (!g_hash_table_contains (pkgs_with_content, pkg))
-            {
-              g_autofree char *tmpfiles_d_path = g_strconcat ("usr/lib/tmpfiles.d/pkg-",
-                                                              dnf_package_get_name (pkg),
-                                                              ".conf", NULL);
-              g_autoptr(GFile) tmpfiles_d_f = g_file_resolve_relative_path (root, tmpfiles_d_path);
-              const gboolean is_tmpfiles_only = g_file_query_exists (tmpfiles_d_f, cancellable);
-              /* I added this while debugging missing tmpfiles.d/pkg-$x.conf
-               * objects; it turns out not to trigger currently, but keeping it
-               * anyways.
-               */
-              if (is_tmpfiles_only)
-                {
-                  g_hash_table_add (pkgs_with_content, pkg);
-                  g_print ("  %s (tmpfiles only)\n", dnf_package_get_nevra (pkg));
-                }
-              else
-                g_print ("  %s\n", dnf_package_get_nevra (pkg));
-            }
-        }
-      g_print ("\n");
-    }
-
-#if 0
-  /* Maps a new big object hash to an object from a package */
-  g_autoptr(GHashTable) new_big_pkgidentical = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-#endif
-  /* Maps a new big object hash to a set of duplicates; yes this happens
-   * unfortunately for the initramfs right now due to SELinux labeling.
-   */
-  g_autoptr(GHashTable) new_big_content_identical = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                                           g_free, (GDestroyNotify)g_ptr_array_unref);
-
-  guint64 oirpm_bytes_big = 0;
-  GLNX_HASH_TABLE_FOREACH_IT (new_reachable_big, it, const char *, checksum,
-                              void *, unused)
-    {
-      guint32 objsize;
-      if (!query_objsize_assert_32bit (self->repo, checksum, &objsize, error))
-        return FALSE;
-      g_assert_cmpint (objsize, >=, BIG_OBJ_SIZE);
-
-      g_autofree char *obj_contenthash =
-        contentonly_hash_for_object (self->repo, checksum, cancellable, error);
-      if (!obj_contenthash)
-        return FALSE;
-      g_autofree char *objsize_formatted = g_format_size (objsize);
-
-      /* This is complex to implement; it would be useful for the grub2-efi data
-       * but in the end we should avoid having content-identical objects in the
-       * OS data anyways.
-       */
-#if 0
-      const char *probable_source = g_hash_table_lookup (self->objsize_to_object, GUINT_TO_POINTER (objsize));
-
-      if (probable_source)
-        {
-          g_autofree char *probable_source_contenthash =
-            contentonly_hash_for_object (self->pkgcache_repo, probable_source, cancellable, error);
-          if (!probable_source_contenthash)
-            return FALSE;
-          if (g_str_equal (obj_contenthash, probable_source_contenthash))
-            {
-              g_print ("%s %s (pkg content hash hit)\n", checksum, objsize_formatted);
-              g_hash_table_replace (new_big_pkgidentical, g_strdup (checksum), g_strdup (probable_source));
-              g_hash_table_iter_remove (&it);
-
-              pkg_bytes += objsize;
-              /* We found a package content hash hit, loop to next */
-              continue;
-            }
-        }
-#endif
-
-      /* OK, see if it duplicates another *new* object */
-      GPtrArray *identicals = g_hash_table_lookup (new_big_content_identical, obj_contenthash);
-      if (!identicals)
-        {
-          identicals = g_ptr_array_new_with_free_func (g_free);
-          g_hash_table_insert (new_big_content_identical, g_strdup (obj_contenthash), identicals);
-          g_print ("%s %s (new, objhash %s)\n", checksum, objsize_formatted, obj_contenthash);
-          oirpm_bytes_big += objsize;
-        }
-      else
-        {
-          g_print ("%s (content identical with %u objects)\n", checksum, identicals->len);
-        }
-      g_ptr_array_add (identicals, g_strdup (checksum));
-    }
-
-  { g_autofree char *pkg_bytes_formatted = g_format_size (pkg_bytes);
-    g_autofree char *oirpm_bytes_formatted_small = g_format_size (oirpm_bytes_small);
-    g_autofree char *oirpm_bytes_formatted_big = g_format_size (oirpm_bytes_big);
-    g_print ("pkg content size: %s\n", pkg_bytes_formatted);
-    g_print ("oirpm content size (small objs): %s\n", oirpm_bytes_formatted_small);
-    g_print ("oirpm content size (big objs): %s\n", oirpm_bytes_formatted_big);
-  }
 
   g_auto(GLnxTmpDir) oirpm_tmpd = { 0, };
   if (!glnx_mkdtemp ("rpmostree-jigdo-XXXXXX", 0700, &oirpm_tmpd, error))
@@ -862,7 +682,8 @@ impl_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
     return FALSE;
   if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, RPMOSTREE_JIGDO_DIRTREE_DIR, 0755, cancellable, error))
     return FALSE;
-  g_clear_pointer (&commit_reachable, (GDestroyNotify)g_hash_table_unref);
+  /* Traverse the commit again, adding dirtree/dirmeta */
+  g_autoptr(GHashTable) commit_reachable = NULL;
   if (!ostree_repo_traverse_commit (self->repo, commit, 0,
                                     &commit_reachable,
                                     cancellable, error))
@@ -1119,6 +940,246 @@ impl_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
       glnx_tmpdir_unset (&oirpm_tmpd);
     }
 
+
+  return TRUE;
+}
+
+/* Entrypoint function for turning a commit into an OIRPM.
+ *
+ * The basic prerequisite for this: when doing a compose tree, import the
+ * packages, and after import check out the final tree and SELinux relabel the
+ * imports so that they're reliably updated (currently depends on some unified
+ * core 🌐 work).
+ *
+ * First, we find the "jigdo set" of packages we need; not all packages that
+ * live in the tree actually need to be imported; things like `emacs-filesystem`
+ * or `rootfiles` today don't actually generate any content objects we use.
+ *
+ * The biggest "extra data" we need is the SELinux labels for the files in
+ * each package.  To simplify things, we generalize this to "all xattrs".
+ *
+ * Besides that, we need the metadata objects like the OSTree commit and the
+ * referenced dirtree/dirmeta objects. Plus the added content objects like the
+ * rpmdb, initramfs, etc.
+ *
+ * One special optimization made is support for detecting "content-identical"
+ * added content objects, because right now we have the initramfs 3 times in the
+ * tree (due to SELinux labels). While we have 3 copies on disk, we can easily
+ * avoid that on the wire.
+ *
+ * Once we've determined all the needed data, we make a temporary directory, and
+ * start writing out files inside it. This temporary directory is then turned
+ * into the OIRPM (what looks like a plain old RPM) by invoking `rpmbuild` using
+ * a `.spec` file.
+ *
+ * The resulting "jigdo set" is then that OIRPM, plus the exact NEVRAs - we also
+ * record the repodata checksum (normally sha256), to ensure that we get the
+ * *exact* RPMs we require bit-for-bit.
+ */
+static gboolean
+impl_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
+                   const char                   *rev,
+                   const char                   *oirpm_spec,
+                   const char                   *outputdir,
+                   GCancellable                 *cancellable,
+                   GError                      **error)
+{
+  g_assert_cmpint (*outputdir, ==, '/');
+  g_autofree char *commit = NULL;
+  g_autoptr(GFile) root = NULL;
+  if (!ostree_repo_read_commit (self->repo, rev, &root, &commit, cancellable, error))
+    return FALSE;
+
+  g_print ("Finding reachable objects from target %s...\n", commit);
+  g_autoptr(GHashTable) commit_reachable = NULL;
+  if (!ostree_repo_traverse_commit (self->repo, commit, 0,
+                                    &commit_reachable,
+                                    cancellable, error))
+    return FALSE;
+  GLNX_HASH_TABLE_FOREACH_IT (commit_reachable, it, GVariant *, object,
+                              GVariant *, also_object)
+    {
+      OstreeObjectType objtype;
+      const char *checksum;
+      ostree_object_name_deserialize (object, &checksum, &objtype);
+      if (objtype == OSTREE_OBJECT_TYPE_FILE)
+        g_hash_table_add (self->commit_content_objects, g_strdup (checksum));
+      g_hash_table_iter_remove (&it);
+    }
+  g_print ("%u content objects\n", g_hash_table_size (self->commit_content_objects));
+
+  g_print ("Finding reachable objects from packages...\n");
+  g_autoptr(RpmOstreeRefSack) sack =
+    rpmostree_get_refsack_for_commit (self->repo, commit, cancellable, error);
+  if (!sack)
+    return FALSE;
+
+  hy_autoquery HyQuery hquery = hy_query_create (sack->sack);
+  hy_query_filter (hquery, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
+  g_autoptr(GPtrArray) pkglist = hy_query_run (hquery);
+  g_print ("Building object map from %u packages\n", pkglist->len);
+
+  g_assert_cmpint (pkglist->len, >, 0);
+
+  for (guint i = 0; i < pkglist->len; i++)
+    {
+      DnfPackage *pkg = pkglist->pdata[i];
+      if (!build_objid_map_for_package (self, pkg, cancellable, error))
+        return FALSE;
+    }
+
+  g_print ("%u content objects in packages\n", g_hash_table_size (self->content_object_to_pkg_objid));
+  g_print ("  %u duplicate, %u unused\n",
+           self->n_duplicate_pkg_content_objs, self->n_unused_pkg_content_objs);
+  g_print ("  %u big sizematches, %u/%u nonunique basenames\n",
+           self->duplicate_big_pkgobjects, self->n_nonunique_objid_basenames, self->n_objid_basenames);
+  /* These sets track objects which aren't in the packages */
+  g_autoptr(GHashTable) new_reachable_big = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  g_autoptr(GHashTable) new_reachable_small = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  g_autoptr(GHashTable) pkgs_with_content = g_hash_table_new (NULL, NULL);
+  guint64 pkg_bytes = 0;
+  guint64 oirpm_bytes_small = 0;
+
+  /* Loop over every content object in the final commit, and see whether we
+   * found a package that contains that exact object.  We classify new
+   * objects as either "big" or "small" - for "big" objects we'll try
+   * to heuristically find a content-identical one.
+   */
+  GLNX_HASH_TABLE_FOREACH (self->commit_content_objects, const char *, checksum)
+    {
+      guint32 objsize;
+      if (!query_objsize_assert_32bit (self->repo, checksum, &objsize, error))
+        return FALSE;
+      const gboolean is_big = objsize >= BIG_OBJ_SIZE;
+
+      PkgObjid *pkgobjid = g_hash_table_lookup (self->content_object_to_pkg_objid, checksum);
+      if (!pkgobjid)
+        g_hash_table_add (is_big ? new_reachable_big : new_reachable_small, g_strdup (checksum));
+      else
+        g_hash_table_add (pkgs_with_content, pkgobjid->pkg);
+
+      if (pkgobjid)
+        pkg_bytes += objsize;
+      else if (!is_big)
+        oirpm_bytes_small += objsize;
+      /* We'll account for new big objects later after more analysis */
+    }
+
+  g_print ("Found objects in %u/%u packages; new (unpackaged) objects: %u small + %u large\n",
+           g_hash_table_size (pkgs_with_content),
+           pkglist->len,
+           g_hash_table_size (new_reachable_small),
+           g_hash_table_size (new_reachable_big));
+  if (g_hash_table_size (pkgs_with_content) != pkglist->len)
+    {
+      g_print ("Packages without content:\n");
+      for (guint i = 0; i < pkglist->len; i++)
+        {
+          DnfPackage *pkg = pkglist->pdata[i];
+          if (!g_hash_table_contains (pkgs_with_content, pkg))
+            {
+              g_autofree char *tmpfiles_d_path = g_strconcat ("usr/lib/tmpfiles.d/pkg-",
+                                                              dnf_package_get_name (pkg),
+                                                              ".conf", NULL);
+              g_autoptr(GFile) tmpfiles_d_f = g_file_resolve_relative_path (root, tmpfiles_d_path);
+              const gboolean is_tmpfiles_only = g_file_query_exists (tmpfiles_d_f, cancellable);
+              /* I added this while debugging missing tmpfiles.d/pkg-$x.conf
+               * objects; it turns out not to trigger currently, but keeping it
+               * anyways.
+               */
+              if (is_tmpfiles_only)
+                {
+                  g_hash_table_add (pkgs_with_content, pkg);
+                  g_print ("  %s (tmpfiles only)\n", dnf_package_get_nevra (pkg));
+                }
+              else
+                g_print ("  %s\n", dnf_package_get_nevra (pkg));
+            }
+        }
+      g_print ("\n");
+    }
+
+#if 0
+  /* Maps a new big object hash to an object from a package */
+  g_autoptr(GHashTable) new_big_pkgidentical = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+#endif
+  g_print ("Examining large objects more closely for content-identical versions...\n");
+  /* Maps a new big object hash to a set of duplicates; yes this happens
+   * unfortunately for the initramfs right now due to SELinux labeling.
+   */
+  g_autoptr(GHashTable) new_big_content_identical = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                                           g_free, (GDestroyNotify)g_ptr_array_unref);
+
+  guint64 oirpm_bytes_big = 0;
+  GLNX_HASH_TABLE_FOREACH_IT (new_reachable_big, it, const char *, checksum,
+                              void *, unused)
+    {
+      guint32 objsize;
+      if (!query_objsize_assert_32bit (self->repo, checksum, &objsize, error))
+        return FALSE;
+      g_assert_cmpint (objsize, >=, BIG_OBJ_SIZE);
+
+      g_autofree char *obj_contenthash =
+        contentonly_hash_for_object (self->repo, checksum, cancellable, error);
+      if (!obj_contenthash)
+        return FALSE;
+      g_autofree char *objsize_formatted = g_format_size (objsize);
+
+      /* This is complex to implement; it would be useful for the grub2-efi data
+       * but in the end we should avoid having content-identical objects in the
+       * OS data anyways.
+       */
+#if 0
+      const char *probable_source = g_hash_table_lookup (self->objsize_to_object, GUINT_TO_POINTER (objsize));
+
+      if (probable_source)
+        {
+          g_autofree char *probable_source_contenthash =
+            contentonly_hash_for_object (self->pkgcache_repo, probable_source, cancellable, error);
+          if (!probable_source_contenthash)
+            return FALSE;
+          if (g_str_equal (obj_contenthash, probable_source_contenthash))
+            {
+              g_print ("%s %s (pkg content hash hit)\n", checksum, objsize_formatted);
+              g_hash_table_replace (new_big_pkgidentical, g_strdup (checksum), g_strdup (probable_source));
+              g_hash_table_iter_remove (&it);
+
+              pkg_bytes += objsize;
+              /* We found a package content hash hit, loop to next */
+              continue;
+            }
+        }
+#endif
+
+      /* OK, see if it duplicates another *new* object */
+      GPtrArray *identicals = g_hash_table_lookup (new_big_content_identical, obj_contenthash);
+      if (!identicals)
+        {
+          identicals = g_ptr_array_new_with_free_func (g_free);
+          g_hash_table_insert (new_big_content_identical, g_strdup (obj_contenthash), identicals);
+          g_print ("%s %s (new, objhash %s)\n", checksum, objsize_formatted, obj_contenthash);
+          oirpm_bytes_big += objsize;
+        }
+      else
+        {
+          g_print ("%s (content identical with %u objects)\n", checksum, identicals->len);
+        }
+      g_ptr_array_add (identicals, g_strdup (checksum));
+    }
+
+  { g_autofree char *pkg_bytes_formatted = g_format_size (pkg_bytes);
+    g_autofree char *oirpm_bytes_formatted_small = g_format_size (oirpm_bytes_small);
+    g_autofree char *oirpm_bytes_formatted_big = g_format_size (oirpm_bytes_big);
+    g_print ("pkg content size: %s\n", pkg_bytes_formatted);
+    g_print ("oirpm content size (small objs): %s\n", oirpm_bytes_formatted_small);
+    g_print ("oirpm content size (big objs): %s\n", oirpm_bytes_formatted_big);
+  }
+
+  if (!write_commit2jigdo (self, commit, oirpm_spec, outputdir, pkgs_with_content,
+                           new_reachable_small, new_big_content_identical,
+                           cancellable, error))
+    return FALSE;
+
   return TRUE;
 }
 
@@ -1129,7 +1190,7 @@ rpmostree_ex_builtin_commit2jigdo (int             argc,
                                    GCancellable   *cancellable,
                                    GError        **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("COMMIT OIRPM-SPEC OUTPUTDIR");
+  g_autoptr(GOptionContext) context = g_option_context_new ("REV OIRPM-SPEC OUTPUTDIR");
   if (!rpmostree_option_context_parse (context,
                                        commit2jigdo_option_entries,
                                        &argc, &argv,
@@ -1141,7 +1202,7 @@ rpmostree_ex_builtin_commit2jigdo (int             argc,
 
   if (argc != 4)
    {
-      rpmostree_usage_error (context, "COMMIT OIRPM-SPEC is required", error);
+      rpmostree_usage_error (context, "REV OIRPM-SPEC OUTPUTDIR are required", error);
       return EXIT_FAILURE;
     }
 
@@ -1151,7 +1212,7 @@ rpmostree_ex_builtin_commit2jigdo (int             argc,
       return EXIT_FAILURE;
     }
 
-  const char *commit = argv[1];
+  const char *rev = argv[1];
   const char *oirpm_spec = argv[2];
   const char *outputdir = argv[3];
   if (!g_str_has_prefix (outputdir, "/"))
@@ -1160,7 +1221,7 @@ rpmostree_ex_builtin_commit2jigdo (int             argc,
   g_autoptr(RpmOstreeCommit2JigdoContext) self = NULL;
   if (!rpm_ostree_commit2jigdo_context_new (&self, cancellable, error))
     return EXIT_FAILURE;
-  if (!impl_commit2jigdo (self, commit, oirpm_spec, outputdir, cancellable, error))
+  if (!impl_commit2jigdo (self, rev, oirpm_spec, outputdir, cancellable, error))
     return EXIT_FAILURE;
 
   return EXIT_SUCCESS;

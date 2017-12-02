@@ -267,6 +267,8 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
       // TODO: use repodata checksum, but probably only if covered by the ostree
       // gpg sig?
       DnfPackage *pkg = query_nevra (dnfctx, name, epoch, version, release, architecture, error);
+      // FIXME: We shouldn't require a package to be in the repos if we already
+      // have it imported otherwise we'll break upgrades for ancient systems
       if (!pkg)
         return FALSE;
       g_ptr_array_add (pkgs_required, g_object_ref (pkg));

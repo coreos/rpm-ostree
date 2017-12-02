@@ -31,7 +31,7 @@ static RpmOstreeCommand ex_subcommands[] = {
   { "kargs", 0,
     "Query or Modify the kernel arguments", rpmostree_ex_builtin_kargs },
   { "commit2jigdo", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    "Convert an OSTree commit into a rpm-ostree jigdo format", rpmostree_ex_builtin_commit2jigdo },
+    "Convert an OSTree commit into an rpm-ostree jigdo", rpmostree_ex_builtin_commit2jigdo },
   { "jigdo2commit", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Convert an rpm-ostree jigdo into an OSTree commit", rpmostree_ex_builtin_jigdo2commit },
   { NULL, 0, NULL, NULL }

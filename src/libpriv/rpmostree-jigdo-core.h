@@ -26,6 +26,37 @@
 #include <rpm/rpmlib.h>
 #include <libdnf/libdnf.h>
 
+/* An OIRPM is structured as an ordered set of files/directories; we use numeric
+ * prefixes to ensure ordering. Most of the files are in GVariant format.
+ *
+ * An OIRPM starts with the OSTree commit object and its detached metadata,
+ * so that can be GPG verified first - if that fails, we can then cleanly
+ * abort.
+ *
+ * Next, we have the "jigdo set" - the NEVRAs + repodata checksum of the
+ * RPM packages we need.  So during client side processing, downloads
+ * can be initiated for those while we continue to process the OIRPM.
+ *
+ * The dirmeta/dirtree objects that are referenced by the commit follow.
+ *
+ * A special optimization is made for "content-identical" new objects,
+ * such as the initramfs right now which unfortunately has separate
+ * SELinux labels and hence different object checksum.
+ *
+ * The pure added content objects follow - content objects which won't be
+ * generated when we import the packages. One interesting detail is right now
+ * this includes the /usr/lib/tmpfiles.d/pkg-foo.conf objects that we generate
+ * server side, because we don't generate that client side in jigdo mode.
+ *
+ * Finally, we have the xattr data, which is mostly in support of SELinux
+ * labeling (note this is done on the server side still).  In order to
+ * dedup content, we have an xattr "string table" which is just an array
+ * of xattrs; then there is a GVariant for each package which contains
+ * a mapping of "objid" to an unsigned integer index into the xattr table.
+ * The "objid" can either be a full path, or a basename if that basename is
+ * unique inside a particular package.
+ */
+
 /* Use a numeric prefix to ensure predictable ordering */
 #define RPMOSTREE_JIGDO_COMMIT_DIR "00commit"
 #define RPMOSTREE_JIGDO_PKGS "01pkgs"
