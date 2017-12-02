@@ -35,6 +35,7 @@
 #include "rpmostree-unpacker-core.h"
 #include "rpmostree-importer.h"
 #include "rpmostree-core.h"
+#include "rpmostree-jigdo-assembler.h"
 #include "rpmostree-rpm-util.h"
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
@@ -67,6 +68,11 @@ struct RpmOstreeImporter
   char *hdr_sha256;
 
   char *ostree_branch;
+
+  gboolean jigdo_mode;
+  GVariant *jigdo_xattr_table;
+  GVariant *jigdo_xattrs;
+  GVariant *jigdo_next_xattrs; /* passed from filter to xattr cb */
 };
 
 G_DEFINE_TYPE(RpmOstreeImporter, rpmostree_importer, G_TYPE_OBJECT)
@@ -90,6 +96,10 @@ rpmostree_importer_finalize (GObject *object)
   g_clear_pointer (&self->doc_files, (GDestroyNotify)g_hash_table_unref);
 
   g_free (self->hdr_sha256);
+
+  g_clear_pointer (&self->jigdo_xattr_table, (GDestroyNotify)g_variant_unref);
+  g_clear_pointer (&self->jigdo_xattrs, (GDestroyNotify)g_variant_unref);
+  g_clear_pointer (&self->jigdo_next_xattrs, (GDestroyNotify)g_variant_unref);
 
   G_OBJECT_CLASS (rpmostree_importer_parent_class)->finalize (object);
 }
@@ -300,6 +310,16 @@ rpmostree_importer_new_at (int dfd, const char *path,
   return g_steal_pointer (&ret);
 }
 
+void
+rpmostree_importer_set_jigdo_mode (RpmOstreeImporter                    *self,
+                                   GVariant *xattr_table,
+                                   GVariant *xattrs)
+{
+  self->jigdo_mode = TRUE;
+  self->jigdo_xattr_table = g_variant_ref (xattr_table);
+  self->jigdo_xattrs = g_variant_ref (xattrs);
+}
+
 static void
 get_rpmfi_override (RpmOstreeImporter *self,
                     const char        *path,
@@ -473,6 +493,13 @@ build_metadata_variant (RpmOstreeImporter *self,
       g_variant_builder_add (&metadata_builder, "{sv}",
                              "rpmostree.repodata_checksum",
                              g_variant_new_string (chksum_repr));
+    }
+
+  if (self->jigdo_mode)
+    {
+      g_variant_builder_add (&metadata_builder, "{sv}",
+                             "rpmostree.jigdo",
+                             g_variant_new_boolean (TRUE));
     }
 
   if (self->doc_files)
@@ -680,6 +707,45 @@ unprivileged_filter_cb (OstreeRepo         *repo,
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
 
+static OstreeRepoCommitFilterResult
+jigdo_filter_cb (OstreeRepo         *repo,
+                 const char         *path,
+                 GFileInfo          *file_info,
+                 gpointer            user_data)
+{
+  RpmOstreeImporter *self = ((cb_data*)user_data)->self;
+  GError **error = ((cb_data*)user_data)->error;
+  const gboolean error_was_set = (error && *error != NULL);
+
+  if (error_was_set)
+    return OSTREE_REPO_COMMIT_FILTER_SKIP;
+
+  if (g_file_info_get_file_type (file_info) != G_FILE_TYPE_DIRECTORY)
+    {
+      self->jigdo_next_xattrs = NULL;
+      if (!rpmostree_jigdo_assembler_xattr_lookup (self->jigdo_xattr_table, path,
+                                                   self->jigdo_xattrs,
+                                                   &self->jigdo_next_xattrs,
+                                                   error))
+        return OSTREE_REPO_COMMIT_FILTER_SKIP;
+      /* No xattrs means we don't need to import it */
+      if (!self->jigdo_next_xattrs)
+        return OSTREE_REPO_COMMIT_FILTER_SKIP;
+    }
+
+  return OSTREE_REPO_COMMIT_FILTER_ALLOW;
+}
+
+static GVariant*
+jigdo_xattr_cb (OstreeRepo  *repo,
+                const char  *path,
+                GFileInfo   *file_info,
+                gpointer     user_data)
+{
+  RpmOstreeImporter *self = user_data;
+  return g_steal_pointer (&self->jigdo_next_xattrs);
+}
+
 static GVariant*
 xattr_cb (OstreeRepo  *repo,
           const char  *path,
@@ -737,7 +803,9 @@ import_rpm_to_repo (RpmOstreeImporter *self,
    * is unprivileged, anything else is a compose.
    */
   const gboolean unprivileged = ostree_repo_get_mode (repo) == OSTREE_REPO_MODE_BARE_USER_ONLY;
-  if (unprivileged)
+  if (self->jigdo_mode)
+    filter = jigdo_filter_cb;
+  else if (unprivileged)
     filter = unprivileged_filter_cb;
   else
     filter = compose_filter_cb;
@@ -749,9 +817,17 @@ import_rpm_to_repo (RpmOstreeImporter *self,
     modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CANONICAL_PERMISSIONS;
   g_autoptr(OstreeRepoCommitModifier) modifier =
     ostree_repo_commit_modifier_new (modifier_flags, filter, &fdata, NULL);
-  ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb,
-                                                  NULL, self);
-  ostree_repo_commit_modifier_set_sepolicy (modifier, sepolicy);
+  if (self->jigdo_mode)
+    {
+      ostree_repo_commit_modifier_set_xattr_callback (modifier, jigdo_xattr_cb,
+                                                      NULL, self);
+      g_assert (sepolicy == NULL);
+    }
+  else
+    {
+      ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb, NULL, self);
+      ostree_repo_commit_modifier_set_sepolicy (modifier, sepolicy);
+    }
 
   OstreeRepoImportArchiveOptions opts = { 0 };
   opts.ignore_unsupported_content = TRUE;

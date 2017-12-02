@@ -59,6 +59,10 @@ rpmostree_importer_new_at (int dfd,
                            RpmOstreeImporterFlags flags,
                            GError **error);
 
+void rpmostree_importer_set_jigdo_mode (RpmOstreeImporter *self,
+                                        GVariant *xattr_table,
+                                        GVariant *xattrs);
+
 gboolean
 rpmostree_importer_read_metainfo (int fd,
                                   Header *out_header,

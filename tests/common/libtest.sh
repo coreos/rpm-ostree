@@ -480,12 +480,13 @@ EOF
         --define "_rpmdir $test_tmpdir/yumrepo/packages" \
         --define "_buildrootdir $PWD")
     (cd yumrepo && createrepo_c --no-database .)
-    if test -n yumrepo.repo; then
-        cat > yumrepo.repo << EOF
+    if test '!' -f yumrepo.repo; then
+        cat > yumrepo.repo.tmp << EOF
 [test-repo]
 name=test-repo
 baseurl=file:///$PWD/yumrepo
 EOF
+        mv yumrepo.repo{.tmp,}
     fi
 }
 
