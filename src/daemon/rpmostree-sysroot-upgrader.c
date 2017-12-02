@@ -920,7 +920,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
 
       g_auto(GLnxTmpfile) initramfs_tmpf = { 0, };
       if (!rpmostree_run_dracut (self->tmprootfs_dfd, add_dracut_argv, kver,
-                                 initramfs_path, &initramfs_tmpf,
+                                 initramfs_path, NULL, &initramfs_tmpf,
                                  cancellable, error))
         return FALSE;
 
