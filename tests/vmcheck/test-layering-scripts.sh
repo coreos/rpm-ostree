@@ -188,6 +188,13 @@ vm_cmd test -f /home/testuser/somedata -a -f /etc/fstab -a -f /tmp/sometmpfile -
 assert_file_has_content err.txt 'error: sanitycheck: Executing bwrap(/usr/bin/true)'
 echo "ok impervious to rm -rf post"
 
+# capabilities
+vm_build_rpm test-cap-drop post "capsh --print > /usr/share/rpmostree-capsh.txt"
+vm_rpmostree install test-cap-drop
+vm_rpmostree ex livefs
+vm_cmd cat /usr/share/rpmostree-capsh.txt > caps.txt
+assert_not_file_has_content caps.test '^Current: =.*cap_sys_admin'
+
 vm_build_rpm etc-mutate post "truncate -s 0 /etc/selinux/config"
 if vm_rpmostree install etc-mutate; then
   assert_not_reached "successfully installed etc-mutate?"

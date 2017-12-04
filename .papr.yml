@@ -49,11 +49,11 @@ required: true
 cluster:
   hosts:
     - name: vmcheck1
-      distro: centos/7/atomic
+      distro: centos/7/atomic/smoketested
     - name: vmcheck2
-      distro: centos/7/atomic
+      distro: centos/7/atomic/smoketested
     - name: vmcheck3
-      distro: centos/7/atomic
+      distro: centos/7/atomic/smoketested
   container:
     image: registry.centos.org/centos/centos:7
 
