@@ -49,6 +49,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
                       const char *const* argv,
                       const char *kver,
                       const char *rebuild_from_initramfs,
+                      GLnxTmpDir  *dracut_host_tmpdir,
                       GLnxTmpfile *out_initramfs_tmpf,
                       GCancellable  *cancellable,
                       GError **error);

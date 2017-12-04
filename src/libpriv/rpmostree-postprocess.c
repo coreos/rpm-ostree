@@ -394,11 +394,16 @@ process_kernel_and_initramfs (int            rootfs_dfd,
   g_ptr_array_add (dracut_argv, NULL);
 
   g_auto(GLnxTmpfile) initramfs_tmpf = { 0, };
-  if (!rpmostree_run_dracut (rootfs_dfd,
-                             (const char *const*)dracut_argv->pdata, kver,
-                             NULL, &initramfs_tmpf,
-                             cancellable, error))
-    return FALSE;
+  { g_auto(GLnxTmpDir) dracut_host_tmpd = { 0, };
+    if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpmostree-dracut.XXXXXX", 0700,
+                         &dracut_host_tmpd, error))
+      return FALSE;
+    if (!rpmostree_run_dracut (rootfs_dfd,
+                               (const char *const*)dracut_argv->pdata, kver,
+                               NULL, &dracut_host_tmpd,
+                               &initramfs_tmpf, cancellable, error))
+      return FALSE;
+  }
 
   /* We always tell rpmostree_finalize_kernel() to skip /boot, since we'll do a
    * full hardlink pass if needed after that for the kernel + bootloader data.

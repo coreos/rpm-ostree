@@ -366,6 +366,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
                       const char *const* argv,
                       const char *kver,
                       const char *rebuild_from_initramfs,
+                      GLnxTmpDir  *dracut_host_tmpdir,
                       GLnxTmpfile *out_initramfs_tmpf,
                       GCancellable  *cancellable,
                       GError **error)
@@ -446,6 +447,9 @@ rpmostree_run_dracut (int     rootfs_dfd,
   if (!bwrap)
     return FALSE;
 
+  if (dracut_host_tmpdir)
+    rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", dracut_host_tmpdir->path, "/tmp/dracut", NULL);
+
   /* Set up argv and run */
   rpmostree_bwrap_append_child_argv (bwrap, (char*)glnx_basename (rpmostree_dracut_wrapper_path), NULL);
   for (char **iter = (char**)argv; iter && *iter; iter++)
@@ -453,6 +457,9 @@ rpmostree_run_dracut (int     rootfs_dfd,
 
   if (kver)
     rpmostree_bwrap_append_child_argv (bwrap, "--kver", kver, NULL);
+
+  if (dracut_host_tmpdir)
+    rpmostree_bwrap_append_child_argv (bwrap, "--tmpdir", "/tmp/dracut", NULL);
 
   rpmostree_bwrap_set_child_setup (bwrap, dracut_child_setup, GINT_TO_POINTER (tmpf.fd));
 
