@@ -237,11 +237,14 @@ rpmostree_bwrap_new (int rootfs_fd,
    * "cap_net_raw" (no use for this in %post, and major source of security vulnerabilities)
    * "cap_mknod" (%post should not be making devices, it wouldn't be persistent anyways)
    * "cap_audit_write" (we shouldn't be auditing anything from here)
+   * "cap_net_bind_service" (nothing should be doing IP networking at all)
    *
    * But crucially we're dropping a lot of other capabilities like
    * "cap_sys_admin", "cap_sys_module", etc that Docker also drops by default.
    * We don't want RPM scripts to be doing any of that. Instead, do it from
    * systemd unit files.
+   *
+   * Also this way we drop out any new capabilities that appear.
    */
   if (getuid () == 0)
     rpmostree_bwrap_append_bwrap_argv (ret, "--cap-drop", "ALL",
@@ -253,7 +256,6 @@ rpmostree_bwrap_new (int rootfs_fd,
                                        "--cap-add", "cap_setgid",
                                        "--cap-add", "cap_setuid",
                                        "--cap-add", "cap_setpcap",
-                                       "--cap-add", "cap_net_bind_service",
                                        "--cap-add", "cap_sys_chroot",
                                        "--cap-add", "cap_setfcap",
                                        NULL);
