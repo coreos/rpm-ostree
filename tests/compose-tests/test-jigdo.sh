@@ -46,7 +46,7 @@ enabled=1
 gpgcheck=0
 eof
 do_jigdo2commit() {
-    rpm-ostree ex jigdo2commit -d $(pwd)/composedata -e fedora-local -e test-repo -e jigdo-test --repo=jigdo-unpack-repo fedora-atomic-host | tee jigdo2commit-out.txt
+    rpm-ostree ex jigdo2commit -d $(pwd)/composedata -e fedora-local -e test-repo -e jigdo-test --repo=jigdo-unpack-repo jigdo-test:fedora-atomic-host | tee jigdo2commit-out.txt
 }
 do_jigdo2commit
 # there will generally be pkgs not in the jigdo set, but let's at least assert it's > 0
