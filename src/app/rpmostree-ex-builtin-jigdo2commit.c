@@ -153,10 +153,21 @@ compare_pkgs_reverse (gconstpointer ap,
 
 static gboolean
 impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
-                   const char                   *oirpm_name,
+                   const char                   *repoid_and_oirpm_name,
                    GCancellable                 *cancellable,
                    GError                      **error)
 {
+  g_autofree char *oirpm_repoid = NULL;
+  g_autofree char *oirpm_name = NULL;
+
+  /* We expect REPOID:OIRPM-NAME */
+  { const char *colon = strchr (repoid_and_oirpm_name, ':');
+    if (!colon)
+      return glnx_throw (error, "Invalid OIRPM spec '%s', expected repoid:name", repoid_and_oirpm_name);
+    oirpm_repoid = g_strndup (repoid_and_oirpm_name, colon - repoid_and_oirpm_name);
+    oirpm_name = g_strdup (colon + 1);
+  }
+
   g_autoptr(GKeyFile) tsk = g_key_file_new ();
 
   if (opt_releasever)
@@ -169,7 +180,6 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
   if (!treespec)
     return FALSE;
 
-
   if (!rpmostree_context_setup (self->ctx, NULL, NULL, treespec, cancellable, error))
     return FALSE;
   if (!rpmostree_context_download_metadata (self->ctx, cancellable, error))
@@ -178,15 +188,10 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
   DnfContext *dnfctx = rpmostree_context_get_dnf (self->ctx);
   g_autoptr(DnfPackage) oirpm_pkg = NULL;
   { hy_autoquery HyQuery query = hy_query_create (dnf_context_get_sack (dnfctx));
+    hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, oirpm_repoid);
+    hy_query_filter (query, HY_PKG_NAME, HY_EQ, oirpm_name);
     if (opt_oirpm_version)
-      {
-        hy_query_filter (query, HY_PKG_NAME, HY_EQ, oirpm_name);
-        hy_query_filter (query, HY_PKG_VERSION, HY_EQ, opt_oirpm_version);
-      }
-    else
-      {
-        hy_query_filter (query, HY_PKG_NAME, HY_EQ, oirpm_name);
-      }
+      hy_query_filter (query, HY_PKG_VERSION, HY_EQ, opt_oirpm_version);
     g_autoptr(GPtrArray) pkglist = hy_query_run (query);
     if (pkglist->len == 0)
       return glnx_throw (error, "Failed to find jigdo OIRPM package '%s'", oirpm_name);
@@ -334,7 +339,7 @@ rpmostree_ex_builtin_jigdo2commit (int             argc,
                                    GCancellable   *cancellable,
                                    GError        **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("OIRPM");
+  g_autoptr(GOptionContext) context = g_option_context_new ("REPOID:OIRPM-NAME");
   if (!rpmostree_option_context_parse (context,
                                        jigdo2commit_option_entries,
                                        &argc, &argv,
@@ -346,7 +351,7 @@ rpmostree_ex_builtin_jigdo2commit (int             argc,
 
   if (argc != 2)
    {
-      rpmostree_usage_error (context, "OIRPM name is required", error);
+      rpmostree_usage_error (context, "REPOID:OIRPM-NAME is required", error);
       return EXIT_FAILURE;
     }
 
