@@ -85,7 +85,7 @@ context: f27-compose
 
 build: false
 
-timeout: 30m
+timeout: 40m
 
 required: true
 
