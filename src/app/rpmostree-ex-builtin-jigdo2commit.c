@@ -281,9 +281,15 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
 
   g_autoptr(GHashTable) pkgset_to_import = g_hash_table_new (NULL, NULL);
   { g_autoptr(GPtrArray) pkgs_to_import = rpmostree_context_get_packages_to_import (self->ctx);
+    guint64 dlsize = 0;
     for (guint i = 0; i < pkgs_to_import->len; i++)
-      g_hash_table_add (pkgset_to_import, pkgs_to_import->pdata[i]);
-    g_print ("%u packages to import\n", pkgs_to_import->len);
+      {
+        DnfPackage *pkg = pkgs_to_import->pdata[i];
+        dlsize += dnf_package_get_size (pkg);
+        g_hash_table_add (pkgset_to_import, pkg);
+      }
+    g_autofree char *dlsize_fmt = g_format_size (dlsize);
+    g_print ("%u packages to import, download size: %s\n", pkgs_to_import->len, dlsize_fmt);
   }
 
   g_autoptr(GHashTable) pkg_to_xattrs = g_hash_table_new_full (NULL, NULL,
