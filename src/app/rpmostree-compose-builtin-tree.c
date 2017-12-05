@@ -1124,10 +1124,10 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   }
 
   if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
   if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile, opt_ex_unified_core,
                                     cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (self->treefile)
     {
