@@ -64,6 +64,7 @@ BUILTINPROTO(upgrade);
 BUILTINPROTO(reload);
 BUILTINPROTO(deploy);
 BUILTINPROTO(rebase);
+BUILTINPROTO(cancel);
 BUILTINPROTO(cleanup);
 BUILTINPROTO(rollback);
 BUILTINPROTO(initramfs);
