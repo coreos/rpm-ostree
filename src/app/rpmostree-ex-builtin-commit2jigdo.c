@@ -500,6 +500,8 @@ build_objid_map_for_package (RpmOstreeCommit2JigdoContext *self,
                              GCancellable                 *cancellable,
                              GError                      **error)
 {
+  const char *errmsg = glnx_strjoina ("build objidmap for ", dnf_package_get_nevra (pkg));
+  GLNX_AUTO_PREFIX_ERROR (errmsg, error);
   g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
   g_autofree char *pkg_commit = NULL;
   g_autoptr(GFile) commit_root = NULL;
