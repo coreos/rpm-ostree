@@ -926,6 +926,10 @@ write_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
           g_ptr_array_add (rpmbuild_argv, g_strdup ("-D"));
           g_ptr_array_add (rpmbuild_argv, g_strconcat ("ostree_version ", commit_version, NULL));
         }
+
+      g_ptr_array_add (rpmbuild_argv, g_strdup ("-D"));
+      g_ptr_array_add (rpmbuild_argv, g_strconcat ("rpmostree_jigdo_meta ", "Provides: " RPMOSTREE_JIGDO_PROVIDE_V1 "\n", NULL));
+
       g_ptr_array_add (rpmbuild_argv, g_strdup (oirpm_spec));
       g_ptr_array_add (rpmbuild_argv, NULL);
       int estatus;

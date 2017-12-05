@@ -196,9 +196,29 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
         g_print ("%u oirpm matches\n", pkglist->len);
       }
     g_ptr_array_set_size (pkglist, 1);
+    oirpm_pkg = g_object_ref (pkglist->pdata[0]);
+
+    /* Iterate over provides directly to provide a nicer error on mismatch */
+    gboolean found_v1_provide = FALSE;
+    g_autoptr(DnfReldepList) provides = dnf_package_get_provides (oirpm_pkg);
+    const gint n_provides = dnf_reldep_list_count (provides);
+    for (int i = 0; i < n_provides; i++)
+      {
+        DnfReldep *provide = dnf_reldep_list_index (provides, i);
+
+        if (g_str_equal (dnf_reldep_to_string (provide), RPMOSTREE_JIGDO_PROVIDE_V1))
+          {
+            found_v1_provide = TRUE;
+            break;
+          }
+      }
+
+    if (!found_v1_provide)
+      return glnx_throw (error, "Package '%s' does not have Provides: %s",
+                         dnf_package_get_nevra (oirpm_pkg), RPMOSTREE_JIGDO_PROVIDE_V1);
+
     if (!rpmostree_context_set_packages (self->ctx, pkglist, cancellable, error))
       return FALSE;
-    oirpm_pkg = g_object_ref (pkglist->pdata[0]);
   }
 
   g_print ("oirpm: %s (%s)\n", dnf_package_get_nevra (oirpm_pkg),

@@ -7,6 +7,7 @@ Version:	%{ostree_version}
 Release:	1%{?dist}
 Summary:	Image (rpm-ostree jigdo) for Fedora Atomic Host
 License:	MIT
+%{rpmostree_jigdo_meta}
 
 %description
 %{summary}
