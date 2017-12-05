@@ -253,8 +253,7 @@ struct _RpmOstreeContext {
   char *passwd_dir;
 
   gboolean async_running;
-  gboolean async_error_set;
-  GError **async_error;
+  GError *async_error;
   DnfState *async_dnfstate;
   GPtrArray *pkgs_to_download;
   GPtrArray *pkgs_to_import;
@@ -2045,11 +2044,11 @@ on_async_import_done (GObject                    *obj,
   RpmOstreeContext *self = user_data;
   g_autofree char *rev =
     rpmostree_importer_run_async_finish (importer, res,
-                                         self->async_error_set ? NULL : self->async_error);
+                                         self->async_error ? NULL : &self->async_error);
   if (!rev)
     {
       self->async_running = FALSE;
-      self->async_error_set = TRUE;
+      g_assert (self->async_error != NULL);
     }
   else
     {
@@ -2146,10 +2145,14 @@ rpmostree_context_import_jigdo (RpmOstreeContext *self,
 
     /* Wait for all of the imports to complete */
     GMainContext *mainctx = g_main_context_get_thread_default ();
+    self->async_error = NULL;
     while (self->async_running)
       g_main_context_iteration (mainctx, TRUE);
     if (self->async_error)
-      return FALSE;
+      {
+        g_propagate_error (error, g_steal_pointer (&self->async_error));
+        return FALSE;
+      }
 
     g_signal_handler_disconnect (hifstate, progress_sigid);
     rpmostree_output_percent_progress_end ();
