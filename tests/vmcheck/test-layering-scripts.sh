@@ -159,22 +159,37 @@ if vm_rpmostree install rofiles-violation; then
     assert_not_reached "installed test-post-rofiles-violation!"
 fi
 
-# Test cancellation via having a script hang
-cursor=$(vm_get_journal_cursor)
+# Test cancellation via having a script hang (direct path doing a SIGINT)
+# to the client binary.
 vm_build_rpm post-that-hangs \
              post "echo entering post-that-hangs-infloop 1>&2; while true; do sleep 1h; done"
-# use a systemd transient service as an easy way to run in the background
-vm_cmd systemd-run --unit vmcheck-install-hang rpm-ostree install post-that-hangs
-if ! vm_wait_content_after_cursor "${cursor}" "entering post-that-hangs-infloop"; then
-    vm_cmd systemctl stop vmcheck-install-hang
-    assert_not_reached "failed to wait for post-that-hangs"
-fi
+background_install_post_that_hangs() {
+    # use a systemd transient service as an easy way to run in the background; be
+    # sure any previous failed instances are cleaned up
+    vm_cmd systemctl stop vmcheck-install-hang || true
+    vm_cmd systemctl reset-failed vmcheck-install-hang || true
+    vm_cmd systemd-run --unit vmcheck-install-hang rpm-ostree install post-that-hangs
+    if ! vm_wait_content_after_cursor "${cursor}" "entering post-that-hangs-infloop"; then
+        vm_cmd systemctl stop vmcheck-install-hang || true
+        assert_not_reached "failed to wait for post-that-hangs"
+    fi
+}
+cursor=$(vm_get_journal_cursor)
+background_install_post_that_hangs
 vm_cmd pkill --signal INT -f "'rpm-ostree install post-that-hangs'"
 # Wait for our expected result
 vm_wait_content_after_cursor "${cursor}" "Txn.*failed.*Running %post for post-that-hangs"
 # Forcibly restart now to avoid any races with the txn finally exiting
 vm_cmd systemctl restart rpm-ostreed
 echo "ok cancel infinite post"
+
+# Test `rpm-ostree cancel` (which is the same as doing a Ctrl-C on the client)
+cursor=$(vm_get_journal_cursor)
+background_install_post_that_hangs
+vm_rpmostree cancel
+vm_wait_content_after_cursor "${cursor}" "Txn.*failed.*Running %post for post-that-hangs"
+# Forcibly restart now to avoid any races with the txn finally exiting
+vm_cmd systemctl restart rpm-ostreed
 
 # Test rm -rf /!
 vm_cmd 'useradd testuser || true'
