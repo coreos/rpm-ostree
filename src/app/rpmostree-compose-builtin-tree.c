@@ -1091,6 +1091,37 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
 }
 
 static gboolean
+create_rpmdb_pkglist_variant (int              rootfs_dfd,
+                              GVariant       **out_variant,
+                              GCancellable    *cancellable,
+                              GError         **error)
+{
+  g_autoptr(GPtrArray) pkglist = NULL;
+  g_autoptr(RpmOstreeRefSack) refsack = NULL;
+  if (!rpmostree_get_pkglist_for_root (rootfs_dfd, ".", &refsack,
+                                       &pkglist, cancellable, error))
+    return FALSE;
+
+  GVariantBuilder pkglist_v_builder;
+  g_variant_builder_init (&pkglist_v_builder, (GVariantType*)"a(stsss)");
+
+  const guint n = pkglist->len;
+  for (guint i = 0; i < n; i++)
+    {
+      DnfPackage *pkg = pkglist->pdata[i];
+      g_variant_builder_add (&pkglist_v_builder, "(stsss)",
+                             dnf_package_get_name (pkg),
+                             dnf_package_get_epoch (pkg),
+                             dnf_package_get_version (pkg),
+                             dnf_package_get_release (pkg),
+                             dnf_package_get_arch (pkg));
+    }
+
+  *out_variant = g_variant_builder_end (&pkglist_v_builder);
+  return TRUE;
+}
+
+static gboolean
 impl_commit_tree (RpmOstreeTreeComposeContext *self,
                   GCancellable    *cancellable,
                   GError         **error)
@@ -1108,6 +1139,15 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   { g_autoptr(GVariantBuilder) metadata_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
     GLNX_HASH_TABLE_FOREACH_KV (self->metadata, const char*, strkey, GVariant*, v)
       g_variant_builder_add (metadata_builder, "{sv}", strkey, v);
+
+    /* include list of packages in rpmdb; this is used client-side for easily previewing
+     * pending updates. once we only support unified core composes, this can easily be much
+     * more readily injected during assembly */
+    g_autoptr(GVariant) rpmdb_v = NULL;
+    if (!create_rpmdb_pkglist_variant (self->rootfs_dfd, &rpmdb_v, cancellable, error))
+      return FALSE;
+    g_variant_builder_add (metadata_builder, "{sv}", "rpmostree.rpmdb.pkglist",
+                           g_steal_pointer (&rpmdb_v));
 
     metadata = g_variant_ref_sink (g_variant_builder_end (metadata_builder));
     /* Canonicalize to big endian, like OSTree does. Without this, any numbers
