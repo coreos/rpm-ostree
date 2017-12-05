@@ -540,7 +540,7 @@ build_objid_map_for_package (RpmOstreeCommit2JigdoContext *self,
        * "content-identical objects" i.e. they differ only in metadata.
        */
       guint32 objsize;
-      if (!query_objsize_assert_32bit (self->repo, checksum, &objsize, error))
+      if (!query_objsize_assert_32bit (self->pkgcache_repo, checksum, &objsize, error))
         return FALSE;
       if (objsize >= BIG_OBJ_SIZE)
         {
