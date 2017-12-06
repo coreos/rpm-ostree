@@ -50,6 +50,7 @@ assert_status_jq '.deployments[0].version == "1.0.10"'
 echo "ok status shows right version"
 
 rpm-ostree status > status.txt
+assert_file_has_content status.txt '  ostree://testos:testos/buildmaster/x86_64-runtime'
 assert_file_has_content status.txt 'Version: 1.0.10'
 assert_not_file_has_content status.txt StateRoot:
 rpm-ostree status -v > status.txt
