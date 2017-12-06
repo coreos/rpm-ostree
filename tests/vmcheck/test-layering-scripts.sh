@@ -159,11 +159,12 @@ if vm_rpmostree install rofiles-violation; then
     assert_not_reached "installed test-post-rofiles-violation!"
 fi
 
-# Test cancellation via having a script hang (direct path doing a SIGINT)
-# to the client binary.
+# Test cancellation via having a script hang; we interrupt directly by sending
+# SIGINT to the client binary.
 vm_build_rpm post-that-hangs \
              post "echo entering post-that-hangs-infloop 1>&2; while true; do sleep 1h; done"
 background_install_post_that_hangs() {
+    local cursor="$1"
     # use a systemd transient service as an easy way to run in the background; be
     # sure any previous failed instances are cleaned up
     vm_cmd systemctl stop vmcheck-install-hang || true
@@ -175,21 +176,22 @@ background_install_post_that_hangs() {
     fi
 }
 cursor=$(vm_get_journal_cursor)
-background_install_post_that_hangs
+background_install_post_that_hangs "${cursor}"
 vm_cmd pkill --signal INT -f "'rpm-ostree install post-that-hangs'"
 # Wait for our expected result
 vm_wait_content_after_cursor "${cursor}" "Txn.*failed.*Running %post for post-that-hangs"
 # Forcibly restart now to avoid any races with the txn finally exiting
 vm_cmd systemctl restart rpm-ostreed
-echo "ok cancel infinite post"
+echo "ok cancel infinite post via SIGINT"
 
 # Test `rpm-ostree cancel` (which is the same as doing a Ctrl-C on the client)
 cursor=$(vm_get_journal_cursor)
-background_install_post_that_hangs
+background_install_post_that_hangs "${cursor}"
 vm_rpmostree cancel
 vm_wait_content_after_cursor "${cursor}" "Txn.*failed.*Running %post for post-that-hangs"
 # Forcibly restart now to avoid any races with the txn finally exiting
 vm_cmd systemctl restart rpm-ostreed
+echo "ok cancel infinite post via `rpm-ostree cancel`"
 
 # Test rm -rf /!
 vm_cmd 'useradd testuser || true'
