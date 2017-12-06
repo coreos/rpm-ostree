@@ -299,7 +299,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       g_print ("%s ", is_booted ? libsd_special_glyph (BLACK_CIRCLE) : " ");
 
       if (origin_refspec)
-        g_print ("%s", origin_refspec);
+        g_print ("ostree://%s", origin_refspec);
       else
         g_print ("%s", checksum);
       g_print ("\n");
