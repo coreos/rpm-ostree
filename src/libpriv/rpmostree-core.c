@@ -2225,7 +2225,6 @@ rpmostree_context_consume_package (RpmOstreeContext  *self,
 
 static gboolean
 checkout_package (OstreeRepo   *repo,
-                  DnfPackage   *pkg,
                   int           dfd,
                   const char   *path,
                   OstreeRepoDevInoCache *devino_cache,
@@ -2246,11 +2245,8 @@ checkout_package (OstreeRepo   *repo,
   /* Always want hardlinks */
   opts.no_copy_fallback = TRUE;
 
-  if (!ostree_repo_checkout_at (repo, &opts, dfd, path,
-                                pkg_commit, cancellable, error))
-    return glnx_prefix_error (error, "Checking out %s",
-                              dnf_package_get_nevra (pkg));
-  return TRUE;
+  return ostree_repo_checkout_at (repo, &opts, dfd, path,
+                                  pkg_commit, cancellable, error);
 }
 
 static gboolean
@@ -2280,10 +2276,10 @@ checkout_package_into_root (RpmOstreeContext *self,
         }
     }
 
-  if (!checkout_package (pkgcache_repo, pkg, dfd, path,
+  if (!checkout_package (pkgcache_repo, dfd, path,
                          devino_cache, pkg_commit, ovwmode,
                          cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Checkout %s", dnf_package_get_nevra (pkg));
 
   return TRUE;
 }
@@ -2540,8 +2536,10 @@ relabel_one_package (RpmOstreeContext *self,
                      GCancellable   *cancellable,
                      GError        **error)
 {
-  GLNX_AUTO_PREFIX_ERROR ("Relabeling", error);
-  const char *pkg_dirname = dnf_package_get_nevra (pkg);
+  g_autofree char *nevra = g_strdup (dnf_package_get_nevra (pkg));
+  const char *errmsg = glnx_strjoina ("Relabeling ", nevra);
+  GLNX_AUTO_PREFIX_ERROR (errmsg, error);
+  const char *pkg_dirname = nevra;
   g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
   g_autofree char *commit_csum = NULL;
   if (!ostree_repo_resolve_rev (repo, cachebranch, FALSE,
@@ -2551,7 +2549,7 @@ relabel_one_package (RpmOstreeContext *self,
   /* checkout the pkg and relabel, breaking hardlinks */
   g_autoptr(OstreeRepoDevInoCache) cache = ostree_repo_devino_cache_new ();
 
-  if (!checkout_package (repo, pkg, tmpdir_dfd, pkg_dirname, cache,
+  if (!checkout_package (repo, tmpdir_dfd, pkg_dirname, cache,
                          commit_csum, OSTREE_REPO_CHECKOUT_OVERWRITE_NONE,
                          cancellable, error))
     return FALSE;
