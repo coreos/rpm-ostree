@@ -569,6 +569,10 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface,
     {
       action = "org.projectatomic.rpmostree1.reload-daemon";
     }
+  else if (g_strcmp0 (method_name, "Cancel") == 0)
+    {
+      action = "org.projectatomic.rpmostree1.cancel";
+    }
   else if (g_strcmp0 (method_name, "RegisterClient") == 0 ||
            g_strcmp0 (method_name, "UnregisterClient") == 0)
     {

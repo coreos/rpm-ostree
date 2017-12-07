@@ -117,6 +117,20 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
+        <term><command>cancel</command></term>
+
+        <listitem>
+          <para>
+            Cancel a pending transaction.  Exits successfully and does
+            nothing if no transaction is running.  Note that it is fully
+            safe to cancel transactions such as <command>upgrade</command>
+            in general.
+          </para>
+
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><command>db</command></term>
 
         <listitem>
