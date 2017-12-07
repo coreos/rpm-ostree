@@ -65,7 +65,6 @@ rpmostree_builtin_cancel (int             argc,
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autofree char *transaction_address = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
 
   if (!rpmostree_option_context_parse (context,
