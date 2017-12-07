@@ -53,9 +53,10 @@ typedef GObjectClass RpmOstreeImporterClass;
 struct RpmOstreeImporter
 {
   GObject parent_instance;
+  OstreeRepo *repo;
+  OstreeSePolicy *sepolicy;
   struct archive *archive;
   int fd;
-  gboolean owns_fd;
   Header hdr;
   rpmfi fi;
   off_t cpio_offset;
@@ -87,10 +88,11 @@ rpmostree_importer_finalize (GObject *object)
     archive_read_free (self->archive);
   if (self->fi)
     (void) rpmfiFree (self->fi);
-  if (self->owns_fd)
-    glnx_close_fd (&self->fd);
+  glnx_close_fd (&self->fd);
   g_string_free (self->tmpfiles_d, TRUE);
   g_free (self->ostree_branch);
+  g_clear_object (&self->repo);
+  g_clear_object (&self->sepolicy);
 
   g_clear_pointer (&self->rpmfi_overrides, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&self->doc_files, (GDestroyNotify)g_hash_table_unref);
@@ -115,6 +117,7 @@ rpmostree_importer_class_init (RpmOstreeImporterClass *klass)
 static void
 rpmostree_importer_init (RpmOstreeImporter *self)
 {
+  self->fd = -1;
   self->rpmfi_overrides = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                  g_free, NULL);
   self->tmpfiles_d = g_string_new ("");
@@ -226,10 +229,12 @@ build_rpmfi_overrides (RpmOstreeImporter *self)
 }
 
 /*
- * rpmostree_importer_new_fd:
+ * rpmostree_importer_new_take_fd:
  * @fd: Fd
+ * @repo: repo
  * @pkg: (optional): Package reference, used for metadata
  * @flags: flags
+ * @sepolicy: (optional): SELinux policy
  * @error: error
  *
  * Create a new unpacker instance.  The @pkg argument, if
@@ -237,10 +242,12 @@ build_rpmfi_overrides (RpmOstreeImporter *self)
  * origin repo will be added to the final commit.
  */
 RpmOstreeImporter *
-rpmostree_importer_new_fd (int fd,
-                           DnfPackage *pkg,
-                           RpmOstreeImporterFlags flags,
-                           GError **error)
+rpmostree_importer_new_take_fd (int                     *fd,
+                                OstreeRepo              *repo,
+                                DnfPackage              *pkg,
+                                RpmOstreeImporterFlags   flags,
+                                OstreeSePolicy          *sepolicy,
+                                GError                 **error)
 {
   RpmOstreeImporter *ret = NULL;
   g_auto(Header) hdr = NULL;
@@ -248,15 +255,17 @@ rpmostree_importer_new_fd (int fd,
   struct archive *archive;
   gsize cpio_offset;
 
-  archive = rpmostree_unpack_rpm2cpio (fd, error);
+  archive = rpmostree_unpack_rpm2cpio (*fd, error);
   if (archive == NULL)
     goto out;
 
-  if (!rpmostree_importer_read_metainfo (fd, &hdr, &cpio_offset, &fi, error))
+  if (!rpmostree_importer_read_metainfo (*fd, &hdr, &cpio_offset, &fi, error))
     goto out;
 
   ret = g_object_new (RPMOSTREE_TYPE_IMPORTER, NULL);
-  ret->fd = fd;
+  ret->fd = glnx_steal_fd (fd);
+  ret->repo = g_object_ref (repo);
+  ret->sepolicy = sepolicy ? g_object_ref (sepolicy) : NULL;
   ret->fi = g_steal_pointer (&fi);
   ret->archive = g_steal_pointer (&archive);
   ret->flags = flags;
@@ -276,38 +285,6 @@ rpmostree_importer_new_fd (int fd,
   if (fi)
     rpmfiFree (fi);
   return ret;
-}
-
-/*
- * rpmostree_importer_new_at:
- * @dfd: Fd
- * @path: Path
- * @pkg: (optional): Package reference, used for metadata
- * @flags: flags
- * @error: error
- *
- * Create a new unpacker instance.  The @pkg argument, if
- * specified, will be inspected and metadata such as the
- * origin repo will be added to the final commit.
- */
-RpmOstreeImporter *
-rpmostree_importer_new_at (int dfd, const char *path,
-                           DnfPackage *pkg,
-                           RpmOstreeImporterFlags flags,
-                           GError **error)
-{
-  glnx_autofd int fd = -1;
-  if (!glnx_openat_rdonly (dfd, path, TRUE, &fd, error))
-    return FALSE;
-
-  RpmOstreeImporter *ret = rpmostree_importer_new_fd (fd, pkg, flags, error);
-  if (ret == NULL)
-    return NULL;
-
-  ret->owns_fd = TRUE;
-  fd = -1;
-
-  return g_steal_pointer (&ret);
 }
 
 void
@@ -410,7 +387,6 @@ repo_metadata_for_package (DnfRepo *repo)
 
 static gboolean
 build_metadata_variant (RpmOstreeImporter *self,
-                        OstreeSePolicy    *sepolicy,
                         GVariant         **out_variant,
                         GCancellable      *cancellable,
                         GError           **error)
@@ -460,10 +436,10 @@ build_metadata_variant (RpmOstreeImporter *self,
   /* The current sepolicy that was used to label the unpacked files is important
    * to record. It will help us during future overlays to determine whether the
    * files should be relabeled. */
-  if (sepolicy)
+  if (self->sepolicy)
     g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.sepolicy",
                            g_variant_new_string
-                             (ostree_sepolicy_get_csum (sepolicy)));
+                             (ostree_sepolicy_get_csum (self->sepolicy)));
 
   /* let's be nice to our future selves just in case */
   g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.unpack_version",
@@ -788,12 +764,11 @@ handle_translate_pathname (OstreeRepo   *repo,
 
 static gboolean
 import_rpm_to_repo (RpmOstreeImporter *self,
-                    OstreeRepo        *repo,
-                    OstreeSePolicy    *sepolicy,
                     char             **out_csum,
                     GCancellable      *cancellable,
                     GError           **error)
 {
+  OstreeRepo *repo = self->repo;
   /* Passed to the commit modifier */
   GError *cb_error = NULL;
   cb_data fdata = { self, &cb_error };
@@ -821,12 +796,12 @@ import_rpm_to_repo (RpmOstreeImporter *self,
     {
       ostree_repo_commit_modifier_set_xattr_callback (modifier, jigdo_xattr_cb,
                                                       NULL, self);
-      g_assert (sepolicy == NULL);
+      g_assert (self->sepolicy == NULL);
     }
   else
     {
       ostree_repo_commit_modifier_set_xattr_callback (modifier, xattr_cb, NULL, self);
-      ostree_repo_commit_modifier_set_sepolicy (modifier, sepolicy);
+      ostree_repo_commit_modifier_set_sepolicy (modifier, self->sepolicy);
     }
 
   OstreeRepoImportArchiveOptions opts = { 0 };
@@ -883,7 +858,7 @@ import_rpm_to_repo (RpmOstreeImporter *self,
     return FALSE;
 
   g_autoptr(GVariant) metadata = NULL;
-  if (!build_metadata_variant (self, sepolicy, &metadata, cancellable, error))
+  if (!build_metadata_variant (self, &metadata, cancellable, error))
     return FALSE;
   g_variant_ref_sink (metadata);
 
@@ -903,22 +878,55 @@ import_rpm_to_repo (RpmOstreeImporter *self,
 
 gboolean
 rpmostree_importer_run (RpmOstreeImporter *self,
-                        OstreeRepo        *repo,
-                        OstreeSePolicy    *sepolicy,
                         char             **out_csum,
                         GCancellable      *cancellable,
                         GError           **error)
 {
   g_autofree char *csum = NULL;
-  if (!import_rpm_to_repo (self, repo, sepolicy, &csum, cancellable, error))
+  if (!import_rpm_to_repo (self, &csum, cancellable, error))
     return FALSE;
 
   const char *branch = rpmostree_importer_get_ostree_branch (self);
-  ostree_repo_transaction_set_ref (repo, NULL, branch, csum);
+  ostree_repo_transaction_set_ref (self->repo, NULL, branch, csum);
 
   if (out_csum)
     *out_csum = g_steal_pointer (&csum);
   return TRUE;
+}
+
+static void
+import_in_thread (GTask            *task,
+                  gpointer          source,
+                  gpointer          task_data,
+                  GCancellable     *cancellable)
+{
+  GError *local_error = NULL;
+  RpmOstreeImporter *self = source;
+  g_autofree char *rev = NULL;
+
+  if (!rpmostree_importer_run (self, &rev, cancellable, &local_error))
+    g_task_return_error (task, local_error);
+  else
+    g_task_return_pointer (task, g_steal_pointer (&rev), g_free);
+}
+
+void
+rpmostree_importer_run_async (RpmOstreeImporter  *self,
+                              GCancellable       *cancellable,
+                              GAsyncReadyCallback callback,
+                              gpointer            user_data)
+{
+  g_autoptr(GTask) task = g_task_new (self, cancellable, callback, user_data);
+  g_task_run_in_thread (task, import_in_thread);
+}
+
+char *
+rpmostree_importer_run_async_finish (RpmOstreeImporter  *self,
+                                     GAsyncResult       *result,
+                                     GError            **error)
+{
+  g_return_val_if_fail (g_task_is_valid (result, self), FALSE);
+  return g_task_propagate_pointer ((GTask*)result, error);
 }
 
 char *
