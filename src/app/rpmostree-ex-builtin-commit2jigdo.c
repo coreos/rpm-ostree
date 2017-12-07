@@ -500,6 +500,8 @@ build_objid_map_for_package (RpmOstreeCommit2JigdoContext *self,
                              GCancellable                 *cancellable,
                              GError                      **error)
 {
+  const char *errmsg = glnx_strjoina ("build objidmap for ", dnf_package_get_nevra (pkg));
+  GLNX_AUTO_PREFIX_ERROR (errmsg, error);
   g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
   g_autofree char *pkg_commit = NULL;
   g_autoptr(GFile) commit_root = NULL;
@@ -538,7 +540,7 @@ build_objid_map_for_package (RpmOstreeCommit2JigdoContext *self,
        * "content-identical objects" i.e. they differ only in metadata.
        */
       guint32 objsize;
-      if (!query_objsize_assert_32bit (self->repo, checksum, &objsize, error))
+      if (!query_objsize_assert_32bit (self->pkgcache_repo, checksum, &objsize, error))
         return FALSE;
       if (objsize >= BIG_OBJ_SIZE)
         {
@@ -924,6 +926,10 @@ write_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
           g_ptr_array_add (rpmbuild_argv, g_strdup ("-D"));
           g_ptr_array_add (rpmbuild_argv, g_strconcat ("ostree_version ", commit_version, NULL));
         }
+
+      g_ptr_array_add (rpmbuild_argv, g_strdup ("-D"));
+      g_ptr_array_add (rpmbuild_argv, g_strconcat ("rpmostree_jigdo_meta ", "Provides: " RPMOSTREE_JIGDO_PROVIDE_V1 "\n", NULL));
+
       g_ptr_array_add (rpmbuild_argv, g_strdup (oirpm_spec));
       g_ptr_array_add (rpmbuild_argv, NULL);
       int estatus;

@@ -75,3 +75,5 @@
 #define RPMOSTREE_JIGDO_XATTRS_TABLE_VARIANT_FORMAT (G_VARIANT_TYPE ("aa(ayay)"))
 /* NEVRA + xattr table */
 #define RPMOSTREE_JIGDO_XATTRS_PKG_VARIANT_FORMAT (G_VARIANT_TYPE ("a(su)"))
+
+#define RPMOSTREE_JIGDO_PROVIDE_V1 "rpmostree-jigdo(v1)"
