@@ -33,9 +33,11 @@
  * so that can be GPG verified first - if that fails, we can then cleanly
  * abort.
  *
- * Next, we have the "jigdo set" - the NEVRAs + repodata checksum of the
- * RPM packages we need.  So during client side processing, downloads
- * can be initiated for those while we continue to process the OIRPM.
+ * Next, we have the "jigdo set" - the NEVRAs + repodata checksum of the RPM
+ * packages we need. These requires are also included in the RPM, but we also
+ * have the repodata checksum here so that it's covered by the RPM GPG
+ * signature, increasing security. The plan is to ensure that the repodata
+ * checksums match the ones in this set.
  *
  * The dirmeta/dirtree objects that are referenced by the commit follow.
  *
@@ -77,3 +79,6 @@
 #define RPMOSTREE_JIGDO_XATTRS_PKG_VARIANT_FORMAT (G_VARIANT_TYPE ("a(su)"))
 
 #define RPMOSTREE_JIGDO_PROVIDE_V1 "rpmostree-jigdo(v1)"
+
+/* This one goes in the spec file to use as our replacement */
+#define RPMOSTREE_JIGDO_SPEC_META_MAGIC "#@@@rpmostree_jigdo_meta@@@"
