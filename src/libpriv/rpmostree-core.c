@@ -2225,7 +2225,6 @@ rpmostree_context_consume_package (RpmOstreeContext  *self,
 
 static gboolean
 checkout_package (OstreeRepo   *repo,
-                  DnfPackage   *pkg,
                   int           dfd,
                   const char   *path,
                   OstreeRepoDevInoCache *devino_cache,
@@ -2246,11 +2245,8 @@ checkout_package (OstreeRepo   *repo,
   /* Always want hardlinks */
   opts.no_copy_fallback = TRUE;
 
-  if (!ostree_repo_checkout_at (repo, &opts, dfd, path,
-                                pkg_commit, cancellable, error))
-    return glnx_prefix_error (error, "Checking out %s",
-                              dnf_package_get_nevra (pkg));
-  return TRUE;
+  return ostree_repo_checkout_at (repo, &opts, dfd, path,
+                                  pkg_commit, cancellable, error);
 }
 
 static gboolean
@@ -2280,10 +2276,10 @@ checkout_package_into_root (RpmOstreeContext *self,
         }
     }
 
-  if (!checkout_package (pkgcache_repo, pkg, dfd, path,
+  if (!checkout_package (pkgcache_repo, dfd, path,
                          devino_cache, pkg_commit, ovwmode,
                          cancellable, error))
-    return FALSE;
+    return glnx_prefix_error (error, "Checkout %s", dnf_package_get_nevra (pkg));
 
   return TRUE;
 }
@@ -2398,168 +2394,36 @@ break_hardlinks_at (int             dfd,
   return TRUE;
 }
 
-static const char*
-get_selinux_label (GVariant *xattrs)
-{
-  for (int i = 0; i < g_variant_n_children (xattrs); i++)
-    {
-      const char *name, *value;
-      g_variant_get_child (xattrs, i, "(^&ay^&ay)", &name, &value);
-      if (strcmp (name, "security.selinux") == 0)
-        return value;
-    }
-  return NULL;
-}
-
-static GVariant*
-set_selinux_label (GVariant   *xattrs,
-                   const char *new_label)
-{
-  GVariantBuilder builder;
-  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(ayay)"));
-
-  /* copy all the other xattrs */
-  for (int i = 0; i < g_variant_n_children (xattrs); i++)
-    {
-      const char *name;
-      g_autoptr(GVariant) value = NULL;
-
-      g_variant_get_child (xattrs, i, "(^&ay@ay)", &name, &value);
-      if (strcmp (name, "security.selinux") != 0)
-        g_variant_builder_add (&builder, "(^ay@ay)", name, value);
-    }
-
-  /* add the label if any */
-  if (new_label != NULL)
-    g_variant_builder_add (&builder, "(^ay^ay)", "security.selinux", new_label);
-
-  return g_variant_ref_sink (g_variant_builder_end (&builder));
-}
-
-static gboolean
-relabel_dir_recurse_at (OstreeRepo        *repo,
-                        int                dfd,
-                        const char        *path,
-                        const char        *prefix,
-                        OstreeSePolicy    *sepolicy,
-                        guint             *inout_n_changed,
-                        GCancellable      *cancellable,
-                        GError           **error)
-{
-  g_auto(GLnxDirFdIterator) dfd_iter = { FALSE, };
-  if (!glnx_dirfd_iterator_init_at (dfd, path, FALSE, &dfd_iter, error))
-    return FALSE;
-
-  while (TRUE)
-    {
-      struct dirent *dent = NULL;
-
-      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent,
-                                                       cancellable, error))
-        return FALSE;
-      if (dent == NULL)
-        break;
-
-      if (dent->d_type != DT_DIR &&
-          dent->d_type != DT_REG &&
-          dent->d_type != DT_LNK)
-        continue;
-
-      g_autoptr(GVariant) cur_xattrs = NULL;
-      if (!glnx_dfd_name_get_all_xattrs (dfd_iter.fd, dent->d_name, &cur_xattrs,
-                                         cancellable, error))
-        return FALSE;
-
-      /* may return NULL */
-      const char *cur_label = get_selinux_label (cur_xattrs);
-
-      /* build the new full path to use for label lookup (we can't just use
-       * glnx_fdrel_abspath() since that will just give a new /proc/self/fd/$fd
-       * on each recursion) */
-      g_autofree char *fullpath = g_build_filename (prefix, dent->d_name, NULL);
-      g_autofree char *new_label = NULL;
-      {
-        struct stat stbuf;
-
-        if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf,
-                           AT_SYMLINK_NOFOLLOW, error))
-          return FALSE;
-
-        /* may be NULL */
-        if (!ostree_sepolicy_get_label (sepolicy, fullpath, stbuf.st_mode,
-                                        &new_label, cancellable, error))
-          return FALSE;
-      }
-
-      if (g_strcmp0 (cur_label, new_label) != 0)
-        {
-          if (dent->d_type != DT_DIR)
-            if (!rpmostree_break_hardlink (dfd_iter.fd, dent->d_name, 0,
-                                           cancellable, error))
-              return FALSE;
-
-          g_autoptr(GVariant) new_xattrs = set_selinux_label (cur_xattrs, new_label);
-          if (!glnx_dfd_name_set_all_xattrs (dfd_iter.fd, dent->d_name,
-                                             new_xattrs, cancellable, error))
-            return FALSE;
-
-          (*inout_n_changed)++;
-        }
-
-      if (dent->d_type == DT_DIR)
-        if (!relabel_dir_recurse_at (repo, dfd_iter.fd, dent->d_name, fullpath,
-                                     sepolicy, inout_n_changed, cancellable, error))
-          return FALSE;
-    }
-
-  return TRUE;
-}
-
-static gboolean
-relabel_rootfs (OstreeRepo        *repo,
-                int                dfd,
-                const char        *path,
-                OstreeSePolicy    *sepolicy,
-                guint             *inout_n_changed,
-                GCancellable      *cancellable,
-                GError           **error)
-{
-  /* NB: this does mean that / itself will not be labeled properly, but that
-   * doesn't matter since it will always exist during overlay */
-  return relabel_dir_recurse_at (repo, dfd, path, "/", sepolicy,
-                                 inout_n_changed, cancellable, error);
-}
-
 static gboolean
 relabel_one_package (RpmOstreeContext *self,
                      int               tmpdir_dfd,
                      OstreeRepo     *repo,
                      DnfPackage     *pkg,
                      OstreeSePolicy *sepolicy,
-                     guint          *inout_n_changed,
+                     gboolean          *changed,
                      GCancellable   *cancellable,
                      GError        **error)
 {
-  GLNX_AUTO_PREFIX_ERROR ("Relabeling", error);
-  const char *pkg_dirname = dnf_package_get_nevra (pkg);
+  g_autofree char *nevra = g_strdup (dnf_package_get_nevra (pkg));
+  const char *errmsg = glnx_strjoina ("Relabeling ", nevra);
+  GLNX_AUTO_PREFIX_ERROR (errmsg, error);
+  const char *pkg_dirname = nevra;
   g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
   g_autofree char *commit_csum = NULL;
   if (!ostree_repo_resolve_rev (repo, cachebranch, FALSE,
                                 &commit_csum, error))
     return FALSE;
+  g_autoptr(GVariant) orig_commit = NULL;
+  if (!ostree_repo_load_commit (repo, commit_csum, &orig_commit, NULL, error))
+    return FALSE;
+  g_autofree char *orig_content_checksum = rpmostree_commit_content_checksum (orig_commit);
 
   /* checkout the pkg and relabel, breaking hardlinks */
   g_autoptr(OstreeRepoDevInoCache) cache = ostree_repo_devino_cache_new ();
 
-  if (!checkout_package (repo, pkg, tmpdir_dfd, pkg_dirname, cache,
+  if (!checkout_package (repo, tmpdir_dfd, pkg_dirname, cache,
                          commit_csum, OSTREE_REPO_CHECKOUT_OVERWRITE_NONE,
                          cancellable, error))
-    return FALSE;
-
-  /* This is where the magic happens. We traverse the tree and relabel stuff,
-   * making sure to break hardlinks if needed. */
-  if (!relabel_rootfs (repo, tmpdir_dfd, pkg_dirname, sepolicy, inout_n_changed,
-                       cancellable, error))
     return FALSE;
 
   /* write to the tree */
@@ -2572,6 +2436,7 @@ relabel_one_package (RpmOstreeContext *self,
                                        NULL, NULL, NULL);
 
     ostree_repo_commit_modifier_set_devino_cache (modifier, cache);
+    ostree_repo_commit_modifier_set_sepolicy (modifier, self->sepolicy);
 
     if (!ostree_repo_write_dfd_to_mtree (repo, tmpdir_dfd, pkg_dirname, mtree,
                                          modifier, cancellable, error))
@@ -2606,6 +2471,13 @@ relabel_one_package (RpmOstreeContext *self,
                                      OSTREE_REPO_FILE (root), &new_commit_csum,
                                      cancellable, error))
         return FALSE;
+
+      g_autoptr(GVariant) new_commit = NULL;
+      if (!ostree_repo_load_commit (repo, new_commit_csum, &new_commit, NULL, error))
+        return FALSE;
+      g_autofree char *new_content_checksum = rpmostree_commit_content_checksum (new_commit);
+
+      *changed = !g_str_equal (orig_content_checksum, new_content_checksum);
 
       ostree_repo_transaction_set_ref (repo, NULL, cachebranch,
                                        new_commit_csum);
@@ -2648,22 +2520,18 @@ rpmostree_context_relabel (RpmOstreeContext *self,
                        &relabel_tmpdir, error))
     return FALSE;
 
-  guint n_changed_files = 0;
   guint n_changed_pkgs = 0;
   const guint n_to_relabel = self->pkgs_to_relabel->len;
   for (guint i = 0; i < n_to_relabel; i++)
     {
       DnfPackage *pkg = self->pkgs_to_relabel->pdata[i];
-      guint pkg_n_changed = 0;
+      gboolean pkg_changed = 0;
       if (!relabel_one_package (self, relabel_tmpdir.fd, ostreerepo,
                                 pkg, self->sepolicy,
-                                &pkg_n_changed, cancellable, error))
+                                &pkg_changed, cancellable, error))
         return FALSE;
-      if (pkg_n_changed > 0)
-        {
-          n_changed_files += pkg_n_changed;
-          n_changed_pkgs++;
-        }
+      if (pkg_changed)
+        n_changed_pkgs++;
       dnf_state_assert_done (hifstate);
     }
 
@@ -2675,10 +2543,8 @@ rpmostree_context_relabel (RpmOstreeContext *self,
   rpmostree_output_percent_progress_end ();
 
   sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_SELINUX_RELABEL),
-                   "MESSAGE=Relabeled %u/%u pkgs, %u file%s changed", n_changed_pkgs,
-                   n_to_relabel, n_changed_files, _NS(n_changed_files),
+                   "MESSAGE=Relabeled %u/%u pkgs", n_changed_pkgs, n_to_relabel,
                    "RELABELED_PKGS=%u/%u", n_changed_pkgs, n_to_relabel,
-                   "RELABELED_N_CHANGED_FILES=%u", n_changed_files,
                    NULL);
 
   return TRUE;

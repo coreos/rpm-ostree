@@ -127,6 +127,9 @@ rpmostree_decompose_sha256_nevra (const char **nevra,
 char *
 rpmostree_cache_branch_to_nevra (const char *cachebranch);
 
+char *
+rpmostree_commit_content_checksum (GVariant *commit);
+
 gboolean
 rpmostree_break_hardlink (int           dfd,
                           const char   *path,
