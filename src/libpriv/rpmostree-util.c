@@ -675,6 +675,34 @@ rpmostree_cache_branch_to_nevra (const char *cachebranch)
   return g_string_free (r, FALSE);
 }
 
+/* Comptute SHA-256(dirtree checksum, dirmeta checksum) of a commit;
+ * this identifies the checksum of its *contents*, independent of metadata
+ * like the commit timestamp.  https://github.com/ostreedev/ostree/issues/1315
+ */
+char *
+rpmostree_commit_content_checksum (GVariant *commit)
+{
+  g_autoptr(GChecksum) hasher = g_checksum_new (G_CHECKSUM_SHA256);
+  char checksum[OSTREE_SHA256_STRING_LEN+1];
+  const guint8 *csum;
+
+  /* Hash content checksum */
+  g_autoptr(GVariant) csum_bytes = NULL;
+  g_variant_get_child (commit, 6, "@ay", &csum_bytes);
+  csum = ostree_checksum_bytes_peek (csum_bytes);
+  ostree_checksum_inplace_from_bytes (csum, checksum);
+  g_checksum_update (hasher, (guint8*)checksum, OSTREE_SHA256_STRING_LEN);
+  g_clear_pointer (&csum_bytes, (GDestroyNotify)g_variant_unref);
+
+  /* Hash meta checksum */
+  g_variant_get_child (commit, 7, "@ay", &csum_bytes);
+  csum = ostree_checksum_bytes_peek (csum_bytes);
+  ostree_checksum_inplace_from_bytes (csum, checksum);
+  g_checksum_update (hasher, (guint8*)checksum, OSTREE_SHA256_STRING_LEN);
+
+  return g_strdup (g_checksum_get_string (hasher));
+}
+
 /* Implementation taken from https://git.gnome.org/browse/libgsystem/tree/src/gsystem-log.c */
 gboolean
 rpmostree_stdout_is_journal (void)
