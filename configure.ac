@@ -89,7 +89,7 @@ PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
 				     ostree-1 >= 2017.14
 				     libsystemd
 				     polkit-gobject-1
-				     rpm librepo
+				     rpm librepo libsolv
 				     libarchive])
 dnl bundled libdnf
 PKGDEP_RPMOSTREE_CFLAGS="-I $(pwd)/libdnf -I $(pwd)/libdnf-build $PKGDEP_RPMOSTREE_CFLAGS"
