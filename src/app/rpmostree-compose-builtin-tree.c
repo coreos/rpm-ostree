@@ -431,6 +431,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
         return FALSE;
       rpmostree_context_set_repos (self->corectx, self->repo, self->pkgcache_repo);
       self->devino_cache = ostree_repo_devino_cache_new ();
+      rpmostree_context_set_devino_cache (self->corectx, self->devino_cache);
 
       /* Ensure that the imported packages are labeled with *a* policy if
        * possible, even if it's not the final one. This helps avoid duplicating
@@ -1146,7 +1147,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   /* The penultimate step, just basically `ostree commit` */
   g_autofree char *new_revision = NULL;
   if (!rpmostree_commit (self->rootfs_dfd, self->repo, self->ref, opt_write_commitid_to,
-                         metadata, gpgkey, selinux, NULL,
+                         metadata, gpgkey, selinux, self->devino_cache,
                          &new_revision,
                          cancellable, error))
     return FALSE;
