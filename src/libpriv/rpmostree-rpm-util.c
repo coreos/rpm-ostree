@@ -890,6 +890,10 @@ rpmostree_get_pkglist_for_root (int               dfd,
                                 GCancellable     *cancellable,
                                 GError          **error)
 {
+  /* the DnfPackage objects don't have a ref on their DnfSack; make sure callers don't fall
+   * in that trap */
+  g_return_val_if_fail (out_pkglist == NULL || out_refsack != NULL, FALSE);
+
   g_autoptr(RpmOstreeRefSack) refsack =
     rpmostree_get_refsack_for_root (dfd, path, cancellable, error);
   if (!refsack)

@@ -39,4 +39,9 @@ assert_not_file_has_content ls.txt '__db' 'lock'
 ostree --repo=${repobuild} ls -R ${treeref} /usr/etc/selinux > ls.txt
 assert_not_file_has_content ls.txt 'LOCK'
 echo "ok no leftover files"
+
+ostree --repo=${repobuild} show ${treeref} \
+  --print-metadata-key rpmostree.rpmdb.pkglist > pkglist.txt
+assert_file_has_content pkglist.txt 'systemd'
+echo "ok pkglist"
 }
