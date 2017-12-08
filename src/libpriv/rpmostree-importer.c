@@ -68,6 +68,8 @@ struct RpmOstreeImporter
   DnfPackage *pkg;
   char *hdr_sha256;
 
+  guint n_jigdo_skipped;
+  guint n_jigdo_total;
   char *ostree_branch;
 
   gboolean jigdo_mode;
@@ -476,6 +478,13 @@ build_metadata_variant (RpmOstreeImporter *self,
       g_variant_builder_add (&metadata_builder, "{sv}",
                              "rpmostree.jigdo",
                              g_variant_new_boolean (TRUE));
+      g_variant_builder_add (&metadata_builder, "{sv}",
+                             "rpmostree.jigdo_n_skipped",
+                             g_variant_new_uint32 (self->n_jigdo_skipped));
+      g_variant_builder_add (&metadata_builder, "{sv}",
+                             "rpmostree.jigdo_total",
+                             g_variant_new_uint32 (self->n_jigdo_total));
+
     }
 
   if (self->doc_files)
@@ -696,6 +705,8 @@ jigdo_filter_cb (OstreeRepo         *repo,
   if (error_was_set)
     return OSTREE_REPO_COMMIT_FILTER_SKIP;
 
+  self->n_jigdo_total++;
+
   if (g_file_info_get_file_type (file_info) != G_FILE_TYPE_DIRECTORY)
     {
       self->jigdo_next_xattrs = NULL;
@@ -706,7 +717,10 @@ jigdo_filter_cb (OstreeRepo         *repo,
         return OSTREE_REPO_COMMIT_FILTER_SKIP;
       /* No xattrs means we don't need to import it */
       if (!self->jigdo_next_xattrs)
-        return OSTREE_REPO_COMMIT_FILTER_SKIP;
+        {
+          self->n_jigdo_skipped++;
+          return OSTREE_REPO_COMMIT_FILTER_SKIP;
+        }
     }
 
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;

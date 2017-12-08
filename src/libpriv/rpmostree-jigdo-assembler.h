@@ -43,7 +43,6 @@ rpmostree_jigdo_assembler_read_meta (RpmOstreeJigdoAssembler    *jigdo,
                                      char             **out_checksum,
                                      GVariant         **commit,
                                      GVariant         **detached_meta,
-                                     GVariant         **pkgs,
                                      GCancellable      *cancellable,
                                      GError           **error);
 

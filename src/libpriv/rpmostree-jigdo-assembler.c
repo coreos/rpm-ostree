@@ -64,7 +64,6 @@ struct RpmOstreeJigdoAssembler
   DnfPackage *pkg;
   GVariant *commit;
   GVariant *meta;
-  GVariant *pkgs;
   char *checksum;
   GVariant *xattrs_table;
   struct archive *archive;
@@ -82,7 +81,6 @@ rpmostree_jigdo_assembler_finalize (GObject *object)
     archive_read_free (self->archive);
   g_clear_pointer (&self->commit, (GDestroyNotify)g_variant_unref);
   g_clear_pointer (&self->meta, (GDestroyNotify)g_variant_unref);
-  g_clear_pointer (&self->pkgs, (GDestroyNotify)g_variant_unref);
   g_free (self->checksum);
   g_clear_object (&self->pkg);
   g_clear_pointer (&self->xattrs_table, (GDestroyNotify)g_variant_unref);
@@ -260,14 +258,13 @@ parse_checksum_from_pathname (const char *pathname,
 }
 
 /* First step: read metadata: the commit object and its metadata, suitable for
- * GPG verification, as well as the component package NEVRAs.
+ * GPG verification.
  */
 gboolean
 rpmostree_jigdo_assembler_read_meta (RpmOstreeJigdoAssembler    *self,
                            char             **out_checksum,
                            GVariant         **out_commit,
                            GVariant         **out_detached_meta,
-                           GVariant         **out_pkgs,
                            GCancellable      *cancellable,
                            GError           **error)
 {
@@ -314,27 +311,13 @@ rpmostree_jigdo_assembler_read_meta (RpmOstreeJigdoAssembler    *self,
       self->next_entry = entry; /* Stash for next call */
     }
 
-  /* And the component packages */
-  entry = jigdo_require_next_entry (self, cancellable, error);
-  entry_path = peel_entry_pathname (entry, error);
-  if (!entry_path)
-    return FALSE;
-  if (!g_str_equal (entry_path, RPMOSTREE_JIGDO_PKGS))
-    return glnx_throw (error, "Unexpected state for path: %s", entry_path);
-  g_autoptr(GVariant) pkgs = jigdo_read_variant (RPMOSTREE_JIGDO_PKGS_VARIANT_FORMAT,
-                                                 self->archive, entry, cancellable, error);
-  if (!pkgs)
-    return FALSE;
-
   self->state = STATE_DIRMETA;
   self->checksum = g_strdup (actual_checksum);
   self->commit = g_variant_ref (commit);
   self->meta = meta ? g_variant_ref (meta) : NULL;
-  self->pkgs = g_variant_ref (pkgs);
   *out_checksum = g_steal_pointer (&checksum);
   *out_commit = g_steal_pointer (&commit);
   *out_detached_meta = g_steal_pointer (&meta);
-  *out_pkgs = g_steal_pointer (&pkgs);
   return TRUE;
 }
 

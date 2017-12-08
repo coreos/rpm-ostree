@@ -24,6 +24,9 @@
 #include <glib-unix.h>
 #include <gio/gunixoutputstream.h>
 #include <libdnf/libdnf.h>
+// For the jigdo Requires parsing
+#include <libdnf/dnf-reldep-private.h>
+#include <libdnf/dnf-sack-private.h>
 #include <sys/mount.h>
 #include <stdio.h>
 #include <libglnx.h>
@@ -102,23 +105,17 @@ rpm_ostree_jigdo2commit_context_new (RpmOstreeJigdo2CommitContext **out_context,
 }
 
 static DnfPackage *
-query_nevra (DnfContext *dnfctx,
-             const char *name,
-             guint64     epoch,
-             const char *version,
-             const char *release,
-             const char *arch,
-             GError    **error)
+query_jigdo_pkg (DnfContext *dnfctx,
+                 const char *name,
+                 const char *evr,
+                 GError    **error)
 {
   hy_autoquery HyQuery query = hy_query_create (dnf_context_get_sack (dnfctx));
   hy_query_filter (query, HY_PKG_NAME, HY_EQ, name);
-  hy_query_filter_num (query, HY_PKG_EPOCH, HY_EQ, epoch);
-  hy_query_filter (query, HY_PKG_VERSION, HY_EQ, version);
-  hy_query_filter (query, HY_PKG_RELEASE, HY_EQ, release);
-  hy_query_filter (query, HY_PKG_ARCH, HY_EQ, arch);
+  hy_query_filter (query, HY_PKG_EVR, HY_EQ, evr);
   g_autoptr(GPtrArray) pkglist = hy_query_run (query);
   if (pkglist->len == 0)
-    return glnx_null_throw (error, "Failed to find package '%s'", name);
+    return glnx_null_throw (error, "Failed to find package %s-%s", name, evr);
   return g_object_ref (pkglist->pdata[0]);
 }
 
@@ -149,6 +146,15 @@ compare_pkgs_reverse (gconstpointer ap,
   DnfPackage **a = (gpointer)ap;
   DnfPackage **b = (gpointer)bp;
   return dnf_package_cmp (*b, *a); // Reverse
+}
+
+static int
+compare_pkgs (gconstpointer ap,
+                      gconstpointer bp)
+{
+  DnfPackage **a = (gpointer)ap;
+  DnfPackage **b = (gpointer)bp;
+  return dnf_package_cmp (*a, *b);
 }
 
 static gboolean
@@ -187,6 +193,7 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
 
   DnfContext *dnfctx = rpmostree_context_get_dnf (self->ctx);
   g_autoptr(DnfPackage) oirpm_pkg = NULL;
+  g_autofree char *provided_commit = NULL;
   { hy_autoquery HyQuery query = hy_query_create (dnf_context_get_sack (dnfctx));
     hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, oirpm_repoid);
     hy_query_filter (query, HY_PKG_NAME, HY_EQ, oirpm_name);
@@ -204,30 +211,110 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
     oirpm_pkg = g_object_ref (pkglist->pdata[0]);
 
     /* Iterate over provides directly to provide a nicer error on mismatch */
-    gboolean found_v1_provide = FALSE;
+    gboolean found_vprovide = FALSE;
     g_autoptr(DnfReldepList) provides = dnf_package_get_provides (oirpm_pkg);
     const gint n_provides = dnf_reldep_list_count (provides);
     for (int i = 0; i < n_provides; i++)
       {
         DnfReldep *provide = dnf_reldep_list_index (provides, i);
 
-        if (g_str_equal (dnf_reldep_to_string (provide), RPMOSTREE_JIGDO_PROVIDE_V1))
+        const char *provide_str = dnf_reldep_to_string (provide);
+        if (g_str_equal (provide_str, RPMOSTREE_JIGDO_PROVIDE_V2))
           {
-            found_v1_provide = TRUE;
-            break;
+            found_vprovide = TRUE;
+          }
+        else if (g_str_has_prefix (provide_str, RPMOSTREE_JIGDO_PROVIDE_COMMIT))
+          {
+            const char *rest = provide_str + strlen (RPMOSTREE_JIGDO_PROVIDE_COMMIT);
+            if (*rest != '(')
+              return glnx_throw (error, "Invalid %s", provide_str);
+            rest++;
+            const char *closeparen = strchr (rest, ')');
+            if (!closeparen)
+              return glnx_throw (error, "Invalid %s", provide_str);
+
+            provided_commit = g_strndup (rest, closeparen - rest);
+            if (strlen (provided_commit) != OSTREE_SHA256_STRING_LEN)
+              return glnx_throw (error, "Invalid %s", provide_str);
           }
       }
 
-    if (!found_v1_provide)
+    if (!found_vprovide)
       return glnx_throw (error, "Package '%s' does not have Provides: %s",
-                         dnf_package_get_nevra (oirpm_pkg), RPMOSTREE_JIGDO_PROVIDE_V1);
-
-    if (!rpmostree_context_set_packages (self->ctx, pkglist, cancellable, error))
-      return FALSE;
+                         dnf_package_get_nevra (oirpm_pkg), RPMOSTREE_JIGDO_PROVIDE_V2);
+    if (!provided_commit)
+      return glnx_throw (error, "Package '%s' does not have Provides: %s",
+                         dnf_package_get_nevra (oirpm_pkg), RPMOSTREE_JIGDO_PROVIDE_COMMIT);
   }
 
-  g_print ("oirpm: %s (%s)\n", dnf_package_get_nevra (oirpm_pkg),
-           dnf_package_get_reponame (oirpm_pkg));
+  g_print ("oirpm: %s (%s) commit=%s\n", dnf_package_get_nevra (oirpm_pkg),
+           dnf_package_get_reponame (oirpm_pkg), provided_commit);
+
+  { OstreeRepoCommitState commitstate;
+    gboolean has_commit;
+    if (!ostree_repo_has_object (self->repo, OSTREE_OBJECT_TYPE_COMMIT, provided_commit,
+                                 &has_commit, cancellable, error))
+      return FALSE;
+    if (has_commit)
+      {
+        if (!ostree_repo_load_commit (self->repo, provided_commit, NULL,
+                                      &commitstate, error))
+          return FALSE;
+        if (!(commitstate & OSTREE_REPO_COMMIT_STATE_PARTIAL))
+          {
+            g_print ("Commit is already written, nothing to do\n");
+            return TRUE;  /* 🔚 Early return */
+          }
+      }
+  }
+
+  g_autoptr(GPtrArray) pkgs_required = g_ptr_array_new_with_free_func (g_object_unref);
+
+  /* Look at the Requires of the jigdoRPM.  Note that we don't want to do
+   * dependency resolution here - that's part of the whole idea, we're doing
+   * deterministic imaging.
+   */
+  g_autoptr(DnfReldepList) requires = dnf_package_get_requires (oirpm_pkg);
+  const gint n_requires = dnf_reldep_list_count (requires);
+  Pool *pool = dnf_sack_get_pool (dnf_context_get_sack (dnfctx));
+  for (int i = 0; i < n_requires; i++)
+    {
+      DnfReldep *req = dnf_reldep_list_index (requires, i);
+      Id reqid = dnf_reldep_get_id (req);
+      if (!ISRELDEP (reqid))
+        continue;
+      Reldep *rdep = GETRELDEP (pool, reqid);
+      /* This is the core hack; we're searching for Requires that
+       * have exact '=' versions.  This assumes that the rpmbuild
+       * process won't inject such requirements.
+       */
+      if (!(rdep->flags & REL_EQ))
+        continue;
+
+      const char *name = pool_id2str (pool, rdep->name);
+      const char *evr = pool_id2str (pool, rdep->evr);
+
+      DnfPackage *pkg = query_jigdo_pkg (dnfctx, name, evr, error);
+      // FIXME: Possibly we shouldn't require a package to be in the repos if we
+      // already have it imported? This would help support downgrades if the
+      // repo owner has pruned.
+      if (!pkg)
+        return FALSE;
+      g_ptr_array_add (pkgs_required, g_object_ref (pkg));
+    }
+  g_ptr_array_sort (pkgs_required, compare_pkgs);
+
+  g_print ("Jigdo from %u packages\n", pkgs_required->len);
+
+  /* For now we first serially download the oirpm, but down the line we can do
+   * this async. Doing so will require putting more of the jigdo logic into the
+   * core, so it knows not to import the jigdoRPM.
+   */
+  { g_autoptr(GPtrArray) oirpm_singleton_pkglist = g_ptr_array_new ();
+    g_ptr_array_add (oirpm_singleton_pkglist, oirpm_pkg);
+    if (!rpmostree_context_set_packages (self->ctx, oirpm_singleton_pkglist, cancellable, error))
+      return FALSE;
+  }
 
   if (!rpmostree_context_download (self->ctx, cancellable, error))
     return FALSE;
@@ -242,29 +329,13 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
   g_autofree char *checksum = NULL;
   g_autoptr(GVariant) commit = NULL;
   g_autoptr(GVariant) commit_meta = NULL;
-  g_autoptr(GVariant) pkgs = NULL;
-  if (!rpmostree_jigdo_assembler_read_meta (jigdo, &checksum, &commit, &commit_meta, &pkgs,
-                                  cancellable, error))
+  if (!rpmostree_jigdo_assembler_read_meta (jigdo, &checksum, &commit, &commit_meta,
+                                            cancellable, error))
     return FALSE;
 
-  g_print ("OSTree commit: %s\n", checksum);
-
-  { OstreeRepoCommitState commitstate;
-    gboolean has_commit;
-    if (!ostree_repo_has_object (self->repo, OSTREE_OBJECT_TYPE_COMMIT, checksum,
-                                 &has_commit, cancellable, error))
-      return FALSE;
-    if (has_commit)
-      {
-        if (!ostree_repo_load_commit (self->repo, checksum, NULL, &commitstate, error))
-          return FALSE;
-        if (!(commitstate & OSTREE_REPO_COMMIT_STATE_PARTIAL))
-          {
-            g_print ("Commit is already written, nothing to do\n");
-            return TRUE;  /* 🔚 Early return */
-          }
-      }
-  }
+  if (!g_str_equal (checksum, provided_commit))
+    return glnx_throw (error, "Package '%s' commit mismatch; Provides=%s, actual=%s",
+                       dnf_package_get_nevra (oirpm_pkg), provided_commit, checksum);
 
   g_printerr ("TODO implement GPG verification\n");
 
@@ -278,32 +349,13 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
   if (!commit_and_print (self, &txn, cancellable, error))
     return FALSE;
 
-  /* Download any packages we don't already have imported */
-  g_autoptr(GPtrArray) pkgs_required = g_ptr_array_new_with_free_func (g_object_unref);
-  const guint n_pkgs = g_variant_n_children (pkgs);
-  for (guint i = 0; i < n_pkgs; i++)
-    {
-      const char *name, *version, *release, *architecture;
-      const char *repodata_checksum;
-      guint64 epoch;
-      g_variant_get_child (pkgs, i, "(&st&s&s&s&s)",
-                           &name, &epoch, &version, &release, &architecture,
-                           &repodata_checksum);
-      // TODO: use repodata checksum, but probably only if covered by the ostree
-      // gpg sig?
-      DnfPackage *pkg = query_nevra (dnfctx, name, epoch, version, release, architecture, error);
-      // FIXME: We shouldn't require a package to be in the repos if we already
-      // have it imported otherwise we'll break upgrades for ancient systems
-      if (!pkg)
-        return FALSE;
-      g_ptr_array_add (pkgs_required, g_object_ref (pkg));
-    }
-
-  g_print ("Jigdo from %u packages\n", pkgs_required->len);
-
+  /* And now, process the jigdo set */
   if (!rpmostree_context_set_packages (self->ctx, pkgs_required, cancellable, error))
     return FALSE;
 
+  /* See what packages we need to import, print their size. TODO clarify between
+   * download/import.
+   */
   g_autoptr(GHashTable) pkgset_to_import = g_hash_table_new (NULL, NULL);
   { g_autoptr(GPtrArray) pkgs_to_import = rpmostree_context_get_packages_to_import (self->ctx);
     guint64 dlsize = 0;
@@ -317,6 +369,7 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
     g_print ("%u packages to import, download size: %s\n", pkgs_to_import->len, dlsize_fmt);
   }
 
+  /* Parse the xattr data in the jigdoRPM */
   g_autoptr(GHashTable) pkg_to_xattrs = g_hash_table_new_full (NULL, NULL,
                                                                (GDestroyNotify)g_object_unref,
                                                                (GDestroyNotify)g_variant_unref);
@@ -335,6 +388,7 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
       g_hash_table_insert (pkg_to_xattrs, g_object_ref (pkg), g_steal_pointer (&objid_to_xattrs));
     }
 
+  /* Start the download and import, using the xattr data from the jigdoRPM */
   if (!rpmostree_context_download (self->ctx, cancellable, error))
     return FALSE;
   g_autoptr(GVariant) xattr_table = rpmostree_jigdo_assembler_get_xattr_table (jigdo);
