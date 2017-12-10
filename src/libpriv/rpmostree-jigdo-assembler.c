@@ -290,6 +290,14 @@ rpmostree_jigdo_assembler_read_meta (RpmOstreeJigdoAssembler    *self,
                                                    self->archive, entry, cancellable, error);
   g_autoptr(GVariant) meta = NULL;
 
+  g_autoptr(GChecksum) hasher = g_checksum_new (G_CHECKSUM_SHA256);
+  g_checksum_update (hasher, g_variant_get_data (commit), g_variant_get_size (commit));
+  const char *actual_checksum = g_checksum_get_string (hasher);
+
+  if (!g_str_equal (checksum, actual_checksum))
+    return glnx_throw (error, "Checksum mismatch; described='%s' actual='%s'",
+                       checksum, actual_checksum);
+
   entry = jigdo_require_next_entry (self, cancellable, error);
   entry_path = peel_entry_pathname (entry, error);
   if (!entry_path)
@@ -319,7 +327,7 @@ rpmostree_jigdo_assembler_read_meta (RpmOstreeJigdoAssembler    *self,
     return FALSE;
 
   self->state = STATE_DIRMETA;
-  self->checksum = g_strdup (checksum);
+  self->checksum = g_strdup (actual_checksum);
   self->commit = g_variant_ref (commit);
   self->meta = meta ? g_variant_ref (meta) : NULL;
   self->pkgs = g_variant_ref (pkgs);
