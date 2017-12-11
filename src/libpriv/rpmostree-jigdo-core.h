@@ -70,7 +70,7 @@
 /* NEVRA + xattr table */
 #define RPMOSTREE_JIGDO_XATTRS_PKG_VARIANT_FORMAT (G_VARIANT_TYPE ("a(su)"))
 
-#define RPMOSTREE_JIGDO_PROVIDE_V2 "rpmostree-jigdo(v2)"
+#define RPMOSTREE_JIGDO_PROVIDE_V3 "rpmostree-jigdo(v3)"
 #define RPMOSTREE_JIGDO_PROVIDE_COMMIT "rpmostree-jigdo-commit"
 
 /* This one goes in the spec file to use as our replacement */

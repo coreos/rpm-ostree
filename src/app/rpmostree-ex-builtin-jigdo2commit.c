@@ -221,7 +221,7 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
         DnfReldep *provide = dnf_reldep_list_index (provides, i);
 
         const char *provide_str = dnf_reldep_to_string (provide);
-        if (g_str_equal (provide_str, RPMOSTREE_JIGDO_PROVIDE_V2))
+        if (g_str_equal (provide_str, RPMOSTREE_JIGDO_PROVIDE_V3))
           {
             found_vprovide = TRUE;
           }
@@ -243,7 +243,7 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
 
     if (!found_vprovide)
       return glnx_throw (error, "Package '%s' does not have Provides: %s",
-                         dnf_package_get_nevra (oirpm_pkg), RPMOSTREE_JIGDO_PROVIDE_V2);
+                         dnf_package_get_nevra (oirpm_pkg), RPMOSTREE_JIGDO_PROVIDE_V3);
     if (!provided_commit)
       return glnx_throw (error, "Package '%s' does not have Provides: %s",
                          dnf_package_get_nevra (oirpm_pkg), RPMOSTREE_JIGDO_PROVIDE_COMMIT);
