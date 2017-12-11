@@ -111,7 +111,9 @@ query_jigdo_pkg (DnfContext *dnfctx,
                  GError    **error)
 {
   hy_autoquery HyQuery query = hy_query_create (dnf_context_get_sack (dnfctx));
+  /* See also similar examples of queries in e.g. dnf_context_update() */
   hy_query_filter (query, HY_PKG_NAME, HY_EQ, name);
+  hy_query_filter (query, HY_PKG_ARCH, HY_NEQ, "src");
   hy_query_filter (query, HY_PKG_EVR, HY_EQ, evr);
   g_autoptr(GPtrArray) pkglist = hy_query_run (query);
   if (pkglist->len == 0)
