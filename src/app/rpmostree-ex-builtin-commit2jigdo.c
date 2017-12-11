@@ -885,9 +885,8 @@ write_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
           }
 
         /* We're done with this object data */
-        g_hash_table_iter_remove (&it);
         g_hash_table_remove (self->content_object_to_pkg_objid, checksum);
-
+        g_hash_table_iter_remove (&it);
       }
 
     g_print ("%u unique xattrs\n", g_hash_table_size (xattr_table_hash));
