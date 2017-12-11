@@ -882,6 +882,9 @@ rpmostree_importer_run (RpmOstreeImporter *self,
                         GCancellable      *cancellable,
                         GError           **error)
 {
+  if (g_cancellable_set_error_if_cancelled (cancellable, error))
+    return FALSE;
+
   g_autofree char *csum = NULL;
   if (!import_rpm_to_repo (self, &csum, cancellable, error))
     return FALSE;
