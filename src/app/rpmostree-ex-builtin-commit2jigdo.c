@@ -1152,7 +1152,10 @@ impl_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
                   g_print ("  %s (tmpfiles only)\n", dnf_package_get_nevra (pkg));
                 }
               else
-                g_print ("  %s\n", dnf_package_get_nevra (pkg));
+                {
+                  g_autofree char *pkgsize_str = g_format_size (dnf_package_get_size (pkg));
+                  g_print ("  %s (%s)\n", dnf_package_get_nevra (pkg), pkgsize_str);
+                }
             }
         }
       g_print ("\n");
