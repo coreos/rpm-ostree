@@ -22,8 +22,9 @@ typedef enum {
   RPMOSTREE_OUTPUT_MESSAGE,
   RPMOSTREE_OUTPUT_TASK_BEGIN,
   RPMOSTREE_OUTPUT_TASK_END,
-  RPMOSTREE_OUTPUT_PERCENT_PROGRESS,
-  RPMOSTREE_OUTPUT_PERCENT_PROGRESS_END,
+  RPMOSTREE_OUTPUT_PROGRESS_N_ITEMS,
+  RPMOSTREE_OUTPUT_PROGRESS_PERCENT,
+  RPMOSTREE_OUTPUT_PROGRESS_END,
 } RpmOstreeOutputType;
 
 void
@@ -52,10 +53,19 @@ rpmostree_output_task_end (const char *format, ...) G_GNUC_PRINTF (1,2);
 typedef struct {
   const char *text;
   guint32 percentage;
-} RpmOstreeOutputPercentProgress;
+} RpmOstreeOutputProgressPercent;
+
+typedef struct {
+  const char *text;
+  guint current;
+  guint total;
+} RpmOstreeOutputProgressNItems;
 
 void
-rpmostree_output_percent_progress (const char *text, int percentage);
+rpmostree_output_progress_n_items (const char *text, guint current, guint total);
 
 void
-rpmostree_output_percent_progress_end (void);
+rpmostree_output_progress_percent (const char *text, int percentage);
+
+void
+rpmostree_output_progress_end (void);

@@ -279,7 +279,6 @@ struct _RpmOstreeContext {
   gboolean async_running;
   GCancellable *async_cancellable;
   GError *async_error;
-  DnfState *async_dnfstate;
   GPtrArray *pkgs_to_download;
   GPtrArray *pkgs_to_import;
   guint n_async_pkgs_imported;
@@ -748,7 +747,7 @@ on_hifstate_percentage_changed (DnfState   *hifstate,
                                 gpointer    user_data)
 {
   const char *text = user_data;
-  rpmostree_output_percent_progress (text, percentage);
+  rpmostree_output_progress_percent (text, percentage);
 }
 
 static gboolean
@@ -1074,7 +1073,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
           did_update = TRUE;
 
           g_signal_handler_disconnect (hifstate, progress_sigid);
-          rpmostree_output_percent_progress_end ();
+          rpmostree_output_progress_end ();
         }
 
       guint64 ts = dnf_repo_get_timestamp_generated (repo);
@@ -1106,7 +1105,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
     if (!dnf_context_setup_sack (self->dnfctx, hifstate, error))
       return FALSE;
     g_signal_handler_disconnect (hifstate, progress_sigid);
-    rpmostree_output_percent_progress_end ();
+    rpmostree_output_progress_end ();
   }
 
   /* A lot of code to simply log a message to the systemd journal with the state
@@ -2157,13 +2156,12 @@ rpmostree_context_download (RpmOstreeContext *self,
           return FALSE;
 
         g_signal_handler_disconnect (hifstate, progress_sigid);
-        rpmostree_output_percent_progress_end ();
+        rpmostree_output_progress_end ();
       }
   }
 
   return TRUE;
 }
-
 
 /* Returns: (transfer none): The jigdo package */
 DnfPackage *
@@ -2179,12 +2177,6 @@ rpmostree_context_get_jigdo_checksum (RpmOstreeContext  *self)
 {
   g_assert (self->jigdo_spec);
   return self->jigdo_checksum;
-}
-
-static inline void
-dnf_state_assert_done (DnfState *dnfstate)
-{
-  g_assert (dnf_state_done (dnfstate, NULL));
 }
 
 static void
@@ -2206,7 +2198,8 @@ on_async_import_done (GObject                    *obj,
 
   g_assert_cmpint (self->n_async_pkgs_imported, <, self->pkgs_to_import->len);
   self->n_async_pkgs_imported++;
-  dnf_state_assert_done (self->async_dnfstate);
+  rpmostree_output_progress_n_items ("Importing", self->n_async_pkgs_imported,
+                                     self->pkgs_to_import->len);
   if (self->n_async_pkgs_imported == self->pkgs_to_import->len)
     self->async_running = FALSE;
 }
@@ -2236,13 +2229,6 @@ rpmostree_context_import_jigdo (RpmOstreeContext *self,
     return FALSE;
 
   {
-    glnx_unref_object DnfState *hifstate = dnf_state_new ();
-    dnf_state_set_number_steps (hifstate, self->pkgs_to_import->len);
-    guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                             G_CALLBACK (on_hifstate_percentage_changed),
-                                             "Importing:");
-
-    self->async_dnfstate = hifstate;
     self->async_running = TRUE;
     self->async_cancellable = cancellable;
 
@@ -2306,8 +2292,7 @@ rpmostree_context_import_jigdo (RpmOstreeContext *self,
         return FALSE;
       }
 
-    g_signal_handler_disconnect (hifstate, progress_sigid);
-    rpmostree_output_percent_progress_end ();
+    rpmostree_output_progress_end ();
   }
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
@@ -2721,7 +2706,8 @@ on_async_relabel_done (GObject                    *obj,
       data->n_changed_files += n_relabeled;
       data->n_changed_pkgs++;
     }
-  dnf_state_assert_done (self->async_dnfstate);
+  rpmostree_output_progress_n_items ("Relabeling", self->n_async_pkgs_relabeled,
+                                     self->pkgs_to_relabel->len);
   if (self->n_async_pkgs_relabeled == self->pkgs_to_relabel->len)
     self->async_running = FALSE;
 }
@@ -2744,14 +2730,6 @@ rpmostree_context_relabel (RpmOstreeContext *self,
 
   g_return_val_if_fail (ostreerepo != NULL, FALSE);
 
-  glnx_unref_object DnfState *hifstate = dnf_state_new ();
-  g_autofree char *prefix = g_strdup_printf ("Relabeling %d package%s:", n, _NS(n));
-
-  dnf_state_set_number_steps (hifstate, self->pkgs_to_relabel->len);
-  guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
-                                           G_CALLBACK (on_hifstate_percentage_changed),
-                                           prefix);
-
   /* Prep a txn and tmpdir for all of the relabels */
   g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
   if (!rpmostree_repo_auto_transaction_start (&txn, ostreerepo, FALSE, cancellable, error))
@@ -2762,7 +2740,6 @@ rpmostree_context_relabel (RpmOstreeContext *self,
                        &relabel_tmpdir, error))
     return FALSE;
 
-  self->async_dnfstate = hifstate;
   self->async_running = TRUE;
   self->async_cancellable = cancellable;
 
@@ -2785,14 +2762,12 @@ rpmostree_context_relabel (RpmOstreeContext *self,
       g_propagate_error (error, g_steal_pointer (&self->async_error));
       return FALSE;
     }
-  self->async_dnfstate = NULL;
+
+  rpmostree_output_progress_end ();
 
   /* Commit */
   if (!ostree_repo_commit_transaction (ostreerepo, NULL, cancellable, error))
     return FALSE;
-
-  g_signal_handler_disconnect (hifstate, progress_sigid);
-  rpmostree_output_percent_progress_end ();
 
   sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_SELINUX_RELABEL),
                    "MESSAGE=Relabeled %u/%u pkgs", data.n_changed_pkgs, n_to_relabel,
