@@ -1,10 +1,15 @@
 # This used to live in test-basic.sh, but it's now shared with test-basic-unified.sh
 basic_test() {
-ostree --repo=${repobuild} ls -R ${treeref} /usr/lib/ostree-boot > bootls.txt
 if ostree --repo=${repobuild} ls -R ${treeref} /usr/etc/passwd-; then
     assert_not_reached "Found /usr/etc/passwd- backup file in tree"
 fi
-echo "ok compose"
+echo "ok passwd"
+
+for path in /usr/share/rpm /usr/lib/sysimage/rpm-ostree-base-db; do
+    ostree --repo=${repobuild} ls -R ${treeref} ${path} > db.txt
+    assert_file_has_content_literal db.txt /Packages
+done
+echo "ok db"
 
 ostree --repo=${repobuild} show --print-metadata-key exampleos.gitrepo ${treeref} > meta.txt
 assert_file_has_content meta.txt 'rev.*97ec21c614689e533d294cdae464df607b526ab9'
