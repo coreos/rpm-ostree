@@ -193,9 +193,9 @@ init_rootfs (int            dfd,
   return TRUE;
 }
 
-/* Given a directory referenced by @src_dfd+@src_path,
- * Create @dest_dfd+@dest_path as a directory, hardlinking
- * all content - recursively.
+/* Given a directory referenced by @src_dfd+@src_path, as well as a target
+ * directory @dest_dfd+@dest_path (which must already exist), hardlink all
+ * content recursively.
  */
 static gboolean
 hardlink_recurse (int                src_dfd,
@@ -1231,10 +1231,13 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
+  gboolean have_rpmdb;
   if (!glnx_fstatat_allow_noent (rootfs_fd, RPMOSTREE_RPMDB_LOCATION, NULL, AT_SYMLINK_NOFOLLOW, error))
     return FALSE;
-  if (errno == ENOENT)
+  have_rpmdb = (errno == 0);
+  if (!have_rpmdb)
     {
+      /* Try looking in var/lib/rpm */
       struct stat stbuf;
       if (!glnx_fstatat_allow_noent (rootfs_fd, "var/lib/rpm", &stbuf, AT_SYMLINK_NOFOLLOW, error))
         return FALSE;
@@ -1244,12 +1247,30 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
             return FALSE;
           if (symlinkat ("../../" RPMOSTREE_RPMDB_LOCATION, rootfs_fd, "var/lib/rpm") < 0)
             return glnx_throw_errno_prefix (error, "symlinkat(%s)", "var/lib/rpm");
+          have_rpmdb = TRUE;
         }
     }
 
   if (!cleanup_leftover_files (rootfs_fd, RPMOSTREE_RPMDB_LOCATION, rpmdb_leftover_files,
                                rpmdb_leftover_prefixes, cancellable, error))
     return FALSE;
+
+  /* If we do have an rpmdb, hardlink it into the base path */
+  if (have_rpmdb)
+    {
+      /* We need idempotence, so check if it already exists */
+      if (!glnx_fstatat_allow_noent (rootfs_fd, RPMOSTREE_BASE_RPMDB, NULL, AT_SYMLINK_NOFOLLOW, error))
+        return FALSE;
+      if (errno == ENOENT)
+        {
+          if (!glnx_shutil_mkdir_p_at (rootfs_fd, RPMOSTREE_BASE_RPMDB, 0755, cancellable, error))
+            return FALSE;
+          if (!hardlink_recurse (rootfs_fd, RPMOSTREE_RPMDB_LOCATION,
+                                 rootfs_fd, RPMOSTREE_BASE_RPMDB,
+                                 cancellable, error))
+            return glnx_prefix_error (error, "Hardlinking %s", RPMOSTREE_BASE_RPMDB);
+        }
+    }
 
   if (!cleanup_selinux_lockfiles (rootfs_fd, cancellable, error))
     return FALSE;
