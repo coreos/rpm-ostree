@@ -33,10 +33,6 @@
  * so that can be GPG verified first - if that fails, we can then cleanly
  * abort.
  *
- * Next, we have the "jigdo set" - the NEVRAs + repodata checksum of the
- * RPM packages we need.  So during client side processing, downloads
- * can be initiated for those while we continue to process the OIRPM.
- *
  * The dirmeta/dirtree objects that are referenced by the commit follow.
  *
  * A special optimization is made for "content-identical" new objects,
@@ -59,8 +55,6 @@
 
 /* Use a numeric prefix to ensure predictable ordering */
 #define RPMOSTREE_JIGDO_COMMIT_DIR "00commit"
-#define RPMOSTREE_JIGDO_PKGS "01pkgs"
-#define RPMOSTREE_JIGDO_PKGS_VARIANT_FORMAT (G_VARIANT_TYPE ("a(stssss)")) // NEVRA,repodata checksum
 #define RPMOSTREE_JIGDO_DIRMETA_DIR "02dirmeta"
 #define RPMOSTREE_JIGDO_DIRTREE_DIR "03dirtree"
 //#define RPMOSTREE_JIGDO_NEW_PKGIDENT "04new-pkgident"
@@ -76,4 +70,8 @@
 /* NEVRA + xattr table */
 #define RPMOSTREE_JIGDO_XATTRS_PKG_VARIANT_FORMAT (G_VARIANT_TYPE ("a(su)"))
 
-#define RPMOSTREE_JIGDO_PROVIDE_V1 "rpmostree-jigdo(v1)"
+#define RPMOSTREE_JIGDO_PROVIDE_V3 "rpmostree-jigdo(v3)"
+#define RPMOSTREE_JIGDO_PROVIDE_COMMIT "rpmostree-jigdo-commit"
+
+/* This one goes in the spec file to use as our replacement */
+#define RPMOSTREE_JIGDO_SPEC_META_MAGIC "#@@@rpmostree_jigdo_meta@@@"
