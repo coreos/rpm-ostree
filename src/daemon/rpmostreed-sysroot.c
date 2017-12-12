@@ -58,8 +58,6 @@ typedef struct _RpmostreedSysrootClass RpmostreedSysrootClass;
 struct _RpmostreedSysroot {
   RPMOSTreeSysrootSkeleton parent_instance;
 
-  GCancellable *cancellable;
-
   OstreeSysroot *ot_sysroot;
   OstreeRepo *repo;
   struct stat repo_last_stat;
@@ -152,9 +150,7 @@ handle_create_osname (RPMOSTreeSysroot *object,
   GError *error = NULL;
   g_autofree gchar *dbus_path = NULL;
 
-  if (!ostree_sysroot_ensure_initialized (self->ot_sysroot,
-                                          self->cancellable,
-                                          &error))
+  if (!ostree_sysroot_ensure_initialized (self->ot_sysroot, NULL, &error))
     goto out;
 
   if (strchr (osname, '/') != 0)
@@ -166,7 +162,7 @@ handle_create_osname (RPMOSTreeSysroot *object,
       goto out;
     }
 
-  if (!ostree_sysroot_init_osname (self->ot_sysroot, osname, self->cancellable, &error))
+  if (!ostree_sysroot_init_osname (self->ot_sysroot, osname, NULL, &error))
     goto out;
 
   dbus_path = rpmostreed_generate_object_path (BASE_DBUS_PATH, osname, NULL);
@@ -273,7 +269,7 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
     *out_changed = FALSE;
 
   gboolean sysroot_changed;
-  if (!ostree_sysroot_load_if_changed (self->ot_sysroot, &sysroot_changed, self->cancellable, error))
+  if (!ostree_sysroot_load_if_changed (self->ot_sysroot, &sysroot_changed, NULL, error))
     return FALSE;
 
   struct stat repo_new_stat;
@@ -426,8 +422,6 @@ sysroot_dispose (GObject *object)
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
   gint tries;
 
-  g_cancellable_cancel (self->cancellable);
-
   if (self->monitor)
     {
       if (self->sig_changed)
@@ -474,7 +468,6 @@ sysroot_finalize (GObject *object)
   g_hash_table_unref (self->os_interfaces);
   g_hash_table_unref (self->osexperimental_interfaces);
 
-  g_clear_object (&self->cancellable);
   g_clear_object (&self->monitor);
 
   rpmostree_output_set_callback (NULL, NULL);
@@ -487,8 +480,6 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
 {
   g_assert (_sysroot_instance == NULL);
   _sysroot_instance = self;
-
-  self->cancellable = g_cancellable_new ();
 
   self->os_interfaces = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
                                                (GDestroyNotify) g_object_unref);
