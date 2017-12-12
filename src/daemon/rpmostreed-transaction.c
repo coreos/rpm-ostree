@@ -590,6 +590,10 @@ transaction_handle_start (RPMOSTreeTransaction *transaction,
                          priv->cancellable,
                          transaction_execute_done_cb,
                          NULL);
+      /* Some of the async ops in rpmostree-core.c will cancel,
+       * but we want the first error to take precedence.
+       */
+      g_task_set_check_cancellable (task, FALSE);
       g_task_run_in_thread (task, transaction_execute_thread);
       g_object_unref (task);
     }
