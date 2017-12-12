@@ -74,6 +74,7 @@ rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
                                              OstreeDeployment *cfg_deployment);
 
 void rpmostree_context_set_is_empty (RpmOstreeContext *self);
+void rpmostree_context_set_is_pure_jigdo (RpmOstreeContext *self);
 
 void rpmostree_context_set_repos (RpmOstreeContext *self,
                                   OstreeRepo       *base_repo,
@@ -148,6 +149,9 @@ rpmostree_context_consume_package (RpmOstreeContext  *self,
                                    DnfPackage        *package,
                                    int               *out_fd,
                                    GError           **error);
+
+DnfPackage *rpmostree_context_get_jigdo_pkg (RpmOstreeContext  *self);
+const char *rpmostree_context_get_jigdo_checksum (RpmOstreeContext  *self);
 
 gboolean rpmostree_context_import (RpmOstreeContext *self,
                                    GCancellable     *cancellable,
