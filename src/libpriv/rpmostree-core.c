@@ -33,6 +33,7 @@
 #include <librepo/librepo.h>
 
 #include "rpmostree-core.h"
+#include "rpmostree-jigdo-core.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-passwd-util.h"
@@ -50,6 +51,15 @@
 #define RPMOSTREE_DIR_LOCK "lock"
 
 static OstreeRepo * get_pkgcache_repo (RpmOstreeContext *self);
+
+static int
+compare_pkgs (gconstpointer ap,
+              gconstpointer bp)
+{
+  DnfPackage **a = (gpointer)ap;
+  DnfPackage **b = (gpointer)bp;
+  return dnf_package_cmp (*a, *b);
+}
 
 /***********************************************************
  *                    RpmOstreeTreespec                    *
@@ -170,6 +180,12 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
       g_variant_builder_add (&builder, "{sv}", "ref", g_variant_new_string (ref));
   }
 
+  /* See if we're using jigdo */
+  { g_autofree char *jigdo = g_key_file_get_string (keyfile, "tree", "jigdo", NULL);
+    if (jigdo)
+      g_variant_builder_add (&builder, "{sv}", "jigdo", g_variant_new_string (jigdo));
+  }
+
   add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
   add_canonicalized_string_array (&builder, "cached-packages", NULL, keyfile);
   add_canonicalized_string_array (&builder, "removed-base-packages", NULL, keyfile);
@@ -243,6 +259,14 @@ struct _RpmOstreeContext {
 
   RpmOstreeTreespec *spec;
   gboolean empty;
+
+  /* jigdo-mode data */
+  const char *jigdo_spec; /* The jigdo spec like: repoid:package */
+  const char *jigdo_version; /* Optional */
+  gboolean jigdo_pure; /* There is only jigdo */
+  DnfPackage *jigdo_pkg;
+  char *jigdo_checksum;
+
   gboolean pkgcache_only;
   DnfContext *dnfctx;
   OstreeRepo *ostreerepo;
@@ -280,6 +304,9 @@ rpmostree_context_finalize (GObject *object)
 
   g_clear_object (&rctx->spec);
   g_clear_object (&rctx->dnfctx);
+
+  g_clear_object (&rctx->jigdo_pkg);
+  g_free (rctx->jigdo_checksum);
 
   g_clear_object (&rctx->pkgcache_repo);
   g_clear_object (&rctx->ostreerepo);
@@ -686,6 +713,11 @@ rpmostree_context_setup (RpmOstreeContext    *self,
           g_strv_length (pkgs) > 0)
         return glnx_throw (error, "No enabled repositories");
     }
+
+  /* Keep a handy pointer to the jigdo source if specified, since it influences
+   * a lot of things here.
+   */
+  g_variant_dict_lookup (self->spec->dict, "jigdo", "&s", &self->jigdo_spec);
 
   /* Ensure that each repo that's enabled is marked as required; this should be
    * the default, but we make sure.  This is a bit of a messy topic, but for
@@ -1699,6 +1731,79 @@ add_remaining_pkgcache_pkgs (RpmOstreeContext *self,
   return TRUE;
 }
 
+static gboolean
+setup_jigdo_state (RpmOstreeContext *self,
+                   GError          **error)
+{
+  g_assert (self->jigdo_spec);
+  g_assert (!self->jigdo_pkg);
+  g_assert (!self->jigdo_checksum);
+
+  g_autofree char *jigdo_repoid = NULL;
+  g_autofree char *jigdo_name = NULL;
+
+  { const char *colon = strchr (self->jigdo_spec, ':');
+    if (!colon)
+      return glnx_throw (error, "Invalid jigdo spec '%s', expected repoid:name", self->jigdo_spec);
+    jigdo_repoid = g_strndup (self->jigdo_spec, colon - self->jigdo_spec);
+    jigdo_name = g_strdup (colon + 1);
+  }
+
+  const char *jigdo_version = NULL;
+  g_variant_dict_lookup (self->spec->dict, "jigdo-version", "&s", &jigdo_version);
+
+  hy_autoquery HyQuery query = hy_query_create (dnf_context_get_sack (self->dnfctx));
+  hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, jigdo_repoid);
+  hy_query_filter (query, HY_PKG_NAME, HY_EQ, jigdo_name);
+  if (jigdo_version)
+    hy_query_filter (query, HY_PKG_VERSION, HY_EQ, jigdo_version);
+
+  g_autoptr(GPtrArray) pkglist = hy_query_run (query);
+  if (pkglist->len == 0)
+    return glnx_throw (error, "Failed to find jigdo package '%s'", self->jigdo_spec);
+  g_ptr_array_sort (pkglist, compare_pkgs);
+  /* We use the last package in the array which should be newest */
+  self->jigdo_pkg = g_object_ref (pkglist->pdata[pkglist->len-1]);
+
+  /* Iterate over provides directly to provide a nicer error on mismatch */
+  gboolean found_vprovide = FALSE;
+  g_autoptr(DnfReldepList) provides = dnf_package_get_provides (self->jigdo_pkg);
+  const gint n_provides = dnf_reldep_list_count (provides);
+  for (int i = 0; i < n_provides; i++)
+    {
+      DnfReldep *provide = dnf_reldep_list_index (provides, i);
+
+      const char *provide_str = dnf_reldep_to_string (provide);
+      if (g_str_equal (provide_str, RPMOSTREE_JIGDO_PROVIDE_V3))
+        {
+          found_vprovide = TRUE;
+        }
+      else if (g_str_has_prefix (provide_str, RPMOSTREE_JIGDO_PROVIDE_COMMIT))
+        {
+          const char *rest = provide_str + strlen (RPMOSTREE_JIGDO_PROVIDE_COMMIT);
+          if (*rest != '(')
+            return glnx_throw (error, "Invalid %s", provide_str);
+          rest++;
+          const char *closeparen = strchr (rest, ')');
+          if (!closeparen)
+            return glnx_throw (error, "Invalid %s", provide_str);
+
+          self->jigdo_checksum = g_strndup (rest, closeparen - rest);
+          if (strlen (self->jigdo_checksum) != OSTREE_SHA256_STRING_LEN)
+            return glnx_throw (error, "Invalid %s", provide_str);
+        }
+    }
+
+  if (!found_vprovide)
+    return glnx_throw (error, "Package '%s' does not have Provides: %s",
+                       dnf_package_get_nevra (self->jigdo_pkg), RPMOSTREE_JIGDO_PROVIDE_V3);
+  if (!self->jigdo_checksum)
+    return glnx_throw (error, "Package '%s' does not have Provides: %s",
+                       dnf_package_get_nevra (self->jigdo_pkg), RPMOSTREE_JIGDO_PROVIDE_COMMIT);
+
+  return TRUE;
+}
+
 /* Check for/download new rpm-md, then depsolve */
 gboolean
 rpmostree_context_prepare (RpmOstreeContext *self,
@@ -1731,13 +1836,20 @@ rpmostree_context_prepare (RpmOstreeContext *self,
         return FALSE;
     }
 
-  HyGoal goal = dnf_context_get_goal (dnfctx);
+  if (self->jigdo_pure)
+    {
+      g_assert_cmpint (g_strv_length (pkgnames), ==, 0);
+      g_assert_cmpint (g_strv_length (cached_pkgnames), ==, 0);
+      g_assert_cmpint (g_strv_length (cached_replace_pkgs), ==, 0);
+      g_assert_cmpint (g_strv_length (removed_base_pkgnames), ==, 0);
+    }
 
   /* Handle packages to remove */
   g_autoptr(GPtrArray) removed_pkgnames = g_ptr_array_new ();
   for (char **it = removed_base_pkgnames; it && *it; it++)
     {
       const char *pkgname = *it;
+      g_assert (!self->jigdo_pure);
       if (!dnf_context_remove (dnfctx, pkgname, error))
         return FALSE;
 
@@ -1756,6 +1868,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
         return FALSE;
 
+      g_assert (!self->jigdo_pure);
       if (!install_pkg_from_cache (self, nevra, sha256, cancellable, error))
         return FALSE;
 
@@ -1771,6 +1884,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
         return FALSE;
 
+      g_assert (!self->jigdo_pure);
       if (!install_pkg_from_cache (self, nevra, sha256, cancellable, error))
         return FALSE;
 
@@ -1791,31 +1905,57 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   for (char **it = pkgnames; it && *it; it++)
     {
       const char *pkgname = *it;
+      g_assert (!self->jigdo_pure);
       if (!dnf_context_install (dnfctx, pkgname, error))
         return FALSE;
     }
 
-  rpmostree_output_task_begin ("Resolving dependencies");
-
-  /* XXX: consider a --allow-uninstall switch? */
-  if (!dnf_goal_depsolve (goal, DNF_INSTALL | DNF_ALLOW_UNINSTALL, error) ||
-      !check_goal_solution (self, removed_pkgnames, replaced_nevras, error))
+  if (self->jigdo_spec)
     {
-      rpmostree_output_task_end ("failed");
-      return FALSE;
-    }
-  g_autoptr(GPtrArray) packages = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
-                                                         DNF_PACKAGE_INFO_INSTALL,
-                                                         DNF_PACKAGE_INFO_UPDATE,
-                                                         DNF_PACKAGE_INFO_DOWNGRADE, -1);
-  if (!sort_packages (self, packages, cancellable, error))
-    {
-      rpmostree_output_task_end ("failed");
-      return FALSE;
+      if (!setup_jigdo_state (self, error))
+        return FALSE;
     }
 
-  rpmostree_output_task_end ("done");
+  if (!self->jigdo_pure)
+    {
+      HyGoal goal = dnf_context_get_goal (dnfctx);
+
+      rpmostree_output_task_begin ("Resolving dependencies");
+
+      /* XXX: consider a --allow-uninstall switch? */
+      if (!dnf_goal_depsolve (goal, DNF_INSTALL | DNF_ALLOW_UNINSTALL, error) ||
+          !check_goal_solution (self, removed_pkgnames, replaced_nevras, error))
+        {
+          rpmostree_output_task_end ("failed");
+          return FALSE;
+        }
+      g_autoptr(GPtrArray) packages = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
+                                                             DNF_PACKAGE_INFO_INSTALL,
+                                                             DNF_PACKAGE_INFO_UPDATE,
+                                                             DNF_PACKAGE_INFO_DOWNGRADE, -1);
+      if (!sort_packages (self, packages, cancellable, error))
+        {
+          rpmostree_output_task_end ("failed");
+          return FALSE;
+        }
+      rpmostree_output_task_end ("done");
+    }
+
   return TRUE;
+}
+
+/* Call this to ensure we don't do any "package stuff" like
+ * depsolving - we're in "pure jigdo" mode.  If specified
+ * this obviously means there are no layered packages for
+ * example.
+ */
+gboolean
+rpmostree_context_prepare_jigdo (RpmOstreeContext *self,
+                                 GCancellable     *cancellable,
+                                 GError          **error)
+{
+  self->jigdo_pure = TRUE;
+  return rpmostree_context_prepare (self, cancellable, error);
 }
 
 /* Rather than doing a depsolve, directly set which packages
@@ -1841,15 +1981,6 @@ rpmostree_context_get_packages_to_import (RpmOstreeContext *self)
 {
   g_assert (self->pkgs_to_import);
   return g_ptr_array_ref (self->pkgs_to_import);
-}
-
-static int
-compare_pkgs (gconstpointer ap,
-              gconstpointer bp)
-{
-  DnfPackage **a = (gpointer)ap;
-  DnfPackage **b = (gpointer)bp;
-  return dnf_package_cmp (*a, *b);
 }
 
 /* XXX: push this into libdnf */
@@ -2031,6 +2162,23 @@ rpmostree_context_download (RpmOstreeContext *self,
   }
 
   return TRUE;
+}
+
+
+/* Returns: (transfer none): The jigdo package */
+DnfPackage *
+rpmostree_context_get_jigdo_pkg (RpmOstreeContext  *self)
+{
+  g_assert (self->jigdo_spec);
+  return self->jigdo_pkg;
+}
+
+/* Returns: (transfer none): The jigdo checksum */
+const char *
+rpmostree_context_get_jigdo_checksum (RpmOstreeContext  *self)
+{
+  g_assert (self->jigdo_spec);
+  return self->jigdo_checksum;
 }
 
 static inline void
@@ -3023,6 +3171,8 @@ run_all_transfiletriggers (RpmOstreeContext *self,
                            GCancellable *cancellable,
                            GError      **error)
 {
+  g_assert (!self->jigdo_pure);
+
   /* Triggers from base packages, but only if we already have an rpmdb,
    * otherwise librpm will whine on our stderr.
    */
