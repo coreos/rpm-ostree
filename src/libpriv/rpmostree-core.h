@@ -29,6 +29,8 @@
 #define RPMOSTREE_CORE_CACHEDIR "/var/cache/rpm-ostree/"
 /* See http://lists.rpm.org/pipermail/rpm-maint/2017-October/006681.html */
 #define RPMOSTREE_RPMDB_LOCATION "usr/share/rpm"
+#define RPMOSTREE_SYSIMAGE_DIR "usr/lib/sysimage"
+#define RPMOSTREE_BASE_RPMDB RPMOSTREE_SYSIMAGE_DIR "/rpm-ostree-base-db"
 
 #define RPMOSTREE_TYPE_CONTEXT (rpmostree_context_get_type ())
 G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, GObject)
