@@ -130,12 +130,25 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
     rpmostree_transaction_emit_task_end (RPMOSTREE_TRANSACTION (transaction),
                                          ((RpmOstreeOutputTaskEnd*)data)->text);
     break;
-  case RPMOSTREE_OUTPUT_PERCENT_PROGRESS:
+  case RPMOSTREE_OUTPUT_PROGRESS_PERCENT:
     rpmostree_transaction_emit_percent_progress (RPMOSTREE_TRANSACTION (transaction),
-                                                 ((RpmOstreeOutputPercentProgress*)data)->text,
-                                                 ((RpmOstreeOutputPercentProgress*)data)->percentage);
+                                                 ((RpmOstreeOutputProgressPercent*)data)->text,
+                                                 ((RpmOstreeOutputProgressPercent*)data)->percentage);
     break;
-  case RPMOSTREE_OUTPUT_PERCENT_PROGRESS_END:
+  case RPMOSTREE_OUTPUT_PROGRESS_N_ITEMS:
+    {
+      RpmOstreeOutputProgressNItems *nitems = data;
+      /* We still emit PercentProgress for compatibility with older clients as
+       * well as Cockpit. It's not worth trying to deal with version skew just
+       * for this yet.
+       */
+      int percentage = (nitems->current == nitems->total) ? 100 :
+        (((double)(nitems->current)) / (nitems->total) * 100);
+      g_autofree char *newtext = g_strdup_printf ("%s (%u/%u)", nitems->text, nitems->current, nitems->total);
+      rpmostree_transaction_emit_percent_progress (RPMOSTREE_TRANSACTION (transaction), newtext, percentage);
+    }
+    break;
+  case RPMOSTREE_OUTPUT_PROGRESS_END:
     rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
     break;
   }

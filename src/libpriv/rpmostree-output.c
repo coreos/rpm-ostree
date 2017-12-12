@@ -47,14 +47,23 @@ rpmostree_output_default_handler (RpmOstreeOutputType type,
   case RPMOSTREE_OUTPUT_TASK_END:
     g_print ("%s\n", ((RpmOstreeOutputTaskEnd*)data)->text);
     break;
-  case RPMOSTREE_OUTPUT_PERCENT_PROGRESS:
+  case RPMOSTREE_OUTPUT_PROGRESS_PERCENT:
     if (!console.locked)
       glnx_console_lock (&console);
     glnx_console_progress_text_percent (
-      ((RpmOstreeOutputPercentProgress*)data)->text,
-      ((RpmOstreeOutputPercentProgress*)data)->percentage);
+      ((RpmOstreeOutputProgressPercent*)data)->text,
+      ((RpmOstreeOutputProgressPercent*)data)->percentage);
     break;
-  case RPMOSTREE_OUTPUT_PERCENT_PROGRESS_END:
+  case RPMOSTREE_OUTPUT_PROGRESS_N_ITEMS:
+    {
+      RpmOstreeOutputProgressNItems *nitems = data;
+      if (!console.locked)
+        glnx_console_lock (&console);
+
+      glnx_console_progress_n_items (nitems->text, nitems->current, nitems->total);
+    }
+    break;
+  case RPMOSTREE_OUTPUT_PROGRESS_END:
     if (console.locked)
       glnx_console_unlock (&console);
     break;
@@ -104,14 +113,21 @@ rpmostree_output_task_end (const char *format, ...)
 }
 
 void
-rpmostree_output_percent_progress (const char *text, int percentage)
+rpmostree_output_progress_percent (const char *text, int percentage)
 {
-  RpmOstreeOutputPercentProgress progress = { text, percentage };
-  active_cb (RPMOSTREE_OUTPUT_PERCENT_PROGRESS, &progress, active_cb_opaque);
+  RpmOstreeOutputProgressPercent progress = { text, percentage };
+  active_cb (RPMOSTREE_OUTPUT_PROGRESS_PERCENT, &progress, active_cb_opaque);
 }
 
 void
-rpmostree_output_percent_progress_end (void)
+rpmostree_output_progress_n_items (const char *text, guint current, guint total)
 {
-  active_cb (RPMOSTREE_OUTPUT_PERCENT_PROGRESS_END, NULL, active_cb_opaque);
+  RpmOstreeOutputProgressNItems progress = { text, current, total };
+  active_cb (RPMOSTREE_OUTPUT_PROGRESS_N_ITEMS, &progress, active_cb_opaque);
+}
+
+void
+rpmostree_output_progress_end (void)
+{
+  active_cb (RPMOSTREE_OUTPUT_PROGRESS_END, NULL, active_cb_opaque);
 }
