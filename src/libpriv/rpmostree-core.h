@@ -132,6 +132,10 @@ gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
 gboolean rpmostree_context_prepare (RpmOstreeContext     *self,
                                     GCancellable   *cancellable,
                                     GError        **error);
+/* Like above, but used for "pure jigdo" cases */
+gboolean rpmostree_context_prepare_jigdo (RpmOstreeContext     *self,
+                                          GCancellable   *cancellable,
+                                          GError        **error);
 
 /* Alternative to _prepare() for non-depsolve cases like jigdo */
 gboolean rpmostree_context_set_packages (RpmOstreeContext *self,
@@ -150,6 +154,9 @@ rpmostree_context_consume_package (RpmOstreeContext  *self,
                                    DnfPackage        *package,
                                    int               *out_fd,
                                    GError           **error);
+
+DnfPackage *rpmostree_context_get_jigdo_pkg (RpmOstreeContext  *self);
+const char *rpmostree_context_get_jigdo_checksum (RpmOstreeContext  *self);
 
 gboolean rpmostree_context_import (RpmOstreeContext *self,
                                    GCancellable     *cancellable,

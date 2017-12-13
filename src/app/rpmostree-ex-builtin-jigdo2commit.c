@@ -142,15 +142,6 @@ commit_and_print (RpmOstreeJigdo2CommitContext *self,
 }
 
 static int
-compare_pkgs_reverse (gconstpointer ap,
-                      gconstpointer bp)
-{
-  DnfPackage **a = (gpointer)ap;
-  DnfPackage **b = (gpointer)bp;
-  return dnf_package_cmp (*b, *a); // Reverse
-}
-
-static int
 compare_pkgs (gconstpointer ap,
                       gconstpointer bp)
 {
@@ -161,23 +152,15 @@ compare_pkgs (gconstpointer ap,
 
 static gboolean
 impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
-                   const char                   *repoid_and_oirpm_name,
+                   const char                   *jigdo_id,
                    GCancellable                 *cancellable,
                    GError                      **error)
 {
-  g_autofree char *oirpm_repoid = NULL;
-  g_autofree char *oirpm_name = NULL;
-
-  /* We expect REPOID:OIRPM-NAME */
-  { const char *colon = strchr (repoid_and_oirpm_name, ':');
-    if (!colon)
-      return glnx_throw (error, "Invalid OIRPM spec '%s', expected repoid:name", repoid_and_oirpm_name);
-    oirpm_repoid = g_strndup (repoid_and_oirpm_name, colon - repoid_and_oirpm_name);
-    oirpm_name = g_strdup (colon + 1);
-  }
-
   g_autoptr(GKeyFile) tsk = g_key_file_new ();
 
+  g_key_file_set_string (tsk, "tree", "jigdo", jigdo_id);
+  if (opt_oirpm_version)
+    g_key_file_set_string (tsk, "tree", "jigdo-version", opt_oirpm_version);
   if (opt_releasever)
     g_key_file_set_string (tsk, "tree", "releasever", opt_releasever);
   if (opt_enable_rpmmdrepo)
@@ -188,67 +171,16 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
   if (!treespec)
     return FALSE;
 
+  /* We're also "pure" jigdo - this adds assertions that we don't depsolve for example */
   if (!rpmostree_context_setup (self->ctx, NULL, NULL, treespec, cancellable, error))
     return FALSE;
-  if (!rpmostree_context_download_metadata (self->ctx, cancellable, error))
+  if (!rpmostree_context_prepare_jigdo (self->ctx, cancellable, error))
     return FALSE;
 
+  DnfPackage* oirpm_pkg = rpmostree_context_get_jigdo_pkg (self->ctx);
+  const char *provided_commit = rpmostree_context_get_jigdo_checksum (self->ctx);
+
   DnfContext *dnfctx = rpmostree_context_get_dnf (self->ctx);
-  g_autoptr(DnfPackage) oirpm_pkg = NULL;
-  g_autofree char *provided_commit = NULL;
-  { hy_autoquery HyQuery query = hy_query_create (dnf_context_get_sack (dnfctx));
-    hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, oirpm_repoid);
-    hy_query_filter (query, HY_PKG_NAME, HY_EQ, oirpm_name);
-    if (opt_oirpm_version)
-      hy_query_filter (query, HY_PKG_VERSION, HY_EQ, opt_oirpm_version);
-    g_autoptr(GPtrArray) pkglist = hy_query_run (query);
-    if (pkglist->len == 0)
-      return glnx_throw (error, "Failed to find jigdo OIRPM package '%s'", oirpm_name);
-    g_ptr_array_sort (pkglist, compare_pkgs_reverse);
-    if (pkglist->len > 1)
-      {
-        g_print ("%u oirpm matches\n", pkglist->len);
-      }
-    g_ptr_array_set_size (pkglist, 1);
-    oirpm_pkg = g_object_ref (pkglist->pdata[0]);
-
-    /* Iterate over provides directly to provide a nicer error on mismatch */
-    gboolean found_vprovide = FALSE;
-    g_autoptr(DnfReldepList) provides = dnf_package_get_provides (oirpm_pkg);
-    const gint n_provides = dnf_reldep_list_count (provides);
-    for (int i = 0; i < n_provides; i++)
-      {
-        DnfReldep *provide = dnf_reldep_list_index (provides, i);
-
-        const char *provide_str = dnf_reldep_to_string (provide);
-        if (g_str_equal (provide_str, RPMOSTREE_JIGDO_PROVIDE_V3))
-          {
-            found_vprovide = TRUE;
-          }
-        else if (g_str_has_prefix (provide_str, RPMOSTREE_JIGDO_PROVIDE_COMMIT))
-          {
-            const char *rest = provide_str + strlen (RPMOSTREE_JIGDO_PROVIDE_COMMIT);
-            if (*rest != '(')
-              return glnx_throw (error, "Invalid %s", provide_str);
-            rest++;
-            const char *closeparen = strchr (rest, ')');
-            if (!closeparen)
-              return glnx_throw (error, "Invalid %s", provide_str);
-
-            provided_commit = g_strndup (rest, closeparen - rest);
-            if (strlen (provided_commit) != OSTREE_SHA256_STRING_LEN)
-              return glnx_throw (error, "Invalid %s", provide_str);
-          }
-      }
-
-    if (!found_vprovide)
-      return glnx_throw (error, "Package '%s' does not have Provides: %s",
-                         dnf_package_get_nevra (oirpm_pkg), RPMOSTREE_JIGDO_PROVIDE_V3);
-    if (!provided_commit)
-      return glnx_throw (error, "Package '%s' does not have Provides: %s",
-                         dnf_package_get_nevra (oirpm_pkg), RPMOSTREE_JIGDO_PROVIDE_COMMIT);
-  }
-
   g_print ("oirpm: %s (%s) commit=%s\n", dnf_package_get_nevra (oirpm_pkg),
            dnf_package_get_reponame (oirpm_pkg), provided_commit);
 
