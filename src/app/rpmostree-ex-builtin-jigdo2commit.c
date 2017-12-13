@@ -172,10 +172,9 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
     return FALSE;
 
   /* We're also "pure" jigdo - this adds assertions that we don't depsolve for example */
-  rpmostree_context_set_is_pure_jigdo (self->ctx);
   if (!rpmostree_context_setup (self->ctx, NULL, NULL, treespec, cancellable, error))
     return FALSE;
-  if (!rpmostree_context_prepare (self->ctx, cancellable, error))
+  if (!rpmostree_context_prepare_jigdo (self->ctx, cancellable, error))
     return FALSE;
 
   DnfPackage* oirpm_pkg = rpmostree_context_get_jigdo_pkg (self->ctx);

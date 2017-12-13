@@ -74,7 +74,6 @@ rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
                                              OstreeDeployment *cfg_deployment);
 
 void rpmostree_context_set_is_empty (RpmOstreeContext *self);
-void rpmostree_context_set_is_pure_jigdo (RpmOstreeContext *self);
 
 void rpmostree_context_set_repos (RpmOstreeContext *self,
                                   OstreeRepo       *base_repo,
@@ -131,6 +130,10 @@ gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
 gboolean rpmostree_context_prepare (RpmOstreeContext     *self,
                                     GCancellable   *cancellable,
                                     GError        **error);
+/* Like above, but used for "pure jigdo" cases */
+gboolean rpmostree_context_prepare_jigdo (RpmOstreeContext     *self,
+                                          GCancellable   *cancellable,
+                                          GError        **error);
 
 /* Alternative to _prepare() for non-depsolve cases like jigdo */
 gboolean rpmostree_context_set_packages (RpmOstreeContext *self,

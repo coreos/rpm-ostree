@@ -483,17 +483,6 @@ rpmostree_context_set_is_empty (RpmOstreeContext *self)
   self->empty = TRUE;
 }
 
-/* Call this to ensure we don't do any "package stuff" like
- * depsolving - we're in "pure jigdo" mode.  If specified
- * this obviously means there are no layered packages for
- * example.
- */
-void
-rpmostree_context_set_is_pure_jigdo (RpmOstreeContext *self)
-{
-  self->jigdo_pure = TRUE;
-}
-
 /* XXX: or put this in new_system() instead? */
 void
 rpmostree_context_set_repos (RpmOstreeContext *self,
@@ -1953,6 +1942,20 @@ rpmostree_context_prepare (RpmOstreeContext *self,
     }
 
   return TRUE;
+}
+
+/* Call this to ensure we don't do any "package stuff" like
+ * depsolving - we're in "pure jigdo" mode.  If specified
+ * this obviously means there are no layered packages for
+ * example.
+ */
+gboolean
+rpmostree_context_prepare_jigdo (RpmOstreeContext *self,
+                                 GCancellable     *cancellable,
+                                 GError          **error)
+{
+  self->jigdo_pure = TRUE;
+  return rpmostree_context_prepare (self, cancellable, error);
 }
 
 /* Rather than doing a depsolve, directly set which packages
