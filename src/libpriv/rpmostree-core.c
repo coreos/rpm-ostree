@@ -3421,8 +3421,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                                   error))
         return FALSE;
 
-      /* Also neuter systemctl - at least glusterfs calls it
-       * in %post without disallowing errors.  Anyways,
+      /* Also neuter systemctl - at least glusterfs for example calls `systemctl
+       * start` in its %post which both violates Fedora policy and also will not
+       * work with the rpm-ostree model.
+       * See also https://github.com/projectatomic/rpm-ostree/issues/550
        */
       if (renameat (tmprootfs_dfd, "usr/bin/systemctl",
                     tmprootfs_dfd, "usr/bin/systemctl.rpmostreesave") < 0)
@@ -3435,8 +3437,18 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       else
         {
           have_systemctl = TRUE;
-          if (symlinkat ("true", tmprootfs_dfd, "usr/bin/systemctl") < 0)
-            return glnx_throw_errno_prefix (error, "symlinkat(usr/bin/systemctl)");
+          g_autoptr(GBytes) systemctl_wrapper = g_resources_lookup_data ("/rpmostree/systemctl-wrapper.sh",
+                                                                         G_RESOURCE_LOOKUP_FLAGS_NONE,
+                                                                         error);
+          if (!systemctl_wrapper)
+            return FALSE;
+          size_t len;
+          const guint8* buf = g_bytes_get_data (systemctl_wrapper, &len);
+          if (!glnx_file_replace_contents_with_perms_at (tmprootfs_dfd, "usr/bin/systemctl",
+                                                         buf, len, 0755, (uid_t) -1, (gid_t) -1,
+                                                         GLNX_FILE_REPLACE_NODATASYNC,
+                                                         cancellable, error))
+            return FALSE;
         }
 
       /* Necessary for unified core to work with semanage calls in %post, like container-selinux */
