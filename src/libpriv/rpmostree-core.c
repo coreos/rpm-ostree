@@ -3301,20 +3301,21 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   guint overrides_total = overrides_remove->len + overrides_replace->len;
   if (overrides_total > 0 && overlays->len > 0)
-    rpmostree_output_task_begin ("Applying %u override%s and %u overlay%s",
-                                 overrides_total, _NS(overrides_total),
-                                 overlays->len, _NS(overlays->len));
+    rpmostree_output_message ("Applying %u override%s and %u overlay%s",
+                              overrides_total, _NS(overrides_total),
+                              overlays->len, _NS(overlays->len));
   else if (overrides_total > 0)
-    rpmostree_output_task_begin ("Applying %u override%s", overrides_total,
-                                 _NS(overrides_total));
+    rpmostree_output_message ("Applying %u override%s", overrides_total,
+                              _NS(overrides_total));
   else if (overlays->len > 0)
-    rpmostree_output_task_begin ("Applying %u overlay%s", overlays->len,
-                                 _NS(overlays->len));
+    rpmostree_output_message ("Applying %u overlay%s", overlays->len,
+                              _NS(overlays->len));
   else
     g_assert_not_reached ();
 
-  guint n_rpmts_elements = (guint)rpmtsNElements (ordering_ts);
+  const guint n_rpmts_elements = (guint)rpmtsNElements (ordering_ts);
   g_assert (n_rpmts_elements > 0);
+  guint n_rpmts_done = 0;
 
   /* Okay so what's going on in Fedora with incestuous relationship
    * between the `filesystem`, `setup`, `libgcc` RPMs is actively
@@ -3335,6 +3336,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                        OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL,
                                        cancellable, error))
         return FALSE;
+      n_rpmts_done++;
+      rpmostree_output_progress_n_items ("Building filesystem", n_rpmts_done, n_rpmts_elements);
     }
 
   /* We're completely disregarding how rpm normally does upgrades/downgrade here. rpm
@@ -3356,6 +3359,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
       if (!delete_package_from_root (self, te, tmprootfs_dfd, cancellable, error))
         return FALSE;
+      n_rpmts_done++;
+      rpmostree_output_progress_n_items ("Building filesystem", n_rpmts_done, n_rpmts_elements);
     }
 
   for (guint i = 0; i < n_rpmts_elements; i++)
@@ -3383,9 +3388,11 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                        g_hash_table_lookup (pkg_to_ostree_commit, pkg),
                                        ovwmode, cancellable, error))
         return FALSE;
+      n_rpmts_done++;
+      rpmostree_output_progress_n_items ("Building filesystem", n_rpmts_done, n_rpmts_elements);
     }
 
-  rpmostree_output_task_end ("done");
+  rpmostree_output_progress_end ();
 
   if (!rpmostree_rootfs_prepare_links (tmprootfs_dfd, cancellable, error))
     return FALSE;
