@@ -45,6 +45,8 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-rpm-util.h \
 	src/libpriv/rpmostree-importer.c \
 	src/libpriv/rpmostree-importer.h \
+	src/libpriv/rpmostree-jigdo-build.c \
+	src/libpriv/rpmostree-jigdo-build.h \
 	src/libpriv/rpmostree-jigdo-assembler.c \
 	src/libpriv/rpmostree-jigdo-assembler.h \
 	src/libpriv/rpmostree-jigdo-core.h \
