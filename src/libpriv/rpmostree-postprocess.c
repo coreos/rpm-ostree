@@ -78,7 +78,7 @@ run_bwrap_mutably (int           rootfs_fd,
                                  RPMOSTREE_BWRAP_MUTATE_FREELY,
                                  error,
                                  "--bind", "var", "/var",
-                                 "--bind", "etc", "/etc",
+                                 "--bind", "usr/etc", "/etc",
                                  NULL);
 
   if (!bwrap)
