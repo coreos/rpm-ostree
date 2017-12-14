@@ -2944,12 +2944,14 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
       const char *user = rpmfiFUser (fi) ?: "root";
       const char *group = rpmfiFGroup (fi) ?: "root";
       const char *fcaps = rpmfiFCaps (fi) ?: '\0';
+      const gboolean have_fcaps = fcaps[0] != '\0';
       rpm_mode_t mode = rpmfiFMode (fi);
       rpmfileAttrs fattrs = rpmfiFFlags (fi);
       const gboolean is_ghost = fattrs & RPMFILE_GHOST;
 
       if (g_str_equal (user, "root") &&
-          g_str_equal (group, "root"))
+          g_str_equal (group, "root") &&
+          !have_fcaps)
         continue;
 
       /* In theory, RPMs could contain block devices or FIFOs; we would normally
@@ -3057,7 +3059,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
         return glnx_throw_errno_prefix (error, "fchownat(%s)", fn);
 
       /* the chown clears away file caps, so reapply it here */
-      if (fcaps[0] != '\0')
+      if (have_fcaps)
         {
           g_autoptr(GVariant) xattrs = rpmostree_fcap_to_xattr_variant (fcaps);
           if (!glnx_dfd_name_set_all_xattrs (tmprootfs_dfd, fn, xattrs,
