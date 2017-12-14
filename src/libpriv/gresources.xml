@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/rpmostree">
+    <file>systemctl-wrapper.sh</file>
+  </gresource>
+</gresources>
