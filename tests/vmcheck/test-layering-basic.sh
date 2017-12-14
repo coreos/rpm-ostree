@@ -135,12 +135,12 @@ echo "ok cleanup"
 
 # install foo and make sure it was imported
 vm_rpmostree install foo | tee output.txt
-assert_file_has_content output.txt '^Importing:'
+assert_file_has_content output.txt '^Importing (1/1)'
 
 # upgrade with same foo in repos --> shouldn't re-import
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
 vm_rpmostree upgrade | tee output.txt
-assert_not_file_has_content output.txt '^Importing:'
+assert_not_file_has_content output.txt '^Importing ('
 
 # upgrade with different foo in repos --> should re-import
 c1=$(sha256sum ${test_tmpdir}/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm)
@@ -150,7 +150,7 @@ if cmp -s c1 c2; then
   assert_not_reached "RPM rebuild yielded same SHA256"
 fi
 vm_rpmostree upgrade | tee output.txt
-assert_file_has_content output.txt '^Importing:'
+assert_file_has_content output.txt '^Importing (1/1)'
 echo "ok invalidate pkgcache from RPM chksum"
 
 # make sure installing in /boot translates to /usr/lib/ostree-boot
