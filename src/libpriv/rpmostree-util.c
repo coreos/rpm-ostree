@@ -731,67 +731,6 @@ rpmostree_stdout_is_journal (void)
   return stdout_is_socket;
 }
 
-/* Given a path to a file/symlink, make a copy (reflink if possible)
- * of it if it's a hard link.  We need this in a few places right now:
- *  - The RPM database
- *  - SELinux policy "denormalization" where a label changes
- *  - Working around shadow-utils opening /etc/passwd with O_RDWR
- *  - Upon applying rpmfi overrides during assembly
- */
-gboolean
-rpmostree_break_hardlink (int           dfd,
-                          const char   *path,
-                          GLnxFileCopyFlags copyflags,
-                          GCancellable *cancellable,
-                          GError      **error)
-{
-   struct stat stbuf;
-
-  if (!glnx_fstatat (dfd, path, &stbuf, AT_SYMLINK_NOFOLLOW, error))
-    return FALSE;
-
-  if (!S_ISLNK (stbuf.st_mode) && !S_ISREG (stbuf.st_mode))
-    return glnx_throw (error, "Unsupported type for entry '%s'", path);
-
-  if (stbuf.st_nlink > 1)
-    {
-      guint count;
-      gboolean copy_success = FALSE;
-      char *path_tmp = glnx_strjoina (path, ".XXXXXX");
-
-      for (count = 0; count < 100; count++)
-        {
-          g_autoptr(GError) tmp_error = NULL;
-
-          glnx_gen_temp_name (path_tmp);
-
-          if (!glnx_file_copy_at (dfd, path, &stbuf, dfd, path_tmp, copyflags,
-                                  cancellable, &tmp_error))
-            {
-              if (g_error_matches (tmp_error, G_IO_ERROR, G_IO_ERROR_EXISTS))
-                continue;
-              g_propagate_error (error, g_steal_pointer (&tmp_error));
-              return FALSE;
-            }
-
-          copy_success = TRUE;
-          break;
-        }
-
-      if (!copy_success)
-        {
-          g_set_error (error, G_IO_ERROR, G_IO_ERROR_EXISTS,
-                       "Exceeded limit of %u file creation attempts", count);
-          return FALSE;
-        }
-
-      if (!glnx_renameat (dfd, path_tmp, dfd, path, error))
-        return FALSE;
-    }
-
-  return TRUE;
-}
-
 /* Given the result of rpm_ostree_db_diff(), print it. */
 void
 rpmostree_diff_print (GPtrArray *removed,

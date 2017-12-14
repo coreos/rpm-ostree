@@ -2523,8 +2523,8 @@ break_hardlinks_at (int             dfd,
         return FALSE;
       if (dent == NULL)
         break;
-      if (!rpmostree_break_hardlink (dfd_iter.fd, dent->d_name, 0,
-                                     cancellable, error))
+      if (!ostree_break_hardlink (dfd_iter.fd, dent->d_name, FALSE,
+                                  cancellable, error))
         return FALSE;
     }
 
@@ -3010,7 +3010,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
 
       if (!S_ISDIR (stbuf.st_mode))
         {
-          if (!rpmostree_break_hardlink (tmprootfs_dfd, fn, 0, cancellable, error))
+          if (!ostree_break_hardlink (tmprootfs_dfd, fn, FALSE, cancellable, error))
             return FALSE;
         }
 

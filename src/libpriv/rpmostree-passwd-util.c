@@ -1071,8 +1071,8 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
       if (errno == ENOENT)
         continue;
 
-      if (!rpmostree_break_hardlink (rootfs_dfd, src, GLNX_FILE_COPY_NOXATTRS,
-                                     cancellable, error))
+      if (!ostree_break_hardlink (rootfs_dfd, src, TRUE,
+                                  cancellable, error))
         return FALSE;
     }
 
