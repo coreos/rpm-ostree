@@ -42,6 +42,10 @@ ostree --repo=${repobuild} ls ${treeref} /usr/bin/su > su.txt
 assert_file_has_content su.txt '^-04[71][0-7][0-7]'
 echo "ok setuid"
 
+ostree --repo=${repobuild} ls -X ${treeref} /usr/bin/ping > ping.txt
+assert_file_has_content_literal ping.txt "b'security.capability', [byte"
+echo "ok fcaps"
+
 # https://github.com/projectatomic/rpm-ostree/issues/669
 ostree --repo=${repobuild} ls  ${treeref} /tmp > ls.txt
 assert_file_has_content ls.txt 'l00777 0 0      0 /tmp -> sysroot/tmp'
