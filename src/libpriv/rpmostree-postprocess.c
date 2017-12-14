@@ -66,26 +66,21 @@ run_bwrap_mutably (int           rootfs_fd,
                    GCancellable *cancellable,
                    GError      **error)
 {
-  const char *etc_bind;
-
-  /* This gets called both by treecompose, where in the non-unified path we just
-   * have /etc, and in kernel postprocessing where we have usr/etc.
-   */
-  if (!glnx_fstatat_allow_noent (rootfs_fd, "etc", NULL, 0, error))
-    return FALSE;
-  if (errno == ENOENT)
-    etc_bind = "usr/etc";
+  g_autoptr(RpmOstreeBwrap) bwrap = NULL;
+  if (unified_core_mode)
+    bwrap = rpmostree_bwrap_new (rootfs_fd,
+                                 RPMOSTREE_BWRAP_MUTATE_ROFILES,
+                                 error,
+                                 "--ro-bind", "./var", "/var",
+                                 NULL);
   else
-    etc_bind = "etc";
+    bwrap = rpmostree_bwrap_new (rootfs_fd,
+                                 RPMOSTREE_BWRAP_MUTATE_FREELY,
+                                 error,
+                                 "--bind", "var", "/var",
+                                 "--bind", "usr/etc", "/etc",
+                                 NULL);
 
-  g_autoptr(RpmOstreeBwrap) bwrap =
-    rpmostree_bwrap_new (rootfs_fd,
-                         unified_core_mode ? RPMOSTREE_BWRAP_MUTATE_ROFILES :
-                                             RPMOSTREE_BWRAP_MUTATE_FREELY,
-                         error,
-                         "--bind", "var", "/var",
-                         "--bind", etc_bind, "/etc",
-                         NULL);
   if (!bwrap)
     return FALSE;
 
