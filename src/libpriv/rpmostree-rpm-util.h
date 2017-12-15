@@ -100,7 +100,6 @@ rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
 RpmOstreeRefSack *
 rpmostree_get_refsack_for_root (int              dfd,
                                 const char      *path,
-                                GCancellable    *cancellable,
                                 GError         **error);
 
 gboolean
@@ -110,13 +109,8 @@ rpmostree_get_refts_for_commit (OstreeRepo                *repo,
                                 GCancellable              *cancellable,
                                 GError                   **error);
 
-gboolean
-rpmostree_get_pkglist_for_root (int               dfd,
-                                const char       *path,
-                                RpmOstreeRefSack **out_refsack,
-                                GPtrArray        **out_pkglist,
-                                GCancellable     *cancellable,
-                                GError          **error);
+GPtrArray*
+rpmostree_get_pkglist_in_refsack (RpmOstreeRefSack  *refsack);
 
 void
 rpmostree_print_transaction (DnfContext   *context);
