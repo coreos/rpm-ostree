@@ -1,0 +1,8 @@
+[Unit]
+Description=RPM-OSTree Automatic Update
+Documentation=man:rpm-ostree(1) man:rpm-ostreed.conf(5)
+ConditionPathExists=/run/ostree-booted
+
+[Service]
+Type=oneshot
+ExecStart=@bindir@/rpm-ostree upgrade --automatic

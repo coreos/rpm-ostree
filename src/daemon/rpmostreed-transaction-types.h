@@ -19,6 +19,7 @@
 #pragma once
 
 #include "rpmostreed-types.h"
+#include "rpmostreed-daemon.h"
 
 #include <gio/gunixfdlist.h>
 
@@ -56,6 +57,7 @@ typedef enum {
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES = (1 << 6),
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_CACHE_ONLY = (1 << 7),
   RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY = (1 << 8),
+  RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY = (1 << 9),
 } RpmOstreeTransactionDeployFlags;
 
 

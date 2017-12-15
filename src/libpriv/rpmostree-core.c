@@ -46,10 +46,6 @@
 #define RPMOSTREE_MESSAGE_PKG_REPOS SD_ID128_MAKE(0e,ea,67,9b,bf,a3,4d,43,80,2d,ec,99,b2,74,eb,e7)
 #define RPMOSTREE_MESSAGE_PKG_IMPORT SD_ID128_MAKE(df,8b,b5,4f,04,fa,47,08,ac,16,11,1b,bf,4b,a3,52)
 
-#define RPMOSTREE_DIR_CACHE_REPOMD "repomd"
-#define RPMOSTREE_DIR_CACHE_SOLV "solv"
-#define RPMOSTREE_DIR_LOCK "lock"
-
 static OstreeRepo * get_pkgcache_repo (RpmOstreeContext *self);
 
 /* Given a string, look for ostree:// or rojig:// prefix and

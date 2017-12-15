@@ -122,3 +122,9 @@ rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
                              char        **out_transaction_address,
                              GCancellable *cancellable,
                              GError      **error);
+
+gboolean
+rpmostree_print_cached_update (GVariant         *cached_update,
+                               gboolean          verbose,
+                               GCancellable     *cancellable,
+                               GError          **error);

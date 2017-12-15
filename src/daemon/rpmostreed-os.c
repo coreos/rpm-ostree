@@ -20,6 +20,7 @@
 #include "ostree.h"
 
 #include <libglnx.h>
+#include <systemd/sd-journal.h>
 
 #include "rpmostreed-sysroot.h"
 #include "rpmostreed-daemon.h"
@@ -119,7 +120,9 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
     {
       g_ptr_array_add (actions, "org.projectatomic.rpmostree1.deploy");
     }
-  else if (g_strcmp0 (method_name, "Upgrade") == 0)
+  /* unite these for now; it could make sense at least to make "check" its own action */
+  else if (g_strcmp0 (method_name, "Upgrade") == 0 ||
+           g_strcmp0 (method_name, "AutomaticUpdateTrigger") == 0)
     {
       g_ptr_array_add (actions, "org.projectatomic.rpmostree1.upgrade");
     }
@@ -713,6 +716,20 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
                                             cancellable, error);
 }
 
+static gboolean
+refresh_cached_update (RpmostreedOS*, GError **error);
+
+static void
+on_auto_update_done (RpmostreedTransaction *transaction, RpmostreedOS *self)
+{
+  g_autoptr(GError) local_error = NULL;
+  if (!refresh_cached_update (self, &local_error))
+    {
+      sd_journal_print (LOG_WARNING, "Failed to refresh CachedUpdate property: %s",
+                        local_error->message);
+    }
+}
+
 typedef void (*InvocationCompleter)(RPMOSTreeOS*,
                                     GDBusMethodInvocation*,
                                     GUnixFDList*,
@@ -772,8 +789,15 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
                                           fd_list,
                                           &local_error);
       if (transaction)
-        rpmostreed_transaction_monitor_add (self->transaction_monitor,
-                                            transaction);
+        rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+
+      /* For the AutomaticUpdateTrigger "check" and "download" cases, we want to make sure
+       * we refresh CachedUpdate after; "deploy" will do this through sysroot_changed */
+      const char *method_name = g_dbus_method_invocation_get_method_name (invocation);
+      if (g_str_equal (method_name, "AutomaticUpdateTrigger") &&
+          (default_flags & (RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY |
+                            RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY)))
+        g_signal_connect (transaction, "closed", G_CALLBACK (on_auto_update_done), self);
     }
 
   if (transaction)
@@ -891,6 +915,75 @@ os_handle_update_deployment (RPMOSTreeOS *interface,
                                            0, arg_options, modifiers, fd_list,
                                            rpmostree_os_complete_update_deployment);
 }
+
+/* compat shim for call completer */
+static void automatic_update_trigger_completer (RPMOSTreeOS            *os,
+                                                GDBusMethodInvocation  *invocation,
+                                                GUnixFDList            *dummy,
+                                                const gchar            *address)
+{                                                              /* enabled */
+  rpmostree_os_complete_automatic_update_trigger (os, invocation, TRUE, address);
+}
+
+
+/* we make this a separate method to keep the D-Bus API clean, but the actual
+ * implementation is done by our dear friend deploy_transaction_execute(). ❤️
+ */
+
+static gboolean
+os_handle_automatic_update_trigger (RPMOSTreeOS *interface,
+                                    GDBusMethodInvocation *invocation,
+                                    GVariant *arg_options)
+{
+  g_auto(GVariantDict) dict;
+  g_variant_dict_init (&dict, arg_options);
+  const char *mode = vardict_lookup_ptr (&dict, "mode", "&s") ?: "auto";
+  g_autoptr(GError) local_error = NULL;
+  GError **error = &local_error;
+
+  RpmostreedAutomaticUpdatePolicy autoupdate_policy;
+  if (g_str_equal (mode, "auto"))
+    autoupdate_policy = rpmostreed_get_automatic_update_policy (rpmostreed_daemon_get ());
+  else
+    {
+      if (!rpmostree_str_to_auto_update_policy (mode, &autoupdate_policy, error))
+        {
+          g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+          return TRUE;
+        }
+    }
+
+  /* Now we translate policy into flags the deploy transaction understands. But avoid
+   * starting it at all if we're not even on. The benefit of this approach is that we keep
+   * the Deploy transaction simpler. */
+
+  RpmOstreeTransactionDeployFlags dfault = 0;
+  switch (autoupdate_policy)
+    {
+    case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_NONE:
+      {
+        /* NB: we return the empty string here rather than NULL, because gdbus converts this
+         * to a gvariant, which doesn't support NULL strings */             /* enabled */
+        rpmostree_os_complete_automatic_update_trigger (interface, invocation, FALSE, "");
+        return TRUE;
+      }
+    case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_CHECK:
+      dfault = RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY;
+      break;
+    default:
+      g_assert_not_reached ();
+    }
+
+  return os_merge_or_start_deployment_txn (
+      interface,
+      invocation,
+      dfault,
+      NULL,
+      NULL,
+      NULL,
+      automatic_update_trigger_completer);
+}
+
 
 static gboolean
 os_handle_rollback (RPMOSTreeOS *interface,
@@ -1597,22 +1690,51 @@ out:
 }
 
 static gboolean
+refresh_cached_update (RpmostreedOS *self, GError **error)
+{
+  const char *name = rpmostree_os_get_name (RPMOSTREE_OS (self));
+  OstreeSysroot *sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
+  OstreeRepo *repo = ostree_sysroot_repo (sysroot);
+
+  /* if we're not handling the system sysroot, then let's just skip all this (e.g. `make
+   * check` tests) */
+  const char *sysroot_path = gs_file_get_path_cached (ostree_sysroot_get_path (sysroot));
+  if (!g_str_equal (sysroot_path, "/"))
+    return TRUE;
+
+  /* Note here we're *not* using rpmostree_syscore_get_origin_merge_deployment(): cached
+   * updates are always relative to the booted/merge deployment; e.g. we still want to be
+   * able to show details about a pending deployment. */
+  g_autoptr(OstreeDeployment) merge_deployment =
+    ostree_sysroot_get_merge_deployment (sysroot, name);
+
+  g_autoptr(GVariant) cached_update = NULL;
+
+  if (!rpmostreed_update_generate_variant (sysroot, merge_deployment, repo,
+                                           &cached_update, error))
+    return FALSE;
+
+  rpmostree_os_set_cached_update (RPMOSTREE_OS (self), cached_update);
+
+  /* for backwards compatibility */
+  gboolean has_cached_updates = (cached_update != NULL);
+  rpmostree_os_set_has_cached_update_rpm_diff (RPMOSTREE_OS (self), has_cached_updates);
+  return TRUE;
+}
+
+static gboolean
 rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
 {
   const gchar *name;
 
   OstreeDeployment *booted = NULL; /* owned by sysroot */
   g_autofree gchar* booted_id = NULL;
-  glnx_unref_object  OstreeDeployment *merge_deployment = NULL; /* transfered */
-
   g_autoptr(GPtrArray) deployments = NULL;
   OstreeSysroot *ot_sysroot;
   OstreeRepo *ot_repo;
   GVariant *booted_variant = NULL;
   GVariant *default_variant = NULL;
   GVariant *rollback_variant = NULL;
-  g_autoptr(GVariant) cached_update = NULL;
-  gboolean has_cached_updates = FALSE;
 
   name = rpmostree_os_get_name (RPMOSTREE_OS (self));
   g_debug ("loading %s", name);
@@ -1661,25 +1783,6 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
         }
     }
 
-  merge_deployment = ostree_sysroot_get_merge_deployment (ot_sysroot, name);
-  if (merge_deployment)
-    {
-      g_autoptr(RpmOstreeOrigin) origin = NULL;
-
-      /* Don't fail here for unknown origin types */
-      origin = rpmostree_origin_parse_deployment (merge_deployment, NULL);
-      if (origin)
-        {
-          cached_update = rpmostreed_commit_generate_cached_details_variant (merge_deployment,
-                                                                             ot_repo,
-                                                                             rpmostree_origin_get_refspec (origin),
-                                                                             error);
-          if (!cached_update)
-            return FALSE;
-          has_cached_updates = cached_update != NULL;
-        }
-   }
-
   if (!booted_variant)
     booted_variant = rpmostreed_deployment_generate_blank_variant ();
   rpmostree_os_set_booted_deployment (RPMOSTREE_OS (self),
@@ -1695,10 +1798,10 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   rpmostree_os_set_rollback_deployment (RPMOSTREE_OS (self),
                                         rollback_variant);
 
-  rpmostree_os_set_cached_update (RPMOSTREE_OS (self), cached_update);
-  rpmostree_os_set_has_cached_update_rpm_diff (RPMOSTREE_OS (self),
-                                               has_cached_updates);
-  g_dbus_interface_skeleton_flush(G_DBUS_INTERFACE_SKELETON (self));
+  if (!refresh_cached_update (self, error))
+    return FALSE;
+
+  g_dbus_interface_skeleton_flush (G_DBUS_INTERFACE_SKELETON (self));
 
   return TRUE;
 }
@@ -1706,6 +1809,7 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
 static void
 rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
 {
+  iface->handle_automatic_update_trigger   = os_handle_automatic_update_trigger;
   iface->handle_cleanup                    = os_handle_cleanup;
   iface->handle_get_deployment_boot_config = os_handle_get_deployment_boot_config;
   iface->handle_kernel_args                = os_handle_kernel_args;

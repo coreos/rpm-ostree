@@ -68,11 +68,26 @@ Boston, MA 02111-1307, USA.
 
     <variablelist>
       <varlistentry>
+        <term><varname>AutomaticUpdatePolicy=</varname></term>
+
+        <listitem>
+        <para>Controls the automatic update policy. Currently "none" or "check".
+        "none" disables automatic updates. "check" downloads just enough metadata to check
+        for updates and display them in <command>rpm-ostree status</command>. Defaults to
+        "none".</para>
+
+        <para>Automatic updates enablement and frequency are controlled by the
+        <command>rpm-ostreed-automatic.timer</command> unit. <!-- XXX: needs man page -->
+        See <citerefentry><refentrytitle>systemd.timer</refentrytitle><manvolnum>5</manvolnum></citerefentry>
+        for more information on how to control systemd timers.</para>
+        </listitem>
+      </varlistentry>
+      <varlistentry>
         <term><varname>IdleExitTimeout=</varname></term>
 
         <listitem>
         <para>Controls the time in seconds of inactivity before the daemon exits. Use 0 to
-        disable auto-exit.</para>
+        disable auto-exit. Defaults to 60.</para>
         </listitem>
       </varlistentry>
     <!--

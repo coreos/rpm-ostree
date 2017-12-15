@@ -27,6 +27,10 @@
 #include "libglnx.h"
 
 #define RPMOSTREE_CORE_CACHEDIR "/var/cache/rpm-ostree/"
+#define RPMOSTREE_DIR_CACHE_REPOMD "repomd"
+#define RPMOSTREE_DIR_CACHE_SOLV "solv"
+#define RPMOSTREE_DIR_LOCK "lock"
+
 /* See http://lists.rpm.org/pipermail/rpm-maint/2017-October/006681.html */
 #define RPMOSTREE_RPMDB_LOCATION "usr/share/rpm"
 #define RPMOSTREE_SYSIMAGE_DIR "usr/lib/sysimage"

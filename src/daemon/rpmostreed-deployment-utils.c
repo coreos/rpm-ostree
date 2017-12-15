@@ -18,14 +18,18 @@
 
 #include "config.h"
 
+#include <systemd/sd-journal.h>
+#include <libglnx.h>
+
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostree-origin.h"
 #include "rpmostree-util.h"
+#include "rpmostree-rpm-util.h"
 #include "rpmostree-sysroot-core.h"
+#include "rpmostree-core.h"
+#include "rpmostree-package-variants.h"
 #include "rpmostreed-utils.h"
 #include "rpmostreed-errors.h"
-
-#include <libglnx.h>
 
 /* Get a currently unique (for this host) identifier for the
  * deployment; TODO - adding the deployment timestamp would make it
@@ -187,7 +191,7 @@ variant_add_metadata_attribute (GVariantDict *dict,
 
 static void
 variant_add_commit_details (GVariantDict *dict,
-                            const char *prefix,
+                            const char   *prefix,
                             GVariant     *commit)
 {
   g_autoptr(GVariant) metadata = NULL;
@@ -436,4 +440,455 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
     return NULL;
 
   return g_variant_ref_sink (g_variant_dict_end (&dict));
+}
+
+typedef struct {
+  gboolean   initialized;
+  GPtrArray *upgraded;
+  GPtrArray *downgraded;
+  GPtrArray *removed;
+  GPtrArray *added;
+} RpmDiff;
+
+static void
+rpm_diff_init (RpmDiff *diff)
+{
+  g_assert (!diff->initialized);
+  diff->upgraded = g_ptr_array_new_with_free_func ((GDestroyNotify)g_variant_unref);
+  diff->downgraded = g_ptr_array_new_with_free_func ((GDestroyNotify)g_variant_unref);
+  diff->removed = g_ptr_array_new_with_free_func ((GDestroyNotify)g_variant_unref);
+  diff->added = g_ptr_array_new_with_free_func ((GDestroyNotify)g_variant_unref);
+  diff->initialized = TRUE;
+}
+
+static void
+rpm_diff_clear (RpmDiff *diff)
+{
+  if (!diff->initialized)
+    return;
+  g_clear_pointer (&diff->upgraded, (GDestroyNotify)g_ptr_array_unref);
+  g_clear_pointer (&diff->downgraded, (GDestroyNotify)g_ptr_array_unref);
+  g_clear_pointer (&diff->removed, (GDestroyNotify)g_ptr_array_unref);
+  g_clear_pointer (&diff->added, (GDestroyNotify)g_ptr_array_unref);
+  diff->initialized = FALSE;
+}
+
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RpmDiff, rpm_diff_clear);
+
+static GVariant*
+single_pkg_variant_new (RpmOstreePkgTypes type,
+                        RpmOstreePackage *pkg)
+{
+  return g_variant_ref_sink (
+      g_variant_new ("(usss)", type,
+                     rpm_ostree_package_get_name (pkg),
+                     rpm_ostree_package_get_evr (pkg),
+                     rpm_ostree_package_get_arch (pkg)));
+}
+
+static GVariant*
+modified_pkg_variant_new (RpmOstreePkgTypes type,
+                          RpmOstreePackage *pkg_old,
+                          RpmOstreePackage *pkg_new)
+{
+  const char *name_old = rpm_ostree_package_get_name (pkg_old);
+  const char *name_new = rpm_ostree_package_get_name (pkg_new);
+  g_assert_cmpstr (name_old, ==, name_new);
+  return g_variant_ref_sink (
+      g_variant_new ("(us(ss)(ss))", type, name_old,
+                     rpm_ostree_package_get_evr (pkg_old),
+                     rpm_ostree_package_get_arch (pkg_old),
+                     rpm_ostree_package_get_evr (pkg_new),
+                     rpm_ostree_package_get_arch (pkg_new)));
+}
+
+static GVariant*
+modified_dnfpkg_variant_new (RpmOstreePkgTypes type,
+                             RpmOstreePackage *pkg_old,
+                             DnfPackage       *pkg_new)
+{
+  const char *name_old = rpm_ostree_package_get_name (pkg_old);
+  const char *name_new = dnf_package_get_name (pkg_new);
+  g_assert_cmpstr (name_old, ==, name_new);
+  return g_variant_ref_sink (
+      g_variant_new ("(us(ss)(ss))", type, name_old,
+                     rpm_ostree_package_get_evr (pkg_old),
+                     rpm_ostree_package_get_arch (pkg_old),
+                     dnf_package_get_evr (pkg_new),
+                     dnf_package_get_arch (pkg_new)));
+}
+
+static void
+rpm_diff_add_base_db_diff (RpmDiff    *diff,
+                           /* element-type RpmOstreePackage */
+                           GPtrArray  *removed,
+                           GPtrArray  *added,
+                           GPtrArray  *modified_old,
+                           GPtrArray  *modified_new)
+{
+  g_assert_cmpuint (modified_old->len, ==, modified_new->len);
+
+  RpmOstreePkgTypes type = RPM_OSTREE_PKG_TYPE_BASE;
+  for (guint i = 0; i < removed->len; i++)
+    g_ptr_array_add (diff->removed, single_pkg_variant_new (type, removed->pdata[i]));
+  for (guint i = 0; i < added->len; i++)
+    g_ptr_array_add (diff->added, single_pkg_variant_new (type, added->pdata[i]));
+  for (guint i = 0; i < modified_old->len; i++)
+    {
+      RpmOstreePackage *old_pkg = modified_old->pdata[i];
+      RpmOstreePackage *new_pkg = modified_new->pdata[i];
+      if (rpm_ostree_package_cmp (old_pkg, new_pkg) < 0)
+        g_ptr_array_add (diff->upgraded,
+                         modified_pkg_variant_new (type, old_pkg, new_pkg));
+      else
+        g_ptr_array_add (diff->downgraded,
+                         modified_pkg_variant_new (type, old_pkg, new_pkg));
+    }
+}
+
+static void
+rpm_diff_add_layered_diff (RpmDiff  *diff,
+                           RpmOstreePackage *old_pkg,
+                           DnfPackage       *new_pkg)
+{
+  /* add to upgraded; layered pkgs only go up */
+  RpmOstreePkgTypes type = RPM_OSTREE_PKG_TYPE_LAYER;
+  g_ptr_array_add (diff->upgraded, modified_dnfpkg_variant_new (type, old_pkg, new_pkg));
+}
+
+static int
+sort_pkgvariant_by_name (gconstpointer  pkga_pp,
+                         gconstpointer  pkgb_pp)
+{
+  GVariant *pkg_a = *((GVariant**)pkga_pp);
+  GVariant *pkg_b = *((GVariant**)pkgb_pp);
+
+  const char *pkgname_a;
+  g_variant_get_child (pkg_a, 1, "&s", &pkgname_a);
+  const char *pkgname_b;
+  g_variant_get_child (pkg_b, 1, "&s", &pkgname_b);
+
+  return strcmp (pkgname_a, pkgname_b);
+}
+static GVariant*
+array_to_variant_new (const char *format, GPtrArray *array)
+{
+  if (array->len == 0)
+    return g_variant_new (format, NULL);
+
+  /* make doubly sure it's sorted */
+  g_ptr_array_sort (array, sort_pkgvariant_by_name);
+
+  g_auto(GVariantBuilder) builder;
+  g_variant_builder_init (&builder, G_VARIANT_TYPE_ARRAY);
+  for (guint i = 0; i < array->len; i++)
+    g_variant_builder_add_value (&builder, array->pdata[i]);
+  return g_variant_builder_end (&builder);
+}
+
+static GVariant*
+rpm_diff_variant_new (RpmDiff *diff)
+{
+  g_assert (diff->initialized);
+  g_auto(GVariantDict) dict;
+  g_variant_dict_init (&dict, NULL);
+  g_variant_dict_insert_value (&dict, "upgraded",
+                               array_to_variant_new ("a(us(ss)(ss))", diff->upgraded));
+  g_variant_dict_insert_value (&dict, "downgraded",
+                               array_to_variant_new ("a(us(ss)(ss))", diff->downgraded));
+  g_variant_dict_insert_value (&dict, "removed",
+                               array_to_variant_new ("a(usss)", diff->removed));
+  g_variant_dict_insert_value (&dict, "added",
+                               array_to_variant_new ("a(usss)", diff->added));
+  return g_variant_dict_end (&dict);
+}
+
+static DnfPackage*
+find_newer_package (DnfSack    *sack,
+                    RpmOstreePackage *pkg)
+{
+  hy_autoquery HyQuery query = hy_query_create (sack);
+  hy_query_filter (query, HY_PKG_NAME, HY_EQ, rpm_ostree_package_get_name (pkg));
+  hy_query_filter (query, HY_PKG_EVR, HY_GT, rpm_ostree_package_get_evr (pkg));
+  hy_query_filter (query, HY_PKG_ARCH, HY_NEQ, "src");
+  hy_query_filter_latest (query, TRUE);
+  g_autoptr(GPtrArray) new_pkgs = hy_query_run (query);
+  if (new_pkgs->len == 0)
+    return NULL; /* canonicalize to NULL */
+  g_ptr_array_sort (new_pkgs, (GCompareFunc)rpmostree_pkg_array_compare);
+  return g_object_ref (new_pkgs->pdata[new_pkgs->len-1]);
+}
+
+/* For all layered pkgs, check if there are newer versions in the rpmmd. Add diff to
+ * @rpm_diff, and all new pkgs in @out_newer_packages (these are used later for advisories).
+ * */
+static gboolean
+rpmmd_diff (OstreeSysroot    *sysroot,
+            /* these are just to avoid refetching them */
+            OstreeRepo       *repo,
+            OstreeDeployment *deployment,
+            const char       *base_checksum,
+            DnfSack          *sack,
+            RpmDiff          *rpm_diff,
+            GPtrArray       **out_newer_packages,
+            GError          **error)
+{
+  /* Note here that we *don't* actually use layered_pkgs; we want to look at all the RPMs
+   * installed, whereas the layered pkgs (actually patterns) just represent top-level
+   * entries. IOW, we want to run through all layered RPMs, which include deps of
+   * layered_pkgs. */
+
+  g_autoptr(GPtrArray) all_layered_pkgs = NULL;
+  const char *layered_checksum = ostree_deployment_get_csum (deployment);
+  RpmOstreeDbDiffExtFlags flags = RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT;
+  if (!rpm_ostree_db_diff_ext (repo, base_checksum, layered_checksum, flags, NULL,
+                               &all_layered_pkgs, NULL, NULL, NULL, error))
+    return FALSE;
+
+  /* XXX: need to filter out local pkgs; though we still want to check for advisories --
+   * maybe we should do this in status.c instead? */
+
+  if (all_layered_pkgs == NULL || /* -> older layer before we injected pkglist metadata */
+      all_layered_pkgs->len == 0) /* -> no layered pkgs, e.g. override remove only */
+    {
+      *out_newer_packages = NULL;
+      return TRUE; /* note early return */
+    }
+
+  /* for each layered pkg, check if there's a newer version available (in reality, there may
+   * be other new pkgs that need to be layered or some pkgs that no longer need to, but we
+   * won't find out until we have the full commit available -- XXX: we could go the extra
+   * effort and use the rpmdb of new_checksum if we already have it somehow, though that's
+   * probably not the common case */
+
+  g_autoptr(GPtrArray) newer_packages =
+    g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+  for (guint i = 0; i < all_layered_pkgs->len; i++)
+    {
+      RpmOstreePackage *pkg = all_layered_pkgs->pdata[i];
+      g_autoptr(DnfPackage) newer_pkg = find_newer_package (sack, pkg);
+      if (!newer_pkg)
+        continue;
+
+      g_ptr_array_add (newer_packages, g_object_ref (newer_pkg));
+      rpm_diff_add_layered_diff (rpm_diff, pkg, newer_pkg);
+    }
+
+  /* canonicalize to NULL if there's nothing new */
+  if (newer_packages->len == 0)
+    g_clear_pointer (&newer_packages, (GDestroyNotify)g_ptr_array_unref);
+
+  *out_newer_packages = g_steal_pointer (&newer_packages);
+  return TRUE;
+}
+
+static gboolean
+get_cached_rpmmd_sack (OstreeSysroot     *sysroot,
+                       OstreeRepo        *repo,
+                       OstreeDeployment  *deployment,
+                       DnfSack          **out_sack,
+                       GError           **error)
+{
+  /* we don't need the full force of the core ctx here; we just want a DnfContext so that it
+   * can load the repos and deal with releasever for us */
+  g_autoptr(DnfContext) ctx = dnf_context_new ();
+
+  /* We have to point to the same source root for releasever to hit the right cache: an
+   * interesting point here is that if there's a newer $releasever pending (i.e. 'deploy'
+   * auto update policy), we'll still be using the previous releasever -- this is OK though,
+   * we should be special-casing these rebases later re. how to display them; at least
+   * status already shows endoflife. See also deploy_transaction_execute(). */
+  g_autofree char *deployment_root = rpmostree_get_deployment_root (sysroot, deployment);
+  dnf_context_set_source_root (ctx, deployment_root);
+  g_autofree char *reposdir = g_build_filename (deployment_root, "etc/yum.repos.d", NULL);
+  dnf_context_set_repo_dir (ctx, reposdir);
+  dnf_context_set_cache_dir (ctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_REPOMD);
+  dnf_context_set_solv_dir (ctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_SOLV);
+
+  if (!dnf_context_setup (ctx, NULL, error))
+    return FALSE;
+
+  /* add the repos but strictly from cache; we should have already *just* checked &
+   * refreshed metadata as part of the DeployTransaction; but we gracefully handle bad cache
+   * too (e.g. if we start using the new dnf_context_clean_cache() on rebases?) */
+  GPtrArray *repos = dnf_context_get_repos (ctx);
+
+  /* need a new DnfSackAddFlags flag for dnf_sack_add_repos to say "don't fallback to
+   * updating if cache invalid/absent"; for now, just do it ourselves */
+  GPtrArray *cached_enabled_repos = g_ptr_array_new ();
+  for (guint i = 0; i < repos->len; i++)
+    {
+      DnfRepo *repo = repos->pdata[i];
+      if ((dnf_repo_get_enabled (repo) & DNF_REPO_ENABLED_PACKAGES) == 0)
+        continue;
+
+      /* TODO: We need to expand libdnf here to somehow do a dnf_repo_check() without it
+       * triggering a download if there's no cache at all. Here, we just physically check
+       * for the location. */
+      const char *location = dnf_repo_get_location (repo);
+      if (!glnx_fstatat_allow_noent (AT_FDCWD, location, NULL, 0, error))
+        return FALSE;
+      if (errno == ENOENT)
+        continue;
+
+      g_autoptr(GError) local_error = NULL;
+      g_autoptr(DnfState) state = dnf_state_new ();
+      if (!dnf_repo_check (repo, G_MAXUINT, state, &local_error))
+        sd_journal_print (LOG_WARNING, "Couldn't load cache for repo %s: %s",
+                          dnf_repo_get_id (repo), local_error->message);
+      else
+        g_ptr_array_add (cached_enabled_repos, repo);
+    }
+
+  g_autoptr(DnfSack) sack = NULL;
+  if (cached_enabled_repos->len > 0)
+    {
+      /* Set up our own sack and point it to the solv cache. TODO: We could've used the sack
+       * from dnf_context_setup_sack(), but we need to extend libdnf to specify flags like
+       * UPDATEINFO beforehand. Otherwise we have to add_repos() twice which almost double
+       * startup time. */
+      sack = dnf_sack_new ();
+      dnf_sack_set_cachedir (sack, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_SOLV);
+      if (!dnf_sack_setup (sack, DNF_SACK_SETUP_FLAG_MAKE_CACHE_DIR, error))
+        return FALSE;
+
+      /* we still use add_repos rather than add_repo separately above because it does nice
+       * things like process excludes */
+      g_autoptr(DnfState) state = dnf_state_new ();
+      if (!dnf_sack_add_repos (sack, cached_enabled_repos, G_MAXUINT,
+                               DNF_SACK_ADD_FLAG_UPDATEINFO, state, error))
+        return FALSE;
+    }
+
+  *out_sack = g_steal_pointer (&sack);
+  return TRUE;
+}
+
+/* The variant returned by this function is backwards compatible with the one returned by
+ * rpmostreed_commit_generate_cached_details_variant(). However, it also includes a base
+ * tree db diff, layered pkgs diff, state, advisories, etc... Also, it will happily return
+ * NULL if no updates are available. */
+gboolean
+rpmostreed_update_generate_variant (OstreeSysroot *sysroot,
+                                    OstreeDeployment *deployment,
+                                    OstreeRepo *repo,
+                                    GVariant **out_update,
+                                    GError **error)
+{
+  /* We try to minimize I/O in this function. We're in the daemon startup path, and thus
+   * directly contribute to lag from a cold `rpm-ostree status`. Anyway, as a principle we
+   * shouldn't do long-running operations outside of transactions. */
+
+  g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
+  if (!origin)
+    return FALSE;
+
+  const char *refspec = rpmostree_origin_get_refspec (origin);
+  { RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
+    const char *refspec_data;
+    if (!rpmostree_refspec_classify (refspec, &refspectype, &refspec_data, error))
+      return FALSE;
+
+    /* we don't support jigdo-based origins yet */
+    if (refspectype != RPMOSTREE_REFSPEC_TYPE_OSTREE)
+      {
+        *out_update = NULL;
+        return TRUE; /* NB: early return */
+      }
+
+    /* just skip over "ostree://" so we can talk with libostree without thinking about it */
+    refspec = refspec_data;
+  }
+
+  /* let's start with the ostree side of things */
+
+  g_autofree char *new_checksum = NULL;
+  if (!ostree_repo_resolve_rev_ext (repo, refspec, TRUE, 0, &new_checksum, error))
+    return FALSE;
+
+  const char *current_checksum = ostree_deployment_get_csum (deployment);
+  gboolean is_layered;
+  g_autofree char *current_checksum_owned = NULL;
+  if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered,
+                                              &current_checksum_owned, NULL, NULL, NULL,
+                                              error))
+    return FALSE;
+  if (is_layered)
+    current_checksum = current_checksum_owned;
+
+  /* Graciously handle rev no longer in repo; e.g. mucking around with rebase/rollback; we
+   * still want to do the rpm-md phase. In that case, just use the current csum. */
+  gboolean is_new_checksum = FALSE;
+  if (!new_checksum)
+    new_checksum = g_strdup (current_checksum);
+  else
+    is_new_checksum = !g_str_equal (new_checksum, current_checksum);
+
+  g_autoptr(GVariant) commit = NULL;
+  if (!ostree_repo_load_commit (repo, new_checksum, &commit, NULL, error))
+    return FALSE;
+
+  g_auto(GVariantDict) dict;
+  g_variant_dict_init (&dict, NULL);
+
+  /* first get all the traditional/backcompat stuff */
+  if (!add_all_commit_details_to_vardict (deployment, repo, refspec,
+                                          new_checksum, commit, &dict, error))
+    return FALSE;
+
+  /* This may seem trivial, but it's important to keep the final variant as self-contained
+   * and "diff-based" as possible, since it'll be available as a D-Bus property. This makes
+   * it easier to consume for UIs like GNOME Software and Cockpit. */
+  g_variant_dict_insert (&dict, "ref-has-new-commit", "b", is_new_checksum);
+
+  g_auto(RpmDiff) rpm_diff = {0, };
+  rpm_diff_init (&rpm_diff);
+
+  /* we'll need this later for advisories, so just keep it around */
+  g_autoptr(GPtrArray) ostree_modified_new = NULL;
+  if (is_new_checksum)
+    {
+      g_autoptr(GPtrArray) removed = NULL;
+      g_autoptr(GPtrArray) added = NULL;
+      g_autoptr(GPtrArray) modified_old = NULL;
+
+      /* Note we allow_noent here; we'll just skip over the rpm diff if there's no data */
+      RpmOstreeDbDiffExtFlags flags = RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT;
+      if (!rpm_ostree_db_diff_ext (repo, current_checksum, new_checksum, flags, &removed,
+                                   &added, &modified_old, &ostree_modified_new, NULL, error))
+        return FALSE;
+
+      /* check if allow_noent kicked in */
+      if (removed)
+        rpm_diff_add_base_db_diff (&rpm_diff, removed, added,
+                                   modified_old, ostree_modified_new);
+    }
+
+  /* now we look at the rpm-md side */
+
+  /* first we try to set up a sack (NULL --> no cache available) */
+  g_autoptr(DnfSack) sack = NULL;
+  if (!get_cached_rpmmd_sack (sysroot, repo, deployment, &sack, error))
+    return FALSE;
+
+  g_autoptr(GPtrArray) rpmmd_modified_new = NULL;
+
+  GHashTable *layered_pkgs = rpmostree_origin_get_packages (origin);
+  /* check that it's actually layered (i.e. the requests are not all just dormant) */
+  if (sack && is_layered && g_hash_table_size (layered_pkgs) > 0)
+    {
+      if (!rpmmd_diff (sysroot, repo, deployment, current_checksum, sack, &rpm_diff,
+                       &rpmmd_modified_new, error))
+        return FALSE;
+    }
+
+  g_variant_dict_insert (&dict, "rpm-diff", "@a{sv}", rpm_diff_variant_new (&rpm_diff));
+
+  /* but if there are no updates, then just ditch the whole thing and return NULL */
+  if (is_new_checksum || rpmmd_modified_new)
+    *out_update = g_variant_ref_sink (g_variant_dict_end (&dict));
+  else
+    *out_update = NULL;
+
+  return TRUE;
 }

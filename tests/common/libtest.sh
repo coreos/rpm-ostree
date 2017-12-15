@@ -487,20 +487,21 @@ $files
 EOF
     (cd $test_tmpdir/yumrepo/specs &&
      rpmbuild -ba $name.spec \
+        --define "_topdir $PWD" \
         --define "_sourcedir $PWD" \
         --define "_specdir $PWD" \
         --define "_builddir $PWD/.build" \
         --define "_srcrpmdir $PWD" \
         --define "_rpmdir $test_tmpdir/yumrepo/packages" \
         --define "_buildrootdir $PWD")
-    (cd yumrepo && createrepo_c --no-database .)
-    if test '!' -f yumrepo.repo; then
-        cat > yumrepo.repo.tmp << EOF
+    (cd $test_tmpdir/yumrepo && createrepo_c --no-database .)
+    if test '!' -f $test_tmpdir/yumrepo.repo; then
+        cat > $test_tmpdir/yumrepo.repo.tmp << EOF
 [test-repo]
 name=test-repo
 baseurl=file:///$PWD/yumrepo
 EOF
-        mv yumrepo.repo{.tmp,}
+        mv $test_tmpdir/yumrepo.repo{.tmp,}
     fi
 }
 

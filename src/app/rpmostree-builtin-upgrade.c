@@ -39,6 +39,7 @@ static gboolean opt_check;
 static gboolean opt_upgrade_unchanged_exit_77;
 static gboolean opt_cache_only;
 static gboolean opt_download_only;
+static char *opt_automatic;
 
 /* "check-diff" is deprecated, replaced by "preview" */
 static GOptionEntry option_entries[] = {
@@ -51,6 +52,7 @@ static GOptionEntry option_entries[] = {
   { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and RPM data", NULL },
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
   { "upgrade-unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_upgrade_unchanged_exit_77, "If no upgrade is available, exit 77", NULL },
+  { "trigger-automatic-update-policy", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_automatic, "For automated use only; triggered by automatic timer", NULL },
   { NULL }
 };
 
@@ -112,13 +114,29 @@ rpmostree_builtin_upgrade (int             argc,
 
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
-  if (opt_preview || opt_check)
+  const gboolean check_or_preview = (opt_check || opt_preview);
+  if (opt_automatic || check_or_preview)
     {
-      if (!rpmostree_os_call_download_update_rpm_diff_sync (os_proxy,
+      GVariantDict dict;
+      g_variant_dict_init (&dict, NULL);
+      g_variant_dict_insert (&dict, "mode", "s", check_or_preview ? "check" : "auto");
+      g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+
+      gboolean auto_updates_enabled;
+      if (!rpmostree_os_call_automatic_update_trigger_sync (os_proxy,
+                                                            options,
+                                                            &auto_updates_enabled,
                                                             &transaction_address,
                                                             cancellable,
                                                             error))
         return FALSE;
+
+      if (!auto_updates_enabled)
+        {
+          /* print something for the benefit of the journal */
+          g_print ("Automatic updates are not enabled; exiting...\n");
+          return TRUE; /* Note early return */
+        }
     }
   else
     {
@@ -168,27 +186,24 @@ rpmostree_builtin_upgrade (int             argc,
                                                 error))
     return FALSE;
 
-  if (opt_preview || opt_check)
+  if (check_or_preview)
     {
-      g_autoptr(GVariant) result = NULL;
-      g_autoptr(GVariant) details = NULL;
+      g_autoptr(GVariant) cached_update = NULL;
+      if (rpmostree_os_get_has_cached_update_rpm_diff (os_proxy))
+        cached_update = rpmostree_os_dup_cached_update (os_proxy);
 
-      if (!rpmostree_os_call_get_cached_update_rpm_diff_sync (os_proxy,
-                                                              "",
-                                                              &result,
-                                                              &details,
-                                                              cancellable,
-                                                              error))
-        return FALSE;
-
-      if (g_variant_n_children (result) == 0)
+      if (!cached_update)
         {
+          g_print ("No updates available.\n");
           invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
-          return TRUE;
         }
-
-      if (!opt_check)
-        rpmostree_print_package_diffs (result);
+      else
+        {
+          /* preview --> verbose (i.e. we want the diff) */
+          if (!rpmostree_print_cached_update (cached_update, opt_preview,
+                                              cancellable, error))
+            return FALSE;
+        }
     }
   else if (!opt_reboot)
     {

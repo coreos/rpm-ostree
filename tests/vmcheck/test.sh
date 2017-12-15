@@ -76,6 +76,8 @@ if vm_cmd test -f /etc/rpm-ostreed.conf; then
 fi
 vm_cmd cp -f /usr/etc/rpm-ostreed.conf /etc
 
+vm_cmd ostree remote delete --if-exists vmcheckmote
+
 origdir=$(pwd)
 echo -n '' > ${LOG}
 
@@ -186,6 +188,7 @@ for tf in $(find . -name 'test-*.sh' | sort); do
     # and clean up any leftovers from our tmp
     osname=$(vm_get_booted_deployment_info osname)
     vm_cmd rm -rf /ostree/deploy/$osname/var/tmp/vmcheck
+    vm_cmd ostree remote delete --if-exists vmcheckmote
 done
 
 
