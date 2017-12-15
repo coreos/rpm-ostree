@@ -886,24 +886,6 @@ pkg_array_compare (DnfPackage **p_pkg1,
   return dnf_package_cmp (*p_pkg1, *p_pkg2);
 }
 
-/* NB: DnfPackage objects are tied to refsack */
-GPtrArray*
-rpmostree_get_pkglist_in_refsack (RpmOstreeRefSack  *refsack)
-{
-  hy_autoquery HyQuery query = hy_query_create (refsack->sack);
-  hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
-  return hy_query_run (query);
-}
-
-/* NB: DnfPackage objects are tied to refsack */
-GPtrArray*
-rpmostree_get_sorted_pkglist_in_refsack (RpmOstreeRefSack  *refsack)
-{
-  g_autoptr(GPtrArray) pkglist = rpmostree_get_pkglist_in_refsack (refsack);
-  g_ptr_array_sort (pkglist, (GCompareFunc)pkg_array_compare);
-  return g_steal_pointer (&pkglist);
-}
-
 void
 rpmostree_sighandler_reset_cleanup (RpmSighandlerResetCleanup *cleanup)
 {
@@ -1116,6 +1098,22 @@ rpmostree_sack_get_by_pkgname (DnfSack     *sack,
   return TRUE;
 }
 
+GPtrArray*
+rpmostree_sack_get_packages (DnfSack *sack)
+{
+  hy_autoquery HyQuery query = hy_query_create (sack);
+  hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
+  return hy_query_run (query);
+}
+
+GPtrArray*
+rpmostree_sack_get_sorted_packages (DnfSack *sack)
+{
+  g_autoptr(GPtrArray) pkglist = rpmostree_sack_get_packages (sack);
+  g_ptr_array_sort (pkglist, (GCompareFunc)pkg_array_compare);
+  return g_steal_pointer (&pkglist);
+}
+
 gboolean
 rpmostree_create_rpmdb_pkglist_variant (int              rootfs_dfd,
                                         GVariant       **out_variant,
@@ -1128,7 +1126,7 @@ rpmostree_create_rpmdb_pkglist_variant (int              rootfs_dfd,
     return FALSE;
 
   /* we insert it sorted here so it can efficiently be searched on retrieval */
-  g_autoptr(GPtrArray) pkglist = rpmostree_get_sorted_pkglist_in_refsack (refsack);
+  g_autoptr(GPtrArray) pkglist = rpmostree_sack_get_sorted_packages (refsack->sack);
 
   GVariantBuilder pkglist_v_builder;
   g_variant_builder_init (&pkglist_v_builder, (GVariantType*)"a(stsss)");
