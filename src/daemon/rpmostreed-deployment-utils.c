@@ -104,65 +104,58 @@ rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot,
   return g_object_ref (deployments->pdata[deployment_index]);
 }
 
-static GVariant *
-rpmostreed_deployment_gpg_results (OstreeRepo *repo,
+static gboolean
+rpmostreed_deployment_gpg_results (OstreeRepo  *repo,
                                    const gchar *origin_refspec,
-                                   const gchar *csum,
-                                   gboolean *out_enabled)
+                                   const gchar *checksum,
+                                   GVariant   **out_results,
+                                   gboolean    *out_enabled,
+                                   GError     **error)
 {
-  GError *error = NULL;
-  GVariant *ret = NULL;
+  GLNX_AUTO_PREFIX_ERROR ("GPG verification error", error);
 
   g_autofree gchar *remote = NULL;
-  glnx_unref_object OstreeGpgVerifyResult *result = NULL;
+  if (!ostree_parse_refspec (origin_refspec, &remote, NULL, error))
+    return FALSE;
 
-  guint n_sigs, i;
-  gboolean gpg_verify;
-  g_auto(GVariantBuilder) builder;
-
-  g_variant_builder_init (&builder, G_VARIANT_TYPE ("av"));
-
-  if (!ostree_parse_refspec (origin_refspec, &remote, NULL, &error))
-    goto out;
-
+  gboolean gpg_verify = FALSE;
   if (remote)
     {
-      if (!ostree_repo_remote_get_gpg_verify (repo, remote, &gpg_verify, &error))
-        goto out;
-    }
-  else
-    {
-      gpg_verify = FALSE;
+      if (!ostree_repo_remote_get_gpg_verify (repo, remote, &gpg_verify, error))
+        return FALSE;
     }
 
-  *out_enabled = gpg_verify;
   if (!gpg_verify)
-    goto out;
-
-  result = ostree_repo_verify_commit_for_remote (repo, csum, remote, NULL, &error);
-  if (!result)
-    goto out;
-
-  n_sigs = ostree_gpg_verify_result_count_all (result);
-  if (n_sigs < 1)
-    goto out;
-
-  for (i = 0; i < n_sigs; i++)
     {
-      g_variant_builder_add (&builder, "v",
-                             ostree_gpg_verify_result_get_all (result, i));
+      /* Note early return; no need to verify signatures! */
+      *out_enabled = FALSE;
+      *out_results = NULL;
+      return TRUE;
     }
 
-  ret = g_variant_builder_end (&builder);
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(OstreeGpgVerifyResult) verify_result =
+    ostree_repo_verify_commit_for_remote (repo, checksum, remote, NULL, &local_error);
+  if (!verify_result)
+    {
+      /* Somehow, we have a deployment which has gpg-verify=true, but *doesn't* have a valid
+       * signature. Let's not just bomb out here. We need to return this in the variant so
+       * that `status` can show the appropriate msg. */
+      *out_enabled = TRUE;
+      *out_results = NULL;
+      return TRUE;
+    }
 
-out:
+  g_auto(GVariantBuilder) builder;
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("av"));
 
-  /* NOT_FOUND just means the commit is not signed. */
-  if (error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-    g_warning ("error loading gpg verify result %s", error->message);
+  guint n_sigs = ostree_gpg_verify_result_count_all (verify_result);
+  for (guint i = 0; i < n_sigs; i++)
+    g_variant_builder_add (&builder, "v", ostree_gpg_verify_result_get_all (verify_result, i));
 
-  g_clear_error (&error);
-  return ret;
+  *out_results = g_variant_ref_sink (g_variant_builder_end (&builder));
+  *out_enabled = TRUE;
+  return TRUE;
 }
 
 GVariant *
@@ -298,9 +291,10 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
     g_variant_dict_insert (&dict, "base-commit-meta", "@a{sv}", base_meta);
   }
 
-  /* floating */
   gboolean gpg_enabled = FALSE;
-  GVariant *sigs = rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &gpg_enabled);
+  g_autoptr(GVariant) sigs = NULL;
+  if (!rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &sigs, &gpg_enabled, error))
+    return NULL;
   variant_add_commit_details (&dict, NULL, commit);
 
   g_autofree char *pending_base_commitrev = NULL;
@@ -369,63 +363,77 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   return g_variant_dict_end (&dict);
 }
 
+static gboolean
+add_all_commit_details_to_vardict (OstreeDeployment *deployment,
+                                   OstreeRepo       *repo,
+                                   const char       *refspec,  /* allow-none */
+                                   const char       *checksum, /* allow-none */
+                                   GVariant         *commit,   /* allow-none */
+                                   GVariantDict     *dict,     /* allow-none */
+                                   GError          **error)
+{
+  const gchar *osname = ostree_deployment_get_osname (deployment);
+
+  g_autofree gchar *refspec_owned = NULL;
+  if (!refspec)
+    {
+      g_autoptr(RpmOstreeOrigin) origin =
+        rpmostree_origin_parse_deployment (deployment, error);
+      if (!origin)
+        return FALSE;
+      refspec = refspec_owned = g_strdup (rpmostree_origin_get_refspec (origin));
+    }
+
+  g_assert (refspec);
+
+  /* allow_noent=TRUE since the ref may have been deleted for a rebase */
+  g_autofree gchar *checksum_owned = NULL;
+  if (!checksum)
+    {
+      if (!ostree_repo_resolve_rev (repo, refspec, TRUE, &checksum_owned, error))
+        return FALSE;
+
+      /* in that case, use deployment csum */
+      checksum = checksum_owned ?: ostree_deployment_get_csum (deployment);
+    }
+
+  g_autoptr(GVariant) commit_owned = NULL;
+  if (!commit)
+    {
+      if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum,
+                                     &commit_owned, error))
+        return FALSE;
+      commit = commit_owned;
+    }
+
+  gboolean gpg_enabled;
+  g_autoptr(GVariant) sigs = NULL;
+  if (!rpmostreed_deployment_gpg_results (repo, refspec, checksum,
+                                          &sigs, &gpg_enabled, error))
+    return FALSE;
+
+  if (osname != NULL)
+    g_variant_dict_insert (dict, "osname", "s", osname);
+  g_variant_dict_insert (dict, "checksum", "s", checksum);
+  variant_add_commit_details (dict, NULL, commit);
+  g_variant_dict_insert (dict, "origin", "s", refspec);
+  if (sigs != NULL)
+    g_variant_dict_insert_value (dict, "signatures", sigs);
+  g_variant_dict_insert (dict, "gpg-enabled", "b", gpg_enabled);
+  return TRUE;
+}
+
 GVariant *
 rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
                                                    OstreeRepo *repo,
                                                    const gchar *refspec,
                                                    GError **error)
 {
-  g_autoptr(GVariant) commit = NULL;
-  g_autofree gchar *origin_refspec = NULL;
-  g_autofree gchar *head = NULL;
-  gboolean gpg_enabled;
-  const gchar *osname;
-  GVariant *sigs = NULL; /* floating variant */
   GVariantDict dict;
-
-  osname = ostree_deployment_get_osname (deployment);
-
-  if (refspec)
-    origin_refspec = g_strdup (refspec);
-  else
-    {
-      g_autoptr(RpmOstreeOrigin) origin = NULL;
-
-      origin = rpmostree_origin_parse_deployment (deployment, error);
-      if (!origin)
-        return NULL;
-      origin_refspec = g_strdup (rpmostree_origin_get_refspec (origin));
-    }
-
-  g_assert (origin_refspec);
-
-  /* allow_noent=TRUE since the ref may have been deleted for a
-   * rebase.
-   */
-  if (!ostree_repo_resolve_rev (repo, origin_refspec,
-                                TRUE, &head, error))
-    return NULL;
-
-  if (head == NULL)
-    head = g_strdup (ostree_deployment_get_csum (deployment));
-
-  if (!ostree_repo_load_variant (repo,
-                                 OSTREE_OBJECT_TYPE_COMMIT,
-                                 head,
-                                 &commit,
-                                 error))
-    return NULL;
-
-  sigs = rpmostreed_deployment_gpg_results (repo, origin_refspec, head, &gpg_enabled);
-
   g_variant_dict_init (&dict, NULL);
-  if (osname != NULL)
-    g_variant_dict_insert (&dict, "osname", "s", osname);
-  g_variant_dict_insert (&dict, "checksum", "s", head);
-  variant_add_commit_details (&dict, NULL, commit);
-  g_variant_dict_insert (&dict, "origin", "s", origin_refspec);
-  if (sigs != NULL)
-    g_variant_dict_insert_value (&dict, "signatures", sigs);
-  g_variant_dict_insert (&dict, "gpg-enabled", "b", gpg_enabled);
+  if (!add_all_commit_details_to_vardict (deployment, repo, refspec,
+                                          NULL, NULL, &dict, error))
+    return NULL;
+
   return g_variant_dict_end (&dict);
 }
