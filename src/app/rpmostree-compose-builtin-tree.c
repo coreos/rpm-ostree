@@ -28,6 +28,9 @@
 #include <libdnf/dnf-repo.h>
 #include <sys/mount.h>
 #include <stdio.h>
+#include <linux/magic.h>
+#include <sys/statvfs.h>
+#include <sys/vfs.h>
 #include <libglnx.h>
 #include <rpm/rpmmacro.h>
 
@@ -1091,6 +1094,18 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
   return TRUE;
 }
 
+/* https://pagure.io/atomic-wg/issue/387 */
+static gboolean
+repo_is_on_netfs (OstreeRepo  *repo)
+{
+  int dfd = ostree_repo_get_dfd (repo);
+  struct statfs stbuf;
+  if (fstatfs (dfd, &stbuf) != 0)
+    return FALSE;
+  return stbuf.f_type == NFS_SUPER_MAGIC;
+}
+
+/* Perform required postprocessing, and invoke rpmostree_compose_commit(). */
 static gboolean
 impl_commit_tree (RpmOstreeTreeComposeContext *self,
                   GCancellable    *cancellable,
@@ -1153,15 +1168,64 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
         glnx_prefix_error (error, "Handling group db");
     }
 
+  /* See comment above */
+  const gboolean use_txn = (getenv ("RPMOSTREE_COMMIT_NO_TXN") == NULL &&
+                            !repo_is_on_netfs (self->repo));
+
+  if (use_txn)
+    {
+      if (!ostree_repo_prepare_transaction (self->repo, NULL, cancellable, error))
+        return FALSE;
+    }
+
+  g_autofree char *parent_revision = NULL;
+  if (self->ref)
+    {
+      if (!ostree_repo_resolve_rev (self->repo, self->ref, TRUE, &parent_revision, error))
+        return FALSE;
+    }
+
   /* The penultimate step, just basically `ostree commit` */
   g_autofree char *new_revision = NULL;
-  if (!rpmostree_commit (self->rootfs_dfd, self->repo, self->ref, opt_write_commitid_to,
-                         metadata, gpgkey, selinux, self->devino_cache,
-                         &new_revision,
-                         cancellable, error))
+  if (!rpmostree_compose_commit (self->rootfs_dfd, self->repo, parent_revision,
+                                 metadata, gpgkey, selinux, self->devino_cache,
+                                 &new_revision, cancellable, error))
     return FALSE;
 
-  g_print ("%s => %s\n", self->ref, new_revision);
+  /* --write-commitid-to overrides writing the ref */
+  if (self->ref && !opt_write_commitid_to)
+    {
+      if (use_txn)
+        ostree_repo_transaction_set_ref (self->repo, NULL, self->ref, new_revision);
+      else
+        {
+          if (!ostree_repo_set_ref_immediate (self->repo, NULL, self->ref, new_revision,
+                                              cancellable, error))
+            return FALSE;
+        }
+    }
+
+  if (use_txn)
+    {
+      OstreeRepoTransactionStats stats = { 0, };
+      if (!ostree_repo_commit_transaction (self->repo, &stats, cancellable, error))
+        return glnx_prefix_error (error, "Commit");
+
+      g_print ("Wrote commit: %s\n", new_revision);
+      g_print ("Metadata Total: %u\n", stats.metadata_objects_total);
+      g_print ("Metadata Written: %u\n", stats.metadata_objects_written);
+      g_print ("Content Total: %u\n", stats.content_objects_total);
+      g_print ("Content Written: %u\n", stats.content_objects_written);
+      g_print ("Content Bytes Written: %" G_GUINT64_FORMAT "\n", stats.content_bytes_written);
+    }
+
+  if (opt_write_commitid_to)
+    {
+      if (!g_file_set_contents (opt_write_commitid_to, new_revision, -1, error))
+        return glnx_prefix_error (error, "While writing to '%s'", opt_write_commitid_to);
+    }
+  else if (self->ref)
+    g_print ("%s => %s\n", self->ref, new_revision);
 
   return TRUE;
 }

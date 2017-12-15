@@ -29,10 +29,7 @@
 #include <utime.h>
 #include <err.h>
 #include <sys/types.h>
-#include <sys/statvfs.h>
-#include <sys/vfs.h>
 #include <sys/stat.h>
-#include <linux/magic.h>
 #include <pwd.h>
 #include <grp.h>
 #include <unistd.h>
@@ -1896,45 +1893,27 @@ on_progress_timeout (gpointer datap)
   return TRUE;
 }
 
-/* https://pagure.io/atomic-wg/issue/387 */
-static gboolean
-repo_is_on_netfs (OstreeRepo  *repo)
-{
-  int dfd = ostree_repo_get_dfd (repo);
-  struct statfs stbuf;
-  if (fstatfs (dfd, &stbuf) != 0)
-    return FALSE;
-  return stbuf.f_type == NFS_SUPER_MAGIC;
-}
-
+/* This is the server-side-only variant; see also the code in rpmostree-core.c
+ * for all the other cases like client side layering and `ex container` for
+ * buildroots.
+ */
 gboolean
-rpmostree_commit (int            rootfs_fd,
-                  OstreeRepo    *repo,
-                  const char    *refname,
-                  const char    *write_commitid_to,
-                  GVariant      *metadata,
-                  const char    *gpg_keyid,
-                  gboolean       enable_selinux,
-                  OstreeRepoDevInoCache *devino_cache,
-                  char         **out_new_revision,
-                  GCancellable  *cancellable,
-                  GError       **error)
+rpmostree_compose_commit (int            rootfs_fd,
+                          OstreeRepo    *repo,
+                          const char    *parent_revision,
+                          GVariant      *metadata,
+                          const char    *gpg_keyid,
+                          gboolean       enable_selinux,
+                          OstreeRepoDevInoCache *devino_cache,
+                          char         **out_new_revision,
+                          GCancellable  *cancellable,
+                          GError       **error)
 {
   g_autoptr(OstreeSePolicy) sepolicy = NULL;
   if (enable_selinux)
     {
       sepolicy = ostree_sepolicy_new_at (rootfs_fd, cancellable, error);
       if (!sepolicy)
-        return FALSE;
-    }
-
-  /* See comment above */
-  const gboolean use_txn = (getenv ("RPMOSTREE_COMMIT_NO_TXN") == NULL &&
-                            !repo_is_on_netfs (repo));
-
-  if (use_txn)
-    {
-      if (!ostree_repo_prepare_transaction (repo, NULL, cancellable, error))
         return FALSE;
     }
 
@@ -2002,13 +1981,6 @@ rpmostree_commit (int            rootfs_fd,
   if (!ostree_repo_write_mtree (repo, mtree, &root_tree, cancellable, error))
     return glnx_prefix_error (error, "While writing tree");
 
-  g_autofree char *parent_revision = NULL;
-  if (refname)
-    {
-      if (!ostree_repo_resolve_rev (repo, refname, TRUE, &parent_revision, error))
-        return FALSE;
-    }
-
   g_autofree char *new_revision = NULL;
   if (!ostree_repo_write_commit (repo, parent_revision, "", "", metadata,
                                  (OstreeRepoFile*)root_tree, &new_revision,
@@ -2022,36 +1994,8 @@ rpmostree_commit (int            rootfs_fd,
         return glnx_prefix_error (error, "While signing commit");
     }
 
-  if (write_commitid_to)
-    {
-      if (!g_file_set_contents (write_commitid_to, new_revision, -1, error))
-        return glnx_prefix_error (error, "While writing to '%s'", write_commitid_to);
-    }
-  else if (refname)
-    {
-      if (use_txn)
-        ostree_repo_transaction_set_ref (repo, NULL, refname, new_revision);
-      else
-        {
-          if (!ostree_repo_set_ref_immediate (repo, NULL, refname, new_revision,
-                                              cancellable, error))
-            return FALSE;
-        }
-    }
-
-  if (use_txn)
-    {
-      OstreeRepoTransactionStats stats = { 0, };
-      if (!ostree_repo_commit_transaction (repo, &stats, cancellable, error))
-        return glnx_prefix_error (error, "Commit");
-
-      g_print ("Metadata Total: %u\n", stats.metadata_objects_total);
-      g_print ("Metadata Written: %u\n", stats.metadata_objects_written);
-      g_print ("Content Total: %u\n", stats.content_objects_total);
-      g_print ("Content Written: %u\n", stats.content_objects_written);
-      g_print ("Content Bytes Written: %" G_GUINT64_FORMAT "\n", stats.content_bytes_written);
-    }
   if (out_new_revision)
     *out_new_revision = g_steal_pointer (&new_revision);
+
   return TRUE;
 }
