@@ -112,6 +112,9 @@ rpmostree_get_refts_for_commit (OstreeRepo                *repo,
 GPtrArray*
 rpmostree_get_pkglist_in_refsack (RpmOstreeRefSack  *refsack);
 
+GPtrArray*
+rpmostree_get_sorted_pkglist_in_refsack (RpmOstreeRefSack  *refsack);
+
 void
 rpmostree_print_transaction (DnfContext   *context);
 

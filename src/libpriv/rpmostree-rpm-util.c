@@ -895,6 +895,15 @@ rpmostree_get_pkglist_in_refsack (RpmOstreeRefSack  *refsack)
   return hy_query_run (query);
 }
 
+/* NB: DnfPackage objects are tied to refsack */
+GPtrArray*
+rpmostree_get_sorted_pkglist_in_refsack (RpmOstreeRefSack  *refsack)
+{
+  g_autoptr(GPtrArray) pkglist = rpmostree_get_pkglist_in_refsack (refsack);
+  g_ptr_array_sort (pkglist, (GCompareFunc)pkg_array_compare);
+  return g_steal_pointer (&pkglist);
+}
+
 void
 rpmostree_sighandler_reset_cleanup (RpmSighandlerResetCleanup *cleanup)
 {
@@ -1118,7 +1127,8 @@ rpmostree_create_rpmdb_pkglist_variant (int              rootfs_dfd,
   if (!refsack)
     return FALSE;
 
-  g_autoptr(GPtrArray) pkglist = rpmostree_get_pkglist_in_refsack (refsack);
+  /* we insert it sorted here so it can efficiently be searched on retrieval */
+  g_autoptr(GPtrArray) pkglist = rpmostree_get_sorted_pkglist_in_refsack (refsack);
 
   GVariantBuilder pkglist_v_builder;
   g_variant_builder_init (&pkglist_v_builder, (GVariantType*)"a(stsss)");

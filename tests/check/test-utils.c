@@ -113,6 +113,41 @@ test_cache_branch_to_nevra (void)
 }
 
 static void
+test_bsearch_str(void)
+{
+  g_auto(GVariantBuilder) builder;
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a(st)"));
+  g_variant_builder_add (&builder, "(st)", "armadillo", 0);
+  g_variant_builder_add (&builder, "(st)", "bunny", 1);
+  g_variant_builder_add (&builder, "(st)", "bunny", 2);
+  g_variant_builder_add (&builder, "(st)", "chipmunk", 3);
+  g_variant_builder_add (&builder, "(st)", "chipmunk", 4);
+  g_variant_builder_add (&builder, "(st)", "chipmunk", 5);
+  g_variant_builder_add (&builder, "(st)", "dung beetle", 6);
+  g_variant_builder_add (&builder, "(st)", "earwig", 7);
+  g_variant_builder_add (&builder, "(st)", "earwig", 8);
+  g_autoptr(GVariant) cool_animals = g_variant_ref_sink (g_variant_builder_end (&builder));
+
+  int idx;
+  g_assert (rpmostree_variant_bsearch_str (cool_animals, "armadillo", &idx));
+  g_assert_cmpint (idx, ==, 0);
+  g_assert (rpmostree_variant_bsearch_str (cool_animals, "bunny", &idx));
+  g_assert_cmpint (idx, ==, 1);
+  g_assert (rpmostree_variant_bsearch_str (cool_animals, "chipmunk", &idx));
+  g_assert_cmpint (idx, ==, 3);
+  g_assert (rpmostree_variant_bsearch_str (cool_animals, "dung beetle", &idx));
+  g_assert_cmpint (idx, ==, 6);
+  g_assert (rpmostree_variant_bsearch_str (cool_animals, "earwig", &idx));
+  g_assert_cmpint (idx, ==, 7);
+  g_assert (!rpmostree_variant_bsearch_str (cool_animals, "aaaa", &idx));
+  g_assert (!rpmostree_variant_bsearch_str (cool_animals, "armz", &idx));
+  g_assert (!rpmostree_variant_bsearch_str (cool_animals, "bunz", &idx));
+  g_assert (!rpmostree_variant_bsearch_str (cool_animals, "chiz", &idx));
+  g_assert (!rpmostree_variant_bsearch_str (cool_animals, "dunz", &idx));
+  g_assert (!rpmostree_variant_bsearch_str (cool_animals, "earz", &idx));
+}
+
+static void
 test_variant_to_nevra(void)
 {
   gboolean ret = FALSE;
@@ -189,6 +224,7 @@ main (int   argc,
 
   g_test_add_func ("/utils/varsubst", test_varsubst_string);
   g_test_add_func ("/utils/cachebranch_to_nevra", test_cache_branch_to_nevra);
+  g_test_add_func ("/utils/bsearch_str", test_bsearch_str);
   g_test_add_func ("/importer/variant_to_nevra", test_variant_to_nevra);
 
   return g_test_run ();
