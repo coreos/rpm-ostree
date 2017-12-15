@@ -277,6 +277,19 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
   if (!rpmostree_repo_auto_transaction_start (&txn, self->repo, FALSE, cancellable, error))
     return FALSE;
 
+  if (!ostree_repo_write_commit_detached_metadata (self->repo, checksum, commit_meta,
+                                                   cancellable, error))
+    return FALSE;
+  /* Mark as partial until we're done */
+  if (!ostree_repo_mark_commit_partial (self->repo, checksum, TRUE, error))
+    return FALSE;
+  { g_autofree guint8*csum = NULL;
+    if (!ostree_repo_write_metadata (self->repo, OSTREE_OBJECT_TYPE_COMMIT,
+                                     checksum, commit, &csum,
+                                     cancellable, error))
+      return FALSE;
+  }
+
   if (!rpmostree_jigdo_assembler_write_new_objects (jigdo, self->repo, cancellable, error))
     return FALSE;
 
@@ -330,18 +343,11 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
                                        cancellable, error))
     return FALSE;
 
-  /* Write commitmeta/commit last since libostree doesn't expose an API to set
-   * partial state right now.
+  /* Last thing is to delete the partial marker, just like
+   * ostree_repo_pull_with_options().
    */
-  if (!ostree_repo_write_commit_detached_metadata (self->repo, checksum, commit_meta,
-                                                   cancellable, error))
+  if (!ostree_repo_mark_commit_partial (self->repo, checksum, FALSE, error))
     return FALSE;
-  { g_autofree guint8*csum = NULL;
-    if (!ostree_repo_write_metadata (self->repo, OSTREE_OBJECT_TYPE_COMMIT,
-                                     checksum, commit, &csum,
-                                     cancellable, error))
-      return FALSE;
-  }
 
   return TRUE;
 }
