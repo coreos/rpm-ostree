@@ -923,7 +923,7 @@ rpmostree_sighandler_reset_cleanup (RpmSighandlerResetCleanup *cleanup)
   /* Forcibly override rpm/librepo SIGINT handlers.  We always operate
    * in a fully idempotent/atomic mode, and can be killed at any time.
    */
-#if !BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY
+#ifndef BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY
   signal (SIGINT, SIG_DFL);
   signal (SIGTERM, SIG_DFL);
 #endif

@@ -366,7 +366,7 @@ rpmostree_context_new_system (OstreeRepo   *repo,
    * otherwise we keep calling _rpmostree_reset_rpm_sighandlers() in
    * various places.
    */
-#if BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY
+#ifdef BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY
   rpmsqSetInterruptSafety (FALSE);
 #endif
 
@@ -2452,7 +2452,7 @@ delete_package_from_root (RpmOstreeContext *self,
                           GCancellable *cancellable,
                           GError      **error)
 {
-#if BUILDOPT_HAVE_RPMFILES /* use rpmfiles API if possible, rpmteFI is deprecated */
+#ifdef BUILDOPT_HAVE_RPMFILES /* use rpmfiles API if possible, rpmteFI is deprecated */
   g_auto(rpmfiles) files = rpmteFiles (pkg);
   g_auto(rpmfi) fi = rpmfilesIter (files, RPMFI_ITER_FWD);
 #else

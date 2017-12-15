@@ -31,6 +31,8 @@ fi
 # Workaround automake bug with subdir-objects and computed paths
 sed -e 's,$(libglnx_srcpath),'${srcdir}/libglnx,g < libglnx/Makefile-libglnx.am >libglnx/Makefile-libglnx.am.inc
 
+# FIXME - figure out how to get aclocal to find this by default
+ln -sf ../libglnx/libglnx.m4 buildutil/libglnx.m4
 
 autoreconf --force --install --verbose
 

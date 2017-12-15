@@ -38,8 +38,10 @@ AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
 	-DLOCALEDIR=\"$(datadir)/locale\" \
         -DRPM_OSTREE_FEATURES='"$(RPM_OSTREE_FEATURES)"' \
 	-DRPM_OSTREE_GITREV='"$(RPM_OSTREE_GITREV)"' \
-	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_40 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_40_
-AM_CFLAGS += -std=gnu11 $(WARN_CFLAGS)
+	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_50 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_50
+# Keep this in sync with the AM_CFLAGS in libostree; see
+# that project for more information about e.g. -fno-strict-aliasing
+AM_CFLAGS += -std=gnu11 -fno-strict-aliasing $(WARN_CFLAGS)
 # bundled libdnf
 AM_LDFLAGS += "-Wl,-rpath=$(libdir)/rpm-ostree"
 

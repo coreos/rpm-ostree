@@ -38,24 +38,29 @@ AC_SUBST([dbusservicedir], [$dbusservicedir])
 AC_MSG_RESULT(dbusservicedir)
 
 dnl Keep this in sync with the version in ostree
+AS_IF([echo "$CFLAGS" | grep -q -E -e '-Werror($| )'], [], [
 CC_CHECK_FLAGS_APPEND([WARN_CFLAGS], [CFLAGS], [\
-        -pipe \
-        -Wall \
-	-Werror=empty-body \
-	-Werror=strict-prototypes \
-	-Werror=missing-prototypes \
-	-Werror=implicit-function-declaration \
-        "-Werror=format=2 -Werror=format-security -Werror=format-nonliteral" \
-	-Werror=pointer-arith -Werror=init-self \
-        -Werror=missing-declarations \
-        -Werror=return-type \
-        -Werror=overflow \
-        -Werror=int-conversion \
-        -Werror=parenthesis \
-        -Werror=incompatible-pointer-types \
-        -Werror=misleading-indentation \
-	-Werror=missing-include-dirs -Werror=aggregate-return \
-])
+  -pipe \
+  -Wall \
+  -Werror=empty-body \
+  -Werror=strict-prototypes \
+  -Werror=missing-prototypes \
+  -Werror=implicit-function-declaration \
+  "-Werror=format=2 -Werror=format-security -Werror=format-nonliteral" \
+  -Werror=pointer-arith -Werror=init-self \
+  -Werror=missing-declarations \
+  -Werror=return-type \
+  -Werror=switch \
+  -Werror=overflow \
+  -Werror=int-conversion \
+  -Werror=parenthesis \
+  -Werror=undef \
+  -Werror=incompatible-pointer-types \
+  -Werror=misleading-indentation \
+  -Werror=missing-include-dirs -Werror=aggregate-return \
+  -Wstrict-aliasing=2 \
+  -Werror=unused-result \
+])])
 AC_SUBST(WARN_CFLAGS)
 
 AC_MSG_CHECKING([for -fsanitize=address in CFLAGS])
@@ -85,7 +90,7 @@ LIBS="$save_LIBS"
 
 # Remember to update AM_CPPFLAGS in Makefile.am when bumping GIO req.
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
-PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.40.0 json-glib-1.0
+PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0
 				     ostree-1 >= 2017.14
 				     libsystemd
 				     polkit-gobject-1
@@ -106,6 +111,7 @@ AC_DEFINE([BUILDOPT_HAVE_RPMFILES], 1, [Set to 1 if we have rpmfiles API]),
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GLIB_TESTS
+LIBGLNX_CONFIGURE
 
 AC_CHECK_TOOL(GPERF, gperf)
 AS_IF([test -z "$GPERF"],
