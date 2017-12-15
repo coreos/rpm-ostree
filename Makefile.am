@@ -38,7 +38,8 @@ AM_CPPFLAGS += -DDATADIR='"$(datadir)"' \
 	-DWITH_SWDB=0 \
 	-DLIBEXECDIR='"$(libexecdir)"' \
 	-DLOCALEDIR=\"$(datadir)/locale\" \
-        -DRPM_OSTREE_FEATURES='"$(RPM_OSTREE_FEATURES)"' \
+	-DSYSCONFDIR='"$(sysconfdir)"' \
+	-DRPM_OSTREE_FEATURES='"$(RPM_OSTREE_FEATURES)"' \
 	-DRPM_OSTREE_GITREV='"$(RPM_OSTREE_GITREV)"' \
 	-DGLIB_VERSION_MIN_REQUIRED=GLIB_VERSION_2_50 -DGLIB_VERSION_MAX_ALLOWED=GLIB_VERSION_2_50
 # Keep this in sync with the AM_CFLAGS in libostree; see

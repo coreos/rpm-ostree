@@ -1,0 +1,92 @@
+<?xml version='1.0'?> <!--*-nxml-*-->
+<!DOCTYPE refentry PUBLIC "-//OASIS//DTD DocBook XML V4.2//EN"
+"http://www.oasis-open.org/docbook/xml/4.2/docbookx.dtd">
+
+<!--
+Copyright (C) 2018 Red Hat, Inc.
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the
+Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+Boston, MA 02111-1307, USA.
+-->
+
+<refentry id="rpm-ostreed.conf">
+
+  <refentryinfo>
+    <title>rpm-ostreed.conf</title>
+    <productname>rpm-ostree</productname>
+
+    <authorgroup>
+      <author>
+        <contrib>Developer</contrib>
+        <firstname>Jonathan</firstname>
+        <surname>Lebon</surname>
+        <email>jlebon@redhat.com</email>
+      </author>
+    </authorgroup>
+  </refentryinfo>
+
+  <refmeta>
+    <refentrytitle>rpm-ostreed.conf</refentrytitle>
+    <manvolnum>5</manvolnum>
+  </refmeta>
+
+  <refnamediv>
+    <refname>rpm-ostreed.conf</refname>
+    <refpurpose>RPM-OSTree daemon configuration file</refpurpose>
+  </refnamediv>
+
+  <refsynopsisdiv>
+    <para><filename>/etc/rpm-ostreed.conf</filename></para>
+  </refsynopsisdiv>
+
+  <refsect1>
+    <title>Description</title>
+
+    <para>
+      This file configures the RPM-OSTree daemon.
+    </para>
+  </refsect1>
+
+  <refsect1>
+    <title>Options</title>
+
+    <para>
+      All options are configured in the "[Daemon]" section. There are
+      currently no available options.
+    </para>
+
+    <variablelist>
+    <!--
+      <varlistentry>
+        <term><varname>OptionName=</varname></term>
+
+        <listitem>
+        <para>Template for adding option names. Values are enumerated like "val1",
+        "val2".</para>
+        </listitem>
+      </varlistentry>
+    -->
+    </variablelist>
+  </refsect1>
+
+  <refsect1>
+    <title>See Also</title>
+
+    <para>
+      <citerefentry><refentrytitle>rpm-ostree</refentrytitle><manvolnum>1</manvolnum></citerefentry>
+    </para>
+  </refsect1>
+
+</refentry>
