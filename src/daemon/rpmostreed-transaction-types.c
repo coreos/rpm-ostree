@@ -577,13 +577,16 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   DeployTransaction *self = (DeployTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
+  const gboolean dry_run =
+    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN) > 0);
+  const gboolean no_overrides =
+    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES) > 0);
+
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
-  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN)
+  if (dry_run)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN;
-  const gboolean no_overrides =
-    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES) > 0);
 
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_CACHE_ONLY)
     {
@@ -918,6 +921,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                                                  cancellable, error))
     return FALSE;
   changed = changed || layering_changed;
+
+  if (dry_run)
+    /* Note early return here; we printed the transaction already */
+    return TRUE;
 
   if (layering_changed)
     {
