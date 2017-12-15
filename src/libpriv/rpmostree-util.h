@@ -130,13 +130,6 @@ rpmostree_cache_branch_to_nevra (const char *cachebranch);
 char *
 rpmostree_commit_content_checksum (GVariant *commit);
 
-gboolean
-rpmostree_break_hardlink (int           dfd,
-                          const char   *path,
-                          GLnxFileCopyFlags copyflags,
-                          GCancellable *cancellable,
-                          GError      **error);
-
 /* https://github.com/ostreedev/ostree/pull/1132 */
 typedef struct {
   gboolean initialized;
