@@ -340,6 +340,14 @@ rpmostree_bwrap_set_child_setup (RpmOstreeBwrap *bwrap,
   bwrap->child_setup_data = data;
 }
 
+
+/* Set an environment variable in the child process */
+void
+rpmostree_bwrap_setenv (RpmOstreeBwrap *bwrap, const char *name, const char *value)
+{
+  g_subprocess_launcher_setenv (bwrap->launcher, name, value, TRUE);
+}
+
 /* Execute @bwrap - must have been configured. After executing this method, the
  * @bwrap instance cannot be run again.
  */
