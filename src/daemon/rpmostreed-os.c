@@ -1724,24 +1724,27 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
 static void
 rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
 {
-  iface->handle_get_cached_update_rpm_diff = os_handle_get_cached_update_rpm_diff;
-  iface->handle_get_deployments_rpm_diff   = os_handle_get_deployments_rpm_diff;
-  iface->handle_download_update_rpm_diff   = os_handle_download_update_rpm_diff;
-  iface->handle_deploy                     = os_handle_deploy;
-  iface->handle_upgrade                    = os_handle_upgrade;
-  iface->handle_rollback                   = os_handle_rollback;
-  iface->handle_clear_rollback_target      = os_handle_clear_rollback_target;
-  iface->handle_rebase                     = os_handle_rebase;
-  iface->handle_refresh_md                 = os_handle_refresh_md;
-  iface->handle_pkg_change                 = os_handle_pkg_change;
-  iface->handle_set_initramfs_state        = os_handle_set_initramfs_state;
-  iface->handle_kernel_args                = os_handle_kernel_args;
-  iface->handle_get_deployment_boot_config = os_handle_get_deployment_boot_config;
   iface->handle_cleanup                    = os_handle_cleanup;
+  iface->handle_get_deployment_boot_config = os_handle_get_deployment_boot_config;
+  iface->handle_kernel_args                = os_handle_kernel_args;
+  iface->handle_refresh_md                 = os_handle_refresh_md;
+  iface->handle_rollback                   = os_handle_rollback;
+  iface->handle_set_initramfs_state        = os_handle_set_initramfs_state;
   iface->handle_update_deployment          = os_handle_update_deployment;
+  /* legacy cleanup API; superseded by Cleanup() */
+  iface->handle_clear_rollback_target      = os_handle_clear_rollback_target;
+  /* legacy deployment change API; superseded by UpdateDeployment() */
+  iface->handle_upgrade                    = os_handle_upgrade;
+  iface->handle_rebase                     = os_handle_rebase;
+  iface->handle_deploy                     = os_handle_deploy;
+  iface->handle_pkg_change                 = os_handle_pkg_change;
+  /* cache API; used by Cockpit at least */
+  iface->handle_get_deployments_rpm_diff   = os_handle_get_deployments_rpm_diff;
+  iface->handle_get_cached_update_rpm_diff = os_handle_get_cached_update_rpm_diff;
   iface->handle_get_cached_rebase_rpm_diff = os_handle_get_cached_rebase_rpm_diff;
-  iface->handle_download_rebase_rpm_diff   = os_handle_download_rebase_rpm_diff;
   iface->handle_get_cached_deploy_rpm_diff = os_handle_get_cached_deploy_rpm_diff;
+  iface->handle_download_update_rpm_diff   = os_handle_download_update_rpm_diff;
+  iface->handle_download_rebase_rpm_diff   = os_handle_download_rebase_rpm_diff;
   iface->handle_download_deploy_rpm_diff   = os_handle_download_deploy_rpm_diff;
 }
 
