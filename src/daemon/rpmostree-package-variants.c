@@ -24,6 +24,23 @@
 #include "rpmostree-package-variants.h"
 #include <libglnx.h>
 
+/**
+ * package_to_variant
+ * @package: RpmOstreePackage
+ *
+ * Returns: A GVariant of (sss) where values are
+ * (package name, evr, arch)
+ */
+static GVariant *
+package_to_variant (RpmOstreePackage *package)
+{
+  return g_variant_new ("(sss)",
+                        rpm_ostree_package_get_name (package),
+                        rpm_ostree_package_get_evr (package),
+                        rpm_ostree_package_get_arch (package));
+}
+
+
 static GVariant *
 build_diff_variant (const gchar *name,
                     guint type,
@@ -36,14 +53,14 @@ build_diff_variant (const gchar *name,
 
   if (old_package)
     {
-        g_variant_builder_add (&options_builder, "{sv}", "PreviousPackage",
-                               rpm_ostree_package_to_variant (old_package));
+      g_variant_builder_add (&options_builder, "{sv}", "PreviousPackage",
+                             package_to_variant (old_package));
     }
 
   if (new_package)
     {
       g_variant_builder_add (&options_builder, "{sv}", "NewPackage",
-                             rpm_ostree_package_to_variant (new_package));
+                             package_to_variant (new_package));
     }
 
   g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
@@ -54,24 +71,7 @@ build_diff_variant (const gchar *name,
 }
 
 
-/**
- * rpm_ostree_package_to_variant
- * @package: RpmOstreePackage
- *
- * Returns: A GVariant of (sss) where values are
- * (package name, evr, arch)
- */
-GVariant *
-rpm_ostree_package_to_variant (RpmOstreePackage *package)
-{
-  return g_variant_new ("(sss)",
-                        rpm_ostree_package_get_name (package),
-                        rpm_ostree_package_get_evr (package),
-                        rpm_ostree_package_get_arch (package));
-}
-
-
-int
+static int
 rpm_ostree_db_diff_variant_compare_by_name (const void *v1,
                                             const void *v2)
 
@@ -81,15 +81,17 @@ rpm_ostree_db_diff_variant_compare_by_name (const void *v1,
   GVariant **v2pp = (GVariant**)v2;
   GVariant *variant2 = *v2pp;
 
-  gchar *name1 = NULL;
-  gchar *name2 = NULL;
+  const char *name1 = NULL;
+  const char *name2 = NULL;
   g_variant_get_child (variant1, 0, "&s", &name1);
   g_variant_get_child (variant2, 0, "&s", &name2);
 
-  return g_strcmp0 (name1, name2);
+  g_assert (name1);
+  g_assert (name2);
+  return strcmp (name1, name2);
 }
 
-int
+static int
 rpm_ostree_db_diff_variant_compare_by_type (const void *v1,
                                             const void *v2)
 
@@ -101,7 +103,6 @@ rpm_ostree_db_diff_variant_compare_by_type (const void *v1,
 
   guint type1;
   guint type2;
-
   g_variant_get_child (variant1, 1, "u", &type1);
   g_variant_get_child (variant2, 1, "u", &type2);
 
@@ -116,98 +117,77 @@ rpm_ostree_db_diff_variant_compare_by_type (const void *v1,
  * @repo: A OstreeRepo
  * @old_ref: old ref to use
  * @new_ref: New ref to use
+ * @out_variant: floating GVariant that represents the differences
+ *   between the rpm databases on the given refs.
  * GCancellable: *cancellable
  * GError: **error
  *
- * Returns: A GVariant that represents the differences
- * between the rpm databases on the given refs.
+ * Returns: %TRUE on success, %FALSE on failure
  */
-GVariant *
+gboolean
 rpm_ostree_db_diff_variant (OstreeRepo *repo,
                             const char *from_rev,
                             const char *to_rev,
+                            GVariant  **out_variant,
                             GCancellable *cancellable,
                             GError **error)
 {
-  GVariant *variant = NULL;
-  GVariantBuilder builder;
 
   g_autoptr(GPtrArray) removed = NULL;
   g_autoptr(GPtrArray) added = NULL;
   g_autoptr(GPtrArray) modified_old = NULL;
   g_autoptr(GPtrArray) modified_new = NULL;
-  g_autoptr(GPtrArray) found = NULL;
-
-  guint i;
-
-  found = g_ptr_array_new ();
-
   if (!rpm_ostree_db_diff (repo, from_rev, to_rev,
-                           &removed, &added, &modified_old,
-                           &modified_new, cancellable, error))
-    goto out;
+                           &removed, &added, &modified_old, &modified_new,
+                           cancellable, error))
+    return FALSE;
 
-  if (modified_old->len > 0)
+  g_assert_cmpuint (modified_old->len, ==, modified_new->len);
+
+  g_autoptr(GPtrArray) found = g_ptr_array_new ();
+
+  for (guint i = 0; i < modified_old->len; i++)
     {
-      for (i = 0; i < modified_old->len; i++)
-      {
-        guint type = RPM_OSTREE_PACKAGE_UPGRADED;
-        RpmOstreePackage *oldpkg = modified_old->pdata[i];
-        RpmOstreePackage *newpkg;
+      guint type = RPM_OSTREE_PACKAGE_UPGRADED;
+      RpmOstreePackage *oldpkg = modified_old->pdata[i];
+      RpmOstreePackage *newpkg = modified_new->pdata[i];
 
-        const char *name = rpm_ostree_package_get_name (oldpkg);
-        g_assert_cmpuint (i, <, modified_new->len);
-        newpkg = modified_new->pdata[i];
+      if (rpm_ostree_package_cmp (oldpkg, newpkg) > 0)
+        type = RPM_OSTREE_PACKAGE_DOWNGRADED;
 
-        if (rpm_ostree_package_cmp (oldpkg, newpkg) > 0)
-              type = RPM_OSTREE_PACKAGE_DOWNGRADED;
-
-        g_ptr_array_add (found,
-                         build_diff_variant (name, type, oldpkg, newpkg));
-      }
+      const char *name = rpm_ostree_package_get_name (oldpkg);
+      g_ptr_array_add (found, build_diff_variant (name, type, oldpkg, newpkg));
     }
 
-  if (removed->len > 0)
+  for (guint i = 0; i < removed->len; i++)
     {
-      for (i = 0; i < removed->len; i++)
-      {
-        RpmOstreePackage *pkg = removed->pdata[i];
-        const char *name = rpm_ostree_package_get_name (pkg);
-        g_ptr_array_add (found,
-                         build_diff_variant (name,
-                                             RPM_OSTREE_PACKAGE_REMOVED,
-                                             pkg,
-                                             NULL));
-      }
+      guint type = RPM_OSTREE_PACKAGE_REMOVED;
+      RpmOstreePackage *pkg = removed->pdata[i];
+      const char *name = rpm_ostree_package_get_name (pkg);
+      g_ptr_array_add (found, build_diff_variant (name, type, pkg, NULL));
     }
 
-  if (added->len > 0)
+  for (guint i = 0; i < added->len; i++)
     {
-      for (i = 0; i < added->len; i++)
-        {
-          RpmOstreePackage *pkg = added->pdata[i];
-          const char *name = rpm_ostree_package_get_name (pkg);
-          g_ptr_array_add (found,
-                           build_diff_variant (name,
-                                               RPM_OSTREE_PACKAGE_ADDED,
-                                               NULL,
-                                               pkg));
-        }
+      guint type = RPM_OSTREE_PACKAGE_ADDED;
+      RpmOstreePackage *pkg = added->pdata[i];
+      const char *name = rpm_ostree_package_get_name (pkg);
+      g_ptr_array_add (found, build_diff_variant (name, type, NULL, pkg));
     }
 
   g_ptr_array_sort (found, rpm_ostree_db_diff_variant_compare_by_type);
-  g_variant_builder_init (&builder, G_VARIANT_TYPE_ARRAY);
-  for (i = 0; i < found->len; i++)
-    {
-      GVariant *v = found->pdata[i];
-      g_variant_builder_add_value (&builder, v);
-    }
 
+  GVariantBuilder builder;
+  g_variant_builder_init (&builder, G_VARIANT_TYPE_ARRAY);
+  for (guint i = 0; i < found->len; i++)
+    g_variant_builder_add_value (&builder, found->pdata[i]);
+
+  GVariant *variant = NULL;
   if (found->len > 1)
     variant = g_variant_builder_end (&builder);
   else
     variant = g_variant_new ("a(sua{sv})", NULL);
 
-out:
-  return variant;
+  *out_variant = g_steal_pointer (&variant);
+  return TRUE;
 }

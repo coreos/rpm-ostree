@@ -30,19 +30,10 @@ typedef enum {
   RPM_OSTREE_PACKAGE_DOWNGRADED
 } RpmOstreePackageDiffTypes;
 
-
-GVariant * rpm_ostree_db_diff_variant (OstreeRepo *repo,
-                                       const char *from_ref,
-                                       const char *to_ref,
-                                       GCancellable *cancellable,
-                                       GError **error);
-
-int rpm_ostree_db_diff_variant_compare_by_name (const void *v1,
-                                                const void *v2);
-
-int rpm_ostree_db_diff_variant_compare_by_type (const void *v1,
-                                                const void *v2);
-
-
-_RPMOSTREE_EXTERN
-GVariant * rpm_ostree_package_to_variant (RpmOstreePackage *package);
+gboolean
+rpm_ostree_db_diff_variant (OstreeRepo *repo,
+                            const char *from_rev,
+                            const char *to_rev,
+                            GVariant  **out_variant,
+                            GCancellable *cancellable,
+                            GError **error);
