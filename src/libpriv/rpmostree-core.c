@@ -1085,7 +1085,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
       else
         repo_ts_str = g_strdup_printf ("(invalid timestamp)");
 
-      rpmostree_output_message ("rpm-md repo '%s'%s; generated: %s\n",
+      rpmostree_output_message ("rpm-md repo '%s'%s; generated: %s",
                                 dnf_repo_get_id (repo), !did_update ? " (cached)" : "",
                                 repo_ts_str);
     }

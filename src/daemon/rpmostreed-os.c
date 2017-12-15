@@ -661,6 +661,9 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
   if (vardict_lookup_bool (&options_dict, "cache-only", FALSE) &&
       vardict_lookup_bool (&options_dict, "download-only", FALSE))
     return glnx_null_throw (error, "Can't specify cache-only and download-only");
+  if (vardict_lookup_bool (&options_dict, "dry-run", FALSE) &&
+      vardict_lookup_bool (&options_dict, "download-only", FALSE))
+    return glnx_null_throw (error, "Can't specify dry-run and download-only");
   if (override_replace_pkgs)
     return glnx_null_throw (error, "Non-local replacement overrides not implemented yet");
 
@@ -1136,7 +1139,7 @@ out:
     {
       const char *client_address;
       client_address = rpmostreed_transaction_get_client_address (transaction);
-      rpmostree_os_complete_pkg_change (interface, invocation, NULL, client_address);
+      rpmostree_os_complete_set_initramfs_state (interface, invocation, client_address);
     }
 
   return TRUE;
