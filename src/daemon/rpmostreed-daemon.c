@@ -22,6 +22,7 @@
 #include "rpmostreed-sysroot.h"
 #include "rpmostreed-types.h"
 #include "rpmostreed-utils.h"
+#include "rpmostree-util.h"
 
 #include <libglnx.h>
 #include <systemd/sd-journal.h>
@@ -61,8 +62,9 @@ struct _RpmostreedDaemon {
   RpmostreedSysroot *sysroot;
   gchar *sysroot_path;
 
-  /* we only have one setting for now, so let's just keep it in the main struct */
+  /* we only have two settings for now, so let's just keep it in the main struct */
   guint idle_exit_timeout;
+  RpmostreedAutomaticUpdatePolicy auto_update_policy;
 
   GDBusConnection *connection;
   GDBusObjectManagerServer *object_manager;
@@ -312,6 +314,17 @@ maybe_load_config_keyfile (GKeyFile **out_keyfile,
   return TRUE;
 }
 
+static char*
+get_config_str (GKeyFile   *keyfile,
+                const char *key,
+                const char *default_val)
+{
+  g_autofree char *val = NULL;
+  if (keyfile)
+    val = g_key_file_get_string (keyfile, DAEMON_CONFIG_GROUP, key, NULL);
+  return g_steal_pointer (&val) ?: g_strdup (default_val);
+}
+
 static guint64
 get_config_uint64 (GKeyFile   *keyfile,
                    const char *key,
@@ -330,6 +343,20 @@ get_config_uint64 (GKeyFile   *keyfile,
   return default_val;
 }
 
+RpmostreedAutomaticUpdatePolicy
+rpmostreed_get_automatic_update_policy (RpmostreedDaemon *self)
+{
+  return self->auto_update_policy;
+}
+
+/* in-place version of g_ascii_strdown */
+static inline void
+ascii_strdown_inplace (char *str)
+{
+  for (char *c = str; *c; c++)
+    *c = g_ascii_tolower (*c);
+}
+
 gboolean
 rpmostreed_daemon_reload_config (RpmostreedDaemon *self,
                                  gboolean         *out_changed,
@@ -343,12 +370,32 @@ rpmostreed_daemon_reload_config (RpmostreedDaemon *self,
    * follow-up requests are more responsive */
   guint64 idle_exit_timeout = get_config_uint64 (config, "IdleExitTimeout", 60);
 
+  /* default to off for now; we will change it to "check" in a later release */
+  RpmostreedAutomaticUpdatePolicy auto_update_policy =
+    RPMOSTREED_AUTOMATIC_UPDATE_POLICY_NONE;
+
+  g_autofree char *auto_update_policy_str =
+    get_config_str (config, "AutomaticUpdatePolicy", NULL);
+  if (auto_update_policy_str)
+    {
+      ascii_strdown_inplace (auto_update_policy_str);
+      if (!rpmostree_str_to_auto_update_policy (auto_update_policy_str,
+                                                &auto_update_policy, error))
+        return FALSE;
+    }
+
   /* don't update changed for this; it's contained to RpmostreedDaemon so no other objects
    * need to be reloaded if it changes */
   self->idle_exit_timeout = idle_exit_timeout;
 
+  gboolean changed = FALSE;
+
+  changed = changed || (self->auto_update_policy != auto_update_policy);
+
+  self->auto_update_policy = auto_update_policy;
+
   if (out_changed)
-    *out_changed = FALSE;
+    *out_changed = changed;
   return TRUE;
 }
 

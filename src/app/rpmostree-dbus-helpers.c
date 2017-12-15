@@ -20,14 +20,18 @@
 
 #include "config.h"
 
+#include <signal.h>
+#include <sys/socket.h>
+#include <systemd/sd-login.h>
+
+#include <glib-unix.h>
+#include <libglnx.h>
+
 #include "rpmostree-dbus-helpers.h"
 #include "rpmostree-builtins.h"
 #include "rpmostree-libbuiltin.h"
-#include "libglnx.h"
-#include <sys/socket.h>
-#include "glib-unix.h"
-#include <signal.h>
-#include <systemd/sd-login.h>
+#include "rpmostree-util.h"
+#include "rpmostree-rpm-util.h"
 
 void
 rpmostree_cleanup_peer (GPid *peer_pid)
@@ -1153,4 +1157,120 @@ rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
                                                    NULL,
                                                    cancellable,
                                                    error);
+}
+
+static void
+append_to_summary (GString     *summary,
+                   const char  *type,
+                   guint        n)
+{
+  if (n == 0)
+    return;
+  if (summary->len > 0)
+    g_string_append (summary, ", ");
+  g_string_append_printf (summary, "%u %s", n, type);
+}
+
+/* this is used by both `status` and `upgrade --check/--preview` */
+gboolean
+rpmostree_print_cached_update (GVariant         *cached_update,
+                               gboolean          verbose,
+                               GCancellable     *cancellable,
+                               GError          **error)
+{
+  GLNX_AUTO_PREFIX_ERROR ("Retrieving cached update", error);
+
+  g_auto(GVariantDict) dict;
+  g_variant_dict_init (&dict, cached_update);
+
+  /* let's just extract 📤 all the info ahead of time */
+
+  const char *checksum;
+  if (!g_variant_dict_lookup (&dict, "checksum", "&s", &checksum))
+    return glnx_throw (error, "Missing \"checksum\" key");
+
+  const char *version;
+  if (!g_variant_dict_lookup (&dict, "version", "&s", &version))
+    version= NULL;
+
+  g_autofree char *timestamp = NULL;
+  { guint64 t;
+    if (!g_variant_dict_lookup (&dict, "timestamp", "t", &t))
+      t = 0;
+    timestamp = rpmostree_timestamp_str_from_unix_utc (t);
+  }
+
+  gboolean gpg_enabled;
+  if (!g_variant_dict_lookup (&dict, "gpg-enabled", "b", &gpg_enabled))
+    gpg_enabled = FALSE;
+
+  g_autoptr(GVariant) signatures =
+    g_variant_dict_lookup_value (&dict, "signatures", G_VARIANT_TYPE ("av"));
+
+  gboolean is_new_checksum;
+  g_assert (g_variant_dict_lookup (&dict, "ref-has-new-commit", "b", &is_new_checksum));
+
+  g_autoptr(GVariant) rpm_diff =
+    g_variant_dict_lookup_value (&dict, "rpm-diff", G_VARIANT_TYPE ("a{sv}"));
+
+  /* and now we can print 🖨️ things! */
+
+  g_print ("Available update:\n");
+
+  /* add the long keys here */
+  const guint max_key_len = MAX (strlen ("Downgraded"),
+                                 strlen ("GPGSignature"));
+
+  if (is_new_checksum)
+    {
+      rpmostree_print_timestamp_version (version, timestamp, max_key_len);
+      rpmostree_print_kv ("Commit", max_key_len, checksum);
+      if (gpg_enabled)
+        rpmostree_print_gpg_info (signatures, verbose, max_key_len);
+    }
+
+  if (rpm_diff)
+    {
+      g_auto(GVariantDict) rpm_diff_dict;
+      g_variant_dict_init (&rpm_diff_dict, rpm_diff);
+
+      g_autoptr(GVariant) upgraded =
+        _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "upgraded",
+                                                  G_VARIANT_TYPE ("a(us(ss)(ss))"), error);
+      if (!upgraded)
+        return FALSE;
+
+      g_autoptr(GVariant) downgraded =
+        _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "downgraded",
+                                                  G_VARIANT_TYPE ("a(us(ss)(ss))"), error);
+      if (!downgraded)
+        return FALSE;
+
+      g_autoptr(GVariant) removed =
+        _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "removed",
+                                                  G_VARIANT_TYPE ("a(usss)"), error);
+      if (!removed)
+        return FALSE;
+
+      g_autoptr(GVariant) added =
+        _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "added",
+                                                  G_VARIANT_TYPE ("a(usss)"), error);
+      if (!added)
+        return FALSE;
+
+      if (verbose)
+        rpmostree_variant_diff_print_formatted (max_key_len,
+                                                upgraded, downgraded, removed, added);
+      else
+        {
+          g_autoptr(GString) diff_summary = g_string_new (NULL);
+          append_to_summary (diff_summary, "upgraded", g_variant_n_children (upgraded));
+          append_to_summary (diff_summary, "downgraded", g_variant_n_children (downgraded));
+          append_to_summary (diff_summary, "removed", g_variant_n_children (removed));
+          append_to_summary (diff_summary, "added", g_variant_n_children (added));
+          rpmostree_print_kv ("Diff", max_key_len, diff_summary->str);
+        }
+    }
+
+  return TRUE;
 }

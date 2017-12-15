@@ -30,7 +30,7 @@
 #include "rpmostree-util.h"
 #include "rpmostree-origin.h"
 #include "rpmostree-output.h"
-#include "rpmostree.h"
+#include "libsd-locale-util.h"
 #include "libglnx.h"
 
 #define RPMOSTREE_OLD_PKGCACHE_DIR "extensions/rpmostree/pkgcache"
@@ -777,7 +777,7 @@ rpmostree_diff_print_formatted (GPtrArray *removed,
 {
   gboolean first;
 
-  g_assert (modified_old->len == modified_new->len);
+  g_assert_cmpuint (modified_old->len, ==, modified_new->len);
 
   first = TRUE;
   for (guint i = 0; i < modified_old->len; i++)
@@ -840,6 +840,50 @@ rpmostree_diff_print_formatted (GPtrArray *removed,
 
       g_print ("  %s\n", nevra);
     }
+}
+
+static void
+variant_diff_print_modified (guint       max_key_len,
+                             GVariant   *modified,
+                             const char *type)
+{
+  guint n = g_variant_n_children (modified);
+  for (guint i = 0; i < n; i++)
+    {
+      const char *name, *evr_old, *evr_new;
+      g_variant_get_child (modified, i, "(u&s(&ss)(&ss))",
+                           NULL, &name, &evr_old, NULL, &evr_new, NULL);
+      g_print ("  %*s%s %s %s -> %s\n", max_key_len, i == 0 ? type : "", i == 0 ? ":" : " ",
+               name, evr_old, evr_new);
+    }
+}
+
+static void
+variant_diff_print_singles (guint       max_key_len,
+                            GVariant   *singles,
+                            const char *type)
+{
+  guint n = g_variant_n_children (singles);
+  for (guint i = 0; i < n; i++)
+    {
+      const char *name, *evr, *arch;
+      g_variant_get_child (singles, i, "(u&s&s&s)", NULL, &name, &evr, &arch);
+      g_print ("  %*s%s %s-%s.%s\n", max_key_len, i == 0 ? type : "", i == 0 ? ":" : " ",
+               name, evr, arch);
+    }
+}
+
+void
+rpmostree_variant_diff_print_formatted (guint     max_key_len,
+                                        GVariant *upgraded,
+                                        GVariant *downgraded,
+                                        GVariant *removed,
+                                        GVariant *added)
+{
+  variant_diff_print_modified (max_key_len, upgraded, "Upgraded");
+  variant_diff_print_modified (max_key_len, downgraded, "Downgraded");
+  variant_diff_print_singles (max_key_len, removed, "Removed");
+  variant_diff_print_singles (max_key_len, added, "Added");
 }
 
 static int
@@ -956,4 +1000,38 @@ rpmostree_variant_bsearch_str (GVariant   *array,
 
   *out_pos = imid;
   return FALSE;
+}
+
+const char*
+rpmostree_auto_update_policy_to_str (RpmostreedAutomaticUpdatePolicy policy,
+                                     GError **error)
+{
+  switch (policy)
+    {
+    case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_NONE:
+      return "none";
+    case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_CHECK:
+      return "check";
+    case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_REBOOT:
+      return "reboot";
+    default:
+      return glnx_null_throw (error, "Invalid policy value %u", policy);
+    }
+}
+
+gboolean
+rpmostree_str_to_auto_update_policy (const char *str,
+                                     RpmostreedAutomaticUpdatePolicy *out_policy,
+                                     GError    **error)
+{
+  g_assert (str);
+  if (g_str_equal (str, "none") || g_str_equal (str, "off"))
+    *out_policy = RPMOSTREED_AUTOMATIC_UPDATE_POLICY_NONE;
+  else if (g_str_equal (str, "check"))
+    *out_policy = RPMOSTREED_AUTOMATIC_UPDATE_POLICY_CHECK;
+  else if (g_str_equal (str, "reboot"))
+    *out_policy = RPMOSTREED_AUTOMATIC_UPDATE_POLICY_REBOOT;
+  else
+    return glnx_throw (error, "Invalid value for AutomaticUpdatePolicy: '%s'", str);
+  return TRUE;
 }

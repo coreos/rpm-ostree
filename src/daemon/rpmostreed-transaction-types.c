@@ -176,6 +176,9 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
                                   GCancellable *cancellable,
                                   GError **error)
 {
+  /* XXX: we should just unify this with deploy_transaction_execute to take advantage of the
+   * new pkglist metadata when possible */
+
   PackageDiffTransaction *self = (PackageDiffTransaction *) transaction;
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
 
@@ -598,12 +601,21 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   /* Mainly for the `install` and `override` commands */
   const gboolean no_pull_base =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE) > 0);
+  /* Used to background check for updates; this essentially means downloading the minimum
+   * amount of metadata only to check if there's an upgrade */
+  const gboolean download_metadata_only =
+    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY) > 0);
 
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
   if (dry_run)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN;
+
+  /* DOWNLOAD_METADATA_ONLY isn't directly exposed at the D-Bus API level, so we shouldn't
+   * ever run into these conflicting options */
+  if (download_metadata_only)
+    g_assert (!(no_pull_base || cache_only || download_only));
 
   if (cache_only)
     {
@@ -701,8 +713,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   else
     g_string_append (txn_title, "upgrade");
 
+  /* so users know we were probably fired by the automated timer when looking at status */
   if (cache_only)
     g_string_append (txn_title, " (cache only)");
+  else if (download_metadata_only)
+    g_string_append (txn_title, " (check only)");
   else if (download_only)
     g_string_append (txn_title, " (download only)");
 
@@ -865,7 +880,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     {
       gboolean base_changed;
 
-      if (!rpmostree_sysroot_upgrader_pull_base (upgrader, NULL, 0, progress,
+      OstreeRepoPullFlags flags = OSTREE_REPO_PULL_FLAGS_NONE;
+      if (download_metadata_only)
+        flags |= OSTREE_REPO_PULL_FLAGS_COMMIT_ONLY;
+
+      if (!rpmostree_sysroot_upgrader_pull_base (upgrader, NULL, flags, progress,
                                                  &base_changed, cancellable, error))
         return FALSE;
 
@@ -931,6 +950,48 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
       changed = TRUE;
+    }
+
+  if (download_metadata_only)
+    {
+      /* We have to short-circuit the usual path here; we already downloaded the ostree
+       * metadata, so now we just need to update the rpmmd data (but only if we actually
+       * have pkgs layered). This is still just a heuristic, since e.g. an InactiveRequest
+       * may in fact become active in the new base, but we don't have the full tree. */
+
+      /* XXX: in jigdo mode we'll want to do this unconditionally */
+      if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
+        {
+          /* XXX: dedupe a bit more with RefreshMd path */
+          g_autoptr(RpmOstreeContext) ctx =
+            rpmostree_context_new_system (repo, cancellable, error);
+
+          /* Note here that we use the cfg merge deployment for releasever: the download
+           * metadata only path is currently used only by the auto-update checker, and there
+           * we want to show updates/vulnerabilities relative to the *booted* releasever.
+           * Anyway, given that we don't yet do etc merges on boot, it shouldn't be too
+           * common for users to stay long on e.g. f26 when they have f27 already deployed
+           * and ready to reboot into. */
+          g_autoptr(OstreeDeployment) cfg_merge_deployment =
+            ostree_sysroot_get_merge_deployment (sysroot, self->osname);
+
+          g_autofree char *source_root =
+            rpmostree_get_deployment_root (sysroot, cfg_merge_deployment);
+          if (!rpmostree_context_setup (ctx, NULL, source_root, NULL, cancellable, error))
+            return FALSE;
+
+          /* we always want to force a refetch of the metadata */
+          dnf_context_set_cache_age (rpmostree_context_get_dnf (ctx), 0);
+
+          /* point libdnf to our repos dir */
+          rpmostree_context_configure_from_deployment (ctx, sysroot, cfg_merge_deployment);
+
+          if (!rpmostree_context_download_metadata (ctx, cancellable, error))
+            return FALSE;
+        }
+
+      /* Note early return */
+      return TRUE;
     }
 
   RpmOstreeSysrootUpgraderLayeringType layering_type;

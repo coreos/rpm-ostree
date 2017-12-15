@@ -410,6 +410,20 @@ handle_unregister_client (RPMOSTreeSysroot *object,
 }
 
 static gboolean
+reset_config_properties (RpmostreedSysroot  *self,
+                         GError            **error)
+{
+  RpmostreedDaemon *daemon = rpmostreed_daemon_get ();
+
+  RpmostreedAutomaticUpdatePolicy policy = rpmostreed_get_automatic_update_policy (daemon);
+  const char *policy_str = rpmostree_auto_update_policy_to_str (policy, NULL);
+  g_assert (policy_str);
+  rpmostree_sysroot_set_automatic_update_policy (RPMOSTREE_SYSROOT (self), policy_str);
+
+  return TRUE;
+}
+
+static gboolean
 handle_reload_config (RPMOSTreeSysroot *object,
                       GDBusMethodInvocation *invocation)
 {
@@ -417,7 +431,11 @@ handle_reload_config (RPMOSTreeSysroot *object,
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
 
-  if (!rpmostreed_daemon_reload_config (rpmostreed_daemon_get (), NULL, error))
+  gboolean changed = FALSE;
+  if (!rpmostreed_daemon_reload_config (rpmostreed_daemon_get (), &changed, error))
+    goto out;
+
+  if (changed && !reset_config_properties (self, error))
     goto out;
 
   if (!rpmostreed_sysroot_reload (self, error))
@@ -740,6 +758,9 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
     return FALSE;
 
   if (!sysroot_populate_deployments_unlocked (self, NULL, error))
+    return FALSE;
+
+  if (!reset_config_properties (self, error))
     return FALSE;
 
   if (self->monitor == NULL)

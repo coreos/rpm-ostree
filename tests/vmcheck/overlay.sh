@@ -12,6 +12,26 @@ if test -z "${INSIDE_VM:-}"; then
     fi
 
     vm_rsync
+
+    # ✀✀✀ BEGIN selinux-policy hack (part 1) for
+    # https://github.com/fedora-selinux/selinux-policy-contrib/pull/45
+    selhack=selinux-tmp-hack
+    if ! vm_cmd sesearch -A -s init_t -t install_t -c dbus | grep -q allow; then
+      echo "Activating selinux-tmp-hack"
+      d=$(mktemp -d)
+      cat > $d/$selhack.te << 'EOF'
+policy_module(selinux-tmp-hack, 1.0.0)
+gen_require(`
+      type install_t;
+')
+init_dbus_chat(install_t)
+EOF
+      make -C $d -f /usr/share/selinux/devel/Makefile $selhack.pp
+      vm_send /var/roothome/sync $d/$selhack.pp
+      rm -rf $d
+    fi
+    # ✀✀✀ END selinux-policy hack ✀✀✀
+
     vm_cmd env INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh
     vm_reboot
     exit 0
@@ -54,6 +74,20 @@ INSTTREE=/var/roothome/sync/insttree
 rsync -rlv $INSTTREE/usr/ vmcheck/usr/
 rsync -rlv $INSTTREE/etc/ vmcheck/usr/etc/
 
+## ✀✀✀ BEGIN selinux-policy hack (part 2) for
+## https://github.com/fedora-selinux/selinux-policy-contrib/pull/45
+selhack=selinux-tmp-hack
+pp=/var/roothome/sync/$selhack.pp
+if [ -f $pp ]; then
+  seld=usr/share/selinux/packages/$selhack
+  mkdir -p vmcheck/$seld
+  cp $pp vmcheck/$seld
+  mkdir vmcheck/var/tmp # bwrap wrapper will mount tmpfs there
+  /var/roothome/sync/scripts/bwrap-script-shell.sh /ostree/repo/tmp/vmcheck \
+    semodule -v -n -i /$seld/$selhack.pp
+fi
+## ✀✀✀ END selinux-policy hack ✀✀✀
+
 # ✀✀✀ BEGIN hack to get --keep-metadata
 if ! ostree commit --help | grep -q -e --keep-metadata; then
   # this is fine, rsync doesn't modify in place
@@ -63,7 +97,14 @@ if ! ostree commit --help | grep -q -e --keep-metadata; then
 fi
 # ✀✀✀ END hack to get --keep-metadata ✀✀✀
 
+# if the commit already has pkglist metadata (i.e. the tree was composed with at
+# least v2018.1), make sure it gets preserved, because it's useful for playing
+# around (but note it's not a requirement for our tests)
 commit_opts=
+if ostree show $commit --raw | grep -q rpmostree.rpmdb.pkglist; then
+  commit_opts="${commit_opts} --keep-metadata=rpmostree.rpmdb.pkglist"
+fi
+
 source_opt= # make this its own var since it contains spaces
 if [ $origin != vmcheck ]; then
   source_title="${origin}"
@@ -82,4 +123,5 @@ fi
 ostree commit --parent=$commit -b vmcheck --consume --no-bindings \
        --link-checkout-speedup ${commit_opts} "${source_opt}" \
        --selinux-policy=vmcheck --tree=dir=vmcheck
+
 ostree admin deploy vmcheck
