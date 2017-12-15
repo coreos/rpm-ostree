@@ -79,14 +79,13 @@ rpmostree_postprocess_final (int            rootfs_dfd,
                              GError       **error);
 
 gboolean
-rpmostree_commit (int            rootfs_dfd,
-                  OstreeRepo    *repo,
-                  const char    *refname,
-                  const char    *write_commitid_to,
-                  GVariant      *metadata,
-                  const char    *gpg_keyid,
-                  gboolean       enable_selinux,
-                  OstreeRepoDevInoCache *devino_cache,
-                  char         **out_new_revision,
-                  GCancellable  *cancellable,
-                  GError       **error);
+rpmostree_compose_commit (int            rootfs_dfd,
+                          OstreeRepo    *repo,
+                          const char    *parent,
+                          GVariant      *metadata,
+                          const char    *gpg_keyid,
+                          gboolean       enable_selinux,
+                          OstreeRepoDevInoCache *devino_cache,
+                          char         **out_new_revision,
+                          GCancellable  *cancellable,
+                          GError       **error);
