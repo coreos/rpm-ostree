@@ -3427,6 +3427,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
        * start` in its %post which both violates Fedora policy and also will not
        * work with the rpm-ostree model.
        * See also https://github.com/projectatomic/rpm-ostree/issues/550
+       *
+       * See also the SYSTEMD_OFFLINE bits in rpmostree-scripts.c; at some
+       * point in the far future when we don't support CentOS7 we can drop
+       * our wrapper script.  If we remember.
        */
       if (renameat (tmprootfs_dfd, "usr/bin/systemctl",
                     tmprootfs_dfd, "usr/bin/systemctl.rpmostreesave") < 0)
