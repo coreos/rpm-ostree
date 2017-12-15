@@ -217,6 +217,11 @@ if vm_rpmostree install etc-mutate; then
   assert_not_reached "successfully installed etc-mutate?"
 fi
 
+# SYSTEMD_OFFLINE
+vm_build_rpm test-systemd-offline post 'test "${SYSTEMD_OFFLINE}" = 1'
+vm_rpmostree install test-systemd-offline
+vm_rpmostree uninstall test-systemd-offline
+
 # Ensure this is reset; at least in the Vagrant box with
 # fedora-atomic:fedora/26/x86_64/atomic-host
 # Version: 26.131 (2017-09-19 22:29:04)

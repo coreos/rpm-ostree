@@ -46,6 +46,8 @@ RpmOstreeBwrap *rpmostree_bwrap_new (int rootfs,
 void rpmostree_bwrap_append_bwrap_argv (RpmOstreeBwrap *bwrap, ...) G_GNUC_NULL_TERMINATED;
 void rpmostree_bwrap_append_child_argv (RpmOstreeBwrap *bwrap, ...) G_GNUC_NULL_TERMINATED;
 
+void rpmostree_bwrap_setenv (RpmOstreeBwrap *bwrap, const char *name, const char *value);
+
 void rpmostree_bwrap_set_child_setup (RpmOstreeBwrap *bwrap,
                                       GSpawnChildSetupFunc func,
                                       gpointer             data);

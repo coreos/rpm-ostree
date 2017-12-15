@@ -278,6 +278,11 @@ run_script_in_bwrap_container (int rootfs_fd,
   if (!bwrap)
     goto out;
 
+  /* https://github.com/systemd/systemd/pull/7631 AKA
+   * "systemctl,verbs: Introduce SYSTEMD_OFFLINE environment variable"
+   * https://github.com/systemd/systemd/commit/f38951a62837a00a0b1ff42d007e9396b347742d
+   */
+  rpmostree_bwrap_setenv (bwrap, "SYSTEMD_OFFLINE", "1");
 
   struct ChildSetupData data = { .stdin_fd = stdin_fd,
                                  .stdout_fd = -1,

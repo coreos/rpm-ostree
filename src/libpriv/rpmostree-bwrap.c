@@ -44,6 +44,7 @@ struct RpmOstreeBwrap {
 
   int rootfs_fd;
 
+  GSubprocessLauncher *launcher; /* 🚀 */
   GPtrArray *argv;
   const char *child_argv0;
   GLnxTmpDir rofiles_mnt;
@@ -98,6 +99,7 @@ rpmostree_bwrap_unref (RpmOstreeBwrap *bwrap)
     }
   (void)glnx_tmpdir_delete (&bwrap->rofiles_mnt, NULL, NULL);
 
+  g_clear_object (&bwrap->launcher);
   g_ptr_array_unref (bwrap->argv);
   g_free (bwrap);
 }
@@ -204,6 +206,21 @@ rpmostree_bwrap_new (int rootfs_fd,
   ret->refcount = 1;
   ret->rootfs_fd = rootfs_fd;
   ret->argv = g_ptr_array_new_with_free_func (g_free);
+  ret->launcher = g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_NONE);
+
+  /* Initialize launcher now; it may also be modified by our API methods */
+  const char *current_lang = getenv ("LANG");
+  if (!current_lang)
+    current_lang = "C";
+
+  const char *lang_var = glnx_strjoina ("LANG=", current_lang);
+  /* This is similar to what systemd does, except:
+   *  - We drop /usr/local, since scripts shouldn't see it.
+   *  - We pull in the current process' LANG, since that's what people
+   *    have historically expected from RPM scripts.
+   */
+  const char *bwrap_env[] = {"PATH=/usr/sbin:/usr/bin", lang_var, NULL};
+  g_subprocess_launcher_set_environ (ret->launcher, (char**)bwrap_env);
 
   /* ⚠⚠⚠ If you change this, also update scripts/bwrap-script-shell.sh ⚠⚠⚠ */
   rpmostree_bwrap_append_bwrap_argv (ret,
@@ -323,6 +340,14 @@ rpmostree_bwrap_set_child_setup (RpmOstreeBwrap *bwrap,
   bwrap->child_setup_data = data;
 }
 
+
+/* Set an environment variable in the child process */
+void
+rpmostree_bwrap_setenv (RpmOstreeBwrap *bwrap, const char *name, const char *value)
+{
+  g_subprocess_launcher_setenv (bwrap->launcher, name, value, TRUE);
+}
+
 /* Execute @bwrap - must have been configured. After executing this method, the
  * @bwrap instance cannot be run again.
  */
@@ -331,20 +356,10 @@ rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
                      GCancellable   *cancellable,
                      GError        **error)
 {
+  GSubprocessLauncher *launcher = bwrap->launcher;
+
   g_assert (!bwrap->executed);
   bwrap->executed = TRUE;
-
-  const char *current_lang = getenv ("LANG");
-  if (!current_lang)
-    current_lang = "C";
-
-  const char *lang_var = glnx_strjoina ("LANG=", current_lang);
-  /* This is similar to what systemd does, except:
-   *  - We drop /usr/local, since scripts shouldn't see it.
-   *  - We pull in the current process' LANG, since that's what people
-   *    have historically expected from RPM scripts.
-   */
-  const char *bwrap_env[] = {"PATH=/usr/sbin:/usr/bin", lang_var, NULL};
 
   /* Set up our error message */
   const char *errmsg = glnx_strjoina ("Executing bwrap(", bwrap->child_argv0, ")");
@@ -353,9 +368,6 @@ rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
   /* Add the final NULL */
   g_ptr_array_add (bwrap->argv, NULL);
 
-  g_autoptr(GSubprocessLauncher) launcher =
-    g_subprocess_launcher_new (G_SUBPROCESS_FLAGS_NONE);
-  g_subprocess_launcher_set_environ (launcher, (char**)bwrap_env);
   g_subprocess_launcher_set_child_setup (launcher, bwrap_child_setup, bwrap, NULL);
   g_autoptr(GSubprocess) subproc =
     g_subprocess_launcher_spawnv (launcher, (const char *const*)bwrap->argv->pdata,
