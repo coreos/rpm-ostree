@@ -150,13 +150,13 @@ static gboolean
 setup_rofiles_usr (RpmOstreeBwrap *bwrap,
                    GError **error)
 {
-  const char *rofiles_argv[] = { "rofiles-fuse", "./usr", NULL, NULL};
+  const char *rofiles_argv[] = { "rofiles-fuse", "--copyup", "./usr", NULL, NULL};
 
   if (!glnx_mkdtemp ("rpmostree-rofiles-fuse.XXXXXX", 0700, &bwrap->rofiles_mnt, error))
     return FALSE;
 
   const char *rofiles_mntpath = bwrap->rofiles_mnt.path;
-  rofiles_argv[2] = rofiles_mntpath;
+  rofiles_argv[3] = rofiles_mntpath;
 
   int estatus;
   if (!g_spawn_sync (NULL, (char**)rofiles_argv, NULL, G_SPAWN_SEARCH_PATH,
