@@ -78,7 +78,7 @@ vm_assert_status_jq \
   '.deployments[0]["base-checksum"]' \
   '.deployments[0]["pending-base-checksum"]|not' \
   '.deployments[0]["base-commit-meta"]' \
-  '.deployments[0]["layered-commit-meta"]["rpmostree.clientlayer_version"] == 2'
+  '.deployments[0]["layered-commit-meta"]["rpmostree.clientlayer_version"] > 1'
 
 vm_assert_layered_pkg foo-1.0 present
 echo "ok pkg foo added"
@@ -190,3 +190,8 @@ for ref in rpmostree/pkg/test-pkgcache-migrate-pkg{1,2}/1.0-1.x86__64; do
 done
 vm_cmd test -L ${OLD_PKGCACHE_DIR}
 echo "ok migrate pkgcache"
+
+vm_cmd ostree show --print-metadata-key rpmostree.rpmdb.pkglist \
+  $(vm_get_deployment_info 0 checksum) > pkglist.txt
+assert_file_has_content pkglist.txt 'test-pkgcache-migrate-pkg'
+echo "ok layered pkglist"
