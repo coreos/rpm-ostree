@@ -810,8 +810,9 @@ rpmostree_diff_print (GPtrArray *removed,
  * @str: Search for this string
  * @out_pos: Output position
  *
- * Binary search in a GVariant array, which must be of the form 'a(s...)',
- * where '...' may be anything.  The array elements must be sorted.
+ * Binary search in a GVariant array, which must be of the form 'a(s...)', where
+ * '...' may be anything.  The array elements must be sorted. If duplicates are
+ * present, the earliest match will be returned.
  *
  * Returns: %TRUE iff found
  */
@@ -847,8 +848,13 @@ rpmostree_variant_bsearch_str (GVariant   *array,
         }
       else
         {
-          *out_pos = imid;
-          return TRUE;
+          if (imin < imid)
+            imax = imid;
+          else
+            {
+              *out_pos = imid;
+              return TRUE;
+            }
         }
     }
 
