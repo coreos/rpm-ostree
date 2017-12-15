@@ -152,12 +152,12 @@ vm_rpmostree uninstall scriptpkg{4,5}
 echo "ok transfiletriggerin"
 fi
 
-# And now, things that should fail
-vm_build_rpm rofiles-violation \
-  post "echo should fail >> /usr/share/licenses/glibc/COPYING"
-if vm_rpmostree install rofiles-violation; then
-    assert_not_reached "installed test-post-rofiles-violation!"
-fi
+# Should work now that we're using --copyup
+# https://github.com/projectatomic/rpm-ostree/pull/1171
+vm_build_rpm rofiles-copyup \
+  post "echo copyup >> /usr/share/licenses/glibc/COPYING"
+vm_rpmostree install rofiles-copyup
+vm_rpmostree uninstall rofiles-copyup
 
 # Test cancellation via having a script hang; we interrupt directly by sending
 # SIGINT to the client binary.
@@ -212,10 +212,10 @@ vm_rpmostree ex livefs
 vm_cmd cat /usr/share/rpmostree-capsh.txt > caps.txt
 assert_not_file_has_content caps.test '^Current: =.*cap_sys_admin'
 
+# See also rofiles-copyup above
 vm_build_rpm etc-mutate post "truncate -s 0 /etc/selinux/config"
-if vm_rpmostree install etc-mutate; then
-  assert_not_reached "successfully installed etc-mutate?"
-fi
+vm_rpmostree install etc-mutate
+vm_rpmostree uninstall etc-mutate
 
 # SYSTEMD_OFFLINE
 vm_build_rpm test-systemd-offline post 'test "${SYSTEMD_OFFLINE}" = 1'
