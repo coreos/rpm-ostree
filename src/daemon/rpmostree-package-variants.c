@@ -183,7 +183,7 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
     g_variant_builder_add_value (&builder, found->pdata[i]);
 
   GVariant *variant = NULL;
-  if (found->len > 1)
+  if (found->len > 0)
     variant = g_variant_builder_end (&builder);
   else
     variant = g_variant_new ("a(sua{sv})", NULL);
