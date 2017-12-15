@@ -843,14 +843,14 @@ rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
 {
   g_auto(GLnxTmpDir) tmpdir = { 0, };
   if (!glnx_mkdtemp ("rpmostree-dbquery-XXXXXX", 0700, &tmpdir, error))
-    return FALSE;
+    return NULL;
 
   if (!checkout_only_rpmdb (repo, ref, &tmpdir, cancellable, error))
-    return FALSE;
+    return NULL;
 
   g_autoptr(DnfSack) hsack = NULL; /* NB: refsack adds a ref to it */
   if (!get_sack_for_root (tmpdir.fd, ".", &hsack, cancellable, error))
-    return FALSE;
+    return NULL;
 
   /* Ownership of tmpdir is transferred */
   return rpmostree_refsack_new (hsack, &tmpdir);
