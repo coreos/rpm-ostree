@@ -1128,3 +1128,34 @@ rpmostree_sack_get_by_pkgname (DnfSack     *sack,
   *out_pkg = g_steal_pointer (&ret_pkg);
   return TRUE;
 }
+
+gboolean
+rpmostree_create_rpmdb_pkglist_variant (int              rootfs_dfd,
+                                        GVariant       **out_variant,
+                                        GCancellable    *cancellable,
+                                        GError         **error)
+{
+  g_autoptr(GPtrArray) pkglist = NULL;
+  g_autoptr(RpmOstreeRefSack) refsack = NULL;
+  if (!rpmostree_get_pkglist_for_root (rootfs_dfd, ".", &refsack,
+                                       &pkglist, cancellable, error))
+    return FALSE;
+
+  GVariantBuilder pkglist_v_builder;
+  g_variant_builder_init (&pkglist_v_builder, (GVariantType*)"a(stsss)");
+
+  const guint n = pkglist->len;
+  for (guint i = 0; i < n; i++)
+    {
+      DnfPackage *pkg = pkglist->pdata[i];
+      g_variant_builder_add (&pkglist_v_builder, "(stsss)",
+                             dnf_package_get_name (pkg),
+                             dnf_package_get_epoch (pkg),
+                             dnf_package_get_version (pkg),
+                             dnf_package_get_release (pkg),
+                             dnf_package_get_arch (pkg));
+    }
+
+  *out_variant = g_variant_builder_end (&pkglist_v_builder);
+  return TRUE;
+}

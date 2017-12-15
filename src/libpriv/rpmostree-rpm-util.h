@@ -181,3 +181,9 @@ rpmostree_sack_get_by_pkgname (DnfSack     *sack,
                                const char  *pkgname,
                                DnfPackage **out_pkg,
                                GError     **error);
+
+gboolean
+rpmostree_create_rpmdb_pkglist_variant (int              rootfs_dfd,
+                                        GVariant       **out_variant,
+                                        GCancellable    *cancellable,
+                                        GError         **error);
