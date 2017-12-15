@@ -106,6 +106,7 @@ AC_DEFINE([BUILDOPT_HAVE_RPMFILES], 1, [Set to 1 if we have rpmfiles API]),
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GLIB_TESTS
+LIBGLNX_CONFIGURE
 
 AC_CHECK_TOOL(GPERF, gperf)
 AS_IF([test -z "$GPERF"],
