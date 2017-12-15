@@ -498,8 +498,7 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
     return FALSE;
 
   /* build a centralized rsack for it, since we need it in a few places */
-  self->rsack = rpmostree_get_refsack_for_root (self->tmprootfs_dfd, ".",
-                                                cancellable, error);
+  self->rsack = rpmostree_get_refsack_for_root (self->tmprootfs_dfd, ".", error);
   if (self->rsack == NULL)
     return FALSE;
 
