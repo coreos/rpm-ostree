@@ -111,10 +111,13 @@ polkit_policydir = $(datadir)/polkit-1/actions
 dbus_introspection_DATA = src/daemon/org.projectatomic.rpmostree1.xml
 dbus_introspectiondir = $(datadir)/dbus-1/interfaces
 
+sysconf_DATA += $(srcdir)/src/daemon/rpm-ostreed.conf
+
 EXTRA_DIST += \
 	$(dbus_introspection_DATA) \
 	$(dbusservice_DATA) \
 	$(polkit_policy_DATA) \
+	$(sysconf_DATA) \
 	$(service_in_files) \
 	$(systemdunit_in_files) \
 	$(NULL)

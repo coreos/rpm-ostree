@@ -417,6 +417,9 @@ handle_reload_config (RPMOSTreeSysroot *object,
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
 
+  if (!rpmostreed_daemon_reload_config (rpmostreed_daemon_get (), NULL, error))
+    goto out;
+
   if (!rpmostreed_sysroot_reload (self, error))
     goto out;
 

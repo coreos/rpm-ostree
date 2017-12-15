@@ -34,6 +34,9 @@
  * follow-up requests are more responsive */
 #define IDLE_EXIT_TIMEOUT_SECONDS 60
 
+#define RPMOSTREED_CONF SYSCONFDIR "/rpm-ostreed.conf"
+#define DAEMON_CONFIG_GROUP "Daemon"
+
 /**
  * SECTION: daemon
  * @title: RpmostreedDaemon
@@ -246,6 +249,10 @@ rpmostreed_daemon_initable_init (GInitable *initable,
   g_dbus_object_manager_server_set_connection (self->object_manager, self->connection);
   g_debug ("exported object manager");
 
+  /* do this early so sysroot startup sets properties to the right values */
+  if (!rpmostreed_daemon_reload_config (self, NULL, error))
+    return FALSE;
+
   g_autofree gchar *path =
     rpmostreed_generate_object_path (BASE_DBUS_PATH, "Sysroot", NULL);
   self->sysroot = g_object_new (RPMOSTREED_TYPE_SYSROOT,
@@ -276,6 +283,49 @@ rpmostreed_daemon_initable_init (GInitable *initable,
 
   g_debug ("daemon constructed");
 
+  return TRUE;
+}
+
+/* Returns TRUE if config file exists and could be loaded or if config file doesn't exist.
+ * Returns FALSE if config file exists but could not be loaded. */
+static gboolean
+maybe_load_config_keyfile (GKeyFile **out_keyfile,
+                           GError   **error)
+{
+  g_autoptr(GError) local_error = NULL;
+
+  g_autoptr(GKeyFile) keyfile = g_key_file_new ();
+  if (g_key_file_load_from_file (keyfile, RPMOSTREED_CONF, 0, &local_error))
+    {
+      *out_keyfile = g_steal_pointer (&keyfile);
+      sd_journal_print (LOG_INFO, "Reading config file '%s'", RPMOSTREED_CONF);
+      return TRUE;
+    }
+
+  if (!g_error_matches (local_error, G_FILE_ERROR, G_FILE_ERROR_NOENT))
+    {
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
+
+  sd_journal_print (LOG_WARNING, "Missing config file '%s'; using compiled defaults",
+                    RPMOSTREED_CONF);
+  return TRUE;
+}
+
+gboolean
+rpmostreed_daemon_reload_config (RpmostreedDaemon *self,
+                                 gboolean         *out_changed,
+                                 GError          **error)
+{
+  g_autoptr(GKeyFile) config = NULL;
+  if (!maybe_load_config_keyfile (&config, error))
+    return FALSE;
+
+  /* when we have configs, we'll read them in here */
+
+  if (out_changed)
+    *out_changed = FALSE;
   return TRUE;
 }
 

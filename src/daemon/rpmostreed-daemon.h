@@ -47,5 +47,6 @@ void               rpmostreed_daemon_publish        (RpmostreedDaemon *self,
 void               rpmostreed_daemon_unpublish      (RpmostreedDaemon *self,
                                                      const gchar *path,
                                                      gpointer thing);
-gboolean           rpmostreed_reload_config         (RpmostreedDaemon *self,
+gboolean           rpmostreed_daemon_reload_config  (RpmostreedDaemon *self,
+                                                     gboolean         *out_changed,
                                                      GError          **error);
