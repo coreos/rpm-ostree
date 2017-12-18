@@ -667,9 +667,10 @@ rpmostreed_sysroot_reload (RpmostreedSysroot *self,
   gboolean ret = FALSE;
   gboolean did_change;
 
-  if (!sysroot_populate_deployments_unlocked (self, &did_change, error))
-    goto out;
+  /* reload ostree repo first so we pick up e.g. new remotes */
   if (!ostree_repo_reload_config (self->repo, NULL, error))
+    goto out;
+  if (!sysroot_populate_deployments_unlocked (self, &did_change, error))
     goto out;
 
   ret = TRUE;
