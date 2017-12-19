@@ -314,7 +314,7 @@ os_handle_get_deployments_rpm_diff (RPMOSTreeOS *interface,
   glnx_unref_object OstreeDeployment *deployment1 = NULL;
   OstreeSysroot *ot_sysroot = NULL;
   OstreeRepo *ot_repo = NULL;
-  GVariant *value = NULL; /* freed when invoked */
+  g_autoptr(GVariant) value = NULL;
   GError *local_error = NULL;
   const gchar *ref0;
   const gchar *ref1;
@@ -376,8 +376,8 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
   OstreeRepo *ot_repo = NULL;
   glnx_unref_object OstreeDeployment *base_deployment = NULL;
   GCancellable *cancellable = NULL;
-  GVariant *value = NULL; /* freed when invoked */
-  GVariant *details = NULL; /* freed when invoked */
+  g_autoptr(GVariant) value = NULL;
+  g_autoptr(GVariant) details = NULL;
   GError *local_error = NULL;
 
   global_sysroot = rpmostreed_sysroot_get ();
@@ -1369,8 +1369,8 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
   g_autoptr(RpmOstreeOrigin) origin = NULL;
   g_autofree gchar *comp_ref = NULL;
   GError *local_error = NULL;
-  GVariant *value = NULL; /* freed when invoked */
-  GVariant *details = NULL; /* freed when invoked */
+  g_autoptr(GVariant) value = NULL;
+  g_autoptr(GVariant) details = NULL;
 
   /* TODO: Totally ignoring packages for now */
 
@@ -1492,8 +1492,8 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
   g_autofree char *checksum = NULL;
   g_autofree char *version = NULL;
   g_autoptr(GCancellable) cancellable = NULL;
-  GVariant *value = NULL;
-  GVariant *details = NULL;
+  g_autoptr(GVariant) value = NULL;
+  g_autoptr(GVariant) details = NULL;
   GError *local_error = NULL;
   GError **error = &local_error;
 
@@ -1629,7 +1629,7 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   GVariant *booted_variant = NULL;
   GVariant *default_variant = NULL;
   GVariant *rollback_variant = NULL;
-  GVariant *cached_update = NULL;
+  g_autoptr(GVariant) cached_update = NULL;
   gboolean has_cached_updates = FALSE;
 
   name = rpmostree_os_get_name (RPMOSTREE_OS (self));

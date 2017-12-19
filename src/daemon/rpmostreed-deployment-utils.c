@@ -435,5 +435,5 @@ rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
                                           NULL, NULL, &dict, error))
     return NULL;
 
-  return g_variant_dict_end (&dict);
+  return g_variant_ref_sink (g_variant_dict_end (&dict));
 }
