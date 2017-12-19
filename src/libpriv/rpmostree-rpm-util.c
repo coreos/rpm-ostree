@@ -1143,6 +1143,6 @@ rpmostree_create_rpmdb_pkglist_variant (int              rootfs_dfd,
                              dnf_package_get_arch (pkg));
     }
 
-  *out_variant = g_variant_builder_end (&pkglist_v_builder);
+  *out_variant = g_variant_ref_sink (g_variant_builder_end (&pkglist_v_builder));
   return TRUE;
 }

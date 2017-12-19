@@ -3754,12 +3754,11 @@ rpmostree_context_commit (RpmOstreeContext      *self,
                                g_variant_builder_end (&replaced_base_pkgs));
 
         /* this is used by the db commands, and auto updates to diff against the base */
-        g_autoptr(GVariant) rpmdb_v = NULL;
-        if (!rpmostree_create_rpmdb_pkglist_variant (self->tmprootfs_dfd, &rpmdb_v,
+        g_autoptr(GVariant) rpmdb = NULL;
+        if (!rpmostree_create_rpmdb_pkglist_variant (self->tmprootfs_dfd, &rpmdb,
                                                      cancellable, error))
           return FALSE;
-        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.rpmdb.pkglist",
-                               g_steal_pointer (&rpmdb_v));
+        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.rpmdb.pkglist", rpmdb);
 
         /* be nice to our future selves */
         g_variant_builder_add (&metadata_builder, "{sv}",

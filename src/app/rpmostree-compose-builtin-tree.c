@@ -1117,8 +1117,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
     if (!rpmostree_create_rpmdb_pkglist_variant (self->rootfs_dfd, &rpmdb_v,
                                                  cancellable, error))
       return FALSE;
-    g_variant_builder_add (metadata_builder, "{sv}", "rpmostree.rpmdb.pkglist",
-                           g_steal_pointer (&rpmdb_v));
+    g_variant_builder_add (metadata_builder, "{sv}", "rpmostree.rpmdb.pkglist", rpmdb_v);
 
     metadata = g_variant_ref_sink (g_variant_builder_end (metadata_builder));
     /* Canonicalize to big endian, like OSTree does. Without this, any numbers
