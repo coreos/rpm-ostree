@@ -140,7 +140,7 @@ rpmostreed_deployment_gpg_results (OstreeRepo  *repo,
     {
       /* Somehow, we have a deployment which has gpg-verify=true, but *doesn't* have a valid
        * signature. Let's not just bomb out here. We need to return this in the variant so
-       * that `status` can show "(unsigned)". */
+       * that `status` can show the appropriate msg. */
       *out_enabled = TRUE;
       *out_results = NULL;
       return TRUE;
