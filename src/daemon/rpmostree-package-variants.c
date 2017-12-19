@@ -28,11 +28,11 @@
  * package_to_variant
  * @package: RpmOstreePackage
  *
- * Returns: A GVariant of (sss) where values are
+ * Returns: A floating GVariant of (sss) where values are
  * (package name, evr, arch)
  */
 static GVariant *
-package_to_variant (RpmOstreePackage *package)
+package_variant_new (RpmOstreePackage *package)
 {
   return g_variant_new ("(sss)",
                         rpm_ostree_package_get_name (package),
@@ -54,20 +54,20 @@ build_diff_variant (const gchar *name,
   if (old_package)
     {
       g_variant_builder_add (&options_builder, "{sv}", "PreviousPackage",
-                             package_to_variant (old_package));
+                             package_variant_new (old_package));
     }
 
   if (new_package)
     {
       g_variant_builder_add (&options_builder, "{sv}", "NewPackage",
-                             package_to_variant (new_package));
+                             package_variant_new (new_package));
     }
 
   g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
   g_variant_builder_add (&builder, "s", name);
   g_variant_builder_add (&builder, "u", type);
   g_variant_builder_add_value (&builder, g_variant_builder_end (&options_builder));
-  return g_variant_builder_end (&builder);
+  return g_variant_ref_sink (g_variant_builder_end (&builder));
 }
 
 
@@ -117,8 +117,8 @@ rpm_ostree_db_diff_variant_compare_by_type (const void *v1,
  * @repo: A OstreeRepo
  * @old_ref: old ref to use
  * @new_ref: New ref to use
- * @out_variant: floating GVariant that represents the differences
- *   between the rpm databases on the given refs.
+ * @out_variant: GVariant that represents the differences between the rpm
+ *   databases on the given refs.
  * GCancellable: *cancellable
  * GError: **error
  *
@@ -144,7 +144,8 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
 
   g_assert_cmpuint (modified_old->len, ==, modified_new->len);
 
-  g_autoptr(GPtrArray) found = g_ptr_array_new ();
+  g_autoptr(GPtrArray) found =
+    g_ptr_array_new_with_free_func ((GDestroyNotify) g_variant_unref);
 
   for (guint i = 0; i < modified_old->len; i++)
     {
@@ -182,12 +183,10 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
   for (guint i = 0; i < found->len; i++)
     g_variant_builder_add_value (&builder, found->pdata[i]);
 
-  GVariant *variant = NULL;
   if (found->len > 0)
-    variant = g_variant_builder_end (&builder);
+    *out_variant = g_variant_builder_end (&builder);
   else
-    variant = g_variant_new ("a(sua{sv})", NULL);
-
-  *out_variant = g_steal_pointer (&variant);
+    *out_variant = g_variant_new ("a(sua{sv})", NULL);
+  g_variant_ref_sink (*out_variant);
   return TRUE;
 }
