@@ -76,7 +76,7 @@ get_textarea_width (guint maxkeylen)
   if (right_side_width >= columns)
     return G_MAXUINT; /* can't even print keys without wrapping, nothing pretty to do here */
   /* the sha is already 64 chars, so no point in trying to use less */
-  return MAX(64, columns - right_side_width);
+  return MAX(OSTREE_SHA256_STRING_LEN, columns - right_side_width);
 }
 
 static void
@@ -162,6 +162,7 @@ print_packages (const char *k, guint max_key_len,
           current_width = pkg_width;
         }
     }
+  putc ('\n', stdout);
 }
 
 static const gchar**
