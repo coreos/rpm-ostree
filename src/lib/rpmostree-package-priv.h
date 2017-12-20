@@ -36,3 +36,11 @@ _rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
                                      GPtrArray   **out_pkglist,
                                      GCancellable *cancellable,
                                      GError      **error);
+gboolean
+_rpm_ostree_diff_package_lists (GPtrArray  *a,
+                                GPtrArray  *b,
+                                GPtrArray **out_unique_a,
+                                GPtrArray **out_unique_b,
+                                GPtrArray **out_modified_a,
+                                GPtrArray **out_modified_b,
+                                GPtrArray **out_common);
