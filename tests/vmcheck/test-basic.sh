@@ -36,6 +36,10 @@ vm_assert_status_jq \
   '.deployments[0]["layered-commit-meta"]|not'
 echo "ok empty pkg arrays, and commit meta correct in status json"
 
+vm_rpmostree status --jsonpath '$.deployments[0].booted' > jsonpath.txt
+assert_file_has_content_literal jsonpath.txt '[true]'
+echo "ok jsonpath"
+
 # Be sure an unprivileged user exists and that we can SSH into it. This is a bit
 # underhanded, but we need a bona fide user session to verify non-priv status,
 # and logging in through SSH is an easy way to achieve that.
