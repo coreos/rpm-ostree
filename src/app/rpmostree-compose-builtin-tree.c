@@ -1211,13 +1211,13 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
       if (!ostree_repo_commit_transaction (self->repo, &stats, cancellable, error))
         return glnx_prefix_error (error, "Commit");
 
-      g_print ("Wrote commit: %s\n", new_revision);
       g_print ("Metadata Total: %u\n", stats.metadata_objects_total);
       g_print ("Metadata Written: %u\n", stats.metadata_objects_written);
       g_print ("Content Total: %u\n", stats.content_objects_total);
       g_print ("Content Written: %u\n", stats.content_objects_written);
       g_print ("Content Bytes Written: %" G_GUINT64_FORMAT "\n", stats.content_bytes_written);
     }
+  g_print ("Wrote commit: %s\n", new_revision);
 
   if (opt_write_commitid_to)
     {
