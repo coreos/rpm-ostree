@@ -58,11 +58,25 @@ print_kv_no_newline (const char *key,
                      guint       maxkeylen,
                      const char *value)
 {
-  int pad = maxkeylen - strlen (key);
+  const guint n_key = strlen (key);
+  int pad = maxkeylen - n_key;
   g_assert (pad >= 0);
   /* +2 for initial leading spaces */
   printpad (' ', pad + 2);
-  printf ("%s: %s", key, value);
+  printf ("%s%s %s", key, n_key ? ":" : " ", value);
+}
+
+/* return space available for printing value side of kv */
+static guint
+get_textarea_width (guint maxkeylen)
+{
+  const guint columns = glnx_console_columns ();
+  /* +2 for initial leading spaces */
+  const guint right_side_width = maxkeylen + 2 + strlen (": ");
+  if (right_side_width >= columns)
+    return G_MAXUINT; /* can't even print keys without wrapping, nothing pretty to do here */
+  /* the sha is already 64 chars, so no point in trying to use less */
+  return MAX(OSTREE_SHA256_STRING_LEN, columns - right_side_width);
 }
 
 static void
@@ -93,13 +107,9 @@ print_packages (const char *k, guint max_key_len,
                 const char *const* pkgs,
                 const char *const* omit_pkgs)
 {
-  g_autofree char *packages_joined = NULL;
-  g_autoptr(GPtrArray) packages_sorted =
-    g_ptr_array_new_with_free_func (g_free);
-
+  g_autoptr(GPtrArray) packages_sorted = g_ptr_array_new_with_free_func (g_free);
   static gsize regex_initialized;
   static GRegex *safe_chars_regex;
-
   if (g_once_init_enter (&regex_initialized))
     {
       safe_chars_regex = g_regex_new ("^[[:alnum:]-._]+$", 0, 0, NULL);
@@ -119,13 +129,40 @@ print_packages (const char *k, guint max_key_len,
         g_ptr_array_add (packages_sorted, g_shell_quote (*iter));
     }
 
-  if (packages_sorted->len > 0)
+  const guint n_packages = packages_sorted->len;
+  if (n_packages == 0)
+    return;
+
+  print_kv_no_newline (k, max_key_len, "");
+
+  /* wrap pkglist output ourselves rather than letting the terminal cut us up */
+  const guint area_width = get_textarea_width (max_key_len);
+  guint current_width = 0;
+  for (guint i = 0; i < n_packages; i++)
     {
-      g_ptr_array_sort (packages_sorted, rpmostree_ptrarray_sort_compare_strings);
-      g_ptr_array_add (packages_sorted, NULL);
-      packages_joined = g_strjoinv (" ", (char**)packages_sorted->pdata);
-      print_kv (k, max_key_len, packages_joined);
+      const char *pkg = packages_sorted->pdata[i];
+      const guint pkg_width = strlen (pkg);
+
+      /* first print */
+      if (current_width == 0)
+        {
+          g_print ("%s", pkg);
+          current_width += pkg_width;
+        }
+      else if ((current_width + pkg_width + 1) <= area_width) /* +1 for space separator */
+        {
+          g_print (" %s", pkg);
+          current_width += (pkg_width + 1);
+        }
+      else
+        {
+          /* always print at least one per line, even if we overflow */
+          putc ('\n', stdout);
+          print_kv_no_newline ("", max_key_len, pkg);
+          current_width = pkg_width;
+        }
     }
+  putc ('\n', stdout);
 }
 
 static const gchar**
