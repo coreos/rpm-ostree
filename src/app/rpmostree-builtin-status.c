@@ -38,11 +38,13 @@
 static gboolean opt_pretty;
 static gboolean opt_verbose;
 static gboolean opt_json;
+static const char *opt_jsonpath;
 
 static GOptionEntry option_entries[] = {
   { "pretty", 'p', G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_pretty, "This option is deprecated and no longer has any effect", NULL },
   { "verbose", 'v', 0, G_OPTION_ARG_NONE, &opt_verbose, "Print additional fields (e.g. StateRoot)", NULL },
   { "json", 0, 0, G_OPTION_ARG_NONE, &opt_json, "Output JSON", NULL },
+  { "jsonpath", 'J', 0, G_OPTION_ARG_STRING, &opt_jsonpath, "Filter JSONPath expression", "EXPRESSION" },
   { NULL }
 };
 
@@ -676,37 +678,53 @@ rpmostree_builtin_status (int             argc,
                                        error))
     return EXIT_FAILURE;
 
+  if (opt_json && opt_jsonpath)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Cannot specify both --json and --jsonpath");
+      return EXIT_FAILURE;
+    }
+
   if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,
                                 cancellable, &os_proxy, error))
     return EXIT_FAILURE;
 
   deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
 
-  if (opt_json)
+  if (opt_json || opt_jsonpath)
     {
       glnx_unref_object JsonBuilder *builder = json_builder_new ();
-      glnx_unref_object JsonGenerator *generator = json_generator_new ();
-      JsonNode *deployments_node = json_gvariant_serialize (deployments);
-      JsonNode *json_root;
-      JsonNode *txn_node;
-      glnx_unref_object GOutputStream *stdout_gio = g_unix_output_stream_new (1, FALSE);
-      GVariant *txn = get_active_txn (sysroot_proxy);
-
       json_builder_begin_object (builder);
+
       json_builder_set_member_name (builder, "deployments");
-      json_builder_add_value (builder, deployments_node);
+      json_builder_add_value (builder, json_gvariant_serialize (deployments));
       json_builder_set_member_name (builder, "transaction");
-      if (txn)
-        txn_node = json_gvariant_serialize (txn);
-      else
-        txn_node = json_node_new (JSON_NODE_NULL);
+      GVariant *txn = get_active_txn (sysroot_proxy);
+      JsonNode *txn_node =
+        txn ? json_gvariant_serialize (txn) : json_node_new (JSON_NODE_NULL);
       json_builder_add_value (builder, txn_node);
       json_builder_end_object (builder);
-      json_root = json_builder_get_root (builder);
-      json_generator_set_root (generator, json_root);
+
+      JsonNode *json_root = json_builder_get_root (builder);
+      glnx_unref_object JsonGenerator *generator = json_generator_new ();
+
+      if (opt_json)
+        json_generator_set_root (generator, json_root);
+      else
+        {
+          JsonNode *result = json_path_query (opt_jsonpath, json_root, error);
+          if (!result)
+            {
+              g_prefix_error (error, "While compiling jsonpath: ");
+              return EXIT_FAILURE;
+            }
+          json_generator_set_root (generator, result);
+          json_node_free (result);
+        }
       json_node_free (json_root);
 
       /* NB: watch out for the misleading API docs */
+      glnx_unref_object GOutputStream *stdout_gio = g_unix_output_stream_new (1, FALSE);
       if (json_generator_to_stream (generator, stdout_gio, NULL, error) <= 0
           || (error != NULL && *error != NULL))
         return EXIT_FAILURE;
