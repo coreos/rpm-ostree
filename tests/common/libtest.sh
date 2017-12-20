@@ -373,6 +373,13 @@ assert_status_jq() {
     assert_status_file_jq status.json "$@"
 }
 
+get_obj_path() {
+  repo=$1; shift
+  csum=$1; shift
+  objtype=$1; shift
+  echo "${repo}/objects/${csum:0:2}/${csum:2}.${objtype}"
+}
+
 # builds a new RPM and adds it to the testdir's repo
 # $1 - name
 # $2+ - optional, treated as directive/value pairs
