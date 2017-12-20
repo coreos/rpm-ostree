@@ -1546,13 +1546,12 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 
   if (json_object_has_member (treefile, "remove-from-packages"))
     {
-      g_autoptr(RpmOstreeRefSack) refsack = NULL;
-
       remove = json_object_get_array_member (treefile, "remove-from-packages");
       len = json_array_get_length (remove);
 
-      if (!rpmostree_get_pkglist_for_root (rootfs_fd, ".", &refsack, NULL,
-                                           cancellable, error))
+      g_autoptr(RpmOstreeRefSack) refsack =
+        rpmostree_get_refsack_for_root (rootfs_fd, ".", error);
+      if (!refsack)
         return glnx_prefix_error (error, "Reading package set");
 
       /* Backwards compatibility */

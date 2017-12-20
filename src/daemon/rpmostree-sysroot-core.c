@@ -200,7 +200,7 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
            */
           g_autoptr(RpmOstreeRefSack) rsack =
             rpmostree_get_refsack_for_root (ostree_sysroot_get_fd (sysroot),
-                                            deployment_dirpath, cancellable, error);
+                                            deployment_dirpath, error);
           if (rsack == NULL)
             return FALSE;
 

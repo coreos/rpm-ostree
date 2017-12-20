@@ -797,7 +797,6 @@ static gboolean
 get_sack_for_root (int               dfd,
                    const char       *path,
                    DnfSack         **out_sack,
-                   GCancellable     *cancellable,
                    GError          **error)
 {
   g_return_val_if_fail (out_sack != NULL, FALSE);
@@ -822,13 +821,11 @@ get_sack_for_root (int               dfd,
 RpmOstreeRefSack *
 rpmostree_get_refsack_for_root (int              dfd,
                                 const char      *path,
-                                GCancellable    *cancellable,
                                 GError         **error)
 {
   g_autoptr(DnfSack) sack; /* NB: refsack adds a ref to it */
-  if (!get_sack_for_root (dfd, path, &sack, cancellable, error))
+  if (!get_sack_for_root (dfd, path, &sack, error))
     return NULL;
-
   return rpmostree_refsack_new (sack, NULL);
 }
 
@@ -849,7 +846,7 @@ rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
     return NULL;
 
   g_autoptr(DnfSack) hsack = NULL; /* NB: refsack adds a ref to it */
-  if (!get_sack_for_root (tmpdir.fd, ".", &hsack, cancellable, error))
+  if (!get_sack_for_root (tmpdir.fd, ".", &hsack, error))
     return NULL;
 
   /* Ownership of tmpdir is transferred */
@@ -879,34 +876,6 @@ rpmostree_get_refts_for_commit (OstreeRepo                *repo,
 
   /* Ownership of tmpdir is transferred */
   *out_ts = rpmostree_refts_new (ts, &tmpdir);
-  return TRUE;
-}
-
-gboolean
-rpmostree_get_pkglist_for_root (int               dfd,
-                                const char       *path,
-                                RpmOstreeRefSack **out_refsack,
-                                GPtrArray        **out_pkglist,
-                                GCancellable     *cancellable,
-                                GError          **error)
-{
-  /* the DnfPackage objects don't have a ref on their DnfSack; make sure callers don't fall
-   * in that trap */
-  g_return_val_if_fail (out_pkglist == NULL || out_refsack != NULL, FALSE);
-
-  g_autoptr(RpmOstreeRefSack) refsack =
-    rpmostree_get_refsack_for_root (dfd, path, cancellable, error);
-  if (!refsack)
-    return FALSE;
-
-  hy_autoquery HyQuery query = hy_query_create (refsack->sack);
-  hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
-  g_autoptr(GPtrArray) pkglist = hy_query_run (query);
-
-  if (out_refsack)
-    *out_refsack = g_steal_pointer (&refsack);
-  if (out_pkglist)
-    *out_pkglist = g_steal_pointer (&pkglist);
   return TRUE;
 }
 
@@ -1126,5 +1095,54 @@ rpmostree_sack_get_by_pkgname (DnfSack     *sack,
     ret_pkg = NULL;
 
   *out_pkg = g_steal_pointer (&ret_pkg);
+  return TRUE;
+}
+
+GPtrArray*
+rpmostree_sack_get_packages (DnfSack *sack)
+{
+  hy_autoquery HyQuery query = hy_query_create (sack);
+  hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
+  return hy_query_run (query);
+}
+
+GPtrArray*
+rpmostree_sack_get_sorted_packages (DnfSack *sack)
+{
+  g_autoptr(GPtrArray) pkglist = rpmostree_sack_get_packages (sack);
+  g_ptr_array_sort (pkglist, (GCompareFunc)pkg_array_compare);
+  return g_steal_pointer (&pkglist);
+}
+
+gboolean
+rpmostree_create_rpmdb_pkglist_variant (int              rootfs_dfd,
+                                        GVariant       **out_variant,
+                                        GCancellable    *cancellable,
+                                        GError         **error)
+{
+  g_autoptr(RpmOstreeRefSack) refsack =
+    rpmostree_get_refsack_for_root (rootfs_dfd, ".", error);
+  if (!refsack)
+    return FALSE;
+
+  /* we insert it sorted here so it can efficiently be searched on retrieval */
+  g_autoptr(GPtrArray) pkglist = rpmostree_sack_get_sorted_packages (refsack->sack);
+
+  GVariantBuilder pkglist_v_builder;
+  g_variant_builder_init (&pkglist_v_builder, (GVariantType*)"a(stsss)");
+
+  const guint n = pkglist->len;
+  for (guint i = 0; i < n; i++)
+    {
+      DnfPackage *pkg = pkglist->pdata[i];
+      g_variant_builder_add (&pkglist_v_builder, "(stsss)",
+                             dnf_package_get_name (pkg),
+                             dnf_package_get_epoch (pkg),
+                             dnf_package_get_version (pkg),
+                             dnf_package_get_release (pkg),
+                             dnf_package_get_arch (pkg));
+    }
+
+  *out_variant = g_variant_ref_sink (g_variant_builder_end (&pkglist_v_builder));
   return TRUE;
 }

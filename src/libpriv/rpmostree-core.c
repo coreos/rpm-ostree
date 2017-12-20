@@ -3753,10 +3753,17 @@ rpmostree_context_commit (RpmOstreeContext      *self,
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.replaced-base-packages",
                                g_variant_builder_end (&replaced_base_pkgs));
 
+        /* this is used by the db commands, and auto updates to diff against the base */
+        g_autoptr(GVariant) rpmdb = NULL;
+        if (!rpmostree_create_rpmdb_pkglist_variant (self->tmprootfs_dfd, &rpmdb,
+                                                     cancellable, error))
+          return FALSE;
+        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.rpmdb.pkglist", rpmdb);
+
         /* be nice to our future selves */
         g_variant_builder_add (&metadata_builder, "{sv}",
                                "rpmostree.clientlayer_version",
-                               g_variant_new_uint32 (2));
+                               g_variant_new_uint32 (3));
       }
     else if (assemble_type == RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE)
       {

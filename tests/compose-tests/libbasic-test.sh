@@ -60,5 +60,5 @@ echo "ok no leftover files"
 ostree --repo=${repobuild} show ${treeref} \
   --print-metadata-key rpmostree.rpmdb.pkglist > pkglist.txt
 assert_file_has_content pkglist.txt 'systemd'
-echo "ok pkglist"
+echo "ok compose pkglist"
 }
