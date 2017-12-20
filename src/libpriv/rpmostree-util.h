@@ -86,10 +86,17 @@ gs_file_get_path_cached (GFile *file)
 
 gboolean rpmostree_stdout_is_journal (void);
 
-void rpmostree_diff_print (GPtrArray *removed,
-                           GPtrArray *added,
-                           GPtrArray *modified_old,
-                           GPtrArray *modified_new);
+void
+rpmostree_diff_print_formatted (GPtrArray *removed,
+                                GPtrArray *added,
+                                GPtrArray *modified_old,
+                                GPtrArray *modified_new);
+
+void
+rpmostree_diff_print (GPtrArray *removed,
+                      GPtrArray *added,
+                      GPtrArray *modified_old,
+                      GPtrArray *modified_new);
 
 gboolean
 rpmostree_str_has_prefix_in_strv (const char *str,
