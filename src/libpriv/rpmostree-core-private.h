@@ -49,6 +49,7 @@ struct _RpmOstreeContext {
   gboolean async_running;
   GCancellable *async_cancellable;
   GError *async_error;
+  GPtrArray *pkgs; /* All packages */
   GPtrArray *pkgs_to_download;
   GPtrArray *pkgs_to_import;
   guint n_async_pkgs_imported;

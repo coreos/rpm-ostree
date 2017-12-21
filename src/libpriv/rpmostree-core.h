@@ -137,6 +137,8 @@ gboolean rpmostree_context_prepare_jigdo (RpmOstreeContext     *self,
                                           GCancellable   *cancellable,
                                           GError        **error);
 
+GPtrArray *rpmostree_context_get_packages (RpmOstreeContext *self);
+
 /* Alternative to _prepare() for non-depsolve cases like jigdo */
 gboolean rpmostree_context_set_packages (RpmOstreeContext *self,
                                          GPtrArray        *packages,
