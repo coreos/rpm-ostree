@@ -196,3 +196,13 @@ It supports the following parameters:
    and further, we don't want to encourage `/sysroot` to be writable.
    For host system composes, we recommend turning this on; it's left off
    by default to ease the transition.
+
+Experimental options
+--------
+
+All options listed here are subject to change or removal in a future
+version of `rpm-ostree`.
+
+ * `ex-jigdo-spec`: string, optional:  If specified, will also cause
+   a run of `rpm-ostree ex commit2jigdo` on changes.  Also requires the
+   `--ex-jigdo-output-rpm` commandline option.
