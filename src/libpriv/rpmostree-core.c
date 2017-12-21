@@ -274,6 +274,7 @@ rpmostree_context_finalize (GObject *object)
 
   g_clear_pointer (&rctx->passwd_dir, g_free);
 
+  g_clear_pointer (&rctx->pkgs, g_ptr_array_unref);
   g_clear_pointer (&rctx->pkgs_to_download, g_ptr_array_unref);
   g_clear_pointer (&rctx->pkgs_to_import, g_ptr_array_unref);
   g_clear_pointer (&rctx->pkgs_to_relabel, g_ptr_array_unref);
@@ -1879,11 +1880,12 @@ rpmostree_context_prepare (RpmOstreeContext *self,
           rpmostree_output_task_end ("failed");
           return FALSE;
         }
-      g_autoptr(GPtrArray) packages = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
-                                                             DNF_PACKAGE_INFO_INSTALL,
-                                                             DNF_PACKAGE_INFO_UPDATE,
-                                                             DNF_PACKAGE_INFO_DOWNGRADE, -1);
-      if (!sort_packages (self, packages, cancellable, error))
+      g_clear_pointer (&self->pkgs, (GDestroyNotify)g_ptr_array_unref);
+      self->pkgs = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
+                                          DNF_PACKAGE_INFO_INSTALL,
+                                          DNF_PACKAGE_INFO_UPDATE,
+                                          DNF_PACKAGE_INFO_DOWNGRADE, -1);
+      if (!sort_packages (self, self->pkgs, cancellable, error))
         {
           rpmostree_output_task_end ("failed");
           return FALSE;
@@ -1906,6 +1908,15 @@ rpmostree_context_prepare_jigdo (RpmOstreeContext *self,
 {
   self->jigdo_pure = TRUE;
   return rpmostree_context_prepare (self, cancellable, error);
+}
+
+/* Must have invoked rpmostree_context_prepare().
+ * Returns: (transfer container): All packages in the depsolved list.
+ */
+GPtrArray *
+rpmostree_context_get_packages (RpmOstreeContext *self)
+{
+  return g_ptr_array_ref (self->pkgs);
 }
 
 /* Rather than doing a depsolve, directly set which packages
