@@ -57,6 +57,7 @@ static gboolean opt_ex_unified_core;
 static char *opt_proxy;
 static char *opt_output_repodata_dir;
 static char *opt_ex_jigdo_output_rpm;
+static char *opt_ex_jigdo_output_set;
 static char **opt_metadata_strings;
 static char *opt_metadata_json;
 static char *opt_repo;
@@ -78,6 +79,7 @@ static GOptionEntry install_option_entries[] = {
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Like --dry-run, but download RPMs as well; requires --cachedir", NULL },
   { "ex-unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_ex_unified_core, "Use new \"unified core\" codepath", NULL },
   { "ex-jigdo-output-rpm", 0, 0, G_OPTION_ARG_STRING, &opt_ex_jigdo_output_rpm, "Directory to write jigdoRPM", NULL },
+  { "ex-jigdo-output-set", 0, 0, G_OPTION_ARG_STRING, &opt_ex_jigdo_output_set, "Directory to write complete jigdo set (jigdoRPM+dependencies)", NULL },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
   { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
@@ -150,6 +152,12 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
 }
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeTreeComposeContext, rpm_ostree_tree_compose_context_free)
 
+static int
+cachedir_dfd (RpmOstreeTreeComposeContext *self)
+{
+  return self->cachedir_dfd != -1 ? self->cachedir_dfd : self->workdir_dfd;
+}
+
 static gboolean
 compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
                                          HyGoal                         goal,
@@ -214,6 +222,59 @@ compute_checksum_from_treefile_and_goal (RpmOstreeTreeComposeContext   *self,
   return TRUE;
 }
 
+static gboolean
+hardlink_or_copy_at (int         src_dfd,
+                     const char *src_subpath,
+                     int         dest_dfd,
+                     const char *dest_subpath,
+                     GCancellable  *cancellable,
+                     GError       **error)
+{
+  if (linkat (src_dfd, src_subpath, dest_dfd, dest_subpath, 0) != 0)
+    {
+      if (G_IN_SET (errno, EMLINK, EXDEV))
+        return glnx_file_copy_at (src_dfd, src_subpath, NULL, dest_dfd, dest_subpath,
+                                  GLNX_FILE_COPY_NOXATTRS,
+                                  cancellable, error);
+      else
+        return glnx_throw_errno_prefix (error, "linkat(%s)", dest_subpath);
+    }
+
+  return TRUE;
+}
+
+static gboolean
+copy_jigdo_rpms_to_outputdir (RpmOstreeTreeComposeContext *self,
+                              const char                  *jigdoset_outputdir,
+                              GCancellable                *cancellable,
+                              GError                     **error)
+{
+  GLNX_AUTO_PREFIX_ERROR ("Copying jigdo RPMs", error);
+  g_autoptr(GPtrArray) pkglist = rpmostree_context_get_packages (self->corectx);
+  int output_dfd = -1;
+  if (!glnx_opendirat (AT_FDCWD, jigdoset_outputdir, TRUE, &output_dfd, error))
+    return FALSE;
+
+  guint n_copied = 0;
+  for (guint i = 0; i < pkglist->len; i++)
+    {
+      DnfPackage *pkg = pkglist->pdata[i];
+      g_autofree char *location = rpmostree_pkg_get_local_path (pkg);
+      const char *basename = glnx_basename (location);
+      if (!glnx_fstatat_allow_noent (output_dfd, basename, NULL, 0, error))
+        return FALSE;
+      if (errno == 0)
+        continue;
+      if (!hardlink_or_copy_at (AT_FDCWD, location, output_dfd, basename,
+                                cancellable, error))
+        return FALSE;
+      n_copied++;
+    }
+  g_print ("Copied %u (of %u total) jigdoSet RPMS to %s\n", n_copied, pkglist->len,
+           jigdoset_outputdir);
+
+  return TRUE;
+}
 
 static void
 on_hifstate_percentage_changed (DnfState   *hifstate,
@@ -354,9 +415,10 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   dnf_context_set_repo_dir (dnfctx, gs_file_get_path_cached (contextdir));
 
   /* By default, retain packages in addition to metadata with --cachedir, unless
-   * we're doing unified core, in which case the pkgcache repo is the cache.
+   * we're doing unified core, in which case the pkgcache repo is the cache.  But
+   * the jigdoSet build still requires the original RPMs too.
    */
-  if (opt_cachedir && !opt_ex_unified_core)
+  if ((opt_cachedir && !opt_ex_unified_core) || opt_ex_jigdo_output_set)
     dnf_context_set_keep_cache (dnfctx, TRUE);
   /* For compose, always try to refresh metadata; we're used in build servers
    * where fetching should be cheap. Otherwise, if --cache-only is set, it's
@@ -431,8 +493,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   glnx_autofd int host_rootfs_dfd = -1;
   if (opt_ex_unified_core)
     {
-      int pkgcache_dfd = self->cachedir_dfd != -1 ? self->cachedir_dfd : self->workdir_dfd;
-      self->pkgcache_repo = ostree_repo_create_at (pkgcache_dfd, "pkgcache-repo",
+      self->pkgcache_repo = ostree_repo_create_at (cachedir_dfd (self), "pkgcache-repo",
                                                    OSTREE_REPO_MODE_BARE_USER, NULL,
                                                    cancellable, error);
       if (!self->pkgcache_repo)
@@ -509,6 +570,13 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 
   if (opt_download_only)
     return TRUE; /* 🔚 Early return */
+
+  /* Hardlink our input set now for jigdo-set output mode */
+  if (opt_ex_jigdo_output_set)
+    {
+      if (!copy_jigdo_rpms_to_outputdir (self, opt_ex_jigdo_output_set, cancellable, error))
+        return FALSE;
+    }
 
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
   g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile_path);
@@ -759,7 +827,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     g_print ("note: --workdir-tmpfs is deprecated and will be ignored\n");
 
   /* jigdo implies unified core mode currently */
-  if (opt_ex_jigdo_output_rpm)
+  if (opt_ex_jigdo_output_rpm || opt_ex_jigdo_output_set)
     opt_ex_unified_core = TRUE;
 
   if (opt_ex_unified_core)
@@ -1204,13 +1272,14 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
                                  &new_revision, cancellable, error))
     return FALSE;
 
-  if (opt_ex_jigdo_output_rpm)
+  const char *jigdo_outputdir = opt_ex_jigdo_output_rpm ?: opt_ex_jigdo_output_set;
+  if (jigdo_outputdir)
     {
       if (!self->jigdo_spec)
         return glnx_throw (error, "No ex-jigdo-spec provided");
       if (!rpmostree_commit2jigdo (self->repo, self->pkgcache_repo,
                                    new_revision, self->jigdo_spec,
-                                   opt_ex_jigdo_output_rpm,
+                                   jigdo_outputdir,
                                    cancellable, error))
         return FALSE;
     }
