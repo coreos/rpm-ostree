@@ -39,6 +39,7 @@
 #include "rpmostree-bwrap.h"
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
+#include "rpmostree-jigdo-build.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-libbuiltin.h"
@@ -55,6 +56,7 @@ static gboolean opt_cache_only;
 static gboolean opt_ex_unified_core;
 static char *opt_proxy;
 static char *opt_output_repodata_dir;
+static char *opt_ex_jigdo_output_rpm;
 static char **opt_metadata_strings;
 static char *opt_metadata_json;
 static char *opt_repo;
@@ -75,6 +77,7 @@ static GOptionEntry install_option_entries[] = {
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Like --dry-run, but download RPMs as well; requires --cachedir", NULL },
   { "ex-unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_ex_unified_core, "Use new \"unified core\" codepath", NULL },
+  { "ex-jigdo-output-rpm", 0, 0, G_OPTION_ARG_STRING, &opt_ex_jigdo_output_rpm, "Directory to write jigdoRPM", NULL },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
   { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
@@ -111,6 +114,7 @@ typedef struct {
   OstreeRepo *pkgcache_repo;
   OstreeRepoDevInoCache *devino_cache;
   char *ref;
+  char *jigdo_spec;
   char *previous_checksum;
 
   JsonParser *treefile_parser;
@@ -138,6 +142,7 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_clear_object (&ctx->pkgcache_repo);
   g_clear_pointer (&ctx->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
   g_free (ctx->ref);
+  g_free (ctx->jigdo_spec);
   g_free (ctx->previous_checksum);
   g_clear_object (&ctx->treefile_parser);
   g_clear_pointer (&ctx->serialized_treefile, (GDestroyNotify)g_bytes_unref);
@@ -752,6 +757,11 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 
   if (opt_workdir_tmpfs)
     g_print ("note: --workdir-tmpfs is deprecated and will be ignored\n");
+
+  /* jigdo implies unified core mode currently */
+  if (opt_ex_jigdo_output_rpm)
+    opt_ex_unified_core = TRUE;
+
   if (opt_ex_unified_core)
     {
       if (opt_workdir)
@@ -860,6 +870,13 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   self->ref = _rpmostree_varsubst_string (input_ref, varsubsts, error);
   if (!self->ref)
     return FALSE;
+
+  g_autoptr(GFile) treefile_dir = g_file_get_parent (self->treefile_path);
+  const char *jigdo_spec = NULL;
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "ex-jigdo-spec", &jigdo_spec, error))
+    return FALSE;
+  if (jigdo_spec)
+    self->jigdo_spec = g_build_filename (gs_file_get_path_cached (treefile_dir), jigdo_spec, NULL);
 
   *out_context = g_steal_pointer (&self);
   return TRUE;
@@ -1186,6 +1203,17 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
                                  metadata, gpgkey, selinux, self->devino_cache,
                                  &new_revision, cancellable, error))
     return FALSE;
+
+  if (opt_ex_jigdo_output_rpm)
+    {
+      if (!self->jigdo_spec)
+        return glnx_throw (error, "No ex-jigdo-spec provided");
+      if (!rpmostree_commit2jigdo (self->repo, self->pkgcache_repo,
+                                   new_revision, self->jigdo_spec,
+                                   opt_ex_jigdo_output_rpm,
+                                   cancellable, error))
+        return FALSE;
+    }
 
   /* --write-commitid-to overrides writing the ref */
   if (self->ref && !opt_write_commitid_to)
