@@ -24,6 +24,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <ostree.h>
+#include <libdnf/libdnf.h>
 #include "libglnx.h"
 
 #define _N(single, plural, n) ( (n) == 1 ? (single) : (plural) )
@@ -56,6 +57,12 @@ _rpmostree_util_get_commit_hashes (OstreeRepo *repo,
                                    const char *end,
                                    GCancellable *cancellable,
                                    GError **error);
+
+gboolean
+rpmostree_pkg_is_local (DnfPackage *pkg);
+
+char *
+rpmostree_pkg_get_local_path (DnfPackage *pkg);
 
 char *
 _rpmostree_util_next_version (const char *auto_version_prefix,

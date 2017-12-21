@@ -207,6 +207,33 @@ _rpmostree_util_get_commit_hashes (OstreeRepo    *repo,
   return ret;
 }
 
+/* Returns TRUE if a package is originally on a locally-accessible filesystem */
+gboolean
+rpmostree_pkg_is_local (DnfPackage *pkg)
+{
+  const char *reponame = dnf_package_get_reponame (pkg);
+  return (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) == 0 ||
+          dnf_repo_is_local (dnf_package_get_repo (pkg)));
+}
+
+/* Returns the local filesystem path for a package; for non-local packages,
+ * it must have already been downloaded.
+ */
+char *
+rpmostree_pkg_get_local_path (DnfPackage *pkg)
+{
+  DnfRepo *pkg_repo = dnf_package_get_repo (pkg);
+  const gboolean is_local = rpmostree_pkg_is_local (pkg);
+  if (is_local)
+    return g_strdup (dnf_package_get_filename (pkg));
+  else
+    {
+      const char *pkg_location = dnf_package_get_location (pkg);
+      return g_build_filename (dnf_repo_get_location (pkg_repo),
+                               "packages", glnx_basename (pkg_location), NULL);
+    }
+}
+
 char *
 _rpmostree_util_next_version (const char *auto_version_prefix,
                               const char *last_version)
