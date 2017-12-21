@@ -19,4 +19,13 @@ grep 'fedora-atomic-host.*x86_64\.rpm' rpms.txt | while read p; do
     rpm -qp --provides ${p} >>provides.txt
 done
 assert_file_has_content_literal provides.txt "rpmostree-jigdo-commit(${rev})"
-echo "ok compose2jigdo"
+echo "ok compose2jigdoRPM"
+
+runcompose --force-nocache --ex-jigdo-output-set $(pwd)/jigdo-output --cachedir $(pwd)/cache --add-metadata-string version=42.1
+rev=$(ostree --repo=repo-build rev-parse ${treeref})
+find jigdo-output -name '*.rpm' | tee rpms.txt
+assert_file_has_content rpms.txt 'systemd.*x86_64'
+assert_file_has_content rpms.txt 'ostree.*x86_64'
+assert_file_has_content rpms.txt 'fedora-atomic-host-42.1.*x86_64'
+echo "ok compose2jigdoSet"
+
