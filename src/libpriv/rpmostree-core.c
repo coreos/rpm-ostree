@@ -1184,14 +1184,6 @@ rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
 }
 
 static gboolean
-pkg_is_local (DnfPackage *pkg)
-{
-  const char *reponame = dnf_package_get_reponame (pkg);
-  return (g_strcmp0 (reponame, HY_CMDLINE_REPO_NAME) == 0 ||
-          dnf_repo_is_local (dnf_package_get_repo (pkg)));
-}
-
-static gboolean
 commit_has_matching_sepolicy (GVariant       *commit,
                               OstreeSePolicy *sepolicy,
                               gboolean       *out_matches,
@@ -1255,7 +1247,7 @@ commit_has_matching_repodata_chksum_repr (GVariant    *commit,
 static gboolean
 pkg_is_cached (DnfPackage *pkg)
 {
-  if (pkg_is_local (pkg))
+  if (rpmostree_pkg_is_local (pkg))
     return TRUE;
 
   /* Right now we're not re-checksumming cached RPMs, we
@@ -2287,19 +2279,7 @@ rpmostree_context_consume_package (RpmOstreeContext  *self,
   if (!dnf_transaction_gpgcheck_package (dnf_context_get_transaction (self->dnfctx), pkg, error))
     return FALSE;
 
-  DnfRepo *pkg_repo = dnf_package_get_repo (pkg);
-  g_autofree char *pkg_path = NULL;
-  const gboolean is_local = pkg_is_local (pkg);
-  if (is_local)
-    pkg_path = g_strdup (dnf_package_get_filename (pkg));
-  else
-    {
-      const char *pkg_location = dnf_package_get_location (pkg);
-      pkg_path =
-        g_build_filename (dnf_repo_get_location (pkg_repo),
-                          "packages", glnx_basename (pkg_location), NULL);
-    }
-
+  g_autofree char *pkg_path = rpmostree_pkg_get_local_path (pkg);
   glnx_autofd int fd = -1;
   if (!glnx_openat_rdonly (AT_FDCWD, pkg_path, TRUE, &fd, error))
     return FALSE;
@@ -2309,7 +2289,7 @@ rpmostree_context_consume_package (RpmOstreeContext  *self,
    * should be able to redownload, and if the error was something like
    * ENOSPC, deleting it was the right move I'd say.
    */
-  if (!pkg_is_local (pkg))
+  if (!rpmostree_pkg_is_local (pkg))
     {
       if (!glnx_unlinkat (AT_FDCWD, pkg_path, 0, error))
         return FALSE;
