@@ -149,6 +149,11 @@ gboolean rpmostree_context_download (RpmOstreeContext *self,
                                      GCancellable     *cancellable,
                                      GError           **error);
 
+gboolean rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
+                                          gboolean             *out_changed,
+                                          GCancellable         *cancellable,
+                                          GError              **error);
+
 gboolean
 rpmostree_context_consume_package (RpmOstreeContext  *self,
                                    DnfPackage        *package,
