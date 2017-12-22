@@ -302,6 +302,11 @@ vm_get_booted_csum() {
   vm_get_booted_deployment_info checksum
 }
 
+# retrieve the checksum of the pending deployment
+vm_get_pending_csum() {
+  vm_get_deployment_info 0 checksum
+}
+
 # make multiple consistency checks on a test pkg
 # - $1    package to check for
 # - $2    either "present" or "absent"

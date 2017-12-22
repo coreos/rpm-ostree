@@ -130,8 +130,12 @@ rpmostree_fcap_to_xattr_variant (const char *fcap);
 typedef enum {
   PKG_NEVRA_FLAGS_NAME = (1 << 0),
   PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE = (1 << 1),
+  PKG_NEVRA_FLAGS_EVR = PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE,
   PKG_NEVRA_FLAGS_VERSION_RELEASE = (1 << 2),
-  PKG_NEVRA_FLAGS_ARCH = (1 << 3)
+  PKG_NEVRA_FLAGS_ARCH = (1 << 3),
+  PKG_NEVRA_FLAGS_NEVRA = (PKG_NEVRA_FLAGS_NAME |
+                           PKG_NEVRA_FLAGS_EVR  |
+                           PKG_NEVRA_FLAGS_ARCH),
 } RpmOstreePkgNevraFlags;
 
 void

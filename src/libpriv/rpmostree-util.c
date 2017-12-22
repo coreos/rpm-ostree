@@ -731,12 +731,12 @@ rpmostree_stdout_is_journal (void)
   return stdout_is_socket;
 }
 
-/* Given the result of rpm_ostree_db_diff(), print it. */
+/* Given the result of rpm_ostree_db_diff(), print it in a nice formatted way for humans. */
 void
-rpmostree_diff_print (GPtrArray *removed,
-                      GPtrArray *added,
-                      GPtrArray *modified_old,
-                      GPtrArray *modified_new)
+rpmostree_diff_print_formatted (GPtrArray *removed,
+                                GPtrArray *added,
+                                GPtrArray *modified_old,
+                                GPtrArray *modified_new)
 {
   gboolean first;
 
@@ -802,6 +802,65 @@ rpmostree_diff_print (GPtrArray *removed,
       const char *nevra = rpm_ostree_package_get_nevra (pkg);
 
       g_print ("  %s\n", nevra);
+    }
+}
+
+static int
+pkg_cmp_end (RpmOstreePackage *a, RpmOstreePackage *b)
+{
+  if (!b)
+    return -1;
+  if (!a)
+    return +1;
+
+  return rpm_ostree_package_cmp (a, b);
+}
+
+/* Given the result of rpm_ostree_db_diff(), print it in diff format for scripts. */
+void
+rpmostree_diff_print (GPtrArray *removed,
+                      GPtrArray *added,
+                      GPtrArray *modified_old,
+                      GPtrArray *modified_new)
+{
+  g_assert_cmpuint (modified_old->len, ==, modified_new->len);
+
+  const guint an = added->len;
+  const guint rn = removed->len;
+  const guint mn = modified_old->len;
+
+  guint cur_a = 0;
+  guint cur_r = 0;
+  guint cur_m = 0;
+  while (cur_a < an || cur_r < rn || cur_m < mn)
+    {
+      RpmOstreePackage *pkg_a = cur_a < an ? added->pdata[cur_a] : NULL;
+      RpmOstreePackage *pkg_r = cur_r < rn ? removed->pdata[cur_r] : NULL;
+      RpmOstreePackage *pkg_m = cur_m < mn ? modified_old->pdata[cur_m] : NULL;
+
+      if (pkg_cmp_end (pkg_m, pkg_r) < 0)
+        if (pkg_cmp_end (pkg_m, pkg_a) < 0)
+          { /* mod is first */
+            g_print ("!%s\n", rpm_ostree_package_get_nevra (pkg_m));
+            g_print ("=%s\n", rpm_ostree_package_get_nevra (modified_new->pdata[cur_m]));
+            cur_m++;
+          }
+        else
+          { /* add is first */
+            g_print ("+%s\n", rpm_ostree_package_get_nevra (pkg_a));
+            cur_a++;
+          }
+      else
+        if (pkg_cmp_end (pkg_r, pkg_a) < 0)
+          { /* del is first */
+            g_print ("-%s\n", rpm_ostree_package_get_nevra (pkg_r));
+            cur_r++;
+          }
+        else
+          { /* add is first */
+            g_print ("+%s\n", rpm_ostree_package_get_nevra (pkg_a));
+            cur_a++;
+          }
     }
 }
 

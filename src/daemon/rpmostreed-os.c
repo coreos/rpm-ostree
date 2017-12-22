@@ -346,7 +346,7 @@ os_handle_get_deployments_rpm_diff (RPMOSTreeOS *interface,
     }
   ref1 = ostree_deployment_get_csum (deployment1);
 
-  if (!rpm_ostree_db_diff_variant (ot_repo, ref0, ref1, &value,
+  if (!rpm_ostree_db_diff_variant (ot_repo, ref0, ref1, FALSE, &value,
                                    cancellable, &local_error))
     goto out;
 
@@ -414,7 +414,7 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
     goto out;
 
   if (!rpm_ostree_db_diff_variant (ot_repo, ostree_deployment_get_csum (base_deployment),
-                                   rpmostree_origin_get_refspec (origin), &value,
+                                   rpmostree_origin_get_refspec (origin), FALSE, &value,
                                    cancellable, &local_error))
     goto out;
 
@@ -1399,7 +1399,7 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
     goto out;
 
   if (!rpm_ostree_db_diff_variant (ot_repo, ostree_deployment_get_csum (base_deployment),
-                                   comp_ref, &value, cancellable, &local_error))
+                                   comp_ref, FALSE, &value, cancellable, &local_error))
     goto out;
 
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
@@ -1534,7 +1534,7 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
         goto out;
     }
 
-  if (!rpm_ostree_db_diff_variant (ot_repo, base_checksum, checksum, &value,
+  if (!rpm_ostree_db_diff_variant (ot_repo, base_checksum, checksum, FALSE, &value,
                                    cancellable, &local_error))
     goto out;
 

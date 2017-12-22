@@ -34,6 +34,7 @@ gboolean
 rpm_ostree_db_diff_variant (OstreeRepo *repo,
                             const char *from_rev,
                             const char *to_rev,
+                            gboolean    allow_noent,
                             GVariant  **out_variant,
                             GCancellable *cancellable,
                             GError **error);

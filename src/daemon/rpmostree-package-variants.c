@@ -128,19 +128,29 @@ gboolean
 rpm_ostree_db_diff_variant (OstreeRepo *repo,
                             const char *from_rev,
                             const char *to_rev,
+                            gboolean    allow_noent,
                             GVariant  **out_variant,
                             GCancellable *cancellable,
                             GError **error)
 {
+  RpmOstreeDbDiffExtFlags flags = 0;
+  if (allow_noent)
+    flags |= RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT;
 
   g_autoptr(GPtrArray) removed = NULL;
   g_autoptr(GPtrArray) added = NULL;
   g_autoptr(GPtrArray) modified_old = NULL;
   g_autoptr(GPtrArray) modified_new = NULL;
-  if (!rpm_ostree_db_diff (repo, from_rev, to_rev,
-                           &removed, &added, &modified_old, &modified_new,
-                           cancellable, error))
+  if (!rpm_ostree_db_diff_ext (repo, from_rev, to_rev, flags,
+                               &removed, &added, &modified_old, &modified_new,
+                               cancellable, error))
     return FALSE;
+
+  if (allow_noent && !removed)
+    {
+      *out_variant = NULL;
+      return TRUE; /* Note early return */
+    }
 
   g_assert_cmpuint (modified_old->len, ==, modified_new->len);
 

@@ -21,8 +21,26 @@
 
 #pragma once
 
+#include <ostree.h>
 #include "rpmostree-package.h"
 #include "rpmostree-refsack.h"
 
 RpmOstreePackage * _rpm_ostree_package_new (RpmOstreeRefSack *rsack, DnfPackage *hypkg);
 
+RpmOstreePackage * _rpm_ostree_package_new_from_variant (GVariant *gv_nevra);
+
+gboolean
+_rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
+                                     const char   *rev,
+                                     gboolean      allow_noent,
+                                     GPtrArray   **out_pkglist,
+                                     GCancellable *cancellable,
+                                     GError      **error);
+gboolean
+_rpm_ostree_diff_package_lists (GPtrArray  *a,
+                                GPtrArray  *b,
+                                GPtrArray **out_unique_a,
+                                GPtrArray **out_unique_b,
+                                GPtrArray **out_modified_a,
+                                GPtrArray **out_modified_b,
+                                GPtrArray **out_common);

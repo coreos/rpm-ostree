@@ -31,17 +31,30 @@
 #include "config.h"
 
 #include "rpmostree-package-priv.h"
+#include "rpmostree-rpm-util.h"
 
 #include <string.h>
 #include <stdlib.h>
 
 typedef GObjectClass RpmOstreePackageClass;
 
-struct RpmOstreePackage 
+/* Since the class is small, we perform a poor man's polymorphism; RpmOstreePackage objects
+ * can be backed by either a sack or a variant. A ref is kept on the appropriate object.*/
+
+struct RpmOstreePackage
 {
   GObject parent_instance;
+  /* libdnf-based pkg */
   RpmOstreeRefSack *sack;
   DnfPackage *hypkg;
+  /* gvariant-based pkg */
+  GVariant *gv_nevra;
+  /* deconstructed/cached values */
+  char *nevra;
+  const char *name;
+  const char *evr;
+  char *evr_owned;
+  const char *arch;
 };
 
 G_DEFINE_TYPE(RpmOstreePackage, rpm_ostree_package, G_TYPE_OBJECT)
@@ -50,10 +63,12 @@ static void
 rpm_ostree_package_finalize (GObject *object)
 {
   RpmOstreePackage *pkg = (RpmOstreePackage*)object;
-  g_object_unref (pkg->hypkg);
-  
-  /* We do internal refcounting of the sack because hawkey doesn't */
-  rpmostree_refsack_unref (pkg->sack);
+  g_clear_pointer (&pkg->hypkg, g_object_unref);
+  g_clear_pointer (&pkg->sack, rpmostree_refsack_unref);
+  g_clear_pointer (&pkg->gv_nevra, g_variant_unref);
+
+  g_clear_pointer (&pkg->nevra, g_free);
+  g_clear_pointer (&pkg->evr_owned, g_free);
 
   G_OBJECT_CLASS (rpm_ostree_package_parent_class)->finalize (object);
 }
@@ -82,7 +97,7 @@ rpm_ostree_package_init (RpmOstreePackage *p)
 const char *
 rpm_ostree_package_get_nevra (RpmOstreePackage *p)
 {
-  return dnf_package_get_nevra (p->hypkg);
+  return p->nevra;
 }
 
 /**
@@ -94,7 +109,7 @@ rpm_ostree_package_get_nevra (RpmOstreePackage *p)
 const char *
 rpm_ostree_package_get_name (RpmOstreePackage *p)
 {
-  return dnf_package_get_name (p->hypkg);
+  return p->name;
 }
 
 /**
@@ -106,7 +121,7 @@ rpm_ostree_package_get_name (RpmOstreePackage *p)
 const char *
 rpm_ostree_package_get_evr (RpmOstreePackage *p)
 {
-  return dnf_package_get_evr (p->hypkg);
+  return p->evr;
 }
 
 /**
@@ -118,7 +133,7 @@ rpm_ostree_package_get_evr (RpmOstreePackage *p)
 const char *
 rpm_ostree_package_get_arch (RpmOstreePackage *p)
 {
-  return dnf_package_get_arch (p->hypkg);
+  return p->arch;
 }
 
 /**
@@ -135,14 +150,281 @@ rpm_ostree_package_get_arch (RpmOstreePackage *p)
 int
 rpm_ostree_package_cmp (RpmOstreePackage *p1, RpmOstreePackage *p2)
 {
-  return dnf_package_cmp (p1->hypkg, p2->hypkg);
+  if (p1->hypkg && p2->hypkg)
+    return dnf_package_cmp (p1->hypkg, p2->hypkg);
+
+  int ret = strcmp (p1->name, p2->name);
+  if (ret)
+    return ret;
+
+  /* the NULL case is a little wasteful; it needs to allocate a pool to do the comparison.
+   * maybe we should also cache a DnfSack in the GVariant-based case too? OTOH, we shouldn't
+   * hit this case often: the pkglist is already sorted when we read it out of the commit
+   * metadata and we do the diff in _rpm_ostree_diff_package_lists() using a temporary sack.
+   * */
+  ret = dnf_sack_evr_cmp (NULL, p1->evr, p2->evr);
+  if (ret)
+    return ret;
+
+  return strcmp (p1->arch, p2->arch);
 }
 
 RpmOstreePackage *
 _rpm_ostree_package_new (RpmOstreeRefSack *rsack, DnfPackage *hypkg)
 {
   RpmOstreePackage *p = g_object_new (RPM_OSTREE_TYPE_PACKAGE, NULL);
+  /* We do internal refcounting of the sack because hawkey doesn't */
   p->sack = rpmostree_refsack_ref (rsack);
   p->hypkg = g_object_ref (hypkg);
+
+  /* we deconstruct now to make accessors simpler */
+
+  /* cache nevra internally because we can't rely on libsolv
+   * https://github.com/rpm-software-management/libdnf/pull/388 */
+  p->nevra = g_strdup (dnf_package_get_nevra (p->hypkg));
+  p->name = dnf_package_get_name (p->hypkg);
+  p->evr = dnf_package_get_evr (p->hypkg);
+  p->arch = dnf_package_get_arch (p->hypkg);
   return p;
+}
+
+RpmOstreePackage*
+_rpm_ostree_package_new_from_variant (GVariant *gv_nevra)
+{
+  RpmOstreePackage *p = g_object_new (RPM_OSTREE_TYPE_PACKAGE, NULL);
+  p->gv_nevra = g_variant_ref (gv_nevra);
+
+  /* we deconstruct now to make accessors simpler */
+
+  uint64_t epoch;
+  const char *version;
+  const char *release;
+
+  g_variant_get (p->gv_nevra, "(&st&s&s&s)", &p->name, &epoch, &version, &release, &p->arch);
+  p->nevra = rpmostree_custom_nevra_strdup (p->name, epoch, version, release, p->arch,
+                                            PKG_NEVRA_FLAGS_NEVRA);
+  p->evr_owned = rpmostree_custom_nevra_strdup (NULL, epoch, version, release, NULL,
+                                                PKG_NEVRA_FLAGS_EVR);
+  p->evr = p->evr_owned;
+  return p;
+}
+
+static GVariant*
+get_commit_rpmdb_pkglist (GVariant *commit)
+{
+  g_autoptr(GVariant) meta = g_variant_get_child_value (commit, 0);
+  g_autoptr(GVariantDict) meta_dict = g_variant_dict_new (meta);
+  return g_variant_dict_lookup_value (meta_dict, "rpmostree.rpmdb.pkglist",
+                                      G_VARIANT_TYPE ("a(stsss)"));
+}
+
+static GPtrArray *
+query_all_packages_in_sack (RpmOstreeRefSack *rsack)
+{
+  g_autoptr(GPtrArray) result = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr(GPtrArray) pkglist = rpmostree_sack_get_sorted_packages (rsack->sack);
+
+  const guint c = pkglist->len;
+  for (guint i = 0; i < c; i++)
+    {
+      DnfPackage *pkg = pkglist->pdata[i];
+      g_ptr_array_add (result, _rpm_ostree_package_new (rsack, pkg));
+    }
+
+  return g_steal_pointer (&result);
+}
+
+/* Opportunistically try to use the new rpmostree.rpmdb.pkglist metadata, otherwise fall
+ * back to commit rpmdb if available.
+ *
+ * Let's keep this private for now.
+ */
+gboolean
+_rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
+                                     const char   *rev,
+                                     gboolean      allow_noent,
+                                     GPtrArray   **out_pkglist,
+                                     GCancellable *cancellable,
+                                     GError      **error)
+{
+  g_autofree char *checksum = NULL;
+  if (!ostree_repo_resolve_rev (repo, rev, FALSE, &checksum, error))
+    return FALSE;
+
+  g_autoptr(GVariant) commit = NULL;
+  if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT, checksum, &commit, error))
+    return FALSE;
+
+  g_autoptr(GVariant) pkglist_v = get_commit_rpmdb_pkglist (commit);
+  if (!pkglist_v)
+    {
+      /* file-based rpmdb fallback; let fail if rpmdb not available */
+      g_autoptr(GError) local_error = NULL;
+      g_autoptr(RpmOstreeRefSack) rsack =
+        rpmostree_get_refsack_for_commit (repo, rev, cancellable, &local_error);
+      if (!rsack)
+        {
+          if (allow_noent &&
+              g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+            {
+              *out_pkglist = NULL;
+              return TRUE; /* NB: early return */
+            }
+
+          g_propagate_error (error, g_steal_pointer (&local_error));
+          return FALSE;
+        }
+
+      /* Note early return */
+      *out_pkglist = query_all_packages_in_sack (rsack);
+      return TRUE;
+    }
+
+  g_autoptr(GPtrArray) pkglist = g_ptr_array_new_with_free_func (g_object_unref);
+  const guint n = g_variant_n_children (pkglist_v);
+  for (guint i = 0; i < n; i++)
+    {
+      g_autoptr(GVariant) pkg_v = g_variant_get_child_value (pkglist_v, i);
+      g_ptr_array_add (pkglist, _rpm_ostree_package_new_from_variant (pkg_v));
+    }
+
+  /* sanity check that we added stuff */
+  g_assert_cmpint (pkglist->len, >, 0);
+
+  *out_pkglist = g_steal_pointer (&pkglist);
+  return TRUE;
+}
+
+/* Kinda like `comm(1)`, but for RpmOstreePackage lists. Assuming the pkglists are sorted,
+ * this is more efficient than launching hundreds of queries and works with both dnf-based
+ * and rpmdb.pkglist-based RpmOstreePackage arrays.
+ *
+ * Note that we handle multiple pkgs with the same name as follow:
+ *   - if there are N pkgs of the same name in @a, and 0 pkgs of the same name in @b, then
+ *     there will be N entries in @unique_a (and vice-versa for @b/@unique_b)
+ *   - if there are N pkgs of the same name in @a, and M pkgs of the same name in @b, then
+ *     there will be M entries in @modified_b, where all M entries will be paired with the
+ *     same arbitrary pkg coming from one of the N entries.
+ *
+ * This was designed to be fully compatible with the semantics implemented by the
+ * rpm_ostree_db_diff API, though note that its description did not previously reflect the
+ * implementation. Since there isn't one way that's clearly better, I decided to stick with
+ * it to be backwards compatible.
+ *
+ * Anyway, this is a super corner case. AFAIK, only "kernel" falls in this category, and in
+ * rpm-ostree systems by nature we (should) only have a single kernel pkg. */
+gboolean
+_rpm_ostree_diff_package_lists (GPtrArray  *a,
+                                GPtrArray  *b,
+                                GPtrArray **out_unique_a,
+                                GPtrArray **out_unique_b,
+                                GPtrArray **out_modified_a,
+                                GPtrArray **out_modified_b,
+                                GPtrArray **out_common)
+{
+  g_return_val_if_fail (a != NULL && b != NULL, FALSE);
+  g_return_val_if_fail (out_unique_a || out_unique_b ||
+                        out_modified_a || out_modified_b || out_common, FALSE);
+
+  const guint an = a->len;
+  const guint bn = b->len;
+
+  g_autoptr(GPtrArray) unique_a = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr(GPtrArray) unique_b = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr(GPtrArray) modified_a = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr(GPtrArray) modified_b = g_ptr_array_new_with_free_func (g_object_unref);
+  g_autoptr(GPtrArray) common = g_ptr_array_new_with_free_func (g_object_unref);
+
+  /* allocate a sack just for comparisons */
+  g_autoptr(DnfSack) sack = dnf_sack_new ();
+
+  const char *prev_a_name = NULL;
+  const char *prev_b_name = NULL;
+
+  guint cur_a = 0;
+  guint cur_b = 0;
+  while (cur_a < an && cur_b < bn)
+    {
+      RpmOstreePackage *pkg_a = g_ptr_array_index (a, cur_a);
+      RpmOstreePackage *pkg_b = g_ptr_array_index (b, cur_b);
+
+      /* see function description; we need to gracefully handle duplicate pkgnames in @b */
+      if (prev_a_name && g_str_equal (pkg_b->name, prev_a_name) &&
+          prev_b_name && g_str_equal (pkg_b->name, prev_b_name))
+        {
+          /* multiple copies exist in @b for a corresponding pkg in @a; point them all back
+           * to that same entry in @a */
+          g_assert_cmpuint (cur_a, >, 0);
+          RpmOstreePackage *prev_pkg_a = g_ptr_array_index (a, cur_a-1);
+          g_ptr_array_add (modified_a, g_object_ref (prev_pkg_a));
+          g_ptr_array_add (modified_b, g_object_ref (pkg_b));
+          cur_b++;
+          continue;
+        }
+      else if (prev_a_name && g_str_equal (pkg_a->name, prev_a_name) &&
+               prev_b_name && g_str_equal (pkg_a->name, prev_b_name))
+        {
+          /* Multiple copies exist in @a for a pkg that's in @b. Multiple copies might also
+           * exist in @b, but we paired them off with the first match in @a already above;
+           * we just skip over the dupes in @a now. */
+          cur_a++;
+          continue;
+        }
+
+      /* the rest below is just the obvious algorithm you'd expect for this */
+
+      int cmp = strcmp (pkg_a->name, pkg_b->name);
+      if (cmp < 0)
+        {
+          g_ptr_array_add (unique_a, g_object_ref (pkg_a));
+          cur_a++;
+        }
+      else if (cmp > 0)
+        {
+          g_ptr_array_add (unique_b, g_object_ref (pkg_b));
+          cur_b++;
+        }
+      else
+        {
+          cmp = dnf_sack_evr_cmp (sack, pkg_a->evr, pkg_b->evr);
+          if (cmp == 0)
+            {
+              g_ptr_array_add (common, g_object_ref (pkg_a));
+            }
+          else
+            {
+              g_ptr_array_add (modified_a, g_object_ref (pkg_a));
+              g_ptr_array_add (modified_b, g_object_ref (pkg_b));
+            }
+          cur_a++;
+          cur_b++;
+        }
+
+      prev_a_name = pkg_a->name;
+      prev_b_name = pkg_b->name;
+    }
+
+  /* flush out remaining a */
+  for (; cur_a < an; cur_a++)
+    g_ptr_array_add (unique_a, g_object_ref (g_ptr_array_index (a, cur_a)));
+
+  /* flush out remaining b */
+  for (; cur_b < bn; cur_b++)
+    g_ptr_array_add (unique_b, g_object_ref (g_ptr_array_index (b, cur_b)));
+
+  g_assert_cmpuint (cur_a, ==, an);
+  g_assert_cmpuint (cur_b, ==, bn);
+  g_assert_cmpuint (modified_a->len, ==, modified_b->len);
+
+  if (out_unique_a)
+    *out_unique_a = g_steal_pointer (&unique_a);
+  if (out_unique_b)
+    *out_unique_b = g_steal_pointer (&unique_b);
+  if (out_modified_a)
+    *out_modified_a = g_steal_pointer (&modified_a);
+  if (out_modified_b)
+    *out_modified_b = g_steal_pointer (&modified_b);
+  if (out_common)
+    *out_common = g_steal_pointer (&common);
+  return TRUE;
 }
