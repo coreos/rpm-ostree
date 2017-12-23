@@ -256,7 +256,7 @@ rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
   if (!ostree_repo_mark_commit_partial (repo, checksum, FALSE, error))
     return FALSE;
 
-  *out_changed = FALSE;
+  *out_changed = TRUE;
 
   return TRUE;
 }
