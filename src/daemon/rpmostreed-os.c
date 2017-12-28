@@ -58,6 +58,9 @@ static inline void *vardict_lookup_ptr (GVariantDict *dict, const char *key, con
 
 static gboolean vardict_lookup_bool (GVariantDict *dict, const char *key, gboolean dfault);
 
+typedef GVariant RpmOstreeUpdateDeploymentModifiers;
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeUpdateDeploymentModifiers, g_variant_unref)
+
 G_DEFINE_TYPE_WITH_CODE (RpmostreedOS,
                          rpmostreed_os,
                          RPMOSTREE_TYPE_OS_SKELETON,
@@ -869,8 +872,9 @@ os_handle_update_deployment (RPMOSTreeOS *interface,
                              GVariant *arg_modifiers,
                              GVariant *arg_options)
 {
+  RpmOstreeUpdateDeploymentModifiers *modifiers = arg_modifiers;
   g_auto(GVariantDict) dict;
-  g_variant_dict_init (&dict, arg_modifiers);
+  g_variant_dict_init (&dict, modifiers);
   const char *refspec =
     vardict_lookup_ptr (&dict, "set-refspec", "&s");
   const char *revision =
