@@ -34,7 +34,7 @@ static RpmOstreeCommand container_subcommands[] = {
   { NULL, 0, NULL, NULL }
 };
 
-int
+gboolean
 rpmostree_builtin_container (int argc, char **argv,
                              RpmOstreeCommandInvocation *invocation,
                              GCancellable *cancellable, GError **error)

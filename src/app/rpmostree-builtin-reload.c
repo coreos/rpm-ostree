@@ -33,7 +33,7 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-int
+gboolean
 rpmostree_builtin_reload (int             argc,
                           char          **argv,
                           RpmOstreeCommandInvocation *invocation,
@@ -53,10 +53,10 @@ rpmostree_builtin_reload (int             argc,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (!rpmostree_sysroot_call_reload_config_sync (sysroot_proxy, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }

@@ -49,7 +49,7 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-int
+gboolean
 rpmostree_builtin_rebase (int             argc,
                           char          **argv,
                           RpmOstreeCommandInvocation *invocation,
@@ -81,17 +81,17 @@ rpmostree_builtin_rebase (int             argc,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc > 3)
     {
       rpmostree_usage_error (context, "Too many arguments", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc < 2 && !(opt_branch || opt_remote))
     {
@@ -140,7 +140,7 @@ rpmostree_builtin_rebase (int             argc,
                                         &transaction_address,
                                         cancellable,
                                         error))
-        return EXIT_FAILURE;
+        return FALSE;
     }
   else
     {
@@ -163,10 +163,10 @@ rpmostree_builtin_rebase (int             argc,
                                           NULL,
                                           cancellable,
                                           error))
-        return EXIT_FAILURE;
+        return FALSE;
     }
 
-  return rpmostree_transaction_client_run (sysroot_proxy, os_proxy,
+  return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy,
                                            options, FALSE,
                                            transaction_address,
                                            previous_deployment,

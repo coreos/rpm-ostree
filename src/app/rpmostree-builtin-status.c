@@ -654,7 +654,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
   return TRUE;
 }
 
-int
+gboolean
 rpmostree_builtin_status (int             argc,
                           char          **argv,
                           RpmOstreeCommandInvocation *invocation,
@@ -676,18 +676,18 @@ rpmostree_builtin_status (int             argc,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (opt_json && opt_jsonpath)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Cannot specify both --json and --jsonpath");
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,
                                 cancellable, &os_proxy, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
 
@@ -716,7 +716,7 @@ rpmostree_builtin_status (int             argc,
           if (!result)
             {
               g_prefix_error (error, "While compiling jsonpath: ");
-              return EXIT_FAILURE;
+              return FALSE;
             }
           json_generator_set_root (generator, result);
           json_node_free (result);
@@ -727,14 +727,14 @@ rpmostree_builtin_status (int             argc,
       glnx_unref_object GOutputStream *stdout_gio = g_unix_output_stream_new (1, FALSE);
       if (json_generator_to_stream (generator, stdout_gio, NULL, error) <= 0
           || (error != NULL && *error != NULL))
-        return EXIT_FAILURE;
+        return FALSE;
     }
   else
     {
       if (!status_generic (sysroot_proxy, os_proxy, deployments,
                            cancellable, error))
-        return EXIT_FAILURE;
+        return FALSE;
     }
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }

@@ -44,25 +44,25 @@ rpmostree_db_builtin_diff (int argc, char **argv,
   g_autoptr(OstreeRepo) repo = NULL;
   if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv, invocation,
                                           &repo, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc != 3)
     {
       g_autofree char *message =
         g_strdup_printf ("\"%s\" takes exactly 2 arguments", g_get_prgname ());
       rpmostree_usage_error (context, message, error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   const char *old_ref = argv[1];
   g_autofree char *old_checksum = NULL;
   if (!ostree_repo_resolve_rev (repo, old_ref, FALSE, &old_checksum, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   const char *new_ref = argv[2];
   g_autofree char *new_checksum = NULL;
   if (!ostree_repo_resolve_rev (repo, new_ref, FALSE, &new_checksum, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (!g_str_equal (old_ref, old_checksum))
     printf ("ostree diff commit old: %s (%s)\n", old_ref, old_checksum);
@@ -96,19 +96,16 @@ rpmostree_db_builtin_diff (int argc, char **argv,
     {
       if (!rpm_ostree_db_diff (repo, old_ref, new_ref, &removed, &added, &modified_old,
                                &modified_new, cancellable, error))
-        return EXIT_FAILURE;
+        return FALSE;
 
       if (g_str_equal (opt_format, "diff"))
         rpmostree_diff_print (removed, added, modified_old, modified_new);
       else if (g_str_equal (opt_format, "block"))
         rpmostree_diff_print_formatted (removed, added, modified_old, modified_new);
       else
-        {
-          glnx_throw (error, "Format argument is invalid, pick one of: diff, block");
-          return EXIT_FAILURE;
-        }
+        return glnx_throw (error, "Format argument is invalid, pick one of: diff, block");
     }
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }
 

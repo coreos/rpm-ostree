@@ -781,11 +781,10 @@ out:
 /* Handles client-side processing for most command line tools
  * after a transaction has been started.  Wraps invocation
  * of rpmostree_transaction_get_response_sync().
- *
- * Returns: A Unix exit code (normally 0 or 1, may be 77 if exit_unchanged_77 is enabled)
  */
-int
-rpmostree_transaction_client_run (RPMOSTreeSysroot *sysroot_proxy,
+gboolean
+rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
+                                  RPMOSTreeSysroot *sysroot_proxy,
                                   RPMOSTreeOS      *os_proxy,
                                   GVariant         *options,
                                   gboolean          exit_unchanged_77,
@@ -797,7 +796,7 @@ rpmostree_transaction_client_run (RPMOSTreeSysroot *sysroot_proxy,
   /* Wait for the txn to complete */
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy, transaction_address,
                                                 cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   /* Process the result of the txn and our options */
 
@@ -817,8 +816,8 @@ rpmostree_transaction_client_run (RPMOSTreeSysroot *sysroot_proxy,
       if (!rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
         {
           if (exit_unchanged_77)
-            return RPM_OSTREE_EXIT_UNCHANGED;
-          return EXIT_SUCCESS;
+            invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
+          return TRUE;
         }
       else
         {
@@ -827,13 +826,13 @@ rpmostree_transaction_client_run (RPMOSTreeSysroot *sysroot_proxy,
           if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                                cancellable,
                                                                error))
-            return EXIT_FAILURE;
+            return FALSE;
         }
 
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }
 
 void

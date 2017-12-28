@@ -21,39 +21,10 @@
 #pragma once
 
 #include "ostree.h"
+#include "rpmostree-builtin-types.h"
 #include "rpmostree-dbus-helpers.h"
 
 G_BEGIN_DECLS
-
-/* Exit code for no change after pulling commits.
- * Use alongside EXIT_SUCCESS and EXIT_FAILURE. */
-#define RPM_OSTREE_EXIT_UNCHANGED  (77)
-
-typedef enum {
-  RPM_OSTREE_BUILTIN_FLAG_NONE = 0,
-  RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD = 1 << 0,
-  RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT = 1 << 1,
-  RPM_OSTREE_BUILTIN_FLAG_HIDDEN = 1 << 2,
-  RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS = 1 << 3,
-} RpmOstreeBuiltinFlags;
-
-typedef struct RpmOstreeCommand RpmOstreeCommand;
-typedef struct RpmOstreeCommandInvocation RpmOstreeCommandInvocation;
-
-struct RpmOstreeCommand {
-  const char *name;
-  RpmOstreeBuiltinFlags flags;
-  const char *description; /* a short decription to describe the functionality */
-  int (*fn) (int argc, char **argv, RpmOstreeCommandInvocation *invocation, GCancellable *cancellable, GError **error);
-};
-
-/* Currently, this has just the command (which is mostly there for the
- * name/flags), but in the future if we want to add something new we won't need
- * to touch every prototype.
- */
-struct RpmOstreeCommandInvocation {
-  RpmOstreeCommand *command;
-};
 
 #define BUILTINPROTO(name) gboolean rpmostree_builtin_ ## name (int argc, char **argv, \
                                                                 RpmOstreeCommandInvocation *invocation, \
