@@ -367,27 +367,27 @@ rpmostree_ex_builtin_jigdo2commit (int             argc,
                                        cancellable,
                                        NULL, NULL, NULL, NULL,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc != 2)
    {
       rpmostree_usage_error (context, "REPOID:OIRPM-NAME is required", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   if (!opt_repo)
     {
       rpmostree_usage_error (context, "--repo must be specified", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   const char *oirpm = argv[1];
 
   g_autoptr(RpmOstreeJigdo2CommitContext) self = NULL;
   if (!rpm_ostree_jigdo2commit_context_new (&self, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
   if (!impl_jigdo2commit (self, oirpm, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }

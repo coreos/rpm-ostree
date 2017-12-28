@@ -89,7 +89,7 @@ rpmostree_db_builtin_list (int argc, char **argv,
   g_autoptr(OstreeRepo) repo = NULL;
   if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv,
                                           invocation, &repo, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   /* Iterate over all arguments. When we see the first argument which
    * appears to be an OSTree commit, take all other arguments to be
@@ -119,8 +119,8 @@ rpmostree_db_builtin_list (int argc, char **argv,
     }
 
   if (!_builtin_db_list (repo, revs, patterns, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }
 

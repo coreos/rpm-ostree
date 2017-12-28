@@ -288,8 +288,7 @@ connect_to_peer (int fd, GError **error)
   return TRUE;
 }
 
-
-int
+gboolean
 rpmostree_builtin_start_daemon (int             argc,
                                 char          **argv,
                                 RpmOstreeCommandInvocation *invocation,
@@ -300,7 +299,7 @@ rpmostree_builtin_start_daemon (int             argc,
   g_option_context_add_main_entries (opt_context, opt_entries, NULL);
 
   if (!g_option_context_parse (opt_context, &argc, &argv, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (opt_debug)
     {
@@ -339,15 +338,15 @@ rpmostree_builtin_start_daemon (int             argc,
       /* Get an explicit ref to the bus so we can use it later */
       bus = g_bus_get_sync (bus_type, NULL, error);
       if (!bus)
-        return EXIT_FAILURE;
+        return FALSE;
       if (!start_daemon (bus, error))
-        return EXIT_FAILURE;
+        return FALSE;
       (void) g_bus_own_name_on_connection (bus, DBUS_NAME, G_BUS_NAME_OWNER_FLAGS_NONE,
                                            on_name_acquired, on_name_lost,
                                            NULL, NULL);
     }
   else if (!connect_to_peer (service_dbus_fd, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   state_transition (APPSTATE_RUNNING);
 
@@ -386,5 +385,5 @@ rpmostree_builtin_start_daemon (int             argc,
   while (appstate == APPSTATE_FLUSHING)
     g_main_context_iteration (mainctx, TRUE);
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }

@@ -43,7 +43,7 @@ static GOptionEntry global_entries[] = {
 };
 */
 
-int
+gboolean
 rpmostree_builtin_ex (int argc, char **argv,
                       RpmOstreeCommandInvocation *invocation,
                       GCancellable *cancellable, GError **error)

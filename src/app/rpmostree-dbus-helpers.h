@@ -23,6 +23,7 @@
 #include <gio/gunixfdlist.h>
 
 #include "rpm-ostreed-generated.h"
+#include "rpmostree-builtin-types.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -71,8 +72,9 @@ rpmostree_transaction_get_response_sync      (RPMOSTreeSysroot *sysroot_proxy,
                                               GCancellable *cancellable,
                                               GError **error);
 
-int /* Returns an exit status */
-rpmostree_transaction_client_run             (RPMOSTreeSysroot *sysroot_proxy,
+gboolean
+rpmostree_transaction_client_run             (RpmOstreeCommandInvocation *invocation,
+                                              RPMOSTreeSysroot *sysroot_proxy,
                                               RPMOSTreeOS      *os_proxy,
                                               GVariant         *options,
                                               gboolean          exit_unchanged_77,

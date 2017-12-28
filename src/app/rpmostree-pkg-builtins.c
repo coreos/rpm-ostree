@@ -57,7 +57,8 @@ static GOptionEntry install_option_entry[] = {
 };
 
 static int
-pkg_change (RPMOSTreeSysroot *sysroot_proxy,
+pkg_change (RpmOstreeCommandInvocation *invocation,
+            RPMOSTreeSysroot *sysroot_proxy,
             const char *const* packages_to_add,
             const char *const* packages_to_remove,
             GCancellable  *cancellable,
@@ -73,7 +74,7 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
   g_autoptr(GVariant) options =
@@ -106,7 +107,7 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
                                         &transaction_address,
                                         cancellable,
                                         error))
-        return EXIT_FAILURE;
+        return FALSE;
     }
   else
     {
@@ -119,17 +120,17 @@ pkg_change (RPMOSTreeSysroot *sysroot_proxy,
                                               NULL,
                                               cancellable,
                                               error))
-        return EXIT_FAILURE;
+        return FALSE;
     }
 
-  return rpmostree_transaction_client_run (sysroot_proxy, os_proxy,
+  return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy,
                                            options, FALSE,
                                            transaction_address,
                                            previous_deployment,
                                            cancellable, error);
 }
 
-int
+gboolean
 rpmostree_builtin_install (int            argc,
                            char         **argv,
                            RpmOstreeCommandInvocation *invocation,
@@ -153,12 +154,12 @@ rpmostree_builtin_install (int            argc,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc < 2)
     {
       rpmostree_usage_error (context, "At least one PACKAGE must be specified", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   /* shift to first pkgspec and ensure it's a proper strv (previous parsing
@@ -166,13 +167,13 @@ rpmostree_builtin_install (int            argc,
   argv++; argc--;
   argv[argc] = NULL;
 
-  return pkg_change (sysroot_proxy,
+  return pkg_change (invocation, sysroot_proxy,
                      (const char *const*)argv,
                      (const char *const*)opt_uninstall,
                      cancellable, error);
 }
 
-int
+gboolean
 rpmostree_builtin_uninstall (int            argc,
                              char         **argv,
                              RpmOstreeCommandInvocation *invocation,
@@ -196,12 +197,12 @@ rpmostree_builtin_uninstall (int            argc,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc < 2)
     {
       rpmostree_usage_error (context, "At least one PACKAGE must be specified", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   /* shift to first pkgspec and ensure it's a proper strv (previous parsing
@@ -214,7 +215,7 @@ rpmostree_builtin_uninstall (int            argc,
   if (!opt_install)
     opt_cache_only = TRUE;
 
-  return pkg_change (sysroot_proxy,
+  return pkg_change (invocation, sysroot_proxy,
                      (const char *const*)opt_install,
                      (const char *const*)argv,
                      cancellable, error);

@@ -55,7 +55,7 @@ get_args_variant (void)
   return g_variant_dict_end (&dict);
 }
 
-int
+gboolean
 rpmostree_builtin_initramfs (int             argc,
                              char          **argv,
                              RpmOstreeCommandInvocation *invocation,
@@ -75,12 +75,12 @@ rpmostree_builtin_initramfs (int             argc,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (!(opt_enable || opt_disable))
     {
@@ -91,7 +91,7 @@ rpmostree_builtin_initramfs (int             argc,
         {
           g_set_error_literal (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                                "--reboot must be used with --enable or --disable");
-          return EXIT_FAILURE;
+          return FALSE;
         }
 
       g_variant_iter_init (&iter, deployments);
@@ -135,7 +135,7 @@ rpmostree_builtin_initramfs (int             argc,
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                    "Cannot simultaenously specify --enable and --disable");
-      return EXIT_FAILURE;
+      return FALSE;
     }
   else
     {
@@ -144,7 +144,7 @@ rpmostree_builtin_initramfs (int             argc,
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
                        "Cannot simultaenously specify --disable and --arg");
-          return EXIT_FAILURE;
+          return FALSE;
         }
       if (!opt_add_arg)
         opt_add_arg = empty_strv;
@@ -157,16 +157,16 @@ rpmostree_builtin_initramfs (int             argc,
                                                        &transaction_address,
                                                        cancellable,
                                                        error))
-        return EXIT_FAILURE;
+        return FALSE;
 
       if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                     transaction_address,
                                                     cancellable,
                                                     error))
-        return EXIT_FAILURE;
+        return FALSE;
 
       g_print ("Initramfs regeneration is now: %s\n", opt_enable ? "enabled" : "disabled");
     }
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }
