@@ -699,22 +699,37 @@ typedef void (*InvocationCompleter)(RPMOSTreeOS*,
 static gboolean
 os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
                                   GDBusMethodInvocation  *invocation,
-                                  const char             *refspec,
-                                  const char             *revision,
                                   RpmOstreeTransactionDeployFlags default_flags,
                                   GVariant               *options,
-                                  const char *const      *install_pkgs,
-                                  const char *const      *uninstall_pkgs,
-                                  GVariant               *install_local_pkgs_idxs,
-                                  const char *const      *override_replace_pkgs,
-                                  GVariant               *override_replace_local_pkgs_idxs,
-                                  const char *const      *override_remove_pkgs,
-                                  const char *const      *override_reset_pkgs,
+                                  RpmOstreeUpdateDeploymentModifiers *modifiers,
                                   GUnixFDList            *fd_list,
                                   InvocationCompleter     completer)
 {
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   g_autoptr(GError) local_error = NULL;
+
+  g_auto(GVariantDict) dict;
+  g_variant_dict_init (&dict, modifiers);
+  const char *refspec =
+    vardict_lookup_ptr (&dict, "set-refspec", "&s");
+  const char *revision =
+    vardict_lookup_ptr (&dict, "set-revision", "&s");
+  g_autofree const char *const *install_pkgs =
+    vardict_lookup_ptr (&dict, "install-packages", "^a&s");
+  g_autofree const char *const *uninstall_pkgs =
+    vardict_lookup_ptr (&dict, "uninstall-packages", "^a&s");
+  g_autofree const char *const *override_replace_pkgs =
+    vardict_lookup_ptr (&dict, "override-replace-packages", "^a&s");
+  g_autofree const char *const *override_remove_pkgs =
+    vardict_lookup_ptr (&dict, "override-remove-packages", "^a&s");
+  g_autofree const char *const *override_reset_pkgs =
+    vardict_lookup_ptr (&dict, "override-reset-packages", "^a&s");
+  g_autoptr(GVariant) install_local_pkgs_idxs =
+    g_variant_dict_lookup_value (&dict, "install-local-packages",
+                                 G_VARIANT_TYPE("ah"));
+  g_autoptr(GVariant) override_replace_local_pkgs_idxs =
+    g_variant_dict_lookup_value (&dict, "override-replace-local-packages",
+                                 G_VARIANT_TYPE("ah"));
 
   /* try to merge with an existing transaction, otherwise start a new one */
 
@@ -764,22 +779,16 @@ os_handle_deploy (RPMOSTreeOS *interface,
                   const char *arg_revision,
                   GVariant *arg_options)
 {
-  return os_merge_or_start_deployment_txn (
-      interface,
-      invocation,
-      NULL,
-      arg_revision,
-      RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE,
-      arg_options,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      rpmostree_os_complete_deploy);
+  g_autoptr(GVariantBuilder) vbuilder = g_variant_builder_new (G_VARIANT_TYPE_VARDICT);
+  if (arg_revision)
+    g_variant_builder_add (vbuilder, "{sv}", "set-revision",
+                           g_variant_new_string (arg_revision));
+  g_autoptr(RpmOstreeUpdateDeploymentModifiers) modifiers =
+    g_variant_ref_sink (g_variant_builder_end (vbuilder));
+  return os_merge_or_start_deployment_txn (interface, invocation,
+                                           RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE,
+                                           arg_options, modifiers, fd_list,
+                                           rpmostree_os_complete_deploy);
 }
 
 static gboolean
@@ -788,22 +797,12 @@ os_handle_upgrade (RPMOSTreeOS *interface,
                    GUnixFDList *fd_list,
                    GVariant *arg_options)
 {
-  return os_merge_or_start_deployment_txn (
-      interface,
-      invocation,
-      NULL,
-      NULL,
-      0,
-      arg_options,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      rpmostree_os_complete_upgrade);
+  g_autoptr(GVariantBuilder) vbuilder = g_variant_builder_new (G_VARIANT_TYPE_VARDICT);
+  g_autoptr(RpmOstreeUpdateDeploymentModifiers) modifiers =
+    g_variant_ref_sink (g_variant_builder_end (vbuilder));
+  return os_merge_or_start_deployment_txn (interface, invocation, 0,
+                                           arg_options, modifiers, fd_list,
+                                           rpmostree_os_complete_upgrade);
 }
 
 static gboolean
@@ -821,22 +820,20 @@ os_handle_rebase (RPMOSTreeOS *interface,
   const char *opt_revision = NULL;
   g_variant_dict_lookup (&options_dict, "revision", "&s", &opt_revision);
 
-  return os_merge_or_start_deployment_txn (
-      interface,
-      invocation,
-      arg_refspec,
-      opt_revision,
-      RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE,
-      arg_options,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      rpmostree_os_complete_rebase);
+  g_autoptr(GVariantBuilder) vbuilder = g_variant_builder_new (G_VARIANT_TYPE_VARDICT);
+  if (arg_refspec)
+    g_variant_builder_add (vbuilder, "{sv}", "set-refspec",
+                           g_variant_new_string (arg_refspec));
+  if (opt_revision)
+    g_variant_builder_add (vbuilder, "{sv}", "set-revision",
+                           g_variant_new_string (opt_revision));
+  g_autoptr(RpmOstreeUpdateDeploymentModifiers) modifiers =
+    g_variant_ref_sink (g_variant_builder_end (vbuilder));
+
+  return os_merge_or_start_deployment_txn (interface, invocation,
+                                           RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE,
+                                           arg_options, modifiers, fd_list,
+                                           rpmostree_os_complete_rebase);
 }
 
 static gboolean
@@ -847,22 +844,17 @@ os_handle_pkg_change (RPMOSTreeOS *interface,
                       const char * const *arg_packages_added,
                       const char * const *arg_packages_removed)
 {
-  return os_merge_or_start_deployment_txn (
-      interface,
-      invocation,
-      NULL,
-      NULL,
-      RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE,
-      arg_options,
-      arg_packages_added,
-      arg_packages_removed,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      NULL,
-      rpmostree_os_complete_pkg_change);
+  g_autoptr(GVariantBuilder) vbuilder = g_variant_builder_new (G_VARIANT_TYPE_VARDICT);
+  g_variant_builder_add (vbuilder, "{sv}", "install-packages",
+                         g_variant_new_strv (arg_packages_added, -1));
+  g_variant_builder_add (vbuilder, "{sv}", "uninstall-packages",
+                         g_variant_new_strv (arg_packages_removed, -1));
+  g_autoptr(RpmOstreeUpdateDeploymentModifiers) modifiers =
+    g_variant_ref_sink (g_variant_builder_end (vbuilder));
+  return os_merge_or_start_deployment_txn (interface, invocation,
+                                           RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE,
+                                           arg_options, modifiers, NULL,
+                                           rpmostree_os_complete_pkg_change);
 }
 
 static gboolean
@@ -873,45 +865,9 @@ os_handle_update_deployment (RPMOSTreeOS *interface,
                              GVariant *arg_options)
 {
   RpmOstreeUpdateDeploymentModifiers *modifiers = arg_modifiers;
-  g_auto(GVariantDict) dict;
-  g_variant_dict_init (&dict, modifiers);
-  const char *refspec =
-    vardict_lookup_ptr (&dict, "set-refspec", "&s");
-  const char *revision =
-    vardict_lookup_ptr (&dict, "set-revision", "&s");
-  g_autofree const char *const *install_pkgs =
-    vardict_lookup_ptr (&dict, "install-packages", "^a&s");
-  g_autofree const char *const *uninstall_pkgs =
-    vardict_lookup_ptr (&dict, "uninstall-packages", "^a&s");
-  g_autofree const char *const *override_replace_pkgs =
-    vardict_lookup_ptr (&dict, "override-replace-packages", "^a&s");
-  g_autofree const char *const *override_remove_pkgs =
-    vardict_lookup_ptr (&dict, "override-remove-packages", "^a&s");
-  g_autofree const char *const *override_reset_pkgs =
-    vardict_lookup_ptr (&dict, "override-reset-packages", "^a&s");
-  g_autoptr(GVariant) install_local_pkgs_idxs =
-    g_variant_dict_lookup_value (&dict, "install-local-packages",
-                                 G_VARIANT_TYPE("ah"));
-  g_autoptr(GVariant) override_replace_local_pkgs_idxs =
-    g_variant_dict_lookup_value (&dict, "override-replace-local-packages",
-                                 G_VARIANT_TYPE("ah"));
-
-  return os_merge_or_start_deployment_txn (
-      interface,
-      invocation,
-      refspec,
-      revision,
-      0,
-      arg_options,
-      install_pkgs,
-      uninstall_pkgs,
-      install_local_pkgs_idxs,
-      override_replace_pkgs,
-      override_replace_local_pkgs_idxs,
-      override_remove_pkgs,
-      override_reset_pkgs,
-      fd_list,
-      rpmostree_os_complete_update_deployment);
+  return os_merge_or_start_deployment_txn (interface, invocation,
+                                           0, arg_options, modifiers, fd_list,
+                                           rpmostree_os_complete_update_deployment);
 }
 
 static gboolean
