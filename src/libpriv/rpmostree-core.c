@@ -1423,6 +1423,7 @@ sort_packages (RpmOstreeContext *self,
           g_ptr_array_add (self->pkgs_to_download, g_object_ref (pkg));
         if (!in_ostree)
           g_ptr_array_add (self->pkgs_to_import, g_object_ref (pkg));
+        /* This logic is equivalent to that in rpmostree_context_force_relabel() */
         if (in_ostree && !selinux_match)
           g_ptr_array_add (self->pkgs_to_relabel, g_object_ref (pkg));
       }
@@ -2662,10 +2663,10 @@ on_async_relabel_done (GObject                    *obj,
     self->async_running = FALSE;
 }
 
-gboolean
-rpmostree_context_relabel (RpmOstreeContext *self,
-                           GCancellable     *cancellable,
-                           GError          **error)
+static gboolean
+relabel_if_necessary (RpmOstreeContext *self,
+                      GCancellable     *cancellable,
+                      GError          **error)
 {
   if (!self->pkgs_to_relabel)
     return TRUE;
@@ -2728,6 +2729,40 @@ rpmostree_context_relabel (RpmOstreeContext *self,
   self->n_async_pkgs_relabeled = 0;
 
   return TRUE;
+}
+
+/* Forcibly relabel all packages */
+gboolean
+rpmostree_context_force_relabel (RpmOstreeContext *self,
+                                 GCancellable     *cancellable,
+                                 GError          **error)
+{
+  g_clear_pointer (&self->pkgs_to_relabel, (GDestroyNotify)g_ptr_array_unref);
+  self->pkgs_to_relabel = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+
+  g_autoptr(GPtrArray) packages = dnf_goal_get_packages (dnf_context_get_goal (self->dnfctx),
+                                                         DNF_PACKAGE_INFO_INSTALL,
+                                                         DNF_PACKAGE_INFO_UPDATE,
+                                                         DNF_PACKAGE_INFO_DOWNGRADE, -1);
+
+  for (guint i = 0; i < packages->len; i++)
+    {
+      DnfPackage *pkg = packages->pdata[i];
+
+      if (g_cancellable_set_error_if_cancelled (cancellable, error))
+        return FALSE;
+
+      /* This logic is equivalent to that in sort_packages() */
+      gboolean in_ostree, selinux_match;
+      if (!find_pkg_in_ostree (self, pkg, self->sepolicy,
+                               &in_ostree, &selinux_match, error))
+        return FALSE;
+
+      if (in_ostree && !selinux_match)
+        g_ptr_array_add (self->pkgs_to_relabel, g_object_ref (pkg));
+    }
+
+  return relabel_if_necessary (self, cancellable, error);
 }
 
 typedef struct {
@@ -3172,6 +3207,12 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
     }
 
   int tmprootfs_dfd = self->tmprootfs_dfd; /* Alias to avoid bigger diff */
+
+  /* We need up to date labels; the set of things needing relabeling
+   * will have been calculated in sort_packages()
+   */
+  if (!relabel_if_necessary (self, cancellable, error))
+    return FALSE;
 
   DnfContext *dnfctx = self->dnfctx;
   TransactionData tdata = { 0, NULL };

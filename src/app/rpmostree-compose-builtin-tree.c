@@ -528,11 +528,6 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     {
       if (!rpmostree_context_import (self->corectx, cancellable, error))
         return FALSE;
-      /* Depending on cache state, we may have some pkgs already
-       * labeled with a final target policy.
-       */
-      if (!rpmostree_context_relabel (self->corectx, cancellable, error))
-        return FALSE;
       rpmostree_context_set_tmprootfs_dfd (self->corectx, rootfs_dfd);
       if (!rpmostree_context_assemble (self->corectx, cancellable, error))
         return FALSE;
@@ -545,7 +540,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
       g_autoptr(OstreeSePolicy) sepolicy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
       rpmostree_context_set_sepolicy (self->corectx, sepolicy);
 
-      if (!rpmostree_context_relabel (self->corectx, cancellable, error))
+      if (!rpmostree_context_force_relabel (self->corectx, cancellable, error))
         return FALSE;
     }
   else
