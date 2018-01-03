@@ -1,7 +1,7 @@
 {
     "ref": "fedora/stable/${basearch}",
 
-    "repos": ["fedora"],
+    "repos": ["fedora", "updates"],
 
     "packages": ["kernel", "nss-altfiles", "systemd", "ostree", "selinux-policy-targeted", "chrony",
                  "tuned", "iputils"],
