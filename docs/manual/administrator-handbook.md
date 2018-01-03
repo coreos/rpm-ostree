@@ -83,9 +83,15 @@ rpm-ostree rebase -b $branchname
 Your operating system vendor may provide multiple base branches.  For example,
 Fedora Atomic Host has branches of the form:
 
- - `fedora/26/x86_64/atomic-host`
- - `fedora/26/x86_64/updates-testing/atomic-host`
- - `fedora/27/x86_64/atomic-host`
+  - `fedora/27/aarch64/atomic-host`
+  - `fedora/27/aarch64/testing/atomic-host`
+  - `fedora/27/aarch64/updates/atomic-host`
+  - `fedora/27/ppc64le/atomic-host`
+  - `fedora/27/ppc64le/testing/atomic-host`
+  - `fedora/27/ppc64le/updates/atomic-host`
+  - `fedora/27/x86_64/atomic-host`
+  - `fedora/27/x86_64/testing/atomic-host`
+  - `fedora/27/x86_64/updates/atomic-host`
 
 You can use the `rebase` command to switch between these; this can represent a
 major version upgrade, or logically switching between different "testing"
@@ -109,7 +115,7 @@ See `man rpm-ostree` for more information.
 
 The only writable directories are `/etc` and `/var`.  In particular,
 `/usr` has a read-only bind mount at all times.  Any data in `/var` is
-never touched, and is shared across upgrades. 
+never touched, and is shared across upgrades.
 
 At upgrade time, the process takes the *new default* `/etc`, and adds
 your changes on top.  This means that upgrades will receive new
