@@ -32,7 +32,7 @@
 #include <libdnf/libdnf.h>
 #include <librepo/librepo.h>
 
-#include "rpmostree-core.h"
+#include "rpmostree-core-private.h"
 #include "rpmostree-jigdo-core.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
@@ -253,47 +253,6 @@ rpmostree_treespec_to_variant (RpmOstreeTreespec *spec)
  *                    RpmOstreeContext                     *
  ***********************************************************
  */
-
-struct _RpmOstreeContext {
-  GObject parent;
-
-  RpmOstreeTreespec *spec;
-  gboolean empty;
-
-  /* jigdo-mode data */
-  const char *jigdo_spec; /* The jigdo spec like: repoid:package */
-  const char *jigdo_version; /* Optional */
-  gboolean jigdo_pure; /* There is only jigdo */
-  DnfPackage *jigdo_pkg;
-  char *jigdo_checksum;
-
-  gboolean pkgcache_only;
-  DnfContext *dnfctx;
-  OstreeRepo *ostreerepo;
-  OstreeRepo *pkgcache_repo;
-  OstreeRepoDevInoCache *devino_cache;
-  gboolean unprivileged;
-  OstreeSePolicy *sepolicy;
-  char *passwd_dir;
-
-  gboolean async_running;
-  GCancellable *async_cancellable;
-  GError *async_error;
-  GPtrArray *pkgs_to_download;
-  GPtrArray *pkgs_to_import;
-  guint n_async_pkgs_imported;
-  GPtrArray *pkgs_to_relabel;
-  guint n_async_pkgs_relabeled;
-
-  GHashTable *pkgs_to_remove;  /* pkgname --> gv_nevra */
-  GHashTable *pkgs_to_replace; /* new gv_nevra --> old gv_nevra */
-
-  GLnxTmpDir tmpdir;
-
-  int tmprootfs_dfd; /* Borrowed */
-  GLnxTmpDir repo_tmpdir; /* Used to assemble+commit if no base rootfs provided */
-};
-
 G_DEFINE_TYPE (RpmOstreeContext, rpmostree_context, G_TYPE_OBJECT)
 
 static void

@@ -30,6 +30,7 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-refts.c \
 	src/libpriv/rpmostree-core.c \
 	src/libpriv/rpmostree-core.h \
+	src/libpriv/rpmostree-core-private.h \
 	src/libpriv/rpmostree-bwrap.c \
 	src/libpriv/rpmostree-bwrap.h \
 	src/libpriv/rpmostree-kernel.c \
@@ -50,6 +51,7 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-jigdo-assembler.c \
 	src/libpriv/rpmostree-jigdo-assembler.h \
 	src/libpriv/rpmostree-jigdo-core.h \
+	src/libpriv/rpmostree-jigdo-client.c \
 	src/libpriv/rpmostree-unpacker-core.c \
 	src/libpriv/rpmostree-unpacker-core.h \
 	src/libpriv/rpmostree-output.c \
