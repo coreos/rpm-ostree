@@ -68,6 +68,14 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
                            GError       **error);
 
 gboolean
+rpmostree_pkgtriggers_run_sync (Header         hdr,
+                                int            rootfs_fd,
+                                rpmts          ts,
+                                guint         *out_n_run,
+                                GCancellable  *cancellable,
+                                GError       **error);
+
+gboolean
 rpmostree_transfiletriggers_run_sync (Header         hdr,
                                       int            rootfs_fd,
                                       guint         *out_n_run,

@@ -716,6 +716,100 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
   return TRUE;
 }
 
+/* Implementation of %triggerin */
+gboolean
+rpmostree_pkgtriggers_run_sync (Header         hdr,
+                                int            rootfs_fd,
+                                rpmts          ts,
+                                guint         *out_n_run,
+                                GCancellable  *cancellable,
+                                GError       **error)
+{
+  const char *pkg_name = headerGetString (hdr, RPMTAG_NAME);
+  g_assert (pkg_name);
+
+  RpmOstreeScriptAction action = lookup_script_action (pkg_name, "%triggerin");
+  switch (action)
+    {
+    case RPMOSTREE_SCRIPT_ACTION_IGNORE:
+      return TRUE; /* Note early return */
+    case RPMOSTREE_SCRIPT_ACTION_DEFAULT:
+      break; /* Continue below */
+    }
+
+  g_autofree char *error_prefix = g_strconcat ("Executing %triggerin for ", pkg_name, NULL);
+  GLNX_AUTO_PREFIX_ERROR (error_prefix, error);
+
+  headerGetFlags hgflags = HEADERGET_MINMEM;
+  struct rpmtd_s tscripts, tname, tversion, tflags, tindex;
+  headerGet (hdr, RPMTAG_TRIGGERSCRIPTS, &tscripts, hgflags);
+  headerGet (hdr, RPMTAG_TRIGGERNAME, &tname, hgflags);
+  headerGet (hdr, RPMTAG_TRIGGERVERSION, &tversion, hgflags);
+  headerGet (hdr, RPMTAG_TRIGGERFLAGS, &tflags, hgflags);
+  headerGet (hdr, RPMTAG_TRIGGERINDEX, &tindex, hgflags);
+  g_debug ("pkg %s %%triggerin count %u/%u/%u/%u/%u\n",
+           pkg_name, rpmtdCount (&tscripts), rpmtdCount (&tname),
+           rpmtdCount (&tversion), rpmtdCount (&tflags), rpmtdCount (&tindex));
+
+  if (rpmtdCount (&tscripts) == 0)
+    return TRUE;
+
+  const guint n_scripts = rpmtdCount (&tscripts);
+  const guint n_names = rpmtdCount (&tname);
+  /* See the transfiletriggers code below for more information about this
+   * parsing. To briefly repeat though, some librpm source references:
+   *  - tagexts.c:triggercondsTagFor()
+   *  - rpmscript.c:rpmScriptFromTriggerTag()
+   */
+  for (guint i = 0; i < n_scripts; i++)
+    {
+      rpmtdInit (&tname);
+      rpmtdInit (&tflags);
+      rpmtdInit (&tversion);
+
+      g_assert_cmpint (rpmtdSetIndex (&tscripts, i), ==, i);
+      const char *script = rpmtdGetString (&tscripts);
+      if (!script)
+        continue;
+
+      /* Iterate over the trigger "names" which are file patterns */
+      for (guint j = 0; j < n_names; j++)
+        {
+          g_assert_cmpint (rpmtdSetIndex (&tindex, j), ==, j);
+          guint32 tindex_num = *rpmtdGetUint32 (&tindex);
+
+          if (tindex_num != i)
+            continue;
+
+          g_assert_cmpint (rpmtdSetIndex (&tname, j), ==, j);
+          g_assert_cmpint (rpmtdSetIndex (&tversion, j), ==, j);
+          const char *name = rpmtdGetString (&tname);
+          const char *version = rpmtdGetString (&tversion);
+
+          rpmFlags sense = 0;
+          if (rpmtdSetIndex (&tflags, j) >= 0)
+            sense = rpmtdGetNumber (&tflags);
+          /* See if this is a triggerin (as opposed to triggerun, which we)
+           * don't execute.  We also only execute > and >= triggers.
+           */
+          const gboolean trigger_in = (sense & RPMSENSE_TRIGGERIN) > 0;
+          const gboolean greater = (sense & RPMSENSE_GREATER) > 0;
+          if (!(trigger_in && greater))
+            continue;
+
+          /* TODO query for dependent package name */
+          if (!run_script_in_bwrap_container (rootfs_fd, pkg_name,
+                                              "%triggerin", "/bin/sh", script, NULL, -1,
+                                              cancellable, error))
+            return FALSE;
+
+          (*out_n_run)++;
+        }
+    }
+
+  return TRUE;
+}
+
 /* File triggers, as used by e.g. glib2.spec and vagrant.spec in Fedora. More
  * info at <http://rpm.org/user_doc/file_triggers.html>.
  */

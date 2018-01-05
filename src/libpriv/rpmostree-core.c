@@ -3438,6 +3438,36 @@ add_install (RpmOstreeContext *self,
   return TRUE;
 }
 
+/* Run %triggerin */
+static gboolean
+run_all_pkgtriggerin (RpmOstreeContext *self,
+                      int               rootfs_dfd,
+                      rpmts             ts,
+                      guint            *out_n_run,
+                      GCancellable     *cancellable,
+                      GError          **error)
+{
+  g_assert (!self->jigdo_pure);
+
+  const guint n = (guint)rpmtsNElements (ts);
+  for (guint i = 0; i < n; i++)
+    {
+      rpmte te = rpmtsElement (ts, i);
+      if (rpmteType (te) != TR_ADDED)
+        continue;
+      DnfPackage *pkg = (void*)rpmteKey (te);
+      g_autofree char *path = get_package_relpath (pkg);
+      g_auto(Header) hdr = NULL;
+      if (!get_package_metainfo (self, path, &hdr, NULL, error))
+        return FALSE;
+
+      if (!rpmostree_pkgtriggers_run_sync (hdr, rootfs_dfd, ts, out_n_run,
+                                           cancellable, error))
+        return FALSE;
+    }
+  return TRUE;
+}
+
 /* Run %transfiletriggerin */
 static gboolean
 run_all_transfiletriggers (RpmOstreeContext *self,
@@ -3900,6 +3930,14 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
               g_hash_table_insert (groupents, ent->name, ent);
             }
         }
+
+      /* %triggerin */
+      rpmostree_output_task_begin ("Running triggerin scripts");
+      guint n_triggerin_run = 0;
+      if (!run_all_pkgtriggerin (self, tmprootfs_dfd, ordering_ts,
+                                 &n_triggerin_run, cancellable, error))
+        return FALSE;
+      rpmostree_output_task_end ("%u done", n_triggerin_run);
 
       rpmostree_output_task_begin ("Running post scripts");
       guint n_post_scripts_run = 0;
