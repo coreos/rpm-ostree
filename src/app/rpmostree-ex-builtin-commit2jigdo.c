@@ -67,18 +67,18 @@ rpmostree_ex_builtin_commit2jigdo (int             argc,
                                        cancellable,
                                        NULL, NULL, NULL, NULL,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc != 4)
     {
       rpmostree_usage_error (context, "REV OIRPM-SPEC OUTPUTDIR are required", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   if (!(opt_repo && opt_pkgcache_repo))
     {
       rpmostree_usage_error (context, "--repo and --pkgcache-repo must be specified", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   const char *rev = argv[1];
@@ -89,13 +89,13 @@ rpmostree_ex_builtin_commit2jigdo (int             argc,
 
   g_autoptr(OstreeRepo) repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
   if (!repo)
-    return EXIT_FAILURE;
+    return FALSE;
   g_autoptr(OstreeRepo) pkgcache_repo = ostree_repo_open_at (AT_FDCWD, opt_pkgcache_repo, cancellable, error);
   if (!pkgcache_repo)
-    return EXIT_FAILURE;
+    return FALSE;
   if (!rpmostree_commit2jigdo (repo, pkgcache_repo, rev, oirpm_spec, outputdir,
                                cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }

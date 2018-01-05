@@ -46,7 +46,7 @@ get_args_variant (void)
   return g_variant_dict_end (&dict);
 }
 
-int
+gboolean
 rpmostree_builtin_refresh_md (int             argc,
                               char          **argv,
                               RpmOstreeCommandInvocation *invocation,
@@ -68,30 +68,30 @@ rpmostree_builtin_refresh_md (int             argc,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc < 1 || argc > 2)
     {
       rpmostree_usage_error (context, "Too few or too many arguments", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (!rpmostree_os_call_refresh_md_sync (os_proxy,
                                           get_args_variant (),
                                           &transaction_address,
                                           cancellable,
                                           error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
                                                 cancellable,
                                                 error))
-    return EXIT_FAILURE;
+    return FALSE;
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }

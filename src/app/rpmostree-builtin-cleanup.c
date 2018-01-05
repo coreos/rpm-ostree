@@ -45,7 +45,7 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-int
+gboolean
 rpmostree_builtin_cleanup (int             argc,
                            char          **argv,
                            RpmOstreeCommandInvocation *invocation,
@@ -68,12 +68,12 @@ rpmostree_builtin_cleanup (int             argc,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc < 1 || argc > 2)
     {
       rpmostree_usage_error (context, "Too few or too many arguments", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   if (opt_base)
@@ -87,27 +87,27 @@ rpmostree_builtin_cleanup (int             argc,
   if (cleanup_types->len == 0)
     {
       glnx_throw (error, "At least one cleanup option must be specified");
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   g_ptr_array_add (cleanup_types, NULL);
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (!rpmostree_os_call_cleanup_sync (os_proxy,
                                        (const char *const*)cleanup_types->pdata,
                                        &transaction_address,
                                        cancellable,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
                                                 cancellable,
                                                 error))
-    return EXIT_FAILURE;
+    return FALSE;
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }

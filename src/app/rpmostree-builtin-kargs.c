@@ -188,7 +188,7 @@ rpmostree_ex_builtin_kargs (int            argc,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
    if (opt_editor && (opt_kernel_delete_strings ||
        opt_kernel_replace_strings ||  opt_kernel_append_strings))
@@ -198,32 +198,32 @@ rpmostree_ex_builtin_kargs (int            argc,
        */
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Cannot specify --editor with --replace, --delete, or --append");
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   if (opt_kernel_delete_strings && opt_kernel_replace_strings)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Cannot specify both --delete and --replace");
-      return EXIT_FAILURE;
+      return FALSE;
     }
   if (opt_kernel_delete_strings && opt_kernel_append_strings)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Cannot specify both --delete and --append");
-      return EXIT_FAILURE;
+      return FALSE;
     }
   if (opt_import_proc_cmdline && opt_deploy_index)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Cannot specify both --import-from-proc-cmdline and --deployid");
-      return EXIT_FAILURE;
+      return FALSE;
     }
   if (opt_import_proc_cmdline && opt_osname)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Cannot specify both osname and --import-from-proc-cmdline");
-      return EXIT_FAILURE;
+      return FALSE;
     }
   if (!(opt_kernel_delete_strings) && !(opt_kernel_append_strings)
       && !(opt_kernel_replace_strings) && !(opt_editor))
@@ -233,13 +233,13 @@ rpmostree_ex_builtin_kargs (int            argc,
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Cannot reboot when kernel arguments not changed");
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   /* The proc cmdline is the kernel args from booted deployment
    * if this option is not specified, we will default to find the first
@@ -261,19 +261,19 @@ rpmostree_ex_builtin_kargs (int            argc,
                                                           &boot_config,
                                                           cancellable,
                                                           error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   /* We extract the existing kernel arguments from the boot configuration */
   const char *old_kernel_arg_string = NULL;
   if (!g_variant_lookup (boot_config, "options",
                          "&s", &old_kernel_arg_string))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (display_kernel_args)
     {
       g_print ("The kernel arguments are:\n%s\n",
                old_kernel_arg_string);
-      return EXIT_SUCCESS;
+      return TRUE;
     }
 
   g_autofree char *transaction_address = NULL;
@@ -291,7 +291,7 @@ rpmostree_ex_builtin_kargs (int            argc,
       const char* current_kernel_arg_string = NULL;
       if (!kernel_arg_handle_editor (old_kernel_arg_string, &current_kernel_arg_string,
                                      cancellable, error))
-        return EXIT_FAILURE;
+        return FALSE;
       gboolean out_changed = FALSE;
 
       /* Here we load the sysroot again, if the sysroot
@@ -302,13 +302,13 @@ rpmostree_ex_builtin_kargs (int            argc,
                                            &out_changed,
                                            cancellable,
                                            error))
-        return EXIT_FAILURE;
+        return FALSE;
       if (out_changed)
         {
           g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                        "Conflict: bootloader configuration changed. Saved kernel arguments: \n%s", current_kernel_arg_string);
 
-          return EXIT_FAILURE;
+          return FALSE;
         }
       /* We use the user defined kernel args as existing arguments here
        * and kept other strvs empty, because the existing kernel arguments
@@ -323,7 +323,7 @@ rpmostree_ex_builtin_kargs (int            argc,
                                                &transaction_address,
                                                cancellable,
                                                error))
-        return EXIT_FAILURE;
+        return FALSE;
     }
   else
     {
@@ -347,16 +347,16 @@ rpmostree_ex_builtin_kargs (int            argc,
                                                &transaction_address,
                                                cancellable,
                                                error))
-        return EXIT_FAILURE;
+        return FALSE;
     }
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
                                                 cancellable,
                                                 error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   g_print("Kernel arguments updated.\nRun \"systemctl reboot\" to start a reboot\n");
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }

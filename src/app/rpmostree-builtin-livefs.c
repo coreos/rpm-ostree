@@ -69,14 +69,14 @@ rpmostree_ex_builtin_livefs (int             argc,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeOSExperimental *osexperimental_proxy = NULL;
   if (!rpmostree_load_os_proxies (sysroot_proxy, NULL,
                                   cancellable, &os_proxy,
                                   &osexperimental_proxy, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   g_autofree char *transaction_address = NULL;
   if (!rpmostree_osexperimental_call_live_fs_sync (osexperimental_proxy,
@@ -84,13 +84,13 @@ rpmostree_ex_builtin_livefs (int             argc,
                                                    &transaction_address,
                                                    cancellable,
                                                    error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
                                                 cancellable,
                                                 error))
-    return EXIT_FAILURE;
+    return FALSE;
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }

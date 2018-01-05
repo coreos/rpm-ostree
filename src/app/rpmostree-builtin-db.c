@@ -90,7 +90,7 @@ rpmostree_db_option_context_parse (GOptionContext *context,
   return TRUE;
 }
 
-int
+gboolean
 rpmostree_builtin_db (int argc, char **argv,
                       RpmOstreeCommandInvocation *invocation,
                       GCancellable *cancellable, GError **error)

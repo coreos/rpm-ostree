@@ -46,7 +46,7 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-int
+gboolean
 rpmostree_builtin_deploy (int            argc,
                           char         **argv,
                           RpmOstreeCommandInvocation *invocation,
@@ -75,26 +75,26 @@ rpmostree_builtin_deploy (int            argc,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc < 2)
     {
       rpmostree_usage_error (context, "REVISION must be specified", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   if (opt_preview && (install_pkgs != NULL || uninstall_pkgs != NULL))
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "Cannot specify both --preview and --install/--uninstall");
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   revision = argv[1];
 
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
@@ -106,7 +106,7 @@ rpmostree_builtin_deploy (int            argc,
                                                             &transaction_address,
                                                             cancellable,
                                                             error))
-        return EXIT_FAILURE;
+        return FALSE;
     }
   else
     {
@@ -136,7 +136,7 @@ rpmostree_builtin_deploy (int            argc,
                                             &transaction_address,
                                             cancellable,
                                             error))
-            return EXIT_FAILURE;
+            return FALSE;
         }
       else
         {
@@ -148,7 +148,7 @@ rpmostree_builtin_deploy (int            argc,
                                               NULL,
                                               cancellable,
                                               error))
-            return EXIT_FAILURE;
+            return FALSE;
         }
     }
 
@@ -156,7 +156,7 @@ rpmostree_builtin_deploy (int            argc,
                                                 transaction_address,
                                                 cancellable,
                                                 error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (opt_preview)
     {
@@ -170,27 +170,33 @@ rpmostree_builtin_deploy (int            argc,
                                                               &details,
                                                               cancellable,
                                                               error))
-        return EXIT_FAILURE;
+        return FALSE;
 
       if (g_variant_n_children (result) == 0)
-        return RPM_OSTREE_EXIT_UNCHANGED;
+        {
+          invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
+          return TRUE;
+        }
 
       rpmostree_print_package_diffs (result);
     }
   else if (!opt_reboot)
     {
       if (!rpmostree_has_new_default_deployment (os_proxy, previous_deployment))
-        return RPM_OSTREE_EXIT_UNCHANGED;
+        {
+          invocation->exit_code = RPM_OSTREE_EXIT_UNCHANGED;
+          return TRUE;
+        }
 
       /* do diff without dbus: https://github.com/projectatomic/rpm-ostree/pull/116 */
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
                                                            error))
-        return EXIT_FAILURE;
+        return FALSE;
 
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }

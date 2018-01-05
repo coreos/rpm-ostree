@@ -44,7 +44,7 @@ static RpmOstreeCommand compose_subcommands[] = {
   { NULL, 0, NULL, NULL }
 };
 
-int
+gboolean
 rpmostree_builtin_compose (int argc, char **argv,
                            RpmOstreeCommandInvocation *invocation,
                            GCancellable *cancellable, GError **error)

@@ -56,7 +56,7 @@ on_active_txn_path_changed (GObject    *object,
   g_main_context_wakeup (NULL);
 }
 
-int
+gboolean
 rpmostree_builtin_cancel (int             argc,
                           char          **argv,
                           RpmOstreeCommandInvocation *invocation,
@@ -76,7 +76,7 @@ rpmostree_builtin_cancel (int             argc,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
 
   /* Keep track of the txn path we saw first, as well as checking if it changed
@@ -86,7 +86,7 @@ rpmostree_builtin_cancel (int             argc,
   glnx_unref_object RPMOSTreeTransaction *txn_proxy = NULL;
   if (!rpmostree_transaction_connect_active (sysroot_proxy, &txn_path, &txn_proxy,
                                              cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
   if (!txn_proxy)
     {
       /* Let's not make this an error; cancellation may race with completion.
@@ -94,7 +94,7 @@ rpmostree_builtin_cancel (int             argc,
        * "recently" but eh.
        */
       g_print ("No active transaction.\n");
-      return EXIT_SUCCESS;
+      return TRUE;
     }
 
   const char *title = rpmostree_transaction_get_title (txn_proxy);
@@ -117,5 +117,5 @@ rpmostree_builtin_cancel (int             argc,
     }
   g_print ("Cancelled.\n");
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }

@@ -340,15 +340,20 @@ rpmostree_handle_subcommand (int argc, char **argv,
 
       g_autofree char *help = g_option_context_get_help (context, FALSE, NULL);
       g_printerr ("%s", help);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   g_autofree char *prgname =
     g_strdup_printf ("%s %s", g_get_prgname (), subcommand_name);
   g_set_prgname (prgname);
 
-  RpmOstreeCommandInvocation sub_invocation = { .command = subcommand };
-  return subcommand->fn (argc, argv, &sub_invocation, cancellable, error);
+  /* We need a new sub-invocation with the new command, which also carries a new
+   * exit code, but we'll proxy the latter. */
+  RpmOstreeCommandInvocation sub_invocation = { .command = subcommand, .exit_code = -1 };
+  gboolean ret = subcommand->fn (argc, argv, &sub_invocation, cancellable, error);
+  /* Proxy the exit code */
+  invocation->exit_code = sub_invocation.exit_code;
+  return ret;
 }
 
 int
@@ -357,10 +362,15 @@ main (int    argc,
 {
   GCancellable *cancellable = g_cancellable_new ();
   RpmOstreeCommand *command;
-  int exit_status = EXIT_SUCCESS;
   const char *command_name = NULL;
   g_autofree char *prgname = NULL;
   GError *local_error = NULL;
+  /* We can leave this function with an error status from both a command
+   * invocation, as well as an option processing failure. Keep an alias to the
+   * two places that hold status codes.
+   */
+  int exit_status = EXIT_SUCCESS;
+  int *exit_statusp = &exit_status;
 
   /* avoid gvfs (http://bugzilla.gnome.org/show_bug.cgi?id=526454) */
   g_setenv ("GIO_USE_VFS", "local", TRUE);
@@ -409,16 +419,29 @@ main (int    argc,
       help = g_option_context_get_help (context, FALSE, NULL);
       g_printerr ("%s", help);
       exit_status = EXIT_FAILURE;
-
       goto out;
     }
 
   prgname = g_strdup_printf ("%s %s", g_get_prgname (), command_name);
   g_set_prgname (prgname);
 
-  { RpmOstreeCommandInvocation invocation = { .command = command };
-    exit_status = command->fn (argc, argv, &invocation, cancellable, &local_error);
-  }
+  RpmOstreeCommandInvocation invocation = { .command = command,
+                                            .exit_code = -1 };
+  exit_statusp = &(invocation.exit_code);
+  if (!command->fn (argc, argv, &invocation, cancellable, &local_error))
+    {
+      if (invocation.exit_code == -1)
+        invocation.exit_code = EXIT_FAILURE;
+      g_assert (local_error);
+      goto out;
+    }
+  else
+    {
+      if (invocation.exit_code == -1)
+        invocation.exit_code = EXIT_SUCCESS;
+      else
+        g_assert (invocation.exit_code != EXIT_SUCCESS);
+    }
 
  out:
   if (local_error != NULL)
@@ -434,13 +457,9 @@ main (int    argc,
       g_dbus_error_strip_remote_error (local_error);
       g_printerr ("%serror: %s%s\n", prefix, suffix, local_error->message);
       g_error_free (local_error);
-
-      /* Print a warning if the exit status indicates success when we
-       * actually had an error, so it gets reported and fixed quickly. */
-      g_warn_if_fail (exit_status != EXIT_SUCCESS);
     }
 
   rpmostree_polkit_agent_close ();
 
-  return exit_status;
+  return *exit_statusp;
 }

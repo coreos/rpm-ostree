@@ -55,7 +55,7 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   if (!rpmostree_load_os_proxy (sysroot_proxy, opt_osname,
                                 cancellable, &os_proxy, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   /* Perform uninstalls offline; users don't expect the "auto-update" behaviour here. But
    * note we might still need to fetch pkgs in the local replacement case (e.g. the
@@ -85,13 +85,13 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
                                     &transaction_address,
                                     cancellable,
                                     error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (!rpmostree_transaction_get_response_sync (sysroot_proxy,
                                                 transaction_address,
                                                 cancellable,
                                                 error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (opt_dry_run)
     {
@@ -104,12 +104,12 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
       if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path,
                                                            cancellable,
                                                            error))
-        return EXIT_FAILURE;
+        return FALSE;
 
       g_print ("Run \"systemctl reboot\" to start a reboot\n");
     }
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }
 
 gboolean
@@ -134,13 +134,13 @@ rpmostree_override_builtin_replace (int argc, char **argv,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc < 2)
     {
       rpmostree_usage_error (context, "At least one PACKAGE must be specified",
                              error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   /* shift to first pkgspec and ensure it's a proper strv (previous parsing
@@ -175,13 +175,13 @@ rpmostree_override_builtin_remove (int argc, char **argv,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc < 2)
     {
       rpmostree_usage_error (context, "At least one PACKAGE must be specified",
                              error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   /* shift to first pkgspec and ensure it's a proper strv (previous parsing
@@ -218,19 +218,19 @@ rpmostree_override_builtin_reset (int argc, char **argv,
                                        &sysroot_proxy,
                                        &peer_pid,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc < 2 && !opt_reset_all)
     {
       rpmostree_usage_error (context, "At least one PACKAGE must be specified",
                              error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
   else if (opt_reset_all && argc >= 2)
     {
       rpmostree_usage_error (context, "Cannot specify PACKAGEs with --all",
                              error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   /* shift to first pkgspec and ensure it's a proper strv (previous parsing

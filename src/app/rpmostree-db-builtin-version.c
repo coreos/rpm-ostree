@@ -95,7 +95,7 @@ rpmostree_db_builtin_version (int argc, char **argv,
   if (!rpmostree_db_option_context_parse (context, db_version_entries, &argc,
                                           &argv, invocation, &repo, cancellable,
                                           error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   g_autoptr(GPtrArray) revs = g_ptr_array_new ();
 
@@ -103,8 +103,8 @@ rpmostree_db_builtin_version (int argc, char **argv,
     g_ptr_array_add (revs, argv[ii]);
 
   if (!_builtin_db_version (repo, revs, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }
 

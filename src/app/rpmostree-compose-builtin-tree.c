@@ -1247,24 +1247,24 @@ rpmostree_compose_builtin_install (int             argc,
                                        cancellable,
                                        NULL, NULL, NULL, NULL,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc != 3)
    {
       rpmostree_usage_error (context, "TREEFILE and DESTDIR required", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   if (!opt_repo)
     {
       rpmostree_usage_error (context, "--repo must be specified", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   if (opt_workdir)
     {
       rpmostree_usage_error (context, "--workdir is ignored with install-root", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   const char *treefile_path = argv[1];
@@ -1274,13 +1274,13 @@ rpmostree_compose_builtin_install (int             argc,
 
   g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
   if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
   gboolean changed;
   if (!impl_install_tree (self, &changed, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
   g_print ("rootfs: %s/rootfs\n", destdir);
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }
 
 int
@@ -1298,12 +1298,12 @@ rpmostree_compose_builtin_postprocess (int             argc,
                                        cancellable,
                                        NULL, NULL, NULL, NULL,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc < 2 || argc > 3)
     {
       rpmostree_usage_error (context, "ROOTFS must be specified", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   const char *rootfs_path = argv[1];
@@ -1319,7 +1319,7 @@ rpmostree_compose_builtin_postprocess (int             argc,
     {
       treefile_parser = json_parser_new ();
       if (!json_parser_load_from_file (treefile_parser, treefile_path, error))
-        return EXIT_FAILURE;
+        return FALSE;
 
       JsonNode *treefile_rootval = json_parser_get_root (treefile_parser);
       if (!JSON_NODE_HOLDS_OBJECT (treefile_rootval))
@@ -1329,13 +1329,13 @@ rpmostree_compose_builtin_postprocess (int             argc,
 
   glnx_fd_close int rootfs_dfd = -1;
   if (!glnx_opendirat (AT_FDCWD, rootfs_path, TRUE, &rootfs_dfd, error))
-    return EXIT_FAILURE;
+    return FALSE;
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
   if (!rpmostree_postprocess_final (rootfs_dfd, treefile, opt_ex_unified_core,
                                     cancellable, error))
-    return EXIT_FAILURE;
-  return EXIT_SUCCESS;
+    return FALSE;
+  return TRUE;
 }
 
 int
@@ -1355,18 +1355,18 @@ rpmostree_compose_builtin_commit (int             argc,
                                        cancellable,
                                        NULL, NULL, NULL, NULL,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc < 2)
     {
       rpmostree_usage_error (context, "TREEFILE must be specified", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   if (!opt_repo)
     {
       rpmostree_usage_error (context, "--repo must be specified", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   const char *treefile_path = argv[1];
@@ -1374,12 +1374,12 @@ rpmostree_compose_builtin_commit (int             argc,
 
   g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
   if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
   if (!glnx_opendirat (AT_FDCWD, rootfs_path, TRUE, &self->rootfs_dfd, error))
-    return EXIT_FAILURE;
+    return FALSE;
   if (!impl_commit_tree (self, cancellable, error))
-     return EXIT_FAILURE;
-  return EXIT_SUCCESS;
+     return FALSE;
+  return TRUE;
 }
 
 int
@@ -1401,38 +1401,38 @@ rpmostree_compose_builtin_tree (int             argc,
                                        cancellable,
                                        NULL, NULL, NULL, NULL,
                                        error))
-    return EXIT_FAILURE;
+    return FALSE;
 
   if (argc < 2)
     {
       rpmostree_usage_error (context, "TREEFILE must be specified", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   if (!opt_repo)
     {
       rpmostree_usage_error (context, "--repo must be specified", error);
-      return EXIT_FAILURE;
+      return FALSE;
     }
 
   const char *treefile_path = argv[1];
 
   g_autoptr(RpmOstreeTreeComposeContext) self = NULL;
   if (!rpm_ostree_compose_context_new (treefile_path, &self, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
   gboolean changed;
   if (!impl_install_tree (self, &changed, cancellable, error))
-    return EXIT_FAILURE;
+    return FALSE;
   if (changed)
     {
       /* Do the ostree commit */
       if (!impl_commit_tree (self, cancellable, error))
-        return EXIT_FAILURE;
+        return FALSE;
       /* Finally process the --touch-if-changed option  */
       if (!process_touch_if_changed (error))
-        return EXIT_FAILURE;
+        return FALSE;
     }
 
 
-  return EXIT_SUCCESS;
+  return TRUE;
 }
