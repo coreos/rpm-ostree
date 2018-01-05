@@ -432,6 +432,7 @@ main (int    argc,
     {
       if (invocation.exit_code == -1)
         invocation.exit_code = EXIT_FAILURE;
+      g_assert (local_error);
       goto out;
     }
   else

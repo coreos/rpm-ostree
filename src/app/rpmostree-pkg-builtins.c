@@ -56,7 +56,7 @@ static GOptionEntry install_option_entry[] = {
   { NULL }
 };
 
-static int
+static gboolean
 pkg_change (RpmOstreeCommandInvocation *invocation,
             RPMOSTreeSysroot *sysroot_proxy,
             const char *const* packages_to_add,
