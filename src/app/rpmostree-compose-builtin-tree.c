@@ -528,9 +528,6 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     {
       if (!rpmostree_context_import (self->corectx, cancellable, error))
         return FALSE;
-      /* Depending on cache state, we may have some pkgs already
-       * labeled with a final target policy.
-       */
       rpmostree_context_set_tmprootfs_dfd (self->corectx, rootfs_dfd);
       if (!rpmostree_context_assemble (self->corectx, cancellable, error))
         return FALSE;
