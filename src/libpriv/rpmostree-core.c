@@ -3188,6 +3188,14 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
    */
   set_rpm_macro_define ("_dbpath", "/" RPMOSTREE_RPMDB_LOCATION);
 
+  /* Determine now if we have an existing rpmdb; whether this is a layering
+   * operation or a fresh root. Mostly we use this to change how we render
+   * output.
+   */
+  if (!glnx_fstatat_allow_noent (self->tmprootfs_dfd, RPMOSTREE_RPMDB_LOCATION, NULL, AT_SYMLINK_NOFOLLOW, error))
+    return FALSE;
+  const gboolean layering_on_base = (errno == 0);
+
   /* Don't verify checksums here (we should have done this on ostree
    * import).  Also, avoid updating the database or anything by
    * flagging it as a test.  We'll do the database next.
@@ -3252,13 +3260,24 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   }
 
   guint overrides_total = overrides_remove->len + overrides_replace->len;
-  if (overrides_total > 0 && overlays->len > 0)
-    rpmostree_output_message ("Applying %u override%s and %u overlay%s",
-                              overrides_total, _NS(overrides_total),
-                              overlays->len, _NS(overlays->len));
+  if (!layering_on_base)
+    {
+      g_assert_cmpint (overrides_total, ==, 0);
+      rpmostree_output_message ("Installing %u package%s", overlays->len,
+                                _NS(overlays->len));
+    }
   else if (overrides_total > 0)
-    rpmostree_output_message ("Applying %u override%s", overrides_total,
-                              _NS(overrides_total));
+    {
+      g_assert (layering_on_base);
+      if (overlays->len > 0)
+        rpmostree_output_message ("Applying %u override%s and %u overlay%s",
+                                  overrides_total, _NS(overrides_total),
+                                  overlays->len, _NS(overlays->len));
+      else
+        rpmostree_output_message ("Applying %u override%s", overrides_total,
+                                  _NS(overrides_total));
+    }
+
   else if (overlays->len > 0)
     rpmostree_output_message ("Applying %u overlay%s", overlays->len,
                               _NS(overlays->len));
