@@ -4,13 +4,14 @@ set -euo pipefail
 dn=$(cd $(dirname $0) && pwd)
 
 export topsrcdir=$(cd $dn/.. && pwd)
+. ${dn}/common/libtest-core.sh
 . ${dn}/common/libcomposetest.sh
 
 # avoid refetching yum metadata everytime
 export RPMOSTREE_USE_CACHED_METADATA=1
 
-LOG=${LOG:-compose.log}
-date > ${LOG}
+LOGDIR=${LOGDIR:-$(pwd)/test-compose-logs}
+mkdir -p ${LOGDIR}
 
 colour_print() {
   colour=$1; shift
@@ -40,14 +41,14 @@ datadir_owner=$(stat -c '%u' ${test_compose_datadir})
 test ${uid} = ${datadir_owner}
 
 # Create a consistent cache of the RPMs
-echo "Preparing compose tests..." | tee -a ${LOG}
+echo "Preparing compose tests..."
 tmp_repo=${test_compose_datadir}/tmp-repo
 if test -z "${RPMOSTREE_COMPOSE_CACHEONLY:-}"; then
     mkdir -p ${test_compose_datadir}/cache
     setup_rpmmd_repos ${dn}/composedata
     ostree --repo=${tmp_repo} init --mode=bare-user
     # We use rpm-ostree in dry-run --cachedir mode
-    rpm-ostree compose --repo=${tmp_repo} tree --download-only --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json &>> ${LOG}
+    rpm-ostree compose --repo=${tmp_repo} tree --download-only --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json
     (cd ${test_compose_datadir}/cache && createrepo_c .)
 fi
 rm ${tmp_repo} -rf
@@ -56,46 +57,29 @@ total=0
 pass=0
 fail=0
 skip=0
-for tf in $(find ${dn}/compose-tests -name 'test-*.sh' | sort); do
-
-    if [ -n "${TESTS+ }" ]; then
+all_tests="$(cd ${dn}/compose-tests && ls test-*.sh | sort)"
+tests=""
+if [ -n "${TESTS+ }" ]; then
+    for tf in ${all_tests}; do
         tfbn=$(basename "$tf" .sh)
         tfbn=" ${tfbn#test-} "
         if [[ " $TESTS " != *$tfbn* ]]; then
+            echo "Skipping: ${tf}"
             continue
         fi
-    fi
+        tests="${tests} ${tf}"
+    done
+else
+    tests="${all_tests}"
+fi
 
-    let "total += 1"
+if test -z "${tests}"; then
+    fatal "error: No tests match ${TESTS}"
+fi
 
-    bn=$(basename ${tf})
-    printf "Running $bn...\n"
-    printf "\n\n===== ${bn} =====\n\n" >> ${LOG}
-
-    # do some dirty piping to get some instant feedback and help debugging
-    if ${tf} |& tee -a ${LOG} \
-            | grep -e '^ok ' --line-buffered \
-            | xargs -d '\n' -n 1 echo "  "; then
-        pass_print "PASS: $bn"
-        echo "PASS" >> ${LOG}
-        let "pass += 1"
-    else
-        if test $? = 77; then
-            skip_print "SKIP: $bn"
-            echo "SKIP" >> ${LOG}
-            let "skip += 1"
-        else
-            fail_print "FAIL: $bn"
-            echo "FAIL" >> ${LOG}
-            let "fail += 1"
-            if test -n "${RPMOSTREE_COMPOSE_FASTFAIL:-}"; then
-                break;
-            fi
-        fi
-    fi
-done
-
-[ ${fail} -eq 0 ] && printer=pass || printer=fail
-${printer}_print "TOTAL: $total PASS: $pass SKIP: $skip FAIL: $fail"
-echo "See ${LOG} for more information."
-[ ${fail} -eq 0 ]
+echo "Compose tests starting: $(date)"
+echo "Executing: ${tests}"
+echo "Writing logs to ${LOGDIR}"
+(for tf in ${tests}; do echo $tf; done) | \
+    parallel --halt soon,fail=1 --results ${LOGDIR} ${dn}/compose-tests/{} |& tail
+echo "$(date): All tests passed"
