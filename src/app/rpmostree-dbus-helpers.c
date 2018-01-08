@@ -29,6 +29,26 @@
 #include <signal.h>
 #include <systemd/sd-login.h>
 
+static gboolean opt_txn_quiet;
+
+static const GOptionEntry txn_common_option_entries[] = {
+  { "quiet", 'q', 0, G_OPTION_ARG_NONE, &opt_txn_quiet, "Quiet output; Primarily, do not emit progress information", NULL },
+  { NULL }
+};
+
+GOptionGroup *
+rpmostree_txn_common_options (void)
+{
+  static GOptionGroup *g;
+  if (!g)
+    {
+      g = g_option_group_new ("txn", "Transaction options:", "Options controlling transaction",
+                              NULL, NULL);
+      g_option_group_add_entries (g, txn_common_option_entries);
+    }
+  return g;
+}
+
 void
 rpmostree_cleanup_peer (GPid *peer_pid)
 {
@@ -473,6 +493,8 @@ on_transaction_progress (GDBusProxy *proxy,
     }
   else if (g_strcmp0 (signal_name, "PercentProgress") == 0)
     {
+      if (opt_txn_quiet)
+        return;
       const gchar *message = NULL;
       guint32 percentage;
       g_variant_get_child (parameters, 0, "&s", &message);
@@ -481,6 +503,8 @@ on_transaction_progress (GDBusProxy *proxy,
     }
   else if (g_strcmp0 (signal_name, "DownloadProgress") == 0)
     {
+      if (opt_txn_quiet)
+        return;
       g_autofree gchar *line = NULL;
 
       guint64 start_time;
@@ -525,6 +549,8 @@ on_transaction_progress (GDBusProxy *proxy,
     }
   else if (g_strcmp0 (signal_name, "ProgressEnd") == 0)
     {
+      if (opt_txn_quiet)
+        return;
       end_status_line (tp);
     }
   else if (g_strcmp0 (signal_name, "Finished") == 0)
