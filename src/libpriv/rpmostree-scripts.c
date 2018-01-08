@@ -323,7 +323,8 @@ run_script_in_bwrap_container (int rootfs_fd,
 
   if (!rpmostree_bwrap_run (bwrap, cancellable, error))
     {
-      if (error)
+      /* If errors go to the journal, help the user/admin find them there */
+      if (error && rpmostree_stdout_is_journal ())
         {
           g_assert (*error);
           g_autofree char *errmsg = (*error)->message;
