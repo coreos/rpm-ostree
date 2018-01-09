@@ -94,6 +94,7 @@ required: true
 # docker --privileged run.
 host:
   distro: fedora/27/atomic
+  cpus: 4
 
 # Copy yum.repos.d to get any injected repos from the host, which
 # will point to a closer mirror.  Note we substitute $releasever
