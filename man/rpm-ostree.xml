@@ -30,6 +30,15 @@ Boston, MA 02111-1307, USA.
     <authorgroup>
       <author>
         <contrib>Developer</contrib>
+        <firstname>Jonathan</firstname>
+        <surname>Lebon</surname>
+        <email>jlebon@redhat.com</email>
+      </author>
+    </authorgroup>
+
+    <authorgroup>
+      <author>
+        <contrib>Developer</contrib>
         <firstname>Colin</firstname>
         <surname>Walters</surname>
         <email>walters@redhat.com</email>
@@ -45,7 +54,7 @@ Boston, MA 02111-1307, USA.
   <refnamediv>
     <refname>rpm-ostree</refname>
     <refpurpose>
-      Operating system upgrade and software management tool
+      Hybrid image/package system for host operating system updates
     </refpurpose>
   </refnamediv>
 
@@ -61,11 +70,12 @@ Boston, MA 02111-1307, USA.
     <title>Description</title>
 
     <para>
-      rpm-ostree (also called "atomic" if configured) is a system
-      software management tool that combines features of both
-      traditional RPM and OSTree.  It has support for both server-side
-      composing of trees, as well as client-side upgrading and
-      management of deployments.
+      rpm-ostree is a hybrid image and package system; as the name suggests, it
+      uses OSTree for the image side, and RPM for the package side.  It supports
+      composing RPMs server-side into an OSTree commit (like an image), and
+      clients can replicate that bit-for-bit, with fast incremental updates.
+      Additionally, the hybrid nature comes to the fore with client-side package
+      layering and overrides.
     </para>
 
     <para>
@@ -81,40 +91,25 @@ Boston, MA 02111-1307, USA.
       OSTree layer replicates a complete filesystem tree from a
       compose server into a new deployment, available on the next
       reboot.  One benefit of this is that there will always be a
-      previous deployment, available for rollback.
+      previous deployment, available for rollback.  This also
+      makes it easier to reliably "queue" an update without destabilizing
+      the running system at all.  (Currently though there's an experimental
+      <literal>livefs</literal> command that supports changing the
+      running filesystem).
     </para>
 
     <para>
-      Note in this "pure replication" model, at present there is no
-      dependency resolution on the client machines, nor any ability to
-      add or remove packages.  You may however use /usr/local/bin, or
-      an application mechanism such as
-      <citerefentry>
-        <refentrytitle>docker</refentrytitle>
-        <manvolnum>1</manvolnum>
-      </citerefentry>.
+      Note in this "pure replication" model, there is no per-client
+      packaging overhead.  Dependency resolution, SELinux labeling,
+      all of the scripts etc. were run on the server side and captured
+      in the OSTree commit.
     </para>
   </refsect1>
 
   <refsect1>
-    <title>Commands</title>
+    <title>Client side commands</title>
 
     <variablelist>
-
-      <varlistentry>
-        <term><command>compose</command></term>
-
-        <listitem>
-          <para>
-            Entrypoint for tree composition; most typically used on servers to
-            prepare trees for replication by client systems. The
-            <literal>tree</literal> subcommand processes a treefile, installs
-            packages, and commits the result to an OSTree repository. There are
-            also split commands <literal>install</literal>,
-            <literal>postprocess</literal>, and <literal>commit</literal>.
-          </para>
-        </listitem>
-      </varlistentry>
 
       <varlistentry>
         <term><command>cancel</command></term>
@@ -546,6 +541,30 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
     </variablelist>
+  </refsect1>
+
+  <refsect1>
+    <title>Server side commands</title>
+
+    <variablelist>
+
+      <varlistentry>
+        <term><command>compose</command></term>
+
+        <listitem>
+          <para>
+            Entrypoint for tree composition; most typically used on servers to
+            prepare trees for replication by client systems. The
+            <literal>tree</literal> subcommand processes a treefile, installs
+            packages, and commits the result to an OSTree repository. There are
+            also split commands <literal>install</literal>,
+            <literal>postprocess</literal>, and <literal>commit</literal>.
+          </para>
+        </listitem>
+      </varlistentry>
+
+    </variablelist>
+
   </refsect1>
 
   <refsect1>
