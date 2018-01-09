@@ -1,9 +1,9 @@
 dn=$(cd $(dirname $0) && pwd)
-. ${dn}/../common/libtest.sh
 test_tmpdir=$(mktemp -d /var/tmp/rpm-ostree-compose-test.XXXXXX)
 touch ${test_tmpdir}/.test
 trap _cleanup_tmpdir EXIT
 cd ${test_tmpdir}
+. ${dn}/../common/libtest.sh
 
 pyeditjson() {
     cat >editjson.py <<EOF
