@@ -83,3 +83,8 @@ echo "Writing logs to ${LOGDIR}"
 (for tf in ${tests}; do echo $tf; done) | \
     parallel --halt soon,fail=1 --results ${LOGDIR} ${dn}/compose-tests/{} |& tail
 echo "$(date): All tests passed"
+# Help out S3 to have the right MIME type
+for x in ${LOGDIR}/1/*.sh; do
+    mv ${x}/stdout{,.txt}
+    mv ${x}/stderr{,.txt}
+done
