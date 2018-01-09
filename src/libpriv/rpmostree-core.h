@@ -175,9 +175,9 @@ gboolean rpmostree_context_import_jigdo (RpmOstreeContext *self,
                                          GCancellable     *cancellable,
                                          GError          **error);
 
-gboolean rpmostree_context_relabel (RpmOstreeContext *self,
-                                    GCancellable     *cancellable,
-                                    GError          **error);
+gboolean rpmostree_context_force_relabel (RpmOstreeContext *self,
+                                          GCancellable     *cancellable,
+                                          GError          **error);
 
 typedef enum {
   RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE,

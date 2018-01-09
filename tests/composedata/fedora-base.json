@@ -4,7 +4,7 @@
     "repos": ["fedora", "updates"],
 
     "packages": ["kernel", "nss-altfiles", "systemd", "ostree", "selinux-policy-targeted", "chrony",
-                 "tuned", "iputils"],
+                 "tuned", "iputils", "fedora-release-atomichost", "docker", "container-selinux"],
 
     "packages-aarch64": ["grub2-efi", "ostree-grub2",
                          "efibootmgr", "shim"],

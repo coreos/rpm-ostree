@@ -38,6 +38,10 @@ ostree --repo=${repobuild} ls ${treeref} usr/etc/systemd/system/multi-user.targe
 assert_file_has_content_literal preset.txt '-> /usr/lib/systemd/system/chronyd.service'
 echo "ok systemctl preset"
 
+ostree --repo=${repobuild} ls -X ${treeref} usr/bin/docker-current > docker.txt
+assert_file_has_content_literal docker.txt 'system_u:object_r:container_runtime_exec_t:s0'
+echo "ok container-selinux"
+
 ostree --repo=${repobuild} ls ${treeref} /usr/bin/su > su.txt
 assert_file_has_content su.txt '^-04[71][0-7][0-7]'
 echo "ok setuid"

@@ -886,9 +886,6 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
 
   if (self->layering_type == RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
     {
-      if (!rpmostree_context_relabel (self->ctx, cancellable, error))
-        return FALSE;
-
       g_clear_pointer (&self->final_revision, g_free);
 
       /* --- override/overlay and commit --- */
