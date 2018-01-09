@@ -154,18 +154,8 @@ fi
 
 # Should work now that we're using --copyup
 # https://github.com/projectatomic/rpm-ostree/pull/1171
-test_overwritepath=
-for path in /usr/share/licenses/glibc/COPYING
-            /usr/share/systemd/kbd-model-map
-            /usr/share/rpm-ostree/treefile.json; do
-    if vm_cmd test -f ${path}; then
-        test_overwritepath=${path}
-        break
-    fi
-done
-test -n "${test_overwritepath}" || fatal "failed to find test file"
 vm_build_rpm rofiles-copyup \
-  post "echo copyup >> ${test_overwritepath}"
+             post "echo copyup >> /usr/share/rpm-ostree/treefile.json"
 vm_rpmostree install rofiles-copyup
 vm_rpmostree uninstall rofiles-copyup
 
