@@ -76,6 +76,7 @@
        'timestamp' (type 't')
        'origin' (type 's')
        'signatures' (type 'av')
+       'gpg-enabled' (type 'b')
     -->
     <property name="CachedUpdate" type="a{sv}" access="read"/>
     <property name="HasCachedUpdateRpmDiff" type="b" access="read"/>
