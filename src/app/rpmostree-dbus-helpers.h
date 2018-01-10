@@ -84,9 +84,9 @@ rpmostree_transaction_client_run             (RpmOstreeCommandInvocation *invoca
                                               GError **error);
 
 void
-rpmostree_print_signatures                   (GVariant *variant,
-                                              const gchar *sep,
-                                              gboolean verbose);
+rpmostree_print_gpg_info (GVariant  *signatures,
+                          gboolean   verbose,
+                          guint      max_key_len);
 
 void
 rpmostree_print_package_diffs                (GVariant *variant);

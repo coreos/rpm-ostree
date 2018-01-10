@@ -835,7 +835,7 @@ rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
   return TRUE;
 }
 
-void
+static void
 rpmostree_print_signatures (GVariant *variant,
                             const gchar *sep,
                             gboolean verbose)
@@ -866,6 +866,37 @@ rpmostree_print_signatures (GVariant *variant,
     }
 
   g_print ("%s", sigs_buffer->str);
+}
+
+void
+rpmostree_print_gpg_info (GVariant  *signatures,
+                          gboolean   verbose,
+                          guint      max_key_len)
+{
+  if (signatures)
+    {
+      /* +2 for initial leading spaces */
+      const guint gpgpad = max_key_len + 2 + strlen (": ");
+      char gpgspaces[gpgpad+1];
+      memset (gpgspaces, ' ', gpgpad);
+      gpgspaces[gpgpad] = '\0';
+
+      if (verbose)
+        {
+          const guint n_sigs = g_variant_n_children (signatures);
+          g_autofree char *gpgheader =
+            g_strdup_printf ("%u signature%s", n_sigs,
+                             n_sigs == 1 ? "" : "s");
+          rpmostree_print_kv ("GPGSignature", max_key_len, gpgheader);
+        }
+      else
+        rpmostree_print_kv_no_newline ("GPGSignature", max_key_len, "");
+      rpmostree_print_signatures (signatures, gpgspaces, verbose);
+    }
+  else
+    {
+      rpmostree_print_kv ("GPGSignature", max_key_len, "(unsigned)");
+    }
 }
 
 static gint

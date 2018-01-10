@@ -29,6 +29,23 @@
 #include "libglnx.h"
 
 void
+rpmostree_print_kv_no_newline (const char *key,
+                               guint       maxkeylen,
+                               const char *value)
+{
+  printf ("  %*s%s %s", maxkeylen, key, strlen (key) ? ":" : " ", value);
+}
+
+void
+rpmostree_print_kv (const char *key,
+                    guint       maxkeylen,
+                    const char *value)
+{
+  rpmostree_print_kv_no_newline (key, maxkeylen, value);
+  putc ('\n', stdout);
+}
+
+void
 rpmostree_usage_error (GOptionContext  *context,
                        const char      *message,
                        GError         **error)
@@ -114,4 +131,29 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
     }
 
   return TRUE;
+}
+
+char*
+rpmostree_timestamp_str_from_unix_utc (guint64 t)
+{
+  g_autoptr(GDateTime) timestamp = g_date_time_new_from_unix_utc (t);
+  if (timestamp != NULL)
+    return g_date_time_format (timestamp, "%Y-%m-%d %T");
+  return g_strdup_printf ("(invalid timestamp)");
+}
+
+void
+rpmostree_print_timestamp_version (const char  *version_string,
+                                   const char  *timestamp_string,
+                                   guint        max_key_len)
+{
+  if (!version_string)
+    rpmostree_print_kv ("Timestamp", max_key_len, timestamp_string);
+  else
+    {
+      g_autofree char *version_time
+        = g_strdup_printf ("%s%s%s (%s)", get_bold_start (), version_string,
+                           get_bold_end (), timestamp_string);
+      rpmostree_print_kv ("Version", max_key_len, version_time);
+    }
 }
