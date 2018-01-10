@@ -68,6 +68,7 @@ rpmostree_builtin_rollback (int             argc,
                                        NULL, NULL,
                                        &sysroot_proxy,
                                        &peer_pid,
+                                       NULL,
                                        error))
     return FALSE;
 

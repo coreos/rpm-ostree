@@ -75,6 +75,7 @@ rpmostree_builtin_cancel (int             argc,
                                        NULL, NULL,
                                        &sysroot_proxy,
                                        &peer_pid,
+                                       NULL,
                                        error))
     return FALSE;
 

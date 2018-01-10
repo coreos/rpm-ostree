@@ -77,7 +77,7 @@ rpmostree_builtin_upgrade (int             argc,
                                        &install_pkgs,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
-                                       &peer_pid,
+                                       &peer_pid, NULL,
                                        error))
     return FALSE;
 

@@ -147,7 +147,7 @@ rpmostree_ex_builtin_jigdo2commit (int             argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
-                                       NULL, NULL, NULL, NULL,
+                                       NULL, NULL, NULL, NULL, NULL,
                                        error))
     return FALSE;
 
