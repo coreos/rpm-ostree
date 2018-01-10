@@ -1275,7 +1275,9 @@ find_pkg_in_ostree (RpmOstreeContext *self,
 {
   OstreeRepo *repo = get_pkgcache_repo (self);
   /* Init output here, since we have several early returns */
-  *out_in_ostree = *out_selinux_match = FALSE;
+  *out_in_ostree = FALSE;
+  /* If there's no sepolicy, then we always match */
+  *out_selinux_match = (sepolicy == NULL);
 
   /* NB: we're not using a pkgcache yet in the compose path */
   if (repo == NULL)
