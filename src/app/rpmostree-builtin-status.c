@@ -49,26 +49,6 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-static void
-printpad (char c, guint n)
-{
-  for (guint i = 0; i < n; i++)
-    putc (c, stdout);
-}
-
-static void
-print_kv_no_newline (const char *key,
-                     guint       maxkeylen,
-                     const char *value)
-{
-  const guint n_key = strlen (key);
-  int pad = maxkeylen - n_key;
-  g_assert (pad >= 0);
-  /* +2 for initial leading spaces */
-  printpad (' ', pad + 2);
-  printf ("%s%s %s", key, n_key ? ":" : " ", value);
-}
-
 /* return space available for printing value side of kv */
 static guint
 get_textarea_width (guint maxkeylen)
@@ -80,15 +60,6 @@ get_textarea_width (guint maxkeylen)
     return G_MAXUINT; /* can't even print keys without wrapping, nothing pretty to do here */
   /* the sha is already 64 chars, so no point in trying to use less */
   return MAX(OSTREE_SHA256_STRING_LEN, columns - right_side_width);
-}
-
-static void
-print_kv (const char *key,
-          guint       maxkeylen,
-          const char *value)
-{
-  print_kv_no_newline (key, maxkeylen, value);
-  putc ('\n', stdout);
 }
 
 static GVariant *
@@ -136,7 +107,7 @@ print_packages (const char *k, guint max_key_len,
   if (n_packages == 0)
     return;
 
-  print_kv_no_newline (k, max_key_len, "");
+  rpmostree_print_kv_no_newline (k, max_key_len, "");
 
   /* wrap pkglist output ourselves rather than letting the terminal cut us up */
   const guint area_width = get_textarea_width (max_key_len);
@@ -161,7 +132,7 @@ print_packages (const char *k, guint max_key_len,
         {
           /* always print at least one per line, even if we overflow */
           putc ('\n', stdout);
-          print_kv_no_newline ("", max_key_len, pkg);
+          rpmostree_print_kv_no_newline ("", max_key_len, pkg);
           current_width = pkg_width;
         }
     }
@@ -365,25 +336,9 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         g_assert (g_variant_dict_lookup (dict, "base-timestamp", "t", &t));
       else
         g_assert (g_variant_dict_lookup (dict, "timestamp", "t", &t));
-      { g_autoptr(GDateTime) timestamp = g_date_time_new_from_unix_utc (t);
+      timestamp_string = rpmostree_timestamp_str_from_unix_utc (t);
 
-        if (timestamp != NULL)
-          timestamp_string = g_date_time_format (timestamp, "%Y-%m-%d %T");
-        else
-          timestamp_string = g_strdup_printf ("(invalid timestamp)");
-      }
-
-      if (version_string)
-        {
-          g_autofree char *version_time
-            = g_strdup_printf ("%s%s%s (%s)", get_bold_start (), version_string,
-                               get_bold_end (), timestamp_string);
-          print_kv ("Version", max_key_len, version_time);
-        }
-      else
-        {
-          print_kv ("Timestamp", max_key_len, timestamp_string);
-        }
+      rpmostree_print_timestamp_version (version_string, timestamp_string, max_key_len);
 
       if (!g_variant_dict_lookup (dict, "live-inprogress", "&s", &live_inprogress))
         live_inprogress = NULL;
@@ -394,25 +349,25 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       if (is_locally_assembled)
         {
           if (have_live_changes)
-            print_kv ("BootedBaseCommit", max_key_len, base_checksum);
+            rpmostree_print_kv ("BootedBaseCommit", max_key_len, base_checksum);
           else
-            print_kv ("BaseCommit", max_key_len, base_checksum);
+            rpmostree_print_kv ("BaseCommit", max_key_len, base_checksum);
           if (opt_verbose || have_any_live_overlay)
-            print_kv ("Commit", max_key_len, checksum);
+            rpmostree_print_kv ("Commit", max_key_len, checksum);
         }
       else
         {
           if (have_live_changes)
-            print_kv ("BootedCommit", max_key_len, checksum);
+            rpmostree_print_kv ("BootedCommit", max_key_len, checksum);
           if (!have_live_changes || opt_verbose)
-            print_kv ("Commit", max_key_len, checksum);
+            rpmostree_print_kv ("Commit", max_key_len, checksum);
         }
 
       if (live_inprogress)
         {
           if (is_booted)
             g_print ("%s%s", get_red_start (), get_bold_start ());
-          print_kv ("InterruptedLiveCommit", max_key_len, live_inprogress);
+          rpmostree_print_kv ("InterruptedLiveCommit", max_key_len, live_inprogress);
           if (is_booted)
             g_print ("%s%s", get_bold_end (), get_red_end ());
         }
@@ -420,7 +375,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
         {
           if (is_booted)
             g_print ("%s%s", get_red_start (), get_bold_start ());
-          print_kv ("LiveCommit", max_key_len, live_replaced);
+          rpmostree_print_kv ("LiveCommit", max_key_len, live_replaced);
           if (is_booted)
             g_print ("%s%s", get_bold_end (), get_red_end ());
         }
@@ -436,7 +391,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
 
           if (g_variant_dict_lookup (dict, "pending-base-checksum", "&s", &pending_checksum))
             {
-              print_kv (is_locally_assembled ? "PendingBaseCommit" : "PendingCommit",
+              rpmostree_print_kv (is_locally_assembled ? "PendingBaseCommit" : "PendingCommit",
                         max_key_len, pending_checksum);
               g_assert (g_variant_dict_lookup (dict, "pending-base-timestamp", "t", &t));
               g_variant_dict_lookup (dict, "pending-base-version", "&s", &pending_version);
@@ -452,7 +407,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
                     timestamp_string = g_strdup_printf ("(invalid timestamp)");
 
                   version_time = g_strdup_printf ("%s (%s)", pending_version, timestamp_string);
-                  print_kv (is_locally_assembled ? "PendingBaseVersion" : "PendingVersion",
+                  rpmostree_print_kv (is_locally_assembled ? "PendingBaseVersion" : "PendingVersion",
                             max_key_len, version_time);
                 }
             }
@@ -460,37 +415,13 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
 
       /* This used to be OSName; see https://github.com/ostreedev/ostree/pull/794 */
       if (opt_verbose)
-        print_kv ("StateRoot", max_key_len, os_name);
+        rpmostree_print_kv ("StateRoot", max_key_len, os_name);
 
       if (!g_variant_dict_lookup (dict, "gpg-enabled", "b", &gpg_enabled))
         gpg_enabled = FALSE;
 
       if (gpg_enabled)
-        {
-          if (signatures)
-            {
-              const guint gpgpad = max_key_len+4;
-              char gpgspaces[gpgpad+1];
-              memset (gpgspaces, ' ', gpgpad);
-              gpgspaces[gpgpad] = '\0';
-
-              if (opt_verbose)
-                {
-                  const guint n_sigs = g_variant_n_children (signatures);
-                  g_autofree char *gpgheader =
-                    g_strdup_printf ("%u signature%s", n_sigs,
-                                     n_sigs == 1 ? "" : "s");
-                  print_kv ("GPGSignature", max_key_len, gpgheader);
-                }
-              else
-                print_kv_no_newline ("GPGSignature", max_key_len, "");
-              rpmostree_print_signatures (signatures, gpgspaces, opt_verbose);
-            }
-          else
-            {
-              print_kv ("GPGSignature", max_key_len, "(unsigned)");
-            }
-        }
+        rpmostree_print_gpg_info (signatures, opt_verbose, max_key_len);
 
       /* print base overrides before overlays */
       g_autoptr(GPtrArray) active_removals = g_ptr_array_new_with_free_func (g_free);
@@ -512,7 +443,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
             }
           g_ptr_array_add (active_removals, NULL);
           if (str->len)
-            print_kv ("RemovedBasePackages", max_key_len, str->str);
+            rpmostree_print_kv ("RemovedBasePackages", max_key_len, str->str);
         }
 
       /* only print inactive base removal requests in verbose mode */
@@ -590,7 +521,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
           g_ptr_array_add (active_replacements, NULL);
 
           if (str->len)
-            print_kv ("ReplacedBasePackages", max_key_len, str->str);
+            rpmostree_print_kv ("ReplacedBasePackages", max_key_len, str->str);
         }
 
       if (origin_requested_base_local_replacements && opt_verbose)
@@ -626,13 +557,13 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
             }
           if (buf->len == 0)
             g_string_append (buf, "regenerate");
-          print_kv ("Initramfs", max_key_len, buf->str);
+          rpmostree_print_kv ("Initramfs", max_key_len, buf->str);
         }
 
       if (unlocked && g_strcmp0 (unlocked, "none") != 0)
         {
           g_print ("%s%s", get_red_start (), get_bold_start ());
-          print_kv ("Unlocked", max_key_len, unlocked);
+          rpmostree_print_kv ("Unlocked", max_key_len, unlocked);
           g_print ("%s%s", get_bold_end (), get_red_end ());
         }
       const char *end_of_life_string = NULL;
@@ -642,7 +573,7 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       if (end_of_life_string)
         {
           g_print ("%s%s", get_red_start (), get_bold_start ());
-          print_kv ("EndOfLife", max_key_len, end_of_life_string);
+          rpmostree_print_kv ("EndOfLife", max_key_len, end_of_life_string);
           g_print ("%s%s", get_bold_end (), get_red_end ());
         }
     }

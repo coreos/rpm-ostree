@@ -43,6 +43,16 @@ TERM_ESCAPE_SEQUENCE(bold_end,   "\x1b[0m")
 #undef TERM_ESCAPE_SEQUENCE
 
 void
+rpmostree_print_kv_no_newline (const char *key,
+                               guint       maxkeylen,
+                               const char *value);
+
+void
+rpmostree_print_kv (const char *key,
+                    guint       maxkeylen,
+                    const char *value);
+
+void
 rpmostree_usage_error (GOptionContext  *context,
                        const char      *message,
                        GError         **error);
@@ -60,5 +70,13 @@ gboolean
 rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
                                                 GCancellable *cancellable,
                                                 GError **error);
+
+char*
+rpmostree_timestamp_str_from_unix_utc (guint64 t);
+
+void
+rpmostree_print_timestamp_version (const char  *version_string,
+                                   const char  *timestamp_string,
+                                   guint        max_key_len);
 
 G_END_DECLS
