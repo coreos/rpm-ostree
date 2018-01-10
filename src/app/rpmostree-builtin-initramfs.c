@@ -74,6 +74,7 @@ rpmostree_builtin_initramfs (int             argc,
                                        NULL, NULL,
                                        &sysroot_proxy,
                                        &peer_pid,
+                                       NULL,
                                        error))
     return FALSE;
 

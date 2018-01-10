@@ -152,7 +152,7 @@ rpmostree_builtin_install (int            argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       &peer_pid,
+                                       &peer_pid, NULL,
                                        error))
     return FALSE;
 
@@ -195,7 +195,7 @@ rpmostree_builtin_uninstall (int            argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       &peer_pid,
+                                       &peer_pid, NULL,
                                        error))
     return FALSE;
 

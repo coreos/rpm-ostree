@@ -68,6 +68,7 @@ rpmostree_ex_builtin_livefs (int             argc,
                                        NULL, NULL,
                                        &sysroot_proxy,
                                        &peer_pid,
+                                       NULL,
                                        error))
     return FALSE;
 

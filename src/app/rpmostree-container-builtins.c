@@ -140,7 +140,7 @@ rpmostree_container_builtin_init (int             argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
-                                       NULL, NULL, NULL, NULL,
+                                       NULL, NULL, NULL, NULL, NULL,
                                        error))
     return FALSE;
 
@@ -241,7 +241,7 @@ rpmostree_container_builtin_assemble (int             argc,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
-                                       NULL, NULL, NULL, NULL,
+                                       NULL, NULL, NULL, NULL, NULL,
                                        error))
     return FALSE;
 
@@ -378,7 +378,7 @@ rpmostree_container_builtin_upgrade (int argc, char **argv,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
-                                       NULL, NULL, NULL, NULL,
+                                       NULL, NULL, NULL, NULL, NULL,
                                        error))
     return FALSE;
 

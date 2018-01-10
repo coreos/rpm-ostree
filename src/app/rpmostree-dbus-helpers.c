@@ -40,26 +40,10 @@ static GDBusConnection*
 get_connection_for_path (gchar *sysroot,
                          gboolean force_peer,
                          GPid *out_peer_pid,
+                         GBusType *out_bus_type,
                          GCancellable *cancellable,
                          GError **error)
 {
-  glnx_unref_object GDBusConnection *connection = NULL;
-  glnx_unref_object GSocketConnection *stream = NULL;
-  glnx_unref_object GSocket *socket = NULL;
-  _cleanup_peer_ GPid peer_pid = 0;
-
-  gchar buffer[16];
-
-  int pair[2];
-
-  const gchar *args[] = {
-    "rpm-ostree",
-    "start-daemon",
-    "--sysroot", sysroot,
-    "--dbus-peer", buffer,
-    NULL
-  };
-
   /* This is only intended for use by installed tests.
    * Note that it disregards the 'sysroot' and 'force_peer' options
    * and assumes the service activation command has been configured
@@ -73,6 +57,8 @@ get_connection_for_path (gchar *sysroot,
       GDBusConnection *ret = g_bus_get_sync (G_BUS_TYPE_SESSION, cancellable, error);
       if (!ret)
         return glnx_prefix_error_null (error, "Connecting to session bus");
+
+      *out_bus_type = G_BUS_TYPE_SESSION;
       return ret;
     }
 
@@ -85,8 +71,20 @@ get_connection_for_path (gchar *sysroot,
       GDBusConnection *ret = g_bus_get_sync (G_BUS_TYPE_SYSTEM, cancellable, error);
       if (!ret)
         return glnx_prefix_error_null (error, "Connecting to system bus");
+
+      *out_bus_type = G_BUS_TYPE_SYSTEM;
       return ret;
     }
+
+  gchar buffer[16];
+  int pair[2];
+  const gchar *args[] = {
+    "rpm-ostree",
+    "start-daemon",
+    "--sysroot", sysroot,
+    "--dbus-peer", buffer,
+    NULL
+  };
 
   g_print ("Running in single user mode. Be sure no other users are modifying the system\n");
   if (socketpair (AF_UNIX, SOCK_STREAM, 0, pair) < 0)
@@ -94,7 +92,7 @@ get_connection_for_path (gchar *sysroot,
 
   g_snprintf (buffer, sizeof (buffer), "%d", pair[1]);
 
-  socket = g_socket_new_from_fd (pair[0], error);
+  g_autoptr(GSocket) socket = g_socket_new_from_fd (pair[0], error);
   if (socket == NULL)
     {
       close (pair[0]);
@@ -102,6 +100,7 @@ get_connection_for_path (gchar *sysroot,
       return NULL;
     }
 
+  _cleanup_peer_ GPid peer_pid = 0;
   if (!g_spawn_async (NULL, (gchar **)args, NULL,
                       G_SPAWN_LEAVE_DESCRIPTORS_OPEN | G_SPAWN_DO_NOT_REAP_CHILD,
                       NULL, NULL, &peer_pid, error))
@@ -110,14 +109,17 @@ get_connection_for_path (gchar *sysroot,
       return NULL;
     }
 
-  stream = g_socket_connection_factory_create_connection (socket);
-  connection = g_dbus_connection_new_sync (G_IO_STREAM (stream), NULL,
-                                           G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
-                                           NULL, cancellable, error);
+  g_autoptr(GSocketConnection) stream =
+    g_socket_connection_factory_create_connection (socket);
+  g_autoptr(GDBusConnection) connection =
+    g_dbus_connection_new_sync (G_IO_STREAM (stream), NULL,
+                                G_DBUS_CONNECTION_FLAGS_AUTHENTICATION_CLIENT,
+                                NULL, cancellable, error);
   if (!connection)
     return NULL;
 
   *out_peer_pid = peer_pid; peer_pid = 0;
+  *out_bus_type = G_BUS_TYPE_NONE;
   return connection;
 }
 
@@ -138,13 +140,15 @@ rpmostree_load_sysroot (gchar *sysroot,
                         GCancellable *cancellable,
                         RPMOSTreeSysroot **out_sysroot_proxy,
                         GPid *out_peer_pid,
+                        GBusType *out_bus_type,
                         GError **error)
 {
   const char *bus_name = NULL;
   glnx_unref_object GDBusConnection *connection = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
 
-  connection = get_connection_for_path (sysroot, force_peer, &peer_pid,
+  GBusType bus_type;
+  connection = get_connection_for_path (sysroot, force_peer, &peer_pid, &bus_type,
                                         cancellable, error);
   if (connection == NULL)
     return FALSE;
@@ -216,6 +220,8 @@ rpmostree_load_sysroot (gchar *sysroot,
 
   *out_sysroot_proxy = g_steal_pointer (&sysroot_proxy);
   *out_peer_pid = peer_pid; peer_pid = 0;
+  if (out_bus_type)
+    *out_bus_type = bus_type;
   return TRUE;
 }
 

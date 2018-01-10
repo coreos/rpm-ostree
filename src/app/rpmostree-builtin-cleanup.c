@@ -67,6 +67,7 @@ rpmostree_builtin_cleanup (int             argc,
                                        NULL, NULL,
                                        &sysroot_proxy,
                                        &peer_pid,
+                                       NULL,
                                        error))
     return FALSE;
 
