@@ -22,9 +22,25 @@
 
 #include <ostree.h>
 
+#include "libglnx.h"
+
 #include "rpm-ostreed-generated.h"
 
 G_BEGIN_DECLS
+
+#define TERM_ESCAPE_SEQUENCE(type,seq)                   \
+    static inline const char* get_##type (void) {        \
+      if (glnx_stdout_is_tty ())                         \
+        return seq;                                      \
+      return "";                                         \
+    }
+
+TERM_ESCAPE_SEQUENCE(red_start,  "\x1b[31m")
+TERM_ESCAPE_SEQUENCE(red_end,    "\x1b[22m")
+TERM_ESCAPE_SEQUENCE(bold_start, "\x1b[1m")
+TERM_ESCAPE_SEQUENCE(bold_end,   "\x1b[0m")
+
+#undef TERM_ESCAPE_SEQUENCE
 
 void
 rpmostree_usage_error (GOptionContext  *context,
