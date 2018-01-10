@@ -29,8 +29,10 @@
 #include <stdio.h>
 
 #define RPMOSTREE_MESSAGE_TRANSACTION_STARTED SD_ID128_MAKE(d5,be,a3,7a,8f,c8,4f,f5,9d,bc,fd,79,17,7b,7d,f8)
-/* I picked this arbitrarily */
-#define IDLE_EXIT_TIMEOUT_SECONDS 10
+
+/* let's not exit super fast; our startup is non-trivial so staying around will ensure
+ * follow-up requests are more responsive */
+#define IDLE_EXIT_TIMEOUT_SECONDS 60
 
 /**
  * SECTION: daemon
