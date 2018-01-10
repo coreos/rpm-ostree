@@ -28,6 +28,7 @@
 #include <json-glib/json-glib.h>
 
 #include "rpmostree-builtins.h"
+#include "rpmostree-libbuiltin.h"
 #include "rpmostree-dbus-helpers.h"
 #include "rpmostree-util.h"
 #include "rpmostree-rpm-util.h"
@@ -206,11 +207,6 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
 {
   GVariantIter iter;
   gboolean first = TRUE;
-  const int is_tty = isatty (1);
-  const char *bold_prefix = is_tty ? "\x1b[1m" : "";
-  const char *bold_suffix = is_tty ? "\x1b[0m" : "";
-  const char *red_prefix = is_tty ? "\x1b[31m" : "";
-  const char *red_suffix = is_tty ? "\x1b[22m" : "";
 
   /* First, gather global state */
   gboolean have_any_live_overlay = FALSE;
@@ -380,8 +376,8 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       if (version_string)
         {
           g_autofree char *version_time
-            = g_strdup_printf ("%s%s%s (%s)", bold_prefix, version_string,
-                               bold_suffix, timestamp_string);
+            = g_strdup_printf ("%s%s%s (%s)", get_bold_start (), version_string,
+                               get_bold_end (), timestamp_string);
           print_kv ("Version", max_key_len, version_time);
         }
       else
@@ -415,18 +411,18 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       if (live_inprogress)
         {
           if (is_booted)
-            g_print ("%s%s", red_prefix, bold_prefix);
+            g_print ("%s%s", get_red_start (), get_bold_start ());
           print_kv ("InterruptedLiveCommit", max_key_len, live_inprogress);
           if (is_booted)
-            g_print ("%s%s", bold_suffix, red_suffix);
+            g_print ("%s%s", get_bold_end (), get_red_end ());
         }
       if (live_replaced)
         {
           if (is_booted)
-            g_print ("%s%s", red_prefix, bold_prefix);
+            g_print ("%s%s", get_red_start (), get_bold_start ());
           print_kv ("LiveCommit", max_key_len, live_replaced);
           if (is_booted)
-            g_print ("%s%s", bold_suffix, red_suffix);
+            g_print ("%s%s", get_bold_end (), get_red_end ());
         }
 
       /* Show any difference between the baseref vs head, but only for the
@@ -635,9 +631,9 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
 
       if (unlocked && g_strcmp0 (unlocked, "none") != 0)
         {
-          g_print ("%s%s", red_prefix, bold_prefix);
+          g_print ("%s%s", get_red_start (), get_bold_start ());
           print_kv ("Unlocked", max_key_len, unlocked);
-          g_print ("%s%s", bold_suffix, red_suffix);
+          g_print ("%s%s", get_bold_end (), get_red_end ());
         }
       const char *end_of_life_string = NULL;
       /* look for endoflife attribute in the deployment */
@@ -645,9 +641,9 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
 
       if (end_of_life_string)
         {
-          g_print ("%s%s", red_prefix, bold_prefix);
+          g_print ("%s%s", get_red_start (), get_bold_start ());
           print_kv ("EndOfLife", max_key_len, end_of_life_string);
-          g_print ("%s%s", bold_suffix, red_suffix);
+          g_print ("%s%s", get_bold_end (), get_red_end ());
         }
     }
 
