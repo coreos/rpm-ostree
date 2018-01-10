@@ -674,7 +674,7 @@ rpmostree_builtin_status (int             argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       &peer_pid,
+                                       &peer_pid, NULL,
                                        error))
     return FALSE;
 

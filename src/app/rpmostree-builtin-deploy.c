@@ -74,6 +74,7 @@ rpmostree_builtin_deploy (int            argc,
                                        &uninstall_pkgs,
                                        &sysroot_proxy,
                                        &peer_pid,
+                                       NULL,
                                        error))
     return FALSE;
 

@@ -42,6 +42,7 @@ rpmostree_load_sysroot                       (gchar *sysroot,
                                               GCancellable *cancellable,
                                               RPMOSTreeSysroot **out_sysroot_proxy,
                                               GPid *out_peer_pid,
+                                              GBusType *out_bus_type,
                                               GError **error);
 
 gboolean
