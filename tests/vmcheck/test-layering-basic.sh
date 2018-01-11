@@ -59,7 +59,9 @@ assert_file_has_content err.txt "See https://github.com/projectatomic/rpm-ostree
 
 echo "ok failed to install in /opt and /usr/local"
 
-vm_build_rpm foo
+# Explicit epoch of 0 as it's a corner case:
+# https://github.com/projectatomic/rpm-ostree/issues/349
+vm_build_rpm foo epoch 0
 vm_rpmostree pkg-add foo-1.0
 vm_cmd ostree refs |grep /foo/> refs.txt
 pkgref=$(head -1 refs.txt)
@@ -71,6 +73,10 @@ rm -f refs.txt refdata.txt
 # This will cover things like us failing to break hardlinks for the rpmdb,
 # as well as rofiles-fuse
 vm_cmd ostree fsck
+vm_cmd ostree show --print-metadata-key rpmostree.rpmdb.pkglist \
+       $(vm_get_deployment_info 0 checksum) > variant-pkglist.txt
+# No 0: in EVR
+assert_file_has_content_literal 'variant-pkglist.txt' "('foo', '1.0-1', 'x86_64')"
 echo "ok pkg-add foo"
 
 vm_reboot

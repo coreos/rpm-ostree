@@ -385,6 +385,8 @@ get_obj_path() {
 # $2+ - optional, treated as directive/value pairs
 build_rpm() {
     local name=$1; shift
+    # Unset, not zero https://github.com/projectatomic/rpm-ostree/issues/349
+    local epoch=""
     local version=1.0
     local release=1
     local arch=x86_64
@@ -415,7 +417,7 @@ EOF
             echo "Conflicts: $arg" >> $spec;;
         post_args)
             post_args="$arg";;
-        version|release|arch|build|install|files|pretrans|pre|post|posttrans)
+        version|release|epoch|arch|build|install|files|pretrans|pre|post|posttrans)
             declare $section="$arg";;
         transfiletriggerin)
             transfiletriggerin_patterns="$arg";
@@ -434,6 +436,7 @@ EOF
     cat >> $spec << EOF
 Version: $version
 Release: $release
+${epoch:+Epoch: $epoch}
 BuildArch: $arch
 
 %description
