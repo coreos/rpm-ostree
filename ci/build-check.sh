@@ -19,7 +19,9 @@ if test -x /usr/bin/clang; then
   #   error: argument unused during compilation: '-specs=/usr/lib/rpm/redhat/redhat-hardened    -cc1' [-Werror,-Wunused-command-line-argument]
   # Except for macro-redefined:
   #   /usr/include/python2.7/pyconfig-64.h:1199:9: error: '_POSIX_C_SOURCE' macro redefined
-  export CFLAGS="-Wall -Werror -Wno-error=macro-redefined -Wno-error=unused-command-line-argument ${CFLAGS:-}"
+  # Except for deprecated-declarations: libdnf python bindings uses deprecated
+  # functions
+  export CFLAGS="-Wall -Werror -Wno-error=deprecated-declarations -Wno-error=macro-redefined -Wno-error=unused-command-line-argument ${CFLAGS:-}"
   export CC=clang
   git clean -dfx && git submodule foreach git clean -dfx
   build
