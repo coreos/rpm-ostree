@@ -320,14 +320,17 @@ rpmhdrs_new (RpmOstreeRefTs *refts, const GPtrArray *patterns)
   return ret;
 }
 
-static void
-rpmhdrs_free (struct RpmHeaders *l1)
+void
+rpmhdrs_free (struct RpmHeaders *hdrs)
 {
-  g_ptr_array_free (l1->hs, TRUE);
-  l1->hs = NULL;
-  rpmostree_refts_unref (l1->refts);
+  if (!hdrs)
+    return;
 
-  g_free (l1);
+  g_ptr_array_free (hdrs->hs, TRUE);
+  hdrs->hs = NULL;
+  rpmostree_refts_unref (hdrs->refts);
+
+  g_free (hdrs);
 }
 
 static struct RpmHeadersDiff *

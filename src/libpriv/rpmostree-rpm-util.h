@@ -38,6 +38,8 @@ struct RpmHeaders
   GPtrArray *hs; /* list of rpm header objects from <rpm.h> = Header */
 };
 
+typedef struct RpmHeaders RpmHeaders;
+
 struct RpmHeadersDiff
 {
   GPtrArray *hs_add; /* list of rpm header objects from <rpm.h> = Header */
@@ -90,6 +92,9 @@ const char *rpmrev_get_commit (struct RpmRevisionData *self);
 
 void rpmrev_free (struct RpmRevisionData *ptr);
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmRevisionData, rpmrev_free);
+
+void rpmhdrs_free (RpmHeaders *hdrs);
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmHeaders, rpmhdrs_free);
 
 RpmOstreeRefSack *
 rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
