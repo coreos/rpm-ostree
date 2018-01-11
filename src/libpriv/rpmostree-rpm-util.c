@@ -1129,15 +1129,20 @@ rpmostree_create_rpmdb_pkglist_variant (int              rootfs_dfd,
   g_autoptr(GPtrArray) pkglist = rpmostree_sack_get_sorted_packages (refsack->sack);
 
   GVariantBuilder pkglist_v_builder;
-  g_variant_builder_init (&pkglist_v_builder, (GVariantType*)"a(sss)");
+  g_variant_builder_init (&pkglist_v_builder, (GVariantType*)"a(sssss)");
 
   const guint n = pkglist->len;
   for (guint i = 0; i < n; i++)
     {
       DnfPackage *pkg = pkglist->pdata[i];
-      g_variant_builder_add (&pkglist_v_builder, "(sss)",
-                             dnf_package_get_name (pkg),
-                             dnf_package_get_evr (pkg),
+
+      /* put epoch as a string so we're indifferent to endianness -- also note that unlike
+       * librpm, libdnf doesn't care about unset vs 0 epoch and neither do we */
+      g_autofree char *epoch = g_strdup_printf ("%" PRIu64, dnf_package_get_epoch (pkg));
+      g_variant_builder_add (&pkglist_v_builder, "(sssss)",
+                             dnf_package_get_name (pkg), epoch,
+                             dnf_package_get_version (pkg),
+                             dnf_package_get_release (pkg),
                              dnf_package_get_arch (pkg));
     }
 

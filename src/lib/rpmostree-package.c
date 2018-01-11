@@ -53,6 +53,7 @@ struct RpmOstreePackage
   char *nevra;
   const char *name;
   const char *evr;
+  char *evr_owned;
   const char *arch;
 };
 
@@ -67,6 +68,7 @@ rpm_ostree_package_finalize (GObject *object)
   g_clear_pointer (&pkg->gv_nevra, g_variant_unref);
 
   g_clear_pointer (&pkg->nevra, g_free);
+  g_clear_pointer (&pkg->evr_owned, g_free);
 
   G_OBJECT_CLASS (rpm_ostree_package_parent_class)->finalize (object);
 }
@@ -193,8 +195,18 @@ _rpm_ostree_package_new_from_variant (GVariant *gv_nevra)
   p->gv_nevra = g_variant_ref (gv_nevra);
 
   /* we deconstruct now to make accessors simpler */
+  const char *epoch;
+  const char *version;
+  const char *release;
 
-  g_variant_get (p->gv_nevra, "(&s&s&s)", &p->name, &p->evr, &p->arch);
+  g_variant_get (p->gv_nevra, "(&s&s&s&s&s)", &p->name, &epoch, &version, &release, &p->arch);
+  /* we follow the libdnf convention here of explicit 0 --> skip over */
+  g_assert (epoch);
+  if (g_str_equal (epoch, "0"))
+    p->evr_owned = g_strdup_printf ("%s-%s", version, release);
+  else
+    p->evr_owned = g_strdup_printf ("%s:%s-%s", epoch, version, release);
+  p->evr = p->evr_owned;
   p->nevra = g_strdup_printf ("%s-%s.%s", p->name, p->evr, p->arch);
   return p;
 }
@@ -205,7 +217,7 @@ get_commit_rpmdb_pkglist (GVariant *commit)
   g_autoptr(GVariant) meta = g_variant_get_child_value (commit, 0);
   g_autoptr(GVariantDict) meta_dict = g_variant_dict_new (meta);
   return g_variant_dict_lookup_value (meta_dict, "rpmostree.rpmdb.pkglist",
-                                      G_VARIANT_TYPE ("a(sss)"));
+                                      G_VARIANT_TYPE ("a(sssss)"));
 }
 
 static GPtrArray *
