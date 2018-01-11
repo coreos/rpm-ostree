@@ -853,6 +853,24 @@ rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
   return rpmostree_refsack_new (hsack, &tmpdir);
 }
 
+static RpmOstreeRefTs*
+get_refts_for_rootfs (const char       *rootfs,
+                      GLnxTmpDir       *tmpdir)
+{
+  g_assert ((rootfs != NULL) || (tmpdir != NULL));
+  g_assert ((rootfs == NULL) || (tmpdir == NULL));
+
+  rpmts ts = rpmtsCreate ();
+  /* This actually makes sense because we know we've verified it at build time */
+  rpmtsSetVSFlags (ts, _RPMVSF_NODIGESTS | _RPMVSF_NOSIGNATURES);
+
+  int r = rpmtsSetRootDir (ts, rootfs ?: tmpdir->path);
+  g_assert_cmpint (r, ==, 0);
+
+  /* Ownership of tmpdir is transferred */
+  return rpmostree_refts_new (ts, tmpdir);
+}
+
 gboolean
 rpmostree_get_refts_for_commit (OstreeRepo                *repo,
                                 const char                *ref,
@@ -867,15 +885,8 @@ rpmostree_get_refts_for_commit (OstreeRepo                *repo,
   if (!checkout_only_rpmdb (repo, ref, &tmpdir, cancellable, error))
     return FALSE;
 
-  rpmts ts = rpmtsCreate ();
-  /* This actually makes sense because we know we've verified it at build time */
-  rpmtsSetVSFlags (ts, _RPMVSF_NODIGESTS | _RPMVSF_NOSIGNATURES);
-
-  int r = rpmtsSetRootDir (ts, tmpdir.path);
-  g_assert_cmpint (r, ==, 0);
-
   /* Ownership of tmpdir is transferred */
-  *out_ts = rpmostree_refts_new (ts, &tmpdir);
+  *out_ts = get_refts_for_rootfs (NULL, &tmpdir);
   return TRUE;
 }
 
