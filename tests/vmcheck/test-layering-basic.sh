@@ -75,8 +75,13 @@ rm -f refs.txt refdata.txt
 vm_cmd ostree fsck
 vm_cmd ostree show --print-metadata-key rpmostree.rpmdb.pkglist \
        $(vm_get_deployment_info 0 checksum) > variant-pkglist.txt
-# No 0: in EVR
-assert_file_has_content_literal 'variant-pkglist.txt' "('foo', '1.0-1', 'x86_64')"
+# 0 shows up in variant dump
+assert_file_has_content_literal 'variant-pkglist.txt' "('foo', '0', '1.0', '1', 'x86_64')"
+# But no 0: in e.g. db diff output, which uses pkglist metadata
+vm_rpmostree db diff --format=diff \
+  $(vm_get_deployment_info 0 base-checksum) \
+  $(vm_get_deployment_info 0 checksum) > db-diff.txt
+assert_file_has_content_literal 'db-diff.txt' "+foo-1.0-1.x86_64"
 echo "ok pkg-add foo"
 
 vm_reboot
