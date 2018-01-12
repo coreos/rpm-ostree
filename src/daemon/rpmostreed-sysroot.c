@@ -202,7 +202,7 @@ handle_get_os (RPMOSTreeSysroot *object,
       rpmostree_sysroot_complete_get_os (object,
                                          invocation,
                                          rpmostree_sysroot_dup_booted (object));
-      return FALSE;
+        return FALSE;
     }
 
   g_autoptr(GDBusInterfaceSkeleton) os_interface =
