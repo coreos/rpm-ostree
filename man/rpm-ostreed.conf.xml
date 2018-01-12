@@ -63,11 +63,18 @@ Boston, MA 02111-1307, USA.
     <title>Options</title>
 
     <para>
-      All options are configured in the "[Daemon]" section. There are
-      currently no available options.
+      All options are configured in the "[Daemon]" section. Available options are:
     </para>
 
     <variablelist>
+      <varlistentry>
+        <term><varname>IdleExitTimeout=</varname></term>
+
+        <listitem>
+        <para>Controls the time in seconds of inactivity before the daemon exits. Use 0 to
+        disable auto-exit.</para>
+        </listitem>
+      </varlistentry>
     <!--
       <varlistentry>
         <term><varname>OptionName=</varname></term>
