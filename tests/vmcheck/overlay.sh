@@ -52,19 +52,6 @@ if [ -d $INSTTREE/etc ]; then # on CentOS, the dbus service file is in /usr
   rsync -rlv $INSTTREE/etc/ vmcheck/usr/etc/
 fi
 
-# ✀✀✀ BEGIN hack to get --selinux-policy (https://github.com/ostreedev/ostree/pull/1114) ✀✀✀
-if ! ostree commit --help | grep -q -e --selinux-policy; then
-  # this is fine, rsync doesn't modify in place
-  mount -o rw,remount /usr
-  # don't overwrite /etc/ to not mess up 3-way merge
-  rsync -rlv --exclude '/etc/' vmcheck/usr/ /usr/
-fi
-# ✀✀✀ END hack to get --selinux-policy ✀✀✀
-
-# ✀✀✀ BEGIN tmp hack for https://github.com/projectatomic/rpm-ostree/pull/999
-rm -vrf vmcheck/usr/etc/selinux/targeted/semanage.*.LOCK
-# ✀✀✀ END tmp hack
-
 commit_opts=
 for opt in --consume --no-bindings; do
     if ostree commit --help | grep -q -e "${opt}"; then
