@@ -56,6 +56,15 @@ if [ -d $INSTTREE/etc ]; then # on CentOS, the dbus service file is in /usr
   rsync -rlv $INSTTREE/etc/ vmcheck/usr/etc/
 fi
 
+# ✀✀✀ BEGIN hack to get --keep-metadata
+if ! ostree commit --help | grep -q -e --keep-metadata; then
+  # this is fine, rsync doesn't modify in place
+  mount -o rw,remount /usr
+  # don't overwrite /etc/ to not mess up 3-way merge
+  rsync -rlv --exclude '/etc/' vmcheck/usr/ /usr/
+fi
+# ✀✀✀ END hack to get --keep-metadata ✀✀✀
+
 commit_opts=
 for opt in --consume --no-bindings; do
     if ostree commit --help | grep -q -e "${opt}"; then
@@ -63,16 +72,22 @@ for opt in --consume --no-bindings; do
     fi
 done
 
-source_title="${origin}"
-if [ -n "$version" ]; then
-  source_title="${source_title} (${version}; $timestamp)"
+source_opt= # make this its own var since it contains spaces
+if [ $origin != vmcheck ]; then
+  source_title="${origin}"
+  if [ -n "$version" ]; then
+    source_title="${source_title} (${version}; $timestamp)"
+  else
+    source_title="${source_title} ($timestamp)"
+  fi
+  source_opt="--add-metadata-string=ostree.source-title=Dev overlay on ${source_title}"
+  commit_opts="${commit_opts} --add-metadata-string=rpmostree.original-origin=${origin}"
 else
-  source_title="${source_title} ($timestamp)"
+  source_opt="--keep-metadata=ostree.source-title"
+  commit_opts="${commit_opts} --keep-metadata=rpmostree.original-origin"
 fi
 
-ostree commit --parent=none -b vmcheck \
-       --add-metadata-string=ostree.source-title="Dev overlay on ${source_title}" \
-       --add-metadata-string=rpmostree.original-origin=${origin} \
-       --link-checkout-speedup ${commit_opts} \
+ostree commit --parent=$commit -b vmcheck \
+       --link-checkout-speedup ${commit_opts} "${source_opt}" \
        --selinux-policy=vmcheck --tree=dir=vmcheck
 ostree admin deploy vmcheck
