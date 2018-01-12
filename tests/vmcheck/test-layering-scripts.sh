@@ -166,7 +166,7 @@ vm_rpmostree install rofiles-copyup-overwrite
 vm_cmd cat $(vm_get_deployment_root 0)/usr/share/rpm-ostree/treefile.json > out.txt
 assert_file_has_content out.txt "XXXoverwriteXXX"
 assert_not_file_has_content out.txt "XXXcopyupXXX"
-vm_rpmostree uninstall rofiles-copyup
+vm_rpmostree uninstall rofiles-copyup rofiles-copyup-overwrite
 echo "ok copyup scriptlets"
 
 # Test cancellation via having a script hang; we interrupt directly by sending
