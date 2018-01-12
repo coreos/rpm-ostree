@@ -116,7 +116,7 @@ rpm_ostree_db_diff (OstreeRepo               *repo,
  * @out_modified_new: (out) (transfer container) (element-type RpmOstreePackage) (allow-none): Return location for modified new packages
  *
  * This function is identical to rpm_ostree_db_diff_ext(), but supports a @flags argument to
- * further control behaviour.
+ * further control behaviour. At least one of the @out parameters must not be NULL.
  *
  * Since: 2017.12
  */
@@ -132,8 +132,8 @@ rpm_ostree_db_diff_ext (OstreeRepo               *repo,
                         GCancellable             *cancellable,
                         GError                  **error)
 {
-  g_return_val_if_fail (out_removed != NULL && out_added != NULL &&
-                        out_modified_old != NULL && out_modified_new != NULL, FALSE);
+  g_return_val_if_fail (out_removed || out_added ||
+                        out_modified_old || out_modified_new, FALSE);
 
   const gboolean allow_noent = ((flags & RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT) > 0);
 
@@ -154,10 +154,14 @@ rpm_ostree_db_diff_ext (OstreeRepo               *repo,
     {
       /* it's the only way we could've gotten this far */
       g_assert (allow_noent);
-      *out_removed = NULL;
-      *out_added = NULL;
-      *out_modified_old = NULL;
-      *out_modified_new = NULL;
+      if (out_removed)
+        *out_removed = NULL;
+      if (out_added)
+        *out_added = NULL;
+      if (out_modified_old)
+        *out_modified_old = NULL;
+      if (out_modified_new)
+        *out_modified_new = NULL;
       return TRUE;
     }
 
