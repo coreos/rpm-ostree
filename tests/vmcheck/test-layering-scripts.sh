@@ -155,9 +155,19 @@ fi
 # Should work now that we're using --copyup
 # https://github.com/projectatomic/rpm-ostree/pull/1171
 vm_build_rpm rofiles-copyup \
-             post "echo copyup >> /usr/share/rpm-ostree/treefile.json"
+             post "echo XXXcopyupXXX >> /usr/share/rpm-ostree/treefile.json"
 vm_rpmostree install rofiles-copyup
+vm_cmd cat $(vm_get_deployment_root 0)/usr/share/rpm-ostree/treefile.json > out.txt
+assert_file_has_content out.txt "XXXcopyupXXX"
+# use posttrans to switch things up
+vm_build_rpm rofiles-copyup-overwrite requires rofiles-copyup \
+             posttrans "echo XXXoverwriteXXX > /usr/share/rpm-ostree/treefile.json"
+vm_rpmostree install rofiles-copyup-overwrite
+vm_cmd cat $(vm_get_deployment_root 0)/usr/share/rpm-ostree/treefile.json > out.txt
+assert_file_has_content out.txt "XXXoverwriteXXX"
+assert_not_file_has_content out.txt "XXXcopyupXXX"
 vm_rpmostree uninstall rofiles-copyup
+echo "ok copyup scriptlets"
 
 # Test cancellation via having a script hang; we interrupt directly by sending
 # SIGINT to the client binary.
