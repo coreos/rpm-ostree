@@ -21,19 +21,23 @@ set -x
 
 # And then this code path in the VM
 
-# get csum and origin of current default deployment
-commit=$(rpm-ostree status --json | \
-  python -c '
+# get details from the current default deployment
+rpm-ostree status --json > json.txt
+json_field() {
+  field=$1; shift;
+  python -c "
 import sys, json;
-deployment = json.load(sys.stdin)["deployments"][0]
-print deployment["checksum"]
-exit()')
-origin=$(rpm-ostree status --json | \
-  python -c '
-import sys, json;
-deployment = json.load(sys.stdin)["deployments"][0]
-print deployment["origin"]
-exit()')
+deployment = json.load(open('json.txt'))['deployments'][0]
+print deployment.get('$field', '')
+exit()"
+}
+commit=$(json_field checksum)
+origin=$(json_field origin)
+version=$(json_field version)
+timestamp=$(json_field timestamp)
+[ -n "$timestamp" ]
+timestamp=$(date -d "@$timestamp" "+%b %d %Y")
+rm -f json.txt
 
 if [[ -z $commit ]] || ! ostree rev-parse $commit; then
   echo "Error while determining current commit" >&2
@@ -59,8 +63,15 @@ for opt in --consume --no-bindings; do
     fi
 done
 
+source_title="${origin}"
+if [ -n "$version" ]; then
+  source_title="${source_title} (${version}; $timestamp)"
+else
+  source_title="${source_title} ($timestamp)"
+fi
+
 ostree commit --parent=none -b vmcheck \
-       --add-metadata-string=ostree.source-title="Dev overlay on ${origin}" \
+       --add-metadata-string=ostree.source-title="Dev overlay on ${source_title}" \
        --add-metadata-string=rpmostree.original-origin=${origin} \
        --link-checkout-speedup ${commit_opts} \
        --selinux-policy=vmcheck --tree=dir=vmcheck
