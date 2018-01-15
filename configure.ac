@@ -3,8 +3,8 @@ dnl To do a release, increment this number, commit, then submit it as a PR
 dnl to merge via homu.  After that, do `git pull origin && git reset --hard origin/master`.
 dnl Then use https://github.com/cgwalters/git-evtag to sign.
 dnl Then, git push origin v201X.XX
-m4_define([year_version], [2017])
-m4_define([release_version], [11])
+m4_define([year_version], [2018])
+m4_define([release_version], [1])
 m4_define([package_version], [year_version.release_version])
 AC_INIT([rpm-ostree], [package_version], [atomic-devel@projectatomic.io])
 AC_CONFIG_HEADER([config.h])
