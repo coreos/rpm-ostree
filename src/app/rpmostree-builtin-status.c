@@ -31,6 +31,7 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-dbus-helpers.h"
 #include "rpmostree-util.h"
+#include "rpmostree-core.h"
 #include "rpmostree-rpm-util.h"
 #include "libsd-locale-util.h"
 
@@ -304,8 +305,15 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
 
       g_print ("%s ", is_booted ? libsd_special_glyph (BLACK_CIRCLE) : " ");
 
+      RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
       if (origin_refspec)
-        g_print ("ostree://%s", origin_refspec);
+        {
+          const char *refspec_data;
+          if (!rpmostree_refspec_classify (origin_refspec, &refspectype, &refspec_data, error))
+            return FALSE;
+          g_autofree char *canonrefspec = rpmostree_refspec_to_string (refspectype, refspec_data);
+          g_print ("%s", canonrefspec);
+        }
       else
         g_print ("%s", checksum);
       g_print ("\n");

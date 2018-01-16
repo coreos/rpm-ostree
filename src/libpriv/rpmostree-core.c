@@ -52,6 +52,59 @@
 
 static OstreeRepo * get_pkgcache_repo (RpmOstreeContext *self);
 
+/* Given a string, look for ostree:// or rojig:// prefix and
+ * return its type and the remainder of the string.
+ */
+gboolean
+rpmostree_refspec_classify (const char *refspec,
+                            RpmOstreeRefspecType *out_type,
+                            const char **out_remainder,
+                            GError     **error)
+{
+  if (g_str_has_prefix (refspec, RPMOSTREE_REFSPEC_OSTREE_PREFIX))
+    {
+      *out_type = RPMOSTREE_REFSPEC_TYPE_OSTREE;
+      if (out_remainder)
+        *out_remainder = refspec + strlen (RPMOSTREE_REFSPEC_OSTREE_PREFIX);
+      return TRUE;
+    }
+  else if (g_str_has_prefix (refspec, RPMOSTREE_REFSPEC_ROJIG_PREFIX))
+    {
+      *out_type = RPMOSTREE_REFSPEC_TYPE_ROJIG;
+      if (out_remainder)
+        *out_remainder = refspec + strlen (RPMOSTREE_REFSPEC_ROJIG_PREFIX);
+      return TRUE;
+    }
+
+  /* Fallback case when we have no explicit prefix - treat this as ostree://
+   * for compatibility.  In the future we may do some error checking here,
+   * i.e. trying to parse the refspec.
+   */
+  *out_type = RPMOSTREE_REFSPEC_TYPE_OSTREE;
+  if (out_remainder)
+    *out_remainder = refspec;
+
+  return TRUE;
+}
+
+char*
+rpmostree_refspec_to_string (RpmOstreeRefspecType  reftype,
+                             const char           *data)
+{
+  const char *prefix = NULL;
+  switch (reftype)
+    {
+    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+      prefix = RPMOSTREE_REFSPEC_OSTREE_PREFIX;
+      break;
+    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+      prefix = RPMOSTREE_REFSPEC_ROJIG_PREFIX;
+      break;
+    }
+  g_assert (prefix);
+  return g_strconcat (prefix, data, NULL);
+}
+
 static int
 compare_pkgs (gconstpointer ap,
               gconstpointer bp)
