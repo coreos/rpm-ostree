@@ -21,19 +21,23 @@ set -x
 
 # And then this code path in the VM
 
-# get csum and origin of current default deployment
-commit=$(rpm-ostree status --json | \
-  python -c '
+# get details from the current default deployment
+rpm-ostree status --json > json.txt
+json_field() {
+  field=$1; shift;
+  python -c "
 import sys, json;
-deployment = json.load(sys.stdin)["deployments"][0]
-print deployment["checksum"]
-exit()')
-origin=$(rpm-ostree status --json | \
-  python -c '
-import sys, json;
-deployment = json.load(sys.stdin)["deployments"][0]
-print deployment["origin"]
-exit()')
+deployment = json.load(open('json.txt'))['deployments'][0]
+print deployment.get('$field', '')
+exit()"
+}
+commit=$(json_field checksum)
+origin=$(json_field origin)
+version=$(json_field version)
+timestamp=$(json_field timestamp)
+[ -n "$timestamp" ]
+timestamp=$(date -d "@$timestamp" "+%b %d %Y")
+rm -f json.txt
 
 if [[ -z $commit ]] || ! ostree rev-parse $commit; then
   echo "Error while determining current commit" >&2
@@ -52,18 +56,14 @@ if [ -d $INSTTREE/etc ]; then # on CentOS, the dbus service file is in /usr
   rsync -rlv $INSTTREE/etc/ vmcheck/usr/etc/
 fi
 
-# ✀✀✀ BEGIN hack to get --selinux-policy (https://github.com/ostreedev/ostree/pull/1114) ✀✀✀
-if ! ostree commit --help | grep -q -e --selinux-policy; then
+# ✀✀✀ BEGIN hack to get --keep-metadata
+if ! ostree commit --help | grep -q -e --keep-metadata; then
   # this is fine, rsync doesn't modify in place
   mount -o rw,remount /usr
   # don't overwrite /etc/ to not mess up 3-way merge
   rsync -rlv --exclude '/etc/' vmcheck/usr/ /usr/
 fi
-# ✀✀✀ END hack to get --selinux-policy ✀✀✀
-
-# ✀✀✀ BEGIN tmp hack for https://github.com/projectatomic/rpm-ostree/pull/999
-rm -vrf vmcheck/usr/etc/selinux/targeted/semanage.*.LOCK
-# ✀✀✀ END tmp hack
+# ✀✀✀ END hack to get --keep-metadata ✀✀✀
 
 commit_opts=
 for opt in --consume --no-bindings; do
@@ -72,9 +72,22 @@ for opt in --consume --no-bindings; do
     fi
 done
 
-ostree commit --parent=none -b vmcheck \
-       --add-metadata-string=ostree.source-title="Dev overlay on ${origin}" \
-       --add-metadata-string=rpmostree.original-origin=${origin} \
-       --link-checkout-speedup ${commit_opts} \
+source_opt= # make this its own var since it contains spaces
+if [ $origin != vmcheck ]; then
+  source_title="${origin}"
+  if [ -n "$version" ]; then
+    source_title="${source_title} (${version}; $timestamp)"
+  else
+    source_title="${source_title} ($timestamp)"
+  fi
+  source_opt="--add-metadata-string=ostree.source-title=Dev overlay on ${source_title}"
+  commit_opts="${commit_opts} --add-metadata-string=rpmostree.original-origin=${origin}"
+else
+  source_opt="--keep-metadata=ostree.source-title"
+  commit_opts="${commit_opts} --keep-metadata=rpmostree.original-origin"
+fi
+
+ostree commit --parent=$commit -b vmcheck \
+       --link-checkout-speedup ${commit_opts} "${source_opt}" \
        --selinux-policy=vmcheck --tree=dir=vmcheck
 ostree admin deploy vmcheck
