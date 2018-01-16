@@ -27,6 +27,7 @@
 #include "rpmostree-package-variants.h"
 #include "rpmostreed-errors.h"
 #include "rpmostree-origin.h"
+#include "rpmostree-core.h"
 #include "rpmostree-sysroot-core.h"
 #include "rpmostreed-os.h"
 #include "rpmostreed-utils.h"
@@ -675,11 +676,32 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
                                                              revision))
     default_flags |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE;
 
+  /* Canonicalize here on entry; the deploy code actually ends up peeling it
+   * again, but long term we want to manipulate canonicalized refspecs
+   * internally, and only peel when writing origin files for ostree:// types.
+   */
+  g_autofree char *canon_refspec = NULL;
+  if (refspec)
+    {
+      RpmOstreeRefspecType refspectype;
+      const char *refspecdata;
+      if (!rpmostree_refspec_classify (refspec, &refspectype, &refspecdata, error))
+        return NULL;
+      switch (refspectype)
+        {
+        case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+          break;
+        case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+          return glnx_null_throw (error, "Unsupported refspec: %s", refspec);
+        }
+      canon_refspec = rpmostree_refspec_to_string (refspectype, refspecdata);
+    }
+
   default_flags = deploy_flags_from_options (options, default_flags);
   return rpmostreed_transaction_new_deploy (invocation, ot_sysroot,
                                             default_flags,
                                             osname,
-                                            refspec,
+                                            canon_refspec,
                                             revision,
                                             install_pkgs,
                                             install_local_pkgs,
