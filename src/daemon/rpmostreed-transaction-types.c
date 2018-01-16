@@ -38,12 +38,22 @@
 static gboolean
 change_origin_refspec (OstreeSysroot *sysroot,
                        RpmOstreeOrigin *origin,
-                       const gchar *refspec,
+                       const gchar *src_refspec,
                        GCancellable *cancellable,
                        gchar **out_old_refspec,
                        gchar **out_new_refspec,
                        GError **error)
 {
+  RpmOstreeRefspecType refspectype;
+  const char *refspecdata;
+  if (!rpmostree_refspec_classify (src_refspec, &refspectype, &refspecdata, error))
+    return FALSE;
+  /* Should have been canonicalized earlier */
+  g_assert_cmpint (refspectype, ==, RPMOSTREE_REFSPEC_TYPE_OSTREE);
+
+  /* Now here we "peel" it since the rest of the code assumes libostree */
+  const char *refspec = refspecdata;
+
   g_autofree gchar *current_refspec =
     g_strdup (rpmostree_origin_get_refspec (origin));
   g_autofree gchar *new_refspec = NULL;

@@ -57,6 +57,9 @@ gboolean rpmostree_refspec_classify (const char *refspec,
 char* rpmostree_refspec_to_string (RpmOstreeRefspecType  reftype,
                                    const char           *data);
 
+char* rpmostree_refspec_canonicalize (const char           *orig_refspec,
+                                      GError              **error);
+
 RpmOstreeContext *rpmostree_context_new_system (OstreeRepo   *repo,
                                                 GCancellable *cancellable,
                                                 GError      **error);

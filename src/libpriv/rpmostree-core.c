@@ -105,6 +105,20 @@ rpmostree_refspec_to_string (RpmOstreeRefspecType  reftype,
   return g_strconcat (prefix, data, NULL);
 }
 
+
+/* Primarily this makes sure that ostree refspecs start with `ostree://`.
+ */
+char*
+rpmostree_refspec_canonicalize (const char *orig_refspec,
+                                GError    **error)
+{
+  RpmOstreeRefspecType refspectype;
+  const char *refspec_data;
+  if (!rpmostree_refspec_classify (orig_refspec, &refspectype, &refspec_data, error))
+    return NULL;
+  return rpmostree_refspec_to_string (refspectype, refspec_data);
+}
+
 static int
 compare_pkgs (gconstpointer ap,
               gconstpointer bp)

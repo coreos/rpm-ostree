@@ -25,6 +25,7 @@
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-util.h"
+#include "rpmostree-core.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-dbus-helpers.h"
 
@@ -102,13 +103,19 @@ rpmostree_builtin_rebase (int             argc,
       new_provided_refspec = argv[1];
       if (argc == 3)
         revision = argv[2];
+
+      /* Canonicalize */
+      new_provided_refspec = new_refspec_owned =
+        rpmostree_refspec_canonicalize (new_provided_refspec, error);
+      if (!new_provided_refspec)
+        return FALSE;
     }
   else
     {
       if (opt_remote)
         {
           new_provided_refspec = new_refspec_owned =
-            g_strconcat (opt_remote, ":", opt_branch ?: "", NULL);
+            g_strconcat (RPMOSTREE_REFSPEC_OSTREE_PREFIX, opt_remote, ":", opt_branch ?: "", NULL);
         }
       else
         new_provided_refspec = opt_branch;
