@@ -16,6 +16,7 @@
 # Boston, MA 02111-1307, USA.
 
 man1_MANS = rpm-ostree.1
+man5_MANS = rpm-ostreed.conf.5
 
 XSLTPROC_FLAGS = \
         --nonet \
@@ -31,4 +32,7 @@ XSLTPROC_FLAGS_MAN = \
 rpm-ostree.1: man/rpm-ostree.xml Makefile
 	$(AM_V_GEN) $(XSLTPROC) $(XSLTPROC_FLAGS_MAN) $<
 
-CLEANFILES += rpm-ostree.1
+rpm-ostreed.conf.5: man/rpm-ostreed.conf.xml Makefile
+	$(AM_V_GEN) $(XSLTPROC) $(XSLTPROC_FLAGS_MAN) $<
+
+CLEANFILES += $(man1_MANS) $(man5_MANS)

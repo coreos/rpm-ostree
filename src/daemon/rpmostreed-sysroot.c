@@ -202,7 +202,7 @@ handle_get_os (RPMOSTreeSysroot *object,
       rpmostree_sysroot_complete_get_os (object,
                                          invocation,
                                          rpmostree_sysroot_dup_booted (object));
-      return FALSE;
+        return FALSE;
     }
 
   g_autoptr(GDBusInterfaceSkeleton) os_interface =
@@ -416,6 +416,9 @@ handle_reload_config (RPMOSTreeSysroot *object,
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
   g_autoptr(GError) local_error = NULL;
   GError **error = &local_error;
+
+  if (!rpmostreed_daemon_reload_config (rpmostreed_daemon_get (), NULL, error))
+    goto out;
 
   if (!rpmostreed_sysroot_reload (self, error))
     goto out;

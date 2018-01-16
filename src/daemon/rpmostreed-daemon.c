@@ -30,9 +30,8 @@
 
 #define RPMOSTREE_MESSAGE_TRANSACTION_STARTED SD_ID128_MAKE(d5,be,a3,7a,8f,c8,4f,f5,9d,bc,fd,79,17,7b,7d,f8)
 
-/* let's not exit super fast; our startup is non-trivial so staying around will ensure
- * follow-up requests are more responsive */
-#define IDLE_EXIT_TIMEOUT_SECONDS 60
+#define RPMOSTREED_CONF SYSCONFDIR "/rpm-ostreed.conf"
+#define DAEMON_CONFIG_GROUP "Daemon"
 
 /**
  * SECTION: daemon
@@ -61,6 +60,9 @@ struct _RpmostreedDaemon {
   guint rerender_status_id;
   RpmostreedSysroot *sysroot;
   gchar *sysroot_path;
+
+  /* we only have one setting for now, so let's just keep it in the main struct */
+  guint idle_exit_timeout;
 
   GDBusConnection *connection;
   GDBusObjectManagerServer *object_manager;
@@ -246,6 +248,10 @@ rpmostreed_daemon_initable_init (GInitable *initable,
   g_dbus_object_manager_server_set_connection (self->object_manager, self->connection);
   g_debug ("exported object manager");
 
+  /* do this early so sysroot startup sets properties to the right values */
+  if (!rpmostreed_daemon_reload_config (self, NULL, error))
+    return FALSE;
+
   g_autofree gchar *path =
     rpmostreed_generate_object_path (BASE_DBUS_PATH, "Sysroot", NULL);
   self->sysroot = g_object_new (RPMOSTREED_TYPE_SYSROOT,
@@ -276,6 +282,72 @@ rpmostreed_daemon_initable_init (GInitable *initable,
 
   g_debug ("daemon constructed");
 
+  return TRUE;
+}
+
+/* Returns TRUE if config file exists and could be loaded or if config file doesn't exist.
+ * Returns FALSE if config file exists but could not be loaded. */
+static gboolean
+maybe_load_config_keyfile (GKeyFile **out_keyfile,
+                           GError   **error)
+{
+  g_autoptr(GError) local_error = NULL;
+
+  g_autoptr(GKeyFile) keyfile = g_key_file_new ();
+  if (g_key_file_load_from_file (keyfile, RPMOSTREED_CONF, 0, &local_error))
+    {
+      *out_keyfile = g_steal_pointer (&keyfile);
+      sd_journal_print (LOG_INFO, "Reading config file '%s'", RPMOSTREED_CONF);
+      return TRUE;
+    }
+
+  if (!g_error_matches (local_error, G_FILE_ERROR, G_FILE_ERROR_NOENT))
+    {
+      g_propagate_error (error, g_steal_pointer (&local_error));
+      return FALSE;
+    }
+
+  sd_journal_print (LOG_WARNING, "Missing config file '%s'; using compiled defaults",
+                    RPMOSTREED_CONF);
+  return TRUE;
+}
+
+static guint64
+get_config_uint64 (GKeyFile   *keyfile,
+                   const char *key,
+                   guint64     default_val)
+{
+  if (keyfile && g_key_file_has_key (keyfile, DAEMON_CONFIG_GROUP, key, NULL))
+    {
+      g_autoptr(GError) local_error = NULL;
+      guint64 r = g_key_file_get_uint64 (keyfile, DAEMON_CONFIG_GROUP, key, &local_error);
+      if (!local_error)
+        return r;
+      sd_journal_print (LOG_WARNING, "Bad value for key '%s': %s; using compiled defaults",
+                        key, local_error->message);
+    }
+  return default_val;
+}
+
+gboolean
+rpmostreed_daemon_reload_config (RpmostreedDaemon *self,
+                                 gboolean         *out_changed,
+                                 GError          **error)
+{
+  g_autoptr(GKeyFile) config = NULL;
+  if (!maybe_load_config_keyfile (&config, error))
+    return FALSE;
+
+  /* default to 60s by default; our startup is non-trivial so staying around will ensure
+   * follow-up requests are more responsive */
+  guint64 idle_exit_timeout = get_config_uint64 (config, "IdleExitTimeout", 60);
+
+  /* don't update changed for this; it's contained to RpmostreedDaemon so no other objects
+   * need to be reloaded if it changes */
+  self->idle_exit_timeout = idle_exit_timeout;
+
+  if (out_changed)
+    *out_changed = FALSE;
   return TRUE;
 }
 
@@ -417,7 +489,7 @@ update_status (RpmostreedDaemon *self)
         have_active_txn = TRUE;
     }
 
-  if (!getenv ("RPMOSTREE_DEBUG_DISABLE_DAEMON_IDLE_EXIT"))
+  if (!getenv ("RPMOSTREE_DEBUG_DISABLE_DAEMON_IDLE_EXIT") && self->idle_exit_timeout > 0)
     currently_idle = !have_active_txn && n_clients == 0;
 
   if (currently_idle && !self->idle_exit_source)
@@ -425,7 +497,7 @@ update_status (RpmostreedDaemon *self)
       /* I think adding some randomness is a good idea, to mitigate
        * pathological cases where someone is talking to us at the same
        * frequency as our exit timer. */
-      const guint idle_exit_secs = IDLE_EXIT_TIMEOUT_SECONDS + g_random_int_range (0, 5);
+      const guint idle_exit_secs = self->idle_exit_timeout + g_random_int_range (0, 5);
       self->idle_exit_source = g_timeout_source_new_seconds (idle_exit_secs);
       g_source_set_callback (self->idle_exit_source, on_idle_exit, self, NULL);
       g_source_attach (self->idle_exit_source, NULL);

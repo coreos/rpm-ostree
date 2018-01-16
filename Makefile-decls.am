@@ -38,6 +38,7 @@ privlibdir = $(pkglibdir)
 privlib_LTLIBRARIES =
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA =
+sysconf_DATA =
 INTROSPECTION_GIRS = 
 girdir = $(datadir)/gir-1.0
 gir_DATA =
