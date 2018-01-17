@@ -347,14 +347,20 @@ vm_assert_status_jq() {
 
 # Like build_rpm, but also sends it to the VM
 vm_build_rpm() {
-    build_rpm "$@"
+    if ! build_rpm "$@" &> build.txt; then
+      cat build.txt
+      assert_not_reached "failed to build RPM"
+    fi
     vm_send_test_repo
 }
 
 # Like vm_build_rpm but takes a yumrepo mode
 vm_build_rpm_repo_mode() {
     mode=$1; shift
-    build_rpm "$@"
+    if ! build_rpm "$@" &> build.txt; then
+      cat build.txt
+      assert_not_reached "failed to build RPM"
+    fi
     vm_send_test_repo $mode
 }
 
