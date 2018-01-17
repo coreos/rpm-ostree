@@ -167,18 +167,37 @@ gv_nevra_to_evr (GString  *buffer,
                           PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE);
 }
 
+static gboolean
+print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
+                    GCancellable     *cancellable,
+                    GError          **error)
+{
+  glnx_unref_object RPMOSTreeTransaction *txn_proxy = NULL;
+  if (!rpmostree_transaction_connect_active (sysroot_proxy, NULL, &txn_proxy,
+                                             cancellable, error))
+    return FALSE;
+
+  g_print ("State: %s", txn_proxy ? "busy" : "idle");
+
+  if (txn_proxy)
+    {
+      const char *title = rpmostree_transaction_get_title (txn_proxy);
+      g_print ("Transaction: %s\n", title);
+    }
+
+  return TRUE;
+}
+
 /* We will have an optimized path for the case where there are just
  * two deployments, this code will be the generic fallback.
  */
 static gboolean
-status_generic (RPMOSTreeSysroot *sysroot_proxy,
-                RPMOSTreeOS *os_proxy,
-                GVariant       *deployments,
-                GCancellable   *cancellable,
-                GError        **error)
+print_deployments (RPMOSTreeSysroot *sysroot_proxy,
+                   GVariant         *deployments,
+                   GCancellable     *cancellable,
+                   GError          **error)
 {
   GVariantIter iter;
-  gboolean first = TRUE;
 
   /* First, gather global state */
   gboolean have_any_live_overlay = FALSE;
@@ -203,22 +222,11 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       have_any_live_overlay = have_any_live_overlay || have_live_changes;
     }
 
-  glnx_unref_object RPMOSTreeTransaction *txn_proxy = NULL;
-  if (!rpmostree_transaction_connect_active (sysroot_proxy, NULL, &txn_proxy,
-                                             cancellable, error))
-    return FALSE;
-
-  if (txn_proxy)
-    {
-      const char *title = rpmostree_transaction_get_title (txn_proxy);
-      g_print ("State: transaction: %s\n", title);
-    }
-  else
-    g_print ("State: idle\n");
   g_print ("Deployments:\n");
 
   g_variant_iter_init (&iter, deployments);
 
+  gboolean first = TRUE;
   while (TRUE)
     {
       g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
@@ -599,7 +607,6 @@ rpmostree_builtin_status (int             argc,
   g_autoptr(GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GVariant) deployments = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
 
   if (!rpmostree_option_context_parse (context,
@@ -620,11 +627,10 @@ rpmostree_builtin_status (int             argc,
       return FALSE;
     }
 
-  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,
-                                cancellable, &os_proxy, error))
+  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL, cancellable, &os_proxy, error))
     return FALSE;
 
-  deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
+  g_autoptr(GVariant) deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
 
   if (opt_json || opt_jsonpath)
     {
@@ -666,8 +672,10 @@ rpmostree_builtin_status (int             argc,
     }
   else
     {
-      if (!status_generic (sysroot_proxy, os_proxy, deployments,
-                           cancellable, error))
+      if (!print_daemon_state (sysroot_proxy, cancellable, error))
+        return FALSE;
+
+      if (!print_deployments (sysroot_proxy, deployments, cancellable, error))
         return FALSE;
     }
 
