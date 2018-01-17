@@ -17,7 +17,7 @@
 
 include Makefile-decls.am
 
-newname = nts
+newname = yum-img
 if BUILDOPT_NEW_NAME
 primaryname = $(newname)
 else
