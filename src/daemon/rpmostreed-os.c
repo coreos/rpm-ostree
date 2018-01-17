@@ -686,18 +686,9 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
   g_autofree char *canon_refspec = NULL;
   if (refspec)
     {
-      RpmOstreeRefspecType refspectype;
-      const char *refspecdata;
-      if (!rpmostree_refspec_classify (refspec, &refspectype, &refspecdata, error))
-        return NULL;
-      switch (refspectype)
-        {
-        case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-          break;
-        case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-          return glnx_null_throw (error, "Unsupported refspec: %s", refspec);
-        }
-      canon_refspec = rpmostree_refspec_to_string (refspectype, refspecdata);
+      canon_refspec = rpmostree_refspec_canonicalize (refspec, error);
+      if (!canon_refspec)
+        return FALSE;
     }
 
   default_flags = deploy_flags_from_options (options, default_flags);

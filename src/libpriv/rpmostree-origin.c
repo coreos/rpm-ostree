@@ -24,6 +24,7 @@
 
 #include "libglnx.h"
 #include "rpmostree-origin.h"
+#include "rpmostree-core.h"
 #include "rpmostree-util.h"
 
 struct RpmOstreeOrigin {
@@ -32,8 +33,14 @@ struct RpmOstreeOrigin {
   /* this is the single source of truth */
   GKeyFile *kf;
 
+  /* An origin can have either a refspec or a jigdospec */
+  RpmOstreeRefspecType refspec_type;
   char *cached_refspec;
+
+  /* Version data that goes along with the refspec */
   char *cached_override_commit;
+  char *cached_jigdo_version;
+
   char *cached_unconfigured_state;
   char **cached_initramfs_args;
   GHashTable *cached_packages;                  /* set of reldeps */
@@ -107,32 +114,48 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
 
   ret->cached_unconfigured_state = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
 
-  ret->cached_refspec = g_key_file_get_string (ret->kf, "origin", "refspec", NULL);
-  if (!ret->cached_refspec)
+  g_autofree char *refspec = g_key_file_get_string (ret->kf, "origin", "refspec", NULL);
+  if (!refspec)
     {
-      ret->cached_refspec = g_key_file_get_string (ret->kf, "origin", "baserefspec", NULL);
-      if (!ret->cached_refspec)
+      refspec = g_key_file_get_string (ret->kf, "origin", "baserefspec", NULL);
+      if (!refspec)
         return glnx_null_throw (error, "No origin/refspec or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree");
-
-      if (!parse_packages_strv (ret->kf, "packages", "requested", FALSE,
-                                ret->cached_packages, error))
-        return FALSE;
-
-      if (!parse_packages_strv (ret->kf, "packages", "requested-local", TRUE,
-                                ret->cached_local_packages, error))
-        return FALSE;
-
-      if (!parse_packages_strv (ret->kf, "overrides", "remove", FALSE,
-                                ret->cached_overrides_remove, error))
-        return FALSE;
-
-      if (!parse_packages_strv (ret->kf, "overrides", "replace-local", TRUE,
-                                ret->cached_overrides_local_replace, error))
-        return FALSE;
     }
 
-  ret->cached_override_commit =
-    g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
+  const char *refspecdata;
+  if (!rpmostree_refspec_classify (refspec, &ret->refspec_type, &refspecdata, error))
+    return FALSE;
+  /* We "peel" here so that code that just calls
+   * rpmostree_origin_get_refspec() in the ostree:// case
+   * sees it without the prefix for compatibility.
+   */
+  ret->cached_refspec = g_strdup (refspecdata);
+  switch (ret->refspec_type)
+    {
+    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+      ret->cached_override_commit =
+        g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
+      break;
+    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+      ret->cached_jigdo_version = g_key_file_get_string (ret->kf, "origin", "jigdo-version", NULL);
+      break;
+    }
+
+  if (!parse_packages_strv (ret->kf, "packages", "requested", FALSE,
+                            ret->cached_packages, error))
+    return FALSE;
+
+  if (!parse_packages_strv (ret->kf, "packages", "requested-local", TRUE,
+                            ret->cached_local_packages, error))
+    return FALSE;
+
+  if (!parse_packages_strv (ret->kf, "overrides", "remove", FALSE,
+                            ret->cached_overrides_remove, error))
+    return FALSE;
+
+  if (!parse_packages_strv (ret->kf, "overrides", "replace-local", TRUE,
+                            ret->cached_overrides_local_replace, error))
+    return FALSE;
 
   ret->cached_initramfs_args =
     g_key_file_get_string_list (ret->kf, "rpmostree", "initramfs-args", NULL, NULL);
@@ -143,13 +166,50 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
 RpmOstreeOrigin *
 rpmostree_origin_dup (RpmOstreeOrigin *origin)
 {
-  return rpmostree_origin_parse_keyfile (origin->kf, NULL);
+  g_autoptr(GError) local_error = NULL;
+  RpmOstreeOrigin *ret = rpmostree_origin_parse_keyfile (origin->kf, &local_error);
+  g_assert_no_error (local_error);
+  return ret;
 }
 
 const char *
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin)
 {
   return origin->cached_refspec;
+}
+
+/* For rojig:// refspecs, includes the prefix. */
+char *
+rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin,
+                                   RpmOstreeRefspecType *out_refspectype)
+{
+  if (out_refspectype)
+    *out_refspectype = origin->refspec_type;
+  switch (origin->refspec_type)
+    {
+    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+      return g_strdup (origin->cached_refspec);
+    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+      return g_strconcat (RPMOSTREE_REFSPEC_ROJIG_PREFIX, origin->cached_refspec, NULL);
+    }
+  g_assert_not_reached ();
+  return NULL;
+}
+
+void
+rpmostree_origin_classify_refspec (RpmOstreeOrigin      *origin,
+                                   RpmOstreeRefspecType *out_type,
+                                   const char          **out_refspecdata)
+{
+  *out_type = origin->refspec_type;
+  if (out_refspecdata)
+    *out_refspecdata = origin->cached_refspec;
+}
+
+const char *
+rpmostree_origin_get_jigdo_version (RpmOstreeOrigin *origin)
+{
+  return origin->cached_jigdo_version;
 }
 
 GHashTable *
@@ -256,6 +316,7 @@ rpmostree_origin_unref (RpmOstreeOrigin *origin)
     return;
   g_key_file_unref (origin->kf);
   g_free (origin->cached_refspec);
+  g_free (origin->cached_jigdo_version);
   g_free (origin->cached_unconfigured_state);
   g_strfreev (origin->cached_initramfs_args);
   g_clear_pointer (&origin->cached_packages, g_hash_table_unref);
@@ -325,38 +386,31 @@ rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin,
   origin->cached_override_commit = g_strdup (checksum);
 }
 
-/* updates an origin's refspec without migrating format */
-static gboolean
-origin_set_refspec (GKeyFile   *origin,
-                    const char *new_refspec,
-                    GError    **error)
-{
-  if (g_key_file_has_key (origin, "origin", "baserefspec", error))
-    {
-      g_key_file_set_value (origin, "origin", "baserefspec", new_refspec);
-      return TRUE;
-    }
-
-  if (error && *error)
-    return FALSE;
-
-  g_key_file_set_value (origin, "origin", "refspec", new_refspec);
-  return TRUE;
-}
-
 gboolean
 rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
                              const char      *new_refspec,
                              GError         **error)
 {
-  if (!origin_set_refspec (origin->kf, new_refspec, error))
-    return FALSE;
-
-  /* we don't want to carry any commit overrides during a rebase */
+  /* We don't want to carry any commit overrides or version pinning during a
+   * rebase by default.
+   */
   rpmostree_origin_set_override_commit (origin, NULL, NULL);
+  g_key_file_remove_key (origin->kf, "origin", "jigdo-version", NULL);
 
+  /* See related code in rpmostree_origin_parse_keyfile() */
+  const char *refspecdata;
+  if (!rpmostree_refspec_classify (new_refspec, &origin->refspec_type, &refspecdata, error))
+    return FALSE;
   g_free (origin->cached_refspec);
-  origin->cached_refspec = g_strdup (new_refspec);
+  origin->cached_refspec = g_strdup (refspecdata);
+
+  const char *refspec_key =
+    g_key_file_has_key (origin->kf, "origin", "baserefspec", NULL) ?
+      "baserefspec" : "refspec";
+  /* Peel for ostree:// types for compatibility */
+  const char *refspec_value =
+    origin->refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE ? origin->cached_refspec : new_refspec;
+  g_key_file_set_string (origin->kf, "origin", refspec_key, refspec_value);
 
   return TRUE;
 }

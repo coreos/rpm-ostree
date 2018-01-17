@@ -48,8 +48,26 @@ change_origin_refspec (OstreeSysroot *sysroot,
   const char *refspecdata;
   if (!rpmostree_refspec_classify (src_refspec, &refspectype, &refspecdata, error))
     return FALSE;
-  /* Should have been canonicalized earlier */
-  g_assert_cmpint (refspectype, ==, RPMOSTREE_REFSPEC_TYPE_OSTREE);
+
+  RpmOstreeRefspecType current_refspectype;
+  const char *current_refspecdata;
+  rpmostree_origin_classify_refspec (origin, &current_refspectype, &current_refspecdata);
+
+  /* This function ideally would be split into ostree/rojig handling
+   * and we'd also do "partial" support for rojig so one could do e.g.
+   * `rpm-ostree rebase fedora-atomic-workstation` instead of
+   * `rpm-ostree rebase updates:fedora-atomic-workstation` etc.
+   */
+  if (refspectype == RPMOSTREE_REFSPEC_TYPE_ROJIG)
+    {
+      if (!rpmostree_origin_set_rebase (origin, src_refspec, error))
+        return FALSE;
+
+      if (out_old_refspec != NULL)
+        *out_old_refspec = g_strdup (current_refspecdata);
+      *out_new_refspec = g_strdup (src_refspec);
+      return TRUE;
+    }
 
   /* Now here we "peel" it since the rest of the code assumes libostree */
   const char *refspec = refspecdata;
@@ -57,6 +75,7 @@ change_origin_refspec (OstreeSysroot *sysroot,
   g_autofree gchar *current_refspec =
     g_strdup (rpmostree_origin_get_refspec (origin));
   g_autofree gchar *new_refspec = NULL;
+
   if (!rpmostreed_refspec_parse_partial (refspec,
                                          current_refspec,
                                          &new_refspec,
