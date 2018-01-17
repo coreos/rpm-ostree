@@ -254,7 +254,6 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
       guint64 t = 0;
       int serial;
       gboolean is_booted;
-      const gboolean was_first = first;
       /* Add the long keys here */
       const guint max_key_len = MAX (strlen ("InactiveBaseReplacements"),
                                      strlen ("InterruptedLiveCommit"));
@@ -394,39 +393,6 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
           rpmostree_print_kv ("LiveCommit", max_key_len, live_replaced);
           if (is_booted)
             g_print ("%s%s", get_bold_end (), get_red_end ());
-        }
-
-      /* Show any difference between the baseref vs head, but only for the
-         booted commit, and only if there isn't a pending deployment. Otherwise
-         it's either unnecessary or too noisy.
-      */
-      if (is_booted && was_first)
-        {
-          const gchar *pending_checksum = NULL;
-          const gchar *pending_version = NULL;
-
-          if (g_variant_dict_lookup (dict, "pending-base-checksum", "&s", &pending_checksum))
-            {
-              rpmostree_print_kv (is_locally_assembled ? "PendingBaseCommit" : "PendingCommit",
-                        max_key_len, pending_checksum);
-              g_assert (g_variant_dict_lookup (dict, "pending-base-timestamp", "t", &t));
-              g_variant_dict_lookup (dict, "pending-base-version", "&s", &pending_version);
-
-              if (pending_version)
-                {
-                  g_autoptr(GDateTime) timestamp = g_date_time_new_from_unix_utc (t);
-                  g_autofree char *version_time = NULL;
-
-                  if (timestamp != NULL)
-                    timestamp_string = g_date_time_format (timestamp, "%Y-%m-%d %T");
-                  else
-                    timestamp_string = g_strdup_printf ("(invalid timestamp)");
-
-                  version_time = g_strdup_printf ("%s (%s)", pending_version, timestamp_string);
-                  rpmostree_print_kv (is_locally_assembled ? "PendingBaseVersion" : "PendingVersion",
-                            max_key_len, version_time);
-                }
-            }
         }
 
       /* This used to be OSName; see https://github.com/ostreedev/ostree/pull/794 */
