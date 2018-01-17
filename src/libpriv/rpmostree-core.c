@@ -3834,7 +3834,7 @@ rpmostree_context_commit (RpmOstreeContext      *self,
 
         /* this is used by the db commands, and auto updates to diff against the base */
         g_autoptr(GVariant) rpmdb = NULL;
-        if (!rpmostree_create_rpmdb_pkglist_variant (self->tmprootfs_dfd, &rpmdb,
+        if (!rpmostree_create_rpmdb_pkglist_variant (self->tmprootfs_dfd, ".", &rpmdb,
                                                      cancellable, error))
           return FALSE;
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.rpmdb.pkglist", rpmdb);
