@@ -636,6 +636,16 @@ rpmostree_migrate_pkgcache_repo (OstreeRepo   *repo,
   return TRUE;
 }
 
+char*
+rpmostree_get_deployment_root (OstreeSysroot     *sysroot,
+                               OstreeDeployment *deployment)
+{
+  const char *sysroot_path = gs_file_get_path_cached (ostree_sysroot_get_path (sysroot));
+  g_autofree char *deployment_dirpath =
+    ostree_sysroot_get_deployment_dirpath (sysroot, deployment);
+  return g_build_filename (sysroot_path, deployment_dirpath, NULL);
+}
+
 gboolean
 rpmostree_decompose_sha256_nevra (const char **nevra, /* gets incremented */
                                   char       **out_sha256,
