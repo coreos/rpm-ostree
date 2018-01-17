@@ -24,6 +24,7 @@
 #include "rpmostree-types.h"
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostree-origin.h"
+#include "rpmostree-core.h"
 #include "rpmostree-util.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-sysroot-core.h"
@@ -245,7 +246,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   if (!origin)
     return NULL;
 
-  const char *refspec = rpmostree_origin_get_refspec (origin);
+  RpmOstreeRefspecType refspec_type;
+  g_autofree char *refspec = rpmostree_origin_get_full_refspec (origin, &refspec_type);
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
@@ -295,31 +297,32 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   { g_autoptr(GVariant) base_meta = g_variant_get_child_value (commit, 0);
     g_variant_dict_insert (&dict, "base-commit-meta", "@a{sv}", base_meta);
   }
+  variant_add_commit_details (&dict, NULL, commit);
 
   gboolean gpg_enabled = FALSE;
   g_autoptr(GVariant) sigs = NULL;
-  if (!rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &sigs, &gpg_enabled, error))
-    return NULL;
-  variant_add_commit_details (&dict, NULL, commit);
-
-  g_autofree char *pending_base_commitrev = NULL;
-  if (!ostree_repo_resolve_rev (repo, refspec, TRUE,
-                                &pending_base_commitrev, error))
-    return NULL;
-
-  if (pending_base_commitrev && strcmp (pending_base_commitrev, base_checksum) != 0)
+  if (refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE)
     {
-      g_autoptr(GVariant) pending_base_commit = NULL;
-
-      if (!ostree_repo_load_variant (repo,
-                                     OSTREE_OBJECT_TYPE_COMMIT,
-                                     pending_base_commitrev,
-                                     &pending_base_commit,
-                                     error))
+      if (!rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &sigs, &gpg_enabled, error))
         return NULL;
 
-      g_variant_dict_insert (&dict, "pending-base-checksum", "s", pending_base_commitrev);
-      variant_add_commit_details (&dict, "pending-base-", pending_base_commit);
+      g_autofree char *pending_base_commitrev = NULL;
+      if (!ostree_repo_resolve_rev (repo, refspec, TRUE,
+                                    &pending_base_commitrev, error))
+        return NULL;
+
+      if (pending_base_commitrev && !g_str_equal (pending_base_commitrev, base_checksum))
+        {
+          g_autoptr(GVariant) pending_base_commit = NULL;
+
+          if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
+                                         pending_base_commitrev, &pending_base_commit,
+                                         error))
+            return NULL;
+
+          g_variant_dict_insert (&dict, "pending-base-checksum", "s", pending_base_commitrev);
+          variant_add_commit_details (&dict, "pending-base-", pending_base_commit);
+        }
     }
 
   g_autofree char *live_inprogress = NULL;
@@ -333,7 +336,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   if (live_replaced)
     g_variant_dict_insert (&dict, "live-replaced", "s", live_replaced);
 
-  g_variant_dict_insert (&dict, "origin", "s", refspec);
+  if (refspec)
+    g_variant_dict_insert (&dict, "origin", "s", refspec);
 
   variant_add_from_hash_table (&dict, "requested-packages",
                                rpmostree_origin_get_packages (origin));
@@ -380,13 +384,16 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
   const gchar *osname = ostree_deployment_get_osname (deployment);
 
   g_autofree gchar *refspec_owned = NULL;
+  gboolean refspec_is_ostree = FALSE;
   if (!refspec)
     {
       g_autoptr(RpmOstreeOrigin) origin =
         rpmostree_origin_parse_deployment (deployment, error);
       if (!origin)
         return FALSE;
-      refspec = refspec_owned = g_strdup (rpmostree_origin_get_refspec (origin));
+      RpmOstreeRefspecType refspec_type;
+      refspec = refspec_owned = rpmostree_origin_get_full_refspec (origin, &refspec_type);
+      refspec_is_ostree = (refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE);
     }
 
   g_assert (refspec);
@@ -395,8 +402,11 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
   g_autofree gchar *checksum_owned = NULL;
   if (!checksum)
     {
-      if (!ostree_repo_resolve_rev (repo, refspec, TRUE, &checksum_owned, error))
-        return FALSE;
+      if (refspec_is_ostree)
+        {
+          if (!ostree_repo_resolve_rev (repo, refspec, TRUE, &checksum_owned, error))
+            return FALSE;
+        }
 
       /* in that case, use deployment csum */
       checksum = checksum_owned ?: ostree_deployment_get_csum (deployment);
@@ -411,11 +421,14 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
       commit = commit_owned;
     }
 
-  gboolean gpg_enabled;
+  gboolean gpg_enabled = FALSE;
   g_autoptr(GVariant) sigs = NULL;
-  if (!rpmostreed_deployment_gpg_results (repo, refspec, checksum,
-                                          &sigs, &gpg_enabled, error))
-    return FALSE;
+  if (refspec_is_ostree)
+    {
+      if (!rpmostreed_deployment_gpg_results (repo, refspec, checksum,
+                                              &sigs, &gpg_enabled, error))
+        return FALSE;
+    }
 
   if (osname != NULL)
     g_variant_dict_insert (dict, "osname", "s", osname);

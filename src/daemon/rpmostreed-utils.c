@@ -136,10 +136,9 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
                                   gchar **out_refspec,
                                   GError **error)
 {
-
   g_autofree gchar *ref = NULL;
   g_autofree gchar *remote = NULL;
-  gboolean infer_remote = TRUE;;
+  gboolean infer_remote = TRUE;
 
   /* Allow just switching remotes */
   if (g_str_has_suffix (new_provided_refspec, ":"))

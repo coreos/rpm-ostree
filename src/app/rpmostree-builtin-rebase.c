@@ -38,6 +38,7 @@ static char * opt_branch;
 static char * opt_remote;
 static gboolean opt_cache_only;
 static gboolean opt_download_only;
+static gboolean opt_experimental;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -47,6 +48,7 @@ static GOptionEntry option_entries[] = {
   { "skip-purge", 0, 0, G_OPTION_ARG_NONE, &opt_skip_purge, "Keep previous refspec after rebase", NULL },
   { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and RPM data", NULL },
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
+  { "experimental", 0, 0, G_OPTION_ARG_NONE, &opt_experimental, "Enable experimental features", NULL },
   { NULL }
 };
 
@@ -120,6 +122,12 @@ rpmostree_builtin_rebase (int             argc,
       else
         new_provided_refspec = opt_branch;
     }
+
+  RpmOstreeRefspecType refspectype;
+  if (!rpmostree_refspec_classify (new_provided_refspec, &refspectype, NULL, error))
+    return FALSE;
+  if (!opt_experimental && refspectype == RPMOSTREE_REFSPEC_TYPE_ROJIG)
+    return glnx_throw (error, "rojig:// refspec requires --experimental");
 
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
   g_autoptr(GVariant) options =
