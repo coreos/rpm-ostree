@@ -598,8 +598,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   /* Mainly for the `install` and `override` commands */
   const gboolean no_pull_base =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE) > 0);
-  /* Used to background check for updates; this essentially means downloading the minimum
-   * amount of metadata only to check if there's an upgrade */
 
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
