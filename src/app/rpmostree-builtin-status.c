@@ -167,18 +167,37 @@ gv_nevra_to_evr (GString  *buffer,
                           PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE);
 }
 
+static gboolean
+print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
+                    GCancellable     *cancellable,
+                    GError          **error)
+{
+  glnx_unref_object RPMOSTreeTransaction *txn_proxy = NULL;
+  if (!rpmostree_transaction_connect_active (sysroot_proxy, NULL, &txn_proxy,
+                                             cancellable, error))
+    return FALSE;
+
+  g_print ("State: %s", txn_proxy ? "busy" : "idle");
+
+  if (txn_proxy)
+    {
+      const char *title = rpmostree_transaction_get_title (txn_proxy);
+      g_print ("Transaction: %s\n", title);
+    }
+
+  return TRUE;
+}
+
 /* We will have an optimized path for the case where there are just
  * two deployments, this code will be the generic fallback.
  */
 static gboolean
-status_generic (RPMOSTreeSysroot *sysroot_proxy,
-                RPMOSTreeOS *os_proxy,
-                GVariant       *deployments,
-                GCancellable   *cancellable,
-                GError        **error)
+print_deployments (RPMOSTreeSysroot *sysroot_proxy,
+                   GVariant         *deployments,
+                   GCancellable     *cancellable,
+                   GError          **error)
 {
   GVariantIter iter;
-  gboolean first = TRUE;
 
   /* First, gather global state */
   gboolean have_any_live_overlay = FALSE;
@@ -203,22 +222,11 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       have_any_live_overlay = have_any_live_overlay || have_live_changes;
     }
 
-  glnx_unref_object RPMOSTreeTransaction *txn_proxy = NULL;
-  if (!rpmostree_transaction_connect_active (sysroot_proxy, NULL, &txn_proxy,
-                                             cancellable, error))
-    return FALSE;
-
-  if (txn_proxy)
-    {
-      const char *title = rpmostree_transaction_get_title (txn_proxy);
-      g_print ("State: transaction: %s\n", title);
-    }
-  else
-    g_print ("State: idle\n");
   g_print ("Deployments:\n");
 
   g_variant_iter_init (&iter, deployments);
 
+  gboolean first = TRUE;
   while (TRUE)
     {
       g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
@@ -246,7 +254,6 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
       guint64 t = 0;
       int serial;
       gboolean is_booted;
-      const gboolean was_first = first;
       /* Add the long keys here */
       const guint max_key_len = MAX (strlen ("InactiveBaseReplacements"),
                                      strlen ("InterruptedLiveCommit"));
@@ -386,39 +393,6 @@ status_generic (RPMOSTreeSysroot *sysroot_proxy,
           rpmostree_print_kv ("LiveCommit", max_key_len, live_replaced);
           if (is_booted)
             g_print ("%s%s", get_bold_end (), get_red_end ());
-        }
-
-      /* Show any difference between the baseref vs head, but only for the
-         booted commit, and only if there isn't a pending deployment. Otherwise
-         it's either unnecessary or too noisy.
-      */
-      if (is_booted && was_first)
-        {
-          const gchar *pending_checksum = NULL;
-          const gchar *pending_version = NULL;
-
-          if (g_variant_dict_lookup (dict, "pending-base-checksum", "&s", &pending_checksum))
-            {
-              rpmostree_print_kv (is_locally_assembled ? "PendingBaseCommit" : "PendingCommit",
-                        max_key_len, pending_checksum);
-              g_assert (g_variant_dict_lookup (dict, "pending-base-timestamp", "t", &t));
-              g_variant_dict_lookup (dict, "pending-base-version", "&s", &pending_version);
-
-              if (pending_version)
-                {
-                  g_autoptr(GDateTime) timestamp = g_date_time_new_from_unix_utc (t);
-                  g_autofree char *version_time = NULL;
-
-                  if (timestamp != NULL)
-                    timestamp_string = g_date_time_format (timestamp, "%Y-%m-%d %T");
-                  else
-                    timestamp_string = g_strdup_printf ("(invalid timestamp)");
-
-                  version_time = g_strdup_printf ("%s (%s)", pending_version, timestamp_string);
-                  rpmostree_print_kv (is_locally_assembled ? "PendingBaseVersion" : "PendingVersion",
-                            max_key_len, version_time);
-                }
-            }
         }
 
       /* This used to be OSName; see https://github.com/ostreedev/ostree/pull/794 */
@@ -599,7 +573,6 @@ rpmostree_builtin_status (int             argc,
   g_autoptr(GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
-  g_autoptr(GVariant) deployments = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
 
   if (!rpmostree_option_context_parse (context,
@@ -620,11 +593,10 @@ rpmostree_builtin_status (int             argc,
       return FALSE;
     }
 
-  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL,
-                                cancellable, &os_proxy, error))
+  if (!rpmostree_load_os_proxy (sysroot_proxy, NULL, cancellable, &os_proxy, error))
     return FALSE;
 
-  deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
+  g_autoptr(GVariant) deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
 
   if (opt_json || opt_jsonpath)
     {
@@ -666,8 +638,10 @@ rpmostree_builtin_status (int             argc,
     }
   else
     {
-      if (!status_generic (sysroot_proxy, os_proxy, deployments,
-                           cancellable, error))
+      if (!print_daemon_state (sysroot_proxy, cancellable, error))
+        return FALSE;
+
+      if (!print_deployments (sysroot_proxy, deployments, cancellable, error))
         return FALSE;
     }
 

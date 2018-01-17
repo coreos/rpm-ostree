@@ -138,6 +138,10 @@ rpmostree_decompose_sha256_nevra (const char **nevra,
                                   char       **sha256,
                                   GError     **error);
 
+char*
+rpmostree_get_deployment_root (OstreeSysroot     *sysroot,
+                               OstreeDeployment *deployment);
+
 char *
 rpmostree_cache_branch_to_nevra (const char *cachebranch);
 

@@ -1209,7 +1209,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
      * pending updates. once we only support unified core composes, this can easily be much
      * more readily injected during assembly */
     g_autoptr(GVariant) rpmdb_v = NULL;
-    if (!rpmostree_create_rpmdb_pkglist_variant (self->rootfs_dfd, &rpmdb_v,
+    if (!rpmostree_create_rpmdb_pkglist_variant (self->rootfs_dfd, ".", &rpmdb_v,
                                                  cancellable, error))
       return FALSE;
     g_variant_builder_add (metadata_builder, "{sv}", "rpmostree.rpmdb.pkglist", rpmdb_v);

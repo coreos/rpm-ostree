@@ -1129,13 +1129,13 @@ rpmostree_sack_get_sorted_packages (DnfSack *sack)
 }
 
 gboolean
-rpmostree_create_rpmdb_pkglist_variant (int              rootfs_dfd,
+rpmostree_create_rpmdb_pkglist_variant (int              dfd,
+                                        const char      *path,
                                         GVariant       **out_variant,
                                         GCancellable    *cancellable,
                                         GError         **error)
 {
-  g_autoptr(RpmOstreeRefSack) refsack =
-    rpmostree_get_refsack_for_root (rootfs_dfd, ".", error);
+  g_autoptr(RpmOstreeRefSack) refsack = rpmostree_get_refsack_for_root (dfd, path, error);
   if (!refsack)
     return FALSE;
 
