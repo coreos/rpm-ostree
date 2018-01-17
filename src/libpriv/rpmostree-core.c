@@ -485,13 +485,10 @@ rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
                                              OstreeSysroot    *sysroot,
                                              OstreeDeployment *cfg_deployment)
 {
-  const char *sysroot_path = gs_file_get_path_cached (ostree_sysroot_get_path (sysroot));
-  g_autofree char *cfg_deployment_dirpath =
-    ostree_sysroot_get_deployment_dirpath (sysroot, cfg_deployment);
   g_autofree char *cfg_deployment_root =
-    g_build_filename (sysroot_path, cfg_deployment_dirpath, NULL);
-
-  g_autofree char *reposdir = g_build_filename (cfg_deployment_root, "etc/yum.repos.d", NULL);
+    rpmostree_get_deployment_root (sysroot, cfg_deployment);
+  g_autofree char *reposdir =
+    g_build_filename (cfg_deployment_root, "etc/yum.repos.d", NULL);
 
   /* point libhif to the yum.repos.d and os-release of the merge deployment */
   dnf_context_set_repo_dir (self->dnfctx, reposdir);

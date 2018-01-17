@@ -1403,11 +1403,8 @@ refresh_md_transaction_execute (RpmostreedTransaction *transaction,
     rpmostree_syscore_get_origin_merge_deployment (sysroot, self->osname);
 
   /* but set the source root to be the origin merge deployment's so we pick up releasever */
-  const char *sysroot_path = gs_file_get_path_cached (ostree_sysroot_get_path (sysroot));
-  g_autofree char *origin_deployment_dirpath =
-    ostree_sysroot_get_deployment_dirpath (sysroot, origin_merge_deployment);
   g_autofree char *origin_deployment_root =
-    g_build_filename (sysroot_path, origin_deployment_dirpath, NULL);
+    rpmostree_get_deployment_root (sysroot, origin_merge_deployment);
 
   OstreeRepo *repo = ostree_sysroot_repo (sysroot);
   g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_system (repo, cancellable, error);
