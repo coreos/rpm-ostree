@@ -189,7 +189,8 @@ GPtrArray*
 rpmostree_sack_get_sorted_packages (DnfSack *sack);
 
 gboolean
-rpmostree_create_rpmdb_pkglist_variant (int              rootfs_dfd,
+rpmostree_create_rpmdb_pkglist_variant (int              dfd,
+                                        const char      *path,
                                         GVariant       **out_variant,
                                         GCancellable    *cancellable,
                                         GError         **error);
