@@ -42,18 +42,21 @@
 
 static DnfPackage *
 query_jigdo_pkg (DnfContext *dnfctx,
-                 const char *name,
+                 const char *name_arch,
                  const char *evr,
                  GError    **error)
 {
   hy_autoquery HyQuery query = hy_query_create (dnf_context_get_sack (dnfctx));
-  /* See also similar examples of queries in e.g. dnf_context_update() */
-  hy_query_filter (query, HY_PKG_NAME, HY_EQ, name);
-  hy_query_filter (query, HY_PKG_ARCH, HY_NEQ, "src");
+  /* This changed in v4, we now go through the Provides: name(arch) */
+  const gboolean is_archful = strchr (name_arch, '(') != NULL;
+  if (is_archful)
+    hy_query_filter (query, HY_PKG_PROVIDES, HY_EQ, name_arch);
+  else
+    hy_query_filter (query, HY_PKG_NAME, HY_EQ, name_arch);
   hy_query_filter (query, HY_PKG_EVR, HY_EQ, evr);
   g_autoptr(GPtrArray) pkglist = hy_query_run (query);
   if (pkglist->len == 0)
-    return glnx_null_throw (error, "Failed to find package %s-%s", name, evr);
+    return glnx_null_throw (error, "Failed to find package %s = %s", name_arch, evr);
   return g_object_ref (pkglist->pdata[0]);
 }
 
@@ -124,17 +127,18 @@ rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
       if (!ISRELDEP (reqid))
         continue;
       Reldep *rdep = GETRELDEP (pool, reqid);
-      /* This is the core hack; we're searching for Requires that
-       * have exact '=' versions.  This assumes that the rpmbuild
-       * process won't inject such requirements.
+      /* This is the core hack; we're searching for Requires that have exact '='
+       * versions. This assumes that the rpmbuild process won't inject such
+       * requirements.
        */
       if (!(rdep->flags & REL_EQ))
         continue;
 
-      const char *name = pool_id2str (pool, rdep->name);
+      /* Since v4 the server uses "Provides: name(arch) for archful */
+      const char *name_arch = pool_id2str (pool, rdep->name);
       const char *evr = pool_id2str (pool, rdep->evr);
 
-      DnfPackage *pkg = query_jigdo_pkg (dnfctx, name, evr, error);
+      DnfPackage *pkg = query_jigdo_pkg (dnfctx, name_arch, evr, error);
       // FIXME: Possibly we shouldn't require a package to be in the repos if we
       // already have it imported? This would help support downgrades if the
       // repo owner has pruned.

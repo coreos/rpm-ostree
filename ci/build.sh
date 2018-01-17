@@ -34,9 +34,5 @@ fi
 adduser testuser
 
 export LSAN_OPTIONS=verbosity=1:log_threads=1
-BWRAP=/usr/bin/bwrap
-# we use smoketested now, which uses a git master-ish version of bwrap
-#if [ "$id" == centos ]; then
-#  BWRAP=/usr/lib64/rpm-ostree/bwrap
-#fi
-build --enable-installed-tests --enable-gtk-doc --with-bubblewrap=$BWRAP
+# And now the build
+build --enable-installed-tests --enable-gtk-doc ${CONFIGOPTS:-}
