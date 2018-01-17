@@ -591,6 +591,15 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN) > 0);
   const gboolean no_overrides =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES) > 0);
+  const gboolean cache_only =
+    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_CACHE_ONLY) > 0);
+  const gboolean download_only =
+    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY) > 0);
+  /* Mainly for the `install` and `override` commands */
+  const gboolean no_pull_base =
+    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE) > 0);
+  /* Used to background check for updates; this essentially means downloading the minimum
+   * amount of metadata only to check if there's an upgrade */
 
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
@@ -598,7 +607,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   if (dry_run)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN;
 
-  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_CACHE_ONLY)
+  if (cache_only)
     {
       /* practically, we could unite those two into a single flag, though it's nice to be
        * able to keep them separate as well */
@@ -693,6 +702,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     g_string_append (txn_title, "deploy");
   else
     g_string_append (txn_title, "upgrade");
+
+  if (cache_only)
+    g_string_append (txn_title, " (cache only)");
+  else if (download_only)
+    g_string_append (txn_title, " (download only)");
 
   gboolean changed = FALSE;
   if (self->uninstall_pkgs)
@@ -848,10 +862,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, txn_title->str);
 
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
-
-  /* Mainly for the `install` and `override` commands */
-  const gboolean no_pull_base =
-    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE) > 0);
 
   if (!no_pull_base)
     {
@@ -1380,6 +1390,13 @@ refresh_md_transaction_execute (RpmostreedTransaction *transaction,
   RefreshMdTransaction *self = (RefreshMdTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
 
+  const gboolean force = ((self->flags & RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE) > 0);
+
+  g_autoptr(GString) title = g_string_new ("makecache");
+  if (force)
+    g_string_append (title, " (force)");
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, title->str);
+
   g_autoptr(OstreeDeployment) cfg_merge_deployment =
     ostree_sysroot_get_merge_deployment (sysroot, self->osname);
   g_autoptr(OstreeDeployment) origin_merge_deployment =
@@ -1397,12 +1414,11 @@ refresh_md_transaction_execute (RpmostreedTransaction *transaction,
 
   /* We could bypass rpmostree_context_setup() here and call dnf_context_setup() ourselves
    * since we're not actually going to perform any installation. Though it does provide us
-   * with the right semantics for install/source_root. So let's just play the game and
-   * provide a dummy treespec. */
+   * with the right semantics for install/source_root. */
   if (!rpmostree_context_setup (ctx, NULL, origin_deployment_root, NULL, cancellable, error))
     return FALSE;
 
-  if (self->flags & RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE)
+  if (force)
     {
       DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
       dnf_context_set_cache_age (dnfctx, 0);
