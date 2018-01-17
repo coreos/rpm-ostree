@@ -69,6 +69,13 @@ else
     echo "Keeping existing vmcheck /etc/yum.repos.d"
 fi
 
+# tests expect to run with the default config
+# remember the original config, we restore it after the tests
+if vm_cmd test -f /etc/rpm-ostreed.conf; then
+  vm_cmd mv -f /etc/rpm-ostreed.conf{,.bak}
+fi
+vm_cmd cp -f /usr/etc/rpm-ostreed.conf /etc
+
 origdir=$(pwd)
 echo -n '' > ${LOG}
 
@@ -148,17 +155,25 @@ for tf in $(find . -name 'test-*.sh' | sort); do
     vm_cmd ostree refs vmcheck vmcheck_tmp vmcheck_remote --delete
     vm_cmd ostree refs vmcheck_orig --create vmcheck &>> ${LOG}
 
+    # restore the default config
+    vm_cmd cp -f /usr/etc/rpm-ostreed.conf /etc/
+
     # go back to the original vmcheck deployment if needed
+    origin_cur=$(vm_get_booted_deployment_info origin)
     csum_cur=$(vm_get_booted_csum)
     unlocked_cur=$(vm_get_booted_deployment_info unlocked)
     live_csum=$(vm_get_booted_deployment_info live-replaced)
-    if [[ $csum_orig != $csum_cur ]] || \
+    if [[ $origin_cur != vmcheck ]] || \
+       [[ $csum_orig != $csum_cur ]] || \
        [[ $unlocked_cur != none ]] || \
        [ -n "${live_csum}" ]; then
       # redeploy under the name 'vmcheck' so that tests can
       # never modify the vmcheck_orig ref itself
       vm_cmd ostree admin deploy vmcheck &>> ${LOG}
       vm_reboot &>> ${LOG}
+    else
+      # make sure we're using the default config vals again
+      vm_cmd systemctl restart rpm-ostreed
     fi
 
     # make sure to clean up any pending & rollback deployments
@@ -181,6 +196,12 @@ if test -z "${VMCHECK_DEBUG:-}"; then
         vm_cmd rm -rf /etc/yum.repos.d
         vm_cmd mv /etc/yum.repos.d{.bak,}
     fi
+fi
+
+# put back the original config if any
+vm_cmd rm -f /etc/rpm-ostreed.conf
+if vm_cmd test -f /etc/rpm-ostreed.conf.bak; then
+  vm_cmd mv /etc/rpm-ostreed.conf{.bak,}
 fi
 
 # Gather post-failure system logs if necessary
