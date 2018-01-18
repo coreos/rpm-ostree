@@ -552,11 +552,7 @@ build_objid_map_for_package (RpmOstreeCommit2JigdoContext *self,
 /* Converts e.g. x86_64 to x86-64 (which is the current value of the RPM %{_isa}
  * macro). Here's where RPM maintains this currently:
  * https://github.com/rpm-software-management/rpm/blob/d9d47e01146a5d4411691a71916b1030ac7da193/installplatform#L25
- *
- * We could maintain a copy of that table but it'd be a huge maintenance pain. A
- * much simpler approach is to take the values we used from our own architecture
- * build. This currently will break doing cross-architecture jigdo2commit, as
- * well as multilib treecomposes.
+ * For now we scrape all the Provides: looking for a `Provides: %{name}(something)`.
  */
 static char *
 pkg_get_requires_isa (RpmOstreeCommit2JigdoContext *self,
