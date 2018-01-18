@@ -52,9 +52,7 @@ rm vmcheck/etc -rf
 # Now, overlay our built binaries & config files
 INSTTREE=/var/roothome/sync/insttree
 rsync -rlv $INSTTREE/usr/ vmcheck/usr/
-if [ -d $INSTTREE/etc ]; then # on CentOS, the dbus service file is in /usr
-  rsync -rlv $INSTTREE/etc/ vmcheck/usr/etc/
-fi
+rsync -rlv $INSTTREE/etc/ vmcheck/usr/etc/
 
 # ✀✀✀ BEGIN hack to get --keep-metadata
 if ! ostree commit --help | grep -q -e --keep-metadata; then
