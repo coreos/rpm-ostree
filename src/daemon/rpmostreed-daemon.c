@@ -323,8 +323,9 @@ get_config_uint64 (GKeyFile   *keyfile,
       guint64 r = g_key_file_get_uint64 (keyfile, DAEMON_CONFIG_GROUP, key, &local_error);
       if (!local_error)
         return r;
-      sd_journal_print (LOG_WARNING, "Bad value for key '%s': %s; using compiled defaults",
-                        key, local_error->message);
+      if (g_error_matches (local_error, G_KEY_FILE_ERROR, G_KEY_FILE_ERROR_INVALID_VALUE))
+        sd_journal_print (LOG_WARNING, "Bad uint64 for '%s': %s; using compiled defaults",
+                          key, local_error->message);
     }
   return default_val;
 }
