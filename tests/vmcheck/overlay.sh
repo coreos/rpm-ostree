@@ -64,12 +64,6 @@ fi
 # ✀✀✀ END hack to get --keep-metadata ✀✀✀
 
 commit_opts=
-for opt in --consume --no-bindings; do
-    if ostree commit --help | grep -q -e "${opt}"; then
-        commit_opts="${commit_opts} ${opt}"
-    fi
-done
-
 source_opt= # make this its own var since it contains spaces
 if [ $origin != vmcheck ]; then
   source_title="${origin}"
@@ -85,7 +79,7 @@ else
   commit_opts="${commit_opts} --keep-metadata=rpmostree.original-origin"
 fi
 
-ostree commit --parent=$commit -b vmcheck \
+ostree commit --parent=$commit -b vmcheck --consume --no-bindings \
        --link-checkout-speedup ${commit_opts} "${source_opt}" \
        --selinux-policy=vmcheck --tree=dir=vmcheck
 ostree admin deploy vmcheck
