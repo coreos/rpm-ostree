@@ -402,6 +402,7 @@ License: GPLv2+
 EOF
 
     local build= install= files= pretrans= pre= post= posttrans= post_args=
+    local verifyscript=
     local transfiletriggerin= transfiletriggerin_patterns=
     local transfiletriggerin2= transfiletriggerin2_patterns=
     local transfiletriggerun= transfiletriggerun_patterns=
@@ -417,7 +418,7 @@ EOF
             echo "Conflicts: $arg" >> $spec;;
         post_args)
             post_args="$arg";;
-        version|release|epoch|arch|build|install|files|pretrans|pre|post|posttrans)
+        version|release|epoch|arch|build|install|files|pretrans|pre|post|posttrans|verifyscript)
             declare $section="$arg";;
         transfiletriggerin)
             transfiletriggerin_patterns="$arg";
@@ -468,6 +469,9 @@ $transfiletriggerin2
 
 ${transfiletriggerun:+%transfiletriggerun -- ${transfiletriggerun_patterns}}
 $transfiletriggerun
+
+${verifyscript:+%verifyscript}
+$verifyscript
 
 %install
 mkdir -p %{buildroot}/usr/bin
