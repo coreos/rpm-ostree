@@ -48,11 +48,17 @@ query_jigdo_pkg (DnfContext *dnfctx,
 {
   hy_autoquery HyQuery query = hy_query_create (dnf_context_get_sack (dnfctx));
   /* This changed in v4, we now go through the Provides: name(arch) */
-  const gboolean is_archful = strchr (name_arch, '(') != NULL;
-  if (is_archful)
-    hy_query_filter (query, HY_PKG_PROVIDES, HY_EQ, name_arch);
+  const char *arch_start = strchr (name_arch, '(');
+  g_autofree char *name_owned = NULL;
+  const char *name;
+  if (arch_start)
+    {
+      name = name_owned = g_strndup (name_arch, arch_start - name_arch);
+      hy_query_filter (query, HY_PKG_PROVIDES, HY_EQ, name_arch);
+    }
   else
-    hy_query_filter (query, HY_PKG_NAME, HY_EQ, name_arch);
+    name = name_arch;
+  hy_query_filter (query, HY_PKG_NAME, HY_EQ, name);
   hy_query_filter (query, HY_PKG_EVR, HY_EQ, evr);
   g_autoptr(GPtrArray) pkglist = hy_query_run (query);
   if (pkglist->len == 0)

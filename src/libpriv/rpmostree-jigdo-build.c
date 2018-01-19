@@ -57,7 +57,7 @@ pkg_objid_free (PkgObjid *pkgobjid)
 typedef struct {
   OstreeRepo *repo;
   OstreeRepo *pkgcache_repo;
-  RpmOstreeRefSack *sack;
+  RpmOstreeRefSack *rsack;
 
   guint n_nonunique_objid_basenames;
   guint n_objid_basenames;
@@ -74,7 +74,7 @@ rpm_ostree_commit2jigdo_context_free (RpmOstreeCommit2JigdoContext *ctx)
 {
   g_clear_object (&ctx->repo);
   g_clear_object (&ctx->pkgcache_repo);
-  g_clear_pointer (&ctx->sack, rpmostree_refsack_unref);
+  g_clear_pointer (&ctx->rsack, rpmostree_refsack_unref);
   g_clear_pointer (&ctx->commit_content_objects, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&ctx->content_object_to_pkg_objid, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&ctx->objsize_to_object, (GDestroyNotify)g_hash_table_unref);
@@ -561,7 +561,7 @@ pkg_get_requires_isa (RpmOstreeCommit2JigdoContext *self,
 {
   g_autoptr(DnfReldepList) provides = dnf_package_get_provides (pkg);
   const gint n_provides = dnf_reldep_list_count (provides);
-  Pool *pool = dnf_sack_get_pool (self->sack->sack);
+  Pool *pool = dnf_sack_get_pool (self->rsack->sack);
   g_autofree char *provides_prefix = g_strconcat (dnf_package_get_name (pkg), "(", NULL);
   for (int i = 0; i < n_provides; i++)
     {
@@ -1080,11 +1080,11 @@ impl_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
   g_print ("%u content objects\n", g_hash_table_size (self->commit_content_objects));
 
   g_print ("Finding reachable objects from packages...\n");
-  self->sack = rpmostree_get_refsack_for_commit (self->repo, commit, cancellable, error);
-  if (!self->sack)
+  self->rsack = rpmostree_get_refsack_for_commit (self->repo, commit, cancellable, error);
+  if (!self->rsack)
     return FALSE;
 
-  hy_autoquery HyQuery hquery = hy_query_create (self->sack->sack);
+  hy_autoquery HyQuery hquery = hy_query_create (self->rsack->sack);
   hy_query_filter (hquery, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
   g_autoptr(GPtrArray) pkglist = hy_query_run (hquery);
   g_print ("Building object map from %u packages\n", pkglist->len);
