@@ -247,11 +247,14 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
       g_variant_builder_add (&builder, "{sv}", "ref", g_variant_new_string (ref));
   }
 
-  /* See if we're using jigdo */
-  { g_autofree char *jigdo = g_key_file_get_string (keyfile, "tree", "jigdo", NULL);
-    if (jigdo)
-      g_variant_builder_add (&builder, "{sv}", "jigdo", g_variant_new_string (jigdo));
+#define BIND_STRING(k)                                                  \
+  { g_autofree char *v = g_key_file_get_string (keyfile, "tree", k, NULL); \
+    if (v)                                                              \
+      g_variant_builder_add (&builder, "{sv}", k, g_variant_new_string (v)); \
   }
+
+  BIND_STRING("jigdo");
+  BIND_STRING("releasever");
 
   add_canonicalized_string_array (&builder, "packages", NULL, keyfile);
   add_canonicalized_string_array (&builder, "cached-packages", NULL, keyfile);
