@@ -20,12 +20,10 @@
 setup_rpmmd_repos() {
     dest=$1
     shift
-    releasever=${1:-26}
     repos=${RPMOSTREE_COMPOSE_TEST_USE_REPOS:-/etc/yum.repos.d}
-    # When bumping 26 here, also bump fedora.repo, .papr.yml
     for x in ${repos}/fedora{,-updates}.repo; do
         bn=$(basename ${x})
-        sed -e "s,\$releasever,$releasever," < $x > ${dest}/${bn}
+        cp $x ${dest}/${bn}
     done
 }
 
