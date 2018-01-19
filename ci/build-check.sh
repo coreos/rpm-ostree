@@ -24,5 +24,5 @@ if test -x /usr/bin/clang; then
   export CFLAGS="-Wall -Werror -Wno-error=deprecated-declarations -Wno-error=macro-redefined -Wno-error=unused-command-line-argument ${CFLAGS:-}"
   export CC=clang
   git clean -dfx && git submodule foreach git clean -dfx
-  build
+  build ${CONFIGOPTS:-}
 fi

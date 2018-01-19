@@ -102,10 +102,10 @@ PKGDEP_RPMOSTREE_LIBS="-L$(pwd)/libdnf-build/libdnf -ldnf $PKGDEP_RPMOSTREE_LIBS
 
 dnl This is the current version in Fedora 25.
 AS_IF([pkg-config --atleast-version=4.13.0.1 rpm], [
-have_modern_rpm=true
-AC_DEFINE([BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY], 1, [Set to 1 if we have interrupt safety API])
-AC_DEFINE([BUILDOPT_HAVE_RPM_FILETRIGGERS], 1, [Set to 1 if we have file triggers])
-AC_DEFINE([BUILDOPT_HAVE_RPMFILES], 1, [Set to 1 if we have rpmfiles API]),
+  have_modern_rpm=true
+  AC_DEFINE([BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY], 1, [Set to 1 if we have interrupt safety API])
+  AC_DEFINE([BUILDOPT_HAVE_RPM_FILETRIGGERS], 1, [Set to 1 if we have file triggers])
+  AC_DEFINE([BUILDOPT_HAVE_RPMFILES], 1, [Set to 1 if we have rpmfiles API])
 ], [have_modern_rpm=false])
 
 AC_PATH_PROG([XSLTPROC], [xsltproc])
