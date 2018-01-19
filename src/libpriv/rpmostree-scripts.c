@@ -66,6 +66,10 @@ static const KnownRpmScriptKind ignored_scripts[] = {
   { "%triggerpostun", RPMSENSE_TRIGGERPOSTUN,
     RPMTAG_TRIGGERPOSTUN, 0, 0 },
 
+  /* https://github.com/projectatomic/rpm-ostree/issues/1216 */
+  { "%verifyscript", 0,
+    RPMTAG_VERIFYSCRIPT, RPMTAG_VERIFYSCRIPTPROG, RPMTAG_VERIFYSCRIPTFLAGS},
+
   /* In practice, %pretrans are hack-arounds for broken upgrades.
    * Again, since we always assemble a new root, there's no point
    * to running them.
@@ -89,8 +93,6 @@ static const KnownRpmScriptKind unsupported_scripts[] = {
     RPMTAG_TRIGGERPREIN, 0, 0 },
   { "%triggerin", RPMSENSE_TRIGGERIN,
     RPMTAG_TRIGGERIN, 0, 0 },
-  { "%verify", 0,
-    RPMTAG_VERIFYSCRIPT, RPMTAG_VERIFYSCRIPTPROG, RPMTAG_VERIFYSCRIPTFLAGS},
 };
 
 typedef struct {

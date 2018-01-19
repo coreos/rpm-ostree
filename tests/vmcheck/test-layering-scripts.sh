@@ -28,10 +28,13 @@ set -x
 
 # do a bunch of tests together so that we only have to reboot once
 
+# For the expected semantics of these scripts, see the comments in
+# rpmostree-scripts.c.
 vm_build_rpm scriptpkg1 \
   pre "groupadd -r scriptpkg1" \
   pretrans "# http://lists.rpm.org/pipermail/rpm-ecosystem/2016-August/000391.html
-            echo i should've been ignored && exit 1" \
+            echo pretrans should've been ignored && exit 1" \
+  verifyscript "echo verifyscript should've been ignored && exit 1" \
   post_args "-p /usr/bin/python" \
   post 'open("/usr/lib/rpmostreetestinterp", "w")' \
   posttrans "# Firewalld; https://github.com/projectatomic/rpm-ostree/issues/638
