@@ -27,6 +27,7 @@
 #include <libdnf/libdnf.h>
 #include "libglnx.h"
 #include "rpmostree.h"
+#include "rpmostree-types.h"
 
 #define _N(single, plural, n) ( (n) == 1 ? (single) : (plural) )
 #define _NS(n) _N("", "s", n)
@@ -200,13 +201,6 @@ rpmostree_variant_bsearch_str (GVariant   *array,
                                const char *str,
                                int        *out_pos);
 
-/* these are kept here for easier sharing with the client */
-
-typedef enum {
-  RPMOSTREED_AUTOMATIC_UPDATE_POLICY_NONE,
-  RPMOSTREED_AUTOMATIC_UPDATE_POLICY_CHECK,
-} RpmostreedAutomaticUpdatePolicy;
-
 const char*
 rpmostree_auto_update_policy_to_str (RpmostreedAutomaticUpdatePolicy policy,
                                      GError **error);
@@ -215,8 +209,3 @@ gboolean
 rpmostree_str_to_auto_update_policy (const char *str,
                                      RpmostreedAutomaticUpdatePolicy *out_policy,
                                      GError **error);
-
-typedef enum {
-  RPM_OSTREE_PKG_TYPE_BASE,
-  RPM_OSTREE_PKG_TYPE_LAYER,
-} RpmOstreePkgTypes;

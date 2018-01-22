@@ -27,6 +27,7 @@
 #include <glib-unix.h>
 #include <libglnx.h>
 
+#include "rpmostree-types.h"
 #include "rpmostree-dbus-helpers.h"
 #include "rpmostree-builtins.h"
 #include "rpmostree-libbuiltin.h"
@@ -1236,25 +1237,29 @@ rpmostree_print_cached_update (GVariant         *cached_update,
 
       g_autoptr(GVariant) upgraded =
         _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "upgraded",
-                                                  G_VARIANT_TYPE ("a(us(ss)(ss))"), error);
+                                                  RPMOSTREE_DIFF_MODIFIED_GVARIANT_FORMAT,
+                                                  error);
       if (!upgraded)
         return FALSE;
 
       g_autoptr(GVariant) downgraded =
         _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "downgraded",
-                                                  G_VARIANT_TYPE ("a(us(ss)(ss))"), error);
+                                                  RPMOSTREE_DIFF_MODIFIED_GVARIANT_FORMAT,
+                                                  error);
       if (!downgraded)
         return FALSE;
 
       g_autoptr(GVariant) removed =
         _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "removed",
-                                                  G_VARIANT_TYPE ("a(usss)"), error);
+                                                  RPMOSTREE_DIFF_SINGLE_GVARIANT_FORMAT,
+                                                  error);
       if (!removed)
         return FALSE;
 
       g_autoptr(GVariant) added =
         _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "added",
-                                                  G_VARIANT_TYPE ("a(usss)"), error);
+                                                  RPMOSTREE_DIFF_SINGLE_GVARIANT_FORMAT,
+                                                  error);
       if (!added)
         return FALSE;
 
