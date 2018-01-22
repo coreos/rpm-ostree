@@ -21,6 +21,7 @@
 #include <systemd/sd-journal.h>
 #include <libglnx.h>
 
+#include "rpmostree-types.h"
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostree-origin.h"
 #include "rpmostree-util.h"
@@ -570,6 +571,7 @@ sort_pkgvariant_by_name (gconstpointer  pkga_pp,
 
   return strcmp (pkgname_a, pkgname_b);
 }
+
 static GVariant*
 array_to_variant_new (const char *format, GPtrArray *array)
 {
@@ -592,14 +594,14 @@ rpm_diff_variant_new (RpmDiff *diff)
   g_assert (diff->initialized);
   g_auto(GVariantDict) dict;
   g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert_value (&dict, "upgraded",
-                               array_to_variant_new ("a(us(ss)(ss))", diff->upgraded));
-  g_variant_dict_insert_value (&dict, "downgraded",
-                               array_to_variant_new ("a(us(ss)(ss))", diff->downgraded));
-  g_variant_dict_insert_value (&dict, "removed",
-                               array_to_variant_new ("a(usss)", diff->removed));
-  g_variant_dict_insert_value (&dict, "added",
-                               array_to_variant_new ("a(usss)", diff->added));
+  g_variant_dict_insert_value (&dict, "upgraded", array_to_variant_new (
+                                 RPMOSTREE_DIFF_MODIFIED_GVARIANT_STRING, diff->upgraded));
+  g_variant_dict_insert_value (&dict, "downgraded", array_to_variant_new (
+                                 RPMOSTREE_DIFF_MODIFIED_GVARIANT_STRING, diff->downgraded));
+  g_variant_dict_insert_value (&dict, "removed", array_to_variant_new (
+                                 RPMOSTREE_DIFF_SINGLE_GVARIANT_STRING, diff->removed));
+  g_variant_dict_insert_value (&dict, "added", array_to_variant_new (
+                                 RPMOSTREE_DIFF_SINGLE_GVARIANT_STRING, diff->added));
   return g_variant_dict_end (&dict);
 }
 
