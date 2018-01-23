@@ -1,5 +1,6 @@
 {
     "ref": "fedora/stable/${basearch}",
+    "releasever": "27",
 
     "repos": ["fedora", "updates"],
 
