@@ -510,6 +510,8 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
       break;
     }
 
+  if (!rpmostree_stdout_is_journal ())
+    g_print ("Running: %s %s\n", dnf_package_get_name (pkg), rpmscript->desc);
   guint64 start_time_ms = g_get_monotonic_time () / 1000;
   if (!run_script_in_bwrap_container (rootfs_fd, var_lib_rpm_statedir, dnf_package_get_name (pkg),
                                       rpmscript->desc, interp, script, script_arg,

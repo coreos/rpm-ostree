@@ -3703,6 +3703,14 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   g_assert (n_rpmts_elements > 0);
   guint n_rpmts_done = 0;
 
+  for (guint i = 0; i < n_rpmts_elements; i++)
+    {
+      rpmte te = rpmtsElement (ordering_ts, i);
+      rpmElementType type = rpmteType (te);
+      DnfPackage *pkg = (void*)rpmteKey (te);
+      g_printerr ("TS: %s\n", dnf_package_get_nevra (pkg));
+    }
+
   /* Okay so what's going on in Fedora with incestuous relationship
    * between the `filesystem`, `setup`, `libgcc` RPMs is actively
    * ridiculous.  If we unpack libgcc first it writes to /lib64 which
@@ -3789,6 +3797,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       OstreeRepoCheckoutOverwriteMode ovwmode =
         (pkg == setup_package) ? OSTREE_REPO_CHECKOUT_OVERWRITE_ADD_FILES :
         OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL;
+
+      g_printerr ("TS: %s\n", dnf_package_get_name (pkg));
 
       if (!checkout_package_into_root (self, pkg, tmprootfs_dfd, ".", self->devino_cache,
                                        g_hash_table_lookup (pkg_to_ostree_commit, pkg),
@@ -3931,14 +3941,6 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
             }
         }
 
-      /* %triggerin */
-      rpmostree_output_task_begin ("Running triggerin scripts");
-      guint n_triggerin_run = 0;
-      if (!run_all_pkgtriggerin (self, tmprootfs_dfd, ordering_ts,
-                                 &n_triggerin_run, cancellable, error))
-        return FALSE;
-      rpmostree_output_task_end ("%u done", n_triggerin_run);
-
       rpmostree_output_task_begin ("Running post scripts");
       guint n_post_scripts_run = 0;
 
@@ -3962,6 +3964,14 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                 &n_post_scripts_run, cancellable, error))
             return FALSE;
         }
+
+      /* %triggerin */
+      rpmostree_output_task_begin ("Running triggerin scripts");
+      guint n_triggerin_run = 0;
+      if (!run_all_pkgtriggerin (self, tmprootfs_dfd, ordering_ts,
+                                 &n_triggerin_run, cancellable, error))
+        return FALSE;
+      rpmostree_output_task_end ("%u done", n_triggerin_run);
 
       /* %posttrans */
       for (guint i = 0; i < n_rpmts_elements; i++)
