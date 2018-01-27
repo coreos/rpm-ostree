@@ -26,6 +26,7 @@
 #include <glib-unix.h>
 #include <gio/gunixoutputstream.h>
 #include <json-glib/json-glib.h>
+#include <libdnf/libdnf.h>
 
 #include "rpmostree-builtins.h"
 #include "rpmostree-libbuiltin.h"
@@ -34,8 +35,12 @@
 #include "rpmostree-core.h"
 #include "rpmostree-rpm-util.h"
 #include "libsd-locale-util.h"
+#include "libsd-time-util.h"
 
 #include <libglnx.h>
+
+#define RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH \
+  "/org/freedesktop/systemd1/unit/rpm_2dostreed_2dautomatic_2eservice"
 
 static gboolean opt_pretty;
 static gboolean opt_verbose;
@@ -168,7 +173,69 @@ gv_nevra_to_evr (GString  *buffer,
 }
 
 static gboolean
+get_last_auto_update_run (GDBusConnection *connection,
+                          char           **out_last_run,
+                          gboolean        *out_fail,
+                          GCancellable    *cancellable,
+                          GError         **error)
+{
+  GLNX_AUTO_PREFIX_ERROR ("Querying systemd for last auto-update run", error);
+
+  g_autoptr(GDBusProxy) unit_proxy =
+    g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
+                           "org.freedesktop.systemd1", RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH,
+                           "org.freedesktop.systemd1.Unit", cancellable, error);
+  if (!unit_proxy)
+    return FALSE;
+
+  g_autoptr(GVariant) state_val =
+    g_dbus_proxy_get_cached_property (unit_proxy, "ActiveState");
+
+  /* let's not error out if we can't msg systemd (e.g. bad sepol); just mark as unknown */
+  if (state_val == NULL)
+    {
+      *out_fail = FALSE;
+      *out_last_run = g_strdup ("unknown");
+      return TRUE; /* NB early return */
+    }
+
+  const char *state = g_variant_get_string (state_val, NULL);
+  if (g_str_equal (state, "failed"))
+    {
+      *out_fail = TRUE;
+      return TRUE; /* NB early return */
+    }
+
+  g_autoptr(GDBusProxy) service_proxy =
+    g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
+                           "org.freedesktop.systemd1", RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH,
+                           "org.freedesktop.systemd1.Service", cancellable, error);
+  if (!service_proxy)
+    return FALSE;
+
+  g_autoptr(GVariant) t_val =
+    g_dbus_proxy_get_cached_property (service_proxy, "ExecMainExitTimestamp");
+
+  g_autofree char *last_run = NULL;
+  if (t_val)
+    {
+      guint64 t = g_variant_get_uint64 (t_val);
+      if (t > 0)
+        {
+          char time_rel[FORMAT_TIMESTAMP_RELATIVE_MAX] = "";
+          libsd_format_timestamp_relative (time_rel, sizeof(time_rel), t);
+          last_run = g_strdup (time_rel);
+        }
+    }
+
+  *out_fail = FALSE;
+  *out_last_run = g_steal_pointer (&last_run);
+  return TRUE;
+}
+
+static gboolean
 print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
+                    GBusType          bus_type,
                     GCancellable     *cancellable,
                     GError          **error)
 {
@@ -177,7 +244,38 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
                                              cancellable, error))
     return FALSE;
 
+  const char *policy = rpmostree_sysroot_get_automatic_update_policy (sysroot_proxy);
+
   g_print ("State: %s", txn_proxy ? "busy" : "idle");
+  if (g_str_equal (policy, "none"))
+    g_print ("; auto updates disabled\n");
+  else
+    {
+      g_print ("; auto updates enabled ");
+
+      /* don't try to get info from systemd if we're not on the system bus */
+      if (bus_type != G_BUS_TYPE_SYSTEM)
+        g_print ("(%s)\n", policy);
+      else
+        {
+          gboolean failed;
+          g_autofree char *last_run = NULL;
+
+          GDBusConnection *connection =
+            g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
+          if (!get_last_auto_update_run (connection, &last_run, &failed, cancellable, error))
+            return FALSE;
+
+          if (failed)
+            g_print ("(%s; %s%slast run failed%s%s)\n", policy,
+                     get_red_start (), get_bold_start (), get_bold_end (), get_red_end ());
+          else if (last_run)
+            /* e.g. "last check 4h 32min ago" */
+            g_print ("(%s; last run %s)\n", policy, last_run);
+          else
+            g_print ("(%s; no runs since boot)\n", policy);
+        }
+    }
 
   if (txn_proxy)
     {
@@ -575,6 +673,7 @@ rpmostree_builtin_status (int             argc,
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
   _cleanup_peer_ GPid peer_pid = 0;
 
+  GBusType bus_type;
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
@@ -582,7 +681,7 @@ rpmostree_builtin_status (int             argc,
                                        cancellable,
                                        NULL, NULL,
                                        &sysroot_proxy,
-                                       &peer_pid, NULL,
+                                       &peer_pid, &bus_type,
                                        error))
     return FALSE;
 
@@ -597,6 +696,9 @@ rpmostree_builtin_status (int             argc,
     return FALSE;
 
   g_autoptr(GVariant) deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
+  g_autoptr(GVariant) cached_update = NULL;
+  if (rpmostree_os_get_has_cached_update_rpm_diff (os_proxy))
+    cached_update = rpmostree_os_dup_cached_update (os_proxy);
 
   if (opt_json || opt_jsonpath)
     {
@@ -610,6 +712,13 @@ rpmostree_builtin_status (int             argc,
       JsonNode *txn_node =
         txn ? json_gvariant_serialize (txn) : json_node_new (JSON_NODE_NULL);
       json_builder_add_value (builder, txn_node);
+      json_builder_set_member_name (builder, "cached-update");
+      JsonNode *cached_update_node;
+      if (cached_update)
+        cached_update_node = json_gvariant_serialize (cached_update);
+      else
+        cached_update_node = json_node_new (JSON_NODE_NULL);
+      json_builder_add_value (builder, cached_update_node);
       json_builder_end_object (builder);
 
       JsonNode *json_root = json_builder_get_root (builder);
@@ -638,11 +747,21 @@ rpmostree_builtin_status (int             argc,
     }
   else
     {
-      if (!print_daemon_state (sysroot_proxy, cancellable, error))
+      if (!print_daemon_state (sysroot_proxy, bus_type, cancellable, error))
         return FALSE;
 
       if (!print_deployments (sysroot_proxy, deployments, cancellable, error))
         return FALSE;
+
+      const char *policy = rpmostree_sysroot_get_automatic_update_policy (sysroot_proxy);
+      gboolean auto_updates_enabled = (!g_str_equal (policy, "none"));
+      if (cached_update && auto_updates_enabled)
+        {
+          g_print ("\n");
+          if (!rpmostree_print_cached_update (cached_update, opt_verbose,
+                                              cancellable, error))
+            return FALSE;
+        }
     }
 
   return TRUE;

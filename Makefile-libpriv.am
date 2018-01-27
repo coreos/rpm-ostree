@@ -24,6 +24,7 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-json-parsing.h \
 	src/libpriv/rpmostree-util.c \
 	src/libpriv/rpmostree-util.h \
+	src/libpriv/rpmostree-types.h \
 	src/libpriv/rpmostree-passwd-util.c \
 	src/libpriv/rpmostree-passwd-util.h \
 	src/libpriv/rpmostree-refts.h \
@@ -62,6 +63,8 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-editor.h \
 	src/libpriv/libsd-locale-util.c \
 	src/libpriv/libsd-locale-util.h \
+	src/libpriv/libsd-time-util.c \
+	src/libpriv/libsd-time-util.h \
 	src/libpriv/rpmostree-libarchive-input-stream.c \
 	src/libpriv/rpmostree-libarchive-input-stream.h \
 	$(NULL)

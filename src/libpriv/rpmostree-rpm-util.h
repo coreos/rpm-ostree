@@ -114,6 +114,10 @@ rpmostree_get_refts_for_commit (OstreeRepo                *repo,
                                 GCancellable              *cancellable,
                                 GError                   **error);
 
+gint
+rpmostree_pkg_array_compare (DnfPackage **p_pkg1,
+                             DnfPackage **p_pkg2);
+
 void
 rpmostree_print_transaction (DnfContext   *context);
 

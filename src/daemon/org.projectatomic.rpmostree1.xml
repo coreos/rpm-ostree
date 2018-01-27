@@ -50,6 +50,9 @@
     <method name="ReloadConfig">
     </method>
 
+    <!-- none, check, reboot -->
+    <property name="AutomaticUpdatePolicy" type="s" access="read"/>
+
     <method name="CreateOSName">
       <arg type="s" name="name"/>
       <arg type="o" name="result" direction="out"/>
@@ -77,12 +80,32 @@
        'origin' (type 's')
        'signatures' (type 'av')
        'gpg-enabled' (type 'b')
+       'ref-has-new-commit' (type 'b')
+          TRUE if 'checksum' refers to a new commit we're not booted in.
+       'rpm-diff' (type 'a{sv}')
+          'upgraded' (type 'a(us(ss)(ss))')
+          'downgraded' (type 'a(us(ss)(ss))')
+          'removed' (type 'a(usss)')
+          'added' (type 'a(usss)')
     -->
     <property name="CachedUpdate" type="a{sv}" access="read"/>
     <property name="HasCachedUpdateRpmDiff" type="b" access="read"/>
 
-    <!-- NONE, DIFF, PREPARE, REBOOT -->
-    <property name="AutomaticUpdatePolicy" type="s" access="read"/>
+    <!-- Available options:
+         "mode" (type 's')
+            One of auto, none, check, reboot. Defaults to
+            auto, which follows configured policy (available in
+            AutomaticUpdatePolicy property).
+
+         If automatic updates are not enabled, @enabled will be FALSE and
+         @transaction_address will be the empty string.
+    -->
+    <method name="AutomaticUpdateTrigger">
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="b" name="enabled" direction="out"/>
+      <arg type="s" name="transaction_address" direction="out"/>
+    </method>
+
     <property name="Name" type="s" access="read"/>
 
     <method name="GetDeploymentsRpmDiff">

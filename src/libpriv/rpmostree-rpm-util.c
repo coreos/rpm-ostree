@@ -143,7 +143,7 @@ static char *
 pkg_nevra_strdup (Header h1)
 {
   return rpmostree_header_custom_nevra_strdup (h1, PKG_NEVRA_FLAGS_NAME |
-                                                   PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE |
+                                                   PKG_NEVRA_FLAGS_EVR |
                                                    PKG_NEVRA_FLAGS_ARCH);
 }
 
@@ -893,9 +893,9 @@ rpmostree_get_refts_for_commit (OstreeRepo                *repo,
   return TRUE;
 }
 
-static gint
-pkg_array_compare (DnfPackage **p_pkg1,
-                   DnfPackage **p_pkg2)
+gint
+rpmostree_pkg_array_compare (DnfPackage **p_pkg1,
+                             DnfPackage **p_pkg2)
 {
   return dnf_package_cmp (*p_pkg1, *p_pkg2);
 }
@@ -915,7 +915,7 @@ rpmostree_sighandler_reset_cleanup (RpmSighandlerResetCleanup *cleanup)
 static void
 print_pkglist (GPtrArray *pkglist)
 {
-  g_ptr_array_sort (pkglist, (GCompareFunc) pkg_array_compare);
+  g_ptr_array_sort (pkglist, (GCompareFunc) rpmostree_pkg_array_compare);
 
   for (guint i = 0; i < pkglist->len; i++)
     {
@@ -1124,7 +1124,7 @@ GPtrArray*
 rpmostree_sack_get_sorted_packages (DnfSack *sack)
 {
   g_autoptr(GPtrArray) pkglist = rpmostree_sack_get_packages (sack);
-  g_ptr_array_sort (pkglist, (GCompareFunc)pkg_array_compare);
+  g_ptr_array_sort (pkglist, (GCompareFunc)rpmostree_pkg_array_compare);
   return g_steal_pointer (&pkglist);
 }
 

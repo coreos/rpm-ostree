@@ -74,15 +74,26 @@ librpmostreed_la_LIBADD = \
 dbusconf_DATA = $(srcdir)/src/daemon/org.projectatomic.rpmostree1.conf
 dbusconfdir = ${sysconfdir}/dbus-1/system.d
 
-systemdunit_in_files = $(srcdir)/src/daemon/rpm-ostreed.service.in
-systemdunit_DATA     = $(systemdunit_in_files:.service.in=.service)
+systemdunit_service_in_files = \
+	$(srcdir)/src/daemon/rpm-ostreed.service.in \
+	$(srcdir)/src/daemon/rpm-ostreed-automatic.service.in \
+	$(NULL)
+
+systemdunit_service_files = $(systemdunit_service_in_files:.service.in=.service)
+systemdunit_timer_files = $(srcdir)/src/daemon/rpm-ostreed-automatic.timer
+
+systemdunit_DATA = \
+	$(systemdunit_service_files) \
+	$(systemdunit_timer_files) \
+	$(NULL)
+
 systemdunitdir       = $(prefix)/lib/systemd/system/
 if BUILDOPT_ASAN
 daemon_asan_options = -e s,@SYSTEMD_ENVIRON\@,Environment=ASAN_OPTIONS=detect_leaks=false,
 else
 daemon_asan_options = -e /@SYSTEMD_ENVIRON\@/d
 endif
-$(systemdunit_DATA): Makefile
+$(systemdunit_service_files): Makefile
 	$(SED_SUBST) $(daemon_asan_options) $@.in > $@
 
 # We keep this stub script around to have SELinux labeling work,
@@ -119,10 +130,11 @@ EXTRA_DIST += \
 	$(polkit_policy_DATA) \
 	$(sysconf_DATA) \
 	$(service_in_files) \
-	$(systemdunit_in_files) \
+	$(systemdunit_service_in_files) \
+	$(systemdunit_timer_files) \
 	$(NULL)
 
 CLEANFILES += \
 	$(service_DATA) \
-	$(systemdunit_DATA) \
+	$(systemdunit_service_files) \
 	$(NULL)

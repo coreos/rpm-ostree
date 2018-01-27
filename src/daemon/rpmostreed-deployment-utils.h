@@ -44,3 +44,9 @@ GVariant *      rpmostreed_commit_generate_cached_details_variant (OstreeDeploym
                                                                    OstreeRepo       *repo,
                                                                    const gchar      *refspec,
                                                                    GError          **error);
+gboolean
+rpmostreed_update_generate_variant (OstreeSysroot *sysroot,
+                                    OstreeDeployment *deployment,
+                                    OstreeRepo *repo,
+                                    GVariant **out_update,
+                                    GError **error);
