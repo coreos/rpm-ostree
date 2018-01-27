@@ -970,13 +970,6 @@ os_handle_automatic_update_trigger (RPMOSTreeOS *interface,
     case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_CHECK:
       dfault = RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY;
       break;
-    case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_REBOOT:
-      /* XXX: We should tease this out a bit more; e.g. we may only want to auto-reboot if
-       * it's an ostree update, not just a layered pkg update, or if there's a medium+
-       * severity advisory open. This would probably have to be implemented with more
-       * configs like AutomaticUpdateRebootPolicy. */
-      dfault = RPMOSTREE_TRANSACTION_DEPLOY_FLAG_REBOOT;
-      break;
     default:
       g_assert_not_reached ();
     }

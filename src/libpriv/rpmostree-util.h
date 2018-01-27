@@ -205,7 +205,6 @@ rpmostree_variant_bsearch_str (GVariant   *array,
 typedef enum {
   RPMOSTREED_AUTOMATIC_UPDATE_POLICY_NONE,
   RPMOSTREED_AUTOMATIC_UPDATE_POLICY_CHECK,
-  RPMOSTREED_AUTOMATIC_UPDATE_POLICY_REBOOT,
 } RpmostreedAutomaticUpdatePolicy;
 
 const char*

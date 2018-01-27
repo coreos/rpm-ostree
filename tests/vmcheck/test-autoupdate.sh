@@ -180,17 +180,7 @@ assert_default_deployment_is_update() {
   assert_file_has_content list.txt 'layered-cake-2.1-4.x86_64'
 }
 
-# now let's try reboot mode
-change_policy reboot
-vm_reboot_cmd rpm-ostree upgrade --trigger-automatic-update-policy
+# now let's upgrade and check that it matches what we expect
+vm_rpmostree upgrade
 assert_default_deployment_is_update
-echo "ok reboot mode"
-
-# let's do another reboot mode trigger to make sure we don't reboot if there's
-# nothing pending (use 77 exit to make it easier to test)
-rc=0
-vm_cmd rpm-ostree upgrade \
-  --upgrade-unchanged-exit-77 \
-  --trigger-automatic-update-policy || rc=$?
-assert_streq "$rc" "77"
-echo "ok reboot mode no upgrades"
+echo "ok upgrade"

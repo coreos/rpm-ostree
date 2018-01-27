@@ -71,10 +71,9 @@ Boston, MA 02111-1307, USA.
         <term><varname>AutomaticUpdatePolicy=</varname></term>
 
         <listitem>
-        <para>Controls the automatic update policy. One of "none", "check", or "reboot".
+        <para>Controls the automatic update policy. Currently "none" or "check".
         "none" disables automatic updates. "check" downloads just enough metadata to check
-        for updates and display them in <command>rpm-ostree status</command>. "reboot"
-        downloads the update, deploys it, and reboots the machine. Defaults to
+        for updates and display them in <command>rpm-ostree status</command>. Defaults to
         "none".</para>
 
         <para>Automatic updates enablement and frequency are controlled by the
