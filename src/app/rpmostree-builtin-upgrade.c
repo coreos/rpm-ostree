@@ -71,6 +71,8 @@ rpmostree_builtin_upgrade (int             argc,
   const char *const *install_pkgs = NULL;
   const char *const *uninstall_pkgs = NULL;
 
+  g_option_context_add_group (context, rpmostree_txn_common_options ());
+
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,

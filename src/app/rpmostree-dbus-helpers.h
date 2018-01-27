@@ -92,6 +92,9 @@ rpmostree_print_gpg_info (GVariant  *signatures,
 void
 rpmostree_print_package_diffs                (GVariant *variant);
 
+
+GOptionGroup *rpmostree_txn_common_options (void);
+
 gboolean
 rpmostree_sort_pkgs_strv (const char *const* pkgs,
                           GUnixFDList  *fd_list,
