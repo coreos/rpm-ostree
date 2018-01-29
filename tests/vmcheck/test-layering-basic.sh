@@ -84,6 +84,12 @@ vm_rpmostree db diff --format=diff \
 assert_file_has_content_literal 'db-diff.txt' "+foo-1.0-1.x86_64"
 echo "ok pkg-add foo"
 
+# Test that we don't do progress bars if on a tty (with the client)
+vm_rpmostree uninstall foo-1.0
+vm_rpmostree install foo-1.0 > foo-install.txt
+assert_file_has_content_literal foo-install.txt 'Building filesystem (1/1) 100%'
+echo "ok install not on a tty"
+
 vm_reboot
 vm_assert_status_jq \
   '.deployments[0]["base-checksum"]' \
