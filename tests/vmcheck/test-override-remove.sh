@@ -39,8 +39,12 @@ vm_assert_status_jq \
 vm_cmd ostree refs $(vm_get_booted_csum) \
   --create vmcheck_tmp/without_foo_and_bar
 
-# create a new branch with foo and bar
-vm_build_rpm foo
+# create a new branch with foo and bar.
+# foo has files in /lib, to test our re-canonicalization to /usr
+vm_build_rpm foo \
+             files "%dir /lib/foo
+                    /lib/foo/foo.txt" \
+             install 'mkdir -p %{buildroot}/lib/foo && echo %{name} > %{buildroot}/lib/foo/foo.txt'
 vm_build_rpm bar
 vm_rpmostree install foo bar
 vm_cmd ostree refs $(vm_get_deployment_info 0 checksum) \
@@ -74,6 +78,10 @@ vm_assert_status_jq \
   '.deployments[0]["requested-base-removals"]|length == 2' \
   '.deployments[0]["requested-base-removals"]|index("foo") >= 0' \
   '.deployments[0]["requested-base-removals"]|index("bar") >= 0'
+newroot=$(vm_get_deployment_root 0)
+# And this tests handling /lib -> /usr/lib
+vm_cmd "test -d ${newroot}/usr/lib && test '!' -f ${newroot}/usr/lib/foo/foo.txt && \
+        test '!' -d ${newroot}/usr/lib/foo"
 echo "ok override remove foo and bar"
 
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck

@@ -351,6 +351,8 @@ rpmostree_context_finalize (GObject *object)
   (void)glnx_tmpdir_delete (&rctx->tmpdir, NULL, NULL);
   (void)glnx_tmpdir_delete (&rctx->repo_tmpdir, NULL, NULL);
 
+  g_clear_pointer (&rctx->rootfs_usrlinks, g_hash_table_unref);
+
   G_OBJECT_CLASS (rpmostree_context_parent_class)->finalize (object);
 }
 
@@ -2461,6 +2463,55 @@ get_rpmdb_pkg_header (rpmts rpmdb_ts,
   return headerLink (hdr);
 }
 
+/* Scan rootfs and build up a mapping like lib → usr/lib, etc. */
+static gboolean
+build_rootfs_usrlinks (RpmOstreeContext *self,
+                       GError          **error)
+{
+  g_assert (!self->rootfs_usrlinks);
+  self->rootfs_usrlinks = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+
+  g_auto(GLnxDirFdIterator) dfd_iter = { FALSE, };
+  if (!glnx_dirfd_iterator_init_at (self->tmprootfs_dfd, ".", TRUE, &dfd_iter, error))
+    return FALSE;
+  while (TRUE)
+    {
+      struct dirent *dent = NULL;
+      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, NULL, error))
+        return FALSE;
+      if (dent == NULL)
+        break;
+
+      if (dent->d_type != DT_LNK)
+        continue;
+
+      g_autofree char *link = glnx_readlinkat_malloc (dfd_iter.fd, dent->d_name, NULL, error);
+      if (!link)
+        return FALSE;
+      const char *link_rel = link + strspn (link, "/");
+      if (g_str_has_prefix (link_rel, "usr/"))
+        g_hash_table_insert (self->rootfs_usrlinks, g_strdup (dent->d_name),
+                             g_strdup (link_rel));
+    }
+
+  return TRUE;
+}
+
+/* Convert e.g. lib/foo/bar → usr/lib/foo/bar */
+static char *
+canonicalize_non_usrmove_path (RpmOstreeContext  *self,
+                               const char *path)
+{
+  const char *slash = strchr (path, '/');
+  if (!slash)
+    return NULL;
+  const char *prefix = strndupa (path, slash - path);
+  const char *link = g_hash_table_lookup (self->rootfs_usrlinks, prefix);
+  if (!link)
+    return NULL;
+  return g_build_filename (link, slash + 1, NULL);
+}
+
 static gboolean
 delete_package_from_root (RpmOstreeContext *self,
                           rpmte         pkg,
@@ -2494,8 +2545,16 @@ delete_package_from_root (RpmOstreeContext *self,
       g_assert (fn[0]);
 
       g_autofree char *fn_owned = NULL;
+      /* Handle ostree's /usr/etc */
       if (g_str_has_prefix (fn, "etc/"))
         fn = fn_owned = g_strconcat ("usr/", fn, NULL);
+      else
+        {
+          /* Otherwise be sure we've canonicalized usr/ */
+          fn_owned = canonicalize_non_usrmove_path (self, fn);
+          if (fn_owned)
+            fn = fn_owned;
+        }
 
       /* for now, we only remove files from /usr */
       if (!g_str_has_prefix (fn, "usr/"))
@@ -3016,6 +3075,11 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
       fn += strspn (fn, "/");
       g_assert (fn[0]);
 
+      /* Be sure we've canonicalized usr/ */
+      g_autofree char *fn_canonical = canonicalize_non_usrmove_path (self, fn);
+      if (fn_canonical)
+        fn = fn_canonical;
+
       g_autofree char *modified_fn = NULL;  /* May be used to override fn */
       /* /run and /var paths have already been translated to tmpfiles during
        * unpacking */
@@ -3272,6 +3336,12 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
     }
 
   int tmprootfs_dfd = self->tmprootfs_dfd; /* Alias to avoid bigger diff */
+
+  /* In e.g. removing a package we walk librpm which doesn't have canonical
+   * /usr, so we need to build up a mapping.
+   */
+  if (!build_rootfs_usrlinks (self, error))
+    return FALSE;
 
   /* We need up to date labels; the set of things needing relabeling
    * will have been calculated in sort_packages()
