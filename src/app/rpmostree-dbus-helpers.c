@@ -428,9 +428,14 @@ add_status_line (TransactionProgress *self,
   self->in_status_line = TRUE;
   if (!self->console.locked)
     glnx_console_lock (&self->console);
+
+  /* Always render text, but we only show progress if we're on a tty, to be
+   * friendlier to e.g. Ansible and other tools that may just be seeing our
+   * output.
+   */
   if (percentage < 0)
     glnx_console_text (line);
-  else
+  else if (percentage == 100 || self->console.is_tty)
     glnx_console_progress_text_percent (line, percentage);
 }
 
