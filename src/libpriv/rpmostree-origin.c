@@ -115,30 +115,30 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   ret->cached_unconfigured_state = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
 
   g_autofree char *refspec = g_key_file_get_string (ret->kf, "origin", "refspec", NULL);
+  g_autofree char *jigdo_spec = g_key_file_get_string (ret->kf, "origin", "rojig", NULL);
   if (!refspec)
     {
       refspec = g_key_file_get_string (ret->kf, "origin", "baserefspec", NULL);
-      if (!refspec)
-        return glnx_null_throw (error, "No origin/refspec or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree");
+      if (!refspec && !jigdo_spec)
+        return glnx_null_throw (error, "No origin/refspec, origin/rojig, or origin/baserefspec in current deployment origin; cannot handle via rpm-ostree");
     }
-
-  const char *refspecdata;
-  if (!rpmostree_refspec_classify (refspec, &ret->refspec_type, &refspecdata, error))
-    return FALSE;
-  /* We "peel" here so that code that just calls
-   * rpmostree_origin_get_refspec() in the ostree:// case
-   * sees it without the prefix for compatibility.
-   */
-  ret->cached_refspec = g_strdup (refspecdata);
-  switch (ret->refspec_type)
+  if (refspec && jigdo_spec)
+    return glnx_null_throw (error, "Duplicate origin/refspec and origin/rojig in deployment origin");
+  else if (refspec)
     {
-    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-      ret->cached_override_commit =
-        g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
-      break;
-    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+      ret->refspec_type = RPMOSTREE_REFSPEC_TYPE_OSTREE;
+      /* Note the lack of a prefix here so that code that just calls
+       * rpmostree_origin_get_refspec() in the ostree:// case
+       * sees it without the prefix for compatibility.
+       */
+      ret->cached_refspec = g_steal_pointer (&refspec);
+    }
+  else
+    {
+      g_assert (jigdo_spec);
+      ret->refspec_type = RPMOSTREE_REFSPEC_TYPE_ROJIG;
+      ret->cached_refspec = g_steal_pointer (&jigdo_spec);
       ret->cached_jigdo_version = g_key_file_get_string (ret->kf, "origin", "jigdo-version", NULL);
-      break;
     }
 
   if (!parse_packages_strv (ret->kf, "packages", "requested", FALSE,
@@ -403,14 +403,27 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
     return FALSE;
   g_free (origin->cached_refspec);
   origin->cached_refspec = g_strdup (refspecdata);
-
-  const char *refspec_key =
-    g_key_file_has_key (origin->kf, "origin", "baserefspec", NULL) ?
-      "baserefspec" : "refspec";
-  /* Peel for ostree:// types for compatibility */
-  const char *refspec_value =
-    origin->refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE ? origin->cached_refspec : new_refspec;
-  g_key_file_set_string (origin->kf, "origin", refspec_key, refspec_value);
+  switch (origin->refspec_type)
+    {
+    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+      {
+        g_key_file_remove_key (origin->kf, "origin", "rojig", NULL);
+        const char *refspec_key =
+          g_key_file_has_key (origin->kf, "origin", "baserefspec", NULL) ?
+          "baserefspec" : "refspec";
+        g_key_file_set_string (origin->kf, "origin", refspec_key, origin->cached_refspec);
+      }
+      break;
+    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+      {
+        origin->cached_refspec = g_strdup (refspecdata);
+        g_key_file_remove_key (origin->kf, "origin", "refspec", NULL);
+        g_key_file_remove_key (origin->kf, "origin", "baserefspec", NULL);
+        /* Peeled */
+        g_key_file_set_string (origin->kf, "origin", "rojig", origin->cached_refspec);
+      }
+      break;
+    }
 
   return TRUE;
 }
@@ -479,10 +492,21 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin,
 
   if (g_hash_table_size (pkgs) > 0)
     {
-      /* migrate to baserefspec model */
-      g_key_file_set_value (origin->kf, "origin", "baserefspec",
-                            origin->cached_refspec);
-      g_key_file_remove_key (origin->kf, "origin", "refspec", NULL);
+      switch (origin->refspec_type)
+        {
+        case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+          {
+            g_key_file_set_value (origin->kf, "origin", "baserefspec",
+                                  origin->cached_refspec);
+            g_key_file_remove_key (origin->kf, "origin", "refspec", NULL);
+            break;
+          }
+        case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+          /* Nothing to switch, since libostree already doesn't know how to
+           * handle rojig.
+           */
+          break;
+        }
     }
 }
 

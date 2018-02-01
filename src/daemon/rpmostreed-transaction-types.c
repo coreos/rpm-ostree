@@ -58,15 +58,24 @@ change_origin_refspec (OstreeSysroot *sysroot,
    * `rpm-ostree rebase fedora-atomic-workstation` instead of
    * `rpm-ostree rebase updates:fedora-atomic-workstation` etc.
    */
-  if (refspectype == RPMOSTREE_REFSPEC_TYPE_ROJIG)
+  switch (refspectype)
     {
-      if (!rpmostree_origin_set_rebase (origin, src_refspec, error))
-        return FALSE;
+      case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+        {
+          if (!rpmostree_origin_set_rebase (origin, src_refspec, error))
+            return FALSE;
 
-      if (out_old_refspec != NULL)
-        *out_old_refspec = g_strdup (current_refspecdata);
-      *out_new_refspec = g_strdup (src_refspec);
-      return TRUE;
+          if (current_refspectype == RPMOSTREE_REFSPEC_TYPE_ROJIG
+              && strcmp (current_refspecdata, refspecdata) == 0)
+            return glnx_throw (error, "Old and new refs are equal: %s", src_refspec);
+
+          if (out_old_refspec != NULL)
+            *out_old_refspec = g_strdup (current_refspecdata);
+          *out_new_refspec = g_strdup (src_refspec);
+          return TRUE;
+        }
+    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+      break;
     }
 
   /* Now here we "peel" it since the rest of the code assumes libostree */

@@ -301,7 +301,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
 
   gboolean gpg_enabled = FALSE;
   g_autoptr(GVariant) sigs = NULL;
-  if (refspec && refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE)
+  if (refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE)
     {
       if (!rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &sigs, &gpg_enabled, error))
         return NULL;
@@ -311,7 +311,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
                                     &pending_base_commitrev, error))
         return NULL;
 
-      if (pending_base_commitrev && strcmp (pending_base_commitrev, base_checksum) != 0)
+      if (pending_base_commitrev && !g_str_equal (pending_base_commitrev, base_checksum))
         {
           g_autoptr(GVariant) pending_base_commit = NULL;
 

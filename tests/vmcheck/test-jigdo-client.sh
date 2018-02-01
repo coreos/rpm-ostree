@@ -33,7 +33,11 @@ baseurl=https://ci.centos.org/artifacts/sig-atomic/fahc/jigdo
 gpgcheck=0
 EOF
 
-vm_rpmostree rebase rojig://fahc:fedora-atomic-host
+if vm_rpmostree rebase rojig://fahc:fedora-atomic-host 2>err.txt; then
+    fatal "Did rojig rebase without --experimental"
+fi
+assert_file_has_content_literal err.txt 'rojig:// refspec requires --experimental'
+vm_rpmostree rebase --experimental rojig://fahc:fedora-atomic-host
 vm_assert_status_jq '.deployments[0].origin|startswith("rojig://fahc:fedora-atomic-host")'
 vm_cmd ostree refs > refs.txt
 assert_file_has_content refs.txt '^rpmostree/pkg/kernel-core/'
