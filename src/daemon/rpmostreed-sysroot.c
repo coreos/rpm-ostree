@@ -719,7 +719,7 @@ on_deploy_changed (GFileMonitor *monitor,
 
  out:
   if (error)
-    g_critical ("Unable to update state: %s", error->message);
+    sd_journal_print (LOG_ERR, "Unable to update state: %s", error->message);
 }
 
 static void
