@@ -132,6 +132,8 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
        * sees it without the prefix for compatibility.
        */
       ret->cached_refspec = g_steal_pointer (&refspec);
+      ret->cached_override_commit =
+        g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
     }
   else
     {
