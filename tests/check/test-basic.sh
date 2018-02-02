@@ -30,6 +30,7 @@ setup_os_repository "archive-z2" "syslinux"
 
 echo "ok setup"
 
+set -x
 # Note: Daemon already knows what sysroot to use, so avoid passing
 #       --sysroot=sysroot to rpm-ostree commands as it will result
 #       in a warning message.
