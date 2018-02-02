@@ -44,7 +44,7 @@
  * The #RpmOstreeSysrootUpgrader class models a `baserefspec` OSTree branch
  * in an origin file, along with a set of layered RPM packages.
  *
- * It also supports the plain-ostree "refspec" model.
+ * It also supports the plain-ostree "refspec" model, as well as rojig://.
  */
 typedef struct {
   GObjectClass parent_class;
@@ -374,13 +374,6 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
                                       GCancellable           *cancellable,
                                       GError                **error)
 {
-  const char *refspec = rpmostree_origin_get_refspec (self->origin);
-
-  g_autofree char *origin_remote = NULL;
-  g_autofree char *origin_ref = NULL;
-  if (!ostree_parse_refspec (refspec, &origin_remote, &origin_ref, error))
-    return FALSE;
-
   const gboolean allow_older =
     (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER) > 0;
   const gboolean synthetic =
@@ -388,44 +381,101 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
 
   const char *override_commit = rpmostree_origin_get_override_commit (self->origin);
 
-  g_assert (self->origin_merge_deployment);
-  if (origin_remote && !synthetic)
-    {
-      g_autoptr(GVariantBuilder) optbuilder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
-      if (dir_to_pull && *dir_to_pull)
-        g_variant_builder_add (optbuilder, "{s@v}", "subdir",
-                               g_variant_new_variant (g_variant_new_string (dir_to_pull)));
-      g_variant_builder_add (optbuilder, "{s@v}", "flags",
-                             g_variant_new_variant (g_variant_new_int32 (flags)));
-      /* Add the timestamp check, unless disabled. The option was added in
-       * libostree v2017.11 */
-      if (!allow_older)
-        g_variant_builder_add (optbuilder, "{s@v}", "timestamp-check",
-                               g_variant_new_variant (g_variant_new_boolean (TRUE)));
-      g_variant_builder_add (optbuilder, "{s@v}", "refs",
-                             g_variant_new_variant (g_variant_new_strv (
-                                 (const char *const *)&origin_ref, 1)));
-      if (override_commit)
-        g_variant_builder_add (optbuilder, "{s@v}", "override-commit-ids",
-                               g_variant_new_variant (g_variant_new_strv (
-                                   (const char *const *)&override_commit, 1)));
-
-      g_autoptr(GVariant) opts = g_variant_ref_sink (g_variant_builder_end (optbuilder));
-      if (!ostree_repo_pull_with_options (self->repo, origin_remote, opts, progress,
-                                          cancellable, error))
-        return FALSE;
-
-      if (progress)
-        ostree_async_progress_finish (progress);
-    }
+  RpmOstreeRefspecType refspec_type;
+  const char *refspec;
+  rpmostree_origin_classify_refspec (self->origin, &refspec_type, &refspec);
 
   g_autofree char *new_base_rev = NULL;
-  if (override_commit)
-    new_base_rev = g_strdup (override_commit);
-  else
+
+  switch (refspec_type)
     {
-      if (!ostree_repo_resolve_rev (self->repo, refspec, FALSE, &new_base_rev, error))
-        return FALSE;
+    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+      {
+        g_autofree char *origin_remote = NULL;
+        g_autofree char *origin_ref = NULL;
+        if (!ostree_parse_refspec (refspec, &origin_remote, &origin_ref, error))
+          return FALSE;
+
+        g_assert (self->origin_merge_deployment);
+        if (origin_remote && !synthetic)
+          {
+            g_autoptr(GVariantBuilder) optbuilder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+            if (dir_to_pull && *dir_to_pull)
+              g_variant_builder_add (optbuilder, "{s@v}", "subdir",
+                                     g_variant_new_variant (g_variant_new_string (dir_to_pull)));
+            g_variant_builder_add (optbuilder, "{s@v}", "flags",
+                                   g_variant_new_variant (g_variant_new_int32 (flags)));
+            /* Add the timestamp check, unless disabled. The option was added in
+             * libostree v2017.11 */
+            if (!allow_older)
+              g_variant_builder_add (optbuilder, "{s@v}", "timestamp-check",
+                                     g_variant_new_variant (g_variant_new_boolean (TRUE)));
+            g_variant_builder_add (optbuilder, "{s@v}", "refs",
+                                   g_variant_new_variant (g_variant_new_strv (
+                                                                              (const char *const *)&origin_ref, 1)));
+            if (override_commit)
+              g_variant_builder_add (optbuilder, "{s@v}", "override-commit-ids",
+                                     g_variant_new_variant (g_variant_new_strv (
+                                                                                (const char *const *)&override_commit, 1)));
+
+            g_autoptr(GVariant) opts = g_variant_ref_sink (g_variant_builder_end (optbuilder));
+            if (!ostree_repo_pull_with_options (self->repo, origin_remote, opts, progress,
+                                                cancellable, error))
+              return FALSE;
+
+            if (progress)
+              ostree_async_progress_finish (progress);
+          }
+
+        if (override_commit)
+          new_base_rev = g_strdup (override_commit);
+        else
+          {
+            if (!ostree_repo_resolve_rev (self->repo, refspec, FALSE, &new_base_rev, error))
+              return FALSE;
+          }
+      }
+      break;
+    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+      {
+        // Not implemented yet, though we could do a query for the provides
+        g_assert (!override_commit);
+
+        g_autoptr(GKeyFile) tsk = g_key_file_new ();
+        g_key_file_set_string (tsk, "tree", "jigdo", refspec);
+        const char *jigdo_version = rpmostree_origin_get_jigdo_version (self->origin);
+        if (jigdo_version)
+          g_key_file_set_string (tsk, "tree", "jigdo-version", jigdo_version);
+
+        g_autoptr(RpmOstreeTreespec) treespec = rpmostree_treespec_new_from_keyfile (tsk, error);
+        if (!treespec)
+          return FALSE;
+
+        /* This context is currently different from one that may be created later
+         * for e.g. package layering. I can't think why we couldn't unify them,
+         * but for now it seems a lot simpler to keep the symmetry that
+         * rpm-ostree jigdo == ostree pull.
+         */
+        g_autoptr(RpmOstreeContext) ctx =
+          rpmostree_context_new_system (self->repo, cancellable, error);
+        if (!ctx)
+          return FALSE;
+
+        /* We use / as a source root mostly so we get $releasever from it so
+         * things work out of the box. That said this is kind of wrong and we'll
+         * really need a way for users to configure a different releasever when
+         * e.g. rebasing across majors.
+         */
+        if (!rpmostree_context_setup (ctx, NULL, "/", treespec, cancellable, error))
+          return FALSE;
+        /* We're also "pure" rpm-ostree jigdo - this adds assertions that we don't depsolve for example */
+        if (!rpmostree_context_prepare_jigdo (ctx, cancellable, error))
+          return FALSE;
+        new_base_rev = g_strdup (rpmostree_context_get_jigdo_checksum (ctx));
+        gboolean jigdo_changed;  /* Currently unused */
+        if (!rpmostree_context_execute_jigdo (ctx, &jigdo_changed, cancellable, error))
+          return FALSE;
+      }
     }
 
   gboolean changed = !g_str_equal (new_base_rev, self->base_revision);

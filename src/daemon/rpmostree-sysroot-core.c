@@ -190,7 +190,15 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
                                                   NULL, NULL, error))
         return FALSE;
 
-      if (is_layered)
+      g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
+      if (!origin)
+        return FALSE;
+
+      RpmOstreeRefspecType refspectype;
+      rpmostree_origin_classify_refspec (origin, &refspectype, NULL);
+
+      /* In rojig mode, we need to also reference all packages */
+      if (is_layered || refspectype == RPMOSTREE_REFSPEC_TYPE_ROJIG)
         {
           g_autofree char *deployment_dirpath =
             ostree_sysroot_get_deployment_dirpath (sysroot, deployment);
@@ -209,8 +217,6 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
         }
 
       /* also add any inactive local replacements */
-      g_autoptr(RpmOstreeOrigin) origin =
-        rpmostree_origin_parse_deployment (deployment, error);
       GHashTable *local_replace = rpmostree_origin_get_overrides_local_replace (origin);
       GLNX_HASH_TABLE_FOREACH (local_replace, const char*, nevra)
         {

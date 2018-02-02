@@ -30,6 +30,7 @@ setup_os_repository "archive-z2" "syslinux"
 
 echo "ok setup"
 
+set -x
 # Note: Daemon already knows what sysroot to use, so avoid passing
 #       --sysroot=sysroot to rpm-ostree commands as it will result
 #       in a warning message.
@@ -179,10 +180,6 @@ echo "ok rebase new syntax"
 
 rpm-ostree rebase --skip-purge --os=testos ostree://testos:testos/buildmaster/x86_64-runtime
 assert_status_jq '.deployments[0].origin == "testos:testos/buildmaster/x86_64-runtime"'
-if rpm-ostree rebase --skip-purge --os=testos rojig://testos:testos/buildmaster/x86_64-runtime 2>err.txt; then
-    fatal "rebase rojig worked?"
-fi
-assert_file_has_content_literal err.txt 'error: Unsupported refspec: rojig://'
 echo "ok rebase refspec syntax"
 
 rpm-ostree rebase --os=testos :another-branch

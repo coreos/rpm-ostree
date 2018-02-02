@@ -21,6 +21,7 @@
 #pragma once
 
 #include <ostree.h>
+#include "rpmostree-core.h"
 
 typedef struct RpmOstreeOrigin RpmOstreeOrigin;
 RpmOstreeOrigin *rpmostree_origin_ref (RpmOstreeOrigin *origin);
@@ -53,6 +54,18 @@ rpmostree_origin_dup (RpmOstreeOrigin *origin);
 
 const char *
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin);
+
+void
+rpmostree_origin_classify_refspec (RpmOstreeOrigin      *origin,
+                                   RpmOstreeRefspecType *out_type,
+                                   const char          **out_refspecdata);
+
+char *
+rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin,
+                                   RpmOstreeRefspecType *out_refspectype);
+
+const char *
+rpmostree_origin_get_jigdo_version (RpmOstreeOrigin *origin);
 
 GHashTable *
 rpmostree_origin_get_packages (RpmOstreeOrigin *origin);
