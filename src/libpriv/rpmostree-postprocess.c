@@ -462,21 +462,21 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
         case DT_LNK:
           filetype_c = 'L';
           break;
-        default:
+        case DT_REG:
           /* nfs-utils in RHEL7; https://bugzilla.redhat.com/show_bug.cgi?id=1427537 */
           if (g_str_has_prefix (prefix->str, "/var/lib/nfs"))
             {
               filetype_c = 'f';
+              break;
             }
-          else
-            {
-              if (!glnx_unlinkat (dfd_iter.fd, dent->d_name, 0, error))
-                return FALSE;
-              g_print ("Ignoring non-directory/non-symlink '%s/%s'\n",
-                       prefix->str,
-                       dent->d_name);
-              continue;
-            }
+          /* Fallthrough */
+        default:
+          if (!glnx_unlinkat (dfd_iter.fd, dent->d_name, 0, error))
+            return FALSE;
+          g_print ("Ignoring non-directory/non-symlink '%s/%s'\n",
+                   prefix->str,
+                   dent->d_name);
+          continue;
         }
 
       g_autoptr(GString) tmpfiles_d_buf = g_string_new ("");
@@ -504,6 +504,7 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
           if (filetype_c == 'd')
             {
               /* Push prefix */
+              gsize prev_len = prefix->len;
               g_string_append_c (prefix, '/');
               g_string_append (prefix, dent->d_name);
 
@@ -512,9 +513,7 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
                 return FALSE;
 
               /* Pop prefix */
-              const char *r = memrchr (prefix->str, '/', prefix->len);
-              g_assert (r != NULL);
-              g_string_truncate (prefix, r - prefix->str);
+              g_string_truncate (prefix, prev_len);
             }
         }
       else
