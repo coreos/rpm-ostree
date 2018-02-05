@@ -485,8 +485,16 @@ rm -rf %{buildroot}
 /usr/bin/$name
 $files
 EOF
+
+    # because it'd be overkill to set up mock for this, let's just fool
+    # rpmbuild using setarch
+    local buildarch=$arch
+    if [ "$arch" -eq "noarch" ]; then
+        buildarch=$(uname -m)
+    fi
+
     (cd $test_tmpdir/yumrepo/specs &&
-     rpmbuild -ba $name.spec \
+     setarch $buildarch rpmbuild --target $arch -ba $name.spec \
         --define "_topdir $PWD" \
         --define "_sourcedir $PWD" \
         --define "_specdir $PWD" \

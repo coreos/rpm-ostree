@@ -36,6 +36,13 @@ check_diff() {
   assert_file_has_content diff.txt "$@"
 }
 
+check_not_diff() {
+  from=$1; shift
+  to=$1; shift
+  vm_rpmostree db diff --format=diff $from $to > diff.txt
+  assert_not_file_has_content diff.txt "$@"
+}
+
 vm_build_rpm pkg-to-remove
 vm_build_rpm pkg-to-replace
 vm_rpmostree install pkg-to-remove pkg-to-replace
@@ -59,14 +66,29 @@ echo "ok setup"
 vm_rpmostree override remove pkg-to-remove
 vm_build_rpm pkg-to-replace version 2.0
 vm_rpmostree override replace $YUMREPO/pkg-to-replace-2.0-1.x86_64.rpm
-vm_build_rpm pkg-to-overlay
-vm_rpmostree install pkg-to-overlay
+vm_build_rpm pkg-to-overlay build 'echo same > pkg-to-overlay'
+# some multilib handling tests (override default /bin script to skip conflicts)
+vm_build_rpm pkg-to-overlay build 'echo same > pkg-to-overlay' arch i686
+vm_build_rpm glibc arch i686
+vm_rpmostree install pkg-to-overlay.{x86_64,i686} glibc.i686
 pending_layered_csum=$(vm_get_pending_csum)
 check_diff $booted_csum $pending_layered_csum \
-  +pkg-to-overlay \
+  +pkg-to-overlay-1.0-1.x86_64 \
+  +pkg-to-overlay-1.0-1.i686 \
+  +glibc-1.0-1.i686 \
   +pkg-to-replace-2.0
+# check that regular glibc is *not* in the list of modified/dropped packages
+check_not_diff $booted_csum $pending_layered_csum \
+  =glibc \
+  !glibc \
+  -glibc \
+  =pkg-to-overlay \
+  !pkg-to-overlay \
+  -pkg-to-overlay
 check_diff $pending_csum $pending_layered_csum \
-  +pkg-to-overlay \
+  +pkg-to-overlay-1.0-1.x86_64 \
+  +pkg-to-overlay-1.0-1.i686 \
+  +glibc-1.0-1.i686 \
   -pkg-to-remove \
   !pkg-to-replace-1.0 \
   =pkg-to-replace-2.0
@@ -84,7 +106,9 @@ if vm_cmd ostree checkout --subpath /usr/share/rpm $pending_layered_csum; then
   assert_not_reached "Was able to checkout /usr/share/rpm?"
 fi
 check_diff $pending_csum $pending_layered_csum \
-  +pkg-to-overlay \
+  +pkg-to-overlay-1.0-1.x86_64 \
+  +pkg-to-overlay-1.0-1.i686 \
+  +glibc-1.0-1.i686 \
   -pkg-to-remove \
   !pkg-to-replace-1.0 \
   =pkg-to-replace-2.0

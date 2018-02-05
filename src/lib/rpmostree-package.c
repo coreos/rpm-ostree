@@ -299,22 +299,9 @@ _rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
 
 /* Kinda like `comm(1)`, but for RpmOstreePackage lists. Assuming the pkglists are sorted,
  * this is more efficient than launching hundreds of queries and works with both dnf-based
- * and rpmdb.pkglist-based RpmOstreePackage arrays.
- *
- * Note that we handle multiple pkgs with the same name as follow:
- *   - if there are N pkgs of the same name in @a, and 0 pkgs of the same name in @b, then
- *     there will be N entries in @unique_a (and vice-versa for @b/@unique_b)
- *   - if there are N pkgs of the same name in @a, and M pkgs of the same name in @b, then
- *     there will be M entries in @modified_b, where all M entries will be paired with the
- *     same arbitrary pkg coming from one of the N entries.
- *
- * This was designed to be fully compatible with the semantics implemented by the
- * rpm_ostree_db_diff API, though note that its description did not previously reflect the
- * implementation. Since there isn't one way that's clearly better, I decided to stick with
- * it to be backwards compatible.
- *
- * Anyway, this is a super corner case. AFAIK, only "kernel" falls in this category, and in
- * rpm-ostree systems by nature we (should) only have a single kernel pkg. */
+ * and rpmdb.pkglist-based RpmOstreePackage arrays. Packages with different arches (e.g.
+ * multilib) are counted as different packages.
+ * */
 gboolean
 _rpm_ostree_diff_package_lists (GPtrArray  *a,
                                 GPtrArray  *b,
@@ -340,42 +327,15 @@ _rpm_ostree_diff_package_lists (GPtrArray  *a,
   /* allocate a sack just for comparisons */
   g_autoptr(DnfSack) sack = dnf_sack_new ();
 
-  const char *prev_a_name = NULL;
-  const char *prev_b_name = NULL;
-
   guint cur_a = 0;
   guint cur_b = 0;
   while (cur_a < an && cur_b < bn)
     {
+      int cmp;
       RpmOstreePackage *pkg_a = g_ptr_array_index (a, cur_a);
       RpmOstreePackage *pkg_b = g_ptr_array_index (b, cur_b);
 
-      /* see function description; we need to gracefully handle duplicate pkgnames in @b */
-      if (prev_a_name && g_str_equal (pkg_b->name, prev_a_name) &&
-          prev_b_name && g_str_equal (pkg_b->name, prev_b_name))
-        {
-          /* multiple copies exist in @b for a corresponding pkg in @a; point them all back
-           * to that same entry in @a */
-          g_assert_cmpuint (cur_a, >, 0);
-          RpmOstreePackage *prev_pkg_a = g_ptr_array_index (a, cur_a-1);
-          g_ptr_array_add (modified_a, g_object_ref (prev_pkg_a));
-          g_ptr_array_add (modified_b, g_object_ref (pkg_b));
-          cur_b++;
-          continue;
-        }
-      else if (prev_a_name && g_str_equal (pkg_a->name, prev_a_name) &&
-               prev_b_name && g_str_equal (pkg_a->name, prev_b_name))
-        {
-          /* Multiple copies exist in @a for a pkg that's in @b. Multiple copies might also
-           * exist in @b, but we paired them off with the first match in @a already above;
-           * we just skip over the dupes in @a now. */
-          cur_a++;
-          continue;
-        }
-
-      /* the rest below is just the obvious algorithm you'd expect for this */
-
-      int cmp = strcmp (pkg_a->name, pkg_b->name);
+      cmp = strcmp (pkg_a->name, pkg_b->name);
       if (cmp < 0)
         {
           g_ptr_array_add (unique_a, g_object_ref (pkg_a));
@@ -388,22 +348,33 @@ _rpm_ostree_diff_package_lists (GPtrArray  *a,
         }
       else
         {
-          cmp = dnf_sack_evr_cmp (sack, pkg_a->evr, pkg_b->evr);
-          if (cmp == 0)
+          cmp = strcmp (pkg_a->arch, pkg_b->arch);
+          if (cmp < 0)
             {
-              g_ptr_array_add (common, g_object_ref (pkg_a));
+              g_ptr_array_add (unique_a, g_object_ref (pkg_a));
+              cur_a++;
+            }
+          else if (cmp > 0)
+            {
+              g_ptr_array_add (unique_b, g_object_ref (pkg_b));
+              cur_b++;
             }
           else
             {
-              g_ptr_array_add (modified_a, g_object_ref (pkg_a));
-              g_ptr_array_add (modified_b, g_object_ref (pkg_b));
+              cmp = dnf_sack_evr_cmp (sack, pkg_a->evr, pkg_b->evr);
+              if (cmp == 0)
+                {
+                  g_ptr_array_add (common, g_object_ref (pkg_a));
+                }
+              else
+                {
+                  g_ptr_array_add (modified_a, g_object_ref (pkg_a));
+                  g_ptr_array_add (modified_b, g_object_ref (pkg_b));
+                }
             }
           cur_a++;
           cur_b++;
         }
-
-      prev_a_name = pkg_a->name;
-      prev_b_name = pkg_b->name;
     }
 
   /* flush out remaining a */
