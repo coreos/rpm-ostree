@@ -463,12 +463,20 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
           filetype_c = 'L';
           break;
         default:
-          g_print ("Ignoring non-directory/non-symlink '%s/%s'\n",
-                   prefix->str,
-                   dent->d_name);
-          if (!glnx_unlinkat (dfd_iter.fd, dent->d_name, 0, error))
-            return FALSE;
-          continue;
+          /* nfs-utils in RHEL7; https://bugzilla.redhat.com/show_bug.cgi?id=1427537 */
+          if (g_str_has_prefix (prefix->str, "/var/lib/nfs"))
+            {
+              filetype_c = 'f';
+            }
+          else
+            {
+              if (!glnx_unlinkat (dfd_iter.fd, dent->d_name, 0, error))
+                return FALSE;
+              g_print ("Ignoring non-directory/non-symlink '%s/%s'\n",
+                       prefix->str,
+                       dent->d_name);
+              continue;
+            }
         }
 
       g_autoptr(GString) tmpfiles_d_buf = g_string_new ("");
@@ -478,7 +486,7 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
       g_string_append_c (tmpfiles_d_buf, '/');
       g_string_append (tmpfiles_d_buf, dent->d_name);
 
-      if (filetype_c == 'd')
+      if (filetype_c == 'd' || filetype_c == 'f')
         {
           struct stat stbuf;
           if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
@@ -493,20 +501,21 @@ convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
             return glnx_throw (error, "Failed to find group '%u' for %s", stbuf.st_gid, dent->d_name);
           g_string_append_printf (tmpfiles_d_buf, " %s %s - -", user, group);
 
-          /* Push prefix */
-          g_string_append_c (prefix, '/');
-          g_string_append (prefix, dent->d_name);
+          if (filetype_c == 'd')
+            {
+              /* Push prefix */
+              g_string_append_c (prefix, '/');
+              g_string_append (prefix, dent->d_name);
 
-          if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, dfd, pwdb, prefix,
-                                                  cancellable, error))
-            return FALSE;
+              if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, dfd, pwdb, prefix,
+                                                      cancellable, error))
+                return FALSE;
 
-          /* Pop prefix */
-          {
-            char *r = memrchr (prefix->str, '/', prefix->len);
-            g_assert (r != NULL);
-            g_string_truncate (prefix, r - prefix->str);
-          }
+              /* Pop prefix */
+              const char *r = memrchr (prefix->str, '/', prefix->len);
+              g_assert (r != NULL);
+              g_string_truncate (prefix, r - prefix->str);
+            }
         }
       else
         {
@@ -538,6 +547,8 @@ convert_var_to_tmpfiles_d (int            rootfs_dfd,
                            GCancellable  *cancellable,
                            GError       **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Converting /var to tmpfiles.d", error);
+
   g_autoptr(RpmOstreePasswdDB) pwdb = rpmostree_passwddb_open (rootfs_dfd, cancellable, error);
   if (!pwdb)
     return FALSE;
