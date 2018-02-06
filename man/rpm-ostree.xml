@@ -509,7 +509,7 @@ Boston, MA 02111-1307, USA.
             One important goal of this is to support traditional <command>rpm
             -Uvh /path/to/rpms</command> or equivalent where changes are applied
             live. However, an intended future feature for
-            <command>rpm-ostree</command> will be a varant of
+            <command>rpm-ostree</command> will be a variant of
             <command>rpm-ostree override</command> which also supports applying
             changes live, for the cases which one wants persistence as well.
           </para>
