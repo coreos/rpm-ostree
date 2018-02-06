@@ -495,6 +495,33 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
+        <term><command>usroverlay</command></term>
+
+        <listitem>
+          <para>
+            Mount a writable overlay filesystem on <literal>/usr</literal> which
+            is active only for the remainder of the system boot. This is
+            intended for development, testing, and debugging. Changes will not
+            persist across upgrades, or rebooting in general.
+          </para>
+
+          <para>
+            One important goal of this is to support traditional <command>rpm
+            -Uvh /path/to/rpms</command> or equivalent where changes are applied
+            live. However, an intended future feature for
+            <command>rpm-ostree</command> will be a variant of
+            <command>rpm-ostree override</command> which also supports applying
+            changes live, for the cases which one wants persistence as well.
+          </para>
+
+          <para>
+            This command is equivalent to <command>ostree admin unlock</command>.
+          </para>
+
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><command>initramfs</command></term>
 
         <listitem>
