@@ -1043,6 +1043,12 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 {
   g_assert (!self->empty);
 
+  /* https://github.com/rpm-software-management/libdnf/pull/416
+   * https://github.com/projectatomic/rpm-ostree/issues/1127
+   */
+  if (self->jigdo_pure)
+    dnf_context_set_enable_filelists (self->dnfctx, FALSE);
+
   g_autoptr(GPtrArray) rpmmd_repos =
     get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
 
