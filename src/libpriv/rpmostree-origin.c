@@ -388,6 +388,15 @@ rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin,
   origin->cached_override_commit = g_strdup (checksum);
 }
 
+void
+rpmostree_origin_set_jigdo_version (RpmOstreeOrigin *origin,
+                                    const char      *version)
+{
+  g_key_file_set_string (origin->kf, "origin", "jigdo-version", version);
+  g_free (origin->cached_jigdo_version);
+  origin->cached_jigdo_version = g_strdup (version);
+}
+
 gboolean
 rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
                              const char      *new_refspec,

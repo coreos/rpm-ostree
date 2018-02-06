@@ -117,6 +117,10 @@ rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin,
                                       const char      *checksum,
                                       const char      *version);
 
+void
+rpmostree_origin_set_jigdo_version (RpmOstreeOrigin *origin,
+                                    const char      *version);
+
 gboolean
 rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
                              const char      *new_refspec,

@@ -250,6 +250,7 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   }
 
   BIND_STRING("jigdo");
+  BIND_STRING("jigdo-version");
   BIND_STRING("releasever");
 
   add_canonicalized_string_array (&builder, "packages", NULL, keyfile);

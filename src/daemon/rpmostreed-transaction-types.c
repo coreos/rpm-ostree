@@ -122,6 +122,8 @@ change_origin_refspec (OstreeSysroot *sysroot,
   return TRUE;
 }
 
+/* Handle `deploy` semantics of pinning to a version or checksum. See
+ * rpmostreed_parse_revision() for available syntax for @revision */
 static gboolean
 apply_revision_override (RpmostreedTransaction    *transaction,
                          OstreeRepo               *repo,
@@ -131,40 +133,60 @@ apply_revision_override (RpmostreedTransaction    *transaction,
                          GCancellable             *cancellable,
                          GError                  **error)
 {
+  RpmOstreeRefspecType refspectype;
+  rpmostree_origin_classify_refspec (origin, &refspectype, NULL);
+
   g_autofree char *checksum = NULL;
   g_autofree char *version = NULL;
-
-  if (!rpmostreed_parse_revision (revision,
-                                  &checksum,
-                                  &version,
-                                  error))
+  if (!rpmostreed_parse_revision (revision, &checksum, &version, error))
     return FALSE;
 
   if (version != NULL)
     {
-      rpmostreed_transaction_emit_message_printf (transaction,
-                                                  "Resolving version '%s'",
-                                                  version);
+      switch (refspectype)
+        {
+        case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+          {
+            /* Perhaps down the line we'll drive history traversal into libostree */
+            rpmostreed_transaction_emit_message_printf (transaction,
+                                                        "Resolving version '%s'",
+                                                        version);
 
-      if (!rpmostreed_repo_lookup_version (repo, rpmostree_origin_get_refspec (origin),
-                                           version, progress,
-                                           cancellable, &checksum, error))
-        return FALSE;
+            if (!rpmostreed_repo_lookup_version (repo, rpmostree_origin_get_refspec (origin),
+                                                 version, progress,
+                                                 cancellable, &checksum, error))
+              return FALSE;
+          }
+          break;
+        case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+          /* This case we'll look up later */
+          rpmostree_origin_set_jigdo_version (origin, version);
+          break;
+        }
     }
   else
     {
       g_assert (checksum != NULL);
 
-      rpmostreed_transaction_emit_message_printf (transaction,
-                                                  "Validating checksum '%s'",
-                                                  checksum);
+      switch (refspectype)
+        {
+        case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+          rpmostreed_transaction_emit_message_printf (transaction,
+                                                      "Validating checksum '%s'",
+                                                      checksum);
+          if (!rpmostreed_repo_lookup_checksum (repo, rpmostree_origin_get_refspec (origin),
+                                                checksum, progress, cancellable, error))
+            return FALSE;
+          break;
+        case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+          /* For now we skip validation here, if there's an error we'll see it later
+           * on.
+           */
+          break;
+        }
 
-      if (!rpmostreed_repo_lookup_checksum (repo, rpmostree_origin_get_refspec (origin),
-                                            checksum, progress, cancellable, error))
-        return FALSE;
+      rpmostree_origin_set_override_commit (origin, checksum, version);
     }
-
-  rpmostree_origin_set_override_commit (origin, checksum, version);
 
   return TRUE;
 }
