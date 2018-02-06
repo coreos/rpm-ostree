@@ -188,3 +188,7 @@ if ! vm_rpmostree install refresh-md-new-pkg --dry-run; then
 fi
 vm_stop_httpd vmcheck
 echo "ok refresh-md"
+
+vm_rpmostree usroverlay
+vm_cmd test -w /usr/bin
+echo "ok usroverlay"
