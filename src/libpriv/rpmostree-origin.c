@@ -392,7 +392,10 @@ void
 rpmostree_origin_set_jigdo_version (RpmOstreeOrigin *origin,
                                     const char      *version)
 {
-  g_key_file_set_string (origin->kf, "origin", "jigdo-version", version);
+  if (version)
+    g_key_file_set_string (origin->kf, "origin", "jigdo-version", version);
+  else
+    g_key_file_remove_key (origin->kf, "origin", "jigdo-version", NULL);
   g_free (origin->cached_jigdo_version);
   origin->cached_jigdo_version = g_strdup (version);
 }
