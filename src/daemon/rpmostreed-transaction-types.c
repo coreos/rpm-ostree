@@ -156,6 +156,8 @@ apply_revision_override (RpmostreedTransaction    *transaction,
                                                  version, progress,
                                                  cancellable, &checksum, error))
               return FALSE;
+
+            rpmostree_origin_set_override_commit (origin, checksum, version);
           }
           break;
         case RPMOSTREE_REFSPEC_TYPE_ROJIG:
