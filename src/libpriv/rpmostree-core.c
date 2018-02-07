@@ -2378,6 +2378,21 @@ rpmostree_context_consume_package (RpmOstreeContext  *self,
   return TRUE;
 }
 
+/* Convert e.g. lib/foo/bar → usr/lib/foo/bar */
+static char *
+canonicalize_non_usrmove_path (RpmOstreeContext  *self,
+                               const char *path)
+{
+  const char *slash = strchr (path, '/');
+  if (!slash)
+    return NULL;
+  const char *prefix = strndupa (path, slash - path);
+  const char *link = g_hash_table_lookup (self->rootfs_usrlinks, prefix);
+  if (!link)
+    return NULL;
+  return g_build_filename (link, slash + 1, NULL);
+}
+
 static gboolean
 checkout_package (OstreeRepo   *repo,
                   int           dfd,
@@ -2495,21 +2510,6 @@ build_rootfs_usrlinks (RpmOstreeContext *self,
     }
 
   return TRUE;
-}
-
-/* Convert e.g. lib/foo/bar → usr/lib/foo/bar */
-static char *
-canonicalize_non_usrmove_path (RpmOstreeContext  *self,
-                               const char *path)
-{
-  const char *slash = strchr (path, '/');
-  if (!slash)
-    return NULL;
-  const char *prefix = strndupa (path, slash - path);
-  const char *link = g_hash_table_lookup (self->rootfs_usrlinks, prefix);
-  if (!link)
-    return NULL;
-  return g_build_filename (link, slash + 1, NULL);
 }
 
 static gboolean
