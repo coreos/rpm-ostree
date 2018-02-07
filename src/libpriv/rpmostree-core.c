@@ -2378,6 +2378,37 @@ rpmostree_context_consume_package (RpmOstreeContext  *self,
   return TRUE;
 }
 
+/* Builds a mapping from filename to rpm color */
+static void
+add_te_files_to_ht (rpmte        te,
+                    GHashTable  *ht)
+{
+#ifdef BUILDOPT_HAVE_RPMFILES /* use rpmfiles API if possible, rpmteFI is deprecated */
+  g_auto(rpmfiles) files = rpmteFiles (te);
+  g_auto(rpmfi) fi = rpmfilesIter (files, RPMFI_ITER_FWD);
+#else
+  rpmfi fi = rpmteFI (te); /* rpmfi owned by rpmte */
+#endif
+
+  while (rpmfiNext (fi) >= 0)
+    {
+      const char *fn = rpmfiFN (fi);
+      rpm_color_t color = rpmfiFColor (fi);
+      g_hash_table_insert (ht, g_strdup (fn), GUINT_TO_POINTER (color));
+    }
+}
+
+static char*
+canonicalize_rpmfi_path (const char *path)
+{
+  /* this is a bit awkward; we relativize for the translation, but then make it absolute
+   * again to match libostree */
+  path += strspn (path, "/");
+  g_autofree char *translated =
+    rpmostree_translate_path_for_ostree (path) ?: g_strdup (path);
+  return g_build_filename ("/", translated, NULL);
+}
+
 /* Convert e.g. lib/foo/bar → usr/lib/foo/bar */
 static char *
 canonicalize_non_usrmove_path (RpmOstreeContext  *self,
@@ -2393,12 +2424,151 @@ canonicalize_non_usrmove_path (RpmOstreeContext  *self,
   return g_build_filename (link, slash + 1, NULL);
 }
 
+/* This is a lighter version of calculations that librpm calls "file disposition".
+ * Essentially, we determine which file removals/installations should be skipped. The librpm
+ * functions and APIs for these are unfortunately private since they're just run as part of
+ * rpmtsRun(). XXX: see if we can make the rpmfs APIs public, but we'd still need to support
+ * RHEL/CentOS anyway. */
+static gboolean
+handle_file_dispositions (RpmOstreeContext *self,
+                          int           tmprootfs_dfd,
+                          rpmts         ts,
+                          GHashTable  **out_files_skip_add,
+                          GHashTable  **out_files_skip_delete,
+                          GCancellable *cancellable,
+                          GError      **error)
+{
+  g_autoptr(GHashTable) pkgs_deleted = g_hash_table_new (g_direct_hash, g_direct_equal);
+
+  /* note these entries are *not* canonicalized for ostree conventions */
+  g_autoptr(GHashTable) files_deleted =
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  g_autoptr(GHashTable) files_added =
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
+  const guint n_rpmts_elements = (guint)rpmtsNElements (ts);
+  for (guint i = 0; i < n_rpmts_elements; i++)
+    {
+      rpmte te = rpmtsElement (ts, i);
+      rpmElementType type = rpmteType (te);
+      if (type == TR_REMOVED)
+        g_hash_table_add (pkgs_deleted, GUINT_TO_POINTER (rpmteDBInstance (te)));
+      add_te_files_to_ht (te, type == TR_REMOVED ? files_deleted : files_added);
+    }
+
+  /* this we *do* canonicalize since we'll be comparing against ostree paths */
+  g_autoptr(GHashTable) files_skip_add =
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  /* this one we *don't* canonicalize since we'll be comparing against rpmfi paths */
+  g_autoptr(GHashTable) files_skip_delete =
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
+  /* we deal with color similarly to librpm (compare with skipInstallFiles()) */
+  rpm_color_t ts_color = rpmtsColor (ts);
+  rpm_color_t ts_prefcolor = rpmtsPrefColor (ts);
+
+  /* ignore colored files not in our rainbow */
+  GLNX_HASH_TABLE_FOREACH_IT (files_added, it, const char*, fn, gpointer, colorp)
+    {
+      rpm_color_t color = GPOINTER_TO_UINT (colorp);
+      if (color && ts_color && !(ts_color & color))
+        g_hash_table_add (files_skip_add, canonicalize_rpmfi_path (fn));
+    }
+
+  g_auto(rpmdbMatchIterator) it = rpmtsInitIterator (ts, RPMDBI_PACKAGES, NULL, 0);
+  Header h;
+  while ((h = rpmdbNextIterator (it)) != NULL)
+    {
+      /* is this pkg to be deleted? */
+      guint off = rpmdbGetIteratorOffset (it);
+      if (g_hash_table_contains (pkgs_deleted, GUINT_TO_POINTER (off)))
+        continue;
+
+      /* try to only load what we need: filenames and colors */
+      rpmfiFlags flags = RPMFI_FLAGS_QUERY;
+#ifdef BUILDOPT_HAVE_RPMFILES /* we're using this more as a "if not on CentOS" switch */
+      /* this is even more restrictive that QUERY */
+      flags = RPMFI_FLAGS_ONLY_FILENAMES;
+#endif
+      flags &= ~RPMFI_NOFILECOLORS;
+
+      g_auto(rpmfi) fi = rpmfiNew (ts, h, RPMTAG_BASENAMES, flags);
+
+      fi = rpmfiInit (fi, 0);
+      while (rpmfiNext (fi) >= 0)
+        {
+          const char *fn = rpmfiFN (fi);
+          g_assert (fn != NULL);
+
+          /* check if one of the pkgs to delete wants to delete our file */
+          if (g_hash_table_contains (files_deleted, fn))
+            g_hash_table_add (files_skip_delete, g_strdup (fn));
+
+          rpm_color_t color = (rpmfiFColor (fi) & ts_color);
+
+          /* let's make the safe assumption that the color mess is only an issue for /usr */
+          const char *fn_rel = fn + strspn (fn, "/");
+
+          /* be sure we've canonicalized usr/ */
+          g_autofree char *fn_rel_owned = canonicalize_non_usrmove_path (self, fn_rel);
+          if (fn_rel_owned)
+            fn_rel = fn_rel_owned;
+
+          if (!g_str_has_prefix (fn_rel, "usr/"))
+            continue;
+
+          /* check if one of the pkgs to install wants to overwrite our file */
+          rpm_color_t other_color =
+            GPOINTER_TO_UINT (g_hash_table_lookup (files_added, fn));
+          other_color &= ts_color;
+
+          /* see handleColorConflict() */
+          if (color && other_color && (color != other_color))
+            {
+              /* do we already have the preferred color installed? */
+              if (color & ts_prefcolor)
+                g_hash_table_add (files_skip_add, canonicalize_rpmfi_path (fn));
+              else if (other_color & ts_prefcolor)
+                {
+                  /* the new pkg is bringing our favourite color, give way now so we let
+                   * checkout silently write into it */
+                  if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, fn_rel, cancellable, error))
+                    return FALSE;
+                }
+            }
+        }
+    }
+
+  *out_files_skip_add = g_steal_pointer (&files_skip_add);
+  *out_files_skip_delete = g_steal_pointer (&files_skip_delete);
+  return TRUE;
+}
+
+static OstreeRepoCheckoutFilterResult
+checkout_filter (OstreeRepo         *self,
+                 const char         *path,
+                 struct stat        *st_buf,
+                 gpointer            user_data)
+{
+  GHashTable *files_skip = user_data;
+  if (g_hash_table_contains (files_skip, path))
+    return OSTREE_REPO_CHECKOUT_FILTER_SKIP;
+  /* Hack for nsswitch.conf: the glibc.i686 copy is identical to the one in glibc.x86_64,
+   * but because we modify it at treecompose time, UNION_IDENTICAL wouldn't save us here. A
+   * better heuristic here might be to skip all /etc files which have a different digest
+   * than the one registered in the rpmdb */
+  if (g_str_equal (path, "/usr/etc/nsswitch.conf"))
+    return OSTREE_REPO_CHECKOUT_FILTER_SKIP;
+  return OSTREE_REPO_CHECKOUT_FILTER_ALLOW;
+}
+
 static gboolean
 checkout_package (OstreeRepo   *repo,
                   int           dfd,
                   const char   *path,
                   OstreeRepoDevInoCache *devino_cache,
                   const char   *pkg_commit,
+                  GHashTable   *files_skip,
                   OstreeRepoCheckoutOverwriteMode ovwmode,
                   GCancellable *cancellable,
                   GError      **error)
@@ -2415,6 +2585,12 @@ checkout_package (OstreeRepo   *repo,
   /* Always want hardlinks */
   opts.no_copy_fallback = TRUE;
 
+  if (files_skip && g_hash_table_size (files_skip) > 0)
+    {
+      opts.filter = checkout_filter;
+      opts.filter_user_data = files_skip;
+    }
+
   return ostree_repo_checkout_at (repo, &opts, dfd, path,
                                   pkg_commit, cancellable, error);
 }
@@ -2426,6 +2602,7 @@ checkout_package_into_root (RpmOstreeContext *self,
                             const char   *path,
                             OstreeRepoDevInoCache *devino_cache,
                             const char   *pkg_commit,
+                            GHashTable   *files_skip,
                             OstreeRepoCheckoutOverwriteMode ovwmode,
                             GCancellable *cancellable,
                             GError      **error)
@@ -2447,7 +2624,7 @@ checkout_package_into_root (RpmOstreeContext *self,
     }
 
   if (!checkout_package (pkgcache_repo, dfd, path,
-                         devino_cache, pkg_commit, ovwmode,
+                         devino_cache, pkg_commit, files_skip, ovwmode,
                          cancellable, error))
     return glnx_prefix_error (error, "Checkout %s", dnf_package_get_nevra (pkg));
 
@@ -2516,20 +2693,21 @@ static gboolean
 delete_package_from_root (RpmOstreeContext *self,
                           rpmte         pkg,
                           int           rootfs_dfd,
+                          GHashTable   *files_skip,
                           GCancellable *cancellable,
                           GError      **error)
 {
 #ifdef BUILDOPT_HAVE_RPMFILES /* use rpmfiles API if possible, rpmteFI is deprecated */
   g_auto(rpmfiles) files = rpmteFiles (pkg);
+  /* NB: new librpm uses RPMFI_ITER_BACK here to empty out dirs before deleting them using
+   * unlink/rmdir. Older rpm doesn't support this API, so rather than doing some fancy
+   * compat, we just use shutil_rm_rf anyway since we now skip over shared dirs/files. */
   g_auto(rpmfi) fi = rpmfilesIter (files, RPMFI_ITER_FWD);
 #else
   rpmfi fi = rpmteFI (pkg); /* rpmfi owned by rpmte */
 #endif
 
-  g_autoptr(GPtrArray) deleted_dirs = g_ptr_array_new_with_free_func (g_free);
-
-  int i;
-  while ((i = rpmfiNext (fi)) >= 0)
+  while (rpmfiNext (fi) >= 0)
     {
       /* see also apply_rpmfi_overrides() for a commented version of the loop */
       const char *fn = rpmfiFN (fi);
@@ -2538,6 +2716,9 @@ delete_package_from_root (RpmOstreeContext *self,
       if (!(S_ISREG (mode) ||
             S_ISLNK (mode) ||
             S_ISDIR (mode)))
+        continue;
+
+      if (g_hash_table_contains (files_skip, fn))
         continue;
 
       g_assert (fn != NULL);
@@ -2560,20 +2741,8 @@ delete_package_from_root (RpmOstreeContext *self,
       if (!g_str_has_prefix (fn, "usr/"))
         continue;
 
-      /* avoiding the stat syscall is worth a bit of userspace computation */
-      if (rpmostree_str_has_prefix_in_ptrarray (fn, deleted_dirs))
-        continue;
-
-      if (!glnx_fstatat_allow_noent (rootfs_dfd, fn, NULL, AT_SYMLINK_NOFOLLOW, error))
-        return FALSE;
-      if (errno == ENOENT)
-        continue; /* a job well done */
-
       if (!glnx_shutil_rm_rf_at (rootfs_dfd, fn, cancellable, error))
         return FALSE;
-
-      if (S_ISDIR (mode))
-        g_ptr_array_add (deleted_dirs, g_strconcat (fn, "/", NULL));
     }
 
   return TRUE;
@@ -2648,7 +2817,7 @@ relabel_in_thread_impl (RpmOstreeContext *self,
   g_autoptr(OstreeRepoDevInoCache) cache = ostree_repo_devino_cache_new ();
 
   if (!checkout_package (repo, tmpdir_dfd, pkg_dirname, cache,
-                         commit_csum, OSTREE_REPO_CHECKOUT_OVERWRITE_NONE,
+                         commit_csum, NULL, OSTREE_REPO_CHECKOUT_OVERWRITE_NONE,
                          cancellable, error))
     return FALSE;
 
@@ -3479,7 +3648,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       if (!checkout_package_into_root (self, filesystem_package,
                                        tmprootfs_dfd, ".", self->devino_cache,
                                        g_hash_table_lookup (pkg_to_ostree_commit,
-                                                            filesystem_package),
+                                                            filesystem_package), NULL,
                                        OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL,
                                        cancellable, error))
         return FALSE;
@@ -3487,13 +3656,11 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       rpmostree_output_progress_n_items ("Building filesystem", n_rpmts_done, n_rpmts_elements);
     }
 
-  /* We're completely disregarding how rpm normally does upgrades/downgrade here. rpm
-   * usually calculates the fate of each file and then installs the new files first, then
-   * removes the obsoleted files. So the TR_ADDED element for the new pkg comes *before* the
-   * TR_REMOVED element for the old pkg. This makes sense when operating on the live system.
-   * Though that's not the case here, so let's just take the easy way out and first nuke
-   * TR_REMOVED pkgs, then checkout the TR_ADDED ones. This will probably start to matter
-   * though when we start handling e.g. file triggers. */
+  g_autoptr(GHashTable) files_skip_add = NULL;
+  g_autoptr(GHashTable) files_skip_delete = NULL;
+  if (!handle_file_dispositions (self, tmprootfs_dfd, ordering_ts, &files_skip_add,
+                                 &files_skip_delete, cancellable, error))
+    return FALSE;
 
   for (guint i = 0; i < n_rpmts_elements; i++)
     {
@@ -3504,7 +3671,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         continue;
       g_assert_cmpint (type, ==, TR_REMOVED);
 
-      if (!delete_package_from_root (self, te, tmprootfs_dfd, cancellable, error))
+      if (!delete_package_from_root (self, te, tmprootfs_dfd, files_skip_delete,
+                                     cancellable, error))
         return FALSE;
       n_rpmts_done++;
       rpmostree_output_progress_n_items ("Building filesystem", n_rpmts_done, n_rpmts_elements);
@@ -3533,7 +3701,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
       if (!checkout_package_into_root (self, pkg, tmprootfs_dfd, ".", self->devino_cache,
                                        g_hash_table_lookup (pkg_to_ostree_commit, pkg),
-                                       ovwmode, cancellable, error))
+                                       files_skip_add, ovwmode, cancellable, error))
         return FALSE;
       n_rpmts_done++;
       rpmostree_output_progress_n_items ("Building filesystem", n_rpmts_done, n_rpmts_elements);

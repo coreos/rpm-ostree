@@ -127,3 +127,41 @@ if vm_rpmostree upgrade; then
   assert_not_reached "upgrade succeeded but new base has conflicting pkg foo"
 fi
 echo "ok can't upgrade with conflicting layered pkg"
+
+vm_rpmostree cleanup -p
+
+check_bloop_color() {
+  color=$1; shift
+  root=$(vm_get_deployment_root 0)
+  vm_cmd file $root/usr/bin/bloop > file.txt
+  assert_file_has_content file.txt $color
+}
+
+# now let's build two pkgs with different colors
+# we use -nostdlib so we don't pull in glibc.i686
+vm_build_rpm bloop arch i686 build 'echo "void main() {}" | gcc -m32 -nostdlib -o bloop -xc -'
+vm_build_rpm bloop arch x86_64 build 'echo "void main() {}" | gcc -m64 -nostdlib -o bloop -xc -'
+# now embed the x86_64 version into it
+vm_rpmostree install bloop.x86_64
+vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_pending_csum) --fsync=no
+vm_rpmostree cleanup -p
+vm_rpmostree upgrade
+check_bloop_color 64-bit
+# now let's pkglayer the i686 version
+vm_rpmostree install bloop.i686
+# check that the x86_64 version won
+check_bloop_color 64-bit
+echo "ok coloring skip"
+
+# now embed the 32-bit version instead
+vm_rpmostree cleanup -p
+vm_rpmostree install bloop.i686
+vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_pending_csum) --fsync=no
+vm_rpmostree cleanup -p
+vm_rpmostree upgrade
+check_bloop_color 32-bit
+# now let's pkglayer the x86_64 version
+vm_rpmostree install bloop.x86_64
+# and check that the x86_64 version won
+check_bloop_color 64-bit
+echo "ok coloring replace"
