@@ -32,6 +32,8 @@
 #define _N(single, plural, n) ( (n) == 1 ? (single) : (plural) )
 #define _NS(n) _N("", "s", n)
 
+#define VAR_SELINUX_TARGETED_PATH "var/lib/selinux/targeted/"
+
 int
 rpmostree_ptrarray_sort_compare_strings (gconstpointer ap,
                                          gconstpointer bp);
@@ -65,6 +67,9 @@ rpmostree_pkg_is_local (DnfPackage *pkg);
 
 char *
 rpmostree_pkg_get_local_path (DnfPackage *pkg);
+
+char*
+rpmostree_translate_path_for_ostree (const char *path);
 
 char *
 _rpmostree_util_next_version (const char *auto_version_prefix,

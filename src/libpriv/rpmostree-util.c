@@ -234,6 +234,23 @@ rpmostree_pkg_get_local_path (DnfPackage *pkg)
     }
 }
 
+char*
+rpmostree_translate_path_for_ostree (const char *path)
+{
+  if (g_str_has_prefix (path, "etc/"))
+    return g_strconcat ("usr/", path, NULL);
+  else if (g_str_has_prefix (path, "boot/"))
+    return g_strconcat ("usr/lib/ostree-boot/", path + strlen ("boot/"), NULL);
+  /* Special hack for https://bugzilla.redhat.com/show_bug.cgi?id=1290659
+   * See also commit 4a86bdd19665700fa308461510c9decd63e31a03
+   * and rpmostree_postprocess_selinux_policy_store_location().
+   */
+  else if (g_str_has_prefix (path, VAR_SELINUX_TARGETED_PATH))
+    return g_strconcat ("usr/etc/selinux/targeted/", path + strlen (VAR_SELINUX_TARGETED_PATH), NULL);
+
+  return NULL;
+}
+
 char *
 _rpmostree_util_next_version (const char *auto_version_prefix,
                               const char *last_version)
