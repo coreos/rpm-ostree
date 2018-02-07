@@ -40,5 +40,5 @@ assert_file_has_content_literal err.txt 'rojig:// refspec requires --experimenta
 vm_rpmostree rebase --experimental rojig://fahc:fedora-atomic-host
 vm_assert_status_jq '.deployments[0].origin|startswith("rojig://fahc:fedora-atomic-host")'
 vm_cmd ostree refs > refs.txt
-assert_file_has_content refs.txt '^rpmostree/pkg/kernel-core/'
+assert_file_has_content refs.txt '^rpmostree/jigdo/kernel-core/'
 echo "ok jigdo client"
