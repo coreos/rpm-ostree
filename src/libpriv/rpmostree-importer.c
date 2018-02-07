@@ -327,7 +327,12 @@ const char *
 rpmostree_importer_get_ostree_branch (RpmOstreeImporter *self)
 {
   if (!self->ostree_branch)
-    self->ostree_branch = rpmostree_get_cache_branch_header (self->hdr);
+    {
+      if (self->jigdo_mode)
+        self->ostree_branch = rpmostree_get_jigdo_branch_header (self->hdr);
+      else
+        self->ostree_branch = rpmostree_get_cache_branch_header (self->hdr);
+    }
 
   return self->ostree_branch;
 }

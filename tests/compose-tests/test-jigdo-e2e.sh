@@ -54,7 +54,7 @@ assert_file_has_content jigdo2commit-out.txt '[1-9][0-9]* packages to import'
 ostree --repo=jigdo-unpack-repo rev-parse ${rev}
 ostree --repo=jigdo-unpack-repo fsck
 ostree --repo=jigdo-unpack-repo refs > jigdo-refs.txt
-assert_file_has_content jigdo-refs.txt 'rpmostree/pkg/test-pkg/1.0-1.x86__64'
+assert_file_has_content jigdo-refs.txt 'rpmostree/jigdo/test-pkg/1.0-1.x86__64'
 
 echo "ok jigdo ♲📦 fresh assembly"
 
@@ -96,7 +96,7 @@ ostree --repo=jigdo-unpack-repo fsck
 ostree --repo=jigdo-unpack-repo refs > jigdo-refs.txt
 # We should have both refs; GC will be handled by the sysroot upgrader
 # via deployments, same way it is for pkg layering.
-assert_file_has_content jigdo-refs.txt 'rpmostree/pkg/test-pkg/1.0-1.x86__64'
-assert_file_has_content jigdo-refs.txt 'rpmostree/pkg/test-pkg/1.1-1.x86__64'
+assert_file_has_content jigdo-refs.txt 'rpmostree/jigdo/test-pkg/1.0-1.x86__64'
+assert_file_has_content jigdo-refs.txt 'rpmostree/jigdo/test-pkg/1.1-1.x86__64'
 
 echo "ok jigdo ♲📦 update!"

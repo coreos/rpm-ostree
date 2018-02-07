@@ -122,7 +122,9 @@ gboolean rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
 
 char * rpmostree_get_cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch);
 char *rpmostree_get_cache_branch_header (Header hdr);
+char *rpmostree_get_jigdo_branch_header (Header hdr);
 char *rpmostree_get_cache_branch_pkg (DnfPackage *pkg);
+char *rpmostree_get_jigdo_branch_pkg (DnfPackage *pkg);
 
 gboolean
 rpmostree_find_cache_branch_by_nevra (OstreeRepo    *pkgcache,

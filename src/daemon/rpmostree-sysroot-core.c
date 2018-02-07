@@ -115,6 +115,7 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
  */
 static gboolean
 add_package_refs_to_set (RpmOstreeRefSack *rsack,
+                         gboolean          is_jigdo,
                          GHashTable *referenced_pkgs,
                          GCancellable *cancellable,
                          GError **error)
@@ -133,7 +134,8 @@ add_package_refs_to_set (RpmOstreeRefSack *rsack,
       for (guint i = 0; i < pkglist->len; i++)
         {
           DnfPackage *pkg = pkglist->pdata[i];
-          g_autofree char *pkgref = rpmostree_get_cache_branch_pkg (pkg);
+          g_autofree char *pkgref =
+            is_jigdo ? rpmostree_get_jigdo_branch_pkg (pkg) : rpmostree_get_cache_branch_pkg (pkg);
           g_hash_table_add (referenced_pkgs, g_steal_pointer (&pkgref));
         }
     }
@@ -184,9 +186,11 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
   for (guint i = 0; i < deployments->len; i++)
     {
       OstreeDeployment *deployment = deployments->pdata[i];
-
+      const char *current_checksum = ostree_deployment_get_csum (deployment);
       gboolean is_layered;
-      if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered, NULL, NULL,
+      g_autofree char *base_commit = NULL;
+      if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered,
+                                                  &base_commit, NULL,
                                                   NULL, NULL, error))
         return FALSE;
 
@@ -197,8 +201,12 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
       RpmOstreeRefspecType refspectype;
       rpmostree_origin_classify_refspec (origin, &refspectype, NULL);
 
-      /* In rojig mode, we need to also reference all packages */
-      if (is_layered || refspectype == RPMOSTREE_REFSPEC_TYPE_ROJIG)
+      /* Hold a ref to layered packages; actually right now this injects refs
+       * for *all* packages since we don't have an API to query out which
+       * packages are layered. But it's harmless to have nonexistent refs in the
+       * set.
+       */
+      if (is_layered)
         {
           g_autofree char *deployment_dirpath =
             ostree_sysroot_get_deployment_dirpath (sysroot, deployment);
@@ -212,7 +220,21 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
           if (rsack == NULL)
             return FALSE;
 
-          if (!add_package_refs_to_set (rsack, referenced_pkgs, cancellable, error))
+          if (!add_package_refs_to_set (rsack, FALSE, referenced_pkgs, cancellable, error))
+            return FALSE;
+        }
+      /* In rojig mode, we need to also reference packages from the base; this
+       * is a different refspec format.
+       */
+      if (refspectype == RPMOSTREE_REFSPEC_TYPE_ROJIG)
+        {
+          const char *actual_base_commit = base_commit ?: current_checksum;
+          g_autoptr(RpmOstreeRefSack) base_rsack =
+            rpmostree_get_base_refsack_for_commit (repo, actual_base_commit, cancellable, error);
+          if (base_rsack == NULL)
+            return FALSE;
+
+          if (!add_package_refs_to_set (base_rsack, TRUE, referenced_pkgs, cancellable, error))
             return FALSE;
         }
 
@@ -229,13 +251,29 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
         }
     }
 
-  g_autoptr(GHashTable) current_refs = NULL;
-  if (!ostree_repo_list_refs_ext (repo, "rpmostree/pkg", &current_refs,
+  guint n_freed = 0;
+  /* Loop over layered refs */
+  g_autoptr(GHashTable) pkg_refs = NULL;
+  if (!ostree_repo_list_refs_ext (repo, "rpmostree/pkg", &pkg_refs,
                                   OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
     return FALSE;
+  GLNX_HASH_TABLE_FOREACH (pkg_refs, const char*, ref)
+    {
+      if (g_hash_table_contains (referenced_pkgs, ref))
+        continue;
 
-  guint n_freed = 0;
-  GLNX_HASH_TABLE_FOREACH (current_refs, const char*, ref)
+      if (!ostree_repo_set_ref_immediate (repo, NULL, ref, NULL,
+                                          cancellable, error))
+        return FALSE;
+      n_freed++;
+    }
+
+  /* Loop over jigdo refs */
+  g_autoptr(GHashTable) jigdo_refs = NULL;
+  if (!ostree_repo_list_refs_ext (repo, "rpmostree/jigdo", &jigdo_refs,
+                                  OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
+    return FALSE;
+  GLNX_HASH_TABLE_FOREACH (jigdo_refs, const char*, ref)
     {
       if (g_hash_table_contains (referenced_pkgs, ref))
         continue;
