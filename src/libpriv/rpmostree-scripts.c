@@ -207,6 +207,54 @@ script_child_setup (gpointer opaque)
     err (1, "dup2(stderr)");
 }
 
+/* Print the output of a script, with each line prefixed with
+ * the script identifier (e.g. foo.post: bla bla bla).
+ */
+static gboolean
+dump_buffered_output (const char *prefix,
+                      GLnxTmpfile *tmpf,
+                      GError     **error)
+{
+  if (lseek (tmpf->fd, 0, SEEK_SET) < 0)
+    return glnx_throw_errno_prefix (error, "lseek");
+  g_autoptr(FILE) buf = fdopen (tmpf->fd, "r");
+  if (!buf)
+    return glnx_throw_errno_prefix (error, "fdopen");
+  tmpf->fd = -1;  /* Ownership of fd was transferred */
+
+  while (TRUE)
+    {
+      size_t len = 0;
+      ssize_t bytes_read = 0;
+      g_autofree char *line = NULL;
+      errno = 0;
+      if ((bytes_read = getline (&line, &len, buf)) == -1)
+        {
+          if (errno != 0)
+            return glnx_throw_errno_prefix (error, "getline");
+          else
+            break;
+        }
+      printf ("%s: %s", prefix, line);
+      if (bytes_read > 0 && line[bytes_read-1] != '\n')
+        fputc ('\n', stdout);
+    }
+
+  return TRUE;
+}
+
+/* Since it doesn't make sense to fatally error if printing output fails, catch
+ * any errors there and print.
+ */
+static void
+dump_buffered_output_noerr (const char *prefix,
+                            GLnxTmpfile *tmpf)
+{
+  g_autoptr(GError) local_error = NULL;
+  if (!dump_buffered_output (prefix, tmpf, &local_error))
+    g_printerr ("While writing output: %s\n", local_error->message);
+}
+
 /* Lowest level script handler in this file; create a bwrap instance and run it
  * synchronously.
  */
@@ -297,6 +345,7 @@ run_script_in_bwrap_container (int rootfs_fd,
    * is where other output will go.
    */
   const char *id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
+  g_auto(GLnxTmpfile) buffered_output = { 0, };
   if (rpmostree_stdout_is_journal ())
     {
       data.stdout_fd = stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
@@ -313,6 +362,13 @@ run_script_in_bwrap_container (int rootfs_fd,
           goto out;
         }
     }
+  else
+    {
+      /* In the non-journal case we buffer so we can prefix output */
+      if (!glnx_open_anonymous_tmpfile (O_RDWR | O_CLOEXEC, &buffered_output, error))
+        return FALSE;
+      data.stdout_fd = data.stderr_fd = buffered_output.fd;
+    }
 
   data.all_fds_initialized = TRUE;
   rpmostree_bwrap_set_child_setup (bwrap, script_child_setup, &data);
@@ -325,6 +381,7 @@ run_script_in_bwrap_container (int rootfs_fd,
 
   if (!rpmostree_bwrap_run (bwrap, cancellable, error))
     {
+      dump_buffered_output_noerr (pkg_script, &buffered_output);
       /* If errors go to the journal, help the user/admin find them there */
       if (error && rpmostree_stdout_is_journal ())
         {
@@ -335,6 +392,8 @@ run_script_in_bwrap_container (int rootfs_fd,
         }
       goto out;
     }
+  else
+    dump_buffered_output_noerr (pkg_script, &buffered_output);
 
   ret = TRUE;
  out:
