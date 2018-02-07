@@ -116,6 +116,12 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
     "  exec /usr/sbin/build-locale-archive --install-langs \"%{_install_langs}\"\n"
     "fi\n"
   },
+  /* https://pagure.io/atomic-wg/issue/419 */
+  { "glibc.transfiletriggerin",
+    "/usr/bin/sh",
+    "set -euo pipefail\n"
+    "exec /sbin/ldconfig </dev/null\n"
+  },
   /* Just for the tests */
   { "rpmostree-lua-override-test.post",
     "/usr/bin/sh",
@@ -129,15 +135,30 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
   },
 };
 
+/* We carry overrides for lua scripts */
 static gboolean
-fail_if_interp_is_lua (const char *interp,
-                       const char *pkg_name,
-                       const char *script_desc,
-                       GError    **error)
+lookup_lua_script_replacement (const char *pkg_name,
+                               const char *scriptdesc,
+                               const char **out_interp,
+                               const char **out_script,
+                               GError     **error)
 {
-  if (g_strcmp0 (interp, lua_builtin) == 0)
+  g_assert_cmpint (*scriptdesc, !=, '%');
+  const char *pkg_scriptid = glnx_strjoina (pkg_name, ".", scriptdesc);
+  gboolean found_replacement = FALSE;
+  for (guint i = 0; i < G_N_ELEMENTS (lua_replacements); i++)
+    {
+      const RpmOstreeLuaReplacement *repl = &lua_replacements[i];
+      if (!g_str_equal (repl->pkgname_script, pkg_scriptid))
+        continue;
+      found_replacement = TRUE;
+      *out_interp = repl->interp;
+      *out_script = repl->replacement;
+      break;
+    }
+  if (!found_replacement)
     return glnx_throw (error, "Package '%s' has (currently) unsupported %s script in '%s'",
-                       pkg_name, lua_builtin, script_desc);
+                       pkg_name, lua_builtin, scriptdesc);
 
   return TRUE;
 }
@@ -361,36 +382,16 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
   if (headerGet (hdr, rpmscript->progtag, &td, (HEADERGET_ALLOC|HEADERGET_ARGV)))
     args = td.data;
 
-  const char *script;
+  const char *script = NULL;
   const char *interp = (args && args[0]) ? args[0] : "/bin/sh";
-  if (g_str_equal (interp, lua_builtin))
-    {
-      /* This is a lua script; look for a built-in override/replacement */
-      const char *pkg_scriptid = glnx_strjoina (dnf_package_get_name (pkg), ".", rpmscript->desc + 1);
-      gboolean found_replacement = FALSE;
-      for (guint i = 0; i < G_N_ELEMENTS (lua_replacements); i++)
-        {
-          const RpmOstreeLuaReplacement *repl = &lua_replacements[i];
-          if (!g_str_equal (repl->pkgname_script, pkg_scriptid))
-            continue;
-          found_replacement = TRUE;
-          interp = repl->interp;
-          script = repl->replacement;
-          break;
-        }
-      if (!found_replacement)
-        {
-          /* No override found, throw an error and return */
-          g_assert (!fail_if_interp_is_lua (interp, dnf_package_get_name (pkg), rpmscript->desc, error));
-          return FALSE;
-        }
-    }
-  else
-    {
-      script = headerGetString (hdr, rpmscript->tag);
-    }
-  g_autofree char *script_owned = NULL;
+  if (g_str_equal (interp, lua_builtin) &&
+      !lookup_lua_script_replacement (dnf_package_get_name (pkg), rpmscript->desc + 1,
+                                      &interp, &script, error))
+    return FALSE;
+  if (!script)
+    script = headerGetString (hdr, rpmscript->tag);
   g_assert (script);
+  g_autofree char *script_owned = NULL;
   const rpmFlags flags = headerGetNumber (hdr, rpmscript->flagtag);
   if (flags & RPMSCRIPT_FLAG_EXPAND)
     script = script_owned = rpmExpand (script, NULL);
@@ -689,14 +690,21 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
       const char *interp = rpmtdGetString (&tprogs);
       if (!interp)
         interp = "/bin/sh";
-      if (!fail_if_interp_is_lua (interp, pkg_name, "%transfiletriggerin", error))
+      const char *script = NULL;
+      if (g_str_equal (interp, lua_builtin) &&
+          !lookup_lua_script_replacement (pkg_name, "transfiletriggerin",
+                                          &interp, &script, error))
         return FALSE;
-
-      g_autofree char *script_owned = NULL;
-      g_assert_cmpint (rpmtdSetIndex (&tscripts, i), ==, i);
-      const char *script = rpmtdGetString (&tscripts);
+      if (!script)
+        {
+          g_assert_cmpint (rpmtdSetIndex (&tscripts, i), ==, i);
+          script = rpmtdGetString (&tscripts);
+        }
       if (!script)
         continue;
+
+      /* Handle expansion */
+      g_autofree char *script_owned = NULL;
       if (flags & RPMSCRIPT_FLAG_EXPAND)
         script = script_owned = rpmExpand (script, NULL);
 
