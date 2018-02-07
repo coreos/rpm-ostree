@@ -809,7 +809,7 @@ get_sack_for_root (int               dfd,
   g_autoptr(DnfSack) sack = dnf_sack_new ();
   dnf_sack_set_rootdir (sack, fullpath);
 
-  if (!dnf_sack_setup (sack, DNF_SACK_LOAD_FLAG_BUILD_CACHE, error))
+  if (!dnf_sack_setup (sack, 0, error))
     return FALSE;
 
   if (!dnf_sack_load_system_repo (sack, NULL, 0, error))
