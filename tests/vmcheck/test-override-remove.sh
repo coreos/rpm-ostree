@@ -43,9 +43,19 @@ vm_cmd ostree refs $(vm_get_booted_csum) \
 # foo has files in /lib, to test our re-canonicalization to /usr
 vm_build_rpm foo \
              files "%dir /lib/foo
-                    /lib/foo/foo.txt" \
-             install 'mkdir -p %{buildroot}/lib/foo && echo %{name} > %{buildroot}/lib/foo/foo.txt'
-vm_build_rpm bar
+                    /lib/foo/foo.txt
+                    /lib/foo/shared.txt" \
+             install 'mkdir -p %{buildroot}/lib/foo && \
+                      echo %{name} > %{buildroot}/lib/foo/foo.txt && \
+                      echo shared > %{buildroot}/lib/foo/shared.txt'
+# make bar co-own /lib/foo and /lib/foo/shared.txt
+vm_build_rpm bar \
+             files "%dir /lib/foo
+                    /lib/foo/bar.txt
+                    /lib/foo/shared.txt" \
+             install 'mkdir -p %{buildroot}/lib/foo && \
+                      echo %{name} > %{buildroot}/lib/foo/bar.txt && \
+                      echo shared > %{buildroot}/lib/foo/shared.txt'
 vm_rpmostree install foo bar
 vm_cmd ostree refs $(vm_get_deployment_info 0 checksum) \
   --create vmcheck_tmp/with_foo_and_bar
@@ -70,7 +80,23 @@ vm_cmd mv /tmp/vmcheck/yumrepo{,.bak}
 # this works. the only difference here is the [.0] which we use to access the
 # nevra of each gv_nevra element.
 
-vm_rpmostree override remove foo bar
+# remove just bar first to check deletion handling
+vm_rpmostree override remove bar
+vm_assert_status_jq \
+  '.deployments[0]["base-removals"]|length == 1' \
+  '[.deployments[0]["base-removals"][][.0]]|index("bar-1.0-1.x86_64") >= 0' \
+  '.deployments[0]["requested-base-removals"]|length == 1' \
+  '.deployments[0]["requested-base-removals"]|index("bar") >= 0'
+newroot=$(vm_get_deployment_root 0)
+# And test that we removed fully owned files, but not shared files
+vm_cmd "test -d ${newroot}/usr/lib/foo && \
+        test -f ${newroot}/usr/lib/foo/foo.txt && \
+        test -f ${newroot}/usr/lib/foo/shared.txt && \
+        test ! -f ${newroot}/usr/lib/foo/bar.txt"
+echo "ok override remove bar"
+
+# now also remove foo
+vm_rpmostree override remove foo
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 2' \
   '[.deployments[0]["base-removals"][][.0]]|index("foo-1.0-1.x86_64") >= 0' \
@@ -79,8 +105,10 @@ vm_assert_status_jq \
   '.deployments[0]["requested-base-removals"]|index("foo") >= 0' \
   '.deployments[0]["requested-base-removals"]|index("bar") >= 0'
 newroot=$(vm_get_deployment_root 0)
-# And this tests handling /lib -> /usr/lib
-vm_cmd "test -d ${newroot}/usr/lib && test '!' -f ${newroot}/usr/lib/foo/foo.txt && \
+# And this tests handling /lib -> /usr/lib as well as removal of shared files
+vm_cmd "test -d ${newroot}/usr/lib && \
+        test '!' -f ${newroot}/usr/lib/foo/foo.txt && \
+        test '!' -f ${newroot}/usr/lib/foo/shared.txt && \
         test '!' -d ${newroot}/usr/lib/foo"
 echo "ok override remove foo and bar"
 
