@@ -234,6 +234,8 @@ rpmostree_pkg_get_local_path (DnfPackage *pkg)
     }
 }
 
+/* Convert a "traditional" path (normally from e.g. an RPM) into its final location in
+ * ostree */
 char*
 rpmostree_translate_path_for_ostree (const char *path)
 {
