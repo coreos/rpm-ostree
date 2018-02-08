@@ -2378,6 +2378,7 @@ rpmostree_context_consume_package (RpmOstreeContext  *self,
   return TRUE;
 }
 
+/* Builds a mapping from filename to rpm color */
 static void
 add_te_files_to_ht (rpmte        te,
                     GHashTable  *ht)
@@ -2402,10 +2403,9 @@ canonicalize_rpmfi_path (const char *path)
 {
   /* this is a bit awkward; we relativize for the translation, but then make it absolute
    * again to match libostree */
-  const char *path_rel = path;
-  path_rel += strspn (path, "/");
+  path += strspn (path, "/");
   g_autofree char *translated =
-    rpmostree_translate_path_for_ostree (path_rel) ?: g_strdup (path_rel);
+    rpmostree_translate_path_for_ostree (path) ?: g_strdup (path);
   return g_build_filename ("/", translated, NULL);
 }
 
@@ -2507,8 +2507,7 @@ handle_file_dispositions (RpmOstreeContext *self,
           rpm_color_t color = (rpmfiFColor (fi) & ts_color);
 
           /* let's make the safe assumption that the color mess is only an issue for /usr */
-          const char *fn_rel = fn;
-          fn_rel += strspn (fn, "/");
+          const char *fn_rel = fn + strspn (fn, "/");
 
           /* be sure we've canonicalized usr/ */
           g_autofree char *fn_rel_owned = canonicalize_non_usrmove_path (self, fn_rel);
@@ -2554,9 +2553,10 @@ checkout_filter (OstreeRepo         *self,
   GHashTable *files_skip = user_data;
   if (g_hash_table_contains (files_skip, path))
     return OSTREE_REPO_CHECKOUT_FILTER_SKIP;
-  /* hack for nsswitch.conf, which we modify during treecompose; a better heuristic here
-   * might be to skip all /etc files which have a different digest than the one registered
-   * in the rpmdb */
+  /* Hack for nsswitch.conf: the glibc.i686 copy is identical to the one in glibc.x86_64,
+   * but because we modify it at treecompose time, UNION_IDENTICAL wouldn't save us here. A
+   * better heuristic here might be to skip all /etc files which have a different digest
+   * than the one registered in the rpmdb */
   if (g_str_equal (path, "/usr/etc/nsswitch.conf"))
     return OSTREE_REPO_CHECKOUT_FILTER_SKIP;
   return OSTREE_REPO_CHECKOUT_FILTER_ALLOW;
