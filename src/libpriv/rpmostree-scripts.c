@@ -215,6 +215,9 @@ dump_buffered_output (const char *prefix,
                       GLnxTmpfile *tmpf,
                       GError     **error)
 {
+  /* The tmpf won't be initialized in the journal case */
+  if (!tmpf->initialized)
+    return TRUE;
   if (lseek (tmpf->fd, 0, SEEK_SET) < 0)
     return glnx_throw_errno_prefix (error, "lseek");
   g_autoptr(FILE) buf = fdopen (tmpf->fd, "r");
