@@ -469,7 +469,40 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
           if (!rpmostree_refspec_classify (origin_refspec, &refspectype, &refspec_data, error))
             return FALSE;
           g_autofree char *canonrefspec = rpmostree_refspec_to_string (refspectype, refspec_data);
-          g_print ("%s", canonrefspec);
+          switch (refspectype)
+            {
+            case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+              {
+                g_print ("%s", canonrefspec);
+              }
+              break;
+            case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+              {
+                g_autoptr(GVariant) jigdo_description = NULL;
+                g_variant_dict_lookup (dict, "jigdo-description", "@a{sv}", &jigdo_description);
+                if (jigdo_description)
+                  {
+                    g_autoptr(GVariantDict) dict = g_variant_dict_new (jigdo_description);
+                    const char *repo = NULL;
+                    g_variant_dict_lookup (dict, "repo", "&s", &repo);
+                    const char *name = NULL;
+                    g_variant_dict_lookup (dict, "name", "&s", &name);
+                    const char *evr = NULL;
+                    g_variant_dict_lookup (dict, "evr", "&s", &evr);
+                    const char *arch = NULL;
+                    g_variant_dict_lookup (dict, "arch", "&s", &arch);
+                    g_assert (repo && name);
+                    g_print ("%s:%s", repo, name);
+                    if (evr && arch)
+                      g_print ("-%s.%s", evr, arch);
+                  }
+                else
+                  {
+                    g_print ("%s", canonrefspec);
+                  }
+              }
+              break;
+            }
         }
       else
         g_print ("%s", checksum);
@@ -511,7 +544,9 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
         live_replaced = NULL;
       const gboolean have_live_changes = live_inprogress || live_replaced;
 
-      if (is_locally_assembled)
+      const gboolean is_ostree_or_verbose = opt_verbose || refspectype == RPMOSTREE_REFSPEC_TYPE_OSTREE;
+
+      if (is_locally_assembled && is_ostree_or_verbose)
         {
           if (have_live_changes)
             rpmostree_print_kv ("BootedBaseCommit", max_key_len, base_checksum);
@@ -520,7 +555,7 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
           if (opt_verbose || have_any_live_overlay)
             rpmostree_print_kv ("Commit", max_key_len, checksum);
         }
-      else
+      else if (is_ostree_or_verbose)
         {
           if (have_live_changes)
             rpmostree_print_kv ("BootedCommit", max_key_len, checksum);
