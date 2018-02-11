@@ -348,7 +348,7 @@ run_script_in_bwrap_container (int rootfs_fd,
    * is where other output will go.
    */
   const char *id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
-  g_auto(GLnxTmpfile) buffered_output = { 0, };
+  GLnxTmpfile buffered_output = { 0, };
   if (rpmostree_stdout_is_journal ())
     {
       data.stdout_fd = stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
@@ -400,6 +400,7 @@ run_script_in_bwrap_container (int rootfs_fd,
 
   ret = TRUE;
  out:
+  glnx_tmpfile_clear (&buffered_output);
   (void) unlinkat (rootfs_fd, postscript_path_host, 0);
   if (created_var_tmp)
     (void) unlinkat (rootfs_fd, "var/tmp", AT_REMOVEDIR);
