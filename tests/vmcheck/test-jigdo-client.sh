@@ -53,3 +53,8 @@ vm_assert_status_jq '.deployments[0].origin|startswith("rojig://fahc:fedora-atom
                     '.deployments[0].version == "'${prev_version}'"'
 
 echo "ok jigdo client deploy"
+
+vm_cmd rpm-ostree status > status.txt
+assert_file_has_content_literal status.txt  'fahc:fedora-atomic-host-'${prev_version}'-1.fc27.x86_64'
+
+echo "ok jigdo status"

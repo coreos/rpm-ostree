@@ -40,6 +40,8 @@ struct RpmOstreeOrigin {
   /* Version data that goes along with the refspec */
   char *cached_override_commit;
   char *cached_jigdo_version;
+  /* The NEVRA of the jigdoRPM */
+  char *cached_jigdo_description;
 
   char *cached_unconfigured_state;
   char **cached_initramfs_args;
@@ -141,6 +143,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
       ret->refspec_type = RPMOSTREE_REFSPEC_TYPE_ROJIG;
       ret->cached_refspec = g_steal_pointer (&jigdo_spec);
       ret->cached_jigdo_version = g_key_file_get_string (ret->kf, "origin", "jigdo-version", NULL);
+      ret->cached_jigdo_description = g_key_file_get_string (ret->kf, "origin", "jigdo-description", NULL);
     }
 
   if (!parse_packages_strv (ret->kf, "packages", "requested", FALSE,
@@ -219,6 +222,31 @@ const char *
 rpmostree_origin_get_jigdo_version (RpmOstreeOrigin *origin)
 {
   return origin->cached_jigdo_version;
+}
+
+/* Returns a new (floating) variant of type a{sv} with fields:
+ *  - s: repo
+ *  - s: name
+ *  - s: evr
+ *  - s: arch
+ * Note this type is exposed as DBus API.
+ */
+GVariant *
+rpmostree_origin_get_jigdo_description (RpmOstreeOrigin *origin)
+{
+  const char *colon = strchr (origin->cached_refspec, ':');
+  g_assert (colon);
+  const char *repo = strndupa (origin->cached_refspec, colon - origin->cached_refspec);
+  g_autofree char *jigdo_evr = g_key_file_get_string (origin->kf, "origin", "jigdo-imported-evr", NULL);
+  g_autofree char *jigdo_arch = g_key_file_get_string (origin->kf, "origin", "jigdo-imported-arch", NULL);
+  g_autoptr(GVariantBuilder) builder = g_variant_builder_new (G_VARIANT_TYPE_VARDICT);
+  g_variant_builder_add (builder, "{sv}", "repo", g_variant_new_string (repo));
+  g_variant_builder_add (builder, "{sv}", "name", g_variant_new_string (colon + 1));
+  if (jigdo_evr)
+    g_variant_builder_add (builder, "{sv}", "evr", g_variant_new_string (jigdo_evr));
+  if (jigdo_arch)
+    g_variant_builder_add (builder, "{sv}", "arch", g_variant_new_string (jigdo_arch));
+  return g_variant_builder_end (builder);
 }
 
 GHashTable *
@@ -407,6 +435,24 @@ rpmostree_origin_set_jigdo_version (RpmOstreeOrigin *origin,
   origin->cached_jigdo_version = g_strdup (version);
 }
 
+/* The jigdoRPM is highly special; it doesn't live in the rpmdb for example, as
+ * that would be fully circular. Yet, it's of critical importance to the whole
+ * system; we want to render it on the client. For now, what we do is stick the
+ * EVR+A in the origin. That's the only data we really care about.
+ *
+ * Perhaps down the line, what we really want to do is store the whole Header at
+ * least somewhere hooked off the deployment (or perhaps imported itself into
+ * the pkgcache)?
+ */
+void
+rpmostree_origin_set_jigdo_description (RpmOstreeOrigin *origin,
+                                        DnfPackage      *package)
+{
+  g_assert_cmpint (origin->refspec_type, ==, RPMOSTREE_REFSPEC_TYPE_ROJIG);
+  g_key_file_set_string (origin->kf, "origin", "jigdo-imported-evr", dnf_package_get_evr (package));
+  g_key_file_set_string (origin->kf, "origin", "jigdo-imported-arch", dnf_package_get_arch (package));
+}
+
 gboolean
 rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
                              const char      *new_refspec,
@@ -429,6 +475,8 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {
         g_key_file_remove_key (origin->kf, "origin", "rojig", NULL);
+        g_key_file_remove_key (origin->kf, "origin", "jigdo-imported-evr", NULL);
+        g_key_file_remove_key (origin->kf, "origin", "jigdo-imported-arch", NULL);
         const char *refspec_key =
           g_key_file_has_key (origin->kf, "origin", "baserefspec", NULL) ?
           "baserefspec" : "refspec";
