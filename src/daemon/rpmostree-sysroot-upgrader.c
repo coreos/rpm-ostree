@@ -861,6 +861,18 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (treespec == NULL)
     return FALSE;
 
+  RpmOstreeRefspecType refspec_type;
+  const char *refspec;
+  rpmostree_origin_classify_refspec (self->origin, &refspec_type, &refspec);
+  switch (refspec_type)
+    {
+    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+      break;
+    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+      /* We don't want to re-check the metdata, we already did that for the base */
+      rpmostree_context_set_pkgcache_only (self->ctx, TRUE);
+      break;
+    }
   if (!rpmostree_context_setup (self->ctx, tmprootfs_abspath, tmprootfs_abspath, treespec,
                                 cancellable, error))
     return FALSE;
