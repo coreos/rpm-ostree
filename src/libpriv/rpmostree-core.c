@@ -1172,12 +1172,6 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
                      NULL);
   }
 
-  /* Don't try to keep multiple kernels per root; that's a traditional thing,
-   * ostree binds kernel + userspace.
-   */
-  dnf_sack_set_installonly (dnf_context_get_sack (self->dnfctx), NULL);
-  dnf_sack_set_installonly_limit (dnf_context_get_sack (self->dnfctx), 0);
-
   return TRUE;
 }
 
@@ -1860,6 +1854,12 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       if (!rpmostree_context_download_metadata (self, cancellable, error))
         return FALSE;
     }
+
+  /* Don't try to keep multiple kernels per root; that's a traditional thing,
+   * ostree binds kernel + userspace.
+   */
+  dnf_sack_set_installonly (dnf_context_get_sack (self->dnfctx), NULL);
+  dnf_sack_set_installonly_limit (dnf_context_get_sack (self->dnfctx), 0);
 
   if (self->jigdo_pure)
     {

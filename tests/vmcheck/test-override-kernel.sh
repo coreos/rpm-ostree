@@ -33,14 +33,14 @@ vm_cmd 'curl -sS -L -O https://dl.fedoraproject.org/pub/fedora/linux/releases/27
 current=$(vm_get_booted_csum)
 vm_cmd rpm-ostree db list "${current}" > current-dblist.txt
 assert_not_file_has_content current-dblist.txt 'kernel-4.13.9-300.fc27'
-grep -E '^ kernel-' current-dblist.txt  | sed -e 's,^ *,,' > current-kernel.txt
+grep -E '^ kernel-4' current-dblist.txt  | sed -e 's,^ *,,' > orig-kernel.txt
+assert_streq "$(wc -l orig-kernel.txt | cut -f 1 -d ' ')" "1"
+orig_kernel=$(cat orig-kernel.txt)
 vm_rpmostree override replace ./kernel*4.13.9*.rpm
-new=$(vm_get_deployment_info 0 checksum)
+new=$(vm_get_pending_csum)
 vm_cmd rpm-ostree db list "${new}" > new-dblist.txt
 assert_file_has_content_literal new-dblist.txt 'kernel-4.13.9-300.fc27'
-cat current-kernel.txt | while read line; do
-    if grep -q -F -e "${line}" new-dblist.txt; then
-        fatal "Found kernel: ${line}"
-    fi
-done
+if grep -q -F -e "${orig_kernel}" new-dblist.txt; then
+    fatal "Found kernel: ${line}"
+fi
 echo "ok override kernel"
