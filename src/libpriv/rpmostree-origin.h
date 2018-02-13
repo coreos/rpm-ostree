@@ -64,6 +64,8 @@ char *
 rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin,
                                    RpmOstreeRefspecType *out_refspectype);
 
+gboolean rpmostree_origin_is_rojig (RpmOstreeOrigin *origin);
+
 const char *
 rpmostree_origin_get_jigdo_version (RpmOstreeOrigin *origin);
 

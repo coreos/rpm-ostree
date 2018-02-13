@@ -865,23 +865,14 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
                                 cancellable, error))
     return FALSE;
 
-  RpmOstreeRefspecType refspec_type;
-  const char *refspec;
-  rpmostree_origin_classify_refspec (self->origin, &refspec_type, &refspec);
-  switch (refspec_type)
+  if (rpmostree_origin_is_rojig (self->origin))
     {
-    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-      break;
-    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-      {
-        /* We don't want to re-check the metadata, we already did that for the
-         * base. In the future we should try to re-use the DnfContext.
-         */
-        g_autoptr(DnfState) hifstate = dnf_state_new ();
-        if (!dnf_context_setup_sack (rpmostree_context_get_dnf (self->ctx), hifstate, error))
-          return FALSE;
-      }
-      break;
+      /* We don't want to re-check the metadata, we already did that for the
+       * base. In the future we should try to re-use the DnfContext.
+       */
+      g_autoptr(DnfState) hifstate = dnf_state_new ();
+      if (!dnf_context_setup_sack (rpmostree_context_get_dnf (self->ctx), hifstate, error))
+        return FALSE;
     }
 
   const gboolean have_packages = (self->overlay_packages->len > 0 ||

@@ -198,6 +198,13 @@ rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin,
   return NULL;
 }
 
+/* Returns: TRUE iff the origin type is rpm-ostree jigdo */
+gboolean
+rpmostree_origin_is_rojig (RpmOstreeOrigin *origin)
+{
+  return origin->refspec_type == RPMOSTREE_REFSPEC_TYPE_ROJIG;
+}
+
 void
 rpmostree_origin_classify_refspec (RpmOstreeOrigin      *origin,
                                    RpmOstreeRefspecType *out_type,
