@@ -24,6 +24,12 @@ set -euo pipefail
 
 set -x
 
+osid=$(vm_cmd grep -E '^ID=' /etc/os-release)
+if test "${osid}" != 'ID=fedora'; then
+    echo "ok skip on OS ID=${osid}"
+    exit 0
+fi
+
 # Test that we can override the kernel.  For ease of testing
 # I just picked the "gold" F27 kernel.
 vm_cmd 'curl -sS -L -O https://dl.fedoraproject.org/pub/fedora/linux/releases/27/Everything/x86_64/os/Packages/k/kernel-4.13.9-300.fc27.x86_64.rpm \
@@ -34,7 +40,7 @@ current=$(vm_get_booted_csum)
 vm_cmd rpm-ostree db list "${current}" > current-dblist.txt
 assert_not_file_has_content current-dblist.txt 'kernel-4.13.9-300.fc27'
 grep -E '^ kernel-4' current-dblist.txt  | sed -e 's,^ *,,' > orig-kernel.txt
-assert_streq "$(wc -l orig-kernel.txt | cut -f 1 -d ' ')" "1"
+assert_streq "$(wc -l < orig-kernel.txt)" "1"
 orig_kernel=$(cat orig-kernel.txt)
 vm_rpmostree override replace ./kernel*4.13.9*.rpm
 new=$(vm_get_pending_csum)
