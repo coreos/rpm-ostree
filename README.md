@@ -1,17 +1,38 @@
-# rpm-ostree Overview
+# rpm-ostree: A true hybrid image/package system
 
-rpm-ostree is a hybrid image/package system.  It uses
-[OSTree](https://ostree.readthedocs.io/en/latest/) as a base image
-format, and supports RPM on both the client and server side using
-[libdnf](https://github.com/rpm-software-management/libdnf).
+```
+                         +-----------------------------------------+
+                         |                                         |
+                         |       rpm-ostree (daemon + CLI)         |
+                  +------>                                         <---------+
+                  |      |     status, upgrade, rollback,          |         |
+                  |      |     pkg layering, initramfs --enable    |         |
+                  |      |                                         |         |
+                  |      +-----------------------------------------+         |
+                  |                                                          |
+                  |                                                          |
+                  |                                                          |
++-----------------|-------------------------+        +-----------------------|-----------------+
+|                                           |        |                                         |
+|         libostree (image system)          |        |            libdnf (pkg system)          |
+|                                           |        |                                         |
+|   C API, hardlink fs trees, system repo,  |        |    ties together libsolv (SAT solver)   |
+|   commits, atomic bootloader swap         |        |    with librepo (RPM repo downloads)    |
+|                                           |        |                                         |
++-------------------------------------------+        +-----------------------------------------+
+```
+
+rpm-ostree combines [libostree](https://ostree.readthedocs.io/en/latest/) (an image system),
+with [libdnf](https://github.com/rpm-software-management/libdnf) (a package system), bringing
+many of the benefits of both together.
 
 For more information, see the online manual: [Read The Docs (rpm-ostree)](https://rpm-ostree.readthedocs.org/en/latest/)
 
 **Features:**
 
- - Atomic upgrades and rollback for host system updates
- - A server side tool to consume RPMs and commit them to an OSTree repository
- - A system daemon to consume OSTree commits as updates
+ - Transactional upgrades and rollback for host system updates
+ - Client-side package layering (and overrides)
+ - Easily make your own: `rpm-ostree compose tree`
 
 Projects using rpm-ostree
 --------------------------
@@ -24,3 +45,16 @@ Manual
 ------
 
 For more information, see the online manual: [Read The Docs (rpm-ostree)](https://rpm-ostree.readthedocs.org/en/latest/)
+
+Talks and media
+-----
+
+A number of Project Atomic talks are available; see for
+example [this post](https://lists.projectatomic.io/projectatomic-archives/atomic-devel/2018-January/msg00057.html) which
+has a bigger collection that also includes talks on containers.
+
+rpm-ostree specific talks:
+
+ * devconf.cz 2018: [Colin Walters: Hybrid image/package OS updates with rpm-ostree(https://www.youtube.com/watch?v=eWoFpOoA-tE) [slides](https://fedorapeople.org/~walters/2018.01-devconf/index.html)
+ * devconf.cz 2018: [Peter Robinson: Using Fedora and OSTree for IoT](https://www.youtube.com/watch?v=mRqV38qT-wc)
+
