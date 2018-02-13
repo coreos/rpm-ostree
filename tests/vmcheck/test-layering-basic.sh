@@ -106,6 +106,11 @@ if [[ $output != foo-1.0-1.x86_64 ]]; then
 fi
 echo "ok correct output"
 
+# check that there are no leftover rpmdb files
+ls -la /usr/share/rpm > out.txt
+assert_not_file_has_content out.txt __db
+echo "ok no leftover rpmdb files"
+
 # upgrade to a layer with foo already builtin
 vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_booted_csum)
 vm_rpmostree upgrade
