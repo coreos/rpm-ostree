@@ -5,4 +5,4 @@ ConditionPathExists=/run/ostree-booted
 
 [Service]
 Type=oneshot
-ExecStart=@bindir@/rpm-ostree upgrade --automatic
+ExecStart=@bindir@/rpm-ostree upgrade --trigger-automatic-update-policy
