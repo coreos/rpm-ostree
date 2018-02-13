@@ -861,6 +861,10 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (treespec == NULL)
     return FALSE;
 
+  if (!rpmostree_context_setup (self->ctx, tmprootfs_abspath, tmprootfs_abspath, treespec,
+                                cancellable, error))
+    return FALSE;
+
   RpmOstreeRefspecType refspec_type;
   const char *refspec;
   rpmostree_origin_classify_refspec (self->origin, &refspec_type, &refspec);
@@ -869,13 +873,16 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       break;
     case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-      /* We don't want to re-check the metdata, we already did that for the base */
-      rpmostree_context_set_pkgcache_only (self->ctx, TRUE);
+      {
+        /* We don't want to re-check the metadata, we already did that for the
+         * base. In the future we should try to re-use the DnfContext.
+         */
+        g_autoptr(DnfState) hifstate = dnf_state_new ();
+        if (!dnf_context_setup_sack (rpmostree_context_get_dnf (self->ctx), hifstate, error))
+          return FALSE;
+      }
       break;
     }
-  if (!rpmostree_context_setup (self->ctx, tmprootfs_abspath, tmprootfs_abspath, treespec,
-                                cancellable, error))
-    return FALSE;
 
   const gboolean have_packages = (self->overlay_packages->len > 0 ||
                                   g_hash_table_size (local_pkgs) > 0 ||
