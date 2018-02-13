@@ -1211,6 +1211,15 @@ cleanup_selinux_lockfiles (int            rootfs_fd,
   return TRUE;
 }
 
+gboolean
+rpmostree_cleanup_leftover_rpmdb_files (int            rootfs_fd,
+                                        GCancellable  *cancellable,
+                                        GError       **error)
+{
+  return cleanup_leftover_files (rootfs_fd, RPMOSTREE_RPMDB_LOCATION, rpmdb_leftover_files,
+                                 rpmdb_leftover_prefixes, cancellable, error);
+}
+
 /**
  * rpmostree_rootfs_postprocess_common:
  *
@@ -1253,8 +1262,7 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
         }
     }
 
-  if (!cleanup_leftover_files (rootfs_fd, RPMOSTREE_RPMDB_LOCATION, rpmdb_leftover_files,
-                               rpmdb_leftover_prefixes, cancellable, error))
+  if (!rpmostree_cleanup_leftover_rpmdb_files (rootfs_fd, cancellable, error))
     return FALSE;
 
   /* If we do have an rpmdb, hardlink it into the base path */

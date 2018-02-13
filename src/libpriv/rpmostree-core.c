@@ -4127,6 +4127,10 @@ rpmostree_context_commit (RpmOstreeContext      *self,
                            "rpmostree.state-sha512",
                            g_variant_new_string (state_checksum));
 
+    /* And finally, make sure we clean up rpmdb left over files */
+    if (!rpmostree_cleanup_leftover_rpmdb_files (self->tmprootfs_dfd, cancellable, error))
+      return FALSE;
+
     OstreeRepoCommitModifierFlags modflags = OSTREE_REPO_COMMIT_MODIFIER_FLAGS_NONE;
     /* For ex-container (bare-user-only), we always need canonical permissions */
     if (ostree_repo_get_mode (self->ostreerepo) == OSTREE_REPO_MODE_BARE_USER_ONLY)
