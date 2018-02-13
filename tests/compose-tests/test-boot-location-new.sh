@@ -19,7 +19,7 @@ diff -u bootls{-expected,}.txt
 ostree --repo=${repobuild} ls -R ${treeref} /usr/lib/ostree-boot > bootls.txt
 assert_file_has_content bootls.txt vmlinuz-
 assert_file_has_content bootls.txt initramfs-
-kver=$(grep /vmlinuz bootls.txt | sed -e 's,.*/vmlinuz-\(.*\)-[0-9a-e].*$,\1,')
+kver=$(grep /vmlinuz bootls.txt | sed -e 's,.*/vmlinuz-\(.*\)-[0-9a-f].*$,\1,')
 # And use the kver to find the kernel in /usr/lib/modules
 ostree --repo=${repobuild} ls ${treeref} /usr/lib/modules/${kver}/{vmlinuz,initramfs.img} >/dev/null
 echo "ok boot location new"
