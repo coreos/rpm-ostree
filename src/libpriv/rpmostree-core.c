@@ -1209,10 +1209,12 @@ append_quoted (GString *r, const char *value)
 }
 
 /* Return the ostree cache branch for a nevra */
-char *
-rpmostree_get_cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch)
+static char *
+get_branch_for_n_evr_a (const char *type, const char *name, const char *evr, const char *arch)
 {
-  GString *r = g_string_new ("rpmostree/pkg/");
+  GString *r = g_string_new ("rpmostree/");
+  g_string_append (r, type);
+  g_string_append_c (r, '/');
   append_quoted (r, name);
   g_string_append_c (r, '/');
   /* Work around the fact that libdnf and librpm have different handling
@@ -1230,6 +1232,12 @@ rpmostree_get_cache_branch_for_n_evr_a (const char *name, const char *evr, const
   return g_string_free (r, FALSE);
 }
 
+char *
+rpmostree_get_cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch)
+{
+  return get_branch_for_n_evr_a ("pkg", name, evr, arch);
+}
+
 /* Return the ostree cache branch from a Header */
 char *
 rpmostree_get_cache_branch_header (Header hdr)
@@ -1240,6 +1248,15 @@ rpmostree_get_cache_branch_header (Header hdr)
   return rpmostree_get_cache_branch_for_n_evr_a (name, evr, arch);
 }
 
+char *
+rpmostree_get_jigdo_branch_header (Header hdr)
+{
+  g_autofree char *name = headerGetAsString (hdr, RPMTAG_NAME);
+  g_autofree char *evr = headerGetAsString (hdr, RPMTAG_EVR);
+  g_autofree char *arch = headerGetAsString (hdr, RPMTAG_ARCH);
+  return get_branch_for_n_evr_a ("jigdo", name, evr, arch);
+}
+
 /* Return the ostree cache branch from a libdnf Package */
 char *
 rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
@@ -1247,6 +1264,14 @@ rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
   return rpmostree_get_cache_branch_for_n_evr_a (dnf_package_get_name (pkg),
                                                  dnf_package_get_evr (pkg),
                                                  dnf_package_get_arch (pkg));
+}
+
+char *
+rpmostree_get_jigdo_branch_pkg (DnfPackage *pkg)
+{
+  return get_branch_for_n_evr_a ("jigdo", dnf_package_get_name (pkg),
+                                 dnf_package_get_evr (pkg),
+                                 dnf_package_get_arch (pkg));
 }
 
 static gboolean
@@ -1348,7 +1373,8 @@ find_pkg_in_ostree (RpmOstreeContext *self,
   if (repo == NULL)
     return TRUE; /* Note early return */
 
-  g_autofree char *cachebranch = rpmostree_get_cache_branch_pkg (pkg);
+  g_autofree char *cachebranch = self->jigdo_spec ?
+      rpmostree_get_jigdo_branch_pkg (pkg) : rpmostree_get_cache_branch_pkg (pkg);
   g_autofree char *cached_rev = NULL;
   if (!ostree_repo_resolve_rev (repo, cachebranch, TRUE,
                                 &cached_rev, error))

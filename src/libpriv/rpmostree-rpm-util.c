@@ -766,6 +766,7 @@ rpmrev_free (struct RpmRevisionData *ptr)
 static gboolean
 checkout_only_rpmdb (OstreeRepo       *repo,
                      const char       *ref,
+                     const char       *rpmdb,
                      GLnxTmpDir       *tmpdir,
                      GCancellable     *cancellable,
                      GError          **error)
@@ -781,7 +782,8 @@ checkout_only_rpmdb (OstreeRepo       *repo,
   /* Check out the database (via copy) */
   OstreeRepoCheckoutAtOptions checkout_options = { 0, };
   checkout_options.mode = OSTREE_REPO_CHECKOUT_MODE_USER;
-  checkout_options.subpath = RPMOSTREE_RPMDB_LOCATION;
+  const char *subpath = glnx_strjoina ("/", rpmdb);
+  checkout_options.subpath = subpath;
   if (!ostree_repo_checkout_at (repo, &checkout_options, tmpdir->fd,
                                 RPMOSTREE_RPMDB_LOCATION, commit,
                                 cancellable, error))
@@ -809,7 +811,7 @@ get_sack_for_root (int               dfd,
   g_autoptr(DnfSack) sack = dnf_sack_new ();
   dnf_sack_set_rootdir (sack, fullpath);
 
-  if (!dnf_sack_setup (sack, DNF_SACK_LOAD_FLAG_BUILD_CACHE, error))
+  if (!dnf_sack_setup (sack, 0, error))
     return FALSE;
 
   if (!dnf_sack_load_system_repo (sack, NULL, 0, error))
@@ -845,7 +847,37 @@ rpmostree_get_refsack_for_commit (OstreeRepo                *repo,
   if (!glnx_mkdtemp ("rpmostree-dbquery-XXXXXX", 0700, &tmpdir, error))
     return NULL;
 
-  if (!checkout_only_rpmdb (repo, ref, &tmpdir, cancellable, error))
+  if (!checkout_only_rpmdb (repo, ref, RPMOSTREE_RPMDB_LOCATION,
+                            &tmpdir, cancellable, error))
+    return NULL;
+
+  g_autoptr(DnfSack) hsack = NULL; /* NB: refsack adds a ref to it */
+  if (!get_sack_for_root (tmpdir.fd, ".", &hsack, error))
+    return NULL;
+
+  /* Ownership of tmpdir is transferred */
+  return rpmostree_refsack_new (hsack, &tmpdir);
+}
+
+/* Return a sack for the "base" rpmdb without any layering/overrides/etc.
+ * involved.
+ */
+RpmOstreeRefSack *
+rpmostree_get_base_refsack_for_commit (OstreeRepo                *repo,
+                                       const char                *ref,
+                                       GCancellable              *cancellable,
+                                       GError                   **error)
+{
+  g_auto(GLnxTmpDir) tmpdir = { 0, };
+  if (!glnx_mkdtemp ("rpmostree-dbquery-XXXXXX", 0700, &tmpdir, error))
+    return NULL;
+
+  /* This is a bit of a hack; we checkout the "base" dbpath as /usr/share/rpm in
+   * a temporary root. Fixing this would require patching through new APIs into
+   * libdnf → libsolv to teach it about a way to find a user-specified dbpath.
+   */
+  if (!checkout_only_rpmdb (repo, ref, RPMOSTREE_BASE_RPMDB,
+                            &tmpdir, cancellable, error))
     return NULL;
 
   g_autoptr(DnfSack) hsack = NULL; /* NB: refsack adds a ref to it */
@@ -885,7 +917,8 @@ rpmostree_get_refts_for_commit (OstreeRepo                *repo,
   if (!glnx_mkdtemp ("rpmostree-dbquery-XXXXXX", 0700, &tmpdir, error))
     return FALSE;
 
-  if (!checkout_only_rpmdb (repo, ref, &tmpdir, cancellable, error))
+  if (!checkout_only_rpmdb (repo, ref, RPMOSTREE_RPMDB_LOCATION,
+                            &tmpdir, cancellable, error))
     return FALSE;
 
   /* Ownership of tmpdir is transferred */
