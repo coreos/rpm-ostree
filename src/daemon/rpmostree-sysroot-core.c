@@ -198,9 +198,6 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
       if (!origin)
         return FALSE;
 
-      RpmOstreeRefspecType refspectype;
-      rpmostree_origin_classify_refspec (origin, &refspectype, NULL);
-
       /* Hold a ref to layered packages; actually right now this injects refs
        * for *all* packages since we don't have an API to query out which
        * packages are layered. But it's harmless to have nonexistent refs in the
@@ -226,7 +223,7 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
       /* In rojig mode, we need to also reference packages from the base; this
        * is a different refspec format.
        */
-      if (refspectype == RPMOSTREE_REFSPEC_TYPE_ROJIG)
+      if (rpmostree_origin_is_rojig (origin))
         {
           const char *actual_base_commit = base_commit ?: current_checksum;
           g_autoptr(RpmOstreeRefSack) base_rsack =
