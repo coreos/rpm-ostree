@@ -39,6 +39,8 @@
 
 #include <libglnx.h>
 
+#define RPMOSTREE_AUTOMATIC_TIMER_OBJPATH \
+  "/org/freedesktop/systemd1/unit/rpm_2dostreed_2dautomatic_2etimer"
 #define RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH \
   "/org/freedesktop/systemd1/unit/rpm_2dostreed_2dautomatic_2eservice"
 
@@ -172,37 +174,62 @@ gv_nevra_to_evr (GString  *buffer,
                           PKG_NEVRA_FLAGS_EPOCH_VERSION_RELEASE);
 }
 
+typedef enum {
+  AUTO_UPDATE_SDSTATE_TIMER_UNKNOWN,
+  AUTO_UPDATE_SDSTATE_TIMER_INACTIVE,
+  AUTO_UPDATE_SDSTATE_SERVICE_FAILED,
+  AUTO_UPDATE_SDSTATE_OK,
+} AutoUpdateSdState;
+
 static gboolean
-get_last_auto_update_run (GDBusConnection *connection,
-                          char           **out_last_run,
-                          gboolean        *out_fail,
-                          GCancellable    *cancellable,
-                          GError         **error)
+get_last_auto_update_run (GDBusConnection   *connection,
+                          AutoUpdateSdState *out_state,
+                          char             **out_last_run,
+                          GCancellable      *cancellable,
+                          GError           **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Querying systemd for last auto-update run", error);
 
-  g_autoptr(GDBusProxy) unit_proxy =
+  /* Check if the timer is running, otherwise systemd won't even keep timestamp info on dead
+   * services. Also good to tell users if the policy is not none, but timer is off (though
+   * we don't print it as an error; e.g. the timer might have been explicitly masked). */
+  g_autoptr(GDBusProxy) timer_unit_proxy =
     g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
-                           "org.freedesktop.systemd1", RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH,
+                           "org.freedesktop.systemd1", RPMOSTREE_AUTOMATIC_TIMER_OBJPATH,
                            "org.freedesktop.systemd1.Unit", cancellable, error);
-  if (!unit_proxy)
+  if (!timer_unit_proxy)
     return FALSE;
 
-  g_autoptr(GVariant) state_val =
-    g_dbus_proxy_get_cached_property (unit_proxy, "ActiveState");
+  g_autoptr(GVariant) timer_state_val =
+    g_dbus_proxy_get_cached_property (timer_unit_proxy, "ActiveState");
 
   /* let's not error out if we can't msg systemd (e.g. bad sepol); just mark as unknown */
-  if (state_val == NULL)
+  if (timer_state_val == NULL)
     {
-      *out_fail = FALSE;
-      *out_last_run = g_strdup ("unknown");
+      *out_state = AUTO_UPDATE_SDSTATE_TIMER_UNKNOWN;
       return TRUE; /* NB early return */
     }
 
-  const char *state = g_variant_get_string (state_val, NULL);
-  if (g_str_equal (state, "failed"))
+  const char *timer_state = g_variant_get_string (timer_state_val, NULL);
+  if (g_str_equal (timer_state, "inactive"))
     {
-      *out_fail = TRUE;
+      *out_state = AUTO_UPDATE_SDSTATE_TIMER_INACTIVE;
+      return TRUE; /* NB early return */
+    }
+
+  g_autoptr(GDBusProxy) service_unit_proxy =
+    g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
+                           "org.freedesktop.systemd1", RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH,
+                           "org.freedesktop.systemd1.Unit", cancellable, error);
+  if (!service_unit_proxy)
+    return FALSE;
+
+  g_autoptr(GVariant) service_state_val =
+    g_dbus_proxy_get_cached_property (service_unit_proxy, "ActiveState");
+  const char *service_state = g_variant_get_string (service_state_val, NULL);
+  if (g_str_equal (service_state, "failed"))
+    {
+      *out_state = AUTO_UPDATE_SDSTATE_SERVICE_FAILED;
       return TRUE; /* NB early return */
     }
 
@@ -228,7 +255,7 @@ get_last_auto_update_run (GDBusConnection *connection,
         }
     }
 
-  *out_fail = FALSE;
+  *out_state = AUTO_UPDATE_SDSTATE_OK;
   *out_last_run = g_steal_pointer (&last_run);
   return TRUE;
 }
@@ -258,22 +285,47 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
         g_print ("(%s)\n", policy);
       else
         {
-          gboolean failed;
+          AutoUpdateSdState state;
           g_autofree char *last_run = NULL;
 
           GDBusConnection *connection =
             g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
-          if (!get_last_auto_update_run (connection, &last_run, &failed, cancellable, error))
+          if (!get_last_auto_update_run (connection, &state, &last_run, cancellable, error))
             return FALSE;
 
-          if (failed)
-            g_print ("(%s; %s%slast run failed%s%s)\n", policy,
-                     get_red_start (), get_bold_start (), get_bold_end (), get_red_end ());
-          else if (last_run)
-            /* e.g. "last check 4h 32min ago" */
-            g_print ("(%s; last run %s)\n", policy, last_run);
-          else
-            g_print ("(%s; no runs since boot)\n", policy);
+          switch (state)
+            {
+            case AUTO_UPDATE_SDSTATE_TIMER_UNKNOWN:
+              {
+                g_print ("(%s; unknown timer state)\n", policy);
+                break;
+              }
+            case AUTO_UPDATE_SDSTATE_TIMER_INACTIVE:
+              {
+                g_print ("(%s; timer inactive)\n", policy);
+                break;
+              }
+            case AUTO_UPDATE_SDSTATE_SERVICE_FAILED:
+              {
+                g_print ("(%s; %s%slast run failed%s%s)\n", policy,
+                         get_red_start (), get_bold_start (),
+                         get_bold_end (), get_red_end ());
+                break;
+              }
+            case AUTO_UPDATE_SDSTATE_OK:
+              {
+                if (last_run)
+                  /* e.g. "last check 4h 32min ago" */
+                  g_print ("(%s; last run %s)\n", policy, last_run);
+                else
+                  g_print ("(%s; no runs since boot)\n", policy);
+                break;
+              }
+            default:
+              {
+                g_assert_not_reached ();
+              }
+            }
         }
     }
 
