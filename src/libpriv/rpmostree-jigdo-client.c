@@ -95,8 +95,6 @@ rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
   const char *provided_commit = rpmostree_context_get_jigdo_checksum (self);
 
   DnfContext *dnfctx = rpmostree_context_get_dnf (self);
-  rpmostree_output_message ("jigdoRPM: %s (%s) commit=%s", dnf_package_get_nevra (oirpm_pkg),
-                            dnf_package_get_reponame (oirpm_pkg), provided_commit);
 
   { OstreeRepoCommitState commitstate;
     gboolean has_commit;
@@ -110,12 +108,13 @@ rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
           return FALSE;
         if (!(commitstate & OSTREE_REPO_COMMIT_STATE_PARTIAL))
           {
-            rpmostree_output_message ("Commit is already written, nothing to do");
             *out_changed = FALSE;
             return TRUE;  /* 🔚 Early return */
           }
       }
   }
+
+  rpmostree_output_message ("Updating to: %s:%s", dnf_package_get_reponame (oirpm_pkg), dnf_package_get_nevra (oirpm_pkg));
 
   g_autoptr(GPtrArray) pkgs_required = g_ptr_array_new_with_free_func (g_object_unref);
 
@@ -153,8 +152,6 @@ rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
       g_ptr_array_add (pkgs_required, g_object_ref (pkg));
     }
   g_ptr_array_sort (pkgs_required, compare_pkgs);
-
-  rpmostree_output_message ("Jigdo from %u packages", pkgs_required->len);
 
   /* For now we first serially download the oirpm, but down the line we can do
    * this async. Doing so will require putting more of the jigdo logic into the
