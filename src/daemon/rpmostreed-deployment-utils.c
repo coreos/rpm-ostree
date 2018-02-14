@@ -372,6 +372,18 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   return g_variant_dict_end (&dict);
 }
 
+/* Adds the following keys to the vardict:
+ *  - osname
+ *  - checksum
+ *  - version
+ *  - timestamp
+ *  - origin
+ *  - signatures
+ *  - gpg-enabled
+ *
+ * If not %NULL, @refspec and @checksum override defaults from @deployment. They can also be
+ * used to avoid lookups if they're already available.
+ * */
 static gboolean
 add_all_commit_details_to_vardict (OstreeDeployment *deployment,
                                    OstreeRepo       *repo,
@@ -385,16 +397,23 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
 
   g_autofree gchar *refspec_owned = NULL;
   gboolean refspec_is_ostree = FALSE;
+  RpmOstreeRefspecType refspec_type;
   if (!refspec)
     {
       g_autoptr(RpmOstreeOrigin) origin =
         rpmostree_origin_parse_deployment (deployment, error);
       if (!origin)
         return FALSE;
-      RpmOstreeRefspecType refspec_type;
       refspec = refspec_owned = rpmostree_origin_get_full_refspec (origin, &refspec_type);
-      refspec_is_ostree = (refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE);
     }
+  else
+    {
+      const char *refspec_remainder = NULL;
+      if (!rpmostree_refspec_classify (refspec, &refspec_type, &refspec_remainder, error))
+        return FALSE;
+      refspec = refspec_remainder;
+    }
+  refspec_is_ostree = (refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE);
 
   g_assert (refspec);
 
@@ -443,14 +462,15 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
 
 GVariant *
 rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
-                                                   OstreeRepo *repo,
-                                                   const gchar *refspec,
-                                                   GError **error)
+                                                   OstreeRepo       *repo,
+                                                   const char       *refspec,
+                                                   const char       *checksum,
+                                                   GError          **error)
 {
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);
   if (!add_all_commit_details_to_vardict (deployment, repo, refspec,
-                                          NULL, NULL, &dict, error))
+                                          checksum, NULL, &dict, error))
     return NULL;
 
   return g_variant_ref_sink (g_variant_dict_end (&dict));
