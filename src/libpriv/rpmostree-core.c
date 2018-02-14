@@ -1881,6 +1881,12 @@ rpmostree_context_prepare (RpmOstreeContext *self,
         return FALSE;
     }
 
+  /* Don't try to keep multiple kernels per root; that's a traditional thing,
+   * ostree binds kernel + userspace.
+   */
+  dnf_sack_set_installonly (dnf_context_get_sack (self->dnfctx), NULL);
+  dnf_sack_set_installonly_limit (dnf_context_get_sack (self->dnfctx), 0);
+
   if (self->jigdo_pure)
     {
       g_assert_cmpint (g_strv_length (pkgnames), ==, 0);
