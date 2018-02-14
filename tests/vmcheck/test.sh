@@ -74,7 +74,9 @@ fi
 if vm_cmd test -f /etc/rpm-ostreed.conf; then
   vm_cmd mv -f /etc/rpm-ostreed.conf{,.bak}
 fi
-vm_cmd cp -f /usr/etc/rpm-ostreed.conf /etc
+if vm_cmd test -f /usr/etc/rpm-ostreed.conf; then
+    vm_cmd cp -f /usr/etc/rpm-ostreed.conf /etc
+fi
 
 vm_cmd ostree remote delete --if-exists vmcheckmote
 

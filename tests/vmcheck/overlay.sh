@@ -32,7 +32,7 @@ EOF
     fi
     # ✀✀✀ END selinux-policy hack ✀✀✀
 
-    vm_cmd env INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh
+    vm_cmd env RPMOSTREE_TEST_NO_OVERLAY="${RPMOSTREE_TEST_NO_OVERLAY:-}" INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh
     vm_reboot
     exit 0
 fi
@@ -69,10 +69,16 @@ rm vmcheck -rf
 ostree checkout $commit vmcheck --fsync=0
 rm vmcheck/etc -rf
 
-# Now, overlay our built binaries & config files
-INSTTREE=/var/roothome/sync/insttree
-rsync -rlv $INSTTREE/usr/ vmcheck/usr/
-rsync -rlv $INSTTREE/etc/ vmcheck/usr/etc/
+# Now, overlay our built binaries & config files, unless
+# explicitly requested not to (with the goal of testing the
+# tree shipped as is with our existing tests).
+if test -z "${RPMOSTREE_TEST_NO_OVERLAY}"; then
+    INSTTREE=/var/roothome/sync/insttree
+    rsync -rlv $INSTTREE/usr/ vmcheck/usr/
+    rsync -rlv $INSTTREE/etc/ vmcheck/usr/etc/
+else
+    echo "Skipping overlay of built rpm-ostree"
+fi
 
 ## ✀✀✀ BEGIN selinux-policy hack (part 2) for
 ## https://github.com/fedora-selinux/selinux-policy-contrib/pull/45
