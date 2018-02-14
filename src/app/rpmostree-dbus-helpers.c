@@ -1177,6 +1177,150 @@ append_to_summary (GString     *summary,
   g_string_append_printf (summary, "%u %s", n, type);
 }
 
+static int
+compare_sec_advisories (gconstpointer ap,
+                        gconstpointer bp)
+{
+  GVariant *a = *((GVariant**)ap);
+  GVariant *b = *((GVariant**)bp);
+
+  RpmOstreeAdvisorySeverity asev;
+  g_variant_get_child (a, 2, "u", &asev);
+
+  RpmOstreeAdvisorySeverity bsev;
+  g_variant_get_child (b, 2, "u", &bsev);
+
+  if (asev != bsev)
+    return asev - bsev;
+
+  const char *aid;
+  g_variant_get_child (a, 0, "&s", &aid);
+
+  const char *bid;
+  g_variant_get_child (b, 0, "&s", &bid);
+
+  return strcmp (aid, bid);
+}
+
+static const char*
+severity_to_str (RpmOstreeAdvisorySeverity severity)
+{
+  switch (severity)
+    {
+    case RPM_OSTREE_ADVISORY_SEVERITY_LOW:
+      return "Low";
+    case RPM_OSTREE_ADVISORY_SEVERITY_MODERATE:
+      return "Moderate";
+    case RPM_OSTREE_ADVISORY_SEVERITY_IMPORTANT:
+      return "Important";
+    case RPM_OSTREE_ADVISORY_SEVERITY_CRITICAL:
+      return "Critical";
+    default: /* including NONE */
+      return "Unknown";
+    }
+}
+
+static void
+print_advisories (GVariant *advisories,
+                  gboolean  verbose,
+                  guint     max_key_len)
+{
+  /* counters for none/unknown, low, moderate, important, critical advisories */
+  guint n_sev[5] = {0,};
+
+  /* we only display security advisories for now */
+  g_autoptr(GPtrArray) sec_advisories =
+    g_ptr_array_new_with_free_func ((GDestroyNotify)g_variant_unref);
+
+  guint max_id_len = 0;
+
+  GVariantIter iter;
+  g_variant_iter_init (&iter, advisories);
+  while (TRUE)
+    {
+      g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
+      if (!child)
+        break;
+
+      DnfAdvisoryKind kind;
+      g_variant_get_child (child, 1, "u", &kind);
+
+      /* we only display security advisories for now */
+      if (kind != DNF_ADVISORY_KIND_SECURITY)
+        continue;
+
+      const char *id;
+      g_variant_get_child (child, 0, "&s", &id);
+      max_id_len = MAX (max_id_len, strlen (id));
+
+      RpmOstreeAdvisorySeverity severity;
+      g_variant_get_child (child, 2, "u", &severity);
+      /* just make sure it's capped at LAST */
+      if (severity < RPM_OSTREE_ADVISORY_SEVERITY_LAST)
+        n_sev[severity]++;
+      else /* bad val; count as unknown */
+        n_sev[0]++;
+
+      g_ptr_array_add (sec_advisories, g_variant_ref (child));
+    }
+
+  if (sec_advisories->len == 0)
+    return;
+
+  g_print ("%s%s", get_red_start (), get_bold_start ());
+  rpmostree_print_kv_no_newline ("SecAdvisories", max_key_len, "");
+
+  if (!verbose)
+    {
+      /* just spell out "severity" for the unknown case, because e.g.
+       * "SecAdvisories: 1 unknown" * on its own is cryptic and scary */
+      g_autoptr(GString) advisory_summary = g_string_new (NULL);
+      const char *sev_str[] = {"unknown severity", "low", "moderate", "important", "critical"};
+      for (guint i = 0; i < (sizeof (sev_str) / sizeof (const char *)); i++)
+        append_to_summary (advisory_summary, sev_str[i], n_sev[i]);
+      g_print ("%s\n", advisory_summary->str);
+    }
+
+  g_print ("%s%s", get_bold_end (), get_red_end ());
+  if (!verbose)
+    return;
+
+  const guint max_sev_len = strlen ("Important");
+
+  /* sort by severity */
+  g_ptr_array_sort (sec_advisories, compare_sec_advisories);
+
+  for (guint i = 0; i < sec_advisories->len; i++)
+    {
+      GVariant *advisory = sec_advisories->pdata[i];
+
+      const char *id;
+      g_variant_get_child (advisory, 0, "&s", &id);
+
+      DnfAdvisoryKind kind;
+      g_variant_get_child (advisory, 1, "u", &kind);
+
+      RpmOstreeAdvisorySeverity severity;
+      g_variant_get_child (advisory, 2, "u", &severity);
+
+      g_autoptr(GVariant) pkgs = g_variant_get_child_value (advisory, 3);
+
+      const char *severity_str = severity_to_str (severity);
+      const guint n_pkgs = g_variant_n_children (pkgs);
+      for (guint j = 0; j < n_pkgs; j++)
+        {
+          const char *nevra;
+          g_variant_get_child (pkgs, j, "&s", &nevra);
+
+          if (i == 0 && j == 0) /* we're on the same line as SecInfo */
+            g_print ("%-*s  %-*s  %s\n", max_id_len, id, max_sev_len, severity_str, nevra);
+          else
+            g_print ("  %*s  %-*s  %-*s  %s\n", max_key_len, "", max_id_len, id,
+                     max_sev_len, severity_str, nevra);
+        }
+    }
+}
+
 /* this is used by both `status` and `upgrade --check/--preview` */
 gboolean
 rpmostree_print_cached_update (GVariant         *cached_update,
@@ -1219,12 +1363,15 @@ rpmostree_print_cached_update (GVariant         *cached_update,
   g_autoptr(GVariant) rpm_diff =
     g_variant_dict_lookup_value (&dict, "rpm-diff", G_VARIANT_TYPE ("a{sv}"));
 
+  g_autoptr(GVariant) advisories =
+    g_variant_dict_lookup_value (&dict, "advisories", G_VARIANT_TYPE ("a(suuasa{sv})"));
+
   /* and now we can print 🖨️ things! */
 
   g_print ("Available update:\n");
 
   /* add the long keys here */
-  const guint max_key_len = MAX (strlen ("Downgraded"),
+  const guint max_key_len = MAX (strlen ("SecAdvisories"),
                                  strlen ("GPGSignature"));
 
   if (is_new_checksum)
@@ -1237,6 +1384,9 @@ rpmostree_print_cached_update (GVariant         *cached_update,
 
   if (rpm_diff)
     {
+      if (advisories)
+        print_advisories (advisories, verbose, max_key_len);
+
       g_auto(GVariantDict) rpm_diff_dict;
       g_variant_dict_init (&rpm_diff_dict, rpm_diff);
 

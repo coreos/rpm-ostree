@@ -707,6 +707,137 @@ rpmmd_diff (OstreeSysroot    *sysroot,
   return TRUE;
 }
 
+/* convert those now to make the D-Bus API nicer and easier for clients */
+static RpmOstreeAdvisorySeverity
+str2severity (const char *str)
+{
+  if (str == NULL)
+    return RPM_OSTREE_ADVISORY_SEVERITY_NONE;
+
+  /* these expect RHEL naming conventions; Fedora hopefully should follow soon, see:
+   * https://github.com/fedora-infra/bodhi/pull/2099 */
+  g_autofree char *str_up = g_ascii_strup (str, -1);
+  if (g_str_equal (str_up, "LOW"))
+    return RPM_OSTREE_ADVISORY_SEVERITY_LOW;
+  if (g_str_equal (str_up, "MODERATE"))
+    return RPM_OSTREE_ADVISORY_SEVERITY_MODERATE;
+  if (g_str_equal (str_up, "IMPORTANT"))
+    return RPM_OSTREE_ADVISORY_SEVERITY_IMPORTANT;
+  if (g_str_equal (str_up, "CRITICAL"))
+    return RPM_OSTREE_ADVISORY_SEVERITY_CRITICAL;
+  return RPM_OSTREE_ADVISORY_SEVERITY_NONE;
+}
+
+/* Returns a *floating* variant ref representing the advisory */
+static GVariant*
+advisory_variant_new (DnfAdvisory *adv,
+                      GPtrArray   *pkgs)
+{
+  g_auto(GVariantBuilder) builder;
+  g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
+  g_variant_builder_add (&builder, "s", dnf_advisory_get_id (adv));
+  g_variant_builder_add (&builder, "u", dnf_advisory_get_kind (adv));
+  g_variant_builder_add (&builder, "u", str2severity (dnf_advisory_get_severity (adv)));
+
+  { g_auto(GVariantBuilder) pkgs_array;
+    g_variant_builder_init (&pkgs_array, G_VARIANT_TYPE_ARRAY);
+    for (guint i = 0; i < pkgs->len; i++)
+      g_variant_builder_add (&pkgs_array, "s", dnf_package_get_nevra (pkgs->pdata[i]));
+    g_variant_builder_add_value (&builder, g_variant_builder_end (&pkgs_array));
+  }
+
+  /* for now we don't ship any extra info about the errata (e.g. title, date, desc, refs) */
+  g_variant_builder_add_value (&builder, g_variant_new ("a{sv}", NULL));
+
+  return g_variant_builder_end (&builder);
+}
+
+/* libdnf creates new DnfAdvisory objects on request */
+
+static guint
+advisory_hash (gconstpointer v)
+{
+  return g_str_hash (dnf_advisory_get_id ((DnfAdvisory*)v));
+}
+
+static gboolean
+advisory_equal (gconstpointer v1,
+                gconstpointer v2)
+{
+  return g_str_equal (dnf_advisory_get_id ((DnfAdvisory*)v1),
+                      dnf_advisory_get_id ((DnfAdvisory*)v2));
+}
+
+static GVariant*
+advisories_variant (DnfSack    *sack,
+                    GPtrArray  *pkgs)
+{
+  g_autoptr(GHashTable) advisories =
+    g_hash_table_new_full (advisory_hash, advisory_equal, g_object_unref,
+                           (GDestroyNotify)g_ptr_array_unref);
+
+  /* libdnf provides pkg -> set of advisories, but we want advisory -> set of pkgs;
+   * making sure we only keep the pkgs we actually care about */
+  for (guint i = 0; i < pkgs->len; i++)
+    {
+      DnfPackage *pkg = pkgs->pdata[i];
+      g_autoptr(GPtrArray) advisories_with_pkg = dnf_package_get_advisories (pkg, HY_EQ);
+      for (guint j = 0; j < advisories_with_pkg->len; j++)
+        {
+          DnfAdvisory *advisory = advisories_with_pkg->pdata[j];
+
+          /* for now we're only interested in security erratas */
+          if (dnf_advisory_get_kind (advisory) != DNF_ADVISORY_KIND_SECURITY)
+            continue;
+
+          /* reverse mapping */
+          GPtrArray *pkgs_in_advisory = g_hash_table_lookup (advisories, advisory);
+          if (!pkgs_in_advisory)
+            {
+              pkgs_in_advisory =
+                g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+              g_hash_table_insert (advisories, g_object_ref (advisory), pkgs_in_advisory);
+            }
+          g_ptr_array_add (pkgs_in_advisory, g_object_ref (pkg));
+        }
+    }
+
+  if (g_hash_table_size (advisories) == 0)
+    return NULL;
+
+  g_auto(GVariantBuilder) builder;
+  g_variant_builder_init (&builder, G_VARIANT_TYPE_ARRAY);
+  GLNX_HASH_TABLE_FOREACH_KV (advisories, DnfAdvisory*, advisory, GPtrArray*, pkgs)
+    g_variant_builder_add_value (&builder, advisory_variant_new (advisory, pkgs));
+  return g_variant_ref_sink (g_variant_builder_end (&builder));
+}
+
+/* try to find the exact same RpmOstreePackage pkgs in the sack */
+static GPtrArray*
+rpm_ostree_pkgs_to_dnf (DnfSack   *sack,
+                        GPtrArray *rpm_ostree_pkgs)
+{
+  g_autoptr(GPtrArray) dnf_pkgs =
+    g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+
+  const guint n = rpm_ostree_pkgs->len;
+  for (guint i = 0; i < n; i++)
+    {
+      RpmOstreePackage *pkg = rpm_ostree_pkgs->pdata[i];
+      hy_autoquery HyQuery query = hy_query_create (sack);
+      hy_query_filter (query, HY_PKG_NAME, HY_EQ, rpm_ostree_package_get_name (pkg));
+      hy_query_filter (query, HY_PKG_EVR, HY_EQ, rpm_ostree_package_get_evr (pkg));
+      hy_query_filter (query, HY_PKG_ARCH, HY_EQ, rpm_ostree_package_get_arch (pkg));
+      g_autoptr(GPtrArray) pkgs = hy_query_run (query);
+
+      /* 0 --> ostree stream is out of sync with rpmmd repos probably? */
+      if (pkgs->len > 0)
+        g_ptr_array_add (dnf_pkgs, g_object_ref (pkgs->pdata[0]));
+    }
+
+  return g_steal_pointer (&dnf_pkgs);
+}
+
 static gboolean
 get_cached_rpmmd_sack (OstreeSysroot     *sysroot,
                        OstreeRepo        *repo,
@@ -910,6 +1041,34 @@ rpmostreed_update_generate_variant (OstreeSysroot *sysroot,
   /* don't bother inserting if there's nothing new */
   if (!rpm_diff_is_empty (&rpm_diff))
     g_variant_dict_insert (&dict, "rpm-diff", "@a{sv}", rpm_diff_variant_new (&rpm_diff));
+
+  /* now we look for advisories */
+
+  if (sack && (ostree_modified_new || rpmmd_modified_new))
+    {
+      /* let's just merge the two now for convenience */
+      g_autoptr(GPtrArray) new_packages =
+        g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
+
+      if (ostree_modified_new)
+        {
+          /* recall that @ostree_modified_new is an array of RpmOstreePackage; try to find
+           * the same pkg in the rpmmd so that we can search for advisories afterwards */
+          g_autoptr(GPtrArray) pkgs = rpm_ostree_pkgs_to_dnf (sack, ostree_modified_new);
+          for (guint i = 0; i < pkgs->len; i++)
+            g_ptr_array_add (new_packages, g_object_ref (pkgs->pdata[i]));
+        }
+
+      if (rpmmd_modified_new)
+        {
+          for (guint i = 0; i < rpmmd_modified_new->len; i++)
+            g_ptr_array_add (new_packages, g_object_ref (rpmmd_modified_new->pdata[i]));
+        }
+
+      g_autoptr(GVariant) advisories = advisories_variant (sack, new_packages);
+      if (advisories)
+        g_variant_dict_insert (&dict, "advisories", "@a(suuasa{sv})", advisories);
+    }
 
   /* but if there are no updates, then just ditch the whole thing and return NULL */
   if (is_new_checksum || rpmmd_modified_new)

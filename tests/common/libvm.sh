@@ -351,6 +351,12 @@ vm_build_rpm() {
     vm_send_test_repo
 }
 
+# Like uinfo_cmd, but also sends it to the VM
+vm_uinfo() {
+    uinfo_cmd "$@"
+    vm_send_test_repo
+}
+
 # Like vm_build_rpm but takes a yumrepo mode
 vm_build_rpm_repo_mode() {
     mode=$1; shift

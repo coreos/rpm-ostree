@@ -63,34 +63,62 @@ create_update() {
 # (delete ref but don't prune for easier debugging)
 vm_cmd ostree refs --repo=$REMOTE_OSTREE vmcheck --delete
 
+# this is split out for the sole purpose of making iterating easier when hacking
+# (see below for more details)
+init_updated_rpmmd_repo() {
+  vm_build_rpm base-pkg-foo version 1.4 release 8 # upgraded
+  vm_build_rpm base-pkg-bar version 0.9 release 3 # downgraded
+  vm_build_rpm base-pkg-boo version 3.7 release 2.11 # added
+  vm_uinfo add VMCHECK-ENH enhancement
+  vm_uinfo add VMCHECK-SEC-NONE security none
+  vm_uinfo add VMCHECK-SEC-LOW security low
+  vm_uinfo add VMCHECK-SEC-CRIT security critical
+  vm_build_rpm base-pkg-enh version 2.0 uinfo VMCHECK-ENH
+  vm_build_rpm base-pkg-sec-none version 2.0 uinfo VMCHECK-SEC-NONE
+  vm_build_rpm base-pkg-sec-low version 2.0 uinfo VMCHECK-SEC-LOW
+  vm_build_rpm base-pkg-sec-crit version 2.0 uinfo VMCHECK-SEC-CRIT
+}
+
 # now let's build some pkgs that we'll jury-rig into a base update
-# this whole block can be commented out for a speed-up when iterating locally
+# this whole block can be commented out (except the init_updated_rpmmd_repo
+# call) after the first run for a speed-up when iterating locally
 vm_build_rpm base-pkg-foo version 1.4 release 7
 vm_build_rpm base-pkg-bar
 vm_build_rpm base-pkg-baz version 1.1 release 1
-vm_rpmostree install base-pkg-{foo,bar,baz}
+vm_build_rpm base-pkg-enh
+vm_build_rpm base-pkg-sec-none
+vm_build_rpm base-pkg-sec-low
+vm_build_rpm base-pkg-sec-crit
+vm_rpmostree install base-pkg-{foo,bar,baz,enh,sec-{none,low,crit}}
 lift_commit $(vm_get_pending_csum) v1
 vm_rpmostree cleanup -p
 rm -rf $test_tmpdir/yumrepo
-vm_build_rpm base-pkg-foo version 1.4 release 8 # upgraded
-vm_build_rpm base-pkg-bar version 0.9 release 3 # downgraded
-vm_build_rpm base-pkg-boo version 3.7 release 2.11 # added
-vm_rpmostree install base-pkg-{foo,bar,boo}
+init_updated_rpmmd_repo
+vm_rpmostree install base-pkg-{foo,bar,boo,enh,sec-{none,low,crit}}
 lift_commit $(vm_get_pending_csum) v2
 vm_rpmostree cleanup -p
 
 # ok, we're done with prep, now let's rebase on the first revision and install a
-# layered package
+# bunch of layered packages
 create_update v1
 vm_cmd ostree remote add vmcheckmote --no-gpg-verify http://localhost:8888/
 vm_build_rpm layered-cake version 2.1 release 3
-vm_rpmostree rebase vmcheckmote:vmcheck --install layered-cake
+vm_build_rpm layered-enh
+vm_build_rpm layered-sec-none
+vm_build_rpm layered-sec-low
+vm_build_rpm layered-sec-crit
+vm_rpmostree rebase vmcheckmote:vmcheck \
+  --install layered-cake \
+  --install layered-enh \
+  --install layered-sec-none \
+  --install layered-sec-low \
+  --install layered-sec-crit
 vm_reboot
 vm_rpmostree status -v
 vm_assert_status_jq \
     ".deployments[0][\"origin\"] == \"vmcheckmote:vmcheck\"" \
     ".deployments[0][\"version\"] == \"v1\"" \
-    '.deployments[0]["packages"]|length == 1' \
+    '.deployments[0]["packages"]|length == 5' \
     '.deployments[0]["packages"]|index("layered-cake") >= 0'
 echo "ok prep"
 
@@ -130,6 +158,7 @@ vm_rpmostree upgrade --trigger-automatic-update-policy
 vm_rpmostree status > out.txt
 assert_file_has_content out.txt "Available update"
 assert_file_has_content out.txt "Diff: 1 upgraded"
+assert_not_file_has_content out.txt "SecAdvisories"
 vm_rpmostree status -v > out.txt
 assert_file_has_content out.txt "Upgraded: layered-cake 2.1-3 -> 2.1-4"
 # make sure we don't report ostree-based stuff somehow
@@ -137,6 +166,31 @@ assert_file_has_content out.txt "Upgraded: layered-cake 2.1-3 -> 2.1-4"
 ! grep -A999 'Available update' out.txt | grep "Timestamp"
 ! grep -A999 'Available update' out.txt | grep "Commit"
 echo "ok check mode layered only"
+
+# now add some advisory updates
+vm_build_rpm layered-enh version 2.0 uinfo VMCHECK-ENH
+vm_build_rpm layered-sec-none version 2.0 uinfo VMCHECK-SEC-NONE
+vm_rpmostree upgrade --trigger-automatic-update-policy
+vm_rpmostree status > out.txt
+assert_file_has_content out.txt "SecAdvisories: 1 unknown severity"
+vm_rpmostree status -v > out.txt
+assert_file_has_content out.txt \
+  "SecAdvisories: VMCHECK-SEC-NONE  Unknown    layered-sec-none-2.0-1.x86_64"
+assert_not_file_has_content out.txt "VMCHECK-ENH"
+
+# now add all of them
+vm_build_rpm layered-sec-low version 2.0 uinfo VMCHECK-SEC-LOW
+vm_build_rpm layered-sec-crit version 2.0 uinfo VMCHECK-SEC-CRIT
+vm_rpmostree upgrade --trigger-automatic-update-policy
+vm_rpmostree status > out.txt
+assert_file_has_content out.txt \
+  "SecAdvisories: 1 unknown severity, 1 low, 1 critical"
+vm_rpmostree status -v > out.txt
+assert_file_has_content out.txt \
+  "SecAdvisories: VMCHECK-SEC-NONE  Unknown    layered-sec-none-2.0-1.x86_64" \
+  "               VMCHECK-SEC-LOW   Low        layered-sec-low-2.0-1.x86_64" \
+  "               VMCHECK-SEC-CRIT  Critical   layered-sec-crit-2.0-1.x86_64"
+echo "ok check mode layered only with advisories"
 
 # ok now let's add ostree updates in the picture
 create_update v2
@@ -157,14 +211,23 @@ assert_update() {
   # we could assert more json here, though how it's presented to users is
   # important, and implicitly tests the json
   vm_rpmostree status > out.txt
-  assert_file_has_content out.txt 'Diff: 2 upgraded, 1 downgraded, 1 removed, 1 added'
+  assert_file_has_content out.txt \
+    "SecAdvisories: 1 unknown severity, 1 low, 1 critical" \
+    'Diff: 10 upgraded, 1 downgraded, 1 removed, 1 added'
 
   vm_rpmostree status -v > out.txt
-  assert_file_has_content out.txt 'Upgraded: base-pkg-foo 1.4-7 -> 1.4-8'
-  assert_file_has_content out.txt "          layered-cake 2.1-3 -> 2.1-4"
-  assert_file_has_content out.txt 'Downgraded: base-pkg-bar 1.0-1 -> 0.9-3'
-  assert_file_has_content out.txt 'Removed: base-pkg-baz-1.1-1.x86_64'
-  assert_file_has_content out.txt 'Added: base-pkg-boo-3.7-2.11.x86_64'
+  assert_file_has_content out.txt \
+    "VMCHECK-SEC-NONE  Unknown    base-pkg-sec-none-2.0-1.x86_64" \
+    "VMCHECK-SEC-NONE  Unknown    layered-sec-none-2.0-1.x86_64" \
+    "VMCHECK-SEC-LOW   Low        base-pkg-sec-low-2.0-1.x86_64" \
+    "VMCHECK-SEC-LOW   Low        layered-sec-low-2.0-1.x86_64" \
+    "VMCHECK-SEC-CRIT  Critical   base-pkg-sec-crit-2.0-1.x86_64" \
+    "VMCHECK-SEC-CRIT  Critical   layered-sec-crit-2.0-1.x86_64" \
+    'Upgraded: base-pkg-enh 1.0-1 -> 2.0-1' \
+    '          base-pkg-foo 1.4-7 -> 1.4-8' \
+    'Downgraded: base-pkg-bar 1.0-1 -> 0.9-3' \
+    'Removed: base-pkg-baz-1.1-1.x86_64' \
+    'Added: base-pkg-boo-3.7-2.11.x86_64'
 }
 
 assert_update
@@ -174,7 +237,7 @@ assert_default_deployment_is_update() {
   vm_assert_status_jq \
     '.deployments[0]["origin"] == "vmcheckmote:vmcheck"' \
     '.deployments[0]["version"] == "v2"' \
-    '.deployments[0]["packages"]|length == 1' \
+    '.deployments[0]["packages"]|length == 5' \
     '.deployments[0]["packages"]|index("layered-cake") >= 0'
   vm_rpmostree db list $(vm_get_pending_csum) > list.txt
   assert_file_has_content list.txt 'layered-cake-2.1-4.x86_64'
