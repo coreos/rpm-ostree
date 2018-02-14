@@ -41,4 +41,15 @@ vm_rpmostree rebase --experimental rojig://fahc:fedora-atomic-host
 vm_assert_status_jq '.deployments[0].origin|startswith("rojig://fahc:fedora-atomic-host")'
 vm_cmd ostree refs > refs.txt
 assert_file_has_content refs.txt '^rpmostree/jigdo/kernel-core/'
-echo "ok jigdo client"
+echo "ok jigdo client rebase "
+
+version=$(vm_get_deployment_info 0 version)
+version_major=$(echo ${version} | cut -f 1 -d '.')
+version_minor=$(echo ${version} | cut -f 2 -d '.')
+prev_version=${version_major}.$((${version_minor} - 1))
+assert_not_streq "${version}" "${prev_version}"
+vm_rpmostree deploy ${prev_version}
+vm_assert_status_jq '.deployments[0].origin|startswith("rojig://fahc:fedora-atomic-host")' \
+                    '.deployments[0].version == "'${prev_version}'"'
+
+echo "ok jigdo client deploy"

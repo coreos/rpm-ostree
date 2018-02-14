@@ -439,7 +439,8 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
     case RPMOSTREE_REFSPEC_TYPE_ROJIG:
       {
         // Not implemented yet, though we could do a query for the provides
-        g_assert (!override_commit);
+        if (override_commit)
+          return glnx_throw (error, "Specifying commit overrides for rojig:// is not implemented yet");
 
         g_autoptr(GKeyFile) tsk = g_key_file_new ();
         g_key_file_set_string (tsk, "tree", "jigdo", refspec);
