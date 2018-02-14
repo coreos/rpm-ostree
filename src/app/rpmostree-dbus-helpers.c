@@ -1226,7 +1226,7 @@ print_advisories (GVariant *advisories,
                   guint     max_key_len)
 {
   /* counters for none/unknown, low, moderate, important, critical advisories */
-  guint n_sev[5] = {0,};
+  guint n_sev[RPM_OSTREE_ADVISORY_SEVERITY_LAST] = {0,};
 
   /* we only display security advisories for now */
   g_autoptr(GPtrArray) sec_advisories =
@@ -1273,10 +1273,11 @@ print_advisories (GVariant *advisories,
   if (!verbose)
     {
       /* just spell out "severity" for the unknown case, because e.g.
-       * "SecAdvisories: 1 unknown" * on its own is cryptic and scary */
+       * "SecAdvisories: 1 unknown" on its own is cryptic and scary */
       g_autoptr(GString) advisory_summary = g_string_new (NULL);
       const char *sev_str[] = {"unknown severity", "low", "moderate", "important", "critical"};
-      for (guint i = 0; i < (sizeof (sev_str) / sizeof (const char *)); i++)
+      g_assert_cmpint (G_N_ELEMENTS (n_sev), ==, G_N_ELEMENTS (sev_str));
+      for (guint i = 0; i < G_N_ELEMENTS (sev_str); i++)
         append_to_summary (advisory_summary, sev_str[i], n_sev[i]);
       g_print ("%s\n", advisory_summary->str);
     }

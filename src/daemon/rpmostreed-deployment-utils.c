@@ -768,6 +768,16 @@ advisory_equal (gconstpointer v1,
                       dnf_advisory_get_id ((DnfAdvisory*)v2));
 }
 
+/* Go through the list of @pkgs and check if there are any advisories open for them. If
+ * no advisories are found, returns %NULL. Otherwise, returns a GVariant of the following
+ * type:
+     'a(suuasa{sv})'
+        s     advisory id (e.g. FEDORA-2018-a1b2c3d4e5f6)
+        u     advisory kind (enum DnfAdvisoryKind)
+        u     advisory severity (enum RpmOstreeAdvisorySeverity)
+        as    list of packages (NEVRAs) contained in the advisory
+        a{sv} additional info about advisory (none so far)
+ */
 static GVariant*
 advisories_variant (DnfSack    *sack,
                     GPtrArray  *pkgs)
