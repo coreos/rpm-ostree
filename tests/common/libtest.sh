@@ -489,7 +489,7 @@ EOF
     # because it'd be overkill to set up mock for this, let's just fool
     # rpmbuild using setarch
     local buildarch=$arch
-    if [ "$arch" -eq "noarch" ]; then
+    if [ "$arch" == "noarch" ]; then
         buildarch=$(uname -m)
     fi
 
