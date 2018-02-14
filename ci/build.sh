@@ -22,7 +22,8 @@ pkg_install_builddeps rpm-ostree
 # Mostly dependencies for tests
 pkg_install ostree{,-devel,-grub2} createrepo_c /usr/bin/jq PyYAML \
     libubsan libasan libtsan elfutils fuse sudo python-gobject-base \
-    selinux-policy-devel selinux-policy-targeted python2-createrepo_c
+    selinux-policy-devel selinux-policy-targeted python2-createrepo_c \
+    rpm-python # provided by python2-rpm on Fedora
 # For ex-container tests and clang build
 pkg_install_if_os fedora parallel clang
 
