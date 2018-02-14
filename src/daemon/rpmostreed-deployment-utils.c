@@ -601,6 +601,16 @@ array_to_variant_new (const char *format, GPtrArray *array)
   return g_variant_builder_end (&builder);
 }
 
+static gboolean
+rpm_diff_is_empty (RpmDiff *diff)
+{
+  g_assert (diff->initialized);
+  return !diff->upgraded->len &&
+         !diff->downgraded->len &&
+         !diff->removed->len &&
+         !diff->added->len;
+}
+
 static GVariant*
 rpm_diff_variant_new (RpmDiff *diff)
 {
@@ -897,7 +907,9 @@ rpmostreed_update_generate_variant (OstreeSysroot *sysroot,
         return FALSE;
     }
 
-  g_variant_dict_insert (&dict, "rpm-diff", "@a{sv}", rpm_diff_variant_new (&rpm_diff));
+  /* don't bother inserting if there's nothing new */
+  if (!rpm_diff_is_empty (&rpm_diff))
+    g_variant_dict_insert (&dict, "rpm-diff", "@a{sv}", rpm_diff_variant_new (&rpm_diff));
 
   /* but if there are no updates, then just ditch the whole thing and return NULL */
   if (is_new_checksum || rpmmd_modified_new)
