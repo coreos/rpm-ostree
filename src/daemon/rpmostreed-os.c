@@ -427,6 +427,7 @@ os_handle_get_cached_update_rpm_diff (RPMOSTreeOS *interface,
 
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment, ot_repo,
                                                                rpmostree_origin_get_refspec (origin),
+                                                               NULL,
                                                                &local_error);
   if (!details)
     goto out;
@@ -1471,6 +1472,7 @@ os_handle_get_cached_rebase_rpm_diff (RPMOSTreeOS *interface,
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
                                                                ot_repo,
                                                                comp_ref,
+                                                               NULL,
                                                                &local_error);
   if (!details)
     goto out;
@@ -1606,7 +1608,8 @@ os_handle_get_cached_deploy_rpm_diff (RPMOSTreeOS *interface,
 
   details = rpmostreed_commit_generate_cached_details_variant (base_deployment,
                                                                ot_repo,
-                                                               NULL,
+                                                               rpmostree_origin_get_refspec (origin),
+                                                               checksum,
                                                                &local_error);
   if (!details)
     goto out;
