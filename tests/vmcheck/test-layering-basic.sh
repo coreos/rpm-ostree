@@ -107,12 +107,13 @@ fi
 echo "ok correct output"
 
 # check that there are no leftover rpmdb files
-vm_cmd ls -la /usr/share/rpm > out.txt
+booted_csum=$(vm_get_booted_csum)
+vm_cmd ostree ls $booted_csum /usr/share/rpm > out.txt
 assert_not_file_has_content out.txt __db
 echo "ok no leftover rpmdb files"
 
 # upgrade to a layer with foo already builtin
-vm_cmd ostree commit -b vmcheck --tree=ref=$(vm_get_booted_csum)
+vm_cmd ostree commit -b vmcheck --tree=ref=$booted_csum
 vm_rpmostree upgrade
 vm_build_rpm bar conflicts foo
 if vm_rpmostree install bar &> err.txt; then
