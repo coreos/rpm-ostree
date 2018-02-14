@@ -828,7 +828,7 @@ rpmostree_get_refsack_for_root (int              dfd,
                                 const char      *path,
                                 GError         **error)
 {
-  g_autoptr(DnfSack) sack; /* NB: refsack adds a ref to it */
+  g_autoptr(DnfSack) sack = NULL; /* NB: refsack adds a ref to it */
   if (!get_sack_for_root (dfd, path, &sack, error))
     return NULL;
   return rpmostree_refsack_new (sack, NULL);
