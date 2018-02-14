@@ -50,7 +50,7 @@ vm_rpmostree cleanup -p
 echo "ok setup"
 
 osname=$(vm_get_booted_deployment_info osname)
-ospath=/org/projectatomic/rpmostree1/${osname/-/_}
+ospath=/org/projectatomic/rpmostree1/${osname//-/_}
 
 call_dbus() {
   method=$1; shift
