@@ -107,7 +107,7 @@ fi
 echo "ok correct output"
 
 # check that there are no leftover rpmdb files
-ls -la /usr/share/rpm > out.txt
+vm_cmd ls -la /usr/share/rpm > out.txt
 assert_not_file_has_content out.txt __db
 echo "ok no leftover rpmdb files"
 
