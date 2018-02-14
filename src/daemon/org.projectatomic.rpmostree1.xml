@@ -87,6 +87,7 @@
           'downgraded' (type 'a(us(ss)(ss))')
           'removed' (type 'a(usss)')
           'added' (type 'a(usss)')
+       'advisories' (type 'a(suuasa{sv})')
     -->
     <property name="CachedUpdate" type="a{sv}" access="read"/>
     <property name="HasCachedUpdateRpmDiff" type="b" access="read"/>

@@ -31,6 +31,8 @@ if test -z "${SRCDIR:-}"; then
 fi
 . ${SRCDIR}/common/libtest-core.sh
 
+UPDATEINFO=${SRCDIR}/utils/updateinfo
+
 for bin in jq; do
     if ! command -v $bin >/dev/null; then
         (echo ${bin} is required to execute tests 1>&2; exit 1)
@@ -380,6 +382,10 @@ get_obj_path() {
   echo "${repo}/objects/${csum:0:2}/${csum:2}.${objtype}"
 }
 
+uinfo_cmd() {
+    $UPDATEINFO --repo "${test_tmpdir}/yumrepo" "$@"
+}
+
 # builds a new RPM and adds it to the testdir's repo
 # $1 - name
 # $2+ - optional, treated as directive/value pairs
@@ -402,7 +408,7 @@ License: GPLv2+
 EOF
 
     local build= install= files= pretrans= pre= post= posttrans= post_args=
-    local verifyscript=
+    local verifyscript= uinfo=
     local transfiletriggerin= transfiletriggerin_patterns=
     local transfiletriggerin2= transfiletriggerin2_patterns=
     local transfiletriggerun= transfiletriggerun_patterns=
@@ -418,7 +424,7 @@ EOF
             echo "Conflicts: $arg" >> $spec;;
         post_args)
             post_args="$arg";;
-        version|release|epoch|arch|build|install|files|pretrans|pre|post|posttrans|verifyscript)
+        version|release|epoch|arch|build|install|files|pretrans|pre|post|posttrans|verifyscript|uinfo)
             declare $section="$arg";;
         transfiletriggerin)
             transfiletriggerin_patterns="$arg";
@@ -502,7 +508,13 @@ EOF
         --define "_srcrpmdir $PWD" \
         --define "_rpmdir $test_tmpdir/yumrepo/packages" \
         --define "_buildrootdir $PWD")
-    (cd $test_tmpdir/yumrepo && createrepo_c --no-database .)
+    # use --keep-all-metadata to retain previous updateinfo
+    (cd $test_tmpdir/yumrepo &&
+     createrepo_c --no-database --update --keep-all-metadata .)
+    # convenience function to avoid follow-up add-pkg
+    if [ -n "$uinfo" ]; then
+        uinfo_cmd add-pkg $uinfo $name 0 $version $release $arch
+    fi
     if test '!' -f $test_tmpdir/yumrepo.repo; then
         cat > $test_tmpdir/yumrepo.repo.tmp << EOF
 [test-repo]
