@@ -315,7 +315,7 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
             case AUTO_UPDATE_SDSTATE_OK:
               {
                 if (last_run)
-                  /* e.g. "last check 4h 32min ago" */
+                  /* e.g. "last run 4h 32min ago" */
                   g_print ("(%s; last run %s)\n", policy, last_run);
                 else
                   g_print ("(%s; no runs since boot)\n", policy);
