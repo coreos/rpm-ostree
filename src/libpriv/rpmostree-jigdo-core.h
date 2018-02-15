@@ -26,10 +26,10 @@
 #include <rpm/rpmlib.h>
 #include <libdnf/libdnf.h>
 
-/* An OIRPM is structured as an ordered set of files/directories; we use numeric
+/* A jigdoRPM is structured as an ordered set of files/directories; we use numeric
  * prefixes to ensure ordering. Most of the files are in GVariant format.
  *
- * An OIRPM starts with the OSTree commit object and its detached metadata,
+ * The first entry in a jigdoRPM is the OSTree commit and its detached metadata,
  * so that can be GPG verified first - if that fails, we can then cleanly
  * abort.
  *
@@ -50,7 +50,9 @@
  * of xattrs; then there is a GVariant for each package which contains
  * a mapping of "objid" to an unsigned integer index into the xattr table.
  * The "objid" can either be a full path, or a basename if that basename is
- * unique inside a particular package.
+ * unique inside a particular package.  Since v5, there is also a "cacheid"
+ * which is used to invalidate client-side caching:
+ * https://github.com/projectatomic/rpm-ostree/issues/1197
  */
 
 /* Use a numeric prefix to ensure predictable ordering */
@@ -66,11 +68,14 @@
 #define RPMOSTREE_JIGDO_XATTRS_TABLE "06xattrs/00table"
 #define RPMOSTREE_JIGDO_XATTRS_PKG_DIR "06xattrs/pkg"
 
+/* Array of (NEVRA, cacheid) pairs */
+#define RPMOSTREE_JIGDO_PKG_CACHEIDS_VARIANT_FORMAT (G_VARIANT_TYPE ("a(ss)"))
+/* Array of xattr (name, value) pairs */
 #define RPMOSTREE_JIGDO_XATTRS_TABLE_VARIANT_FORMAT (G_VARIANT_TYPE ("aa(ayay)"))
-/* NEVRA + xattr table */
-#define RPMOSTREE_JIGDO_XATTRS_PKG_VARIANT_FORMAT (G_VARIANT_TYPE ("a(su)"))
+/* cacheid + map of objid to index into table ↑ */
+#define RPMOSTREE_JIGDO_XATTRS_PKG_VARIANT_FORMAT (G_VARIANT_TYPE ("(sa(su))"))
 
-#define RPMOSTREE_JIGDO_PROVIDE_V4 "rpmostree-jigdo(v4)"
+#define RPMOSTREE_JIGDO_PROVIDE_V5 "rpmostree-jigdo(v5)"
 #define RPMOSTREE_JIGDO_PROVIDE_COMMIT "rpmostree-jigdo-commit"
 
 /* This one goes in the spec file to use as our replacement */

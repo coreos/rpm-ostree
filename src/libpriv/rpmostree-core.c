@@ -1821,7 +1821,7 @@ setup_jigdo_state (RpmOstreeContext *self,
       DnfReldep *provide = dnf_reldep_list_index (provides, i);
 
       const char *provide_str = dnf_reldep_to_string (provide);
-      if (g_str_equal (provide_str, RPMOSTREE_JIGDO_PROVIDE_V4))
+      if (g_str_equal (provide_str, RPMOSTREE_JIGDO_PROVIDE_V5))
         {
           found_vprovide = TRUE;
         }
@@ -1843,7 +1843,7 @@ setup_jigdo_state (RpmOstreeContext *self,
 
   if (!found_vprovide)
     return glnx_throw (error, "Package '%s' does not have Provides: %s",
-                       dnf_package_get_nevra (self->jigdo_pkg), RPMOSTREE_JIGDO_PROVIDE_V4);
+                       dnf_package_get_nevra (self->jigdo_pkg), RPMOSTREE_JIGDO_PROVIDE_V5);
   if (!self->jigdo_checksum)
     return glnx_throw (error, "Package '%s' does not have Provides: %s",
                        dnf_package_get_nevra (self->jigdo_pkg), RPMOSTREE_JIGDO_PROVIDE_COMMIT);

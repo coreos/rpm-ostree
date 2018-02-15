@@ -75,6 +75,50 @@ compare_pkgs (gconstpointer ap,
   return dnf_package_cmp (*a, *b);
 }
 
+/* Walk over the list of cacheids for each package; if we have
+ * a cached jigdo pkg with a different cacheid, invalidate it.
+ */
+static gboolean
+invalidate_changed_cacheids (RpmOstreeContext     *self,
+                             DnfPackage           *pkg,
+                             GVariant             *pkg_objid_to_xattrs,
+                             guint                *out_n_invalidated,
+                             GCancellable         *cancellable,
+                             GError              **error)
+{
+  GLNX_AUTO_PREFIX_ERROR ("During jigdo pkgcache invalidation", error);
+
+  OstreeRepo *pkgcache_repo = self->pkgcache_repo ?: self->ostreerepo;
+  const char *cacheid;
+  g_variant_get (pkg_objid_to_xattrs, "(&s@a(su))", &cacheid, NULL);
+  /* See if we have it cached */
+  g_autofree char *jigdo_branch = rpmostree_get_jigdo_branch_pkg (pkg);
+  g_autofree char *cached_rev = NULL;
+  if (!ostree_repo_resolve_rev (pkgcache_repo, jigdo_branch, TRUE,
+                                &cached_rev, error))
+    return FALSE;
+  /* Not cached?  That's fine, on to the next */
+  if (!cached_rev)
+    return TRUE; /* Early return */
+
+  g_autoptr(GVariant) commit = NULL;
+  if (!ostree_repo_load_commit (pkgcache_repo, cached_rev, &commit, NULL, error))
+    return FALSE;
+  g_autoptr(GVariant) metadata = g_variant_get_child_value (commit, 0);
+  g_autoptr(GVariantDict) metadata_dict = g_variant_dict_new (metadata);
+  const char *current_cacheid = NULL;
+  g_variant_dict_lookup (metadata_dict, "rpmostree.jigdo_cacheid", "s", &current_cacheid);
+  if (g_strcmp0 (current_cacheid, cacheid))
+    {
+      if (!ostree_repo_set_ref_immediate (pkgcache_repo, NULL, jigdo_branch, NULL,
+                                          cancellable, error))
+        return FALSE;
+      (*out_n_invalidated)++;
+    }
+
+  return TRUE;
+}
+
 /* Core logic for performing a jigdo assembly client side.  The high level flow is:
  *
  * - Download rpm-md
@@ -210,6 +254,28 @@ rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
     return FALSE;
   txn.initialized = FALSE;
 
+  /* Process the xattrs, including the cacheids before we compute what we need
+   * to download.
+   */
+  g_autoptr(GHashTable) pkg_to_xattrs = g_hash_table_new_full (NULL, NULL,
+                                                               (GDestroyNotify)g_object_unref,
+                                                               (GDestroyNotify)g_variant_unref);
+
+  guint n_invalidated = 0;
+  for (guint i = 0; i < pkgs_required->len; i++)
+    {
+      DnfPackage *pkg = pkgs_required->pdata[i];
+      g_autoptr(GVariant) objid_to_xattrs = NULL;
+      if (!rpmostree_jigdo_assembler_next_xattrs (jigdo, &objid_to_xattrs, cancellable, error))
+        return FALSE;
+      if (!objid_to_xattrs)
+        return glnx_throw (error, "missing xattr entry: %s", dnf_package_get_name (pkg));
+      if (!invalidate_changed_cacheids (self, pkg, objid_to_xattrs,
+                                        &n_invalidated, cancellable, error))
+        return FALSE;
+      g_hash_table_insert (pkg_to_xattrs, g_object_ref (pkg), g_steal_pointer (&objid_to_xattrs));
+    }
+
   /* And now, process the jigdo set */
   if (!rpmostree_context_set_packages (self, pkgs_required, cancellable, error))
     return FALSE;
@@ -227,27 +293,12 @@ rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
         g_hash_table_add (pkgset_to_import, pkg);
       }
     g_autofree char *dlsize_fmt = g_format_size (dlsize);
-    rpmostree_output_message ("%u packages to import, download size: %s", pkgs_to_import->len, dlsize_fmt);
+    if (n_invalidated > 0)
+      rpmostree_output_message ("%u packages to import (%u changed), download size: %s",
+                                pkgs_to_import->len, n_invalidated, dlsize_fmt);
+    else
+      rpmostree_output_message ("%u packages to import, download size: %s", pkgs_to_import->len, dlsize_fmt);
   }
-
-  /* Parse the xattr data in the jigdoRPM */
-  g_autoptr(GHashTable) pkg_to_xattrs = g_hash_table_new_full (NULL, NULL,
-                                                               (GDestroyNotify)g_object_unref,
-                                                               (GDestroyNotify)g_variant_unref);
-
-  for (guint i = 0; i < pkgs_required->len; i++)
-    {
-      DnfPackage *pkg = pkgs_required->pdata[i];
-      const gboolean should_import = g_hash_table_contains (pkgset_to_import, pkg);
-      g_autoptr(GVariant) objid_to_xattrs = NULL;
-      if (!rpmostree_jigdo_assembler_next_xattrs (jigdo, &objid_to_xattrs, cancellable, error))
-        return FALSE;
-      if (!objid_to_xattrs)
-        return glnx_throw (error, "missing xattr entry: %s", dnf_package_get_name (pkg));
-      if (!should_import)
-        continue;
-      g_hash_table_insert (pkg_to_xattrs, g_object_ref (pkg), g_steal_pointer (&objid_to_xattrs));
-    }
 
   /* Start the download and import, using the xattr data from the jigdoRPM */
   if (!rpmostree_context_download (self, cancellable, error))
