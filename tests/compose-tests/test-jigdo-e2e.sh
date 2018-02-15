@@ -50,7 +50,7 @@ do_jigdo2commit() {
 }
 do_jigdo2commit
 # there will generally be pkgs not in the jigdo set, but let's at least assert it's > 0
-assert_file_has_content jigdo2commit-out.txt '[1-9][0-9]* packages to import'
+assert_file_has_content jigdo2commit-out.txt ${npkgs}' packages to import'
 ostree --repo=jigdo-unpack-repo rev-parse ${rev}
 ostree --repo=jigdo-unpack-repo fsck
 ostree --repo=jigdo-unpack-repo refs > jigdo-refs.txt
