@@ -301,28 +301,38 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
 
   gboolean gpg_enabled = FALSE;
   g_autoptr(GVariant) sigs = NULL;
-  if (refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE)
+  switch (refspec_type)
     {
-      if (!rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &sigs, &gpg_enabled, error))
-        return NULL;
+    case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+      {
+        if (!rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &sigs, &gpg_enabled, error))
+          return NULL;
 
-      g_autofree char *pending_base_commitrev = NULL;
-      if (!ostree_repo_resolve_rev (repo, refspec, TRUE,
-                                    &pending_base_commitrev, error))
-        return NULL;
+        g_autofree char *pending_base_commitrev = NULL;
+        if (!ostree_repo_resolve_rev (repo, refspec, TRUE,
+                                      &pending_base_commitrev, error))
+          return NULL;
 
-      if (pending_base_commitrev && !g_str_equal (pending_base_commitrev, base_checksum))
-        {
-          g_autoptr(GVariant) pending_base_commit = NULL;
+        if (pending_base_commitrev && !g_str_equal (pending_base_commitrev, base_checksum))
+          {
+            g_autoptr(GVariant) pending_base_commit = NULL;
 
-          if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
-                                         pending_base_commitrev, &pending_base_commit,
-                                         error))
-            return NULL;
+            if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
+                                           pending_base_commitrev, &pending_base_commit,
+                                           error))
+              return NULL;
 
-          g_variant_dict_insert (&dict, "pending-base-checksum", "s", pending_base_commitrev);
-          variant_add_commit_details (&dict, "pending-base-", pending_base_commit);
-        }
+            g_variant_dict_insert (&dict, "pending-base-checksum", "s", pending_base_commitrev);
+            variant_add_commit_details (&dict, "pending-base-", pending_base_commit);
+          }
+      }
+      break;
+    case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+      {
+        g_variant_dict_insert (&dict, "jigdo-description", "@a{sv}",
+                               rpmostree_origin_get_jigdo_description (origin));
+      }
+      break;
     }
 
   g_autofree char *live_inprogress = NULL;

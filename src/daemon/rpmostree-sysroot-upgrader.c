@@ -472,10 +472,14 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
         /* We're also "pure" rpm-ostree jigdo - this adds assertions that we don't depsolve for example */
         if (!rpmostree_context_prepare_jigdo (ctx, cancellable, error))
           return FALSE;
+        DnfPackage *jigdo_pkg = rpmostree_context_get_jigdo_pkg (ctx);
         new_base_rev = g_strdup (rpmostree_context_get_jigdo_checksum (ctx));
         gboolean jigdo_changed;  /* Currently unused */
         if (!rpmostree_context_execute_jigdo (ctx, &jigdo_changed, cancellable, error))
           return FALSE;
+
+        if (jigdo_changed)
+          rpmostree_origin_set_jigdo_description (self->origin, jigdo_pkg);
       }
     }
 
