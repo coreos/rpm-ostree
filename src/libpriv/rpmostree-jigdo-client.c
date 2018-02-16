@@ -294,10 +294,11 @@ rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
       }
     g_autofree char *dlsize_fmt = g_format_size (dlsize);
     if (n_invalidated > 0)
-      rpmostree_output_message ("%u packages to import (%u changed), download size: %s",
-                                pkgs_to_import->len, n_invalidated, dlsize_fmt);
+      rpmostree_output_message ("%u/%u packages to import (%u changed), download size: %s",
+                                pkgs_to_import->len, n_requires, n_invalidated, dlsize_fmt);
     else
-      rpmostree_output_message ("%u packages to import, download size: %s", pkgs_to_import->len, dlsize_fmt);
+      rpmostree_output_message ("%u/%u packages to import, download size: %s",
+                                pkgs_to_import->len, n_requires, dlsize_fmt);
   }
 
   /* Start the download and import, using the xattr data from the jigdoRPM */
