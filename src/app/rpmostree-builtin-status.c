@@ -47,6 +47,7 @@
 static gboolean opt_pretty;
 static gboolean opt_verbose;
 static gboolean opt_json;
+static gboolean opt_only_booted;
 static const char *opt_jsonpath;
 
 static GOptionEntry option_entries[] = {
@@ -54,6 +55,7 @@ static GOptionEntry option_entries[] = {
   { "verbose", 'v', 0, G_OPTION_ARG_NONE, &opt_verbose, "Print additional fields (e.g. StateRoot)", NULL },
   { "json", 0, 0, G_OPTION_ARG_NONE, &opt_json, "Output JSON", NULL },
   { "jsonpath", 'J', 0, G_OPTION_ARG_STRING, &opt_jsonpath, "Filter JSONPath expression", "EXPRESSION" },
+  { "booted", 'b', 0, G_OPTION_ARG_NONE, &opt_only_booted, "Only print the booted deployment", NULL },
   { NULL }
 };
 
@@ -421,6 +423,12 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
       g_assert (g_variant_dict_lookup (dict, "serial", "i", &serial));
       g_assert (g_variant_dict_lookup (dict, "checksum", "&s", &checksum));
 
+      if (!g_variant_dict_lookup (dict, "booted", "b", &is_booted))
+        is_booted = FALSE;
+
+      if (!is_booted && opt_only_booted)
+        continue;
+
       if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
         {
           origin_packages =
@@ -456,9 +464,6 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
         first = FALSE;
       else
         g_print ("\n");
-
-      if (!g_variant_dict_lookup (dict, "booted", "b", &is_booted))
-        is_booted = FALSE;
 
       g_print ("%s ", is_booted ? libsd_special_glyph (BLACK_CIRCLE) : " ");
 
