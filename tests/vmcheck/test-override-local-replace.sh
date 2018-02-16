@@ -171,15 +171,15 @@ vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
 vm_rpmostree upgrade
 vm_rpmostree override replace $YUMREPO/bar-0.9-1.x86_64.rpm \
                        --install $YUMREPO/baz-1.0-1.x86_64.rpm \
-                       --remove foo
+                       --remove foo --remove fooext
 vm_assert_status_jq \
   '.deployments[0]["base-local-replacements"]|length == 1' \
   '.deployments[0]["requested-base-local-replacements"]|length == 1' \
   '.deployments[0]["requested-local-packages"]|length == 1' \
   '.deployments[0]["requested-local-packages"]|index("baz-1.0-1.x86_64") >= 0' \
-  '.deployments[0]["base-removals"]|length == 1' \
+  '.deployments[0]["base-removals"]|length == 2' \
   '[.deployments[0]["base-removals"][][.0]]|index("foo-1.0-1.x86_64") >= 0' \
-  '.deployments[0]["requested-base-removals"]|length == 1' \
+  '.deployments[0]["requested-base-removals"]|length == 2' \
   '.deployments[0]["requested-base-removals"]|index("foo") >= 0'
 assert_replaced_local_pkg bar-1.0-1.x86_64 bar-0.9-1.x86_64
 echo "ok local replace and local layering"
