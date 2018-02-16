@@ -51,7 +51,7 @@ do_jigdo2commit() {
 }
 do_jigdo2commit
 # there will generally be pkgs not in the jigdo set, but let's at least assert it's > 0
-assert_file_has_content jigdo2commit-out.txt ${npkgs}' packages to import'
+assert_file_has_content jigdo2commit-out.txt ${npkgs}/${npkgs}' packages to import'
 ostree --repo=jigdo-unpack-repo rev-parse ${rev}
 ostree --repo=jigdo-unpack-repo fsck
 ostree --repo=jigdo-unpack-repo refs > jigdo-refs.txt
@@ -89,7 +89,7 @@ assert_file_has_content requires.txt 'test-pkg(.*) = 1.0-1'
 # And pull it; we should download the newer version by default
 do_jigdo2commit
 # Now we should only download 2 packages
-assert_file_has_content jigdo2commit-out.txt '2 packages to import'
+assert_file_has_content jigdo2commit-out.txt '2/[1-9][0-9]* packages to import'
 for x in ${origrev} ${newrev}; do
     ostree --repo=jigdo-unpack-repo rev-parse ${x}
 done
@@ -111,6 +111,6 @@ find jigdo-output -name '*.rpm' | tee rpms.txt
 assert_file_has_content rpms.txt 'fedora-atomic-host-42.2.*x86_64'
 do_jigdo2commit
 # Not every package has docs, but there are going to need to be changes
-assert_file_has_content jigdo2commit-out.txt '[1-9][0-9]* packages to import ([1-9][0-9]* changed)'
+assert_file_has_content jigdo2commit-out.txt '[1-9][0-9]*/[1-9][0-9]* packages to import ([1-9][0-9]* changed)'
 ostree --repo=jigdo-unpack-repo ls -R ${newrev} >/dev/null
 echo "ok jigdo ♲📦 updated docs"
