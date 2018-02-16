@@ -29,6 +29,8 @@ static char *opt_osname;
 static gboolean opt_reboot;
 static gboolean opt_dry_run;
 static gboolean opt_reset_all;
+static const char *const *opt_remove_pkgs;
+static const char *const *opt_replace_pkgs;
 static const char *const *install_pkgs;
 static const char *const *uninstall_pkgs;
 
@@ -41,6 +43,16 @@ static GOptionEntry option_entries[] = {
 
 static GOptionEntry reset_option_entries[] = {
   { "all", 'a', 0, G_OPTION_ARG_NONE, &opt_reset_all, "Reset all active overrides", NULL },
+  { NULL }
+};
+
+static GOptionEntry replace_option_entries[] = {
+  { "remove", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_remove_pkgs, "Remove a package", "PKG" },
+  { NULL }
+};
+
+static GOptionEntry remove_option_entries[] = {
+  { "replace", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_replace_pkgs, "Replace a package", "RPM" },
   { NULL }
 };
 
@@ -124,6 +136,8 @@ rpmostree_override_builtin_replace (int argc, char **argv,
 
   context = g_option_context_new ("PACKAGE [PACKAGE...]");
 
+  g_option_context_add_main_entries (context, replace_option_entries, NULL);
+
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
@@ -149,7 +163,7 @@ rpmostree_override_builtin_replace (int argc, char **argv,
   argv[argc] = NULL;
 
   return handle_override (sysroot_proxy,
-                          NULL, (const char *const*)argv, NULL,
+                          opt_remove_pkgs, (const char *const*)argv, NULL,
                           cancellable, error);
 }
 
@@ -165,6 +179,8 @@ rpmostree_override_builtin_remove (int argc, char **argv,
 
   context = g_option_context_new ("PACKAGE [PACKAGE...]");
 
+  g_option_context_add_main_entries (context, remove_option_entries, NULL);
+
   if (!rpmostree_option_context_parse (context,
                                        option_entries,
                                        &argc, &argv,
@@ -190,7 +206,7 @@ rpmostree_override_builtin_remove (int argc, char **argv,
   argv[argc] = NULL;
 
   return handle_override (sysroot_proxy,
-                          (const char *const*)argv, NULL, NULL,
+                          (const char *const*)argv, opt_replace_pkgs, NULL,
                           cancellable, error);
 }
 
