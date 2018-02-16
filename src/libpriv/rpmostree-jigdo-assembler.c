@@ -549,22 +549,16 @@ rpmostree_jigdo_assembler_get_xattr_table (RpmOstreeJigdoAssembler    *self)
 /* Loop over each package, returning its xattr set (as indexes into the xattr table) */
 gboolean
 rpmostree_jigdo_assembler_next_xattrs (RpmOstreeJigdoAssembler    *self,
-                             GVariant         **out_objid_to_xattrs,
-                             GCancellable      *cancellable,
-                             GError           **error)
+                                       GVariant         **out_objid_to_xattrs,
+                                       GCancellable      *cancellable,
+                                       GError           **error)
 {
-  /* Init output variable for EOF state now */
-  *out_objid_to_xattrs = NULL;
-
   /* If we haven't loaded the xattr string table, do so */
   if (self->state < STATE_XATTRS_TABLE)
     {
-      gboolean eof;
-      struct archive_entry *entry;
-      if (!jigdo_next_entry (self, &eof, &entry, cancellable, error))
+      struct archive_entry *entry = jigdo_require_next_entry (self, cancellable, error);
+      if (!entry)
         return FALSE;
-      if (eof)
-        return TRUE; /* 🔚 Early return */
 
       const char *pathname = peel_entry_pathname (entry, error);
       if (!pathname)
@@ -580,6 +574,9 @@ rpmostree_jigdo_assembler_next_xattrs (RpmOstreeJigdoAssembler    *self,
       self->xattrs_table = g_steal_pointer (&xattrs_table);
       self->state = STATE_XATTRS_TABLE;
     }
+
+  /* Init output variable for EOF state now */
+  *out_objid_to_xattrs = NULL;
 
   /* Look for an xattr entry */
   gboolean eof;

@@ -73,6 +73,7 @@ struct RpmOstreeImporter
   char *ostree_branch;
 
   gboolean jigdo_mode;
+  char *jigdo_cacheid;
   GVariant *jigdo_xattr_table;
   GVariant *jigdo_xattrs;
   GVariant *jigdo_next_xattrs; /* passed from filter to xattr cb */
@@ -101,6 +102,7 @@ rpmostree_importer_finalize (GObject *object)
 
   g_free (self->hdr_sha256);
 
+  g_free (self->jigdo_cacheid);
   g_clear_pointer (&self->jigdo_xattr_table, (GDestroyNotify)g_variant_unref);
   g_clear_pointer (&self->jigdo_xattrs, (GDestroyNotify)g_variant_unref);
   g_clear_pointer (&self->jigdo_next_xattrs, (GDestroyNotify)g_variant_unref);
@@ -296,7 +298,9 @@ rpmostree_importer_set_jigdo_mode (RpmOstreeImporter                    *self,
 {
   self->jigdo_mode = TRUE;
   self->jigdo_xattr_table = g_variant_ref (xattr_table);
-  self->jigdo_xattrs = g_variant_ref (xattrs);
+  g_variant_get (xattrs, "(s@a(su))",
+                 &self->jigdo_cacheid,
+                 &self->jigdo_xattrs);
 }
 
 static void
@@ -483,6 +487,9 @@ build_metadata_variant (RpmOstreeImporter *self,
       g_variant_builder_add (&metadata_builder, "{sv}",
                              "rpmostree.jigdo",
                              g_variant_new_boolean (TRUE));
+      g_variant_builder_add (&metadata_builder, "{sv}",
+                             "rpmostree.jigdo_cacheid",
+                             g_variant_new_string (self->jigdo_cacheid));
       g_variant_builder_add (&metadata_builder, "{sv}",
                              "rpmostree.jigdo_n_skipped",
                              g_variant_new_uint32 (self->n_jigdo_skipped));
