@@ -142,7 +142,7 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
       g_assert (jigdo_spec);
       ret->refspec_type = RPMOSTREE_REFSPEC_TYPE_ROJIG;
       ret->cached_refspec = g_steal_pointer (&jigdo_spec);
-      ret->cached_jigdo_version = g_key_file_get_string (ret->kf, "origin", "jigdo-version", NULL);
+      ret->cached_jigdo_version = g_key_file_get_string (ret->kf, "origin", "jigdo-override-version", NULL);
       ret->cached_jigdo_description = g_key_file_get_string (ret->kf, "origin", "jigdo-description", NULL);
     }
 
@@ -428,9 +428,9 @@ rpmostree_origin_set_jigdo_version (RpmOstreeOrigin *origin,
                                     const char      *version)
 {
   if (version)
-    g_key_file_set_string (origin->kf, "origin", "jigdo-version", version);
+    g_key_file_set_string (origin->kf, "origin", "jigdo-override-version", version);
   else
-    g_key_file_remove_key (origin->kf, "origin", "jigdo-version", NULL);
+    g_key_file_remove_key (origin->kf, "origin", "jigdo-override-version", NULL);
   g_free (origin->cached_jigdo_version);
   origin->cached_jigdo_version = g_strdup (version);
 }
@@ -462,7 +462,7 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
    * rebase by default.
    */
   rpmostree_origin_set_override_commit (origin, NULL, NULL);
-  g_key_file_remove_key (origin->kf, "origin", "jigdo-version", NULL);
+  g_key_file_remove_key (origin->kf, "origin", "jigdo-override-version", NULL);
 
   /* See related code in rpmostree_origin_parse_keyfile() */
   const char *refspecdata;
