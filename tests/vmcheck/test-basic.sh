@@ -98,6 +98,10 @@ vm_assert_status_jq ".deployments[0][\"booted\"] == false" \
                     ".deployments[1][\"booted\"] == true"
 echo "ok rollback"
 
+vm_rpmostree status -b > status.txt
+assert_streq $(grep -F -e 'ostree://' status.txt | wc -l) "1"
+echo "ok status -b"
+
 # https://github.com/ostreedev/ostree/pull/1055
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --timestamp=\"October 25 1985\"
 if vm_rpmostree upgrade 2>err.txt; then
