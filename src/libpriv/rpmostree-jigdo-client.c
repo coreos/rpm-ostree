@@ -107,7 +107,7 @@ invalidate_changed_cacheids (RpmOstreeContext     *self,
   g_autoptr(GVariant) metadata = g_variant_get_child_value (commit, 0);
   g_autoptr(GVariantDict) metadata_dict = g_variant_dict_new (metadata);
   const char *current_cacheid = NULL;
-  g_variant_dict_lookup (metadata_dict, "rpmostree.jigdo_cacheid", "s", &current_cacheid);
+  g_variant_dict_lookup (metadata_dict, "rpmostree.jigdo_cacheid", "&s", &current_cacheid);
   if (g_strcmp0 (current_cacheid, cacheid))
     {
       if (!ostree_repo_set_ref_immediate (pkgcache_repo, NULL, jigdo_branch, NULL,

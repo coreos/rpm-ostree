@@ -68,8 +68,6 @@
 #define RPMOSTREE_JIGDO_XATTRS_TABLE "06xattrs/00table"
 #define RPMOSTREE_JIGDO_XATTRS_PKG_DIR "06xattrs/pkg"
 
-/* Array of (NEVRA, cacheid) pairs */
-#define RPMOSTREE_JIGDO_PKG_CACHEIDS_VARIANT_FORMAT (G_VARIANT_TYPE ("a(ss)"))
 /* Array of xattr (name, value) pairs */
 #define RPMOSTREE_JIGDO_XATTRS_TABLE_VARIANT_FORMAT (G_VARIANT_TYPE ("aa(ayay)"))
 /* cacheid + map of objid to index into table ↑ */
