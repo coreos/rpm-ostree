@@ -326,7 +326,7 @@ transaction_execute_done_cb (GObject *source_object,
   success = g_task_propagate_boolean (G_TASK (result), &local_error);
   if (success)
     {
-      if (!rpmostreed_sysroot_reload (rpmostreed_sysroot_get (), &local_error))
+      if (!rpmostreed_sysroot_reload (rpmostreed_sysroot_get (), NULL, &local_error))
         success = FALSE;
     }
 
