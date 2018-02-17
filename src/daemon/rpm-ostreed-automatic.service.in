@@ -4,5 +4,5 @@ Documentation=man:rpm-ostree(1) man:rpm-ostreed.conf(5)
 ConditionPathExists=/run/ostree-booted
 
 [Service]
-Type=oneshot
+Type=simple
 ExecStart=@bindir@/rpm-ostree upgrade --trigger-automatic-update-policy
