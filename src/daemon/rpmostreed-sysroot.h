@@ -36,6 +36,7 @@ gboolean            rpmostreed_sysroot_populate         (RpmostreedSysroot *self
                                                          GCancellable *cancellable,
                                                          GError **error);
 gboolean            rpmostreed_sysroot_reload           (RpmostreedSysroot *self,
+                                                         gboolean *out_changed,
                                                          GError **error);
 
 OstreeSysroot *     rpmostreed_sysroot_get_root         (RpmostreedSysroot *self);
