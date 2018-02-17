@@ -1703,10 +1703,24 @@ refresh_cached_update (RpmostreedOS *self, GError **error)
     ostree_sysroot_get_merge_deployment (sysroot, name);
 
   g_autoptr(GVariant) cached_update = NULL;
+  RpmostreedAutomaticUpdatePolicy autoupdate_policy =
+    rpmostreed_get_automatic_update_policy (rpmostreed_daemon_get ());
 
-  if (!rpmostreed_update_generate_variant (sysroot, merge_deployment, repo,
-                                           &cached_update, error))
-    return FALSE;
+  /* if auto-updates is off, just fill in the backcompat stuff */
+  if (autoupdate_policy == RPMOSTREED_AUTOMATIC_UPDATE_POLICY_NONE)
+    {
+      cached_update = rpmostreed_commit_generate_cached_details_variant (merge_deployment,
+                                                                         repo, NULL, NULL,
+                                                                         error);
+      if (!cached_update)
+        return FALSE;
+    }
+  else
+    {
+      if (!rpmostreed_update_generate_variant (sysroot, merge_deployment, repo,
+                                               &cached_update, error))
+        return FALSE;
+    }
 
   rpmostree_os_set_cached_update (RPMOSTREE_OS (self), cached_update);
 

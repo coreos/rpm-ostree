@@ -409,6 +409,7 @@ handle_unregister_client (RPMOSTreeSysroot *object,
   return TRUE;
 }
 
+/* remap relevant daemon configs to D-Bus properties */
 static gboolean
 reset_config_properties (RpmostreedSysroot  *self,
                          GError            **error)
@@ -438,8 +439,14 @@ handle_reload_config (RPMOSTreeSysroot *object,
   if (changed && !reset_config_properties (self, error))
     goto out;
 
-  if (!rpmostreed_sysroot_reload (self, error))
+  gboolean sysroot_changed;
+  if (!rpmostreed_sysroot_reload (self, &sysroot_changed, error))
     goto out;
+
+  /* also send an UPDATED signal if configs changed to cause OS interfaces to reload; we do
+   * it here if not done already in `rpmostreed_sysroot_reload` */
+  if (changed && !sysroot_changed)
+    g_signal_emit (self, signals[UPDATED], 0);
 
   rpmostree_sysroot_complete_reload_config (object, invocation);
 out:
@@ -683,6 +690,7 @@ rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
 
 gboolean
 rpmostreed_sysroot_reload (RpmostreedSysroot *self,
+                           gboolean *out_changed,
                            GError **error)
 {
   gboolean ret = FALSE;
@@ -695,6 +703,8 @@ rpmostreed_sysroot_reload (RpmostreedSysroot *self,
     goto out;
 
   ret = TRUE;
+  if (out_changed)
+    *out_changed = did_change;
  out:
   if (ret && did_change)
     g_signal_emit (self, signals[UPDATED], 0);
@@ -713,7 +723,7 @@ on_deploy_changed (GFileMonitor *monitor,
 
   if (event_type == G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED)
     {
-      if (!rpmostreed_sysroot_reload (self, &error))
+      if (!rpmostreed_sysroot_reload (self, NULL, &error))
         goto out;
     }
 
