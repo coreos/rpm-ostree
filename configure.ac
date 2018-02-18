@@ -1,10 +1,13 @@
 AC_PREREQ([2.63])
 dnl To do a release, increment this number, commit, then submit it as a PR
 dnl to merge via homu.  After that, do `git pull origin && git reset --hard origin/master`.
-dnl Then use https://github.com/cgwalters/git-evtag to sign.
+dnl Then draft release notes highlighting changes and generate the shortlog using
+dnl <https://github.com/cgwalters/homegit/blob/master/bin/git-shortlog-with-prs>.
+dnl Then use <https://github.com/cgwalters/git-evtag> to create a signed tag with the
+dnl release notes as its content.
 dnl Then, git push origin v201X.XX
 m4_define([year_version], [2018])
-m4_define([release_version], [2])
+m4_define([release_version], [3])
 m4_define([package_version], [year_version.release_version])
 AC_INIT([rpm-ostree], [package_version], [atomic-devel@projectatomic.io])
 AC_CONFIG_HEADER([config.h])
