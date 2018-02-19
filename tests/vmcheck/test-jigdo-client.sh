@@ -24,9 +24,6 @@ set -euo pipefail
 
 set -x
 
-echo "ok SKIP for v5 bump; remove after FAHC is rebuilt"
-exit 0
-
 # Test rebasing to https://pagure.io/fedora-atomic-host-continuous
 # in rojig:// mode.
 
