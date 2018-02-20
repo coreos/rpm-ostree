@@ -42,7 +42,7 @@ Projects using rpm-ostree
 delivering upstream container technologies and combined with a minimized,
 atomically upgradable host system to Fedora, Red Hat Enterprise Linux, and CentOS.
 
-rpm-ostree is the underlying technology for host updates. The headling project
+rpm-ostree is the underlying technology for host updates. The headlining project
 is "Atomic Host", which is a server variant oriented towards running Linux
 containers using e.g. Kubernetes. However, there is now also a Workstation
 variant, showing the full generality of the rpm-ostree model.
