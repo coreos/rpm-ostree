@@ -38,9 +38,14 @@ For more information, see the online manual: [Read The Docs (rpm-ostree)](https:
 Projects using rpm-ostree
 --------------------------
 
-[Project Atomic](http://www.projectatomic.io/) uses rpm-ostree to
-provide a minimal host for Docker formatted Linux containers.
-Replicating a base immutable OS, then using Docker for applications.
+[Project Atomic](http://www.projectatomic.io/) is an umbrella project for
+delivering upstream container technologies and combined with a minimized,
+atomically upgradable host system to Fedora, Red Hat Enterprise Linux, and CentOS.
+
+rpm-ostree is the underlying technology for host updates. The headlining project
+is "Atomic Host", which is a server variant oriented towards running Linux
+containers using e.g. Kubernetes. However, there is now also a Workstation
+variant, showing the full generality of the rpm-ostree model.
 
 Manual
 ------
