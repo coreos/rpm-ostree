@@ -24,7 +24,7 @@
 #include "rpmostree-jigdo-core.h"
 
 gboolean
-rpmostree_commit2jigdo (OstreeRepo   *repo,
+rpmostree_commit2rojig (OstreeRepo   *repo,
                         OstreeRepo   *pkgcache_repo,
                         const char   *commit,
                         const char   *spec,

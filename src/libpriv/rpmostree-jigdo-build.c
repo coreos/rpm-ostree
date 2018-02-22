@@ -666,7 +666,7 @@ compare_pkgs (gconstpointer ap,
 }
 
 static gboolean
-write_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
+write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
                     const char                   *commit,
                     const char                   *oirpm_spec,
                     const char                   *outputdir,
@@ -1038,7 +1038,7 @@ write_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
  * imports so that they're reliably updated (currently depends on some unified
  * core 🌐 work).
  *
- * First, we find the "jigdo set" of packages we need; not all packages that
+ * First, we find the "rojig set" of packages we need; not all packages that
  * live in the tree actually need to be imported; things like `emacs-filesystem`
  * or `rootfiles` today don't actually generate any content objects we use.
  *
@@ -1059,12 +1059,12 @@ write_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
  * into the OIRPM (what looks like a plain old RPM) by invoking `rpmbuild` using
  * a `.spec` file.
  *
- * The resulting "jigdo set" is then that OIRPM, plus the exact NEVRAs - we also
+ * The resulting "rojig set" is then that OIRPM, plus the exact NEVRAs - we also
  * record the repodata checksum (normally sha256), to ensure that we get the
  * *exact* RPMs we require bit-for-bit.
  */
 static gboolean
-impl_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
+impl_commit2rojig (RpmOstreeCommit2JigdoContext *self,
                    const char                   *rev,
                    const char                   *oirpm_spec,
                    const char                   *outputdir,
@@ -1267,7 +1267,7 @@ impl_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
   }
 
   /* Hardcode FALSE for opt_only_contentdir for now */
-  if (!write_commit2jigdo (self, commit, oirpm_spec, outputdir, FALSE, pkglist,
+  if (!write_commit2rojig (self, commit, oirpm_spec, outputdir, FALSE, pkglist,
                            new_reachable_small, new_big_content_identical,
                            cancellable, error))
     return FALSE;
@@ -1275,9 +1275,9 @@ impl_commit2jigdo (RpmOstreeCommit2JigdoContext *self,
   return TRUE;
 }
 
-/* See comment for impl_commit2jigdo() */
+/* See comment for impl_commit2rojig() */
 gboolean
-rpmostree_commit2jigdo (OstreeRepo   *repo,
+rpmostree_commit2rojig (OstreeRepo   *repo,
                         OstreeRepo   *pkgcache_repo,
                         const char   *commit,
                         const char   *spec,
@@ -1295,5 +1295,5 @@ rpmostree_commit2jigdo (OstreeRepo   *repo,
                                                              (GDestroyNotify)g_free,(GDestroyNotify)pkg_objid_free);
   self->objsize_to_object = g_hash_table_new_full (NULL, NULL, NULL, (GDestroyNotify)g_free);
 
-  return impl_commit2jigdo (self, commit, spec, outputdir, cancellable, error);
+  return impl_commit2rojig (self, commit, spec, outputdir, cancellable, error);
 }

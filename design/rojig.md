@@ -1,10 +1,10 @@
-Introducing rpm-ostree jigdo
+Introducing rpm-ostree rojig
 --------
 
 In the rpm-ostree project, we're blending an image system (libostree)
 with a package system (libdnf).  The goal is to gain the
 advantages of both.  However, the dual nature also brings overhead;
-this proposal aims to reduce some of that by adding a new "jigdo"
+this proposal aims to reduce some of that by adding a new "rojig"
 model to rpm-ostree that makes more operations use the libdnf side.
 
 To do this, we're reviving an old idea: The [http://atterer.org/jigdo/](Jigdo)
@@ -62,7 +62,7 @@ How?
 
 We've already stated that a primary design goal is to preserve the "image"
 functionality by default. Further, let's assume that we have an OSTree commit,
-and we want to point it at a set of RPMs to use as the jigdo source. The source
+and we want to point it at a set of RPMs to use as the rojig source. The source
 OSTree commit can have modified, added to, or removed data from the RPM set, and
 we will support that. Examples of additional data are the initramfs and RPM
 database.
@@ -74,7 +74,7 @@ with checksum that is bit-for-bit identical.
 
 A simple approach is to scan over the set of files in the RPMs, then the set
 of files in the OSTree commit, and add RPMs which contain files in the OSTree
-commit to our "jigdo set".
+commit to our "rojig set".
 
 However, a major complication is SELinux labeling. It turns out that in a lot of
 cases, doing SELinux labeling is expensive; there are thousands of regular
@@ -84,7 +84,7 @@ further complicating things is that there are also other packages that add
 labeling configuration such as `container-selinux`. In other words there's a
 circular dependency: packages have labels, but labels are contained in packages.
 We go to great lengths to handle this in rpm-ostree for package layering, and we
-need to do the same for jigdo.
+need to do the same for rojig.
 
 We can address this by having our OIRPM contain a mapping of (package, file
 path) to a set of extended attributes (including the key `security.selinux`
