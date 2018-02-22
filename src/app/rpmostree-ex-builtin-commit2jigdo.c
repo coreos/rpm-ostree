@@ -45,7 +45,7 @@ static char *opt_repo;
 static char *opt_pkgcache_repo;
 static gboolean opt_only_contentdir;
 
-static GOptionEntry commit2jigdo_option_entries[] = {
+static GOptionEntry commit2rojig_option_entries[] = {
   { "repo", 0, 0, G_OPTION_ARG_STRING, &opt_repo, "OSTree repo", "REPO" },
   { "pkgcache-repo", 0, 0, G_OPTION_ARG_STRING, &opt_pkgcache_repo, "Pkgcache OSTree repo", "REPO" },
   { "only-contentdir", 0, 0, G_OPTION_ARG_NONE, &opt_only_contentdir, "Do not generate RPM, only output content directory", NULL },
@@ -53,7 +53,7 @@ static GOptionEntry commit2jigdo_option_entries[] = {
 };
 
 int
-rpmostree_ex_builtin_commit2jigdo (int             argc,
+rpmostree_ex_builtin_commit2rojig (int             argc,
                                    char          **argv,
                                    RpmOstreeCommandInvocation *invocation,
                                    GCancellable   *cancellable,
@@ -61,7 +61,7 @@ rpmostree_ex_builtin_commit2jigdo (int             argc,
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("REV OIRPM-SPEC OUTPUTDIR");
   if (!rpmostree_option_context_parse (context,
-                                       commit2jigdo_option_entries,
+                                       commit2rojig_option_entries,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
@@ -93,7 +93,7 @@ rpmostree_ex_builtin_commit2jigdo (int             argc,
   g_autoptr(OstreeRepo) pkgcache_repo = ostree_repo_open_at (AT_FDCWD, opt_pkgcache_repo, cancellable, error);
   if (!pkgcache_repo)
     return FALSE;
-  if (!rpmostree_commit2jigdo (repo, pkgcache_repo, rev, oirpm_spec, outputdir,
+  if (!rpmostree_commit2rojig (repo, pkgcache_repo, rev, oirpm_spec, outputdir,
                                cancellable, error))
     return FALSE;
 

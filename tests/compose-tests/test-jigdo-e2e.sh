@@ -30,7 +30,7 @@ rev=$(ostree --repo=${repobuild} rev-parse ${treeref})
 mkdir jigdo-output
 do_commit2jigdo() {
     targetrev=$1
-    rpm-ostree ex commit2jigdo --repo=repo-build --pkgcache-repo cache/pkgcache-repo ${targetrev} $(pwd)/composedata/fedora-atomic-host-oirpm.spec $(pwd)/jigdo-output
+    rpm-ostree ex commit2rojig --repo=repo-build --pkgcache-repo cache/pkgcache-repo ${targetrev} $(pwd)/composedata/fedora-atomic-host-oirpm.spec $(pwd)/jigdo-output
     (cd jigdo-output && createrepo_c .)
 }
 do_commit2jigdo ${rev}
@@ -46,10 +46,10 @@ baseurl=file://$(pwd)/jigdo-output
 enabled=1
 gpgcheck=0
 eof
-do_jigdo2commit() {
-    rpm-ostree ex jigdo2commit -d $(pwd)/composedata -e fedora-local -e test-repo -e jigdo-test --repo=jigdo-unpack-repo jigdo-test:fedora-atomic-host | tee jigdo2commit-out.txt
+do_rojig2commit() {
+    rpm-ostree ex rojig2commit -d $(pwd)/composedata -e fedora-local -e test-repo -e jigdo-test --repo=jigdo-unpack-repo jigdo-test:fedora-atomic-host | tee jigdo2commit-out.txt
 }
-do_jigdo2commit
+do_rojig2commit
 # there will generally be pkgs not in the jigdo set, but let's at least assert it's > 0
 assert_file_has_content jigdo2commit-out.txt ${npkgs}/${npkgs}' packages to import'
 ostree --repo=jigdo-unpack-repo rev-parse ${rev}
@@ -87,7 +87,7 @@ assert_file_has_content requires.txt 'systemd(.*) = '
 assert_file_has_content requires.txt 'test-pkg(.*) = 1.0-1'
 
 # And pull it; we should download the newer version by default
-do_jigdo2commit
+do_rojig2commit
 # Now we should only download 2 packages
 assert_file_has_content jigdo2commit-out.txt '2/[1-9][0-9]* packages to import'
 for x in ${origrev} ${newrev}; do
@@ -109,7 +109,7 @@ newrev=$(ostree --repo=${repobuild} rev-parse ${treeref})
 do_commit2jigdo ${newrev}
 find jigdo-output -name '*.rpm' | tee rpms.txt
 assert_file_has_content rpms.txt 'fedora-atomic-host-42.2.*x86_64'
-do_jigdo2commit
+do_rojig2commit
 # Not every package has docs, but there are going to need to be changes
 assert_file_has_content jigdo2commit-out.txt '[1-9][0-9]*/[1-9][0-9]* packages to import ([1-9][0-9]* changed)'
 ostree --repo=jigdo-unpack-repo ls -R ${newrev} >/dev/null

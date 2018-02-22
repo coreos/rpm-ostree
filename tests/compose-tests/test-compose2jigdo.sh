@@ -1,5 +1,5 @@
 #!/bin/bash
-# Test rpm-ostree compose tree --ex-jigdo-output-rpm
+# Test rpm-ostree compose tree --ex-rojig-output-rpm
 
 set -xeuo pipefail
 
@@ -8,10 +8,10 @@ dn=$(cd $(dirname $0) && pwd)
 . ${dn}/../common/libtest.sh
 
 prepare_compose_test "compose2jigdo"
-pysetjsonmember "ex-jigdo-spec" '"fedora-atomic-host-oirpm.spec"'
+pysetjsonmember "ex-rojig-spec" '"fedora-atomic-host-oirpm.spec"'
 mkdir cache
 mkdir jigdo-output
-runcompose --ex-jigdo-output-rpm $(pwd)/jigdo-output --cachedir $(pwd)/cache --add-metadata-string version=42.0
+runcompose --ex-rojig-output-rpm $(pwd)/jigdo-output --cachedir $(pwd)/cache --add-metadata-string version=42.0
 rev=$(ostree --repo=repo-build rev-parse ${treeref})
 find jigdo-output -name '*.rpm' | tee rpms.txt
 assert_file_has_content rpms.txt 'fedora-atomic-host-42.0.*x86_64'
@@ -21,7 +21,7 @@ done
 assert_file_has_content_literal provides.txt "rpmostree-jigdo-commit(${rev})"
 echo "ok compose2jigdoRPM"
 
-runcompose --force-nocache --ex-jigdo-output-set $(pwd)/jigdo-output --cachedir $(pwd)/cache --add-metadata-string version=42.1
+runcompose --force-nocache --ex-rojig-output-set $(pwd)/jigdo-output --cachedir $(pwd)/cache --add-metadata-string version=42.1
 rev=$(ostree --repo=repo-build rev-parse ${treeref})
 find jigdo-output -name '*.rpm' | tee rpms.txt
 assert_file_has_content rpms.txt 'systemd.*x86_64'

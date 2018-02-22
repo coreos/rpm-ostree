@@ -446,7 +446,7 @@ state_transition (RpmOstreeJigdoAssembler    *self,
   return TRUE;
 }
 
-/* Process new objects included in the OIRPM */
+/* Process new objects included in the rojigRPM */
 gboolean
 rpmostree_jigdo_assembler_write_new_objects (RpmOstreeJigdoAssembler    *self,
                                    OstreeRepo        *repo,

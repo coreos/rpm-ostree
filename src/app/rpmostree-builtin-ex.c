@@ -30,10 +30,10 @@ static RpmOstreeCommand ex_subcommands[] = {
     "Assemble local unprivileged containers", rpmostree_builtin_container },
   { "kargs", 0,
     "Query or Modify the kernel arguments", rpmostree_ex_builtin_kargs },
-  { "commit2jigdo", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    "Convert an OSTree commit into an rpm-ostree jigdo", rpmostree_ex_builtin_commit2jigdo },
-  { "jigdo2commit", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
-    "Convert an rpm-ostree jigdo into an OSTree commit", rpmostree_ex_builtin_jigdo2commit },
+  { "commit2rojig", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "Convert an OSTree commit into an rpm-ostree rojig", rpmostree_ex_builtin_commit2rojig },
+  { "rojig2commit", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "Convert an rpm-ostree rojig into an OSTree commit", rpmostree_ex_builtin_rojig2commit },
   { NULL, 0, NULL, NULL }
 };
 
