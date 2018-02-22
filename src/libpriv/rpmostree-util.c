@@ -234,6 +234,20 @@ rpmostree_pkg_get_local_path (DnfPackage *pkg)
     }
 }
 
+gboolean
+rpmostree_check_size_within_limit (guint64     actual,
+                                   guint64     limit,
+                                   const char *subject,
+                                   GError    **error)
+{
+  if (actual <= limit)
+    return TRUE;
+  g_autofree char *max_formatted = g_format_size (limit);
+  g_autofree char *found_formatted = g_format_size (actual);
+  return glnx_throw (error, "Exceeded maximum size %s; %s is of size: %s",
+                     max_formatted, subject, found_formatted);
+}
+
 /* Convert a "traditional" path (normally from e.g. an RPM) into its final location in
  * ostree */
 char*
