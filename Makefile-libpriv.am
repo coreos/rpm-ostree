@@ -42,7 +42,6 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-scripts.h \
 	src/libpriv/rpmostree-refsack.h \
 	src/libpriv/rpmostree-refsack.c \
-	src/libpriv/rpmostree-cleanup.h \
 	src/libpriv/rpmostree-rpm-util.c \
 	src/libpriv/rpmostree-rpm-util.h \
 	src/libpriv/rpmostree-importer.c \
