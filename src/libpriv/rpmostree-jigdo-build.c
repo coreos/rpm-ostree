@@ -1031,7 +1031,7 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
   return TRUE;
 }
 
-/* Entrypoint function for turning a commit into an OIRPM.
+/* Entrypoint function for turning a commit into an rojigRPM.
  *
  * The basic prerequisite for this: when doing a compose tree, import the
  * packages, and after import check out the final tree and SELinux relabel the
@@ -1056,10 +1056,10 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
  *
  * Once we've determined all the needed data, we make a temporary directory, and
  * start writing out files inside it. This temporary directory is then turned
- * into the OIRPM (what looks like a plain old RPM) by invoking `rpmbuild` using
+ * into the rojigRPM (what looks like a plain old RPM) by invoking `rpmbuild` using
  * a `.spec` file.
  *
- * The resulting "rojig set" is then that OIRPM, plus the exact NEVRAs - we also
+ * The resulting "rojig set" is then that rojigRPM, plus the exact NEVRAs - we also
  * record the repodata checksum (normally sha256), to ensure that we get the
  * *exact* RPMs we require bit-for-bit.
  */

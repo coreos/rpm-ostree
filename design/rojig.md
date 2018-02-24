@@ -92,6 +92,5 @@ one).
 
 At this point, if we add in the new objects such as the metadata objects from
 the OSTree commit and all new content objects that aren't part of a package,
-we'll have our OIRPM. (There is
-some [further complexity](https://pagure.io/fedora-atomic/issue/94) around
+we'll have our rojigRPM. (There is some [further complexity](https://pagure.io/fedora-atomic/issue/94) around
 handling the initramfs and SELinux labeling that we'll omit for now).
