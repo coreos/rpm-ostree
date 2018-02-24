@@ -203,6 +203,6 @@ Experimental options
 All options listed here are subject to change or removal in a future
 version of `rpm-ostree`.
 
- * `ex-jigdo-spec`: string, optional:  If specified, will also cause
-   a run of `rpm-ostree ex commit2jigdo` on changes.  Also requires the
-   `--ex-jigdo-output-rpm` commandline option.
+ * `ex-rojig-spec`: string, optional:  If specified, will also cause
+   a run of `rpm-ostree ex commit2rojig` on changes.  Also requires the
+   `--ex-rojig-output-rpm` commandline option.

@@ -46,7 +46,7 @@ static char *opt_releasever;
 static char **opt_enable_rpmmdrepo;
 static char *opt_oirpm_version;
 
-static GOptionEntry jigdo2commit_option_entries[] = {
+static GOptionEntry rojig2commit_option_entries[] = {
   { "repo", 0, 0, G_OPTION_ARG_STRING, &opt_repo, "OSTree repo", "REPO" },
   { "rpmmd-reposd", 'd', 0, G_OPTION_ARG_STRING, &opt_rpmmd_reposdir, "Path to yum.repos.d (rpmmd) config directory", "PATH" },
   { "enablerepo", 'e', 0, G_OPTION_ARG_STRING_ARRAY, &opt_enable_rpmmdrepo, "Enable rpm-md repo with id ID", "ID" },
@@ -102,7 +102,7 @@ rpm_ostree_jigdo2commit_context_new (RpmOstreeJigdo2CommitContext **out_context,
 }
 
 static gboolean
-impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
+impl_rojig2commit (RpmOstreeJigdo2CommitContext *self,
                    const char                   *jigdo_id,
                    GCancellable                 *cancellable,
                    GError                      **error)
@@ -135,7 +135,7 @@ impl_jigdo2commit (RpmOstreeJigdo2CommitContext *self,
 }
 
 int
-rpmostree_ex_builtin_jigdo2commit (int             argc,
+rpmostree_ex_builtin_rojig2commit (int             argc,
                                    char          **argv,
                                    RpmOstreeCommandInvocation *invocation,
                                    GCancellable   *cancellable,
@@ -143,7 +143,7 @@ rpmostree_ex_builtin_jigdo2commit (int             argc,
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("REPOID:OIRPM-NAME");
   if (!rpmostree_option_context_parse (context,
-                                       jigdo2commit_option_entries,
+                                       rojig2commit_option_entries,
                                        &argc, &argv,
                                        invocation,
                                        cancellable,
@@ -168,7 +168,7 @@ rpmostree_ex_builtin_jigdo2commit (int             argc,
   g_autoptr(RpmOstreeJigdo2CommitContext) self = NULL;
   if (!rpm_ostree_jigdo2commit_context_new (&self, cancellable, error))
     return FALSE;
-  if (!impl_jigdo2commit (self, oirpm, cancellable, error))
+  if (!impl_rojig2commit (self, oirpm, cancellable, error))
     return FALSE;
 
   return TRUE;
