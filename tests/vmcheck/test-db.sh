@@ -45,13 +45,15 @@ check_not_diff() {
 
 vm_build_rpm pkg-to-remove
 vm_build_rpm pkg-to-replace
-vm_rpmostree install pkg-to-remove pkg-to-replace
+vm_build_rpm pkg-to-replace-archtrans arch noarch
+vm_rpmostree install pkg-to-remove pkg-to-replace pkg-to-replace-archtrans
 
 booted_csum=$(vm_get_booted_csum)
 pending_csum=$(vm_get_pending_csum)
 check_diff $booted_csum $pending_csum \
   +pkg-to-remove \
-  +pkg-to-replace
+  +pkg-to-replace \
+  +pkg-to-replace-archtrans
 
 # now let's make the pending csum become an update
 vm_cmd ostree commit -b vmcheck --tree=ref=$pending_csum
@@ -60,12 +62,16 @@ vm_rpmostree upgrade
 pending_csum=$(vm_get_pending_csum)
 check_diff $booted_csum $pending_csum \
   +pkg-to-remove \
-  +pkg-to-replace
+  +pkg-to-replace \
+  +pkg-to-replace-archtrans
 echo "ok setup"
 
 vm_rpmostree override remove pkg-to-remove
 vm_build_rpm pkg-to-replace version 2.0
-vm_rpmostree override replace $YUMREPO/pkg-to-replace-2.0-1.x86_64.rpm
+vm_build_rpm pkg-to-replace-archtrans version 2.0
+vm_rpmostree override replace \
+  $YUMREPO/pkg-to-replace-2.0-1.x86_64.rpm \
+  $YUMREPO/pkg-to-replace-archtrans-2.0-1.x86_64.rpm
 vm_build_rpm pkg-to-overlay build 'echo same > pkg-to-overlay'
 # some multilib handling tests (override default /bin script to skip conflicts)
 vm_build_rpm pkg-to-overlay build 'echo same > pkg-to-overlay' arch i686
@@ -76,7 +82,8 @@ check_diff $booted_csum $pending_layered_csum \
   +pkg-to-overlay-1.0-1.x86_64 \
   +pkg-to-overlay-1.0-1.i686 \
   +glibc-1.0-1.i686 \
-  +pkg-to-replace-2.0
+  +pkg-to-replace-2.0 \
+  +pkg-to-replace-archtrans-2.0
 # check that regular glibc is *not* in the list of modified/dropped packages
 check_not_diff $booted_csum $pending_layered_csum \
   =glibc \
@@ -91,7 +98,9 @@ check_diff $pending_csum $pending_layered_csum \
   +glibc-1.0-1.i686 \
   -pkg-to-remove \
   !pkg-to-replace-1.0 \
-  =pkg-to-replace-2.0
+  =pkg-to-replace-2.0 \
+  !pkg-to-replace-archtrans-1.0 \
+  =pkg-to-replace-archtrans-2.0
 echo "ok db diff"
 
 # this is a bit convoluted; basically, we prune the commit and only keep its
@@ -111,5 +120,7 @@ check_diff $pending_csum $pending_layered_csum \
   +glibc-1.0-1.i686 \
   -pkg-to-remove \
   !pkg-to-replace-1.0 \
-  =pkg-to-replace-2.0
+  =pkg-to-replace-2.0 \
+  !pkg-to-replace-archtrans-1.0 \
+  =pkg-to-replace-archtrans-2.0
 echo "ok db from pkglist.metadata"
