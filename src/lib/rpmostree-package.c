@@ -297,6 +297,15 @@ _rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
   return TRUE;
 }
 
+static inline gboolean
+next_pkg_has_different_name (const char *name, GPtrArray *pkgs, guint cur_i)
+{
+  if (cur_i + 1 >= pkgs->len)
+    return TRUE;
+  RpmOstreePackage *pkg = g_ptr_array_index (pkgs, cur_i + 1);
+  return !g_str_equal (name, pkg->name);
+}
+
 /* Kinda like `comm(1)`, but for RpmOstreePackage lists. Assuming the pkglists are sorted,
  * this is more efficient than launching hundreds of queries and works with both dnf-based
  * and rpmdb.pkglist-based RpmOstreePackage arrays. Packages with different arches (e.g.
@@ -366,7 +375,18 @@ _rpm_ostree_diff_package_lists (GPtrArray  *a,
             }
           else
             {
-              if (cmp < 0)
+              /* if it's just a *single* package of that name that changed arch, let's catch
+               * it to match yum/dnf. otherwise (multilib), just report them separately. */
+              const gboolean single_a = next_pkg_has_different_name (pkg_a->name, a, cur_a);
+              const gboolean single_b = next_pkg_has_different_name (pkg_b->name, b, cur_b);
+              if (single_a && single_b)
+                {
+                  g_ptr_array_add (modified_a, g_object_ref (pkg_a));
+                  g_ptr_array_add (modified_b, g_object_ref (pkg_b));
+                  cur_a++;
+                  cur_b++;
+                }
+              else if (cmp < 0)
                 {
                   g_ptr_array_add (unique_a, g_object_ref (pkg_a));
                   cur_a++;
