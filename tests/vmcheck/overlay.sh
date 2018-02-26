@@ -13,26 +13,9 @@ if test -z "${INSIDE_VM:-}"; then
 
     vm_rsync
 
-    # ✀✀✀ BEGIN selinux-policy hack (part 1) for
-    # https://github.com/fedora-selinux/selinux-policy-contrib/pull/45
-    selhack=selinux-tmp-hack
-    if ! vm_cmd sesearch -A -s init_t -t install_t -c dbus | grep -q allow; then
-      echo "Activating selinux-tmp-hack"
-      d=$(mktemp -d)
-      cat > $d/$selhack.te << 'EOF'
-policy_module(selinux-tmp-hack, 1.0.0)
-gen_require(`
-      type install_t;
-')
-init_dbus_chat(install_t)
-EOF
-      make -C $d -f /usr/share/selinux/devel/Makefile $selhack.pp
-      vm_send /var/roothome/sync $d/$selhack.pp
-      rm -rf $d
-    fi
-    # ✀✀✀ END selinux-policy hack ✀✀✀
-
-    vm_cmd env RPMOSTREE_TEST_NO_OVERLAY="${RPMOSTREE_TEST_NO_OVERLAY:-}" INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh
+    vm_cmd env \
+      RPMOSTREE_TEST_NO_OVERLAY="${RPMOSTREE_TEST_NO_OVERLAY:-}" \
+      INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh
     vm_reboot
     exit 0
 fi
@@ -79,20 +62,6 @@ if test -z "${RPMOSTREE_TEST_NO_OVERLAY}"; then
 else
     echo "Skipping overlay of built rpm-ostree"
 fi
-
-## ✀✀✀ BEGIN selinux-policy hack (part 2) for
-## https://github.com/fedora-selinux/selinux-policy-contrib/pull/45
-selhack=selinux-tmp-hack
-pp=/var/roothome/sync/$selhack.pp
-if [ -f $pp ]; then
-  seld=usr/share/selinux/packages/$selhack
-  mkdir -p vmcheck/$seld
-  cp $pp vmcheck/$seld
-  mkdir vmcheck/var/tmp # bwrap wrapper will mount tmpfs there
-  /var/roothome/sync/scripts/bwrap-script-shell.sh /ostree/repo/tmp/vmcheck \
-    semodule -v -n -i /$seld/$selhack.pp
-fi
-## ✀✀✀ END selinux-policy hack ✀✀✀
 
 # ✀✀✀ BEGIN hack to get --keep-metadata
 if ! ostree commit --help | grep -q -e --keep-metadata; then
