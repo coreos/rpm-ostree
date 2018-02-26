@@ -104,6 +104,26 @@ Boston, MA 02111-1307, USA.
   </refsect1>
 
   <refsect1>
+    <title>Example</title>
+
+    <para>Enabling the automatic updates "check" policy is a two step process.
+    First, edit <filename>/etc/rpm-ostreed.conf</filename> to include
+    <literal>AutomaticUpdatePolicy=check</literal> and then use
+    <command>rpm-ostree reload</command> to reload the <literal>rpm-ostreed</literal>
+    service.  Next, enable the <command>rpm-ostreed-automatic.timer</command> using
+    <command>systemd enable rpm-ostreed-automatic.timer</command>.</para>
+
+    <para>When successful, the output from <command>rpm-ostree status</command> will
+    display output similar to the following:</para>
+
+    <literallayout>
+    $ rpm-ostree status
+    State: idle; auto updates enabled (check; last run 22min ago)
+    ...
+    </literallayout>
+  </refsect1>
+
+  <refsect1>
     <title>See Also</title>
 
     <para>
