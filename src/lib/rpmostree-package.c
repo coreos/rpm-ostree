@@ -349,17 +349,7 @@ _rpm_ostree_diff_package_lists (GPtrArray  *a,
       else
         {
           cmp = strcmp (pkg_a->arch, pkg_b->arch);
-          if (cmp < 0)
-            {
-              g_ptr_array_add (unique_a, g_object_ref (pkg_a));
-              cur_a++;
-            }
-          else if (cmp > 0)
-            {
-              g_ptr_array_add (unique_b, g_object_ref (pkg_b));
-              cur_b++;
-            }
-          else
+          if (cmp == 0)
             {
               cmp = dnf_sack_evr_cmp (sack, pkg_a->evr, pkg_b->evr);
               if (cmp == 0)
@@ -373,6 +363,19 @@ _rpm_ostree_diff_package_lists (GPtrArray  *a,
                 }
               cur_a++;
               cur_b++;
+            }
+          else
+            {
+              if (cmp < 0)
+                {
+                  g_ptr_array_add (unique_a, g_object_ref (pkg_a));
+                  cur_a++;
+                }
+              else if (cmp > 0)
+                {
+                  g_ptr_array_add (unique_b, g_object_ref (pkg_b));
+                  cur_b++;
+                }
             }
         }
     }
