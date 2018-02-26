@@ -371,9 +371,9 @@ _rpm_ostree_diff_package_lists (GPtrArray  *a,
                   g_ptr_array_add (modified_a, g_object_ref (pkg_a));
                   g_ptr_array_add (modified_b, g_object_ref (pkg_b));
                 }
+              cur_a++;
+              cur_b++;
             }
-          cur_a++;
-          cur_b++;
         }
     }
 
