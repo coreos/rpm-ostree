@@ -275,9 +275,9 @@ rpmostree_jigdo_assembler_read_meta (RpmOstreeJigdoAssembler    *self,
   const char *entry_path = peel_entry_pathname (entry, error);
   if (!entry_path)
     return FALSE;
-  if (!g_str_has_prefix (entry_path, RPMOSTREE_JIGDO_COMMIT_DIR "/"))
+  if (!g_str_has_prefix (entry_path, RPMOSTREE_ROJIG_COMMIT_DIR "/"))
     return glnx_throw (error, "Unexpected entry: %s", entry_path);
-  entry_path += strlen (RPMOSTREE_JIGDO_COMMIT_DIR "/");
+  entry_path += strlen (RPMOSTREE_ROJIG_COMMIT_DIR "/");
 
   g_autofree char *checksum = parse_checksum_from_pathname (entry_path, error);
   if (!checksum)
@@ -299,7 +299,7 @@ rpmostree_jigdo_assembler_read_meta (RpmOstreeJigdoAssembler    *self,
   entry_path = peel_entry_pathname (entry, error);
   if (!entry_path)
     return FALSE;
-  if (g_str_equal (entry_path, RPMOSTREE_JIGDO_COMMIT_DIR "/meta"))
+  if (g_str_equal (entry_path, RPMOSTREE_ROJIG_COMMIT_DIR "/meta"))
     {
       meta = jigdo_read_variant (G_VARIANT_TYPE ("a{sv}"), self->archive, entry,
                                  cancellable, error);
@@ -335,13 +335,13 @@ process_contentident (RpmOstreeJigdoAssembler    *self,
    */
   if (!g_str_has_suffix (meta_pathname, "/01meta"))
     return glnx_throw (error, "Malformed contentident: %s", meta_pathname);
-  const char *contentident_id_start = meta_pathname + strlen (RPMOSTREE_JIGDO_NEW_CONTENTIDENT_DIR "/");
+  const char *contentident_id_start = meta_pathname + strlen (RPMOSTREE_ROJIG_NEW_CONTENTIDENT_DIR "/");
   const char *slash = strchr (contentident_id_start, '/');
   if (!slash)
     return glnx_throw (error, "Malformed contentident: %s", meta_pathname);
   // g_autofree char *contentident_id_str = g_strndup (contentident_id_start, slash - contentident_id_start);
 
-  g_autoptr(GVariant) meta = jigdo_read_variant (RPMOSTREE_JIGDO_NEW_CONTENTIDENT_VARIANT_FORMAT,
+  g_autoptr(GVariant) meta = jigdo_read_variant (RPMOSTREE_ROJIG_NEW_CONTENTIDENT_VARIANT_FORMAT,
                                                  self->archive, entry,
                                                  cancellable, error);
 
@@ -470,12 +470,12 @@ rpmostree_jigdo_assembler_write_new_objects (RpmOstreeJigdoAssembler    *self,
       const char *pathname = peel_entry_pathname (entry, error);
       if (!pathname)
         return FALSE;
-      if (g_str_has_prefix (pathname, RPMOSTREE_JIGDO_DIRMETA_DIR "/"))
+      if (g_str_has_prefix (pathname, RPMOSTREE_ROJIG_DIRMETA_DIR "/"))
         {
           if (!state_transition (self, pathname, STATE_DIRMETA, error))
             return FALSE;
           g_autofree char *checksum =
-            parse_checksum_from_pathname (pathname + strlen (RPMOSTREE_JIGDO_DIRMETA_DIR "/"), error);
+            parse_checksum_from_pathname (pathname + strlen (RPMOSTREE_ROJIG_DIRMETA_DIR "/"), error);
           if (!checksum)
             return FALSE;
           g_autoptr(GVariant) dirmeta = jigdo_read_variant (OSTREE_DIRMETA_GVARIANT_FORMAT,
@@ -486,12 +486,12 @@ rpmostree_jigdo_assembler_write_new_objects (RpmOstreeJigdoAssembler    *self,
                                            checksum, dirmeta, &csum, cancellable, error))
             return FALSE;
         }
-      else if (g_str_has_prefix (pathname, RPMOSTREE_JIGDO_DIRTREE_DIR "/"))
+      else if (g_str_has_prefix (pathname, RPMOSTREE_ROJIG_DIRTREE_DIR "/"))
         {
           if (!state_transition (self, pathname, STATE_DIRTREE, error))
             return FALSE;
           g_autofree char *checksum =
-            parse_checksum_from_pathname (pathname + strlen (RPMOSTREE_JIGDO_DIRTREE_DIR "/"), error);
+            parse_checksum_from_pathname (pathname + strlen (RPMOSTREE_ROJIG_DIRTREE_DIR "/"), error);
           if (!checksum)
             return FALSE;
           g_autoptr(GVariant) dirtree = jigdo_read_variant (OSTREE_TREE_GVARIANT_FORMAT,
@@ -502,19 +502,19 @@ rpmostree_jigdo_assembler_write_new_objects (RpmOstreeJigdoAssembler    *self,
                                            checksum, dirtree, &csum, cancellable, error))
             return FALSE;
         }
-      else if (g_str_has_prefix (pathname, RPMOSTREE_JIGDO_NEW_CONTENTIDENT_DIR "/"))
+      else if (g_str_has_prefix (pathname, RPMOSTREE_ROJIG_NEW_CONTENTIDENT_DIR "/"))
         {
           if (!state_transition (self, pathname, STATE_NEW_CONTENTIDENT, error))
             return FALSE;
           if (!process_contentident (self, repo, entry, pathname, cancellable, error))
             return FALSE;
         }
-      else if (g_str_has_prefix (pathname, RPMOSTREE_JIGDO_NEW_DIR "/"))
+      else if (g_str_has_prefix (pathname, RPMOSTREE_ROJIG_NEW_DIR "/"))
         {
           if (!state_transition (self, pathname, STATE_NEW, error))
             return FALSE;
           g_autofree char *checksum =
-            parse_checksum_from_pathname (pathname + strlen (RPMOSTREE_JIGDO_NEW_DIR "/"), error);
+            parse_checksum_from_pathname (pathname + strlen (RPMOSTREE_ROJIG_NEW_DIR "/"), error);
           if (!checksum)
             return FALSE;
 
@@ -527,7 +527,7 @@ rpmostree_jigdo_assembler_write_new_objects (RpmOstreeJigdoAssembler    *self,
                                           stbuf->st_size, &csum, cancellable, error))
             return FALSE;
         }
-      else if (g_str_has_prefix (pathname, RPMOSTREE_JIGDO_XATTRS_DIR "/"))
+      else if (g_str_has_prefix (pathname, RPMOSTREE_ROJIG_XATTRS_DIR "/"))
         {
           self->next_entry = g_steal_pointer (&entry); /* Stash for next call */
           break;
@@ -563,10 +563,10 @@ rpmostree_jigdo_assembler_next_xattrs (RpmOstreeJigdoAssembler    *self,
       const char *pathname = peel_entry_pathname (entry, error);
       if (!pathname)
         return FALSE;
-      if (!g_str_has_prefix (pathname, RPMOSTREE_JIGDO_XATTRS_TABLE))
+      if (!g_str_has_prefix (pathname, RPMOSTREE_ROJIG_XATTRS_TABLE))
         return glnx_throw (error, "Unexpected entry: %s", pathname);
 
-      g_autoptr(GVariant) xattrs_table = jigdo_read_variant (RPMOSTREE_JIGDO_XATTRS_TABLE_VARIANT_FORMAT,
+      g_autoptr(GVariant) xattrs_table = jigdo_read_variant (RPMOSTREE_ROJIG_XATTRS_TABLE_VARIANT_FORMAT,
                                                              self->archive, entry, cancellable, error);
       if (!xattrs_table)
         return FALSE;
@@ -592,10 +592,10 @@ rpmostree_jigdo_assembler_next_xattrs (RpmOstreeJigdoAssembler    *self,
   /* At this point there's nothing left besides xattrs, so throw if it doesn't
    * match that filename pattern.
    */
-  if (!g_str_has_prefix (pathname, RPMOSTREE_JIGDO_XATTRS_PKG_DIR "/"))
+  if (!g_str_has_prefix (pathname, RPMOSTREE_ROJIG_XATTRS_PKG_DIR "/"))
     return glnx_throw (error, "Unexpected entry: %s", pathname);
-  // const char *nevra = pathname + strlen (RPMOSTREE_JIGDO_XATTRS_PKG_DIR "/");
-  *out_objid_to_xattrs = jigdo_read_variant (RPMOSTREE_JIGDO_XATTRS_PKG_VARIANT_FORMAT,
+  // const char *nevra = pathname + strlen (RPMOSTREE_ROJIG_XATTRS_PKG_DIR "/");
+  *out_objid_to_xattrs = jigdo_read_variant (RPMOSTREE_ROJIG_XATTRS_PKG_VARIANT_FORMAT,
                                              self->archive, entry, cancellable, error);
   return TRUE;
 }
