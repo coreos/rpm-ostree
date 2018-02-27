@@ -971,6 +971,14 @@ os_handle_automatic_update_trigger (RPMOSTreeOS *interface,
       g_assert_not_reached ();
     }
 
+  /* if redirect-output is not explicitly set, default to TRUE */
+  g_autoptr(GVariant) new_dict = NULL;
+  if (!g_variant_dict_contains (&dict, "redirect-output"))
+    {
+      g_variant_dict_insert (&dict, "redirect-output", "b", TRUE);
+      arg_options = new_dict = g_variant_ref_sink (g_variant_dict_end (&dict));
+    }
+
   return os_merge_or_start_deployment_txn (
       interface,
       invocation,
