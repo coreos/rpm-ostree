@@ -103,15 +103,15 @@ rpm_ostree_jigdo2commit_context_new (RpmOstreeJigdo2CommitContext **out_context,
 
 static gboolean
 impl_rojig2commit (RpmOstreeJigdo2CommitContext *self,
-                   const char                   *jigdo_id,
+                   const char                   *rojig_id,
                    GCancellable                 *cancellable,
                    GError                      **error)
 {
   g_autoptr(GKeyFile) tsk = g_key_file_new ();
 
-  g_key_file_set_string (tsk, "tree", "jigdo", jigdo_id);
+  g_key_file_set_string (tsk, "tree", "rojig", rojig_id);
   if (opt_oirpm_version)
-    g_key_file_set_string (tsk, "tree", "jigdo-version", opt_oirpm_version);
+    g_key_file_set_string (tsk, "tree", "rojig-version", opt_oirpm_version);
   if (opt_releasever)
     g_key_file_set_string (tsk, "tree", "releasever", opt_releasever);
   if (opt_enable_rpmmdrepo)
@@ -122,13 +122,13 @@ impl_rojig2commit (RpmOstreeJigdo2CommitContext *self,
   if (!treespec)
     return FALSE;
 
-  /* We're also "pure" jigdo - this adds assertions that we don't depsolve for example */
+  /* We're also "pure" rojig - this adds assertions that we don't depsolve for example */
   if (!rpmostree_context_setup (self->ctx, NULL, NULL, treespec, cancellable, error))
     return FALSE;
   if (!rpmostree_context_prepare_jigdo (self->ctx, cancellable, error))
     return FALSE;
-  gboolean jigdo_changed;
-  if (!rpmostree_context_execute_jigdo (self->ctx, &jigdo_changed, cancellable, error))
+  gboolean rojig_changed;
+  if (!rpmostree_context_execute_jigdo (self->ctx, &rojig_changed, cancellable, error))
     return FALSE;
 
   return TRUE;
