@@ -331,56 +331,67 @@ run_script_in_bwrap_container (int rootfs_fd,
   if (!bwrap)
     goto out;
 
+  const gboolean debugging_script = g_strcmp0 (g_getenv ("RPMOSTREE_SCRIPT_DEBUG"), pkg_script) == 0;
+
   /* https://github.com/systemd/systemd/pull/7631 AKA
    * "systemctl,verbs: Introduce SYSTEMD_OFFLINE environment variable"
    * https://github.com/systemd/systemd/commit/f38951a62837a00a0b1ff42d007e9396b347742d
    */
   rpmostree_bwrap_setenv (bwrap, "SYSTEMD_OFFLINE", "1");
 
-  struct ChildSetupData data = { .stdin_fd = stdin_fd,
-                                 .stdout_fd = -1,
-                                 .stderr_fd = -1, };
-
-  /* Only try to log to the journal if we're already set up that way (normally
-   * rpm-ostreed for host system management). Otherwise we might be in a Docker
-   * container, or directly on a host system being executed unprivileged
-   * via `ex container`, and in these cases we want to output to stdout, which
-   * is where other output will go.
-   */
-  const char *id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
   GLnxTmpfile buffered_output = { 0, };
-  if (rpmostree_stdout_is_journal ())
+  const char *id = glnx_strjoina ("rpm-ostree(", pkg_script, ")");
+  if (debugging_script)
     {
-      data.stdout_fd = stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
-      if (stdout_fd < 0)
-        {
-          glnx_throw_errno_prefix (error, "While creating stdout stream fd");
-          goto out;
-        }
-
-      data.stderr_fd = stderr_fd = sd_journal_stream_fd (id, LOG_ERR, 0);
-      if (stderr_fd < 0)
-        {
-          glnx_throw_errno_prefix (error, "While creating stderr stream fd");
-          goto out;
-        }
+      rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/bash", NULL);
+      rpmostree_bwrap_set_inherit_stdin (bwrap);
     }
   else
     {
-      /* In the non-journal case we buffer so we can prefix output */
-      if (!glnx_open_anonymous_tmpfile (O_RDWR | O_CLOEXEC, &buffered_output, error))
-        return FALSE;
-      data.stdout_fd = data.stderr_fd = buffered_output.fd;
+      struct ChildSetupData data = { .stdin_fd = stdin_fd,
+                                     .stdout_fd = -1,
+                                     .stderr_fd = -1, };
+
+      /* Only try to log to the journal if we're already set up that way (normally
+       * rpm-ostreed for host system management). Otherwise we might be in a Docker
+       * container, or directly on a host system being executed unprivileged
+       * via `ex container`, and in these cases we want to output to stdout, which
+       * is where other output will go.
+       */
+      if (rpmostree_stdout_is_journal ())
+        {
+          data.stdout_fd = stdout_fd = sd_journal_stream_fd (id, LOG_INFO, 0);
+          if (stdout_fd < 0)
+            {
+              glnx_throw_errno_prefix (error, "While creating stdout stream fd");
+              goto out;
+            }
+
+          data.stderr_fd = stderr_fd = sd_journal_stream_fd (id, LOG_ERR, 0);
+          if (stderr_fd < 0)
+            {
+              glnx_throw_errno_prefix (error, "While creating stderr stream fd");
+              goto out;
+            }
+        }
+      else
+        {
+          /* In the non-journal case we buffer so we can prefix output */
+          if (!glnx_open_anonymous_tmpfile (O_RDWR | O_CLOEXEC, &buffered_output, error))
+            return FALSE;
+          data.stdout_fd = data.stderr_fd = buffered_output.fd;
+        }
+
+      data.all_fds_initialized = TRUE;
+      rpmostree_bwrap_set_child_setup (bwrap, script_child_setup, &data);
+
+      rpmostree_bwrap_append_child_argv (bwrap,
+                                         interp,
+                                         postscript_path_container,
+                                         script_arg,
+                                         NULL);
     }
 
-  data.all_fds_initialized = TRUE;
-  rpmostree_bwrap_set_child_setup (bwrap, script_child_setup, &data);
-
-  rpmostree_bwrap_append_child_argv (bwrap,
-                                     interp,
-                                     postscript_path_container,
-                                     script_arg,
-                                     NULL);
 
   if (!rpmostree_bwrap_run (bwrap, cancellable, error))
     {
