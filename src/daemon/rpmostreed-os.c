@@ -781,15 +781,17 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
                                           fd_list,
                                           &local_error);
       if (transaction)
-        rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+        {
+          rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
 
-      /* For the AutomaticUpdateTrigger "check" and "download" cases, we want to make sure
-       * we refresh CachedUpdate after; "deploy" will do this through sysroot_changed */
-      const char *method_name = g_dbus_method_invocation_get_method_name (invocation);
-      if (g_str_equal (method_name, "AutomaticUpdateTrigger") &&
-          (default_flags & (RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY |
-                            RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY)))
-        g_signal_connect (transaction, "closed", G_CALLBACK (on_auto_update_done), self);
+          /* For the AutomaticUpdateTrigger "check" case, we want to make sure we refresh
+           * the CachedUpdate property; "deploy" will do this through sysroot_changed */
+          const char *method_name = g_dbus_method_invocation_get_method_name (invocation);
+          if (g_str_equal (method_name, "AutomaticUpdateTrigger") &&
+              (default_flags & (RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY |
+                                RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY)))
+            g_signal_connect (transaction, "closed", G_CALLBACK (on_auto_update_done), self);
+        }
     }
 
   if (transaction)
