@@ -115,7 +115,7 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
  */
 static gboolean
 add_package_refs_to_set (RpmOstreeRefSack *rsack,
-                         gboolean          is_jigdo,
+                         gboolean          is_rojig,
                          GHashTable *referenced_pkgs,
                          GCancellable *cancellable,
                          GError **error)
@@ -135,7 +135,7 @@ add_package_refs_to_set (RpmOstreeRefSack *rsack,
         {
           DnfPackage *pkg = pkglist->pdata[i];
           g_autofree char *pkgref =
-            is_jigdo ? rpmostree_get_jigdo_branch_pkg (pkg) : rpmostree_get_cache_branch_pkg (pkg);
+            is_rojig ? rpmostree_get_rojig_branch_pkg (pkg) : rpmostree_get_cache_branch_pkg (pkg);
           g_hash_table_add (referenced_pkgs, g_steal_pointer (&pkgref));
         }
     }
@@ -265,12 +265,12 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
       n_freed++;
     }
 
-  /* Loop over jigdo refs */
-  g_autoptr(GHashTable) jigdo_refs = NULL;
-  if (!ostree_repo_list_refs_ext (repo, "rpmostree/jigdo", &jigdo_refs,
+  /* Loop over rojig refs */
+  g_autoptr(GHashTable) rojig_refs = NULL;
+  if (!ostree_repo_list_refs_ext (repo, "rpmostree/rojig", &rojig_refs,
                                   OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
     return FALSE;
-  GLNX_HASH_TABLE_FOREACH (jigdo_refs, const char*, ref)
+  GLNX_HASH_TABLE_FOREACH (rojig_refs, const char*, ref)
     {
       if (g_hash_table_contains (referenced_pkgs, ref))
         continue;

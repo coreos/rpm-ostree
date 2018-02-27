@@ -20,7 +20,7 @@
  */
 
 
-/* This file contains the client-side portions of jigdo that are "private"
+/* This file contains the client-side portions of rojig that are "private"
  * implementation detials of RpmOstreeContext. A better model down the line
  * might be to have RpmOstreeJigdoContext or so.
  */
@@ -33,7 +33,7 @@
 #include "rpmostree-core-private.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-output.h"
-// For the jigdo Requires parsing
+// For the rojig Requires parsing
 #include <libdnf/dnf-reldep-private.hpp>
 #include <libdnf/dnf-sack-private.hpp>
 
@@ -41,7 +41,7 @@
 #include <stdlib.h>
 
 static DnfPackage *
-query_jigdo_pkg (DnfContext *dnfctx,
+query_rojig_pkg (DnfContext *dnfctx,
                  const char *name_arch,
                  const char *evr,
                  GError    **error)
@@ -76,7 +76,7 @@ compare_pkgs (gconstpointer ap,
 }
 
 /* Walk over the list of cacheids for each package; if we have
- * a cached jigdo pkg with a different cacheid, invalidate it.
+ * a cached rojig pkg with a different cacheid, invalidate it.
  */
 static gboolean
 invalidate_changed_cacheids (RpmOstreeContext     *self,
@@ -86,15 +86,15 @@ invalidate_changed_cacheids (RpmOstreeContext     *self,
                              GCancellable         *cancellable,
                              GError              **error)
 {
-  GLNX_AUTO_PREFIX_ERROR ("During jigdo pkgcache invalidation", error);
+  GLNX_AUTO_PREFIX_ERROR ("During rojig pkgcache invalidation", error);
 
   OstreeRepo *pkgcache_repo = self->pkgcache_repo ?: self->ostreerepo;
   const char *cacheid;
   g_variant_get (pkg_objid_to_xattrs, "(&s@a(su))", &cacheid, NULL);
   /* See if we have it cached */
-  g_autofree char *jigdo_branch = rpmostree_get_jigdo_branch_pkg (pkg);
+  g_autofree char *rojig_branch = rpmostree_get_rojig_branch_pkg (pkg);
   g_autofree char *cached_rev = NULL;
-  if (!ostree_repo_resolve_rev (pkgcache_repo, jigdo_branch, TRUE,
+  if (!ostree_repo_resolve_rev (pkgcache_repo, rojig_branch, TRUE,
                                 &cached_rev, error))
     return FALSE;
   /* Not cached?  That's fine, on to the next */
@@ -107,10 +107,10 @@ invalidate_changed_cacheids (RpmOstreeContext     *self,
   g_autoptr(GVariant) metadata = g_variant_get_child_value (commit, 0);
   g_autoptr(GVariantDict) metadata_dict = g_variant_dict_new (metadata);
   const char *current_cacheid = NULL;
-  g_variant_dict_lookup (metadata_dict, "rpmostree.jigdo_cacheid", "&s", &current_cacheid);
+  g_variant_dict_lookup (metadata_dict, "rpmostree.rojig_cacheid", "&s", &current_cacheid);
   if (g_strcmp0 (current_cacheid, cacheid))
     {
-      if (!ostree_repo_set_ref_immediate (pkgcache_repo, NULL, jigdo_branch, NULL,
+      if (!ostree_repo_set_ref_immediate (pkgcache_repo, NULL, rojig_branch, NULL,
                                           cancellable, error))
         return FALSE;
       (*out_n_invalidated)++;
@@ -119,24 +119,24 @@ invalidate_changed_cacheids (RpmOstreeContext     *self,
   return TRUE;
 }
 
-/* Core logic for performing a jigdo assembly client side.  The high level flow is:
+/* Core logic for performing a rojig assembly client side.  The high level flow is:
  *
  * - Download rpm-md
- * - query for jigdoRPM
- * - query for jigdoSet (dependencies of above)
- * - download and parse jigdoRPM
- * - download and import jigdoSet
+ * - query for rojigRPM
+ * - query for rojigSet (dependencies of above)
+ * - download and parse rojigRPM
+ * - download and import rojigSet
  * - commit all data to ostree
  */
 gboolean
-rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
+rpmostree_context_execute_rojig (RpmOstreeContext     *self,
                                  gboolean             *out_changed,
                                  GCancellable         *cancellable,
                                  GError              **error)
 {
   OstreeRepo *repo = self->ostreerepo;
-  DnfPackage* oirpm_pkg = rpmostree_context_get_jigdo_pkg (self);
-  const char *provided_commit = rpmostree_context_get_jigdo_checksum (self);
+  DnfPackage* oirpm_pkg = rpmostree_context_get_rojig_pkg (self);
+  const char *provided_commit = rpmostree_context_get_rojig_checksum (self);
 
   DnfContext *dnfctx = rpmostree_context_get_dnf (self);
 
@@ -162,7 +162,7 @@ rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
 
   g_autoptr(GPtrArray) pkgs_required = g_ptr_array_new_with_free_func (g_object_unref);
 
-  /* Look at the Requires of the jigdoRPM.  Note that we don't want to do
+  /* Look at the Requires of the rojigRPM.  Note that we don't want to do
    * dependency resolution here - that's part of the whole idea, we're doing
    * deterministic imaging.
    */
@@ -187,7 +187,7 @@ rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
       const char *name_arch = pool_id2str (pool, rdep->name);
       const char *evr = pool_id2str (pool, rdep->evr);
 
-      DnfPackage *pkg = query_jigdo_pkg (dnfctx, name_arch, evr, error);
+      DnfPackage *pkg = query_rojig_pkg (dnfctx, name_arch, evr, error);
       // FIXME: Possibly we shouldn't require a package to be in the repos if we
       // already have it imported? This would help support downgrades if the
       // repo owner has pruned.
@@ -198,8 +198,8 @@ rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
   g_ptr_array_sort (pkgs_required, compare_pkgs);
 
   /* For now we first serially download the oirpm, but down the line we can do
-   * this async. Doing so will require putting more of the jigdo logic into the
-   * core, so it knows not to import the jigdoRPM.
+   * this async. Doing so will require putting more of the rojig logic into the
+   * core, so it knows not to import the rojigRPM.
    */
   { g_autoptr(GPtrArray) oirpm_singleton_pkglist = g_ptr_array_new ();
     g_ptr_array_add (oirpm_singleton_pkglist, oirpm_pkg);
@@ -276,7 +276,7 @@ rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
       g_hash_table_insert (pkg_to_xattrs, g_object_ref (pkg), g_steal_pointer (&objid_to_xattrs));
     }
 
-  /* And now, process the jigdo set */
+  /* And now, process the rojig set */
   if (!rpmostree_context_set_packages (self, pkgs_required, cancellable, error))
     return FALSE;
 
@@ -301,11 +301,11 @@ rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
                                 pkgs_to_import->len, n_requires, dlsize_fmt);
   }
 
-  /* Start the download and import, using the xattr data from the jigdoRPM */
+  /* Start the download and import, using the xattr data from the rojigRPM */
   if (!rpmostree_context_download (self, cancellable, error))
     return FALSE;
   g_autoptr(GVariant) xattr_table = rpmostree_jigdo_assembler_get_xattr_table (jigdo);
-  if (!rpmostree_context_import_jigdo (self, xattr_table, pkg_to_xattrs,
+  if (!rpmostree_context_import_rojig (self, xattr_table, pkg_to_xattrs,
                                        cancellable, error))
     return FALSE;
 
