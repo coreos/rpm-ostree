@@ -755,25 +755,6 @@ rpmostreed_transaction_get_client_address (RpmostreedTransaction *transaction)
   return g_dbus_server_get_client_address (priv->server);
 }
 
-void
-rpmostreed_transaction_emit_message_printf (RpmostreedTransaction *transaction,
-                                            const char *format,
-                                            ...)
-{
-  g_autofree char *formatted_message = NULL;
-  va_list args;
-
-  g_return_if_fail (RPMOSTREED_IS_TRANSACTION (transaction));
-  g_return_if_fail (format != NULL);
-
-  va_start (args, format);
-  formatted_message = g_strdup_vprintf (format, args);
-  va_end (args);
-
-  rpmostree_transaction_emit_message (RPMOSTREE_TRANSACTION (transaction),
-                                      formatted_message);
-}
-
 gboolean
 rpmostreed_transaction_is_compatible (RpmostreedTransaction *transaction,
                                       GDBusMethodInvocation *invocation)
