@@ -35,7 +35,7 @@
 #include "rpmostree-unpacker-core.h"
 #include "rpmostree-importer.h"
 #include "rpmostree-core.h"
-#include "rpmostree-jigdo-assembler.h"
+#include "rpmostree-rojig-assembler.h"
 #include "rpmostree-rpm-util.h"
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
@@ -720,7 +720,7 @@ rojig_filter_cb (OstreeRepo         *repo,
   if (g_file_info_get_file_type (file_info) != G_FILE_TYPE_DIRECTORY)
     {
       self->rojig_next_xattrs = NULL;
-      if (!rpmostree_jigdo_assembler_xattr_lookup (self->rojig_xattr_table, path,
+      if (!rpmostree_rojig_assembler_xattr_lookup (self->rojig_xattr_table, path,
                                                    self->rojig_xattrs,
                                                    &self->rojig_next_xattrs,
                                                    error))
