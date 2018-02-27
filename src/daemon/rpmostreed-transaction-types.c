@@ -148,9 +148,7 @@ apply_revision_override (RpmostreedTransaction    *transaction,
         case RPMOSTREE_REFSPEC_TYPE_OSTREE:
           {
             /* Perhaps down the line we'll drive history traversal into libostree */
-            rpmostreed_transaction_emit_message_printf (transaction,
-                                                        "Resolving version '%s'",
-                                                        version);
+            rpmostree_output_message ("Resolving version '%s'", version);
 
             if (!rpmostreed_repo_lookup_version (repo, rpmostree_origin_get_refspec (origin),
                                                  version, progress,
@@ -173,9 +171,7 @@ apply_revision_override (RpmostreedTransaction    *transaction,
       switch (refspectype)
         {
         case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-          rpmostreed_transaction_emit_message_printf (transaction,
-                                                      "Validating checksum '%s'",
-                                                      checksum);
+          rpmostree_output_message ("Validating checksum '%s'", checksum);
           if (!rpmostreed_repo_lookup_checksum (repo, rpmostree_origin_get_refspec (origin),
                                                 checksum, progress, cancellable, error))
             return FALSE;
@@ -281,9 +277,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
 
   if (self->refspec != NULL)
     {
-      rpmostreed_transaction_emit_message_printf (transaction,
-                                                  "Updating from: %s",
-                                                  self->refspec);
+      rpmostree_output_message ("Updating from: %s", self->refspec);
     }
 
   gboolean changed = FALSE;
@@ -297,11 +291,9 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
   if (!changed)
     {
       if (upgrading)
-        rpmostreed_transaction_emit_message_printf (transaction,
-                                                    "No upgrade available.");
+        rpmostree_output_message ("No upgrade available.");
       else
-        rpmostreed_transaction_emit_message_printf (transaction,
-                                                    "No change.");
+        rpmostree_output_message ("No change.");
     }
 
   return TRUE;
@@ -413,10 +405,9 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
   /* build out the reordered array; rollback is first now */
   g_ptr_array_add (new_deployments, g_object_ref (rollback_deployment));
 
-  rpmostreed_transaction_emit_message_printf (transaction,
-                                              "Moving '%s.%d' to be first deployment",
-                                              ostree_deployment_get_csum (rollback_deployment),
-                                              ostree_deployment_get_deployserial (rollback_deployment));
+  rpmostree_output_message ("Moving '%s.%d' to be first deployment",
+                            ostree_deployment_get_csum (rollback_deployment),
+                            ostree_deployment_get_deployserial (rollback_deployment));
 
   for (guint i = 0; i < old_deployments->len; i++)
     {
@@ -1074,9 +1065,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         {
           /* XXX: improve msg here; e.g. cache will be blown on next operation? */
           if (changed)
-            rpmostreed_transaction_emit_message_printf (transaction, "Update downloaded.");
+            rpmostree_output_message ("Update downloaded.");
           else
-            rpmostreed_transaction_emit_message_printf (transaction, "No changes.");
+            rpmostree_output_message ("No changes.");
           return TRUE;
         }
 
@@ -1106,9 +1097,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   else
     {
       if (!self->revision)
-        rpmostreed_transaction_emit_message_printf (transaction, "No upgrade available.");
+        rpmostree_output_message ("No upgrade available.");
       else
-        rpmostreed_transaction_emit_message_printf (transaction, "No change.");
+        rpmostree_output_message ("No change.");
     }
 
   return TRUE;

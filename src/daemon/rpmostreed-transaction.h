@@ -48,9 +48,6 @@ OstreeSysroot * rpmostreed_transaction_get_sysroot         (RpmostreedTransactio
 GDBusMethodInvocation *
                 rpmostreed_transaction_get_invocation      (RpmostreedTransaction *transaction);
 const char *    rpmostreed_transaction_get_client_address  (RpmostreedTransaction *transaction);
-void            rpmostreed_transaction_emit_message_printf (RpmostreedTransaction *transaction,
-                                                            const char *format,
-                                                            ...) G_GNUC_PRINTF (2, 3);
 gboolean        rpmostreed_transaction_is_compatible       (RpmostreedTransaction *transaction,
                                                             GDBusMethodInvocation *invocation);
 void            rpmostreed_transaction_connect_download_progress
