@@ -219,7 +219,7 @@ rpmostree_origin_classify_refspec (RpmOstreeOrigin      *origin,
 }
 
 const char *
-rpmostree_origin_get_jigdo_version (RpmOstreeOrigin *origin)
+rpmostree_origin_get_rojig_version (RpmOstreeOrigin *origin)
 {
   return origin->cached_rojig_version;
 }
@@ -232,7 +232,7 @@ rpmostree_origin_get_jigdo_version (RpmOstreeOrigin *origin)
  * Note this type is exposed as DBus API.
  */
 GVariant *
-rpmostree_origin_get_jigdo_description (RpmOstreeOrigin *origin)
+rpmostree_origin_get_rojig_description (RpmOstreeOrigin *origin)
 {
   const char *colon = strchr (origin->cached_refspec, ':');
   g_assert (colon);
@@ -424,7 +424,7 @@ rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin,
 }
 
 void
-rpmostree_origin_set_jigdo_version (RpmOstreeOrigin *origin,
+rpmostree_origin_set_rojig_version (RpmOstreeOrigin *origin,
                                     const char      *version)
 {
   if (version)
@@ -445,7 +445,7 @@ rpmostree_origin_set_jigdo_version (RpmOstreeOrigin *origin,
  * the pkgcache)?
  */
 void
-rpmostree_origin_set_jigdo_description (RpmOstreeOrigin *origin,
+rpmostree_origin_set_rojig_description (RpmOstreeOrigin *origin,
                                         DnfPackage      *package)
 {
   g_assert_cmpint (origin->refspec_type, ==, RPMOSTREE_REFSPEC_TYPE_ROJIG);

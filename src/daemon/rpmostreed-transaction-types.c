@@ -162,7 +162,7 @@ apply_revision_override (RpmostreedTransaction    *transaction,
           break;
         case RPMOSTREE_REFSPEC_TYPE_ROJIG:
           /* This case we'll look up later */
-          rpmostree_origin_set_jigdo_version (origin, version);
+          rpmostree_origin_set_rojig_version (origin, version);
           break;
         }
     }
@@ -1011,7 +1011,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
        * have pkgs layered). This is still just a heuristic, since e.g. an InactiveRequest
        * may in fact become active in the new base, but we don't have the full tree. */
 
-      /* XXX: in jigdo mode we'll want to do this unconditionally */
+      /* XXX: in rojig mode we'll want to do this unconditionally */
       if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
         {
           /* XXX: dedupe a bit more with RefreshMd path */

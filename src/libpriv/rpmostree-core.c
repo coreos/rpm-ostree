@@ -1251,7 +1251,7 @@ rpmostree_get_cache_branch_header (Header hdr)
 }
 
 char *
-rpmostree_get_jigdo_branch_header (Header hdr)
+rpmostree_get_rojig_branch_header (Header hdr)
 {
   g_autofree char *name = headerGetAsString (hdr, RPMTAG_NAME);
   g_autofree char *evr = headerGetAsString (hdr, RPMTAG_EVR);
@@ -1269,7 +1269,7 @@ rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
 }
 
 char *
-rpmostree_get_jigdo_branch_pkg (DnfPackage *pkg)
+rpmostree_get_rojig_branch_pkg (DnfPackage *pkg)
 {
   return get_branch_for_n_evr_a ("rojig", dnf_package_get_name (pkg),
                                  dnf_package_get_evr (pkg),
@@ -1376,7 +1376,7 @@ find_pkg_in_ostree (RpmOstreeContext *self,
     return TRUE; /* Note early return */
 
   g_autofree char *cachebranch = self->rojig_spec ?
-      rpmostree_get_jigdo_branch_pkg (pkg) : rpmostree_get_cache_branch_pkg (pkg);
+      rpmostree_get_rojig_branch_pkg (pkg) : rpmostree_get_cache_branch_pkg (pkg);
   g_autofree char *cached_rev = NULL;
   if (!ostree_repo_resolve_rev (repo, cachebranch, TRUE,
                                 &cached_rev, error))
@@ -1779,7 +1779,7 @@ add_remaining_pkgcache_pkgs (RpmOstreeContext *self,
 }
 
 static gboolean
-setup_jigdo_state (RpmOstreeContext *self,
+setup_rojig_state (RpmOstreeContext *self,
                    GError          **error)
 {
   g_assert (self->rojig_spec);
@@ -1965,7 +1965,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   if (self->rojig_spec)
     {
-      if (!setup_jigdo_state (self, error))
+      if (!setup_rojig_state (self, error))
         return FALSE;
     }
 
@@ -2004,7 +2004,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
  * example.
  */
 gboolean
-rpmostree_context_prepare_jigdo (RpmOstreeContext *self,
+rpmostree_context_prepare_rojig (RpmOstreeContext *self,
                                  GCancellable     *cancellable,
                                  GError          **error)
 {
@@ -2229,7 +2229,7 @@ rpmostree_context_download (RpmOstreeContext *self,
 
 /* Returns: (transfer none): The rojig package */
 DnfPackage *
-rpmostree_context_get_jigdo_pkg (RpmOstreeContext  *self)
+rpmostree_context_get_rojig_pkg (RpmOstreeContext  *self)
 {
   g_assert (self->rojig_spec);
   return self->rojig_pkg;
@@ -2237,7 +2237,7 @@ rpmostree_context_get_jigdo_pkg (RpmOstreeContext  *self)
 
 /* Returns: (transfer none): The rojig checksum */
 const char *
-rpmostree_context_get_jigdo_checksum (RpmOstreeContext  *self)
+rpmostree_context_get_rojig_checksum (RpmOstreeContext  *self)
 {
   g_assert (self->rojig_spec);
   return self->rojig_checksum;
@@ -2269,7 +2269,7 @@ on_async_import_done (GObject                    *obj,
 }
 
 gboolean
-rpmostree_context_import_jigdo (RpmOstreeContext *self,
+rpmostree_context_import_rojig (RpmOstreeContext *self,
                                 GVariant         *rojig_xattr_table,
                                 GHashTable       *rojig_pkg_to_xattrs,
                                 GCancellable     *cancellable,
@@ -2339,7 +2339,7 @@ rpmostree_context_import_jigdo (RpmOstreeContext *self,
         if (rojig_xattrs)
           {
             g_assert (!self->sepolicy);
-            rpmostree_importer_set_jigdo_mode (unpacker, rojig_xattr_table, rojig_xattrs);
+            rpmostree_importer_set_rojig_mode (unpacker, rojig_xattr_table, rojig_xattrs);
           }
 
         rpmostree_importer_run_async (unpacker, cancellable, on_async_import_done, self);
@@ -2376,7 +2376,7 @@ rpmostree_context_import (RpmOstreeContext *self,
                           GCancellable     *cancellable,
                           GError          **error)
 {
-  return rpmostree_context_import_jigdo (self, NULL, NULL, cancellable, error);
+  return rpmostree_context_import_rojig (self, NULL, NULL, cancellable, error);
 }
 
 /* Given a single package, verify its GPG signature (if enabled), open a file

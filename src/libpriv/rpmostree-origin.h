@@ -67,10 +67,10 @@ rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin,
 gboolean rpmostree_origin_is_rojig (RpmOstreeOrigin *origin);
 
 const char *
-rpmostree_origin_get_jigdo_version (RpmOstreeOrigin *origin);
+rpmostree_origin_get_rojig_version (RpmOstreeOrigin *origin);
 
 GVariant *
-rpmostree_origin_get_jigdo_description (RpmOstreeOrigin *origin);
+rpmostree_origin_get_rojig_description (RpmOstreeOrigin *origin);
 
 GHashTable *
 rpmostree_origin_get_packages (RpmOstreeOrigin *origin);
@@ -122,11 +122,11 @@ rpmostree_origin_set_override_commit (RpmOstreeOrigin *origin,
                                       const char      *checksum,
                                       const char      *version);
 void
-rpmostree_origin_set_jigdo_description (RpmOstreeOrigin *origin,
+rpmostree_origin_set_rojig_description (RpmOstreeOrigin *origin,
                                         DnfPackage      *package);
 
 void
-rpmostree_origin_set_jigdo_version (RpmOstreeOrigin *origin,
+rpmostree_origin_set_rojig_version (RpmOstreeOrigin *origin,
                                     const char      *version);
 
 gboolean
