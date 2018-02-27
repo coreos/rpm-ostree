@@ -329,7 +329,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
       break;
     case RPMOSTREE_REFSPEC_TYPE_ROJIG:
       {
-        g_variant_dict_insert (&dict, "jigdo-description", "@a{sv}",
+        g_variant_dict_insert (&dict, "rojig-description", "@a{sv}",
                                rpmostree_origin_get_jigdo_description (origin));
       }
       break;
@@ -985,7 +985,7 @@ rpmostreed_update_generate_variant (OstreeSysroot *sysroot,
     if (!rpmostree_refspec_classify (refspec, &refspectype, &refspec_data, error))
       return FALSE;
 
-    /* we don't support jigdo-based origins yet */
+    /* we don't support rojig-based origins yet */
     if (refspectype != RPMOSTREE_REFSPEC_TYPE_OSTREE)
       {
         *out_update = NULL;

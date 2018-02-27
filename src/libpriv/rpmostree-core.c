@@ -249,8 +249,8 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
       g_variant_builder_add (&builder, "{sv}", k, g_variant_new_string (v)); \
   }
 
-  BIND_STRING("jigdo");
-  BIND_STRING("jigdo-version");
+  BIND_STRING("rojig");
+  BIND_STRING("rojig-version");
   BIND_STRING("releasever");
 #undef BIND_STRING
 
@@ -331,8 +331,8 @@ rpmostree_context_finalize (GObject *object)
   g_clear_object (&rctx->spec);
   g_clear_object (&rctx->dnfctx);
 
-  g_clear_object (&rctx->jigdo_pkg);
-  g_free (rctx->jigdo_checksum);
+  g_clear_object (&rctx->rojig_pkg);
+  g_free (rctx->rojig_checksum);
 
   g_clear_object (&rctx->pkgcache_repo);
   g_clear_object (&rctx->ostreerepo);
@@ -740,10 +740,10 @@ rpmostree_context_setup (RpmOstreeContext    *self,
         return glnx_throw (error, "No enabled repositories");
     }
 
-  /* Keep a handy pointer to the jigdo source if specified, since it influences
+  /* Keep a handy pointer to the rojig source if specified, since it influences
    * a lot of things here.
    */
-  g_variant_dict_lookup (self->spec->dict, "jigdo", "&s", &self->jigdo_spec);
+  g_variant_dict_lookup (self->spec->dict, "rojig", "&s", &self->rojig_spec);
 
   /* Ensure that each repo that's enabled is marked as required; this should be
    * the default, but we make sure.  This is a bit of a messy topic, but for
@@ -1256,7 +1256,7 @@ rpmostree_get_jigdo_branch_header (Header hdr)
   g_autofree char *name = headerGetAsString (hdr, RPMTAG_NAME);
   g_autofree char *evr = headerGetAsString (hdr, RPMTAG_EVR);
   g_autofree char *arch = headerGetAsString (hdr, RPMTAG_ARCH);
-  return get_branch_for_n_evr_a ("jigdo", name, evr, arch);
+  return get_branch_for_n_evr_a ("rojig", name, evr, arch);
 }
 
 /* Return the ostree cache branch from a libdnf Package */
@@ -1271,7 +1271,7 @@ rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
 char *
 rpmostree_get_jigdo_branch_pkg (DnfPackage *pkg)
 {
-  return get_branch_for_n_evr_a ("jigdo", dnf_package_get_name (pkg),
+  return get_branch_for_n_evr_a ("rojig", dnf_package_get_name (pkg),
                                  dnf_package_get_evr (pkg),
                                  dnf_package_get_arch (pkg));
 }
@@ -1375,7 +1375,7 @@ find_pkg_in_ostree (RpmOstreeContext *self,
   if (repo == NULL)
     return TRUE; /* Note early return */
 
-  g_autofree char *cachebranch = self->jigdo_spec ?
+  g_autofree char *cachebranch = self->rojig_spec ?
       rpmostree_get_jigdo_branch_pkg (pkg) : rpmostree_get_cache_branch_pkg (pkg);
   g_autofree char *cached_rev = NULL;
   if (!ostree_repo_resolve_rev (repo, cachebranch, TRUE,
@@ -1782,39 +1782,39 @@ static gboolean
 setup_jigdo_state (RpmOstreeContext *self,
                    GError          **error)
 {
-  g_assert (self->jigdo_spec);
-  g_assert (!self->jigdo_pkg);
-  g_assert (!self->jigdo_checksum);
+  g_assert (self->rojig_spec);
+  g_assert (!self->rojig_pkg);
+  g_assert (!self->rojig_checksum);
 
-  g_autofree char *jigdo_repoid = NULL;
-  g_autofree char *jigdo_name = NULL;
+  g_autofree char *rojig_repoid = NULL;
+  g_autofree char *rojig_name = NULL;
 
-  { const char *colon = strchr (self->jigdo_spec, ':');
+  { const char *colon = strchr (self->rojig_spec, ':');
     if (!colon)
-      return glnx_throw (error, "Invalid jigdo spec '%s', expected repoid:name", self->jigdo_spec);
-    jigdo_repoid = g_strndup (self->jigdo_spec, colon - self->jigdo_spec);
-    jigdo_name = g_strdup (colon + 1);
+      return glnx_throw (error, "Invalid rojig spec '%s', expected repoid:name", self->rojig_spec);
+    rojig_repoid = g_strndup (self->rojig_spec, colon - self->rojig_spec);
+    rojig_name = g_strdup (colon + 1);
   }
 
-  const char *jigdo_version = NULL;
-  g_variant_dict_lookup (self->spec->dict, "jigdo-version", "&s", &jigdo_version);
+  const char *rojig_version = NULL;
+  g_variant_dict_lookup (self->spec->dict, "rojig-version", "&s", &rojig_version);
 
   hy_autoquery HyQuery query = hy_query_create (dnf_context_get_sack (self->dnfctx));
-  hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, jigdo_repoid);
-  hy_query_filter (query, HY_PKG_NAME, HY_EQ, jigdo_name);
-  if (jigdo_version)
-    hy_query_filter (query, HY_PKG_VERSION, HY_EQ, jigdo_version);
+  hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, rojig_repoid);
+  hy_query_filter (query, HY_PKG_NAME, HY_EQ, rojig_name);
+  if (rojig_version)
+    hy_query_filter (query, HY_PKG_VERSION, HY_EQ, rojig_version);
 
   g_autoptr(GPtrArray) pkglist = hy_query_run (query);
   if (pkglist->len == 0)
-    return glnx_throw (error, "Failed to find jigdo package '%s'", self->jigdo_spec);
+    return glnx_throw (error, "Failed to find rojig package '%s'", self->rojig_spec);
   g_ptr_array_sort (pkglist, compare_pkgs);
   /* We use the last package in the array which should be newest */
-  self->jigdo_pkg = g_object_ref (pkglist->pdata[pkglist->len-1]);
+  self->rojig_pkg = g_object_ref (pkglist->pdata[pkglist->len-1]);
 
   /* Iterate over provides directly to provide a nicer error on mismatch */
   gboolean found_vprovide = FALSE;
-  g_autoptr(DnfReldepList) provides = dnf_package_get_provides (self->jigdo_pkg);
+  g_autoptr(DnfReldepList) provides = dnf_package_get_provides (self->rojig_pkg);
   const gint n_provides = dnf_reldep_list_count (provides);
   for (int i = 0; i < n_provides; i++)
     {
@@ -1835,18 +1835,18 @@ setup_jigdo_state (RpmOstreeContext *self,
           if (!closeparen)
             return glnx_throw (error, "Invalid %s", provide_str);
 
-          self->jigdo_checksum = g_strndup (rest, closeparen - rest);
-          if (strlen (self->jigdo_checksum) != OSTREE_SHA256_STRING_LEN)
+          self->rojig_checksum = g_strndup (rest, closeparen - rest);
+          if (strlen (self->rojig_checksum) != OSTREE_SHA256_STRING_LEN)
             return glnx_throw (error, "Invalid %s", provide_str);
         }
     }
 
   if (!found_vprovide)
     return glnx_throw (error, "Package '%s' does not have Provides: %s",
-                       dnf_package_get_nevra (self->jigdo_pkg), RPMOSTREE_JIGDO_PROVIDE_V5);
-  if (!self->jigdo_checksum)
+                       dnf_package_get_nevra (self->rojig_pkg), RPMOSTREE_JIGDO_PROVIDE_V5);
+  if (!self->rojig_checksum)
     return glnx_throw (error, "Package '%s' does not have Provides: %s",
-                       dnf_package_get_nevra (self->jigdo_pkg), RPMOSTREE_JIGDO_PROVIDE_COMMIT);
+                       dnf_package_get_nevra (self->rojig_pkg), RPMOSTREE_JIGDO_PROVIDE_COMMIT);
 
   return TRUE;
 }
@@ -1889,7 +1889,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   dnf_sack_set_installonly (dnf_context_get_sack (self->dnfctx), NULL);
   dnf_sack_set_installonly_limit (dnf_context_get_sack (self->dnfctx), 0);
 
-  if (self->jigdo_pure)
+  if (self->rojig_pure)
     {
       g_assert_cmpint (g_strv_length (pkgnames), ==, 0);
       g_assert_cmpint (g_strv_length (cached_pkgnames), ==, 0);
@@ -1902,7 +1902,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   for (char **it = removed_base_pkgnames; it && *it; it++)
     {
       const char *pkgname = *it;
-      g_assert (!self->jigdo_pure);
+      g_assert (!self->rojig_pure);
       if (!dnf_context_remove (dnfctx, pkgname, error))
         return FALSE;
 
@@ -1921,7 +1921,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
         return FALSE;
 
-      g_assert (!self->jigdo_pure);
+      g_assert (!self->rojig_pure);
       if (!install_pkg_from_cache (self, nevra, sha256, cancellable, error))
         return FALSE;
 
@@ -1937,7 +1937,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
         return FALSE;
 
-      g_assert (!self->jigdo_pure);
+      g_assert (!self->rojig_pure);
       if (!install_pkg_from_cache (self, nevra, sha256, cancellable, error))
         return FALSE;
 
@@ -1958,18 +1958,18 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   for (char **it = pkgnames; it && *it; it++)
     {
       const char *pkgname = *it;
-      g_assert (!self->jigdo_pure);
+      g_assert (!self->rojig_pure);
       if (!dnf_context_install (dnfctx, pkgname, error))
         return FALSE;
     }
 
-  if (self->jigdo_spec)
+  if (self->rojig_spec)
     {
       if (!setup_jigdo_state (self, error))
         return FALSE;
     }
 
-  if (!self->jigdo_pure)
+  if (!self->rojig_pure)
     {
       HyGoal goal = dnf_context_get_goal (dnfctx);
 
@@ -1999,7 +1999,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 }
 
 /* Call this to ensure we don't do any "package stuff" like
- * depsolving - we're in "pure jigdo" mode.  If specified
+ * depsolving - we're in "pure rojig" mode.  If specified
  * this obviously means there are no layered packages for
  * example.
  */
@@ -2008,7 +2008,7 @@ rpmostree_context_prepare_jigdo (RpmOstreeContext *self,
                                  GCancellable     *cancellable,
                                  GError          **error)
 {
-  self->jigdo_pure = TRUE;
+  self->rojig_pure = TRUE;
   return rpmostree_context_prepare (self, cancellable, error);
 }
 
@@ -2022,7 +2022,7 @@ rpmostree_context_get_packages (RpmOstreeContext *self)
 }
 
 /* Rather than doing a depsolve, directly set which packages
- * are required.  Will be used by jigdo.
+ * are required.  Will be used by rojig.
  */
 gboolean
 rpmostree_context_set_packages (RpmOstreeContext *self,
@@ -2227,20 +2227,20 @@ rpmostree_context_download (RpmOstreeContext *self,
   return TRUE;
 }
 
-/* Returns: (transfer none): The jigdo package */
+/* Returns: (transfer none): The rojig package */
 DnfPackage *
 rpmostree_context_get_jigdo_pkg (RpmOstreeContext  *self)
 {
-  g_assert (self->jigdo_spec);
-  return self->jigdo_pkg;
+  g_assert (self->rojig_spec);
+  return self->rojig_pkg;
 }
 
-/* Returns: (transfer none): The jigdo checksum */
+/* Returns: (transfer none): The rojig checksum */
 const char *
 rpmostree_context_get_jigdo_checksum (RpmOstreeContext  *self)
 {
-  g_assert (self->jigdo_spec);
-  return self->jigdo_checksum;
+  g_assert (self->rojig_spec);
+  return self->rojig_checksum;
 }
 
 static void
@@ -2270,8 +2270,8 @@ on_async_import_done (GObject                    *obj,
 
 gboolean
 rpmostree_context_import_jigdo (RpmOstreeContext *self,
-                                GVariant         *jigdo_xattr_table,
-                                GHashTable       *jigdo_pkg_to_xattrs,
+                                GVariant         *rojig_xattr_table,
+                                GHashTable       *rojig_pkg_to_xattrs,
                                 GCancellable     *cancellable,
                                 GError          **error)
 {
@@ -2282,7 +2282,7 @@ rpmostree_context_import_jigdo (RpmOstreeContext *self,
 
   OstreeRepo *repo = get_pkgcache_repo (self);
   g_return_val_if_fail (repo != NULL, FALSE);
-  g_return_val_if_fail (jigdo_pkg_to_xattrs == NULL || self->sepolicy == NULL, FALSE);
+  g_return_val_if_fail (rojig_pkg_to_xattrs == NULL || self->sepolicy == NULL, FALSE);
 
   if (!dnf_transaction_import_keys (dnf_context_get_transaction (dnfctx), error))
     return FALSE;
@@ -2299,12 +2299,12 @@ rpmostree_context_import_jigdo (RpmOstreeContext *self,
     for (guint i = 0; i < self->pkgs_to_import->len; i++)
       {
         DnfPackage *pkg = self->pkgs_to_import->pdata[i];
-        GVariant *jigdo_xattrs = NULL;
-        if (jigdo_pkg_to_xattrs)
+        GVariant *rojig_xattrs = NULL;
+        if (rojig_pkg_to_xattrs)
           {
-            jigdo_xattrs = g_hash_table_lookup (jigdo_pkg_to_xattrs, pkg);
-            if (!jigdo_xattrs)
-              g_error ("Failed to find jigdo xattrs for %s", dnf_package_get_nevra (pkg));
+            rojig_xattrs = g_hash_table_lookup (rojig_pkg_to_xattrs, pkg);
+            if (!rojig_xattrs)
+              g_error ("Failed to find rojig xattrs for %s", dnf_package_get_nevra (pkg));
           }
 
         glnx_fd_close int fd = -1;
@@ -2336,10 +2336,10 @@ rpmostree_context_import_jigdo (RpmOstreeContext *self,
         if (!unpacker)
           return FALSE;
 
-        if (jigdo_xattrs)
+        if (rojig_xattrs)
           {
             g_assert (!self->sepolicy);
-            rpmostree_importer_set_jigdo_mode (unpacker, jigdo_xattr_table, jigdo_xattrs);
+            rpmostree_importer_set_jigdo_mode (unpacker, rojig_xattr_table, rojig_xattrs);
           }
 
         rpmostree_importer_run_async (unpacker, cancellable, on_async_import_done, self);
@@ -3465,7 +3465,7 @@ run_all_transfiletriggers (RpmOstreeContext *self,
                            GCancellable *cancellable,
                            GError      **error)
 {
-  g_assert (!self->jigdo_pure);
+  g_assert (!self->rojig_pure);
 
   /* Triggers from base packages, but only if we already have an rpmdb,
    * otherwise librpm will whine on our stderr.

@@ -54,10 +54,10 @@ do_rojig2commit
 assert_file_has_content jigdo2commit-out.txt ${npkgs}/${npkgs}' packages to import'
 ostree --repo=jigdo-unpack-repo rev-parse ${rev}
 ostree --repo=jigdo-unpack-repo fsck
-ostree --repo=jigdo-unpack-repo refs > jigdo-refs.txt
-assert_file_has_content jigdo-refs.txt 'rpmostree/jigdo/test-pkg/1.0-1.x86__64'
+ostree --repo=jigdo-unpack-repo refs > rojig-refs.txt
+assert_file_has_content rojig-refs.txt 'rpmostree/rojig/test-pkg/1.0-1.x86__64'
 
-echo "ok jigdo ♲📦 fresh assembly"
+echo "ok rojig ♲📦 fresh assembly"
 
 origrev=${rev}
 unset rev
@@ -94,13 +94,13 @@ for x in ${origrev} ${newrev}; do
     ostree --repo=jigdo-unpack-repo rev-parse ${x}
 done
 ostree --repo=jigdo-unpack-repo fsck
-ostree --repo=jigdo-unpack-repo refs > jigdo-refs.txt
+ostree --repo=jigdo-unpack-repo refs > rojig-refs.txt
 # We should have both refs; GC will be handled by the sysroot upgrader
 # via deployments, same way it is for pkg layering.
-assert_file_has_content jigdo-refs.txt 'rpmostree/jigdo/test-pkg/1.0-1.x86__64'
-assert_file_has_content jigdo-refs.txt 'rpmostree/jigdo/test-pkg/1.1-1.x86__64'
+assert_file_has_content rojig-refs.txt 'rpmostree/rojig/test-pkg/1.0-1.x86__64'
+assert_file_has_content rojig-refs.txt 'rpmostree/rojig/test-pkg/1.1-1.x86__64'
 
-echo "ok jigdo ♲📦 update!"
+echo "ok rojig ♲📦 update!"
 
 # Add all docs to test https://github.com/projectatomic/rpm-ostree/issues/1197
 pysetjsonmember "documentation" 'True'
@@ -113,4 +113,4 @@ do_rojig2commit
 # Not every package has docs, but there are going to need to be changes
 assert_file_has_content jigdo2commit-out.txt '[1-9][0-9]*/[1-9][0-9]* packages to import ([1-9][0-9]* changed)'
 ostree --repo=jigdo-unpack-repo ls -R ${newrev} >/dev/null
-echo "ok jigdo ♲📦 updated docs"
+echo "ok rojig ♲📦 updated docs"
