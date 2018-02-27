@@ -29,7 +29,7 @@
 
 #include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
-#include "rpmostree-jigdo-assembler.h"
+#include "rpmostree-rojig-assembler.h"
 #include "rpmostree-core-private.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-output.h"
@@ -214,13 +214,13 @@ rpmostree_context_execute_rojig (RpmOstreeContext     *self,
   if (!rpmostree_context_consume_package (self, oirpm_pkg, &oirpm_fd, error))
     return FALSE;
 
-  g_autoptr(RpmOstreeJigdoAssembler) jigdo = rpmostree_jigdo_assembler_new_take_fd (&oirpm_fd, oirpm_pkg, error);
-  if (!jigdo)
+  g_autoptr(RpmOstreeRojigAssembler) rojig = rpmostree_rojig_assembler_new_take_fd (&oirpm_fd, oirpm_pkg, error);
+  if (!rojig)
     return FALSE;
   g_autofree char *checksum = NULL;
   g_autoptr(GVariant) commit = NULL;
   g_autoptr(GVariant) commit_meta = NULL;
-  if (!rpmostree_jigdo_assembler_read_meta (jigdo, &checksum, &commit, &commit_meta,
+  if (!rpmostree_rojig_assembler_read_meta (rojig, &checksum, &commit, &commit_meta,
                                             cancellable, error))
     return FALSE;
 
@@ -247,7 +247,7 @@ rpmostree_context_execute_rojig (RpmOstreeContext     *self,
       return FALSE;
   }
 
-  if (!rpmostree_jigdo_assembler_write_new_objects (jigdo, repo, cancellable, error))
+  if (!rpmostree_rojig_assembler_write_new_objects (rojig, repo, cancellable, error))
     return FALSE;
 
   if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
@@ -266,7 +266,7 @@ rpmostree_context_execute_rojig (RpmOstreeContext     *self,
     {
       DnfPackage *pkg = pkgs_required->pdata[i];
       g_autoptr(GVariant) objid_to_xattrs = NULL;
-      if (!rpmostree_jigdo_assembler_next_xattrs (jigdo, &objid_to_xattrs, cancellable, error))
+      if (!rpmostree_rojig_assembler_next_xattrs (rojig, &objid_to_xattrs, cancellable, error))
         return FALSE;
       if (!objid_to_xattrs)
         return glnx_throw (error, "missing xattr entry: %s", dnf_package_get_name (pkg));
@@ -304,7 +304,7 @@ rpmostree_context_execute_rojig (RpmOstreeContext     *self,
   /* Start the download and import, using the xattr data from the rojigRPM */
   if (!rpmostree_context_download (self, cancellable, error))
     return FALSE;
-  g_autoptr(GVariant) xattr_table = rpmostree_jigdo_assembler_get_xattr_table (jigdo);
+  g_autoptr(GVariant) xattr_table = rpmostree_rojig_assembler_get_xattr_table (rojig);
   if (!rpmostree_context_import_rojig (self, xattr_table, pkg_to_xattrs,
                                        cancellable, error))
     return FALSE;
