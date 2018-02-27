@@ -33,7 +33,7 @@
 #include <librepo/librepo.h>
 
 #include "rpmostree-core-private.h"
-#include "rpmostree-jigdo-core.h"
+#include "rpmostree-rojig-core.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-passwd-util.h"
@@ -1821,13 +1821,13 @@ setup_rojig_state (RpmOstreeContext *self,
       DnfReldep *provide = dnf_reldep_list_index (provides, i);
 
       const char *provide_str = dnf_reldep_to_string (provide);
-      if (g_str_equal (provide_str, RPMOSTREE_JIGDO_PROVIDE_V5))
+      if (g_str_equal (provide_str, RPMOSTREE_ROJIG_PROVIDE_V5))
         {
           found_vprovide = TRUE;
         }
-      else if (g_str_has_prefix (provide_str, RPMOSTREE_JIGDO_PROVIDE_COMMIT))
+      else if (g_str_has_prefix (provide_str, RPMOSTREE_ROJIG_PROVIDE_COMMIT))
         {
-          const char *rest = provide_str + strlen (RPMOSTREE_JIGDO_PROVIDE_COMMIT);
+          const char *rest = provide_str + strlen (RPMOSTREE_ROJIG_PROVIDE_COMMIT);
           if (*rest != '(')
             return glnx_throw (error, "Invalid %s", provide_str);
           rest++;
@@ -1843,10 +1843,10 @@ setup_rojig_state (RpmOstreeContext *self,
 
   if (!found_vprovide)
     return glnx_throw (error, "Package '%s' does not have Provides: %s",
-                       dnf_package_get_nevra (self->rojig_pkg), RPMOSTREE_JIGDO_PROVIDE_V5);
+                       dnf_package_get_nevra (self->rojig_pkg), RPMOSTREE_ROJIG_PROVIDE_V5);
   if (!self->rojig_checksum)
     return glnx_throw (error, "Package '%s' does not have Provides: %s",
-                       dnf_package_get_nevra (self->rojig_pkg), RPMOSTREE_JIGDO_PROVIDE_COMMIT);
+                       dnf_package_get_nevra (self->rojig_pkg), RPMOSTREE_ROJIG_PROVIDE_COMMIT);
 
   return TRUE;
 }

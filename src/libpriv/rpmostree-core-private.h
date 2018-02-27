@@ -21,7 +21,7 @@
 #pragma once
 
 #include "libglnx.h"
-#include "rpmostree-jigdo-core.h"
+#include "rpmostree-rojig-core.h"
 #include "rpmostree-core.h"
 
 struct _RpmOstreeContext {
