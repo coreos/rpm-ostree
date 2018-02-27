@@ -86,6 +86,7 @@ RpmOstreeTreespec *rpmostree_treespec_new_from_path (const char *path, GError  *
 RpmOstreeTreespec *rpmostree_treespec_new (GVariant   *variant);
 
 GHashTable *rpmostree_dnfcontext_get_varsubsts (DnfContext *context);
+GPtrArray * rpmostree_dnfcontext_get_repos (DnfContext *dnfctx, DnfRepoEnabled enablement);
 
 GVariant *rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext  *self);
 

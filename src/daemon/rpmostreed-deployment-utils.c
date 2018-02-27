@@ -222,6 +222,20 @@ variant_add_from_hash_table (GVariantDict *dict,
   g_variant_dict_insert (dict, key, "^as", values);
 }
 
+/* For now we just insert the id, as other state (such as the last updated)
+ * timestamp, etc. may not be known yet.  Furthermore some of this overlaps
+ * heavily with the "cached update" logic and I don't want to duplicate that
+ * too much.
+ */
+static GVariant*
+repo_to_vardict (DnfRepo *repo)
+{
+  GVariantDict dict;
+  g_variant_dict_init (&dict, NULL);
+  g_variant_dict_insert (&dict, "id", "s", dnf_repo_get_id (repo));
+  return g_variant_dict_end (&dict);
+}
+
 GVariant *
 rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
                                         OstreeDeployment *deployment,
@@ -335,6 +349,27 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
       break;
     }
 
+  const gboolean is_booted = g_strcmp0 (booted_id, id) == 0;
+  if (booted_id != NULL)
+    g_variant_dict_insert (&dict, "booted", "b", is_booted);
+
+  /* For the booted deployment, gather the rpm-md repos */
+  if (is_booted &&
+      (is_layered || refspec_type == RPMOSTREE_REFSPEC_TYPE_ROJIG))
+    {
+      g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_system (repo, NULL, error);
+      if (!rpmostree_context_setup (ctx, NULL, NULL, NULL, NULL, error))
+        return FALSE;
+      rpmostree_context_configure_from_deployment (ctx, sysroot, deployment);
+      g_autoptr(GPtrArray) repos = rpmostree_dnfcontext_get_repos (rpmostree_context_get_dnf (ctx),
+                                                                   DNF_REPO_ENABLED_PACKAGES);
+      g_auto(GVariantBuilder) builder;
+      g_variant_builder_init (&builder, (GVariantType*)"aa{sv}");
+      for (guint i = 0; i < repos->len; i++)
+        g_variant_builder_add_value (&builder, repo_to_vardict (repos->pdata[i]));
+      g_variant_dict_insert (&dict, "rpmmd-repos", "@aa{sv}", g_variant_builder_end (&builder));
+    }
+
   g_autofree char *live_inprogress = NULL;
   g_autofree char *live_replaced = NULL;
   if (!rpmostree_syscore_deployment_get_live (sysroot, deployment, &live_inprogress,
@@ -377,9 +412,6 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
     if (args && *args)
       g_variant_dict_insert (&dict, "initramfs-args", "^as", args);
   }
-
-  if (booted_id != NULL)
-    g_variant_dict_insert (&dict, "booted", "b", g_strcmp0 (booted_id, id) == 0);
 
   return g_variant_dict_end (&dict);
 }

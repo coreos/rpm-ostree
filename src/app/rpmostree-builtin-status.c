@@ -351,6 +351,30 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
   return TRUE;
 }
 
+static void
+print_rpmmd_repos (GVariant *repos, int max_key_len)
+{
+  GVariantIter iter;
+  g_variant_iter_init (&iter, repos);
+  g_autoptr(GString) buf = g_string_new ("");
+  while (TRUE)
+    {
+      g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
+      if (!child)
+        break;
+
+      g_autoptr(GVariantDict) dict = g_variant_dict_new (child);
+      const char *id;
+      g_assert (g_variant_dict_lookup (dict, "id", "&s", &id));
+      if (buf->len > 0)
+        g_string_append_c (buf, ' ');
+      g_string_append (buf, id);
+    }
+  if (buf->len == 0)
+    g_string_append (buf, "(none)");
+  rpmostree_print_kv ("RpmMdRepos", max_key_len, buf->str);
+}
+
 /* We will have an optimized path for the case where there are just
  * two deployments, this code will be the generic fallback.
  */
@@ -547,6 +571,11 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
       g_variant_dict_lookup (commit_meta_dict, OSTREE_COMMIT_META_KEY_SOURCE_TITLE, "&s", &source_title);
       if (source_title)
         g_print ("  %s %s\n", libsd_special_glyph (TREE_RIGHT), source_title);
+
+      g_autoptr(GVariant) rpmmd_repos = NULL;
+      g_variant_dict_lookup (dict, "rpmmd-repos", "@aa{sv}", &rpmmd_repos);
+      if (rpmmd_repos)
+        print_rpmmd_repos (rpmmd_repos, max_key_len);
 
       guint64 t = 0;
       if (is_locally_assembled)

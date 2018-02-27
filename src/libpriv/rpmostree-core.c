@@ -212,8 +212,8 @@ add_canonicalized_string_array (GVariantBuilder *builder,
                          g_variant_new_strv ((const char*const*)sorted, count));
 }
 
-static GPtrArray *
-get_enabled_rpmmd_repos (DnfContext *dnfctx, DnfRepoEnabled enablement)
+GPtrArray *
+rpmostree_dnfcontext_get_repos (DnfContext *dnfctx, DnfRepoEnabled enablement)
 {
   g_autoptr(GPtrArray) ret = g_ptr_array_new ();
   GPtrArray *repos = dnf_context_get_repos (dnfctx);
@@ -565,7 +565,7 @@ rpmostree_context_get_rpmmd_repo_commit_metadata (RpmOstreeContext  *self)
 {
   g_auto(GVariantBuilder) repo_list_builder;
   g_variant_builder_init (&repo_list_builder, (GVariantType*)"aa{sv}");
-  g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
+  g_autoptr(GPtrArray) repos = rpmostree_dnfcontext_get_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
   for (guint i = 0; i < repos->len; i++)
     {
       g_auto(GVariantBuilder) repo_builder;
@@ -728,7 +728,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
           return FALSE;
     }
 
-  g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
+  g_autoptr(GPtrArray) repos = rpmostree_dnfcontext_get_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
   if (repos->len == 0 && !self->pkgcache_only)
     {
       /* To be nice, let's only make this fatal if "packages" is empty (e.g. if
@@ -1055,7 +1055,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
     dnf_context_set_enable_filelists (self->dnfctx, FALSE);
 
   g_autoptr(GPtrArray) rpmmd_repos =
-    get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
+    rpmostree_dnfcontext_get_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
 
   if (self->pkgcache_only)
     {
@@ -1156,8 +1156,7 @@ journal_rpmmd_info (RpmOstreeContext *self)
    * of the rpm-md repos. This is intended to aid system admins with determining
    * system ""up-to-dateness"".
    */
-  { g_autoptr(GPtrArray) repos =
-      get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
+  { g_autoptr(GPtrArray) repos = rpmostree_dnfcontext_get_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
     g_autoptr(GString) enabled_repos = g_string_new ("");
     g_autoptr(GString) enabled_repos_solvables = g_string_new ("");
     g_autoptr(GString) enabled_repos_timestamps = g_string_new ("");
