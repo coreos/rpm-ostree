@@ -1133,6 +1133,7 @@ RpmostreedTransaction *
 rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    OstreeSysroot *sysroot,
                                    RpmOstreeTransactionDeployFlags flags,
+                                   gboolean    redirect_output,
                                    const char *osname,
                                    const char *refspec,
                                    const char *revision,
@@ -1155,6 +1156,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                     cancellable, error,
                     "invocation", invocation,
                     "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
+                    "redirect-output", redirect_output,
                     NULL);
 
   if (self != NULL)

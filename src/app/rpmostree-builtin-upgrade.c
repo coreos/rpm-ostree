@@ -120,6 +120,8 @@ rpmostree_builtin_upgrade (int             argc,
       GVariantDict dict;
       g_variant_dict_init (&dict, NULL);
       g_variant_dict_insert (&dict, "mode", "s", check_or_preview ? "check" : "auto");
+      /* override default if we're actually on a tty and not e.g. timer triggered */
+      g_variant_dict_insert (&dict, "redirect-output", "b", !glnx_stdout_is_tty ());
       g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       gboolean auto_updates_enabled;

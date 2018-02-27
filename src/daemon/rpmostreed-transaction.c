@@ -37,6 +37,8 @@ struct _RpmostreedTransactionPrivate {
   char *sysroot_path;
   OstreeSysroot *sysroot;
 
+  gboolean redirect_output;
+
   GDBusServer *server;
   GHashTable *peer_connections;
 
@@ -50,7 +52,8 @@ enum {
   PROP_0,
   PROP_ACTIVE,
   PROP_INVOCATION,
-  PROP_SYSROOT_PATH
+  PROP_SYSROOT_PATH,
+  PROP_REDIRECT_OUTPUT
 };
 
 enum {
@@ -376,6 +379,9 @@ transaction_set_property (GObject *object,
       case PROP_SYSROOT_PATH:
         priv->sysroot_path = g_value_dup_string (value);
         break;
+      case PROP_REDIRECT_OUTPUT:
+        priv->redirect_output = g_value_get_boolean (value);
+        break;
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
         break;
@@ -398,6 +404,9 @@ transaction_get_property (GObject *object,
         break;
       case PROP_SYSROOT_PATH:
         g_value_set_string (value, priv->sysroot_path);
+        break;
+      case PROP_REDIRECT_OUTPUT:
+        g_value_set_boolean (value, priv->redirect_output);
         break;
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -673,6 +682,16 @@ rpmostreed_transaction_class_init (RpmostreedTransactionClass *class)
                                                         G_PARAM_READWRITE |
                                                         G_PARAM_CONSTRUCT_ONLY |
                                                         G_PARAM_STATIC_STRINGS));
+
+  g_object_class_install_property (object_class,
+                                   PROP_REDIRECT_OUTPUT,
+                                   g_param_spec_boolean ("redirect-output",
+                                                         "Redirect output",
+                                                         "Whether to redirect output to daemon",
+                                                         FALSE,
+                                                         G_PARAM_READWRITE |
+                                                         G_PARAM_CONSTRUCT_ONLY |
+                                                         G_PARAM_STATIC_STRINGS));
 
   signals[CLOSED] = g_signal_new ("closed",
                                   RPMOSTREED_TYPE_TRANSACTION,

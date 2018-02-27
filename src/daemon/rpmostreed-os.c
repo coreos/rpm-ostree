@@ -692,9 +692,12 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
         return FALSE;
     }
 
+  const gboolean redirect_output =
+    vardict_lookup_bool (&options_dict, "redirect-output", FALSE);
   default_flags = deploy_flags_from_options (options, default_flags);
   return rpmostreed_transaction_new_deploy (invocation, ot_sysroot,
                                             default_flags,
+                                            redirect_output,
                                             osname,
                                             canon_refspec,
                                             revision,
@@ -972,7 +975,7 @@ os_handle_automatic_update_trigger (RPMOSTreeOS *interface,
       interface,
       invocation,
       dfault,
-      NULL,
+      arg_options,
       NULL,
       NULL,
       automatic_update_trigger_completer);
