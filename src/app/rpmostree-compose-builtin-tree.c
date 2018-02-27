@@ -39,7 +39,7 @@
 #include "rpmostree-bwrap.h"
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
-#include "rpmostree-jigdo-build.h"
+#include "rpmostree-rojig-build.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-libbuiltin.h"
