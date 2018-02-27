@@ -43,6 +43,7 @@ RpmOstreeBwrap *rpmostree_bwrap_new (int rootfs,
                                      GError **error,
                                      ...) G_GNUC_NULL_TERMINATED;
 
+void rpmostree_bwrap_set_inherit_stdin (RpmOstreeBwrap *bwrap);
 void rpmostree_bwrap_append_bwrap_argv (RpmOstreeBwrap *bwrap, ...) G_GNUC_NULL_TERMINATED;
 void rpmostree_bwrap_append_child_argv (RpmOstreeBwrap *bwrap, ...) G_GNUC_NULL_TERMINATED;
 

@@ -104,6 +104,13 @@ rpmostree_bwrap_unref (RpmOstreeBwrap *bwrap)
   g_free (bwrap);
 }
 
+/* Configure the process to inherit stdin */
+void
+rpmostree_bwrap_set_inherit_stdin (RpmOstreeBwrap *bwrap)
+{
+  g_subprocess_launcher_set_flags (bwrap->launcher, G_SUBPROCESS_FLAGS_STDIN_INHERIT);
+}
+
 void
 rpmostree_bwrap_append_bwrap_argv (RpmOstreeBwrap *bwrap, ...)
 {
