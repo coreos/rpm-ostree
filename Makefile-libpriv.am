@@ -51,7 +51,7 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-jigdo-assembler.c \
 	src/libpriv/rpmostree-jigdo-assembler.h \
 	src/libpriv/rpmostree-rojig-core.h \
-	src/libpriv/rpmostree-jigdo-client.c \
+	src/libpriv/rpmostree-rojig-client.c \
 	src/libpriv/rpmostree-unpacker-core.c \
 	src/libpriv/rpmostree-unpacker-core.h \
 	src/libpriv/rpmostree-output.c \

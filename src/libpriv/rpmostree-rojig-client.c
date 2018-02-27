@@ -22,7 +22,7 @@
 
 /* This file contains the client-side portions of rojig that are "private"
  * implementation detials of RpmOstreeContext. A better model down the line
- * might be to have RpmOstreeJigdoContext or so.
+ * might be to have RpmOstreeRojigContext or so.
  */
 
 #include "config.h"
