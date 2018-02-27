@@ -443,10 +443,10 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
           return glnx_throw (error, "Specifying commit overrides for rojig:// is not implemented yet");
 
         g_autoptr(GKeyFile) tsk = g_key_file_new ();
-        g_key_file_set_string (tsk, "tree", "jigdo", refspec);
-        const char *jigdo_version = rpmostree_origin_get_jigdo_version (self->origin);
-        if (jigdo_version)
-          g_key_file_set_string (tsk, "tree", "jigdo-version", jigdo_version);
+        g_key_file_set_string (tsk, "tree", "rojig", refspec);
+        const char *rojig_version = rpmostree_origin_get_jigdo_version (self->origin);
+        if (rojig_version)
+          g_key_file_set_string (tsk, "tree", "rojig-version", rojig_version);
 
         g_autoptr(RpmOstreeTreespec) treespec = rpmostree_treespec_new_from_keyfile (tsk, error);
         if (!treespec)
@@ -455,7 +455,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
         /* This context is currently different from one that may be created later
          * for e.g. package layering. I can't think why we couldn't unify them,
          * but for now it seems a lot simpler to keep the symmetry that
-         * rpm-ostree jigdo == ostree pull.
+         * rojig == ostree pull.
          */
         g_autoptr(RpmOstreeContext) ctx =
           rpmostree_context_new_system (self->repo, cancellable, error);
@@ -469,17 +469,17 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
          */
         if (!rpmostree_context_setup (ctx, NULL, "/", treespec, cancellable, error))
           return FALSE;
-        /* We're also "pure" rpm-ostree jigdo - this adds assertions that we don't depsolve for example */
+        /* We're also "pure" rojig - this adds assertions that we don't depsolve for example */
         if (!rpmostree_context_prepare_jigdo (ctx, cancellable, error))
           return FALSE;
-        DnfPackage *jigdo_pkg = rpmostree_context_get_jigdo_pkg (ctx);
+        DnfPackage *rojig_pkg = rpmostree_context_get_jigdo_pkg (ctx);
         new_base_rev = g_strdup (rpmostree_context_get_jigdo_checksum (ctx));
-        gboolean jigdo_changed;  /* Currently unused */
-        if (!rpmostree_context_execute_jigdo (ctx, &jigdo_changed, cancellable, error))
+        gboolean rojig_changed;  /* Currently unused */
+        if (!rpmostree_context_execute_jigdo (ctx, &rojig_changed, cancellable, error))
           return FALSE;
 
-        if (jigdo_changed)
-          rpmostree_origin_set_jigdo_description (self->origin, jigdo_pkg);
+        if (rojig_changed)
+          rpmostree_origin_set_jigdo_description (self->origin, rojig_pkg);
       }
     }
 

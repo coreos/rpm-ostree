@@ -30,12 +30,12 @@ struct _RpmOstreeContext {
   RpmOstreeTreespec *spec;
   gboolean empty;
 
-  /* jigdo-mode data */
-  const char *jigdo_spec; /* The jigdo spec like: repoid:package */
-  const char *jigdo_version; /* Optional */
-  gboolean jigdo_pure; /* There is only jigdo */
-  DnfPackage *jigdo_pkg;
-  char *jigdo_checksum;
+  /* rojig-mode data */
+  const char *rojig_spec; /* The rojig spec like: repoid:package */
+  const char *rojig_version; /* Optional */
+  gboolean rojig_pure; /* There is only rojig */
+  DnfPackage *rojig_pkg;
+  char *rojig_checksum;
 
   gboolean pkgcache_only;
   DnfContext *dnfctx;
