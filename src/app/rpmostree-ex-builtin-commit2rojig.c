@@ -33,7 +33,7 @@
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
 #include "rpmostree-rojig-core.h"
-#include "rpmostree-jigdo-build.h"
+#include "rpmostree-rojig-build.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-libbuiltin.h"
