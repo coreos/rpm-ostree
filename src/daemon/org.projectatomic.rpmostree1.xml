@@ -96,6 +96,9 @@
          "mode" (type 's')
             One of auto, none, check. Defaults to auto, which follows configured
             policy (available in AutomaticUpdatePolicy property).
+         "output-to-self" (type 'b')
+            Whether output should go to the daemon itself rather than the
+            transaction. Defaults to TRUE.
 
          If automatic updates are not enabled, @enabled will be FALSE and
          @transaction_address will be the empty string.
