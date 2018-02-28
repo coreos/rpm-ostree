@@ -108,11 +108,22 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
     "set -euo pipefail\n"
     "ln -s os.release.d/os-release-atomichost /usr/lib/os-release\n"
   },
-  /* https://bugzilla.redhat.com/show_bug.cgi?id=1367585 */
+  /* Upstream bug for replacing lua with shell: https://bugzilla.redhat.com/show_bug.cgi?id=1367585
+   * Further note that the current glibc code triggers a chain of bugs
+   * in rofiles-fuse: https://github.com/ostreedev/ostree/pull/1470
+   * Basically it does writes via mmap() and also to an unlink()ed file
+   * and this creates a decoherence between the size reported by fstat()
+   * vs the real size.  So here we break the hardlink for the template file
+   * which glibc truncates, and down below we disable rofiles-fuse.   The glibc
+   * locale code is (hopefully!) unlikely to go out mutating other files, so we'll
+   * live with this hack for now.
+   **/
   { "glibc-all-langpacks.posttrans",
     "/usr/bin/sh",
     "set -euo pipefail\n"
-    "if test -s \"/usr/lib/locale/locale-archive.tmpl\"; then\n"
+    "tmpl=/usr/lib/locale/locale-archive.tmpl\n"
+    "if test -s \"${tmpl}\"; then\n"
+    "  cp -a \"${tmpl}\"{,.new} && mv \"${tmpl}\"{.new,}\n"
     "  exec /usr/sbin/build-locale-archive --install-langs \"%{_install_langs}\"\n"
     "fi\n"
   },
@@ -322,8 +333,13 @@ run_script_in_bwrap_container (int rootfs_fd,
   /* We just did a ro bind mount over /var above. However we want a writable
    * var/tmp, so we need to tmpfs mount on top of it. See also
    * https://github.com/projectatomic/bubblewrap/issues/182
+   *
+   * See above for why we special case glibc.
    */
-  bwrap = rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_MUTATE_ROFILES, error,
+  const gboolean is_glibc_locales = strcmp (pkg_script, "glibc-all-langpacks.posttrans") == 0;
+  bwrap = rpmostree_bwrap_new (rootfs_fd,
+                               is_glibc_locales ? RPMOSTREE_BWRAP_MUTATE_FREELY : RPMOSTREE_BWRAP_MUTATE_ROFILES,
+                               error,
                                /* Scripts can see a /var with compat links like alternatives */
                                "--ro-bind", "./var", "/var",
                                "--tmpfs", "/var/tmp",
