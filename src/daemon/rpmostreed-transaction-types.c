@@ -1156,7 +1156,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                     cancellable, error,
                     "invocation", invocation,
                     "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
-                    "redirect-output", redirect_output,
+                    "output-to-self", redirect_output,
                     NULL);
 
   if (self != NULL)

@@ -685,9 +685,9 @@ rpmostreed_transaction_class_init (RpmostreedTransactionClass *class)
 
   g_object_class_install_property (object_class,
                                    PROP_REDIRECT_OUTPUT,
-                                   g_param_spec_boolean ("redirect-output",
-                                                         "Redirect output",
-                                                         "Whether to redirect output to daemon",
+                                   g_param_spec_boolean ("output-to-self",
+                                                         "Output to self",
+                                                         "Whether to redirect output to daemon itself",
                                                          FALSE,
                                                          G_PARAM_READWRITE |
                                                          G_PARAM_CONSTRUCT_ONLY |

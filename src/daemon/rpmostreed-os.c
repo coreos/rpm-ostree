@@ -693,7 +693,7 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
     }
 
   const gboolean redirect_output =
-    vardict_lookup_bool (&options_dict, "redirect-output", FALSE);
+    vardict_lookup_bool (&options_dict, "output-to-self", FALSE);
   default_flags = deploy_flags_from_options (options, default_flags);
   return rpmostreed_transaction_new_deploy (invocation, ot_sysroot,
                                             default_flags,
@@ -971,11 +971,11 @@ os_handle_automatic_update_trigger (RPMOSTreeOS *interface,
       g_assert_not_reached ();
     }
 
-  /* if redirect-output is not explicitly set, default to TRUE */
+  /* if output-to-self is not explicitly set, default to TRUE */
   g_autoptr(GVariant) new_dict = NULL;
-  if (!g_variant_dict_contains (&dict, "redirect-output"))
+  if (!g_variant_dict_contains (&dict, "output-to-self"))
     {
-      g_variant_dict_insert (&dict, "redirect-output", "b", TRUE);
+      g_variant_dict_insert (&dict, "output-to-self", "b", TRUE);
       arg_options = new_dict = g_variant_ref_sink (g_variant_dict_end (&dict));
     }
 
