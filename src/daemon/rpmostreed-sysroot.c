@@ -106,11 +106,14 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
 {
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (opaque);
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  gboolean redirect = FALSE;
 
   transaction =
     rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
+  if (transaction)
+    g_object_get (transaction, "output-to-self", &redirect, NULL);
 
-  if (!transaction)
+  if (!transaction || redirect)
     {
       rpmostree_output_default_handler (type, data, opaque);
       return;

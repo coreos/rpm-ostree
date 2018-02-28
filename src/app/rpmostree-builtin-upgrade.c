@@ -120,6 +120,10 @@ rpmostree_builtin_upgrade (int             argc,
       GVariantDict dict;
       g_variant_dict_init (&dict, NULL);
       g_variant_dict_insert (&dict, "mode", "s", check_or_preview ? "check" : "auto");
+      /* override default of TRUE if we're handling --check/--preview for backcompat,
+       * or we're *are* handling --trigger-automatic-update-policy, but on a tty */
+      if (check_or_preview || glnx_stdout_is_tty ())
+        g_variant_dict_insert (&dict, "output-to-self", "b", FALSE);
       g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       gboolean auto_updates_enabled;

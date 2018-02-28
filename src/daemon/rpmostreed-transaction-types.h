@@ -65,6 +65,7 @@ RpmostreedTransaction *
 rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    OstreeSysroot *sysroot,
                                    RpmOstreeTransactionDeployFlags flags,
+                                   gboolean    redirect_output,
                                    const char *osname,
                                    const char *refspec,
                                    const char *revision,

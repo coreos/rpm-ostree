@@ -50,9 +50,10 @@ rpmostree_output_default_handler (RpmOstreeOutputType type,
   case RPMOSTREE_OUTPUT_PROGRESS_PERCENT:
     if (!console.locked)
       glnx_console_lock (&console);
-    glnx_console_progress_text_percent (
-      ((RpmOstreeOutputProgressPercent*)data)->text,
-      ((RpmOstreeOutputProgressPercent*)data)->percentage);
+    RpmOstreeOutputProgressPercent *prog = data;
+    /* let's not spam stdout if it's not a tty; see dbus-helpers.c */
+    if (prog->percentage == 100 || console.is_tty)
+      glnx_console_progress_text_percent (prog->text, prog->percentage);
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_N_ITEMS:
     {
