@@ -1186,11 +1186,22 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
 static gboolean
 repo_is_on_netfs (OstreeRepo  *repo)
 {
+#ifndef FUSE_SUPER_MAGIC
+#define FUSE_SUPER_MAGIC 0x65735546
+#endif
+
   int dfd = ostree_repo_get_dfd (repo);
   struct statfs stbuf;
   if (fstatfs (dfd, &stbuf) != 0)
     return FALSE;
-  return stbuf.f_type == NFS_SUPER_MAGIC;
+  switch (stbuf.f_type)
+    {
+    case NFS_SUPER_MAGIC:
+    case FUSE_SUPER_MAGIC:
+      return TRUE;
+    default:
+      return FALSE;
+    }
 }
 
 /* Perform required postprocessing, and invoke rpmostree_compose_commit(). */
@@ -1257,8 +1268,13 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
     }
 
   /* See comment above */
-  const gboolean use_txn = (getenv ("RPMOSTREE_COMMIT_NO_TXN") == NULL &&
-                            !repo_is_on_netfs (self->repo));
+  const gboolean txn_explicitly_disabled = (getenv ("RPMOSTREE_COMMIT_NO_TXN") != NULL);
+  const gboolean using_netfs = repo_is_on_netfs (self->repo);
+  if (txn_explicitly_disabled)
+    g_print ("libostree transactions explicitly disabled\n");
+  else if (using_netfs)
+    g_print ("Network filesystem detected for repo; disabling transaction\n");
+  const gboolean use_txn = !(txn_explicitly_disabled || using_netfs);
 
   if (use_txn)
     {
