@@ -692,12 +692,12 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
         return FALSE;
     }
 
-  const gboolean redirect_output =
+  const gboolean output_to_self =
     vardict_lookup_bool (&options_dict, "output-to-self", FALSE);
   default_flags = deploy_flags_from_options (options, default_flags);
   return rpmostreed_transaction_new_deploy (invocation, ot_sysroot,
                                             default_flags,
-                                            redirect_output,
+                                            output_to_self,
                                             osname,
                                             canon_refspec,
                                             revision,
