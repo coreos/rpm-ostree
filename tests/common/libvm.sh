@@ -415,6 +415,11 @@ vm_start_httpd() {
   local dir=$1; shift
   local port=$1; shift
 
+  # just nuke the service of the same name if it exists and is also transient
+  if vm_cmd systemctl show $name | grep -q UnitFileState=transient; then
+    vm_cmd systemctl stop $name
+  fi
+
   # CentOS systemd is too old for -p WorkingDirectory
   vm_cmd systemd-run --unit $name sh -c \
     "'cd $dir && python -m SimpleHTTPServer $port'"
