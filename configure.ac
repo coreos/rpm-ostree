@@ -183,7 +183,7 @@ AS_IF([test x$enable_compose_tooling = xyes], [
 if test x$enable_compose_tooling != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES compose"; fi
 
 dnl Try to automatically determine cmake type from CFLAGS
-if $(echo $CFLAGS |grep -q -e "-O0"); then
+if $(echo $CFLAGS |grep -q -E "(-O0|-Og)"); then
   cmake_args="-DCMAKE_BUILD_TYPE=Debug"
   export cmake_args
 else
