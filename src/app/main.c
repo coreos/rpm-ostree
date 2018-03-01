@@ -65,8 +65,8 @@ static RpmOstreeCommand commands[] = {
   { "reload", 0,
     "Reload configuration",
     rpmostree_builtin_reload },
-  { "usroverlay", 0,
-    "Apply a transient overlayfs to /urs",
+  { "usroverlay", RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
+    "Apply a transient overlayfs to /usr",
     rpmostree_builtin_usroverlay },
   /* Let's be "cognitively" compatible with `ostree admin unlock` */
   { "unlock", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
