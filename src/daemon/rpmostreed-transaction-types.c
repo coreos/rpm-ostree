@@ -1496,7 +1496,7 @@ refresh_md_transaction_execute (RpmostreedTransaction *transaction,
 
   const gboolean force = ((self->flags & RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE) > 0);
 
-  g_autoptr(GString) title = g_string_new ("makecache");
+  g_autoptr(GString) title = g_string_new ("refresh-md");
   if (force)
     g_string_append (title, " (force)");
   rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, title->str);

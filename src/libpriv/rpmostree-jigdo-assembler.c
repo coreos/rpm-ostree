@@ -143,12 +143,9 @@ jigdo_read_variant (const GVariantType   *vtype,
   const struct stat *stbuf = archive_entry_stat (entry);
   if (!S_ISREG (stbuf->st_mode))
     return glnx_null_throw (error, "Expected regular file for entry: %s", path);
-  if (stbuf->st_size > OSTREE_MAX_METADATA_SIZE)
-    {
-      g_autofree char *max_formatted = g_format_size (OSTREE_MAX_METADATA_SIZE);
-      g_autofree char *found_formatted = g_format_size (stbuf->st_size);
-      return glnx_null_throw (error, "Exceeded maximum size %s; %s is of size: %s", max_formatted, found_formatted, path);
-    }
+  if (!rpmostree_check_size_within_limit (stbuf->st_size, OSTREE_MAX_METADATA_SIZE,
+                                          path, error))
+    return NULL;
   g_assert_cmpint (stbuf->st_size, >=, 0);
   const size_t total = stbuf->st_size;
   g_autofree guint8* buf = g_malloc (total);

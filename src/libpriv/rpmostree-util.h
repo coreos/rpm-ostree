@@ -68,6 +68,12 @@ rpmostree_pkg_is_local (DnfPackage *pkg);
 char *
 rpmostree_pkg_get_local_path (DnfPackage *pkg);
 
+gboolean
+rpmostree_check_size_within_limit (guint64     actual,
+                                   guint64     limit,
+                                   const char *subject,
+                                   GError    **error);
+
 char*
 rpmostree_translate_path_for_ostree (const char *path);
 
