@@ -25,7 +25,7 @@
 #include <gio/gunixinputstream.h>
 #include "rpmostree-libarchive-input-stream.h"
 #include "rpmostree-unpacker-core.h"
-#include "rpmostree-jigdo-assembler.h"
+#include "rpmostree-rojig-assembler.h"
 #include "rpmostree-core.h"
 #include "rpmostree-rpm-util.h"
 #include <rpm/rpmlib.h>
@@ -46,7 +46,7 @@ typedef enum {
   STATE_NEW,
   STATE_XATTRS_TABLE,
   STATE_XATTRS_PKG,
-} JigdoAssemblerState;
+} RojigAssemblerState;
 
 static gboolean
 throw_libarchive_error (GError      **error,
@@ -55,12 +55,12 @@ throw_libarchive_error (GError      **error,
   return glnx_throw (error, "%s", archive_error_string (a));
 }
 
-typedef GObjectClass RpmOstreeJigdoAssemblerClass;
+typedef GObjectClass RpmOstreeRojigAssemblerClass;
 
-struct RpmOstreeJigdoAssembler
+struct RpmOstreeRojigAssembler
 {
   GObject parent_instance;
-  JigdoAssemblerState state;
+  RojigAssemblerState state;
   DnfPackage *pkg;
   GVariant *commit;
   GVariant *meta;
@@ -71,12 +71,12 @@ struct RpmOstreeJigdoAssembler
   int fd;
 };
 
-G_DEFINE_TYPE(RpmOstreeJigdoAssembler, rpmostree_jigdo_assembler, G_TYPE_OBJECT)
+G_DEFINE_TYPE(RpmOstreeRojigAssembler, rpmostree_rojig_assembler, G_TYPE_OBJECT)
 
 static void
-rpmostree_jigdo_assembler_finalize (GObject *object)
+rpmostree_rojig_assembler_finalize (GObject *object)
 {
-  RpmOstreeJigdoAssembler *self = (RpmOstreeJigdoAssembler*)object;
+  RpmOstreeRojigAssembler *self = (RpmOstreeRojigAssembler*)object;
   if (self->archive)
     archive_read_free (self->archive);
   g_clear_pointer (&self->commit, (GDestroyNotify)g_variant_unref);
@@ -86,25 +86,25 @@ rpmostree_jigdo_assembler_finalize (GObject *object)
   g_clear_pointer (&self->xattrs_table, (GDestroyNotify)g_variant_unref);
   glnx_close_fd (&self->fd);
 
-  G_OBJECT_CLASS (rpmostree_jigdo_assembler_parent_class)->finalize (object);
+  G_OBJECT_CLASS (rpmostree_rojig_assembler_parent_class)->finalize (object);
 }
 
 static void
-rpmostree_jigdo_assembler_class_init (RpmOstreeJigdoAssemblerClass *klass)
+rpmostree_rojig_assembler_class_init (RpmOstreeRojigAssemblerClass *klass)
 {
   GObjectClass *gobject_class = G_OBJECT_CLASS (klass);
 
-  gobject_class->finalize = rpmostree_jigdo_assembler_finalize;
+  gobject_class->finalize = rpmostree_rojig_assembler_finalize;
 }
 
 static void
-rpmostree_jigdo_assembler_init (RpmOstreeJigdoAssembler *self)
+rpmostree_rojig_assembler_init (RpmOstreeRojigAssembler *self)
 {
   self->fd = -1;
 }
 
 /*
- * rpmostree_jigdo_assembler_new_take_fd:
+ * rpmostree_rojig_assembler_new_take_fd:
  * @fd: Fd, ownership is taken
  * @pkg: (optional): Package reference, used for metadata
  * @error: error
@@ -113,8 +113,8 @@ rpmostree_jigdo_assembler_init (RpmOstreeJigdoAssembler *self)
  * specified, will be inspected and metadata such as the
  * origin repo will be added to the final commit.
  */
-RpmOstreeJigdoAssembler *
-rpmostree_jigdo_assembler_new_take_fd (int *fd,
+RpmOstreeRojigAssembler *
+rpmostree_rojig_assembler_new_take_fd (int *fd,
                              DnfPackage *pkg,
                              GError **error)
 {
@@ -124,7 +124,7 @@ rpmostree_jigdo_assembler_new_take_fd (int *fd,
   if (archive == NULL)
     return NULL;
 
-  RpmOstreeJigdoAssembler *ret = g_object_new (RPMOSTREE_TYPE_JIGDO_ASSEMBLER, NULL);
+  RpmOstreeRojigAssembler *ret = g_object_new (RPMOSTREE_TYPE_ROJIG_ASSEMBLER, NULL);
   ret->archive = g_steal_pointer (&archive);
   ret->pkg = pkg ? g_object_ref (pkg) : NULL;
   ret->fd = glnx_steal_fd (&owned_fd);
@@ -133,7 +133,7 @@ rpmostree_jigdo_assembler_new_take_fd (int *fd,
 }
 
 static GVariant *
-jigdo_read_variant (const GVariantType   *vtype,
+rojig_read_variant (const GVariantType   *vtype,
                     struct archive       *a,
                     struct archive_entry *entry,
                     GCancellable        *cancellable,
@@ -186,7 +186,7 @@ peel_entry_pathname (struct archive_entry *entry,
 }
 
 static gboolean
-jigdo_next_entry (RpmOstreeJigdoAssembler     *self,
+rojig_next_entry (RpmOstreeRojigAssembler     *self,
                   gboolean           *out_eof,
                   struct archive_entry **out_entry,
                   GCancellable      *cancellable,
@@ -231,13 +231,13 @@ jigdo_next_entry (RpmOstreeJigdoAssembler     *self,
 }
 
 static struct archive_entry *
-jigdo_require_next_entry (RpmOstreeJigdoAssembler    *self,
+rojig_require_next_entry (RpmOstreeRojigAssembler    *self,
                           GCancellable      *cancellable,
                           GError           **error)
 {
   gboolean eof;
   struct archive_entry *entry;
-  if (!jigdo_next_entry (self, &eof, &entry, cancellable, error))
+  if (!rojig_next_entry (self, &eof, &entry, cancellable, error))
     return FALSE;
   if (eof)
     return glnx_null_throw (error, "Unexpected end of archive");
@@ -261,7 +261,7 @@ parse_checksum_from_pathname (const char *pathname,
  * GPG verification.
  */
 gboolean
-rpmostree_jigdo_assembler_read_meta (RpmOstreeJigdoAssembler    *self,
+rpmostree_rojig_assembler_read_meta (RpmOstreeRojigAssembler    *self,
                            char             **out_checksum,
                            GVariant         **out_commit,
                            GVariant         **out_detached_meta,
@@ -269,21 +269,21 @@ rpmostree_jigdo_assembler_read_meta (RpmOstreeJigdoAssembler    *self,
                            GError           **error)
 {
   g_assert_cmpint (self->state, ==, STATE_COMMIT);
-  struct archive_entry *entry = jigdo_require_next_entry (self, cancellable, error);
+  struct archive_entry *entry = rojig_require_next_entry (self, cancellable, error);
   if (!entry)
     return FALSE;
   const char *entry_path = peel_entry_pathname (entry, error);
   if (!entry_path)
     return FALSE;
-  if (!g_str_has_prefix (entry_path, RPMOSTREE_JIGDO_COMMIT_DIR "/"))
+  if (!g_str_has_prefix (entry_path, RPMOSTREE_ROJIG_COMMIT_DIR "/"))
     return glnx_throw (error, "Unexpected entry: %s", entry_path);
-  entry_path += strlen (RPMOSTREE_JIGDO_COMMIT_DIR "/");
+  entry_path += strlen (RPMOSTREE_ROJIG_COMMIT_DIR "/");
 
   g_autofree char *checksum = parse_checksum_from_pathname (entry_path, error);
   if (!checksum)
     return FALSE;
 
-  g_autoptr(GVariant) commit = jigdo_read_variant (OSTREE_COMMIT_GVARIANT_FORMAT,
+  g_autoptr(GVariant) commit = rojig_read_variant (OSTREE_COMMIT_GVARIANT_FORMAT,
                                                    self->archive, entry, cancellable, error);
   g_autoptr(GVariant) meta = NULL;
 
@@ -295,13 +295,13 @@ rpmostree_jigdo_assembler_read_meta (RpmOstreeJigdoAssembler    *self,
     return glnx_throw (error, "Checksum mismatch; described='%s' actual='%s'",
                        checksum, actual_checksum);
 
-  entry = jigdo_require_next_entry (self, cancellable, error);
+  entry = rojig_require_next_entry (self, cancellable, error);
   entry_path = peel_entry_pathname (entry, error);
   if (!entry_path)
     return FALSE;
-  if (g_str_equal (entry_path, RPMOSTREE_JIGDO_COMMIT_DIR "/meta"))
+  if (g_str_equal (entry_path, RPMOSTREE_ROJIG_COMMIT_DIR "/meta"))
     {
-      meta = jigdo_read_variant (G_VARIANT_TYPE ("a{sv}"), self->archive, entry,
+      meta = rojig_read_variant (G_VARIANT_TYPE ("a{sv}"), self->archive, entry,
                                  cancellable, error);
       if (!meta)
         return FALSE;
@@ -322,7 +322,7 @@ rpmostree_jigdo_assembler_read_meta (RpmOstreeJigdoAssembler    *self,
 }
 
 static gboolean
-process_contentident (RpmOstreeJigdoAssembler    *self,
+process_contentident (RpmOstreeRojigAssembler    *self,
                       OstreeRepo        *repo,
                       struct archive_entry *entry,
                       const char        *meta_pathname,
@@ -335,20 +335,20 @@ process_contentident (RpmOstreeJigdoAssembler    *self,
    */
   if (!g_str_has_suffix (meta_pathname, "/01meta"))
     return glnx_throw (error, "Malformed contentident: %s", meta_pathname);
-  const char *contentident_id_start = meta_pathname + strlen (RPMOSTREE_JIGDO_NEW_CONTENTIDENT_DIR "/");
+  const char *contentident_id_start = meta_pathname + strlen (RPMOSTREE_ROJIG_NEW_CONTENTIDENT_DIR "/");
   const char *slash = strchr (contentident_id_start, '/');
   if (!slash)
     return glnx_throw (error, "Malformed contentident: %s", meta_pathname);
   // g_autofree char *contentident_id_str = g_strndup (contentident_id_start, slash - contentident_id_start);
 
-  g_autoptr(GVariant) meta = jigdo_read_variant (RPMOSTREE_JIGDO_NEW_CONTENTIDENT_VARIANT_FORMAT,
+  g_autoptr(GVariant) meta = rojig_read_variant (RPMOSTREE_ROJIG_NEW_CONTENTIDENT_VARIANT_FORMAT,
                                                  self->archive, entry,
                                                  cancellable, error);
 
 
   /* Read the content */
   // FIXME match contentident_id
-  entry = jigdo_require_next_entry (self, cancellable, error);
+  entry = rojig_require_next_entry (self, cancellable, error);
   if (!entry)
     return FALSE;
 
@@ -435,9 +435,9 @@ process_contentident (RpmOstreeJigdoAssembler    *self,
 }
 
 static gboolean
-state_transition (RpmOstreeJigdoAssembler    *self,
+state_transition (RpmOstreeRojigAssembler    *self,
                   const char        *pathname,
-                  JigdoAssemblerState         new_state,
+                  RojigAssemblerState         new_state,
                   GError           **error)
 {
   if (self->state > new_state)
@@ -448,7 +448,7 @@ state_transition (RpmOstreeJigdoAssembler    *self,
 
 /* Process new objects included in the rojigRPM */
 gboolean
-rpmostree_jigdo_assembler_write_new_objects (RpmOstreeJigdoAssembler    *self,
+rpmostree_rojig_assembler_write_new_objects (RpmOstreeRojigAssembler    *self,
                                    OstreeRepo        *repo,
                                    GCancellable      *cancellable,
                                    GError           **error)
@@ -463,22 +463,22 @@ rpmostree_jigdo_assembler_write_new_objects (RpmOstreeJigdoAssembler    *self,
     {
       gboolean eof;
       struct archive_entry *entry;
-      if (!jigdo_next_entry (self, &eof, &entry, cancellable, error))
+      if (!rojig_next_entry (self, &eof, &entry, cancellable, error))
         return FALSE;
       if (eof)
         break;
       const char *pathname = peel_entry_pathname (entry, error);
       if (!pathname)
         return FALSE;
-      if (g_str_has_prefix (pathname, RPMOSTREE_JIGDO_DIRMETA_DIR "/"))
+      if (g_str_has_prefix (pathname, RPMOSTREE_ROJIG_DIRMETA_DIR "/"))
         {
           if (!state_transition (self, pathname, STATE_DIRMETA, error))
             return FALSE;
           g_autofree char *checksum =
-            parse_checksum_from_pathname (pathname + strlen (RPMOSTREE_JIGDO_DIRMETA_DIR "/"), error);
+            parse_checksum_from_pathname (pathname + strlen (RPMOSTREE_ROJIG_DIRMETA_DIR "/"), error);
           if (!checksum)
             return FALSE;
-          g_autoptr(GVariant) dirmeta = jigdo_read_variant (OSTREE_DIRMETA_GVARIANT_FORMAT,
+          g_autoptr(GVariant) dirmeta = rojig_read_variant (OSTREE_DIRMETA_GVARIANT_FORMAT,
                                                             self->archive, entry,
                                                             cancellable, error);
           g_autofree guint8*csum = NULL;
@@ -486,15 +486,15 @@ rpmostree_jigdo_assembler_write_new_objects (RpmOstreeJigdoAssembler    *self,
                                            checksum, dirmeta, &csum, cancellable, error))
             return FALSE;
         }
-      else if (g_str_has_prefix (pathname, RPMOSTREE_JIGDO_DIRTREE_DIR "/"))
+      else if (g_str_has_prefix (pathname, RPMOSTREE_ROJIG_DIRTREE_DIR "/"))
         {
           if (!state_transition (self, pathname, STATE_DIRTREE, error))
             return FALSE;
           g_autofree char *checksum =
-            parse_checksum_from_pathname (pathname + strlen (RPMOSTREE_JIGDO_DIRTREE_DIR "/"), error);
+            parse_checksum_from_pathname (pathname + strlen (RPMOSTREE_ROJIG_DIRTREE_DIR "/"), error);
           if (!checksum)
             return FALSE;
-          g_autoptr(GVariant) dirtree = jigdo_read_variant (OSTREE_TREE_GVARIANT_FORMAT,
+          g_autoptr(GVariant) dirtree = rojig_read_variant (OSTREE_TREE_GVARIANT_FORMAT,
                                                             self->archive, entry,
                                                             cancellable, error);
           g_autofree guint8*csum = NULL;
@@ -502,19 +502,19 @@ rpmostree_jigdo_assembler_write_new_objects (RpmOstreeJigdoAssembler    *self,
                                            checksum, dirtree, &csum, cancellable, error))
             return FALSE;
         }
-      else if (g_str_has_prefix (pathname, RPMOSTREE_JIGDO_NEW_CONTENTIDENT_DIR "/"))
+      else if (g_str_has_prefix (pathname, RPMOSTREE_ROJIG_NEW_CONTENTIDENT_DIR "/"))
         {
           if (!state_transition (self, pathname, STATE_NEW_CONTENTIDENT, error))
             return FALSE;
           if (!process_contentident (self, repo, entry, pathname, cancellable, error))
             return FALSE;
         }
-      else if (g_str_has_prefix (pathname, RPMOSTREE_JIGDO_NEW_DIR "/"))
+      else if (g_str_has_prefix (pathname, RPMOSTREE_ROJIG_NEW_DIR "/"))
         {
           if (!state_transition (self, pathname, STATE_NEW, error))
             return FALSE;
           g_autofree char *checksum =
-            parse_checksum_from_pathname (pathname + strlen (RPMOSTREE_JIGDO_NEW_DIR "/"), error);
+            parse_checksum_from_pathname (pathname + strlen (RPMOSTREE_ROJIG_NEW_DIR "/"), error);
           if (!checksum)
             return FALSE;
 
@@ -527,7 +527,7 @@ rpmostree_jigdo_assembler_write_new_objects (RpmOstreeJigdoAssembler    *self,
                                           stbuf->st_size, &csum, cancellable, error))
             return FALSE;
         }
-      else if (g_str_has_prefix (pathname, RPMOSTREE_JIGDO_XATTRS_DIR "/"))
+      else if (g_str_has_prefix (pathname, RPMOSTREE_ROJIG_XATTRS_DIR "/"))
         {
           self->next_entry = g_steal_pointer (&entry); /* Stash for next call */
           break;
@@ -540,7 +540,7 @@ rpmostree_jigdo_assembler_write_new_objects (RpmOstreeJigdoAssembler    *self,
 }
 
 GVariant *
-rpmostree_jigdo_assembler_get_xattr_table (RpmOstreeJigdoAssembler    *self)
+rpmostree_rojig_assembler_get_xattr_table (RpmOstreeRojigAssembler    *self)
 {
   g_assert (self->xattrs_table);
   return g_variant_ref (self->xattrs_table);
@@ -548,7 +548,7 @@ rpmostree_jigdo_assembler_get_xattr_table (RpmOstreeJigdoAssembler    *self)
 
 /* Loop over each package, returning its xattr set (as indexes into the xattr table) */
 gboolean
-rpmostree_jigdo_assembler_next_xattrs (RpmOstreeJigdoAssembler    *self,
+rpmostree_rojig_assembler_next_xattrs (RpmOstreeRojigAssembler    *self,
                                        GVariant         **out_objid_to_xattrs,
                                        GCancellable      *cancellable,
                                        GError           **error)
@@ -556,17 +556,17 @@ rpmostree_jigdo_assembler_next_xattrs (RpmOstreeJigdoAssembler    *self,
   /* If we haven't loaded the xattr string table, do so */
   if (self->state < STATE_XATTRS_TABLE)
     {
-      struct archive_entry *entry = jigdo_require_next_entry (self, cancellable, error);
+      struct archive_entry *entry = rojig_require_next_entry (self, cancellable, error);
       if (!entry)
         return FALSE;
 
       const char *pathname = peel_entry_pathname (entry, error);
       if (!pathname)
         return FALSE;
-      if (!g_str_has_prefix (pathname, RPMOSTREE_JIGDO_XATTRS_TABLE))
+      if (!g_str_has_prefix (pathname, RPMOSTREE_ROJIG_XATTRS_TABLE))
         return glnx_throw (error, "Unexpected entry: %s", pathname);
 
-      g_autoptr(GVariant) xattrs_table = jigdo_read_variant (RPMOSTREE_JIGDO_XATTRS_TABLE_VARIANT_FORMAT,
+      g_autoptr(GVariant) xattrs_table = rojig_read_variant (RPMOSTREE_ROJIG_XATTRS_TABLE_VARIANT_FORMAT,
                                                              self->archive, entry, cancellable, error);
       if (!xattrs_table)
         return FALSE;
@@ -581,7 +581,7 @@ rpmostree_jigdo_assembler_next_xattrs (RpmOstreeJigdoAssembler    *self,
   /* Look for an xattr entry */
   gboolean eof;
   struct archive_entry *entry;
-  if (!jigdo_next_entry (self, &eof, &entry, cancellable, error))
+  if (!rojig_next_entry (self, &eof, &entry, cancellable, error))
     return FALSE;
   if (eof)
     return TRUE; /* 🔚 Early return */
@@ -592,17 +592,17 @@ rpmostree_jigdo_assembler_next_xattrs (RpmOstreeJigdoAssembler    *self,
   /* At this point there's nothing left besides xattrs, so throw if it doesn't
    * match that filename pattern.
    */
-  if (!g_str_has_prefix (pathname, RPMOSTREE_JIGDO_XATTRS_PKG_DIR "/"))
+  if (!g_str_has_prefix (pathname, RPMOSTREE_ROJIG_XATTRS_PKG_DIR "/"))
     return glnx_throw (error, "Unexpected entry: %s", pathname);
-  // const char *nevra = pathname + strlen (RPMOSTREE_JIGDO_XATTRS_PKG_DIR "/");
-  *out_objid_to_xattrs = jigdo_read_variant (RPMOSTREE_JIGDO_XATTRS_PKG_VARIANT_FORMAT,
+  // const char *nevra = pathname + strlen (RPMOSTREE_ROJIG_XATTRS_PKG_DIR "/");
+  *out_objid_to_xattrs = rojig_read_variant (RPMOSTREE_ROJIG_XATTRS_PKG_VARIANT_FORMAT,
                                              self->archive, entry, cancellable, error);
   return TRUE;
 }
 
 /* Client side lookup for xattrs */
 gboolean
-rpmostree_jigdo_assembler_xattr_lookup (GVariant *xattr_table,
+rpmostree_rojig_assembler_xattr_lookup (GVariant *xattr_table,
                                         const char *path,
                                         GVariant *xattrs,
                                         GVariant **out_xattrs,
@@ -618,14 +618,14 @@ rpmostree_jigdo_assembler_xattr_lookup (GVariant *xattr_table,
           // "don't import"
           *out_xattrs = NULL;
           return TRUE;
-          /* jigdodata->caught_error = TRUE; */
-          /* return glnx_null_throw (&jigdodata->error, "Failed to find jigdo xattrs for path '%s'", path); */
+          /* rojigdata->caught_error = TRUE; */
+          /* return glnx_null_throw (&rojigdata->error, "Failed to find rojig xattrs for path '%s'", path); */
         }
     }
   guint xattr_idx;
   g_variant_get_child (xattrs, pos, "(&su)", NULL, &xattr_idx);
   if (xattr_idx >= g_variant_n_children (xattr_table))
-    return glnx_throw (error, "Out of range jigdo xattr index %u for path '%s'", xattr_idx, path);
+    return glnx_throw (error, "Out of range rojig xattr index %u for path '%s'", xattr_idx, path);
   *out_xattrs = g_variant_get_child_value (xattr_table, xattr_idx);
   return TRUE;
 }

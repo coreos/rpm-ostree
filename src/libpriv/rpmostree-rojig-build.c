@@ -26,7 +26,7 @@
 #include <gio/gunixoutputstream.h>
 #include "rpmostree-libarchive-input-stream.h"
 #include "rpmostree-unpacker-core.h"
-#include "rpmostree-jigdo-build.h"
+#include "rpmostree-rojig-build.h"
 #include "rpmostree-core.h"
 #include "rpmostree-rpm-util.h"
 #include <rpm/rpmlib.h>
@@ -67,10 +67,10 @@ typedef struct {
   guint n_duplicate_pkg_content_objs;
   guint n_unused_pkg_content_objs;
   GHashTable *objsize_to_object; /* Map<guint32 objsize,checksum> */
-} RpmOstreeCommit2JigdoContext;
+} RpmOstreeCommit2RojigContext;
 
 static void
-rpm_ostree_commit2jigdo_context_free (RpmOstreeCommit2JigdoContext *ctx)
+rpm_ostree_commit2rojig_context_free (RpmOstreeCommit2RojigContext *ctx)
 {
   g_clear_object (&ctx->repo);
   g_clear_object (&ctx->pkgcache_repo);
@@ -80,7 +80,7 @@ rpm_ostree_commit2jigdo_context_free (RpmOstreeCommit2JigdoContext *ctx)
   g_clear_pointer (&ctx->objsize_to_object, (GDestroyNotify)g_hash_table_unref);
   g_free (ctx);
 }
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeCommit2JigdoContext, rpm_ostree_commit2jigdo_context_free)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeCommit2RojigContext, rpm_ostree_commit2rojig_context_free)
 
 /* Add @objid to the set of objectids for @checksum */
 static void
@@ -120,7 +120,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(PkgBuildObjidMap, pkg_build_objidmap_free)
 
 /* Recursively walk @dir, building a map of object to Set<objid> */
 static gboolean
-build_objid_map_for_tree (RpmOstreeCommit2JigdoContext *self,
+build_objid_map_for_tree (RpmOstreeCommit2RojigContext *self,
                           PkgBuildObjidMap             *build,
                           GHashTable                   *object_to_objid,
                           GFile                        *dir,
@@ -158,7 +158,7 @@ build_objid_map_for_tree (RpmOstreeCommit2JigdoContext *self,
       g_autofree char *path = g_file_get_path (child);
 
       /* Handling SELinux labeling for the tmpfiles.d would get very tricky.
-       * Currently the jigdo unpack path is intentionally "dumb" - we won't
+       * Currently the rojig unpack path is intentionally "dumb" - we won't
        * synthesize the tmpfiles.d like we do for layering. So punt these into
        * the new object set.
        */
@@ -288,13 +288,13 @@ write_one_new_object (OstreeRepo             *repo,
   switch (objtype)
     {
     case OSTREE_OBJECT_TYPE_DIR_META:
-      subdir = RPMOSTREE_JIGDO_DIRMETA_DIR;
+      subdir = RPMOSTREE_ROJIG_DIRMETA_DIR;
       break;
     case OSTREE_OBJECT_TYPE_DIR_TREE:
-      subdir = RPMOSTREE_JIGDO_DIRTREE_DIR;
+      subdir = RPMOSTREE_ROJIG_DIRTREE_DIR;
       break;
     case OSTREE_OBJECT_TYPE_FILE:
-      subdir = RPMOSTREE_JIGDO_NEW_DIR;
+      subdir = RPMOSTREE_ROJIG_NEW_DIR;
       break;
     default:
       g_assert_not_reached ();
@@ -334,12 +334,12 @@ write_content_identical_set (OstreeRepo             *repo,
 {
   g_assert_cmpint (identicals->len, >, 1);
   GLNX_AUTO_PREFIX_ERROR ("Processing big content-identical", error);
-  g_autofree char *subdir = g_strdup_printf ("%s/%u", RPMOSTREE_JIGDO_NEW_CONTENTIDENT_DIR, content_ident_idx);
+  g_autofree char *subdir = g_strdup_printf ("%s/%u", RPMOSTREE_ROJIG_NEW_CONTENTIDENT_DIR, content_ident_idx);
   if (!glnx_shutil_mkdir_p_at (tmp_dfd, subdir, 0755, cancellable, error))
     return FALSE;
 
   /* Write metadata for all of the objects as a single variant */
-  g_autoptr(GVariantBuilder) builder = g_variant_builder_new (RPMOSTREE_JIGDO_NEW_CONTENTIDENT_VARIANT_FORMAT);
+  g_autoptr(GVariantBuilder) builder = g_variant_builder_new (RPMOSTREE_ROJIG_NEW_CONTENTIDENT_VARIANT_FORMAT);
   for (guint i = 0; i < identicals->len; i++)
     {
       const char *checksum = identicals->pdata[i];
@@ -459,7 +459,7 @@ cmp_objidxattrs (gconstpointer ap,
 
 /* Walk @pkg, building up a map of content object hash to "objid". */
 static gboolean
-build_objid_map_for_package (RpmOstreeCommit2JigdoContext *self,
+build_objid_map_for_package (RpmOstreeCommit2RojigContext *self,
                              DnfPackage                   *pkg,
                              GCancellable                 *cancellable,
                              GError                      **error)
@@ -555,7 +555,7 @@ build_objid_map_for_package (RpmOstreeCommit2JigdoContext *self,
  * For now we scrape all the Provides: looking for a `Provides: %{name}(something)`.
  */
 static char *
-pkg_get_requires_isa (RpmOstreeCommit2JigdoContext *self,
+pkg_get_requires_isa (RpmOstreeCommit2RojigContext *self,
                       DnfPackage *pkg,
                       GError    **error)
 {
@@ -596,10 +596,10 @@ pkg_get_requires_isa (RpmOstreeCommit2JigdoContext *self,
  * inserted.
  */
 static char *
-generate_spec (RpmOstreeCommit2JigdoContext  *self,
+generate_spec (RpmOstreeCommit2RojigContext  *self,
                const char                    *spec_path,
                const char                    *ostree_commit_sha256,
-               GPtrArray                     *jigdo_packages,
+               GPtrArray                     *rojig_packages,
                GCancellable                  *cancellable,
                GError                       **error)
 {
@@ -610,25 +610,25 @@ generate_spec (RpmOstreeCommit2JigdoContext  *self,
     return NULL;
 
   /* Look for the magic comment */
-  const char *meta = strstr (spec_contents, "\n" RPMOSTREE_JIGDO_SPEC_META_MAGIC);
+  const char *meta = strstr (spec_contents, "\n" RPMOSTREE_ROJIG_SPEC_META_MAGIC);
   if (!meta)
-    return glnx_null_throw (error, "Missing magic '%s' in %s", RPMOSTREE_JIGDO_SPEC_META_MAGIC, spec_path);
+    return glnx_null_throw (error, "Missing magic '%s' in %s", RPMOSTREE_ROJIG_SPEC_META_MAGIC, spec_path);
 
   /* Generate a replacement in memory */
   g_autoptr(GString) replacement = g_string_new ("");
   g_string_append_len (replacement, spec_contents, meta - spec_contents);
   g_string_append (replacement, "# Generated by rpm-ostree\n");
-  g_string_append (replacement, "Provides: " RPMOSTREE_JIGDO_PROVIDE_V5 "\n");
+  g_string_append (replacement, "Provides: " RPMOSTREE_ROJIG_PROVIDE_V5 "\n");
   /* Add provides for the commit hash */
-  g_string_append (replacement, "Provides: " RPMOSTREE_JIGDO_PROVIDE_COMMIT);
+  g_string_append (replacement, "Provides: " RPMOSTREE_ROJIG_PROVIDE_COMMIT);
   g_string_append_printf (replacement, "(%s)\n", ostree_commit_sha256);
 
   /* Add Requires: on our dependent packages; note this needs to be
    * arch-specific otherwise we may be tripped up by multiarch packages.
    */
-  for (guint i = 0; i < jigdo_packages->len; i++)
+  for (guint i = 0; i < rojig_packages->len; i++)
     {
-      DnfPackage *pkg = jigdo_packages->pdata[i];
+      DnfPackage *pkg = rojig_packages->pdata[i];
       if (g_str_equal (dnf_package_get_arch (pkg), "noarch"))
         {
           g_string_append_printf (replacement, "Requires: %s = %s\n",
@@ -645,10 +645,10 @@ generate_spec (RpmOstreeCommit2JigdoContext  *self,
                                   dnf_package_get_evr (pkg));
         }
     }
-  g_string_append (replacement, meta + strlen (RPMOSTREE_JIGDO_SPEC_META_MAGIC) + 1);
+  g_string_append (replacement, meta + strlen (RPMOSTREE_ROJIG_SPEC_META_MAGIC) + 1);
   g_string_append (replacement, "# End data generated by rpm-ostree\n");
 
-  g_autofree char *tmppath = g_strdup ("/tmp/rpmostree-jigdo-spec.XXXXXX");
+  g_autofree char *tmppath = g_strdup ("/tmp/rpmostree-rojig-spec.XXXXXX");
   glnx_autofd int fd = g_mkstemp_full (tmppath, O_WRONLY | O_CLOEXEC, 0644);
   if (glnx_loop_write (fd, replacement->str, replacement->len) < 0)
     return glnx_null_throw_errno_prefix (error, "write");
@@ -666,7 +666,7 @@ compare_pkgs (gconstpointer ap,
 }
 
 static gboolean
-write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
+write_commit2rojig (RpmOstreeCommit2RojigContext *self,
                     const char                   *commit,
                     const char                   *oirpm_spec,
                     const char                   *outputdir,
@@ -687,13 +687,13 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
     return FALSE;
 
   g_auto(GLnxTmpDir) oirpm_tmpd = { 0, };
-  if (!glnx_mkdtemp ("rpmostree-jigdo-XXXXXX", 0700, &oirpm_tmpd, error))
+  if (!glnx_mkdtemp ("rpmostree-rojig-XXXXXX", 0700, &oirpm_tmpd, error))
     return FALSE;
 
   /* The commit object and metadata go first, so that the client can do GPG verification
    * early on.
    */
-  { g_autofree char *commit_dir = g_strdup_printf ("%s/%c%c", RPMOSTREE_JIGDO_COMMIT_DIR,
+  { g_autofree char *commit_dir = g_strdup_printf ("%s/%c%c", RPMOSTREE_ROJIG_COMMIT_DIR,
                                                    commit[0], commit[1]);
     if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, commit_dir, 0755, cancellable, error))
       return FALSE;
@@ -708,7 +708,7 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
   }
   { const guint8 *buf = (const guint8*)"";
     size_t buflen = 0;
-    g_autofree char *commit_metapath = g_strconcat (RPMOSTREE_JIGDO_COMMIT_DIR, "/meta", NULL);
+    g_autofree char *commit_metapath = g_strconcat (RPMOSTREE_ROJIG_COMMIT_DIR, "/meta", NULL);
     if (commit_detached_meta)
       {
         buf = g_variant_get_data (commit_detached_meta);
@@ -721,9 +721,9 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
   }
 
   /* dirtree/dirmeta */
-  if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, RPMOSTREE_JIGDO_DIRMETA_DIR, 0755, cancellable, error))
+  if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, RPMOSTREE_ROJIG_DIRMETA_DIR, 0755, cancellable, error))
     return FALSE;
-  if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, RPMOSTREE_JIGDO_DIRTREE_DIR, 0755, cancellable, error))
+  if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, RPMOSTREE_ROJIG_DIRTREE_DIR, 0755, cancellable, error))
     return FALSE;
   /* Traverse the commit again, adding dirtree/dirmeta */
   g_autoptr(GHashTable) commit_reachable = NULL;
@@ -759,7 +759,7 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
   /* Process large objects, which may only have 1 reference, in which case they also
    * go under new/, otherwise new-contentident/.
    */
-  if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, RPMOSTREE_JIGDO_NEW_CONTENTIDENT_DIR, 0755, cancellable, error))
+  if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, RPMOSTREE_ROJIG_NEW_CONTENTIDENT_DIR, 0755, cancellable, error))
     return FALSE;
   guint content_ident_idx = 0;
   GLNX_HASH_TABLE_FOREACH_IT (new_big_content_identical, it, const char *, content_checksum,
@@ -812,7 +812,7 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
    */
   { g_autoptr(GHashTable) xattr_table_hash = g_hash_table_new_full (xattr_chunk_hash, xattr_chunk_equals,
                                                                     (GDestroyNotify)g_variant_unref, NULL);
-    if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, RPMOSTREE_JIGDO_XATTRS_DIR, 0755, cancellable, error))
+    if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, RPMOSTREE_ROJIG_XATTRS_DIR, 0755, cancellable, error))
       return FALSE;
 
     g_autoptr(GHashTable) pkg_to_objidxattrs = g_hash_table_new_full (NULL, NULL, g_object_unref,
@@ -820,7 +820,7 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
 
     /* First, gather the unique set of xattrs from all pkgobjs */
     g_autoptr(GVariantBuilder) xattr_table_builder =
-      g_variant_builder_new (RPMOSTREE_JIGDO_XATTRS_TABLE_VARIANT_FORMAT);
+      g_variant_builder_new (RPMOSTREE_ROJIG_XATTRS_TABLE_VARIANT_FORMAT);
     guint global_xattr_idx = 0;
     GLNX_HASH_TABLE_FOREACH_IT (self->commit_content_objects, it, const char *, checksum,
                                 const char *, unused)
@@ -887,7 +887,7 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
     /* Generate empty entries for the "unused set" - the set of packages
      * that are part of the install, but carry no content objects actually
      * in the tree.  ${foo}-filesystem packages are common examples.  Since
-     * v3 the "jigdo set" is the same as the "install set".
+     * v3 the "rojig set" is the same as the "install set".
      */
     for (guint i = 0; i < pkglist->len; i++)
       {
@@ -903,10 +903,10 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
     g_print ("%u unique xattrs\n", g_hash_table_size (xattr_table_hash));
 
     /* Write the xattr string table */
-    if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, RPMOSTREE_JIGDO_XATTRS_DIR, 0755, cancellable, error))
+    if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, RPMOSTREE_ROJIG_XATTRS_DIR, 0755, cancellable, error))
       return FALSE;
     { g_autoptr(GVariant) xattr_table = g_variant_ref_sink (g_variant_builder_end (xattr_table_builder));
-      if (!glnx_file_replace_contents_at (oirpm_tmpd.fd, RPMOSTREE_JIGDO_XATTRS_TABLE,
+      if (!glnx_file_replace_contents_at (oirpm_tmpd.fd, RPMOSTREE_ROJIG_XATTRS_TABLE,
                                           g_variant_get_data (xattr_table),
                                           g_variant_get_size (xattr_table),
                                           GLNX_FILE_REPLACE_NODATASYNC,
@@ -915,7 +915,7 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
     }
 
     /* Subdirectory for packages */
-    if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, RPMOSTREE_JIGDO_XATTRS_PKG_DIR, 0755, cancellable, error))
+    if (!glnx_shutil_mkdir_p_at (oirpm_tmpd.fd, RPMOSTREE_ROJIG_XATTRS_PKG_DIR, 0755, cancellable, error))
       return FALSE;
 
     /* We're done with these maps */
@@ -938,7 +938,7 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
          * sufficient as a cache invalidation mechanism.  Scenarios:
          *
          * - We change the content of a file: Since we do object based imports,
-         *   it will be a new object; it'd end up in jigdoRPM.
+         *   it will be a new object; it'd end up in rojigRPM.
          * - We start wanting an existing pkg object (e.g. docs): Counting works
          * - An object migrates (again add/remove): Counting works
          *
@@ -947,7 +947,7 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
         g_autofree char *cacheid = g_strdup_printf ("%u", objidxattrs->len);
 
         /* Build up the variant from sorted data */
-        g_autoptr(GVariantBuilder) objid_xattr_builder = g_variant_builder_new (RPMOSTREE_JIGDO_XATTRS_PKG_VARIANT_FORMAT);
+        g_autoptr(GVariantBuilder) objid_xattr_builder = g_variant_builder_new (RPMOSTREE_ROJIG_XATTRS_PKG_VARIANT_FORMAT);
         g_variant_builder_add (objid_xattr_builder, "s", cacheid);
         g_variant_builder_open (objid_xattr_builder, G_VARIANT_TYPE ("a(su)"));
 
@@ -959,7 +959,7 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
         g_variant_builder_close (objid_xattr_builder);
         g_autoptr(GVariant) objid_xattrs_final = g_variant_ref_sink (g_variant_builder_end (objid_xattr_builder));
 
-        g_autofree char *path = g_strconcat (RPMOSTREE_JIGDO_XATTRS_PKG_DIR, "/", nevra, NULL);
+        g_autofree char *path = g_strconcat (RPMOSTREE_ROJIG_XATTRS_PKG_DIR, "/", nevra, NULL);
         /* The "unused set" will have empty maps for xattrs */
         const guint8 *buf = g_variant_get_data (objid_xattrs_final) ?: "";
         if (!glnx_file_replace_contents_at (oirpm_tmpd.fd, path, buf,
@@ -1064,7 +1064,7 @@ write_commit2rojig (RpmOstreeCommit2JigdoContext *self,
  * *exact* RPMs we require bit-for-bit.
  */
 static gboolean
-impl_commit2rojig (RpmOstreeCommit2JigdoContext *self,
+impl_commit2rojig (RpmOstreeCommit2RojigContext *self,
                    const char                   *rev,
                    const char                   *oirpm_spec,
                    const char                   *outputdir,
@@ -1285,7 +1285,7 @@ rpmostree_commit2rojig (OstreeRepo   *repo,
                         GCancellable *cancellable,
                         GError      **error)
 {
-  g_autoptr(RpmOstreeCommit2JigdoContext) self = g_new0 (RpmOstreeCommit2JigdoContext, 1);
+  g_autoptr(RpmOstreeCommit2RojigContext) self = g_new0 (RpmOstreeCommit2RojigContext, 1);
 
   self->repo = g_object_ref (repo);
   self->pkgcache_repo = g_object_ref (pkgcache_repo);

@@ -54,7 +54,7 @@ rpmostree_importer_new_take_fd (int                     *fd,
                                 OstreeSePolicy          *sepolicy,
                                 GError                 **error);
 
-void rpmostree_importer_set_jigdo_mode (RpmOstreeImporter *self,
+void rpmostree_importer_set_rojig_mode (RpmOstreeImporter *self,
                                         GVariant *xattr_table,
                                         GVariant *xattrs);
 

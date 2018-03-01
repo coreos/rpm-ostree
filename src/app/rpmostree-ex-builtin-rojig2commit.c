@@ -32,7 +32,7 @@
 #include "rpmostree-ex-builtins.h"
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
-#include "rpmostree-jigdo-assembler.h"
+#include "rpmostree-rojig-assembler.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-libbuiltin.h"
@@ -59,25 +59,25 @@ typedef struct {
   OstreeRepo *repo;
   GLnxTmpDir tmpd;
   RpmOstreeContext *ctx;
-} RpmOstreeJigdo2CommitContext;
+} RpmOstreeRojig2CommitContext;
 
 static void
-rpm_ostree_jigdo2commit_context_free (RpmOstreeJigdo2CommitContext *ctx)
+rpm_ostree_rojig2commit_context_free (RpmOstreeRojig2CommitContext *ctx)
 {
   g_clear_object (&ctx->repo);
   (void) glnx_tmpdir_delete (&ctx->tmpd, NULL, NULL);
   g_free (ctx);
 }
-G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeJigdo2CommitContext, rpm_ostree_jigdo2commit_context_free)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRojig2CommitContext, rpm_ostree_rojig2commit_context_free)
 
-/* Initialize a context for converting a jigdo to a commit.
+/* Initialize a context for converting a rojig to a commit.
  */
 static gboolean
-rpm_ostree_jigdo2commit_context_new (RpmOstreeJigdo2CommitContext **out_context,
+rpm_ostree_rojig2commit_context_new (RpmOstreeRojig2CommitContext **out_context,
                                      GCancellable  *cancellable,
                                      GError       **error)
 {
-  g_autoptr(RpmOstreeJigdo2CommitContext) self = g_new0 (RpmOstreeJigdo2CommitContext, 1);
+  g_autoptr(RpmOstreeRojig2CommitContext) self = g_new0 (RpmOstreeRojig2CommitContext, 1);
 
   self->repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
   if (!self->repo)
@@ -85,7 +85,7 @@ rpm_ostree_jigdo2commit_context_new (RpmOstreeJigdo2CommitContext **out_context,
 
   /* Our workdir lives in the repo for command line testing */
   if (!glnx_mkdtempat (ostree_repo_get_dfd (self->repo),
-                       "tmp/rpmostree-jigdo-XXXXXX", 0700, &self->tmpd, error))
+                       "tmp/rpmostree-rojig-XXXXXX", 0700, &self->tmpd, error))
     return FALSE;
 
   self->ctx = rpmostree_context_new_tree (self->tmpd.fd, self->repo, cancellable, error);
@@ -102,7 +102,7 @@ rpm_ostree_jigdo2commit_context_new (RpmOstreeJigdo2CommitContext **out_context,
 }
 
 static gboolean
-impl_rojig2commit (RpmOstreeJigdo2CommitContext *self,
+impl_rojig2commit (RpmOstreeRojig2CommitContext *self,
                    const char                   *rojig_id,
                    GCancellable                 *cancellable,
                    GError                      **error)
@@ -125,10 +125,10 @@ impl_rojig2commit (RpmOstreeJigdo2CommitContext *self,
   /* We're also "pure" rojig - this adds assertions that we don't depsolve for example */
   if (!rpmostree_context_setup (self->ctx, NULL, NULL, treespec, cancellable, error))
     return FALSE;
-  if (!rpmostree_context_prepare_jigdo (self->ctx, cancellable, error))
+  if (!rpmostree_context_prepare_rojig (self->ctx, cancellable, error))
     return FALSE;
   gboolean rojig_changed;
-  if (!rpmostree_context_execute_jigdo (self->ctx, &rojig_changed, cancellable, error))
+  if (!rpmostree_context_execute_rojig (self->ctx, &rojig_changed, cancellable, error))
     return FALSE;
 
   return TRUE;
@@ -165,8 +165,8 @@ rpmostree_ex_builtin_rojig2commit (int             argc,
 
   const char *oirpm = argv[1];
 
-  g_autoptr(RpmOstreeJigdo2CommitContext) self = NULL;
-  if (!rpm_ostree_jigdo2commit_context_new (&self, cancellable, error))
+  g_autoptr(RpmOstreeRojig2CommitContext) self = NULL;
+  if (!rpm_ostree_rojig2commit_context_new (&self, cancellable, error))
     return FALSE;
   if (!impl_rojig2commit (self, oirpm, cancellable, error))
     return FALSE;

@@ -39,7 +39,7 @@
 #include "rpmostree-bwrap.h"
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
-#include "rpmostree-jigdo-build.h"
+#include "rpmostree-rojig-build.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-libbuiltin.h"
@@ -118,7 +118,7 @@ typedef struct {
   OstreeRepo *pkgcache_repo;
   OstreeRepoDevInoCache *devino_cache;
   char *ref;
-  char *jigdo_spec;
+  char *rojig_spec;
   char *previous_checksum;
 
   JsonParser *treefile_parser;
@@ -146,7 +146,7 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_clear_object (&ctx->pkgcache_repo);
   g_clear_pointer (&ctx->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
   g_free (ctx->ref);
-  g_free (ctx->jigdo_spec);
+  g_free (ctx->rojig_spec);
   g_free (ctx->previous_checksum);
   g_clear_object (&ctx->treefile_parser);
   g_clear_pointer (&ctx->serialized_treefile, (GDestroyNotify)g_bytes_unref);
@@ -246,15 +246,15 @@ hardlink_or_copy_at (int         src_dfd,
 }
 
 static gboolean
-copy_jigdo_rpms_to_outputdir (RpmOstreeTreeComposeContext *self,
-                              const char                  *jigdoset_outputdir,
+copy_rojig_rpms_to_outputdir (RpmOstreeTreeComposeContext *self,
+                              const char                  *rojigset_outputdir,
                               GCancellable                *cancellable,
                               GError                     **error)
 {
-  GLNX_AUTO_PREFIX_ERROR ("Copying jigdo RPMs", error);
+  GLNX_AUTO_PREFIX_ERROR ("Copying rojig RPMs", error);
   g_autoptr(GPtrArray) pkglist = rpmostree_context_get_packages (self->corectx);
   int output_dfd = -1;
-  if (!glnx_opendirat (AT_FDCWD, jigdoset_outputdir, TRUE, &output_dfd, error))
+  if (!glnx_opendirat (AT_FDCWD, rojigset_outputdir, TRUE, &output_dfd, error))
     return FALSE;
 
   guint n_copied = 0;
@@ -272,8 +272,8 @@ copy_jigdo_rpms_to_outputdir (RpmOstreeTreeComposeContext *self,
         return FALSE;
       n_copied++;
     }
-  g_print ("Copied %u (of %u total) jigdoSet RPMS to %s\n", n_copied, pkglist->len,
-           jigdoset_outputdir);
+  g_print ("Copied %u (of %u total) rojigSet RPMS to %s\n", n_copied, pkglist->len,
+           rojigset_outputdir);
 
   return TRUE;
 }
@@ -418,7 +418,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 
   /* By default, retain packages in addition to metadata with --cachedir, unless
    * we're doing unified core, in which case the pkgcache repo is the cache.  But
-   * the jigdoSet build still requires the original RPMs too.
+   * the rojigSet build still requires the original RPMs too.
    */
   if ((opt_cachedir && !opt_ex_unified_core) || opt_ex_jigdo_output_set)
     dnf_context_set_keep_cache (dnfctx, TRUE);
@@ -573,10 +573,10 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (opt_download_only)
     return TRUE; /* 🔚 Early return */
 
-  /* Hardlink our input set now for jigdo-set output mode */
+  /* Hardlink our input set now for rojig-set output mode */
   if (opt_ex_jigdo_output_set)
     {
-      if (!copy_jigdo_rpms_to_outputdir (self, opt_ex_jigdo_output_set, cancellable, error))
+      if (!copy_rojig_rpms_to_outputdir (self, opt_ex_jigdo_output_set, cancellable, error))
         return FALSE;
     }
 
@@ -610,7 +610,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
       /* Now reload the policy from the tmproot, and relabel the pkgcache - this
        * is the same thing done in rpmostree_context_commit(). But here we want
        * to ensure our pkgcache labels are accurate, since that will
-       * be important for the ostree-jigdo work.
+       * be important for the ostree-rojig work.
        */
       g_autoptr(OstreeSePolicy) sepolicy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
       rpmostree_context_set_sepolicy (self->corectx, sepolicy);
@@ -828,7 +828,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   if (opt_workdir_tmpfs)
     g_print ("note: --workdir-tmpfs is deprecated and will be ignored\n");
 
-  /* jigdo implies unified core mode currently */
+  /* rojig implies unified core mode currently */
   if (opt_ex_jigdo_output_rpm || opt_ex_jigdo_output_set)
     opt_ex_unified_core = TRUE;
 
@@ -942,17 +942,17 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     return FALSE;
 
   g_autoptr(GFile) treefile_dir = g_file_get_parent (self->treefile_path);
-  const char *jigdo_spec = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "ex-rojig-spec", &jigdo_spec, error))
+  const char *rojig_spec = NULL;
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "ex-rojig-spec", &rojig_spec, error))
     return FALSE;
-  if (!jigdo_spec)
+  if (!rojig_spec)
     {
       /* Backcompat for a little while */
-      if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "ex-jigdo-spec", &jigdo_spec, error))
+      if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "ex-jigdo-spec", &rojig_spec, error))
         return FALSE;
     }
-  if (jigdo_spec)
-    self->jigdo_spec = g_build_filename (gs_file_get_path_cached (treefile_dir), jigdo_spec, NULL);
+  if (rojig_spec)
+    self->rojig_spec = g_build_filename (gs_file_get_path_cached (treefile_dir), rojig_spec, NULL);
 
   *out_context = g_steal_pointer (&self);
   return TRUE;
@@ -1296,14 +1296,14 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
                                  &new_revision, cancellable, error))
     return FALSE;
 
-  const char *jigdo_outputdir = opt_ex_jigdo_output_rpm ?: opt_ex_jigdo_output_set;
-  if (jigdo_outputdir)
+  const char *rojig_outputdir = opt_ex_jigdo_output_rpm ?: opt_ex_jigdo_output_set;
+  if (rojig_outputdir)
     {
-      if (!self->jigdo_spec)
+      if (!self->rojig_spec)
         return glnx_throw (error, "No ex-rojig-spec provided");
       if (!rpmostree_commit2rojig (self->repo, self->pkgcache_repo,
-                                   new_revision, self->jigdo_spec,
-                                   jigdo_outputdir,
+                                   new_revision, self->rojig_spec,
+                                   rojig_outputdir,
                                    cancellable, error))
         return FALSE;
     }

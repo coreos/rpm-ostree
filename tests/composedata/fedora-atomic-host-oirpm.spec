@@ -5,9 +5,9 @@
 Name: fedora-atomic-host
 Version:	%{ostree_version}
 Release:	1%{?dist}
-Summary:	Image (rpm-ostree jigdo) for Fedora Atomic Host
+Summary:	Image (rpm-ostree rojig) for Fedora Atomic Host
 License:	MIT
-#@@@rpmostree_jigdo_meta@@@
+#@@@rpmostree_rojig_meta@@@
 
 %description
 %{summary}

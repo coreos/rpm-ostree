@@ -122,9 +122,9 @@ gboolean rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
 
 char * rpmostree_get_cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch);
 char *rpmostree_get_cache_branch_header (Header hdr);
-char *rpmostree_get_jigdo_branch_header (Header hdr);
+char *rpmostree_get_rojig_branch_header (Header hdr);
 char *rpmostree_get_cache_branch_pkg (DnfPackage *pkg);
-char *rpmostree_get_jigdo_branch_pkg (DnfPackage *pkg);
+char *rpmostree_get_rojig_branch_pkg (DnfPackage *pkg);
 
 gboolean
 rpmostree_find_cache_branch_by_nevra (OstreeRepo    *pkgcache,
@@ -160,14 +160,14 @@ gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
 gboolean rpmostree_context_prepare (RpmOstreeContext     *self,
                                     GCancellable   *cancellable,
                                     GError        **error);
-/* Like above, but used for "pure jigdo" cases */
-gboolean rpmostree_context_prepare_jigdo (RpmOstreeContext     *self,
+/* Like above, but used for "pure rojig" cases */
+gboolean rpmostree_context_prepare_rojig (RpmOstreeContext     *self,
                                           GCancellable   *cancellable,
                                           GError        **error);
 
 GPtrArray *rpmostree_context_get_packages (RpmOstreeContext *self);
 
-/* Alternative to _prepare() for non-depsolve cases like jigdo */
+/* Alternative to _prepare() for non-depsolve cases like rojig */
 gboolean rpmostree_context_set_packages (RpmOstreeContext *self,
                                          GPtrArray        *packages,
                                          GCancellable     *cancellable,
@@ -179,7 +179,7 @@ gboolean rpmostree_context_download (RpmOstreeContext *self,
                                      GCancellable     *cancellable,
                                      GError           **error);
 
-gboolean rpmostree_context_execute_jigdo (RpmOstreeContext     *self,
+gboolean rpmostree_context_execute_rojig (RpmOstreeContext     *self,
                                           gboolean             *out_changed,
                                           GCancellable         *cancellable,
                                           GError              **error);
@@ -190,14 +190,14 @@ rpmostree_context_consume_package (RpmOstreeContext  *self,
                                    int               *out_fd,
                                    GError           **error);
 
-DnfPackage *rpmostree_context_get_jigdo_pkg (RpmOstreeContext  *self);
-const char *rpmostree_context_get_jigdo_checksum (RpmOstreeContext  *self);
+DnfPackage *rpmostree_context_get_rojig_pkg (RpmOstreeContext  *self);
+const char *rpmostree_context_get_rojig_checksum (RpmOstreeContext  *self);
 
 gboolean rpmostree_context_import (RpmOstreeContext *self,
                                    GCancellable     *cancellable,
                                    GError          **error);
 
-gboolean rpmostree_context_import_jigdo (RpmOstreeContext *self,
+gboolean rpmostree_context_import_rojig (RpmOstreeContext *self,
                                          GVariant         *xattr_table,
                                          GHashTable       *pkg_to_xattrs,
                                          GCancellable     *cancellable,

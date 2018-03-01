@@ -35,7 +35,7 @@
 #include "rpmostree-unpacker-core.h"
 #include "rpmostree-importer.h"
 #include "rpmostree-core.h"
-#include "rpmostree-jigdo-assembler.h"
+#include "rpmostree-rojig-assembler.h"
 #include "rpmostree-rpm-util.h"
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
@@ -68,15 +68,15 @@ struct RpmOstreeImporter
   DnfPackage *pkg;
   char *hdr_sha256;
 
-  guint n_jigdo_skipped;
-  guint n_jigdo_total;
+  guint n_rojig_skipped;
+  guint n_rojig_total;
   char *ostree_branch;
 
-  gboolean jigdo_mode;
-  char *jigdo_cacheid;
-  GVariant *jigdo_xattr_table;
-  GVariant *jigdo_xattrs;
-  GVariant *jigdo_next_xattrs; /* passed from filter to xattr cb */
+  gboolean rojig_mode;
+  char *rojig_cacheid;
+  GVariant *rojig_xattr_table;
+  GVariant *rojig_xattrs;
+  GVariant *rojig_next_xattrs; /* passed from filter to xattr cb */
 };
 
 G_DEFINE_TYPE(RpmOstreeImporter, rpmostree_importer, G_TYPE_OBJECT)
@@ -102,10 +102,10 @@ rpmostree_importer_finalize (GObject *object)
 
   g_free (self->hdr_sha256);
 
-  g_free (self->jigdo_cacheid);
-  g_clear_pointer (&self->jigdo_xattr_table, (GDestroyNotify)g_variant_unref);
-  g_clear_pointer (&self->jigdo_xattrs, (GDestroyNotify)g_variant_unref);
-  g_clear_pointer (&self->jigdo_next_xattrs, (GDestroyNotify)g_variant_unref);
+  g_free (self->rojig_cacheid);
+  g_clear_pointer (&self->rojig_xattr_table, (GDestroyNotify)g_variant_unref);
+  g_clear_pointer (&self->rojig_xattrs, (GDestroyNotify)g_variant_unref);
+  g_clear_pointer (&self->rojig_next_xattrs, (GDestroyNotify)g_variant_unref);
 
   G_OBJECT_CLASS (rpmostree_importer_parent_class)->finalize (object);
 }
@@ -292,15 +292,15 @@ rpmostree_importer_new_take_fd (int                     *fd,
 }
 
 void
-rpmostree_importer_set_jigdo_mode (RpmOstreeImporter                    *self,
+rpmostree_importer_set_rojig_mode (RpmOstreeImporter                    *self,
                                    GVariant *xattr_table,
                                    GVariant *xattrs)
 {
-  self->jigdo_mode = TRUE;
-  self->jigdo_xattr_table = g_variant_ref (xattr_table);
+  self->rojig_mode = TRUE;
+  self->rojig_xattr_table = g_variant_ref (xattr_table);
   g_variant_get (xattrs, "(s@a(su))",
-                 &self->jigdo_cacheid,
-                 &self->jigdo_xattrs);
+                 &self->rojig_cacheid,
+                 &self->rojig_xattrs);
 }
 
 static void
@@ -332,8 +332,8 @@ rpmostree_importer_get_ostree_branch (RpmOstreeImporter *self)
 {
   if (!self->ostree_branch)
     {
-      if (self->jigdo_mode)
-        self->ostree_branch = rpmostree_get_jigdo_branch_header (self->hdr);
+      if (self->rojig_mode)
+        self->ostree_branch = rpmostree_get_rojig_branch_header (self->hdr);
       else
         self->ostree_branch = rpmostree_get_cache_branch_header (self->hdr);
     }
@@ -482,20 +482,20 @@ build_metadata_variant (RpmOstreeImporter *self,
                              g_variant_new_string (chksum_repr));
     }
 
-  if (self->jigdo_mode)
+  if (self->rojig_mode)
     {
       g_variant_builder_add (&metadata_builder, "{sv}",
-                             "rpmostree.jigdo",
+                             "rpmostree.rojig",
                              g_variant_new_boolean (TRUE));
       g_variant_builder_add (&metadata_builder, "{sv}",
-                             "rpmostree.jigdo_cacheid",
-                             g_variant_new_string (self->jigdo_cacheid));
+                             "rpmostree.rojig_cacheid",
+                             g_variant_new_string (self->rojig_cacheid));
       g_variant_builder_add (&metadata_builder, "{sv}",
-                             "rpmostree.jigdo_n_skipped",
-                             g_variant_new_uint32 (self->n_jigdo_skipped));
+                             "rpmostree.rojig_n_skipped",
+                             g_variant_new_uint32 (self->n_rojig_skipped));
       g_variant_builder_add (&metadata_builder, "{sv}",
-                             "rpmostree.jigdo_total",
-                             g_variant_new_uint32 (self->n_jigdo_total));
+                             "rpmostree.rojig_total",
+                             g_variant_new_uint32 (self->n_rojig_total));
 
     }
 
@@ -703,7 +703,7 @@ unprivileged_filter_cb (OstreeRepo         *repo,
 }
 
 static OstreeRepoCommitFilterResult
-jigdo_filter_cb (OstreeRepo         *repo,
+rojig_filter_cb (OstreeRepo         *repo,
                  const char         *path,
                  GFileInfo          *file_info,
                  gpointer            user_data)
@@ -715,20 +715,20 @@ jigdo_filter_cb (OstreeRepo         *repo,
   if (error_was_set)
     return OSTREE_REPO_COMMIT_FILTER_SKIP;
 
-  self->n_jigdo_total++;
+  self->n_rojig_total++;
 
   if (g_file_info_get_file_type (file_info) != G_FILE_TYPE_DIRECTORY)
     {
-      self->jigdo_next_xattrs = NULL;
-      if (!rpmostree_jigdo_assembler_xattr_lookup (self->jigdo_xattr_table, path,
-                                                   self->jigdo_xattrs,
-                                                   &self->jigdo_next_xattrs,
+      self->rojig_next_xattrs = NULL;
+      if (!rpmostree_rojig_assembler_xattr_lookup (self->rojig_xattr_table, path,
+                                                   self->rojig_xattrs,
+                                                   &self->rojig_next_xattrs,
                                                    error))
         return OSTREE_REPO_COMMIT_FILTER_SKIP;
       /* No xattrs means we don't need to import it */
-      if (!self->jigdo_next_xattrs)
+      if (!self->rojig_next_xattrs)
         {
-          self->n_jigdo_skipped++;
+          self->n_rojig_skipped++;
           return OSTREE_REPO_COMMIT_FILTER_SKIP;
         }
     }
@@ -737,13 +737,13 @@ jigdo_filter_cb (OstreeRepo         *repo,
 }
 
 static GVariant*
-jigdo_xattr_cb (OstreeRepo  *repo,
+rojig_xattr_cb (OstreeRepo  *repo,
                 const char  *path,
                 GFileInfo   *file_info,
                 gpointer     user_data)
 {
   RpmOstreeImporter *self = user_data;
-  return g_steal_pointer (&self->jigdo_next_xattrs);
+  return g_steal_pointer (&self->rojig_next_xattrs);
 }
 
 static GVariant*
@@ -791,8 +791,8 @@ import_rpm_to_repo (RpmOstreeImporter *self,
    * is unprivileged, anything else is a compose.
    */
   const gboolean unprivileged = ostree_repo_get_mode (repo) == OSTREE_REPO_MODE_BARE_USER_ONLY;
-  if (self->jigdo_mode)
-    filter = jigdo_filter_cb;
+  if (self->rojig_mode)
+    filter = rojig_filter_cb;
   else if (unprivileged)
     filter = unprivileged_filter_cb;
   else
@@ -805,9 +805,9 @@ import_rpm_to_repo (RpmOstreeImporter *self,
     modifier_flags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_CANONICAL_PERMISSIONS;
   g_autoptr(OstreeRepoCommitModifier) modifier =
     ostree_repo_commit_modifier_new (modifier_flags, filter, &fdata, NULL);
-  if (self->jigdo_mode)
+  if (self->rojig_mode)
     {
-      ostree_repo_commit_modifier_set_xattr_callback (modifier, jigdo_xattr_cb,
+      ostree_repo_commit_modifier_set_xattr_callback (modifier, rojig_xattr_cb,
                                                       NULL, self);
       g_assert (self->sepolicy == NULL);
     }
