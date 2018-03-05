@@ -71,13 +71,6 @@ rpm-ostree rebase --os=testos otheros:
 assert_status_jq '.deployments[0].version == "'$(date "+%Y%m%d.0")'"'
 echo "ok rebase onto newer version"
 
-# Test 'upgrade --check' w/ no upgrade
-# XXX Disabled this because source repo has no /usr/share/rpm
-#     Maybe that's too heavy a requirement to just check for an
-#     upgrade, but on the other hand this is *RPM*-ostree.
-#rpm-ostree upgrade --os=testos --check
-#test "$?" = "77" || (echo 1>&2 "Expected exit code 77, got $?"; exit 1)
-
 # Jump backward to 1.0.9
 rpm-ostree deploy --os=testos 1.0.9
 assert_status_jq '.deployments[0].version == "1.0.9"'

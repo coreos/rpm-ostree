@@ -149,6 +149,13 @@ if [ -s out.txt ]; then
 fi
 echo "ok disabled"
 
+# check that --check/--preview still works
+vm_rpmostree upgrade --check > out.txt
+assert_file_has_content out.txt "No updates available."
+vm_rpmostree upgrade --preview > out.txt
+assert_file_has_content out.txt "No updates available."
+echo "ok --check/--preview no updates"
+
 # ok, let's test out check
 change_policy check
 vm_rpmostree status | grep 'auto updates enabled (check'
@@ -192,21 +199,42 @@ assert_file_has_content out.txt \
   "SecAdvisories: VMCHECK-SEC-NONE  Unknown    layered-sec-none-2.0-1.x86_64"
 assert_not_file_has_content out.txt "VMCHECK-ENH"
 
+assert_output() {
+  assert_file_has_content out.txt \
+    "SecAdvisories: 1 unknown severity, 1 low, 1 critical"
+  assert_file_has_content out-verbose.txt \
+    "SecAdvisories: VMCHECK-SEC-NONE  Unknown    layered-sec-none-2.0-1.x86_64" \
+    "               VMCHECK-SEC-LOW   Low        layered-sec-low-2.0-1.x86_64" \
+    "               VMCHECK-SEC-CRIT  Critical   layered-sec-crit-2.0-1.x86_64"
+}
+
 # now add all of them
 vm_build_rpm layered-sec-low version 2.0 uinfo VMCHECK-SEC-LOW
 vm_build_rpm layered-sec-crit version 2.0 uinfo VMCHECK-SEC-CRIT
 vm_rpmostree upgrade --trigger-automatic-update-policy
 vm_rpmostree status > out.txt
-assert_file_has_content out.txt \
-  "SecAdvisories: 1 unknown severity, 1 low, 1 critical"
-vm_rpmostree status -v > out.txt
-assert_file_has_content out.txt \
-  "SecAdvisories: VMCHECK-SEC-NONE  Unknown    layered-sec-none-2.0-1.x86_64" \
-  "               VMCHECK-SEC-LOW   Low        layered-sec-low-2.0-1.x86_64" \
-  "               VMCHECK-SEC-CRIT  Critical   layered-sec-crit-2.0-1.x86_64"
+vm_rpmostree status -v > out-verbose.txt
+assert_output
 echo "ok check mode layered only with advisories"
 
+# check we see the same output with --check/--preview
+vm_rpmostree upgrade --check > out.txt
+vm_rpmostree upgrade --preview > out-verbose.txt
+assert_output
+echo "ok --check/--preview layered pkgs check policy"
+
+# check that --check/--preview still works even with policy off
+change_policy off
+vm_rpmostree cleanup -m
+vm_cmd systemctl stop rpm-ostreed
+vm_rpmostree status | grep 'auto updates disabled'
+vm_rpmostree upgrade --check > out.txt
+vm_rpmostree upgrade --preview > out-verbose.txt
+assert_output
+echo "ok --check/--preview layered pkgs off policy"
+
 # ok now let's add ostree updates in the picture
+change_policy check
 create_update v2
 vm_rpmostree upgrade --trigger-automatic-update-policy
 
@@ -215,7 +243,7 @@ if vm_cmd ostree checkout vmcheckmote:vmcheck --subpath /usr/share/rpm; then
   assert_not_reached "Was able to checkout /usr/share/rpm?"
 fi
 
-assert_update() {
+assert_output2() {
   vm_assert_status_jq \
     '.["cached-update"]["origin"] == "vmcheckmote:vmcheck"' \
     '.["cached-update"]["version"] == "v2"' \
@@ -224,13 +252,11 @@ assert_update() {
 
   # we could assert more json here, though how it's presented to users is
   # important, and implicitly tests the json
-  vm_rpmostree status > out.txt
   assert_file_has_content out.txt \
     "SecAdvisories: 1 unknown severity, 1 low, 1 critical" \
     'Diff: 10 upgraded, 1 downgraded, 1 removed, 1 added'
 
-  vm_rpmostree status -v > out.txt
-  assert_file_has_content out.txt \
+  assert_file_has_content out-verbose.txt \
     "VMCHECK-SEC-NONE  Unknown    base-pkg-sec-none-2.0-1.x86_64" \
     "VMCHECK-SEC-NONE  Unknown    layered-sec-none-2.0-1.x86_64" \
     "VMCHECK-SEC-LOW   Low        base-pkg-sec-low-2.0-1.x86_64" \
@@ -244,8 +270,25 @@ assert_update() {
     'Added: base-pkg-boo-3.7-2.11.x86_64'
 }
 
-assert_update
+vm_rpmostree status > out.txt
+vm_rpmostree status -v > out-verbose.txt
+assert_output2
 echo "ok check mode ostree"
+
+# check that we get similar output with --check/--preview
+
+vm_rpmostree upgrade --check > out.txt
+vm_rpmostree upgrade --preview > out-verbose.txt
+assert_output2
+echo "ok --check/--preview base pkgs check policy"
+
+change_policy off
+vm_rpmostree cleanup -m
+vm_cmd systemctl stop rpm-ostreed
+vm_rpmostree upgrade --check > out.txt
+vm_rpmostree upgrade --preview > out-verbose.txt
+assert_output2
+echo "ok --check/--preview base pkgs off policy"
 
 assert_default_deployment_is_update() {
   vm_assert_status_jq \
