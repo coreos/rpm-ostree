@@ -81,7 +81,7 @@
        'signatures' (type 'av')
        'gpg-enabled' (type 'b')
        'ref-has-new-commit' (type 'b')
-          TRUE if 'checksum' refers to a new commit we're not booted in.
+          TRUE if 'checksum' refers to a new base commit we're not booted in.
        'rpm-diff' (type 'a{sv}')
           'upgraded' (type 'a(us(ss)(ss))')
           'downgraded' (type 'a(us(ss)(ss))')

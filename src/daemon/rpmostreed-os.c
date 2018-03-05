@@ -914,14 +914,14 @@ os_handle_update_deployment (RPMOSTreeOS *interface,
 }
 
 /* compat shim for call completer */
-static void automatic_update_trigger_completer (RPMOSTreeOS            *os,
-                                                GDBusMethodInvocation  *invocation,
-                                                GUnixFDList            *dummy,
-                                                const gchar            *address)
+static void
+automatic_update_trigger_completer (RPMOSTreeOS            *os,
+                                    GDBusMethodInvocation  *invocation,
+                                    GUnixFDList            *dummy,
+                                    const gchar            *address)
 {                                                              /* enabled */
   rpmostree_os_complete_automatic_update_trigger (os, invocation, TRUE, address);
 }
-
 
 /* we make this a separate method to keep the D-Bus API clean, but the actual
  * implementation is done by our dear friend deploy_transaction_execute(). ❤️
@@ -932,11 +932,26 @@ os_handle_automatic_update_trigger (RPMOSTreeOS *interface,
                                     GDBusMethodInvocation *invocation,
                                     GVariant *arg_options)
 {
+  g_autoptr(GError) local_error = NULL;
+  GError **error = &local_error;
+
+  const char *osname = rpmostree_os_get_name (interface);
+  OstreeSysroot *sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
+  OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
+  if (!booted || !g_str_equal (osname, ostree_deployment_get_osname (booted)))
+    {
+      /* We're not even booted in our osname; let's just not handle this case for now until
+       * someone shows up with a good use case for it. We only want the booted OS to use the
+       * current /var/cache, since it's per-OS. If we ever allow this, we'll want to
+       * invalidate the auto-update cache on the osname as well. */
+      glnx_throw (error, "Cannot trigger auto-update for offline OS '%s'", osname);
+      g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+      return TRUE;
+    }
+
   g_auto(GVariantDict) dict;
   g_variant_dict_init (&dict, arg_options);
   const char *mode = vardict_lookup_ptr (&dict, "mode", "&s") ?: "auto";
-  g_autoptr(GError) local_error = NULL;
-  GError **error = &local_error;
 
   RpmostreedAutomaticUpdatePolicy autoupdate_policy;
   if (g_str_equal (mode, "auto"))
@@ -1696,53 +1711,72 @@ out:
   return TRUE;
 }
 
+/* split out for easier handling of the NULL case */
+static gboolean
+refresh_cached_update_impl (RpmostreedOS *self,
+                            GVariant    **out_cached_update,
+                            GError      **error)
+{
+  g_autoptr(GVariant) cached_update = NULL;
+
+  /* if we're not booted into our OS, don't look at cache; it's for another OS interface */
+  const char *osname = rpmostree_os_get_name (RPMOSTREE_OS (self));
+  OstreeSysroot *sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
+  OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
+  if (!booted || !g_str_equal (osname, ostree_deployment_get_osname (booted)))
+    return TRUE; /* Note early return */
+
+  glnx_autofd int fd = -1;
+  g_autoptr(GError) local_error = NULL;
+  if (!glnx_openat_rdonly (AT_FDCWD, RPMOSTREE_AUTOUPDATES_CACHE_FILE, TRUE, &fd,
+                           &local_error))
+    {
+      if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+        return g_propagate_error (error, g_steal_pointer (&local_error)), FALSE;
+      return TRUE; /* Note early return */
+    }
+
+  /* sanity check there isn't something fishy going on before even reading it in */
+  struct stat stbuf;
+  if (!glnx_fstat (fd, &stbuf, error))
+    return FALSE;
+
+  if (!rpmostree_check_size_within_limit (stbuf.st_size, OSTREE_MAX_METADATA_SIZE,
+                                          RPMOSTREE_AUTOUPDATES_CACHE_FILE, error))
+    return FALSE;
+
+  g_autoptr(GBytes) data = glnx_fd_readall_bytes (fd, NULL, error);
+  if (!data)
+    return FALSE;
+
+  cached_update =
+    g_variant_ref_sink (g_variant_new_from_bytes (G_VARIANT_TYPE_VARDICT, data, FALSE));
+
+  /* check if cache is still valid -- see rpmostreed_update_generate_variant() */
+  g_auto(GVariantDict) dict;
+  g_variant_dict_init (&dict, cached_update);
+  const char *state = vardict_lookup_ptr (&dict, "update-sha256", "&s");
+  if (g_strcmp0 (state, ostree_deployment_get_csum (booted)) != 0)
+    {
+      sd_journal_print (LOG_INFO, "Deleting outdated cached update for OS '%s'", osname);
+      g_clear_pointer (&cached_update, (GDestroyNotify)g_variant_unref);
+      if (!glnx_unlinkat (AT_FDCWD, RPMOSTREE_AUTOUPDATES_CACHE_FILE, 0, error))
+        return FALSE;
+    }
+
+  *out_cached_update = g_steal_pointer (&cached_update);
+  return TRUE;
+}
+
 static gboolean
 refresh_cached_update (RpmostreedOS *self, GError **error)
 {
-  const char *name = rpmostree_os_get_name (RPMOSTREE_OS (self));
-  OstreeSysroot *sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
-  OstreeRepo *repo = ostree_sysroot_repo (sysroot);
-
-  /* if we're not handling the system sysroot, then let's just skip all this (e.g. `make
-   * check` tests) */
-  const char *sysroot_path = gs_file_get_path_cached (ostree_sysroot_get_path (sysroot));
-  if (!g_str_equal (sysroot_path, "/"))
-    return TRUE;
-
-  /* Note here we're *not* using rpmostree_syscore_get_origin_merge_deployment(): cached
-   * updates are always relative to the booted/merge deployment; e.g. we still want to be
-   * able to show details about a pending deployment. */
-  g_autoptr(OstreeDeployment) merge_deployment =
-    ostree_sysroot_get_merge_deployment (sysroot, name);
-
   g_autoptr(GVariant) cached_update = NULL;
-  if (merge_deployment)
-    {
-      RpmostreedAutomaticUpdatePolicy autoupdate_policy =
-        rpmostreed_get_automatic_update_policy (rpmostreed_daemon_get ());
-
-      /* if auto-updates is off, just fill in the backcompat stuff */
-      if (autoupdate_policy == RPMOSTREED_AUTOMATIC_UPDATE_POLICY_NONE)
-        {
-          cached_update = rpmostreed_commit_generate_cached_details_variant (merge_deployment,
-                                                                             repo, NULL, NULL,
-                                                                             error);
-          if (!cached_update)
-            return FALSE;
-        }
-      else
-        {
-          if (!rpmostreed_update_generate_variant (sysroot, merge_deployment, repo,
-                                                   &cached_update, error))
-            return FALSE;
-        }
-    }
+  if (!refresh_cached_update_impl (self, &cached_update, error))
+    return FALSE;
 
   rpmostree_os_set_cached_update (RPMOSTREE_OS (self), cached_update);
-
-  /* for backwards compatibility */
-  gboolean has_cached_updates = (cached_update != NULL);
-  rpmostree_os_set_has_cached_update_rpm_diff (RPMOSTREE_OS (self), has_cached_updates);
+  rpmostree_os_set_has_cached_update_rpm_diff (RPMOSTREE_OS (self), cached_update != NULL);
   return TRUE;
 }
 

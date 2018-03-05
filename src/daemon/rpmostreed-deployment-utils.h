@@ -19,6 +19,7 @@
 #pragma once
 
 #include <ostree.h>
+#include <libdnf/libdnf.h>
 
 #include "rpmostreed-types.h"
 
@@ -45,9 +46,10 @@ GVariant *      rpmostreed_commit_generate_cached_details_variant (OstreeDeploym
                                                                    const char       *refspec,
                                                                    const char       *checksum,
                                                                    GError          **error);
-gboolean
-rpmostreed_update_generate_variant (OstreeSysroot *sysroot,
-                                    OstreeDeployment *deployment,
-                                    OstreeRepo *repo,
-                                    GVariant **out_update,
-                                    GError **error);
+
+gboolean        rpmostreed_update_generate_variant (OstreeDeployment  *deployment,
+                                                    OstreeRepo        *repo,
+                                                    DnfSack           *sack,
+                                                    GVariant         **out_update,
+                                                    GCancellable      *cancellable,
+                                                    GError           **error);

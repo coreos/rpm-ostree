@@ -36,6 +36,9 @@
 #define RPMOSTREE_SYSIMAGE_DIR "usr/lib/sysimage"
 #define RPMOSTREE_BASE_RPMDB RPMOSTREE_SYSIMAGE_DIR "/rpm-ostree-base-db"
 
+/* put it in cache dir so it gets destroyed naturally with a `cleanup -m` */
+#define RPMOSTREE_AUTOUPDATES_CACHE_FILE RPMOSTREE_CORE_CACHEDIR "cached-update.gv"
+
 #define RPMOSTREE_TYPE_CONTEXT (rpmostree_context_get_type ())
 G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, GObject)
 
