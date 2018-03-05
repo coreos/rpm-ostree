@@ -153,8 +153,9 @@ rpmostree_get_nevra_from_pkgcache (OstreeRepo   *repo,
                                    GError  **error);
 
 gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
-                                               GCancellable      *cancellable,
-                                               GError           **error);
+                                              DnfContextSetupSackFlags flags,
+                                              GCancellable      *cancellable,
+                                              GError           **error);
 
 /* This API allocates an install context, use with one of the later ones */
 gboolean rpmostree_context_prepare (RpmOstreeContext     *self,

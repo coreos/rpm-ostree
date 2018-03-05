@@ -1040,6 +1040,7 @@ rpmostree_get_nevra_from_pkgcache (OstreeRepo  *repo,
 /* Initiate download of rpm-md */
 gboolean
 rpmostree_context_download_metadata (RpmOstreeContext *self,
+                                     DnfContextSetupSackFlags flags,
                                      GCancellable     *cancellable,
                                      GError          **error)
 {
@@ -1049,6 +1050,8 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
    * https://github.com/projectatomic/rpm-ostree/issues/1127
    */
   if (self->rojig_pure)
+    flags |= DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS;
+  if (flags & DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS)
     dnf_context_set_enable_filelists (self->dnfctx, FALSE);
 
   g_autoptr(GPtrArray) rpmmd_repos =
@@ -1056,11 +1059,12 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 
   if (self->pkgcache_only)
     {
+      /* we already disabled all the repos in setup */
       g_assert_cmpint (rpmmd_repos->len, ==, 0);
 
       /* this is essentially a no-op */
       g_autoptr(DnfState) hifstate = dnf_state_new ();
-      if (!dnf_context_setup_sack (self->dnfctx, hifstate, error))
+      if (!dnf_context_setup_sack_with_flags (self->dnfctx, hifstate, flags, error))
         return FALSE;
 
       /* Note early return; no repos to fetch. */
@@ -1131,11 +1135,12 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
     guint progress_sigid = g_signal_connect (hifstate, "percentage-changed",
                                              G_CALLBACK (on_hifstate_percentage_changed),
                                              "Importing metadata");
+
     /* This will check the metadata again, but it *should* hit the cache; down
      * the line we should really improve the libdnf API around all of this.
      */
     DECLARE_RPMSIGHANDLER_RESET;
-    if (!dnf_context_setup_sack (self->dnfctx, hifstate, error))
+    if (!dnf_context_setup_sack_with_flags (self->dnfctx, hifstate, flags, error))
       return FALSE;
     g_signal_handler_disconnect (hifstate, progress_sigid);
     rpmostree_output_progress_end ();
@@ -1895,7 +1900,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   /* setup sack if not yet set up */
   if (dnf_context_get_sack (dnfctx) == NULL)
     {
-      if (!rpmostree_context_download_metadata (self, cancellable, error))
+      if (!rpmostree_context_download_metadata (self, 0, cancellable, error))
         return FALSE;
       journal_rpmmd_info (self);
     }
