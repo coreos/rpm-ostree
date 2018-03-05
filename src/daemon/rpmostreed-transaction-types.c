@@ -1528,7 +1528,9 @@ refresh_md_transaction_execute (RpmostreedTransaction *transaction,
   /* point libdnf to our repos dir */
   rpmostree_context_configure_from_deployment (ctx, sysroot, cfg_merge_deployment);
 
-  if (!rpmostree_context_download_metadata (ctx, cancellable, error))
+  /* don't even bother loading the rpmdb */
+  if (!rpmostree_context_download_metadata (ctx, DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB,
+                                            cancellable, error))
     return FALSE;
 
   return TRUE;
