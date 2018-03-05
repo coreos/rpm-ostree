@@ -1135,11 +1135,18 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
     rpmostree_output_progress_end ();
   }
 
+  return TRUE;
+}
+
+static void
+journal_rpmmd_info (RpmOstreeContext *self)
+{
   /* A lot of code to simply log a message to the systemd journal with the state
    * of the rpm-md repos. This is intended to aid system admins with determining
    * system ""up-to-dateness"".
    */
-  { g_autoptr(GPtrArray) repos = get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
+  { g_autoptr(GPtrArray) repos =
+      get_enabled_rpmmd_repos (self->dnfctx, DNF_REPO_ENABLED_PACKAGES);
     g_autoptr(GString) enabled_repos = g_string_new ("");
     g_autoptr(GString) enabled_repos_solvables = g_string_new ("");
     g_autoptr(GString) enabled_repos_timestamps = g_string_new ("");
@@ -1161,20 +1168,23 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
         g_autofree char *quoted = g_shell_quote (dnf_repo_get_id (repo));
         g_string_append (enabled_repos, quoted);
         total_solvables += dnf_repo_get_n_solvables (repo);
-        g_string_append_printf (enabled_repos_solvables, "%u", dnf_repo_get_n_solvables (repo));
-        g_string_append_printf (enabled_repos_timestamps, "%" G_GUINT64_FORMAT, dnf_repo_get_timestamp_generated (repo));
+        g_string_append_printf (enabled_repos_solvables, "%u",
+                                dnf_repo_get_n_solvables (repo));
+        g_string_append_printf (enabled_repos_timestamps, "%" G_GUINT64_FORMAT,
+                                dnf_repo_get_timestamp_generated (repo));
       }
 
-    sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_PKG_REPOS),
-                     "MESSAGE=Preparing pkg txn; enabled repos: [%s] solvables: %u", enabled_repos->str, total_solvables,
-                     "SACK_N_SOLVABLES=%i", dnf_sack_count (dnf_context_get_sack (self->dnfctx)),
+    sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR,
+                        SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_PKG_REPOS),
+                     "MESSAGE=Preparing pkg txn; enabled repos: [%s] solvables: %u",
+                        enabled_repos->str, total_solvables,
+                     "SACK_N_SOLVABLES=%i",
+                        dnf_sack_count (dnf_context_get_sack (self->dnfctx)),
                      "ENABLED_REPOS=[%s]", enabled_repos->str,
                      "ENABLED_REPOS_SOLVABLES=[%s]", enabled_repos_solvables->str,
                      "ENABLED_REPOS_TIMESTAMPS=[%s]", enabled_repos_timestamps->str,
                      NULL);
   }
-
-  return TRUE;
 }
 
 /* Quote/squash all non-(alphanumeric plus `.` and `-`); this
@@ -1881,6 +1891,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
     {
       if (!rpmostree_context_download_metadata (self, cancellable, error))
         return FALSE;
+      journal_rpmmd_info (self);
     }
 
   /* Don't try to keep multiple kernels per root; that's a traditional thing,
