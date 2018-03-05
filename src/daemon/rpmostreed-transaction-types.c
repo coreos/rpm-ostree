@@ -1002,6 +1002,14 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
        * have pkgs layered). This is still just a heuristic, since e.g. an InactiveRequest
        * may in fact become active in the new base, but we don't have the full tree. */
 
+      /* Note here that we use the cfg merge deployment for releasever: the download
+       * metadata only path is currently used only by the auto-update checker, and there
+       * we want to show updates/vulnerabilities relative to the *booted* releasever. */
+      g_autoptr(OstreeDeployment) cfg_merge_deployment =
+        ostree_sysroot_get_merge_deployment (sysroot, self->osname);
+
+      g_autoptr(DnfSack) sack = NULL;
+
       /* XXX: in rojig mode we'll want to do this unconditionally */
       if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
         {
@@ -1009,27 +1017,47 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           g_autoptr(RpmOstreeContext) ctx =
             rpmostree_context_new_system (repo, cancellable, error);
 
-          /* Note here that we use the cfg merge deployment for releasever: the download
-           * metadata only path is currently used only by the auto-update checker, and there
-           * we want to show updates/vulnerabilities relative to the *booted* releasever.
-           * Anyway, given that we don't yet do etc merges on boot, it shouldn't be too
-           * common for users to stay long on e.g. f26 when they have f27 already deployed
-           * and ready to reboot into. */
-          g_autoptr(OstreeDeployment) cfg_merge_deployment =
-            ostree_sysroot_get_merge_deployment (sysroot, self->osname);
-
           g_autofree char *source_root =
             rpmostree_get_deployment_root (sysroot, cfg_merge_deployment);
           if (!rpmostree_context_setup (ctx, NULL, source_root, NULL, cancellable, error))
             return FALSE;
 
           /* we always want to force a refetch of the metadata */
-          dnf_context_set_cache_age (rpmostree_context_get_dnf (ctx), 0);
+          DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
+          dnf_context_set_cache_age (dnfctx, 0);
 
           /* point libdnf to our repos dir */
           rpmostree_context_configure_from_deployment (ctx, sysroot, cfg_merge_deployment);
 
-          if (!rpmostree_context_download_metadata (ctx, cancellable, error))
+          /* streamline: we don't need rpmdb or filelists, but we *do* need updateinfo */
+          if (!rpmostree_context_download_metadata (ctx,
+                DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB |
+                DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS |
+                DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO, cancellable, error))
+            return FALSE;
+
+          sack = g_object_ref (dnf_context_get_sack (dnfctx));
+        }
+
+      /* now generate the variant and cache it to disk */
+
+      /* always delete first since we might not be replacing it at all */
+      if (!glnx_shutil_rm_rf_at (AT_FDCWD, RPMOSTREE_AUTOUPDATES_CACHE_FILE,
+                                 cancellable, error))
+        return FALSE;
+
+      g_autoptr(GVariant) update = NULL;
+      if (!rpmostreed_update_generate_variant (sysroot, cfg_merge_deployment, repo, sack,
+                                               &update, cancellable, error))
+        return FALSE;
+
+      if (update != NULL)
+        {
+          if (!glnx_file_replace_contents_at (AT_FDCWD, RPMOSTREE_AUTOUPDATES_CACHE_FILE,
+                                              g_variant_get_data (update),
+                                              g_variant_get_size (update),
+                                              GLNX_FILE_REPLACE_NODATASYNC,
+                                              cancellable, error))
             return FALSE;
         }
 

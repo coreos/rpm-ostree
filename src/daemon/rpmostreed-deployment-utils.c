@@ -878,103 +878,19 @@ rpm_ostree_pkgs_to_dnf (DnfSack   *sack,
   return g_steal_pointer (&dnf_pkgs);
 }
 
-static gboolean
-get_cached_rpmmd_sack (OstreeSysroot     *sysroot,
-                       OstreeRepo        *repo,
-                       OstreeDeployment  *deployment,
-                       DnfSack          **out_sack,
-                       GError           **error)
-{
-  /* we don't need the full force of the core ctx here; we just want a DnfContext so that it
-   * can load the repos and deal with releasever for us */
-  g_autoptr(DnfContext) ctx = dnf_context_new ();
-
-  /* We have to point to the same source root for releasever to hit the right cache: an
-   * interesting point here is that if there's a newer $releasever pending (i.e. 'deploy'
-   * auto update policy), we'll still be using the previous releasever -- this is OK though,
-   * we should be special-casing these rebases later re. how to display them; at least
-   * status already shows endoflife. See also deploy_transaction_execute(). */
-  g_autofree char *deployment_root = rpmostree_get_deployment_root (sysroot, deployment);
-  dnf_context_set_source_root (ctx, deployment_root);
-  g_autofree char *reposdir = g_build_filename (deployment_root, "etc/yum.repos.d", NULL);
-  dnf_context_set_repo_dir (ctx, reposdir);
-  dnf_context_set_cache_dir (ctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_REPOMD);
-  dnf_context_set_solv_dir (ctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_SOLV);
-
-  if (!dnf_context_setup (ctx, NULL, error))
-    return FALSE;
-
-  /* add the repos but strictly from cache; we should have already *just* checked &
-   * refreshed metadata as part of the DeployTransaction; but we gracefully handle bad cache
-   * too (e.g. if we start using the new dnf_context_clean_cache() on rebases?) */
-  GPtrArray *repos = dnf_context_get_repos (ctx);
-
-  /* need a new DnfSackAddFlags flag for dnf_sack_add_repos to say "don't fallback to
-   * updating if cache invalid/absent"; for now, just do it ourselves */
-  GPtrArray *cached_enabled_repos = g_ptr_array_new ();
-  for (guint i = 0; i < repos->len; i++)
-    {
-      DnfRepo *repo = repos->pdata[i];
-      if ((dnf_repo_get_enabled (repo) & DNF_REPO_ENABLED_PACKAGES) == 0)
-        continue;
-
-      /* TODO: We need to expand libdnf here to somehow do a dnf_repo_check() without it
-       * triggering a download if there's no cache at all. Here, we just physically check
-       * for the location. */
-      const char *location = dnf_repo_get_location (repo);
-      if (!glnx_fstatat_allow_noent (AT_FDCWD, location, NULL, 0, error))
-        return FALSE;
-      if (errno == ENOENT)
-        continue;
-
-      g_autoptr(GError) local_error = NULL;
-      g_autoptr(DnfState) state = dnf_state_new ();
-      if (!dnf_repo_check (repo, G_MAXUINT, state, &local_error))
-        sd_journal_print (LOG_WARNING, "Couldn't load cache for repo %s: %s",
-                          dnf_repo_get_id (repo), local_error->message);
-      else
-        g_ptr_array_add (cached_enabled_repos, repo);
-    }
-
-  g_autoptr(DnfSack) sack = NULL;
-  if (cached_enabled_repos->len > 0)
-    {
-      /* Set up our own sack and point it to the solv cache. TODO: We could've used the sack
-       * from dnf_context_setup_sack(), but we need to extend libdnf to specify flags like
-       * UPDATEINFO beforehand. Otherwise we have to add_repos() twice which almost double
-       * startup time. */
-      sack = dnf_sack_new ();
-      dnf_sack_set_cachedir (sack, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_SOLV);
-      if (!dnf_sack_setup (sack, DNF_SACK_SETUP_FLAG_MAKE_CACHE_DIR, error))
-        return FALSE;
-
-      /* we still use add_repos rather than add_repo separately above because it does nice
-       * things like process excludes */
-      g_autoptr(DnfState) state = dnf_state_new ();
-      if (!dnf_sack_add_repos (sack, cached_enabled_repos, G_MAXUINT,
-                               DNF_SACK_ADD_FLAG_UPDATEINFO, state, error))
-        return FALSE;
-    }
-
-  *out_sack = g_steal_pointer (&sack);
-  return TRUE;
-}
-
 /* The variant returned by this function is backwards compatible with the one returned by
  * rpmostreed_commit_generate_cached_details_variant(). However, it also includes a base
  * tree db diff, layered pkgs diff, state, advisories, etc... Also, it will happily return
  * NULL if no updates are available. */
 gboolean
-rpmostreed_update_generate_variant (OstreeSysroot *sysroot,
-                                    OstreeDeployment *deployment,
-                                    OstreeRepo *repo,
-                                    GVariant **out_update,
-                                    GError **error)
+rpmostreed_update_generate_variant (OstreeSysroot     *sysroot,
+                                    OstreeDeployment  *deployment,
+                                    OstreeRepo        *repo,
+                                    DnfSack           *sack,
+                                    GVariant         **out_update,
+                                    GCancellable      *cancellable,
+                                    GError           **error)
 {
-  /* We try to minimize I/O in this function. We're in the daemon startup path, and thus
-   * directly contribute to lag from a cold `rpm-ostree status`. Anyway, as a principle we
-   * shouldn't do long-running operations outside of transactions. */
-
   g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
   if (!origin)
     return FALSE;
@@ -1003,22 +919,23 @@ rpmostreed_update_generate_variant (OstreeSysroot *sysroot,
     return FALSE;
 
   const char *current_checksum = ostree_deployment_get_csum (deployment);
+  const char *current_base_checksum = current_checksum;
   gboolean is_layered;
-  g_autofree char *current_checksum_owned = NULL;
+  g_autofree char *current_base_checksum_owned = NULL;
   if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered,
-                                              &current_checksum_owned, NULL, NULL, NULL,
+                                              &current_base_checksum_owned, NULL, NULL, NULL,
                                               error))
     return FALSE;
   if (is_layered)
-    current_checksum = current_checksum_owned;
+    current_base_checksum = current_base_checksum_owned;
 
   /* Graciously handle rev no longer in repo; e.g. mucking around with rebase/rollback; we
    * still want to do the rpm-md phase. In that case, just use the current csum. */
   gboolean is_new_checksum = FALSE;
   if (!new_checksum)
-    new_checksum = g_strdup (current_checksum);
+    new_checksum = g_strdup (current_base_checksum);
   else
-    is_new_checksum = !g_str_equal (new_checksum, current_checksum);
+    is_new_checksum = !g_str_equal (new_checksum, current_base_checksum);
 
   g_autoptr(GVariant) commit = NULL;
   if (!ostree_repo_load_commit (repo, new_checksum, &commit, NULL, error))
@@ -1050,8 +967,9 @@ rpmostreed_update_generate_variant (OstreeSysroot *sysroot,
 
       /* Note we allow_noent here; we'll just skip over the rpm diff if there's no data */
       RpmOstreeDbDiffExtFlags flags = RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT;
-      if (!rpm_ostree_db_diff_ext (repo, current_checksum, new_checksum, flags, &removed,
-                                   &added, &modified_old, &ostree_modified_new, NULL, error))
+      if (!rpm_ostree_db_diff_ext (repo, current_base_checksum, new_checksum, flags,
+                                   &removed, &added, &modified_old, &ostree_modified_new,
+                                   cancellable, error))
         return FALSE;
 
       /* check if allow_noent kicked in */
@@ -1062,18 +980,13 @@ rpmostreed_update_generate_variant (OstreeSysroot *sysroot,
 
   /* now we look at the rpm-md side */
 
-  /* first we try to set up a sack (NULL --> no cache available) */
-  g_autoptr(DnfSack) sack = NULL;
-  if (!get_cached_rpmmd_sack (sysroot, repo, deployment, &sack, error))
-    return FALSE;
-
   g_autoptr(GPtrArray) rpmmd_modified_new = NULL;
 
   GHashTable *layered_pkgs = rpmostree_origin_get_packages (origin);
   /* check that it's actually layered (i.e. the requests are not all just dormant) */
   if (sack && is_layered && g_hash_table_size (layered_pkgs) > 0)
     {
-      if (!rpmmd_diff (sysroot, repo, deployment, current_checksum, sack, &rpm_diff,
+      if (!rpmmd_diff (sysroot, repo, deployment, current_base_checksum, sack, &rpm_diff,
                        &rpmmd_modified_new, error))
         return FALSE;
     }
@@ -1112,7 +1025,12 @@ rpmostreed_update_generate_variant (OstreeSysroot *sysroot,
 
   /* but if there are no updates, then just ditch the whole thing and return NULL */
   if (is_new_checksum || rpmmd_modified_new)
-    *out_update = g_variant_ref_sink (g_variant_dict_end (&dict));
+    {
+      /* include a "state" checksum for cache invalidation; for now this is just the booted
+       * checksum (*not* base), though we could base it off more things later if needed */
+      g_variant_dict_insert (&dict, "state-sha512", "s", current_checksum);
+      *out_update = g_variant_ref_sink (g_variant_dict_end (&dict));
+    }
   else
     *out_update = NULL;
 

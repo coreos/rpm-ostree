@@ -135,11 +135,18 @@ EOF
   vm_rpmostree reload
 }
 
+vm_rpmostree cleanup -m
+
 # make sure that off means off
 change_policy off
 vm_rpmostree status | grep 'auto updates disabled'
 vm_rpmostree upgrade --trigger-automatic-update-policy > out.txt
 assert_file_has_content out.txt "Automatic updates are not enabled; exiting"
+# check we didn't download any metadata (skip starting dir)
+vm_cmd find /var/cache/rpm-ostree | tail -n +2 > out.txt
+if [ -s out.txt ]; then
+  cat out.txt && assert_not_reached "rpmmd downloaded!"
+fi
 echo "ok disabled"
 
 # ok, let's test out check
@@ -166,6 +173,13 @@ assert_file_has_content out.txt "Upgraded: layered-cake 2.1-3 -> 2.1-4"
 ! grep -A999 'Available update' out.txt | grep "Timestamp"
 ! grep -A999 'Available update' out.txt | grep "Commit"
 echo "ok check mode layered only"
+
+# confirm no filelists were fetched
+vm_cmd find /var/cache/rpm-ostree -iname '*filelists*' > out.txt
+if [ -s out.txt ]; then
+  cat out.txt && assert_not_reached "Filelists were downloaded!"
+fi
+echo "ok no filelists"
 
 # now add some advisory updates
 vm_build_rpm layered-enh version 2.0 uinfo VMCHECK-ENH
