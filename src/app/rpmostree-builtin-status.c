@@ -353,6 +353,8 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
 
   /* First, gather global state */
   gboolean have_any_live_overlay = FALSE;
+  gboolean have_multiple_stateroots = FALSE;
+  const char *last_osname = NULL;
   g_variant_iter_init (&iter, deployments);
   while (TRUE)
     {
@@ -372,6 +374,13 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
       const gboolean have_live_changes = live_inprogress || live_replaced;
 
       have_any_live_overlay = have_any_live_overlay || have_live_changes;
+
+      const char *osname = NULL;
+      g_assert (g_variant_dict_lookup (dict, "osname", "&s", &osname));
+      if (!last_osname)
+        last_osname = osname;
+      else if (!g_str_equal (osname, last_osname))
+        have_multiple_stateroots = TRUE;
     }
 
   g_print ("Deployments:\n");
@@ -586,7 +595,7 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
         }
 
       /* This used to be OSName; see https://github.com/ostreedev/ostree/pull/794 */
-      if (opt_verbose)
+      if (opt_verbose || have_multiple_stateroots)
         rpmostree_print_kv ("StateRoot", max_key_len, os_name);
 
       if (!g_variant_dict_lookup (dict, "gpg-enabled", "b", &gpg_enabled))
