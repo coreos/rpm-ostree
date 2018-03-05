@@ -20,6 +20,7 @@
 #include "ostree.h"
 
 #include <libglnx.h>
+#include <systemd/sd-journal.h>
 
 #include "rpmostreed-transaction-types.h"
 #include "rpmostreed-transaction.h"
@@ -1002,11 +1003,16 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
        * have pkgs layered). This is still just a heuristic, since e.g. an InactiveRequest
        * may in fact become active in the new base, but we don't have the full tree. */
 
-      /* Note here that we use the cfg merge deployment for releasever: the download
-       * metadata only path is currently used only by the auto-update checker, and there
-       * we want to show updates/vulnerabilities relative to the *booted* releasever. */
-      g_autoptr(OstreeDeployment) cfg_merge_deployment =
-        ostree_sysroot_get_merge_deployment (sysroot, self->osname);
+      /* Note here that we use the booted deployment for releasever: the download metadata
+       * only path is currently used only by the auto-update checker, and there we always
+       * want to show updates/vulnerabilities relative to the *booted* releasever. */
+      OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
+
+      /* this is checked in AutomaticUpdateTrigger, but check here too to be safe */
+      if (!booted_deployment ||
+          !g_str_equal (self->osname, ostree_deployment_get_osname (booted_deployment)))
+        return glnx_throw (error, "Refusing to download rpm-md for offline OS '%s'",
+                           self->osname);
 
       g_autoptr(DnfSack) sack = NULL;
 
@@ -1018,7 +1024,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             rpmostree_context_new_system (repo, cancellable, error);
 
           g_autofree char *source_root =
-            rpmostree_get_deployment_root (sysroot, cfg_merge_deployment);
+            rpmostree_get_deployment_root (sysroot, booted_deployment);
           if (!rpmostree_context_setup (ctx, NULL, source_root, NULL, cancellable, error))
             return FALSE;
 
@@ -1027,7 +1033,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           dnf_context_set_cache_age (dnfctx, 0);
 
           /* point libdnf to our repos dir */
-          rpmostree_context_configure_from_deployment (ctx, sysroot, cfg_merge_deployment);
+          rpmostree_context_configure_from_deployment (ctx, sysroot, booted_deployment);
 
           /* streamline: we don't need rpmdb or filelists, but we *do* need updateinfo */
           if (!rpmostree_context_download_metadata (ctx,
@@ -1047,8 +1053,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
 
       g_autoptr(GVariant) update = NULL;
-      if (!rpmostreed_update_generate_variant (sysroot, cfg_merge_deployment, repo, sack,
-                                               &update, cancellable, error))
+      if (!rpmostreed_update_generate_variant (booted_deployment, repo, sack, &update,
+                                               cancellable, error))
         return FALSE;
 
       if (update != NULL)
@@ -1056,8 +1062,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           if (!glnx_file_replace_contents_at (AT_FDCWD, RPMOSTREE_AUTOUPDATES_CACHE_FILE,
                                               g_variant_get_data (update),
                                               g_variant_get_size (update),
-                                              GLNX_FILE_REPLACE_NODATASYNC,
-                                              cancellable, error))
+                                              0, cancellable, error))
             return FALSE;
         }
 

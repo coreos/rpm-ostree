@@ -678,11 +678,9 @@ find_newer_package (DnfSack    *sack,
  * @rpm_diff, and all new pkgs in @out_newer_packages (these are used later for advisories).
  * */
 static gboolean
-rpmmd_diff (OstreeSysroot    *sysroot,
-            /* these are just to avoid refetching them */
-            OstreeRepo       *repo,
-            OstreeDeployment *deployment,
+rpmmd_diff (OstreeRepo       *repo,
             const char       *base_checksum,
+            const char       *layered_checksum,
             DnfSack          *sack,
             RpmDiff          *rpm_diff,
             GPtrArray       **out_newer_packages,
@@ -694,7 +692,6 @@ rpmmd_diff (OstreeSysroot    *sysroot,
    * layered_pkgs. */
 
   g_autoptr(GPtrArray) all_layered_pkgs = NULL;
-  const char *layered_checksum = ostree_deployment_get_csum (deployment);
   RpmOstreeDbDiffExtFlags flags = RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT;
   if (!rpm_ostree_db_diff_ext (repo, base_checksum, layered_checksum, flags, NULL,
                                &all_layered_pkgs, NULL, NULL, NULL, error))
@@ -883,15 +880,15 @@ rpm_ostree_pkgs_to_dnf (DnfSack   *sack,
  * tree db diff, layered pkgs diff, state, advisories, etc... Also, it will happily return
  * NULL if no updates are available. */
 gboolean
-rpmostreed_update_generate_variant (OstreeSysroot     *sysroot,
-                                    OstreeDeployment  *deployment,
+rpmostreed_update_generate_variant (OstreeDeployment  *deployment,
                                     OstreeRepo        *repo,
                                     DnfSack           *sack,
                                     GVariant         **out_update,
                                     GCancellable      *cancellable,
                                     GError           **error)
 {
-  g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
+  g_autoptr(RpmOstreeOrigin) origin =
+    rpmostree_origin_parse_deployment (deployment, error);
   if (!origin)
     return FALSE;
 
@@ -986,7 +983,7 @@ rpmostreed_update_generate_variant (OstreeSysroot     *sysroot,
   /* check that it's actually layered (i.e. the requests are not all just dormant) */
   if (sack && is_layered && g_hash_table_size (layered_pkgs) > 0)
     {
-      if (!rpmmd_diff (sysroot, repo, deployment, current_base_checksum, sack, &rpm_diff,
+      if (!rpmmd_diff (repo, current_base_checksum, current_checksum, sack, &rpm_diff,
                        &rpmmd_modified_new, error))
         return FALSE;
     }
@@ -1026,9 +1023,10 @@ rpmostreed_update_generate_variant (OstreeSysroot     *sysroot,
   /* but if there are no updates, then just ditch the whole thing and return NULL */
   if (is_new_checksum || rpmmd_modified_new)
     {
-      /* include a "state" checksum for cache invalidation; for now this is just the booted
-       * checksum (*not* base), though we could base it off more things later if needed */
-      g_variant_dict_insert (&dict, "state-sha512", "s", current_checksum);
+      /* include a "state" checksum for cache invalidation; for now this is just the
+       * checksum of the deployment against which we ran, though we could base it off more
+       * things later if needed */
+      g_variant_dict_insert (&dict, "update-sha256", "s", current_checksum);
       *out_update = g_variant_ref_sink (g_variant_dict_end (&dict));
     }
   else
