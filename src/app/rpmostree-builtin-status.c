@@ -391,10 +391,33 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
   while (TRUE)
     {
       g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
-      g_autoptr(GVariantDict) dict = NULL;
-      g_autoptr(GVariantDict) commit_meta_dict = NULL;
-      g_autoptr(GVariantDict) layered_commit_meta_dict = NULL;
-      gboolean is_locally_assembled = FALSE;
+      /* Add the long keys here */
+      const guint max_key_len = MAX (strlen ("InactiveBaseReplacements"),
+                                     strlen ("InterruptedLiveCommit"));
+
+      if (child == NULL)
+        break;
+
+      g_autoptr(GVariantDict) dict = g_variant_dict_new (child);
+
+      /* osname should always be present. */
+      const gchar *os_name;
+      const gchar *id;
+      int serial;
+      const gchar *checksum;
+      g_assert (g_variant_dict_lookup (dict, "osname", "&s", &os_name));
+      g_assert (g_variant_dict_lookup (dict, "id", "&s", &id));
+      g_assert (g_variant_dict_lookup (dict, "serial", "i", &serial));
+      g_assert (g_variant_dict_lookup (dict, "checksum", "&s", &checksum));
+
+      gboolean is_booted;
+      if (!g_variant_dict_lookup (dict, "booted", "b", &is_booted))
+        is_booted = FALSE;
+
+      if (!is_booted && opt_only_booted)
+        continue;
+
+      const gchar *origin_refspec;
       g_autofree const gchar **origin_packages = NULL;
       g_autofree const gchar **origin_requested_packages = NULL;
       g_autofree const gchar **origin_requested_local_packages = NULL;
@@ -402,42 +425,6 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
       g_autofree const gchar **origin_requested_base_removals = NULL;
       g_autoptr(GVariant) origin_base_local_replacements = NULL;
       g_autofree const gchar **origin_requested_base_local_replacements = NULL;
-      const gchar *origin_refspec;
-      const gchar *id;
-      const gchar *os_name;
-      const gchar *checksum;
-      const gchar *version_string;
-      const gchar *unlocked;
-      const gchar *live_inprogress;
-      const gchar *live_replaced;
-      gboolean gpg_enabled;
-      gboolean regenerate_initramfs;
-      guint64 t = 0;
-      int serial;
-      gboolean is_booted;
-      /* Add the long keys here */
-      const guint max_key_len = MAX (strlen ("InactiveBaseReplacements"),
-                                     strlen ("InterruptedLiveCommit"));
-      g_autoptr(GVariant) signatures = NULL;
-      g_autofree char *timestamp_string = NULL;
-
-      if (child == NULL)
-        break;
-
-      dict = g_variant_dict_new (child);
-
-      /* osname should always be present. */
-      g_assert (g_variant_dict_lookup (dict, "osname", "&s", &os_name));
-      g_assert (g_variant_dict_lookup (dict, "id", "&s", &id));
-      g_assert (g_variant_dict_lookup (dict, "serial", "i", &serial));
-      g_assert (g_variant_dict_lookup (dict, "checksum", "&s", &checksum));
-
-      if (!g_variant_dict_lookup (dict, "booted", "b", &is_booted))
-        is_booted = FALSE;
-
-      if (!is_booted && opt_only_booted)
-        continue;
-
       if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
         {
           origin_packages =
@@ -458,16 +445,20 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
         }
       else
         origin_refspec = NULL;
+
+      const gchar *version_string;
       if (!g_variant_dict_lookup (dict, "version", "&s", &version_string))
         version_string = NULL;
+      const gchar *unlocked;
       if (!g_variant_dict_lookup (dict, "unlocked", "&s", &unlocked))
         unlocked = NULL;
 
+      gboolean regenerate_initramfs;
       if (!g_variant_dict_lookup (dict, "regenerate-initramfs", "b", &regenerate_initramfs))
         regenerate_initramfs = FALSE;
 
-      signatures = g_variant_dict_lookup_value (dict, "signatures",
-                                                G_VARIANT_TYPE ("av"));
+      g_autoptr(GVariant) signatures =
+        g_variant_dict_lookup_value (dict, "signatures", G_VARIANT_TYPE ("av"));
 
       if (first)
         first = FALSE;
@@ -524,14 +515,16 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
 
       const char *base_checksum = NULL;
       g_variant_dict_lookup (dict, "base-checksum", "&s", &base_checksum);
+      gboolean is_locally_assembled = FALSE;
       if (base_checksum != NULL)
         is_locally_assembled = TRUE;
 
       /* Load the commit metadata into a dict */
-      { g_autoptr(GVariant) commit_meta_v = NULL;
-        g_assert (g_variant_dict_lookup (dict, "base-commit-meta", "@a{sv}", &commit_meta_v));
-        commit_meta_dict = g_variant_dict_new (commit_meta_v);
-      }
+      g_autoptr(GVariantDict) commit_meta_dict =
+        ({ g_autoptr(GVariant) commit_meta_v = NULL;
+          g_assert (g_variant_dict_lookup (dict, "base-commit-meta", "@a{sv}", &commit_meta_v));
+          g_variant_dict_new (commit_meta_v); });
+      g_autoptr(GVariantDict) layered_commit_meta_dict = NULL;
       if (is_locally_assembled)
         {
           g_autoptr(GVariant) layered_commit_meta_v = NULL;
@@ -544,14 +537,17 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
       if (source_title)
         g_print ("  %s %s\n", libsd_special_glyph (TREE_RIGHT), source_title);
 
+      guint64 t = 0;
       if (is_locally_assembled)
         g_assert (g_variant_dict_lookup (dict, "base-timestamp", "t", &t));
       else
         g_assert (g_variant_dict_lookup (dict, "timestamp", "t", &t));
-      timestamp_string = rpmostree_timestamp_str_from_unix_utc (t);
+      g_autofree char *timestamp_string = rpmostree_timestamp_str_from_unix_utc (t);
 
       rpmostree_print_timestamp_version (version_string, timestamp_string, max_key_len);
 
+      const gchar *live_inprogress;
+      const gchar *live_replaced;
       if (!g_variant_dict_lookup (dict, "live-inprogress", "&s", &live_inprogress))
         live_inprogress = NULL;
       if (!g_variant_dict_lookup (dict, "live-replaced", "&s", &live_replaced))
@@ -598,6 +594,7 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
       if (opt_verbose || have_multiple_stateroots)
         rpmostree_print_kv ("StateRoot", max_key_len, os_name);
 
+      gboolean gpg_enabled;
       if (!g_variant_dict_lookup (dict, "gpg-enabled", "b", &gpg_enabled))
         gpg_enabled = FALSE;
 
