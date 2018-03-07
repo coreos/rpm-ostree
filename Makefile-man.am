@@ -17,6 +17,7 @@
 
 man1_MANS = rpm-ostree.1
 man5_MANS = rpm-ostreed.conf.5
+man8_MANS = rpm-ostreed-automatic.service.8 rpm-ostreed-automatic.timer.8
 
 XSLTPROC_FLAGS = \
         --nonet \
@@ -35,4 +36,7 @@ rpm-ostree.1: man/rpm-ostree.xml Makefile
 rpm-ostreed.conf.5: man/rpm-ostreed.conf.xml Makefile
 	$(AM_V_GEN) $(XSLTPROC) $(XSLTPROC_FLAGS_MAN) $<
 
-CLEANFILES += $(man1_MANS) $(man5_MANS)
+rpm-ostreed-automatic.service.8 rpm-ostreed-automatic.timer.8: man/rpm-ostreed-automatic.xml Makefile
+	$(AM_V_GEN) $(XSLTPROC) $(XSLTPROC_FLAGS_MAN) $<
+
+CLEANFILES += $(man1_MANS) $(man5_MANS) $(man8_MANS)

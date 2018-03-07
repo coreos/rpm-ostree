@@ -211,7 +211,7 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
-        <term><command>install (pkg-add)</command></term>
+        <term><command>install</command></term>
 
         <listitem>
           <para>
@@ -249,7 +249,7 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
-        <term><command>uninstall (pkg-remove)</command></term>
+        <term><command>uninstall</command></term>
 
         <listitem>
           <para>
@@ -442,6 +442,37 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
+        <term><command>override</command></term>
+
+        <listitem>
+          <para>
+            Provides subcommands for overriding (modifying) the base
+            OSTree layer. Such modifications should be done with care
+            and are normally not intended to be long-lasting. For
+            example, one might replace a base package with its older
+            version to avoid a regression. Overrides are automatically
+            carried over during new deployments. The subcommands are:
+          </para>
+
+          <para>
+            <command>remove</command> to remove base packages.
+          </para>
+
+          <para>
+            <command>replace</command> to replace base packages.
+            Currently, only local RPM replacements are supported:
+            one must directly provide the RPMs to substitute in.
+          </para>
+
+          <para>
+            <command>reset</command> to reset previous overrides.
+            Currently, the full <literal>NEVRA</literal> of the target
+            packages must be specified.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><command>refresh-md</command></term>
 
         <listitem>
@@ -598,6 +629,7 @@ Boston, MA 02111-1307, USA.
     <title>See Also</title>
 
     <para>
+      <citerefentry><refentrytitle>rpm-ostreed.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>
       <citerefentry><refentrytitle>ostree</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
       <citerefentry><refentrytitle>rpm</refentrytitle><manvolnum>8</manvolnum></citerefentry>
     </para>
