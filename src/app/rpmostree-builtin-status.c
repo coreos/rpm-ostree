@@ -180,7 +180,8 @@ typedef enum {
   AUTO_UPDATE_SDSTATE_TIMER_UNKNOWN,
   AUTO_UPDATE_SDSTATE_TIMER_INACTIVE,
   AUTO_UPDATE_SDSTATE_SERVICE_FAILED,
-  AUTO_UPDATE_SDSTATE_OK,
+  AUTO_UPDATE_SDSTATE_SERVICE_RUNNING,
+  AUTO_UPDATE_SDSTATE_SERVICE_EXITED,
 } AutoUpdateSdState;
 
 static gboolean
@@ -234,6 +235,11 @@ get_last_auto_update_run (GDBusConnection   *connection,
       *out_state = AUTO_UPDATE_SDSTATE_SERVICE_FAILED;
       return TRUE; /* NB early return */
     }
+  else if (g_str_equal (service_state, "active"))
+    {
+      *out_state = AUTO_UPDATE_SDSTATE_SERVICE_RUNNING;
+      return TRUE; /* NB early return */
+    }
 
   g_autoptr(GDBusProxy) service_proxy =
     g_dbus_proxy_new_sync (connection, G_DBUS_PROXY_FLAGS_DO_NOT_CONNECT_SIGNALS, NULL,
@@ -257,7 +263,7 @@ get_last_auto_update_run (GDBusConnection   *connection,
         }
     }
 
-  *out_state = AUTO_UPDATE_SDSTATE_OK;
+  *out_state = AUTO_UPDATE_SDSTATE_SERVICE_EXITED;
   *out_last_run = g_steal_pointer (&last_run);
   return TRUE;
 }
@@ -314,7 +320,12 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
                          get_bold_end (), get_red_end ());
                 break;
               }
-            case AUTO_UPDATE_SDSTATE_OK:
+            case AUTO_UPDATE_SDSTATE_SERVICE_RUNNING:
+              {
+                g_print ("(%s; running)\n", policy);
+                break;
+              }
+            case AUTO_UPDATE_SDSTATE_SERVICE_EXITED:
               {
                 if (last_run)
                   /* e.g. "last run 4h 32min ago" */
