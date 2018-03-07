@@ -74,12 +74,8 @@ Boston, MA 02111-1307, USA.
         <para>Controls the automatic update policy. Currently "none" or "check".
         "none" disables automatic updates. "check" downloads just enough metadata to check
         for updates and display them in <command>rpm-ostree status</command>. Defaults to
-        "none".</para>
-
-        <para>Automatic updates enablement and frequency are controlled by the
-        <command>rpm-ostreed-automatic.timer</command> unit. <!-- XXX: needs man page -->
-        See <citerefentry><refentrytitle>systemd.timer</refentrytitle><manvolnum>5</manvolnum></citerefentry>
-        for more information on how to control systemd timers.</para>
+        "none". The <citerefentry><refentrytitle>rpm-ostreed-automatic.timer</refentrytitle><manvolnum>8</manvolnum></citerefentry>
+        unit determines the actual frequency of updates.</para>
         </listitem>
       </varlistentry>
       <varlistentry>
@@ -128,6 +124,7 @@ Boston, MA 02111-1307, USA.
 
     <para>
       <citerefentry><refentrytitle>rpm-ostree</refentrytitle><manvolnum>1</manvolnum></citerefentry>
+      <citerefentry><refentrytitle>rpm-ostreed-automatic</refentrytitle><manvolnum>8</manvolnum></citerefentry>
     </para>
   </refsect1>
 

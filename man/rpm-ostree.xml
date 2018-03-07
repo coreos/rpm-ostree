@@ -629,6 +629,7 @@ Boston, MA 02111-1307, USA.
     <title>See Also</title>
 
     <para>
+      <citerefentry><refentrytitle>rpm-ostreed.conf</refentrytitle><manvolnum>5</manvolnum></citerefentry>
       <citerefentry><refentrytitle>ostree</refentrytitle><manvolnum>1</manvolnum></citerefentry>,
       <citerefentry><refentrytitle>rpm</refentrytitle><manvolnum>8</manvolnum></citerefentry>
     </para>
