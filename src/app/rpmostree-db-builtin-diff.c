@@ -34,7 +34,7 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-int
+gboolean
 rpmostree_db_builtin_diff (int argc, char **argv,
                            RpmOstreeCommandInvocation *invocation,
                            GCancellable *cancellable, GError **error)
@@ -84,10 +84,10 @@ rpmostree_db_builtin_diff (int argc, char **argv,
     {
       g_autoptr(RpmRevisionData) rpmrev1 = rpmrev_new (repo, old_ref, NULL, cancellable, error);
       if (!rpmrev1)
-        return EXIT_FAILURE;
+        return FALSE;
       g_autoptr(RpmRevisionData) rpmrev2 = rpmrev_new (repo, new_ref, NULL, cancellable, error);
       if (!rpmrev2)
-        return EXIT_FAILURE;
+        return FALSE;
 
       rpmhdrs_diff_prnt_block (TRUE, rpmhdrs_diff (rpmrev_get_headers (rpmrev1),
                                                    rpmrev_get_headers (rpmrev2)));
