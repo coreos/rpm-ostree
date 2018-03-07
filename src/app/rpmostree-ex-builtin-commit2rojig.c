@@ -52,7 +52,7 @@ static GOptionEntry commit2rojig_option_entries[] = {
   { NULL }
 };
 
-int
+gboolean
 rpmostree_ex_builtin_commit2rojig (int             argc,
                                    char          **argv,
                                    RpmOstreeCommandInvocation *invocation,
@@ -85,7 +85,7 @@ rpmostree_ex_builtin_commit2rojig (int             argc,
   const char *oirpm_spec = argv[2];
   const char *outputdir = argv[3];
   if (!g_str_has_prefix (outputdir, "/"))
-    return glnx_throw (error, "outputdir must be absolute"), EXIT_FAILURE;
+    return glnx_throw (error, "outputdir must be absolute");
 
   g_autoptr(OstreeRepo) repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
   if (!repo)

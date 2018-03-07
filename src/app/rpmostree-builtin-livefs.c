@@ -50,7 +50,7 @@ get_args_variant (void)
   return g_variant_dict_end (&dict);
 }
 
-int
+gboolean
 rpmostree_ex_builtin_livefs (int             argc,
                              char          **argv,
                              RpmOstreeCommandInvocation *invocation,

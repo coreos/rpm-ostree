@@ -98,7 +98,7 @@ rpmostree_builtin_rebase (int             argc,
 
   if (argc < 2 && !(opt_branch || opt_remote))
     {
-      return rpmostree_usage_error (context, "Must specify refspec, or -b branch or -r remote", error), EXIT_FAILURE;
+      return rpmostree_usage_error (context, "Must specify refspec, or -b branch or -r remote", error), FALSE;
     }
   else if (argc >= 2)
     {

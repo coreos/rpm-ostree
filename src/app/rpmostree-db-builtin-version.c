@@ -83,7 +83,7 @@ _builtin_db_version (OstreeRepo *repo, GPtrArray *revs,
   return TRUE;
 }
 
-int
+gboolean
 rpmostree_db_builtin_version (int argc, char **argv,
                               RpmOstreeCommandInvocation *invocation,
                               GCancellable *cancellable, GError **error)

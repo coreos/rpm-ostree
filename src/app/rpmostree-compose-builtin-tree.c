@@ -1346,7 +1346,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   return TRUE;
 }
 
-int
+gboolean
 rpmostree_compose_builtin_install (int             argc,
                                    char          **argv,
                                    RpmOstreeCommandInvocation *invocation,
@@ -1399,7 +1399,7 @@ rpmostree_compose_builtin_install (int             argc,
   return TRUE;
 }
 
-int
+gboolean
 rpmostree_compose_builtin_postprocess (int             argc,
                                        char          **argv,
                                        RpmOstreeCommandInvocation *invocation,
@@ -1439,7 +1439,7 @@ rpmostree_compose_builtin_postprocess (int             argc,
 
       JsonNode *treefile_rootval = json_parser_get_root (treefile_parser);
       if (!JSON_NODE_HOLDS_OBJECT (treefile_rootval))
-        return glnx_throw (error, "Treefile root is not an object"), EXIT_FAILURE;
+        return glnx_throw (error, "Treefile root is not an object");
       treefile = json_node_get_object (treefile_rootval);
     }
 
@@ -1454,7 +1454,7 @@ rpmostree_compose_builtin_postprocess (int             argc,
   return TRUE;
 }
 
-int
+gboolean
 rpmostree_compose_builtin_commit (int             argc,
                                   char          **argv,
                                   RpmOstreeCommandInvocation *invocation,
@@ -1498,7 +1498,7 @@ rpmostree_compose_builtin_commit (int             argc,
   return TRUE;
 }
 
-int
+gboolean
 rpmostree_compose_builtin_tree (int             argc,
                                 char          **argv,
                                 RpmOstreeCommandInvocation *invocation,
