@@ -44,10 +44,13 @@ echo "ok jsonpath"
 # underhanded, but we need a bona fide user session to verify non-priv status,
 # and logging in through SSH is an easy way to achieve that.
 if ! vm_cmd getent passwd testuser; then
-  vm_cmd useradd testuser
-  vm_cmd mkdir -pm 0700 /home/testuser/.ssh
-  vm_cmd cp -a /root/.ssh/authorized_keys /home/testuser/.ssh
-  vm_cmd chown -R testuser:testuser /home/testuser/.ssh
+  vm_ansible_inline <<EOF
+- shell: >
+    useradd testuser &&
+    mkdir -pm 0700 /home/testuser/.ssh &&
+    cp -a /root/.ssh/authorized_keys /home/testuser/.ssh &&
+    chown -R testuser:testuser /home/testuser/.ssh
+EOF
 fi
 
 # Make sure we can't do various operations as non-root

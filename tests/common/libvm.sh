@@ -21,19 +21,31 @@
 vm_setup() {
 
   export VM=${VM:-vmcheck}
-  local sshopts="-o User=root \
-                 -o ControlMaster=auto \
-                 -o ControlPath=/var/tmp/ssh-$VM-$(date +%s%N).sock \
-                 -o ControlPersist=yes"
+  SSHOPTS="-o User=root -o ControlMaster=auto \
+           -o ControlPath=/var/tmp/ssh-$VM-$(date +%s%N).sock \
+           -o ControlPersist=yes"
 
   # If we're provided with an ssh-config, make sure we tell
   # ssh to pick it up.
   if [ -f "${topsrcdir}/ssh-config" ]; then
-    sshopts="$sshopts -F ${topsrcdir}/ssh-config"
+    SSHOPTS="${SSHOPTS} -F ${topsrcdir}/ssh-config"
   fi
+  export SSHOPTS
 
-  export SSH="ssh $sshopts $VM"
-  export SCP="scp $sshopts"
+  export SSH="ssh ${SSHOPTS} $VM"
+  export SCP="scp ${SSHOPTS}"
+}
+
+vm_ansible_inline() {
+    playbook=$(mktemp -p /tmp 'libvm-ansible.XXXXXX')
+    cat > ${playbook} <<EOF
+---
+- hosts: ${VM}
+  tasks:
+EOF
+    sed -e 's,^,  ,' >> ${playbook}
+    ansible-playbook -i ${VM}, --ssh-common-args "${SSHOPTS}" ${playbook}
+    rm -f ${playbook}
 }
 
 # rsync wrapper that sets up authentication
