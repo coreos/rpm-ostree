@@ -35,6 +35,63 @@ static GOptionEntry option_entries[] = {
 };
 
 gboolean
+print_diff (OstreeRepo   *repo,
+            const char   *old_desc,
+            const char   *old_checksum,
+            const char   *new_desc,
+            const char   *new_checksum,
+            GCancellable *cancellable,
+            GError       **error)
+{
+  if (!g_str_equal (old_desc, old_checksum))
+    printf ("ostree diff commit old: %s (%s)\n", old_desc, old_checksum);
+  else
+    printf ("ostree diff commit old: %s\n", old_desc);
+
+  if (!g_str_equal (new_desc, new_checksum))
+    printf ("ostree diff commit new: %s (%s)\n", new_desc, new_checksum);
+  else
+    printf ("ostree diff commit new: %s\n", new_desc);
+
+  g_autoptr(GPtrArray) removed = NULL;
+  g_autoptr(GPtrArray) added = NULL;
+  g_autoptr(GPtrArray) modified_old = NULL;
+  g_autoptr(GPtrArray) modified_new = NULL;
+
+  /* we still use the old API for changelogs; should enhance libdnf for this */
+  if (g_str_equal (opt_format, "block") && opt_changelogs)
+    {
+      g_autoptr(RpmRevisionData) rpmrev1 =
+        rpmrev_new (repo, old_checksum, NULL, cancellable, error);
+      if (!rpmrev1)
+        return FALSE;
+      g_autoptr(RpmRevisionData) rpmrev2 =
+        rpmrev_new (repo, new_checksum, NULL, cancellable, error);
+      if (!rpmrev2)
+        return FALSE;
+
+      rpmhdrs_diff_prnt_block (TRUE, rpmhdrs_diff (rpmrev_get_headers (rpmrev1),
+                                                   rpmrev_get_headers (rpmrev2)));
+    }
+  else
+    {
+      if (!rpm_ostree_db_diff (repo, old_checksum, new_checksum,
+                               &removed, &added, &modified_old, &modified_new,
+                               cancellable, error))
+        return FALSE;
+
+      if (g_str_equal (opt_format, "diff"))
+        rpmostree_diff_print (removed, added, modified_old, modified_new);
+      else if (g_str_equal (opt_format, "block"))
+        rpmostree_diff_print_formatted (removed, added, modified_old, modified_new);
+      else
+        return glnx_throw (error, "Format argument is invalid, pick one of: diff, block");
+    }
+
+  return TRUE;
+}
+
+gboolean
 rpmostree_db_builtin_diff (int argc, char **argv,
                            RpmOstreeCommandInvocation *invocation,
                            GCancellable *cancellable, GError **error)
@@ -64,48 +121,7 @@ rpmostree_db_builtin_diff (int argc, char **argv,
   if (!ostree_repo_resolve_rev (repo, new_ref, FALSE, &new_checksum, error))
     return FALSE;
 
-  if (!g_str_equal (old_ref, old_checksum))
-    printf ("ostree diff commit old: %s (%s)\n", old_ref, old_checksum);
-  else
-    printf ("ostree diff commit old: %s\n", old_ref);
-
-  if (!g_str_equal (new_ref, new_checksum))
-    printf ("ostree diff commit new: %s (%s)\n", new_ref, new_checksum);
-  else
-    printf ("ostree diff commit new: %s\n", new_ref);
-
-  g_autoptr(GPtrArray) removed = NULL;
-  g_autoptr(GPtrArray) added = NULL;
-  g_autoptr(GPtrArray) modified_old = NULL;
-  g_autoptr(GPtrArray) modified_new = NULL;
-
-  /* we still use the old API for changelogs; should enhance libdnf for this */
-  if (g_str_equal (opt_format, "block") && opt_changelogs)
-    {
-      g_autoptr(RpmRevisionData) rpmrev1 = rpmrev_new (repo, old_ref, NULL, cancellable, error);
-      if (!rpmrev1)
-        return FALSE;
-      g_autoptr(RpmRevisionData) rpmrev2 = rpmrev_new (repo, new_ref, NULL, cancellable, error);
-      if (!rpmrev2)
-        return FALSE;
-
-      rpmhdrs_diff_prnt_block (TRUE, rpmhdrs_diff (rpmrev_get_headers (rpmrev1),
-                                                   rpmrev_get_headers (rpmrev2)));
-    }
-  else
-    {
-      if (!rpm_ostree_db_diff (repo, old_ref, new_ref, &removed, &added, &modified_old,
-                               &modified_new, cancellable, error))
-        return FALSE;
-
-      if (g_str_equal (opt_format, "diff"))
-        rpmostree_diff_print (removed, added, modified_old, modified_new);
-      else if (g_str_equal (opt_format, "block"))
-        rpmostree_diff_print_formatted (removed, added, modified_old, modified_new);
-      else
-        return glnx_throw (error, "Format argument is invalid, pick one of: diff, block");
-    }
-
-  return TRUE;
+  return print_diff (repo, old_ref, old_checksum, new_ref, new_checksum,
+                     cancellable, error);
 }
 
