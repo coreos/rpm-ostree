@@ -34,6 +34,25 @@ vm_setup() {
 
   export SSH="ssh $sshopts $VM"
   export SCP="scp $sshopts"
+
+  cat >${topsrcdir}/ansible-inventory.yml <<EOF
+all:
+  hosts:
+    vmcheck:
+      ansible_ssh_common_args: "${sshopts}"
+EOF
+}
+
+vm_ansible_inline() {
+    playbook=$(mktemp -p /tmp 'libvm-ansible.XXXXXX')
+    cat > ${playbook} <<EOF
+---
+- hosts: vmcheck
+  tasks:
+EOF
+    sed -e 's,^,  ,' >> ${playbook}
+    ansible-playbook -i ${topsrcdir}/ansible-inventory.yml ${playbook}
+    rm -f ${playbook}
 }
 
 # rsync wrapper that sets up authentication

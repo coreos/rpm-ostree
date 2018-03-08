@@ -29,6 +29,7 @@ tests:
   - ci/ci-commitmessage-submodules.sh
   - ci/codestyle.sh
   - ci/build-check.sh
+  - ci/vmcheck-provision.sh
   - make vmcheck
 
 timeout: 60m
