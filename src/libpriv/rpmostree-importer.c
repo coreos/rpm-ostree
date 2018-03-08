@@ -378,6 +378,8 @@ get_lead_sig_header_as_bytes (RpmOstreeImporter *self,
  * https://github.com/rpm-software-management/libdnf/pull/199/
  * https://github.com/projectatomic/rpm-ostree/issues/774
  * https://github.com/projectatomic/rpm-ostree/pull/1072
+ *
+ * Note overlap with rpmostree_context_get_rpmmd_repo_commit_metadata()
  */
 static GVariant *
 repo_metadata_for_package (DnfRepo *repo)
