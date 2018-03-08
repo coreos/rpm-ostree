@@ -30,9 +30,16 @@ set -x
 YUMREPO=/tmp/vmcheck/yumrepo/packages/x86_64
 
 check_diff() {
-  from=$1; shift
-  to=$1; shift
-  vm_rpmostree db diff --format=diff $from $to > diff.txt
+  arg1=$1; shift
+  arg2=$1; shift
+  cmd="vm_rpmostree db diff --format=diff"
+  if [ -n "$arg1" ]; then
+    cmd="$cmd $arg1"
+  fi
+  if [ -n "$arg2" ]; then
+    cmd="$cmd $arg2"
+  fi
+  $cmd > diff.txt
   assert_file_has_content diff.txt "$@"
 }
 
@@ -51,6 +58,18 @@ vm_rpmostree install pkg-to-remove pkg-to-replace pkg-to-replace-archtrans
 booted_csum=$(vm_get_booted_csum)
 pending_csum=$(vm_get_pending_csum)
 check_diff $booted_csum $pending_csum \
+  +pkg-to-remove \
+  +pkg-to-replace \
+  +pkg-to-replace-archtrans
+
+# check that it's the default behaviour without both args
+check_diff "" "" \
+  +pkg-to-remove \
+  +pkg-to-replace \
+  +pkg-to-replace-archtrans
+
+# check that it's the default behaviour without one arg
+check_diff "$pending_csum" "" \
   +pkg-to-remove \
   +pkg-to-replace \
   +pkg-to-replace-archtrans

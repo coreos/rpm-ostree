@@ -134,7 +134,7 @@ impl_rojig2commit (RpmOstreeRojig2CommitContext *self,
   return TRUE;
 }
 
-int
+gboolean
 rpmostree_ex_builtin_rojig2commit (int             argc,
                                    char          **argv,
                                    RpmOstreeCommandInvocation *invocation,

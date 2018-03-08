@@ -168,7 +168,7 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
 }
 
 
-int
+gboolean
 rpmostree_ex_builtin_kargs (int            argc,
                             char         **argv,
                             RpmOstreeCommandInvocation *invocation,

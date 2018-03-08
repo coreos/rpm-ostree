@@ -305,7 +305,7 @@ rpmostree_subcommand_parse (int *inout_argc,
   return command_name;
 }
 
-int
+gboolean
 rpmostree_handle_subcommand (int argc, char **argv,
                              RpmOstreeCommand *subcommands,
                              RpmOstreeCommandInvocation *invocation,

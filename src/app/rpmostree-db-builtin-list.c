@@ -78,7 +78,7 @@ _builtin_db_list (OstreeRepo *repo,
   return TRUE;
 }
 
-int
+gboolean
 rpmostree_db_builtin_list (int argc, char **argv,
                            RpmOstreeCommandInvocation *invocation,
                            GCancellable *cancellable, GError **error)
@@ -123,4 +123,3 @@ rpmostree_db_builtin_list (int argc, char **argv,
 
   return TRUE;
 }
-
