@@ -36,7 +36,7 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-gboolean
+static gboolean
 print_diff (OstreeRepo   *repo,
             const char   *old_desc,
             const char   *old_checksum,
