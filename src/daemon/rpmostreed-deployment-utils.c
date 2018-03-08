@@ -366,6 +366,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
     g_variant_dict_insert_value (&dict, "signatures", sigs);
   g_variant_dict_insert (&dict, "gpg-enabled", "b", gpg_enabled);
 
+  g_variant_dict_insert (&dict, "pinned", "b",
+                         ostree_deployment_is_pinned (deployment));
   g_variant_dict_insert (&dict, "unlocked", "s",
                          ostree_deployment_unlocked_state_to_string (ostree_deployment_get_unlocked (deployment)));
 

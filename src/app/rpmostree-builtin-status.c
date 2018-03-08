@@ -748,6 +748,10 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
             g_string_append (buf, "regenerate");
           rpmostree_print_kv ("Initramfs", max_key_len, buf->str);
         }
+      gboolean pinned = FALSE;
+      g_variant_dict_lookup (dict, "pinned", "b", &pinned);
+      if (pinned)
+        rpmostree_print_kv ("Pinned", max_key_len, "yes");
 
       if (unlocked && g_strcmp0 (unlocked, "none") != 0)
         {
