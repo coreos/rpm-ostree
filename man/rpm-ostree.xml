@@ -137,7 +137,10 @@ Boston, MA 02111-1307, USA.
 
           <para>
             <command>diff</command> to see how the packages are
-            different between the trees in two commits.  The
+            different between the trees in two revs. If no revs are
+            provided, the booted commit is compared to the pending
+            commit. If only a single rev is provided, the booted commit
+            is compared to that rev. The
             <option>--format=diff</option> option uses
             <literal>-</literal> for removed packages,
             <literal>+</literal> for added packages, and finally

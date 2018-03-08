@@ -27,10 +27,12 @@
 
 static char *opt_format = "block";
 static gboolean opt_changelogs;
+static char *opt_sysroot;
 
 static GOptionEntry option_entries[] = {
   { "format", 'F', 0, G_OPTION_ARG_STRING, &opt_format, "Output format: \"diff\" or (default) \"block\"", "FORMAT" },
   { "changelogs", 'c', 0, G_OPTION_ARG_NONE, &opt_changelogs, "Also output RPM changelogs", NULL },
+  { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { NULL }
 };
 
@@ -96,32 +98,73 @@ rpmostree_db_builtin_diff (int argc, char **argv,
                            RpmOstreeCommandInvocation *invocation,
                            GCancellable *cancellable, GError **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("COMMIT COMMIT");
+  g_autoptr(GOptionContext) context = g_option_context_new ("[FROM_REV] [TO_REV]");
 
   g_autoptr(OstreeRepo) repo = NULL;
   if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv, invocation,
                                           &repo, cancellable, error))
     return FALSE;
 
-  if (argc != 3)
+  if (argc > 3)
     {
       g_autofree char *message =
-        g_strdup_printf ("\"%s\" takes exactly 2 arguments", g_get_prgname ());
+        g_strdup_printf ("\"%s\" takes at most 2 arguments", g_get_prgname ());
       rpmostree_usage_error (context, message, error);
       return FALSE;
     }
 
-  const char *old_ref = argv[1];
+  const char *old_desc = NULL;
   g_autofree char *old_checksum = NULL;
-  if (!ostree_repo_resolve_rev (repo, old_ref, FALSE, &old_checksum, error))
-    return FALSE;
-
-  const char *new_ref = argv[2];
+  const char *new_desc = NULL;
   g_autofree char *new_checksum = NULL;
-  if (!ostree_repo_resolve_rev (repo, new_ref, FALSE, &new_checksum, error))
-    return FALSE;
 
-  return print_diff (repo, old_ref, old_checksum, new_ref, new_checksum,
+  if (argc < 3)
+    {
+      /* find booted deployment */
+      const char *sysroot_path = opt_sysroot ?: "/";
+      g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
+      g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new (sysroot_file);
+      if (!ostree_sysroot_load (sysroot, cancellable, error))
+        return FALSE;
+
+      OstreeDeployment *booted = ostree_sysroot_get_booted_deployment (sysroot);
+      if (!booted)
+        return glnx_throw (error, "Not booted into any deployment");
+
+      old_desc = "booted deployment";
+      old_checksum = g_strdup (ostree_deployment_get_csum (booted));
+
+      if (argc < 2)
+        {
+          /* diff booted against pending deployment */
+          new_desc = "pending deployment";
+          g_autoptr(OstreeDeployment) pending = NULL;
+          ostree_sysroot_query_deployments_for (sysroot, NULL, &pending, NULL);
+          if (!pending || ostree_deployment_equal (pending, booted))
+            return glnx_throw (error, "No pending deployment to diff against");
+          new_checksum = g_strdup (ostree_deployment_get_csum (pending));
+        }
+      else
+        {
+          /* diff against the booted deployment */
+          new_desc = argv[1];
+          if (!ostree_repo_resolve_rev (repo, new_desc, FALSE, &new_checksum, error))
+            return FALSE;
+        }
+    }
+  else
+    {
+      old_desc = argv[1];
+      if (!ostree_repo_resolve_rev (repo, old_desc, FALSE, &old_checksum, error))
+        return FALSE;
+
+      new_desc = argv[2];
+      if (!ostree_repo_resolve_rev (repo, new_desc, FALSE, &new_checksum, error))
+        return FALSE;
+
+    }
+
+  return print_diff (repo, old_desc, old_checksum, new_desc, new_checksum,
                      cancellable, error);
 }
 
