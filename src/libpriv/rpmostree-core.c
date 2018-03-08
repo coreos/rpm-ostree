@@ -4090,6 +4090,11 @@ rpmostree_context_commit (RpmOstreeContext      *self,
         g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.clientlayer",
                                g_variant_new_boolean (TRUE));
 
+
+        /* Record the rpm-md information on the client just like we do on the server side */
+        g_autoptr(GVariant) rpmmd_meta = rpmostree_context_get_rpmmd_repo_commit_metadata (self);
+        g_variant_builder_add (&metadata_builder, "{sv}", "rpmostree.rpmmd-repos", rpmmd_meta);
+
         /* embed packages (really, "patterns") layered */
         g_autoptr(GVariant) pkgs =
           g_variant_dict_lookup_value (self->spec->dict, "packages", G_VARIANT_TYPE ("as"));
