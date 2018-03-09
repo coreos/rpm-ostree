@@ -38,7 +38,7 @@ vm_setup() {
   cat >${topsrcdir}/ansible-inventory.yml <<EOF
 all:
   hosts:
-    vmcheck:
+    ${VM}:
       ansible_ssh_common_args: "${sshopts}"
 EOF
 }
@@ -47,7 +47,7 @@ vm_ansible_inline() {
     playbook=$(mktemp -p /tmp 'libvm-ansible.XXXXXX')
     cat > ${playbook} <<EOF
 ---
-- hosts: vmcheck
+- hosts: ${VM}
   tasks:
 EOF
     sed -e 's,^,  ,' >> ${playbook}
