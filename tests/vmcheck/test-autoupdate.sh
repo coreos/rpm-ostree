@@ -127,12 +127,12 @@ vm_start_httpd ostree_server $REMOTE_OSTREE 8888
 
 change_policy() {
   policy=$1; shift
-  vm_cmd cp /usr/etc/rpm-ostreed.conf /etc
-  cat > tmp.sh << EOF
-echo -e "[Daemon]\nAutomaticUpdatePolicy=$policy" > /etc/rpm-ostreed.conf
+  vm_ansible_inline <<EOF
+- shell: |
+  cp /usr/etc/rpm-ostreed.conf /etc
+  echo -e "[Daemon]\nAutomaticUpdatePolicy=$policy" > /etc/rpm-ostreed.conf 
+  rpm-ostree reload
 EOF
-  vm_cmdfile tmp.sh
-  vm_rpmostree reload
 }
 
 vm_rpmostree cleanup -m

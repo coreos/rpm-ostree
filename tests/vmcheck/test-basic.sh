@@ -45,10 +45,11 @@ echo "ok jsonpath"
 # and logging in through SSH is an easy way to achieve that.
 if ! vm_cmd getent passwd testuser; then
   vm_ansible_inline <<EOF
-- shell: >
-    useradd testuser &&
-    mkdir -pm 0700 /home/testuser/.ssh &&
-    cp -a /root/.ssh/authorized_keys /home/testuser/.ssh &&
+- shell: |
+    set -euo pipefail
+    useradd testuser
+    mkdir -pm 0700 /home/testuser/.ssh
+    cp -a /root/.ssh/authorized_keys /home/testuser/.ssh
     chown -R testuser:testuser /home/testuser/.ssh
 EOF
 fi
@@ -183,13 +184,15 @@ echo "ok script output prefixed in journal"
 # local repos are always cached, so let's start up an http server for the same
 # vmcheck repo
 vm_start_httpd vmcheck /tmp 8888
-cat > vmcheck-http.repo << EOF
-[vmcheck-http]
-name=vmcheck-http
-baseurl=http://localhost:8888/vmcheck/yumrepo
-gpgcheck=0
+vm_ansible_inline <<EOF
+- copy:
+    content: |
+      [vmcheck-http]
+      name=vmcheck-http
+      baseurl=http://localhost:8888/vmcheck/yumrepo
+      gpgcheck=0
+    dest: /etc/yum.repos.d/vmcheck-http.repo
 EOF
-vm_send /etc/yum.repos.d vmcheck-http.repo
 
 vm_rpmostree cleanup -rpmb
 vm_cmd rm -f /etc/yum.repos.d/vmcheck.repo

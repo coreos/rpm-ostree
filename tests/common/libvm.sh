@@ -84,16 +84,6 @@ vm_cmd() {
   $SSH "$@"
 }
 
-# Copy argument (usually shell script) to VM, execute it there
-vm_cmdfile() {
-    local bin=$1
-    chmod a+x ${bin}
-    local bn=$(basename ${bin})
-    $SCP $1 $VM:/root/${bn}
-    $SSH /root/${bn}
-}
-
-
 # Delete anything which we might change between runs
 vm_clean_caches() {
     vm_cmd rm /ostree/repo/refs/heads/rpmostree/pkg/* -rf
@@ -103,15 +93,6 @@ vm_clean_caches() {
 # - $@    args
 vm_rpmostree() {
     vm_cmd env ASAN_OPTIONS=detect_leaks=false rpm-ostree "$@"
-}
-
-# copy files to a directory in the vm
-# - $1    target directory
-# - $2..  files & dirs to copy
-vm_send() {
-  local dir=$1; shift
-  vm_cmd mkdir -p $dir
-  $SCP -r "$@" $VM:$dir
 }
 
 # copy the test repo to the vm
@@ -142,7 +123,10 @@ EOF
       echo 'gpgcheck=0' >> vmcheck.repo
   fi
 
-  vm_send /etc/yum.repos.d vmcheck.repo
+  vm_ansible_inline <<EOF
+- file: path=/etc/yum.repos.d state=directory
+- copy: src=$(pwd)/vmcheck.repo dest=/etc/yum.repos.d
+EOF
 }
 
 # wait until ssh is available on the vm
@@ -391,24 +375,23 @@ vm_get_journal_cursor() {
 vm_wait_content_after_cursor() {
     from_cursor=$1; shift
     regex=$1; shift
-    cat > wait.sh <<EOF
-#!/usr/bin/bash
-set -xeuo pipefail
-tmpf=\$(mktemp /var/tmp/journal.XXXXXX)
-for x in \$(seq 60); do
-  journalctl -u rpm-ostreed --after-cursor "${from_cursor}" > \${tmpf}
-  if grep -q -e "${regex}" \${tmpf}; then
-    exit 0
-  else
-    cat \${tmpf}
-    sleep 1
-  fi
-done
-echo "timed out after 60s" 1>&2
-journalctl -u rpm-ostreed --after-cursor "${from_cursor}" | tail -100
-exit 1
+    vm_ansible_inline <<EOF
+- shell: |
+  set -xeuo pipefail
+  tmpf=\$(mktemp /var/tmp/journal.XXXXXX)
+  for x in \$(seq 60); do
+    journalctl -u rpm-ostreed --after-cursor "${from_cursor}" > \${tmpf}
+    if grep -q -e "${regex}" \${tmpf}; then
+      exit 0
+    else
+      cat \${tmpf}
+      sleep 1
+    fi
+  done
+  echo "timed out after 60s" 1>&2
+  journalctl -u rpm-ostreed --after-cursor "${from_cursor}" | tail -100
+  exit 1
 EOF
-    vm_cmdfile wait.sh
 }
 
 vm_assert_journal_has_content() {
