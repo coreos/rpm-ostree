@@ -35,12 +35,15 @@ vm_setup() {
   export SSH="ssh $sshopts $VM"
   export SCP="scp $sshopts"
 
-  cat >${topsrcdir}/ansible-inventory.yml <<EOF
-all:
-  hosts:
-    ${VM}:
-      ansible_ssh_common_args: "${sshopts}"
-EOF
+  local HOSTS="${HOSTS:-${VM}}"
+  inventory=${topsrcdir}/ansible-inventory.ini
+  (echo '[vmcheck]' &&
+   for host in "${HOSTS}"; do
+       echo "${host}"
+   done &&
+   echo '[vmcheck:vars]' &&
+   echo 'ansible_ssh_common_args: "'${sshopts}'"'
+  ) > ${inventory}.new && mv ${inventory}{.new,}
 }
 
 vm_ansible_inline() {
