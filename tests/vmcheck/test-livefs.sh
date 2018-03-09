@@ -145,18 +145,17 @@ fi
 vm_cmd test -f /${dummy_file_to_modify}
 generate_upgrade() {
     # Create a modified vmcheck commit
-    cat >t.sh<<EOF
-#!/bin/bash
-set -xeuo pipefail
-cd /ostree/repo/tmp
-rm vmcheck -rf
-ostree checkout vmcheck vmcheck --fsync=0
-(date; echo "JUST KIDDING DO WHATEVER") >vmcheck/${dummy_file_to_modify}.new && mv vmcheck/${dummy_file_to_modify}{.new,}
-$@
-ostree commit -b vmcheck --tree=dir=vmcheck --link-checkout-speedup
-rm vmcheck -rf
+    vm_ansible_inline <<EOF
+- shell: |
+    set -xeuo pipefail
+      cd /ostree/repo/tmp
+      rm vmcheck -rf
+      ostree checkout vmcheck vmcheck --fsync=0
+      (date; echo "JUST KIDDING DO WHATEVER") >vmcheck/${dummy_file_to_modify}.new && mv vmcheck/${dummy_file_to_modify}{.new,}
+      $@
+      ostree commit -b vmcheck --tree=dir=vmcheck --link-checkout-speedup
+      rm vmcheck -rf
 EOF
-    vm_cmdfile t.sh
 }
 generate_upgrade
 # And remove the pending deployment so that our origin is now the booted
