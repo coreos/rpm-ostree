@@ -129,9 +129,9 @@ change_policy() {
   policy=$1; shift
   vm_ansible_inline <<EOF
 - shell: |
-  cp /usr/etc/rpm-ostreed.conf /etc
-  echo -e "[Daemon]\nAutomaticUpdatePolicy=$policy" > /etc/rpm-ostreed.conf 
-  rpm-ostree reload
+    cp /usr/etc/rpm-ostreed.conf /etc
+    echo -e "[Daemon]\nAutomaticUpdatePolicy=$policy" > /etc/rpm-ostreed.conf 
+    rpm-ostree reload
 EOF
 }
 
