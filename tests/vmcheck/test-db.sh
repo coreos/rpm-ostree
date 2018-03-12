@@ -74,6 +74,9 @@ check_diff "$pending_csum" "" \
   +pkg-to-replace \
   +pkg-to-replace-archtrans
 
+# check that diff'ing with --base yields 0 diffs
+check_not_diff "--base" "" pkg-to-
+
 # now let's make the pending csum become an update
 vm_cmd ostree commit -b vmcheck --tree=ref=$pending_csum
 vm_rpmostree cleanup -p
