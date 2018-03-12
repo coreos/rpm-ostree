@@ -148,13 +148,13 @@ generate_upgrade() {
     vm_ansible_inline <<EOF
 - shell: |
     set -xeuo pipefail
-    cd /ostree/repo/tmp
-    rm vmcheck -rf
-    ostree checkout vmcheck vmcheck --fsync=0
-    (date; echo "JUST KIDDING DO WHATEVER") >vmcheck/${dummy_file_to_modify}.new && mv vmcheck/${dummy_file_to_modify}{.new,}
-    $@
-    ostree commit -b vmcheck --tree=dir=vmcheck --link-checkout-speedup
-    rm vmcheck -rf
+      cd /ostree/repo/tmp
+      rm vmcheck -rf
+      ostree checkout vmcheck vmcheck --fsync=0
+      (date; echo "JUST KIDDING DO WHATEVER") >vmcheck/${dummy_file_to_modify}.new && mv vmcheck/${dummy_file_to_modify}{.new,}
+      $@
+      ostree commit -b vmcheck --tree=dir=vmcheck --link-checkout-speedup
+      rm vmcheck -rf
 EOF
 }
 generate_upgrade
