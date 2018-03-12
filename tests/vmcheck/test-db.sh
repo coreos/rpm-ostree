@@ -146,3 +146,17 @@ check_diff $pending_csum $pending_layered_csum \
   !pkg-to-replace-archtrans-1.0 \
   =pkg-to-replace-archtrans-2.0
 echo "ok db from pkglist.metadata"
+
+# check that db list also works fine from pkglist.metadata
+vm_rpmostree db list $pending_layered_csum > out.txt
+assert_not_file_has_content out.txt \
+  pkg-to-remove \
+  pkg-to-replace-1.0 \
+  pkg-to-replace-archtrans-1.0
+assert_file_has_content out.txt \
+  pkg-to-overlay-1.0-1.x86_64 \
+  pkg-to-overlay-1.0-1.i686 \
+  glibc-1.0-1.i686 \
+  pkg-to-replace-2.0 \
+  pkg-to-replace-archtrans-2.0
+echo "ok list from pkglist.metadata"
