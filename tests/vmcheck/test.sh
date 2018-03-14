@@ -194,19 +194,20 @@ for tf in $(find . -name 'test-*.sh' | sort); do
 done
 
 
-# put back the original yum repos
 if test -z "${VMCHECK_DEBUG:-}"; then
+
+    # put back the original yum repos
     if vm_cmd test -f /etc/yum.repos.d/.vmcheck; then
         echo "Restoring original /etc/yum.repos.d"
         vm_cmd rm -rf /etc/yum.repos.d
         vm_cmd mv /etc/yum.repos.d{.bak,}
     fi
-fi
 
-# put back the original config if any
-vm_cmd rm -f /etc/rpm-ostreed.conf
-if vm_cmd test -f /etc/rpm-ostreed.conf.bak; then
-  vm_cmd mv /etc/rpm-ostreed.conf{.bak,}
+    # put back the original config if any
+    vm_cmd rm -f /etc/rpm-ostreed.conf
+    if vm_cmd test -f /etc/rpm-ostreed.conf.bak; then
+        vm_cmd mv /etc/rpm-ostreed.conf{.bak,}
+    fi
 fi
 
 # Gather post-failure system logs if necessary
