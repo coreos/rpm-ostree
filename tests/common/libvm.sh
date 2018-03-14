@@ -377,20 +377,20 @@ vm_wait_content_after_cursor() {
     regex=$1; shift
     vm_ansible_inline <<EOF
 - shell: |
-  set -xeuo pipefail
-  tmpf=\$(mktemp /var/tmp/journal.XXXXXX)
-  for x in \$(seq 60); do
-    journalctl -u rpm-ostreed --after-cursor "${from_cursor}" > \${tmpf}
-    if grep -q -e "${regex}" \${tmpf}; then
-      exit 0
-    else
-      cat \${tmpf}
-      sleep 1
-    fi
-  done
-  echo "timed out after 60s" 1>&2
-  journalctl -u rpm-ostreed --after-cursor "${from_cursor}" | tail -100
-  exit 1
+    set -xeuo pipefail
+    tmpf=\$(mktemp /var/tmp/journal.XXXXXX)
+    for x in \$(seq 60); do
+      journalctl -u rpm-ostreed --after-cursor "${from_cursor}" > \${tmpf}
+      if grep -q -e "${regex}" \${tmpf}; then
+        exit 0
+      else
+        cat \${tmpf}
+        sleep 1
+      fi
+    done
+    echo "timed out after 60s" 1>&2
+    journalctl -u rpm-ostreed --after-cursor "${from_cursor}" | tail -100
+    exit 1
 EOF
 }
 
