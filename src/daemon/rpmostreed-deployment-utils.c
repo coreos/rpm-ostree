@@ -111,12 +111,11 @@ rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot,
 }
 
 static gboolean
-rpmostreed_deployment_gpg_results (OstreeRepo  *repo,
-                                   const gchar *origin_refspec,
-                                   const gchar *checksum,
-                                   GVariant   **out_results,
-                                   gboolean    *out_enabled,
-                                   GError     **error)
+variant_add_gpg_results (OstreeRepo  *repo,
+                         const gchar *origin_refspec,
+                         const gchar *checksum,
+                         GVariantDict *dict,
+                         GError     **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("GPG verification error", error);
 
@@ -130,14 +129,9 @@ rpmostreed_deployment_gpg_results (OstreeRepo  *repo,
       if (!ostree_repo_remote_get_gpg_verify (repo, remote, &gpg_verify, error))
         return FALSE;
     }
-
+  g_variant_dict_insert (dict, "gpg-enabled", "b", gpg_verify);
   if (!gpg_verify)
-    {
-      /* Note early return; no need to verify signatures! */
-      *out_enabled = FALSE;
-      *out_results = NULL;
-      return TRUE;
-    }
+    return TRUE; /* Note early return; no need to verify signatures! */
 
   g_autoptr(GError) local_error = NULL;
   g_autoptr(OstreeGpgVerifyResult) verify_result =
@@ -147,8 +141,6 @@ rpmostreed_deployment_gpg_results (OstreeRepo  *repo,
       /* Somehow, we have a deployment which has gpg-verify=true, but *doesn't* have a valid
        * signature. Let's not just bomb out here. We need to return this in the variant so
        * that `status` can show the appropriate msg. */
-      *out_enabled = TRUE;
-      *out_results = NULL;
       return TRUE;
     }
 
@@ -159,8 +151,7 @@ rpmostreed_deployment_gpg_results (OstreeRepo  *repo,
   for (guint i = 0; i < n_sigs; i++)
     g_variant_builder_add (&builder, "v", ostree_gpg_verify_result_get_all (verify_result, i));
 
-  *out_results = g_variant_ref_sink (g_variant_builder_end (&builder));
-  *out_enabled = TRUE;
+  g_variant_dict_insert_value (dict, "signatures", g_variant_builder_end (&builder));
   return TRUE;
 }
 
@@ -299,13 +290,11 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   }
   variant_add_commit_details (&dict, NULL, commit);
 
-  gboolean gpg_enabled = FALSE;
-  g_autoptr(GVariant) sigs = NULL;
   switch (refspec_type)
     {
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {
-        if (!rpmostreed_deployment_gpg_results (repo, refspec, base_checksum, &sigs, &gpg_enabled, error))
+        if (!variant_add_gpg_results (repo, refspec, base_checksum, &dict, error))
           return NULL;
 
         g_autofree char *pending_base_commitrev = NULL;
@@ -361,10 +350,6 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   g_variant_dict_insert (&dict, "packages", "^as", layered_pkgs);
   g_variant_dict_insert_value (&dict, "base-removals", removed_base_pkgs);
   g_variant_dict_insert_value (&dict, "base-local-replacements", replaced_base_pkgs);
-
-  if (sigs != NULL)
-    g_variant_dict_insert_value (&dict, "signatures", sigs);
-  g_variant_dict_insert (&dict, "gpg-enabled", "b", gpg_enabled);
 
   g_variant_dict_insert (&dict, "pinned", "b",
                          ostree_deployment_is_pinned (deployment));
@@ -452,12 +437,9 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
       commit = commit_owned;
     }
 
-  gboolean gpg_enabled = FALSE;
-  g_autoptr(GVariant) sigs = NULL;
   if (refspec_is_ostree)
     {
-      if (!rpmostreed_deployment_gpg_results (repo, refspec, checksum,
-                                              &sigs, &gpg_enabled, error))
+      if (!variant_add_gpg_results (repo, refspec, checksum, dict, error))
         return FALSE;
     }
 
@@ -466,9 +448,6 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
   g_variant_dict_insert (dict, "checksum", "s", checksum);
   variant_add_commit_details (dict, NULL, commit);
   g_variant_dict_insert (dict, "origin", "s", refspec);
-  if (sigs != NULL)
-    g_variant_dict_insert_value (dict, "signatures", sigs);
-  g_variant_dict_insert (dict, "gpg-enabled", "b", gpg_enabled);
   return TRUE;
 }
 
