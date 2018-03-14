@@ -77,6 +77,14 @@ echo "ok status doesn't require active PAM session"
 vm_cmd rpm-ostree reload
 echo "ok reload"
 
+# Reload as root https://github.com/projectatomic/rpm-ostree/issues/976
+vm_cmd 'mv /etc/ostree/remotes.d{,.orig}'
+vm_cmd systemctl restart rpm-ostreed
+vm_cmd rpm-ostree status > status.txt
+assert_file_has_content status.txt 'Remote.*not found'
+vm_cmd 'mv /etc/ostree/remotes.d{.orig,}'
+echo "ok remote not found"
+
 # Add metadata string containing EnfOfLife attribtue
 META_ENDOFLIFE_MESSAGE="this is a test for metadata message"
 commit=$(vm_cmd ostree commit -b vmcheck \

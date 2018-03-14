@@ -524,6 +524,15 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
         g_print ("%s", checksum);
       g_print ("\n");
 
+      const char *remote_not_found = NULL;
+      g_variant_dict_lookup (dict, "remote-not-found", "s", &remote_not_found);
+      if (remote_not_found)
+        {
+          g_print ("%s%s", get_red_start (), get_bold_start ());
+          rpmostree_print_kv ("OstreeRemoteStatus", max_key_len, remote_not_found);
+          g_print ("%s%s", get_bold_end (), get_red_end ());
+        }
+
       const char *base_checksum = NULL;
       g_variant_dict_lookup (dict, "base-checksum", "&s", &base_checksum);
       gboolean is_locally_assembled = FALSE;
