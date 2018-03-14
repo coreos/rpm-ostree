@@ -111,31 +111,42 @@ rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot,
 }
 
 static gboolean
-variant_add_gpg_results (OstreeRepo  *repo,
-                         const gchar *origin_refspec,
-                         const gchar *checksum,
-                         GVariantDict *dict,
-                         GError     **error)
+variant_add_remote_status (OstreeRepo  *repo,
+                           const gchar *origin_refspec,
+                           const gchar *checksum,
+                           GVariantDict *dict,
+                           GError     **error)
 {
-  GLNX_AUTO_PREFIX_ERROR ("GPG verification error", error);
+  GLNX_AUTO_PREFIX_ERROR ("Loading origin status", error);
 
   g_autofree gchar *remote = NULL;
   if (!ostree_parse_refspec (origin_refspec, &remote, NULL, error))
     return FALSE;
 
+  g_autoptr(GError) local_error = NULL;
   gboolean gpg_verify = FALSE;
   if (remote)
     {
-      if (!ostree_repo_remote_get_gpg_verify (repo, remote, &gpg_verify, error))
-        return FALSE;
+      if (!ostree_repo_remote_get_gpg_verify (repo, remote, &gpg_verify, &local_error))
+        {
+          /* If the remote doesn't exist, let's note that so that status can
+           * render it specially.
+           */
+          if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+            {
+              g_variant_dict_insert (dict, "remote-error", "s", local_error->message);
+              return TRUE;
+            }
+          g_propagate_error (error, g_steal_pointer (&local_error));
+          return FALSE;
+        }
     }
   g_variant_dict_insert (dict, "gpg-enabled", "b", gpg_verify);
   if (!gpg_verify)
     return TRUE; /* Note early return; no need to verify signatures! */
 
-  g_autoptr(GError) local_error = NULL;
   g_autoptr(OstreeGpgVerifyResult) verify_result =
-    ostree_repo_verify_commit_for_remote (repo, checksum, remote, NULL, &local_error);
+    ostree_repo_verify_commit_for_remote (repo, checksum, remote, NULL, NULL);
   if (!verify_result)
     {
       /* Somehow, we have a deployment which has gpg-verify=true, but *doesn't* have a valid
@@ -294,7 +305,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
     {
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {
-        if (!variant_add_gpg_results (repo, refspec, base_checksum, &dict, error))
+        if (!variant_add_remote_status (repo, refspec, base_checksum, &dict, error))
           return NULL;
 
         g_autofree char *pending_base_commitrev = NULL;
@@ -439,7 +450,7 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
 
   if (refspec_is_ostree)
     {
-      if (!variant_add_gpg_results (repo, refspec, checksum, dict, error))
+      if (!variant_add_remote_status (repo, refspec, checksum, dict, error))
         return FALSE;
     }
 
