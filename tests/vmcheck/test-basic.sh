@@ -77,7 +77,7 @@ echo "ok status doesn't require active PAM session"
 vm_cmd rpm-ostree reload
 echo "ok reload"
 
-# Reload as root https://github.com/projectatomic/rpm-ostree/issues/976
+# https://github.com/projectatomic/rpm-ostree/issues/1301
 vm_cmd 'mv /etc/ostree/remotes.d{,.orig}'
 vm_cmd systemctl restart rpm-ostreed
 vm_cmd rpm-ostree status > status.txt

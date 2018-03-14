@@ -111,7 +111,7 @@ rpmostreed_deployment_get_for_index (OstreeSysroot *sysroot,
 }
 
 static gboolean
-variant_add_origin_status (OstreeRepo  *repo,
+variant_add_remote_status (OstreeRepo  *repo,
                            const gchar *origin_refspec,
                            const gchar *checksum,
                            GVariantDict *dict,
@@ -305,7 +305,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
     {
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {
-        if (!variant_add_origin_status (repo, refspec, base_checksum, &dict, error))
+        if (!variant_add_remote_status (repo, refspec, base_checksum, &dict, error))
           return NULL;
 
         g_autofree char *pending_base_commitrev = NULL;
@@ -450,7 +450,7 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
 
   if (refspec_is_ostree)
     {
-      if (!variant_add_origin_status (repo, refspec, checksum, dict, error))
+      if (!variant_add_remote_status (repo, refspec, checksum, dict, error))
         return FALSE;
     }
 
