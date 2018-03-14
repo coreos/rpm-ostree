@@ -134,7 +134,7 @@ variant_add_remote_status (OstreeRepo  *repo,
            */
           if (g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
             {
-              g_variant_dict_insert (dict, "remote-not-found", "s", local_error->message);
+              g_variant_dict_insert (dict, "remote-error", "s", local_error->message);
               return TRUE;
             }
           g_propagate_error (error, g_steal_pointer (&local_error));

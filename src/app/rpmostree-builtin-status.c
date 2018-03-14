@@ -525,7 +525,7 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
       g_print ("\n");
 
       const char *remote_not_found = NULL;
-      g_variant_dict_lookup (dict, "remote-not-found", "s", &remote_not_found);
+      g_variant_dict_lookup (dict, "remote-error", "s", &remote_not_found);
       if (remote_not_found)
         {
           g_print ("%s%s", get_red_start (), get_bold_start ());
