@@ -41,10 +41,11 @@ vm_ansible_inline() {
     cat > ${playbook} <<EOF
 ---
 - hosts: ${VM}
+  gather_facts: no
   tasks:
 EOF
     sed -e 's,^,  ,' >> ${playbook}
-    ansible-playbook -i ${VM}, --ssh-common-args "${SSHOPTS}" ${playbook}
+    ansible-playbook -vi ${VM}, --ssh-common-args "${SSHOPTS}" ${playbook}
     rm -f ${playbook}
 }
 
