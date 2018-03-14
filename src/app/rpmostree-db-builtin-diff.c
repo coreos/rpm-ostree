@@ -28,11 +28,13 @@
 static char *opt_format = "block";
 static gboolean opt_changelogs;
 static char *opt_sysroot;
+static gboolean opt_base;
 
 static GOptionEntry option_entries[] = {
   { "format", 'F', 0, G_OPTION_ARG_STRING, &opt_format, "Output format: \"diff\" or (default) \"block\"", "FORMAT" },
   { "changelogs", 'c', 0, G_OPTION_ARG_NONE, &opt_changelogs, "Also output RPM changelogs", NULL },
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
+  { "base", 0, 0, G_OPTION_ARG_NONE, &opt_base, "Diff against deployments' base, not layered commits", NULL },
   { NULL }
 };
 
@@ -93,6 +95,27 @@ print_diff (OstreeRepo   *repo,
   return TRUE;
 }
 
+static gboolean
+get_checksum_from_deployment (OstreeRepo       *repo,
+                              OstreeDeployment *deployment,
+                              char            **out_checksum,
+                              GError          **error)
+{
+  g_autofree char *checksum = NULL;
+  if (opt_base)
+    {
+      if (!rpmostree_deployment_get_layered_info (repo, deployment, NULL, &checksum,
+                                                  NULL, NULL, NULL, error))
+        return FALSE;
+    }
+
+  if (!checksum)
+    checksum = g_strdup (ostree_deployment_get_csum (deployment));
+
+  *out_checksum = g_steal_pointer (&checksum);
+  return TRUE;
+}
+
 gboolean
 rpmostree_db_builtin_diff (int argc, char **argv,
                            RpmOstreeCommandInvocation *invocation,
@@ -132,7 +155,8 @@ rpmostree_db_builtin_diff (int argc, char **argv,
         return glnx_throw (error, "Not booted into any deployment");
 
       old_desc = "booted deployment";
-      old_checksum = g_strdup (ostree_deployment_get_csum (booted));
+      if (!get_checksum_from_deployment (repo, booted, &old_checksum, error))
+        return FALSE;
 
       if (argc < 2)
         {
@@ -142,7 +166,8 @@ rpmostree_db_builtin_diff (int argc, char **argv,
           ostree_sysroot_query_deployments_for (sysroot, NULL, &pending, NULL);
           if (!pending || ostree_deployment_equal (pending, booted))
             return glnx_throw (error, "No pending deployment to diff against");
-          new_checksum = g_strdup (ostree_deployment_get_csum (pending));
+          if (!get_checksum_from_deployment (repo, pending, &new_checksum, error))
+            return FALSE;
         }
       else
         {

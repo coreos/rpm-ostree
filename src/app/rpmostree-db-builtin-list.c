@@ -28,17 +28,16 @@ static GOptionEntry option_entries[] = {
 };
 
 static gboolean
-_builtin_db_list (OstreeRepo *repo,
-                  GPtrArray *revs, const GPtrArray *patterns,
-                  GCancellable   *cancellable,
-                  GError        **error)
+_builtin_db_list (OstreeRepo      *repo,
+                  GPtrArray       *revs,
+                  const GPtrArray *patterns,
+                  GCancellable    *cancellable,
+                  GError         **error)
 {
   for (guint num = 0; num < revs->len; num++)
     {
       char *rev = revs->pdata[num];
-      g_autoptr(RpmRevisionData) rpmrev = NULL;
       char *mrev = strstr (rev, "..");
-
       if (mrev)
         {
           g_autoptr(GPtrArray) range_revs = NULL;
@@ -55,24 +54,44 @@ _builtin_db_list (OstreeRepo *repo,
           if (!range_revs)
             return FALSE;
 
-          if (!_builtin_db_list (repo, range_revs, patterns,
-                                 cancellable, error))
+          if (!_builtin_db_list (repo, range_revs, patterns, cancellable, error))
             return FALSE;
 
           continue;
         }
 
-      rpmrev = rpmrev_new (repo, rev, patterns,
-                           cancellable, error);
-      if (!rpmrev)
+      g_autofree char *checksum = NULL;
+      if (!ostree_repo_resolve_rev (repo, rev, FALSE, &checksum, error))
         return FALSE;
 
-      if (!g_str_equal (rev, rpmrev_get_commit (rpmrev)))
-        printf ("ostree commit: %s (%s)\n", rev, rpmrev_get_commit (rpmrev));
+      if (!g_str_equal (rev, checksum))
+        printf ("ostree commit: %s (%s)\n", rev, checksum);
       else
         printf ("ostree commit: %s\n", rev);
 
-      rpmhdrs_list (rpmrev_get_headers (rpmrev));
+      /* in the common case where no patterns are provided, use the smarter db_query API */
+      if (!patterns)
+        {
+          g_autoptr(GPtrArray) packages =
+            rpm_ostree_db_query_all (repo, checksum, cancellable, error);
+          if (!packages)
+            return FALSE;
+
+          for (guint i = 0; i < packages->len; i++)
+            {
+              RpmOstreePackage *package = g_ptr_array_index (packages, i);
+              g_print (" %s\n", rpm_ostree_package_get_nevra (package));
+            }
+        }
+      else
+        {
+          g_autoptr(RpmRevisionData) rpmrev = NULL;
+          rpmrev = rpmrev_new (repo, checksum, patterns, cancellable, error);
+          if (!rpmrev)
+            return FALSE;
+
+          rpmhdrs_list (rpmrev_get_headers (rpmrev));
+        }
     }
 
   return TRUE;
@@ -84,7 +103,7 @@ rpmostree_db_builtin_list (int argc, char **argv,
                            GCancellable *cancellable, GError **error)
 {
   g_autoptr(GOptionContext) context =
-    g_option_context_new ("[PREFIX-PKGNAME...] COMMIT...");
+    g_option_context_new ("REV... [PREFIX-PKGNAME...]");
 
   g_autoptr(OstreeRepo) repo = NULL;
   if (!rpmostree_db_option_context_parse (context, option_entries, &argc, &argv,
