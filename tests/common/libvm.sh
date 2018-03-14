@@ -49,6 +49,14 @@ EOF
     rm -f ${playbook}
 }
 
+vm_shell_inline() {
+  vm_ansible_inline <<EOF
+- shell: |
+    set -xeuo pipefail
+$(sed -e 's,^,    ,')
+EOF
+}
+
 # rsync wrapper that sets up authentication
 vm_raw_rsync() {
   local rsyncopts="ssh -o User=root"
