@@ -190,6 +190,39 @@ apply_revision_override (RpmostreedTransaction    *transaction,
   return TRUE;
 }
 
+/* Generates the update GVariant and caches it to disk. This is set as the CachedUpdate
+ * property of RPMOSTreeOS by refresh_cached_update, but we calculate during transactions
+ * only, since it's potentially costly to do. See:
+ * https://github.com/projectatomic/rpm-ostree/pull/1268 */
+static gboolean
+generate_update_variant (OstreeRepo       *repo,
+                         OstreeDeployment *deployment,
+                         DnfSack          *sack,
+                         GCancellable     *cancellable,
+                         GError          **error)
+{
+  /* always delete first since we might not be replacing it at all */
+  if (!glnx_shutil_rm_rf_at (AT_FDCWD, RPMOSTREE_AUTOUPDATES_CACHE_FILE,
+                             cancellable, error))
+    return FALSE;
+
+  g_autoptr(GVariant) update = NULL;
+  if (!rpmostreed_update_generate_variant (deployment, repo, sack, &update,
+                                           cancellable, error))
+    return FALSE;
+
+  if (update != NULL)
+    {
+      if (!glnx_file_replace_contents_at (AT_FDCWD, RPMOSTREE_AUTOUPDATES_CACHE_FILE,
+                                          g_variant_get_data (update),
+                                          g_variant_get_size (update),
+                                          0, cancellable, error))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
 /* ============================= Package Diff  ============================= */
 
 typedef struct {
@@ -1045,26 +1078,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           sack = g_object_ref (dnf_context_get_sack (dnfctx));
         }
 
-      /* now generate the variant and cache it to disk */
-
-      /* always delete first since we might not be replacing it at all */
-      if (!glnx_shutil_rm_rf_at (AT_FDCWD, RPMOSTREE_AUTOUPDATES_CACHE_FILE,
-                                 cancellable, error))
+      if (!generate_update_variant (repo, booted_deployment, sack, cancellable, error))
         return FALSE;
-
-      g_autoptr(GVariant) update = NULL;
-      if (!rpmostreed_update_generate_variant (booted_deployment, repo, sack, &update,
-                                               cancellable, error))
-        return FALSE;
-
-      if (update != NULL)
-        {
-          if (!glnx_file_replace_contents_at (AT_FDCWD, RPMOSTREE_AUTOUPDATES_CACHE_FILE,
-                                              g_variant_get_data (update),
-                                              g_variant_get_size (update),
-                                              0, cancellable, error))
-            return FALSE;
-        }
 
       /* Note early return */
       return TRUE;
