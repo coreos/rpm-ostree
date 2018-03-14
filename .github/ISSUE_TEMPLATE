@@ -1,12 +1,12 @@
-** Host system details **
+**Host system details**
 
 Provide the output of `rpm-ostree status`.
 
-** Expected vs actual behavior **
+**Expected vs actual behavior**
 
 ```
 # rpm-ostree install somepackage
-error: installing somepackage: encountered some an error
+error: installing somepackage: encountered an error
 ```
 
 Expected:
