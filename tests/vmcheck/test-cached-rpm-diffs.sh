@@ -58,6 +58,33 @@ call_dbus() {
     -m org.projectatomic.rpmostree1.OS.$method "$@"
 }
 
+if vm_cmd grep -q 'ID=.*centos' /etc/os-release; then
+  py=python
+else
+  py=python3
+fi
+
+run_transaction() {
+  method=$1; shift
+  sig=$1; shift
+  args=$1; shift
+  cur=$(vm_get_journal_cursor)
+  # use ansible for this so we don't have to think about hungry quote-eating ssh
+  vm_shell_inline <<EOF
+$py -c '
+import dbus
+addr = dbus.SystemBus().call_blocking(
+  "org.projectatomic.rpmostree1", "$ospath", "org.projectatomic.rpmostree1.OS",
+  "$method", "$sig", ($args))
+t = dbus.connection.Connection(addr)
+t.call_blocking(
+  "org.projectatomic.rpmostree1", "/",
+  "org.projectatomic.rpmostree1.Transaction", "Start", "", ())
+t.close()'
+EOF
+  vm_wait_content_after_cursor $cur "Txn $method on .* successful"
+}
+
 call_dbus GetCachedDeployRpmDiff "vDeploy" [] > out.txt
 assert_file_has_content out.txt "<'vmcheck'>"
 assert_file_has_content out.txt "$deploy_csum"
@@ -85,3 +112,9 @@ assert_file_has_content out.txt "pkg1"
 assert_file_has_content out.txt "pkg2"
 assert_file_has_content out.txt "pkg3"
 echo "ok GetCachedRebaseRpmDiff"
+
+# This is not a super realistic test since we don't actually download anything.
+# Still it checks that we properly update the cache
+run_transaction DownloadUpdateRpmDiff "" ""
+vm_assert_status_jq '.["cached-update"]["version"] == "vUpdate"'
+echo "ok DownloadUpdateRpmDiff"
