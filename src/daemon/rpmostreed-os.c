@@ -464,6 +464,20 @@ merge_compatible_txn (RpmostreedOS *self,
 }
 
 static gboolean
+refresh_cached_update (RpmostreedOS*, GError **error);
+
+static void
+on_auto_update_done (RpmostreedTransaction *transaction, RpmostreedOS *self)
+{
+  g_autoptr(GError) local_error = NULL;
+  if (!refresh_cached_update (self, &local_error))
+    {
+      sd_journal_print (LOG_WARNING, "Failed to refresh CachedUpdate property: %s",
+                        local_error->message);
+    }
+}
+
+static gboolean
 os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
                                     GDBusMethodInvocation *invocation)
 {
@@ -497,6 +511,11 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
 
   if (transaction == NULL)
     goto out;
+
+  /* Make sure we refresh CachedUpdate after the transaction. This normally happens
+   * automatically if new data was downloaded (through the repo mtime bump --> UPDATED
+   * signal), but we also want to do this even if the data was already present. */
+  g_signal_connect (transaction, "closed", G_CALLBACK (on_auto_update_done), self);
 
   rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
 
@@ -709,20 +728,6 @@ start_deployment_txn (GDBusMethodInvocation  *invocation,
                                             override_remove_pkgs,
                                             override_reset_pkgs,
                                             cancellable, error);
-}
-
-static gboolean
-refresh_cached_update (RpmostreedOS*, GError **error);
-
-static void
-on_auto_update_done (RpmostreedTransaction *transaction, RpmostreedOS *self)
-{
-  g_autoptr(GError) local_error = NULL;
-  if (!refresh_cached_update (self, &local_error))
-    {
-      sd_journal_print (LOG_WARNING, "Failed to refresh CachedUpdate property: %s",
-                        local_error->message);
-    }
 }
 
 typedef void (*InvocationCompleter)(RPMOSTreeOS*,

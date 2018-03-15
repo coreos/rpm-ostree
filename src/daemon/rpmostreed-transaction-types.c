@@ -330,6 +330,17 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
         rpmostree_output_message ("No change.");
     }
 
+  if (upgrading)
+    {
+      /* For backwards compatibility, we still need to make sure the CachedUpdate property
+       * is updated here. To do this, we cache to disk in libostree mode (no DnfSack), since
+       * that's all we updated here. This conflicts with auto-updates for now, though we
+       * need better test coverage before uniting those two paths. */
+      OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
+      if (!generate_update_variant (repo, booted_deployment, NULL, cancellable, error))
+        return FALSE;
+    }
+
   return TRUE;
 }
 
