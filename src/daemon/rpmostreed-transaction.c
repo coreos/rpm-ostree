@@ -303,13 +303,19 @@ transaction_execute_thread (GTask *task,
       /* Also log to journal in addition to the client, so it's recorded
        * consistently.
        */
-      sd_journal_print (LOG_ERR, "Txn %s failed: %s",
+      sd_journal_print (LOG_ERR, "Txn %s on %s failed: %s",
+                        g_dbus_method_invocation_get_method_name (priv->invocation),
                         g_dbus_method_invocation_get_object_path (priv->invocation),
                         local_error->message);
       g_task_return_error (task, local_error);
     }
   else
-    g_task_return_boolean (task, success);
+    {
+      sd_journal_print (LOG_INFO, "Txn %s on %s successful",
+                        g_dbus_method_invocation_get_method_name (priv->invocation),
+                        g_dbus_method_invocation_get_object_path (priv->invocation));
+      g_task_return_boolean (task, success);
+    }
 
   /* Clean up context */
   g_main_context_pop_thread_default (mctx);
