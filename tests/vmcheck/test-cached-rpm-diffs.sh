@@ -58,10 +58,10 @@ call_dbus() {
     -m org.projectatomic.rpmostree1.OS.$method "$@"
 }
 
-if vm_cmd grep -q 'ID=.*centos' /etc/os-release; then
-  py=python
-else
+if vm_cmd test -x /usr/bin/python3; then
   py=python3
+else
+  py=python
 fi
 
 run_transaction() {
