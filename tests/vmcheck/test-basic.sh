@@ -125,6 +125,16 @@ vm_rpmostree status > status.txt
 assert_not_file_has_content status.txt "Pinned: yes"
 echo "ok pinning"
 
+vm_cmd ostree admin pin 0
+vm_rpmostree reload  # Try to avoid reload races
+vm_rpmostree cleanup -p
+vm_assert_status_jq ".deployments|length == 2"
+vm_cmd ostree admin pin -u 0
+vm_rpmostree reload  # Try to avoid reload races
+vm_rpmostree cleanup -p
+vm_assert_status_jq ".deployments|length == 1"
+echo "ok pinned retained"
+
 # https://github.com/ostreedev/ostree/pull/1055
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --timestamp=\"October 25 1985\"
 if vm_rpmostree upgrade 2>err.txt; then
