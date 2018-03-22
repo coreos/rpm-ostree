@@ -404,8 +404,10 @@ rpmostree_syscore_filter_deployments (OstreeSysroot      *sysroot,
           continue;
         }
 
-      /* Is this deployment for a different osname?  Keep it. */
-      if (strcmp (ostree_deployment_get_osname (deployment), osname) != 0)
+      const gboolean osname_matches =
+        strcmp (ostree_deployment_get_osname (deployment), osname) == 0;
+      /* Retain deployments for other osnames, as well as pinned ones */
+      if (!osname_matches || ostree_deployment_is_pinned (deployment))
         {
           g_ptr_array_add (new_deployments, g_object_ref (deployment));
           continue;
