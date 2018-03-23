@@ -218,6 +218,9 @@ assert_output
 echo "ok check mode layered only with advisories"
 
 # check we see the same output with --check/--preview
+# clear out cache first to make sure they start from scratch
+vm_rpmostree cleanup -m
+vm_cmd systemctl stop rpm-ostreed
 vm_rpmostree upgrade --check > out.txt
 vm_rpmostree upgrade --preview > out-verbose.txt
 assert_output

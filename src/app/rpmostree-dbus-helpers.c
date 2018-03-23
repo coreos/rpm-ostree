@@ -689,6 +689,16 @@ rpmostree_transaction_connect_active (RPMOSTreeSysroot *sysroot_proxy,
   return FALSE;
 }
 
+static void
+on_reload_done (GObject      *src,
+                GAsyncResult *res,
+                gpointer      user_data)
+{
+  gboolean *donep = user_data;
+  *donep = TRUE;
+  (void) rpmostree_sysroot_call_reload_finish ((RPMOSTreeSysroot*)src, res, NULL);
+}
+
 /* Transactions need an explicit Start call so we can set up watches for signals
  * beforehand and avoid losing information.  We monitor the transaction,
  * printing output it sends, and handle Ctrl-C, etc.
@@ -782,6 +792,16 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
         {
           success = TRUE;
         }
+    }
+
+  /* On success, call Reload() as a way to sync with the daemon. Do this in async mode so
+   * that gdbus handles signals for changed properties. */
+  if (success)
+    {
+      gboolean done = FALSE;
+      rpmostree_sysroot_call_reload (sysroot_proxy, NULL, on_reload_done, &done);
+      while (!done)
+        g_main_context_iteration (NULL, TRUE);
     }
 
 out:
