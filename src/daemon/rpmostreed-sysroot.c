@@ -40,9 +40,9 @@
 #include <systemd/sd-journal.h>
 
 static gboolean
-sysroot_reload (RpmostreedSysroot *self,
-                gboolean *out_changed,
-                GError **error);
+sysroot_reload_ostree_configs_and_deployments (RpmostreedSysroot *self,
+                                               gboolean *out_changed,
+                                               GError **error);
 
 /**
  * SECTION: sysroot
@@ -448,7 +448,7 @@ handle_reload_config (RPMOSTreeSysroot *object,
     goto out;
 
   gboolean sysroot_changed;
-  if (!sysroot_reload (self, &sysroot_changed, error))
+  if (!sysroot_reload_ostree_configs_and_deployments (self, &sysroot_changed, error))
     goto out;
 
   /* also send an UPDATED signal if configs changed to cause OS interfaces to reload; we do
@@ -697,9 +697,9 @@ rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
 }
 
 static gboolean
-sysroot_reload (RpmostreedSysroot *self,
-                gboolean *out_changed,
-                GError **error)
+sysroot_reload_ostree_configs_and_deployments (RpmostreedSysroot *self,
+                                               gboolean *out_changed,
+                                               GError **error)
 {
   gboolean ret = FALSE;
   gboolean did_change;
@@ -722,7 +722,7 @@ sysroot_reload (RpmostreedSysroot *self,
 gboolean
 rpmostreed_sysroot_reload (RpmostreedSysroot *self, GError **error)
 {
-  return sysroot_reload (self, NULL, error);
+  return sysroot_reload_ostree_configs_and_deployments (self, NULL, error);
 }
 
 static void
