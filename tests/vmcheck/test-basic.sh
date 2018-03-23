@@ -126,11 +126,9 @@ assert_not_file_has_content status.txt "Pinned: yes"
 echo "ok pinning"
 
 vm_cmd ostree admin pin 0
-vm_rpmostree reload  # Try to avoid reload races
 vm_rpmostree cleanup -p
 vm_assert_status_jq ".deployments|length == 2"
 vm_cmd ostree admin pin -u 0
-vm_rpmostree reload  # Try to avoid reload races
 vm_rpmostree cleanup -p
 vm_assert_status_jq ".deployments|length == 1"
 echo "ok pinned retained"
