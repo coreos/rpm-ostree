@@ -39,6 +39,11 @@
 #include <systemd/sd-login.h>
 #include <systemd/sd-journal.h>
 
+static gboolean
+sysroot_reload (RpmostreedSysroot *self,
+                gboolean *out_changed,
+                GError **error);
+
 /**
  * SECTION: sysroot
  * @title: RpmostreedSysroot
@@ -443,7 +448,7 @@ handle_reload_config (RPMOSTreeSysroot *object,
     goto out;
 
   gboolean sysroot_changed;
-  if (!rpmostreed_sysroot_reload (self, &sysroot_changed, error))
+  if (!sysroot_reload (self, &sysroot_changed, error))
     goto out;
 
   /* also send an UPDATED signal if configs changed to cause OS interfaces to reload; we do
@@ -691,10 +696,10 @@ rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
   gdbus_interface_skeleton_class->g_authorize_method = sysroot_authorize_method;
 }
 
-gboolean
-rpmostreed_sysroot_reload (RpmostreedSysroot *self,
-                           gboolean *out_changed,
-                           GError **error)
+static gboolean
+sysroot_reload (RpmostreedSysroot *self,
+                gboolean *out_changed,
+                GError **error)
 {
   gboolean ret = FALSE;
   gboolean did_change;
@@ -714,6 +719,12 @@ rpmostreed_sysroot_reload (RpmostreedSysroot *self,
   return ret;
 }
 
+gboolean
+rpmostreed_sysroot_reload (RpmostreedSysroot *self, GError **error)
+{
+  return sysroot_reload (self, NULL, error);
+}
+
 static void
 on_deploy_changed (GFileMonitor *monitor,
                    GFile *file,
@@ -726,7 +737,7 @@ on_deploy_changed (GFileMonitor *monitor,
 
   if (event_type == G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED)
     {
-      if (!rpmostreed_sysroot_reload (self, NULL, &error))
+      if (!rpmostreed_sysroot_reload (self, &error))
         goto out;
     }
 
@@ -796,6 +807,10 @@ rpmostreed_sysroot_populate (RpmostreedSysroot *self,
   return TRUE;
 }
 
+/* Ensures the sysroot is up to date, and returns references to the underlying
+ * libostree sysroot object as well as the repo.  This function should
+ * be used at the start of both state querying and transactions.
+ */
 gboolean
 rpmostreed_sysroot_load_state (RpmostreedSysroot *self,
                                GCancellable *cancellable,
@@ -803,6 +818,14 @@ rpmostreed_sysroot_load_state (RpmostreedSysroot *self,
                                OstreeRepo **out_repo,
                                GError **error)
 {
+  /* Always do a reload check here to suppress race conditions such as
+   * doing: ostree admin pin && rpm-ostree cleanup
+   * Without this we're relying on the file monitoring picking things up.
+   * Note that the sysroot reload checks mtimes and hence is a cheap
+   * no-op if nothing has changed.
+   */
+  if (!rpmostreed_sysroot_reload (self, error))
+    return FALSE;
   if (out_sysroot)
     *out_sysroot = g_object_ref (rpmostreed_sysroot_get_root (self));
   if (out_repo)
