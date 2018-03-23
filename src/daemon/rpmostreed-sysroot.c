@@ -432,6 +432,29 @@ reset_config_properties (RpmostreedSysroot  *self,
   return TRUE;
 }
 
+/* reloads *only* deployments and os internals, *no* configuration files */
+static gboolean
+handle_reload (RPMOSTreeSysroot *object,
+               GDBusMethodInvocation *invocation)
+{
+  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
+  g_autoptr(GError) local_error = NULL;
+
+  if (!sysroot_populate_deployments_unlocked (self, NULL, &local_error))
+    goto out;
+
+  /* always send an UPDATED signal to also force OS interfaces to reload */
+  g_signal_emit (self, signals[UPDATED], 0);
+
+  rpmostree_sysroot_complete_reload (object, invocation);
+
+out:
+  if (local_error)
+    g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+  return TRUE;
+}
+
+/* reloads *everything*: ostree configs, rpm-ostreed.conf, deployments, os internals */
 static gboolean
 handle_reload_config (RPMOSTreeSysroot *object,
                       GDBusMethodInvocation *invocation)
@@ -600,9 +623,10 @@ sysroot_authorize_method (GDBusInterfaceSkeleton *interface,
       /* The daemon is on the session bus, running self tests */
       authorized = TRUE;
     }
-  else if (g_strcmp0 (method_name, "GetOS") == 0)
+  else if (g_strcmp0 (method_name, "GetOS") == 0 ||
+           g_strcmp0 (method_name, "Reload") == 0)
     {
-      /* GetOS() is always allowed */
+      /* GetOS() and Reload() are always allowed */
       authorized = TRUE;
     }
   else if (g_strcmp0 (method_name, "ReloadConfig") == 0)
@@ -753,6 +777,7 @@ rpmostreed_sysroot_iface_init (RPMOSTreeSysrootIface *iface)
   iface->handle_get_os = handle_get_os;
   iface->handle_register_client = handle_register_client;
   iface->handle_unregister_client = handle_unregister_client;
+  iface->handle_reload = handle_reload;
   iface->handle_reload_config = handle_reload_config;
 }
 

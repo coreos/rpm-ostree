@@ -47,6 +47,12 @@
       <arg type="a{sv}" name="options" direction="in"/>
     </method>
 
+    <!-- Reload sysroot if changed. This can also be used as a way to sync with the daemon
+         to ensure e.g. D-Bus properties are updated before reading them. -->
+    <method name="Reload">
+    </method>
+
+    <!-- Like Reload, but also reload configuration files. -->
     <method name="ReloadConfig">
     </method>
 
