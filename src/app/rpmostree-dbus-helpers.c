@@ -128,6 +128,28 @@ get_connection_for_path (gchar *sysroot,
   return connection;
 }
 
+/* Used to close race conditions by ensuring the daemon status is up-to-date */
+static void
+on_reload_done (GObject      *src,
+                GAsyncResult *res,
+                gpointer      user_data)
+{
+  gboolean *donep = user_data;
+  *donep = TRUE;
+  (void) rpmostree_sysroot_call_reload_finish ((RPMOSTreeSysroot*)src, res, NULL);
+}
+
+
+/* This is an async call so that gdbus handles signals for changed
+ * properties. */
+static void
+await_reload_sync (RPMOSTreeSysroot *sysroot_proxy)
+{
+  gboolean done = FALSE;
+  rpmostree_sysroot_call_reload (sysroot_proxy, NULL, on_reload_done, &done);
+  while (!done)
+    g_main_context_iteration (NULL, TRUE);
+}
 
 /**
 * rpmostree_load_sysroot
@@ -222,6 +244,9 @@ rpmostree_load_sysroot (gchar *sysroot,
                                       NULL, error);
   if (sysroot_proxy == NULL)
     return FALSE;
+
+  /* TODO: Change RegisterClient to also do a reload and do it async instead */
+  await_reload_sync (sysroot_proxy);
 
   *out_sysroot_proxy = g_steal_pointer (&sysroot_proxy);
   *out_peer_pid = peer_pid; peer_pid = 0;
@@ -689,16 +714,6 @@ rpmostree_transaction_connect_active (RPMOSTreeSysroot *sysroot_proxy,
   return FALSE;
 }
 
-static void
-on_reload_done (GObject      *src,
-                GAsyncResult *res,
-                gpointer      user_data)
-{
-  gboolean *donep = user_data;
-  *donep = TRUE;
-  (void) rpmostree_sysroot_call_reload_finish ((RPMOSTreeSysroot*)src, res, NULL);
-}
-
 /* Transactions need an explicit Start call so we can set up watches for signals
  * beforehand and avoid losing information.  We monitor the transaction,
  * printing output it sends, and handle Ctrl-C, etc.
@@ -797,12 +812,7 @@ rpmostree_transaction_get_response_sync (RPMOSTreeSysroot *sysroot_proxy,
   /* On success, call Reload() as a way to sync with the daemon. Do this in async mode so
    * that gdbus handles signals for changed properties. */
   if (success)
-    {
-      gboolean done = FALSE;
-      rpmostree_sysroot_call_reload (sysroot_proxy, NULL, on_reload_done, &done);
-      while (!done)
-        g_main_context_iteration (NULL, TRUE);
-    }
+    await_reload_sync (sysroot_proxy);
 
 out:
   if (sigintid)
