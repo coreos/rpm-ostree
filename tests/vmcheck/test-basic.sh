@@ -116,11 +116,9 @@ echo "ok status -b"
 
 # Pinning
 vm_cmd ostree admin pin 0
-vm_rpmostree reload  # Try to avoid reload races
 vm_rpmostree status > status.txt
 assert_file_has_content_literal status.txt "Pinned: yes"
 vm_cmd ostree admin pin -u 0
-vm_rpmostree reload  # Try to avoid reload races
 vm_rpmostree status > status.txt
 assert_not_file_has_content status.txt "Pinned: yes"
 echo "ok pinning"
