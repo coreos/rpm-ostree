@@ -191,11 +191,12 @@ It supports the following parameters:
    Example: `"add-files": [["bar", "/bar"], ["foo", "/foo"]]`
 
  * `tmp-is-dir`: boolean, optional: Defaults to `false`.  By default,
-   rpm-ostree creates symlink `/tmp` → `/sysroot/tmp`.
-   It's more flexible to leave it as a directory (systemd will mount it),
-   and further, we don't want to encourage `/sysroot` to be writable.
-   For host system composes, we recommend turning this on; it's left off
-   by default to ease the transition.
+   rpm-ostree creates symlink `/tmp` → `sysroot/tmp`.  When set to `true`,
+   `/tmp` will be a regular directory, which allows the `systemd` unit
+   `tmp.mount` to mount it as `tmpfs`. It's more flexible to leave it
+   as a directory, and further, we don't want to encourage `/sysroot`
+   to be writable. For host system composes, we recommend turning this on;
+   it's left off by default to ease the transition.
 
 Experimental options
 --------
