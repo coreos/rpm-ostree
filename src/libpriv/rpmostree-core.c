@@ -1406,6 +1406,10 @@ find_pkg_in_ostree (RpmOstreeContext *self,
   if (!cached_rev)
     return TRUE; /* Note early return */
 
+  /* Below here prefix with the branch */
+  const char *errprefix = glnx_strjoina ("Loading pkgcache branch ", cachebranch);
+  GLNX_AUTO_PREFIX_ERROR (errprefix, error);
+
   g_autoptr(GVariant) commit = NULL;
   if (!ostree_repo_load_commit (repo, cached_rev, &commit, NULL, error))
     return FALSE;
