@@ -274,6 +274,7 @@ dump_buffered_output_noerr (const char *prefix,
  */
 static gboolean
 run_script_in_bwrap_container (int rootfs_fd,
+                               GLnxTmpDir *var_lib_rpm_statedir,
                                const char *name,
                                const char *scriptdesc,
                                const char *interp,
@@ -290,6 +291,7 @@ run_script_in_bwrap_container (int rootfs_fd,
   const char *postscript_path_host = postscript_path_container + 1;
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   gboolean created_var_tmp = FALSE;
+  gboolean created_var_lib_rpmstate = FALSE;
   glnx_autofd int stdout_fd = -1;
   glnx_autofd int stderr_fd = -1;
 
@@ -328,11 +330,29 @@ run_script_in_bwrap_container (int rootfs_fd,
   else
     created_var_tmp = TRUE;
 
+  /* And similarly for /var/lib/rpm-state */
+  if (var_lib_rpm_statedir)
+    {
+      if (mkdirat (rootfs_fd, "var/lib/rpm-state", 0755) < 0)
+        {
+          if (errno == EEXIST)
+            ;
+          else
+            {
+              glnx_set_error_from_errno (error);
+              goto out;
+            }
+        }
+      else
+        created_var_lib_rpmstate = TRUE;
+    }
+
   /* ⚠⚠⚠ If you change this, also update scripts/bwrap-script-shell.sh ⚠⚠⚠ */
 
   /* We just did a ro bind mount over /var above. However we want a writable
    * var/tmp, so we need to tmpfs mount on top of it. See also
    * https://github.com/projectatomic/bubblewrap/issues/182
+   * Similarly for /var/lib/rpm-state.
    *
    * See above for why we special case glibc.
    */
@@ -346,6 +366,9 @@ run_script_in_bwrap_container (int rootfs_fd,
                                NULL);
   if (!bwrap)
     goto out;
+
+  if (var_lib_rpm_statedir)
+    rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", var_lib_rpm_statedir->path, "/var/lib/rpm-state", NULL);
 
   const gboolean debugging_script = g_strcmp0 (g_getenv ("RPMOSTREE_SCRIPT_DEBUG"), pkg_script) == 0;
 
@@ -431,6 +454,8 @@ run_script_in_bwrap_container (int rootfs_fd,
   (void) unlinkat (rootfs_fd, postscript_path_host, 0);
   if (created_var_tmp)
     (void) unlinkat (rootfs_fd, "var/tmp", AT_REMOVEDIR);
+  if (created_var_lib_rpmstate)
+    (void) unlinkat (rootfs_fd, "var/lib/rpm-state", AT_REMOVEDIR);
   return ret;
 }
 
@@ -443,6 +468,7 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
                      DnfPackage    *pkg,
                      Header         hdr,
                      int            rootfs_fd,
+                     GLnxTmpDir    *var_lib_rpm_statedir,
                      GCancellable  *cancellable,
                      GError       **error)
 {
@@ -511,7 +537,7 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
     }
 
   guint64 start_time_ms = g_get_monotonic_time () / 1000;
-  if (!run_script_in_bwrap_container (rootfs_fd, dnf_package_get_name (pkg),
+  if (!run_script_in_bwrap_container (rootfs_fd, var_lib_rpm_statedir, dnf_package_get_name (pkg),
                                       rpmscript->desc, interp, script, script_arg,
                                       -1, cancellable, error))
     return glnx_prefix_error (error, "Running %s for %s", rpmscript->desc, dnf_package_get_name (pkg));
@@ -536,6 +562,7 @@ run_script (const KnownRpmScriptKind *rpmscript,
             DnfPackage               *pkg,
             Header                    hdr,
             int                       rootfs_fd,
+            GLnxTmpDir               *var_lib_rpm_statedir,
             gboolean                 *out_did_run,
             GCancellable             *cancellable,
             GError                  **error)
@@ -563,7 +590,7 @@ run_script (const KnownRpmScriptKind *rpmscript,
     }
 
   *out_did_run = TRUE;
-  return impl_run_rpm_script (rpmscript, pkg, hdr, rootfs_fd,
+  return impl_run_rpm_script (rpmscript, pkg, hdr, rootfs_fd, var_lib_rpm_statedir,
                               cancellable, error);
 }
 
@@ -683,6 +710,7 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
                            Header         hdr,
                            RpmOstreeScriptKind kind,
                            int            rootfs_fd,
+                           GLnxTmpDir    *var_lib_rpm_statedir,
                            guint         *out_n_run,
                            GCancellable  *cancellable,
                            GError       **error)
@@ -705,6 +733,7 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
 
   gboolean did_run = FALSE;
   if (!run_script (scriptkind, pkg, hdr, rootfs_fd,
+                   var_lib_rpm_statedir,
                    &did_run, cancellable, error))
     return FALSE;
 
@@ -873,7 +902,7 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
 
       /* Run it, and log the result */
       guint64 start_time_ms = g_get_monotonic_time () / 1000;
-      if (!run_script_in_bwrap_container (rootfs_fd, pkg_name,
+      if (!run_script_in_bwrap_container (rootfs_fd, NULL, pkg_name,
                                           "%transfiletriggerin", interp, script, NULL,
                                           fileno (tmpf_file), cancellable, error))
         return FALSE;
