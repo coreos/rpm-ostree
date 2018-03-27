@@ -45,7 +45,13 @@ struct _RpmOstreeContext {
   gboolean unprivileged;
   OstreeSePolicy *sepolicy;
   char *passwd_dir;
+  /* Used in async imports, not owned */
+  GVariant *rojig_xattr_table;
+  GHashTable *rojig_pkg_to_xattrs;
 
+  guint async_index; /* Offset into array if applicable */
+  guint n_async_running;
+  guint n_async_max;
   gboolean async_running;
   GCancellable *async_cancellable;
   GError *async_error;
