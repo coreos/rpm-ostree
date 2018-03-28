@@ -2292,6 +2292,7 @@ on_async_import_done (GObject                    *obj,
 
   g_assert_cmpint (self->n_async_pkgs_imported, <, self->pkgs_to_import->len);
   self->n_async_pkgs_imported++;
+  g_assert_cmpint (self->n_async_running, >, 0);
   self->n_async_running--;
   rpmostree_output_progress_n_items ("Importing", self->n_async_pkgs_imported,
                                      self->pkgs_to_import->len);
@@ -2367,8 +2368,7 @@ async_imports_mainctx_iter (gpointer user_data)
       DnfPackage *pkg = self->pkgs_to_import->pdata[self->async_index];
       if (!import_one_package (self, pkg, self->async_cancellable, &self->async_error))
         {
-          if (self->async_cancellable)
-            g_cancellable_cancel (self->async_cancellable);
+          g_cancellable_cancel (self->async_cancellable);
           break;
         }
       self->async_index++;
@@ -2376,7 +2376,10 @@ async_imports_mainctx_iter (gpointer user_data)
     }
 
   if (self->n_async_pkgs_imported == self->pkgs_to_import->len)
-    self->async_running = FALSE;
+    {
+      g_assert_cmpint (self->n_async_running, ==, 0);
+      self->n_async_running--;
+    }
 
   return FALSE;
 }
@@ -2416,11 +2419,11 @@ rpmostree_context_import_rojig (RpmOstreeContext *self,
 
   /* Process imports */
   GMainContext *mainctx = g_main_context_get_thread_default ();
-  GSource *src = g_timeout_source_new (0);
-  g_source_set_priority (src, G_PRIORITY_HIGH);
-  g_source_set_callback (src, async_imports_mainctx_iter, self, NULL);
-  g_source_attach (src, mainctx);
-  g_source_unref (src);
+  { g_autoptr(GSource) src = g_timeout_source_new (0);
+    g_source_set_priority (src, G_PRIORITY_HIGH);
+    g_source_set_callback (src, async_imports_mainctx_iter, self, NULL);
+    g_source_attach (src, mainctx); /* Note takes a ref */
+  }
 
   self->async_error = NULL;
   while (self->async_running)
