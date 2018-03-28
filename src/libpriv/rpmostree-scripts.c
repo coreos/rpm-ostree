@@ -331,18 +331,21 @@ run_script_in_bwrap_container (int rootfs_fd,
     created_var_tmp = TRUE;
 
   /* And similarly for /var/lib/rpm-state */
-  if (mkdirat (rootfs_fd, "var/lib/rpm-state", 0755) < 0)
+  if (var_lib_rpm_statedir)
     {
-      if (errno == EEXIST)
-        ;
-      else
+      if (mkdirat (rootfs_fd, "var/lib/rpm-state", 0755) < 0)
         {
-          glnx_set_error_from_errno (error);
-          goto out;
+          if (errno == EEXIST)
+            ;
+          else
+            {
+              glnx_set_error_from_errno (error);
+              goto out;
+            }
         }
+      else
+        created_var_lib_rpmstate = TRUE;
     }
-  else
-    created_var_lib_rpmstate = TRUE;
 
   /* ⚠⚠⚠ If you change this, also update scripts/bwrap-script-shell.sh ⚠⚠⚠ */
 
@@ -357,12 +360,12 @@ run_script_in_bwrap_container (int rootfs_fd,
   bwrap = rpmostree_bwrap_new (rootfs_fd,
                                is_glibc_locales ? RPMOSTREE_BWRAP_MUTATE_FREELY : RPMOSTREE_BWRAP_MUTATE_ROFILES,
                                error,
+                               /* Scripts can see a /var with compat links like alternatives */
                                "--ro-bind", "./var", "/var",
                                "--tmpfs", "/var/tmp",
                                NULL);
   if (!bwrap)
     goto out;
-
 
   if (var_lib_rpm_statedir)
     rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", var_lib_rpm_statedir->path, "/var/lib/rpm-state", NULL);

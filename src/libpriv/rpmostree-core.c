@@ -3937,7 +3937,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         }
 
       /* file triggers */
-      if (!run_all_transfiletriggers (self, ordering_ts, tmprootfs_dfd, 
+      if (!run_all_transfiletriggers (self, ordering_ts, tmprootfs_dfd,
                                       &n_post_scripts_run, cancellable, error))
         return FALSE;
 
