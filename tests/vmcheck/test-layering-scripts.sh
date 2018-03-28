@@ -36,7 +36,8 @@ vm_build_rpm scriptpkg1 \
             echo pretrans should've been ignored && exit 1" \
   verifyscript "echo verifyscript should've been ignored && exit 1" \
   post_args "-p /usr/bin/python" \
-  post 'open("/usr/lib/rpmostreetestinterp", "w")' \
+  post 'open("/usr/lib/rpmostreetestinterp", "w").close();
+open("/var/lib/rpm-state/scriptpkg1-stamp", "w").close()' \
   posttrans "# Firewalld; https://github.com/projectatomic/rpm-ostree/issues/638
              . /etc/os-release || :
              # See https://github.com/projectatomic/rpm-ostree/pull/647
@@ -45,7 +46,8 @@ vm_build_rpm scriptpkg1 \
                  echo found file from host /tmp
                  exit 1
                fi
-             done"
+             done;
+             test -f /var/lib/rpm-state/scriptpkg1-stamp"
 
 # check that host /tmp doesn't get mounted
 vm_cmd touch /tmp/file-in-host-tmp-not-for-scripts

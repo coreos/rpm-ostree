@@ -21,6 +21,7 @@ for src in lib{,32,64} bin sbin; do
         BWRAP_ARGV="$BWRAP_ARGV --symlink usr/$src $src"
     fi
 done
-BWRAP_ARGV="$BWRAP_ARGV --ro-bind usr /usr --ro-bind ./var /var --bind ./usr/etc /etc --tmpfs /var/tmp"
+BWRAP_ARGV="$BWRAP_ARGV --ro-bind usr /usr --ro-bind ./var /var --bind ./usr/etc /etc \
+            --tmpfs /var/tmp --tmpfs /var/lib/rpm-state"
 echo exec bwrap $BWRAP_ARGV "$@"
 exec env PS1='bwrap$ ' bwrap $BWRAP_ARGV "$@"

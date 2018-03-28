@@ -3232,6 +3232,7 @@ rpmts_add_erase (RpmOstreeContext *self,
 static gboolean
 run_script_sync (RpmOstreeContext *self,
                  int rootfs_dfd,
+                 GLnxTmpDir *var_lib_rpm_statedir,
                  DnfPackage *pkg,
                  RpmOstreeScriptKind kind,
                  guint        *out_n_run,
@@ -3244,7 +3245,7 @@ run_script_sync (RpmOstreeContext *self,
   if (!get_package_metainfo (self, path, &hdr, NULL, error))
     return FALSE;
 
-  if (!rpmostree_script_run_sync (pkg, hdr, kind, rootfs_dfd,
+  if (!rpmostree_script_run_sync (pkg, hdr, kind, rootfs_dfd, var_lib_rpm_statedir,
                                   out_n_run, cancellable, error))
     return FALSE;
 
@@ -3834,6 +3835,11 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       if (!rpmostree_rootfs_fixup_selinux_store_root (tmprootfs_dfd, cancellable, error))
         return FALSE;
 
+      g_auto(GLnxTmpDir) var_lib_rpm_statedir = { 0, };
+      if (!glnx_mkdtempat (AT_FDCWD, "/tmp/rpmostree-state.XXXXXX", 0700,
+                           &var_lib_rpm_statedir, error))
+        return FALSE;
+
       /* We're technically deviating from RPM here by running all the %pre's
        * beforehand, rather than each package's %pre & %post in order. Though I
        * highly doubt this should cause any issues. The advantage of doing it
@@ -3851,7 +3857,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           DnfPackage *pkg = (void*)rpmteKey (te);
           g_assert (pkg);
 
-          if (!run_script_sync (self, tmprootfs_dfd, pkg, RPMOSTREE_SCRIPT_PREIN,
+          if (!run_script_sync (self, tmprootfs_dfd, &var_lib_rpm_statedir,
+                                pkg, RPMOSTREE_SCRIPT_PREIN,
                                 &n_pre_scripts_run, cancellable, error))
             return FALSE;
         }
@@ -3907,7 +3914,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
             return glnx_prefix_error (error, "While applying overrides for pkg %s",
                                       dnf_package_get_name (pkg));
 
-          if (!run_script_sync (self, tmprootfs_dfd, pkg, RPMOSTREE_SCRIPT_POSTIN,
+          if (!run_script_sync (self, tmprootfs_dfd, &var_lib_rpm_statedir,
+                                pkg, RPMOSTREE_SCRIPT_POSTIN,
                                 &n_post_scripts_run, cancellable, error))
             return FALSE;
         }
@@ -3922,7 +3930,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           DnfPackage *pkg = (void*)rpmteKey (te);
           g_assert (pkg);
 
-          if (!run_script_sync (self, tmprootfs_dfd, pkg, RPMOSTREE_SCRIPT_POSTTRANS,
+          if (!run_script_sync (self, tmprootfs_dfd, &var_lib_rpm_statedir,
+                                pkg, RPMOSTREE_SCRIPT_POSTTRANS,
                                 &n_post_scripts_run, cancellable, error))
             return FALSE;
         }

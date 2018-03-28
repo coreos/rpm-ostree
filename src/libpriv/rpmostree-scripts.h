@@ -62,6 +62,7 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
                            Header         hdr,
                            RpmOstreeScriptKind kind,
                            int            rootfs_fd,
+                           GLnxTmpDir    *var_lib_rpm_statedir,
                            guint         *out_n_run,
                            GCancellable  *cancellable,
                            GError       **error);
