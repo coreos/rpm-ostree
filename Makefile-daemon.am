@@ -57,6 +57,7 @@ librpmostreed_la_CFLAGS = \
 	$(AM_CFLAGS) \
 	$(PKGDEP_RPMOSTREE_CFLAGS) \
 	-DG_LOG_DOMAIN=\"rpm-ostreed\" \
+	-fvisibility=hidden \
 	-D_RPMOSTREE_EXTERN= \
 	-I$(srcdir)/src/daemon \
 	-I$(srcdir)/src/lib \
