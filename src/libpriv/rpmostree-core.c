@@ -2301,9 +2301,9 @@ on_async_import_done (GObject                    *obj,
 
 /* Queue an asynchronous import of a package */
 static gboolean
-import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
-                    GCancellable *cancellable,
-                    GError **error)
+start_async_import_one_package (RpmOstreeContext *self, DnfPackage *pkg,
+                                GCancellable *cancellable,
+                                GError **error)
 {
   GVariant *rojig_xattrs = NULL;
   if (self->rojig_pkg_to_xattrs)
@@ -2363,10 +2363,11 @@ async_imports_mainctx_iter (gpointer user_data)
   RpmOstreeContext *self = user_data;
 
   while (self->async_index < self->pkgs_to_import->len &&
-         self->n_async_running < self->n_async_max)
+         self->n_async_running < self->n_async_max &&
+         self->async_error == NULL)
     {
       DnfPackage *pkg = self->pkgs_to_import->pdata[self->async_index];
-      if (!import_one_package (self, pkg, self->async_cancellable, &self->async_error))
+      if (!start_async_import_one_package (self, pkg, self->async_cancellable, &self->async_error))
         {
           g_cancellable_cancel (self->async_cancellable);
           break;
@@ -2375,10 +2376,10 @@ async_imports_mainctx_iter (gpointer user_data)
       self->n_async_running++;
     }
 
-  if (self->n_async_pkgs_imported == self->pkgs_to_import->len)
+  if (self->n_async_running == 0)
     {
-      g_assert_cmpint (self->n_async_running, ==, 0);
-      self->n_async_running--;
+      self->async_running = FALSE;
+      g_main_context_wakeup (g_main_context_get_thread_default ());
     }
 
   return FALSE;
