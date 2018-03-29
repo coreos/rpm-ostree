@@ -346,6 +346,9 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   if (live_replaced)
     g_variant_dict_insert (&dict, "live-replaced", "s", live_replaced);
 
+  if (ostree_deployment_is_staged (deployment))
+    g_variant_dict_insert (&dict, "staged", "b", TRUE);
+
   if (refspec)
     g_variant_dict_insert (&dict, "origin", "s", refspec);
 

@@ -793,7 +793,7 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
           rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
 
           /* For the AutomaticUpdateTrigger "check" case, we want to make sure we refresh
-           * the CachedUpdate property; "deploy" will do this through sysroot_changed */
+           * the CachedUpdate property; "stage" will do this through sysroot_changed */
           const char *method_name = g_dbus_method_invocation_get_method_name (invocation);
           if (g_str_equal (method_name, "AutomaticUpdateTrigger") &&
               (default_flags & (RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY |
@@ -1794,6 +1794,7 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   OstreeSysroot *ot_sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
   OstreeRepo *ot_repo = rpmostreed_sysroot_get_repo (rpmostreed_sysroot_get ());
 
+  /* Booted */
   g_autofree gchar* booted_id = NULL;
   OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (ot_sysroot);
   g_autoptr(GVariant) booted_variant = NULL; /* Strong ref as we reuse it below */
@@ -1810,6 +1811,7 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
     booted_variant = g_variant_ref_sink (rpmostreed_deployment_generate_blank_variant ());
   rpmostree_os_set_booted_deployment (RPMOSTREE_OS (self), booted_variant);
 
+  /* Default (pending or booted) and rollback */
   g_autoptr(OstreeDeployment) rollback_deployment = NULL;
   g_autoptr(OstreeDeployment) pending_deployment = NULL;
   ostree_sysroot_query_deployments_for (ot_sysroot, name,

@@ -33,6 +33,7 @@
 
 #define RPMOSTREED_CONF SYSCONFDIR "/rpm-ostreed.conf"
 #define DAEMON_CONFIG_GROUP "Daemon"
+#define EXPERIMENTAL_CONFIG_GROUP "Experimental"
 
 /**
  * SECTION: daemon
@@ -62,9 +63,10 @@ struct _RpmostreedDaemon {
   RpmostreedSysroot *sysroot;
   gchar *sysroot_path;
 
-  /* we only have two settings for now, so let's just keep it in the main struct */
+  /* Settings from the config file */
   guint idle_exit_timeout;
   RpmostreedAutomaticUpdatePolicy auto_update_policy;
+  gboolean ex_stage_deployments;
 
   GDBusConnection *connection;
   GDBusObjectManagerServer *object_manager;
@@ -349,6 +351,12 @@ rpmostreed_get_automatic_update_policy (RpmostreedDaemon *self)
   return self->auto_update_policy;
 }
 
+gboolean
+rpmostreed_get_ex_stage_deployments (RpmostreedDaemon *self)
+{
+  return self->ex_stage_deployments;
+}
+
 /* in-place version of g_ascii_strdown */
 static inline void
 ascii_strdown_inplace (char *str)
@@ -383,6 +391,9 @@ rpmostreed_daemon_reload_config (RpmostreedDaemon *self,
                                                 &auto_update_policy, error))
         return FALSE;
     }
+
+  self->ex_stage_deployments = g_key_file_get_boolean (config, EXPERIMENTAL_CONFIG_GROUP,
+                                                       "StageDeployments", NULL);
 
   /* don't update changed for this; it's contained to RpmostreedDaemon so no other objects
    * need to be reloaded if it changes */
