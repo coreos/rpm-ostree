@@ -1212,11 +1212,14 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   g_assert (target_revision);
 
   /* Use staging only if we're booted into the target root.  Further,
-   * it's currently gated behind an experimental flag.
+   * it's currently gated behind either the "stage" automatic update
+   * policy, or an experimental flag that applies globally to all operations.
    */
-  const gboolean use_staging =
-    ostree_sysroot_get_booted_deployment (self->sysroot) &&
+  const gboolean staging_is_configured =
+    (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_STAGE) > 0 ||
     rpmostreed_get_ex_stage_deployments (rpmostreed_daemon_get ());
+  const gboolean use_staging = staging_is_configured &&
+    ostree_sysroot_get_booted_deployment (self->sysroot) != NULL;
 
   g_autoptr(GKeyFile) origin = rpmostree_origin_dup_keyfile (self->origin);
   g_autoptr(OstreeDeployment) new_deployment = NULL;

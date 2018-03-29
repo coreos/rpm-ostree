@@ -987,6 +987,9 @@ os_handle_automatic_update_trigger (RPMOSTreeOS *interface,
     case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_CHECK:
       dfault = RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY;
       break;
+    case RPMOSTREED_AUTOMATIC_UPDATE_POLICY_STAGE:
+      dfault = RPMOSTREE_TRANSACTION_DEPLOY_FLAG_STAGE;
+      break;
     default:
       g_assert_not_reached ();
     }

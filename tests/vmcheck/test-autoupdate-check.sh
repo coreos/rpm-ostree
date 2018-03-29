@@ -55,20 +55,10 @@ echo "ok prep"
 # start it up again since we rebooted
 vm_start_httpd ostree_server $REMOTE_OSTREE 8888
 
-change_policy() {
-  policy=$1; shift
-  vm_ansible_inline <<EOF
-- shell: |
-    cp /usr/etc/rpm-ostreed.conf /etc
-    echo -e "[Daemon]\nAutomaticUpdatePolicy=$policy" > /etc/rpm-ostreed.conf
-    rpm-ostree reload
-EOF
-}
-
 vm_rpmostree cleanup -m
 
 # make sure that off means off
-change_policy off
+vm_change_update_policy off
 vm_rpmostree status | grep 'auto updates disabled'
 vm_rpmostree upgrade --trigger-automatic-update-policy > out.txt
 assert_file_has_content out.txt "Automatic updates are not enabled; exiting"
@@ -87,7 +77,7 @@ assert_file_has_content out.txt "No updates available."
 echo "ok --check/--preview no updates"
 
 # ok, let's test out check
-change_policy check
+vm_change_update_change_policy check
 vm_rpmostree status | grep 'auto updates enabled (check'
 
 # build an *older version* and check that we don't report an update
@@ -160,7 +150,7 @@ assert_output
 echo "ok --check/--preview layered pkgs check policy"
 
 # check that --check/--preview still works even with policy off
-change_policy off
+vm_change_update_policy off
 vm_rpmostree cleanup -m
 vm_cmd systemctl stop rpm-ostreed
 vm_rpmostree status | grep 'auto updates disabled'
@@ -170,7 +160,7 @@ assert_output
 echo "ok --check/--preview layered pkgs off policy"
 
 # ok now let's add ostree updates in the picture
-change_policy check
+vm_change_update_policy check
 vm_ostreeupdate_create v2
 vm_rpmostree upgrade --trigger-automatic-update-policy
 
@@ -221,7 +211,7 @@ vm_rpmostree upgrade --preview > out-verbose.txt
 assert_output2
 echo "ok --check/--preview base pkgs check policy"
 
-change_policy off
+vm_change_update_policy off
 vm_rpmostree cleanup -m
 vm_cmd systemctl stop rpm-ostreed
 vm_rpmostree upgrade --check > out.txt

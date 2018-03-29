@@ -25,19 +25,7 @@ set -euo pipefail
 set -x
 
 # Prepare an OSTree repo with updates
-vm_ostreeupdate_prepare
-
-vm_rpmostree rebase vmcheckmote:vmcheck
-vm_reboot
-vm_rpmostree cleanup -pr
-vm_assert_status_jq ".deployments[0][\"origin\"] == \"vmcheckmote:vmcheck\"" \
-                    ".deployments[0][\"booted\"]" \
-                    ".deployments[0][\"version\"] == \"v1\""
-vm_rpmostree status > status.txt
-assert_file_has_content_literal status.txt 'auto updates disabled'
-# start it up again since we rebooted
-vm_start_httpd ostree_server $REMOTE_OSTREE 8888
-echo "ok prep"
+vm_ostreeupdate_prepare_reboot
 
 # Test base ostree update
 vm_ostreeupdate_create v2

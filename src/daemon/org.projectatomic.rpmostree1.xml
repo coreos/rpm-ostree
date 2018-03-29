@@ -56,7 +56,7 @@
     <method name="ReloadConfig">
     </method>
 
-    <!-- none, check -->
+    <!-- none, check, ex-stage -->
     <property name="AutomaticUpdatePolicy" type="s" access="read"/>
 
     <method name="CreateOSName">
