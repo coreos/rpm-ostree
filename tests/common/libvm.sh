@@ -514,6 +514,31 @@ vm_ostreeupdate_prepare() {
 
     vm_ostreeupdate_create v1
     vm_cmd ostree remote add vmcheckmote --no-gpg-verify http://localhost:8888/
+    vm_rpmostree reload
+}
+
+vm_ostreeupdate_prepare_reboot() {
+    vm_ostreeupdate_prepare
+    vm_rpmostree rebase vmcheckmote:vmcheck
+    vm_reboot
+    vm_rpmostree cleanup -pr
+    vm_assert_status_jq ".deployments[0][\"origin\"] == \"vmcheckmote:vmcheck\"" \
+                        ".deployments[0][\"booted\"]" \
+                        ".deployments[0][\"version\"] == \"v1\""
+    vm_rpmostree status > status.txt
+    assert_file_has_content_literal status.txt 'auto updates disabled'
+    # start it up again since we rebooted
+    vm_start_httpd ostree_server $REMOTE_OSTREE 8888
+}
+
+vm_change_update_policy() {
+    policy=$1; shift
+    vm_ansible_inline <<EOF
+- shell: |
+    cp /usr/etc/rpm-ostreed.conf /etc
+    echo -e "[Daemon]\nAutomaticUpdatePolicy=$policy" > /etc/rpm-ostreed.conf
+    rpm-ostree reload
+EOF
 }
 
 # APIs to build up a history on the server. Rather than wasting time

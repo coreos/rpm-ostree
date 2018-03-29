@@ -29,6 +29,7 @@ typedef enum {
 typedef enum {
   RPMOSTREED_AUTOMATIC_UPDATE_POLICY_NONE,
   RPMOSTREED_AUTOMATIC_UPDATE_POLICY_CHECK,
+  RPMOSTREED_AUTOMATIC_UPDATE_POLICY_STAGE,
 } RpmostreedAutomaticUpdatePolicy;
 
 typedef enum {
