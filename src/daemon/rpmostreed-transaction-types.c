@@ -1107,7 +1107,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return glnx_throw (error, "Refusing to download rpm-md for offline OS '%s'",
                            self->osname);
 
-
       /* XXX: in rojig mode we'll want to do this unconditionally */
       g_autoptr(DnfSack) sack = NULL;
       if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)

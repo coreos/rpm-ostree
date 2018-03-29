@@ -604,6 +604,12 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
         g_print ("%s%s", get_bold_end (), get_red_end ());
     }
 
+  gboolean is_staged = FALSE;
+  g_variant_dict_lookup (dict, "staged", "b", &is_staged);
+
+  if (opt_verbose && (is_staged || first))
+    rpmostree_print_kv ("Staged", max_key_len, is_staged ? "yes" : "no");
+
   /* This used to be OSName; see https://github.com/ostreedev/ostree/pull/794 */
   if (opt_verbose || have_multiple_stateroots)
     rpmostree_print_kv ("StateRoot", max_key_len, os_name);

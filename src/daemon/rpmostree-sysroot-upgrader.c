@@ -29,6 +29,8 @@
 #include "rpmostree-core.h"
 #include "rpmostree-origin.h"
 #include "rpmostree-kernel.h"
+#include "rpmostreed-daemon.h"
+#include "rpmostree-kernel.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-output.h"
@@ -1195,19 +1197,42 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   const char *target_revision = self->final_revision ?: self->base_revision;
   g_assert (target_revision);
 
+  /* Use staging only if we're booted into the target root.  Further,
+   * it's currently gated behind an experimental flag.
+   */
+  const gboolean use_staging =
+    ostree_sysroot_get_booted_deployment (self->sysroot) &&
+    rpmostreed_get_ex_stage_deployments (rpmostreed_daemon_get ());
+
   g_autoptr(GKeyFile) origin = rpmostree_origin_dup_keyfile (self->origin);
   g_autoptr(OstreeDeployment) new_deployment = NULL;
-  if (!ostree_sysroot_deploy_tree (self->sysroot, self->osname,
-                                   target_revision, origin,
-                                   self->cfg_merge_deployment,
-                                   self->kargs_strv,
-                                   &new_deployment,
-                                   cancellable, error))
-    return FALSE;
+  if (use_staging)
+    {
+      if (!ostree_sysroot_stage_tree (self->sysroot, self->osname,
+                                      target_revision, origin,
+                                      self->cfg_merge_deployment,
+                                      self->kargs_strv,
+                                      &new_deployment,
+                                      cancellable, error))
+        return FALSE;
+    }
+  else
+    {
+      if (!ostree_sysroot_deploy_tree (self->sysroot, self->osname,
+                                       target_revision, origin,
+                                       self->cfg_merge_deployment,
+                                       self->kargs_strv,
+                                       &new_deployment,
+                                       cancellable, error))
+        return FALSE;
+    }
 
   /* Also do a sanitycheck even if there's no local mutation; it's basically free
    * and might save someone in the future.  The RPMOSTREE_SKIP_SANITYCHECK
    * environment variable is just used by test-basic.sh currently.
+   *
+   * Note that since the staging changes, this now operates without a
+   * config-merged state.
    */
   if (!self->final_revision)
     {
@@ -1221,10 +1246,9 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
       if (!rpmostree_deployment_sanitycheck (deployment_dfd, cancellable, error))
         return FALSE;
     }
-
-  if (self->final_revision)
+  else
     {
-      /* Generate a temporary ref for the new deployment in case we are
+      /* Generate a temporary ref for the base revision in case we are
        * interrupted; the base layer refs generation isn't transactional.
        */
       if (!ostree_repo_set_ref_immediate (self->repo, NULL, RPMOSTREE_TMP_BASE_REF,
@@ -1233,10 +1257,22 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
         return FALSE;
     }
 
-  if (!rpmostree_syscore_write_deployment (self->sysroot, new_deployment,
-                                           self->cfg_merge_deployment, FALSE,
-                                           cancellable, error))
-    return FALSE;
+  if (use_staging)
+    {
+      /* In the staging path, we just need to regenerate our baselayer refs and
+       * do the prune.  The stage_tree() API above should have loaded our new deployment
+       * into the set.
+       */
+      if (!rpmostree_syscore_cleanup (self->sysroot, self->repo, cancellable, error))
+        return FALSE;
+    }
+  else
+    {
+      if (!rpmostree_syscore_write_deployment (self->sysroot, new_deployment,
+                                               self->cfg_merge_deployment, FALSE,
+                                               cancellable, error))
+        return FALSE;
+    }
 
   if (out_deployment)
     *out_deployment = g_steal_pointer (&new_deployment);
