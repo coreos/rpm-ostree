@@ -135,7 +135,9 @@ echo "ok override reset foo and fooext using name and nevra"
 vm_rpmostree override reset --all
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 0' \
-  '.deployments[0]["requested-base-removals"]|length == 0'
+  '.deployments[0]["requested-base-removals"]|length == 0' \
+  '.deployments[0]["base-local-replacements"]|length == 0' \
+  '.deployments[0]["requested-base-local-replacements"]|length == 0'
 echo "ok override reset --all"
 
 vm_rpmostree cleanup -p
