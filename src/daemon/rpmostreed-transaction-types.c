@@ -201,6 +201,11 @@ generate_update_variant (OstreeRepo       *repo,
                          GCancellable     *cancellable,
                          GError          **error)
 {
+  if (!glnx_shutil_mkdir_p_at (AT_FDCWD,
+                               dirname (strdupa (RPMOSTREE_AUTOUPDATES_CACHE_FILE)),
+                               0775, cancellable, error))
+    return FALSE;
+
   /* always delete first since we might not be replacing it at all */
   if (!glnx_shutil_rm_rf_at (AT_FDCWD, RPMOSTREE_AUTOUPDATES_CACHE_FILE,
                              cancellable, error))
