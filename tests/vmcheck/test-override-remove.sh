@@ -150,9 +150,6 @@ vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 0' \
   '.deployments[0]["requested-base-removals"]|length == 1' \
   '.deployments[0]["requested-base-removals"]|index("foo") >= 0'
-echo "ok override remove requested but not applied"
-
-# check that upgrading again to a base with foo turns the override back on
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
 vm_rpmostree upgrade --cache-only
 vm_assert_status_jq \
@@ -160,7 +157,21 @@ vm_assert_status_jq \
   '[.deployments[0]["base-removals"][][.0]]|index("foo-1.0-1.x86_64") >= 0' \
   '.deployments[0]["requested-base-removals"]|length == 1' \
   '.deployments[0]["requested-base-removals"]|index("foo") >= 0'
-echo "ok override remove re-applied"
+echo "ok active -> inactive -> active override remove"
+
+# make sure we can reset it while it's inactive
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo_and_bar
+vm_rpmostree upgrade --cache-only
+vm_assert_status_jq \
+  '.deployments[0]["base-removals"]|length == 0' \
+  '.deployments[0]["requested-base-removals"]|length == 1' \
+  '.deployments[0]["requested-base-removals"]|index("foo") >= 0'
+vm_rpmostree override reset foo
+vm_assert_status_jq \
+  '.deployments[0]["base-removals"]|length == 0' \
+  '.deployments[0]["requested-base-removals"]|length == 0'
+echo "ok reset inactive override remove"
+
 vm_rpmostree cleanup -p
 
 # Restore the local yum repo.
