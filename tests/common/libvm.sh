@@ -21,14 +21,15 @@
 vm_setup() {
 
   export VM=${VM:-vmcheck}
+  export SSH_CONFIG=${SSH_CONFIG:-${topsrcdir}/ssh-config}
   SSHOPTS="-o User=root -o ControlMaster=auto \
            -o ControlPath=/var/tmp/ssh-$VM-$(date +%s%N).sock \
            -o ControlPersist=yes"
 
   # If we're provided with an ssh-config, make sure we tell
   # ssh to pick it up.
-  if [ -f "${topsrcdir}/ssh-config" ]; then
-    SSHOPTS="${SSHOPTS} -F ${topsrcdir}/ssh-config"
+  if [ -f "${SSH_CONFIG}" ]; then
+    SSHOPTS="${SSHOPTS} -F ${SSH_CONFIG}"
   fi
   export SSHOPTS
 
@@ -60,8 +61,8 @@ EOF
 # rsync wrapper that sets up authentication
 vm_raw_rsync() {
   local rsyncopts="ssh -o User=root"
-  if [ -f ${topsrcdir}/ssh-config ]; then
-    rsyncopts="$rsyncopts -F '${topsrcdir}/ssh-config'"
+  if [ -f "${SSH_CONFIG}" ]; then
+    rsyncopts="$rsyncopts -F '${SSH_CONFIG}'"
   fi
   rsync -az --no-owner --no-group -e "$rsyncopts" "$@"
 }
@@ -81,8 +82,8 @@ vm_cmd_as() {
   local user=$1; shift
   # don't reuse root's ControlPath
   local sshopts="-o User=$user"
-  if [ -f "${topsrcdir}/ssh-config" ]; then
-    sshopts="$sshopts -F ${topsrcdir}/ssh-config"
+  if [ -f "${SSH_CONFIG}" ]; then
+    sshopts="$sshopts -F ${SSH_CONFIG}"
   fi
   ssh $sshopts $VM "$@"
 }
