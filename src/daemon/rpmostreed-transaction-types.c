@@ -1130,7 +1130,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           return TRUE;
         }
 
-      if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+      if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
         return FALSE;
 
       /* Are we rebasing?  May want to delete the previous ref */
@@ -1304,7 +1304,7 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
   rpmostree_origin_set_regenerate_initramfs (origin, self->regenerate, self->args);
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 
-  if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+  if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
     return FALSE;
 
   if (self->reboot)
