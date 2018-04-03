@@ -1122,12 +1122,13 @@ rpmostree_sysroot_upgrader_deploy_set_kargs (RpmOstreeSysrootUpgrader *self,
   /* Set the attribute kargs directly, not sure whether or not to have a setter */
   /* Because .. currently pretty much here is the only place that we set it */
   self->kargs_strv = g_strdupv (kernel_args);
-  return rpmostree_sysroot_upgrader_deploy (self, cancellable, error);
+  return rpmostree_sysroot_upgrader_deploy (self, NULL, cancellable, error);
 }
 
 /**
  * rpmostree_sysroot_upgrader_deploy:
  * @self: Self
+ * @out_deployment: (out) (optional): return location for new deployment
  * @cancellable: Cancellable
  * @error: Error
  *
@@ -1136,6 +1137,7 @@ rpmostree_sysroot_upgrader_deploy_set_kargs (RpmOstreeSysrootUpgrader *self,
  */
 gboolean
 rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
+                                   OstreeDeployment        **out_deployment,
                                    GCancellable             *cancellable,
                                    GError                  **error)
 {
@@ -1212,6 +1214,8 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                            cancellable, error))
     return FALSE;
 
+  if (out_deployment)
+    *out_deployment = g_steal_pointer (&new_deployment);
   return TRUE;
 }
 

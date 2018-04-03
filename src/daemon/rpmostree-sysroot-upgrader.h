@@ -121,6 +121,7 @@ rpmostree_sysroot_upgrader_pull_repos (RpmOstreeSysrootUpgrader  *self,
 
 gboolean
 rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader  *self,
+                                   OstreeDeployment         **out_deployment,
                                    GCancellable           *cancellable,
                                    GError                **error);
 

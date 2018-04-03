@@ -201,6 +201,11 @@ generate_update_variant (OstreeRepo       *repo,
                          GCancellable     *cancellable,
                          GError          **error)
 {
+  if (!glnx_shutil_mkdir_p_at (AT_FDCWD,
+                               dirname (strdupa (RPMOSTREE_AUTOUPDATES_CACHE_FILE)),
+                               0775, cancellable, error))
+    return FALSE;
+
   /* always delete first since we might not be replacing it at all */
   if (!glnx_shutil_rm_rf_at (AT_FDCWD, RPMOSTREE_AUTOUPDATES_CACHE_FILE,
                              cancellable, error))
@@ -671,6 +676,45 @@ gv_nevra_add_nevra_name_mappings (GVariant *gv_nevra,
 }
 
 static gboolean
+get_sack_for_booted (OstreeSysroot    *sysroot,
+                     OstreeRepo       *repo,
+                     OstreeDeployment *booted_deployment,
+                     gboolean          force_refresh,
+                     DnfSack         **out_sack,
+                     GCancellable     *cancellable,
+                     GError          **error)
+{
+  GLNX_AUTO_PREFIX_ERROR ("Loading sack", error);
+
+  g_autoptr(RpmOstreeContext) ctx =
+    rpmostree_context_new_system (repo, cancellable, error);
+
+  g_autofree char *source_root =
+    rpmostree_get_deployment_root (sysroot, booted_deployment);
+  if (!rpmostree_context_setup (ctx, NULL, source_root, NULL, cancellable, error))
+    return FALSE;
+
+  DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
+  if (force_refresh)
+    dnf_context_set_cache_age (dnfctx, 0);
+  else
+    dnf_context_set_cache_age (dnfctx, G_MAXUINT);
+
+  /* point libdnf to our repos dir */
+  rpmostree_context_configure_from_deployment (ctx, sysroot, booted_deployment);
+
+  /* streamline: we don't need rpmdb or filelists, but we *do* need updateinfo */
+  if (!rpmostree_context_download_metadata (ctx,
+        DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB |
+        DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS |
+        DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO, cancellable, error))
+    return FALSE;
+
+  *out_sack = g_object_ref (dnf_context_get_sack (dnfctx));
+  return TRUE;
+}
+
+static gboolean
 deploy_transaction_execute (RpmostreedTransaction *transaction,
                             GCancellable *cancellable,
                             GError **error)
@@ -1063,30 +1107,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       /* XXX: in rojig mode we'll want to do this unconditionally */
       if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
         {
-          /* XXX: dedupe a bit more with RefreshMd path */
-          g_autoptr(RpmOstreeContext) ctx =
-            rpmostree_context_new_system (repo, cancellable, error);
-
-          g_autofree char *source_root =
-            rpmostree_get_deployment_root (sysroot, booted_deployment);
-          if (!rpmostree_context_setup (ctx, NULL, source_root, NULL, cancellable, error))
-            return FALSE;
-
           /* we always want to force a refetch of the metadata */
-          DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
-          dnf_context_set_cache_age (dnfctx, 0);
-
-          /* point libdnf to our repos dir */
-          rpmostree_context_configure_from_deployment (ctx, sysroot, booted_deployment);
-
-          /* streamline: we don't need rpmdb or filelists, but we *do* need updateinfo */
-          if (!rpmostree_context_download_metadata (ctx,
-                DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_RPMDB |
-                DNF_CONTEXT_SETUP_SACK_FLAG_SKIP_FILELISTS |
-                DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO, cancellable, error))
+          if (!get_sack_for_booted (sysroot, repo, booted_deployment, TRUE, &sack,
+                                    cancellable, error))
             return FALSE;
-
-          sack = g_object_ref (dnf_context_get_sack (dnfctx));
         }
 
       if (!generate_update_variant (repo, booted_deployment, sack, cancellable, error))
@@ -1130,7 +1154,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           return TRUE;
         }
 
-      if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+      if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
         return FALSE;
 
       /* Are we rebasing?  May want to delete the previous ref */
@@ -1304,7 +1328,7 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
   rpmostree_origin_set_regenerate_initramfs (origin, self->regenerate, self->args);
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 
-  if (!rpmostree_sysroot_upgrader_deploy (upgrader, cancellable, error))
+  if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
     return FALSE;
 
   if (self->reboot)
