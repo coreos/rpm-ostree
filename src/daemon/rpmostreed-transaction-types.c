@@ -872,15 +872,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       OstreeDeployment *merge_deployment =
         rpmostree_sysroot_upgrader_get_merge_deployment (upgrader);
 
-      gboolean is_layered;
       g_autoptr(GVariant) removed = NULL;
       g_autoptr(GVariant) replaced = NULL;
-      if (!rpmostree_deployment_get_layered_info (repo, merge_deployment, &is_layered, NULL,
-                                                  NULL, &removed, &replaced, error))
+      if (!rpmostree_deployment_get_layered_info (repo, merge_deployment, NULL, NULL, NULL,
+                                                  &removed, &replaced, error))
         return FALSE;
-
-      if (!is_layered)
-        return glnx_throw (error, "No overrides currently applied");
 
       g_autoptr(GHashTable) nevra_to_name = g_hash_table_new (g_str_hash, g_str_equal);
       g_autoptr(GHashTable) name_to_nevra = g_hash_table_new (g_str_hash, g_str_equal);
@@ -915,7 +911,11 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           const char *nevra = g_hash_table_lookup (name_to_nevra, name_or_nevra);
 
           if (name == NULL && nevra == NULL)
-            return glnx_throw (error, "No overrides for package '%s'", name_or_nevra);
+            {
+              /* it might be an inactive override; just try it both ways */
+              name = name_or_nevra;
+              nevra = name_or_nevra;
+            }
           else if (name == NULL)
             name = name_or_nevra;
           else if (nevra == NULL)
@@ -935,8 +935,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                                                 RPMOSTREE_ORIGIN_OVERRIDE_REPLACE_LOCAL))
             continue; /* override found; move on to the next one */
 
-          /* if a mapping was found, then it must be an override */
-          g_assert_not_reached ();
+          return glnx_throw (error, "No overrides for package '%s'", name_or_nevra);
         }
 
       changed = TRUE;
