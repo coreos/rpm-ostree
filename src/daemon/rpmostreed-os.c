@@ -1788,78 +1788,59 @@ refresh_cached_update (RpmostreedOS *self, GError **error)
 static gboolean
 rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
 {
-  const gchar *name;
-
-  OstreeDeployment *booted = NULL; /* owned by sysroot */
-  g_autofree gchar* booted_id = NULL;
-  g_autoptr(GPtrArray) deployments = NULL;
-  OstreeSysroot *ot_sysroot;
-  OstreeRepo *ot_repo;
-  GVariant *booted_variant = NULL;
-  GVariant *default_variant = NULL;
-  GVariant *rollback_variant = NULL;
-
-  name = rpmostree_os_get_name (RPMOSTREE_OS (self));
+  const gchar *name = rpmostree_os_get_name (RPMOSTREE_OS (self));
   g_debug ("loading %s", name);
 
-  ot_sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
-  ot_repo = rpmostreed_sysroot_get_repo (rpmostreed_sysroot_get ());
+  OstreeSysroot *ot_sysroot = rpmostreed_sysroot_get_root (rpmostreed_sysroot_get ());
+  OstreeRepo *ot_repo = rpmostreed_sysroot_get_repo (rpmostreed_sysroot_get ());
 
-  booted = ostree_sysroot_get_booted_deployment (ot_sysroot);
-  if (booted && g_strcmp0 (ostree_deployment_get_osname (booted), name) == 0)
+  g_autofree gchar* booted_id = NULL;
+  OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (ot_sysroot);
+  g_autoptr(GVariant) booted_variant = NULL; /* Strong ref as we reuse it below */
+  if (booted_deployment && g_strcmp0 (ostree_deployment_get_osname (booted_deployment), name) == 0)
     {
-      booted_variant = rpmostreed_deployment_generate_variant (ot_sysroot, booted, booted_id,
-                                                               ot_repo, error);
+      booted_variant =
+        g_variant_ref_sink (rpmostreed_deployment_generate_variant (ot_sysroot, booted_deployment, booted_id,
+                                                                    ot_repo, error));
       if (!booted_variant)
         return FALSE;
-      booted_id = rpmostreed_deployment_generate_id (booted);
+      booted_id = rpmostreed_deployment_generate_id (booted_deployment);
     }
+  else
+    booted_variant = g_variant_ref_sink (rpmostreed_deployment_generate_blank_variant ());
+  rpmostree_os_set_booted_deployment (RPMOSTREE_OS (self), booted_variant);
 
-  deployments = ostree_sysroot_get_deployments (ot_sysroot);
-  for (guint i=0; i<deployments->len; i++)
+  g_autoptr(OstreeDeployment) rollback_deployment = NULL;
+  g_autoptr(OstreeDeployment) pending_deployment = NULL;
+  ostree_sysroot_query_deployments_for (ot_sysroot, name,
+                                        &pending_deployment, &rollback_deployment);
+
+  g_autoptr(GVariant) default_variant = NULL;
+  if (pending_deployment)
     {
-      if (g_strcmp0 (ostree_deployment_get_osname (deployments->pdata[i]), name) == 0)
-        {
-          default_variant = rpmostreed_deployment_generate_variant (ot_sysroot,
-                                                                    deployments->pdata[i],
+      default_variant =
+        g_variant_ref_sink (rpmostreed_deployment_generate_variant (ot_sysroot,
+                                                                    pending_deployment,
                                                                     booted_id,
-                                                                    ot_repo, error);
-          if (default_variant == NULL)
-            return FALSE;
-          break;
-        }
+                                                                    ot_repo, error));
+      if (!default_variant)
+        return FALSE;
     }
+  else
+    default_variant = g_variant_ref (booted_variant); /* Default to booted */
+  rpmostree_os_set_default_deployment (RPMOSTREE_OS (self), default_variant);
 
-  if (booted)
+  GVariant *rollback_variant = NULL; /* Floating */
+  if (rollback_deployment)
     {
-      g_autoptr(OstreeDeployment) rollback = NULL;
-      ostree_sysroot_query_deployments_for (ot_sysroot,
-                                            ostree_deployment_get_osname (booted),
-                                            NULL, &rollback);
-
-      if (rollback)
-        {
-          rollback_variant = rpmostreed_deployment_generate_variant (ot_sysroot, rollback, booted_id,
-                                                                     ot_repo, error);
-          if (!rollback_variant)
-            return FALSE;
-        }
+      rollback_variant = rpmostreed_deployment_generate_variant (ot_sysroot, rollback_deployment,
+                                                                 booted_id, ot_repo, error);
+      if (!rollback_variant)
+        return FALSE;
     }
-
-  if (!booted_variant)
-    booted_variant = rpmostreed_deployment_generate_blank_variant ();
-  rpmostree_os_set_booted_deployment (RPMOSTREE_OS (self),
-                                      booted_variant);
-
-  if (!default_variant)
-    default_variant = rpmostreed_deployment_generate_blank_variant ();
-  rpmostree_os_set_default_deployment (RPMOSTREE_OS (self),
-                                       default_variant);
-
-  if (!rollback_variant)
+  else
     rollback_variant = rpmostreed_deployment_generate_blank_variant ();
-  rpmostree_os_set_rollback_deployment (RPMOSTREE_OS (self),
-                                        rollback_variant);
+  rpmostree_os_set_rollback_deployment (RPMOSTREE_OS (self), rollback_variant);
 
   if (!refresh_cached_update (self, error))
     return FALSE;
