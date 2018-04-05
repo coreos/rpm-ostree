@@ -12,7 +12,11 @@ version_id=$(. /etc/os-release && echo $VERSION_ID)
 if [ "$id" == fedora ] && [ "$version_id" == 27 ]; then
     echo -e '[fahc]\nmetadata_expire=1m\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/fahc/rdgo/build/\ngpgcheck=0\n' > /etc/yum.repos.d/fahc.repo
     # Until we fix https://github.com/rpm-software-management/libdnf/pull/149
-    sed -i -e 's,metadata_expire=6h,exclude=ostree ostree-devel ostree-libs ostree-grub2\nmetadata_expire=6h,' /etc/yum.repos.d/fedora-updates.repo
+    excludes='exclude=ostree ostree-libs ostree-grub2 rpm-ostree'
+    for repo in /etc/yum.repos.d/fedora*.repo; do
+        cat ${repo} | (while read line; do if echo "$line" | grep -qE -e '^enabled=1'; then echo "${excludes}"; fi; echo $line; done) > ${repo}.new
+        mv ${repo}.new ${repo}
+    done
 elif [ "$id" == centos ]; then
     echo -e '[cahc]\nmetdata_expire=1m\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/build\ngpgcheck=0\n' > /etc/yum.repos.d/cahc.repo
 fi
