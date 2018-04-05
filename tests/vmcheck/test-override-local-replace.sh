@@ -135,7 +135,9 @@ echo "ok override reset foo and fooext using name and nevra"
 vm_rpmostree override reset --all
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 0' \
-  '.deployments[0]["requested-base-removals"]|length == 0'
+  '.deployments[0]["requested-base-removals"]|length == 0' \
+  '.deployments[0]["base-local-replacements"]|length == 0' \
+  '.deployments[0]["requested-base-local-replacements"]|length == 0'
 echo "ok override reset --all"
 
 vm_rpmostree cleanup -p
@@ -161,6 +163,19 @@ vm_assert_status_jq \
   '.deployments[0]["requested-base-local-replacements"]|length == 1'
 assert_replaced_local_pkg bar-1.0-1.x86_64 bar-0.9-1.x86_64
 echo "ok active -> inactive -> active override replace"
+
+# make sure we can reset it while it's inactive
+vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo_and_bar
+vm_rpmostree upgrade
+vm_assert_status_jq \
+  '.deployments[0]["base-local-replacements"]|length == 0' \
+  '.deployments[0]["requested-base-local-replacements"]|length == 1' \
+  '.deployments[0]["requested-base-local-replacements"]|index("bar-0.9-1.x86_64") >= 0'
+vm_rpmostree override reset bar-0.9-1.x86_64
+vm_assert_status_jq \
+  '.deployments[0]["base-local-replacements"]|length == 0' \
+  '.deployments[0]["requested-base-local-replacements"]|length == 0'
+echo "ok reset inactive override replace"
 
 vm_rpmostree cleanup -p
 
