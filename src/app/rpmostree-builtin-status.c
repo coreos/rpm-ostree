@@ -351,6 +351,391 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
   return TRUE;
 }
 
+static gboolean
+print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
+                      GVariant         *child,
+                      gboolean          first,
+                      gboolean          have_any_live_overlay,
+                      gboolean          have_multiple_stateroots,
+                      const char       *last_osname,
+                      GError          **error)
+{
+  /* Add the long keys here */
+  const guint max_key_len = MAX (strlen ("InactiveBaseReplacements"),
+                                 strlen ("InterruptedLiveCommit"));
+
+
+  g_autoptr(GVariantDict) dict = g_variant_dict_new (child);
+
+  /* osname should always be present. */
+  const gchar *os_name;
+  const gchar *id;
+  int serial;
+  const gchar *checksum;
+  g_assert (g_variant_dict_lookup (dict, "osname", "&s", &os_name));
+  g_assert (g_variant_dict_lookup (dict, "id", "&s", &id));
+  g_assert (g_variant_dict_lookup (dict, "serial", "i", &serial));
+  g_assert (g_variant_dict_lookup (dict, "checksum", "&s", &checksum));
+
+  gboolean is_booted;
+  if (!g_variant_dict_lookup (dict, "booted", "b", &is_booted))
+    is_booted = FALSE;
+
+  if (!is_booted && opt_only_booted)
+    return TRUE;
+
+  const gchar *origin_refspec;
+  g_autofree const gchar **origin_packages = NULL;
+  g_autofree const gchar **origin_requested_packages = NULL;
+  g_autofree const gchar **origin_requested_local_packages = NULL;
+  g_autoptr(GVariant) origin_base_removals = NULL;
+  g_autofree const gchar **origin_requested_base_removals = NULL;
+  g_autoptr(GVariant) origin_base_local_replacements = NULL;
+  g_autofree const gchar **origin_requested_base_local_replacements = NULL;
+  if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
+    {
+      origin_packages =
+        lookup_array_and_canonicalize (dict, "packages");
+      origin_requested_packages =
+        lookup_array_and_canonicalize (dict, "requested-packages");
+      origin_requested_local_packages =
+        lookup_array_and_canonicalize (dict, "requested-local-packages");
+      origin_base_removals =
+        g_variant_dict_lookup_value (dict, "base-removals", G_VARIANT_TYPE ("av"));
+      origin_requested_base_removals =
+        lookup_array_and_canonicalize (dict, "requested-base-removals");
+      origin_base_local_replacements =
+        g_variant_dict_lookup_value (dict, "base-local-replacements",
+                                     G_VARIANT_TYPE ("a(vv)"));
+      origin_requested_base_local_replacements =
+        lookup_array_and_canonicalize (dict, "requested-base-local-replacements");
+    }
+  else
+    origin_refspec = NULL;
+
+  const gchar *version_string;
+  if (!g_variant_dict_lookup (dict, "version", "&s", &version_string))
+    version_string = NULL;
+  const gchar *unlocked;
+  if (!g_variant_dict_lookup (dict, "unlocked", "&s", &unlocked))
+    unlocked = NULL;
+
+  gboolean regenerate_initramfs;
+  if (!g_variant_dict_lookup (dict, "regenerate-initramfs", "b", &regenerate_initramfs))
+    regenerate_initramfs = FALSE;
+
+  g_autoptr(GVariant) signatures =
+    g_variant_dict_lookup_value (dict, "signatures", G_VARIANT_TYPE ("av"));
+
+  if (!first)
+    g_print ("\n");
+
+  g_print ("%s ", is_booted ? libsd_special_glyph (BLACK_CIRCLE) : " ");
+
+  RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
+  if (origin_refspec)
+    {
+      const char *refspec_data;
+      if (!rpmostree_refspec_classify (origin_refspec, &refspectype, &refspec_data, error))
+        return FALSE;
+      g_autofree char *canonrefspec = rpmostree_refspec_to_string (refspectype, refspec_data);
+      switch (refspectype)
+        {
+        case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+          {
+            g_print ("%s", canonrefspec);
+          }
+          break;
+        case RPMOSTREE_REFSPEC_TYPE_ROJIG:
+          {
+            g_autoptr(GVariant) rojig_description = NULL;
+            g_variant_dict_lookup (dict, "rojig-description", "@a{sv}", &rojig_description);
+            if (rojig_description)
+              {
+                g_autoptr(GVariantDict) dict = g_variant_dict_new (rojig_description);
+                const char *repo = NULL;
+                g_variant_dict_lookup (dict, "repo", "&s", &repo);
+                const char *name = NULL;
+                g_variant_dict_lookup (dict, "name", "&s", &name);
+                const char *evr = NULL;
+                g_variant_dict_lookup (dict, "evr", "&s", &evr);
+                const char *arch = NULL;
+                g_variant_dict_lookup (dict, "arch", "&s", &arch);
+                g_assert (repo && name);
+                g_print ("%s:%s", repo, name);
+                if (evr && arch)
+                  g_print ("-%s.%s", evr, arch);
+              }
+            else
+              {
+                g_print ("%s", canonrefspec);
+              }
+          }
+          break;
+        }
+    }
+  else
+    g_print ("%s", checksum);
+  g_print ("\n");
+
+  const char *remote_not_found = NULL;
+  g_variant_dict_lookup (dict, "remote-error", "s", &remote_not_found);
+  if (remote_not_found)
+    {
+      g_print ("%s%s", get_red_start (), get_bold_start ());
+      rpmostree_print_kv ("OstreeRemoteStatus", max_key_len, remote_not_found);
+      g_print ("%s%s", get_bold_end (), get_red_end ());
+    }
+
+  const char *base_checksum = NULL;
+  g_variant_dict_lookup (dict, "base-checksum", "&s", &base_checksum);
+  gboolean is_locally_assembled = FALSE;
+  if (base_checksum != NULL)
+    is_locally_assembled = TRUE;
+
+  /* Load the commit metadata into a dict */
+  g_autoptr(GVariantDict) commit_meta_dict =
+    ({ g_autoptr(GVariant) commit_meta_v = NULL;
+      g_assert (g_variant_dict_lookup (dict, "base-commit-meta", "@a{sv}", &commit_meta_v));
+      g_variant_dict_new (commit_meta_v); });
+  g_autoptr(GVariantDict) layered_commit_meta_dict = NULL;
+  if (is_locally_assembled)
+    {
+      g_autoptr(GVariant) layered_commit_meta_v = NULL;
+      g_assert (g_variant_dict_lookup (dict, "layered-commit-meta", "@a{sv}", &layered_commit_meta_v));
+      layered_commit_meta_dict = g_variant_dict_new (layered_commit_meta_v);
+    }
+
+  const gchar *source_title = NULL;
+  g_variant_dict_lookup (commit_meta_dict, OSTREE_COMMIT_META_KEY_SOURCE_TITLE, "&s", &source_title);
+  if (source_title)
+    g_print ("  %s %s\n", libsd_special_glyph (TREE_RIGHT), source_title);
+
+  guint64 t = 0;
+  if (is_locally_assembled)
+    g_assert (g_variant_dict_lookup (dict, "base-timestamp", "t", &t));
+  else
+    g_assert (g_variant_dict_lookup (dict, "timestamp", "t", &t));
+  g_autofree char *timestamp_string = rpmostree_timestamp_str_from_unix_utc (t);
+
+  rpmostree_print_timestamp_version (version_string, timestamp_string, max_key_len);
+
+  const gchar *live_inprogress;
+  const gchar *live_replaced;
+  if (!g_variant_dict_lookup (dict, "live-inprogress", "&s", &live_inprogress))
+    live_inprogress = NULL;
+  if (!g_variant_dict_lookup (dict, "live-replaced", "&s", &live_replaced))
+    live_replaced = NULL;
+  const gboolean have_live_changes = live_inprogress || live_replaced;
+
+  const gboolean is_ostree_or_verbose = opt_verbose || refspectype == RPMOSTREE_REFSPEC_TYPE_OSTREE;
+
+  if (is_locally_assembled && is_ostree_or_verbose)
+    {
+      if (have_live_changes)
+        rpmostree_print_kv ("BootedBaseCommit", max_key_len, base_checksum);
+      else
+        rpmostree_print_kv ("BaseCommit", max_key_len, base_checksum);
+      if (opt_verbose || have_any_live_overlay)
+        rpmostree_print_kv ("Commit", max_key_len, checksum);
+    }
+  else if (is_ostree_or_verbose)
+    {
+      if (have_live_changes)
+        rpmostree_print_kv ("BootedCommit", max_key_len, checksum);
+      if (!have_live_changes || opt_verbose)
+        rpmostree_print_kv ("Commit", max_key_len, checksum);
+    }
+
+  if (live_inprogress)
+    {
+      if (is_booted)
+        g_print ("%s%s", get_red_start (), get_bold_start ());
+      rpmostree_print_kv ("InterruptedLiveCommit", max_key_len, live_inprogress);
+      if (is_booted)
+        g_print ("%s%s", get_bold_end (), get_red_end ());
+    }
+  if (live_replaced)
+    {
+      if (is_booted)
+        g_print ("%s%s", get_red_start (), get_bold_start ());
+      rpmostree_print_kv ("LiveCommit", max_key_len, live_replaced);
+      if (is_booted)
+        g_print ("%s%s", get_bold_end (), get_red_end ());
+    }
+
+  /* This used to be OSName; see https://github.com/ostreedev/ostree/pull/794 */
+  if (opt_verbose || have_multiple_stateroots)
+    rpmostree_print_kv ("StateRoot", max_key_len, os_name);
+
+  gboolean gpg_enabled;
+  if (!g_variant_dict_lookup (dict, "gpg-enabled", "b", &gpg_enabled))
+    gpg_enabled = FALSE;
+
+  if (gpg_enabled)
+    rpmostree_print_gpg_info (signatures, opt_verbose, max_key_len);
+
+  /* print base overrides before overlays */
+  g_autoptr(GPtrArray) active_removals = g_ptr_array_new_with_free_func (g_free);
+  if (origin_base_removals)
+    {
+      g_autoptr(GString) str = g_string_new ("");
+      const guint n = g_variant_n_children (origin_base_removals);
+      for (guint i = 0; i < n; i++)
+        {
+          g_autoptr(GVariant) gv_nevra;
+          g_variant_get_child (origin_base_removals, i, "v", &gv_nevra);
+          const char *name, *nevra;
+          g_variant_get_child (gv_nevra, 0, "&s", &nevra);
+          g_variant_get_child (gv_nevra, 1, "&s", &name);
+          if (str->len)
+            g_string_append (str, ", ");
+          g_string_append (str, nevra);
+          g_ptr_array_add (active_removals, g_strdup (name));
+        }
+      g_ptr_array_add (active_removals, NULL);
+      if (str->len)
+        rpmostree_print_kv ("RemovedBasePackages", max_key_len, str->str);
+    }
+
+  /* only print inactive base removal requests in verbose mode */
+  if (origin_requested_base_removals && opt_verbose)
+    print_packages ("InactiveBaseRemovals", max_key_len,
+                    origin_requested_base_removals,
+                    (const char *const*)active_removals->pdata);
+
+  g_autoptr(GPtrArray) active_replacements = g_ptr_array_new_with_free_func (g_free);
+  if (origin_base_local_replacements)
+    {
+      g_autoptr(GString) str = g_string_new ("");
+      g_autoptr(GHashTable) grouped_diffs =
+        g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                               (GDestroyNotify)g_ptr_array_unref);
+
+      const guint n = g_variant_n_children (origin_base_local_replacements);
+      for (guint i = 0; i < n; i++)
+        {
+          g_autoptr(GVariant) gv_nevra_new;
+          g_autoptr(GVariant) gv_nevra_old;
+          g_variant_get_child (origin_base_local_replacements, i, "(vv)",
+                               &gv_nevra_new, &gv_nevra_old);
+          const char *nevra_new, *name_new, *name_old;
+          g_variant_get_child (gv_nevra_new, 0, "&s", &nevra_new);
+          g_variant_get_child (gv_nevra_new, 1, "&s", &name_new);
+          g_variant_get_child (gv_nevra_old, 1, "&s", &name_old);
+
+          /* if pkgnames match, print a nicer version like treediff */
+          if (g_str_equal (name_new, name_old))
+            {
+              /* let's just use str as a scratchpad to avoid excessive mallocs; the str
+               * needs to be stretched anyway for the final output */
+              gsize original_size = str->len;
+              gv_nevra_to_evr (str, gv_nevra_old);
+              g_string_append (str, " -> ");
+              gv_nevra_to_evr (str, gv_nevra_new);
+              const char *diff = str->str + original_size;
+              GPtrArray *pkgs = g_hash_table_lookup (grouped_diffs, diff);
+              if (!pkgs)
+                {
+                  pkgs = g_ptr_array_new_with_free_func (g_free);
+                  g_hash_table_insert (grouped_diffs, g_strdup (diff), pkgs);
+                }
+              g_ptr_array_add (pkgs, g_strdup (name_new));
+              g_string_truncate (str, original_size);
+            }
+          else
+            {
+              if (str->len)
+                g_string_append (str, ", ");
+
+              const char *nevra_old;
+              g_variant_get_child (gv_nevra_old, 0, "&s", &nevra_old);
+              g_string_append_printf (str, "%s -> %s", nevra_old, nevra_new);
+            }
+          g_ptr_array_add (active_replacements, g_strdup (nevra_new));
+        }
+
+      GLNX_HASH_TABLE_FOREACH_KV (grouped_diffs, const char*, diff, GPtrArray*, pkgs)
+        {
+          if (str->len)
+            g_string_append (str, ", ");
+          for (guint i = 0, n = pkgs->len; i < n; i++)
+            {
+              const char *pkgname = g_ptr_array_index (pkgs, i);
+              if (i > 0)
+                g_string_append_c (str, ' ');
+              g_string_append (str, pkgname);
+            }
+          g_string_append_c (str, ' ');
+          g_string_append (str, diff);
+        }
+
+      g_ptr_array_add (active_replacements, NULL);
+
+      if (str->len)
+        rpmostree_print_kv ("ReplacedBasePackages", max_key_len, str->str);
+    }
+
+  if (origin_requested_base_local_replacements && opt_verbose)
+    print_packages ("InactiveBaseReplacements", max_key_len,
+                    origin_requested_base_local_replacements,
+                    (const char *const*)active_replacements->pdata);
+
+  /* only print inactive layering requests in verbose mode */
+  if (origin_requested_packages && opt_verbose)
+    /* requested-packages - packages = inactive (i.e. dormant requests) */
+    print_packages ("InactiveRequests", max_key_len,
+                    origin_requested_packages, origin_packages);
+
+  if (origin_packages)
+    print_packages ("LayeredPackages", max_key_len,
+                    origin_packages, NULL);
+
+  if (origin_requested_local_packages)
+    print_packages ("LocalPackages", max_key_len,
+                    origin_requested_local_packages, NULL);
+
+  if (regenerate_initramfs)
+    {
+      g_autoptr(GString) buf = g_string_new ("");
+      g_autofree char **initramfs_args = NULL;
+
+      g_variant_dict_lookup (dict, "initramfs-args", "^a&s", &initramfs_args);
+
+      for (char **iter = initramfs_args; iter && *iter; iter++)
+        {
+          g_string_append (buf, *iter);
+          g_string_append_c (buf, ' ');
+        }
+      if (buf->len == 0)
+        g_string_append (buf, "regenerate");
+      rpmostree_print_kv ("Initramfs", max_key_len, buf->str);
+    }
+  gboolean pinned = FALSE;
+  g_variant_dict_lookup (dict, "pinned", "b", &pinned);
+  if (pinned)
+    rpmostree_print_kv ("Pinned", max_key_len, "yes");
+
+  if (unlocked && g_strcmp0 (unlocked, "none") != 0)
+    {
+      g_print ("%s%s", get_red_start (), get_bold_start ());
+      rpmostree_print_kv ("Unlocked", max_key_len, unlocked);
+      g_print ("%s%s", get_bold_end (), get_red_end ());
+    }
+  const char *end_of_life_string = NULL;
+  /* look for endoflife attribute in the deployment */
+  g_variant_dict_lookup (dict, "endoflife", "&s", &end_of_life_string);
+
+  if (end_of_life_string)
+    {
+      g_print ("%s%s", get_red_start (), get_bold_start ());
+      rpmostree_print_kv ("EndOfLife", max_key_len, end_of_life_string);
+      g_print ("%s%s", get_bold_end (), get_red_end ());
+    }
+
+  return TRUE;
+}
+
 /* We will have an optimized path for the case where there are just
  * two deployments, this code will be the generic fallback.
  */
@@ -402,382 +787,14 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
   while (TRUE)
     {
       g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
-      /* Add the long keys here */
-      const guint max_key_len = MAX (strlen ("InactiveBaseReplacements"),
-                                     strlen ("InterruptedLiveCommit"));
-
       if (child == NULL)
         break;
 
-      g_autoptr(GVariantDict) dict = g_variant_dict_new (child);
-
-      /* osname should always be present. */
-      const gchar *os_name;
-      const gchar *id;
-      int serial;
-      const gchar *checksum;
-      g_assert (g_variant_dict_lookup (dict, "osname", "&s", &os_name));
-      g_assert (g_variant_dict_lookup (dict, "id", "&s", &id));
-      g_assert (g_variant_dict_lookup (dict, "serial", "i", &serial));
-      g_assert (g_variant_dict_lookup (dict, "checksum", "&s", &checksum));
-
-      gboolean is_booted;
-      if (!g_variant_dict_lookup (dict, "booted", "b", &is_booted))
-        is_booted = FALSE;
-
-      if (!is_booted && opt_only_booted)
-        continue;
-
-      const gchar *origin_refspec;
-      g_autofree const gchar **origin_packages = NULL;
-      g_autofree const gchar **origin_requested_packages = NULL;
-      g_autofree const gchar **origin_requested_local_packages = NULL;
-      g_autoptr(GVariant) origin_base_removals = NULL;
-      g_autofree const gchar **origin_requested_base_removals = NULL;
-      g_autoptr(GVariant) origin_base_local_replacements = NULL;
-      g_autofree const gchar **origin_requested_base_local_replacements = NULL;
-      if (g_variant_dict_lookup (dict, "origin", "&s", &origin_refspec))
-        {
-          origin_packages =
-            lookup_array_and_canonicalize (dict, "packages");
-          origin_requested_packages =
-            lookup_array_and_canonicalize (dict, "requested-packages");
-          origin_requested_local_packages =
-            lookup_array_and_canonicalize (dict, "requested-local-packages");
-          origin_base_removals =
-            g_variant_dict_lookup_value (dict, "base-removals", G_VARIANT_TYPE ("av"));
-          origin_requested_base_removals =
-            lookup_array_and_canonicalize (dict, "requested-base-removals");
-          origin_base_local_replacements =
-            g_variant_dict_lookup_value (dict, "base-local-replacements",
-                                         G_VARIANT_TYPE ("a(vv)"));
-          origin_requested_base_local_replacements =
-            lookup_array_and_canonicalize (dict, "requested-base-local-replacements");
-        }
-      else
-        origin_refspec = NULL;
-
-      const gchar *version_string;
-      if (!g_variant_dict_lookup (dict, "version", "&s", &version_string))
-        version_string = NULL;
-      const gchar *unlocked;
-      if (!g_variant_dict_lookup (dict, "unlocked", "&s", &unlocked))
-        unlocked = NULL;
-
-      gboolean regenerate_initramfs;
-      if (!g_variant_dict_lookup (dict, "regenerate-initramfs", "b", &regenerate_initramfs))
-        regenerate_initramfs = FALSE;
-
-      g_autoptr(GVariant) signatures =
-        g_variant_dict_lookup_value (dict, "signatures", G_VARIANT_TYPE ("av"));
-
+      if (!print_one_deployment (sysroot_proxy, child, first, have_any_live_overlay,
+                                 have_multiple_stateroots, last_osname, error))
+        return FALSE;
       if (first)
         first = FALSE;
-      else
-        g_print ("\n");
-
-      g_print ("%s ", is_booted ? libsd_special_glyph (BLACK_CIRCLE) : " ");
-
-      RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
-      if (origin_refspec)
-        {
-          const char *refspec_data;
-          if (!rpmostree_refspec_classify (origin_refspec, &refspectype, &refspec_data, error))
-            return FALSE;
-          g_autofree char *canonrefspec = rpmostree_refspec_to_string (refspectype, refspec_data);
-          switch (refspectype)
-            {
-            case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-              {
-                g_print ("%s", canonrefspec);
-              }
-              break;
-            case RPMOSTREE_REFSPEC_TYPE_ROJIG:
-              {
-                g_autoptr(GVariant) rojig_description = NULL;
-                g_variant_dict_lookup (dict, "rojig-description", "@a{sv}", &rojig_description);
-                if (rojig_description)
-                  {
-                    g_autoptr(GVariantDict) dict = g_variant_dict_new (rojig_description);
-                    const char *repo = NULL;
-                    g_variant_dict_lookup (dict, "repo", "&s", &repo);
-                    const char *name = NULL;
-                    g_variant_dict_lookup (dict, "name", "&s", &name);
-                    const char *evr = NULL;
-                    g_variant_dict_lookup (dict, "evr", "&s", &evr);
-                    const char *arch = NULL;
-                    g_variant_dict_lookup (dict, "arch", "&s", &arch);
-                    g_assert (repo && name);
-                    g_print ("%s:%s", repo, name);
-                    if (evr && arch)
-                      g_print ("-%s.%s", evr, arch);
-                  }
-                else
-                  {
-                    g_print ("%s", canonrefspec);
-                  }
-              }
-              break;
-            }
-        }
-      else
-        g_print ("%s", checksum);
-      g_print ("\n");
-
-      const char *remote_not_found = NULL;
-      g_variant_dict_lookup (dict, "remote-error", "s", &remote_not_found);
-      if (remote_not_found)
-        {
-          g_print ("%s%s", get_red_start (), get_bold_start ());
-          rpmostree_print_kv ("OstreeRemoteStatus", max_key_len, remote_not_found);
-          g_print ("%s%s", get_bold_end (), get_red_end ());
-        }
-
-      const char *base_checksum = NULL;
-      g_variant_dict_lookup (dict, "base-checksum", "&s", &base_checksum);
-      gboolean is_locally_assembled = FALSE;
-      if (base_checksum != NULL)
-        is_locally_assembled = TRUE;
-
-      /* Load the commit metadata into a dict */
-      g_autoptr(GVariantDict) commit_meta_dict =
-        ({ g_autoptr(GVariant) commit_meta_v = NULL;
-          g_assert (g_variant_dict_lookup (dict, "base-commit-meta", "@a{sv}", &commit_meta_v));
-          g_variant_dict_new (commit_meta_v); });
-      g_autoptr(GVariantDict) layered_commit_meta_dict = NULL;
-      if (is_locally_assembled)
-        {
-          g_autoptr(GVariant) layered_commit_meta_v = NULL;
-          g_assert (g_variant_dict_lookup (dict, "layered-commit-meta", "@a{sv}", &layered_commit_meta_v));
-          layered_commit_meta_dict = g_variant_dict_new (layered_commit_meta_v);
-        }
-
-      const gchar *source_title = NULL;
-      g_variant_dict_lookup (commit_meta_dict, OSTREE_COMMIT_META_KEY_SOURCE_TITLE, "&s", &source_title);
-      if (source_title)
-        g_print ("  %s %s\n", libsd_special_glyph (TREE_RIGHT), source_title);
-
-      guint64 t = 0;
-      if (is_locally_assembled)
-        g_assert (g_variant_dict_lookup (dict, "base-timestamp", "t", &t));
-      else
-        g_assert (g_variant_dict_lookup (dict, "timestamp", "t", &t));
-      g_autofree char *timestamp_string = rpmostree_timestamp_str_from_unix_utc (t);
-
-      rpmostree_print_timestamp_version (version_string, timestamp_string, max_key_len);
-
-      const gchar *live_inprogress;
-      const gchar *live_replaced;
-      if (!g_variant_dict_lookup (dict, "live-inprogress", "&s", &live_inprogress))
-        live_inprogress = NULL;
-      if (!g_variant_dict_lookup (dict, "live-replaced", "&s", &live_replaced))
-        live_replaced = NULL;
-      const gboolean have_live_changes = live_inprogress || live_replaced;
-
-      const gboolean is_ostree_or_verbose = opt_verbose || refspectype == RPMOSTREE_REFSPEC_TYPE_OSTREE;
-
-      if (is_locally_assembled && is_ostree_or_verbose)
-        {
-          if (have_live_changes)
-            rpmostree_print_kv ("BootedBaseCommit", max_key_len, base_checksum);
-          else
-            rpmostree_print_kv ("BaseCommit", max_key_len, base_checksum);
-          if (opt_verbose || have_any_live_overlay)
-            rpmostree_print_kv ("Commit", max_key_len, checksum);
-        }
-      else if (is_ostree_or_verbose)
-        {
-          if (have_live_changes)
-            rpmostree_print_kv ("BootedCommit", max_key_len, checksum);
-          if (!have_live_changes || opt_verbose)
-            rpmostree_print_kv ("Commit", max_key_len, checksum);
-        }
-
-      if (live_inprogress)
-        {
-          if (is_booted)
-            g_print ("%s%s", get_red_start (), get_bold_start ());
-          rpmostree_print_kv ("InterruptedLiveCommit", max_key_len, live_inprogress);
-          if (is_booted)
-            g_print ("%s%s", get_bold_end (), get_red_end ());
-        }
-      if (live_replaced)
-        {
-          if (is_booted)
-            g_print ("%s%s", get_red_start (), get_bold_start ());
-          rpmostree_print_kv ("LiveCommit", max_key_len, live_replaced);
-          if (is_booted)
-            g_print ("%s%s", get_bold_end (), get_red_end ());
-        }
-
-      /* This used to be OSName; see https://github.com/ostreedev/ostree/pull/794 */
-      if (opt_verbose || have_multiple_stateroots)
-        rpmostree_print_kv ("StateRoot", max_key_len, os_name);
-
-      gboolean gpg_enabled;
-      if (!g_variant_dict_lookup (dict, "gpg-enabled", "b", &gpg_enabled))
-        gpg_enabled = FALSE;
-
-      if (gpg_enabled)
-        rpmostree_print_gpg_info (signatures, opt_verbose, max_key_len);
-
-      /* print base overrides before overlays */
-      g_autoptr(GPtrArray) active_removals = g_ptr_array_new_with_free_func (g_free);
-      if (origin_base_removals)
-        {
-          g_autoptr(GString) str = g_string_new ("");
-          const guint n = g_variant_n_children (origin_base_removals);
-          for (guint i = 0; i < n; i++)
-            {
-              g_autoptr(GVariant) gv_nevra;
-              g_variant_get_child (origin_base_removals, i, "v", &gv_nevra);
-              const char *name, *nevra;
-              g_variant_get_child (gv_nevra, 0, "&s", &nevra);
-              g_variant_get_child (gv_nevra, 1, "&s", &name);
-              if (str->len)
-                g_string_append (str, ", ");
-              g_string_append (str, nevra);
-              g_ptr_array_add (active_removals, g_strdup (name));
-            }
-          g_ptr_array_add (active_removals, NULL);
-          if (str->len)
-            rpmostree_print_kv ("RemovedBasePackages", max_key_len, str->str);
-        }
-
-      /* only print inactive base removal requests in verbose mode */
-      if (origin_requested_base_removals && opt_verbose)
-        print_packages ("InactiveBaseRemovals", max_key_len,
-                        origin_requested_base_removals,
-                        (const char *const*)active_removals->pdata);
-
-      g_autoptr(GPtrArray) active_replacements = g_ptr_array_new_with_free_func (g_free);
-      if (origin_base_local_replacements)
-        {
-          g_autoptr(GString) str = g_string_new ("");
-          g_autoptr(GHashTable) grouped_diffs =
-            g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
-                                   (GDestroyNotify)g_ptr_array_unref);
-
-          const guint n = g_variant_n_children (origin_base_local_replacements);
-          for (guint i = 0; i < n; i++)
-            {
-              g_autoptr(GVariant) gv_nevra_new;
-              g_autoptr(GVariant) gv_nevra_old;
-              g_variant_get_child (origin_base_local_replacements, i, "(vv)",
-                                   &gv_nevra_new, &gv_nevra_old);
-              const char *nevra_new, *name_new, *name_old;
-              g_variant_get_child (gv_nevra_new, 0, "&s", &nevra_new);
-              g_variant_get_child (gv_nevra_new, 1, "&s", &name_new);
-              g_variant_get_child (gv_nevra_old, 1, "&s", &name_old);
-
-              /* if pkgnames match, print a nicer version like treediff */
-              if (g_str_equal (name_new, name_old))
-                {
-                  /* let's just use str as a scratchpad to avoid excessive mallocs; the str
-                   * needs to be stretched anyway for the final output */
-                  gsize original_size = str->len;
-                  gv_nevra_to_evr (str, gv_nevra_old);
-                  g_string_append (str, " -> ");
-                  gv_nevra_to_evr (str, gv_nevra_new);
-                  const char *diff = str->str + original_size;
-                  GPtrArray *pkgs = g_hash_table_lookup (grouped_diffs, diff);
-                  if (!pkgs)
-                    {
-                      pkgs = g_ptr_array_new_with_free_func (g_free);
-                      g_hash_table_insert (grouped_diffs, g_strdup (diff), pkgs);
-                    }
-                  g_ptr_array_add (pkgs, g_strdup (name_new));
-                  g_string_truncate (str, original_size);
-                }
-              else
-                {
-                  if (str->len)
-                    g_string_append (str, ", ");
-
-                  const char *nevra_old;
-                  g_variant_get_child (gv_nevra_old, 0, "&s", &nevra_old);
-                  g_string_append_printf (str, "%s -> %s", nevra_old, nevra_new);
-                }
-              g_ptr_array_add (active_replacements, g_strdup (nevra_new));
-            }
-
-          GLNX_HASH_TABLE_FOREACH_KV (grouped_diffs, const char*, diff, GPtrArray*, pkgs)
-            {
-              if (str->len)
-                g_string_append (str, ", ");
-              for (guint i = 0, n = pkgs->len; i < n; i++)
-                {
-                  const char *pkgname = g_ptr_array_index (pkgs, i);
-                  if (i > 0)
-                    g_string_append_c (str, ' ');
-                  g_string_append (str, pkgname);
-                }
-              g_string_append_c (str, ' ');
-              g_string_append (str, diff);
-            }
-
-          g_ptr_array_add (active_replacements, NULL);
-
-          if (str->len)
-            rpmostree_print_kv ("ReplacedBasePackages", max_key_len, str->str);
-        }
-
-      if (origin_requested_base_local_replacements && opt_verbose)
-        print_packages ("InactiveBaseReplacements", max_key_len,
-                        origin_requested_base_local_replacements,
-                        (const char *const*)active_replacements->pdata);
-
-      /* only print inactive layering requests in verbose mode */
-      if (origin_requested_packages && opt_verbose)
-        /* requested-packages - packages = inactive (i.e. dormant requests) */
-        print_packages ("InactiveRequests", max_key_len,
-                        origin_requested_packages, origin_packages);
-
-      if (origin_packages)
-        print_packages ("LayeredPackages", max_key_len,
-                        origin_packages, NULL);
-
-      if (origin_requested_local_packages)
-        print_packages ("LocalPackages", max_key_len,
-                        origin_requested_local_packages, NULL);
-
-      if (regenerate_initramfs)
-        {
-          g_autoptr(GString) buf = g_string_new ("");
-          g_autofree char **initramfs_args = NULL;
-
-          g_variant_dict_lookup (dict, "initramfs-args", "^a&s", &initramfs_args);
-
-          for (char **iter = initramfs_args; iter && *iter; iter++)
-            {
-              g_string_append (buf, *iter);
-              g_string_append_c (buf, ' ');
-            }
-          if (buf->len == 0)
-            g_string_append (buf, "regenerate");
-          rpmostree_print_kv ("Initramfs", max_key_len, buf->str);
-        }
-      gboolean pinned = FALSE;
-      g_variant_dict_lookup (dict, "pinned", "b", &pinned);
-      if (pinned)
-        rpmostree_print_kv ("Pinned", max_key_len, "yes");
-
-      if (unlocked && g_strcmp0 (unlocked, "none") != 0)
-        {
-          g_print ("%s%s", get_red_start (), get_bold_start ());
-          rpmostree_print_kv ("Unlocked", max_key_len, unlocked);
-          g_print ("%s%s", get_bold_end (), get_red_end ());
-        }
-      const char *end_of_life_string = NULL;
-      /* look for endoflife attribute in the deployment */
-      g_variant_dict_lookup (dict, "endoflife", "&s", &end_of_life_string);
-
-      if (end_of_life_string)
-        {
-          g_print ("%s%s", get_red_start (), get_bold_start ());
-          rpmostree_print_kv ("EndOfLife", max_key_len, end_of_life_string);
-          g_print ("%s%s", get_bold_end (), get_red_end ());
-        }
     }
 
   return TRUE;
