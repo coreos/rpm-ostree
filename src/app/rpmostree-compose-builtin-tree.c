@@ -114,6 +114,7 @@ typedef struct {
   int workdir_dfd;
   int rootfs_dfd;
   int cachedir_dfd;
+  gboolean unified_core_and_fuse;
   OstreeRepo *repo;
   OstreeRepo *pkgcache_repo;
   OstreeRepoDevInoCache *devino_cache;
@@ -503,6 +504,32 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                                                    cancellable, error);
       if (!self->pkgcache_repo)
         return FALSE;
+
+      if (!opt_cachedir)
+        {
+          /* This is part of enabling rpm-ostree inside Docker/Kubernetes/OpenShift;
+           * in this case we probably don't have access to FUSE as today it uses a
+           * suid binary which doesn't have the capabilities it needs.
+           *
+           * So this magical bit tells the core to disable FUSE, which we only do
+           * if --cachedir isn't specified.  Another way to say this is that
+           * running inside an unprivileged container today requires turning off
+           * some of the rpm-ostree intelligence around caching.
+           *
+           * We don't make this actually conditional somehow on running in a
+           * container since if you're not using a persistent cache there's no
+           * real advantage to taking the overhead of FUSE. If the hardlinks are
+           * corrupted, it doesn't matter as they're going to be deleted
+           * anyways.
+           */
+          g_autoptr(GKeyFile) config = ostree_repo_copy_config (self->pkgcache_repo);
+          g_key_file_set_boolean (config, "rpmostree", "enable-fuse", FALSE);
+          if (!ostree_repo_write_config (self->pkgcache_repo, config, error))
+            return FALSE;
+        }
+      else
+        self->unified_core_and_fuse = TRUE;
+
       rpmostree_context_set_repos (self->corectx, self->repo, self->pkgcache_repo);
       self->devino_cache = ostree_repo_devino_cache_new ();
       rpmostree_context_set_devino_cache (self->corectx, self->devino_cache);
@@ -1142,7 +1169,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
   /* Start postprocessing */
   if (!rpmostree_treefile_postprocessing (self->rootfs_dfd, self->treefile_context_dirs->pdata[0],
                                           self->serialized_treefile, self->treefile,
-                                          next_version, opt_ex_unified_core,
+                                          next_version, self->unified_core_and_fuse,
                                           cancellable, error))
     return glnx_prefix_error (error, "Postprocessing");
 
@@ -1252,7 +1279,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
 
   if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile, opt_ex_unified_core,
+  if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile, self->unified_core_and_fuse,
                                     cancellable, error))
     return FALSE;
 

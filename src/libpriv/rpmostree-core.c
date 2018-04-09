@@ -517,6 +517,11 @@ rpmostree_context_set_repos (RpmOstreeContext *self,
 {
   g_set_object (&self->ostreerepo, base_repo);
   g_set_object (&self->pkgcache_repo, pkgcache_repo);
+
+  self->enable_fuse =
+    (pkgcache_repo == NULL) ||
+    g_key_file_get_boolean (ostree_repo_get_config (pkgcache_repo),
+                            "rpmostree", "enable-fuse", NULL);
 }
 
 static OstreeRepo *
@@ -3299,7 +3304,7 @@ run_script_sync (RpmOstreeContext *self,
     return FALSE;
 
   if (!rpmostree_script_run_sync (pkg, hdr, kind, rootfs_dfd, var_lib_rpm_statedir,
-                                  out_n_run, cancellable, error))
+                                  self->enable_fuse, out_n_run, cancellable, error))
     return FALSE;
 
   return TRUE;
@@ -3558,7 +3563,8 @@ run_all_transfiletriggers (RpmOstreeContext *self,
       Header hdr;
       while ((hdr = rpmdbNextIterator (mi)) != NULL)
         {
-          if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, out_n_run,
+          if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, self->enable_fuse,
+                                                     out_n_run,
                                                      cancellable, error))
             return FALSE;
         }
@@ -3577,8 +3583,8 @@ run_all_transfiletriggers (RpmOstreeContext *self,
       if (!get_package_metainfo (self, path, &hdr, NULL, error))
         return FALSE;
 
-      if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, out_n_run,
-                                                 cancellable, error))
+      if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, self->enable_fuse,
+                                                 out_n_run, cancellable, error))
         return FALSE;
     }
   return TRUE;

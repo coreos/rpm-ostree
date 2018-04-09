@@ -275,6 +275,7 @@ dump_buffered_output_noerr (const char *prefix,
 static gboolean
 run_script_in_bwrap_container (int rootfs_fd,
                                GLnxTmpDir *var_lib_rpm_statedir,
+                               gboolean    enable_fuse,
                                const char *name,
                                const char *scriptdesc,
                                const char *interp,
@@ -333,8 +334,10 @@ run_script_in_bwrap_container (int rootfs_fd,
    * See above for why we special case glibc.
    */
   const gboolean is_glibc_locales = strcmp (pkg_script, "glibc-all-langpacks.posttrans") == 0;
+  RpmOstreeBwrapMutability mutability =
+    (is_glibc_locales || !enable_fuse) ? RPMOSTREE_BWRAP_MUTATE_FREELY : RPMOSTREE_BWRAP_MUTATE_ROFILES;
   bwrap = rpmostree_bwrap_new (rootfs_fd,
-                               is_glibc_locales ? RPMOSTREE_BWRAP_MUTATE_FREELY : RPMOSTREE_BWRAP_MUTATE_ROFILES,
+                               mutability,
                                error,
                                /* Scripts can see a /var with compat links like alternatives */
                                "--ro-bind", "./var", "/var",
@@ -443,6 +446,7 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
                      Header         hdr,
                      int            rootfs_fd,
                      GLnxTmpDir    *var_lib_rpm_statedir,
+                     gboolean       enable_fuse,
                      GCancellable  *cancellable,
                      GError       **error)
 {
@@ -511,7 +515,8 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
     }
 
   guint64 start_time_ms = g_get_monotonic_time () / 1000;
-  if (!run_script_in_bwrap_container (rootfs_fd, var_lib_rpm_statedir, dnf_package_get_name (pkg),
+  if (!run_script_in_bwrap_container (rootfs_fd, var_lib_rpm_statedir, enable_fuse,
+                                      dnf_package_get_name (pkg),
                                       rpmscript->desc, interp, script, script_arg,
                                       -1, cancellable, error))
     return glnx_prefix_error (error, "Running %s for %s", rpmscript->desc, dnf_package_get_name (pkg));
@@ -537,6 +542,7 @@ run_script (const KnownRpmScriptKind *rpmscript,
             Header                    hdr,
             int                       rootfs_fd,
             GLnxTmpDir               *var_lib_rpm_statedir,
+            gboolean                  enable_fuse,
             gboolean                 *out_did_run,
             GCancellable             *cancellable,
             GError                  **error)
@@ -565,7 +571,7 @@ run_script (const KnownRpmScriptKind *rpmscript,
 
   *out_did_run = TRUE;
   return impl_run_rpm_script (rpmscript, pkg, hdr, rootfs_fd, var_lib_rpm_statedir,
-                              cancellable, error);
+                              enable_fuse, cancellable, error);
 }
 
 #ifdef BUILDOPT_HAVE_RPM_FILETRIGGERS
@@ -685,6 +691,7 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
                            RpmOstreeScriptKind kind,
                            int            rootfs_fd,
                            GLnxTmpDir    *var_lib_rpm_statedir,
+                           gboolean       enable_fuse,
                            guint         *out_n_run,
                            GCancellable  *cancellable,
                            GError       **error)
@@ -707,7 +714,7 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
 
   gboolean did_run = FALSE;
   if (!run_script (scriptkind, pkg, hdr, rootfs_fd,
-                   var_lib_rpm_statedir,
+                   var_lib_rpm_statedir, enable_fuse,
                    &did_run, cancellable, error))
     return FALSE;
 
@@ -722,6 +729,7 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
 gboolean
 rpmostree_transfiletriggers_run_sync (Header        hdr,
                                       int           rootfs_fd,
+                                      gboolean      enable_fuse,
                                       guint        *out_n_run,
                                       GCancellable *cancellable,
                                       GError      **error)
@@ -876,7 +884,7 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
 
       /* Run it, and log the result */
       guint64 start_time_ms = g_get_monotonic_time () / 1000;
-      if (!run_script_in_bwrap_container (rootfs_fd, NULL, pkg_name,
+      if (!run_script_in_bwrap_container (rootfs_fd, NULL, enable_fuse, pkg_name,
                                           "%transfiletriggerin", interp, script, NULL,
                                           fileno (tmpf_file), cancellable, error))
         return FALSE;
