@@ -42,6 +42,7 @@ struct _RpmOstreeContext {
   RpmOstreeContextDnfCachePolicy dnf_cache_policy;
   OstreeRepo *ostreerepo;
   OstreeRepo *pkgcache_repo;
+  gboolean enable_rofiles;
   OstreeRepoDevInoCache *devino_cache;
   gboolean unprivileged;
   OstreeSePolicy *sepolicy;

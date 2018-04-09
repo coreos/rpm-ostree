@@ -35,6 +35,21 @@ if ostree --repo=${repobuild} cat ${treeref} /usr/lib/tmpfiles.d/pkg-rpm.conf > 
 fi
 echo "ok autovar"
 
+# And verify we're not hardlinking zero-sized files since this path isn't using
+# rofiles-fuse
+co=${repobuild}/tmp/usr-etc
+ostree --repo=${repobuild} checkout -UHz --subpath=/usr/etc ${treeref} ${co}
+# Verify the files exist and are zero-sized
+for f in ${co}/sub{u,g}id; do
+    test -f "$f"
+    test '!' -s "$f"
+done
+if files_are_hardlinked ${co}/sub{u,g}id; then
+    fatal "Hardlinked zero-sized files without cachedir"
+fi
+rm ${co} -rf
+echo "ok no cachedir zero-sized hardlinks"
+
 # And redo it to trigger relabeling
 origrev=$(ostree --repo=${repobuild} rev-parse ${treeref})
 runcompose  --force-nocache --ex-unified-core
