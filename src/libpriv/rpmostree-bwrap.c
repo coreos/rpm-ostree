@@ -24,6 +24,7 @@
 #include <err.h>
 #include <stdio.h>
 #include <systemd/sd-journal.h>
+#include <sys/capability.h>
 
 void
 rpmostree_ptrarray_append_strdup (GPtrArray *argv_array, ...)
@@ -174,8 +175,7 @@ setup_rofiles_usr (RpmOstreeBwrap *bwrap,
     return FALSE;
 
   rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", rofiles_mntpath, "/usr", NULL);
-
-  /* also mount /etc from the rofiles mount to allow RPM scripts to change defaults, while
+  /* also mount /etc to the rofiles /usr/etc to allow RPM scripts to change defaults, while
    * still being protected; note we use bind to ensure symlinks work, see:
    * https://github.com/projectatomic/rpm-ostree/pull/640 */
   const char *rofiles_etc_mntpath = glnx_strjoina (rofiles_mntpath, "/etc");
@@ -200,8 +200,21 @@ running_in_nspawn (void)
   return g_strcmp0 (getenv ("container"), "systemd-nspawn") == 0;
 }
 
-RpmOstreeBwrap *
-rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
+/* We want to support running rpm-ostree in non-privileged Kubernetes/OpenShift
+ * pods. This tests effectively if we running under default docker capabilities?
+ * Also equivalent to OpenShift scc `anyuid`.
+ *
+ * https://github.com/projectatomic/rpm-ostree/issues/1329
+ */
+static gboolean
+running_as_uid0_container (void)
+{
+  return getuid () == 0 &&
+    cap_get_bound (CAP_SYS_ADMIN) == 0;
+}
+
+static RpmOstreeBwrap *
+bwrap_new_internal (int rootfs_fd, gboolean for_selftest, GError **error)
 {
   g_autoptr(RpmOstreeBwrap) ret = g_new0 (RpmOstreeBwrap, 1);
   static const char *usr_links[] = {"lib", "lib32", "lib64", "bin", "sbin"};
@@ -228,20 +241,11 @@ rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
   /* ⚠⚠⚠ If you change this, also update scripts/bwrap-script-shell.sh ⚠⚠⚠ */
   rpmostree_bwrap_append_bwrap_argv (ret,
                                      WITH_BUBBLEWRAP_PATH,
-                                     "--dev", "/dev",
-                                     "--proc", "/proc",
                                      "--dir", "/tmp",
                                      "--chdir", "/",
-                                     "--ro-bind", "/sys/block", "/sys/block",
-                                     "--ro-bind", "/sys/bus", "/sys/bus",
-                                     "--ro-bind", "/sys/class", "/sys/class",
-                                     "--ro-bind", "/sys/dev", "/sys/dev",
-                                     "--ro-bind", "/sys/devices", "/sys/devices",
                                      "--die-with-parent", /* Since 0.1.8 */
-                                     /* Here we do all namespaces except the user one.
-                                      * Down the line we want to do a userns too I think,
-                                      * but it may need some mapping work.
-                                      */
+                                     /* See below regarding net and user namespaces */
+                                     "--dev", "/dev",
                                      "--unshare-pid",
                                      "--unshare-uts",
                                      "--unshare-ipc",
@@ -250,6 +254,51 @@ rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
 
   if (!running_in_nspawn ())
     rpmostree_bwrap_append_bwrap_argv (ret, "--unshare-net", NULL);
+
+  /* Down the line we might want to enable userns unconditionally everywhere,
+   * I'm currently just trying to be conservative and not affect the pkglayering
+   * case.  I also worry about userns enablement on RHEL/CentOS, so it'd
+   * have to be at least --unshare-user-try there.
+   *
+   * Further, in the recursive case, we need to just bind mount the API mounts
+   * like /proc,/sys rather than try to creat new instances, as trying to
+   * create new ones would potentially undo the read-only mounts that the "outer
+   * container" has made.
+   */
+  if (running_as_uid0_container ())
+    {
+      /* User namespace */
+      rpmostree_bwrap_append_bwrap_argv (ret, "--unshare-user", NULL);
+
+      /* In the selftest case, there's no reason to overmount.  So don't.
+       *
+       * See above for rationale for the non-selftest container case.
+       */
+      if (!for_selftest)
+        {
+          rpmostree_bwrap_append_bwrap_argv (ret,
+                                             "--bind", "/proc", "/proc",
+                                             "--bind", "/sys", "/sys",
+                                             NULL);
+        }
+    }
+  else
+    {
+      /* We're running on a raw host (e.g. package layering), or in a privileged
+       * container. Let's set up strict mounts, similar to what runc (I think)
+       * is doing. Note to self: bwrap covers less of this than runc does, e.g.
+       * I see a tmpfs mount over `/proc/scsi`. That said if we enable userns
+       * (see above) that should be unnecessary.
+       */
+      rpmostree_bwrap_append_bwrap_argv (ret,
+                                         "--proc", "/proc",
+                                         "--ro-bind", "/sys/block", "/sys/block",
+                                         "--ro-bind", "/sys/bus", "/sys/bus",
+                                         "--ro-bind", "/sys/class", "/sys/class",
+                                         "--ro-bind", "/sys/dev", "/sys/dev",
+                                         "--ro-bind", "/sys/devices", "/sys/devices",
+                                         NULL);
+    }
 
   /* Capabilities; this is a subset of the Docker (1.13 at least) default.
    * Specifically we strip out in addition to that:
@@ -301,6 +350,12 @@ rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
 }
 
 RpmOstreeBwrap *
+rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
+{
+  return bwrap_new_internal (rootfs_fd, FALSE, error);
+}
+
+RpmOstreeBwrap *
 rpmostree_bwrap_new (int rootfs_fd,
                      RpmOstreeBwrapMutability mutable,
                      GError **error,
@@ -313,17 +368,26 @@ rpmostree_bwrap_new (int rootfs_fd,
   va_list args;
   switch (mutable)
     {
-    case RPMOSTREE_BWRAP_IMMUTABLE:
-      rpmostree_bwrap_append_bwrap_argv (ret, "--ro-bind", "usr", "/usr", NULL);
-      break;
     case RPMOSTREE_BWRAP_MUTATE_ROFILES:
-      if (!setup_rofiles_usr (ret, error))
-        return NULL;
+      {
+        if (!setup_rofiles_usr (ret, error))
+          return NULL;
+        rpmostree_bwrap_append_bwrap_argv (ret, "--ro-bind", "./var", "/var", NULL);
+      }
       break;
     case RPMOSTREE_BWRAP_MUTATE_FREELY:
-      rpmostree_bwrap_append_bwrap_argv (ret, "--bind", "usr", "/usr", NULL);
+      rpmostree_bwrap_append_bwrap_argv (ret, "--bind", "usr", "/usr",
+                                         "--bind", "usr/etc", "/etc",
+                                         "--bind", "var", "/var",
+                                         NULL);
       break;
     }
+
+  /* We may have a ro bind mount over /var above. However we want a writable
+   * var/tmp, so we need to tmpfs mount on top of it. See also
+   * https://github.com/projectatomic/bubblewrap/issues/182
+   */
+  rpmostree_bwrap_append_bwrap_argv (ret, "--tmpfs", "/var/tmp", NULL);
 
   const char *arg;
   va_start (args, error);
@@ -421,10 +485,10 @@ rpmostree_bwrap_selftest (GError **error)
   if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &host_root_dfd, error))
     return FALSE;
 
-  bwrap = rpmostree_bwrap_new (host_root_dfd, RPMOSTREE_BWRAP_IMMUTABLE, error, NULL);
+  bwrap = bwrap_new_internal (host_root_dfd, TRUE, error);
   if (!bwrap)
     return FALSE;
-
+  rpmostree_bwrap_append_bwrap_argv (bwrap, "--ro-bind", "usr", "/usr", NULL);
   rpmostree_bwrap_append_child_argv (bwrap, "true", NULL);
 
   if (!rpmostree_bwrap_run (bwrap, NULL, error))

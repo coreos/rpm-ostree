@@ -325,12 +325,7 @@ run_script_in_bwrap_container (int rootfs_fd,
     }
 
   /* ⚠⚠⚠ If you change this, also update scripts/bwrap-script-shell.sh ⚠⚠⚠ */
-
-  /* We just did a ro bind mount over /var above. However we want a writable
-   * var/tmp, so we need to tmpfs mount on top of it. See also
-   * https://github.com/projectatomic/bubblewrap/issues/182
-   * Similarly for /var/lib/rpm-state.
-   *
+  /*
    * See above for why we special case glibc.
    */
   const gboolean is_glibc_locales = strcmp (pkg_script, "glibc-all-langpacks.posttrans") == 0;
@@ -339,9 +334,6 @@ run_script_in_bwrap_container (int rootfs_fd,
   bwrap = rpmostree_bwrap_new (rootfs_fd,
                                mutability,
                                error,
-                               /* Scripts can see a /var with compat links like alternatives */
-                               "--ro-bind", "./var", "/var",
-                               "--tmpfs", "/var/tmp",
                                NULL);
   if (!bwrap)
     goto out;
@@ -927,10 +919,16 @@ rpmostree_deployment_sanitycheck (int           rootfs_fd,
 
   GLNX_AUTO_PREFIX_ERROR ("sanitycheck", error);
   g_autoptr(RpmOstreeBwrap) bwrap =
-    rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_IMMUTABLE, error,
-                         "--ro-bind", "./usr/etc", "/etc", NULL);
+    rpmostree_bwrap_new_base (rootfs_fd, error);
   if (!bwrap)
     return FALSE;
+  /* The deployment /var will be empty, we could use the host's but eh, why not
+   * just do an empty one.
+   */
+  rpmostree_bwrap_append_bwrap_argv (bwrap, "--ro-bind", "usr", "/usr",
+                                     "--ro-bind", "usr/etc", "/etc",
+                                     "--dir", "/var/tmp",
+                                     NULL);
   rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/true", NULL);
   if (!rpmostree_bwrap_run (bwrap, cancellable, error))
     return FALSE;

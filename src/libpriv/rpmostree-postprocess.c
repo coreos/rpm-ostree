@@ -68,14 +68,11 @@ run_bwrap_mutably (int           rootfs_fd,
     bwrap = rpmostree_bwrap_new (rootfs_fd,
                                  RPMOSTREE_BWRAP_MUTATE_ROFILES,
                                  error,
-                                 "--ro-bind", "./var", "/var",
                                  NULL);
   else
     bwrap = rpmostree_bwrap_new (rootfs_fd,
                                  RPMOSTREE_BWRAP_MUTATE_FREELY,
                                  error,
-                                 "--bind", "var", "/var",
-                                 "--bind", "usr/etc", "/etc",
                                  NULL);
 
   if (!bwrap)

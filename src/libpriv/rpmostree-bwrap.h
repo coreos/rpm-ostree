@@ -25,7 +25,6 @@
 #include "libglnx.h"
 
 typedef enum {
-  RPMOSTREE_BWRAP_IMMUTABLE = 0,
   RPMOSTREE_BWRAP_MUTATE_ROFILES,
   RPMOSTREE_BWRAP_MUTATE_FREELY
 } RpmOstreeBwrapMutability;
