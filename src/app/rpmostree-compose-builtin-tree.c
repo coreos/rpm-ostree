@@ -139,7 +139,10 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   /* Only close workdir_dfd if it's not owned by the tmpdir */
   if (!ctx->workdir_tmp.initialized)
     glnx_close_fd (&ctx->workdir_dfd);
-  (void)glnx_tmpdir_delete (&ctx->workdir_tmp, NULL, NULL);
+  if (g_getenv ("RPMOSTREE_PRESERVE_TMPDIR"))
+    g_print ("Preserved workdir: %s\n", ctx->workdir_tmp.path);
+  else
+    (void)glnx_tmpdir_delete (&ctx->workdir_tmp, NULL, NULL);
   glnx_close_fd (&ctx->rootfs_dfd);
   glnx_close_fd (&ctx->cachedir_dfd);
   g_clear_object (&ctx->repo);
