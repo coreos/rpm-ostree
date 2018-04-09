@@ -121,6 +121,7 @@ void rpmostree_context_set_repos (RpmOstreeContext *self,
                                   OstreeRepo       *pkgcache_repo);
 void rpmostree_context_set_devino_cache (RpmOstreeContext *self,
                                          OstreeRepoDevInoCache *devino_cache);
+void rpmostree_context_disable_rofiles (RpmOstreeContext *self);
 void rpmostree_context_set_sepolicy (RpmOstreeContext *self,
                                      OstreeSePolicy   *sepolicy);
 

@@ -381,6 +381,7 @@ rpmostree_context_init (RpmOstreeContext *self)
 {
   self->tmprootfs_dfd = -1;
   self->dnf_cache_policy = RPMOSTREE_CONTEXT_DNF_CACHE_DEFAULT;
+  self->enable_rofiles = TRUE;
 }
 
 static void
@@ -555,9 +556,17 @@ void
 rpmostree_context_set_devino_cache (RpmOstreeContext *self,
                                     OstreeRepoDevInoCache *devino_cache)
 {
+  g_assert (self->enable_rofiles);
   if (self->devino_cache)
     ostree_repo_devino_cache_unref (self->devino_cache);
   self->devino_cache = devino_cache ? ostree_repo_devino_cache_ref (devino_cache) : NULL;
+}
+
+void
+rpmostree_context_disable_rofiles (RpmOstreeContext *self)
+{
+  g_assert (!self->devino_cache);
+  self->enable_rofiles = FALSE;
 }
 
 DnfContext *
@@ -2577,6 +2586,7 @@ checkout_package (OstreeRepo   *repo,
                   const char   *pkg_commit,
                   GHashTable   *files_skip,
                   OstreeRepoCheckoutOverwriteMode ovwmode,
+                  gboolean      force_copy_zerosized,
                   GCancellable *cancellable,
                   GError      **error)
 {
@@ -2591,6 +2601,8 @@ checkout_package (OstreeRepo   *repo,
 
   /* Always want hardlinks */
   opts.no_copy_fallback = TRUE;
+  /* Used in the no-rofiles-fuse path */
+  opts.force_copy_zerosized = force_copy_zerosized;
 
   if (files_skip && g_hash_table_size (files_skip) > 0)
     {
@@ -2632,6 +2644,7 @@ checkout_package_into_root (RpmOstreeContext *self,
 
   if (!checkout_package (pkgcache_repo, dfd, path,
                          devino_cache, pkg_commit, files_skip, ovwmode,
+                         !self->enable_rofiles,
                          cancellable, error))
     return glnx_prefix_error (error, "Checkout %s", dnf_package_get_nevra (pkg));
 
@@ -2887,7 +2900,7 @@ relabel_in_thread_impl (RpmOstreeContext *self,
   g_autoptr(OstreeRepoDevInoCache) cache = ostree_repo_devino_cache_new ();
 
   if (!checkout_package (repo, tmpdir_dfd, pkg_dirname, cache,
-                         commit_csum, NULL, OSTREE_REPO_CHECKOUT_OVERWRITE_NONE,
+                         commit_csum, NULL, OSTREE_REPO_CHECKOUT_OVERWRITE_NONE, FALSE,
                          cancellable, error))
     return FALSE;
 
@@ -3256,7 +3269,7 @@ run_script_sync (RpmOstreeContext *self,
     return FALSE;
 
   if (!rpmostree_script_run_sync (pkg, hdr, kind, rootfs_dfd, var_lib_rpm_statedir,
-                                  out_n_run, cancellable, error))
+                                  self->enable_rofiles, out_n_run, cancellable, error))
     return FALSE;
 
   return TRUE;
@@ -3530,7 +3543,8 @@ run_all_transfiletriggers (RpmOstreeContext *self,
       Header hdr;
       while ((hdr = rpmdbNextIterator (mi)) != NULL)
         {
-          if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, out_n_run,
+          if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, self->enable_rofiles,
+                                                     out_n_run,
                                                      cancellable, error))
             return FALSE;
         }
@@ -3549,8 +3563,8 @@ run_all_transfiletriggers (RpmOstreeContext *self,
       if (!get_package_metainfo (self, path, &hdr, NULL, error))
         return FALSE;
 
-      if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, out_n_run,
-                                                 cancellable, error))
+      if (!rpmostree_transfiletriggers_run_sync (hdr, rootfs_dfd, self->enable_rofiles,
+                                                 out_n_run, cancellable, error))
         return FALSE;
     }
   return TRUE;

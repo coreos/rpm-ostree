@@ -63,6 +63,7 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
                            RpmOstreeScriptKind kind,
                            int            rootfs_fd,
                            GLnxTmpDir    *var_lib_rpm_statedir,
+                           gboolean       enable_rofiles,
                            guint         *out_n_run,
                            GCancellable  *cancellable,
                            GError       **error);
@@ -70,6 +71,7 @@ rpmostree_script_run_sync (DnfPackage    *pkg,
 gboolean
 rpmostree_transfiletriggers_run_sync (Header         hdr,
                                       int            rootfs_fd,
+                                      gboolean       enable_rofiles,
                                       guint         *out_n_run,
                                       GCancellable  *cancellable,
                                       GError       **error);
