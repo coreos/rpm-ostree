@@ -4022,6 +4022,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           if (!rpmostree_passwd_complete_rpm_layering (tmprootfs_dfd, error))
             return FALSE;
         }
+
+      /* And clean up var/tmp, we don't want it in commits */
+      if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, "var/tmp", cancellable, error))
+        return FALSE;
     }
   else
     {
