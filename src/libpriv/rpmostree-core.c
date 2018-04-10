@@ -3823,6 +3823,11 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   rpmostree_output_progress_end ();
 
+  /* Some packages expect to be able to make temporary files here
+   * for obvious reasons, but we otherwise make `/var` read-only.
+   */
+  if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "var/tmp", 0755, cancellable, error))
+    return FALSE;
   if (!rpmostree_rootfs_prepare_links (tmprootfs_dfd, cancellable, error))
     return FALSE;
 
