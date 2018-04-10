@@ -290,7 +290,6 @@ run_script_in_bwrap_container (int rootfs_fd,
   const char *postscript_path_container = glnx_strjoina ("/usr", postscript_name);
   const char *postscript_path_host = postscript_path_container + 1;
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
-  gboolean created_var_tmp = FALSE;
   gboolean created_var_lib_rpmstate = FALSE;
   glnx_autofd int stdout_fd = -1;
   glnx_autofd int stderr_fd = -1;
@@ -306,29 +305,6 @@ run_script_in_bwrap_container (int rootfs_fd,
       g_prefix_error (error, "Writing script to %s: ", postscript_path_host);
       goto out;
     }
-
-  /* We need to make the mount point in the case where we're doing
-   * package layering, since the host `/var` tree is empty.  We
-   * *could* point at the real `/var`...but that seems
-   * unnecessary/dangerous to me.  Daemons that need to perform data
-   * migrations should do them as part of their systemd units and not
-   * in %post.
-   *
-   * Another alternative would be to make a tmpfs with the compat
-   * symlinks.
-   */
-  if (mkdirat (rootfs_fd, "var/tmp", 0755) < 0)
-    {
-      if (errno == EEXIST)
-        ;
-      else
-        {
-          glnx_set_error_from_errno (error);
-          goto out;
-        }
-    }
-  else
-    created_var_tmp = TRUE;
 
   /* And similarly for /var/lib/rpm-state */
   if (var_lib_rpm_statedir)
@@ -452,8 +428,6 @@ run_script_in_bwrap_container (int rootfs_fd,
  out:
   glnx_tmpfile_clear (&buffered_output);
   (void) unlinkat (rootfs_fd, postscript_path_host, 0);
-  if (created_var_tmp)
-    (void) unlinkat (rootfs_fd, "var/tmp", AT_REMOVEDIR);
   if (created_var_lib_rpmstate)
     (void) unlinkat (rootfs_fd, "var/lib/rpm-state", AT_REMOVEDIR);
   return ret;
