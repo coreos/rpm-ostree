@@ -1815,13 +1815,14 @@ rpmostreed_os_load_internals (RpmostreedOS *self, GError **error)
   ostree_sysroot_query_deployments_for (ot_sysroot, name,
                                         &pending_deployment, &rollback_deployment);
 
-  GVariant *default_variant = NULL; /* Floating */
+  g_autoptr(GVariant) default_variant = NULL;
   if (pending_deployment)
     {
-      default_variant = rpmostreed_deployment_generate_variant (ot_sysroot,
-                                                                pending_deployment,
-                                                                booted_id,
-                                                                ot_repo, error);
+      default_variant =
+        g_variant_ref_sink (rpmostreed_deployment_generate_variant (ot_sysroot,
+                                                                    pending_deployment,
+                                                                    booted_id,
+                                                                    ot_repo, error));
       if (!default_variant)
         return FALSE;
     }
