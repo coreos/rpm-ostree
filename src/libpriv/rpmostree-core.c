@@ -3823,6 +3823,11 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   rpmostree_output_progress_end ();
 
+  /* Some packages expect to be able to make temporary files here
+   * for obvious reasons, but we otherwise make `/var` read-only.
+   */
+  if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, "var/tmp", 0755, cancellable, error))
+    return FALSE;
   if (!rpmostree_rootfs_prepare_links (tmprootfs_dfd, cancellable, error))
     return FALSE;
 
@@ -4017,6 +4022,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           if (!rpmostree_passwd_complete_rpm_layering (tmprootfs_dfd, error))
             return FALSE;
         }
+
     }
   else
     {
@@ -4024,6 +4030,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       if (!rpmostree_deployment_sanitycheck (tmprootfs_dfd, cancellable, error))
         return FALSE;
     }
+
+  /* And clean up var/tmp, we don't want it in commits */
+  if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, "var/tmp", cancellable, error))
+    return FALSE;
 
   g_clear_pointer (&ordering_ts, rpmtsFree);
 

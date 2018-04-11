@@ -201,12 +201,8 @@ running_in_nspawn (void)
 }
 
 RpmOstreeBwrap *
-rpmostree_bwrap_new (int rootfs_fd,
-                     RpmOstreeBwrapMutability mutable,
-                     GError **error,
-                     ...)
+rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
 {
-  va_list args;
   g_autoptr(RpmOstreeBwrap) ret = g_new0 (RpmOstreeBwrap, 1);
   static const char *usr_links[] = {"lib", "lib32", "lib64", "bin", "sbin"};
 
@@ -301,6 +297,20 @@ rpmostree_bwrap_new (int rootfs_fd,
       rpmostree_bwrap_append_bwrap_argv (ret, "--symlink", srcpath, destpath, NULL);
     }
 
+  return g_steal_pointer (&ret);
+}
+
+RpmOstreeBwrap *
+rpmostree_bwrap_new (int rootfs_fd,
+                     RpmOstreeBwrapMutability mutable,
+                     GError **error,
+                     ...)
+{
+  g_autoptr(RpmOstreeBwrap) ret = rpmostree_bwrap_new_base (rootfs_fd, error);
+  if (!ret)
+    return FALSE;
+
+  va_list args;
   switch (mutable)
     {
     case RPMOSTREE_BWRAP_IMMUTABLE:
@@ -315,12 +325,11 @@ rpmostree_bwrap_new (int rootfs_fd,
       break;
     }
 
-  { const char *arg;
-    va_start (args, error);
-    while ((arg = va_arg (args, char *)))
-      g_ptr_array_add (ret->argv, g_strdup (arg));
-    va_end (args);
-  }
+  const char *arg;
+  va_start (args, error);
+  while ((arg = va_arg (args, char *)))
+    g_ptr_array_add (ret->argv, g_strdup (arg));
+  va_end (args);
 
   return g_steal_pointer (&ret);
 }

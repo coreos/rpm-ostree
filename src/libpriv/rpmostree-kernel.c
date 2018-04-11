@@ -437,15 +437,25 @@ rpmostree_run_dracut (int     rootfs_dfd,
    * config files.  Otherwise, we use the usr/etc defaults.
    */
   if (rebuild_from_initramfs)
-    bwrap = rpmostree_bwrap_new (rootfs_dfd, RPMOSTREE_BWRAP_IMMUTABLE, error,
-                                 "--ro-bind", "/etc", "/etc",
-                                 NULL);
+    {
+      bwrap = rpmostree_bwrap_new_base (rootfs_dfd, error);
+      if (!bwrap)
+        return FALSE;
+      rpmostree_bwrap_append_bwrap_argv (bwrap,
+                                         "--ro-bind", "/etc", "/etc",
+                                         "--ro-bind", "usr", "/usr",
+                                         NULL);
+    }
   else
-    bwrap = rpmostree_bwrap_new (rootfs_dfd, RPMOSTREE_BWRAP_IMMUTABLE, error,
-                                 "--ro-bind", "usr/etc", "/etc",
-                                 NULL);
-  if (!bwrap)
-    return FALSE;
+    {
+      bwrap = rpmostree_bwrap_new_base (rootfs_dfd, error);
+      if (!bwrap)
+        return FALSE;
+      rpmostree_bwrap_append_bwrap_argv (bwrap,
+                                        "--ro-bind", "usr/etc", "/etc",
+                                        "--ro-bind", "usr", "/usr",
+                                        NULL);
+    }
 
   if (dracut_host_tmpdir)
     rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", dracut_host_tmpdir->path, "/tmp/dracut", NULL);

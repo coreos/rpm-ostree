@@ -38,6 +38,8 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeBwrap, rpmostree_bwrap_unref)
 /* TODO - move this utility elsewhere */
 void rpmostree_ptrarray_append_strdup (GPtrArray *argv_array, ...) G_GNUC_NULL_TERMINATED;
 
+RpmOstreeBwrap *rpmostree_bwrap_new_base (int rootfs, GError **error);
+
 RpmOstreeBwrap *rpmostree_bwrap_new (int rootfs,
                                      RpmOstreeBwrapMutability mutable,
                                      GError **error,
