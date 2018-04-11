@@ -4023,9 +4023,6 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
             return FALSE;
         }
 
-      /* And clean up var/tmp, we don't want it in commits */
-      if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, "var/tmp", cancellable, error))
-        return FALSE;
     }
   else
     {
@@ -4033,6 +4030,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       if (!rpmostree_deployment_sanitycheck (tmprootfs_dfd, cancellable, error))
         return FALSE;
     }
+
+  /* And clean up var/tmp, we don't want it in commits */
+  if (!glnx_shutil_rm_rf_at (tmprootfs_dfd, "var/tmp", cancellable, error))
+    return FALSE;
 
   g_clear_pointer (&ordering_ts, rpmtsFree);
 
