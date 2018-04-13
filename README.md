@@ -61,6 +61,6 @@ has a bigger collection that also includes talks on containers.
 
 rpm-ostree specific talks:
 
- * devconf.cz 2018: [Colin Walters: Hybrid image/package OS updates with rpm-ostree](https://www.youtube.com/watch?v=eWoFpOoA-tE) [slides](https://fedorapeople.org/~walters/2018.01-devconf/index.html)
+ * devconf.cz 2018: [Colin Walters: Hybrid image/package OS updates with rpm-ostree](https://www.youtube.com/watch?v=4A_xl5dC210) [slides](https://fedorapeople.org/~walters/2018.01-devconf/index.html)
  * devconf.cz 2018: [Peter Robinson: Using Fedora and OSTree for IoT](https://www.youtube.com/watch?v=mRqV38qT-wc)
 
