@@ -24,118 +24,7 @@ set -euo pipefail
 
 set -x
 
-# make sure that package-related entries are always present,
-# even when they're empty
-vm_assert_status_jq \
-  '.deployments[0]["packages"]' \
-  '.deployments[0]["requested-packages"]' \
-  '.deployments[0]["requested-local-packages"]' \
-  '.deployments[0]["base-removals"]' \
-  '.deployments[0]["requested-base-removals"]' \
-  '.deployments[0]["base-commit-meta"]["ostree.source-title"]|contains("overlay")' \
-  '.deployments[0]["layered-commit-meta"]|not'
-echo "ok empty pkg arrays, and commit meta correct in status json"
-
-vm_rpmostree status --jsonpath '$.deployments[0].booted' > jsonpath.txt
-assert_file_has_content_literal jsonpath.txt '[true]'
-echo "ok jsonpath"
-
-vm_rpmostree --version > version.yaml
-python -c 'import yaml; v=yaml.safe_load(open("version.yaml")); assert("Version" in v["rpm-ostree"])'
-echo "ok yaml version"
-
-# Ensure we return an error when passing a wrong option.
-vm_rpmostree --help | awk '/^$/ {in_commands=0} {if(in_commands==1){print $0}} /^Builtin Commands:/ {in_commands=1}' > commands
-while read command; do
-    if vm_rpmostree $command --n0t-3xisting-0ption &>/dev/null; then
-        assert_not_reached "command $command --n0t-3xisting-0ption was successful"
-    fi
-done < commands
-echo "ok error on unknown command options"
-
-if vm_rpmostree nosuchcommand --nosuchoption 2>err.txt; then
-    assert_not_reached "Expected an error for nosuchcommand"
-fi
-assert_file_has_content err.txt 'Unknown.*command'
-echo "ok error on unknown command"
-
-# Be sure an unprivileged user exists and that we can SSH into it. This is a bit
-# underhanded, but we need a bona fide user session to verify non-priv status,
-# and logging in through SSH is an easy way to achieve that.
-if ! vm_cmd getent passwd testuser; then
-  vm_ansible_inline <<EOF
-- shell: |
-    set -euo pipefail
-    useradd testuser
-    mkdir -pm 0700 /home/testuser/.ssh
-    cp -a /root/.ssh/authorized_keys /home/testuser/.ssh
-    chown -R testuser:testuser /home/testuser/.ssh
-EOF
-fi
-
-# Make sure we can't do various operations as non-root
-vm_build_rpm foo
-if vm_cmd_as testuser rpm-ostree pkg-add foo &> err.txt; then
-    assert_not_reached "Was able to install a package as non-root!"
-fi
-assert_file_has_content err.txt 'PkgChange not allowed for user'
-if vm_cmd_as testuser rpm-ostree reload &> err.txt; then
-    assert_not_reached "Was able to reload as non-root!"
-fi
-assert_file_has_content err.txt 'ReloadConfig not allowed for user'
-echo "ok auth"
-
-# Assert that we can do status as non-root
-vm_cmd_as testuser rpm-ostree status
-echo "ok status doesn't require root"
-
-# StateRoot is only in --verbose
-vm_rpmostree status > status.txt
-assert_not_file_has_content status.txt StateRoot:
-vm_rpmostree status -v > status.txt
-assert_file_has_content status.txt StateRoot:
-echo "ok status text"
-
-# Also check that we can do status as non-root non-active
-vm_cmd runuser -u bin rpm-ostree status
-echo "ok status doesn't require active PAM session"
-
-# Reload as root https://github.com/projectatomic/rpm-ostree/issues/976
-vm_cmd rpm-ostree reload
-echo "ok reload"
-
-stateroot=$(vm_get_booted_stateroot)
-stateroot_dbus=$(echo ${stateroot} | sed -e 's,-,_,')
-vm_cmd dbus-send --system --dest=org.projectatomic.rpmostree1 --print-reply=literal /org/projectatomic/rpmostree1/${stateroot_dbus} org.projectatomic.rpmostree1.OSExperimental.Moo boolean:true > moo.txt
-assert_file_has_content moo.txt '🐄'
-echo "ok moo"
-
-vm_ansible_inline <<EOF
-- shell: |
-    set -xeuo pipefail
-    rpm-ostree cleanup -p
-    originpath=\$(ostree admin --print-current-dir).origin
-    cp -a \${originpath}{,.orig}
-    echo "unconfigured-state=Access to TestOS requires ONE BILLION DOLLARS" >> \${originpath}
-    rpm-ostree reload
-    rpm-ostree status
-    if rpm-ostree upgrade 2>err.txt; then
-       echo "Upgraded from unconfigured-state"
-       exit 1
-    fi
-    grep -qFe 'ONE BILLION DOLLARS' err.txt
-    mv \${originpath}{.orig,}
-    rpm-ostree reload
-EOF
-echo "ok unconfigured status"
-
-# https://github.com/projectatomic/rpm-ostree/issues/1301
-vm_cmd 'mv /etc/ostree/remotes.d{,.orig}'
-vm_cmd systemctl restart rpm-ostreed
-vm_cmd rpm-ostree status > status.txt
-assert_file_has_content status.txt 'Remote.*not found'
-vm_cmd 'mv /etc/ostree/remotes.d{.orig,}'
-echo "ok remote not found"
+# More miscellaneous tests
 
 # Add metadata string containing EnfOfLife attribtue
 META_ENDOFLIFE_MESSAGE="this is a test for metadata message"
@@ -160,10 +49,6 @@ vm_rpmostree rollback
 vm_assert_status_jq ".deployments[0][\"booted\"] == false" \
                     ".deployments[1][\"booted\"] == true"
 echo "ok rollback"
-
-vm_rpmostree status -b > status.txt
-assert_streq $(grep -F -e 'ostree://' status.txt | wc -l) "1"
-echo "ok status -b"
 
 # Pinning
 vm_cmd ostree admin pin 0
@@ -274,7 +159,3 @@ if ! vm_rpmostree install refresh-md-new-pkg --dry-run; then
 fi
 vm_stop_httpd vmcheck
 echo "ok refresh-md"
-
-vm_rpmostree usroverlay
-vm_cmd test -w /usr/bin
-echo "ok usroverlay"
