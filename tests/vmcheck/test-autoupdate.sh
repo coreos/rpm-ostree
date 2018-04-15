@@ -28,37 +28,8 @@ set -x
 # tests
 vm_cmd systemctl disable --now rpm-ostreed-automatic.timer
 
-# Really testing this like a user requires a remote ostree server setup.
-# Let's start by setting up the repo.
-REMOTE_OSTREE=/ostree/repo/tmp/vmcheck-remote
-vm_cmd mkdir -p $REMOTE_OSTREE
-vm_cmd ostree init --repo=$REMOTE_OSTREE --mode=archive
-vm_start_httpd ostree_server $REMOTE_OSTREE 8888
-
-# We need to build up a history on the server. Rather than wasting time
-# composing trees for real, we just use client package layering to create new
-# trees that we then "lift" into the server before cleaning them up client-side.
-
-# steal a commit from the system repo and make a branch out of it
-lift_commit() {
-  checksum=$1; shift
-  branch=$1; shift
-  vm_cmd ostree pull-local --repo=$REMOTE_OSTREE --disable-fsync \
-    /ostree/repo $checksum
-  vm_cmd ostree --repo=$REMOTE_OSTREE refs $branch --delete
-  vm_cmd ostree --repo=$REMOTE_OSTREE refs $checksum --create=$branch
-}
-
-# use a previously stolen commit to create an update on our vmcheck branch,
-# complete with version string and pkglist metadata
-create_update() {
-  branch=$1; shift
-  vm_cmd ostree commit --repo=$REMOTE_OSTREE -b vmcheck \
-    --tree=ref=$branch --add-metadata-string=version=$branch --fsync=no
-  # avoid libtool wrapper here since we're running on the VM and it would try to
-  # cd to topsrcdir/use gcc; libs are installed anyway
-  vm_cmd /var/roothome/sync/.libs/inject-pkglist $REMOTE_OSTREE vmcheck
-}
+# Prepare an OSTree repo with updates
+vm_ostreeupdate_prepare_repo
 
 # (delete ref but don't prune for easier debugging)
 vm_cmd ostree refs --repo=$REMOTE_OSTREE vmcheck --delete
@@ -90,17 +61,17 @@ vm_build_rpm base-pkg-sec-none
 vm_build_rpm base-pkg-sec-low
 vm_build_rpm base-pkg-sec-crit
 vm_rpmostree install base-pkg-{foo,bar,baz,enh,sec-{none,low,crit}}
-lift_commit $(vm_get_pending_csum) v1
+vm_ostreeupdate_lift_commit $(vm_get_pending_csum) v1
 vm_rpmostree cleanup -p
 rm -rf $test_tmpdir/yumrepo
 init_updated_rpmmd_repo
 vm_rpmostree install base-pkg-{foo,bar,boo,enh,sec-{none,low,crit}}
-lift_commit $(vm_get_pending_csum) v2
+vm_ostreeupdate_lift_commit $(vm_get_pending_csum) v2
 vm_rpmostree cleanup -p
 
 # ok, we're done with prep, now let's rebase on the first revision and install a
 # bunch of layered packages
-create_update v1
+vm_ostreeupdate_create v1
 vm_cmd ostree remote add vmcheckmote --no-gpg-verify http://localhost:8888/
 vm_build_rpm layered-cake version 2.1 release 3
 vm_build_rpm layered-enh
@@ -238,7 +209,7 @@ echo "ok --check/--preview layered pkgs off policy"
 
 # ok now let's add ostree updates in the picture
 change_policy check
-create_update v2
+vm_ostreeupdate_create v2
 vm_rpmostree upgrade --trigger-automatic-update-policy
 
 # make sure we only pulled down the commit metadata
