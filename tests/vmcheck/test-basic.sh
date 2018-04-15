@@ -40,6 +40,25 @@ vm_rpmostree status --jsonpath '$.deployments[0].booted' > jsonpath.txt
 assert_file_has_content_literal jsonpath.txt '[true]'
 echo "ok jsonpath"
 
+vm_rpmostree --version > version.yaml
+python -c 'import yaml; v=yaml.safe_load(open("version.yaml")); assert("Version" in v["rpm-ostree"])'
+echo "ok yaml version"
+
+# Ensure we return an error when passing a wrong option.
+vm_rpmostree --help | awk '/^$/ {in_commands=0} {if(in_commands==1){print $0}} /^Builtin Commands:/ {in_commands=1}' > commands
+while read command; do
+    if vm_rpmostree $command --n0t-3xisting-0ption &>/dev/null; then
+        assert_not_reached "command $command --n0t-3xisting-0ption was successful"
+    fi
+done < commands
+echo "ok error on unknown command options"
+
+if vm_rpmostree nosuchcommand --nosuchoption 2>err.txt; then
+    assert_not_reached "Expected an error for nosuchcommand"
+fi
+assert_file_has_content err.txt 'Unknown.*command'
+echo "ok error on unknown command"
+
 # Be sure an unprivileged user exists and that we can SSH into it. This is a bit
 # underhanded, but we need a bona fide user session to verify non-priv status,
 # and logging in through SSH is an easy way to achieve that.
@@ -70,6 +89,13 @@ echo "ok auth"
 vm_cmd_as testuser rpm-ostree status
 echo "ok status doesn't require root"
 
+# StateRoot is only in --verbose
+vm_rpmostree status > status.txt
+assert_not_file_has_content status.txt StateRoot:
+vm_rpmostree status -v > status.txt
+assert_file_has_content status.txt StateRoot:
+echo "ok status text"
+
 # Also check that we can do status as non-root non-active
 vm_cmd runuser -u bin rpm-ostree status
 echo "ok status doesn't require active PAM session"
@@ -77,6 +103,31 @@ echo "ok status doesn't require active PAM session"
 # Reload as root https://github.com/projectatomic/rpm-ostree/issues/976
 vm_cmd rpm-ostree reload
 echo "ok reload"
+
+stateroot=$(vm_get_booted_stateroot)
+stateroot_dbus=$(echo ${stateroot} | sed -e 's,-,_,')
+vm_cmd dbus-send --system --dest=org.projectatomic.rpmostree1 --print-reply=literal /org/projectatomic/rpmostree1/${stateroot_dbus} org.projectatomic.rpmostree1.OSExperimental.Moo boolean:true > moo.txt
+assert_file_has_content moo.txt '🐄'
+echo "ok moo"
+
+vm_ansible_inline <<EOF
+- shell: |
+    set -xeuo pipefail
+    rpm-ostree cleanup -p
+    originpath=\$(ostree admin --print-current-dir).origin
+    cp -a \${originpath}{,.orig}
+    echo "unconfigured-state=Access to TestOS requires ONE BILLION DOLLARS" >> \${originpath}
+    rpm-ostree reload
+    rpm-ostree status
+    if rpm-ostree upgrade 2>err.txt; then
+       echo "Upgraded from unconfigured-state"
+       exit 1
+    fi
+    grep -qFe 'ONE BILLION DOLLARS' err.txt
+    mv \${originpath}{.orig,}
+    rpm-ostree reload
+EOF
+echo "ok unconfigured status"
 
 # https://github.com/projectatomic/rpm-ostree/issues/1301
 vm_cmd 'mv /etc/ostree/remotes.d{,.orig}'
