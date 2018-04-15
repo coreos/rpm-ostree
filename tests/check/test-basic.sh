@@ -24,7 +24,7 @@ export RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK=yes
 
 ensure_dbus
 
-echo "1..26"
+echo "1..20"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -38,10 +38,6 @@ set -x
 OSTREE="ostree --repo=sysroot/ostree/repo"
 REMOTE_OSTREE="ostree --repo=testos-repo --gpg-homedir=${test_tmpdir}/gpghome"
 
-rpm-ostree --version > version.yaml
-python -c 'import yaml; v=yaml.safe_load(open("version.yaml")); assert("Version" in v["rpm-ostree"])'
-echo "ok yaml version"
-
 # This initial deployment gets kicked off with some kernel arguments 
 $OSTREE remote add --set=gpg-verify=false testos file://$(pwd)/testos-repo testos/buildmaster/x86_64-runtime
 $OSTREE pull testos:testos/buildmaster/x86_64-runtime
@@ -49,18 +45,6 @@ ostree admin --sysroot=sysroot deploy --karg=root=LABEL=MOO --karg=quiet --os=te
 
 assert_status_jq '.deployments[0].version == "1.0.10"'
 echo "ok status shows right version"
-
-rpm-ostree status > status.txt
-assert_file_has_content status.txt '  ostree://testos:testos/buildmaster/x86_64-runtime'
-assert_file_has_content status.txt 'Version: 1.0.10'
-assert_not_file_has_content status.txt StateRoot:
-rpm-ostree status -v > status.txt
-assert_file_has_content status.txt StateRoot:
-echo "ok status text"
-
-dbus-send --session --dest=org.projectatomic.rpmostree1 --print-reply=literal /org/projectatomic/rpmostree1/testos org.projectatomic.rpmostree1.OSExperimental.Moo boolean:true > moo.txt
-assert_file_has_content moo.txt '🐄'
-echo "ok experimental"
 
 os_repository_new_commit
 rpm-ostree upgrade --os=testos
@@ -176,30 +160,6 @@ assert_status_jq '.deployments[0].origin == "testos:testos/buildmaster/x86_64-ru
 echo "ok rebase refspec syntax"
 
 rpm-ostree rebase --os=testos :another-branch
-originpath=$(ostree admin --sysroot=sysroot --print-current-dir).origin
-echo "unconfigured-state=Access to TestOS requires ONE BILLION DOLLARS" >> ${originpath}
-rpm-ostree reload
-rpm-ostree status
-if rpm-ostree upgrade --os=testos 2>err.txt; then
-    assert_not_reached "Upgraded from unconfigured-state"
-fi
-assert_file_has_content err.txt 'ONE BILLION DOLLARS'
-echo "ok unconfigured status"
-
-# Ensure it returns an error when passing a wrong option.
-rpm-ostree --help | awk '/^$/ {in_commands=0} {if(in_commands==1){print $0}} /^Builtin Commands:/ {in_commands=1}' > commands
-while read command; do
-    if rpm-ostree $command --n0t-3xisting-0ption &>/dev/null; then
-        assert_not_reached "command $command --n0t-3xisting-0ption was successful"
-    fi
-done < commands
-echo "ok error on unknown command options"
-
-if rpm-ostree nosuchcommand --nosuchoption 2>err.txt; then
-    assert_not_reached "Expected an error for nosuchcommand"
-fi
-assert_file_has_content err.txt 'Unknown.*command'
-echo "ok error on unknown command"
 
 if ! skip_one_with_asan; then
     cat >test-rpmostree-gi-arch <<EOF

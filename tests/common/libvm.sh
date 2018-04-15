@@ -303,6 +303,10 @@ vm_has_dormant_packages() {
     ! vm_has_layered_packages "$@"
 }
 
+vm_get_booted_stateroot() {
+    vm_get_booted_deployment_info osname
+}
+
 # retrieve the checksum of the currently booted deployment
 vm_get_booted_csum() {
   vm_get_booted_deployment_info checksum
