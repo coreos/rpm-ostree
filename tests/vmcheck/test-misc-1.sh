@@ -26,6 +26,20 @@ set -x
 
 # Miscellaneous basic tests; most are nondestructive
 
+# https://github.com/projectatomic/rpm-ostree/issues/1301
+# FIXME: temporarily disabled as it really wants to start
+# from a fresh instance and we don't currently guarantee that.
+#
+# But we'll rework the test suite to do that soon like
+# https://github.com/ostreedev/ostree/pull/1462
+# vm_cmd 'mv /etc/ostree/remotes.d{,.orig}'
+# vm_cmd systemctl restart rpm-ostreed
+# vm_cmd rpm-ostree status > status.txt
+# assert_file_has_content status.txt 'Remote.*not found'
+# vm_cmd 'mv /etc/ostree/remotes.d{.orig,}'
+# vm_rpmostree reload
+# echo "ok remote not found"
+
 # make sure that package-related entries are always present,
 # even when they're empty
 vm_assert_status_jq \
@@ -138,12 +152,3 @@ vm_ansible_inline <<EOF
     rpm-ostree reload
 EOF
 echo "ok unconfigured status"
-
-# https://github.com/projectatomic/rpm-ostree/issues/1301
-vm_cmd 'mv /etc/ostree/remotes.d{,.orig}'
-vm_cmd systemctl restart rpm-ostreed
-vm_cmd rpm-ostree status > status.txt
-assert_file_has_content status.txt 'Remote.*not found'
-vm_cmd 'mv /etc/ostree/remotes.d{.orig,}'
-vm_rpmostree reload
-echo "ok remote not found"
