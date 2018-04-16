@@ -24,7 +24,7 @@ export RPMOSTREE_SUPPRESS_REQUIRES_ROOT_CHECK=yes
 
 ensure_dbus
 
-echo "1..20"
+echo "1..18"
 
 setup_os_repository "archive-z2" "syslinux"
 
@@ -160,36 +160,3 @@ assert_status_jq '.deployments[0].origin == "testos:testos/buildmaster/x86_64-ru
 echo "ok rebase refspec syntax"
 
 rpm-ostree rebase --os=testos :another-branch
-
-if ! skip_one_with_asan; then
-    cat >test-rpmostree-gi-arch <<EOF
-#!/usr/bin/python2
-import gi
-gi.require_version("RpmOstree", "1.0")
-from gi.repository import RpmOstree
-assert RpmOstree.get_basearch() == 'x86_64'
-assert RpmOstree.varsubst_basearch('http://example.com/foo/\${basearch}/bar') == 'http://example.com/foo/x86_64/bar'
-EOF
-    chmod a+x test-rpmostree-gi-arch
-    case $(arch) in
-        x86_64) ./test-rpmostree-gi-arch
-                echo "ok rpmostree arch"
-                ;;
-        *) echo "ok # SKIP Skipping RPM architecture test on $(arch)"
-    esac
-fi
-
-if ! skip_one_with_asan; then
-    cat >test-rpmostree-gi <<EOF
-#!/usr/bin/python2
-import gi
-gi.require_version("RpmOstree", "1.0")
-from gi.repository import RpmOstree
-assert RpmOstree.check_version(2017, 6)
-# If this fails for you, please come back in a time machine and say hi
-assert not RpmOstree.check_version(3000, 1)
-EOF
-    chmod a+x test-rpmostree-gi
-    ./test-rpmostree-gi
-    echo "ok rpmostree version"
-fi
