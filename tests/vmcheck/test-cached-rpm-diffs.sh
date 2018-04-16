@@ -49,8 +49,8 @@ rebase_csum=$(vm_cmd ostree commit -b vmcheck_tmp/other_branch --fsync=no \
 vm_rpmostree cleanup -p
 echo "ok setup"
 
-osname=$(vm_get_booted_deployment_info osname)
-ospath=/org/projectatomic/rpmostree1/${osname//-/_}
+stateroot=$(vm_get_booted_stateroot)
+ospath=/org/projectatomic/rpmostree1/${stateroot//-/_}
 
 call_dbus() {
   method=$1; shift

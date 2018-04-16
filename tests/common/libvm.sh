@@ -303,6 +303,10 @@ vm_has_dormant_packages() {
     ! vm_has_layered_packages "$@"
 }
 
+vm_get_booted_stateroot() {
+    vm_get_booted_deployment_info osname
+}
+
 # retrieve the checksum of the currently booted deployment
 vm_get_booted_csum() {
   vm_get_booted_deployment_info checksum
@@ -443,4 +447,38 @@ vm_stop_httpd() {
   vm_cmd systemctl stop $name
   set +E
   trap - ERR
+}
+
+vm_ostreeupdate_prepare_repo() {
+  # Really testing this like a user requires a remote ostree server setup.
+  # Let's start by setting up the repo.
+  REMOTE_OSTREE=/ostree/repo/tmp/vmcheck-remote
+  vm_cmd mkdir -p $REMOTE_OSTREE
+  vm_cmd ostree init --repo=$REMOTE_OSTREE --mode=archive
+  vm_start_httpd ostree_server $REMOTE_OSTREE 8888
+}
+
+# APIs to build up a history on the server. Rather than wasting time
+# composing trees for real, we just use client package layering to create new
+# trees that we then "lift" into the server before cleaning them up client-side.
+
+# steal a commit from the system repo and make a branch out of it
+vm_ostreeupdate_lift_commit() {
+  checksum=$1; shift
+  branch=$1; shift
+  vm_cmd ostree pull-local --repo=$REMOTE_OSTREE --disable-fsync \
+    /ostree/repo $checksum
+  vm_cmd ostree --repo=$REMOTE_OSTREE refs $branch --delete
+  vm_cmd ostree --repo=$REMOTE_OSTREE refs $checksum --create=$branch
+}
+
+# use a previously stolen commit to create an update on our vmcheck branch,
+# complete with version string and pkglist metadata
+vm_ostreeupdate_create() {
+  branch=$1; shift
+  vm_cmd ostree commit --repo=$REMOTE_OSTREE -b vmcheck \
+    --tree=ref=$branch --add-metadata-string=version=$branch --fsync=no
+  # avoid libtool wrapper here since we're running on the VM and it would try to
+  # cd to topsrcdir/use gcc; libs are installed anyway
+  vm_cmd /var/roothome/sync/.libs/inject-pkglist $REMOTE_OSTREE vmcheck
 }

@@ -209,7 +209,10 @@ vm_cmd systemctl restart rpm-ostreed
 echo "ok cancel infinite post via `rpm-ostree cancel`"
 
 # Test rm -rf /!
-vm_cmd 'useradd testuser || true'
+vm_ansible_inline <<EOF
+- user:
+    name: testuser
+EOF
 vm_cmd touch /home/testuser/somedata /tmp/sometmpfile /var/tmp/sometmpfile
 vm_build_rpm rmrf post "rm --no-preserve-root -rf / &>/dev/null || true"
 if vm_rpmostree install rmrf 2>err.txt; then
