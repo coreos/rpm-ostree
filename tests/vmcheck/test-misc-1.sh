@@ -78,16 +78,15 @@ echo "ok error on unknown command"
 # Be sure an unprivileged user exists and that we can SSH into it. This is a bit
 # underhanded, but we need a bona fide user session to verify non-priv status,
 # and logging in through SSH is an easy way to achieve that.
-if ! vm_cmd getent passwd testuser; then
-  vm_ansible_inline <<EOF
+vm_ansible_inline <<EOF
+- user:
+    name: testuser
 - shell: |
     set -euo pipefail
-    useradd testuser
     mkdir -pm 0700 /home/testuser/.ssh
     cp -a /root/.ssh/authorized_keys /home/testuser/.ssh
     chown -R testuser:testuser /home/testuser/.ssh
 EOF
-fi
 
 # Make sure we can't do various operations as non-root
 vm_build_rpm foo
