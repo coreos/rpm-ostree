@@ -124,8 +124,8 @@ vm_cmd rpm-ostree reload
 echo "ok reload"
 
 stateroot=$(vm_get_booted_stateroot)
-stateroot_dbus=$(echo ${stateroot} | sed -e 's,-,_,')
-vm_cmd dbus-send --system --dest=org.projectatomic.rpmostree1 --print-reply=literal /org/projectatomic/rpmostree1/${stateroot_dbus} org.projectatomic.rpmostree1.OSExperimental.Moo boolean:true > moo.txt
+ospath=/org/projectatomic/rpmostree1/${stateroot//-/_}
+vm_cmd dbus-send --system --dest=org.projectatomic.rpmostree1 --print-reply=literal $ospath org.projectatomic.rpmostree1.OSExperimental.Moo boolean:true > moo.txt
 assert_file_has_content moo.txt '🐄'
 echo "ok moo"
 
