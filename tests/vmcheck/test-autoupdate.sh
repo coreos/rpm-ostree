@@ -24,55 +24,11 @@ set -euo pipefail
 
 set -x
 
-# first, let's make sure the timer is disabled so it doesn't mess up with our
-# tests
-vm_cmd systemctl disable --now rpm-ostreed-automatic.timer
-
 # Prepare an OSTree repo with updates
-vm_ostreeupdate_prepare_repo
-
-# (delete ref but don't prune for easier debugging)
-vm_cmd ostree refs --repo=$REMOTE_OSTREE vmcheck --delete
-
-# this is split out for the sole purpose of making iterating easier when hacking
-# (see below for more details)
-init_updated_rpmmd_repo() {
-  vm_build_rpm base-pkg-foo version 1.4 release 8 # upgraded
-  vm_build_rpm base-pkg-bar version 0.9 release 3 # downgraded
-  vm_build_rpm base-pkg-boo version 3.7 release 2.11 # added
-  vm_uinfo add VMCHECK-ENH enhancement
-  vm_uinfo add VMCHECK-SEC-NONE security none
-  vm_uinfo add VMCHECK-SEC-LOW security low
-  vm_uinfo add VMCHECK-SEC-CRIT security critical
-  vm_build_rpm base-pkg-enh version 2.0 uinfo VMCHECK-ENH
-  vm_build_rpm base-pkg-sec-none version 2.0 uinfo VMCHECK-SEC-NONE
-  vm_build_rpm base-pkg-sec-low version 2.0 uinfo VMCHECK-SEC-LOW
-  vm_build_rpm base-pkg-sec-crit version 2.0 uinfo VMCHECK-SEC-CRIT
-}
-
-# now let's build some pkgs that we'll jury-rig into a base update
-# this whole block can be commented out (except the init_updated_rpmmd_repo
-# call) after the first run for a speed-up when iterating locally
-vm_build_rpm base-pkg-foo version 1.4 release 7
-vm_build_rpm base-pkg-bar
-vm_build_rpm base-pkg-baz version 1.1 release 1
-vm_build_rpm base-pkg-enh
-vm_build_rpm base-pkg-sec-none
-vm_build_rpm base-pkg-sec-low
-vm_build_rpm base-pkg-sec-crit
-vm_rpmostree install base-pkg-{foo,bar,baz,enh,sec-{none,low,crit}}
-vm_ostreeupdate_lift_commit $(vm_get_pending_csum) v1
-vm_rpmostree cleanup -p
-rm -rf $test_tmpdir/yumrepo
-init_updated_rpmmd_repo
-vm_rpmostree install base-pkg-{foo,bar,boo,enh,sec-{none,low,crit}}
-vm_ostreeupdate_lift_commit $(vm_get_pending_csum) v2
-vm_rpmostree cleanup -p
+vm_ostreeupdate_prepare
 
 # ok, we're done with prep, now let's rebase on the first revision and install a
 # bunch of layered packages
-vm_ostreeupdate_create v1
-vm_cmd ostree remote add vmcheckmote --no-gpg-verify http://localhost:8888/
 vm_build_rpm layered-cake version 2.1 release 3
 vm_build_rpm layered-enh
 vm_build_rpm layered-sec-none
@@ -87,8 +43,8 @@ vm_rpmostree rebase vmcheckmote:vmcheck \
 vm_reboot
 vm_rpmostree status -v
 vm_assert_status_jq \
-    ".deployments[0][\"origin\"] == \"vmcheckmote:vmcheck\"" \
-    ".deployments[0][\"version\"] == \"v1\"" \
+    '.deployments[0]["origin"] == "vmcheckmote:vmcheck"' \
+    '.deployments[0]["version"] == "v1"' \
     '.deployments[0]["packages"]|length == 5' \
     '.deployments[0]["packages"]|index("layered-cake") >= 0'
 echo "ok prep"
@@ -101,7 +57,7 @@ change_policy() {
   vm_ansible_inline <<EOF
 - shell: |
     cp /usr/etc/rpm-ostreed.conf /etc
-    echo -e "[Daemon]\nAutomaticUpdatePolicy=$policy" > /etc/rpm-ostreed.conf 
+    echo -e "[Daemon]\nAutomaticUpdatePolicy=$policy" > /etc/rpm-ostreed.conf
     rpm-ostree reload
 EOF
 }
