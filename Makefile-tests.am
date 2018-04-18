@@ -54,7 +54,6 @@ uninstalled_test_programs = \
 	$(NULL)
 
 uninstalled_test_scripts = \
-	tests/check/test-upgrade-rebase.sh \
 	tests/check/test-lib-introspection.sh \
 	tests/check/test-ucontainer.sh \
 	$(NULL)
