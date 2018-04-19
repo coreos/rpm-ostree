@@ -2802,11 +2802,31 @@ build_rootfs_usrlinks (RpmOstreeContext *self,
   return TRUE;
 }
 
+/* Order by decreasing string length, used by package removals/replacements */
+static int
+compare_strlen (const void *a,
+                const void *b,
+                void *      data)
+{
+  size_t a_len = strlen (a);
+  size_t b_len = strlen (b);
+  if (a_len == b_len)
+    return 0;
+  else if (a_len > b_len)
+    return -1;
+  return 1;
+}
+
+/* Given a single package, remove its files (non-directories), unless they're
+ * included in @files_skip.  Add its directories to @dirs_to_remove, which
+ * are handled in a second pass.
+ */
 static gboolean
 delete_package_from_root (RpmOstreeContext *self,
                           rpmte         pkg,
                           int           rootfs_dfd,
                           GHashTable   *files_skip,
+                          GSequence    *dirs_to_remove,
                           GCancellable *cancellable,
                           GError      **error)
 {
@@ -2854,8 +2874,51 @@ delete_package_from_root (RpmOstreeContext *self,
       if (!g_str_has_prefix (fn, "usr/"))
         continue;
 
-      if (!glnx_shutil_rm_rf_at (rootfs_dfd, fn, cancellable, error))
-        return FALSE;
+      /* Delete files first, we'll handle directories next */
+      if (S_ISDIR (mode))
+        g_sequence_insert_sorted (dirs_to_remove, g_strdup (fn), compare_strlen, NULL);
+      else
+        {
+          if (unlinkat (rootfs_dfd, fn, 0) < 0)
+            {
+              if (errno != ENOENT)
+                return glnx_throw_errno_prefix (error, "unlinkat(%s)", fn);
+            }
+        }
+    }
+
+  return TRUE;
+}
+
+/* Process the directories which we were queued up by
+ * delete_package_from_root().  We ignore non-empty directories
+ * since it's valid for a package being replaced to own a directory
+ * to which dependent packages install files (e.g. systemd).
+ */
+static gboolean
+handle_package_deletion_directories (int           rootfs_dfd,
+                                     GSequence    *dirs_to_remove,
+                                     GCancellable *cancellable,
+                                     GError      **error)
+{
+  /* We want to perform a bottom-up removal of directories. This is implemented
+   * by having a sequence of filenames sorted by decreasing length.  A filename
+   * of greater length must be a subdirectory, or unrelated.
+   *
+   * If a directory isn't empty, that's fine - a package may own
+   * the directory, but it's valid for other packages to put content under it.
+   * Particularly while we're doing a replacement.
+   */
+  GSequenceIter *iter = g_sequence_get_begin_iter (dirs_to_remove);
+  while (!g_sequence_iter_is_end (iter))
+    {
+      const char *fn = g_sequence_get (iter);
+      if (unlinkat (rootfs_dfd, fn, AT_REMOVEDIR) < 0)
+        {
+          if (!G_IN_SET (errno, ENOENT, EEXIST, ENOTEMPTY))
+            return glnx_throw_errno_prefix (error, "rmdir(%s)", fn);
+        }
+      iter = g_sequence_iter_next (iter);
     }
 
   return TRUE;
@@ -3776,6 +3839,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                  &files_skip_delete, cancellable, error))
     return FALSE;
 
+  g_autoptr(GSequence) dirs_to_remove = g_sequence_new (g_free);
   for (guint i = 0; i < n_rpmts_elements; i++)
     {
       rpmte te = rpmtsElement (ordering_ts, i);
@@ -3786,11 +3850,16 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       g_assert_cmpint (type, ==, TR_REMOVED);
 
       if (!delete_package_from_root (self, te, tmprootfs_dfd, files_skip_delete,
-                                     cancellable, error))
+                                     dirs_to_remove, cancellable, error))
         return FALSE;
       n_rpmts_done++;
       rpmostree_output_progress_n_items ("Building filesystem", n_rpmts_done, n_rpmts_elements);
     }
+  g_clear_pointer (&files_skip_delete, g_hash_table_unref);
+
+  if (!handle_package_deletion_directories (tmprootfs_dfd, dirs_to_remove, cancellable, error))
+    return FALSE;
+  g_clear_pointer (&dirs_to_remove, g_sequence_free);
 
   for (guint i = 0; i < n_rpmts_elements; i++)
     {
