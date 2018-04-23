@@ -220,6 +220,8 @@ void rpmostree_context_set_tmprootfs_dfd (RpmOstreeContext *self,
                                           int               dfd);
 int rpmostree_context_get_tmprootfs_dfd  (RpmOstreeContext *self);
 
+gboolean rpmostree_context_get_kernel_changed (RpmOstreeContext *self);
+
 /* NB: tmprootfs_dfd is allowed to have pre-existing data */
 /* devino_cache can be NULL if no previous cache established */
 gboolean rpmostree_context_assemble (RpmOstreeContext      *self,

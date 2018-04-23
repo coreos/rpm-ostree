@@ -35,6 +35,11 @@ rpmostree_find_kernel (int rootfs_dfd,
                        GError **error);
 
 gboolean
+rpmostree_kernel_remove (int rootfs_dfd,
+                         GCancellable *cancellable,
+                         GError **error);
+
+gboolean
 rpmostree_finalize_kernel (int rootfs_dfd,
                            const char *bootdir,
                            const char *kver,

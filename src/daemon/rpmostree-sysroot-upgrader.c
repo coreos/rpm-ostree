@@ -961,23 +961,47 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
   if (!rpmostree_rootfs_postprocess_common (self->tmprootfs_dfd, cancellable, error))
     return FALSE;
 
-  if (rpmostree_origin_get_regenerate_initramfs (self->origin))
+  /* If either the kernel or the initramfs config changed,
+   * we need to load all of the kernel state.
+   */
+  const gboolean kernel_or_initramfs_changed =
+    rpmostree_context_get_kernel_changed (self->ctx) ||
+    rpmostree_origin_get_regenerate_initramfs (self->origin);
+  g_autoptr(GVariant) kernel_state = NULL;
+  const char *bootdir = NULL;
+  const char *kver = NULL;
+  const char *kernel_path = NULL;
+  const char *initramfs_path = NULL;
+  if (kernel_or_initramfs_changed)
     {
-      const char *const* add_dracut_argv = rpmostree_origin_get_initramfs_args (self->origin);
-
-      rpmostree_output_task_begin ("Generating initramfs");
-
-      g_autoptr(GVariant) kernel_state = rpmostree_find_kernel (self->tmprootfs_dfd, cancellable, error);
+      kernel_state = rpmostree_find_kernel (self->tmprootfs_dfd, cancellable, error);
       if (!kernel_state)
         return FALSE;
-      const char *bootdir;
-      const char *kver;
-      const char *kernel_path;
-      const char *initramfs_path;
       g_variant_get (kernel_state, "(&s&s&sm&s)",
                      &kver, &bootdir,
                      &kernel_path, &initramfs_path);
-      g_assert (initramfs_path);
+    }
+
+  /* If *just* the kernel changed, all we need to do is run depmod here.
+   * see also process_kernel_and_initramfs() in the postprocess code
+   * for server-side assembly.
+   */
+  if (rpmostree_context_get_kernel_changed (self->ctx))
+    {
+      g_assert (kernel_state && kver);
+      if (!rpmostree_postprocess_run_depmod (self->tmprootfs_dfd, kver, TRUE, cancellable, error))
+        return FALSE;
+    }
+
+  if (kernel_or_initramfs_changed)
+    {
+      const char *const* add_dracut_argv = NULL;
+      if (rpmostree_origin_get_regenerate_initramfs (self->origin))
+         add_dracut_argv = rpmostree_origin_get_initramfs_args (self->origin);
+
+      rpmostree_output_task_begin ("Generating initramfs");
+
+      g_assert (kernel_state && kernel_path);
 
       g_auto(GLnxTmpfile) initramfs_tmpf = { 0, };
       if (!rpmostree_run_dracut (self->tmprootfs_dfd, add_dracut_argv, kver,
