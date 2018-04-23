@@ -38,6 +38,7 @@
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-scripts.h"
+#include "rpmostree-kernel.h"
 #include "rpmostree-importer.h"
 #include "rpmostree-output.h"
 
@@ -3665,6 +3666,32 @@ rpmostree_context_get_tmprootfs_dfd  (RpmOstreeContext *self)
   return self->tmprootfs_dfd;
 }
 
+static gboolean
+pkg_name_is_kernel (const char *name)
+{
+  return g_str_equal (name, "kernel") || g_str_equal (name, "kernel-core");
+}
+
+/* Determine if a txn element contains vmlinuz.  TODO: Check via provides?
+ * There's also some hacks for this in libdnf.
+ */
+static gboolean
+rpmte_is_kernel (rpmte te)
+{
+  return pkg_name_is_kernel (rpmteN (te));
+}
+
+/* TRUE if a package providing vmlinuz changed in this transaction;
+ * normally this is for `override replace` operations.
+ * The core will not handle things like initramfs regeneration,
+ * this is done in the sysroot upgrader.
+ */
+gboolean
+rpmostree_context_get_kernel_changed (RpmOstreeContext *self)
+{
+  return self->kernel_changed;
+}
+
 gboolean
 rpmostree_context_assemble (RpmOstreeContext      *self,
                             GCancellable          *cancellable,
@@ -3849,6 +3876,17 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         continue;
       g_assert_cmpint (type, ==, TR_REMOVED);
 
+      if (rpmte_is_kernel (te))
+        {
+          self->kernel_changed = TRUE;
+          /* Remove all of our kernel data first, to ensure it's done
+           * consistently. For example, in some of the rpmostree kernel handling code we
+           * won't look for an initramfs if the vmlinuz binary isn't found.
+           */
+          if (!rpmostree_kernel_remove (tmprootfs_dfd, cancellable, error))
+            return FALSE;
+        }
+
       if (!delete_package_from_root (self, te, tmprootfs_dfd, files_skip_delete,
                                      dirs_to_remove, cancellable, error))
         return FALSE;
@@ -3873,6 +3911,9 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       DnfPackage *pkg = (void*)rpmteKey (te);
       if (pkg == filesystem_package)
         continue;
+
+      if (rpmte_is_kernel (te))
+        self->kernel_changed = TRUE;
 
       /* The "setup" package currently contains /etc/passwd; in the treecompose
        * case we need to inject that beforehand, so use "add files" just for

@@ -147,6 +147,61 @@ find_ensure_one_subdirectory (int            rootfs_dfd,
   return TRUE;
 }
 
+static gboolean
+kernel_remove_in (int rootfs_dfd,
+                  const char *bootdir,
+                  GCancellable *cancellable,
+                  GError **error)
+{
+  g_autofree char* kernel_path = NULL;
+  g_autofree char* initramfs_path = NULL;
+  if (!find_kernel_and_initramfs_in_bootdir (rootfs_dfd, bootdir,
+                                             &kernel_path, &initramfs_path,
+                                             cancellable, error))
+    return FALSE;
+
+  if (kernel_path)
+    {
+      if (!glnx_unlinkat (rootfs_dfd, kernel_path, 0, error))
+        return FALSE;
+    }
+  if (initramfs_path)
+    {
+      if (!glnx_unlinkat (rootfs_dfd, initramfs_path, 0, error))
+        return FALSE;
+    }
+
+  return TRUE;
+
+}
+
+/* Given a root filesystem, delete all kernel/initramfs data from it.
+ * The rpm filelist for the kernel isn't aware of all the places we
+ * copy the data, such as `/usr/lib/ostree-boot`.
+ * Used by `rpm-ostree override-replace ./kernel-42.x86_64.rpm`.
+ */
+gboolean
+rpmostree_kernel_remove (int rootfs_dfd,
+                         GCancellable *cancellable,
+                         GError **error)
+{
+  g_autofree char* modversion_dir = NULL;
+  if (!find_ensure_one_subdirectory (rootfs_dfd, "usr/lib/modules",
+                                     &modversion_dir, cancellable, error))
+    return FALSE;
+  if (modversion_dir)
+    {
+      if (!kernel_remove_in (rootfs_dfd, modversion_dir, cancellable, error))
+        return FALSE;
+    }
+  if (!kernel_remove_in (rootfs_dfd, "usr/lib/ostree-boot", cancellable, error))
+    return FALSE;
+  if (!kernel_remove_in (rootfs_dfd, "boot", cancellable, error))
+    return FALSE;
+
+  return TRUE;
+}
+
 /* Given a root filesystem, return a GVariant of format (sssms):
  *  - kver: uname -r equivalent
  *  - bootdir: Path to the boot directory
@@ -388,10 +443,15 @@ rpmostree_run_dracut (int     rootfs_dfd,
   g_autoptr(GPtrArray) rebuild_argv = NULL;
   g_auto(GLnxTmpfile) tmpf = { 0, };
 
-  g_assert (argv != NULL || rebuild_from_initramfs != NULL);
+  /* Previously we used to error out if argv or rebuild_from_initramfs were both
+   * not set; now we simply use the defaults (which in Fedora today also means
+   * implicitly hostonly). That case is for `rpm-ostree override replace
+   * kernel.*.x86_64.rpm`.
+   */
 
   if (rebuild_from_initramfs)
     {
+      g_assert (argv == NULL);
       rebuild_argv = g_ptr_array_new ();
       g_ptr_array_add (rebuild_argv, "--rebuild");
       g_ptr_array_add (rebuild_argv, (char*)rebuild_from_initramfs);

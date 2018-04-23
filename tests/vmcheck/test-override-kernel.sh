@@ -49,4 +49,9 @@ assert_file_has_content_literal new-dblist.txt 'kernel-4.13.9-300.fc27'
 if grep -q -F -e "${orig_kernel}" new-dblist.txt; then
     fatal "Found kernel: ${line}"
 fi
+newroot=$(vm_get_deployment_root 0)
+find ${newroot}/usr/lib/modules -maxdepth 1 -type d > modules-dirs.txt
+assert_streq $(wc -l modules-dirs.txt) "2"
+assert_file_has_content_literal modules-dirs.txt '4.13.9-300.fc27'
+
 echo "ok override kernel"
