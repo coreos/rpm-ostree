@@ -351,6 +351,40 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
   return TRUE;
 }
 
+/* Print the result of rpmostree_context_get_rpmmd_repo_commit_metadata() */
+static void
+print_origin_repos (gboolean host_endian,
+                    guint maxkeylen, GVariantDict *commit_meta)
+{
+  g_autoptr(GVariant) reposdata =
+    g_variant_dict_lookup_value (commit_meta, "rpmostree.rpmmd-repos", G_VARIANT_TYPE ("aa{sv}"));
+
+  if (!reposdata)
+    return;
+
+  const guint n = g_variant_n_children (reposdata);
+  for (guint i = 0; i < n; i++)
+    {
+      g_autoptr(GVariant) child = g_variant_get_child_value (reposdata, i);
+      g_autoptr(GVariantDict) cdict = g_variant_dict_new (child);
+
+      const char *id = NULL;
+      if (!g_variant_dict_lookup (cdict, "id", "&s", &id))
+        continue;
+      guint64 ts;
+      if (!g_variant_dict_lookup (cdict, "timestamp", "t", &ts))
+        continue;
+      /* `compose tree` commits are canonicalized to BE, but client-side commits
+       * are not.  Whee.
+       */
+      if (!host_endian)
+        ts = GUINT64_FROM_BE (ts);
+      g_autofree char *timestamp_string = rpmostree_timestamp_str_from_unix_utc (ts);
+      g_print ("  %*s%s %s (%s)\n", maxkeylen + 2, " ",
+               libsd_special_glyph (TREE_RIGHT), id, timestamp_string);
+    }
+}
+
 static gboolean
 print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
                       GVariant         *child,
@@ -536,8 +570,12 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
         rpmostree_print_kv ("BootedBaseCommit", max_key_len, base_checksum);
       else
         rpmostree_print_kv ("BaseCommit", max_key_len, base_checksum);
+      if (opt_verbose)
+        print_origin_repos (FALSE, max_key_len, commit_meta_dict);
       if (opt_verbose || have_any_live_overlay)
         rpmostree_print_kv ("Commit", max_key_len, checksum);
+      if (opt_verbose)
+        print_origin_repos (TRUE, max_key_len, layered_commit_meta_dict);
     }
   else if (is_ostree_or_verbose)
     {
@@ -545,6 +583,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
         rpmostree_print_kv ("BootedCommit", max_key_len, checksum);
       if (!have_live_changes || opt_verbose)
         rpmostree_print_kv ("Commit", max_key_len, checksum);
+      if (opt_verbose)
+        print_origin_repos (FALSE, max_key_len, commit_meta_dict);
     }
 
   if (live_inprogress)
