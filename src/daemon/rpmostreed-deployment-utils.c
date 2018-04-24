@@ -296,7 +296,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   /* We used to bridge individual keys, but that was annoying; just pass through all
    * of the commit metadata.
    */
-  { g_autoptr(GVariant) base_meta = g_variant_get_child_value (commit, 0);
+  { g_autoptr(GVariant) base_meta = g_variant_get_child_value (base_commit, 0);
     g_variant_dict_insert (&dict, "base-commit-meta", "@a{sv}", base_meta);
   }
   variant_add_commit_details (&dict, NULL, commit);

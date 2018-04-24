@@ -102,6 +102,8 @@ vm_assert_status_jq \
   '.deployments[0]["pending-base-checksum"]|not' \
   '.deployments[0]["base-commit-meta"]' \
   '.deployments[0]["layered-commit-meta"]["rpmostree.clientlayer_version"] > 1'
+vm_rpmostree status --verbose > verbose-status.txt
+assert_file_has_content_literal '└─ test-repo'
 
 vm_assert_layered_pkg foo-1.0 present
 echo "ok pkg foo added"
