@@ -196,7 +196,8 @@ apply_revision_override (RpmostreedTransaction    *transaction,
  * https://github.com/projectatomic/rpm-ostree/pull/1268 */
 static gboolean
 generate_update_variant (OstreeRepo       *repo,
-                         OstreeDeployment *deployment,
+                         OstreeDeployment *booted_deployment,
+                         OstreeDeployment *staged_deployment,
                          DnfSack          *sack,
                          GCancellable     *cancellable,
                          GError          **error)
@@ -212,8 +213,8 @@ generate_update_variant (OstreeRepo       *repo,
     return FALSE;
 
   g_autoptr(GVariant) update = NULL;
-  if (!rpmostreed_update_generate_variant (deployment, repo, sack, &update,
-                                           cancellable, error))
+  if (!rpmostreed_update_generate_variant (booted_deployment, staged_deployment, repo, sack,
+                                           &update, cancellable, error))
     return FALSE;
 
   if (update != NULL)
@@ -342,7 +343,8 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
        * that's all we updated here. This conflicts with auto-updates for now, though we
        * need better test coverage before uniting those two paths. */
       OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
-      if (!generate_update_variant (repo, booted_deployment, NULL, cancellable, error))
+      if (!generate_update_variant (repo, booted_deployment, NULL, NULL,
+                                    cancellable, error))
         return FALSE;
     }
 
@@ -833,6 +835,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   /* https://github.com/projectatomic/rpm-ostree/issues/454 */
+  gboolean is_upgrade = FALSE;
   g_autoptr(GString) txn_title = g_string_new ("");
   if (is_install)
     g_string_append (txn_title, "install");
@@ -843,7 +846,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   else if (self->revision)
     g_string_append (txn_title, "deploy");
   else
-    g_string_append (txn_title, "upgrade");
+    {
+      is_upgrade = TRUE; /* XXX: strengthen how we determine this */
+      g_string_append (txn_title, "upgrade");
+    }
 
   /* so users know we were probably fired by the automated timer when looking at status */
   if (cache_only)
@@ -1101,9 +1107,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return glnx_throw (error, "Refusing to download rpm-md for offline OS '%s'",
                            self->osname);
 
-      g_autoptr(DnfSack) sack = NULL;
 
       /* XXX: in rojig mode we'll want to do this unconditionally */
+      g_autoptr(DnfSack) sack = NULL;
       if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
         {
           /* we always want to force a refetch of the metadata */
@@ -1112,7 +1118,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             return FALSE;
         }
 
-      if (!generate_update_variant (repo, booted_deployment, sack, cancellable, error))
+      if (!generate_update_variant (repo, booted_deployment, NULL, sack,
+                                    cancellable, error))
         return FALSE;
 
       /* Note early return */
@@ -1153,7 +1160,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           return TRUE;
         }
 
-      if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
+      g_autoptr(OstreeDeployment) new_deployment = NULL;
+      if (!rpmostree_sysroot_upgrader_deploy (upgrader, &new_deployment,
+                                              cancellable, error))
         return FALSE;
 
       /* Are we rebasing?  May want to delete the previous ref */
@@ -1171,6 +1180,28 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
               (void) ostree_repo_set_ref_immediate (repo, remote, ref, NULL,
                                                     cancellable, NULL);
             }
+        }
+
+      /* Always write out an update variant on vanilla upgrades since it's clearly the most
+       * up to date. If autoupdates "check" mode is enabled, the *next* run might yet
+       * overwrite it again because we always diff against the booted deployment. */
+      if (is_upgrade)
+        {
+          OstreeDeployment *booted_deployment =
+            ostree_sysroot_get_booted_deployment (sysroot);
+
+          g_autoptr(DnfSack) sack = NULL;
+          if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
+            {
+              /* don't force a refresh; we want the same sack state used by the core */
+              if (!get_sack_for_booted (sysroot, repo, booted_deployment, FALSE, &sack,
+                                        cancellable, error))
+                return FALSE;
+            }
+
+          if (!generate_update_variant (repo, booted_deployment, new_deployment, sack,
+                                        cancellable, error))
+            return FALSE;
         }
 
       if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_REBOOT)

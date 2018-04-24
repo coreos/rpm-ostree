@@ -231,6 +231,10 @@ assert_default_deployment_is_update() {
 }
 
 # now let's upgrade and check that it matches what we expect
+# (but start from scratch to check that vanilla `upgrade` also builds the cache)
+vm_rpmostree cleanup -m
+vm_cmd systemctl stop rpm-ostreed
 vm_rpmostree upgrade
+assert_output2
 assert_default_deployment_is_update
 echo "ok upgrade"
