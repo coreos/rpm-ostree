@@ -29,6 +29,11 @@ vm_ostreeupdate_prepare
 
 # ok, we're done with prep, now let's rebase on the first revision and install a
 # bunch of layered packages
+vm_build_rpm layered-cake version 2.1 release 3
+vm_build_rpm layered-enh
+vm_build_rpm layered-sec-none
+vm_build_rpm layered-sec-low
+vm_build_rpm layered-sec-crit
 vm_rpmostree rebase vmcheckmote:vmcheck \
   --install layered-cake \
   --install layered-enh \
@@ -38,8 +43,8 @@ vm_rpmostree rebase vmcheckmote:vmcheck \
 vm_reboot
 vm_rpmostree status -v
 vm_assert_status_jq \
-    ".deployments[0][\"origin\"] == \"vmcheckmote:vmcheck\"" \
-    ".deployments[0][\"version\"] == \"v1\"" \
+    '.deployments[0]["origin"] == "vmcheckmote:vmcheck"' \
+    '.deployments[0]["version"] == "v1"' \
     '.deployments[0]["packages"]|length == 5' \
     '.deployments[0]["packages"]|index("layered-cake") >= 0'
 echo "ok prep"
@@ -52,7 +57,7 @@ change_policy() {
   vm_ansible_inline <<EOF
 - shell: |
     cp /usr/etc/rpm-ostreed.conf /etc
-    echo -e "[Daemon]\nAutomaticUpdatePolicy=$policy" > /etc/rpm-ostreed.conf 
+    echo -e "[Daemon]\nAutomaticUpdatePolicy=$policy" > /etc/rpm-ostreed.conf
     rpm-ostree reload
 EOF
 }

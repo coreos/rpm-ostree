@@ -449,6 +449,7 @@ vm_stop_httpd() {
   trap - ERR
 }
 
+# start up an ostree server to be used as an http remote
 vm_ostreeupdate_prepare_repo() {
   # Really testing this like a user requires a remote ostree server setup.
   # Let's start by setting up the repo.
@@ -474,6 +475,9 @@ _init_updated_rpmmd_repo() {
     vm_build_rpm base-pkg-sec-crit version 2.0 uinfo VMCHECK-SEC-CRIT
 }
 
+# Start up a remote, and create two new commits (v1 and v2) which contain new
+# pkgs. The 'vmcheck' ref on the remote is set at v1. You can then make a new
+# update appear later using "vm_ostreeupdate_create v2".
 vm_ostreeupdate_prepare() {
     # first, let's make sure the timer is disabled so it doesn't mess up with our
     # tests
@@ -498,7 +502,11 @@ vm_ostreeupdate_prepare() {
     vm_rpmostree install base-pkg-{foo,bar,baz,enh,sec-{none,low,crit}}
     vm_ostreeupdate_lift_commit $(vm_get_pending_csum) v1
     vm_rpmostree cleanup -p
+    # ok, we don't need those RPMs anymore since they're part of the base
     rm -rf $test_tmpdir/yumrepo
+    # create new versions of those RPMs that we install in v2; we keep the repo
+    # around since that's where e.g. advisories are stored too when analyzing
+    # the v2 ostree update
     _init_updated_rpmmd_repo
     vm_rpmostree install base-pkg-{foo,bar,boo,enh,sec-{none,low,crit}}
     vm_ostreeupdate_lift_commit $(vm_get_pending_csum) v2
@@ -506,21 +514,17 @@ vm_ostreeupdate_prepare() {
 
     vm_ostreeupdate_create v1
     vm_cmd ostree remote add vmcheckmote --no-gpg-verify http://localhost:8888/
-    vm_build_rpm layered-cake version 2.1 release 3
-    vm_build_rpm layered-enh
-    vm_build_rpm layered-sec-none
-    vm_build_rpm layered-sec-low
-    vm_build_rpm layered-sec-crit
 }
 
 # APIs to build up a history on the server. Rather than wasting time
 # composing trees for real, we just use client package layering to create new
 # trees that we then "lift" into the server before cleaning them up client-side.
 
-# steal a commit from the system repo and make a branch out of it
+# steal a commit from the system repo and tag it as a new version
 vm_ostreeupdate_lift_commit() {
   checksum=$1; shift
-  branch=$1; shift
+  # ostree doesn't support tags, so just shove it in a branch
+  branch=vmcheck_tmp/$1; shift
   vm_cmd ostree pull-local --repo=$REMOTE_OSTREE --disable-fsync \
     /ostree/repo $checksum
   vm_cmd ostree --repo=$REMOTE_OSTREE refs $branch --delete
@@ -530,9 +534,10 @@ vm_ostreeupdate_lift_commit() {
 # use a previously stolen commit to create an update on our vmcheck branch,
 # complete with version string and pkglist metadata
 vm_ostreeupdate_create() {
-  branch=$1; shift
-  vm_cmd ostree commit --repo=$REMOTE_OSTREE -b vmcheck \
-    --tree=ref=$branch --add-metadata-string=version=$branch --fsync=no
+  version=$1; shift
+  branch=vmcheck_tmp/$version
+  vm_cmd ostree commit --repo=$REMOTE_OSTREE -b vmcheck --fsync=no \
+    --tree=ref=$branch --add-metadata-string=version=$version
   # avoid libtool wrapper here since we're running on the VM and it would try to
   # cd to topsrcdir/use gcc; libs are installed anyway
   vm_cmd /var/roothome/sync/.libs/inject-pkglist $REMOTE_OSTREE vmcheck
