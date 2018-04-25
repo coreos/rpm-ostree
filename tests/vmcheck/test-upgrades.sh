@@ -60,7 +60,7 @@ vm_assert_status_jq ".deployments[0][\"origin\"] == \"vmcheckmote:vmcheck\"" \
 echo "ok rebase"
 
 # A new update is available...but deploy v1 again
-vm_ostreeupdate_create v3
+vm_ostreeupdate_create_noop v3
 vm_rpmostree deploy v1
 vm_assert_status_jq ".deployments[0][\"booted\"]|not" \
                     ".deployments[0][\"version\"] == \"v1\""

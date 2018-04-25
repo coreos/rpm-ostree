@@ -531,14 +531,25 @@ vm_ostreeupdate_lift_commit() {
   vm_cmd ostree --repo=$REMOTE_OSTREE refs $checksum --create=$branch
 }
 
+_commit_and_inject_pkglist() {
+  version=$1; shift
+  src_ref=$1; shift
+  vm_cmd ostree commit --repo=$REMOTE_OSTREE -b vmcheck --fsync=no \
+    --tree=ref=$src_ref --add-metadata-string=version=$version
+  # avoid libtool wrapper here since we're running on the VM and it would try to
+  # cd to topsrcdir/use gcc; libs are installed anyway
+  vm_cmd /var/roothome/sync/.libs/inject-pkglist $REMOTE_OSTREE vmcheck
+}
+
 # use a previously stolen commit to create an update on our vmcheck branch,
 # complete with version string and pkglist metadata
 vm_ostreeupdate_create() {
   version=$1; shift
-  branch=vmcheck_tmp/$version
-  vm_cmd ostree commit --repo=$REMOTE_OSTREE -b vmcheck --fsync=no \
-    --tree=ref=$branch --add-metadata-string=version=$version
-  # avoid libtool wrapper here since we're running on the VM and it would try to
-  # cd to topsrcdir/use gcc; libs are installed anyway
-  vm_cmd /var/roothome/sync/.libs/inject-pkglist $REMOTE_OSTREE vmcheck
+  _commit_and_inject_pkglist $version vmcheck_tmp/$version
+}
+
+# create a new no-op update with version metadata $1
+vm_ostreeupdate_create_noop() {
+  version=$1; shift
+  _commit_and_inject_pkglist $version vmcheck
 }
