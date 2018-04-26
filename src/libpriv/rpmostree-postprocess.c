@@ -250,7 +250,7 @@ rpmostree_postprocess_run_depmod (int           rootfs_dfd,
                                   GCancellable *cancellable,
                                   GError      **error)
 {
-  char *child_argv[] = { "depmod", (char*)kver, NULL };
+  char *child_argv[] = { "depmod", "-a", (char*)kver, NULL };
   if (!run_bwrap_mutably (rootfs_dfd, "depmod", child_argv, unified_core_mode, cancellable, error))
     return FALSE;
   return TRUE;

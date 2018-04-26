@@ -451,7 +451,6 @@ rpmostree_run_dracut (int     rootfs_dfd,
 
   if (rebuild_from_initramfs)
     {
-      g_assert (argv == NULL);
       rebuild_argv = g_ptr_array_new ();
       g_ptr_array_add (rebuild_argv, "--rebuild");
       g_ptr_array_add (rebuild_argv, (char*)rebuild_from_initramfs);
