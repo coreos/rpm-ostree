@@ -67,6 +67,8 @@ struct _RpmOstreeContext {
 
   GLnxTmpDir tmpdir;
 
+  gboolean kernel_changed;
+
   int tmprootfs_dfd; /* Borrowed */
   GHashTable *rootfs_usrlinks;
   GLnxTmpDir repo_tmpdir; /* Used to assemble+commit if no base rootfs provided */
