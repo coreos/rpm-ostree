@@ -193,6 +193,26 @@ rpmostree_kernel_remove (int rootfs_dfd,
     {
       if (!kernel_remove_in (rootfs_dfd, modversion_dir, cancellable, error))
         return FALSE;
+      glnx_autofd int modversion_dfd = -1;
+      if (!glnx_opendirat (rootfs_dfd, modversion_dir, TRUE, &modversion_dfd, error))
+        return FALSE;
+      /* See `/usr/lib/kernel/install.d/50-depmod.install`
+       * which is run by `kernel-install remove` from RPM `%postun`.
+       *
+       * TODO: Add a depmod --clean <kver> command.
+       */
+      const char *depmod_files[] = {"modules.alias", "modules.alias.bin", "modules.builtin.bin",
+                                    "modules.dep", "modules.dep.bin", "modules.devname",
+                                    "modules.softdep", "modules.symbols", "modules.symbols.bin" };
+      for (guint i = 0; i < G_N_ELEMENTS (depmod_files); i++)
+        {
+          const char *name = depmod_files[i];
+          if (unlinkat (modversion_dfd, name, 0) < 0)
+            {
+              if (errno != ENOENT)
+                return glnx_throw_errno_prefix (error, "unlinkat(%s)", name);
+            }
+        }
     }
   if (!kernel_remove_in (rootfs_dfd, "usr/lib/ostree-boot", cancellable, error))
     return FALSE;

@@ -3881,7 +3881,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           self->kernel_changed = TRUE;
           /* Remove all of our kernel data first, to ensure it's done
            * consistently. For example, in some of the rpmostree kernel handling code we
-           * won't look for an initramfs if the vmlinuz binary isn't found.
+           * won't look for an initramfs if the vmlinuz binary isn't found.  This
+           * is also taking over the role of running the kernel.spec's `%preun`.
            */
           if (!rpmostree_kernel_remove (tmprootfs_dfd, cancellable, error))
             return FALSE;
