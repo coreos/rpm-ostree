@@ -64,10 +64,6 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
                                   cancellable, error))
     return FALSE;
 
-  g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
-  if (!rpmostree_repo_auto_transaction_start (&txn, repo, FALSE, cancellable, error))
-    return FALSE;
-
   /* delete all the refs */
   GLNX_HASH_TABLE_FOREACH (refs, const char*, ref)
     ostree_repo_transaction_set_refspec (repo, ref, NULL);
@@ -102,9 +98,6 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
         ostree_repo_transaction_set_refspec (repo, ref, base);
       }
   }
-
-  if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
-    return FALSE;
 
   return TRUE;
 }
@@ -173,8 +166,9 @@ rpmostree_syscore_get_pkgcache_repo (OstreeRepo   *parent,
  * that set.
  */
 static gboolean
-clean_pkgcache_orphans (OstreeSysroot            *sysroot,
+generate_pkgcache_refs (OstreeSysroot            *sysroot,
                         OstreeRepo               *repo,
+                        guint                    *out_n_freed,
                         GCancellable             *cancellable,
                         GError                  **error)
 {
@@ -259,9 +253,7 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
       if (g_hash_table_contains (referenced_pkgs, ref))
         continue;
 
-      if (!ostree_repo_set_ref_immediate (repo, NULL, ref, NULL,
-                                          cancellable, error))
-        return FALSE;
+      ostree_repo_transaction_set_ref (repo, NULL, ref, NULL);
       n_freed++;
     }
 
@@ -275,27 +267,40 @@ clean_pkgcache_orphans (OstreeSysroot            *sysroot,
       if (g_hash_table_contains (referenced_pkgs, ref))
         continue;
 
-      if (!ostree_repo_set_ref_immediate (repo, NULL, ref, NULL,
-                                          cancellable, error))
-        return FALSE;
+      ostree_repo_transaction_set_ref (repo, NULL, ref, NULL);
       n_freed++;
     }
 
-  /* note that we're called right after an ostree_sysroot_cleanup(), so the stats reported
-   * accurately reflect pkgcache branches only */
-  guint64 freed_space;
-  gint n_objects_total, n_objects_pruned;
-  if (!ostree_repo_prune (repo, OSTREE_REPO_PRUNE_FLAGS_REFS_ONLY, 0,
-                          &n_objects_total, &n_objects_pruned, &freed_space,
-                          cancellable, error))
+  *out_n_freed = n_freed;
+  return TRUE;
+}
+
+/* Regenerate base and pkgcache refs */
+static gboolean
+syscore_regenerate_refs (OstreeSysroot            *sysroot,
+                         OstreeRepo               *repo,
+                         guint                    *out_n_pkgcache_freed,
+                         GCancellable             *cancellable,
+                         GError                  **error)
+{
+  g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
+  if (!rpmostree_repo_auto_transaction_start (&txn, repo, FALSE, cancellable, error))
     return FALSE;
 
-  if (n_freed > 0 || freed_space > 0)
-    {
-      char *freed_space_str = g_format_size_full (freed_space, G_FORMAT_SIZE_DEFAULT);
-      rpmostree_output_message ("Freed pkgcache branches: %u size: %s",
-                                n_freed, freed_space_str);
-    }
+  /* regenerate the baselayer refs in case we just kicked out an ancient layered
+   * deployment whose base layer is not needed anymore */
+  if (!generate_baselayer_refs (sysroot, repo, cancellable, error))
+    return FALSE;
+
+  /* And the pkgcache refs */
+  if (!generate_pkgcache_refs (sysroot, repo, out_n_pkgcache_freed, cancellable, error))
+    return FALSE;
+
+  /* Delete our temporary ref */
+  ostree_repo_transaction_set_ref (repo, NULL, RPMOSTREE_TMP_BASE_REF, NULL);
+
+  if (!ostree_repo_commit_transaction (repo, NULL, cancellable, error))
+    return FALSE;
 
   return TRUE;
 }
@@ -312,28 +317,35 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
   GLNX_AUTO_PREFIX_ERROR ("syscore cleanup", error);
   int repo_dfd = ostree_repo_get_dfd (repo); /* borrowed */
 
-  /* regenerate the baselayer refs in case we just kicked out an ancient layered
-   * deployment whose base layer is not needed anymore */
-  if (!generate_baselayer_refs (sysroot, repo, cancellable, error))
+  /* Basic cleanup without pruning */
+  if (!ostree_sysroot_prepare_cleanup (sysroot, cancellable, error))
     return FALSE;
-
-  /* Delete our temporary ref */
-  if (!ostree_repo_set_ref_immediate (repo, NULL, RPMOSTREE_TMP_BASE_REF,
-                                      NULL, cancellable, error))
-    return FALSE;
-
-  /* and shake it loose */
-  if (!ostree_sysroot_cleanup (sysroot, cancellable, error))
-    return FALSE;
-
-  if (!clean_pkgcache_orphans (sysroot, repo, cancellable, error))
-    return FALSE;
-
   /* delete our checkout dir in case a previous run didn't finish
      successfully */
   if (!glnx_shutil_rm_rf_at (repo_dfd, RPMOSTREE_TMP_ROOTFS_DIR,
                              cancellable, error))
     return FALSE;
+
+  /* Regenerate all refs */
+  guint n_pkgcache_freed = 0;
+  if (!syscore_regenerate_refs (sysroot, repo, &n_pkgcache_freed,
+                                cancellable, error))
+    return FALSE;
+
+  /* And do a prune */
+  guint64 freed_space;
+  gint n_objects_total, n_objects_pruned;
+  if (!ostree_repo_prune (repo, OSTREE_REPO_PRUNE_FLAGS_REFS_ONLY, 0,
+                          &n_objects_total, &n_objects_pruned, &freed_space,
+                          cancellable, error))
+    return FALSE;
+
+  if (n_pkgcache_freed > 0 || freed_space > 0)
+    {
+      g_autofree char *freed_space_str = g_format_size_full (freed_space, G_FORMAT_SIZE_DEFAULT);
+      rpmostree_output_message ("Freed: %s (pkgcache branches: %u)",
+                                freed_space_str, n_pkgcache_freed);
+    }
 
   return TRUE;
 }
