@@ -425,7 +425,10 @@ Boston, MA 02111-1307, USA.
           <para>
             <option>--check</option> to just check if an upgrade is
             available, without downloading it or performing a
-            package-level diff.
+            package-level diff.  Using this flag will force an update
+            of the RPM metadata from the enabled repos in
+            <filename>/etc/yum.repos.d/</filename>, if there are any
+            layered packages.
           </para>
 
           <para>
