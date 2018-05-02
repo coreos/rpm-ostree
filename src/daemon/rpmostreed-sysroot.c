@@ -450,7 +450,10 @@ handle_reload (RPMOSTreeSysroot *object,
 
 out:
   if (local_error)
-    g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+    {
+      g_prefix_error (&local_error, "Handling reload: ");
+      g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+    }
   return TRUE;
 }
 
@@ -482,7 +485,10 @@ handle_reload_config (RPMOSTreeSysroot *object,
   rpmostree_sysroot_complete_reload_config (object, invocation);
 out:
   if (local_error)
-    g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+    {
+      g_prefix_error (&local_error, "Handling config reload: ");
+      g_dbus_method_invocation_take_error (invocation, g_steal_pointer (&local_error));
+    }
 
   return TRUE;
 }
@@ -746,6 +752,7 @@ sysroot_reload_ostree_configs_and_deployments (RpmostreedSysroot *self,
 gboolean
 rpmostreed_sysroot_reload (RpmostreedSysroot *self, GError **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Sysroot reload", error);
   return sysroot_reload_ostree_configs_and_deployments (self, NULL, error);
 }
 
