@@ -331,6 +331,8 @@ transaction_execute_done_cb (GObject *source_object,
   const char *error_message = NULL;
   gboolean success;
   GError *local_error = NULL;
+  GError **error = &local_error;
+  GLNX_AUTO_PREFIX_ERROR ("During txn completion", error);
 
   success = g_task_propagate_boolean (G_TASK (result), &local_error);
   if (success)
