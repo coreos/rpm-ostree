@@ -49,7 +49,7 @@ vm_assert_status_jq ".deployments[0][\"booted\"]" \
                     ".deployments[0][\"version\"] == \"v2\""
 echo "ok upgrade"
 
-vm_cmd ostree remote add otherremote --no-gpg-verify http://localhost:8888/
+vm_cmd ostree remote add otherremote --if-not-exists --no-gpg-verify http://localhost:8888/
 vm_rpmostree reload
 vm_rpmostree rebase otherremote:
 vm_assert_status_jq ".deployments[0][\"origin\"] == \"otherremote:vmcheck\"" \

@@ -34,6 +34,5 @@ vm_cmd 'echo "[Experimental]" >> /etc/rpm-ostreed.conf'
 vm_cmd 'echo StageDeployments=true >> /etc/rpm-ostreed.conf'
 vm_rpmostree reload
 
-#${dn}/test-upgrades.sh
-
-${dn}/test-layering-relayer.sh
+${dn}/test-upgrades.sh
+echo "meta-ok upgrades"
