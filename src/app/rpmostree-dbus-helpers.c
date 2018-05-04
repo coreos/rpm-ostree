@@ -1352,6 +1352,65 @@ print_advisories (GVariant *advisories,
     }
 }
 
+/* print "rpm-diff" and "advisories" GVariants from a cached update */
+gboolean
+rpmostree_print_diff_advisories (GVariant         *rpm_diff,
+                                 GVariant         *advisories,
+                                 gboolean          verbose,
+                                 guint             max_key_len,
+                                 GError          **error)
+{
+  if (advisories)
+    print_advisories (advisories, verbose, max_key_len);
+
+  g_auto(GVariantDict) rpm_diff_dict;
+  g_variant_dict_init (&rpm_diff_dict, rpm_diff);
+
+  g_autoptr(GVariant) upgraded =
+    _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "upgraded",
+                                              RPMOSTREE_DIFF_MODIFIED_GVARIANT_FORMAT,
+                                              error);
+  if (!upgraded)
+    return FALSE;
+
+  g_autoptr(GVariant) downgraded =
+    _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "downgraded",
+                                              RPMOSTREE_DIFF_MODIFIED_GVARIANT_FORMAT,
+                                              error);
+  if (!downgraded)
+    return FALSE;
+
+  g_autoptr(GVariant) removed =
+    _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "removed",
+                                              RPMOSTREE_DIFF_SINGLE_GVARIANT_FORMAT,
+                                              error);
+  if (!removed)
+    return FALSE;
+
+  g_autoptr(GVariant) added =
+    _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "added",
+                                              RPMOSTREE_DIFF_SINGLE_GVARIANT_FORMAT,
+                                              error);
+  if (!added)
+    return FALSE;
+
+  if (verbose)
+    rpmostree_variant_diff_print_formatted (max_key_len,
+                                            upgraded, downgraded, removed, added);
+  else
+    {
+      g_autoptr(GString) diff_summary = g_string_new (NULL);
+      append_to_summary (diff_summary, "upgraded", g_variant_n_children (upgraded));
+      append_to_summary (diff_summary, "downgraded", g_variant_n_children (downgraded));
+      append_to_summary (diff_summary, "removed", g_variant_n_children (removed));
+      append_to_summary (diff_summary, "added", g_variant_n_children (added));
+      if (diff_summary->len > 0) /* only print if we have something to print */
+        rpmostree_print_kv ("Diff", max_key_len, diff_summary->str);
+    }
+
+  return TRUE;
+}
+
 /* this is used by both `status` and `upgrade --check/--preview` */
 gboolean
 rpmostree_print_cached_update (GVariant         *cached_update,
@@ -1415,52 +1474,9 @@ rpmostree_print_cached_update (GVariant         *cached_update,
 
   if (rpm_diff)
     {
-      if (advisories)
-        print_advisories (advisories, verbose, max_key_len);
-
-      g_auto(GVariantDict) rpm_diff_dict;
-      g_variant_dict_init (&rpm_diff_dict, rpm_diff);
-
-      g_autoptr(GVariant) upgraded =
-        _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "upgraded",
-                                                  RPMOSTREE_DIFF_MODIFIED_GVARIANT_FORMAT,
-                                                  error);
-      if (!upgraded)
+      if (!rpmostree_print_diff_advisories (rpm_diff, advisories, verbose,
+                                            max_key_len, error))
         return FALSE;
-
-      g_autoptr(GVariant) downgraded =
-        _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "downgraded",
-                                                  RPMOSTREE_DIFF_MODIFIED_GVARIANT_FORMAT,
-                                                  error);
-      if (!downgraded)
-        return FALSE;
-
-      g_autoptr(GVariant) removed =
-        _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "removed",
-                                                  RPMOSTREE_DIFF_SINGLE_GVARIANT_FORMAT,
-                                                  error);
-      if (!removed)
-        return FALSE;
-
-      g_autoptr(GVariant) added =
-        _rpmostree_vardict_lookup_value_required (&rpm_diff_dict, "added",
-                                                  RPMOSTREE_DIFF_SINGLE_GVARIANT_FORMAT,
-                                                  error);
-      if (!added)
-        return FALSE;
-
-      if (verbose)
-        rpmostree_variant_diff_print_formatted (max_key_len,
-                                                upgraded, downgraded, removed, added);
-      else
-        {
-          g_autoptr(GString) diff_summary = g_string_new (NULL);
-          append_to_summary (diff_summary, "upgraded", g_variant_n_children (upgraded));
-          append_to_summary (diff_summary, "downgraded", g_variant_n_children (downgraded));
-          append_to_summary (diff_summary, "removed", g_variant_n_children (removed));
-          append_to_summary (diff_summary, "added", g_variant_n_children (added));
-          rpmostree_print_kv ("Diff", max_key_len, diff_summary->str);
-        }
     }
 
   return TRUE;
