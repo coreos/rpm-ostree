@@ -1357,11 +1357,12 @@ gboolean
 rpmostree_print_diff_advisories (GVariant         *rpm_diff,
                                  GVariant         *advisories,
                                  gboolean          verbose,
+                                 gboolean          verbose_advisories,
                                  guint             max_key_len,
                                  GError          **error)
 {
   if (advisories)
-    print_advisories (advisories, verbose, max_key_len);
+    print_advisories (advisories, verbose || verbose_advisories, max_key_len);
 
   g_auto(GVariantDict) rpm_diff_dict;
   g_variant_dict_init (&rpm_diff_dict, rpm_diff);
@@ -1415,6 +1416,7 @@ rpmostree_print_diff_advisories (GVariant         *rpm_diff,
 gboolean
 rpmostree_print_cached_update (GVariant         *cached_update,
                                gboolean          verbose,
+                               gboolean          verbose_advisories,
                                GCancellable     *cancellable,
                                GError          **error)
 {
@@ -1475,7 +1477,7 @@ rpmostree_print_cached_update (GVariant         *cached_update,
   if (rpm_diff)
     {
       if (!rpmostree_print_diff_advisories (rpm_diff, advisories, verbose,
-                                            max_key_len, error))
+                                            verbose_advisories, max_key_len, error))
         return FALSE;
     }
 

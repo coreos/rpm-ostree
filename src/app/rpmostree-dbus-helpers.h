@@ -127,11 +127,13 @@ gboolean
 rpmostree_print_diff_advisories (GVariant         *rpm_diff,
                                  GVariant         *advisories,
                                  gboolean          verbose,
+                                 gboolean          verbose_advisories,
                                  guint             max_key_len,
                                  GError          **error);
 
 gboolean
 rpmostree_print_cached_update (GVariant         *cached_update,
                                gboolean          verbose,
+                               gboolean          verbose_advisories,
                                GCancellable     *cancellable,
                                GError          **error);

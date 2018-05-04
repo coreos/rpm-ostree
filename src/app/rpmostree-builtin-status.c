@@ -46,13 +46,15 @@
 
 static gboolean opt_pretty;
 static gboolean opt_verbose;
+static gboolean opt_verbose_advisories;
 static gboolean opt_json;
 static gboolean opt_only_booted;
 static const char *opt_jsonpath;
 
 static GOptionEntry option_entries[] = {
   { "pretty", 'p', G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_pretty, "This option is deprecated and no longer has any effect", NULL },
-  { "verbose", 'v', 0, G_OPTION_ARG_NONE, &opt_verbose, "Print additional fields (e.g. StateRoot)", NULL },
+  { "verbose", 'v', 0, G_OPTION_ARG_NONE, &opt_verbose, "Print additional fields (e.g. StateRoot); implies -a", NULL },
+  { "advisories", 'a', 0, G_OPTION_ARG_NONE, &opt_verbose_advisories, "Expand advisories listing", NULL },
   { "json", 0, 0, G_OPTION_ARG_NONE, &opt_json, "Output JSON", NULL },
   { "jsonpath", 'J', 0, G_OPTION_ARG_STRING, &opt_jsonpath, "Filter JSONPath expression", "EXPRESSION" },
   { "booted", 'b', 0, G_OPTION_ARG_NONE, &opt_only_booted, "Only print the booted deployment", NULL },
@@ -636,8 +638,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
         g_variant_dict_lookup_value (&dict, "rpm-diff", G_VARIANT_TYPE ("a{sv}"));
       g_autoptr(GVariant) advisories =
         g_variant_dict_lookup_value (&dict, "advisories", G_VARIANT_TYPE ("a(suuasa{sv})"));
-      if (!rpmostree_print_diff_advisories (rpm_diff, advisories,
-                                            opt_verbose, max_key_len, error))
+      if (!rpmostree_print_diff_advisories (rpm_diff, advisories, opt_verbose,
+                                            opt_verbose_advisories, max_key_len, error))
         return FALSE;
       *out_printed_cached_update = TRUE;
     }
@@ -988,7 +990,7 @@ rpmostree_builtin_status (int             argc,
         {
           g_print ("\n");
           if (!rpmostree_print_cached_update (cached_update, opt_verbose,
-                                              cancellable, error))
+                                              opt_verbose_advisories, cancellable, error))
             return FALSE;
         }
     }

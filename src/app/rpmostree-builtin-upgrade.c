@@ -204,7 +204,7 @@ rpmostree_builtin_upgrade (int             argc,
       else
         {
           /* preview --> verbose (i.e. we want the diff) */
-          if (!rpmostree_print_cached_update (cached_update, opt_preview,
+          if (!rpmostree_print_cached_update (cached_update, opt_preview, FALSE,
                                               cancellable, error))
             return FALSE;
         }
