@@ -391,6 +391,10 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
                       gboolean          first,
                       gboolean          have_any_live_overlay,
                       gboolean          have_multiple_stateroots,
+                      const char       *booted_osname,
+                      const char       *cached_update_deployment_id,
+                      GVariant         *cached_update,
+                      gboolean         *out_printed_cached_update,
                       GError          **error)
 {
   /* Add the long keys here */
@@ -620,6 +624,24 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   if (gpg_enabled)
     rpmostree_print_gpg_info (signatures, opt_verbose, max_key_len);
 
+  /* Print rpm diff and advisories summary if this is a pending deployment matching the
+   * deployment on which the cached update is based. */
+  if (first && !is_booted &&
+      g_strcmp0 (os_name, booted_osname) == 0 &&
+      g_strcmp0 (id, cached_update_deployment_id) == 0)
+    {
+      g_auto(GVariantDict) dict;
+      g_variant_dict_init (&dict, cached_update);
+      g_autoptr(GVariant) rpm_diff =
+        g_variant_dict_lookup_value (&dict, "rpm-diff", G_VARIANT_TYPE ("a{sv}"));
+      g_autoptr(GVariant) advisories =
+        g_variant_dict_lookup_value (&dict, "advisories", G_VARIANT_TYPE ("a(suuasa{sv})"));
+      if (!rpmostree_print_diff_advisories (rpm_diff, advisories,
+                                            opt_verbose, max_key_len, error))
+        return FALSE;
+      *out_printed_cached_update = TRUE;
+    }
+
   /* print base overrides before overlays */
   g_autoptr(GPtrArray) active_removals = g_ptr_array_new_with_free_func (g_free);
   if (origin_base_removals)
@@ -787,12 +809,15 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
 static gboolean
 print_deployments (RPMOSTreeSysroot *sysroot_proxy,
                    GVariant         *deployments,
+                   GVariant         *cached_update,
+                   gboolean         *out_printed_cached_update,
                    GCancellable     *cancellable,
                    GError          **error)
 {
   GVariantIter iter;
 
   /* First, gather global state */
+  const char *booted_osname = NULL;
   gboolean have_any_live_overlay = FALSE;
   gboolean have_multiple_stateroots = FALSE;
   const char *last_osname = NULL;
@@ -822,9 +847,25 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
         last_osname = osname;
       else if (!g_str_equal (osname, last_osname))
         have_multiple_stateroots = TRUE;
+
+      gboolean is_booted;
+      if (!g_variant_dict_lookup (dict, "booted", "b", &is_booted))
+        is_booted = FALSE;
+
+      if (is_booted)
+        booted_osname = osname;
     }
 
   g_print ("Deployments:\n");
+
+  /* just unpack this so that each iteration doesn't have to dig for it */
+  const char *cached_update_deployment_id = NULL;
+  if (cached_update)
+    {
+      g_auto(GVariantDict) dict;
+      g_variant_dict_init (&dict, cached_update);
+      g_variant_dict_lookup (&dict, "deployment", "&s", &cached_update_deployment_id);
+    }
 
   g_variant_iter_init (&iter, deployments);
 
@@ -836,7 +877,9 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
         break;
 
       if (!print_one_deployment (sysroot_proxy, child, first, have_any_live_overlay,
-                                 have_multiple_stateroots, error))
+                                 have_multiple_stateroots, booted_osname,
+                                 cached_update_deployment_id, cached_update,
+                                 out_printed_cached_update, error))
         return FALSE;
       if (first)
         first = FALSE;
@@ -923,8 +966,8 @@ rpmostree_builtin_status (int             argc,
         }
       json_node_free (json_root);
 
-      /* NB: watch out for the misleading API docs */
       glnx_unref_object GOutputStream *stdout_gio = g_unix_output_stream_new (1, FALSE);
+      /* NB: watch out for the misleading API docs */
       if (json_generator_to_stream (generator, stdout_gio, NULL, error) <= 0
           || (error != NULL && *error != NULL))
         return FALSE;
@@ -934,12 +977,14 @@ rpmostree_builtin_status (int             argc,
       if (!print_daemon_state (sysroot_proxy, bus_type, cancellable, error))
         return FALSE;
 
-      if (!print_deployments (sysroot_proxy, deployments, cancellable, error))
+      gboolean printed_cached_update = FALSE;
+      if (!print_deployments (sysroot_proxy, deployments, cached_update,
+                              &printed_cached_update, cancellable, error))
         return FALSE;
 
       const char *policy = rpmostree_sysroot_get_automatic_update_policy (sysroot_proxy);
       gboolean auto_updates_enabled = (!g_str_equal (policy, "none"));
-      if (cached_update && auto_updates_enabled)
+      if (cached_update && !printed_cached_update && auto_updates_enabled)
         {
           g_print ("\n");
           if (!rpmostree_print_cached_update (cached_update, opt_verbose,

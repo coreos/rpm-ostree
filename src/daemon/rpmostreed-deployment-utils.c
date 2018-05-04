@@ -1116,7 +1116,11 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
         g_variant_dict_insert (&dict, "advisories", "@a(suuasa{sv})", advisories);
     }
 
-  g_variant_dict_insert (&dict, "staged", "b", staged_deployment != NULL);
+  if (staged_deployment)
+    {
+      g_autofree char *id = rpmostreed_deployment_generate_id (staged_deployment);
+      g_variant_dict_insert (&dict, "deployment", "s", id);
+    }
 
   /* but if there are no updates, then just ditch the whole thing and return NULL */
   if (is_new_checksum || rpmmd_modified_new)

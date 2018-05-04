@@ -136,6 +136,9 @@ assert_output() {
     "SecAdvisories: VMCHECK-SEC-NONE  Unknown    layered-sec-none-2.0-1.x86_64" \
     "               VMCHECK-SEC-LOW   Low        layered-sec-low-2.0-1.x86_64" \
     "               VMCHECK-SEC-CRIT  Critical   layered-sec-crit-2.0-1.x86_64"
+
+  # make sure any future call doesn't forget to create fresh ones
+  rm -f out.txt out-verbose.txt
 }
 
 # now add all of them
@@ -201,6 +204,9 @@ assert_output2() {
     'Downgraded: base-pkg-bar 1.0-1 -> 0.9-3' \
     'Removed: base-pkg-baz-1.1-1.x86_64' \
     'Added: base-pkg-boo-3.7-2.11.x86_64'
+
+  # make sure any future call doesn't forget to create fresh ones
+  rm -f out.txt out-verbose.txt
 }
 
 vm_rpmostree status > out.txt
@@ -238,6 +244,11 @@ assert_default_deployment_is_update() {
 vm_rpmostree cleanup -m
 vm_cmd systemctl stop rpm-ostreed
 vm_rpmostree upgrade
+vm_rpmostree status > out.txt
+vm_rpmostree status -v > out-verbose.txt
+# we should have printed as part of the pending deployment
+assert_not_file_has_content out.txt "Available update"
+assert_not_file_has_content out-verbose.txt "Available update"
 assert_output2
 assert_default_deployment_is_update
 echo "ok upgrade"
