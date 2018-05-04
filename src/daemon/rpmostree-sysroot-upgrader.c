@@ -67,9 +67,10 @@ struct RpmOstreeSysrootUpgrader {
   /* Used during tree construction */
   OstreeRepoDevInoCache *devino_cache;
   int tmprootfs_dfd;
-  RpmOstreeRefSack *rsack;
+  RpmOstreeRefSack *rsack; /* sack of base layer */
   GLnxTmpDir metatmpdir;
   RpmOstreeContext *ctx;
+  DnfSack *rpmmd_sack; /* sack from core */
 
   GPtrArray *overlay_packages; /* Finalized list of pkgs to overlay */
   GPtrArray *override_remove_packages; /* Finalized list of base pkgs to remove */
@@ -200,7 +201,8 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   RpmOstreeSysrootUpgrader *self = RPMOSTREE_SYSROOT_UPGRADER (object);
 
   g_clear_pointer (&self->rsack, rpmostree_refsack_unref);
-  g_clear_object (&self->ctx);
+  g_clear_object (&self->rpmmd_sack);
+  g_clear_object (&self->ctx); /* Note this is already cleared in the happy path */
   glnx_close_fd (&self->tmprootfs_dfd);
 
   (void)glnx_tmpdir_delete (&self->metatmpdir, NULL, NULL);
@@ -361,6 +363,14 @@ OstreeDeployment*
 rpmostree_sysroot_upgrader_get_merge_deployment (RpmOstreeSysrootUpgrader *self)
 {
   return self->origin_merge_deployment;
+}
+
+/* Returns DnfSack used, if any. */
+DnfSack*
+rpmostree_sysroot_upgrader_get_sack (RpmOstreeSysrootUpgrader *self,
+                                     GError                  **error)
+{
+  return self->rpmmd_sack;
 }
 
 /*
@@ -891,6 +901,10 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
       if (!rpmostree_context_prepare (self->ctx, cancellable, error))
         return FALSE;
       self->layering_type = RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS;
+
+      /* keep a ref on it in case the level higher up needs it */
+      self->rpmmd_sack =
+        g_object_ref (dnf_context_get_sack (rpmostree_context_get_dnf (self->ctx)));
     }
   else
     {

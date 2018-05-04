@@ -87,6 +87,10 @@ rpmostree_sysroot_upgrader_set_origin (RpmOstreeSysrootUpgrader *self,
 const char *
 rpmostree_sysroot_upgrader_get_base (RpmOstreeSysrootUpgrader *self);
 
+DnfSack*
+rpmostree_sysroot_upgrader_get_sack (RpmOstreeSysrootUpgrader *self,
+                                     GError                  **error);
+
 gboolean
 rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
                                       const char             *dir_to_pull,
