@@ -771,6 +771,7 @@ checkout_only_rpmdb (OstreeRepo       *repo,
                      GCancellable     *cancellable,
                      GError          **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("rpmdb checkout", error);
   g_autofree char *commit = NULL;
   if (!ostree_repo_resolve_rev (repo, ref, FALSE, &commit, error))
     return FALSE;
@@ -804,6 +805,7 @@ get_sack_for_root (int               dfd,
                    DnfSack         **out_sack,
                    GError          **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Loading sack", error);
   g_return_val_if_fail (out_sack != NULL, FALSE);
 
   g_autofree char *fullpath = glnx_fdrel_abspath (dfd, path);

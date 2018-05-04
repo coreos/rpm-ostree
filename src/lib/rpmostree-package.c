@@ -249,6 +249,7 @@ _rpm_ostree_package_list_for_commit (OstreeRepo   *repo,
                                      GCancellable *cancellable,
                                      GError      **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Loading package list", error);
   g_autofree char *checksum = NULL;
   if (!ostree_repo_resolve_rev (repo, rev, FALSE, &checksum, error))
     return FALSE;
