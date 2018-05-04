@@ -943,7 +943,7 @@ gboolean
 rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
                                     OstreeDeployment  *staged_deployment,
                                     OstreeRepo        *repo,
-                                    DnfSack           *sack,
+                                    DnfSack           *sack, /* allow-none */
                                     GVariant         **out_update,
                                     GCancellable      *cancellable,
                                     GError           **error)

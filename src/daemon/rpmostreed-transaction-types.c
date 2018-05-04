@@ -198,7 +198,7 @@ static gboolean
 generate_update_variant (OstreeRepo       *repo,
                          OstreeDeployment *booted_deployment,
                          OstreeDeployment *staged_deployment,
-                         DnfSack          *sack,
+                         DnfSack          *sack, /* allow-none */
                          GCancellable     *cancellable,
                          GError          **error)
 {
@@ -1189,15 +1189,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           OstreeDeployment *booted_deployment =
             ostree_sysroot_get_booted_deployment (sysroot);
 
-          g_autoptr(DnfSack) sack = NULL;
-          if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
-            {
-              /* don't force a refresh; we want the same sack state used by the core */
-              if (!get_sack_for_booted (sysroot, repo, booted_deployment, FALSE, &sack,
-                                        cancellable, error))
-                return FALSE;
-            }
-
+          DnfSack *sack = rpmostree_sysroot_upgrader_get_sack (upgrader, error);
           if (!generate_update_variant (repo, booted_deployment, new_deployment, sack,
                                         cancellable, error))
             return FALSE;
