@@ -1905,7 +1905,11 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   /* setup sack if not yet set up */
   if (dnf_context_get_sack (dnfctx) == NULL)
     {
-      if (!rpmostree_context_download_metadata (self, 0, cancellable, error))
+      /* default to loading updateinfo in this path; this allows the sack to be used later
+       * on for advisories -- it's always downloaded anyway */
+      if (!rpmostree_context_download_metadata (self,
+                                                DNF_CONTEXT_SETUP_SACK_FLAG_LOAD_UPDATEINFO,
+                                                cancellable, error))
         return FALSE;
       journal_rpmmd_info (self);
     }
