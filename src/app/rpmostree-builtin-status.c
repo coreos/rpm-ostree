@@ -391,7 +391,6 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
                       gboolean          first,
                       gboolean          have_any_live_overlay,
                       gboolean          have_multiple_stateroots,
-                      const char       *last_osname,
                       GError          **error)
 {
   /* Add the long keys here */
@@ -837,7 +836,7 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
         break;
 
       if (!print_one_deployment (sysroot_proxy, child, first, have_any_live_overlay,
-                                 have_multiple_stateroots, last_osname, error))
+                                 have_multiple_stateroots, error))
         return FALSE;
       if (first)
         first = FALSE;
