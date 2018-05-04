@@ -124,6 +124,13 @@ rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
                              GError      **error);
 
 gboolean
+rpmostree_print_diff_advisories (GVariant         *rpm_diff,
+                                 GVariant         *advisories,
+                                 gboolean          verbose,
+                                 guint             max_key_len,
+                                 GError          **error);
+
+gboolean
 rpmostree_print_cached_update (GVariant         *cached_update,
                                gboolean          verbose,
                                GCancellable     *cancellable,
