@@ -15,40 +15,72 @@ tests:
 
 ---
 
-context: f28-primary
+context: f28-primary-1
 inherit: true
 
-cluster:
-  hosts:
-    - name: vmcheck1
-      distro: fedora/28/atomic
-    - name: vmcheck2
-      distro: fedora/28/atomic
-    - name: vmcheck3
-      distro: fedora/28/atomic
-  container:
-    image: registry.fedoraproject.org/fedora:28
+# https://github.com/ostreedev/ostree/pull/1513#issuecomment-378784162
+host:
+  distro: fedora/28/atomic
+  specs:
+    ram: 8192
+#container:
+#  image: registry.fedoraproject.org/fedora:28
+
+tests:
+  - modprobe -r kvm_intel || true
+  - modprobe kvm_intel nested=1
+  - docker run --device /dev/kvm --rm -v $(pwd):/srv/code:z
+    --env VMCHECK_PARALLEL=${VMCHECK_PARALLEL}
+    --env TESTS_OFFSET=${TESTS_OFFSET}
+    --env TESTS_MODULUS=${TESTS_MODULUS}
+    --env CFLAGS="${CFLAGS}" --env ASAN_OPTIONS=${ASAN_OPTIONS}
+    registry.fedoraproject.org/fedora:28 /bin/sh -c "cd /srv/code && ./ci/papr-vmcheck.sh"
 
 env:
-  HOSTS: vmcheck1 vmcheck2 vmcheck3
+  # each VM is (currently) 1024MB, so we'll leave 1G for the OS
+  VMCHECK_PARALLEL: '5'
   # TODO use -fsanitize=address
   CFLAGS: '-fsanitize=undefined -fsanitize-undefined-trap-on-error -O2 -Wp,-D_FORTIFY_SOURCE=2'
   ASAN_OPTIONS: 'detect_leaks=0'  # Right now we're not fully clean, but this gets us use-after-free etc
-  CI_PKGS: rsync
-
-tests:
-  - ci/build-check.sh
-  - ci/vmcheck-provision.sh
-  - make vmcheck
-  # make sure we're aware of any tests that were skipped
-  - "grep -nr '^SKIP: ' vmcheck/ || :"
+  TESTS_OFFSET: '0'
+  TESTS_MODULUS: '3'
 
 timeout: 60m
 
 artifacts:
+  - artifacts/
   - test-suite.log
   - config.log
   - vmcheck
+
+---
+
+context: f28-primary-2
+inherit: true
+
+# Copy of above, with modified TESTS_OFFSET
+env:
+  VMCHECK_PARALLEL: '5'
+  CFLAGS: '-fsanitize=undefined -fsanitize-undefined-trap-on-error -O2 -Wp,-D_FORTIFY_SOURCE=2'
+  ASAN_OPTIONS: 'detect_leaks=0'  # Right now we're not fully clean, but this gets us use-after-free etc
+  # This one runs the other half of the tests
+  TESTS_OFFSET: '1'
+  TESTS_MODULUS: '2'
+
+---
+
+context: f28-primary-3
+inherit: true
+
+# Copy of above, with modified TESTS_OFFSET
+env:
+  VMCHECK_PARALLEL: '5'
+  CFLAGS: '-fsanitize=undefined -fsanitize-undefined-trap-on-error -O2 -Wp,-D_FORTIFY_SOURCE=2'
+  ASAN_OPTIONS: 'detect_leaks=0'  # Right now we're not fully clean, but this gets us use-after-free etc
+  # This one runs the other half of the tests
+  TESTS_OFFSET: '2'
+  TESTS_MODULUS: '3'
+
 
 ---
 
@@ -58,43 +90,23 @@ context: c7-primary
 
 required: true
 
-cluster:
-  hosts:
-    - name: vmcheck1
-      distro: centos/7/atomic/smoketested
-      # XXX: temp hack until smoketested has newer glib2
-      # XXX: and also causes layering-relabel to fail?
-      # https://github.com/projectatomic/rpm-ostree/pull/1406
-      ostree:
-        branch: centos-atomic-host/7/x86_64/devel/continuous
-    - name: vmcheck2
-      distro: centos/7/atomic/smoketested
-      ostree:
-        branch: centos-atomic-host/7/x86_64/devel/continuous
-    - name: vmcheck3
-      distro: centos/7/atomic/smoketested
-      ostree:
-        branch: centos-atomic-host/7/x86_64/devel/continuous
-  container:
-    image: registry.centos.org/centos/centos:7
+# FIXME; temporary workaround
+# https://github.com/ostreedev/ostree/pull/1513#issuecomment-378784162
+host:
+  distro: fedora/28/atomic
+  specs:
+    ram: 4096
+#container:
+#  image: registry.centos.org/centos/centos:7
 
 # We only want the sanitizers on Fedora
 env:
-    HOSTS: vmcheck1 vmcheck2 vmcheck3
     CFLAGS: ''
 
-extra-repos:
-  - name: atomic-centos-continuous
-    baseurl: https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/build
-    gpgcheck: 0
-
 tests:
-  # we're still on devmapper here; we need to expand rootfs for tests
-  - for vm in vmcheck{1..3}; do ssh $vm lvresize -r -L +5G atomicos/root; done
-  - ci/vmcheck-provision.sh
-  - yum install -y epel-release
-  - ci/build-check.sh
-  - make vmcheck
+  # If we're still on devmapper, we need to expand rootfs for tests
+  - lvresize -r -l +100%FREE atomicos/root
+  - docker run --device /dev/kvm --rm -v $(pwd):/srv/code:z registry.centos.org/centos/centos:7 /bin/sh -c "cd /srv/code && ./ci/papr-vmcheck.sh"
 
 ---
 

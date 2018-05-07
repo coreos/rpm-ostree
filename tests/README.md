@@ -18,8 +18,8 @@ Tests are divided into three groups:
   Note: This is intentionally *not* a `Makefile` target because
   it doesn't require building and doesn't use uninstalled binaries.
 
-- Tests in the `vmcheck` directory are oriented around using
-  Vagrant.  Use `make vmcheck` to run them.
+- Tests in the `vmcheck` directory are oriented around testing
+  in disposable virtual machines.  Use `make vmcheck` to run them.
   See also `HACKING.md` in the top directory.
 
 The `common` directory contains files used by multiple

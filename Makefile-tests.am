@@ -78,7 +78,7 @@ check-local:
 	@echo "  *** NOTE ***"
 	@echo "  *** NOTE ***"
 
-.PHONY: vmsync vmoverlay vmcheck testenv
+.PHONY: vmsync vmcheck testenv
 
 HOSTS ?= "vmcheck"
 
@@ -88,20 +88,10 @@ vmsync:
 	fi; \
 	env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/sync.sh
 
-vmoverlay: inject-pkglist
-	@set -e; if [ -z "$(SKIP_VMOVERLAY)" ]; then \
-	  if [ -z "$(SKIP_INSTALL)" ]; then \
-	    env $(BASE_TESTS_ENVIRONMENT) ./tests/vmcheck/install.sh; \
-	  fi; \
-	  echo -n "$(HOSTS)" | xargs -P 0 -n 1 -d ' ' -I {} \
-	    env $(BASE_TESTS_ENVIRONMENT) VM={} \
-	      ./tests/vmcheck/overlay.sh; \
-	fi
 
 # set up test environment to somewhat resemble uninstalled tests
-vmcheck: vmoverlay
-	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) PYTHONUNBUFFERED=1 \
-	  tests/vmcheck/multitest.py $(HOSTS)
+vmcheck: inject-pkglist
+	@env VMTESTS=1 $(BASE_TESTS_ENVIRONMENT) tests/vmcheck/vmcheck-run.sh
 
 testenv:
 	@echo "===== ENTERING TESTENV ====="

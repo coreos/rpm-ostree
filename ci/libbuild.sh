@@ -2,7 +2,13 @@
 
 pkg_upgrade() {
     echo "Running yum -y distro-sync... $(date)"
-    yum -y distro-sync
+    if ! yum -y distro-sync; then
+        rc=$?
+        if test -f /var/log/dnf.log; then
+            grep librepo.LibrepoException /var/log/dnf.log
+        fi
+        exit ${rc}
+    fi
     echo "Done yum -y distro-sync! $(date)"
 }
 

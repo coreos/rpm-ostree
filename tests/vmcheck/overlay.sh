@@ -4,13 +4,6 @@ set -euo pipefail
 # Execute this code path on the host
 if test -z "${INSIDE_VM:-}"; then
     . ${commondir}/libvm.sh
-    vm_setup
-
-    if ! vm_ssh_wait 30; then
-      echo "ERROR: A running VM is required for 'make vmcheck'."
-      exit 1
-    fi
-
     vm_rsync
 
     vm_cmd env \
@@ -21,8 +14,13 @@ if test -z "${INSIDE_VM:-}"; then
 fi
 
 set -x
-
 # And then this code path in the VM
+
+console_log() {
+    echo "$(date) overlay: $@" > /dev/ttyS0
+}
+
+console_log "Starting"
 
 # get details from the current default deployment
 rpm-ostree status --json > json.txt
@@ -51,6 +49,8 @@ cd /ostree/repo/tmp
 rm vmcheck -rf
 ostree checkout $commit vmcheck --fsync=0
 rm vmcheck/etc -rf
+
+console_log "Checkout complete"
 
 # Now, overlay our built binaries & config files, unless
 # explicitly requested not to (with the goal of testing the
@@ -98,5 +98,7 @@ fi
 ostree commit --parent=$commit -b vmcheck --consume --no-bindings \
        --link-checkout-speedup ${commit_opts} "${source_opt}" \
        --selinux-policy=vmcheck --tree=dir=vmcheck
+console_log "Commit complete"
 
 ostree admin deploy vmcheck
+console_log "Deploy complete"

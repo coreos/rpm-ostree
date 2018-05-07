@@ -52,7 +52,7 @@ _cleanup_tmpdir () {
 # Create a tmpdir if we're running as a local test (i.e. through `make check`)
 # or as a `vmcheck` test, which also needs some scratch space on the host.
 if ( test -n "${UNINSTALLEDTESTS:-}" || test -n "${VMTESTS:-}" ) && ! test -f $PWD/.test; then
-   test_tmpdir=$(mktemp -d test.XXXXXX)
+   test_tmpdir=$(mktemp -d /tmp/test-$(basename ${topsrcdir}).XXXXXX)
    touch ${test_tmpdir}/.test
    trap _cleanup_tmpdir EXIT
    cd ${test_tmpdir}

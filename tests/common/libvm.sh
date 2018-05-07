@@ -17,11 +17,83 @@
 # Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-# prepares the VM and library for action
+vm_run_sti() {
+    local vmid=$1
+    sti_qemu_lockf=$(pwd)/sti-qemu.lock
+    mkdir inventory-${vmid}
+    cd inventory-${vmid}
+    # Marker to denote this is really a tmpdir
+    # https://fedoraproject.org/wiki/CI/Tests
+    if test -z "${TEST_SUBJECTS:-}"; then
+        cat <<EOF
+
+error: TEST_SUBJECTS must be set; e.g.:
+
+  curl -Lo fedora-atomic-host.qcow2 'https://getfedora.org/atomic_qcow2_latest'
+  export TEST_SUBJECTS=\$(pwd)/fedora-atomic-host.qcow2
+
+If you're doing interactive development, we recommend caching the qcow2
+somewhere persistent.
+EOF
+        exit 1
+    fi
+    for subj in ${TEST_SUBJECTS}; do
+        ls -al ${subj} && file ${subj}
+    done
+
+    # Required bits
+    rpm -q qemu-kvm standard-test-roles
+
+    # Unset G_DEBUG=fatal-warnings since qemu triggers a warning in C7 today
+    # (A bit embarassing that we ship it that way...)
+    env -u G_DEBUG /usr/share/ansible/inventory/standard-inventory-qcow2 > inventory.json
+    if ! jq '.' inventory.json; then
+        echo "Failed provisioning; JSON:"
+        sed -e 's,^,# ,' < inventory.json
+        exit 1
+    fi
+    python3 -c "
+import json
+with open('inventory.json') as f:
+  d = json.load(f)
+all_hostvars = d['_meta']['hostvars']
+for k in all_hostvars:
+  host = k
+  break
+hostvars = all_hostvars[host]
+
+# Ansible seems to sometimes use ansible_, sometimes ansible_ssh_
+def getkey(k):
+    return hostvars.get('ansible_'+k) or hostvars.get('ansible_ssh_'+k)
+
+print('''Host vmcheck
+  HostName {host}
+  User root
+  Port {port}
+  UserKnownHostsFile /dev/null
+  StrictHostKeyChecking no
+  PasswordAuthentication no
+  IdentityFile {identity}
+  IdentitiesOnly yes
+  LogLevel FATAL
+'''.format(host=getkey('host'),
+           port=getkey('port'),
+           identity=getkey('private_key_file')))
+" > ssh-config
+  export SSH_CONFIG=$(pwd)/ssh-config
+  cd -
+}
+
+# If SSH_CONFIG is set, use that pre-prepared VM.  Otherwise,
+# use the standard test interface
 vm_setup() {
+  local vmid=${1:-}
+  export SSH_CONFIG=${SSH_CONFIG:-${topsrcdir}/ssh-config}
+  if test '!' -f "${SSH_CONFIG}"; then
+    vm_run_sti "${vmid}"
+  fi
 
   export VM=${VM:-vmcheck}
-  export SSH_CONFIG=${SSH_CONFIG:-${topsrcdir}/ssh-config}
   SSHOPTS="-o User=root -o ControlMaster=auto \
            -o ControlPath=/var/tmp/ssh-$VM-$(date +%s%N).sock \
            -o ControlPersist=yes"
@@ -92,6 +164,11 @@ vm_cmd_as() {
 # - $@    command to run
 vm_cmd() {
   $SSH "$@"
+}
+
+vm_console_log() {
+    msg=$1
+    vm_cmd /bin/sh -c 'echo "$(date): '"${msg}"' > /dev/ttyS0"'
 }
 
 # Delete anything which we might change between runs
