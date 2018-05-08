@@ -3,9 +3,19 @@ branches:
     - auto
     - try
 
-context: f27-primary
-
+context: f27-codestyle
 required: true
+container:
+  image: registry.fedoraproject.org/fedora:27
+
+tests:
+  - ci/ci-commitmessage-submodules.sh
+  - ci/codestyle.sh
+
+---
+
+context: f27-primary
+inherit: true
 
 cluster:
   hosts:
@@ -26,8 +36,6 @@ env:
   CI_PKGS: rsync
 
 tests:
-  - ci/ci-commitmessage-submodules.sh
-  - ci/codestyle.sh
   - ci/build-check.sh
   - ci/vmcheck-provision.sh
   - make vmcheck
