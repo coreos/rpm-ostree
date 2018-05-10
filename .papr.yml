@@ -6,7 +6,7 @@ branches:
 context: f27-codestyle
 required: true
 container:
-  image: registry.fedoraproject.org/fedora:28
+  image: registry.fedoraproject.org/fedora:27
 
 tests:
   - ci/ci-commitmessage-submodules.sh
