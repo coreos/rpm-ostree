@@ -40,6 +40,10 @@ mkdir -p ${test_compose_datadir}
 datadir_owner=$(stat -c '%u' ${test_compose_datadir})
 test ${uid} = ${datadir_owner}
 
+rpm-ostree compose tree --test-compose-capability >out.txt
+assert_file_has_content_literal out.txt 'Exiting successfully due to --test-compose-capability'
+rm -f out.txt
+
 # Create a consistent cache of the RPMs
 echo "Preparing compose tests..."
 tmp_repo=${test_compose_datadir}/tmp-repo

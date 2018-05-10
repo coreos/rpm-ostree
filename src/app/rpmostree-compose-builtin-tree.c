@@ -27,6 +27,7 @@
 #include <libdnf/libdnf.h>
 #include <libdnf/dnf-repo.h>
 #include <sys/mount.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <linux/magic.h>
 #include <sys/statvfs.h>
@@ -64,6 +65,7 @@ static char *opt_repo;
 static char *opt_touch_if_changed;
 static gboolean opt_dry_run;
 static gboolean opt_print_only;
+static gboolean opt_test_compose_capability;
 static char *opt_write_commitid_to;
 
 /* shared by both install & commit */
@@ -86,6 +88,7 @@ static GOptionEntry install_option_entries[] = {
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
   { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
   { "print-only", 0, 0, G_OPTION_ARG_NONE, &opt_print_only, "Just expand any includes and print treefile", NULL },
+  { "test-compose-capability", 0, 0, G_OPTION_ARG_NONE, &opt_test_compose_capability, "Just test whether or not the environment will support running compose", NULL },
   { "touch-if-changed", 0, 0, G_OPTION_ARG_STRING, &opt_touch_if_changed, "Update the modification time on FILE if a new commit was created", "FILE" },
   { "workdir", 0, 0, G_OPTION_ARG_STRING, &opt_workdir, "Working directory", "WORKDIR" },
   { "workdir-tmpfs", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_workdir_tmpfs, "Use tmpfs for working state", NULL },
@@ -805,6 +808,137 @@ process_touch_if_changed (GError **error)
   return TRUE;
 }
 
+static const char mock_compat_envvar[] = "RPMOSTREE_MOCK_COMPAT_RECURSE";
+
+/* From @jlebon https://gist.github.com/jlebon/fb6e7c6dcc3ce17d3e2a86f5938ec033 */
+static const char mock_compat_script[] =
+    "#!/bin/bash\n"
+    "set -euo pipefail\n"
+    "# This is a small compatibility script that ensures mock\n"
+    "# chroots are compatible with applications that expect / to\n"
+    "# be a mount point, such as bubblewrap.\n"
+    "cleanup() {\n"
+    "    for mnt in sys proc dev; do\n"
+    "        umount -lf /mnt/mock-mount/$mnt || true\n"
+    "    done\n"
+    "    umount /mnt/mock-mount\n"
+    "    umount /mnt/mock-mount\n"
+    "}\n"
+    "trap cleanup EXIT\n"
+    "# The parent of mount in which we'll chroot can't be shared\n"
+    "# or pivot_root will barf. So we just remount onto itself,\n"
+    "# but make sure to make the first parent mount private.\n"
+    "mkdir -p /mnt/mock-mount\n"
+    "mount --bind / /mnt/mock-mount\n"
+    "mount --make-private /mnt/mock-mount\n"
+    "mount --bind /mnt/mock-mount /mnt/mock-mount\n"
+    "for mnt in proc sys; do\n"
+    "    mount --bind /$mnt /mnt/mock-mount/$mnt\n"
+    "done\n"
+    "if ! test -c /mnt/mock-mount/dev/zero; then mount -t devtmpfs devtmpfs /mnt/mock-mount/dev; fi\n"
+    "chroot /mnt/mock-mount \"$@\"\n";
+
+/* This is adapted from shell_global_reexec_self() from gnome-shell */
+static gboolean
+reexec_self_mock_compat (GError **error)
+{
+  if (!glnx_file_replace_contents_with_perms_at (AT_FDCWD, "/root/rpmostree-mock-compat.sh",
+                                                 (guint8*)mock_compat_script,
+                                                 strlen (mock_compat_script),
+                                                 0755, 0, 0,
+                                                 GLNX_FILE_REPLACE_NODATASYNC,
+                                                 NULL, error))
+    return FALSE;
+
+  g_autoptr(GPtrArray) arr = g_ptr_array_new ();
+  g_ptr_array_add (arr, "/root/rpmostree-mock-compat.sh");
+  g_ptr_array_add (arr, "/root/rpmostree-mock-compat.sh");
+
+  gsize len;
+  g_autofree char *buf = NULL;
+  if (!g_file_get_contents ("/proc/self/cmdline", &buf, &len, error))
+    return FALSE;
+
+  char *buf_p;
+  const char *buf_end = buf+len;
+  gboolean first = FALSE;
+  /* The cmdline file is NUL-separated */
+  for (buf_p = buf; buf_p < buf_end; buf_p = buf_p + strlen (buf_p) + 1)
+    {
+      if (!first)
+        g_ptr_array_add (arr, buf_p);
+      else
+        first = TRUE;
+    }
+  g_ptr_array_add (arr, NULL);
+
+  /* Avoid recursion */
+  setenv (mock_compat_envvar, "1", TRUE);
+
+  if (execvp (arr->pdata[0], (char**)arr->pdata) < 0)
+    return glnx_throw_errno_prefix (error, "execvp");
+
+  g_assert_not_reached ();
+  return TRUE;
+}
+
+static gboolean
+run_bwrap_selftest (GError **error)
+{
+  /* Test whether or not bwrap is going to work - we will fail inside e.g. a Docker
+   * container without --privileged or userns exposed.  This code has also
+   * gained some gymnastics to handle being invoked inside `mock --old-chroot`.
+   */
+  const gboolean mock_compat_invoked = getenv (mock_compat_envvar) != NULL;
+
+  if (!mock_compat_invoked)
+    {
+      gboolean mock_compat_mode = FALSE;
+      const gboolean running_in_nspawn = g_strcmp0 (getenv ("container"), "systemd-nspawn") == 0;
+      if (!running_in_nspawn)
+        {
+          /* Does /builddir exist and it's owned by `mockbuild` ? */
+          struct stat stbuf;
+          if (!glnx_fstatat_allow_noent (AT_FDCWD, "/builddir", &stbuf, AT_SYMLINK_NOFOLLOW, error))
+            return FALSE;
+          if (errno == 0)
+            {
+              struct passwd *pwent = getpwnam ("mockbuild");
+              if (pwent)
+                mock_compat_mode = (pwent->pw_uid == stbuf.st_uid);
+            }
+        }
+
+      if (mock_compat_mode)
+        {
+          g_printerr ("NOTE: mock --old-chroot detected (/builddir:mockbuild), compatibility mode enabled\n");
+          g_autoptr(GError) local_error = NULL;
+          if (!rpmostree_bwrap_selftest (&local_error))
+            {
+              if (getenv ("RPMOSTREE_MOCK_COMPAT_RECURSE"))
+                {
+                  g_propagate_error (error, g_steal_pointer (&local_error));
+                  return glnx_prefix_error (error, "Recursive mock compat");
+                }
+
+              g_printerr ("NOTE: Attempting mock compat workaround...\n");
+
+              if (!reexec_self_mock_compat (error))
+                return FALSE;
+
+              g_assert_not_reached ();
+            }
+          /* Fall through - bwrap worked, so we may be in mock --new-chroot, or not
+           * in mock at all.
+           */
+        }
+    }
+  else if (!rpmostree_bwrap_selftest (error))
+    return FALSE;
+
+  return TRUE;
+}
+
 /* Prepare a context - this does some generic pre-compose initialization from
  * the arguments such as loading the treefile and any specified metadata.
  */
@@ -818,11 +952,6 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 
   /* Init fds to -1 */
   self->workdir_dfd = self->rootfs_dfd = self->cachedir_dfd = -1;
-  /* Test whether or not bwrap is going to work - we will fail inside e.g. a Docker
-   * container without --privileged or userns exposed.
-   */
-  if (!rpmostree_bwrap_selftest (error))
-    return FALSE;
 
   self->repo = ostree_repo_open_at (AT_FDCWD, opt_repo, cancellable, error);
   if (!self->repo)
@@ -1521,6 +1650,15 @@ rpmostree_compose_builtin_tree (int             argc,
                                        NULL, NULL, NULL, NULL, NULL,
                                        error))
     return FALSE;
+
+  /* Handle this up front */
+  if (!run_bwrap_selftest (error))
+    return FALSE;
+  if (opt_test_compose_capability)
+    {
+      g_print ("Exiting successfully due to --test-compose-capability\n");
+      return TRUE;
+    }
 
   if (argc < 2)
     {

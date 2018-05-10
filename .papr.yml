@@ -173,3 +173,22 @@ tests:
   - git clone https://github.com/projectatomic/atomic-host-tests
   - make vmoverlay HOSTS=testnode
   - cd atomic-host-tests && ./.test_director
+
+---
+
+branches:
+  - master
+  - auto
+  - try
+
+cluster:
+  hosts:
+    - name: composetest-f27
+      distro: fedora/27/atomic
+  container:
+    image: registry.fedoraproject.org/fedora:27
+
+context: f27-mock-old-chroot-compose
+
+tests:
+  - env TARGET_HOST=composetest-f27 MOCKROOT=fedora-27-x86_64 ci/compose-mock-chroot.sh
