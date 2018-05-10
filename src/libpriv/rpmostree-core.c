@@ -3813,15 +3813,15 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   }
 
   guint overrides_total = overrides_remove->len + overrides_replace->len;
+  const char *progress_msg = "Checking out packages";
   if (!layering_on_base)
     {
       g_assert_cmpint (overrides_total, ==, 0);
-      rpmostree_output_message ("Installing %u package%s", overlays->len,
-                                _NS(overlays->len));
     }
   else if (overrides_total > 0)
     {
       g_assert (layering_on_base);
+      progress_msg = "Processing packages";
       if (overlays->len > 0)
         rpmostree_output_message ("Applying %u override%s and %u overlay%s",
                                   overrides_total, _NS(overrides_total),
@@ -3830,10 +3830,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         rpmostree_output_message ("Applying %u override%s", overrides_total,
                                   _NS(overrides_total));
     }
-
   else if (overlays->len > 0)
-    rpmostree_output_message ("Applying %u overlay%s", overlays->len,
-                              _NS(overlays->len));
+    ;
   else
     g_assert_not_reached ();
 
@@ -3861,7 +3859,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                        cancellable, error))
         return FALSE;
       n_rpmts_done++;
-      rpmostree_output_progress_n_items ("Building filesystem", n_rpmts_done, n_rpmts_elements);
+      rpmostree_output_progress_n_items (progress_msg, n_rpmts_done, n_rpmts_elements);
     }
 
   g_autoptr(GHashTable) files_skip_add = NULL;
@@ -3896,7 +3894,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                      dirs_to_remove, cancellable, error))
         return FALSE;
       n_rpmts_done++;
-      rpmostree_output_progress_n_items ("Building filesystem", n_rpmts_done, n_rpmts_elements);
+      rpmostree_output_progress_n_items (progress_msg, n_rpmts_done, n_rpmts_elements);
     }
   g_clear_pointer (&files_skip_delete, g_hash_table_unref);
 
@@ -3933,7 +3931,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                        files_skip_add, ovwmode, cancellable, error))
         return FALSE;
       n_rpmts_done++;
-      rpmostree_output_progress_n_items ("Building filesystem", n_rpmts_done, n_rpmts_elements);
+      rpmostree_output_progress_n_items (progress_msg, n_rpmts_done, n_rpmts_elements);
     }
 
   rpmostree_output_progress_end ();

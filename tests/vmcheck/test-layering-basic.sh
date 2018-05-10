@@ -93,7 +93,7 @@ echo "ok pkg-add foo"
 # Test that we don't do progress bars if on a tty (with the client)
 vm_rpmostree uninstall foo-1.0
 vm_rpmostree install foo-1.0 > foo-install.txt
-assert_file_has_content_literal foo-install.txt 'Building filesystem (1/1) 100%'
+assert_file_has_content_literal foo-install.txt 'Checking out packages (1/1) 100%'
 echo "ok install not on a tty"
 
 vm_reboot
