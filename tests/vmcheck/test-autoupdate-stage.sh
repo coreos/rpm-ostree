@@ -32,9 +32,11 @@ vm_ostreeupdate_create v2
 
 vm_rpmostree cleanup -m
 
-vm_rpmostree status | grep 'auto updates disabled'
+vm_rpmostree status > status.txt
+assert_file_has_content status.txt 'auto updates disabled'
 vm_change_update_policy ex-stage
-vm_rpmostree status | grep 'auto updates enabled (stage'
+vm_rpmostree status > status.txt
+assert_file_has_content_literal status.txt 'auto updates enabled (ex-stage'
 
 vm_rpmostree upgrade --trigger-automatic-update-policy
 vm_assert_status_jq ".deployments[1][\"booted\"]" \
