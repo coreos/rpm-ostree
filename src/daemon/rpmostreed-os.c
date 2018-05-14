@@ -793,7 +793,7 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
           rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
 
           /* For the AutomaticUpdateTrigger "check" case, we want to make sure we refresh
-           * the CachedUpdate property; "stage" will do this through sysroot_changed */
+           * the CachedUpdate property; "ex-stage" will do this through sysroot_changed */
           const char *method_name = g_dbus_method_invocation_get_method_name (invocation);
           if (g_str_equal (method_name, "AutomaticUpdateTrigger") &&
               (default_flags & (RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY |
