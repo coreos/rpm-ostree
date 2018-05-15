@@ -391,11 +391,14 @@ handle_register_client (RPMOSTreeSysroot *object,
                         GDBusMethodInvocation *invocation,
                         GVariant *arg_options)
 {
-  const char *sender;
-  sender = g_dbus_method_invocation_get_sender (invocation);
+  const char *sender = g_dbus_method_invocation_get_sender (invocation);
   g_assert (sender);
 
-  rpmostreed_daemon_add_client (rpmostreed_daemon_get (), sender);
+  g_autoptr(GVariantDict) optdict = g_variant_dict_new (arg_options);
+  const char *client_id = NULL;
+  g_variant_dict_lookup (optdict, "id", "&s", &client_id);
+
+  rpmostreed_daemon_add_client (rpmostreed_daemon_get (), sender, client_id);
   rpmostree_sysroot_complete_register_client (object, invocation);
 
   return TRUE;

@@ -34,6 +34,8 @@
 #include "rpmostree-util.h"
 #include "rpmostree-rpm-util.h"
 
+#define RPMOSTREE_CLI_ID "cli"
+
 void
 rpmostree_cleanup_peer (GPid *peer_pid)
 {
@@ -211,6 +213,8 @@ rpmostree_load_sysroot (gchar *sysroot,
       g_autoptr(GError) local_error = NULL;
       g_autoptr(GVariantBuilder) options_builder =
         g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
+      g_variant_builder_add (options_builder, "{sv}", "id",
+                             g_variant_new_string (RPMOSTREE_CLI_ID));
       g_autoptr(GVariant) res =
         g_dbus_connection_call_sync (connection, bus_name, sysroot_objpath,
                                      "org.projectatomic.rpmostree1.Sysroot",

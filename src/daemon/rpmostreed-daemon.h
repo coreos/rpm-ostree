@@ -34,7 +34,8 @@ gboolean           rpmostreed_get_client_uid        (RpmostreedDaemon *self,
                                                      const char       *client,
                                                      uid_t            *out_uid);
 void               rpmostreed_daemon_add_client     (RpmostreedDaemon *self,
-                                                      const char *client);
+                                                     const char *client,
+                                                     const char *client_id);
 void               rpmostreed_daemon_remove_client  (RpmostreedDaemon *self,
                                                      const char *client);
 char *             rpmostreed_daemon_client_get_string (RpmostreedDaemon *self,

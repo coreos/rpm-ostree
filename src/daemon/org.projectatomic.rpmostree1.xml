@@ -32,7 +32,7 @@
          to either invoke methods on the daemon, or monitor status.
          If no clients are registered, the daemon may exit.
 
-         No options are currently defined.
+         'name' (type 's') - Package/component name (e.g. `cockpit`, `gnome-software`)
     -->
     <method name="RegisterClient">
       <arg type="a{sv}" name="options" direction="in"/>
