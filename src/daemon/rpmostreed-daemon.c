@@ -37,7 +37,7 @@
 #define EXPERIMENTAL_CONFIG_GROUP "Experimental"
 
 struct RpmOstreeClient;
-static struct RpmOstreeClient *client_new (RpmostreedDaemon *self, const char *address);
+static struct RpmOstreeClient *client_new (RpmostreedDaemon *self, const char *address, const char *id);
 
 /**
  * SECTION: daemon
@@ -98,6 +98,7 @@ G_DEFINE_TYPE_WITH_CODE (RpmostreedDaemon, rpmostreed_daemon, G_TYPE_OBJECT,
                                                 rpmostreed_daemon_initable_iface_init))
 
 struct RpmOstreeClient {
+  char *id;
   char *address;
   guint name_watch_id;
   /* In Rust this'd be Option<uid_t> etc. */
@@ -113,6 +114,7 @@ rpmostree_client_free (struct RpmOstreeClient *client)
 {
   if (!client)
     return;
+  g_free (client->id);
   g_free (client->address);
   g_free (client->sd_unit);
   g_free (client);
@@ -121,10 +123,13 @@ rpmostree_client_free (struct RpmOstreeClient *client)
 static char *
 rpmostree_client_to_string (struct RpmOstreeClient *client)
 {
+  g_autoptr(GString) buf = g_string_new ("client(");
+  if (client->id)
+    g_string_append_printf (buf, "id:%s ", client->id);
   /* Since DBus addresses have a leading ':', let's avoid another. Yeah it's not
    * symmetric, but it does read better.
    */
-  g_autoptr(GString) buf = g_string_new ("client(dbus");
+  g_string_append (buf, "dbus");
   g_string_append (buf, client->address);
   if (client->sd_unit)
     g_string_append_printf (buf, " unit:%s", client->sd_unit);
@@ -246,7 +251,7 @@ on_active_txn_changed (GObject *object,
            * then let's gather the relevant client info now.
            */
           if (!clientdata)
-            clientdata = clientdata_owned = client_new (self, sender);
+            clientdata = clientdata_owned = client_new (self, sender, NULL);
           g_autofree char *client_str = rpmostree_client_to_string (clientdata);
           g_autofree char *client_data_msg = NULL;
           if (clientdata->uid_valid)
@@ -665,10 +670,12 @@ get_client_pid (RpmostreedDaemon *self,
 
 /* Given a DBus address, load metadata for it */
 static struct RpmOstreeClient *
-client_new (RpmostreedDaemon *self, const char *address)
+client_new (RpmostreedDaemon *self, const char *address,
+            const char *client_id)
 {
   struct RpmOstreeClient *client = g_new0 (struct RpmOstreeClient, 1);
   client->address = g_strdup (address);
+  client->id = g_strdup (client_id);
   if (rpmostreed_get_client_uid (self, address, &client->uid))
     client->uid_valid = TRUE;
   if (get_client_pid (self, address, &client->pid))
@@ -685,12 +692,13 @@ client_new (RpmostreedDaemon *self, const char *address)
 
 void
 rpmostreed_daemon_add_client (RpmostreedDaemon *self,
-                              const char       *client)
+                              const char       *client,
+                              const char       *client_id)
 {
   if (g_hash_table_lookup (self->bus_clients, client))
     return;
 
-  struct RpmOstreeClient *clientdata = client_new (self, client);
+  struct RpmOstreeClient *clientdata = client_new (self, client, client_id);
   clientdata->name_watch_id =
     g_dbus_connection_signal_subscribe (self->connection,
                                         "org.freedesktop.DBus",
