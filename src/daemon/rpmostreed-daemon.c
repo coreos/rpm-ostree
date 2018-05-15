@@ -26,6 +26,7 @@
 
 #include <libglnx.h>
 #include <systemd/sd-journal.h>
+#include <systemd/sd-login.h>
 #include <systemd/sd-daemon.h>
 #include <stdio.h>
 
@@ -34,6 +35,9 @@
 #define RPMOSTREED_CONF SYSCONFDIR "/rpm-ostreed.conf"
 #define DAEMON_CONFIG_GROUP "Daemon"
 #define EXPERIMENTAL_CONFIG_GROUP "Experimental"
+
+struct RpmOstreeClient;
+static struct RpmOstreeClient *client_new (RpmostreedDaemon *self, const char *address);
 
 /**
  * SECTION: daemon
@@ -96,26 +100,39 @@ G_DEFINE_TYPE_WITH_CODE (RpmostreedDaemon, rpmostreed_daemon, G_TYPE_OBJECT,
 struct RpmOstreeClient {
   char *address;
   guint name_watch_id;
+  /* In Rust this'd be Option<uid_t> etc. */
   gboolean uid_valid;
   uid_t uid;
+  gboolean pid_valid;
+  pid_t pid;
+  char *sd_unit;
 };
 
 static void
 rpmostree_client_free (struct RpmOstreeClient *client)
 {
+  if (!client)
+    return;
   g_free (client->address);
+  g_free (client->sd_unit);
   g_free (client);
 }
 
 static char *
 rpmostree_client_to_string (struct RpmOstreeClient *client)
 {
-  g_autoptr(GString) buf = g_string_new ("client ");
+  /* Since DBus addresses have a leading ':', let's avoid another. Yeah it's not
+   * symmetric, but it does read better.
+   */
+  g_autoptr(GString) buf = g_string_new ("client(dbus");
   g_string_append (buf, client->address);
+  if (client->sd_unit)
+    g_string_append_printf (buf, " unit:%s", client->sd_unit);
   if (client->uid_valid)
-    g_string_append_printf (buf, " (uid %lu)", (unsigned long) client->uid);
+    g_string_append_printf (buf, " uid:%lu", (unsigned long) client->uid);
   else
-    g_string_append (buf, " (unknown uid)");
+    g_string_append (buf, " uid:<unknown>");
+  g_string_append_c (buf, ')');
   return g_string_free (g_steal_pointer (&buf), FALSE);
 }
 
@@ -223,16 +240,24 @@ on_active_txn_changed (GObject *object,
       g_variant_get (active_txn, "(&s&s&s)", &method, &sender, &path);
       if (*method)
         {
-          g_autofree char *client_str = rpmostreed_daemon_client_get_string (self, sender);
           struct RpmOstreeClient *clientdata = g_hash_table_lookup (self->bus_clients, sender);
+          struct RpmOstreeClient *clientdata_owned = NULL;
+          /* If the caller didn't register (e.g. Cockpit doesn't today),
+           * then let's gather the relevant client info now.
+           */
+          if (!clientdata)
+            clientdata = clientdata_owned = client_new (self, sender);
+          g_autofree char *client_str = rpmostree_client_to_string (clientdata);
           g_autofree char *client_data_msg = NULL;
-          if (clientdata && clientdata->uid_valid)
+          if (clientdata->uid_valid)
             client_data_msg = g_strdup_printf ("CLIENT_UID=%u", clientdata->uid);
+          /* TODO: convert other client fields to structured log */
           sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR, SD_ID128_FORMAT_VAL(RPMOSTREE_MESSAGE_TRANSACTION_STARTED),
                            "MESSAGE=Initiated txn %s for %s: %s", method, client_str, path,
                            "BUS_ADDRESS=%s", sender,
                            client_data_msg ?: NULL,
                            NULL);
+          rpmostree_client_free (clientdata_owned);
         }
     }
 
@@ -616,6 +641,48 @@ rpmostreed_get_client_uid (RpmostreedDaemon *self,
   return TRUE;
 }
 
+static gboolean
+get_client_pid (RpmostreedDaemon *self,
+                const char       *client,
+                pid_t            *out_pid)
+{
+  g_autoptr(GError) local_error = NULL;
+  g_autoptr(GVariant) all = g_dbus_proxy_call_sync (self->bus_proxy,
+                                                    "GetConnectionUnixProcessID",
+                                                    g_variant_new ("(s)", client),
+                                                    G_DBUS_CALL_FLAGS_NONE,
+                                                    2000, NULL, &local_error);
+  if (!all)
+    {
+      sd_journal_print (LOG_WARNING, "Failed to GetConnectionUnixProcessID for client %s: %s",
+                        client, local_error->message);
+      return FALSE;
+    }
+
+  g_variant_get (all, "(u)", out_pid);
+  return TRUE;
+}
+
+/* Given a DBus address, load metadata for it */
+static struct RpmOstreeClient *
+client_new (RpmostreedDaemon *self, const char *address)
+{
+  struct RpmOstreeClient *client = g_new0 (struct RpmOstreeClient, 1);
+  client->address = g_strdup (address);
+  if (rpmostreed_get_client_uid (self, address, &client->uid))
+    client->uid_valid = TRUE;
+  if (get_client_pid (self, address, &client->pid))
+    {
+      client->pid_valid = TRUE;
+      if (sd_pid_get_user_unit (client->pid, &client->sd_unit) == 0)
+        {}
+      else if (sd_pid_get_unit (client->pid, &client->sd_unit) == 0)
+        {}
+    }
+
+  return g_steal_pointer (&client);
+}
+
 void
 rpmostreed_daemon_add_client (RpmostreedDaemon *self,
                               const char       *client)
@@ -623,8 +690,7 @@ rpmostreed_daemon_add_client (RpmostreedDaemon *self,
   if (g_hash_table_lookup (self->bus_clients, client))
     return;
 
-  struct RpmOstreeClient *clientdata = g_new0 (struct RpmOstreeClient, 1);
-  clientdata->address = g_strdup (client);
+  struct RpmOstreeClient *clientdata = client_new (self, client);
   clientdata->name_watch_id =
     g_dbus_connection_signal_subscribe (self->connection,
                                         "org.freedesktop.DBus",
@@ -636,9 +702,6 @@ rpmostreed_daemon_add_client (RpmostreedDaemon *self,
                                         on_name_owner_changed,
                                         g_object_ref (self),
                                         g_object_unref);
-
-  if (rpmostreed_get_client_uid (self, client, &clientdata->uid))
-    clientdata->uid_valid = TRUE;
 
   g_hash_table_insert (self->bus_clients, (char*)clientdata->address, clientdata);
   g_autofree char *clientstr = rpmostree_client_to_string (clientdata);
