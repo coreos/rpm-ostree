@@ -82,9 +82,15 @@ vm_rpmostree status | grep 'auto updates enabled (check'
 
 # build an *older version* and check that we don't report an update
 vm_build_rpm layered-cake version 2.1 release 2
-vm_rpmostree upgrade --trigger-automatic-update-policy
+cursor=$(vm_get_journal_cursor)
+vm_cmd systemctl start rpm-ostree-automatic.service
+vm_wait_content_after_cursor $cursor 'Txn AutomaticUpdateTrigger.*successful'
 vm_rpmostree status -v > out.txt
 assert_not_file_has_content out.txt "Available update"
+# And check the unit name https://github.com/projectatomic/rpm-ostree/pull/1368
+vm_cmd journalctl -u rpm-ostreed --after-cursor > journal.txt
+assert_file_has_content journal.txt 'client(id:cli.*unit:rpm-ostreed-automatic.service'
+rm -f journal.txt
 
 # build a *newer version* and check that we report an update
 vm_build_rpm layered-cake version 2.1 release 4
