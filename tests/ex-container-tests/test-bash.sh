@@ -11,7 +11,7 @@ cat >bash.conf <<EOF
 ref=bash
 packages=coreutils;bash;
 repos=fedora;
-releasever=27
+releasever=28
 EOF
 
 rpm-ostree ex container assemble bash.conf
@@ -25,7 +25,7 @@ cat >bash-nodocs.conf <<EOF
 ref=bash-nodocs
 packages=coreutils;bash;
 repos=fedora;
-releasever=27
+releasever=28
 documentation=false;
 EOF
 

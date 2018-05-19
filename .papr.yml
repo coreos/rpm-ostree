@@ -3,10 +3,11 @@ branches:
     - auto
     - try
 
-context: f27-codestyle
+context: f28-codestyle
+
 required: true
 container:
-  image: registry.fedoraproject.org/fedora:27
+  image: registry.fedoraproject.org/fedora:28
 
 tests:
   - ci/ci-commitmessage-submodules.sh
@@ -14,19 +15,27 @@ tests:
 
 ---
 
-context: f27-primary
+context: f28-primary
 inherit: true
 
 cluster:
   hosts:
     - name: vmcheck1
-      distro: fedora/27/atomic
+      distro: fedora/28/atomic
+      # XXX: use updates ref for now so that we can use GA kernel in
+      # test-override-kernel.sh -- remove once another f28 AH update comes out
+      ostree:
+        branch: fedora/28/x86_64/updates/atomic-host
     - name: vmcheck2
-      distro: fedora/27/atomic
+      distro: fedora/28/atomic
+      ostree:
+        branch: fedora/28/x86_64/updates/atomic-host
     - name: vmcheck3
-      distro: fedora/27/atomic
+      distro: fedora/28/atomic
+      ostree:
+        branch: fedora/28/x86_64/updates/atomic-host
   container:
-    image: registry.fedoraproject.org/fedora:27
+    image: registry.fedoraproject.org/fedora:28
 
 env:
   HOSTS: vmcheck1 vmcheck2 vmcheck3
@@ -98,9 +107,9 @@ branches:
   - auto
   - try
 
-# NB: when bumping 27 here, also bump fedora.repo, and compose script
+# NB: when bumping 28 here, also bump fedora.repo, and compose script
 
-context: f27-compose
+context: f28-compose
 
 build: false
 
@@ -112,7 +121,7 @@ required: true
 # which we don't have right now; so just provision a VM and do a
 # docker --privileged run.
 host:
-  distro: fedora/27/atomic
+  distro: fedora/28/atomic
   # Compose tests are slow and should be parallelized
   specs:
     cpus: 4
@@ -125,7 +134,7 @@ tests:
     -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
-    registry.fedoraproject.org/fedora:27 /bin/sh -c
+    registry.fedoraproject.org/fedora:28 /bin/sh -c
     "./ci/build.sh && make install && ./tests/compose"
 
 artifacts:
@@ -138,21 +147,21 @@ branches:
   - auto
   - try
 
-context: f27-ex-container
+context: f28-ex-container
 build: false
 timeout: 30m
 required: false
 
-# See the f27-compose context for why we do things this way.
+# See the f28-compose context for why we do things this way.
 host:
-  distro: fedora/27/atomic
+  distro: fedora/28/atomic
 
 tests:
   - docker run --privileged --rm
     -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
-    registry.fedoraproject.org/fedora:27 /bin/sh -c
+    registry.fedoraproject.org/fedora:28 /bin/sh -c
     "./ci/build.sh && make install && adduser unpriv && setfacl -m u:unpriv:rwX . && runuser -u unpriv ./tests/ex-container"
 
 artifacts:
