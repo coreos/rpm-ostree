@@ -31,27 +31,28 @@ if test "${osid}" != 'ID=fedora'; then
 fi
 
 # Test that we can override the kernel.  For ease of testing
-# I just picked the "gold" F27 kernel.
-vm_cmd 'curl -sS -L -O https://dl.fedoraproject.org/pub/fedora/linux/releases/27/Everything/x86_64/os/Packages/k/kernel-4.13.9-300.fc27.x86_64.rpm \
-                -O https://dl.fedoraproject.org/pub/fedora/linux/releases/27/Everything/x86_64/os/Packages/k/kernel-core-4.13.9-300.fc27.x86_64.rpm \
-                -O https://dl.fedoraproject.org/pub/fedora/linux/releases/27/Everything/x86_64/os/Packages/k/kernel-modules-4.13.9-300.fc27.x86_64.rpm \
-                -O https://dl.fedoraproject.org/pub/fedora/linux/releases/27/Everything/x86_64/os/Packages/k/kernel-modules-extra-4.13.9-300.fc27.x86_64.rpm'
+# I just picked the "gold" F28 kernel.
+vm_cmd 'curl -sS -L \
+  -O https://dl.fedoraproject.org/pub/fedora/linux/releases/28/Everything/x86_64/os/Packages/k/kernel-4.16.3-301.fc28.x86_64.rpm \
+  -O https://dl.fedoraproject.org/pub/fedora/linux/releases/28/Everything/x86_64/os/Packages/k/kernel-core-4.16.3-301.fc28.x86_64.rpm \
+  -O https://dl.fedoraproject.org/pub/fedora/linux/releases/28/Everything/x86_64/os/Packages/k/kernel-modules-4.16.3-301.fc28.x86_64.rpm \
+  -O https://dl.fedoraproject.org/pub/fedora/linux/releases/28/Everything/x86_64/os/Packages/k/kernel-modules-extra-4.16.3-301.fc28.x86_64.rpm'
 current=$(vm_get_booted_csum)
 vm_cmd rpm-ostree db list "${current}" > current-dblist.txt
-assert_not_file_has_content current-dblist.txt 'kernel-4.13.9-300.fc27'
+assert_not_file_has_content current-dblist.txt 'kernel-4.16.3-301.fc28'
 grep -E '^ kernel-4' current-dblist.txt  | sed -e 's,^ *,,' > orig-kernel.txt
 assert_streq "$(wc -l < orig-kernel.txt)" "1"
 orig_kernel=$(cat orig-kernel.txt)
-vm_rpmostree override replace ./kernel*4.13.9*.rpm
+vm_rpmostree override replace ./kernel*4.16.3*.rpm
 new=$(vm_get_pending_csum)
 vm_cmd rpm-ostree db list "${new}" > new-dblist.txt
-assert_file_has_content_literal new-dblist.txt 'kernel-4.13.9-300.fc27'
+assert_file_has_content_literal new-dblist.txt 'kernel-4.16.3-301.fc28'
 if grep -q -F -e "${orig_kernel}" new-dblist.txt; then
     fatal "Found kernel: ${line}"
 fi
 newroot=$(vm_get_deployment_root 0)
 vm_cmd find ${newroot}/usr/lib/modules -maxdepth 1 -type d > modules-dirs.txt
 assert_streq "$(wc -l < modules-dirs.txt)" "2"
-assert_file_has_content_literal modules-dirs.txt '4.13.9-300.fc27'
+assert_file_has_content_literal modules-dirs.txt '4.16.3-301.fc28'
 
 echo "ok override kernel"

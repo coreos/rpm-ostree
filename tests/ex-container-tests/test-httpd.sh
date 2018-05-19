@@ -11,7 +11,7 @@ cat >httpd.conf <<EOF
 ref=httpd
 packages=httpd;
 repos=fedora;
-releasever=27
+releasever=28
 EOF
 
 # This one has non-root ownership in some of the dependencies, but we shouldn't

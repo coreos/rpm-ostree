@@ -15,6 +15,9 @@ make install
 # build.sh) because it doesn't support -Wno-error=macro-redefined, (and neither
 # does clang on CentOS). Anyway, all we want is at least one clang run.
 if test -x /usr/bin/clang; then
+  if grep -q -e 'static inline.*_GLIB_AUTOPTR_LIST_FUNC_NAME' /usr/include/glib-2.0/glib/gmacros.h; then
+      echo 'Skipping clang check, see https://bugzilla.gnome.org/show_bug.cgi?id=796346'
+  else
   # Except unused-command-line-argument:
   #   error: argument unused during compilation: '-specs=/usr/lib/rpm/redhat/redhat-hardened    -cc1' [-Werror,-Wunused-command-line-argument]
   # Except for macro-redefined:
@@ -25,4 +28,5 @@ if test -x /usr/bin/clang; then
   export CC=clang
   git clean -dfx && git submodule foreach git clean -dfx
   build ${CONFIGOPTS:-}
+  fi
 fi
