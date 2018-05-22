@@ -59,13 +59,29 @@ vm_rpmostree status > status.txt
 assert_not_file_has_content status.txt "Pinned: yes"
 echo "ok pinning"
 
+# trying to clean up a pinned pending deployment should be a no-op
 vm_cmd ostree admin pin 0
+vm_assert_status_jq ".deployments|length == 2" \
+                    ".deployments[0][\"pinned\"] == true"
 vm_rpmostree cleanup -p
 vm_assert_status_jq ".deployments|length == 2"
+echo "ok pinned pending"
+
+vm_build_rpm bar
+vm_rpmostree install bar
+vm_assert_status_jq ".deployments|length == 3"
+# but that new one shouldn't be pinned
+vm_assert_status_jq ".deployments[0][\"pinned\"] == false"
+vm_rpmostree cleanup -p
+vm_assert_status_jq ".deployments|length == 2"
+echo "ok pinning not carried over"
+
+# and now check that we can unpin and cleanup
 vm_cmd ostree admin pin -u 0
+vm_assert_status_jq ".deployments[0][\"pinned\"] == false"
 vm_rpmostree cleanup -p
 vm_assert_status_jq ".deployments|length == 1"
-echo "ok pinned retained"
+echo "ok unpin"
 
 # https://github.com/ostreedev/ostree/pull/1055
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck --timestamp=\"October 25 1985\"

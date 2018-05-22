@@ -111,9 +111,6 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   ret->cached_overrides_remove =
     g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
-  /* NOTE hack here - see https://github.com/ostreedev/ostree/pull/343 */
-  g_key_file_remove_key (ret->kf, "origin", "unlocked", NULL);
-
   ret->cached_unconfigured_state = g_key_file_get_string (ret->kf, "origin", "unconfigured-state", NULL);
 
   g_autofree char *refspec = g_key_file_get_string (ret->kf, "origin", "refspec", NULL);
@@ -175,6 +172,22 @@ rpmostree_origin_dup (RpmOstreeOrigin *origin)
   RpmOstreeOrigin *ret = rpmostree_origin_parse_keyfile (origin->kf, &local_error);
   g_assert_no_error (local_error);
   return ret;
+}
+
+/* This is useful if the origin is meant to be used to generate a *new* deployment, as
+ * opposed to simply gathering information about an existing one. In such cases, there are
+ * some things that we do not generally want to apply to a new deployment. */
+void
+rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin)
+{
+  /* first libostree-known things */
+  ostree_deployment_origin_remove_transient_state (origin->kf);
+
+  /* this is already covered by the above, but the below also updates the cached value */
+  rpmostree_origin_set_override_commit (origin, NULL, NULL);
+
+  /* then rpm-ostree specific things */
+  rpmostree_origin_set_live_state (origin, NULL, NULL);
 }
 
 const char *
