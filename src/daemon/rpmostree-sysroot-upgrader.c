@@ -108,6 +108,7 @@ parse_origin_deployment (RpmOstreeSysrootUpgrader *self,
   self->origin = rpmostree_origin_parse_deployment (deployment, error);
   if (!self->origin)
     return FALSE;
+  rpmostree_origin_remove_transient_state (self->origin);
 
   if (rpmostree_origin_get_unconfigured_state (self->origin) &&
       !(self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED))
@@ -118,11 +119,6 @@ parse_origin_deployment (RpmOstreeSysrootUpgrader *self,
                    rpmostree_origin_get_unconfigured_state (self->origin));
       return FALSE;
     }
-
-  /* A bit hacky; here we clean out the live state which is deployment specific.
-   * We don't expect users of the upgrader to want the live state.
-   */
-  rpmostree_origin_set_live_state (self->origin, NULL, NULL);
 
   return TRUE;
 }

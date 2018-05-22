@@ -52,6 +52,9 @@ rpmostree_origin_parse_deployment (OstreeDeployment *deployment,
 RpmOstreeOrigin *
 rpmostree_origin_dup (RpmOstreeOrigin *origin);
 
+void
+rpmostree_origin_remove_transient_state (RpmOstreeOrigin *origin);
+
 const char *
 rpmostree_origin_get_refspec (RpmOstreeOrigin *origin);
 
