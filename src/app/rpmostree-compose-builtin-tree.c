@@ -1267,7 +1267,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
       if (!rpmostree_check_groups (self->repo, self->rootfs_dfd, treefile_dirpath, self->treefile,
                                    self->previous_checksum,
                                    cancellable, error))
-        glnx_prefix_error (error, "Handling group db");
+        return glnx_prefix_error (error, "Handling group db");
     }
 
   /* See comment above */
