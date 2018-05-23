@@ -136,6 +136,9 @@ conv_passwd_ent_free (void *vptr)
   struct conv_passwd_ent *ptr = vptr;
 
   g_free (ptr->name);
+  g_free (ptr->pw_gecos);
+  g_free (ptr->pw_dir);
+  g_free (ptr->pw_shell);
   g_free (ptr);
 }
 
@@ -156,8 +159,9 @@ rpmostree_passwd_data2passwdents (const char *data)
       convent->name = g_strdup (ent->pw_name);
       convent->uid  = ent->pw_uid;
       convent->gid  = ent->pw_gid;
-      /* Want to add anymore, like dir? */
-
+      convent->pw_gecos = g_strdup (ent->pw_gecos);
+      convent->pw_dir = g_strdup (ent->pw_dir);
+      convent->pw_shell = g_strdup (ent->pw_shell);
       g_ptr_array_add (ret, convent);
     }
 
