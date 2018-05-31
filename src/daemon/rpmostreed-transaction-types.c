@@ -877,20 +877,27 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                               g_strv_length (self->uninstall_pkgs));
     }
 
+  /* lazily loaded cache that's used in a few conditional blocks */
+  g_autoptr(RpmOstreeRefSack) base_rsack = NULL;
+
   if (self->install_pkgs)
     {
       /* we run a special check here; let's just not allow trying to install a pkg that will
        * right away become inactive because it's already installed */
-      const char *base = rpmostree_sysroot_upgrader_get_base (upgrader);
-      g_autoptr(RpmOstreeRefSack) rsack =
-        rpmostree_get_refsack_for_commit (repo, base, cancellable, error);
-      if (rsack == NULL)
-        return FALSE;
+
+      if (!base_rsack)
+        {
+          const char *base = rpmostree_sysroot_upgrader_get_base (upgrader);
+          base_rsack = rpmostree_get_refsack_for_commit (repo, base, cancellable, error);
+          if (base_rsack == NULL)
+            return FALSE;
+        }
 
       for (char **it = self->install_pkgs; it && *it; it++)
         {
           const char *pkg = *it;
-          g_autoptr(GPtrArray) pkgs = rpmostree_get_matching_packages (rsack->sack, pkg);
+          g_autoptr(GPtrArray) pkgs =
+            rpmostree_get_matching_packages (base_rsack->sack, pkg);
           if (pkgs->len > 0)
             {
               g_autoptr(GString) pkgnames = g_string_new ("");
@@ -1079,21 +1086,24 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   if (self->override_remove_pkgs)
     {
-      const char *base = rpmostree_sysroot_upgrader_get_base (upgrader);
-      g_autoptr(RpmOstreeRefSack) rsack =
-        rpmostree_get_refsack_for_commit (repo, base, cancellable, error);
-      if (rsack == NULL)
-        return FALSE;
+      if (!base_rsack)
+        {
+          const char *base = rpmostree_sysroot_upgrader_get_base (upgrader);
+          base_rsack = rpmostree_get_refsack_for_commit (repo, base, cancellable, error);
+          if (base_rsack == NULL)
+            return FALSE;
+        }
 
       /* NB: the strings are owned by the sack pool */
       g_autoptr(GPtrArray) pkgnames = g_ptr_array_new ();
       for (char **it = self->override_remove_pkgs; it && *it; it++)
         {
           const char *pkg = *it;
-          g_autoptr(GPtrArray) pkgs = rpmostree_get_matching_packages (rsack->sack, pkg);
+          g_autoptr(GPtrArray) pkgs =
+            rpmostree_get_matching_packages (base_rsack->sack, pkg);
 
           if (pkgs->len == 0)
-            return glnx_throw (error, "No package \"%s\" in base commit %.7s", pkg, base);
+            return glnx_throw (error, "Package \"%s\" not found", pkg);
 
           /* either the subject was somehow too broad, or it's one of the rare
            * packages that supports installonly (e.g. kernel, though that one
