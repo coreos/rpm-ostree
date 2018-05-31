@@ -1,0 +1,22 @@
+[package]
+name = "treefile"
+version = "0.1.0"
+authors = ["Colin Walters <walters@verbum.org>"]
+
+[dependencies]
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+serde_yaml = "0.7"
+libc = "0.2"
+glib-sys = "0.6.0"
+gio-sys = "0.6.0"
+
+[lib]
+name = "treefile_rs"
+path = "src/treefile.rs"
+crate-type = ["staticlib"]
+
+[profile.release]
+panic = "abort"
+lto = true
