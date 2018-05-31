@@ -172,7 +172,7 @@ peel_entry_pathname (struct archive_entry *entry,
                      GError    **error)
 {
   const char *pathname = archive_entry_pathname (entry);
-  static const char prefix[] = "./usr/lib/ostree-jigdo/";
+  static const char prefix[] = "./usr/lib/ostree-rojig/";
   if (!g_str_has_prefix (pathname, prefix))
     return glnx_null_throw (error, "Entry does not have prefix '%s': %s", prefix, pathname);
   pathname += strlen (prefix);
