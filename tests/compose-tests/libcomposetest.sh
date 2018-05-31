@@ -5,6 +5,9 @@ trap _cleanup_tmpdir EXIT
 cd ${test_tmpdir}
 . ${dn}/../common/libtest.sh
 
+export repo=$(pwd)/repo
+export repobuild=$(pwd)/repo-build
+
 pyeditjson() {
     cat >editjson.py <<EOF
 import sys,json
@@ -22,9 +25,6 @@ pysetjsonmember() {
 pyappendjsonmember() {
     pyeditjson "jd['"$1"'] += $2" < ${treefile} > ${treefile}.new && mv ${treefile}{.new,}
 }
-
-export repo=$(pwd)/repo
-export repobuild=$(pwd)/repo-build
 
 prepare_compose_test() {
     name=$1

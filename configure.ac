@@ -182,6 +182,41 @@ AS_IF([test x$enable_compose_tooling = xyes], [
 ])
 if test x$enable_compose_tooling != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES compose"; fi
 
+AC_ARG_ENABLE(rust,
+              AS_HELP_STRING([--enable-rust],
+                             [Compile Rust features (e.g. compose tree --yaml)]),,
+              [enable_rust=no; rust_debug_release=no])
+
+AS_IF([test x$enable_rust = xyes], [
+    AC_PATH_PROG([cargo], [cargo])
+    AS_IF([test -z "$cargo"], [AC_MSG_ERROR([cargo is required for --enable-rust])])
+    AC_PATH_PROG([rustc], [rustc])
+    AS_IF([test -z "$rustc"], [AC_MSG_ERROR([rustc is required for --enable-rust])])
+    AC_DEFINE(HAVE_RUST, 1, [Define if we are building with Rust])
+
+   dnl These bits based on gnome:librsvg/configure.ac
+
+   dnl By default, we build in public release mode.
+   AC_ARG_ENABLE(rust-debug,
+      AC_HELP_STRING([--enable-rust-debug],
+       [Build Rust code with debugging information [default=no]]),
+       [rust_debug_release=$enableval],
+       [rust_debug_release=release])
+
+   AC_MSG_CHECKING(whether to build Rust code with debugging information)
+   if test "x$rust_debug_release" = "xyes" ; then
+      rust_debug_release=debug
+      AC_MSG_RESULT(yes)
+   else
+      AC_MSG_RESULT(no)
+   fi
+   RUST_TARGET_SUBDIR=${rust_debug_release}
+   AC_SUBST([RUST_TARGET_SUBDIR])
+])
+AM_CONDITIONAL(RUST_DEBUG, [test "x$rust_debug_release" = "xdebug"])
+AM_CONDITIONAL(ENABLE_RUST, [test x$enable_rust = xyes])
+if test x$enable_rust != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES rust"; fi
+
 dnl Try to automatically determine cmake type from CFLAGS
 if $(echo $CFLAGS |grep -q -E "(-O0|-Og)"); then
   cmake_args="-DCMAKE_BUILD_TYPE=Debug"
@@ -222,4 +257,5 @@ echo "
     introspection:                           $found_introspection
     bubblewrap:                              $with_bubblewrap
     gtk-doc:                                 $enable_gtk_doc
+    rust:                                    $enable_rust
 "
