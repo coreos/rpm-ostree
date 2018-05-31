@@ -24,6 +24,12 @@ set -euo pipefail
 
 set -x
 
+osid=$(vm_cmd grep -E '^ID=' /etc/os-release)
+if test "${osid}" != 'ID=fedora'; then
+    echo "ok skip on OS ID=${osid}"
+    exit 0
+fi
+
 # Test rebasing to https://pagure.io/fedora-atomic-host-continuous
 # in rojig:// mode.
 
