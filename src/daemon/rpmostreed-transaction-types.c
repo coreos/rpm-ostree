@@ -879,6 +879,31 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   if (self->install_pkgs)
     {
+      /* we run a special check here; let's just not allow trying to install a pkg that will
+       * right away become inactive because it's already installed */
+      const char *base = rpmostree_sysroot_upgrader_get_base (upgrader);
+      g_autoptr(RpmOstreeRefSack) rsack =
+        rpmostree_get_refsack_for_commit (repo, base, cancellable, error);
+      if (rsack == NULL)
+        return FALSE;
+
+      for (char **it = self->install_pkgs; it && *it; it++)
+        {
+          const char *pkg = *it;
+          g_autoptr(GPtrArray) pkgs = rpmostree_get_matching_packages (rsack->sack, pkg);
+          if (pkgs->len > 0)
+            {
+              g_autoptr(GString) pkgnames = g_string_new ("");
+              for (guint i = 0; i < pkgs->len; i++)
+                {
+                  DnfPackage *p = pkgs->pdata[i];
+                  g_string_append_printf (pkgnames, " %s", dnf_package_get_nevra (p));
+                }
+              rpmostree_output_message ("warning: Package \"%s\" is already provided by:%s",
+                                        pkg, pkgnames->str);
+            }
+        }
+
       if (!rpmostree_origin_add_packages (origin, self->install_pkgs, FALSE, error))
         return FALSE;
 
