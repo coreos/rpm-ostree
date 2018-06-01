@@ -74,15 +74,14 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
    * replacing pkg has an additional out-of-tree dep). */
   const gboolean cache_only = (override_replace == NULL);
 
-  g_autoptr(GVariant) options =
-    rpmostree_get_options_variant (opt_reboot,
-                                   FALSE,   /* allow-downgrade */
-                                   cache_only,
-                                   FALSE,   /* download-only */
-                                   FALSE,   /* skip-purge */
-                                   TRUE,    /* no-pull-base */
-                                   opt_dry_run,
-                                   opt_reset_all);
+  GVariantDict dict;
+  g_variant_dict_init (&dict, NULL);
+  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
+  g_variant_dict_insert (&dict, "cache-only", "b", cache_only);
+  g_variant_dict_insert (&dict, "no-pull-base", "b", TRUE);
+  g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
+  g_variant_dict_insert (&dict, "no-overrides", "b", opt_reset_all);
+  g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   g_autofree char *transaction_address = NULL;
   if (!rpmostree_update_deployment (os_proxy,

@@ -111,16 +111,13 @@ rpmostree_builtin_deploy (int            argc,
     }
   else
     {
-      g_autoptr(GVariant) options =
-        rpmostree_get_options_variant (opt_reboot,
-                                       TRUE,   /* allow-downgrade */
-                                       opt_cache_only,
-                                       opt_download_only,
-                                       FALSE,  /* skip-purge */
-                                       FALSE,  /* no-pull-base */
-                                       FALSE,  /* dry-run */
-                                       FALSE); /* no-overrides */
-
+      GVariantDict dict;
+      g_variant_dict_init (&dict, NULL);
+      g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
+      g_variant_dict_insert (&dict, "allow-downgrade", "b", TRUE);
+      g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
+      g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
+      g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       /* Use newer D-Bus API only if we have to so we maintain coverage. */
       if (install_pkgs || uninstall_pkgs)

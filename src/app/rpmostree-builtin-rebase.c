@@ -130,15 +130,15 @@ rpmostree_builtin_rebase (int             argc,
     return glnx_throw (error, "rojig:// refspec requires --experimental");
 
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
-  g_autoptr(GVariant) options =
-    rpmostree_get_options_variant (opt_reboot,
-                                   TRUE,   /* allow-downgrade */
-                                   opt_cache_only,
-                                   opt_download_only,
-                                   opt_skip_purge,
-                                   FALSE,  /* no-pull-base */
-                                   FALSE,  /* dry-run */
-                                   FALSE); /* no-overrides */
+
+  GVariantDict dict;
+  g_variant_dict_init (&dict, NULL);
+  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
+  g_variant_dict_insert (&dict, "allow-downgrade", "b", TRUE);
+  g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
+  g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
+  g_variant_dict_insert (&dict, "skip-purge", "b", opt_skip_purge);
+  g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   /* Use newer D-Bus API only if we have to. */
   if (install_pkgs || uninstall_pkgs)
