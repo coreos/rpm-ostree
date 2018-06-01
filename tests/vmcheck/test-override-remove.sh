@@ -185,12 +185,13 @@ if vm_rpmostree override remove non-existent-package; then
 fi
 echo "ok override remove non-existent-package fails"
 
-vm_rpmostree install foo
-if vm_rpmostree override remove foo; then
+vm_build_rpm baz
+vm_rpmostree install baz
+if vm_rpmostree override remove baz; then
   assert_not_reached "override remove layered pkg foo succeeded?"
 fi
 vm_rpmostree cleanup -p
-echo "ok override remove layered pkg foo fails"
+echo "ok override remove layered pkg baz fails"
 
 # the next two error checks expect an upgraded layer with foo builtin
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
