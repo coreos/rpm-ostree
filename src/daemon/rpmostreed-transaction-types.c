@@ -739,6 +739,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
    * amount of metadata only to check if there's an upgrade */
   const gboolean download_metadata_only =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY) > 0);
+  const gboolean allow_inactive =
+    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_INACTIVE) > 0);
 
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
@@ -906,8 +908,15 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                   DnfPackage *p = pkgs->pdata[i];
                   g_string_append_printf (pkgnames, " %s", dnf_package_get_nevra (p));
                 }
-              rpmostree_output_message ("warning: Package \"%s\" is already provided by:%s",
-                                        pkg, pkgnames->str);
+              if (!allow_inactive)
+                {
+                  /* XXX: awkward CLI mention here */
+                  rpmostree_output_message (
+                      "warning: deprecated: \"%s\" is already provided by:%s. Use "
+                      "--allow-inactive to squash this warning. A future release will make "
+                      "this a requirement. See rpm-ostree(1) for details.",
+                      pkg, pkgnames->str);
+                }
             }
         }
 
