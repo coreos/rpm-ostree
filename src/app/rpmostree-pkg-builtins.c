@@ -77,15 +77,15 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
     return FALSE;
 
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
-  g_autoptr(GVariant) options =
-    rpmostree_get_options_variant (opt_reboot,
-                                   FALSE,   /* allow-downgrade */
-                                   opt_cache_only,
-                                   opt_download_only,
-                                   FALSE,   /* skip-purge */
-                                   TRUE,    /* no-pull-base */
-                                   opt_dry_run,
-                                   FALSE);  /* no-overrides */
+
+  GVariantDict dict;
+  g_variant_dict_init (&dict, NULL);
+  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
+  g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
+  g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
+  g_variant_dict_insert (&dict, "no-pull-base", "b", TRUE);
+  g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
+  g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   gboolean met_local_pkg = FALSE;
   for (const char *const* it = packages_to_add; it && *it; it++)
