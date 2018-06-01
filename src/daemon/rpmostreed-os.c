@@ -579,6 +579,8 @@ deploy_flags_from_options (GVariant *options,
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_CACHE_ONLY;
   if (vardict_lookup_bool (&dict, "download-only", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY;
+  if (vardict_lookup_bool (&dict, "allow-inactive", FALSE))
+    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_INACTIVE;
   return ret;
 }
 

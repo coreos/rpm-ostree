@@ -36,11 +36,13 @@ static gchar **opt_install;
 static gchar **opt_uninstall;
 static gboolean opt_cache_only;
 static gboolean opt_download_only;
+static gboolean opt_allow_inactive;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
   { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after upgrade is prepared", NULL },
   { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction", NULL },
+  { "allow-inactive", 0, 0, G_OPTION_ARG_NONE, &opt_allow_inactive, "Allow inactive package requests", NULL },
   { NULL }
 };
 
@@ -85,6 +87,7 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
   g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
   g_variant_dict_insert (&dict, "no-pull-base", "b", TRUE);
   g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
+  g_variant_dict_insert (&dict, "allow-inactive", "b", opt_allow_inactive);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   gboolean met_local_pkg = FALSE;
