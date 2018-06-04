@@ -24,6 +24,12 @@ set -euo pipefail
 
 set -x
 
+osid=$(vm_cmd grep -E '^ID=' /etc/os-release)
+if test "${osid}" != 'ID=fedora'; then
+    echo "ok skip on OS ID=${osid}"
+    exit 0
+fi
+
 # Test rebasing to https://pagure.io/fedora-atomic-host-continuous
 # in rojig:// mode.
 
@@ -55,6 +61,6 @@ vm_assert_status_jq '.deployments[0].origin|startswith("rojig://fahc:fedora-atom
 echo "ok rojig client deploy"
 
 vm_cmd rpm-ostree status > status.txt
-assert_file_has_content_literal status.txt  'fahc:fedora-atomic-host-'${prev_version}'-1.fc27.x86_64'
+assert_file_has_content_literal status.txt  'fahc:fedora-atomic-host-'${prev_version}'-1.fc28.x86_64'
 
 echo "ok rojig status"
