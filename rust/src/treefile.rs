@@ -53,7 +53,7 @@ pub extern "C" fn treefile_read(
     let c_str: &CStr = unsafe { CStr::from_ptr(filename) };
     let filename_path = Path::new(OsStr::from_bytes(c_str.to_bytes()));
 
-    treefile_read_impl(filename_path, output_file).to_gerr(error)
+    treefile_read_impl(filename_path, output_file).to_glib_convention(error)
 }
 
 fn treefile_read_impl(filename: &Path, output: fs::File) -> io::Result<()> {

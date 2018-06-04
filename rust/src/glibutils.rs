@@ -27,17 +27,20 @@ use std;
 use std::ffi::CString;
 use std::ptr;
 
-// With this, you can just add .map_gerr(error) at the end of functions that
-// return a Result.
-pub trait ToGErrorConventions {
-    fn to_gerr(self: Self, error: *mut *mut glib_sys::GError) -> libc::c_int;
+// Consume a Result into the "GError convention":
+// https://developer.gnome.org/glib/stable/glib-Error-Reporting.html
+// To use, just add .to_glib_convention(error) at the end of function calls that
+// return a Result (using the std Error).
+pub trait ToGlibConvention {
+    fn to_glib_convention(self: Self, error: *mut *mut glib_sys::GError) -> libc::c_int;
 }
 
-impl<T, E> ToGErrorConventions for Result<T, E>
+// TODO: Add a variant for io::Result?  Or try upstreaming this into the glib crate?
+impl<T, E> ToGlibConvention for Result<T, E>
 where
     E: std::error::Error,
 {
-    fn to_gerr(self: Result<T, E>, error: *mut *mut glib_sys::GError) -> libc::c_int {
+    fn to_glib_convention(self: Result<T, E>, error: *mut *mut glib_sys::GError) -> libc::c_int {
         match &self {
             &Ok(_) => 1,
             &Err(ref e) => {
