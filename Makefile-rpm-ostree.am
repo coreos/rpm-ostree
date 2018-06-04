@@ -70,6 +70,10 @@ rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) \
 	-fvisibility=hidden -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
 rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la librpmostree-1.la librpmostreed.la
+# https://github.com/ostreedev/ostree/commit/1f832597fc83fda6cb8daf48c4495a9e1590774c
+if ENABLE_RUST
+rpm_ostree_LDADD += -ldl
+endif
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/app/rpm-ostree-0-integration.conf
@@ -80,3 +84,16 @@ install-bin-hook:
 if BUILDOPT_NEW_NAME
 INSTALL_DATA_HOOKS += install-bin-hook
 endif
+
+if ENABLE_RUST
+libtreefilepath = @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@/libtreefile_rs.a
+TREEFILE_RUST_SRCS = rust/src/treefile.rs
+$(libtreefilepath): Makefile $(TREEFILE_RUST_SRCS)
+	cd $(top_srcdir)/rust && \
+	  CARGO_TARGET_DIR=@abs_top_builddir@/target \
+	  $(cargo) build --verbose $(CARGO_RELEASE_ARGS)
+EXTRA_DIST += $(TREEFILE_RUST_SRCS) rust/Cargo.lock
+
+rpm_ostree_SOURCES += src/app/libtreefile_rs.h
+rpm_ostree_LDADD += $(libtreefilepath)
+endif # ENABLE_RUST

@@ -29,3 +29,18 @@ assert_file_has_content_literal autovar.txt 'd /var/cache 0755 root root - -'
 # And this one has a non-root uid
 assert_file_has_content_literal autovar.txt 'd /var/log/chrony 0755 chrony chrony - -'
 echo "ok autovar"
+
+if ! rpm-ostree --version | grep -q rust; then
+  echo "ok yaml (SKIP)"
+else
+  prepare_compose_test "from-yaml"
+  python <<EOF
+import json, yaml
+jd=json.load(open("$treefile"))
+with open("$treefile.yaml", "w") as f:
+  f.write(yaml.dump(jd))
+EOF
+  export treefile=$treefile.yaml
+  runcompose
+  echo "ok yaml"
+fi

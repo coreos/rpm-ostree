@@ -44,6 +44,9 @@
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
+#ifdef HAVE_RUST
+#include "libtreefile_rs.h"
+#endif
 
 #include "libglnx.h"
 
@@ -671,6 +674,43 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 }
 
 static gboolean
+parse_treefile_to_json (const char    *treefile_path,
+                        JsonParser   **out_parser,
+                        GError       **error)
+{
+#ifdef HAVE_RUST
+  g_autofree char *fdpath = NULL;
+  g_auto(GLnxTmpfile) json_contents = { 0, };
+#endif
+
+  if (g_str_has_suffix (treefile_path, ".yaml") ||
+      g_str_has_suffix (treefile_path, ".yml"))
+    {
+#ifndef HAVE_RUST
+      return glnx_throw (error, "This version of rpm-ostree was built without "
+                                "rust, and doesn't support YAML treefiles");
+#else
+      if (!glnx_open_anonymous_tmpfile (O_RDWR | O_CLOEXEC, &json_contents, error))
+        return FALSE;
+
+      if (!treefile_read (treefile_path, json_contents.fd, error))
+        return glnx_prefix_error (error, "Failed to load YAML treefile");
+
+      /* or just lseek back to 0 and use json_parser_load_from_data here? */
+      treefile_path = fdpath = g_strdup_printf ("/proc/self/fd/%d", json_contents.fd);
+#endif
+    }
+
+  g_autoptr(JsonParser) parser = json_parser_new ();
+  if (!json_parser_load_from_file (parser, treefile_path, error))
+    return FALSE;
+
+  *out_parser = g_steal_pointer (&parser);
+  return TRUE;
+}
+
+
+static gboolean
 process_includes (RpmOstreeTreeComposeContext  *self,
                   GFile             *treefile_path,
                   guint              depth,
@@ -706,15 +746,14 @@ process_includes (RpmOstreeTreeComposeContext  *self,
     {
       g_autoptr(GFile) treefile_dirpath = g_file_get_parent (treefile_path);
       g_autoptr(GFile) parent_path = g_file_resolve_relative_path (treefile_dirpath, include_path);
-      glnx_unref_object JsonParser *parent_parser = json_parser_new ();
+      g_autoptr(JsonParser) parent_parser = NULL;
       JsonNode *parent_rootval;
       JsonObject *parent_root;
       GList *members;
       GList *iter;
 
-      if (!json_parser_load_from_file (parent_parser,
-                                       gs_file_get_path_cached (parent_path),
-                                       error))
+      if (!parse_treefile_to_json (gs_file_get_path_cached (treefile_path),
+                                   &parent_parser, error))
         return FALSE;
 
       parent_rootval = json_parser_get_root (parent_parser);
@@ -920,10 +959,8 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   if (!self->corectx)
     return FALSE;
 
-  self->treefile_parser = json_parser_new ();
-  if (!json_parser_load_from_file (self->treefile_parser,
-                                   gs_file_get_path_cached (self->treefile_path),
-                                   error))
+  if (!parse_treefile_to_json (gs_file_get_path_cached (self->treefile_path),
+                               &self->treefile_parser, error))
     return FALSE;
 
   self->treefile_rootval = json_parser_get_root (self->treefile_parser);
@@ -1436,8 +1473,7 @@ rpmostree_compose_builtin_postprocess (int             argc,
   JsonObject *treefile = NULL; /* Owned by parser */
   if (treefile_path)
     {
-      treefile_parser = json_parser_new ();
-      if (!json_parser_load_from_file (treefile_parser, treefile_path, error))
+      if (!parse_treefile_to_json (treefile_path, &treefile_parser, error))
         return FALSE;
 
       JsonNode *treefile_rootval = json_parser_get_root (treefile_parser);

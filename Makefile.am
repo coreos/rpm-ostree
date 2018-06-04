@@ -67,6 +67,30 @@ include $(INTROSPECTION_MAKEFILE)
 GIRS =
 TYPELIBS = $(GIRS:.gir=.typelib)
 
+# These bits based on gnome:librsvg/Makefile.am
+if ENABLE_RUST
+if RUST_DEBUG
+CARGO_RELEASE_ARGS=
+else
+CARGO_RELEASE_ARGS=--release
+endif
+
+check-local:
+	cd $(srcdir)/rust && CARGO_TARGET_DIR=$(abs_top_builddir)/target cargo test
+
+clean-local:
+	cd $(srcdir)/rust && CARGO_TARGET_DIR=$(abs_top_builddir)/target cargo clean
+
+dist-hook:
+	(cd $(distdir)/rust && \
+   cp $(abs_top_srcdir)/rust/Cargo.lock . && \
+   cargo vendor -q && \
+   mkdir .cargo && \
+	 cp cargo-vendor-config .cargo/config)
+
+EXTRA_DIST += $(srcdir)/rust/Cargo.toml $(srcdir)/rust/cargo-vendor-config
+endif # end ENABLE_RUST
+
 include libglnx/Makefile-libglnx.am.inc
 noinst_LTLIBRARIES += libglnx.la
 include Makefile-libpriv.am
