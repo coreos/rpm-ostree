@@ -22,6 +22,7 @@
 
 extern crate gio_sys;
 extern crate glib_sys;
+extern crate glib;
 extern crate libc;
 
 #[macro_use]

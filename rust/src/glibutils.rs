@@ -22,6 +22,7 @@
 
 use gio_sys;
 use glib_sys;
+use glib;
 use libc;
 use std;
 use std::ffi::CString;
@@ -45,7 +46,8 @@ where
             &Ok(_) => 1,
             &Err(ref e) => {
                 unsafe {
-                    assert!(*error == ptr::null_mut());
+                    assert!(!error.is_null());
+                    assert!((*error).is_null());
                     let c_msg = CString::new(e.description()).unwrap();
                     *error = glib_sys::g_error_new_literal(
                         gio_sys::g_io_error_quark(),
@@ -55,6 +57,33 @@ where
                 };
                 0
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::error::Error;
+    use std::io;
+    #[test]
+    fn no_error() {
+        let r : io::Result<()> = Ok(());
+        let mut error : *mut glib_sys::GError = ptr::null_mut();
+        assert_eq!(r.to_glib_convention(&mut error), 1);
+        assert!(error.is_null());
+    }
+    #[test]
+    fn throw_error() {
+        let r : io::Result<()> = Err(io::Error::new(io::ErrorKind::Other, "oops"));
+        let mut error : *mut glib_sys::GError = ptr::null_mut();
+        assert_eq!(r.to_glib_convention(&mut error), 0);
+        unsafe {
+            assert!(!error.is_null());
+            assert_eq!((*error).domain, gio_sys::g_io_error_quark());
+            assert_eq!((*error).code, gio_sys::G_IO_ERROR_FAILED);
+            let e = glib::Error::wrap(error);
+            assert_eq!(e.description(), "oops");
         }
     }
 }
