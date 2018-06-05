@@ -4,7 +4,7 @@ dbus_built_sources = rpm-ostreed-generated.h rpm-ostreed-generated.c
 # https://github.com/projectatomic/rpm-ostree/pull/705
 rpm-ostreed-generated.h: rpm-ostreed-generated.c
 rpm-ostreed-generated.c: Makefile $(top_srcdir)/src/daemon/org.projectatomic.rpmostree1.xml
-	$(AM_V_GEN) /usr/bin/gdbus-codegen \
+	$(AM_V_GEN) gdbus-codegen \
 		--interface-prefix org.projectatomic.rpmostree1 \
 		--c-namespace RPMOSTree \
 		--c-generate-object-manager \
