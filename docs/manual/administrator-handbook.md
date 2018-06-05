@@ -65,8 +65,13 @@ to use packages where it suits.
 ```
 
 Will download the target package, its dependencies, and create a new deployment
-with those packages installed.  To remove layered packages, use `rpm-ostree
-uninstall`.
+with those packages installed.  It is also possible to specify a local package
+which is not part of a repository.
+
+To remove layered packages installed from a repository, use `rpm-ostree uninstall
+<pkg>`.  To remove layered packages installed from a local package, you must
+specify the full NEVRA of the package.  For example, `rpm-ostree uninstall
+ltrace-0.7.91-16.fc22.x86_64`.
 
 By default, every `rpm-ostree` operation is "offline" - it has no effect
 on your running system, and will only take effect when you reboot.  This "pending" state is
