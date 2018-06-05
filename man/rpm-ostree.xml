@@ -267,7 +267,7 @@ Boston, MA 02111-1307, USA.
 
           <para>When trying to uninstall a package that was installed
             from a local RPM (i.e. not from a repository), you must
-            must specify the full NEVRA of the package.
+            specify the full NEVRA of the package.
           </para>
 
           <para>
