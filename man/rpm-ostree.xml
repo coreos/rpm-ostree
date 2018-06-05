@@ -221,7 +221,8 @@ Boston, MA 02111-1307, USA.
             Takes one or more packages as arguments. The packages are
             fetched from the enabled repositories in
             <filename>/etc/yum.repos.d/</filename> and are overlayed on
-            top of a new deployment.
+            top of a new deployment.  It is also possible to specify a
+            local package that resides on the host.
           </para>
 
           <para>
@@ -262,6 +263,11 @@ Boston, MA 02111-1307, USA.
             fetched from the enabled repositories in
             <filename>/etc/yum.repos.d/</filename> and are overlayed on
             top of a new deployment.
+          </para>
+
+          <para>When trying to uninstall a package that was installed
+            from a local RPM (i.e. not from a repository), you must
+            must specify the full NEVRA of the package.
           </para>
 
           <para>
