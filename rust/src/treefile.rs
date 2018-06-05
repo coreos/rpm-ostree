@@ -81,13 +81,7 @@ fn treefile_read_impl(filename: &Path, output: fs::File) -> io::Result<()> {
 }
 
 fn whitespace_split_packages(pkgs: &[String]) -> Vec<String> {
-    let mut ret = Vec::with_capacity(pkgs.len());
-    for pkg in pkgs {
-        for pkg_item in pkg.split_whitespace() {
-            ret.push(pkg_item.into());
-        }
-    }
-    ret
+    pkgs.iter().flat_map(|pkg| pkg.split_whitespace().map(String::from)).collect()
 }
 
 #[derive(Serialize, Deserialize, Debug)]
