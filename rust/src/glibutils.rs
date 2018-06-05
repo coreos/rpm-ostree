@@ -21,12 +21,11 @@
  * */
 
 use gio_sys;
-use glib_sys;
 use glib;
+use glib_sys;
 use libc;
 use std;
 use std::ffi::CString;
-use std::ptr;
 
 // Consume a Result into the "GError convention":
 // https://developer.gnome.org/glib/stable/glib-Error-Reporting.html
@@ -45,15 +44,16 @@ where
         match &self {
             &Ok(_) => 1,
             &Err(ref e) => {
-                unsafe {
-                    assert!(!error.is_null());
-                    assert!((*error).is_null());
-                    let c_msg = CString::new(e.description()).unwrap();
-                    *error = glib_sys::g_error_new_literal(
-                        gio_sys::g_io_error_quark(),
-                        gio_sys::G_IO_ERROR_FAILED,
-                        c_msg.as_ptr(),
-                    );
+                if !error.is_null() {
+                    unsafe {
+                        assert!((*error).is_null());
+                        let c_msg = CString::new(e.description()).unwrap();
+                        *error = glib_sys::g_error_new_literal(
+                            gio_sys::g_io_error_quark(),
+                            gio_sys::G_IO_ERROR_FAILED,
+                            c_msg.as_ptr(),
+                        )
+                    }
                 };
                 0
             }
@@ -65,18 +65,20 @@ where
 mod tests {
     use super::*;
     use std::error::Error;
-    use std::io;
+    use std::{io, ptr};
+
     #[test]
     fn no_error() {
-        let r : io::Result<()> = Ok(());
-        let mut error : *mut glib_sys::GError = ptr::null_mut();
+        let r: io::Result<()> = Ok(());
+        let mut error: *mut glib_sys::GError = ptr::null_mut();
         assert_eq!(r.to_glib_convention(&mut error), 1);
         assert!(error.is_null());
     }
+
     #[test]
     fn throw_error() {
-        let r : io::Result<()> = Err(io::Error::new(io::ErrorKind::Other, "oops"));
-        let mut error : *mut glib_sys::GError = ptr::null_mut();
+        let r: io::Result<()> = Err(io::Error::new(io::ErrorKind::Other, "oops"));
+        let mut error: *mut glib_sys::GError = ptr::null_mut();
         assert_eq!(r.to_glib_convention(&mut error), 0);
         unsafe {
             assert!(!error.is_null());
@@ -85,5 +87,11 @@ mod tests {
             let e = glib::Error::wrap(error);
             assert_eq!(e.description(), "oops");
         }
+    }
+
+    #[test]
+    fn throw_error_ignored() {
+        let r: io::Result<()> = Err(io::Error::new(io::ErrorKind::Other, "oops"));
+        assert_eq!(r.to_glib_convention(ptr::null_mut()), 0);
     }
 }
