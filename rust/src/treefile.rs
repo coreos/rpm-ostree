@@ -80,14 +80,14 @@ fn treefile_read_impl(filename: &Path, output: fs::File) -> io::Result<()> {
     Ok(())
 }
 
-fn whitespace_split_packages(pkgs: &Vec<String>) -> Vec<String> {
+fn whitespace_split_packages(pkgs: &[String]) -> Vec<String> {
     let mut ret = Vec::with_capacity(pkgs.len());
     for pkg in pkgs {
         for pkg_item in pkg.split_whitespace() {
             ret.push(pkg_item.into());
         }
     }
-    return ret;
+    ret
 }
 
 #[derive(Serialize, Deserialize, Debug)]

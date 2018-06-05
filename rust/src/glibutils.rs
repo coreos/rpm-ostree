@@ -41,9 +41,9 @@ where
     E: std::error::Error,
 {
     fn to_glib_convention(self: Result<T, E>, error: *mut *mut glib_sys::GError) -> libc::c_int {
-        match &self {
-            &Ok(_) => 1,
-            &Err(ref e) => {
+        match self {
+            Ok(_) => 1,
+            Err(ref e) => {
                 if !error.is_null() {
                     unsafe {
                         assert!((*error).is_null());
