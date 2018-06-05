@@ -8,7 +8,7 @@ GITREV=$1
 shift
 
 TARFILE=${PKG_VER}.tar
-TARFILE_TMP=${TARFILE}.tmp
+TARFILE_TMP=$(pwd)/${TARFILE}.tmp
 
 set -x
 set -e
@@ -29,4 +29,22 @@ ls -al ${TARFILE_TMP}
     tar -A -f ${TARFILE_TMP} submodule.tar
     rm submodule.tar
 done
+tmpd=${TOP}/.dist-tmp
+trap cleanup EXIT
+function cleanup () {
+    if test -f ${tmpd}/.tmp; then
+        rm "${tmpd}" -rf
+    fi
+}
+# Run it now
+cleanup
+mkdir ${tmpd} && touch ${tmpd}/.tmp
+
+(cd ${tmpd}
+ mkdir -p .cargo vendor
+ cargo vendor -q --sync ${TOP}/rust/Cargo.toml vendor
+ cp ${TOP}/rust/Cargo.lock .
+ cp ${TOP}/rust/cargo-vendor-config .cargo/config
+ tar --transform="s,^,${PKG_VER}/rust/," -rf ${TARFILE_TMP} *
+ )
 mv ${TARFILE_TMP} ${TARFILE}
