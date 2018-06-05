@@ -86,13 +86,9 @@ clean-local-cargo:
 clean-local: clean-local-cargo
 
 dist-hook:
-	(cd $(distdir)/rust && \
-   cp $(abs_top_srcdir)/rust/Cargo.lock . && \
-   cargo vendor -q && \
-   mkdir .cargo && \
-	 cp cargo-vendor-config .cargo/config)
+  echo 'rpm-ostree does not support "make dist"; see packaging/Makefile.dist-packaging' 1>2
+  exit 1
 
-EXTRA_DIST += $(srcdir)/rust/Cargo.toml $(srcdir)/rust/cargo-vendor-config
 endif # end ENABLE_RUST
 
 include libglnx/Makefile-libglnx.am.inc

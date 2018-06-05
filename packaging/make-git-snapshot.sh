@@ -8,7 +8,7 @@ GITREV=$1
 shift
 
 TARFILE=${PKG_VER}.tar
-TARFILE_TMP=${TARFILE}.tmp
+TARFILE_TMP=$(pwd)/${TARFILE}.tmp
 
 set -x
 set -e
@@ -29,4 +29,15 @@ ls -al ${TARFILE_TMP}
     tar -A -f ${TARFILE_TMP} submodule.tar
     rm submodule.tar
 done
+tmpd=$(mktemp -d)
+touch ${tmpd}/.tmp
+rm -f rust.tar
+(cd ${tmpd}
+ mkdir -p .cargo vendor
+ cargo vendor -q --sync ${TOP}/rust/Cargo.toml vendor
+ cp ${TOP}/rust/Cargo.lock .
+ cp ${TOP}/rust/cargo-vendor-config .cargo/config
+ tar --transform='s,^,rust/,' -vrf ${TARFILE_TMP} .
+ )
+test -f "${tmpd}/.tmp" && rm -rf "${tmpd}"
 mv ${TARFILE_TMP} ${TARFILE}
