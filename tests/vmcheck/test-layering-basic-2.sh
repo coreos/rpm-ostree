@@ -88,3 +88,9 @@ vm_cmd ostree show --print-metadata-key rpmostree.rpmdb.pkglist \
   $(vm_get_deployment_info 0 checksum) > pkglist.txt
 assert_file_has_content pkglist.txt 'test-pkgcache-migrate-pkg'
 echo "ok layered pkglist"
+
+vm_rpmostree install glibc &>out.txt
+assert_file_has_content out.txt "warning: .* Use --allow-inactive to squash this warning."
+vm_rpmostree cleanup -p
+vm_rpmostree install glibc --allow-inactive &>out.txt
+assert_not_file_has_content out.txt "warning:"

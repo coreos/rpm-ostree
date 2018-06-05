@@ -226,6 +226,20 @@ Boston, MA 02111-1307, USA.
           </para>
 
           <para>
+            rpm-ostree remembers these requests even if a later host
+            update includes those packages already: if the packages are
+            subsequently dropped out again, rpm-ostree will go back to
+            layering them.
+          </para>
+
+          <para>
+            Note that currently, you may specify a package that is
+            already in the base layer, though you should use the
+            <command>--allow-inactive</command> option to avoid a
+            warning. This option will become mandatory in the future.
+          </para>
+
+          <para>
             <command>--reboot</command> or <command>-r</command> to
             initiate a reboot after the deployment is prepared.
           </para>
@@ -234,6 +248,11 @@ Boston, MA 02111-1307, USA.
             <command>--dry-run</command> or <command>-n</command> to
             exit after printing the transaction rather than downloading
             the packages and creating a new deployment.
+          </para>
+
+          <para>
+            <option>--allow-inactive</option> to allow requests for
+            packages that are already in the base layer.
           </para>
 
           <para>
