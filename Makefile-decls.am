@@ -57,3 +57,12 @@ install-data-hook: $(INSTALL_DATA_HOOKS)
 
 ALL_LOCAL_HOOKS =
 all-local: $(ALL_LOCAL_HOOKS)
+
+CHECK_LOCAL_HOOKS =
+check-local: $(CHECK_LOCAL_HOOKS)
+
+CLEAN_LOCAL_HOOKS =
+clean-local: $(CLEAN_LOCAL_HOOKS)
+
+DIST_HOOKS =
+dist-hook: $(DIST_HOOKS)

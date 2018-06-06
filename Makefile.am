@@ -67,7 +67,10 @@ include $(INTROSPECTION_MAKEFILE)
 GIRS =
 TYPELIBS = $(GIRS:.gir=.typelib)
 
-# These bits based on gnome:librsvg/Makefile.am
+# These bits were originally based on gnome:librsvg/Makefile.am
+# but have been adapted to non-recursive Automake, and additionally
+# the "cargo vendor" bits for us live in packaging/Makefile.dist-packaging.
+.PHONY: check-local-cargo clean-local-cargo use-git-not-dist-hook
 if ENABLE_RUST
 if RUST_DEBUG
 CARGO_RELEASE_ARGS=
@@ -75,19 +78,21 @@ else
 CARGO_RELEASE_ARGS=--release
 endif
 
-.PHONY: check-local-cargo
 check-local-cargo:
 	cd $(srcdir)/rust && CARGO_TARGET_DIR=$(abs_top_builddir)/target cargo test
-check-local: check-local-cargo
+CHECK_LOCAL_HOOKS += check-local-cargo
 
-.PHONY: clean-local-cargo
 clean-local-cargo:
 	cd $(srcdir)/rust && CARGO_TARGET_DIR=$(abs_top_builddir)/target cargo clean
-clean-local: clean-local-cargo
+CLEAN_LOCAL_HOOKS += clean-local-cargo
 
-dist-hook:
-  echo 'rpm-ostree does not support "make dist"; see packaging/Makefile.dist-packaging' 1>2
-  exit 1
+use-git-not-dist-hook:
+	@echo
+	@echo 'ERROR: rpm-ostree does not use/support "make dist"; see packaging/Makefile.dist-packaging' 1>&2
+	@echo
+	@exit 1
+
+DIST_HOOKS += use-git-not-dist-hook
 
 endif # end ENABLE_RUST
 
