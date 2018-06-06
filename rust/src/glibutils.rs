@@ -21,7 +21,6 @@
  * */
 
 use gio_sys;
-use glib;
 use glib_sys;
 use libc;
 use std;
@@ -64,6 +63,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use glib;
     use std::error::Error;
     use std::{io, ptr};
 
