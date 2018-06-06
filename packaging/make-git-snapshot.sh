@@ -29,15 +29,22 @@ ls -al ${TARFILE_TMP}
     tar -A -f ${TARFILE_TMP} submodule.tar
     rm submodule.tar
 done
-tmpd=$(mktemp -d)
-touch ${tmpd}/.tmp
-rm -f rust.tar
+tmpd=${TOP}/.dist-tmp
+trap cleanup EXIT
+function cleanup () {
+    if test -f ${tmpd}/.tmp; then
+        rm "${tmpd}" -rf
+    fi
+}
+# Run it now
+cleanup
+mkdir ${tmpd} && touch ${tmpd}/.tmp
+
 (cd ${tmpd}
  mkdir -p .cargo vendor
  cargo vendor -q --sync ${TOP}/rust/Cargo.toml vendor
  cp ${TOP}/rust/Cargo.lock .
  cp ${TOP}/rust/cargo-vendor-config .cargo/config
- tar --transform='s,^,rust/,' -vrf ${TARFILE_TMP} .
+ tar --transform="s,^,${PKG_VER}/rust/," -rf ${TARFILE_TMP} *
  )
-test -f "${tmpd}/.tmp" && rm -rf "${tmpd}"
 mv ${TARFILE_TMP} ${TARFILE}
