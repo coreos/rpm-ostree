@@ -540,6 +540,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                                                 &ret_new_inputhash, error))
     return FALSE;
 
+  g_print ("Input state hash: %s\n", ret_new_inputhash);
+
   /* Only look for previous checksum if caller has passed *out_unmodified */
   if (self->previous_checksum && out_unmodified != NULL)
     {
