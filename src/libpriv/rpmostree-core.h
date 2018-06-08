@@ -124,30 +124,12 @@ gboolean rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
                                              GError          **error);
 
 gboolean
-rpmostree_find_cache_branch_by_nevra (OstreeRepo    *pkgcache,
-                                      const char    *nevra,
-                                      char         **out_cache_branch,
-                                      GCancellable  *cancellable,
-                                      GError       **error);
-
-gboolean
 rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
                                     const char    *nevra,
                                     const char    *expected_sha256,
                                     GVariant     **out_header,
                                     GCancellable  *cancellable,
                                     GError       **error);
-
-gboolean
-rpmostree_get_nevra_from_pkgcache (OstreeRepo   *repo,
-                                   const char   *nevra,
-                                   char        **out_name,
-                                   guint64      *out_epoch,
-                                   char        **out_version,
-                                   char        **out_release,
-                                   char        **out_arch,
-                                   GCancellable *cancellable,
-                                   GError  **error);
 
 gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
                                               DnfContextSetupSackFlags flags,

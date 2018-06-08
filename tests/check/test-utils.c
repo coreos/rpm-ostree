@@ -6,7 +6,7 @@
 
 #include <glib-unix.h>
 #include "libglnx.h"
-#include "rpmostree-util.h"
+#include "rpmostree-rpm-util.h"
 #include "rpmostree-core.h"
 #include "rpmostree-importer.h"
 #include "libtest.h"
@@ -66,6 +66,10 @@ test_one_cache_branch_to_nevra (const char *cache_branch,
     rpmostree_cache_branch_to_nevra (cache_branch);
   g_print ("comparing %s to %s\n", expected_nevra, actual_nevra);
   g_assert (g_str_equal (expected_nevra, actual_nevra));
+
+  g_autofree char *actual_branch = NULL;
+  g_assert (rpmostree_nevra_to_cache_branch (expected_nevra, &actual_branch, NULL));
+  g_assert (g_str_equal (cache_branch, actual_branch));
 }
 
 static void
@@ -204,8 +208,8 @@ test_variant_to_nevra(void)
   g_autofree char *trelease;
   g_autofree char *tarch;
 
-  ret = rpmostree_get_nevra_from_pkgcache (repo, nevra, &tname, &tepoch, &tversion,
-                                           &trelease, &tarch, NULL, &error);
+  ret = rpmostree_decompose_nevra (nevra, &tname, &tepoch, &tversion,
+                                   &trelease, &tarch, &error);
   g_assert_no_error (error);
   g_assert (ret);
 

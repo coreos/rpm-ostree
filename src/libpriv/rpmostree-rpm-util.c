@@ -1199,7 +1199,64 @@ rpmostree_create_rpmdb_pkglist_variant (int              dfd,
   return TRUE;
 }
 
-/* translates cachebranch back to nevra */
+/* Simple wrapper around hy_split_nevra() that adds allow-none and GError convention */
+gboolean
+rpmostree_decompose_nevra (const char  *nevra,
+                           char       **out_name,    /* allow-none */
+                           guint64     *out_epoch,   /* allow-none */
+                           char       **out_version, /* allow-none */
+                           char       **out_release, /* allow-none */
+                           char       **out_arch,    /* allow-none */
+                           GError     **error)
+{
+  g_autofree char *name = NULL;
+  int epoch;
+  g_autofree char *version = NULL;
+  g_autofree char *release = NULL;
+  g_autofree char *arch = NULL;
+
+  if (hy_split_nevra (nevra, &name, &epoch, &version, &release, &arch) != 0)
+    return glnx_throw (error, "Failed to decompose NEVRA string '%s'", nevra);
+
+  if (out_name)
+    *out_name = g_steal_pointer (&name);
+  if (out_epoch)
+    *out_epoch = epoch; /* note widening */
+  if (out_version)
+    *out_version = g_steal_pointer (&version);
+  if (out_release)
+    *out_release = g_steal_pointer (&release);
+  if (out_arch)
+    *out_arch = g_steal_pointer (&arch);
+
+  return TRUE;
+}
+
+/* translates NEVRA to its cache branch */
+gboolean
+rpmostree_nevra_to_cache_branch (const char *nevra,
+                                 char      **cache_branch,
+                                 GError    **error)
+{
+  /* It's cumbersome, but we have to decompose the NEVRA and the rebuild it into a cache
+   * branch. Something something Rust slices... */
+
+  g_autofree char *name = NULL;
+  guint64 epoch;
+  g_autofree char *version = NULL;
+  g_autofree char *release = NULL;
+  g_autofree char *arch = NULL;
+
+  if (!rpmostree_decompose_nevra (nevra, &name, &epoch, &version, &release, &arch, error))
+    return FALSE;
+
+  g_autofree char *evr = rpmostree_custom_nevra_strdup (name, epoch, version, release, arch,
+                                                        PKG_NEVRA_FLAGS_EVR);
+  *cache_branch = rpmostree_get_cache_branch_for_n_evr_a (name, evr, arch);
+  return TRUE;
+}
+
+/* translates cachebranch back to nevra (inverse of rpmostree_cache_branch_to_nevra) */
 char *
 rpmostree_cache_branch_to_nevra (const char *cachebranch)
 {

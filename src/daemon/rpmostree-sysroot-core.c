@@ -234,8 +234,7 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
       GLNX_HASH_TABLE_FOREACH (local_replace, const char*, nevra)
         {
           g_autofree char *cachebranch = NULL;
-          if (!rpmostree_find_cache_branch_by_nevra (repo, nevra, &cachebranch,
-                                                     cancellable, error))
+          if (!rpmostree_nevra_to_cache_branch (nevra, &cachebranch, error))
             return FALSE;
 
           g_hash_table_add (referenced_pkgs, g_steal_pointer (&cachebranch));
