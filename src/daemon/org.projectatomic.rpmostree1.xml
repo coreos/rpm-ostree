@@ -291,6 +291,7 @@
          "override-reset-packages" (type 'as')
          "override-replace-packages" (type 'as')
          "override-replace-local-packages" (type 'ah')
+         "custom-origin" (type '(ss)')
 
          Available options:
          "reboot" (type 'b')

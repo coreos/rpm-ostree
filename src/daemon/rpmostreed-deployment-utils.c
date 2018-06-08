@@ -304,7 +304,16 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   switch (refspec_type)
     {
     case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
-      /* Nothing to do here */
+      {
+        g_autofree char *custom_origin_url = NULL;
+        g_autofree char *custom_origin_description = NULL;
+        rpmostree_origin_get_custom_description (origin, &custom_origin_url,
+                                                 &custom_origin_description);
+        if (custom_origin_url)
+          g_variant_dict_insert (&dict, "custom-origin", "(ss)",
+                                 custom_origin_url,
+                                 custom_origin_description ?: "");
+      }
       break;
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {

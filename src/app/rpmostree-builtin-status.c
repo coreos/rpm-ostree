@@ -480,6 +480,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   g_print ("%s ", is_booted ? libsd_special_glyph (BLACK_CIRCLE) : " ");
 
   RpmOstreeRefspecType refspectype = RPMOSTREE_REFSPEC_TYPE_OSTREE;
+  const char *custom_origin_url = NULL;
+  const char *custom_origin_description = NULL;
   if (origin_refspec)
     {
       const char *refspec_data;
@@ -489,6 +491,21 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
       switch (refspectype)
         {
         case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
+          {
+            g_variant_dict_lookup (dict, "custom-origin", "(&s&s)",
+                                   &custom_origin_url,
+                                   &custom_origin_description);
+            /* Canonicalize the empty string to NULL */
+            if (custom_origin_url && !*custom_origin_url)
+              custom_origin_url = NULL;
+            if (custom_origin_description && !*custom_origin_description)
+              custom_origin_description = NULL;
+            if (custom_origin_url)
+              g_print ("%s", custom_origin_url);
+            else
+              g_print ("%s", canonrefspec);
+          }
+          break;
         case RPMOSTREE_REFSPEC_TYPE_OSTREE:
           {
             g_print ("%s", canonrefspec);
@@ -525,6 +542,9 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   else
     g_print ("%s", checksum);
   g_print ("\n");
+
+  if (custom_origin_description)
+    rpmostree_print_kv ("CustomOrigin", max_key_len, custom_origin_description);
 
   const char *remote_not_found = NULL;
   g_variant_dict_lookup (dict, "remote-error", "s", &remote_not_found);

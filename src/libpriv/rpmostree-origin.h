@@ -75,6 +75,11 @@ rpmostree_origin_get_rojig_version (RpmOstreeOrigin *origin);
 GVariant *
 rpmostree_origin_get_rojig_description (RpmOstreeOrigin *origin);
 
+void
+rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin,
+                                         char           **custom_type,
+                                         char           **custom_description);
+
 GHashTable *
 rpmostree_origin_get_packages (RpmOstreeOrigin *origin);
 
@@ -136,6 +141,12 @@ gboolean
 rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
                              const char      *new_refspec,
                              GError         **error);
+gboolean
+rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
+                                    const char      *new_refspec,
+                                    const char      *custom_origin_url,
+                                    const char      *custom_origin_description,
+                                    GError         **error);
 
 gboolean
 rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,

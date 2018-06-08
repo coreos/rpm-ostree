@@ -265,6 +265,16 @@ rpmostree_origin_get_rojig_description (RpmOstreeOrigin *origin)
   return g_variant_builder_end (builder);
 }
 
+void
+rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin,
+                                         char           **custom_type,
+                                         char           **custom_description)
+{
+  *custom_type = g_key_file_get_string (origin->kf, "origin", "custom-url", NULL);
+  if (*custom_type)
+    *custom_description = g_key_file_get_string (origin->kf, "origin", "custom-description", NULL);
+}
+
 GHashTable *
 rpmostree_origin_get_packages (RpmOstreeOrigin *origin)
 {
@@ -469,11 +479,13 @@ rpmostree_origin_set_rojig_description (RpmOstreeOrigin *origin,
 }
 
 gboolean
-rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
-                             const char      *new_refspec,
-                             GError         **error)
+rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
+                                    const char      *new_refspec,
+                                    const char      *custom_origin_url,
+                                    const char      *custom_origin_description,
+                                    GError         **error)
 {
-  /* We don't want to carry any commit overrides or version pinning during a
+   /* We don't want to carry any commit overrides or version pinning during a
    * rebase by default.
    */
   rpmostree_origin_set_override_commit (origin, NULL, NULL);
@@ -497,13 +509,29 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
           g_key_file_has_key (origin->kf, "origin", "baserefspec", NULL) ?
           "baserefspec" : "refspec";
         g_key_file_set_string (origin->kf, "origin", refspec_key, origin->cached_refspec);
+        if (!custom_origin_url)
+          {
+            g_key_file_remove_key (origin->kf, "origin", "custom-url", NULL);
+            g_key_file_remove_key (origin->kf, "origin", "custom-description", NULL);
+          }
+        else
+          {
+            /* Custom origins have to be checksums */
+            g_assert_cmpint (origin->refspec_type, ==, RPMOSTREE_REFSPEC_TYPE_CHECKSUM);
+            g_key_file_set_string (origin->kf, "origin", "custom-url", custom_origin_url);
+            if (custom_origin_description)
+              g_key_file_set_string (origin->kf, "origin", "custom-description", custom_origin_description);
+          }
       }
       break;
     case RPMOSTREE_REFSPEC_TYPE_ROJIG:
       {
+        g_assert (!custom_origin_url);
         origin->cached_refspec = g_strdup (refspecdata);
         g_key_file_remove_key (origin->kf, "origin", "refspec", NULL);
         g_key_file_remove_key (origin->kf, "origin", "baserefspec", NULL);
+        g_key_file_remove_key (origin->kf, "origin", "custom-url", NULL);
+        g_key_file_remove_key (origin->kf, "origin", "custom-description", NULL);
         /* Peeled */
         g_key_file_set_string (origin->kf, "origin", "rojig", origin->cached_refspec);
       }
@@ -511,6 +539,14 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
     }
 
   return TRUE;
+}
+
+gboolean
+rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
+                             const char      *new_refspec,
+                             GError         **error)
+{
+  return rpmostree_origin_set_rebase_custom (origin, new_refspec, NULL, NULL, error);
 }
 
 /* Like g_key_file_set_string(), but remove the key if @value is NULL */
