@@ -45,6 +45,6 @@ mkdir ${tmpd} && touch ${tmpd}/.tmp
  cargo vendor -q --sync ${TOP}/rust/Cargo.toml vendor
  cp ${TOP}/rust/Cargo.lock .
  cp ${TOP}/rust/cargo-vendor-config .cargo/config
- tar --transform="s,^,${PKG_VER}/rust/," -rf ${TARFILE_TMP} *
+ tar --transform="s,^,${PKG_VER}/rust/," -rf ${TARFILE_TMP} * .cargo/
  )
 mv ${TARFILE_TMP} ${TARFILE}
