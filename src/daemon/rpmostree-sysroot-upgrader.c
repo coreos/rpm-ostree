@@ -397,6 +397,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
 
   switch (refspec_type)
     {
+    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {
         g_autofree char *origin_remote = NULL;
