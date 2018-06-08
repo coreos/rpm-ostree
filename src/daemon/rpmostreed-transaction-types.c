@@ -76,6 +76,7 @@ change_origin_refspec (OstreeSysroot *sysroot,
           return TRUE;
         }
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+    case RPMOSTREE_REFSPEC_TYPE_COMMIT:
       break;
     }
 
@@ -163,6 +164,8 @@ apply_revision_override (RpmostreedTransaction    *transaction,
           /* This case we'll look up later */
           rpmostree_origin_set_rojig_version (origin, version);
           break;
+        case RPMOSTREE_REFSPEC_TYPE_COMMIT:
+          return glnx_throw (error, "Cannot look up version while pinned to commit");
         }
     }
   else
@@ -182,6 +185,8 @@ apply_revision_override (RpmostreedTransaction    *transaction,
            * on.
            */
           break;
+        case RPMOSTREE_REFSPEC_TYPE_COMMIT:
+          return glnx_throw (error, "Cannot look up version while pinned to commit");
         }
 
       rpmostree_origin_set_override_commit (origin, checksum, version);

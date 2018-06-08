@@ -303,6 +303,9 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
 
   switch (refspec_type)
     {
+    case RPMOSTREE_REFSPEC_TYPE_COMMIT:
+      /* Nothing to do here */
+      break;
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {
         if (!variant_add_remote_status (repo, refspec, base_checksum, &dict, error))
@@ -424,7 +427,9 @@ add_all_commit_details_to_vardict (OstreeDeployment *deployment,
         return FALSE;
       refspec = refspec_remainder;
     }
-  refspec_is_ostree = (refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE);
+  refspec_is_ostree = refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE;
+  if (refspec_type == RPMOSTREE_REFSPEC_TYPE_COMMIT && !commit)
+    checksum = refspec;
 
   g_assert (refspec);
 
@@ -962,10 +967,14 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
       return FALSE;
 
     /* we don't support rojig-based origins yet */
-    if (refspectype != RPMOSTREE_REFSPEC_TYPE_OSTREE)
+    switch (refspectype)
       {
+      case RPMOSTREE_REFSPEC_TYPE_ROJIG:
         *out_update = NULL;
         return TRUE; /* NB: early return */
+      case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+      case RPMOSTREE_REFSPEC_TYPE_COMMIT:
+        break;
       }
 
     /* just skip over "ostree://" so we can talk with libostree without thinking about it */

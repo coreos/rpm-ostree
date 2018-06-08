@@ -480,6 +480,11 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
       g_autofree char *canonrefspec = rpmostree_refspec_to_string (refspectype, refspec_data);
       switch (refspectype)
         {
+        case RPMOSTREE_REFSPEC_TYPE_COMMIT:
+          {
+            g_print ("Commit: %s", refspec_data);
+          }
+          break;
         case RPMOSTREE_REFSPEC_TYPE_OSTREE:
           {
             g_print ("%s", canonrefspec);
