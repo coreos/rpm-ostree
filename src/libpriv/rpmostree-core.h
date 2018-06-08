@@ -123,19 +123,6 @@ gboolean rpmostree_context_get_state_sha512 (RpmOstreeContext *self,
                                              char            **out_checksum,
                                              GError          **error);
 
-char * rpmostree_get_cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch);
-char *rpmostree_get_cache_branch_header (Header hdr);
-char *rpmostree_get_rojig_branch_header (Header hdr);
-char *rpmostree_get_cache_branch_pkg (DnfPackage *pkg);
-char *rpmostree_get_rojig_branch_pkg (DnfPackage *pkg);
-
-gboolean
-rpmostree_find_cache_branch_by_nevra (OstreeRepo    *pkgcache,
-                                      const char    *nevra,
-                                      char         **out_cache_branch,
-                                      GCancellable  *cancellable,
-                                      GError       **error);
-
 gboolean
 rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
                                     const char    *nevra,
@@ -143,17 +130,6 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
                                     GVariant     **out_header,
                                     GCancellable  *cancellable,
                                     GError       **error);
-
-gboolean
-rpmostree_get_nevra_from_pkgcache (OstreeRepo   *repo,
-                                   const char   *nevra,
-                                   char        **out_name,
-                                   guint64      *out_epoch,
-                                   char        **out_version,
-                                   char        **out_release,
-                                   char        **out_arch,
-                                   GCancellable *cancellable,
-                                   GError  **error);
 
 gboolean rpmostree_context_download_metadata (RpmOstreeContext  *context,
                                               DnfContextSetupSackFlags flags,

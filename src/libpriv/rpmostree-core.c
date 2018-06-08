@@ -920,37 +920,6 @@ checkout_pkg_metadata_by_dnfpkg (RpmOstreeContext *self,
 }
 
 gboolean
-rpmostree_find_cache_branch_by_nevra (OstreeRepo    *pkgcache,
-                                      const char    *nevra,
-                                      char         **out_cache_branch,
-                                      GCancellable  *cancellable,
-                                      GError       **error)
-
-{
-  /* there's no safe way to convert a nevra string to its cache branch, so let's
-   * just do a dumb lookup */
-  /* TODO: parse the refs once at core init, this function is itself
-   * called in loops */
-
-  g_autoptr(GHashTable) refs = NULL;
-  if (!ostree_repo_list_refs_ext (pkgcache, "rpmostree/pkg", &refs,
-                                  OSTREE_REPO_LIST_REFS_EXT_NONE, cancellable, error))
-    return FALSE;
-
-  GLNX_HASH_TABLE_FOREACH (refs, const char*, ref)
-    {
-      g_autofree char *cache_nevra = rpmostree_cache_branch_to_nevra (ref);
-      if (g_str_equal (nevra, cache_nevra))
-        {
-          *out_cache_branch = g_strdup (ref);
-          return TRUE;
-        }
-    }
-
-  return glnx_throw (error, "Failed to find cached pkg for %s", nevra);
-}
-
-gboolean
 rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
                                     const char    *nevra,
                                     const char    *expected_sha256,
@@ -959,8 +928,7 @@ rpmostree_pkgcache_find_pkg_header (OstreeRepo    *pkgcache,
                                     GError       **error)
 {
   g_autofree char *cache_branch = NULL;
-  if (!rpmostree_find_cache_branch_by_nevra (pkgcache, nevra, &cache_branch,
-                                             cancellable, error))
+  if (!rpmostree_nevra_to_cache_branch (nevra, &cache_branch, error))
     return FALSE;
 
   if (expected_sha256 != NULL)
@@ -999,43 +967,6 @@ checkout_pkg_metadata_by_nevra (RpmOstreeContext *self,
     return FALSE;
 
   return checkout_pkg_metadata (self, nevra, header, cancellable, error);
-}
-
-/* Fetches decomposed NEVRA information from pkgcache for a given nevra string. Requires the
- * package to have been unpacked with unpack_version 1.4+ */
-gboolean
-rpmostree_get_nevra_from_pkgcache (OstreeRepo  *repo,
-                                   const char  *nevra,
-                                   char       **out_name,
-                                   guint64     *out_epoch,
-                                   char       **out_version,
-                                   char       **out_release,
-                                   char       **out_arch,
-                                   GCancellable *cancellable,
-                                   GError  **error)
-{
-  g_autofree char *ref = NULL;
-  if (!rpmostree_find_cache_branch_by_nevra (repo, nevra, &ref, cancellable, error))
-    return FALSE;
-
-  g_autofree char *rev = NULL;
-  if (!ostree_repo_resolve_rev (repo, ref, FALSE, &rev, error))
-    return FALSE;
-
-  g_autoptr(GVariant) commit = NULL;
-  if (!ostree_repo_load_commit (repo, rev, &commit, NULL, error))
-    return FALSE;
-
-  g_autoptr(GVariant) meta = g_variant_get_child_value (commit, 0);
-  g_autoptr(GVariantDict) dict = g_variant_dict_new (meta);
-
-  g_autofree char *actual_nevra = NULL;
-  if (!g_variant_dict_lookup (dict, "rpmostree.nevra", "(sstsss)", &actual_nevra,
-                              out_name, out_epoch, out_version, out_release, out_arch))
-    return glnx_throw (error, "Cannot get nevra variant from commit metadata");
-
-  g_assert (g_str_equal (nevra, actual_nevra));
-  return TRUE;
 }
 
 /* Initiate download of rpm-md */
@@ -1197,105 +1128,6 @@ journal_rpmmd_info (RpmOstreeContext *self)
                      "ENABLED_REPOS_TIMESTAMPS=[%s]", enabled_repos_timestamps->str,
                      NULL);
   }
-}
-
-/* Quote/squash all non-(alphanumeric plus `.` and `-`); this
- * is used to map RPM package NEVRAs into ostree branch names.
- */
-static void
-append_quoted (GString *r, const char *value)
-{
-  const char *p;
-
-  for (p = value; *p; p++)
-    {
-      const char c = *p;
-      switch (c)
-        {
-        case '.':
-        case '-':
-          g_string_append_c (r, c);
-          continue;
-        }
-      if (g_ascii_isalnum (c))
-        {
-          g_string_append_c (r, c);
-          continue;
-        }
-      if (c == '_')
-        {
-          g_string_append (r, "__");
-          continue;
-        }
-
-      g_string_append_printf (r, "_%02X", c);
-    }
-}
-
-/* Return the ostree cache branch for a nevra */
-static char *
-get_branch_for_n_evr_a (const char *type, const char *name, const char *evr, const char *arch)
-{
-  GString *r = g_string_new ("rpmostree/");
-  g_string_append (r, type);
-  g_string_append_c (r, '/');
-  append_quoted (r, name);
-  g_string_append_c (r, '/');
-  /* Work around the fact that libdnf and librpm have different handling
-   * for an explicit Epoch header of zero.  libdnf right now ignores it,
-   * but librpm will add an explicit 0:.  Since there's no good reason
-   * to have it, let's follow the lead of libdnf.
-   *
-   * https://github.com/projectatomic/rpm-ostree/issues/349
-   */
-  if (g_str_has_prefix (evr, "0:"))
-    evr += 2;
-  append_quoted (r, evr);
-  g_string_append_c (r, '.');
-  append_quoted (r, arch);
-  return g_string_free (r, FALSE);
-}
-
-char *
-rpmostree_get_cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch)
-{
-  return get_branch_for_n_evr_a ("pkg", name, evr, arch);
-}
-
-/* Return the ostree cache branch from a Header */
-char *
-rpmostree_get_cache_branch_header (Header hdr)
-{
-  g_autofree char *name = headerGetAsString (hdr, RPMTAG_NAME);
-  g_autofree char *evr = headerGetAsString (hdr, RPMTAG_EVR);
-  g_autofree char *arch = headerGetAsString (hdr, RPMTAG_ARCH);
-  return rpmostree_get_cache_branch_for_n_evr_a (name, evr, arch);
-}
-
-char *
-rpmostree_get_rojig_branch_header (Header hdr)
-{
-  g_autofree char *name = headerGetAsString (hdr, RPMTAG_NAME);
-  g_autofree char *evr = headerGetAsString (hdr, RPMTAG_EVR);
-  g_autofree char *arch = headerGetAsString (hdr, RPMTAG_ARCH);
-  return get_branch_for_n_evr_a ("rojig", name, evr, arch);
-}
-
-/* Return the ostree cache branch from a libdnf Package */
-char *
-rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
-{
-  return rpmostree_get_cache_branch_for_n_evr_a (dnf_package_get_name (pkg),
-                                                 dnf_package_get_evr (pkg),
-                                                 dnf_package_get_arch (pkg));
-}
-
-char *
-rpmostree_get_rojig_branch_pkg (DnfPackage *pkg)
-{
-  return get_branch_for_n_evr_a ("rojig", dnf_package_get_name (pkg),
-                                 dnf_package_get_evr (pkg),
-                                 dnf_package_get_arch (pkg));
 }
 
 static gboolean

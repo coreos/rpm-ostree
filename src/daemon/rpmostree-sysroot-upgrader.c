@@ -677,10 +677,8 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self,
 
   GLNX_HASH_TABLE_FOREACH_KV (local_replacements, const char*, nevra, const char*, sha256)
     {
-      /* use the pkgcache because there's no safe way to go from nevra --> pkgname */
       g_autofree char *pkgname = NULL;
-      if (!rpmostree_get_nevra_from_pkgcache (self->repo, nevra, &pkgname, NULL, NULL,
-                                              NULL, NULL, cancellable, error))
+      if (!rpmostree_decompose_nevra (nevra, &pkgname, NULL, NULL, NULL, NULL, error))
         return FALSE;
 
       g_autoptr(DnfPackage) pkg = NULL;

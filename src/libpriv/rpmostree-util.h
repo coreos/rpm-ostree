@@ -163,9 +163,6 @@ rpmostree_get_deployment_root (OstreeSysroot     *sysroot,
                                OstreeDeployment *deployment);
 
 char *
-rpmostree_cache_branch_to_nevra (const char *cachebranch);
-
-char *
 rpmostree_commit_content_checksum (GVariant *commit);
 
 /* https://github.com/ostreedev/ostree/pull/1132 */
