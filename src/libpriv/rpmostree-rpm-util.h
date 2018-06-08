@@ -211,5 +211,18 @@ char *rpmostree_get_rojig_branch_header (Header hdr);
 char *rpmostree_get_cache_branch_pkg (DnfPackage *pkg);
 char *rpmostree_get_rojig_branch_pkg (DnfPackage *pkg);
 
+gboolean
+rpmostree_decompose_nevra (const char  *nevra,
+                           char       **out_name,    /* allow-none */
+                           guint64     *out_epoch,   /* allow-none */
+                           char       **out_version, /* allow-none */
+                           char       **out_release, /* allow-none */
+                           char       **out_arch,    /* allow-none */
+                           GError     **error);
+
+gboolean
+rpmostree_nevra_to_cache_branch (const char *nevra,
+                                 char      **cache_branch,
+                                 GError    **error);
 char *
 rpmostree_cache_branch_to_nevra (const char *cachebranch);
