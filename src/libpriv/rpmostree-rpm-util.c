@@ -1198,3 +1198,145 @@ rpmostree_create_rpmdb_pkglist_variant (int              dfd,
   *out_variant = g_variant_ref_sink (g_variant_builder_end (&pkglist_v_builder));
   return TRUE;
 }
+
+/* translates cachebranch back to nevra */
+char *
+rpmostree_cache_branch_to_nevra (const char *cachebranch)
+{
+  GString *r = g_string_new ("");
+  const char *p;
+
+  g_assert (g_str_has_prefix (cachebranch, "rpmostree/pkg/"));
+  cachebranch += strlen ("rpmostree/pkg/");
+
+  for (p = cachebranch; *p; p++)
+    {
+      char c = *p;
+
+      if (c != '_')
+        {
+          if (c == '/')
+            g_string_append_c (r, '-');
+          else
+            g_string_append_c (r, c);
+          continue;
+        }
+
+      p++;
+      c = *p;
+
+      if (c == '_')
+        {
+          g_string_append_c (r, c);
+          continue;
+        }
+
+      if (!*p || !*(p+1))
+        break;
+
+      const char h[3] = { *p, *(p+1) };
+      g_string_append_c (r, g_ascii_strtoull (h, NULL, 16));
+      p++;
+    }
+
+  return g_string_free (r, FALSE);
+}
+
+/* Quote/squash all non-(alphanumeric plus `.` and `-`); this
+ * is used to map RPM package NEVRAs into ostree branch names.
+ */
+static void
+append_quoted (GString *r, const char *value)
+{
+  const char *p;
+
+  for (p = value; *p; p++)
+    {
+      const char c = *p;
+      switch (c)
+        {
+        case '.':
+        case '-':
+          g_string_append_c (r, c);
+          continue;
+        }
+      if (g_ascii_isalnum (c))
+        {
+          g_string_append_c (r, c);
+          continue;
+        }
+      if (c == '_')
+        {
+          g_string_append (r, "__");
+          continue;
+        }
+
+      g_string_append_printf (r, "_%02X", c);
+    }
+}
+
+/* Return the ostree cache branch for a nevra */
+static char *
+get_branch_for_n_evr_a (const char *type, const char *name, const char *evr, const char *arch)
+{
+  GString *r = g_string_new ("rpmostree/");
+  g_string_append (r, type);
+  g_string_append_c (r, '/');
+  append_quoted (r, name);
+  g_string_append_c (r, '/');
+  /* Work around the fact that libdnf and librpm have different handling
+   * for an explicit Epoch header of zero.  libdnf right now ignores it,
+   * but librpm will add an explicit 0:.  Since there's no good reason
+   * to have it, let's follow the lead of libdnf.
+   *
+   * https://github.com/projectatomic/rpm-ostree/issues/349
+   */
+  if (g_str_has_prefix (evr, "0:"))
+    evr += 2;
+  append_quoted (r, evr);
+  g_string_append_c (r, '.');
+  append_quoted (r, arch);
+  return g_string_free (r, FALSE);
+}
+
+char *
+rpmostree_get_cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch)
+{
+  return get_branch_for_n_evr_a ("pkg", name, evr, arch);
+}
+
+/* Return the ostree cache branch from a Header */
+char *
+rpmostree_get_cache_branch_header (Header hdr)
+{
+  g_autofree char *name = headerGetAsString (hdr, RPMTAG_NAME);
+  g_autofree char *evr = headerGetAsString (hdr, RPMTAG_EVR);
+  g_autofree char *arch = headerGetAsString (hdr, RPMTAG_ARCH);
+  return rpmostree_get_cache_branch_for_n_evr_a (name, evr, arch);
+}
+
+char *
+rpmostree_get_rojig_branch_header (Header hdr)
+{
+  g_autofree char *name = headerGetAsString (hdr, RPMTAG_NAME);
+  g_autofree char *evr = headerGetAsString (hdr, RPMTAG_EVR);
+  g_autofree char *arch = headerGetAsString (hdr, RPMTAG_ARCH);
+  return get_branch_for_n_evr_a ("rojig", name, evr, arch);
+}
+
+/* Return the ostree cache branch from a libdnf Package */
+char *
+rpmostree_get_cache_branch_pkg (DnfPackage *pkg)
+{
+  return rpmostree_get_cache_branch_for_n_evr_a (dnf_package_get_name (pkg),
+                                                 dnf_package_get_evr (pkg),
+                                                 dnf_package_get_arch (pkg));
+}
+
+char *
+rpmostree_get_rojig_branch_pkg (DnfPackage *pkg)
+{
+  return get_branch_for_n_evr_a ("rojig", dnf_package_get_name (pkg),
+                                 dnf_package_get_evr (pkg),
+                                 dnf_package_get_arch (pkg));
+}
