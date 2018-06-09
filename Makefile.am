@@ -93,6 +93,7 @@ use-git-not-dist-hook:
 	@exit 1
 
 DIST_HOOKS += use-git-not-dist-hook
+GITIGNOREFILES += target/
 
 endif # end ENABLE_RUST
 
