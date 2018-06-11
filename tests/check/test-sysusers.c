@@ -20,6 +20,24 @@ static const gchar *expected_sysuser_passwd_content[] ={
   NULL
 };
 
+static const gchar *test_group[] = {
+  "chrony:x:992:",
+  "tcpdump:x:72:",
+  "systemd-timesync:x:991:",
+  "cockpit-ws:x:987:",
+  "test:x:111:",
+  NULL
+};
+
+static const gchar *expected_sysuser_group_content[] = {
+  "g chrony 992 - - -",
+  "g tcpdump 72 - - -",
+  "g systemd-timesync 991 - - -",
+  "g cockpit-ws 987 - - -",
+  "g test 111 - - -",
+  NULL
+};
+
 static void
 verify_sysuser_ent_content (GPtrArray       *sysusers_entries,
                             const gchar     **expected_content)
@@ -54,6 +72,18 @@ setup_sysuser_passwd(const gchar  **test_content,
 }
 
 static void
+setup_sysuser_group (const gchar  **test_content,
+                     GPtrArray    **out_entries,
+                     GError       **error)
+{
+  gboolean ret;
+  g_autofree char* group_data = g_strjoinv ("\n", (char **)test_content);
+  g_autoptr(GPtrArray) group_ents = rpmostree_passwd_data2groupents (group_data);
+  ret = rpmostree_groupents2sysusers (group_ents, out_entries, error);
+  g_assert (ret);
+}
+
+static void
 test_passwd_conversion(void)
 {
   g_autoptr(GPtrArray) sysusers_entries = NULL;
@@ -66,6 +96,19 @@ test_passwd_conversion(void)
   verify_sysuser_ent_content (sysusers_entries, expected_sysuser_passwd_content);
 }
 
+static void
+test_group_conversion(void)
+{
+  g_autoptr(GPtrArray) sysusers_entries = NULL;
+  g_autoptr(GError) error = NULL;
+
+  setup_sysuser_group (test_group, &sysusers_entries, &error);
+  /* Check the pointer array entries after the set up */
+  g_assert (sysusers_entries);
+
+  verify_sysuser_ent_content (sysusers_entries, expected_sysuser_group_content);
+}
+
 int
 main (int argc,
       char *argv[])
@@ -73,5 +116,6 @@ main (int argc,
   g_test_init (&argc, &argv, NULL);
 
   g_test_add_func ("/sysusers/passwd_conversion", test_passwd_conversion);
+  g_test_add_func ("/sysusers/group_conversion", test_group_conversion);
   return g_test_run ();
 }

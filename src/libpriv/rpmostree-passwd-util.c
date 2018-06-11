@@ -269,6 +269,36 @@ rpmostree_passwdents2sysusers (GPtrArray  *passwd_ents,
   return TRUE;
 }
 
+gboolean
+rpmostree_groupents2sysusers (GPtrArray  *group_ents,
+                              GPtrArray  **out_sysusers_entries,
+                              GError     **error)
+{
+  /* Similar to converting passwd to sysusers, we do assignment inside the function */
+  GPtrArray *sysusers_array = NULL;
+  sysusers_array  = *out_sysusers_entries ?: g_ptr_array_new_with_free_func (sysuser_ent_free);
+
+  for (int counter = 0; counter < group_ents->len; counter++)
+    {
+      struct conv_group_ent *convent = group_ents->pdata[counter];
+      struct sysuser_ent *sysent = g_new (struct sysuser_ent, 1);
+
+      sysent->type = "g";
+      sysent->name = g_steal_pointer (&convent->name);
+      sysent->id = g_strdup_printf ("%u", convent->gid);
+      sysent->gecos = NULL;
+      sysent->dir = NULL;
+      sysent->shell = NULL;
+
+      g_ptr_array_add (sysusers_array, sysent);
+    }
+  /* Do the assignment at the end if the sysusers_array was not initialized */
+  if (*out_sysusers_entries == NULL)
+    *out_sysusers_entries = g_steal_pointer (&sysusers_array);
+
+  return TRUE;
+}
+
 /* See "man 5 passwd" We just make sure the name and uid/gid match,
    and that none are missing. don't care about GECOS/dir/shell.
 */
