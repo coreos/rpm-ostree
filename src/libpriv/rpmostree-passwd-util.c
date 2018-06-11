@@ -299,6 +299,29 @@ rpmostree_groupents2sysusers (GPtrArray  *group_ents,
   return TRUE;
 }
 
+gboolean
+rpmostree_passwd_sysusers2char (GPtrArray *sysusers_entries,
+                                char      **out_content,
+                                GError    **error)
+{
+
+  GString* sysuser_content = g_string_new (NULL);
+  for (int counter = 0; counter < sysusers_entries->len; counter++)
+    {
+      struct sysuser_ent *sysent = sysusers_entries->pdata[counter];
+      const char *shell = sysent->shell ?: "-";
+      const char *gecos = sysent->gecos ?: "-";
+      const char *dir = sysent->dir ?: "-";
+      g_autofree gchar* line_content = g_strjoin (" ", sysent->type, sysent->name,
+                                                  sysent->id, gecos, dir, shell, NULL);
+      g_string_append_printf (sysuser_content, "%s\n", line_content);
+    }
+  if (out_content)
+    *out_content = g_string_free(sysuser_content, FALSE);
+
+  return TRUE;
+}
+
 /* See "man 5 passwd" We just make sure the name and uid/gid match,
    and that none are missing. don't care about GECOS/dir/shell.
 */
