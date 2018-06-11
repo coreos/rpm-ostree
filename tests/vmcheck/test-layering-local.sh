@@ -40,6 +40,15 @@ vm_has_local_packages foo-1.2-3.x86_64
 vm_assert_layered_pkg foo-1.2-3.x86_64 present
 echo "ok pkg foo added locally"
 
+# check we could uninstall the package using either its NEVRA or name
+vm_rpmostree uninstall foo-1.2-3.x86_64
+vm_assert_status_jq '.deployments[0]["requested-local-packages"]|length == 0'
+vm_rpmostree cleanup -p
+vm_rpmostree uninstall foo
+vm_assert_status_jq '.deployments[0]["requested-local-packages"]|length == 0'
+vm_rpmostree cleanup -p
+echo "ok uninstall by NEVRA or name"
+
 # check that we can still request foo and it's dormant
 vm_rpmostree install foo
 
