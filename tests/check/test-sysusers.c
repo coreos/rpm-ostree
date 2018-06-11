@@ -38,6 +38,20 @@ static const gchar *expected_sysuser_group_content[] = {
   NULL
 };
 
+static const gchar *expected_sysuser_combined_content[] = {
+  "g chrony 992 - - -",
+  "g cockpit-ws 987 - - -",
+  "g systemd-timesync 991 - - -",
+  "g tcpdump 72 - - -",
+  "g test 111 - - -",
+  "u chrony 994:992 - /var/lib/chrony /sbin/nologin",
+  "u cockpit-ws 988:987 \"b\" / /sbin/nologin",
+  "u systemd-timesync 993:991 \"a\" / /sbin/nologin",
+  "u tcpdump 72 - / /sbin/nologin",
+  "", /* Adds an empty string at the end, so we get an \n for the string when using g_strjoinv */
+  NULL
+};
+
 static void
 verify_sysuser_ent_content (GPtrArray       *sysusers_entries,
                             const gchar     **expected_content)
@@ -109,6 +123,52 @@ test_group_conversion(void)
   verify_sysuser_ent_content (sysusers_entries, expected_sysuser_group_content);
 }
 
+static void
+check_sysuser_conversion_with_sorting (const gchar  **input_passwd,
+                                       const gchar  **input_group,
+                                       const gchar  **expected_content)
+{
+  g_autoptr(GPtrArray) sysusers_entries = NULL;
+  g_autoptr(GError) error = NULL;
+  gboolean ret;
+
+  setup_sysuser_passwd (input_passwd, &sysusers_entries, &error);
+  setup_sysuser_group (input_group, &sysusers_entries, &error);
+
+  g_autofree gchar* output_content = NULL;
+  ret = rpmostree_passwd_sysusers2char (sysusers_entries, &output_content, &error);
+
+  g_assert (ret);
+  g_autofree char* expected_combined_result = g_strjoinv ("\n", (char **)expected_content);
+  g_assert (g_str_equal (expected_combined_result, output_content));
+}
+
+static void
+test_sysuser_conversion_with_sorting(void)
+{
+  /* Checks for g > u */
+  const char* sorting_case_one_group[] = {"chrony:x:992:", NULL};
+  const char* sorting_case_one_passwd[] = {"chrony:x:994:992::/var/lib/chrony:/sbin/nologin", NULL};
+  const char* sorting_case_one_output[] = {"g chrony 992 - - -", "u chrony 994:992 - /var/lib/chrony /sbin/nologin", "", NULL};
+
+  check_sysuser_conversion_with_sorting (sorting_case_one_passwd,
+                                         sorting_case_one_group,
+                                         sorting_case_one_output);
+
+  /* Checks for naming comparison */
+  const char* sorting_case_two_group[] = {"tcpdump:x:72:", "chrony:x:992:", NULL};
+  const char* sorting_case_two_passwd[] = {"chrony:x:994:992::/var/lib/chrony:/sbin/nologin", NULL};
+  const char* sorting_case_two_output[] = {"g chrony 992 - - -", "g tcpdump 72 - - -", "u chrony 994:992 - /var/lib/chrony /sbin/nologin", "", NULL};
+
+  check_sysuser_conversion_with_sorting (sorting_case_two_passwd,
+                                         sorting_case_two_group,
+                                         sorting_case_two_output);
+  /* Check the combined output */
+  check_sysuser_conversion_with_sorting (test_passwd,
+                                         test_group,
+                                         expected_sysuser_combined_content);
+}
+
 int
 main (int argc,
       char *argv[])
@@ -117,5 +177,6 @@ main (int argc,
 
   g_test_add_func ("/sysusers/passwd_conversion", test_passwd_conversion);
   g_test_add_func ("/sysusers/group_conversion", test_group_conversion);
+  g_test_add_func ("/sysusers/sysuser_conversion_with_sorting", test_sysuser_conversion_with_sorting);
   return g_test_run ();
 }
