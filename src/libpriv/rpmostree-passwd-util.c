@@ -186,6 +186,17 @@ conv_group_ent_free (void *vptr)
   g_free (ptr);
 }
 
+static void
+sysuser_ent_free (void *vptr)
+{
+  struct sysuser_ent *ptr = vptr;
+  g_free (ptr->name);
+  g_free (ptr->id);
+  g_free (ptr->gecos);
+  g_free (ptr->dir);
+  g_free (ptr->shell);
+}
+
 GPtrArray *
 rpmostree_passwd_data2groupents (const char *data)
 {
@@ -215,6 +226,47 @@ compare_group_ents (gconstpointer a, gconstpointer b)
   const struct conv_group_ent **sb = (const struct conv_group_ent **)b;
 
   return strcmp ((*sa)->name, (*sb)->name);
+}
+
+gboolean
+rpmostree_passwdents2sysusers (GPtrArray  *passwd_ents,
+                               GPtrArray  **out_sysusers_entries,
+                               GError     **error)
+{
+  /* Do the assignment inside the function so we don't need to expose sysuser_ent
+   * to other files */
+  GPtrArray *sysusers_array = NULL;
+  sysusers_array = *out_sysusers_entries ?: g_ptr_array_new_with_free_func (sysuser_ent_free);
+
+  for (int counter = 0; counter < passwd_ents->len; counter++)
+    {
+      struct conv_passwd_ent *convent = passwd_ents->pdata[counter];
+      struct sysuser_ent *sysent = g_new (struct sysuser_ent, 1);
+
+      /* Systemd-sysusers also supports uid:gid format. That case was used
+       * when creating user and group pairs with different numeric UID and GID values.*/
+      if (convent->uid != convent->gid)
+        sysent->id = g_strdup_printf ("%u:%u", convent->uid, convent->gid);
+      else
+        sysent->id = g_strdup_printf ("%u", convent->uid);
+
+      sysent->type = "u";
+      sysent->name = g_strdup (convent->name);
+
+      /* Gecos may contain multiple words, thus adding a quote here to make it as a 'word' */
+      sysent->gecos = (g_str_equal (convent->pw_gecos, "")) ? NULL :
+                       g_strdup_printf ("\"%s\"", convent->pw_gecos);
+      sysent->dir = (g_str_equal (convent->pw_dir, ""))? NULL :
+                    g_steal_pointer (&convent->pw_dir);
+      sysent->shell = g_steal_pointer (&convent->pw_shell);
+
+      g_ptr_array_add (sysusers_array, sysent);
+    }
+  /* Do the assignment at the end if the sysusers_table was not initialized */
+  if (*out_sysusers_entries == NULL)
+    *out_sysusers_entries = g_steal_pointer (&sysusers_array);
+
+  return TRUE;
 }
 
 /* See "man 5 passwd" We just make sure the name and uid/gid match,

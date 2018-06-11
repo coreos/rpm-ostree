@@ -117,3 +117,8 @@ rpmostree_passwd_data2passwdents (const char *data);
 
 GPtrArray *
 rpmostree_passwd_data2groupents (const char *data);
+
+gboolean
+rpmostree_passwdents2sysusers (GPtrArray *passwd_ents,
+                               GPtrArray **out_sysusers_entries,
+                               GError **error);
