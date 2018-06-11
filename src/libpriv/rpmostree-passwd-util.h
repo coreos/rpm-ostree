@@ -126,3 +126,7 @@ gboolean
 rpmostree_groupents2sysusers (GPtrArray  *group_ents,
                               GPtrArray **out_sysusers_entries,
                               GError    **error);
+gboolean
+rpmostree_passwd_sysusers2char (GPtrArray *sysusers_entries,
+                                char      **out_content,
+                                GError    **error);
