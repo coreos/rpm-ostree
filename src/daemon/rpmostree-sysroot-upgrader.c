@@ -1306,7 +1306,16 @@ rpmostree_sysroot_upgrader_flags_get_type (void)
           "allow-older" },
         { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN,
           "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN",
-          "dry-run" }
+          "dry-run" },
+        { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY,
+          "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY",
+          "pkgcache-only" },
+        { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL,
+          "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL",
+          "synthetic-pull" },
+        { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_STAGE,
+          "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_STAGE",
+          "stage" },
       };
       GType g_define_type_id =
         g_flags_register_static (g_intern_static_string ("RpmOstreeSysrootUpgraderFlags"), values);
