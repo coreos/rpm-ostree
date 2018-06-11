@@ -228,6 +228,31 @@ compare_group_ents (gconstpointer a, gconstpointer b)
   return strcmp ((*sa)->name, (*sb)->name);
 }
 
+static int
+compare_sysuser_ents (gconstpointer a, gconstpointer b)
+{
+  const struct sysuser_ent **sa = (const struct sysuser_ent **)a;
+  const struct sysuser_ent **sb = (const struct sysuser_ent **)b;
+
+  /* g > u > m */
+  if (!g_str_equal ((*sa)->type, (*sb)->type))
+    {
+      gboolean is_group_type = g_str_equal ((*sa)->type, "g") || g_str_equal ((*sa)->type, "g");
+      if (is_group_type)
+        return !strcmp ((*sa)->type, (*sb)->type); /* g is smaller than m and u, we want g > other type here*/
+
+      gboolean is_user_type = g_str_equal ((*sa)->type, "u") || g_str_equal ((*sb)->type, "u");
+      if (is_user_type)
+        return strcmp ((*sa)->type, (*sb)->type); /* u > m */
+    }
+  /* We sort the entry name if type happens to be the same */
+  if (!g_str_equal ((*sa)->name, (*sb)->name))
+      return strcmp ((*sa)->name, (*sb)->name);
+
+  /* This is a collision, when both name and type matches, could error out here */
+  return 0;
+}
+
 gboolean
 rpmostree_passwdents2sysusers (GPtrArray  *passwd_ents,
                                GPtrArray  **out_sysusers_entries,
@@ -306,6 +331,8 @@ rpmostree_passwd_sysusers2char (GPtrArray *sysusers_entries,
 {
 
   GString* sysuser_content = g_string_new (NULL);
+  /* We do the sorting before conversion */
+  g_ptr_array_sort (sysusers_entries, compare_sysuser_ents);
   for (int counter = 0; counter < sysusers_entries->len; counter++)
     {
       struct sysuser_ent *sysent = sysusers_entries->pdata[counter];
