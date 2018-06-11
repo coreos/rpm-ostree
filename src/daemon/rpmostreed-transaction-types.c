@@ -138,6 +138,9 @@ apply_revision_override (RpmostreedTransaction    *transaction,
   RpmOstreeRefspecType refspectype;
   rpmostree_origin_classify_refspec (origin, &refspectype, NULL);
 
+  if (refspectype == RPMOSTREE_REFSPEC_TYPE_COMMIT)
+    return glnx_throw (error, "Cannot look up version while pinned to commit");
+
   g_autofree char *checksum = NULL;
   g_autofree char *version = NULL;
   if (!rpmostreed_parse_revision (revision, &checksum, &version, error))
@@ -165,7 +168,7 @@ apply_revision_override (RpmostreedTransaction    *transaction,
           rpmostree_origin_set_rojig_version (origin, version);
           break;
         case RPMOSTREE_REFSPEC_TYPE_COMMIT:
-          return glnx_throw (error, "Cannot look up version while pinned to commit");
+          g_assert_not_reached ();  /* Handled above */
         }
     }
   else
@@ -186,7 +189,7 @@ apply_revision_override (RpmostreedTransaction    *transaction,
            */
           break;
         case RPMOSTREE_REFSPEC_TYPE_COMMIT:
-          return glnx_throw (error, "Cannot look up version while pinned to commit");
+          g_assert_not_reached ();  /* Handled above */
         }
 
       rpmostree_origin_set_override_commit (origin, checksum, version);

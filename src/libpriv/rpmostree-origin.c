@@ -126,13 +126,13 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
   else if (refspec)
     {
       const char *refspec_value;
-      if (!rpmostree_refspec_classify (refspec, &ret->refspec_type, &refspec_value, error))
+      if (!rpmostree_refspec_classify (refspec, &ret->refspec_type, NULL, error))
         return FALSE;
       /* Note the lack of a prefix here so that code that just calls
        * rpmostree_origin_get_refspec() in the ostree:// case
        * sees it without the prefix for compatibility.
        */
-      ret->cached_refspec = g_strdup (refspec);
+      ret->cached_refspec = g_steal_pointer (&refspec);
       ret->cached_override_commit =
         g_key_file_get_string (ret->kf, "origin", "override-commit", NULL);
     }
