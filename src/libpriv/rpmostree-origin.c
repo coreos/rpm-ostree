@@ -125,7 +125,8 @@ rpmostree_origin_parse_keyfile (GKeyFile         *origin,
     return glnx_null_throw (error, "Duplicate origin/refspec and origin/rojig in deployment origin");
   else if (refspec)
     {
-      ret->refspec_type = RPMOSTREE_REFSPEC_TYPE_OSTREE;
+      if (!rpmostree_refspec_classify (refspec, &ret->refspec_type, NULL, error))
+        return FALSE;
       /* Note the lack of a prefix here so that code that just calls
        * rpmostree_origin_get_refspec() in the ostree:// case
        * sees it without the prefix for compatibility.
@@ -206,6 +207,7 @@ rpmostree_origin_get_full_refspec (RpmOstreeOrigin *origin,
   switch (origin->refspec_type)
     {
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
       return g_strdup (origin->cached_refspec);
     case RPMOSTREE_REFSPEC_TYPE_ROJIG:
       return g_strconcat (RPMOSTREE_REFSPEC_ROJIG_PREFIX, origin->cached_refspec, NULL);
@@ -485,6 +487,7 @@ rpmostree_origin_set_rebase (RpmOstreeOrigin *origin,
   origin->cached_refspec = g_strdup (refspecdata);
   switch (origin->refspec_type)
     {
+    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
       {
         g_key_file_remove_key (origin->kf, "origin", "rojig", NULL);
@@ -577,6 +580,7 @@ update_keyfile_pkgs_from_cache (RpmOstreeOrigin *origin,
       switch (origin->refspec_type)
         {
         case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+        case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
           {
             g_key_file_set_value (origin->kf, "origin", "baserefspec",
                                   origin->cached_refspec);

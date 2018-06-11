@@ -50,7 +50,9 @@
 static OstreeRepo * get_pkgcache_repo (RpmOstreeContext *self);
 
 /* Given a string, look for ostree:// or rojig:// prefix and
- * return its type and the remainder of the string.
+ * return its type and the remainder of the string.  Note
+ * that ostree:// can be either a refspec (TYPE_OSTREE) or
+ * a bare commit (TYPE_COMMIT).
  */
 gboolean
 rpmostree_refspec_classify (const char *refspec,
@@ -58,29 +60,28 @@ rpmostree_refspec_classify (const char *refspec,
                             const char **out_remainder,
                             GError     **error)
 {
-  if (g_str_has_prefix (refspec, RPMOSTREE_REFSPEC_OSTREE_PREFIX))
-    {
-      *out_type = RPMOSTREE_REFSPEC_TYPE_OSTREE;
-      if (out_remainder)
-        *out_remainder = refspec + strlen (RPMOSTREE_REFSPEC_OSTREE_PREFIX);
-      return TRUE;
-    }
-  else if (g_str_has_prefix (refspec, RPMOSTREE_REFSPEC_ROJIG_PREFIX))
+  if (g_str_has_prefix (refspec, RPMOSTREE_REFSPEC_ROJIG_PREFIX))
     {
       *out_type = RPMOSTREE_REFSPEC_TYPE_ROJIG;
       if (out_remainder)
         *out_remainder = refspec + strlen (RPMOSTREE_REFSPEC_ROJIG_PREFIX);
       return TRUE;
     }
+  /* Add any other prefixes here */
 
-  /* Fallback case when we have no explicit prefix - treat this as ostree://
-   * for compatibility.  In the future we may do some error checking here,
-   * i.e. trying to parse the refspec.
-   */
-  *out_type = RPMOSTREE_REFSPEC_TYPE_OSTREE;
+  /* For compatibility, fall back to ostree:// when we have no prefix. */
+  const char *remainder;
+  if (g_str_has_prefix (refspec, RPMOSTREE_REFSPEC_OSTREE_PREFIX))
+    remainder = refspec + strlen (RPMOSTREE_REFSPEC_OSTREE_PREFIX);
+  else
+    remainder = refspec;
+
+  if (ostree_validate_checksum_string (remainder, NULL))
+    *out_type = RPMOSTREE_REFSPEC_TYPE_CHECKSUM;
+  else
+    *out_type = RPMOSTREE_REFSPEC_TYPE_OSTREE;
   if (out_remainder)
-    *out_remainder = refspec;
-
+    *out_remainder = remainder;
   return TRUE;
 }
 
@@ -92,6 +93,7 @@ rpmostree_refspec_to_string (RpmOstreeRefspecType  reftype,
   switch (reftype)
     {
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
+    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
       prefix = RPMOSTREE_REFSPEC_OSTREE_PREFIX;
       break;
     case RPMOSTREE_REFSPEC_TYPE_ROJIG:
