@@ -48,6 +48,7 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeSysrootUpgrader, g_object_unref)
  * Flags controlling operation of an #RpmOstreeSysrootUpgrader.
  */
 typedef enum {
+  /* NB: When changing here, also change rpmostree_sysroot_upgrader_flags_get_type(). */
   RPMOSTREE_SYSROOT_UPGRADER_FLAGS_NONE                 = (1 << 0),
   RPMOSTREE_SYSROOT_UPGRADER_FLAGS_IGNORE_UNCONFIGURED  = (1 << 1),
   RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER          = (1 << 2),
