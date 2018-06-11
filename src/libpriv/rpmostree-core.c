@@ -77,7 +77,7 @@ rpmostree_refspec_classify (const char *refspec,
     remainder = refspec;
 
   if (ostree_validate_checksum_string (remainder, NULL))
-    *out_type = RPMOSTREE_REFSPEC_TYPE_COMMIT;
+    *out_type = RPMOSTREE_REFSPEC_TYPE_CHECKSUM;
   else
     *out_type = RPMOSTREE_REFSPEC_TYPE_OSTREE;
   if (out_remainder)
@@ -93,7 +93,7 @@ rpmostree_refspec_to_string (RpmOstreeRefspecType  reftype,
   switch (reftype)
     {
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-    case RPMOSTREE_REFSPEC_TYPE_COMMIT:
+    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
       prefix = RPMOSTREE_REFSPEC_OSTREE_PREFIX;
       break;
     case RPMOSTREE_REFSPEC_TYPE_ROJIG:

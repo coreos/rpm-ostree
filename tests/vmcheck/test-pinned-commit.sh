@@ -28,11 +28,11 @@ checksum=$(vm_get_booted_csum)
 vm_rpmostree rebase :${checksum}
 vm_assert_status_jq ".deployments[0][\"origin\"] == \"${checksum}\""
 vm_rpmostree status > status.txt
-assert_file_has_content status.txt '^  Commit: '${checksum}
+assert_file_has_content status.txt '^  ostree://'${checksum}
 echo "ok pin to commit"
 
 vm_rpmostree upgrade >out.txt
-assert_file_has_content out.txt 'No upgrade available'
+assert_file_has_content out.txt 'Pinned to commit; no upgrade available'
 if vm_rpmostree deploy 42 2>err.txt; then
     fatal "deployed version from commit?"
 fi

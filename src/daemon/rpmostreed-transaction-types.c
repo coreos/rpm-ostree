@@ -76,7 +76,7 @@ change_origin_refspec (OstreeSysroot *sysroot,
           return TRUE;
         }
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
-    case RPMOSTREE_REFSPEC_TYPE_COMMIT:
+    case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
       break;
     }
 
@@ -138,7 +138,7 @@ apply_revision_override (RpmostreedTransaction    *transaction,
   RpmOstreeRefspecType refspectype;
   rpmostree_origin_classify_refspec (origin, &refspectype, NULL);
 
-  if (refspectype == RPMOSTREE_REFSPEC_TYPE_COMMIT)
+  if (refspectype == RPMOSTREE_REFSPEC_TYPE_CHECKSUM)
     return glnx_throw (error, "Cannot look up version while pinned to commit");
 
   g_autofree char *checksum = NULL;
@@ -167,7 +167,7 @@ apply_revision_override (RpmostreedTransaction    *transaction,
           /* This case we'll look up later */
           rpmostree_origin_set_rojig_version (origin, version);
           break;
-        case RPMOSTREE_REFSPEC_TYPE_COMMIT:
+        case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
           g_assert_not_reached ();  /* Handled above */
         }
     }
@@ -188,7 +188,7 @@ apply_revision_override (RpmostreedTransaction    *transaction,
            * on.
            */
           break;
-        case RPMOSTREE_REFSPEC_TYPE_COMMIT:
+        case RPMOSTREE_REFSPEC_TYPE_CHECKSUM:
           g_assert_not_reached ();  /* Handled above */
         }
 
@@ -1143,6 +1143,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       changed = TRUE;
     }
 
+  /* Past this point we've computed the origin */
+  RpmOstreeRefspecType refspec_type;
+  rpmostree_origin_classify_refspec (origin, &refspec_type, NULL);
+
   if (download_metadata_only)
     {
       /* We have to short-circuit the usual path here; we already downloaded the ostree
@@ -1254,7 +1258,10 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     }
   else
     {
-      if (!self->revision)
+      if (refspec_type == RPMOSTREE_REFSPEC_TYPE_CHECKSUM
+          && layering_type < RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
+        rpmostree_output_message ("Pinned to commit; no upgrade available");
+      else if (!self->revision)
         rpmostree_output_message ("No upgrade available.");
       else
         rpmostree_output_message ("No change.");
