@@ -44,6 +44,8 @@ vm_assert_status_jq ".deployments[1][\"booted\"]" \
                     ".deployments[0][\"version\"] == \"v2\""
 vm_rpmostree status -v > status.txt
 assert_file_has_content status.txt "Staged: yes"
+vm_rpmostree upgrade > upgrade.txt
+assert_file_has_content_literal upgrade.txt 'note: automatic updates (ex-stage) are enabled'
 # And ensure that we have new content in /etc after staging
 vm_cmd echo new-content-in-etc \> /etc/somenewfile
 vm_reboot

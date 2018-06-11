@@ -112,6 +112,18 @@ rpmostree_builtin_upgrade (int             argc,
                                 cancellable, &os_proxy, error))
     return FALSE;
 
+  /* Print a notice if ex-stage updates are enabled and the user
+   * has requested an update manually - in that case we've
+   * already doing basically all of `upgrade` here automatically in
+   * the background.
+   */
+  if (!opt_automatic)
+    {
+      const char *policy = rpmostree_sysroot_get_automatic_update_policy (sysroot_proxy);
+      if (policy && g_str_equal (policy, "ex-stage"))
+        g_print ("note: automatic updates (%s) are enabled\n", policy);
+    }
+
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
   const gboolean check_or_preview = (opt_check || opt_preview);
