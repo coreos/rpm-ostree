@@ -72,7 +72,7 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
   /* Perform uninstalls offline; users don't expect the "auto-update" behaviour here. But
    * note we might still need to fetch pkgs in the local replacement case (e.g. the
    * replacing pkg has an additional out-of-tree dep). */
-  const gboolean cache_only = (override_replace == NULL);
+  const gboolean cache_only = (override_replace == NULL && install_pkgs == NULL);
 
   GVariantDict dict;
   g_variant_dict_init (&dict, NULL);

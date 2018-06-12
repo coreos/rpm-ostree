@@ -216,3 +216,8 @@ if vm_rpmostree override remove foo; then
 fi
 vm_rpmostree cleanup -p
 echo "ok override remove base dep to layered pkg fails"
+
+vm_build_rpm boo
+vm_rpmostree override remove foo --install boo
+vm_rpmostree cleanup -p
+echo "ok remove and --install at the same time"
