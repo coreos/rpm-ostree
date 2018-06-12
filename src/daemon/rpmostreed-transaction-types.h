@@ -20,6 +20,7 @@
 
 #include "rpmostreed-types.h"
 #include "rpmostreed-daemon.h"
+#include "rpmostreed-os.h"
 
 #include <gio/gunixfdlist.h>
 
@@ -66,18 +67,11 @@ typedef enum {
 RpmostreedTransaction *
 rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    OstreeSysroot *sysroot,
-                                   RpmOstreeTransactionDeployFlags flags,
-                                   gboolean    output_to_self,
                                    const char *osname,
-                                   const char *refspec,
-                                   const char *revision,
-                                   const char *const *install_pkgs,
-                                   GUnixFDList       *install_local_pkgs,
-                                   const char *const *uninstall_pkgs,
-                                   const char *const *override_replace_pkgs,
-                                   GUnixFDList       *override_replace_local_pkgs,
-                                   const char *const *override_remove_pkgs,
-                                   const char *const *override_reset_pkgs,
+                                   RpmOstreeTransactionDeployFlags flags,
+                                   GVariant               *options,
+                                   RpmOstreeUpdateDeploymentModifiers *modifiers,
+                                   GUnixFDList            *fd_list,
                                    GCancellable *cancellable,
                                    GError **error);
 
