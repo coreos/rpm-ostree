@@ -543,6 +543,8 @@ typedef struct {
   RpmostreedTransaction parent;
   RpmOstreeTransactionDeployFlags flags;
   char   *osname;
+  GVariantDict *options;
+  GVariantDict *modifiers;
   char   *refspec; /* NULL for non-rebases */
   char   *revision; /* NULL for upgrade */
   char  **install_pkgs;
@@ -570,6 +572,8 @@ deploy_transaction_finalize (GObject *object)
 
   self = (DeployTransaction *) object;
   g_free (self->osname);
+  g_clear_pointer (&self->options, g_variant_dict_unref);
+  g_clear_pointer (&self->modifiers, g_variant_dict_unref);
   g_free (self->refspec);
   g_free (self->revision);
   g_strfreev (self->install_pkgs);
@@ -1343,31 +1347,29 @@ vardict_lookup_ptr (GVariantDict  *dict,
 }
 
 static RpmOstreeTransactionDeployFlags
-deploy_flags_from_options (GVariant *options,
+deploy_flags_from_options (GVariantDict *dict,
                            RpmOstreeTransactionDeployFlags defaults)
 {
   RpmOstreeTransactionDeployFlags ret = defaults;
-  g_auto(GVariantDict) dict;
-  g_variant_dict_init (&dict, options);
-  if (vardict_lookup_bool (&dict, "allow-downgrade", FALSE))
+  if (vardict_lookup_bool (dict, "allow-downgrade", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE;
-  if (vardict_lookup_bool (&dict, "reboot", FALSE))
+  if (vardict_lookup_bool (dict, "reboot", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_REBOOT;
-  if (vardict_lookup_bool (&dict, "skip-purge", FALSE))
+  if (vardict_lookup_bool (dict, "skip-purge", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_SKIP_PURGE;
-  if (vardict_lookup_bool (&dict, "no-pull-base", FALSE))
+  if (vardict_lookup_bool (dict, "no-pull-base", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE;
-  if (vardict_lookup_bool (&dict, "dry-run", FALSE))
+  if (vardict_lookup_bool (dict, "dry-run", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN;
-  if (vardict_lookup_bool (&dict, "no-overrides", FALSE))
+  if (vardict_lookup_bool (dict, "no-overrides", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES;
-  if (vardict_lookup_bool (&dict, "no-layering", FALSE))
+  if (vardict_lookup_bool (dict, "no-layering", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_LAYERING;
-  if (vardict_lookup_bool (&dict, "cache-only", FALSE))
+  if (vardict_lookup_bool (dict, "cache-only", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_CACHE_ONLY;
-  if (vardict_lookup_bool (&dict, "download-only", FALSE))
+  if (vardict_lookup_bool (dict, "download-only", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY;
-  if (vardict_lookup_bool (&dict, "allow-inactive", FALSE))
+  if (vardict_lookup_bool (dict, "allow-inactive", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_INACTIVE;
   return ret;
 }
@@ -1408,13 +1410,11 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
   g_return_val_if_fail (osname != NULL, NULL);
 
-  g_auto(GVariantDict) dict;
-  g_variant_dict_init (&dict, modifiers);
-  g_auto(GVariantDict) options_dict;
-  g_variant_dict_init (&options_dict, options);
+  /* Parse this one early as it's used by an object property */
+  g_autoptr(GVariantDict) options_dict = g_variant_dict_new (options);
 
   const gboolean output_to_self =
-    vardict_lookup_bool (&options_dict, "output-to-self", FALSE);
+    vardict_lookup_bool (options_dict, "output-to-self", FALSE);
 
   g_autoptr(DeployTransaction) self =
     g_initable_new (deploy_transaction_get_type (),
@@ -1426,27 +1426,30 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   if (!self)
     return NULL;
 
-  flags = deploy_flags_from_options (options, flags);
+  self->options = g_variant_dict_ref (options_dict);
+  self->modifiers = g_variant_dict_new (modifiers);
+
+  flags = deploy_flags_from_options (self->options, flags);
 
   const char *refspec =
-    vardict_lookup_ptr (&dict, "set-refspec", "&s");
+    vardict_lookup_ptr (self->modifiers, "set-refspec", "&s");
   const char *revision =
-    vardict_lookup_ptr (&dict, "set-revision", "&s");
+    vardict_lookup_ptr (self->modifiers, "set-revision", "&s");
   g_autofree const char *const *install_pkgs =
-    vardict_lookup_ptr (&dict, "install-packages", "^a&s");
+    vardict_lookup_ptr (self->modifiers, "install-packages", "^a&s");
   g_autofree const char *const *uninstall_pkgs =
-    vardict_lookup_ptr (&dict, "uninstall-packages", "^a&s");
+    vardict_lookup_ptr (self->modifiers, "uninstall-packages", "^a&s");
   g_autofree const char *const *override_replace_pkgs =
-    vardict_lookup_ptr (&dict, "override-replace-packages", "^a&s");
+    vardict_lookup_ptr (self->modifiers, "override-replace-packages", "^a&s");
   g_autofree const char *const *override_remove_pkgs =
-    vardict_lookup_ptr (&dict, "override-remove-packages", "^a&s");
+    vardict_lookup_ptr (self->modifiers, "override-remove-packages", "^a&s");
   g_autofree const char *const *override_reset_pkgs =
-    vardict_lookup_ptr (&dict, "override-reset-packages", "^a&s");
+    vardict_lookup_ptr (self->modifiers, "override-reset-packages", "^a&s");
   g_autoptr(GVariant) install_local_pkgs_idxs =
-    g_variant_dict_lookup_value (&dict, "install-local-packages",
+    g_variant_dict_lookup_value (self->modifiers, "install-local-packages",
                                  G_VARIANT_TYPE("ah"));
   g_autoptr(GVariant) override_replace_local_pkgs_idxs =
-    g_variant_dict_lookup_value (&dict, "override-replace-local-packages",
+    g_variant_dict_lookup_value (self->modifiers, "override-replace-local-packages",
                                  G_VARIANT_TYPE("ah"));
 
   /* We only use the fd list right now to transfer local RPM fds, which are relevant in the
@@ -1492,33 +1495,33 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
 
   /* Also check for conflicting options -- this is after all a public API. */
 
-  if (!refspec && vardict_lookup_bool (&options_dict, "skip-purge", FALSE))
+  if (!refspec && vardict_lookup_bool (self->options, "skip-purge", FALSE))
     return glnx_null_throw (error, "Can't specify skip-purge if not setting a "
                                    "new refspec");
   if ((refspec || revision) &&
-      vardict_lookup_bool (&options_dict, "no-pull-base", FALSE))
+      vardict_lookup_bool (self->options, "no-pull-base", FALSE))
     return glnx_null_throw (error, "Can't specify no-pull-base if setting a "
                                    "new refspec or revision");
-  if (vardict_lookup_bool (&options_dict, "cache-only", FALSE) &&
-      vardict_lookup_bool (&options_dict, "download-only", FALSE))
+  if (vardict_lookup_bool (self->options, "cache-only", FALSE) &&
+      vardict_lookup_bool (self->options, "download-only", FALSE))
     return glnx_null_throw (error, "Can't specify cache-only and download-only");
-  if (vardict_lookup_bool (&options_dict, "dry-run", FALSE) &&
-      vardict_lookup_bool (&options_dict, "download-only", FALSE))
+  if (vardict_lookup_bool (self->options, "dry-run", FALSE) &&
+      vardict_lookup_bool (self->options, "download-only", FALSE))
     return glnx_null_throw (error, "Can't specify dry-run and download-only");
   if (override_replace_pkgs)
     return glnx_null_throw (error, "Non-local replacement overrides not implemented yet");
 
-  if (vardict_lookup_bool (&options_dict, "no-overrides", FALSE) &&
+  if (vardict_lookup_bool (self->options, "no-overrides", FALSE) &&
       (override_remove_pkgs || override_reset_pkgs ||
        override_replace_pkgs || override_replace_local_pkgs_idxs))
     return glnx_null_throw (error, "Can't specify no-overrides if setting "
                                    "override modifiers");
-  if (vardict_lookup_bool (&options_dict, "no-layering", FALSE) &&
+  if (vardict_lookup_bool (self->options, "no-layering", FALSE) &&
       ((install_pkgs && *install_pkgs) || install_local_pkgs))
     return glnx_null_throw (error, "Can't specify no-layering if also layering packages");
 
   /* default to allowing downgrades for rebases & deploys */
-  if (vardict_lookup_bool (&options_dict, "allow-downgrade", refspec ||
+  if (vardict_lookup_bool (self->options, "allow-downgrade", refspec ||
                                                              revision))
     flags |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE;
 
