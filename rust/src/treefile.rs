@@ -50,14 +50,14 @@ pub extern "C" fn treefile_read(
     // memory across the Rust/C boundary
 
     // let's just get the unsafory stuff (see what I did there?) out of the way first
-    let output_file = unsafe { fs::File::from_raw_fd(libc::dup(fd)) };
+    let output = io::BufWriter::new(unsafe { fs::File::from_raw_fd(libc::dup(fd)) });
     let c_str: &CStr = unsafe { CStr::from_ptr(filename) };
     let filename_path = Path::new(OsStr::from_bytes(c_str.to_bytes()));
 
-    treefile_read_impl(filename_path, output_file).to_glib_convention(error)
+    treefile_read_impl(filename_path, output).to_glib_convention(error)
 }
 
-fn treefile_read_impl(filename: &Path, output: fs::File) -> io::Result<()> {
+fn treefile_read_impl<W: io::Write>(filename: &Path, output: W) -> io::Result<()> {
     let f = io::BufReader::new(fs::File::open(filename)?);
 
     let mut treefile: TreeComposeConfig = match serde_yaml::from_reader(f) {
