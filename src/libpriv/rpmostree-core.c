@@ -419,7 +419,6 @@ rpmostree_context_new_system (OstreeRepo   *repo,
 
   dnf_context_set_check_disk_space (self->dnfctx, FALSE);
   dnf_context_set_check_transaction (self->dnfctx, FALSE);
-  dnf_context_set_yumdb_enabled (self->dnfctx, FALSE);
 
   return self;
 }
