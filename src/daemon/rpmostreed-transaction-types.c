@@ -553,6 +553,7 @@ GType deploy_transaction_get_type (void);
 G_DEFINE_TYPE (DeployTransaction,
                deploy_transaction,
                RPMOSTREED_TYPE_TRANSACTION)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (DeployTransaction, g_object_unref)
 
 static void
 deploy_transaction_finalize (GObject *object)
@@ -1373,7 +1374,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   const gboolean output_to_self =
     vardict_lookup_bool (&options_dict, "output-to-self", FALSE);
 
-  DeployTransaction *self =
+  g_autoptr(DeployTransaction) self =
     g_initable_new (deploy_transaction_get_type (),
                     cancellable, error,
                     "invocation", invocation,
@@ -1488,24 +1489,21 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
         return NULL;
     }
 
-  if (self != NULL)
-    {
-      self->osname = g_strdup (osname);
-      self->flags = flags;
-      self->refspec = g_strdup (refspec);
-      self->revision = g_strdup (revision);
-      self->install_pkgs = strdupv_canonicalize (install_pkgs);
-      if (install_local_pkgs != NULL)
-        self->install_local_pkgs = g_object_ref (install_local_pkgs);
-      self->uninstall_pkgs = strdupv_canonicalize (uninstall_pkgs);
-      self->override_replace_pkgs = strdupv_canonicalize (override_replace_pkgs);
-      if (override_replace_local_pkgs != NULL)
-        self->override_replace_local_pkgs = g_object_ref (override_replace_local_pkgs);
-      self->override_remove_pkgs = strdupv_canonicalize (override_remove_pkgs);
-      self->override_reset_pkgs = strdupv_canonicalize (override_reset_pkgs);
-    }
+  self->osname = g_strdup (osname);
+  self->flags = flags;
+  self->refspec = g_strdup (refspec);
+  self->revision = g_strdup (revision);
+  self->install_pkgs = strdupv_canonicalize (install_pkgs);
+  if (install_local_pkgs != NULL)
+    self->install_local_pkgs = g_object_ref (install_local_pkgs);
+  self->uninstall_pkgs = strdupv_canonicalize (uninstall_pkgs);
+  self->override_replace_pkgs = strdupv_canonicalize (override_replace_pkgs);
+  if (override_replace_local_pkgs != NULL)
+    self->override_replace_local_pkgs = g_object_ref (override_replace_local_pkgs);
+  self->override_remove_pkgs = strdupv_canonicalize (override_remove_pkgs);
+  self->override_reset_pkgs = strdupv_canonicalize (override_reset_pkgs);
 
-  return (RpmostreedTransaction *) self;
+  return (RpmostreedTransaction *) g_steal_pointer (&self);
 }
 
 /* ================================ InitramfsState ================================ */
