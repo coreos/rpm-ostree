@@ -26,6 +26,7 @@
 #include "rpmostree-origin.h"
 #include "rpmostree-core.h"
 #include "rpmostree-util.h"
+#include "rpmostree-rpm-util.h"
 
 struct RpmOstreeOrigin {
   guint refcount;
@@ -656,6 +657,25 @@ rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
   return TRUE;
 }
 
+static gboolean
+build_name_to_nevra_map (GHashTable  *nevras,
+                         GHashTable **out_name_to_nevra,
+                         GError     **error)
+{
+  g_autoptr(GHashTable) name_to_nevra = /* nevra vals owned by @nevras */
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+  GLNX_HASH_TABLE_FOREACH (nevras, const char*, nevra)
+    {
+      g_autofree char *name = NULL;
+      if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
+        return FALSE;
+      g_hash_table_insert (name_to_nevra, g_steal_pointer (&name), (gpointer)nevra);
+    }
+
+  *out_name_to_nevra = g_steal_pointer (&name_to_nevra);
+  return TRUE;
+}
+
 gboolean
 rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
                                   char            **packages,
@@ -664,14 +684,36 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
   gboolean changed = FALSE;
   gboolean local_changed = FALSE;
 
+  /* lazily calculated */
+  g_autoptr(GHashTable) name_to_nevra = NULL;
+
   for (char **it = packages; it && *it; it++)
     {
-      if (g_hash_table_remove (origin->cached_local_packages, *it))
+      /* really, either a NEVRA (local RPM) or freeform provides request (from repo) */
+      const char *package = *it;
+      if (g_hash_table_remove (origin->cached_local_packages, package))
         local_changed = TRUE;
-      else if (g_hash_table_remove (origin->cached_packages, *it))
+      else if (g_hash_table_remove (origin->cached_packages, package))
         changed = TRUE;
       else
-        return glnx_throw (error, "Package/capability '%s' is not currently requested", *it);
+        {
+          if (!name_to_nevra)
+            {
+              if (!build_name_to_nevra_map (origin->cached_local_packages,
+                                            &name_to_nevra, error))
+                return FALSE;
+            }
+
+          if (g_hash_table_contains (name_to_nevra, package))
+            {
+              g_assert (g_hash_table_remove (origin->cached_local_packages,
+                                             g_hash_table_lookup (name_to_nevra, package)));
+              local_changed = TRUE;
+            }
+          else
+            return glnx_throw (error, "Package/capability '%s' is not currently requested",
+                               package);
+        }
     }
 
   if (changed)
