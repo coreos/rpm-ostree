@@ -608,20 +608,35 @@ get_fd_array_from_sparse (gint     *fds,
 static RpmostreedTransaction*
 start_deployment_txn (GDBusMethodInvocation  *invocation,
                       const char             *osname,
-                      const char             *refspec,
-                      const char             *revision,
                       RpmOstreeTransactionDeployFlags default_flags,
                       GVariant               *options,
-                      const char *const      *install_pkgs,
-                      GVariant               *install_local_pkgs_idxs,
-                      const char *const      *uninstall_pkgs,
-                      const char *const      *override_replace_pkgs,
-                      GVariant               *override_replace_local_pkgs_idxs,
-                      const char *const      *override_remove_pkgs,
-                      const char *const      *override_reset_pkgs,
+                      RpmOstreeUpdateDeploymentModifiers *modifiers,
                       GUnixFDList            *fd_list,
                       GError                **error)
 {
+  g_auto(GVariantDict) dict;
+  g_variant_dict_init (&dict, modifiers);
+  const char *refspec =
+    vardict_lookup_ptr (&dict, "set-refspec", "&s");
+  const char *revision =
+    vardict_lookup_ptr (&dict, "set-revision", "&s");
+  g_autofree const char *const *install_pkgs =
+    vardict_lookup_ptr (&dict, "install-packages", "^a&s");
+  g_autofree const char *const *uninstall_pkgs =
+    vardict_lookup_ptr (&dict, "uninstall-packages", "^a&s");
+  g_autofree const char *const *override_replace_pkgs =
+    vardict_lookup_ptr (&dict, "override-replace-packages", "^a&s");
+  g_autofree const char *const *override_remove_pkgs =
+    vardict_lookup_ptr (&dict, "override-remove-packages", "^a&s");
+  g_autofree const char *const *override_reset_pkgs =
+    vardict_lookup_ptr (&dict, "override-reset-packages", "^a&s");
+  g_autoptr(GVariant) install_local_pkgs_idxs =
+    g_variant_dict_lookup_value (&dict, "install-local-packages",
+                                 G_VARIANT_TYPE("ah"));
+  g_autoptr(GVariant) override_replace_local_pkgs_idxs =
+    g_variant_dict_lookup_value (&dict, "override-replace-local-packages",
+                                 G_VARIANT_TYPE("ah"));
+
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (), cancellable,
@@ -749,29 +764,6 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
   RpmostreedOS *self = RPMOSTREED_OS (interface);
   g_autoptr(GError) local_error = NULL;
 
-  g_auto(GVariantDict) dict;
-  g_variant_dict_init (&dict, modifiers);
-  const char *refspec =
-    vardict_lookup_ptr (&dict, "set-refspec", "&s");
-  const char *revision =
-    vardict_lookup_ptr (&dict, "set-revision", "&s");
-  g_autofree const char *const *install_pkgs =
-    vardict_lookup_ptr (&dict, "install-packages", "^a&s");
-  g_autofree const char *const *uninstall_pkgs =
-    vardict_lookup_ptr (&dict, "uninstall-packages", "^a&s");
-  g_autofree const char *const *override_replace_pkgs =
-    vardict_lookup_ptr (&dict, "override-replace-packages", "^a&s");
-  g_autofree const char *const *override_remove_pkgs =
-    vardict_lookup_ptr (&dict, "override-remove-packages", "^a&s");
-  g_autofree const char *const *override_reset_pkgs =
-    vardict_lookup_ptr (&dict, "override-reset-packages", "^a&s");
-  g_autoptr(GVariant) install_local_pkgs_idxs =
-    g_variant_dict_lookup_value (&dict, "install-local-packages",
-                                 G_VARIANT_TYPE("ah"));
-  g_autoptr(GVariant) override_replace_local_pkgs_idxs =
-    g_variant_dict_lookup_value (&dict, "override-replace-local-packages",
-                                 G_VARIANT_TYPE("ah"));
-
   /* try to merge with an existing transaction, otherwise start a new one */
 
   glnx_unref_object RpmostreedTransaction *transaction =
@@ -780,15 +772,7 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
     {
       transaction = start_deployment_txn (invocation,
                                           rpmostree_os_get_name (interface),
-                                          refspec, revision, default_flags, options,
-                                          install_pkgs,
-                                          install_local_pkgs_idxs,
-                                          uninstall_pkgs,
-                                          override_replace_pkgs,
-                                          override_replace_local_pkgs_idxs,
-                                          override_remove_pkgs,
-                                          override_reset_pkgs,
-                                          fd_list,
+                                          default_flags, options, modifiers, fd_list,
                                           &local_error);
       if (transaction)
         {
