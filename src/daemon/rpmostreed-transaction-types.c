@@ -1271,7 +1271,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (refspec_type == RPMOSTREE_REFSPEC_TYPE_CHECKSUM
           && layering_type < RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
         rpmostree_output_message ("Pinned to commit; no upgrade available");
-      else if (!self->revision)
+      else if (is_upgrade)
         rpmostree_output_message ("No upgrade available.");
       else
         rpmostree_output_message ("No change.");
