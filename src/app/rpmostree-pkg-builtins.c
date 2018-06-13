@@ -37,6 +37,7 @@ static gchar **opt_uninstall;
 static gboolean opt_cache_only;
 static gboolean opt_download_only;
 static gboolean opt_allow_inactive;
+static gboolean opt_uninstall_all;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -48,6 +49,7 @@ static GOptionEntry option_entries[] = {
 
 static GOptionEntry uninstall_option_entry[] = {
   { "install", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_install, "Install a package", "PKG" },
+  { "all", 0, 0, G_OPTION_ARG_NONE, &opt_uninstall_all, "Remove all layered packages", NULL },
   { NULL }
 };
 
@@ -88,6 +90,7 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
   g_variant_dict_insert (&dict, "no-pull-base", "b", TRUE);
   g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
   g_variant_dict_insert (&dict, "allow-inactive", "b", opt_allow_inactive);
+  g_variant_dict_insert (&dict, "no-layering", "b", opt_uninstall_all);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   gboolean met_local_pkg = FALSE;
@@ -202,9 +205,16 @@ rpmostree_builtin_uninstall (int            argc,
                                        error))
     return FALSE;
 
-  if (argc < 2)
+  if (argc < 2 && !opt_uninstall_all)
     {
       rpmostree_usage_error (context, "At least one PACKAGE must be specified", error);
+      return FALSE;
+    }
+
+  if (opt_install && opt_uninstall_all)
+    {
+      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
+                   "Cannot specify both --install and --all");
       return FALSE;
     }
 
