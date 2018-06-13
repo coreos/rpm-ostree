@@ -737,6 +737,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN) > 0);
   const gboolean no_overrides =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES) > 0);
+  const gboolean no_layering =
+    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_LAYERING) > 0);
   const gboolean cache_only =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_CACHE_ONLY) > 0);
   const gboolean download_only =
@@ -775,7 +777,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY;
     }
 
-  /* this should have been checked already */
+  /* these should have been checked already */
+  if (no_layering)
+    {
+      g_assert (self->install_pkgs == NULL);
+      g_assert (self->install_local_pkgs == NULL);
+    }
   if (no_overrides)
     {
       g_assert (self->override_replace_pkgs == NULL);
@@ -882,7 +889,15 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     g_string_append (txn_title, " (download only)");
 
   gboolean changed = FALSE;
-  if (self->uninstall_pkgs)
+  if (no_layering)
+    {
+      gboolean layering_changed = FALSE;
+      if (!rpmostree_origin_remove_all_packages (origin, &layering_changed, error))
+        return FALSE;
+
+      changed = changed || layering_changed;
+    }
+  else if (self->uninstall_pkgs)
     {
       if (!rpmostree_origin_remove_packages (origin, self->uninstall_pkgs, error))
         return FALSE;
@@ -1346,6 +1361,8 @@ deploy_flags_from_options (GVariant *options,
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN;
   if (vardict_lookup_bool (&dict, "no-overrides", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES;
+  if (vardict_lookup_bool (&dict, "no-layering", FALSE))
+    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_LAYERING;
   if (vardict_lookup_bool (&dict, "cache-only", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_CACHE_ONLY;
   if (vardict_lookup_bool (&dict, "download-only", FALSE))
@@ -1496,6 +1513,9 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
        override_replace_pkgs || override_replace_local_pkgs_idxs))
     return glnx_null_throw (error, "Can't specify no-overrides if setting "
                                    "override modifiers");
+  if (vardict_lookup_bool (&options_dict, "no-layering", FALSE) &&
+      ((install_pkgs && *install_pkgs) || install_local_pkgs))
+    return glnx_null_throw (error, "Can't specify no-layering if also layering packages");
 
   /* default to allowing downgrades for rebases & deploys */
   if (vardict_lookup_bool (&options_dict, "allow-downgrade", refspec ||
