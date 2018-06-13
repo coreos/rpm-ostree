@@ -832,6 +832,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   gboolean is_install = FALSE;
+  gboolean is_uninstall = FALSE;
   gboolean is_override = FALSE;
 
   /* In practice today */
@@ -844,7 +845,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                      self->override_replace_pkgs ||
                      self->override_replace_local_pkgs ||
                      no_overrides);
-      is_install = !is_override;
+      if (!is_override)
+        {
+          if (self->install_pkgs || self->install_local_pkgs)
+            is_install = TRUE;
+          else
+            is_uninstall = TRUE;
+        }
     }
 
   /* https://github.com/projectatomic/rpm-ostree/issues/454 */
@@ -852,6 +859,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   g_autoptr(GString) txn_title = g_string_new ("");
   if (is_install)
     g_string_append (txn_title, "install");
+  else if (is_uninstall)
+    g_string_append (txn_title, "uninstall");
   else if (is_override)
     g_string_append (txn_title, "override");
   else if (self->refspec)
