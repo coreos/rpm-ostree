@@ -135,8 +135,8 @@ vm_rpmostree override reset --all
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 0' \
   '.deployments[0]["requested-base-removals"]|length == 0'
-vm_rpmostree override reset --all |& tee.out
-assert_file_has_content tee.out "No change."
+vm_rpmostree override reset --all |& tee out.txt
+assert_file_has_content out.txt "No change."
 echo "ok override reset --all"
 
 # check that upgrading to a base without foo works
