@@ -958,12 +958,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       if (pkgs->len > 0)
         {
+          g_string_append_printf (txn_title, "; localinstall: %u", pkgs->len);
+
           g_ptr_array_add (pkgs, NULL);
           if (!rpmostree_origin_add_packages (origin, (char**)pkgs->pdata, TRUE, error))
             return FALSE;
 
           changed = TRUE;
-          g_string_append_printf (txn_title, "; localinstall: %u", pkgs->len);
         }
     }
 
