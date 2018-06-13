@@ -727,6 +727,37 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
 }
 
 gboolean
+rpmostree_origin_remove_all_packages (RpmOstreeOrigin  *origin,
+                                      gboolean         *out_changed,
+                                      GError          **error)
+{
+  gboolean changed = FALSE;
+  gboolean local_changed = FALSE;
+
+  if (g_hash_table_size (origin->cached_packages) > 0)
+    {
+      g_hash_table_remove_all (origin->cached_packages);
+      changed = TRUE;
+    }
+
+  if (g_hash_table_size (origin->cached_local_packages) > 0)
+    {
+      g_hash_table_remove_all (origin->cached_local_packages);
+      local_changed = TRUE;
+    }
+
+  if (changed)
+    update_keyfile_pkgs_from_cache (origin, "packages", "requested",
+                                    origin->cached_packages, FALSE);
+  if (local_changed)
+    update_keyfile_pkgs_from_cache (origin, "packages", "requested-local",
+                                    origin->cached_local_packages, TRUE);
+  if (out_changed)
+    *out_changed = changed || local_changed;
+  return TRUE;
+}
+
+gboolean
 rpmostree_origin_add_overrides (RpmOstreeOrigin  *origin,
                                 char            **packages,
                                 RpmOstreeOriginOverrideType type,

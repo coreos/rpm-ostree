@@ -147,6 +147,10 @@ gboolean
 rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
                                   char            **packages,
                                   GError          **error);
+gboolean
+rpmostree_origin_remove_all_packages (RpmOstreeOrigin  *origin,
+                                      gboolean         *out_changed,
+                                      GError          **error);
 
 typedef enum {
   /* RPMOSTREE_ORIGIN_OVERRIDE_REPLACE, */

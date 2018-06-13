@@ -184,6 +184,8 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
         vardict_lookup_bool (&options_dict, "no-pull-base", FALSE);
       gboolean no_overrides =
         vardict_lookup_bool (&options_dict, "no-overrides", FALSE);
+      gboolean no_layering =
+        vardict_lookup_bool (&options_dict, "no-layering", FALSE);
 
       if (refspec != NULL)
         g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rebase");
@@ -192,7 +194,7 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
       else if (!no_pull_base)
         g_ptr_array_add (actions, "org.projectatomic.rpmostree1.upgrade");
 
-      if (install_pkgs != NULL || uninstall_pkgs != NULL)
+      if (install_pkgs != NULL || uninstall_pkgs != NULL || no_layering)
         g_ptr_array_add (actions, "org.projectatomic.rpmostree1.install-uninstall-packages");
 
       if (install_local_pkgs != NULL && g_variant_n_children (install_local_pkgs) > 0)

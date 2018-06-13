@@ -94,3 +94,28 @@ assert_file_has_content out.txt "warning: .* Use --allow-inactive to squash this
 vm_rpmostree cleanup -p
 vm_rpmostree install glibc --allow-inactive &>out.txt
 assert_not_file_has_content out.txt "warning:"
+vm_rpmostree cleanup -p
+echo "ok --allow-inactive"
+
+# remove accumulated crud from previous tests
+vm_rpmostree uninstall --all
+vm_reboot
+vm_rpmostree uninstall --all |& tee out.txt
+assert_file_has_content out.txt "No change."
+vm_build_rpm test-uninstall-all-pkg1
+vm_build_rpm test-uninstall-all-pkg2
+# do one from repo and one local for funsies
+vm_rpmostree install test-uninstall-all-pkg1 \
+  /tmp/vmcheck/yumrepo/packages/x86_64/test-uninstall-all-pkg2-1.0-1.x86_64.rpm
+vm_assert_status_jq \
+  '.deployments[0]["packages"]|length == 1' \
+  '.deployments[0]["requested-packages"]|length == 1' \
+  '.deployments[0]["requested-local-packages"]|length == 1'
+vm_rpmostree uninstall --all |& tee out.txt
+assert_not_file_has_content out.txt "No change."
+vm_assert_status_jq \
+  '.deployments[0]["packages"]|length == 0' \
+  '.deployments[0]["requested-packages"]|length == 0' \
+  '.deployments[0]["requested-local-packages"]|length == 0'
+vm_rpmostree cleanup -p
+echo "ok uninstall --all"
