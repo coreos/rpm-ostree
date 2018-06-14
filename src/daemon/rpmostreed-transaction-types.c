@@ -37,6 +37,11 @@
 #include "rpmostree-kargs-process.h"
 
 static gboolean
+vardict_lookup_bool (GVariantDict *dict,
+                     const char   *key,
+                     gboolean      dfault);
+
+static gboolean
 change_origin_refspec (OstreeSysroot *sysroot,
                        RpmOstreeOrigin *origin,
                        const gchar *src_refspec,
@@ -730,6 +735,13 @@ get_sack_for_booted (OstreeSysroot    *sysroot,
 }
 
 static gboolean
+deploy_has_bool_option (DeployTransaction *self,
+                        const char        *option)
+{
+  return vardict_lookup_bool (self->options, option, FALSE);
+}
+
+static gboolean
 deploy_transaction_execute (RpmostreedTransaction *transaction,
                             GCancellable *cancellable,
                             GError **error)
@@ -739,12 +751,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   const gboolean dry_run =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN) > 0);
-  const gboolean no_overrides =
-    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES) > 0);
-  const gboolean no_layering =
-    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_LAYERING) > 0);
-  const gboolean cache_only =
-    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_CACHE_ONLY) > 0);
+  const gboolean no_overrides = deploy_has_bool_option (self, "no-overrides");
+  const gboolean no_layering = deploy_has_bool_option (self, "no-layering");
+  const gboolean cache_only = deploy_has_bool_option (self, "cache-only");
   const gboolean download_only =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY) > 0);
   /* Mainly for the `install` and `override` commands */
@@ -754,8 +763,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
    * amount of metadata only to check if there's an upgrade */
   const gboolean download_metadata_only =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY) > 0);
-  const gboolean allow_inactive =
-    ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_INACTIVE) > 0);
+  const gboolean allow_inactive = deploy_has_bool_option (self, "allow-inactive");
 
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
@@ -1253,7 +1261,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
 
       /* Are we rebasing?  May want to delete the previous ref */
-      if (self->refspec && !(self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_SKIP_PURGE))
+      if (self->refspec && !(deploy_has_bool_option (self, "skip-purge")))
         {
           g_autofree char *remote = NULL;
           g_autofree char *ref = NULL;
@@ -1283,7 +1291,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             return FALSE;
         }
 
-      if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_REBOOT)
+      if (deploy_has_bool_option (self, "reboot"))
         rpmostreed_reboot (cancellable, error);
     }
   else
@@ -1353,24 +1361,12 @@ deploy_flags_from_options (GVariantDict *dict,
   RpmOstreeTransactionDeployFlags ret = defaults;
   if (vardict_lookup_bool (dict, "allow-downgrade", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE;
-  if (vardict_lookup_bool (dict, "reboot", FALSE))
-    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_REBOOT;
-  if (vardict_lookup_bool (dict, "skip-purge", FALSE))
-    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_SKIP_PURGE;
   if (vardict_lookup_bool (dict, "no-pull-base", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE;
   if (vardict_lookup_bool (dict, "dry-run", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN;
-  if (vardict_lookup_bool (dict, "no-overrides", FALSE))
-    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_OVERRIDES;
-  if (vardict_lookup_bool (dict, "no-layering", FALSE))
-    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_LAYERING;
-  if (vardict_lookup_bool (dict, "cache-only", FALSE))
-    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_CACHE_ONLY;
   if (vardict_lookup_bool (dict, "download-only", FALSE))
     ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY;
-  if (vardict_lookup_bool (dict, "allow-inactive", FALSE))
-    ret |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_INACTIVE;
   return ret;
 }
 
