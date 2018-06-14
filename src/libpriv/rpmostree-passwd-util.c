@@ -577,7 +577,7 @@ rpmostree_check_groups (OstreeRepo      *repo,
                         GCancellable    *cancellable,
                         GError         **error)
 {
-  return rpmostree_check_passwd_groups (TRUE, repo, rootfs_fd, treefile_dirpath,
+  return rpmostree_check_passwd_groups (FALSE, repo, rootfs_fd, treefile_dirpath,
                                         treedata, previous_commit,
                                         cancellable, error);
 }
