@@ -852,9 +852,9 @@ rpmostree_transaction_client_run (RpmOstreeCommandInvocation *invocation,
 
   g_auto(GVariantDict) optdict = G_VARIANT_DICT_INIT (options);
   /* Parse back the options variant */
-  gboolean opt_reboot;
+  gboolean opt_reboot = FALSE;
   g_variant_dict_lookup (&optdict, "reboot", "b", &opt_reboot);
-  gboolean opt_dry_run;
+  gboolean opt_dry_run = FALSE;
   g_variant_dict_lookup (&optdict, "dry-run", "b", &opt_dry_run);
 
   if (opt_dry_run)
