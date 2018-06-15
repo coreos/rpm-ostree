@@ -551,8 +551,8 @@ typedef struct {
   GVariantDict *options;
   GVariantDict *modifiers;
   char   *refspec; /* NULL for non-rebases */
-  char   *revision; /* NULL for upgrade */
-  char  **install_pkgs;
+  const char   *revision; /* NULL for upgrade; owned by @options */
+  char  **install_pkgs; /* single malloc block pointing into GVariant, not strv; same for other *_pkgs */
   GUnixFDList *install_local_pkgs;
   char  **uninstall_pkgs;
   char  **override_replace_pkgs;
@@ -580,14 +580,13 @@ deploy_transaction_finalize (GObject *object)
   g_clear_pointer (&self->options, g_variant_dict_unref);
   g_clear_pointer (&self->modifiers, g_variant_dict_unref);
   g_free (self->refspec);
-  g_free (self->revision);
-  g_strfreev (self->install_pkgs);
+  g_free (self->install_pkgs);
   g_clear_pointer (&self->install_local_pkgs, g_object_unref);
-  g_strfreev (self->uninstall_pkgs);
+  g_free (self->uninstall_pkgs);
   g_strfreev (self->override_replace_pkgs);
   g_clear_pointer (&self->override_replace_local_pkgs, g_object_unref);
-  g_strfreev (self->override_remove_pkgs);
-  g_strfreev (self->override_reset_pkgs);
+  g_free (self->override_remove_pkgs);
+  g_free (self->override_reset_pkgs);
 
   G_OBJECT_CLASS (deploy_transaction_parent_class)->finalize (object);
 }
@@ -1467,7 +1466,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
     }
   const gboolean refspec_or_revision = (self->refspec != NULL || self->revision != NULL);
 
-  self->revision = g_strdup (vardict_lookup_ptr (self->modifiers, "set-revision", "&s"));
+  self->revision = vardict_lookup_ptr (self->modifiers, "set-revision", "&s");
   self->install_pkgs = vardict_lookup_strv_canonical (self->modifiers, "install-packages");
   self->uninstall_pkgs = vardict_lookup_strv_canonical (self->modifiers, "uninstall-packages");
   self->override_replace_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-replace-packages");
