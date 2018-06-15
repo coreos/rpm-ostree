@@ -551,8 +551,8 @@ typedef struct {
   GVariantDict *options;
   GVariantDict *modifiers;
   char   *refspec; /* NULL for non-rebases */
-  char   *revision; /* NULL for upgrade */
-  char  **install_pkgs;
+  const char   *revision; /* NULL for upgrade; owned by @options */
+  char  **install_pkgs; /* single malloc block pointing into GVariant, not strv; same for other *_pkgs */
   GUnixFDList *install_local_pkgs;
   char  **uninstall_pkgs;
   char  **override_replace_pkgs;
@@ -580,14 +580,13 @@ deploy_transaction_finalize (GObject *object)
   g_clear_pointer (&self->options, g_variant_dict_unref);
   g_clear_pointer (&self->modifiers, g_variant_dict_unref);
   g_free (self->refspec);
-  g_free (self->revision);
-  g_strfreev (self->install_pkgs);
+  g_free (self->install_pkgs);
   g_clear_pointer (&self->install_local_pkgs, g_object_unref);
-  g_strfreev (self->uninstall_pkgs);
+  g_free (self->uninstall_pkgs);
   g_strfreev (self->override_replace_pkgs);
   g_clear_pointer (&self->override_replace_local_pkgs, g_object_unref);
-  g_strfreev (self->override_remove_pkgs);
-  g_strfreev (self->override_reset_pkgs);
+  g_free (self->override_remove_pkgs);
+  g_free (self->override_reset_pkgs);
 
   G_OBJECT_CLASS (deploy_transaction_parent_class)->finalize (object);
 }
@@ -1354,6 +1353,24 @@ vardict_lookup_ptr (GVariantDict  *dict,
   return NULL;
 }
 
+/* Look up a strv, but canonicalize the zero-length
+ * array to NULL.
+ */
+static inline char **
+vardict_lookup_strv_canonical (GVariantDict  *dict,
+                               const char    *key)
+{
+  char **v = vardict_lookup_ptr (dict, key, "^a&s");
+  if (!v)
+    return NULL;
+  if (v && !*v)
+    {
+      g_free (v);
+      return NULL;
+    }
+  return v;
+}
+
 static RpmOstreeTransactionDeployFlags
 deploy_flags_from_options (GVariantDict *dict,
                            RpmOstreeTransactionDeployFlags defaults)
@@ -1422,25 +1439,42 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   if (!self)
     return NULL;
 
+  /* Now we do further validation and parsing; the "GObject way" would be to
+   * pass all of these as GObject properties, but that's tedious and painful for
+   * no value, so we just do further error checking and discard the partially
+   * constructed object on failure.
+   */
+
+  self->osname = g_strdup (osname);
   self->options = g_variant_dict_ref (options_dict);
   self->modifiers = g_variant_dict_new (modifiers);
 
-  flags = deploy_flags_from_options (self->options, flags);
+  self->flags = deploy_flags_from_options (self->options, flags);
 
-  const char *refspec =
-    vardict_lookup_ptr (self->modifiers, "set-refspec", "&s");
-  const char *revision =
-    vardict_lookup_ptr (self->modifiers, "set-revision", "&s");
-  g_autofree const char *const *install_pkgs =
-    vardict_lookup_ptr (self->modifiers, "install-packages", "^a&s");
-  g_autofree const char *const *uninstall_pkgs =
-    vardict_lookup_ptr (self->modifiers, "uninstall-packages", "^a&s");
-  g_autofree const char *const *override_replace_pkgs =
-    vardict_lookup_ptr (self->modifiers, "override-replace-packages", "^a&s");
-  g_autofree const char *const *override_remove_pkgs =
-    vardict_lookup_ptr (self->modifiers, "override-remove-packages", "^a&s");
-  g_autofree const char *const *override_reset_pkgs =
-    vardict_lookup_ptr (self->modifiers, "override-reset-packages", "^a&s");
+  const char *refspec = vardict_lookup_ptr (self->modifiers, "set-refspec", "&s");
+  /* Canonicalize here; the later code actually ends up peeling it
+   * again, but long term we want to manipulate canonicalized refspecs
+   * internally, and only peel when writing origin files for ostree:// types.
+   */
+  if (refspec)
+    {
+      self->refspec = rpmostree_refspec_canonicalize (refspec, error);
+      if (!self->refspec)
+        return NULL;
+    }
+  const gboolean refspec_or_revision = (self->refspec != NULL || self->revision != NULL);
+
+  self->revision = vardict_lookup_ptr (self->modifiers, "set-revision", "&s");
+  self->install_pkgs = vardict_lookup_strv_canonical (self->modifiers, "install-packages");
+  self->uninstall_pkgs = vardict_lookup_strv_canonical (self->modifiers, "uninstall-packages");
+  self->override_replace_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-replace-packages");
+  self->override_remove_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-remove-packages");
+  self->override_reset_pkgs = vardict_lookup_strv_canonical (self->modifiers, "override-reset-packages");
+
+  /* default to allowing downgrades for rebases & deploys */
+  if (vardict_lookup_bool (self->options, "allow-downgrade", refspec_or_revision))
+    self->flags |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE;
+
   g_autoptr(GVariant) install_local_pkgs_idxs =
     g_variant_dict_lookup_value (self->modifiers, "install-local-packages",
                                  G_VARIANT_TYPE("ah"));
@@ -1467,8 +1501,6 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                             expected_fdn, actual_fdn);
 
   /* split into two fd lists to make it easier for deploy_transaction_execute */
-  g_autoptr(GUnixFDList) install_local_pkgs = NULL;
-  g_autoptr(GUnixFDList) override_replace_local_pkgs = NULL;
   if (fd_list)
     {
       gint nfds = 0; /* the strange constructions below allow us to avoid dup()s */
@@ -1478,23 +1510,23 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
         {
           g_autofree gint *new_fds =
             get_fd_array_from_sparse (fds, nfds, install_local_pkgs_idxs);
-          install_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
+          self->install_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
         }
 
       if (override_replace_local_pkgs_idxs)
         {
           g_autofree gint *new_fds =
             get_fd_array_from_sparse (fds, nfds, override_replace_local_pkgs_idxs);
-          override_replace_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
+          self->override_replace_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
         }
     }
 
   /* Also check for conflicting options -- this is after all a public API. */
 
-  if (!refspec && vardict_lookup_bool (self->options, "skip-purge", FALSE))
+  if (!self->refspec && vardict_lookup_bool (self->options, "skip-purge", FALSE))
     return glnx_null_throw (error, "Can't specify skip-purge if not setting a "
                                    "new refspec");
-  if ((refspec || revision) &&
+  if (refspec_or_revision &&
       vardict_lookup_bool (self->options, "no-pull-base", FALSE))
     return glnx_null_throw (error, "Can't specify no-pull-base if setting a "
                                    "new refspec or revision");
@@ -1504,48 +1536,17 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   if (vardict_lookup_bool (self->options, "dry-run", FALSE) &&
       vardict_lookup_bool (self->options, "download-only", FALSE))
     return glnx_null_throw (error, "Can't specify dry-run and download-only");
-  if (override_replace_pkgs)
+  if (self->override_replace_pkgs)
     return glnx_null_throw (error, "Non-local replacement overrides not implemented yet");
 
   if (vardict_lookup_bool (self->options, "no-overrides", FALSE) &&
-      (override_remove_pkgs || override_reset_pkgs ||
-       override_replace_pkgs || override_replace_local_pkgs_idxs))
+      (self->override_remove_pkgs || self->override_reset_pkgs ||
+       self->override_replace_pkgs || override_replace_local_pkgs_idxs))
     return glnx_null_throw (error, "Can't specify no-overrides if setting "
                                    "override modifiers");
   if (vardict_lookup_bool (self->options, "no-layering", FALSE) &&
-      ((install_pkgs && *install_pkgs) || install_local_pkgs))
+      (self->install_pkgs || self->install_local_pkgs))
     return glnx_null_throw (error, "Can't specify no-layering if also layering packages");
-
-  /* default to allowing downgrades for rebases & deploys */
-  if (vardict_lookup_bool (self->options, "allow-downgrade", refspec ||
-                                                             revision))
-    flags |= RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE;
-
-  /* Canonicalize here on entry; the deploy code actually ends up peeling it
-   * again, but long term we want to manipulate canonicalized refspecs
-   * internally, and only peel when writing origin files for ostree:// types.
-   */
-  g_autofree char *canon_refspec = NULL;
-  if (refspec)
-    {
-      canon_refspec = rpmostree_refspec_canonicalize (refspec, error);
-      if (!canon_refspec)
-        return NULL;
-    }
-
-  self->osname = g_strdup (osname);
-  self->flags = flags;
-  self->refspec = g_strdup (refspec);
-  self->revision = g_strdup (revision);
-  self->install_pkgs = strdupv_canonicalize (install_pkgs);
-  if (install_local_pkgs != NULL)
-    self->install_local_pkgs = g_object_ref (install_local_pkgs);
-  self->uninstall_pkgs = strdupv_canonicalize (uninstall_pkgs);
-  self->override_replace_pkgs = strdupv_canonicalize (override_replace_pkgs);
-  if (override_replace_local_pkgs != NULL)
-    self->override_replace_local_pkgs = g_object_ref (override_replace_local_pkgs);
-  self->override_remove_pkgs = strdupv_canonicalize (override_remove_pkgs);
-  self->override_reset_pkgs = strdupv_canonicalize (override_reset_pkgs);
 
   return (RpmostreedTransaction *) g_steal_pointer (&self);
 }
