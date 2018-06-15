@@ -926,6 +926,7 @@ rpmostree_builtin_status (int             argc,
     return FALSE;
 
   g_autoptr(GVariant) deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
+  g_assert (deployments);
   g_autoptr(GVariant) cached_update = NULL;
   if (rpmostree_os_get_has_cached_update_rpm_diff (os_proxy))
     cached_update = rpmostree_os_dup_cached_update (os_proxy);
