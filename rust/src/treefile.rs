@@ -146,6 +146,7 @@ pub struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub documentation: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "install-langs")]
     pub install_langs: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "initramfs-args")]
@@ -155,6 +156,7 @@ pub struct TreeComposeConfig {
     #[serde(default)]
     pub boot_location: BootLocation,
     #[serde(default)]
+    #[serde(rename = "tmp-is-dir")]
     pub tmp_is_dir: bool,
 
     // systemd
@@ -174,6 +176,7 @@ pub struct TreeComposeConfig {
 
     // passwd-related bits
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "etc-group-members")]
     pub etc_group_members: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "preserve-passwd")]
@@ -191,7 +194,7 @@ pub struct TreeComposeConfig {
     #[serde(rename = "ignore-removed-groups")]
     pub ignore_removed_groups: Option<Vec<String>>,
 
-    // Content manimulation
+    // Content manipulation
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "postprocess-script")]
     pub postprocess_script: Option<String>,
@@ -199,6 +202,7 @@ pub struct TreeComposeConfig {
     #[serde(rename = "add-files")]
     pub add_files: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "remove-files")]
     pub remove_files: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "remove-from-packages")]
