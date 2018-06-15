@@ -35,7 +35,7 @@ static gboolean opt_download_only;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
-  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after upgrade is prepared", NULL },
+  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL },
   /* XXX As much as I dislike the inconsistency with "rpm-ostree upgrade",
    *     calling this option --check-diff doesn't really make sense here.
    *     A --preview option would work for both commands if we wanted to

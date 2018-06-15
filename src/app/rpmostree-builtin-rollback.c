@@ -32,7 +32,7 @@
 static gboolean opt_reboot;
 
 static GOptionEntry option_entries[] = {
-  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after rollback is prepared", NULL },
+  { "reboot", 'r', 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL },
   { NULL }
 };
 
