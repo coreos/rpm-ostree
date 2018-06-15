@@ -1451,18 +1451,16 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
 
   self->flags = deploy_flags_from_options (self->options, flags);
 
-  self->refspec = g_strdup (vardict_lookup_ptr (self->modifiers, "set-refspec", "&s"));
+  const char *refspec = g_strdup (vardict_lookup_ptr (self->modifiers, "set-refspec", "&s"));
   /* Canonicalize here; the later code actually ends up peeling it
    * again, but long term we want to manipulate canonicalized refspecs
    * internally, and only peel when writing origin files for ostree:// types.
    */
-  if (self->refspec)
+  if (refspec)
     {
-      g_autofree char *canon_refspec = rpmostree_refspec_canonicalize (self->refspec, error);
-      if (!canon_refspec)
+      self->refspec = rpmostree_refspec_canonicalize (refspec, error);
+      if (!self->refspec)
         return NULL;
-      g_free (self->refspec);
-      self->refspec = g_steal_pointer (&canon_refspec);
     }
   const gboolean refspec_or_revision = (self->refspec != NULL || self->revision != NULL);
 
