@@ -1216,8 +1216,19 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   const gboolean use_staging = staging_is_configured &&
     ostree_sysroot_get_booted_deployment (self->sysroot) != NULL;
 
+  /* Fix for https://github.com/projectatomic/rpm-ostree/issues/1392,
+   * when kargs_strv is empty, we port those directly from pending
+   * deployment if there is one */
+  if (!self->kargs_strv)
+    {
+      OstreeBootconfigParser *bootconfig = ostree_deployment_get_bootconfig (self->origin_merge_deployment);
+      const char *options = ostree_bootconfig_parser_get (bootconfig, "options");
+      self->kargs_strv = g_strsplit (options, " ", -1);
+    }
+
   g_autoptr(GKeyFile) origin = rpmostree_origin_dup_keyfile (self->origin);
   g_autoptr(OstreeDeployment) new_deployment = NULL;
+
   if (use_staging)
     {
       if (!ostree_sysroot_stage_tree (self->sysroot, self->osname,
