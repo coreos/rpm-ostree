@@ -222,7 +222,9 @@ Boston, MA 02111-1307, USA.
             fetched from the enabled repositories in
             <filename>/etc/yum.repos.d/</filename> and are overlayed on
             top of a new deployment.  It is also possible to specify a
-            local package that resides on the host.
+            local RPM package that resides on the host. Overlayed
+            packages can later be removed with the
+            <command>uninstall</command> command.
           </para>
 
           <para>
@@ -282,11 +284,6 @@ Boston, MA 02111-1307, USA.
             fetched from the enabled repositories in
             <filename>/etc/yum.repos.d/</filename> and are overlayed on
             top of a new deployment.
-          </para>
-
-          <para>When trying to uninstall a package that was installed
-            from a local RPM (i.e. not from a repository), you must
-            specify the full NEVRA of the package.
           </para>
 
           <para>
