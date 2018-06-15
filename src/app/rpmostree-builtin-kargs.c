@@ -40,7 +40,7 @@ static char  *opt_deploy_index;
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operation on provided OSNAME", "OSNAME" },
   { "deploy-index", 0, 0, G_OPTION_ARG_STRING, &opt_deploy_index, "Modify the kernel args from a specific deployment based on index. Index is in the form of a number (e.g 0 means the first deployment in the list)", "INDEX"},
-  { "reboot", 0, 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after kernel arguments are modified", NULL},
+  { "reboot", 0, 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL},
   { "append", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_append_strings, "Append kernel argument; useful with e.g. console= that can be used multiple times. empty value for an argument is allowed", "KEY=VALUE" },
   { "replace", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_replace_strings, "Replace existing kernel argument, the user is also able to replace an argument with KEY=VALUE if only one value exist for that argument ", "KEY=VALUE=NEWVALUE" },
   { "delete", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_delete_strings, "Delete a specific kernel argument key/val pair or an entire argument with a single key/value pair", "KEY=VALUE"},
