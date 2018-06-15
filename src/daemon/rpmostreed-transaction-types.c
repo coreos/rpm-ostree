@@ -1451,7 +1451,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
 
   self->flags = deploy_flags_from_options (self->options, flags);
 
-  const char *refspec = g_strdup (vardict_lookup_ptr (self->modifiers, "set-refspec", "&s"));
+  const char *refspec = vardict_lookup_ptr (self->modifiers, "set-refspec", "&s");
   /* Canonicalize here; the later code actually ends up peeling it
    * again, but long term we want to manipulate canonicalized refspecs
    * internally, and only peel when writing origin files for ostree:// types.
