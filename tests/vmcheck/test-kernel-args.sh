@@ -85,6 +85,9 @@ assert_not_file_has_content tmp_conf.txt "REPLACE_MULTI_TEST=TEST"
 assert_file_has_content tmp_conf.txt "REPLACE_MULTI_TEST=NUMBERTWO"
 echo "ok replacing value from multi-valued key pairs"
 
+# Reboot into the new deployment, to prepare for a rollback
+vm_reboot
+
 # Do a rollback and check if the content matches original booted conf (read in the beginning of the test)
 vm_rpmostree rollback
 for arg in $(vm_cmd grep ^options /boot/loader/entries/ostree-$osname-0.conf | sed -e 's,options ,,'); do
@@ -128,3 +131,15 @@ for arg in $(vm_rpmostree ex kargs --import-proc-cmdline | tail -n +2); do
     esac
 done
 echo "ok import kargs from current deployment"
+
+# Test for https://github.com/projectatomic/rpm-ostree/issues/1392
+vm_rpmostree ex kargs --append=PACKAGE=TEST
+vm_build_rpm foo
+vm_rpmostree install foo
+
+vm_cmd grep ^options /boot/loader/entries/ostree-$osname-0.conf > kargs.txt
+assert_file_has_content_literal kargs.txt 'PACKAGE=TEST'
+echo "ok kargs with multiple operations"
+vm_rpmostree ex kargs > kargs.txt
+assert_file_has_content_literal kargs.txt 'PACKAGE=TEST'
+echo "ok kargs display with multiple operations"
