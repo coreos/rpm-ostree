@@ -48,13 +48,13 @@ static GOptionEntry option_entries[] = {
 };
 
 static GOptionEntry uninstall_option_entry[] = {
-  { "install", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_install, "Install a package", "PKG" },
-  { "all", 0, 0, G_OPTION_ARG_NONE, &opt_uninstall_all, "Remove all layered packages", NULL },
+  { "install", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_install, "Overlay additional package", "PKG" },
+  { "all", 0, 0, G_OPTION_ARG_NONE, &opt_uninstall_all, "Remove all overlayed additional packages", NULL },
   { NULL }
 };
 
 static GOptionEntry install_option_entry[] = {
-  { "uninstall", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_uninstall, "Uninstall a package", "PKG" },
+  { "uninstall", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_uninstall, "Remove overlayed additional package", "PKG" },
   { "cache-only", 'C', 0, G_OPTION_ARG_NONE, &opt_cache_only, "Do not download latest ostree and RPM data", NULL },
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
   { NULL }
