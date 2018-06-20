@@ -129,7 +129,7 @@ static GOptionEntry daemon_entries[] = {
 
 static GOptionEntry pkg_entries[] = {
   { "install", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_install, "Install a package", "PKG" },
-  { "uninstall", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_uninstall, "Uninstall a package", "PKG" },
+  { "uninstall", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_uninstall, "Uninstall a layered package", "PKG" },
   { NULL }
 };
 
