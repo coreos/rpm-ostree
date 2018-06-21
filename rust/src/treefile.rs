@@ -171,7 +171,7 @@ pub struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub automatic_version_prefix: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[serde(rename = "mutate-os-relase")]
+    #[serde(rename = "mutate-os-release")]
     pub mutate_os_release: Option<String>,
 
     // passwd-related bits
