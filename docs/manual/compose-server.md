@@ -52,7 +52,7 @@ and commits the result to an OSTree repository.
 The input format is a JSON "treefile". See examples in
 `api-doc/treefile-examples`. More real-world examples include the manifest
 for
-[Fedora Atomic](https://pagure.io/fedora-atomic/blob/master/f/fedora-atomic-docker-host.json) and
+[Fedora Atomic](https://pagure.io/fedora-atomic/blob/master/f/fedora-atomic-host.json) and
 [CentOS Atomic](https://github.com/CentOS/sig-atomic-buildscripts/blob/downstream/centos-atomic-host.json).
 
 If you're doing this multiple times, it's strongly recommended to create a cache
