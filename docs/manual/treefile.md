@@ -198,6 +198,15 @@ It supports the following parameters:
    to be writable. For host system composes, we recommend turning this on;
    it's left off by default to ease the transition.
 
+ * `machineid-compat`: boolean, optional: Defaults to `true`.  By default,
+   rpm-ostree creates `/usr/etc/machine-id` as an empty file for historical
+   reasons.  Set this to `false` to ensure it's not present at all.  This
+   will cause systemd to execute `ConditionFirstBoot=`, which implies
+   running `systemctl preset-all` for example.  If you enable this, avoid
+   using the `units` member, as it will no longer function.  Instead,
+   create a `/usr/lib/systemd/system-presets/XX-example.preset` file.
+
+
 Experimental options
 --------
 
