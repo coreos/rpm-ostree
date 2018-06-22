@@ -211,13 +211,6 @@ rpmostree_builtin_uninstall (int            argc,
       return FALSE;
     }
 
-  if (opt_install && opt_uninstall_all)
-    {
-      g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Cannot specify both --install and --all");
-      return FALSE;
-    }
-
   /* shift to first pkgspec and ensure it's a proper strv (previous parsing
    * might have moved args around) */
   argv++; argc--;

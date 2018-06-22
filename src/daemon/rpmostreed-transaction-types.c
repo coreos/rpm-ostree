@@ -788,12 +788,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY;
     }
 
-  /* these should have been checked already */
-  if (no_layering)
-    {
-      g_assert (self->install_pkgs == NULL);
-      g_assert (self->install_local_pkgs == NULL);
-    }
   if (no_overrides)
     {
       g_assert (self->override_replace_pkgs == NULL);
@@ -1544,9 +1538,6 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
        self->override_replace_pkgs || override_replace_local_pkgs_idxs))
     return glnx_null_throw (error, "Can't specify no-overrides if setting "
                                    "override modifiers");
-  if (vardict_lookup_bool (self->options, "no-layering", FALSE) &&
-      (self->install_pkgs || self->install_local_pkgs))
-    return glnx_null_throw (error, "Can't specify no-layering if also layering packages");
 
   return (RpmostreedTransaction *) g_steal_pointer (&self);
 }
