@@ -122,6 +122,11 @@ pub struct CheckPasswd {
     // entries: Option<Map<>String>,
 }
 
+// https://github.com/serde-rs/serde/issues/368
+fn serde_true() -> bool {
+    true
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct TreeComposeConfig {
     // Compose controls
@@ -164,6 +169,9 @@ pub struct TreeComposeConfig {
     pub units: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_target: Option<String>,
+    #[serde(default = "serde_true")]
+    #[serde(rename = "machineid-compat")]
+    pub machineid_compat: bool,
 
     // versioning
     #[serde(skip_serializing_if = "Option::is_none")]
