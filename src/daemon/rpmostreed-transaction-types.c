@@ -447,6 +447,8 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
 
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, "rollback");
+
   g_autoptr(OstreeDeployment) pending_deployment = NULL;
   g_autoptr(OstreeDeployment) rollback_deployment = NULL;
   ostree_sysroot_query_deployments_for (sysroot, self->osname,
@@ -1574,12 +1576,14 @@ initramfs_state_transaction_finalize (GObject *object)
 
 static gboolean
 initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
-                            GCancellable *cancellable,
-                            GError **error)
+                                     GCancellable *cancellable,
+                                     GError **error)
 {
 
   InitramfsStateTransaction *self = (InitramfsStateTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, "initramfs");
 
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
     rpmostree_sysroot_upgrader_new (sysroot, self->osname, 0,
@@ -1735,6 +1739,8 @@ cleanup_transaction_execute (RpmostreedTransaction *transaction,
   CleanupTransaction *self = (CleanupTransaction *) transaction;
   const gboolean cleanup_pending = (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_PENDING_DEPLOY) > 0;
   const gboolean cleanup_rollback = (self->flags & RPMOSTREE_TRANSACTION_CLEANUP_ROLLBACK_DEPLOY) > 0;
+
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, "cleanup");
 
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   g_autoptr(OstreeRepo) repo = NULL;
@@ -1984,6 +1990,8 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
 {
   KernelArgTransaction *self = (KernelArgTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, "kargs");
 
   /* Read in the existing kernel args and convert those to an #OstreeKernelArg instance for API usage */
   __attribute__((cleanup(_ostree_kernel_args_cleanup))) OstreeKernelArgs *kargs = _ostree_kernel_args_from_string (self->existing_kernel_args);
