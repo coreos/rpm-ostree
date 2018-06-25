@@ -20,7 +20,6 @@ pysetjsonmember "postprocess-script" \"$PWD/postprocess.sh\"
 cat > postprocess.sh << EOF
 #!/bin/bash
 set -xeuo pipefail
-test '!' -f /etc/machine-id
 echo misc-tweaks-postprocess-done > /usr/share/misc-tweaks-postprocess-done.txt
 cp -a /usr/etc/foo.txt /usr/share/misc-tweaks-foo.txt
 EOF
