@@ -10,7 +10,7 @@ prepare_compose_test "misc-tweaks"
 pysetjsonmember "documentation" "False"
 # And tweak some of the systemd units
 pysetjsonmember "default_target" '"multi-user.target"'
-pysetjsonmember "machineid-compat" 'false'
+pysetjsonmember "machineid-compat" 'False'
 pysetjsonmember "units" '["tuned.service"]'
 # And test adding/removing files
 pysetjsonmember "add-files" '[["foo.txt", "/usr/etc/foo.txt"],
