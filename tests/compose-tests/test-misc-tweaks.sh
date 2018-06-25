@@ -8,7 +8,11 @@ dn=$(cd $(dirname $0) && pwd)
 prepare_compose_test "misc-tweaks"
 # No docs
 pysetjsonmember "documentation" "False"
-# And tweak some of the systemd units
+# Note this overrides:
+# $ rpm -q systemd
+# systemd-238-8.git0e0aa59.fc28.x86_64
+# $ rpm -qlv systemd|grep -F 'system/default.target '
+# lrwxrwxrwx    1 root    root                       16 May 11 06:59 /usr/lib/systemd/system/default.target -> graphical.target
 pysetjsonmember "default_target" '"multi-user.target"'
 pysetjsonmember "machineid-compat" 'False'
 pysetjsonmember "units" '["tuned.service"]'
@@ -45,8 +49,8 @@ echo "ok no manpages"
 
 # Tests for units
 ostree --repo=${repobuild} ls ${treeref} \
-       /usr/etc/systemd/system/default.target > out.txt
-assert_file_has_content out.txt '-> .*/multi-user\.target'
+       /usr/lib/systemd/system/default.target > out.txt
+assert_file_has_content out.txt '-> .*multi-user\.target'
 echo "ok default target"
 
 ostree --repo=${repobuild} ls ${treeref} \

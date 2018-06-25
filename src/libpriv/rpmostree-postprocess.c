@@ -1525,7 +1525,12 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
       g_autofree char *dest_default_target_path =
         g_strconcat ("/usr/lib/systemd/system/", default_target, NULL);
 
-      static const char default_target_path[] = "usr/etc/systemd/system/default.target";
+      /* This used to be in /etc, but doing it in /usr makes more sense, as it's
+       * part of the OS defaults. This was changed in particular to work with
+       * ConditionFirstBoot= which runs `systemctl preset-all`:
+       * https://github.com/projectatomic/rpm-ostree/pull/1425
+       */
+      static const char default_target_path[] = "usr/lib/systemd/system/default.target";
       (void) unlinkat (rootfs_fd, default_target_path, 0);
 
       if (symlinkat (dest_default_target_path, rootfs_fd, default_target_path) < 0)
