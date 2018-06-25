@@ -34,6 +34,10 @@ ostree --repo=${repobuild} ls -R ${treeref} /usr/share/man > manpages.txt
 assert_file_has_content manpages.txt man5/ostree.repo.5
 echo "ok manpages"
 
+# https://github.com/projectatomic/rpm-ostree/pull/1425
+ostree --repo=${repobuild} ls ${treeref} /usr/etc/machine-id
+echo "ok machine-id"
+
 ostree --repo=${repobuild} ls ${treeref} usr/etc/systemd/system/multi-user.target.wants/chronyd.service > preset.txt
 assert_file_has_content_literal preset.txt '-> /usr/lib/systemd/system/chronyd.service'
 echo "ok systemctl preset"

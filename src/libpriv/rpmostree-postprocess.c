@@ -364,15 +364,31 @@ process_kernel_and_initramfs (int            rootfs_dfd,
         return glnx_throw (error, "Invalid boot location '%s'", boot_location_str);
     }
 
-  /* Ensure the /etc/machine-id file is present and empty; it is read by
-   * dracut. Apparently systemd doesn't work when the file is missing (as of
-   * systemd-219-9.fc22) but it is correctly populated if the file is there.
-   */
-  g_print ("Creating empty machine-id\n");
-  if (!glnx_file_replace_contents_at (rootfs_dfd, "usr/etc/machine-id", (guint8*)"", 0,
-                                      GLNX_FILE_REPLACE_NODATASYNC,
-                                      cancellable, error))
+  gboolean machineid_compat = TRUE;
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile, "machineid-compat",
+                                                               &machineid_compat, error))
     return FALSE;
+  if (machineid_compat)
+    {
+      /* Update June 2018: systemd seems to work fine with this deleted now in
+       * both Fedora 28 and RHEL 7.5. However, see the treefile.md docs for why
+       * "compat" mode is enabled by default.
+       *
+       * ORIGINAL COMMENT:
+       * Ensure the /etc/machine-id file is present and empty; it is read by
+       * dracut.  Systemd doesn't work when the file is missing (as of
+       * systemd-219-9.fc22) but it is correctly populated if the file is there.
+       */
+      g_print ("Creating empty machine-id\n");
+      if (!glnx_file_replace_contents_at (rootfs_dfd, "usr/etc/machine-id", (guint8*)"", 0,
+                                          GLNX_FILE_REPLACE_NODATASYNC,
+                                          cancellable, error))
+        return FALSE;
+    }
+  else
+    {
+      (void) unlinkat (rootfs_dfd, "usr/etc/machine-id", 0);
+    }
 
   /* Run dracut with our chosen arguments (commonly at least --no-hostonly) */
   g_autoptr(GPtrArray) dracut_argv = g_ptr_array_new ();

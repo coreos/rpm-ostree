@@ -10,6 +10,7 @@ prepare_compose_test "misc-tweaks"
 pysetjsonmember "documentation" "False"
 # And tweak some of the systemd units
 pysetjsonmember "default_target" '"multi-user.target"'
+pysetjsonmember "machineid-compat" 'False'
 pysetjsonmember "units" '["tuned.service"]'
 # And test adding/removing files
 pysetjsonmember "add-files" '[["foo.txt", "/usr/etc/foo.txt"],
@@ -78,3 +79,8 @@ echo "ok remove-from-packages"
 ostree --repo=${repobuild} ls  ${treeref} /tmp > ls.txt
 assert_file_has_content ls.txt 'd01777 0 0      0 /tmp'
 echo "ok /tmp"
+
+# https://github.com/projectatomic/rpm-ostree/pull/1425
+ostree --repo=${repobuild} ls ${treeref} /usr/etc > ls.txt
+assert_not_file_has_content ls.txt 'machine-id'
+echo "ok machine-id"
