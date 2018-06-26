@@ -1139,7 +1139,7 @@ os_handle_get_deployment_boot_config (RPMOSTreeOS *interface,
     }
   else
     {
-      /* If the deploy_index is speicified, we ignore the pending option */
+      /* If the deploy_index is specified, we ignore the pending option */
       target_deployment = rpmostreed_deployment_get_for_index (ot_sysroot, arg_deploy_index,
                                                                &local_error);
       if (target_deployment == NULL)

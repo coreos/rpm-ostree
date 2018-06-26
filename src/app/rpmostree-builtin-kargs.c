@@ -39,7 +39,7 @@ static char  *opt_deploy_index;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operation on provided OSNAME", "OSNAME" },
-  { "deploy-index", 0, 0, G_OPTION_ARG_STRING, &opt_deploy_index, "Modify the kernel args from a specific deployment based on index. Index is in the form of a number (e.g 0 means the first deployment in the list)", "INDEX"},
+  { "deploy-index", 0, 0, G_OPTION_ARG_STRING, &opt_deploy_index, "Modify the kernel args from a specific deployment based on index. Index is in the form of a number (e.g. 0 means the first deployment in the list)", "INDEX"},
   { "reboot", 0, 0, G_OPTION_ARG_NONE, &opt_reboot, "Initiate a reboot after operation is complete", NULL},
   { "append", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_append_strings, "Append kernel argument; useful with e.g. console= that can be used multiple times. empty value for an argument is allowed", "KEY=VALUE" },
   { "replace", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_kernel_replace_strings, "Replace existing kernel argument, the user is also able to replace an argument with KEY=VALUE if only one value exist for that argument ", "KEY=VALUE=NEWVALUE" },
@@ -169,11 +169,11 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
 
 
 gboolean
-rpmostree_ex_builtin_kargs (int            argc,
-                            char         **argv,
-                            RpmOstreeCommandInvocation *invocation,
-                            GCancellable  *cancellable,
-                            GError       **error)
+rpmostree_builtin_kargs (int            argc,
+                         char         **argv,
+                         RpmOstreeCommandInvocation *invocation,
+                         GCancellable  *cancellable,
+                         GError       **error)
 {
   _cleanup_peer_ GPid peer_pid = 0;
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
@@ -217,7 +217,7 @@ rpmostree_ex_builtin_kargs (int            argc,
   if (opt_import_proc_cmdline && opt_deploy_index)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
-                   "Cannot specify both --import-from-proc-cmdline and --deployid");
+                   "Cannot specify both --import-from-proc-cmdline and --deploy-index");
       return FALSE;
     }
   if (opt_import_proc_cmdline && opt_osname)

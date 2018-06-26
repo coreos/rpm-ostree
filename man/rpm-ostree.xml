@@ -512,6 +512,29 @@ Boston, MA 02111-1307, USA.
       </varlistentry>
 
       <varlistentry>
+        <term><command>kargs</command></term>
+
+        <listitem>
+          <para>
+            Without options, display current default kernel arguments. Modify
+            arguments using <option>--append</option>,
+            <option>--replace</option>, <option>--delete</option>, or
+            <option>--editor</option>. This will create a new deployment with
+            the modified kernel arguments. Previous deployments are never
+            changed.
+          </para>
+
+          <para>
+            By default, modifications are applied to the kernel arguments of the
+            default deployment to get the final arguments. Use
+            <option>--deploy-index</option> or
+            <option>--import-proc-cmdline</option> to instead base them off of a
+            specific deployment or the current boot.
+          </para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><command>cleanup</command></term>
 
         <listitem>
