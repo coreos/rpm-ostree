@@ -89,6 +89,9 @@ static RpmOstreeCommand commands[] = {
   { "refresh-md", 0,
     "Generate rpm repo metadata",
     rpmostree_builtin_refresh_md },
+  { "kargs", 0,
+    "Query or modify kernel arguments",
+    rpmostree_builtin_kargs },
   /* Legacy aliases */
   { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     NULL, rpmostree_builtin_install },

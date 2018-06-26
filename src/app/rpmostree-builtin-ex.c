@@ -28,12 +28,13 @@ static RpmOstreeCommand ex_subcommands[] = {
     rpmostree_ex_builtin_livefs },
   { "container", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Assemble local unprivileged containers", rpmostree_builtin_container },
-  { "kargs", 0,
-    "Query or Modify the kernel arguments", rpmostree_ex_builtin_kargs },
   { "commit2rojig", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Convert an OSTree commit into an rpm-ostree rojig", rpmostree_ex_builtin_commit2rojig },
   { "rojig2commit", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Convert an rpm-ostree rojig into an OSTree commit", rpmostree_ex_builtin_rojig2commit },
+  /* temporary aliases; nuke in next version */
+  { "kargs", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+    NULL, rpmostree_builtin_kargs },
   { NULL, 0, NULL, NULL }
 };
 
