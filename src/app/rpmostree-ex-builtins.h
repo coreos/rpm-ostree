@@ -32,8 +32,6 @@ G_BEGIN_DECLS
 
 BUILTINPROTO(unpack);
 BUILTINPROTO(livefs);
-BUILTINPROTO(override);
-BUILTINPROTO(kargs);
 BUILTINPROTO(commit2rojig);
 BUILTINPROTO(rojig2commit);
 
