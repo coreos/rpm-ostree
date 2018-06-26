@@ -187,6 +187,9 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
       gboolean no_layering =
         vardict_lookup_bool (&options_dict, "no-layering", FALSE);
 
+      if (vardict_lookup_bool (&options_dict, "no-initramfs", FALSE))
+        g_ptr_array_add (actions, "org.projectatomic.rpmostree1.bootconfig");
+
       if (refspec != NULL)
         g_ptr_array_add (actions, "org.projectatomic.rpmostree1.rebase");
       else if (revision != NULL)

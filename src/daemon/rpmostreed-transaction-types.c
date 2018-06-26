@@ -754,6 +754,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DRY_RUN) > 0);
   const gboolean no_overrides = deploy_has_bool_option (self, "no-overrides");
   const gboolean no_layering = deploy_has_bool_option (self, "no-layering");
+  const gboolean no_initramfs = deploy_has_bool_option (self, "no-initramfs");
   const gboolean cache_only = deploy_has_bool_option (self, "cache-only");
   const gboolean download_only =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY) > 0);
@@ -896,6 +897,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     g_string_append (txn_title, " (download only)");
 
   gboolean changed = FALSE;
+  if (no_initramfs && rpmostree_origin_get_regenerate_initramfs (origin))
+    {
+      rpmostree_origin_set_regenerate_initramfs (origin, FALSE, NULL);
+      changed = TRUE;
+    }
+
   if (no_layering)
     {
       gboolean layering_changed = FALSE;
