@@ -409,8 +409,7 @@ rpmostree_origin_set_regenerate_initramfs (RpmOstreeOrigin *origin,
     }
 
   origin->cached_initramfs_args =
-    g_key_file_get_string_list (origin->kf, "rpmostree", "initramfs-args",
-                                NULL, NULL);
+    g_key_file_get_string_list (origin->kf, "rpmostree", "initramfs-args", NULL, NULL);
 }
 
 void
