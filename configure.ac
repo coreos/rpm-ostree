@@ -94,7 +94,7 @@ LIBS="$save_LIBS"
 # Remember to update AM_CPPFLAGS in Makefile.am when bumping GIO req.
 PKG_CHECK_MODULES(PKGDEP_GIO_UNIX, [gio-unix-2.0])
 PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0
-				     ostree-1 >= 2018.2
+				     ostree-1 >= 2018.7
 				     libsystemd
 				     polkit-gobject-1
 				     rpm librepo libsolv
@@ -185,6 +185,14 @@ AS_IF([test x$enable_compose_tooling = xyes], [
     AC_DEFINE(HAVE_COMPOSE_TOOLING, 1, [Define if we are building compose tooling])
 ])
 if test x$enable_compose_tooling != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES compose"; fi
+
+AC_ARG_ENABLE(staged,
+AS_HELP_STRING([--disable-staged],
+[Disable staged deployments by default]),,
+[enable_staged=yes])
+AS_IF([test x$enable_staged = xyes], [
+  AC_DEFINE(BUILDOPT_STAGE_DEPLOYMENTS, 1, [Define if we are staging deployments])
+])
 
 AC_ARG_ENABLE(rust,
               AS_HELP_STRING([--enable-rust],

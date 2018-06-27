@@ -29,9 +29,9 @@ set -x
 # This test suite enables the libostree staging feature, and executes
 # the layering-relayer tests.
 
-export VMCHECK_FLAGS=stage-deployments
+export VMCHECK_FLAGS=not-stage-deployments
 vm_cmd 'echo "[Experimental]" >> /etc/rpm-ostreed.conf'
-vm_cmd 'echo StageDeployments=true >> /etc/rpm-ostreed.conf'
+vm_cmd 'echo StageDeployments=false >> /etc/rpm-ostreed.conf'
 vm_rpmostree reload
 
 ${dn}/test-layering-relayer.sh

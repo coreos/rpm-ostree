@@ -422,8 +422,18 @@ rpmostreed_daemon_reload_config (RpmostreedDaemon *self,
         return FALSE;
     }
 
-  self->ex_stage_deployments = g_key_file_get_boolean (config, EXPERIMENTAL_CONFIG_GROUP,
-                                                       "StageDeployments", NULL);
+  /* The default used to be `false`, so check for the key being present */
+  if (g_key_file_has_key (config, EXPERIMENTAL_CONFIG_GROUP, "StageDeployments", NULL))
+    self->ex_stage_deployments = g_key_file_get_boolean (config, EXPERIMENTAL_CONFIG_GROUP,
+                                                         "StageDeployments", NULL);
+  else
+    {
+#ifdef BUILDOPT_STAGE_DEPLOYMENTS
+      self->ex_stage_deployments = TRUE;
+#else
+      self->ex_stage_deployments = FALSE;
+#endif
+    }
 
   /* don't update changed for this; it's contained to RpmostreedDaemon so no other objects
    * need to be reloaded if it changes */
