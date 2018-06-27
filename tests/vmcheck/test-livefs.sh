@@ -24,6 +24,10 @@ set -euo pipefail
 
 set -x
 
+# We do various assertions on deployment length, need a reliably
+# clean slate.
+vm_rpmostree cleanup -pr
+
 vm_cmd 'echo "[Experimental]" >> /etc/rpm-ostreed.conf'
 vm_cmd 'echo StageDeployments=true >> /etc/rpm-ostreed.conf'
 vm_rpmostree reload
