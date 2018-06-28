@@ -458,6 +458,10 @@ rollback_transaction_execute (RpmostreedTransaction *transaction,
     return glnx_throw (error, "No rollback deployment found");
   else if (!rollback_deployment)
     {
+      if (ostree_deployment_is_staged (pending_deployment))
+        /* XXX: or just clean it up for them? also, awkward CLI mention */
+        return glnx_throw (error, "Staged deployment (remove with cleanup -p)");
+
       /* If there isn't a rollback deployment, but there *is* a pending deployment, then we
        * want "rpm-ostree rollback" to put the currently booted deployment back on top. This
        * also allows users to effectively undo a rollback operation. */
