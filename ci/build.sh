@@ -9,7 +9,7 @@ dn=$(dirname $0)
 # Use the latest ostree by default
 id=$(. /etc/os-release && echo $ID)
 version_id=$(. /etc/os-release && echo $VERSION_ID)
-if [ "$id" == fedora ] && [ "$version_id" == 27 ]; then
+if [ "$id" == fedora ] && [ "$version_id" == 28 ]; then
     echo -e '[fahc]\nmetadata_expire=1m\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/fahc/rdgo/build/\ngpgcheck=0\n' > /etc/yum.repos.d/fahc.repo
     # Until we fix https://github.com/rpm-software-management/libdnf/pull/149
     excludes='exclude=ostree ostree-libs ostree-grub2 rpm-ostree'
