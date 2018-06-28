@@ -1342,6 +1342,9 @@ rpmostree_print_diff_advisories (GVariant         *rpm_diff,
                                  guint             max_key_len,
                                  GError          **error)
 {
+  if (!rpm_diff)
+    return TRUE; /* Nothing to 🖨️ */
+
   if (advisories)
     print_advisories (advisories, verbose || verbose_advisories, max_key_len);
 
@@ -1455,12 +1458,9 @@ rpmostree_print_cached_update (GVariant         *cached_update,
         rpmostree_print_gpg_info (signatures, verbose, max_key_len);
     }
 
-  if (rpm_diff)
-    {
-      if (!rpmostree_print_diff_advisories (rpm_diff, advisories, verbose,
-                                            verbose_advisories, max_key_len, error))
-        return FALSE;
-    }
+  if (!rpmostree_print_diff_advisories (rpm_diff, advisories, verbose,
+                                        verbose_advisories, max_key_len, error))
+    return FALSE;
 
   return TRUE;
 }
