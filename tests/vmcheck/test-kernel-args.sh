@@ -27,13 +27,13 @@ set -x
 osname=$(vm_get_booted_deployment_info osname)
 
 vm_rpmostree kargs > kargs.txt
-conf_content=$(vm_cmd grep ^options /boot/loader/entries/ostree-$osname-0.conf | sed -e 's,options ,,')
+conf_content=$(vm_cmd grep -h ^options /boot/loader/entries/ostree-*.conf | head -1 | sed -e 's,options ,,')
 assert_file_has_content_literal kargs.txt "$conf_content"
 echo "ok kargs display matches options"
 
 vm_rpmostree kargs --append=FOO=BAR --append=APPENDARG=VALAPPEND --append=APPENDARG=2NDAPPEND
 # read the conf file into a txt for future comparison
-vm_cmd grep ^options /boot/loader/entries/ostree-$osname-0.conf > tmp_conf.txt
+vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > tmp_conf.txt
 assert_file_has_content_literal tmp_conf.txt 'FOO=BAR'
 assert_file_has_content_literal tmp_conf.txt 'APPENDARG=VALAPPEND APPENDARG=2NDAPPEND'
 
@@ -45,7 +45,7 @@ echo "ok kargs append"
 
 # Test for rpm-ostree kargs delete
 vm_rpmostree kargs --delete FOO
-vm_cmd grep ^options /boot/loader/entries/ostree-$osname-0.conf > tmp_conf.txt
+vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > tmp_conf.txt
 assert_not_file_has_content tmp_conf.txt 'FOO=BAR'
 echo "ok delete a single key/value pair"
 
@@ -56,7 +56,7 @@ assert_file_has_content err.txt "Unable to delete argument 'APPENDARG' with mult
 echo "ok failed to delete key with multiple values"
 
 vm_rpmostree kargs --delete APPENDARG=VALAPPEND
-vm_cmd grep ^options /boot/loader/entries/ostree-$osname-0.conf > tmp_conf.txt
+vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > tmp_conf.txt
 assert_not_file_has_content tmp_conf.txt 'APPENDARG=VALAPPEND'
 assert_file_has_content tmp_conf.txt 'APPENDARG=2NDAPPEND'
 echo "ok delete a single key/value pair from multi valued key pairs"
@@ -66,7 +66,7 @@ vm_rpmostree kargs --append=REPLACE_TEST=TEST --append=REPLACE_MULTI_TEST=TEST -
 
 # Test for replacing key/value pair with  only one value
 vm_rpmostree kargs --replace=REPLACE_TEST=HELLO
-vm_cmd grep ^options /boot/loader/entries/ostree-$osname-0.conf > tmp_conf.txt
+vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > tmp_conf.txt
 assert_file_has_content_literal tmp_conf.txt 'REPLACE_TEST=HELLO'
 echo "ok replacing one key/value pair"
 
@@ -79,7 +79,7 @@ echo "ok failed to replace key with multiple values"
 
 # Test for replacing  one of the values for multi value keys
 vm_rpmostree kargs --replace=REPLACE_MULTI_TEST=TEST=NEWTEST
-vm_cmd grep ^options /boot/loader/entries/ostree-$osname-0.conf > tmp_conf.txt
+vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > tmp_conf.txt
 assert_file_has_content tmp_conf.txt "REPLACE_MULTI_TEST=NEWTEST"
 assert_not_file_has_content tmp_conf.txt "REPLACE_MULTI_TEST=TEST"
 assert_file_has_content tmp_conf.txt "REPLACE_MULTI_TEST=NUMBERTWO"
@@ -90,7 +90,7 @@ vm_reboot
 
 # Do a rollback and check if the content matches original booted conf (read in the beginning of the test)
 vm_rpmostree rollback
-for arg in $(vm_cmd grep ^options /boot/loader/entries/ostree-$osname-0.conf | sed -e 's,options ,,'); do
+for arg in $(vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf | sed -e 's,options ,,'); do
     case "$arg" in
   ostree=*) # Skip ostree arg
      ;;
@@ -137,7 +137,7 @@ vm_rpmostree kargs --append=PACKAGE=TEST
 vm_build_rpm foo
 vm_rpmostree install foo
 
-vm_cmd grep ^options /boot/loader/entries/ostree-$osname-0.conf > kargs.txt
+vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > kargs.txt
 assert_file_has_content_literal kargs.txt 'PACKAGE=TEST'
 echo "ok kargs with multiple operations"
 vm_rpmostree kargs > kargs.txt
