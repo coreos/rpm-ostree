@@ -40,27 +40,47 @@ vm_rpmostree install foo
 vm_assert_status_jq ".deployments[0][\"endoflife\"] == \"${META_ENDOFLIFE_MESSAGE}\""
 echo "ok layered commit inherits the endoflife attribute"
 
-vm_assert_status_jq ".deployments[0][\"booted\"] == false" \
-                    ".deployments[1][\"booted\"] == true"
-vm_rpmostree rollback
-vm_assert_status_jq ".deployments[0][\"booted\"] == true" \
-                    ".deployments[1][\"booted\"] == false"
-vm_rpmostree rollback
-vm_assert_status_jq ".deployments[0][\"booted\"] == false" \
-                    ".deployments[1][\"booted\"] == true"
-echo "ok rollback"
+# Check whether it's staged; `rollback` is only supported with
+# the soon-to-be-legacy mode of not staging deployments by default.
+if vm_pending_is_staged; then
+    vm_assert_status_jq ".deployments[1][\"booted\"] == true"
+    if vm_rpmostree rollback 2>err.txt; then
+        fatal "rolled back staged?"
+    fi
+    assert_file_has_content err.txt 'error: Staged.*remove.*cleanup'
+    # For the pinning tests, we need two real deployments, so
+    # let's reboot now, then we need to get back to the previous state,
+    # so reboot again.
+    vm_reboot
+    vm_rpmostree rollback
+    vm_reboot
+    vm_rpmostree rollback
+else
+    vm_rpmostree rollback
+    vm_assert_status_jq ".deployments[0][\"booted\"] == true" \
+                        ".deployments[1][\"booted\"] == false"
+    vm_rpmostree rollback
+    vm_assert_status_jq ".deployments[0][\"booted\"] == false" \
+                        ".deployments[1][\"booted\"] == true"
+    echo "ok rollback"
+fi
+vm_rpmostree status
+echo "before pinning"
 
 # Pinning
-vm_cmd ostree admin pin 0
+vm_cmd ostree admin pin 0 > pin.txt
+assert_file_has_content pin.txt 'is now pinned'
 vm_rpmostree status > status.txt
 assert_file_has_content_literal status.txt "Pinned: yes"
-vm_cmd ostree admin pin -u 0
+vm_cmd ostree admin pin -u 0 > pin.txt
+assert_file_has_content_literal pin.txt 'is now unpinned'
 vm_rpmostree status > status.txt
 assert_not_file_has_content status.txt "Pinned: yes"
 echo "ok pinning"
 
 # trying to clean up a pinned pending deployment should be a no-op
-vm_cmd ostree admin pin 0
+vm_cmd ostree admin pin 0 > pin.txt
+assert_file_has_content pin.txt 'is now pinned'
 vm_assert_status_jq ".deployments|length == 2" \
                     ".deployments[0][\"pinned\"] == true"
 vm_rpmostree cleanup -p
@@ -77,7 +97,8 @@ vm_assert_status_jq ".deployments|length == 2"
 echo "ok pinning not carried over"
 
 # and now check that we can unpin and cleanup
-vm_cmd ostree admin pin -u 0
+vm_cmd ostree admin pin -u 0 > pin.txt
+assert_file_has_content_literal pin.txt 'is now unpinned'
 vm_assert_status_jq ".deployments[0][\"pinned\"] == false"
 vm_rpmostree cleanup -p
 vm_assert_status_jq ".deployments|length == 1"
@@ -121,6 +142,8 @@ echo "ok detecting file name conflicts before writing rpmdb"
 # check that the way we detect deployment changes is not dependent on pending-*
 # https://github.com/projectatomic/rpm-ostree/issues/981
 vm_rpmostree cleanup -rp
+vm_rpmostree status
+echo "before redeploy"
 csum=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
 # restart to make daemon see the pending checksum
 vm_cmd systemctl restart rpm-ostreed
