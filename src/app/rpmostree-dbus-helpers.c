@@ -1444,7 +1444,7 @@ rpmostree_print_cached_update (GVariant         *cached_update,
 
   /* and now we can print 🖨️ things! */
 
-  g_print ("Available update:\n");
+  g_print ("AvailableUpdate:\n");
 
   /* add the long keys here */
   const guint max_key_len = MAX (strlen ("SecAdvisories"),

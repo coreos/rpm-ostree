@@ -39,6 +39,10 @@
 
 #include <libglnx.h>
 
+#define RPMOSTREE_AUTOMATIC_TIMER_UNIT \
+  "rpm-ostreed-automatic.timer"
+#define RPMOSTREE_AUTOMATIC_SERVICE_UNIT          \
+  "rpm-ostreed-automatic.service"
 #define RPMOSTREE_AUTOMATIC_TIMER_OBJPATH \
   "/org/freedesktop/systemd1/unit/rpm_2dostreed_2dautomatic_2etimer"
 #define RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH \
@@ -283,20 +287,23 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
 
   const char *policy = rpmostree_sysroot_get_automatic_update_policy (sysroot_proxy);
 
-  g_print ("State: %s", txn_proxy ? "busy" : "idle");
+  g_print ("State: %s\n", txn_proxy ? "busy" : "idle");
+  g_print ("AutomaticUpdates: ");
   if (g_str_equal (policy, "none"))
-    g_print ("; auto updates disabled\n");
+    g_print ("disabled\n");
   else
     {
-      g_print ("; auto updates enabled ");
+      g_print ("%s", policy);
 
       /* don't try to get info from systemd if we're not on the system bus */
       if (bus_type != G_BUS_TYPE_SYSTEM)
-        g_print ("(%s)\n", policy);
+        g_print ("\n");
       else
         {
           AutoUpdateSdState state;
           g_autofree char *last_run = NULL;
+
+          g_print ("; ");
 
           GDBusConnection *connection =
             g_dbus_proxy_get_connection (G_DBUS_PROXY (sysroot_proxy));
@@ -307,33 +314,34 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
             {
             case AUTO_UPDATE_SDSTATE_TIMER_UNKNOWN:
               {
-                g_print ("(%s; unknown timer state)\n", policy);
+                g_print ("%s: unknown state\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
                 break;
               }
             case AUTO_UPDATE_SDSTATE_TIMER_INACTIVE:
               {
-                g_print ("(%s; timer inactive)\n", policy);
+                g_print ("%s: inactive\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
                 break;
               }
             case AUTO_UPDATE_SDSTATE_SERVICE_FAILED:
               {
-                g_print ("(%s; %s%slast run failed%s%s)\n", policy,
+                g_print ("%s: %s%slast run failed%s%s\n",
+                         RPMOSTREE_AUTOMATIC_SERVICE_UNIT,
                          get_red_start (), get_bold_start (),
                          get_bold_end (), get_red_end ());
                 break;
               }
             case AUTO_UPDATE_SDSTATE_SERVICE_RUNNING:
               {
-                g_print ("(%s; running)\n", policy);
+                g_print ("%s: running\n", RPMOSTREE_AUTOMATIC_SERVICE_UNIT);
                 break;
               }
             case AUTO_UPDATE_SDSTATE_SERVICE_EXITED:
               {
                 if (last_run)
                   /* e.g. "last run 4h 32min ago" */
-                  g_print ("(%s; last run %s)\n", policy, last_run);
+                  g_print ("%s: last run %s\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT, last_run);
                 else
-                  g_print ("(%s; no runs since boot)\n", policy);
+                  g_print ("%s: no runs since boot\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
                 break;
               }
             default:
