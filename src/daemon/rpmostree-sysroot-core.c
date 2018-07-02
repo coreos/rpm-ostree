@@ -334,10 +334,13 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
   /* And do a prune */
   guint64 freed_space;
   gint n_objects_total, n_objects_pruned;
-  if (!ostree_repo_prune (repo, OSTREE_REPO_PRUNE_FLAGS_REFS_ONLY, 0,
-                          &n_objects_total, &n_objects_pruned, &freed_space,
-                          cancellable, error))
-    return FALSE;
+  { g_autoptr(GHashTable) reachable = ostree_repo_traverse_new_reachable ();
+    OstreeRepoPruneOptions opts = { OSTREE_REPO_PRUNE_FLAGS_REFS_ONLY, reachable };
+    if (!ostree_sysroot_cleanup_prune_repo (sysroot, &opts, &n_objects_total,
+                                            &n_objects_pruned, &freed_space,
+                                            cancellable, error))
+      return FALSE;
+  }
 
   if (n_pkgcache_freed > 0 || freed_space > 0)
     {
