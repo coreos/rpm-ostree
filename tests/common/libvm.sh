@@ -355,6 +355,16 @@ vm_assert_status_jq() {
     assert_status_file_jq status.json "$@"
 }
 
+vm_pending_is_staged() {
+    vm_rpmostree status --json > status-staged.json
+    local rc=1
+    if jq -e ".deployments[0][\"staged\"]" < status-staged.json; then
+        rc=0
+    fi
+    rm -f status-staged.json
+    return $rc
+}
+
 # Like build_rpm, but also sends it to the VM
 vm_build_rpm() {
     build_rpm "$@"
