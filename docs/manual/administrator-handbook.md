@@ -73,6 +73,9 @@ To remove layered packages installed from a repository, use `rpm-ostree uninstal
 specify the full NEVRA of the package.  For example, `rpm-ostree uninstall
 ltrace-0.7.91-16.fc22.x86_64`.
 
+In order to uninstall a package that is a part of the base layer, use `rpm-ostree override remove <pkg>`.
+For example, `rpm-ostree override remove firefox`.
+
 By default, every `rpm-ostree` operation is "offline" - it has no effect
 on your running system, and will only take effect when you reboot.  This "pending" state is
 called the "pending deployment".  Operations can be chained; for example,
