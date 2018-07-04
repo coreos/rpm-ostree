@@ -87,15 +87,15 @@ INSTALL_DATA_HOOKS += install-bin-hook
 endif
 
 if ENABLE_RUST
-libtreefilepath = @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@/libtreefile_rs.a
-TREEFILE_RUST_SRCS = rust/src/treefile.rs
-$(libtreefilepath): Makefile $(TREEFILE_RUST_SRCS)
+librpmostree_rust_path = @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@/librpmostree_rust.a
+LIBRPMOSTREE_RUST_SRCS = $(wildcard rust/src/*.rs)
+$(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
 	cd $(top_srcdir)/rust && \
 	  CARGO_TARGET_DIR=@abs_top_builddir@/target \
 	  $(cargo) build --verbose $(CARGO_RELEASE_ARGS)
-EXTRA_DIST += $(TREEFILE_RUST_SRCS) rust/Cargo.lock
+EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS) rust/Cargo.lock
 
 rpm_ostree_CFLAGS += -Irust/include
-rpm_ostree_SOURCES += rust/include/libtreefile_rs.h
-rpm_ostree_LDADD += $(libtreefilepath)
+rpm_ostree_SOURCES += rust/include/librpmostree-rust.h
+rpm_ostree_LDADD += $(librpmostree_rust_path)
 endif # ENABLE_RUST

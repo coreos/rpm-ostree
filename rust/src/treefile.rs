@@ -41,7 +41,7 @@ mod glibutils;
 use glibutils::*;
 
 #[no_mangle]
-pub extern "C" fn treefile_read(
+pub extern "C" fn rpmostree_rs_treefile_read(
     filename: *const libc::c_char,
     fd: libc::c_int,
     error: *mut *mut glib_sys::GError,
