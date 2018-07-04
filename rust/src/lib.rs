@@ -29,7 +29,7 @@ extern crate serde_yaml;
 
 use std::ffi::{CStr, OsStr};
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::io::FromRawFd;
+use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::path::Path;
 use std::{fs, io};
 
@@ -49,10 +49,14 @@ pub extern "C" fn rpmostree_rs_treefile_read(
     // using an O_TMPFILE is an easy way to avoid ownership transfer issues w/ returning allocated
     // memory across the Rust/C boundary
 
-    // let's just get the unsafory stuff (see what I did there?) out of the way first
-    let output = io::BufWriter::new(unsafe { fs::File::from_raw_fd(libc::dup(fd)) });
-    let c_str: &CStr = unsafe { CStr::from_ptr(filename) };
-    let filename_path = Path::new(OsStr::from_bytes(c_str.to_bytes()));
-
-    treefile_read_impl(filename_path, output).to_glib_convention(error)
+    // The dance with `file` is to avoid dup()ing the fd unnecessarily
+    let file = unsafe { fs::File::from_raw_fd(fd) };
+    let r = {
+        let output = io::BufWriter::new(&file);
+        let c_str: &CStr = unsafe { CStr::from_ptr(filename) };
+        let filename_path = Path::new(OsStr::from_bytes(c_str.to_bytes()));
+        treefile_read_impl(filename_path, output).to_glib_convention(error)
+    };
+    file.into_raw_fd(); // Drop ownership of the FD again
+    r
 }
