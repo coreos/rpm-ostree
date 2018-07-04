@@ -1,5 +1,5 @@
 [package]
-name = "treefile"
+name = "rpmostree-rust"
 version = "0.1.0"
 authors = ["Colin Walters <walters@verbum.org>"]
 
@@ -14,7 +14,7 @@ gio-sys = "0.6.0"
 glib = "0.5.0"
 
 [lib]
-name = "treefile_rs"
+name = "rpmostree_rust"
 path = "src/treefile.rs"
 crate-type = ["staticlib"]
 

@@ -45,7 +45,7 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 #ifdef HAVE_RUST
-#include "libtreefile_rs.h"
+#include "rpmostree-rust.h"
 #endif
 
 #include "libglnx.h"
@@ -695,7 +695,7 @@ parse_treefile_to_json (const char    *treefile_path,
       if (!glnx_open_anonymous_tmpfile (O_RDWR | O_CLOEXEC, &json_contents, error))
         return FALSE;
 
-      if (!treefile_read (treefile_path, json_contents.fd, error))
+      if (!rpmostree_rs_treefile_read (treefile_path, json_contents.fd, error))
         return glnx_prefix_error (error, "Failed to load YAML treefile");
 
       /* or just lseek back to 0 and use json_parser_load_from_data here? */
