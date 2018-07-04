@@ -88,11 +88,16 @@ endif
 
 if ENABLE_RUST
 librpmostree_rust_path = @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@/librpmostree_rust.a
+# If the target directory exists, use --frozen; we don't
+# want to (by default) touch the Internet during builds here.
+# One reason is that we want to support `make && sudo make install`,
+# and we don't want to do `sudo cargo` there.
 LIBRPMOSTREE_RUST_SRCS = $(wildcard rust/src/*.rs)
 $(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
 	cd $(top_srcdir)/rust && \
-	  CARGO_TARGET_DIR=@abs_top_builddir@/target \
-	  $(cargo) build --verbose $(CARGO_RELEASE_ARGS)
+	  export CARGO_TARGET_DIR=@abs_top_builddir@/target && \
+	  if test -d @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@; then frozen=--frozen; fi && \
+	  $(cargo) build --verbose $${frozen} $(CARGO_RELEASE_ARGS)
 EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS) rust/Cargo.lock
 
 rpm_ostree_CFLAGS += -Irust/include
