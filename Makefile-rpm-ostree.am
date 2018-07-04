@@ -103,4 +103,8 @@ EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS) rust/Cargo.lock
 rpm_ostree_CFLAGS += -Irust/include
 rpm_ostree_SOURCES += rust/include/librpmostree-rust.h
 rpm_ostree_LDADD += $(librpmostree_rust_path)
+rustfmt:
+	rustfmt $(LIBRPMOSTREE_RUST_SRCS)
 endif # ENABLE_RUST
+# Outside the ifdef, otherwise automake complains
+.PHONY: rustfmt

@@ -50,7 +50,9 @@ pub fn treefile_read_impl<W: io::Write>(filename: &Path, output: W) -> io::Resul
 }
 
 fn whitespace_split_packages(pkgs: &[String]) -> Vec<String> {
-    pkgs.iter().flat_map(|pkg| pkg.split_whitespace().map(String::from)).collect()
+    pkgs.iter()
+        .flat_map(|pkg| pkg.split_whitespace().map(String::from))
+        .collect()
 }
 
 #[derive(Serialize, Deserialize, Debug)]
