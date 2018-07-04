@@ -15,7 +15,7 @@ glib = "0.5.0"
 
 [lib]
 name = "rpmostree_rust"
-path = "src/treefile.rs"
+path = "src/lib.rs"
 crate-type = ["staticlib"]
 
 [profile.release]
