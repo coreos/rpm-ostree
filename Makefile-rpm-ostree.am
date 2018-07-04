@@ -95,6 +95,7 @@ $(libtreefilepath): Makefile $(TREEFILE_RUST_SRCS)
 	  $(cargo) build --verbose $(CARGO_RELEASE_ARGS)
 EXTRA_DIST += $(TREEFILE_RUST_SRCS) rust/Cargo.lock
 
-rpm_ostree_SOURCES += src/app/libtreefile_rs.h
+rpm_ostree_CFLAGS += -Irust/include
+rpm_ostree_SOURCES += rust/include/libtreefile_rs.h
 rpm_ostree_LDADD += $(libtreefilepath)
 endif # ENABLE_RUST
