@@ -288,7 +288,7 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
   const char *policy = rpmostree_sysroot_get_automatic_update_policy (sysroot_proxy);
 
   g_print ("State: %s\n", txn_proxy ? "busy" : "idle");
-  g_print ("Automatic Updates: ");
+  g_print ("AutomaticUpdates: ");
   if (g_str_equal (policy, "none"))
     g_print ("disabled\n");
   else
@@ -314,12 +314,12 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
             {
             case AUTO_UPDATE_SDSTATE_TIMER_UNKNOWN:
               {
-                g_print ("unknown state: %s\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
+                g_print ("%s: unknown state\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
                 break;
               }
             case AUTO_UPDATE_SDSTATE_TIMER_INACTIVE:
               {
-                g_print ("%s inactive\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
+                g_print ("%s: inactive\n", RPMOSTREE_AUTOMATIC_TIMER_UNIT);
                 break;
               }
             case AUTO_UPDATE_SDSTATE_SERVICE_FAILED:

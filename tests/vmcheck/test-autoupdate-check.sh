@@ -59,7 +59,7 @@ vm_rpmostree cleanup -m
 
 # make sure that off means off
 vm_change_update_policy off
-vm_rpmostree status | grep 'auto updates disabled'
+vm_rpmostree status | grep 'AutomaticUpdates: disabled'
 vm_rpmostree upgrade --trigger-automatic-update-policy > out.txt
 assert_file_has_content out.txt "Automatic updates are not enabled; exiting"
 # check we didn't download any metadata (skip starting dir)
@@ -78,7 +78,7 @@ echo "ok --check/--preview no updates"
 
 # ok, let's test out check
 vm_change_update_change_policy check
-vm_rpmostree status | grep 'auto updates enabled (check'
+vm_rpmostree status | grep 'AutomaticUpdates: check'
 
 # build an *older version* and check that we don't report an update
 vm_build_rpm layered-cake version 2.1 release 2
@@ -86,7 +86,7 @@ cursor=$(vm_get_journal_cursor)
 vm_cmd systemctl start rpm-ostree-automatic.service
 vm_wait_content_after_cursor $cursor 'Txn AutomaticUpdateTrigger.*successful'
 vm_rpmostree status -v > out.txt
-assert_not_file_has_content out.txt "Available update"
+assert_not_file_has_content out.txt "AvailableUpdate"
 # And check the unit name https://github.com/projectatomic/rpm-ostree/pull/1368
 vm_cmd journalctl -u rpm-ostreed --after-cursor ${cursor} > journal.txt
 assert_file_has_content journal.txt 'client(id:cli.*unit:rpm-ostreed-automatic.service'
@@ -96,15 +96,15 @@ rm -f journal.txt
 vm_build_rpm layered-cake version 2.1 release 4
 vm_rpmostree upgrade --trigger-automatic-update-policy
 vm_rpmostree status > out.txt
-assert_file_has_content out.txt "Available update"
+assert_file_has_content out.txt "AvailableUpdate"
 assert_file_has_content out.txt "Diff: 1 upgraded"
 assert_not_file_has_content out.txt "SecAdvisories"
 vm_rpmostree status -v > out.txt
 assert_file_has_content out.txt "Upgraded: layered-cake 2.1-3 -> 2.1-4"
 # make sure we don't report ostree-based stuff somehow
-! grep -A999 'Available update' out.txt | grep "Version"
-! grep -A999 'Available update' out.txt | grep "Timestamp"
-! grep -A999 'Available update' out.txt | grep "Commit"
+! grep -A999 'AvailableUpdate' out.txt | grep "Version"
+! grep -A999 'AvailableUpdate' out.txt | grep "Timestamp"
+! grep -A999 'AvailableUpdate' out.txt | grep "Commit"
 echo "ok check mode layered only"
 
 # confirm no filelists were fetched
@@ -159,7 +159,7 @@ echo "ok --check/--preview layered pkgs check policy"
 vm_change_update_policy off
 vm_rpmostree cleanup -m
 vm_cmd systemctl stop rpm-ostreed
-vm_rpmostree status | grep 'auto updates disabled'
+vm_rpmostree status | grep 'AutomaticUpdates: disabled'
 vm_rpmostree upgrade --check > out.txt
 vm_rpmostree upgrade --preview > out-verbose.txt
 assert_output
