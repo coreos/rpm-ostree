@@ -30,7 +30,7 @@ vm_ostreeupdate_prepare_reboot
 # Test base ostree update
 vm_ostreeupdate_create v2
 # Test the update → upgrade alias
-vm_rpmostree update --dry-run
+vm_rpmostree update --check
 # Then use the real command
 vm_rpmostree upgrade
 vm_reboot
