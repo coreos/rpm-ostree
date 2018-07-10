@@ -87,13 +87,13 @@ assert_file_has_content out-verbose.txt "No updates available."
 echo "ok --check/--preview no updates"
 
 # ok, let's test out check
-vm_change_update_change_policy check
+vm_change_update_policy check
 vm_rpmostree status | grep 'AutomaticUpdates: check'
 
 # build an *older version* and check that we don't report an update
 vm_build_rpm layered-cake version 2.1 release 2
 cursor=$(vm_get_journal_cursor)
-vm_cmd systemctl start rpm-ostree-automatic.service
+vm_cmd systemctl start rpm-ostreed-automatic.service
 vm_wait_content_after_cursor $cursor 'Txn AutomaticUpdateTrigger.*successful'
 vm_rpmostree status -v > out.txt
 assert_not_file_has_content out.txt "AvailableUpdate"
