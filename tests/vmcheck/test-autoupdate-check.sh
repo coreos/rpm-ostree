@@ -98,7 +98,7 @@ vm_wait_content_after_cursor $cursor 'Txn AutomaticUpdateTrigger.*successful'
 vm_rpmostree status -v > out.txt
 assert_not_file_has_content out.txt "AvailableUpdate"
 # And check the unit name https://github.com/projectatomic/rpm-ostree/pull/1368
-vm_cmd journalctl -u rpm-ostreed --after-cursor ${cursor} > journal.txt
+vm_get_journal_after_cursor $cursor journal.txt
 assert_file_has_content journal.txt 'client(id:cli.*unit:rpm-ostreed-automatic.service'
 rm -f journal.txt
 
