@@ -418,10 +418,17 @@ vm_wait_content_after_cursor() {
 EOF
 }
 
+# Minor helper that makes sure to get quoting right
+vm_get_journal_after_cursor() {
+  from_cursor=$1; shift
+  to_file=$1; shift
+  # add an extra helping of quotes for hungry ssh
+  vm_cmd journalctl --after-cursor "'$from_cursor'" > $to_file
+}
+
 vm_assert_journal_has_content() {
   from_cursor=$1; shift
-  # add an extra helping of quotes for hungry ssh
-  vm_cmd journalctl --after-cursor "'$from_cursor'" > tmp-journal.txt
+  vm_get_journal_after_cursor $from_cursor tmp-journal.txt
   assert_file_has_content tmp-journal.txt "$@"
   rm -f tmp-journal.txt
 }
