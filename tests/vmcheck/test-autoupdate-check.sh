@@ -69,26 +69,36 @@ if [ -s out.txt ]; then
 fi
 echo "ok disabled"
 
+# runs --check and --preview, verifies rc matches what we expect, and capturing
+# output for a following assert_output
+assert_check_preview_rc() {
+  local expected_rc=$1; shift
+  local rc=0
+  vm_rpmostree upgrade --check > out.txt || rc=$?
+  assert_streq $rc $expected_rc
+  vm_rpmostree upgrade --preview > out-verbose.txt || rc=$?
+  assert_streq $rc $expected_rc
+}
+
 # check that --check/--preview still works
-vm_rpmostree upgrade --check > out.txt
+assert_check_preview_rc 77
 assert_file_has_content out.txt "No updates available."
-vm_rpmostree upgrade --preview > out.txt
-assert_file_has_content out.txt "No updates available."
+assert_file_has_content out-verbose.txt "No updates available."
 echo "ok --check/--preview no updates"
 
 # ok, let's test out check
-vm_change_update_change_policy check
+vm_change_update_policy check
 vm_rpmostree status | grep 'AutomaticUpdates: check'
 
 # build an *older version* and check that we don't report an update
 vm_build_rpm layered-cake version 2.1 release 2
 cursor=$(vm_get_journal_cursor)
-vm_cmd systemctl start rpm-ostree-automatic.service
+vm_cmd systemctl start rpm-ostreed-automatic.service
 vm_wait_content_after_cursor $cursor 'Txn AutomaticUpdateTrigger.*successful'
 vm_rpmostree status -v > out.txt
 assert_not_file_has_content out.txt "AvailableUpdate"
 # And check the unit name https://github.com/projectatomic/rpm-ostree/pull/1368
-vm_cmd journalctl -u rpm-ostreed --after-cursor ${cursor} > journal.txt
+vm_get_journal_after_cursor $cursor journal.txt
 assert_file_has_content journal.txt 'client(id:cli.*unit:rpm-ostreed-automatic.service'
 rm -f journal.txt
 
@@ -150,8 +160,7 @@ echo "ok check mode layered only with advisories"
 # clear out cache first to make sure they start from scratch
 vm_rpmostree cleanup -m
 vm_cmd systemctl stop rpm-ostreed
-vm_rpmostree upgrade --check > out.txt
-vm_rpmostree upgrade --preview > out-verbose.txt
+assert_check_preview_rc 0
 assert_output
 echo "ok --check/--preview layered pkgs check policy"
 
@@ -160,8 +169,7 @@ vm_change_update_policy off
 vm_rpmostree cleanup -m
 vm_cmd systemctl stop rpm-ostreed
 vm_rpmostree status | grep 'AutomaticUpdates: disabled'
-vm_rpmostree upgrade --check > out.txt
-vm_rpmostree upgrade --preview > out-verbose.txt
+assert_check_preview_rc 0
 assert_output
 echo "ok --check/--preview layered pkgs off policy"
 
@@ -212,16 +220,14 @@ echo "ok check mode ostree"
 
 # check that we get similar output with --check/--preview
 
-vm_rpmostree upgrade --check > out.txt
-vm_rpmostree upgrade --preview > out-verbose.txt
+assert_check_preview_rc 0
 assert_output2
 echo "ok --check/--preview base pkgs check policy"
 
 vm_change_update_policy off
 vm_rpmostree cleanup -m
 vm_cmd systemctl stop rpm-ostreed
-vm_rpmostree upgrade --check > out.txt
-vm_rpmostree upgrade --preview > out-verbose.txt
+assert_check_preview_rc 0
 assert_output2
 echo "ok --check/--preview base pkgs off policy"
 
