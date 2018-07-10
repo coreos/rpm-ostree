@@ -36,7 +36,7 @@ vm_rpmostree status > status.txt
 assert_file_has_content status.txt 'AutomaticUpdates: disabled'
 vm_change_update_policy ex-stage
 vm_rpmostree status > status.txt
-assert_file_has_content_literal status.txt 'AutomaticUpdates: ex-stage; rpm-ostree-automatic.timer: inactive'
+assert_file_has_content_literal status.txt 'AutomaticUpdates: ex-stage; rpm-ostreed-automatic.timer: inactive'
 
 vm_rpmostree upgrade --trigger-automatic-update-policy
 vm_assert_status_jq ".deployments[1][\"booted\"]" \
