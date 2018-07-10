@@ -48,6 +48,8 @@ tests:
   - ci/build-check.sh
   - ci/vmcheck-provision.sh
   - make vmcheck
+  # make sure we're aware of any tests that were skipped
+  - grep -nr '^SKIP: ' vmcheck/ || :
 
 timeout: 60m
 
