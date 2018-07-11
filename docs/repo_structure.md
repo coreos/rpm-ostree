@@ -4,20 +4,14 @@
 ### Rpm-ostree source code
 ```
 .
-└─ src                          Contains source code for rpm-ostree
-```
-
-#### File structures under src
-```
-.
 └─ src
-  ├── app                       Contains the "frontend" logic (display CLI commands, function calls to daemon etc) for each command
+  ├── app                       rpm-ostree CLI application
   |
-  ├── daemon                    Usually has the "backend" logic for each command that involves with dbus daemon and transactions
+  ├── daemon                    rpm-ostree daemon providing D-Bus API
   |
-  ├── lib                       Contains package and db libraries
+  ├── lib                       Public library: contains APIs for exploring rpmdb in OSTrees
   |
-  └── libpriv                   Underlying API libraries used by files from both daemon and app
+  └── libpriv                   Private API shared between app and daemon
 
 ```
 
@@ -39,7 +33,7 @@
 
 ```
 .
-└── test                        Contains tests
+└── tests                       Contains tests
 ```
 
 ### Documentation
