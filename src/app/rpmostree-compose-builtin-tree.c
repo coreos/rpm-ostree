@@ -1179,6 +1179,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     return FALSE;
 
   /* Start postprocessing */
+  g_assert_cmpint (self->treefile_context_dirs->len, >, 0);
   if (!rpmostree_treefile_postprocessing (self->rootfs_dfd, self->treefile_context_dirs->pdata[0],
                                           self->serialized_treefile, self->treefile,
                                           next_version, opt_ex_unified_core,
