@@ -1454,6 +1454,9 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
                                    GCancellable  *cancellable,
                                    GError       **error)
 {
+  g_assert (context_directory);
+  g_assert (treefile);
+
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
