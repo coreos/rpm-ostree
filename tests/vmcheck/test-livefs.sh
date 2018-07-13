@@ -24,11 +24,15 @@ set -euo pipefail
 
 set -x
 
+vm_cmd 'echo "[Experimental]" >> /etc/rpm-ostreed.conf'
+vm_cmd 'echo StageDeployments=true >> /etc/rpm-ostreed.conf'
+vm_rpmostree reload
+
 vm_assert_layered_pkg foo absent
 
 vm_build_rpm foo
 vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
-vm_assert_status_jq '.deployments|length == 2'
+vm_assert_status_jq '.deployments|length == 3'
 echo "ok install foo locally"
 
 if vm_cmd rpm -q foo; then
@@ -40,7 +44,8 @@ assert_livefs_ok() {
 }
 assert_livefs_ok
 
-vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
+vm_assert_status_jq '.deployments|length == 3' \
+                    '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]|not'
 vm_rpmostree ex livefs
 vm_cmd rpm -q foo > rpmq.txt
@@ -110,7 +115,7 @@ echo "ok livefs preserved rollback"
 
 # Reset to rollback, undeploy pending
 reset() {
-    vm_rpmostree rollback
+    vm_rpmostree ex reset
     vm_reboot
     vm_rpmostree cleanup -r
     vm_assert_status_jq '.deployments|length == 1' '.deployments[0]["live-replaced"]|not'

@@ -677,6 +677,8 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
    */
   if (origin_merge_deployment == booted_deployment)
     return glnx_throw (error, "No pending deployment");
+  if (!ostree_deployment_is_staged (origin_merge_deployment))
+    return glnx_throw (error, "livefs requires staged deployments");
 
   /* Open a fd for the booted deployment */
   g_autofree char *deployment_path = ostree_sysroot_get_deployment_dirpath (sysroot, booted_deployment);
@@ -876,10 +878,6 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
                                   cancellable, error))
         return FALSE;
     }
-
-  /* XXX: right now we don't have a good solution for this:
-   * https://github.com/projectatomic/rpm-ostree/issues/40 */
-  rpmostree_output_message ("WARNING: any changes to /etc will be lost on next reboot");
 
   /* Write out the origin as having completed this */
   if (!write_livefs_state (sysroot, booted_deployment, NULL, target_csum, error))
