@@ -105,12 +105,13 @@ for file in first second; do
     vm_cmd lsinitrd $initramfs > lsinitrd.txt
     assert_file_has_content lsinitrd.txt /etc/rpmostree-initramfs-testing-${file}
 done
+echo "ok initramfs args enable"
 
 vm_rpmostree initramfs --disable
-
+vm_reboot
 initramfs=$(vm_cmd grep ^initrd /boot/loader/entries/ostree-2-$osname.conf | sed -e 's,initrd ,/boot/,')
 test -n "${initramfs}"
 vm_cmd lsinitrd $initramfs > lsinitrd.txt
 assert_not_file_has_content lsinitrd.txt /etc/rpmostree-initramfs-testing
 
-echo "ok initramfs args"
+echo "ok initramfs disable"
