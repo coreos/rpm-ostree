@@ -214,12 +214,16 @@ packages:
     #[test]
     fn basic_invalid() {
         let mut buf = VALID_PRELUDE.to_string();
-        buf.push_str("install-langs: 42\n");
+        buf.push_str(r###"install_langs:
+  - "klingon"
+  - "esperanto"
+"###);
         let buf = buf.as_bytes();
         let input = io::BufReader::new(buf);
         match treefile_parse_yaml(input) {
-            Ok(_) => panic!("Expected invalid treefile"),
-            Err(_) => {}
+            Err(ref e) if e.kind() == io::ErrorKind::InvalidInput => {},
+            Err(ref e) => panic!("Expected invalid treefile, not {}", e.to_string()),
+            _ => panic!("Expected invalid treefile"),
         }
     }
 }
