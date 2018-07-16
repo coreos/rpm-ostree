@@ -113,6 +113,23 @@ AS_IF([pkg-config --atleast-version=4.13.0.1 rpm], [
 
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
+dnl This was painful to figure out; it's sad that Automake's
+dnl python support doesn't do a better job of optionally supporting
+dnl both 2 and 3.  Anyways the logic here is: Honor $PYTHON if set
+dnl uncondionally, otherwise try python3 if it appears to be available
+dnl first, then fall back to 2.
+dnl Recommendation is explicit PYTHON=python3 ./configure ...
+AS_IF([test -z "$PYTHON"], [
+  AS_IF([test -x /usr/bin/python3], [
+    AM_PATH_PYTHON([3.6])
+  ], [
+    AM_PATH_PYTHON([2.7])
+  ])
+])
+dnl http://maemo.org/maemo_training_material/maemo4.x/html/maemo_Application_Development_Chinook/Chapter_05_GNU_Autotools.html
+dnl incorrectly says the quoted ']' is @>:@ (...crying...)
+pyver=$($PYTHON -c "import sys; sys.stdout.write(sys.version @<:@ :3 @:>@ )")
+
 GLIB_TESTS
 LIBGLNX_CONFIGURE
 
@@ -224,7 +241,13 @@ if $(echo $CFLAGS |grep -q -E "(-O0|-Og)"); then
 else
   cmake_args=-DCMAKE_BUILD_TYPE=RelWithDebugInfo
   export cmake_args
-fi  
+fi
+
+case "${pyver}" in
+  2.*) cmake_args="${cmake_args} -DPYTHON_DESIRED:str=2";;
+  3.*) cmake_args="${cmake_args} -DPYTHON_DESIRED:str=3";;
+  *) AC_MSG_ERROR([unexpected \$pyver $pyver]);;
+esac
 
 dnl I picked /usr/libexec/rpm-ostree just because we need an
 dnl arbitrary path - we don't actually install there.
@@ -257,5 +280,6 @@ echo "
     introspection:                           $found_introspection
     bubblewrap:                              $with_bubblewrap
     gtk-doc:                                 $enable_gtk_doc
+    python:                                  $PYTHON $pyver
     rust:                                    $enable_rust
 "
