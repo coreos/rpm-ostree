@@ -1441,6 +1441,48 @@ mutate_os_release (const char    *contents,
   return g_string_free (new_contents, FALSE);
 }
 
+static gboolean
+refsack_has_package (RpmOstreeRefSack *refsack,
+                     const char *pkgname)
+{
+  hy_autoquery HyQuery query = hy_query_create (refsack->sack);
+  hy_query_filter (query, HY_PKG_NAME, HY_EQ, pkgname);
+  g_autoptr(GPtrArray) pkglist = hy_query_run (query);
+  return pkglist->len > 0;
+}
+
+/* Detect installed packages and perform postprocessing based on that.
+ * Note that this intentionally runs early so that builders can override it
+ * in their postprocessing scripts.
+ */
+static gboolean
+postprocess_package_dependent (int               rootfs_fd,
+                               RpmOstreeRefSack *refsack,
+                               GCancellable     *cancellable,
+                               GError          **error)
+{
+  GLNX_AUTO_PREFIX_ERROR ("Package dependent postprocessing", error);
+
+  static const char etc_resolvconf[] = "usr/etc/resolv.conf";
+  /* First, handle NetworkManager and resolv.conf; we want /etc/resolv.conf
+   * to be a symlink to /run so that one can reasonably bind mount read-only /etc.
+   * This sadly isn't the default...epic series of bugs here; see e.g.
+   * https://bugzilla.redhat.com/show_bug.cgi?id=1197204
+   */
+  if (!glnx_fstatat_allow_noent (rootfs_fd, etc_resolvconf, NULL, 0, error))
+    return FALSE;
+  gboolean has_resolvconf = (errno == 0);
+  if (!has_resolvconf && refsack_has_package (refsack, "NetworkManager"))
+    {
+      if (symlinkat ("../run/NetworkManager/resolv.conf", rootfs_fd, etc_resolvconf) < 0)
+        return glnx_throw_errno_prefix (error, "symlinkat");
+    }
+
+  /* Insert any other package-dependent processing here */
+
+  return TRUE;
+}
+
 /* Move etc -> usr/etc in the rootfs, and run through treefile
  * postprocessing.
  */
@@ -1594,15 +1636,21 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (symlinkat ("../../" RPMOSTREE_RPMDB_LOCATION, rootfs_fd, "var/lib/rpm") < 0)
     return glnx_throw_errno_prefix (error, "symlinkat(%s)", "var/lib/rpm");
 
+  /* Load the packages installed; this is used for remove-from-packages
+   * as well as package-detection based postprocessing.
+   */
+  g_autoptr(RpmOstreeRefSack) refsack =
+    rpmostree_get_refsack_for_root (rootfs_fd, ".", error);
+  if (!refsack)
+    return glnx_prefix_error (error, "Reading package set");
+
+  if (!postprocess_package_dependent (rootfs_fd, refsack, cancellable, error))
+    return FALSE;
+
   if (json_object_has_member (treefile, "remove-from-packages"))
     {
       remove = json_object_get_array_member (treefile, "remove-from-packages");
       len = json_array_get_length (remove);
-
-      g_autoptr(RpmOstreeRefSack) refsack =
-        rpmostree_get_refsack_for_root (rootfs_fd, ".", error);
-      if (!refsack)
-        return glnx_prefix_error (error, "Reading package set");
 
       /* Backwards compatibility */
       if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
