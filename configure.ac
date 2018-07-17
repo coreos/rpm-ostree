@@ -241,10 +241,12 @@ if $(echo $CFLAGS |grep -q -E "(-O0|-Og)"); then
 else
   cmake_args=-DCMAKE_BUILD_TYPE=RelWithDebugInfo
   export cmake_args
-fi  
+fi
 
-case $pyver in
+case "${pyver}" in
+  2.*) cmake_args="${cmake_args} -DPYTHON_DESIRED:str=2";;
   3.*) cmake_args="${cmake_args} -DPYTHON_DESIRED:str=3";;
+  *) AC_MSG_ERROR([unexpected \$pyver $pyver]);;
 esac
 
 dnl I picked /usr/libexec/rpm-ostree just because we need an
