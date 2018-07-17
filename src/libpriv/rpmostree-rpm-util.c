@@ -1106,7 +1106,7 @@ rpmostree_get_matching_packages (DnfSack *sack,
   HySubject subject = NULL;
 
   subject = hy_subject_create (pattern);
-  selector = hy_subject_get_best_selector (subject, sack);
+  selector = hy_subject_get_best_selector (subject, sack, false);
   matches = hy_selector_matches (selector);
 
   hy_selector_free (selector);
