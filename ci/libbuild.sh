@@ -1,7 +1,9 @@
 #!/usr/bin/bash
 
 pkg_upgrade() {
+    echo "Running yum -y distro-sync... $(date)"
     yum -y distro-sync
+    echo "Done yum -y distro-sync! $(date)"
 }
 
 make() {
@@ -15,7 +17,9 @@ build() {
 }
 
 pkg_install() {
+    echo "Running yum -y install... $(date)"
     yum -y install "$@"
+    echo "Done running yum -y install! $(date)"
 }
 
 pkg_install_if_os() {
@@ -31,25 +35,26 @@ pkg_install_if_os() {
 }
 
 pkg_builddep() {
+    echo "Running builddep... $(date)"
     # This is sadly the only case where it's a different command
     if test -x /usr/bin/dnf; then
         dnf builddep -y "$@"
     else
         yum-builddep -y "$@"
     fi
+    echo "Done running builddep! $(date)"
 }
 
 pkg_install_builddeps() {
     pkg=$1
     if test -x /usr/bin/dnf; then
-        yum -y install dnf-plugins-core
-        yum install -y 'dnf-command(builddep)'
+        pkg_install dnf-plugins-core 'dnf-command(builddep)'
         # Base buildroot
         pkg_install @buildsys-build
     else
-        yum -y install yum-utils
+        pkg_install yum-utils
         # Base buildroot, copied from the mock config sadly
-        yum -y install bash bzip2 coreutils cpio diffutils system-release findutils gawk gcc gcc-c++ grep gzip info make patch redhat-rpm-config rpm-build sed shadow-utils tar unzip util-linux which xz
+        pkg_install bash bzip2 coreutils cpio diffutils system-release findutils gawk gcc gcc-c++ grep gzip info make patch redhat-rpm-config rpm-build sed shadow-utils tar unzip util-linux which xz
     fi
     # builddeps+runtime deps
     pkg_builddep $pkg
