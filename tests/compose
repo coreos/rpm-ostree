@@ -41,7 +41,7 @@ datadir_owner=$(stat -c '%u' ${test_compose_datadir})
 test ${uid} = ${datadir_owner}
 
 # Create a consistent cache of the RPMs
-echo "Preparing compose tests..."
+echo "Preparing compose tests... $(date)"
 tmp_repo=${test_compose_datadir}/tmp-repo
 if test -z "${RPMOSTREE_COMPOSE_CACHEONLY:-}"; then
     mkdir -p ${test_compose_datadir}/cache
@@ -51,6 +51,7 @@ if test -z "${RPMOSTREE_COMPOSE_CACHEONLY:-}"; then
     rpm-ostree compose --repo=${tmp_repo} tree --download-only --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json
     (cd ${test_compose_datadir}/cache && createrepo_c .)
 fi
+echo "Done preparing compose tests! $(date)"
 rm ${tmp_repo} -rf
 
 total=0
