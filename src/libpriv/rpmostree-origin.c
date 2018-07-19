@@ -265,14 +265,23 @@ rpmostree_origin_get_rojig_description (RpmOstreeOrigin *origin)
   return g_variant_builder_end (builder);
 }
 
+static char *
+keyfile_get_nonempty_string (GKeyFile *kf, const char *section, const char *key)
+{
+  char *ret = g_key_file_get_string (kf, section, key, NULL);
+  if (ret && !*ret)
+    g_clear_pointer (&ret, g_free);
+  return ret;
+}
+
 void
 rpmostree_origin_get_custom_description (RpmOstreeOrigin *origin,
                                          char           **custom_type,
                                          char           **custom_description)
 {
-  *custom_type = g_key_file_get_string (origin->kf, "origin", "custom-url", NULL);
+  *custom_type = keyfile_get_nonempty_string (origin->kf, "origin", "custom-url");
   if (*custom_type)
-    *custom_description = g_key_file_get_string (origin->kf, "origin", "custom-description", NULL);
+    *custom_description = keyfile_get_nonempty_string (origin->kf, "origin", "custom-description");
 }
 
 GHashTable *
@@ -485,6 +494,12 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
                                     const char      *custom_origin_description,
                                     GError         **error)
 {
+  /* Require non-empty strings */
+  if (custom_origin_url)
+    g_return_val_if_fail (*custom_origin_url, FALSE);
+  if (custom_origin_description)
+    g_return_val_if_fail (*custom_origin_description, FALSE);
+
    /* We don't want to carry any commit overrides or version pinning during a
    * rebase by default.
    */
