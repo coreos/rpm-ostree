@@ -496,9 +496,10 @@ rpmostree_origin_set_rebase_custom (RpmOstreeOrigin *origin,
 {
   /* Require non-empty strings */
   if (custom_origin_url)
-    g_return_val_if_fail (*custom_origin_url, FALSE);
-  if (custom_origin_description)
-    g_return_val_if_fail (*custom_origin_description, FALSE);
+    {
+      g_return_val_if_fail (*custom_origin_url, FALSE);
+      g_return_val_if_fail (custom_origin_description && *custom_origin_description, FALSE);
+    }
 
    /* We don't want to carry any commit overrides or version pinning during a
    * rebase by default.

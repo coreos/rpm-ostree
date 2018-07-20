@@ -144,9 +144,11 @@ rpmostree_builtin_rebase (int             argc,
   g_variant_dict_insert (&dict, "skip-purge", "b", opt_skip_purge);
   if (opt_custom_origin_url)
     {
+      if (!opt_custom_origin_description)
+        return glnx_throw (error, "--custom-origin-description must be supplied with --custom-origin-url");
       g_variant_dict_insert (&dict, "custom-origin", "(ss)",
                              opt_custom_origin_url,
-                             opt_custom_origin_description ?: "");
+                             opt_custom_origin_description);
     }
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 

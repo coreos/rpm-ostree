@@ -1330,9 +1330,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           g_autofree char *custom_origin_description = NULL;
           rpmostree_origin_get_custom_description (origin, &custom_origin_url,
                                                    &custom_origin_description);
-          const char *custom_origin = custom_origin_description ?: custom_origin_url;
-          if (custom_origin)
-            rpmostree_output_message ("Pinned to commit by custom origin: %s", custom_origin);
+          if (custom_origin_description)
+            rpmostree_output_message ("Pinned to commit by custom origin: %s", custom_origin_description);
           else
             rpmostree_output_message ("Pinned to commit; no upgrade available");
         }

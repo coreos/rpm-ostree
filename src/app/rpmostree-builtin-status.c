@@ -498,10 +498,11 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
             /* Canonicalize the empty string to NULL */
             if (custom_origin_url && !*custom_origin_url)
               custom_origin_url = NULL;
-            if (custom_origin_description && !*custom_origin_description)
-              custom_origin_description = NULL;
             if (custom_origin_url)
-              g_print ("%s", custom_origin_url);
+              {
+                g_assert (custom_origin_description && *custom_origin_description);
+                g_print ("%s", custom_origin_url);
+              }
             else
               g_print ("%s", canonrefspec);
           }

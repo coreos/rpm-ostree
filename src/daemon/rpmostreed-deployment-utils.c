@@ -312,7 +312,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
         if (custom_origin_url)
           g_variant_dict_insert (&dict, "custom-origin", "(ss)",
                                  custom_origin_url,
-                                 custom_origin_description ?: "");
+                                 custom_origin_description);
       }
       break;
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
