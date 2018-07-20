@@ -3447,7 +3447,7 @@ run_all_pkgtriggerin (RpmOstreeContext *self,
                       GCancellable     *cancellable,
                       GError          **error)
 {
-  g_assert (!self->jigdo_pure);
+  g_assert (!self->rojig_pure);
 
   const guint n = (guint)rpmtsNElements (ts);
   for (guint i = 0; i < n; i++)

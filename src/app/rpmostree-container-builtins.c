@@ -163,6 +163,71 @@ rpmostree_container_builtin_init (int             argc,
   return TRUE;
 }
 
+int
+rpmostree_container_builtin_mkrootfs (int             argc,
+                                      char          **argv,
+                                      RpmOstreeCommandInvocation *invocation,
+                                      GCancellable   *cancellable,
+                                      GError        **error)
+{
+  g_autoptr(GOptionContext) context = g_option_context_new ("NAME [PKGNAME PKGNAME...]");
+  g_auto(ROContainerContext) rocctx_data = RO_CONTAINER_CONTEXT_INIT;
+  ROContainerContext *rocctx = &rocctx_data;
+
+  if (!rpmostree_option_context_parse (context,
+                                       assemble_option_entries,
+                                       &argc, &argv,
+                                       invocation,
+                                       cancellable,
+                                       NULL, NULL, NULL, NULL, NULL,
+                                       error))
+    return FALSE;
+
+  if (argc < 2)
+    {
+      rpmostree_usage_error (context, "SPEC must be specified", error);
+      return FALSE;
+    }
+  const char *specpath = argv[1];
+  const char *target_rootdir = argv[2];
+
+  g_autoptr(RpmOstreeTreespec) treespec = rpmostree_treespec_new_from_path (specpath, error);
+  if (!treespec)
+    return FALSE;
+
+  if (!roc_context_init (rocctx, error))
+    return FALSE;
+
+  if (mkdirat (AT_FDCWD, target_rootdir, 0755) < 0)
+    return glnx_throw_errno_prefix (error, "mkdir(%s)", target_rootdir);
+  glnx_fd_close int target_dfd = -1;
+  if (!glnx_opendirat (AT_FDCWD, target_rootdir, TRUE, &target_dfd, error))
+    return FALSE;
+
+  if (!roc_context_prepare_for_root (rocctx, treespec, cancellable, error))
+    return FALSE;
+  DnfContext *dnfctx = rpmostree_context_get_dnf (rocctx->ctx);
+  if (opt_cache_only)
+    dnf_context_set_cache_age (dnfctx, G_MAXUINT);
+
+  /* --- Resolving dependencies --- */
+  if (!rpmostree_context_prepare (rocctx->ctx, cancellable, error))
+    return FALSE;
+
+  rpmostree_print_transaction (rpmostree_context_get_dnf (rocctx->ctx));
+
+  if (!rpmostree_context_download (rocctx->ctx, cancellable, error))
+    return FALSE;
+  if (!rpmostree_context_import (rocctx->ctx, cancellable, error))
+    return FALSE;
+  rpmostree_context_set_tmprootfs_dfd (rocctx->ctx, target_dfd);
+  if (!rpmostree_context_assemble (rocctx->ctx, cancellable, error))
+    return FALSE;
+  g_print ("Generated: %s\n", target_rootdir);
+
+  return TRUE;
+}
+
 /*
  * Like symlinkat() but overwrites (atomically) an existing
  * symlink.

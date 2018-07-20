@@ -28,6 +28,8 @@ static RpmOstreeCommand container_subcommands[] = {
     "Initialize a local container", rpmostree_container_builtin_init },
   { "assemble", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Assemble a local container", rpmostree_container_builtin_assemble },
+  { "mkrootfs", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "Generate a root filesystem", rpmostree_container_builtin_mkrootfs },
   /* { "start", rpmostree_container_builtin_start }, */
   { "upgrade", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Perform a local container upgrade", rpmostree_container_builtin_upgrade },

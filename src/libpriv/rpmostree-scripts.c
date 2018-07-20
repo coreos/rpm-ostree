@@ -800,7 +800,7 @@ rpmostree_pkgtriggers_run_sync (Header         hdr,
             continue;
 
           /* TODO query for dependent package name */
-          if (!run_script_in_bwrap_container (rootfs_fd, pkg_name,
+          if (!run_script_in_bwrap_container (rootfs_fd, NULL, pkg_name,
                                               "%triggerin", "/bin/sh", script, NULL, -1,
                                               cancellable, error))
             return FALSE;

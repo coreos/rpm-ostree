@@ -225,9 +225,11 @@ rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
   const char *bwrap_env[] = {"PATH=/usr/sbin:/usr/bin", lang_var, NULL};
   g_subprocess_launcher_set_environ (ret->launcher, (char**)bwrap_env);
 
+  const char *bwrap_path = g_getenv ("RPMOSTREE_BWRAP") ?: WITH_BUBBLEWRAP_PATH;
+
   /* ⚠⚠⚠ If you change this, also update scripts/bwrap-script-shell.sh ⚠⚠⚠ */
   rpmostree_bwrap_append_bwrap_argv (ret,
-                                     WITH_BUBBLEWRAP_PATH,
+                                     bwrap_path,
                                      "--dev", "/dev",
                                      "--proc", "/proc",
                                      "--dir", "/tmp",
