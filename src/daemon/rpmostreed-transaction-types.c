@@ -113,6 +113,12 @@ change_origin_refspec (GVariantDict    *options,
       g_variant_dict_lookup (options, "custom-origin", "(&s&s)",
                              &custom_origin_url,
                              &custom_origin_description);
+      if (custom_origin_url && *custom_origin_url)
+        {
+          g_assert (custom_origin_description);
+          if (!*custom_origin_description)
+            return glnx_throw (error, "Invalid custom-origin");
+        }
       if (!rpmostree_origin_set_rebase_custom (origin, new_refspec,
                                                custom_origin_url,
                                                custom_origin_description,
