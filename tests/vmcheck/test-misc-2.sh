@@ -26,6 +26,24 @@ set -x
 
 # More miscellaneous tests
 
+# Custom origin https://github.com/projectatomic/rpm-ostree/pull/1406
+booted_csum=$(vm_get_booted_csum)
+oscontainer_source="oscontainer://quay.io/exampleos@sha256:98ea6e4f216f2fb4b69fff9b3a44842c38686ca685f3f55dc48c5d3fb1107be4"
+if vm_rpmostree rebase --skip-purge --custom-origin-url "${oscontainer_source}" \
+                :${booted_csum} 2>err.txt; then
+    fatal "rebased without description"
+fi
+assert_file_has_content_literal err.txt '--custom-origin-description must be supplied'
+vm_rpmostree rebase --skip-purge --custom-origin-description "'Updated via pivot'" \
+             --custom-origin-url "${oscontainer_source}" \
+             :${booted_csum}
+vm_rpmostree status > status.txt
+assert_file_has_content_literal status.txt 'CustomOrigin: Updated via pivot'
+assert_file_has_content_literal status.txt "${oscontainer_source}"
+vm_rpmostree upgrade >out.txt
+assert_file_has_content_literal out.txt 'Pinned to commit by custom origin: Updated via pivot'
+vm_rpmostree cleanup -p
+
 # Add metadata string containing EnfOfLife attribtue
 META_ENDOFLIFE_MESSAGE="this is a test for metadata message"
 commit=$(vm_cmd ostree commit -b vmcheck \

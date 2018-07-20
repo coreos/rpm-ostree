@@ -42,7 +42,8 @@ vardict_lookup_bool (GVariantDict *dict,
                      gboolean      dfault);
 
 static gboolean
-change_origin_refspec (OstreeSysroot *sysroot,
+change_origin_refspec (GVariantDict    *options,
+                       OstreeSysroot *sysroot,
                        RpmOstreeOrigin *origin,
                        const gchar *src_refspec,
                        GCancellable *cancellable,
@@ -101,8 +102,34 @@ change_origin_refspec (OstreeSysroot *sysroot,
   if (strcmp (current_refspec, new_refspec) == 0)
     return glnx_throw (error, "Old and new refs are equal: %s", new_refspec);
 
-  if (!rpmostree_origin_set_rebase (origin, new_refspec, error))
+  /* Re-classify after canonicalization to ensure we handle TYPE_CHECKSUM */
+  if (!rpmostree_refspec_classify (new_refspec, &refspectype, &refspecdata, error))
     return FALSE;
+
+  if (refspectype == RPMOSTREE_REFSPEC_TYPE_CHECKSUM)
+    {
+      const char *custom_origin_url = NULL;
+      const char *custom_origin_description = NULL;
+      g_variant_dict_lookup (options, "custom-origin", "(&s&s)",
+                             &custom_origin_url,
+                             &custom_origin_description);
+      if (custom_origin_url && *custom_origin_url)
+        {
+          g_assert (custom_origin_description);
+          if (!*custom_origin_description)
+            return glnx_throw (error, "Invalid custom-origin");
+        }
+      if (!rpmostree_origin_set_rebase_custom (origin, new_refspec,
+                                               custom_origin_url,
+                                               custom_origin_description,
+                                               error))
+        return FALSE;
+    }
+  else
+    {
+      if (!rpmostree_origin_set_rebase (origin, new_refspec, error))
+        return FALSE;
+    }
 
   g_autofree gchar *current_remote = NULL;
   g_autofree gchar *current_branch = NULL;
@@ -305,7 +332,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
 
   if (self->refspec != NULL)
     {
-      if (!change_origin_refspec (sysroot, origin, self->refspec,
+      if (!change_origin_refspec (NULL, sysroot, origin, self->refspec,
                                   cancellable, NULL, NULL, error))
         return FALSE;
     }
@@ -828,7 +855,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   g_autofree gchar *old_refspec = NULL;
   if (self->refspec)
     {
-      if (!change_origin_refspec (sysroot, origin, self->refspec, cancellable,
+      if (!change_origin_refspec (self->options, sysroot, origin, self->refspec, cancellable,
                                   &old_refspec, &new_refspec, error))
         return FALSE;
     }
@@ -1304,7 +1331,16 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     {
       if (refspec_type == RPMOSTREE_REFSPEC_TYPE_CHECKSUM
           && layering_type < RPMOSTREE_SYSROOT_UPGRADER_LAYERING_RPMMD_REPOS)
-        rpmostree_output_message ("Pinned to commit; no upgrade available");
+        {
+          g_autofree char *custom_origin_url = NULL;
+          g_autofree char *custom_origin_description = NULL;
+          rpmostree_origin_get_custom_description (origin, &custom_origin_url,
+                                                   &custom_origin_description);
+          if (custom_origin_description)
+            rpmostree_output_message ("Pinned to commit by custom origin: %s", custom_origin_description);
+          else
+            rpmostree_output_message ("Pinned to commit; no upgrade available");
+        }
       else if (is_upgrade)
         rpmostree_output_message ("No upgrade available.");
       else
