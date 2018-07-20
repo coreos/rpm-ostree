@@ -124,9 +124,9 @@ vm_cmd cat /usr/share/rpmostree-lua-override-test-expand > lua-override-expand.t
 diff -u install-langs.txt lua-override-expand.txt
 echo "ok script override"
 
-vm_rpmostree rollback
+vm_rpmostree ex reset
 vm_reboot
-vm_rpmostree cleanup -p
+vm_rpmostree cleanup -pr
 # File triggers are Fedora+
 if ! vm_cmd grep -q 'ID=.*centos' /etc/os-release; then
 # We use /usr/share/licenses since it's small predictable content
