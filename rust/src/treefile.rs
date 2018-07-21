@@ -26,10 +26,8 @@ use serde_yaml;
 use std::path::Path;
 use std::{fs, io};
 
-pub fn treefile_read_impl<W: io::Write>(filename: &Path, output: W) -> io::Result<()> {
-    let f = io::BufReader::new(fs::File::open(filename)?);
-
-    let mut treefile: TreeComposeConfig = match serde_yaml::from_reader(f) {
+fn treefile_parse_yaml<R: io::Read>(input: R) -> io::Result<TreeComposeConfig> {
+    let mut treefile: TreeComposeConfig = match serde_yaml::from_reader(input) {
         Ok(t) => t,
         Err(e) => {
             return Err(io::Error::new(
@@ -44,8 +42,13 @@ pub fn treefile_read_impl<W: io::Write>(filename: &Path, output: W) -> io::Resul
         treefile.packages = Some(whitespace_split_packages(&pkgs));
     }
 
-    serde_json::to_writer_pretty(output, &treefile)?;
+    Ok(treefile)
+}
 
+pub fn treefile_read_impl<W: io::Write>(filename: &Path, output: W) -> io::Result<()> {
+    let f = io::BufReader::new(fs::File::open(filename)?);
+    let treefile = treefile_parse_yaml(f)?;
+    serde_json::to_writer_pretty(output, &treefile)?;
     Ok(())
 }
 
@@ -99,6 +102,7 @@ fn serde_true() -> bool {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct TreeComposeConfig {
     // Compose controls
     #[serde(rename = "ref")]
@@ -186,4 +190,40 @@ pub struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "remove-from-packages")]
     pub remove_from_packages: Option<Vec<Vec<String>>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    static VALID_PRELUDE : &str = r###"
+ref: "exampleos/x86_64/blah"
+packages:
+ - foo bar
+ - baz
+"###;
+
+    #[test]
+    fn basic_valid() {
+        let input = io::BufReader::new(VALID_PRELUDE.as_bytes());
+        let treefile = treefile_parse_yaml(input).unwrap();
+        assert!(treefile.treeref == "exampleos/x86_64/blah");
+        assert!(treefile.packages.unwrap().len() == 3);
+    }
+
+    #[test]
+    fn basic_invalid() {
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(r###"install_langs:
+  - "klingon"
+  - "esperanto"
+"###);
+        let buf = buf.as_bytes();
+        let input = io::BufReader::new(buf);
+        match treefile_parse_yaml(input) {
+            Err(ref e) if e.kind() == io::ErrorKind::InvalidInput => {},
+            Err(ref e) => panic!("Expected invalid treefile, not {}", e.to_string()),
+            _ => panic!("Expected invalid treefile"),
+        }
+    }
 }
