@@ -26,7 +26,10 @@ use serde_yaml;
 use std::path::Path;
 use std::{fs, io};
 
-fn treefile_parse_yaml<R: io::Read>(input: R) -> io::Result<TreeComposeConfig> {
+const ARCH_X86_64 : &'static str = "x86_64";
+
+/// Parse a YAML treefile definition using architecture `arch`.
+fn treefile_parse_yaml<R: io::Read>(input: R, arch: &'static str) -> io::Result<TreeComposeConfig> {
     let mut treefile: TreeComposeConfig = match serde_yaml::from_reader(input) {
         Ok(t) => t,
         Err(e) => {
@@ -37,17 +40,43 @@ fn treefile_parse_yaml<R: io::Read>(input: R) -> io::Result<TreeComposeConfig> {
         }
     };
 
-    // special handling for packages, since we allow whitespaces within items
-    if let Some(pkgs) = treefile.packages {
-        treefile.packages = Some(whitespace_split_packages(&pkgs));
+    // Special handling for packages, since we allow whitespace within items.
+    // We also canonicalize bootstrap_packages to packages here so it's
+    // easier to append the arch packages after.
+    let mut pkgs : Vec<String> = vec![];
+    {
+        if let Some(base_pkgs) = treefile.packages.take() {
+            pkgs.extend_from_slice(&whitespace_split_packages(&base_pkgs));
+        }
+        if let Some(bootstrap_pkgs) = treefile.bootstrap_packages.take() {
+            pkgs.extend_from_slice(&whitespace_split_packages(&bootstrap_pkgs));
+        }
     }
 
+    let arch_pkgs = match arch {
+        "aarch64" => treefile.packages_aarch64.take(),
+        "armhfp" => treefile.packages_armhfp.take(),
+        "ppc64" => treefile.packages_ppc64.take(),
+        "ppc64le" => treefile.packages_ppc64le.take(),
+        "s390x" => treefile.packages_s390x.take(),
+        ARCH_X86_64 => treefile.packages_x86_64.take(),
+        _ => panic!("Invalid architecture: {}", arch),
+    };
+    if let Some(arch_pkgs) = arch_pkgs {
+        pkgs.extend_from_slice(&whitespace_split_packages(&arch_pkgs));
+    }
+    if pkgs.len() == 0 {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput,
+                                  format!("Missing 'packages' entry")))
+    };
+
+    treefile.packages = Some(pkgs);
     Ok(treefile)
 }
 
 pub fn treefile_read_impl<W: io::Write>(filename: &Path, output: W) -> io::Result<()> {
     let f = io::BufReader::new(fs::File::open(filename)?);
-    let treefile = treefile_parse_yaml(f)?;
+    let treefile = treefile_parse_yaml(f, ARCH_X86_64)?;
     serde_json::to_writer_pretty(output, &treefile)?;
     Ok(())
 }
@@ -119,6 +148,28 @@ pub struct TreeComposeConfig {
     // Core content
     #[serde(skip_serializing_if = "Option::is_none")]
     pub packages: Option<Vec<String>>,
+    // Arch-specific packages; TODO replace this with
+    // custom deserialization or so and avoid having
+    // having an architecture list here.
+    #[serde(rename = "packages-aarch64")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub packages_aarch64: Option<Vec<String>>,
+    #[serde(rename = "packages-armhfp")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub packages_armhfp: Option<Vec<String>>,
+    #[serde(rename = "packages-ppc64")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub packages_ppc64: Option<Vec<String>>,
+    #[serde(rename = "packages-ppc64le")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub packages_ppc64le: Option<Vec<String>>,
+    #[serde(rename = "packages-s390x")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub packages_s390x: Option<Vec<String>>,
+    #[serde(rename = "packages-x86_64")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub packages_x86_64: Option<Vec<String>>,
+    // Deprecated option
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bootstrap_packages: Option<Vec<String>>,
 
@@ -201,29 +252,45 @@ ref: "exampleos/x86_64/blah"
 packages:
  - foo bar
  - baz
+packages-x86_64:
+ - grub2 grub2-tools
+packages-s390x:
+ - zipl
 "###;
 
     #[test]
     fn basic_valid() {
         let input = io::BufReader::new(VALID_PRELUDE.as_bytes());
-        let treefile = treefile_parse_yaml(input).unwrap();
+        let treefile = treefile_parse_yaml(input, ARCH_X86_64).unwrap();
         assert!(treefile.treeref == "exampleos/x86_64/blah");
-        assert!(treefile.packages.unwrap().len() == 3);
+        eprintln!("{:?}", treefile);
+        assert!(treefile.packages.unwrap().len() == 5);
+    }
+
+    fn test_invalid(data: &'static str) {
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(data);
+        let buf = buf.as_bytes();
+        let input = io::BufReader::new(buf);
+        match treefile_parse_yaml(input, ARCH_X86_64) {
+            Err(ref e) if e.kind() == io::ErrorKind::InvalidInput => {},
+        Err(ref e) => panic!("Expected invalid treefile, not {}", e.to_string()),
+    _ => panic!("Expected invalid treefile"),
+        }
     }
 
     #[test]
-    fn basic_invalid() {
-        let mut buf = VALID_PRELUDE.to_string();
-        buf.push_str(r###"install_langs:
+    fn test_invalid_install_langs() {
+        test_invalid(r###"install_langs:
   - "klingon"
   - "esperanto"
 "###);
-        let buf = buf.as_bytes();
-        let input = io::BufReader::new(buf);
-        match treefile_parse_yaml(input) {
-            Err(ref e) if e.kind() == io::ErrorKind::InvalidInput => {},
-            Err(ref e) => panic!("Expected invalid treefile, not {}", e.to_string()),
-            _ => panic!("Expected invalid treefile"),
-        }
+    }
+
+    #[test]
+    fn test_invalid_arch() {
+        test_invalid(r###"packages-hal9000:
+  - podbaydoor glowingredeye
+"###);
     }
 }
