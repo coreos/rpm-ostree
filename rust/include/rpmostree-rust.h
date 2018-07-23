@@ -20,4 +20,6 @@
 
 #pragma once
 
-int rpmostree_rs_treefile_read (const char *filename, int output_fd, GError **error);
+int rpmostree_rs_treefile_read (const char *filename,
+                                const char *arch,
+                                int output_fd, GError **error);

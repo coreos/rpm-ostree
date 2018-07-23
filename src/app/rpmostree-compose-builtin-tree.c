@@ -676,7 +676,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 }
 
 static gboolean
-parse_treefile_to_json (const char    *treefile_path,
+parse_treefile_to_json (RpmOstreeTreeComposeContext  *self,
+                        const char    *treefile_path,
                         JsonParser   **out_parser,
                         GError       **error)
 {
@@ -695,7 +696,9 @@ parse_treefile_to_json (const char    *treefile_path,
       if (!glnx_open_anonymous_tmpfile (O_RDWR | O_CLOEXEC, &json_contents, error))
         return FALSE;
 
-      if (!rpmostree_rs_treefile_read (treefile_path, json_contents.fd, error))
+      const char *arch = self ? dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx)) : NULL;
+      if (!rpmostree_rs_treefile_read (treefile_path, arch,
+                                       json_contents.fd, error))
         return glnx_prefix_error (error, "Failed to load YAML treefile");
 
       /* or just lseek back to 0 and use json_parser_load_from_data here? */
@@ -754,7 +757,8 @@ process_includes (RpmOstreeTreeComposeContext  *self,
       GList *members;
       GList *iter;
 
-      if (!parse_treefile_to_json (gs_file_get_path_cached (treefile_path),
+      if (!parse_treefile_to_json (self,
+                                   gs_file_get_path_cached (treefile_path),
                                    &parent_parser, error))
         return FALSE;
 
@@ -961,7 +965,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   if (!self->corectx)
     return FALSE;
 
-  if (!parse_treefile_to_json (gs_file_get_path_cached (self->treefile_path),
+  if (!parse_treefile_to_json (self, gs_file_get_path_cached (self->treefile_path),
                                &self->treefile_parser, error))
     return FALSE;
 
@@ -1476,7 +1480,7 @@ rpmostree_compose_builtin_postprocess (int             argc,
   JsonObject *treefile = NULL; /* Owned by parser */
   if (treefile_path)
     {
-      if (!parse_treefile_to_json (treefile_path, &treefile_parser, error))
+      if (!parse_treefile_to_json (NULL, treefile_path, &treefile_parser, error))
         return FALSE;
 
       JsonNode *treefile_rootval = json_parser_get_root (treefile_parser);

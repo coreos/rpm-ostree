@@ -5,8 +5,19 @@
     "repos": ["fedora", "updates"],
 
     "packages": ["kernel", "nss-altfiles", "systemd", "ostree", "selinux-policy-targeted", "chrony",
-                 "tuned", "iputils", "fedora-release-atomichost", "docker", "container-selinux",
-                 "grub2", "grub2-efi", "ostree-grub2", "efibootmgr", "shim"],
+                 "tuned", "iputils", "fedora-release-atomichost", "docker", "container-selinux"],
+
+    "packages-aarch64": ["grub2-efi", "ostree-grub2",
+                         "efibootmgr", "shim"],
+
+    "packages-armhfp": ["extlinux-bootloader"],
+
+    "packages-ppc64": ["grub2", "ostree-grub2"],
+
+    "packages-ppc64le": ["grub2", "ostree-grub2"],
+
+    "packages-x86_64": ["grub2", "grub2-efi", "ostree-grub2",
+                        "efibootmgr", "shim"],
 
     "ignore-removed-users": ["root"],
     "ignore-removed-groups": ["root"],
