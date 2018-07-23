@@ -43,19 +43,28 @@ use treefile::treefile_read_impl;
 #[no_mangle]
 pub extern "C" fn rpmostree_rs_treefile_read(
     filename: *const libc::c_char,
+    arch: *const libc::c_char,
     fd: libc::c_int,
     error: *mut *mut glib_sys::GError,
 ) -> libc::c_int {
     // using an O_TMPFILE is an easy way to avoid ownership transfer issues w/ returning allocated
     // memory across the Rust/C boundary
 
+    let arch = if arch.is_null() {
+        None
+    } else {
+        let arch = unsafe { CStr::from_ptr(arch) };
+        Some(arch.to_string_lossy().into_owned())
+    };
+    let arch = arch.as_ref().map(String::as_str);
+
     // The dance with `file` is to avoid dup()ing the fd unnecessarily
     let file = unsafe { fs::File::from_raw_fd(fd) };
     let r = {
         let output = io::BufWriter::new(&file);
-        let c_str: &CStr = unsafe { CStr::from_ptr(filename) };
-        let filename_path = Path::new(OsStr::from_bytes(c_str.to_bytes()));
-        treefile_read_impl(filename_path, output).to_glib_convention(error)
+        let filename: &CStr = unsafe { CStr::from_ptr(filename) };
+        let filename_path = Path::new(OsStr::from_bytes(filename.to_bytes()));
+        treefile_read_impl(filename_path, arch, output).to_glib_convention(error)
     };
     file.into_raw_fd(); // Drop ownership of the FD again
     r

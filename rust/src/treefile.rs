@@ -29,7 +29,7 @@ use std::{fs, io};
 const ARCH_X86_64: &'static str = "x86_64";
 
 /// Parse a YAML treefile definition using architecture `arch`.
-fn treefile_parse_yaml<R: io::Read>(input: R, arch: &'static str) -> io::Result<TreeComposeConfig> {
+fn treefile_parse_yaml<R: io::Read>(input: R, arch: Option<&str>) -> io::Result<TreeComposeConfig> {
     let mut treefile: TreeComposeConfig = match serde_yaml::from_reader(input) {
         Ok(t) => t,
         Err(e) => {
@@ -54,13 +54,14 @@ fn treefile_parse_yaml<R: io::Read>(input: R, arch: &'static str) -> io::Result<
     }
 
     let arch_pkgs = match arch {
-        "aarch64" => treefile.packages_aarch64.take(),
-        "armhfp" => treefile.packages_armhfp.take(),
-        "ppc64" => treefile.packages_ppc64.take(),
-        "ppc64le" => treefile.packages_ppc64le.take(),
-        "s390x" => treefile.packages_s390x.take(),
-        ARCH_X86_64 => treefile.packages_x86_64.take(),
-        _ => panic!("Invalid architecture: {}", arch),
+        Some("aarch64") => treefile.packages_aarch64.take(),
+        Some("armhfp") => treefile.packages_armhfp.take(),
+        Some("ppc64") => treefile.packages_ppc64.take(),
+        Some("ppc64le") => treefile.packages_ppc64le.take(),
+        Some("s390x") => treefile.packages_s390x.take(),
+        Some(ARCH_X86_64) => treefile.packages_x86_64.take(),
+        None => None,
+        Some(x) => panic!("Invalid architecture: {}", x),
     };
     if let Some(arch_pkgs) = arch_pkgs {
         pkgs.extend_from_slice(&whitespace_split_packages(&arch_pkgs));
@@ -76,9 +77,13 @@ fn treefile_parse_yaml<R: io::Read>(input: R, arch: &'static str) -> io::Result<
     Ok(treefile)
 }
 
-pub fn treefile_read_impl<W: io::Write>(filename: &Path, output: W) -> io::Result<()> {
+pub fn treefile_read_impl<W: io::Write>(
+    filename: &Path,
+    arch: Option<&str>,
+    output: W,
+) -> io::Result<()> {
     let f = io::BufReader::new(fs::File::open(filename)?);
-    let treefile = treefile_parse_yaml(f, ARCH_X86_64)?;
+    let treefile = treefile_parse_yaml(f, arch)?;
     serde_json::to_writer_pretty(output, &treefile)?;
     Ok(())
 }
