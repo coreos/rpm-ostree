@@ -26,7 +26,7 @@ use serde_yaml;
 use std::path::Path;
 use std::{fs, io};
 
-const ARCH_X86_64 : &'static str = "x86_64";
+const ARCH_X86_64: &'static str = "x86_64";
 
 /// Parse a YAML treefile definition using architecture `arch`.
 fn treefile_parse_yaml<R: io::Read>(input: R, arch: &'static str) -> io::Result<TreeComposeConfig> {
@@ -43,7 +43,7 @@ fn treefile_parse_yaml<R: io::Read>(input: R, arch: &'static str) -> io::Result<
     // Special handling for packages, since we allow whitespace within items.
     // We also canonicalize bootstrap_packages to packages here so it's
     // easier to append the arch packages after.
-    let mut pkgs : Vec<String> = vec![];
+    let mut pkgs: Vec<String> = vec![];
     {
         if let Some(base_pkgs) = treefile.packages.take() {
             pkgs.extend_from_slice(&whitespace_split_packages(&base_pkgs));
@@ -66,8 +66,10 @@ fn treefile_parse_yaml<R: io::Read>(input: R, arch: &'static str) -> io::Result<
         pkgs.extend_from_slice(&whitespace_split_packages(&arch_pkgs));
     }
     if pkgs.len() == 0 {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput,
-                                  format!("Missing 'packages' entry")))
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Missing 'packages' entry"),
+        ));
     };
 
     treefile.packages = Some(pkgs);
@@ -247,7 +249,7 @@ pub struct TreeComposeConfig {
 mod tests {
     use super::*;
 
-    static VALID_PRELUDE : &str = r###"
+    static VALID_PRELUDE: &str = r###"
 ref: "exampleos/x86_64/blah"
 packages:
  - foo bar
@@ -273,24 +275,28 @@ packages-s390x:
         let buf = buf.as_bytes();
         let input = io::BufReader::new(buf);
         match treefile_parse_yaml(input, ARCH_X86_64) {
-            Err(ref e) if e.kind() == io::ErrorKind::InvalidInput => {},
-        Err(ref e) => panic!("Expected invalid treefile, not {}", e.to_string()),
-    _ => panic!("Expected invalid treefile"),
+            Err(ref e) if e.kind() == io::ErrorKind::InvalidInput => {}
+            Err(ref e) => panic!("Expected invalid treefile, not {}", e.to_string()),
+            _ => panic!("Expected invalid treefile"),
         }
     }
 
     #[test]
     fn test_invalid_install_langs() {
-        test_invalid(r###"install_langs:
+        test_invalid(
+            r###"install_langs:
   - "klingon"
   - "esperanto"
-"###);
+"###,
+        );
     }
 
     #[test]
     fn test_invalid_arch() {
-        test_invalid(r###"packages-hal9000:
+        test_invalid(
+            r###"packages-hal9000:
   - podbaydoor glowingredeye
-"###);
+"###,
+        );
     }
 }
