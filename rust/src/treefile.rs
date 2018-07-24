@@ -268,10 +268,17 @@ packages-s390x:
     #[test]
     fn basic_valid() {
         let input = io::BufReader::new(VALID_PRELUDE.as_bytes());
-        let treefile = treefile_parse_yaml(input, ARCH_X86_64).unwrap();
+        let treefile = treefile_parse_yaml(input, Some(ARCH_X86_64)).unwrap();
         assert!(treefile.treeref == "exampleos/x86_64/blah");
-        eprintln!("{:?}", treefile);
         assert!(treefile.packages.unwrap().len() == 5);
+    }
+
+    #[test]
+    fn basic_valid_noarch() {
+        let input = io::BufReader::new(VALID_PRELUDE.as_bytes());
+        let treefile = treefile_parse_yaml(input, None).unwrap();
+        assert!(treefile.treeref == "exampleos/x86_64/blah");
+        assert!(treefile.packages.unwrap().len() == 3);
     }
 
     fn test_invalid(data: &'static str) {
@@ -279,7 +286,7 @@ packages-s390x:
         buf.push_str(data);
         let buf = buf.as_bytes();
         let input = io::BufReader::new(buf);
-        match treefile_parse_yaml(input, ARCH_X86_64) {
+        match treefile_parse_yaml(input, Some(ARCH_X86_64)) {
             Err(ref e) if e.kind() == io::ErrorKind::InvalidInput => {}
             Err(ref e) => panic!("Expected invalid treefile, not {}", e.to_string()),
             _ => panic!("Expected invalid treefile"),
