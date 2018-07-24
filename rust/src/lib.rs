@@ -27,8 +27,7 @@ extern crate serde;
 extern crate serde_json;
 extern crate serde_yaml;
 
-use std::ffi::{CStr, OsStr};
-use std::os::unix::ffi::OsStrExt;
+use std::ffi::CStr;
 use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::path::Path;
 use std::{fs, io};
@@ -40,6 +39,18 @@ use treefile::treefile_read_impl;
 
 /* Wrapper functions for translating from C to Rust */
 
+/// Convert a C (UTF-8) string to a &str; will panic
+/// if it isn't valid UTF-8.  Note the lifetime of
+/// the return value must be <= the pointer.
+fn str_from_nullable<'a>(s: *const libc::c_char) -> Option<&'a str> {
+    if s.is_null() {
+        None
+    } else {
+        let s = unsafe { CStr::from_ptr(s) };
+        Some(s.to_str().unwrap())
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn rpmostree_rs_treefile_read(
     filename: *const libc::c_char,
@@ -47,24 +58,16 @@ pub extern "C" fn rpmostree_rs_treefile_read(
     fd: libc::c_int,
     error: *mut *mut glib_sys::GError,
 ) -> libc::c_int {
+    // Convert arguments
+    let filename = Path::new(unsafe { CStr::from_ptr(filename).to_str().unwrap() });
+    let arch = str_from_nullable(arch);
     // using an O_TMPFILE is an easy way to avoid ownership transfer issues w/ returning allocated
     // memory across the Rust/C boundary
-
-    let arch = if arch.is_null() {
-        None
-    } else {
-        let arch = unsafe { CStr::from_ptr(arch) };
-        Some(arch.to_string_lossy().into_owned())
-    };
-    let arch = arch.as_ref().map(String::as_str);
-
     // The dance with `file` is to avoid dup()ing the fd unnecessarily
     let file = unsafe { fs::File::from_raw_fd(fd) };
     let r = {
         let output = io::BufWriter::new(&file);
-        let filename: &CStr = unsafe { CStr::from_ptr(filename) };
-        let filename_path = Path::new(OsStr::from_bytes(filename.to_bytes()));
-        treefile_read_impl(filename_path, arch, output).to_glib_convention(error)
+        treefile_read_impl(filename, arch, output).to_glib_convention(error)
     };
     file.into_raw_fd(); // Drop ownership of the FD again
     r
