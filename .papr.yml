@@ -109,7 +109,7 @@ context: f28-compose
 
 build: false
 
-timeout: 40m
+timeout: 50m
 
 required: true
 
