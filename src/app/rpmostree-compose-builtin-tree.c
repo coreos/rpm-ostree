@@ -56,7 +56,7 @@ static char *opt_cachedir;
 static gboolean opt_download_only;
 static gboolean opt_force_nocache;
 static gboolean opt_cache_only;
-static gboolean opt_ex_unified_core;
+static gboolean opt_unified_core;
 static char *opt_proxy;
 static char *opt_output_repodata_dir;
 static char *opt_ex_jigdo_output_rpm;
@@ -80,7 +80,8 @@ static GOptionEntry install_option_entries[] = {
   { "cache-only", 0, 0, G_OPTION_ARG_NONE, &opt_cache_only, "Assume cache is present, do not attempt to update it", NULL },
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Like --dry-run, but download RPMs as well; requires --cachedir", NULL },
-  { "ex-unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_ex_unified_core, "Use new \"unified core\" codepath", NULL },
+  { "ex-unified-core", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_unified_core, "Compat alias for --unified-core", NULL }, // Compat
+  { "unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_unified_core, "Use new \"unified core\" codepath", NULL },
   { "ex-jigdo-output-rpm", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_ex_jigdo_output_rpm, "Deprecated alias", NULL },
   { "ex-jigdo-output-set", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_ex_jigdo_output_set, "Deprecated alias", NULL },
   { "ex-rojig-output-rpm", 0, 0, G_OPTION_ARG_STRING, &opt_ex_jigdo_output_rpm, "Directory to write rojigRPM", NULL },
@@ -426,7 +427,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
    * we're doing unified core, in which case the pkgcache repo is the cache.  But
    * the rojigSet build still requires the original RPMs too.
    */
-  if ((opt_cachedir && !opt_ex_unified_core) || opt_ex_jigdo_output_set)
+  if ((opt_cachedir && !opt_unified_core) || opt_ex_jigdo_output_set)
     dnf_context_set_keep_cache (dnfctx, TRUE);
   /* For compose, always try to refresh metadata; we're used in build servers
    * where fetching should be cheap. Otherwise, if --cache-only is set, it's
@@ -439,7 +440,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   /* Without specifying --cachedir we'd just toss the data we download, so let's
    * catch that.
    */
-  if (opt_download_only && !opt_ex_unified_core && !opt_cachedir)
+  if (opt_download_only && !opt_unified_core && !opt_cachedir)
     return glnx_throw (error, "--download-only can only be used with --cachedir");
 
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
@@ -499,7 +500,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
    * the workdir, or live explicitly in the dir for --cache.
    */
   glnx_autofd int host_rootfs_dfd = -1;
-  if (opt_ex_unified_core)
+  if (opt_unified_core)
     {
       self->pkgcache_repo = ostree_repo_create_at (cachedir_dfd (self), "pkgcache-repo",
                                                    OSTREE_REPO_MODE_BARE_USER, NULL,
@@ -599,7 +600,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 
   if (generate_from_previous)
     {
-      const char *dest = opt_ex_unified_core ? "usr/etc/" : "etc/";
+      const char *dest = opt_unified_core ? "usr/etc/" : "etc/";
       if (!rpmostree_generate_passwd_from_previous (self->repo, rootfs_dfd, dest,
                                                     treefile_dirpath,
                                                     self->previous_root, treedata,
@@ -607,7 +608,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
         return FALSE;
     }
 
-  if (opt_ex_unified_core)
+  if (opt_unified_core)
     {
       if (!rpmostree_context_import (self->corectx, cancellable, error))
         return FALSE;
@@ -878,9 +879,9 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 
   /* rojig implies unified core mode currently */
   if (opt_ex_jigdo_output_rpm || opt_ex_jigdo_output_set)
-    opt_ex_unified_core = TRUE;
+    opt_unified_core = TRUE;
 
-  if (opt_ex_unified_core)
+  if (opt_unified_core)
     {
       if (opt_workdir)
         g_printerr ("note: --workdir is ignored for --ex-unified-core\n");
@@ -1012,7 +1013,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
 {
   if (getuid () != 0)
     {
-      if (!opt_ex_unified_core)
+      if (!opt_unified_core)
         return glnx_throw (error, "This command requires root privileges");
       g_printerr ("NOTICE: Running this command as non-root is currently known not to work completely.\n");
       g_printerr ("NOTICE: Proceeding anyways.\n");
@@ -1186,7 +1187,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
   g_assert_cmpint (self->treefile_context_dirs->len, >, 0);
   if (!rpmostree_treefile_postprocessing (self->rootfs_dfd, self->treefile_context_dirs->pdata[0],
                                           self->serialized_treefile, self->treefile,
-                                          next_version, opt_ex_unified_core,
+                                          next_version, opt_unified_core,
                                           cancellable, error))
     return glnx_prefix_error (error, "Postprocessing");
 
@@ -1296,7 +1297,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
 
   if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile, opt_ex_unified_core,
+  if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile, opt_unified_core,
                                     cancellable, error))
     return FALSE;
 
@@ -1494,7 +1495,7 @@ rpmostree_compose_builtin_postprocess (int             argc,
     return FALSE;
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostree_postprocess_final (rootfs_dfd, treefile, opt_ex_unified_core,
+  if (!rpmostree_postprocess_final (rootfs_dfd, treefile, opt_unified_core,
                                     cancellable, error))
     return FALSE;
   return TRUE;

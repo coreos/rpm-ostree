@@ -20,7 +20,7 @@ pyappendjsonmember "packages" '["test-pkg"]'
 pysetjsonmember "documentation" 'False'
 # Need unified core for this, as well as a cachedir
 mkdir cache
-runcompose --ex-unified-core --cachedir $(pwd)/cache --add-metadata-string version=42.0
+runcompose --unified-core --cachedir $(pwd)/cache --add-metadata-string version=42.0
 npkgs=$(rpm-ostree --repo=${repobuild} db list ${treeref} |grep -v '^ostree commit' | wc -l)
 echo "npkgs=${npkgs}"
 rpm-ostree --repo=${repobuild} db list ${treeref} test-pkg >test-pkg-list.txt
@@ -71,7 +71,7 @@ build_rpm test-newpkg \
           files "/usr/bin/test-newpkg" \
           install "mkdir -p %{buildroot}/usr/bin && echo new localpkg data > %{buildroot}/usr/bin/test-newpkg"
 pyappendjsonmember "packages" '["test-newpkg"]'
-runcompose --ex-unified-core --cachedir $(pwd)/cache --add-metadata-string version=42.1
+runcompose --unified-core --cachedir $(pwd)/cache --add-metadata-string version=42.1
 newrev=$(ostree --repo=${repobuild} rev-parse ${treeref})
 rpm-ostree --repo=${repobuild} db list ${treeref} test-newpkg >test-newpkg-list.txt
 assert_file_has_content test-newpkg-list.txt 'test-newpkg-1.0-1.x86_64'
@@ -104,7 +104,7 @@ echo "ok rojig ♲📦 update!"
 
 # Add all docs to test https://github.com/projectatomic/rpm-ostree/issues/1197
 pysetjsonmember "documentation" 'True'
-runcompose --ex-unified-core --cachedir $(pwd)/cache --add-metadata-string version=42.2
+runcompose --unified-core --cachedir $(pwd)/cache --add-metadata-string version=42.2
 newrev=$(ostree --repo=${repobuild} rev-parse ${treeref})
 do_commit2rojig ${newrev}
 find rojig-output -name '*.rpm' | tee rpms.txt
