@@ -145,6 +145,21 @@ rpmostree_bwrap_append_child_argv (RpmOstreeBwrap *bwrap, ...)
   va_end (args);
 }
 
+void
+rpmostree_bwrap_append_child_argva (RpmOstreeBwrap *bwrap, int argc, char **argv)
+{
+  g_assert (!bwrap->executed);
+  g_assert_cmpint (argc, >=, 0);
+  while (argc > 0)
+    {
+      const char *arg = *argv;
+      g_assert (arg);
+      g_ptr_array_add (bwrap->argv, g_strdup (arg));
+      argc--;
+      argv++;
+    }
+}
+
 static void
 child_setup_fchdir (gpointer user_data)
 {

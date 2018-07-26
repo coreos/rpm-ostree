@@ -400,6 +400,17 @@ run_script_in_bwrap_container (int rootfs_fd,
       data.all_fds_initialized = TRUE;
       rpmostree_bwrap_set_child_setup (bwrap, script_child_setup, &data);
 
+      const char *script_trace = g_getenv ("RPMOSTREE_SCRIPT_TRACE");
+      if (script_trace)
+        {
+          int trace_argc = 0;
+          char **trace_argv = NULL;
+          if (!g_shell_parse_argv (script_trace, &trace_argc, &trace_argv, error))
+            return glnx_prefix_error (error, "Parsing '%s'", script_trace);
+          rpmostree_bwrap_append_child_argva (bwrap, trace_argc, trace_argv);
+          g_strfreev (trace_argv);
+        }
+
       rpmostree_bwrap_append_child_argv (bwrap,
                                          interp,
                                          postscript_path_container,
