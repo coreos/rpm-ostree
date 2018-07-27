@@ -23,6 +23,7 @@
 #include <string.h>
 #include <glib-unix.h>
 #include <json-glib/json-glib.h>
+#include <gio/gunixinputstream.h>
 #include <gio/gunixoutputstream.h>
 #include <libdnf/libdnf.h>
 #include <libdnf/dnf-repo.h>
@@ -125,6 +126,9 @@ typedef struct {
   char *rojig_spec;
   char *previous_checksum;
 
+#ifdef HAVE_RUST
+  RpmOstreeRsTreefile *treefile_rs;
+#endif
   JsonParser *treefile_parser;
   JsonNode *treefile_rootval; /* Unowned */
   JsonObject *treefile; /* Unowned */
@@ -155,6 +159,9 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_free (ctx->ref);
   g_free (ctx->rojig_spec);
   g_free (ctx->previous_checksum);
+#ifdef HAVE_RUST
+  g_clear_pointer (&ctx->treefile_rs, (GDestroyNotify) rpmostree_rs_treefile_free);
+#endif
   g_clear_object (&ctx->treefile_parser);
   g_clear_pointer (&ctx->serialized_treefile, (GDestroyNotify)g_bytes_unref);
   g_free (ctx);
@@ -682,11 +689,7 @@ parse_treefile_to_json (RpmOstreeTreeComposeContext  *self,
                         JsonParser   **out_parser,
                         GError       **error)
 {
-#ifdef HAVE_RUST
-  g_autofree char *fdpath = NULL;
-  g_auto(GLnxTmpfile) json_contents = { 0, };
-#endif
-
+  g_autoptr(JsonParser) parser = json_parser_new ();
   if (g_str_has_suffix (treefile_path, ".yaml") ||
       g_str_has_suffix (treefile_path, ".yml"))
     {
@@ -694,22 +697,22 @@ parse_treefile_to_json (RpmOstreeTreeComposeContext  *self,
       return glnx_throw (error, "This version of rpm-ostree was built without "
                                 "rust, and doesn't support YAML treefiles");
 #else
-      if (!glnx_open_anonymous_tmpfile (O_RDWR | O_CLOEXEC, &json_contents, error))
-        return FALSE;
-
       const char *arch = self ? dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx)) : NULL;
-      if (!rpmostree_rs_treefile_read (treefile_path, arch,
-                                       json_contents.fd, error))
+      self->treefile_rs = rpmostree_rs_treefile_new (treefile_path, arch, error);
+      if (!self->treefile_rs)
         return glnx_prefix_error (error, "Failed to load YAML treefile");
 
-      /* or just lseek back to 0 and use json_parser_load_from_data here? */
-      treefile_path = fdpath = g_strdup_printf ("/proc/self/fd/%d", json_contents.fd);
+      g_autoptr(GInputStream) json_s = g_unix_input_stream_new (rpmostree_rs_treefile_get_json_fd (self->treefile_rs), FALSE);
+
+      if (!json_parser_load_from_stream (parser, json_s, NULL, error))
+        return FALSE;
 #endif
     }
-
-  g_autoptr(JsonParser) parser = json_parser_new ();
-  if (!json_parser_load_from_file (parser, treefile_path, error))
-    return FALSE;
+  else
+    {
+      if (!json_parser_load_from_file (parser, treefile_path, error))
+        return FALSE;
+    }
 
   *out_parser = g_steal_pointer (&parser);
   return TRUE;

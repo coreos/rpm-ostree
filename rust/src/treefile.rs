@@ -22,11 +22,17 @@
 
 use serde_json;
 use serde_yaml;
-
+use std::io::prelude::*;
 use std::path::Path;
 use std::{fs, io};
+use tempfile;
 
 const ARCH_X86_64: &'static str = "x86_64";
+
+pub struct Treefile {
+    pub json_fd: fs::File,
+    pub parsed: TreeComposeConfig,
+}
 
 /// Parse a YAML treefile definition using architecture `arch`.
 fn treefile_parse_yaml<R: io::Read>(input: R, arch: Option<&str>) -> io::Result<TreeComposeConfig> {
@@ -77,15 +83,19 @@ fn treefile_parse_yaml<R: io::Read>(input: R, arch: Option<&str>) -> io::Result<
     Ok(treefile)
 }
 
-pub fn treefile_read_impl<W: io::Write>(
-    filename: &Path,
-    arch: Option<&str>,
-    output: W,
-) -> io::Result<()> {
+pub fn treefile_read_impl(filename: &Path, arch: Option<&str>) -> io::Result<Box<Treefile>> {
     let f = io::BufReader::new(fs::File::open(filename)?);
-    let treefile = treefile_parse_yaml(f, arch)?;
-    serde_json::to_writer_pretty(output, &treefile)?;
-    Ok(())
+    let parsed = treefile_parse_yaml(f, arch)?;
+    let mut tmpf = tempfile::tempfile()?;
+    {
+        let output = io::BufWriter::new(&tmpf);
+        serde_json::to_writer_pretty(output, &parsed)?;
+    }
+    tmpf.seek(io::SeekFrom::Start(0))?;
+    Ok(Box::new(Treefile {
+        parsed: parsed,
+        json_fd: tmpf,
+    }))
 }
 
 fn whitespace_split_packages(pkgs: &[String]) -> Vec<String> {

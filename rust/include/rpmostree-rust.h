@@ -20,6 +20,13 @@
 
 #pragma once
 
-int rpmostree_rs_treefile_read (const char *filename,
-                                const char *arch,
-                                int output_fd, GError **error);
+typedef struct RpmOstreeRsTreefile RpmOstreeRsTreefile;
+
+RpmOstreeRsTreefile *rpmostree_rs_treefile_new (const char *filename,
+                                                const char *arch,
+                                                GError **error);
+
+int rpmostree_rs_treefile_get_json_fd (RpmOstreeRsTreefile *tf);
+
+void rpmostree_rs_treefile_free (RpmOstreeRsTreefile *tf);
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRsTreefile, rpmostree_rs_treefile_free);

@@ -49,6 +49,7 @@ fn error_to_glib(e: &Error, gerror: *mut *mut glib_sys::GError) {
     }
 }
 
+#[allow(dead_code)]
 pub fn int_glib_error<T, E>(res: Result<T, E>, gerror: *mut *mut glib_sys::GError) -> libc::c_int
 where
     E: std::error::Error,
