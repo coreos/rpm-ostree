@@ -73,7 +73,7 @@ pub extern "C" fn rpmostree_rs_treefile_read(
     let file = unsafe { fs::File::from_raw_fd(fd) };
     let r = {
         let output = io::BufWriter::new(&file);
-        treefile_read_impl(filename.as_ref(), arch, output).to_glib_convention(error)
+        int_glib_error(treefile_read_impl(filename.as_ref(), arch, output), error)
     };
     file.into_raw_fd(); // Drop ownership of the FD again
     r
