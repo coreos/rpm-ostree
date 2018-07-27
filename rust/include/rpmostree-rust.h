@@ -24,9 +24,12 @@ typedef struct RpmOstreeRsTreefile RpmOstreeRsTreefile;
 
 RpmOstreeRsTreefile *rpmostree_rs_treefile_new (const char *filename,
                                                 const char *arch,
-                                                GError **error);
+                                                int         workdir_dfd,
+                                                GError    **error);
 
 int rpmostree_rs_treefile_to_json (RpmOstreeRsTreefile *tf, GError **error);
+
+const char *rpmostree_rs_treefile_get_rojig_spec_path (RpmOstreeRsTreefile *tf);
 
 void rpmostree_rs_treefile_free (RpmOstreeRsTreefile *tf);
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRsTreefile, rpmostree_rs_treefile_free);

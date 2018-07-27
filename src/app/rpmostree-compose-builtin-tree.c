@@ -124,6 +124,7 @@ typedef struct {
   OstreeRepoDevInoCache *devino_cache;
   char *ref;
   char *rojig_spec;
+  gboolean rojig_spec_in_workdir;
   char *previous_checksum;
 
 #ifdef HAVE_RUST
@@ -698,7 +699,9 @@ parse_treefile_to_json (RpmOstreeTreeComposeContext  *self,
                                 "rust, and doesn't support YAML treefiles");
 #else
       const char *arch = self ? dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx)) : NULL;
-      self->treefile_rs = rpmostree_rs_treefile_new (treefile_path, arch, error);
+      self->treefile_rs = rpmostree_rs_treefile_new (treefile_path, arch,
+                                                     self->workdir_tmp.fd,
+                                                     error);
       if (!self->treefile_rs)
         return glnx_prefix_error (error, "Failed to load YAML treefile");
 
@@ -998,14 +1001,15 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   const char *rojig_spec = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "ex-rojig-spec", &rojig_spec, error))
     return FALSE;
-  if (!rojig_spec)
-    {
-      /* Backcompat for a little while */
-      if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "ex-jigdo-spec", &rojig_spec, error))
-        return FALSE;
-    }
   if (rojig_spec)
     self->rojig_spec = g_build_filename (gs_file_get_path_cached (treefile_dir), rojig_spec, NULL);
+  #ifdef HAVE_RUST
+  else if (self->treefile_rs)
+    {
+      self->rojig_spec = g_strdup (rpmostree_rs_treefile_get_rojig_spec_path (self->treefile_rs));
+      self->rojig_spec_in_workdir = TRUE;
+    }
+  #endif
 
   *out_context = g_steal_pointer (&self);
   return TRUE;
@@ -1363,7 +1367,9 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
       if (!self->rojig_spec)
         return glnx_throw (error, "No ex-rojig-spec provided");
       if (!rpmostree_commit2rojig (self->repo, self->pkgcache_repo,
-                                   new_revision, self->rojig_spec,
+                                   new_revision,
+                                   self->rojig_spec_in_workdir ? self->workdir_dfd : AT_FDCWD,
+                                   self->rojig_spec,
                                    rojig_outputdir,
                                    cancellable, error))
         return FALSE;

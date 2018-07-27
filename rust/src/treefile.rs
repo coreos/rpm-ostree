@@ -20,17 +20,20 @@
  * https://github.com/cgwalters/coreos-assembler
  * */
 
+use openat;
 use serde_json;
 use serde_yaml;
 use std::io::prelude::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::{fs, io};
 use tempfile;
 
 const ARCH_X86_64: &'static str = "x86_64";
 
 pub struct Treefile {
+    pub workdir: openat::Dir,
     pub parsed: TreeComposeConfig,
+    pub rojig_spec: Option<PathBuf>,
 }
 
 /// Parse a YAML treefile definition using architecture `arch`.
@@ -40,7 +43,7 @@ fn treefile_parse_yaml<R: io::Read>(input: R, arch: Option<&str>) -> io::Result<
         Err(e) => {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("{}", e),
+                format!("serde: {}", e),
             ))
         }
     };
@@ -83,10 +86,23 @@ fn treefile_parse_yaml<R: io::Read>(input: R, arch: Option<&str>) -> io::Result<
 }
 
 impl Treefile {
-    pub fn new_boxed(filename: &Path, arch: Option<&str>) -> io::Result<Box<Treefile>> {
+    pub fn new_boxed(
+        filename: &Path,
+        arch: Option<&str>,
+        workdir: openat::Dir,
+    ) -> io::Result<Box<Treefile>> {
         let f = io::BufReader::new(fs::File::open(filename)?);
         let parsed = treefile_parse_yaml(f, arch)?;
-        Ok(Box::new(Treefile { parsed: parsed }))
+        let rojig_spec = if let &Some(ref rojig) = &parsed.rojig {
+            Some(Treefile::write_rojig_spec(&workdir, rojig)?)
+        } else {
+            None
+        };
+        Ok(Box::new(Treefile {
+            parsed: parsed,
+            workdir: workdir,
+            rojig_spec: rojig_spec,
+        }))
     }
 
     pub fn serialize_json_fd(&self) -> io::Result<fs::File> {
@@ -97,6 +113,51 @@ impl Treefile {
         }
         tmpf.seek(io::SeekFrom::Start(0))?;
         Ok(tmpf)
+    }
+
+    fn write_rojig_spec<'a, 'b>(workdir: &'a openat::Dir, r: &'b Rojig) -> io::Result<PathBuf> {
+        let description = r.description
+            .as_ref()
+            .and_then(|v| if v.len() > 0 { Some(v.as_str()) } else { None })
+            .unwrap_or(r.summary.as_str());
+        let name: PathBuf = format!("{}.spec", r.name).into();
+        {
+            let mut f = workdir.write_file(&name, 0644)?;
+            write!(
+                f,
+                r###"
+# The canonical version of this is maintained by rpm-ostree.
+# Suppress most build root processing we are just carrying
+# binary data.
+%global __os_install_post /usr/lib/rpm/brp-compress %{{nil}}
+Name: {rpmostree_rojig_name}
+Version:	%{{ostree_version}}
+Release:	1%{{?dist}}
+Summary:	{rpmostree_rojig_summary}
+License:	{rpmostree_rojig_license}
+#@@@rpmostree_rojig_meta@@@
+
+%description
+{rpmostree_rojig_description}
+
+%prep
+
+%build
+
+%install
+mkdir -p %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}
+for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; done
+
+%files
+%{{_prefix}}/lib/ostree-jigdo/%{{name}}
+"###,
+                rpmostree_rojig_name = r.name,
+                rpmostree_rojig_summary = r.summary,
+                rpmostree_rojig_license = r.license,
+                rpmostree_rojig_description = description,
+            )?;
+        }
+        Ok(name)
     }
 }
 
@@ -144,6 +205,14 @@ pub struct CheckPasswd {
     // entries: Option<Map<>String>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Rojig {
+    pub name: String,
+    pub summary: String,
+    pub license: String,
+    pub description: Option<String>,
+}
+
 // https://github.com/serde-rs/serde/issues/368
 fn serde_true() -> bool {
     true
@@ -155,6 +224,9 @@ pub struct TreeComposeConfig {
     // Compose controls
     #[serde(rename = "ref")]
     pub treeref: String,
+    // Optional rojig data
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rojig: Option<Rojig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     repos: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -323,4 +395,52 @@ packages-s390x:
 "###,
         );
     }
+
+    struct TreefileTest {
+        tf: Box<Treefile>,
+        #[allow(dead_code)]
+        workdir: tempfile::TempDir,
+    }
+
+    impl TreefileTest {
+        fn new<'a, 'b>(contents: &'a str, arch: Option<&'b str>) -> io::Result<TreefileTest> {
+            let workdir = tempfile::tempdir()?;
+            let tf_path = workdir.path().join("treefile.yaml");
+            {
+                let mut tf_stream = io::BufWriter::new(fs::File::create(&tf_path)?);
+                tf_stream.write_all(contents.as_bytes())?;
+            }
+            let tf =
+                Treefile::new_boxed(tf_path.as_path(), arch, openat::Dir::open(workdir.path())?)?;
+            Ok(TreefileTest { tf, workdir })
+        }
+    }
+
+    #[test]
+    fn test_treefile_new() {
+        let t = TreefileTest::new(VALID_PRELUDE, None).unwrap();
+        let tf = &t.tf;
+        assert!(tf.parsed.rojig.is_none());
+        assert!(tf.rojig_spec.is_none());
+    }
+
+    #[test]
+    fn test_treefile_new_rojig() {
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r###"
+rojig:
+  name: "exampleos"
+  license: "MIT"
+  summary: "ExampleOS rojig base image"
+"###,
+        );
+        let t = TreefileTest::new(buf.as_str(), None).unwrap();
+        let tf = &t.tf;
+        let rojig = tf.parsed.rojig.as_ref().unwrap();
+        assert!(rojig.name == "exampleos");
+        let rojig_spec = tf.rojig_spec.as_ref().unwrap();
+        assert!(rojig_spec.file_name().unwrap() == "exampleos.spec");
+    }
+
 }
