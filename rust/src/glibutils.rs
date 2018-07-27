@@ -26,6 +26,7 @@ use libc;
 use std;
 use std::error::Error;
 use std::ffi::CString;
+use std::ptr;
 
 // Functions to map Rust's Error into the "GError convention":
 // https://developer.gnome.org/glib/stable/glib-Error-Reporting.html
@@ -61,6 +62,19 @@ where
     }
 }
 
+pub fn ptr_glib_error<T, E>(res: Result<Box<T>, E>, gerror: *mut *mut glib_sys::GError) -> *mut T
+where
+    E: std::error::Error,
+{
+    match res {
+        Ok(v) => Box::into_raw(v),
+        Err(ref e) => {
+            error_to_glib(e, gerror);
+            ptr::null_mut()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,8 +82,30 @@ mod tests {
     use std::error::Error;
     use std::{io, ptr};
 
+    struct Foo {
+        pub v: u32,
+    }
+    impl Foo {
+        pub fn new() -> Foo {
+            Foo { v: 42 }
+        }
+    }
+
     #[test]
-    fn no_error() {
+    fn no_error_ptr() {
+        let v = Box::new(Foo::new());
+        let r: io::Result<Box<Foo>> = Ok(v);
+        let mut error: *mut glib_sys::GError = ptr::null_mut();
+        let rawp = ptr_glib_error(r, &mut error);
+        assert!(error.is_null());
+        assert!(!rawp.is_null());
+        // And free it
+        let revived_r = unsafe { &*rawp };
+        assert!(revived_r.v == 42);
+    }
+
+    #[test]
+    fn no_error_int() {
         let r: io::Result<()> = Ok(());
         let mut error: *mut glib_sys::GError = ptr::null_mut();
         assert_eq!(int_glib_error(r, &mut error), 1);
@@ -77,10 +113,24 @@ mod tests {
     }
 
     #[test]
-    fn throw_error() {
+    fn throw_error_int() {
         let r: io::Result<()> = Err(io::Error::new(io::ErrorKind::Other, "oops"));
         let mut error: *mut glib_sys::GError = ptr::null_mut();
         assert_eq!(int_glib_error(r, &mut error), 0);
+        unsafe {
+            assert!(!error.is_null());
+            assert_eq!((*error).domain, gio_sys::g_io_error_quark());
+            assert_eq!((*error).code, gio_sys::G_IO_ERROR_FAILED);
+            let e = glib::Error::wrap(error);
+            assert_eq!(e.description(), "oops");
+        }
+    }
+
+    #[test]
+    fn throw_error_ptr() {
+        let r: io::Result<Box<Foo>> = Err(io::Error::new(io::ErrorKind::Other, "oops"));
+        let mut error: *mut glib_sys::GError = ptr::null_mut();
+        assert_eq!(ptr_glib_error(r, &mut error), ptr::null_mut());
         unsafe {
             assert!(!error.is_null());
             assert_eq!((*error).domain, gio_sys::g_io_error_quark());
