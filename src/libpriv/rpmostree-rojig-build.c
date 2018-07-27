@@ -597,6 +597,7 @@ pkg_get_requires_isa (RpmOstreeCommit2RojigContext *self,
  */
 static char *
 generate_spec (RpmOstreeCommit2RojigContext  *self,
+               int                            spec_dfd,
                const char                    *spec_path,
                const char                    *ostree_commit_sha256,
                GPtrArray                     *rojig_packages,
@@ -604,7 +605,7 @@ generate_spec (RpmOstreeCommit2RojigContext  *self,
                GError                       **error)
 {
   g_autofree char *spec_contents =
-    glnx_file_get_contents_utf8_at (AT_FDCWD, spec_path, NULL,
+    glnx_file_get_contents_utf8_at (spec_dfd, spec_path, NULL,
                                     cancellable, error);
   if (!spec_contents)
     return NULL;
@@ -668,6 +669,7 @@ compare_pkgs (gconstpointer ap,
 static gboolean
 write_commit2rojig (RpmOstreeCommit2RojigContext *self,
                     const char                   *commit,
+                    int                           spec_dfd,
                     const char                   *oirpm_spec,
                     const char                   *outputdir,
                     gboolean                      only_contentdir,
@@ -975,7 +977,7 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
   if (!only_contentdir)
     {
       g_autofree char *tmp_spec =
-        generate_spec (self, oirpm_spec, commit, pkglist, cancellable, error);
+        generate_spec (self, spec_dfd, oirpm_spec, commit, pkglist, cancellable, error);
       if (!tmp_spec)
         return FALSE;
 
@@ -1066,6 +1068,7 @@ write_commit2rojig (RpmOstreeCommit2RojigContext *self,
 static gboolean
 impl_commit2rojig (RpmOstreeCommit2RojigContext *self,
                    const char                   *rev,
+                   int                           spec_dfd,
                    const char                   *oirpm_spec,
                    const char                   *outputdir,
                    GCancellable                 *cancellable,
@@ -1267,7 +1270,7 @@ impl_commit2rojig (RpmOstreeCommit2RojigContext *self,
   }
 
   /* Hardcode FALSE for opt_only_contentdir for now */
-  if (!write_commit2rojig (self, commit, oirpm_spec, outputdir, FALSE, pkglist,
+  if (!write_commit2rojig (self, commit, spec_dfd, oirpm_spec, outputdir, FALSE, pkglist,
                            new_reachable_small, new_big_content_identical,
                            cancellable, error))
     return FALSE;
@@ -1280,6 +1283,7 @@ gboolean
 rpmostree_commit2rojig (OstreeRepo   *repo,
                         OstreeRepo   *pkgcache_repo,
                         const char   *commit,
+                        int           spec_dfd,
                         const char   *spec,
                         const char   *outputdir,
                         GCancellable *cancellable,
@@ -1295,5 +1299,5 @@ rpmostree_commit2rojig (OstreeRepo   *repo,
                                                              (GDestroyNotify)g_free,(GDestroyNotify)pkg_objid_free);
   self->objsize_to_object = g_hash_table_new_full (NULL, NULL, NULL, (GDestroyNotify)g_free);
 
-  return impl_commit2rojig (self, commit, spec, outputdir, cancellable, error);
+  return impl_commit2rojig (self, commit, spec_dfd, spec, outputdir, cancellable, error);
 }

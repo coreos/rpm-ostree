@@ -20,6 +20,7 @@ extern crate gio_sys;
 extern crate glib;
 extern crate glib_sys;
 extern crate libc;
+extern crate openat;
 extern crate tempfile;
 
 #[macro_use]
@@ -30,7 +31,8 @@ extern crate serde_yaml;
 
 use std::ffi::{CStr, OsStr};
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::io::IntoRawFd;
+use std::os::unix::io::{FromRawFd, IntoRawFd};
+use std::{io, ptr};
 
 mod glibutils;
 use glibutils::*;
@@ -57,18 +59,36 @@ fn bytes_from_nonnull<'a>(s: *const libc::c_char) -> &'a [u8] {
     unsafe { CStr::from_ptr(s) }.to_bytes()
 }
 
+fn dir_from_dfd(fd: libc::c_int) -> io::Result<openat::Dir> {
+    let src = unsafe { openat::Dir::from_raw_fd(fd) };
+    let r = src.sub_dir(".")?;
+    let _ = src.into_raw_fd();
+    Ok(r)
+}
+
 #[no_mangle]
 pub extern "C" fn rpmostree_rs_treefile_new(
     filename: *const libc::c_char,
     arch: *const libc::c_char,
-    error: *mut *mut glib_sys::GError,
+    workdir_dfd: libc::c_int,
+    gerror: *mut *mut glib_sys::GError,
 ) -> *mut Treefile {
     // Convert arguments
     let filename = OsStr::from_bytes(bytes_from_nonnull(filename));
     let arch = str_from_nullable(arch);
+    let workdir = match dir_from_dfd(workdir_dfd) {
+        Ok(p) => p,
+        Err(e) => {
+            error_to_glib(&e, gerror);
+            return ptr::null_mut();
+        }
+    };
     // Run code, map error if any, otherwise extract raw pointer, passing
     // ownership back to C.
-    ptr_glib_error(Treefile::new_boxed(filename.as_ref(), arch), error)
+    ptr_glib_error(
+        Treefile::new_boxed(filename.as_ref(), arch, workdir),
+        gerror,
+    )
 }
 
 #[no_mangle]
@@ -84,6 +104,19 @@ pub extern "C" fn rpmostree_rs_treefile_to_json(
             error_to_glib(&e, gerror);
             -1 as libc::c_int
         }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rpmostree_rs_treefile_get_rojig_spec_path(
+    tf: *mut Treefile,
+) -> *const libc::c_char {
+    assert!(!tf.is_null());
+    let tf = unsafe { &mut *tf };
+    if let &Some(ref rojig) = &tf.rojig_spec {
+        rojig.as_os_str().as_bytes().as_ptr() as *const libc::c_char
+    } else {
+        ptr::null_mut()
     }
 }
 
