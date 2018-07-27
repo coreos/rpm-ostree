@@ -20,6 +20,7 @@ extern crate gio_sys;
 extern crate glib;
 extern crate glib_sys;
 extern crate libc;
+extern crate tempfile;
 
 #[macro_use]
 extern crate serde_derive;
@@ -29,13 +30,12 @@ extern crate serde_yaml;
 
 use std::ffi::{CStr, OsStr};
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::io::{FromRawFd, IntoRawFd};
-use std::{fs, io};
+use std::os::unix::io::IntoRawFd;
 
 mod glibutils;
 use glibutils::*;
 mod treefile;
-use treefile::treefile_read_impl;
+use treefile::*;
 
 /* Wrapper functions for translating from C to Rust */
 
@@ -58,23 +58,41 @@ fn bytes_from_nonnull<'a>(s: *const libc::c_char) -> &'a [u8] {
 }
 
 #[no_mangle]
-pub extern "C" fn rpmostree_rs_treefile_read(
+pub extern "C" fn rpmostree_rs_treefile_new(
     filename: *const libc::c_char,
     arch: *const libc::c_char,
-    fd: libc::c_int,
     error: *mut *mut glib_sys::GError,
-) -> libc::c_int {
+) -> *mut Treefile {
     // Convert arguments
     let filename = OsStr::from_bytes(bytes_from_nonnull(filename));
     let arch = str_from_nullable(arch);
-    // Using an O_TMPFILE is an easy way to avoid ownership transfer issues w/
-    // returning allocated memory across the Rust/C boundary; the dance with
-    // `file` is to avoid dup()ing the fd unnecessarily.
-    let file = unsafe { fs::File::from_raw_fd(fd) };
-    let r = {
-        let output = io::BufWriter::new(&file);
-        int_glib_error(treefile_read_impl(filename.as_ref(), arch, output), error)
-    };
-    file.into_raw_fd(); // Drop ownership of the FD again
-    r
+    // Run code, map error if any, otherwise extract raw pointer, passing
+    // ownership back to C.
+    ptr_glib_error(Treefile::new_boxed(filename.as_ref(), arch), error)
+}
+
+#[no_mangle]
+pub extern "C" fn rpmostree_rs_treefile_to_json(
+    tf: *mut Treefile,
+    gerror: *mut *mut glib_sys::GError,
+) -> libc::c_int {
+    assert!(!tf.is_null());
+    let tf = unsafe { &mut *tf };
+    match tf.serialize_json_fd() {
+        Ok(f) => f.into_raw_fd() as libc::c_int,
+        Err(e) => {
+            error_to_glib(&e, gerror);
+            -1 as libc::c_int
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rpmostree_rs_treefile_free(tf: *mut Treefile) {
+    if tf.is_null() {
+        return;
+    }
+    unsafe {
+        Box::from_raw(tf);
+    }
 }
