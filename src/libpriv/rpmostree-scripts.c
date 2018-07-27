@@ -102,11 +102,25 @@ typedef struct {
 } RpmOstreeLuaReplacement;
 
 static const RpmOstreeLuaReplacement lua_replacements[] = {
-  /* No bug yet */
+  /* These three don't have bugs...the release packages are implemented Lua for
+   * unnecessary reasons.  This doesn't fully generalize obviously arbitrarly
+   * release packages, but anyone doing an exampleos-release package can just implement
+   * `ln` in shell script in their package.
+   */
   { "fedora-release-atomichost.post",
     "/usr/bin/sh",
     "set -euo pipefail\n"
-    "ln -s os.release.d/os-release-atomichost /usr/lib/os-release\n"
+    "ln -sf os.release.d/os-release-atomichost /usr/lib/os-release\n"
+  },
+  { "fedora-release-workstation.post",
+    "/usr/bin/sh",
+    "set -euo pipefail\n"
+    "ln -sf os.release.d/os-release-workstation /usr/lib/os-release\n"
+  },
+  { "fedora-release.post",
+    "/usr/bin/sh",
+    "set -euo pipefail\n"
+    "if ! test -L /usr/lib/os-release; then ln -s os.release.d/os-release-fedora /usr/lib/os-release; fi\n"
   },
   /* Upstream bug for replacing lua with shell: https://bugzilla.redhat.com/show_bug.cgi?id=1367585
    * Further note that the current glibc code triggers a chain of bugs
