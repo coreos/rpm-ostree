@@ -34,12 +34,14 @@ vm_build_rpm layered-enh
 vm_build_rpm layered-sec-none
 vm_build_rpm layered-sec-low
 vm_build_rpm layered-sec-crit
+vm_build_rpm layered-constant # this one we won't update
 vm_rpmostree rebase vmcheckmote:vmcheck \
   --install layered-cake \
   --install layered-enh \
   --install layered-sec-none \
   --install layered-sec-low \
-  --install layered-sec-crit
+  --install layered-sec-crit \
+  --install layered-constant
 if vm_cmd 'grep -qE -e "^StageDeployments=true" /etc/rpm-ostreed.conf'; then
     vm_cmd systemctl is-active ostree-finalize-staged.service
 fi
@@ -48,7 +50,7 @@ vm_rpmostree status -v
 vm_assert_status_jq \
     '.deployments[0]["origin"] == "vmcheckmote:vmcheck"' \
     '.deployments[0]["version"] == "v1"' \
-    '.deployments[0]["packages"]|length == 5' \
+    '.deployments[0]["packages"]|length == 6' \
     '.deployments[0]["packages"]|index("layered-cake") >= 0'
 echo "ok prep"
 
@@ -143,6 +145,8 @@ assert_output() {
     "               VMCHECK-SEC-LOW   Low        layered-sec-low-2.0-1.x86_64" \
     "               VMCHECK-SEC-CRIT  Critical   layered-sec-crit-2.0-1.x86_64"
 
+  assert_not_file_has_content out-verbose.txt "layered-constant 1.0-1 -> 1.0-1"
+
   # make sure any future call doesn't forget to create fresh ones
   rm -f out.txt out-verbose.txt
 }
@@ -209,6 +213,8 @@ assert_output2() {
     'Removed: base-pkg-baz-1.1-1.x86_64' \
     'Added: base-pkg-boo-3.7-2.11.x86_64'
 
+  assert_not_file_has_content out-verbose.txt "layered-constant 1.0-1 -> 1.0-1"
+
   # make sure any future call doesn't forget to create fresh ones
   rm -f out.txt out-verbose.txt
 }
@@ -235,7 +241,7 @@ assert_default_deployment_is_update() {
   vm_assert_status_jq \
     '.deployments[0]["origin"] == "vmcheckmote:vmcheck"' \
     '.deployments[0]["version"] == "v2"' \
-    '.deployments[0]["packages"]|length == 5' \
+    '.deployments[0]["packages"]|length == 6' \
     '.deployments[0]["packages"]|index("layered-cake") >= 0'
   vm_rpmostree db list $(vm_get_pending_csum) > list.txt
   assert_file_has_content list.txt 'layered-cake-2.1-4.x86_64'

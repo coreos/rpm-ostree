@@ -571,17 +571,33 @@ modified_dnfpkg_variant_new (RpmOstreePkgTypes type,
                      dnf_package_get_arch (pkg_new)));
 }
 
-static void
-rpm_diff_add_base_db_diff (RpmDiff    *diff,
-                           /* element-type RpmOstreePackage */
-                           GPtrArray  *removed,
-                           GPtrArray  *added,
-                           GPtrArray  *modified_old,
-                           GPtrArray  *modified_new)
+static gboolean
+rpm_diff_add_db_diff (RpmDiff      *diff,
+                      OstreeRepo   *repo,
+                      RpmOstreePkgTypes type,
+                      const char   *old_checksum,
+                      const char   *new_checksum,
+                      GPtrArray   **out_modified_new,
+                      GCancellable *cancellable,
+                      GError      **error)
 {
-  g_assert_cmpuint (modified_old->len, ==, modified_new->len);
+  g_autoptr(GPtrArray) removed = NULL;
+  g_autoptr(GPtrArray) added = NULL;
+  g_autoptr(GPtrArray) modified_old = NULL;
+  g_autoptr(GPtrArray) modified_new = NULL;
 
-  RpmOstreePkgTypes type = RPM_OSTREE_PKG_TYPE_BASE;
+  /* Use allow_noent; we'll just skip over the rpm diff if there's no data */
+  RpmOstreeDbDiffExtFlags flags = RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT;
+  if (!rpm_ostree_db_diff_ext (repo, old_checksum, new_checksum, flags,
+                               &removed, &added, &modified_old, &modified_new,
+                               cancellable, error))
+    return FALSE;
+
+  /* check if allow_noent kicked in */
+  if (!removed)
+    return TRUE; /* NB: early return */
+
+  g_assert_cmpuint (modified_old->len, ==, modified_new->len);
   for (guint i = 0; i < removed->len; i++)
     g_ptr_array_add (diff->removed, single_pkg_variant_new (type, removed->pdata[i]));
   for (guint i = 0; i < added->len; i++)
@@ -597,6 +613,10 @@ rpm_diff_add_base_db_diff (RpmDiff    *diff,
         g_ptr_array_add (diff->downgraded,
                          modified_pkg_variant_new (type, old_pkg, new_pkg));
     }
+
+  if (out_modified_new)
+    *out_modified_new = g_steal_pointer (&modified_new);
+  return TRUE;
 }
 
 static void
@@ -742,58 +762,6 @@ rpmmd_diff_guess (OstreeRepo       *repo,
 
       g_ptr_array_add (newer_packages, g_object_ref (newer_pkg));
       rpm_diff_add_layered_diff (rpm_diff, pkg, newer_pkg);
-    }
-
-  /* canonicalize to NULL if there's nothing new */
-  if (newer_packages->len == 0)
-    g_clear_pointer (&newer_packages, (GDestroyNotify)g_ptr_array_unref);
-
-  *out_newer_packages = g_steal_pointer (&newer_packages);
-  return TRUE;
-}
-
-/* If we have a staged deployment, then those are our new pkgs already. All we need to do is
- * just find them in the rpmmd for advisory purposes. */
-static gboolean
-rpmmd_diff_exact (OstreeRepo       *repo,
-                  const char       *base_checksum,
-                  const char       *layered_checksum,
-                  DnfSack          *sack,
-                  RpmDiff          *rpm_diff,
-                  GPtrArray       **out_newer_packages,
-                  GError          **error)
-{
-  g_autoptr(GPtrArray) all_layered_pkgs = NULL;
-  RpmOstreeDbDiffExtFlags flags = RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT;
-  if (!rpm_ostree_db_diff_ext (repo, base_checksum, layered_checksum, flags, NULL,
-                               &all_layered_pkgs, NULL, NULL, NULL, error))
-    return FALSE;
-
-  if (all_layered_pkgs == NULL || /* -> older layer before we injected pkglist metadata */
-      all_layered_pkgs->len == 0) /* -> no layered pkgs, e.g. override remove only */
-    {
-      *out_newer_packages = NULL;
-      return TRUE; /* note early return */
-    }
-
-  g_autoptr(GPtrArray) newer_packages =
-    g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-  for (guint i = 0; i < all_layered_pkgs->len; i++)
-    {
-      RpmOstreePackage *pkg = all_layered_pkgs->pdata[i];
-      g_autoptr(DnfPackage) dnfpkg = find_package (sack, FALSE, pkg);
-      if (!dnfpkg)
-        {
-         /* We *should* be able to always find the pkg since we're probably using the same
-          * rpmmd that was used to derive the layer in the first place. Handle gracefully if
-          * somehow we don't, but log to journal. */
-          sd_journal_print (LOG_WARNING, "Failed to find layered pkg %s in rpmmd.",
-                            rpm_ostree_package_get_nevra (pkg));
-          continue;
-        }
-
-      g_ptr_array_add (newer_packages, g_object_ref (dnfpkg));
-      rpm_diff_add_layered_diff (rpm_diff, pkg, dnfpkg);
     }
 
   /* canonicalize to NULL if there's nothing new */
@@ -1058,43 +1026,39 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
   g_auto(RpmDiff) rpm_diff = {0, };
   rpm_diff_init (&rpm_diff);
 
-  /* we'll need this later for advisories, so just keep it around */
+  /* we'll need these later for advisories, so just keep them around */
   g_autoptr(GPtrArray) ostree_modified_new = NULL;
-  if (is_new_checksum)
-    {
-      g_autoptr(GPtrArray) removed = NULL;
-      g_autoptr(GPtrArray) added = NULL;
-      g_autoptr(GPtrArray) modified_old = NULL;
-
-      /* Note we allow_noent here; we'll just skip over the rpm diff if there's no data */
-      RpmOstreeDbDiffExtFlags flags = RPM_OSTREE_DB_DIFF_EXT_ALLOW_NOENT;
-      if (!rpm_ostree_db_diff_ext (repo, current_base_checksum, new_base_checksum, flags,
-                                   &removed, &added, &modified_old, &ostree_modified_new,
-                                   cancellable, error))
-        return FALSE;
-
-      /* check if allow_noent kicked in */
-      if (removed)
-        rpm_diff_add_base_db_diff (&rpm_diff, removed, added,
-                                   modified_old, ostree_modified_new);
-    }
-
-  /* now we look at the rpm-md side */
-
   g_autoptr(GPtrArray) rpmmd_modified_new = NULL;
 
-  GHashTable *layered_pkgs = rpmostree_origin_get_packages (origin);
-  /* check that it's actually layered (i.e. the requests are not all just dormant) */
-  if (sack && is_new_layered && g_hash_table_size (layered_pkgs) > 0)
+  if (staged_deployment)
     {
-      if (staged_deployment)
+      /* ok we have a staged deployment; we just need to do a simple diff and BOOM done! */
+      /* XXX: we're marking all pkgs as BASE right now even though there could be layered
+       * pkgs too -- we can tease those out in the future if needed */
+      if (!rpm_diff_add_db_diff (&rpm_diff, repo, RPM_OSTREE_PKG_TYPE_BASE,
+                                 current_checksum, new_checksum, &ostree_modified_new,
+                                 cancellable, error))
+        return FALSE;
+    }
+  else
+    {
+      /* no staged deployment; we do our best to come up with a diff:
+       *  - if a new base checksum was pulled, do a db diff of the old and new bases
+       *  - if there are currently any layered pkgs, lookup in sack for newer versions
+       */
+      if (is_new_checksum)
         {
-          /* no need to guess, we *know* what the new layered pkgs are */
-          if (!rpmmd_diff_exact (repo, new_base_checksum, new_checksum, sack, &rpm_diff,
-                                 &rpmmd_modified_new, error))
+          if (!rpm_diff_add_db_diff (&rpm_diff, repo, RPM_OSTREE_PKG_TYPE_BASE,
+                                     current_base_checksum, new_base_checksum,
+                                     &ostree_modified_new, cancellable, error))
             return FALSE;
         }
-      else
+
+      /* now we look at the rpm-md/layering side */
+      GHashTable *layered_pkgs = rpmostree_origin_get_packages (origin);
+
+      /* check that it's actually layered (i.e. the requests are not all just dormant) */
+      if (sack && is_new_layered && g_hash_table_size (layered_pkgs) > 0)
         {
           if (!rpmmd_diff_guess (repo, current_base_checksum, current_checksum, sack,
                                  &rpm_diff, &rpmmd_modified_new, error))
