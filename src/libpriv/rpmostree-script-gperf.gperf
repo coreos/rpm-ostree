@@ -25,7 +25,6 @@ ca-certificates.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
 libgcc.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
 setup.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
 pinentry.prein, RPMOSTREE_SCRIPT_ACTION_IGNORE
-fedora-release.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
 fedora-release.posttrans, RPMOSTREE_SCRIPT_ACTION_IGNORE
 # These add the vagrant group which IMO is really
 # a libvirt-user group
