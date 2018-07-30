@@ -4010,7 +4010,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   g_auto(rpmts) rpmdb_ts = rpmtsCreate ();
   rpmtsSetVSFlags (rpmdb_ts, _RPMVSF_NOSIGNATURES | _RPMVSF_NODIGESTS);
-  /* https://bugzilla.redhat.com/show_bug.cgi?id=1607223 i
+  /* https://bugzilla.redhat.com/show_bug.cgi?id=1607223
    * Newer librpm defaults to doing a full payload checksum, which we can't
    * do at this point because we imported the RPMs into ostree commits, saving
    * just the header in metadata - we don't have the exact original content to

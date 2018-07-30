@@ -112,7 +112,7 @@ AS_IF([pkg-config --atleast-version=4.13.0.1 rpm], [
 ], [have_modern_rpm=false])
 dnl See usage
 AS_IF([pkg-config --atleast-version=4.14.2-rc1 rpm], [
-  AC_DEFINE([BUILDOPT_HAVE_NEW_RPM_VERIFY], 1, [Set to 1 if we have rpmtsSetVfyLevel ])
+  AC_DEFINE([BUILDOPT_HAVE_NEW_RPM_VERIFY], 1, [Set to 1 if we have rpmtsSetVfyLevel])
 ])
 
 AC_PATH_PROG([XSLTPROC], [xsltproc])
