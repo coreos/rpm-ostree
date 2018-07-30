@@ -90,13 +90,49 @@ vm_rpmostree db diff --format=diff \
 assert_file_has_content_literal 'db-diff.txt' "+foo-1.0-1.x86_64"
 echo "ok pkg-add foo"
 
-# Test that we don't do progress bars if on a tty (with the client)
+# Test idempotent install
+old_pending=$(vm_get_pending_csum)
+if vm_rpmostree install foo-1.0 &> out.txt; then
+  assert_not_reached "installed foo twice?"
+fi
+assert_file_has_content_literal out.txt 'already requested'
+vm_rpmostree install foo-1.0 --idempotent
+assert_streq $old_pending $(vm_get_pending_csum)
+echo "ok idempotent install"
+
 vm_rpmostree uninstall foo-1.0
-vm_rpmostree install foo-1.0 > foo-install.txt
+
+# Test idempotent uninstall
+old_pending=$(vm_get_pending_csum)
+if vm_rpmostree uninstall foo-1.0 &> out.txt; then
+  assert_not_reached "uninstalled foo twice?"
+fi
+assert_file_has_content_literal out.txt 'not currently requested'
+vm_rpmostree uninstall foo-1.0 --idempotent
+rc=0
+vm_rpmostree uninstall foo-1.0 --idempotent --unchanged-exit-77 || rc=$?
+assert_streq $old_pending $(vm_get_pending_csum)
+assert_streq $rc 77
+echo "ok idempotent uninstall"
+
+# Test `rpm-ostree status --pending-exit-77`
+rc=0
+vm_rpmostree status --pending-exit-77 || rc=$?
+assert_streq $rc 77
+
+# Test that we don't do progress bars if on a tty (with the client)
+# (And use --unchanged-exit-77 to verify that we *don't* exit 77).
+vm_rpmostree install foo-1.0 --unchanged-exit-77 > foo-install.txt
 assert_file_has_content_literal foo-install.txt 'Checking out packages (1/1) 100%'
 echo "ok install not on a tty"
 
 vm_reboot
+
+# Test `rpm-ostree status --pending-exit-77`, with no actual pending deployment
+rc=0
+vm_rpmostree status --pending-exit-77 || rc=$?
+assert_streq $rc 0
+
 vm_assert_status_jq \
   '.deployments[0]["base-checksum"]' \
   '.deployments[0]["pending-base-checksum"]|not' \

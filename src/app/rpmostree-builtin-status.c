@@ -54,6 +54,7 @@ static gboolean opt_verbose_advisories;
 static gboolean opt_json;
 static gboolean opt_only_booted;
 static const char *opt_jsonpath;
+static gboolean opt_pending_exit_77;
 
 static GOptionEntry option_entries[] = {
   { "pretty", 'p', G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_pretty, "This option is deprecated and no longer has any effect", NULL },
@@ -62,6 +63,7 @@ static GOptionEntry option_entries[] = {
   { "json", 0, 0, G_OPTION_ARG_NONE, &opt_json, "Output JSON", NULL },
   { "jsonpath", 'J', 0, G_OPTION_ARG_STRING, &opt_jsonpath, "Filter JSONPath expression", "EXPRESSION" },
   { "booted", 'b', 0, G_OPTION_ARG_NONE, &opt_only_booted, "Only print the booted deployment", NULL },
+  { "pending-exit-77", 'b', 0, G_OPTION_ARG_NONE, &opt_pending_exit_77, "If pending deployment available, exit 77", NULL },
   { NULL }
 };
 
@@ -1023,6 +1025,19 @@ rpmostree_builtin_status (int             argc,
           if (!rpmostree_print_cached_update (cached_update, opt_verbose,
                                               opt_verbose_advisories, cancellable, error))
             return FALSE;
+        }
+    }
+
+  if (opt_pending_exit_77)
+    {
+      if (g_variant_n_children (deployments) > 1)
+        {
+          g_autoptr(GVariant) pending = g_variant_get_child_value (deployments, 0);
+          g_auto(GVariantDict) dict;
+          g_variant_dict_init (&dict, pending);
+          gboolean is_booted;
+          if (g_variant_dict_lookup (&dict, "booted", "b", &is_booted) && !is_booted)
+            invocation->exit_code = RPM_OSTREE_EXIT_PENDING;
         }
     }
 

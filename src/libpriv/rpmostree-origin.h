@@ -152,11 +152,15 @@ gboolean
 rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
                                char             **packages,
                                gboolean           local,
+                               gboolean           allow_existing,
+                               gboolean          *out_changed,
                                GError           **error);
 
 gboolean
 rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
                                   char            **packages,
+                                  gboolean          allow_noent,
+                                  gboolean         *out_changed,
                                   GError          **error);
 gboolean
 rpmostree_origin_remove_all_packages (RpmOstreeOrigin  *origin,
