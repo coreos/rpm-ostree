@@ -109,7 +109,10 @@ if vm_rpmostree uninstall foo-1.0 &> out.txt; then
 fi
 assert_file_has_content_literal out.txt 'not currently requested'
 vm_rpmostree uninstall foo-1.0 --idempotent
+rc=0
+vm_rpmostree uninstall foo-1.0 --idempotent --unchanged-exit-77 || rc=$?
 assert_streq $old_pending $(vm_get_pending_csum)
+assert_streq $rc 77
 echo "ok idempotent uninstall"
 
 # Test `rpm-ostree status --pending-exit-77`
@@ -118,7 +121,8 @@ vm_rpmostree status --pending-exit-77 || rc=$?
 assert_streq $rc 77
 
 # Test that we don't do progress bars if on a tty (with the client)
-vm_rpmostree install foo-1.0 > foo-install.txt
+# (And use --unchanged-exit-77 to verify that we *don't* exit 77).
+vm_rpmostree install foo-1.0 --unchanged-exit-77 > foo-install.txt
 assert_file_has_content_literal foo-install.txt 'Checking out packages (1/1) 100%'
 echo "ok install not on a tty"
 

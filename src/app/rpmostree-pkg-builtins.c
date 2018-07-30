@@ -39,6 +39,7 @@ static gboolean opt_cache_only;
 static gboolean opt_download_only;
 static gboolean opt_allow_inactive;
 static gboolean opt_uninstall_all;
+static gboolean opt_unchanged_exit_77;
 
 static GOptionEntry option_entries[] = {
   { "os", 0, 0, G_OPTION_ARG_STRING, &opt_osname, "Operate on provided OSNAME", "OSNAME" },
@@ -46,6 +47,7 @@ static GOptionEntry option_entries[] = {
   { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Exit after printing the transaction", NULL },
   { "allow-inactive", 0, 0, G_OPTION_ARG_NONE, &opt_allow_inactive, "Allow inactive package requests", NULL },
   { "idempotent", 0, 0, G_OPTION_ARG_NONE, &opt_idempotent, "Do nothing if package already (un)installed", NULL },
+  { "unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_unchanged_exit_77, "If no overlays were changed, exit 77", NULL },
   { NULL }
 };
 
@@ -133,7 +135,7 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
     }
 
   return rpmostree_transaction_client_run (invocation, sysroot_proxy, os_proxy,
-                                           options, FALSE,
+                                           options, opt_unchanged_exit_77,
                                            transaction_address,
                                            previous_deployment,
                                            cancellable, error);
