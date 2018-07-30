@@ -30,12 +30,12 @@ extern crate serde_yaml;
 
 use std::ffi::{CStr, OsStr};
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::IntoRawFd;
 
 mod glibutils;
 use glibutils::*;
 mod treefile;
-use treefile::{treefile_read_impl, Treefile};
+use treefile::*;
 
 /* Wrapper functions for translating from C to Rust */
 
@@ -68,14 +68,23 @@ pub extern "C" fn rpmostree_rs_treefile_new(
     let arch = str_from_nullable(arch);
     // Run code, map error if any, otherwise extract raw pointer, passing
     // ownership back to C.
-    ptr_glib_error(treefile_read_impl(filename.as_ref(), arch), error)
+    ptr_glib_error(Treefile::new_boxed(filename.as_ref(), arch), error)
 }
 
 #[no_mangle]
-pub extern "C" fn rpmostree_rs_treefile_get_json_fd(tf: *mut Treefile) -> libc::c_int {
+pub extern "C" fn rpmostree_rs_treefile_to_json(
+    tf: *mut Treefile,
+    gerror: *mut *mut glib_sys::GError,
+) -> libc::c_int {
     assert!(!tf.is_null());
     let tf = unsafe { &mut *tf };
-    tf.json_fd.as_raw_fd() as libc::c_int
+    match tf.serialize_json_fd() {
+        Ok(f) => f.into_raw_fd() as libc::c_int,
+        Err(e) => {
+            error_to_glib(&e, gerror);
+            -1 as libc::c_int
+        }
+    }
 }
 
 #[no_mangle]

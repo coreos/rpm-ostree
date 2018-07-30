@@ -34,7 +34,7 @@ use std::ptr;
 // return a Result (using the std Error).
 // TODO: Try upstreaming this into the glib crate?
 
-fn error_to_glib(e: &Error, gerror: *mut *mut glib_sys::GError) {
+pub fn error_to_glib(e: &Error, gerror: *mut *mut glib_sys::GError) {
     if gerror.is_null() {
         return;
     }

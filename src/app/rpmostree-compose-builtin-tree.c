@@ -702,7 +702,10 @@ parse_treefile_to_json (RpmOstreeTreeComposeContext  *self,
       if (!self->treefile_rs)
         return glnx_prefix_error (error, "Failed to load YAML treefile");
 
-      g_autoptr(GInputStream) json_s = g_unix_input_stream_new (rpmostree_rs_treefile_get_json_fd (self->treefile_rs), FALSE);
+      glnx_fd_close int json_fd = rpmostree_rs_treefile_to_json (self->treefile_rs, error);
+      if (json_fd < 0)
+        return FALSE;
+      g_autoptr(GInputStream) json_s = g_unix_input_stream_new (json_fd, FALSE);
 
       if (!json_parser_load_from_stream (parser, json_s, NULL, error))
         return FALSE;

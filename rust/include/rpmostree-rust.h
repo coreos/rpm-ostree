@@ -26,7 +26,7 @@ RpmOstreeRsTreefile *rpmostree_rs_treefile_new (const char *filename,
                                                 const char *arch,
                                                 GError **error);
 
-int rpmostree_rs_treefile_get_json_fd (RpmOstreeRsTreefile *tf);
+int rpmostree_rs_treefile_to_json (RpmOstreeRsTreefile *tf, GError **error);
 
 void rpmostree_rs_treefile_free (RpmOstreeRsTreefile *tf);
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRsTreefile, rpmostree_rs_treefile_free);

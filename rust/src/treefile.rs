@@ -30,7 +30,6 @@ use tempfile;
 const ARCH_X86_64: &'static str = "x86_64";
 
 pub struct Treefile {
-    pub json_fd: fs::File,
     pub parsed: TreeComposeConfig,
 }
 
@@ -83,19 +82,22 @@ fn treefile_parse_yaml<R: io::Read>(input: R, arch: Option<&str>) -> io::Result<
     Ok(treefile)
 }
 
-pub fn treefile_read_impl(filename: &Path, arch: Option<&str>) -> io::Result<Box<Treefile>> {
-    let f = io::BufReader::new(fs::File::open(filename)?);
-    let parsed = treefile_parse_yaml(f, arch)?;
-    let mut tmpf = tempfile::tempfile()?;
-    {
-        let output = io::BufWriter::new(&tmpf);
-        serde_json::to_writer_pretty(output, &parsed)?;
+impl Treefile {
+    pub fn new_boxed(filename: &Path, arch: Option<&str>) -> io::Result<Box<Treefile>> {
+        let f = io::BufReader::new(fs::File::open(filename)?);
+        let parsed = treefile_parse_yaml(f, arch)?;
+        Ok(Box::new(Treefile { parsed: parsed }))
     }
-    tmpf.seek(io::SeekFrom::Start(0))?;
-    Ok(Box::new(Treefile {
-        parsed: parsed,
-        json_fd: tmpf,
-    }))
+
+    pub fn serialize_json_fd(&self) -> io::Result<fs::File> {
+        let mut tmpf = tempfile::tempfile()?;
+        {
+            let output = io::BufWriter::new(&tmpf);
+            serde_json::to_writer_pretty(output, &self.parsed)?;
+        }
+        tmpf.seek(io::SeekFrom::Start(0))?;
+        Ok(tmpf)
+    }
 }
 
 fn whitespace_split_packages(pkgs: &[String]) -> Vec<String> {
