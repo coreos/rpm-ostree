@@ -90,7 +90,27 @@ vm_rpmostree db diff --format=diff \
 assert_file_has_content_literal 'db-diff.txt' "+foo-1.0-1.x86_64"
 echo "ok pkg-add foo"
 
+# Test idempotent install
+old_pending=$(vm_get_pending_csum)
+if vm_rpmostree install foo-1.0 &> out.txt; then
+  assert_not_reached "installed foo twice?"
+fi
+assert_file_has_content_literal out.txt 'already requested'
+vm_rpmostree install foo-1.0 --idempotent
+assert_streq $old_pending $(vm_get_pending_csum)
+echo "ok idempotent install"
+
 vm_rpmostree uninstall foo-1.0
+
+# Test idempotent uninstall
+old_pending=$(vm_get_pending_csum)
+if vm_rpmostree uninstall foo-1.0 &> out.txt; then
+  assert_not_reached "uninstalled foo twice?"
+fi
+assert_file_has_content_literal out.txt 'not currently requested'
+vm_rpmostree uninstall foo-1.0 --idempotent
+assert_streq $old_pending $(vm_get_pending_csum)
+echo "ok idempotent uninstall"
 
 # Test `rpm-ostree status --pending-exit-77`
 rc=0

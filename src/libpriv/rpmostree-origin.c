@@ -652,6 +652,8 @@ gboolean
 rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
                                char             **packages,
                                gboolean           local,
+                               gboolean           allow_existing,
+                               gboolean          *out_changed,
                                GError           **error)
 {
   gboolean changed = FALSE;
@@ -685,6 +687,9 @@ rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
 
       if (requested || requested_local)
         {
+          if (allow_existing)
+            continue;
+
           if (requested)
             return glnx_throw (error, "Package/capability '%s' is already requested", pkg);
           else
@@ -705,6 +710,7 @@ rpmostree_origin_add_packages (RpmOstreeOrigin   *origin,
                                     local ? origin->cached_local_packages
                                           : origin->cached_packages, local);
 
+  *out_changed = changed;
   return TRUE;
 }
 
@@ -730,6 +736,8 @@ build_name_to_nevra_map (GHashTable  *nevras,
 gboolean
 rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
                                   char            **packages,
+                                  gboolean          allow_noent,
+                                  gboolean         *out_changed,
                                   GError          **error)
 {
   gboolean changed = FALSE;
@@ -761,7 +769,7 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
                                              g_hash_table_lookup (name_to_nevra, package)));
               local_changed = TRUE;
             }
-          else
+          else if (!allow_noent)
             return glnx_throw (error, "Package/capability '%s' is not currently requested",
                                package);
         }
@@ -774,6 +782,11 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
     update_keyfile_pkgs_from_cache (origin, "packages", "requested-local",
                                     origin->cached_local_packages, TRUE);
 
+  /* in reality, there may not be any new layer required (if e.g. we're
+   * removing a duplicate provides), though the origin has changed so we
+   * need to create a new deployment -- see also
+   * https://github.com/projectatomic/rpm-ostree/issues/753 */
+  *out_changed = changed || local_changed;
   return TRUE;
 }
 
