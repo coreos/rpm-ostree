@@ -902,7 +902,11 @@ rpmostree_importer_run (RpmOstreeImporter *self,
 
   g_autofree char *csum = NULL;
   if (!import_rpm_to_repo (self, &csum, cancellable, error))
-    return FALSE;
+    {
+      g_autofree char *name = headerGetAsString (self->hdr, RPMTAG_NAME);
+      g_prefix_error (error, "Importing %s: ", name);
+      return FALSE;
+    }
 
   const char *branch = rpmostree_importer_get_ostree_branch (self);
   ostree_repo_transaction_set_ref (self->repo, NULL, branch, csum);
