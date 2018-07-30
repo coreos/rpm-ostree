@@ -782,10 +782,6 @@ rpmostree_origin_remove_packages (RpmOstreeOrigin  *origin,
     update_keyfile_pkgs_from_cache (origin, "packages", "requested-local",
                                     origin->cached_local_packages, TRUE);
 
-  /* in reality, there may not be any new layer required (if e.g. we're
-   * removing a duplicate provides), though the origin has changed so we
-   * need to create a new deployment -- see also
-   * https://github.com/projectatomic/rpm-ostree/issues/753 */
   *out_changed = changed || local_changed;
   return TRUE;
 }

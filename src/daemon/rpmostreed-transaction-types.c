@@ -935,23 +935,26 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       changed = TRUE;
     }
 
+  gboolean remove_changed = FALSE;
   if (no_layering)
     {
-      gboolean layering_changed = FALSE;
-      if (!rpmostree_origin_remove_all_packages (origin, &layering_changed, error))
+      if (!rpmostree_origin_remove_all_packages (origin, &remove_changed, error))
         return FALSE;
-
-      changed = changed || layering_changed;
     }
   else if (self->uninstall_pkgs)
     {
       if (!rpmostree_origin_remove_packages (origin, self->uninstall_pkgs,
-                                             idempotent_layering, &changed, error))
+                                             idempotent_layering, &remove_changed, error))
         return FALSE;
 
       g_string_append_printf (txn_title, "; uninstall: %u",
                               g_strv_length (self->uninstall_pkgs));
     }
+
+  /* In reality, there may not be any new layer required even if `remove_changed` is TRUE
+   * (if e.g. we're removing a duplicate provides). But the origin has changed so we need to
+   * create a new deployment; see https://github.com/projectatomic/rpm-ostree/issues/753 */
+  changed = changed || remove_changed;
 
   /* lazily loaded cache that's used in a few conditional blocks */
   g_autoptr(RpmOstreeRefSack) base_rsack = NULL;
@@ -994,9 +997,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             }
         }
 
+      gboolean add_changed = FALSE;
       if (!rpmostree_origin_add_packages (origin, self->install_pkgs, FALSE,
-                                          idempotent_layering, &changed, error))
+                                          idempotent_layering, &add_changed, error))
         return FALSE;
+
+      changed = changed || add_changed;
 
       g_string_append_printf (txn_title, "; install: %u",
                               g_strv_length (self->install_pkgs));
@@ -1014,9 +1020,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           g_string_append_printf (txn_title, "; localinstall: %u", pkgs->len);
 
           g_ptr_array_add (pkgs, NULL);
+
+          gboolean add_changed = FALSE;
           if (!rpmostree_origin_add_packages (origin, (char**)pkgs->pdata, TRUE,
-                                              idempotent_layering, &changed, error))
+                                              idempotent_layering, &add_changed, error))
             return FALSE;
+
+          changed = changed || add_changed;
         }
     }
 
