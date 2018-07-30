@@ -28,6 +28,9 @@ G_BEGIN_DECLS
  * Use alongside EXIT_SUCCESS and EXIT_FAILURE. */
 #define RPM_OSTREE_EXIT_UNCHANGED  (77)
 
+/* Exit code for when a pending deployment can be rebooted into. */
+#define RPM_OSTREE_EXIT_PENDING  (77)
+
 typedef enum {
   RPM_OSTREE_BUILTIN_FLAG_NONE = 0,
   RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD = 1 << 0,

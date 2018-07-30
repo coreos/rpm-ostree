@@ -90,13 +90,25 @@ vm_rpmostree db diff --format=diff \
 assert_file_has_content_literal 'db-diff.txt' "+foo-1.0-1.x86_64"
 echo "ok pkg-add foo"
 
-# Test that we don't do progress bars if on a tty (with the client)
 vm_rpmostree uninstall foo-1.0
+
+# Test `rpm-ostree status --pending-exit-77`
+rc=0
+vm_rpmostree status --pending-exit-77 || rc=$?
+assert_streq $rc 77
+
+# Test that we don't do progress bars if on a tty (with the client)
 vm_rpmostree install foo-1.0 > foo-install.txt
 assert_file_has_content_literal foo-install.txt 'Checking out packages (1/1) 100%'
 echo "ok install not on a tty"
 
 vm_reboot
+
+# Test `rpm-ostree status --pending-exit-77`, with no actual pending deployment
+rc=0
+vm_rpmostree status --pending-exit-77 || rc=$?
+assert_streq $rc 0
+
 vm_assert_status_jq \
   '.deployments[0]["base-checksum"]' \
   '.deployments[0]["pending-base-checksum"]|not' \
