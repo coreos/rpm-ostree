@@ -787,6 +787,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   const gboolean no_layering = deploy_has_bool_option (self, "no-layering");
   const gboolean no_initramfs = deploy_has_bool_option (self, "no-initramfs");
   const gboolean cache_only = deploy_has_bool_option (self, "cache-only");
+  const gboolean idempotent_layering = deploy_has_bool_option (self, "idempotent-layering");
   const gboolean download_only =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_ONLY) > 0);
   /* Mainly for the `install` and `override` commands */
@@ -934,28 +935,26 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       changed = TRUE;
     }
 
+  gboolean remove_changed = FALSE;
   if (no_layering)
     {
-      gboolean layering_changed = FALSE;
-      if (!rpmostree_origin_remove_all_packages (origin, &layering_changed, error))
+      if (!rpmostree_origin_remove_all_packages (origin, &remove_changed, error))
         return FALSE;
-
-      changed = changed || layering_changed;
     }
   else if (self->uninstall_pkgs)
     {
-      if (!rpmostree_origin_remove_packages (origin, self->uninstall_pkgs, error))
+      if (!rpmostree_origin_remove_packages (origin, self->uninstall_pkgs,
+                                             idempotent_layering, &remove_changed, error))
         return FALSE;
-
-      /* in reality, there may not be any new layer required (if e.g. we're
-       * removing a duplicate provides), though the origin has changed so we
-       * need to create a new deployment -- see also
-       * https://github.com/projectatomic/rpm-ostree/issues/753 */
-      changed = TRUE;
 
       g_string_append_printf (txn_title, "; uninstall: %u",
                               g_strv_length (self->uninstall_pkgs));
     }
+
+  /* In reality, there may not be any new layer required even if `remove_changed` is TRUE
+   * (if e.g. we're removing a duplicate provides). But the origin has changed so we need to
+   * create a new deployment; see https://github.com/projectatomic/rpm-ostree/issues/753 */
+  changed = changed || remove_changed;
 
   /* lazily loaded cache that's used in a few conditional blocks */
   g_autoptr(RpmOstreeRefSack) base_rsack = NULL;
@@ -998,12 +997,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
             }
         }
 
-      if (!rpmostree_origin_add_packages (origin, self->install_pkgs, FALSE, error))
+      gboolean add_changed = FALSE;
+      if (!rpmostree_origin_add_packages (origin, self->install_pkgs, FALSE,
+                                          idempotent_layering, &add_changed, error))
         return FALSE;
 
-      /* here too -- we could optimize this under certain conditions
-       * (see related blurb in maybe_do_local_assembly()) */
-      changed = TRUE;
+      changed = changed || add_changed;
 
       g_string_append_printf (txn_title, "; install: %u",
                               g_strv_length (self->install_pkgs));
@@ -1021,10 +1020,13 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           g_string_append_printf (txn_title, "; localinstall: %u", pkgs->len);
 
           g_ptr_array_add (pkgs, NULL);
-          if (!rpmostree_origin_add_packages (origin, (char**)pkgs->pdata, TRUE, error))
+
+          gboolean add_changed = FALSE;
+          if (!rpmostree_origin_add_packages (origin, (char**)pkgs->pdata, TRUE,
+                                              idempotent_layering, &add_changed, error))
             return FALSE;
 
-          changed = TRUE;
+          changed = changed || add_changed;
         }
     }
 

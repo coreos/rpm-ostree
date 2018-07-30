@@ -329,6 +329,9 @@
          "allow-inactive-requests" (type 'b')
             When installing packages, allow package requests which would
             not immediately be active.
+         "idempotent-layering" (type 'b')
+            Don't error out on requests in install-* or uninstall-*
+            modifiers that are already satisfied.
     -->
     <method name="UpdateDeployment">
       <arg type="a{sv}" name="modifiers" direction="in"/>
