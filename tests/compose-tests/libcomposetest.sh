@@ -52,8 +52,10 @@ EOF
 
 compose_base_argv="--repo ${repobuild}"
 runcompose() {
+    echo "$(date): starting compose"
     rpm-ostree compose tree ${compose_base_argv} ${treefile} "$@"
     ostree --repo=${repo} pull-local ${repobuild}
+    echo "$(date): finished compose"
 }
 
 prepare_run_compose() {

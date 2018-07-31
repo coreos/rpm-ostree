@@ -30,8 +30,10 @@ rev=$(ostree --repo=${repobuild} rev-parse ${treeref})
 mkdir rojig-output
 do_commit2rojig() {
     targetrev=$1
+    echo "$(date): starting commit2rojig"
     rpm-ostree ex commit2rojig --repo=repo-build --pkgcache-repo cache/pkgcache-repo ${targetrev} $(pwd)/composedata/fedora-atomic-host-oirpm.spec $(pwd)/rojig-output
     (cd rojig-output && createrepo_c .)
+    echo "$(date): finished commit2rojig"
 }
 do_commit2rojig ${rev}
 find rojig-output -name '*.rpm' | tee rpms.txt
@@ -47,13 +49,17 @@ enabled=1
 gpgcheck=0
 eof
 do_rojig2commit() {
+    echo "$(date): starting rojig2commit"
     rpm-ostree ex rojig2commit -d $(pwd)/composedata -e fedora-local -e test-repo -e rojig-test --repo=rojig-unpack-repo rojig-test:fedora-atomic-host | tee rojig2commit-out.txt
+    echo "$(date): finished rojig2commit"
 }
 do_rojig2commit
 # there will generally be pkgs not in the rojig set, but let's at least assert it's > 0
 assert_file_has_content rojig2commit-out.txt ${npkgs}/${npkgs}' packages to import'
 ostree --repo=rojig-unpack-repo rev-parse ${rev}
+echo "$(date): starting fsck"
 ostree --repo=rojig-unpack-repo fsck
+echo "$(date): finished fsck"
 ostree --repo=rojig-unpack-repo refs > rojig-refs.txt
 assert_file_has_content rojig-refs.txt 'rpmostree/rojig/test-pkg/1.0-1.x86__64'
 
