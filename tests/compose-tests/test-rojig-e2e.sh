@@ -59,7 +59,7 @@ assert_file_has_content rojig2commit-out.txt ${npkgs}/${npkgs}' packages to impo
 ostree --repo=rojig-unpack-repo rev-parse ${rev}
 echo "$(date): starting fsck"
 ostree --repo=rojig-unpack-repo fsck
-echo "$(date): finishedfsck"
+echo "$(date): finished fsck"
 ostree --repo=rojig-unpack-repo refs > rojig-refs.txt
 assert_file_has_content rojig-refs.txt 'rpmostree/rojig/test-pkg/1.0-1.x86__64'
 
