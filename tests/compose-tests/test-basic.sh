@@ -30,6 +30,9 @@ assert_file_has_content_literal autovar.txt 'd /var/cache 0755 root root - -'
 assert_file_has_content_literal autovar.txt 'd /var/log/chrony 0755 chrony chrony - -'
 echo "ok autovar"
 
+ostree --repo=${repobuild} cat ${treeref} /usr/lib/systemd/system-preset/rpm-ostree-auto.preset > preset.txt
+assert_file_has_content preset.txt '^enable ostree-remount.service$'
+
 if ! rpm-ostree --version | grep -q rust; then
   echo "ok yaml (SKIP)"
 else

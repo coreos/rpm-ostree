@@ -992,6 +992,22 @@ rpmostree_postprocess_final (int            rootfs_dfd,
         return glnx_prefix_error (error, "SELinux postprocess");
     }
 
+  /* We keep hitting issues with the ostree-remount preset not being
+   * enabled; let's just do this rather than trying to propagate the
+   * preset everywhere.
+   */
+  static const char preset_dir[] = "usr/lib/systemd/system-preset";
+  if (!glnx_shutil_mkdir_p_at (rootfs_dfd, preset_dir, 0755, cancellable, error))
+    return FALSE;
+  { g_autofree char *preset_path = g_build_filename (preset_dir, "rpm-ostree-auto.preset", NULL);
+    static const char remount_preset[] = "# Written by rpm-ostree compose tree\nenable ostree-remount.service\n";
+    if (!glnx_file_replace_contents_at (rootfs_dfd, preset_path, (guint8*)remount_preset,
+                                        strlen (remount_preset),
+                                        GLNX_FILE_REPLACE_NODATASYNC,
+                                        cancellable, error))
+      return FALSE;
+  }
+
   if (!convert_var_to_tmpfiles_d (rootfs_dfd, cancellable, error))
     return FALSE;
 
