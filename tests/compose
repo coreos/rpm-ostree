@@ -10,7 +10,7 @@ export topsrcdir=$(cd $dn/.. && pwd)
 # avoid refetching yum metadata everytime
 export RPMOSTREE_USE_CACHED_METADATA=1
 
-LOGDIR=${LOGDIR:-$(pwd)/test-compose-logs}
+export LOGDIR=${LOGDIR:-$(pwd)/test-compose-logs}
 mkdir -p ${LOGDIR}
 
 colour_print() {
@@ -81,19 +81,7 @@ fi
 echo "Compose tests starting: $(date)"
 echo "Executing: ${tests}"
 echo "Writing logs to ${LOGDIR}"
-function postprocess_logs() {
-    # Help out S3 to have the right MIME type
-    for x in ${LOGDIR}/1/*.sh; do
-        if test -d ${x}; then
-            mv ${x}/{stdout,output.txt}
-            rm ${x}/stderr
-        fi
-    done
-}
-trap postprocess_logs EXIT
-# Note we merge stdout/stderr here since I don't see value
-# in separating them.
 (for tf in ${tests}; do echo $tf; done) | \
-    parallel -j +1 --progress --halt soon,fail=1 \
-             --results ${LOGDIR} /bin/sh -c "${dn}/compose-tests/{} 2>&1" |& tail
+    parallel -v -j +1 --progress --halt soon,fail=1 \
+             --results ${LOGDIR}/parallel --quote /bin/sh -c "${dn}/compose-tests/run-test.sh {}"
 echo "$(date): All tests passed"
