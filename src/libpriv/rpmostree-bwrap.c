@@ -379,13 +379,15 @@ rpmostree_bwrap_setenv (RpmOstreeBwrap *bwrap, const char *name, const char *val
   g_subprocess_launcher_setenv (bwrap->launcher, name, value, TRUE);
 }
 
-/* Execute @bwrap - must have been configured. After executing this method, the
- * @bwrap instance cannot be run again.
+/* Execute @bwrap, optionally capturing stdout or stderr. Must have been configured. After
+ * executing this method, the @bwrap instance cannot be run again.
  */
 gboolean
-rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
-                     GCancellable   *cancellable,
-                     GError        **error)
+rpmostree_bwrap_run_captured (RpmOstreeBwrap *bwrap,
+                              GBytes        **stdout_buf,
+                              GBytes        **stderr_buf,
+                              GCancellable   *cancellable,
+                              GError        **error)
 {
   GSubprocessLauncher *launcher = bwrap->launcher;
 
@@ -399,12 +401,25 @@ rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
   /* Add the final NULL */
   g_ptr_array_add (bwrap->argv, NULL);
 
+  if (stdout_buf)
+    g_subprocess_launcher_set_flags (bwrap->launcher, G_SUBPROCESS_FLAGS_STDOUT_PIPE);
+  if (stderr_buf)
+    g_subprocess_launcher_set_flags (bwrap->launcher, G_SUBPROCESS_FLAGS_STDERR_PIPE);
+
   g_subprocess_launcher_set_child_setup (launcher, bwrap_child_setup, bwrap, NULL);
   g_autoptr(GSubprocess) subproc =
     g_subprocess_launcher_spawnv (launcher, (const char *const*)bwrap->argv->pdata,
                                   error);
   if (!subproc)
     return FALSE;
+
+  if (stdout_buf || stderr_buf)
+    {
+      if (!g_subprocess_communicate (subproc, NULL, cancellable,
+                                     stdout_buf, stderr_buf, error))
+        return FALSE;
+    }
+
   if (!g_subprocess_wait (subproc, cancellable, error))
     {
       /* Now, it's possible @cancellable has been set, which means the process
@@ -424,6 +439,17 @@ rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
     return FALSE;
 
   return TRUE;
+}
+
+/* Execute @bwrap. Must have been configured. After executing this method, the @bwrap
+ * instance cannot be run again.
+ */
+gboolean
+rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
+                     GCancellable   *cancellable,
+                     GError        **error)
+{
+  return rpmostree_bwrap_run_captured (bwrap, NULL, NULL, cancellable, error);
 }
 
 /* Execute /bin/true inside a bwrap container on the host */
