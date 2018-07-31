@@ -15,7 +15,7 @@ runcompose
 echo "ok compose (none)"
 
 ostree --repo=${repobuild} cat ${treeref} \
-    /usr/lib/os.release.d/os-release-fedora > os-release.prop
+    /usr/lib/os.release.d/os-release-atomichost > os-release.prop
 
 assert_file_has_content os-release.prop VERSION_ID=${releasever}
 assert_not_file_has_content os-release.prop OSTREE_VERSION=
@@ -32,7 +32,7 @@ runcompose --add-metadata-string=version=${releasever}.444
 echo "ok compose (cli)"
 
 ostree --repo=${repobuild} cat ${treeref} \
-    /usr/lib/os.release.d/os-release-fedora > os-release.prop
+    /usr/lib/os.release.d/os-release-atomichost > os-release.prop
 
 # VERSION_ID *shouldn't* change
 # (https://github.com/projectatomic/rpm-ostree/pull/433)
@@ -50,7 +50,7 @@ runcompose
 echo "ok compose (auto)"
 
 ostree --repo=${repobuild} cat ${treeref} \
-    /usr/lib/os.release.d/os-release-fedora > os-release.prop
+    /usr/lib/os.release.d/os-release-atomichost > os-release.prop
 
 # VERSION_ID *shouldn't* change
 # (https://github.com/projectatomic/rpm-ostree/pull/433)

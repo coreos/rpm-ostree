@@ -1635,30 +1635,44 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
       }
     else if (base_version != NULL)
       {
-        /* let's try to find the first non-symlink */
-        const char *os_release[] = {
-          "usr/etc/os-release",
-          "usr/lib/os-release",
-          "usr/lib/os.release.d/os-release-fedora"
-        };
+        /* find the real path to os-release using bwrap; this is an overkill but safer way
+         * of resolving a symlink relative to a rootfs (see discussions in
+         * https://github.com/projectatomic/rpm-ostree/pull/410/) */
+        g_autofree char *pathbuf = NULL;
+        const char *path = NULL;
+        {
+          g_autoptr(RpmOstreeBwrap) bwrap =
+            rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_IMMUTABLE, error,
+                                 /* map back to /etc so relative symlinks work */
+                                 "--bind", "usr/etc", "/etc",
+                                 "realpath", "-z", "/etc/os-release",
+                                 NULL);
+          if (!bwrap)
+            return FALSE;
+
+          g_autoptr(GBytes) out = NULL;
+          if (!rpmostree_bwrap_run_captured (bwrap, &out, NULL, cancellable, error))
+            return FALSE;
+
+          gsize len;
+          pathbuf = g_bytes_unref_to_data (g_steal_pointer (&out), &len);
+
+          /* if realpath returned successfully, it must've printed something */
+          g_assert_cmpuint (len, >, 0);
+          g_assert_cmpuint (pathbuf[0], ==, '/');
+          pathbuf[len-1] = '\0';
+
+          path = pathbuf+1; /* skip initial '/' */
+          if (g_str_has_prefix (path, "etc/"))
+            {
+              g_autofree char *old_pathbuf = pathbuf;
+              path = pathbuf = g_strdup_printf ("usr/%s", path);
+            }
+        }
 
         /* fallback on just overwriting etc/os-release */
-        const char *path = os_release[0];
-
-        for (guint i = 0; i < G_N_ELEMENTS (os_release); i++)
-          {
-            struct stat stbuf;
-
-            if (!glnx_fstatat (rootfs_fd, os_release[i], &stbuf,
-                               AT_SYMLINK_NOFOLLOW, error))
-              return FALSE;
-
-            if (S_ISREG (stbuf.st_mode))
-              {
-                path = os_release[i];
-                break;
-              }
-          }
+        if (!path)
+          path = "usr/etc/os-release";
 
         g_print ("Mutating /%s\n", path);
 
