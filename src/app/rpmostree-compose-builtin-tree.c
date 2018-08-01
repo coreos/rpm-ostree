@@ -1066,7 +1066,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
           }
         else
           {
-            g_propagate_error (error, temp_error);
+            g_propagate_error (error, g_steal_pointer (&temp_error));
             return FALSE;
           }
       }
