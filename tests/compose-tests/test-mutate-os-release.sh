@@ -19,7 +19,7 @@ ostree --repo=${repobuild} cat ${treeref} \
 
 assert_file_has_content os-release.prop VERSION_ID=${releasever}
 assert_not_file_has_content os-release.prop OSTREE_VERSION=
-assert_file_has_content os-release.prop 'VERSION="'${releasever}' (Twenty '
+assert_file_has_content os-release.prop 'VERSION="'${releasever}' (Atomic '
 echo "ok mutate-os-release-none"
 
 # make sure --add-metadata-string has precedence and works with
@@ -38,7 +38,7 @@ ostree --repo=${repobuild} cat ${treeref} \
 # (https://github.com/projectatomic/rpm-ostree/pull/433)
 assert_file_has_content os-release.prop VERSION_ID=${releasever}
 assert_file_has_content os-release.prop OSTREE_VERSION=${releasever}.444
-assert_file_has_content os-release.prop 'VERSION="'${releasever}'\.444 (Twenty '
+assert_file_has_content os-release.prop 'VERSION="'${releasever}'\.444 (Atomic '
 echo "ok mutate-os-release-cli"
 
 # make sure automatic_version_prefix works
@@ -56,5 +56,5 @@ ostree --repo=${repobuild} cat ${treeref} \
 # (https://github.com/projectatomic/rpm-ostree/pull/433)
 assert_file_has_content os-release.prop VERSION_ID=${releasever}
 assert_file_has_content os-release.prop OSTREE_VERSION=${releasever}.555
-assert_file_has_content os-release.prop 'VERSION="'${releasever}'\.555 (Twenty '
+assert_file_has_content os-release.prop 'VERSION="'${releasever}'\.555 (Atomic '
 echo "ok mutate-os-release (auto)"
