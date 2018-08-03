@@ -359,17 +359,6 @@ skip_one_with_asan () {
     fi
 }
 
-assert_status_file_jq() {
-    status_file=$1; shift
-    for expression in "$@"; do
-        if ! jq -e "${expression}" >/dev/null < $status_file; then
-            jq . < $status_file | sed -e 's/^/# /' >&2
-            echo 1>&2 "${expression} failed to match in $status_file"
-            exit 1
-        fi
-    done
-}
-
 get_obj_path() {
   repo=$1; shift
   csum=$1; shift
