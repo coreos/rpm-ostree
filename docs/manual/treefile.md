@@ -204,9 +204,10 @@ It supports the following parameters:
    will cause systemd to execute `ConditionFirstBoot=`, which implies
    running `systemctl preset-all` for example.  This requires booting the system
    with `rw` so that systemd can properly populate `/etc/machine-id` and execute
-   the presets at switchroot.  If you enable this, avoid using the `units`
-   member, as it will no longer function.  Instead, create a
-   `/usr/lib/systemd/system-presets/XX-example.preset` file.
+   the presets at switchroot.  When this is enabled, the `units`
+   directive will no longer function.  Instead, create a
+   `/usr/lib/systemd/system-presets/XX-example.preset` file as part of a package
+   or in the postprocess script.
 
 Experimental options
 --------
