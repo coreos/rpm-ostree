@@ -350,9 +350,19 @@ vm_assert_layered_pkg() {
   fi
 }
 
+# Takes a list of `jq` expressions, each of which should evaluate to a boolean,
+# and asserts that they are true.
 vm_assert_status_jq() {
     vm_rpmostree status --json > status.json
-    assert_status_file_jq status.json "$@"
+    vm_rpmostree status > status.txt
+    for expression in "$@"; do
+        if ! jq -e "${expression}" >/dev/null < status.json; then
+            jq . < status.json | sed -e 's/^/# /' >&2
+            echo 1>&2 "${expression} failed to match status.json"
+            cat status.txt
+            exit 1
+        fi
+    done
 }
 
 vm_pending_is_staged() {
