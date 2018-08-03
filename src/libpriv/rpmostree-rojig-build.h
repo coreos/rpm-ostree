@@ -27,6 +27,7 @@ gboolean
 rpmostree_commit2rojig (OstreeRepo   *repo,
                         OstreeRepo   *pkgcache_repo,
                         const char   *commit,
+                        int           spec_dfd,
                         const char   *spec,
                         const char   *outputdir,
                         GCancellable *cancellable,

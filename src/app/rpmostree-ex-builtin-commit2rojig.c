@@ -93,7 +93,7 @@ rpmostree_ex_builtin_commit2rojig (int             argc,
   g_autoptr(OstreeRepo) pkgcache_repo = ostree_repo_open_at (AT_FDCWD, opt_pkgcache_repo, cancellable, error);
   if (!pkgcache_repo)
     return FALSE;
-  if (!rpmostree_commit2rojig (repo, pkgcache_repo, rev, oirpm_spec, outputdir,
+  if (!rpmostree_commit2rojig (repo, pkgcache_repo, rev, AT_FDCWD, oirpm_spec, outputdir,
                                cancellable, error))
     return FALSE;
 
