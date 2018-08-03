@@ -370,11 +370,6 @@ assert_status_file_jq() {
     done
 }
 
-assert_status_jq() {
-    rpm-ostree status --json > status.json
-    assert_status_file_jq status.json "$@"
-}
-
 get_obj_path() {
   repo=$1; shift
   csum=$1; shift
