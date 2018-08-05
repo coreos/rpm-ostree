@@ -16,6 +16,7 @@ cat > metadata.json <<EOF
   "exampleos.tests": ["smoketested", "e2e"]
 }
 EOF
+pysetjsonmember "machineid-compat" 'False'
 runcompose --add-metadata-from-json metadata.json
 
 . ${dn}/libbasic-test.sh
@@ -32,6 +33,11 @@ echo "ok autovar"
 
 ostree --repo=${repobuild} cat ${treeref} /usr/lib/systemd/system-preset/40-rpm-ostree-auto.preset > preset.txt
 assert_file_has_content preset.txt '^enable ostree-remount.service$'
+
+# https://github.com/projectatomic/rpm-ostree/pull/1425
+ostree --repo=${repobuild} ls ${treeref} /usr/etc > ls.txt
+assert_not_file_has_content ls.txt 'machine-id'
+echo "ok machine-id"
 
 if ! rpm-ostree --version | grep -q rust; then
   echo "ok yaml (SKIP)"
