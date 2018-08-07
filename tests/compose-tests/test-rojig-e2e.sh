@@ -87,7 +87,7 @@ path=rojig-output/x86_64/fedora-atomic-host-42.1-1.fc28.x86_64.rpm
 rpm -qp --requires ${path} > requires.txt
 assert_file_has_content requires.txt 'glibc(.*) = '
 assert_file_has_content requires.txt 'systemd(.*) = '
-assert_file_has_content requires.txt 'test-pkg(.*) = 1.0-1'
+assert_file_has_content requires.txt 'test-pkg(.*) = 1.1-1'
 
 # And pull it; we should download the newer version by default
 do_rojig2commit
