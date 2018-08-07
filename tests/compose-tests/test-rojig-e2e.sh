@@ -36,8 +36,7 @@ do_commit2rojig() {
     echo "$(date): finished commit2rojig"
 }
 do_commit2rojig ${rev}
-find rojig-output -name '*.rpm' | tee rpms.txt
-assert_file_has_content rpms.txt 'fedora-atomic-host-42.0.*x86_64'
+test -f rojig-output/x86_64/fedora-atomic-host-42.0-1.fc28.x86_64.rpm
 
 ostree --repo=rojig-unpack-repo init --mode=bare-user
 echo 'fsync=false' >> rojig-unpack-repo/config
@@ -84,9 +83,7 @@ assert_file_has_content test-newpkg-list.txt 'test-newpkg-1.0-1.x86_64'
 
 # Rojig version 42.1
 do_commit2rojig ${newrev}
-find rojig-output -name '*.rpm' | tee rpms.txt
-assert_file_has_content rpms.txt 'fedora-atomic-host-42.1.*x86_64'
-path=$(head -1 rpms.txt)
+path=rojig-output/x86_64/fedora-atomic-host-42.1-1.fc28.x86_64.rpm
 rpm -qp --requires ${path} > requires.txt
 assert_file_has_content requires.txt 'glibc(.*) = '
 assert_file_has_content requires.txt 'systemd(.*) = '
