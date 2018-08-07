@@ -15,3 +15,4 @@ if [ $rc == 0 ]; then
 else
   mv ${TEST_ARTIFACTS}{,.fail.$rc}
 fi
+[ $rc == 0 ]
