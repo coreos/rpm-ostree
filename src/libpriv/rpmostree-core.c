@@ -4009,6 +4009,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   }
 
   g_auto(rpmts) rpmdb_ts = rpmtsCreate ();
+  /* Always call rpmtsSetRootDir() here so rpmtsRootDir() isn't NULL -- see rhbz#1613517 */
+  rpmtsSetRootDir (rpmdb_ts, "/");
   rpmtsSetVSFlags (rpmdb_ts, _RPMVSF_NOSIGNATURES | _RPMVSF_NODIGESTS);
   /* https://bugzilla.redhat.com/show_bug.cgi?id=1607223
    * Newer librpm defaults to doing a full payload checksum, which we can't
