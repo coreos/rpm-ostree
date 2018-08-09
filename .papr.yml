@@ -105,11 +105,11 @@ branches:
 
 # NB: when bumping 28 here, also bump fedora.repo, and compose script
 
-context: f28-compose
+context: f28-compose1
 
 build: false
 
-timeout: 50m
+timeout: 30m
 
 required: true
 
@@ -122,6 +122,9 @@ host:
   specs:
     cpus: 4
 
+env:
+  RPMOSTREE_COMPOSE_TEST_FILTER: odd
+
 # Copy yum.repos.d to get any injected repos from the host, which
 # will point to a closer mirror.  Note we substitute $releasever
 # since https://github.com/projectatomic/rpm-ostree/pull/875
@@ -129,6 +132,7 @@ tests:
   - docker run --privileged --rm
     -e CONFIGOPTS=--enable-rust
     -e CI_PKGS=cargo
+    -e RPMOSTREE_COMPOSE_TEST_FILTER
     -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
@@ -137,6 +141,13 @@ tests:
 
 artifacts:
   - test-compose-logs
+
+---
+
+inherit: true
+context: f28-compose2
+env:
+  RPMOSTREE_COMPOSE_TEST_FILTER: even
 
 ---
 
