@@ -732,11 +732,11 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
   if (!replacing)
     {
       if (!adds_packages)
-        return glnx_throw (error, "No packages added, and replacement not enabled");
+        return glnx_throw (error, "No packages added; cannot apply");
       if (modifies_packages)
-        return glnx_throw (error, "livefs update modifies/replaces packages and replacement not enabled");
+        return glnx_throw (error, "livefs update modifies/replaces packages; cannot apply");
       else if ((diff->flags & COMMIT_DIFF_FLAGS_REPLACEMENT) > 0)
-        return glnx_throw (error, "livefs update would replace files in /usr, and replacement not enabled");
+        return glnx_throw (error, "livefs update would replace files in /usr; cannot apply");
     }
   if ((self->flags & RPMOSTREE_TRANSACTION_LIVEFS_FLAG_DRY_RUN) > 0)
     {
