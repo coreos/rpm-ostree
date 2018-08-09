@@ -176,11 +176,11 @@ if vm_rpmostree ex livefs -n &> livefs-analysis.txt; then
 fi
 vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]|not'
-assert_file_has_content livefs-analysis.txt 'No packages added.*replacement not enabled'
+assert_file_has_content livefs-analysis.txt 'No packages added'
 echo "ok no modifications"
 
 # And now replacement
-vm_rpmostree ex livefs -n --replace &> livefs-analysis.txt
+vm_rpmostree ex livefs -n --dangerous-do-not-use-replace &> livefs-analysis.txt
 assert_file_has_content livefs-analysis.txt 'livefs OK (dry run)'
 vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]|not'
