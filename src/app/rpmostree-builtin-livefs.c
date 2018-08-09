@@ -34,7 +34,8 @@ static gboolean opt_replace;
 
 static GOptionEntry option_entries[] = {
   { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Only perform analysis, do not make changes", NULL },
-  { "replace", 0, 0, G_OPTION_ARG_NONE, &opt_replace, "Completely replace all files in /usr", NULL },
+  /* Known broken with kernel updates; see https://github.com/projectatomic/rpm-ostree/issues/1495 */
+  { "dangerous-do-not-use-replace", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_replace, "Completely replace all files in /usr (known broken)", NULL },
   { NULL }
 };
 
