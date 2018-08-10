@@ -74,12 +74,6 @@ fn treefile_parse_yaml<R: io::Read>(input: R, arch: Option<&str>) -> io::Result<
     if let Some(arch_pkgs) = arch_pkgs {
         pkgs.extend_from_slice(&whitespace_split_packages(&arch_pkgs));
     }
-    if pkgs.len() == 0 {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("Missing 'packages' entry"),
-        ));
-    };
 
     treefile.packages = Some(pkgs);
     Ok(treefile)

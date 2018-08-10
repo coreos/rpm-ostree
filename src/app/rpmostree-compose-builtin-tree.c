@@ -1142,6 +1142,11 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
           return FALSE;
       }
   }
+
+  if (packages->len == 0)
+    return glnx_throw (error, "Missing 'packages' entry");
+
+  /* make NULL-terminated */
   g_ptr_array_add (packages, NULL);
 
   { glnx_unref_object JsonGenerator *generator = json_generator_new ();
