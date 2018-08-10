@@ -1,0 +1,73 @@
+#/usr/bin/env bash
+
+# Copyright (C) 2018 Chris Weeks <chrisweeks@catalyst.net.nz>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Purpose: a simple bash completion script for rpm-ostree.
+
+_rpmostree_get_completion()
+{
+  local cur prev nexttoprev _rpmostree_firstarg _rpmostree_secondarg _rpmostree_command_first_arg_completions _rpmostree_command_second_arg_completions
+  COMPREPLY=()
+  cur="${COMP_WORDS[COMP_CWORD]}"
+  prev="${COMP_WORDS[COMP_CWORD-1]}"
+  nexttoprev="${COMP_WORDS[COMP_CWORD-2]}"
+  case ${prev} in
+    rpm-ostree)
+      if [ ${COMP_CWORD} -eq 1 ]
+      then 
+        if [ -z "${_rpmostree_command_completions:-}" ]
+        then
+          declare _rpmostree_command_completions="$(rpm-ostree --help | grep -e '^  ' | grep -v 'rpm-ostree' | sed 's/-h, //' | awk '{print $1}')"
+        fi
+        COMPREPLY=( $(compgen -W "${_rpmostree_command_completions}" -- "${cur}") )
+      fi
+      return 0
+      ;;
+    --*)      
+      return 0
+      ;;
+    *)
+      if [ ${COMP_CWORD} -eq 4 ]
+      then
+        return 0
+      fi
+      if [ ${COMP_CWORD} -eq 3 ]
+      then
+        _rpmostree_firstarg=$(echo ${nexttoprev} | sed 's/[-=]//g;' )
+        _rpmostree_secondarg=$(echo ${prev} | sed 's/[-=]//g;' )
+        _rpmostree_command_second_arg_completions=_rpmostree_command_${_rpmostree_firstarg}_${_rpmostree_secondarg}_completions
+        if [ -z "${!_rpmostree_command_second_arg_completions:-}" ]
+        then
+          declare _rpmostree_command_${_rpmostree_firstarg}_${_rpmostree_secondarg}_completions="$(rpm-ostree ${nexttoprev} ${prev} --help | grep -e '^  ' | grep -v -e '--version' -e 'rpm-ostree'| sed 's/-., //' | awk '{print $1}')"
+        fi
+        COMPREPLY=( $(compgen -W "${!_rpmostree_command_second_arg_completions}" -- "${cur}") )
+      fi
+      if [ ${COMP_CWORD} -eq 2 ]
+      then
+        _rpmostree_firstarg=$(echo ${prev} | sed 's/[-=]//g;' )
+        _rpmostree_command_first_arg_completions=_rpmostree_command_${_rpmostree_firstarg}_completions
+        if [ -z "${!_rpmostree_command_first_arg_completions:-}" ]
+        then
+          declare _rpmostree_command_${_rpmostree_firstarg}_completions="$(rpm-ostree ${prev} --help | grep -e '^  ' | grep -v -e '--version' -e 'rpm-ostree'| sed 's/-., //' | awk '{print $1}')"
+        fi
+        COMPREPLY=( $(compgen -W "${!_rpmostree_command_first_arg_completions}" -- "${cur}") )
+      fi
+      return 0
+      ;;
+esac
+}
+
+complete -F _rpmostree_get_completion rpm-ostree
