@@ -393,7 +393,8 @@ print_origin_repos (gboolean host_endian,
         ts = GUINT64_FROM_BE (ts);
       g_autofree char *timestamp_string = rpmostree_timestamp_str_from_unix_utc (ts);
       g_print ("  %*s%s %s (%s)\n", maxkeylen + 2, " ",
-               libsd_special_glyph (TREE_RIGHT), id, timestamp_string);
+               libsd_special_glyph (i == (n-1) ? TREE_RIGHT : TREE_BRANCH),
+               id, timestamp_string);
     }
 }
 
