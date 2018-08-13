@@ -117,6 +117,7 @@ echo "ok status doesn't require active PAM session"
 
 vm_rpmostree status -b > status.txt
 assert_streq $(grep -F -e 'ostree://' status.txt | wc -l) "1"
+assert_file_has_content status.txt BootedDeployment:
 echo "ok status -b"
 
 # Reload as root https://github.com/projectatomic/rpm-ostree/issues/976
