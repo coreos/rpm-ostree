@@ -59,6 +59,12 @@ pass=0
 fail=0
 skip=0
 all_tests="$(cd ${dn}/compose-tests && ls test-*.sh | sort)"
+if [ "${RPMOSTREE_COMPOSE_TEST_FILTER:-}" == odd ]; then
+  # https://superuser.com/a/101760/237392
+  all_tests="$(sed -n 'p;n' <<< ${all_tests})"
+elif [ "${RPMOSTREE_COMPOSE_TEST_FILTER:-}" == even ]; then
+  all_tests="$(sed -n 'n;p' <<< ${all_tests})"
+fi
 tests=""
 if [ -n "${TESTS+ }" ]; then
     for tf in ${all_tests}; do
