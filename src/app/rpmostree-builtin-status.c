@@ -393,7 +393,8 @@ print_origin_repos (gboolean host_endian,
         ts = GUINT64_FROM_BE (ts);
       g_autofree char *timestamp_string = rpmostree_timestamp_str_from_unix_utc (ts);
       g_print ("  %*s%s %s (%s)\n", maxkeylen + 2, " ",
-               libsd_special_glyph (TREE_RIGHT), id, timestamp_string);
+               libsd_special_glyph (i == (n-1) ? TREE_RIGHT : TREE_BRANCH),
+               id, timestamp_string);
     }
 }
 
@@ -476,7 +477,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   g_autoptr(GVariant) signatures =
     g_variant_dict_lookup_value (dict, "signatures", G_VARIANT_TYPE ("av"));
 
-  if (!first)
+  if (!first && !opt_only_booted)
     g_print ("\n");
 
   g_print ("%s ", is_booted ? libsd_special_glyph (BLACK_CIRCLE) : " ");
@@ -890,7 +891,10 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
         booted_osname = osname;
     }
 
-  g_print ("Deployments:\n");
+  if (opt_only_booted)
+    g_print ("BootedDeployment:\n");
+  else
+    g_print ("Deployments:\n");
 
   /* just unpack this so that each iteration doesn't have to dig for it */
   const char *cached_update_deployment_id = NULL;
