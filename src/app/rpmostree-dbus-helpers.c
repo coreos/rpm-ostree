@@ -33,6 +33,7 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-util.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-rust.h"
 
 #define RPMOSTREE_CLI_ID "cli"
 
@@ -1042,7 +1043,22 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
   g_variant_builder_init (&builder, G_VARIANT_TYPE ("ah"));
   for (const char *const* pkg = pkgs; pkg && *pkg; pkg++)
     {
-      if (!g_str_has_suffix (*pkg, ".rpm"))
+      if (g_str_has_prefix (*pkg, "http://") ||
+          g_str_has_prefix (*pkg, "https://"))
+        {
+          g_print ("Downloading '%s'... ", *pkg);
+          glnx_autofd int fd = rpmostree_rs_download_to_fd (*pkg, error);
+          if (fd < 0)
+            return FALSE;
+          g_print ("done!\n");
+
+          int idx = g_unix_fd_list_append (fd_list, fd, error);
+          if (idx < 0)
+            return FALSE;
+
+          g_variant_builder_add (&builder, "h", idx);
+        }
+      else if (!g_str_has_suffix (*pkg, ".rpm"))
         g_ptr_array_add (repo_pkgs, g_strdup (*pkg));
       else
         {

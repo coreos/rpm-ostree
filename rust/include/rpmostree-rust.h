@@ -33,3 +33,5 @@ const char *rpmostree_rs_treefile_get_rojig_spec_path (RpmOstreeRsTreefile *tf);
 
 void rpmostree_rs_treefile_free (RpmOstreeRsTreefile *tf);
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeRsTreefile, rpmostree_rs_treefile_free);
+
+int rpmostree_rs_download_to_fd (const char *url, GError **error);

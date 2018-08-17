@@ -98,9 +98,9 @@ $(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
 	  $(cargo) build --verbose $${frozen} $(CARGO_RELEASE_ARGS)
 EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS) rust/Cargo.lock
 
-rpm_ostree_CFLAGS += -Irust/include
+rpm_ostree_CFLAGS += -Irust/include $(PKGDEP_RPMOSTREE_RS_CFLAGS)
 rpm_ostree_SOURCES += rust/include/librpmostree-rust.h
-rpm_ostree_LDADD += $(librpmostree_rust_path)
+rpm_ostree_LDADD += $(librpmostree_rust_path) $(PKGDEP_RPMOSTREE_RS_LIBS)
 rustfmt:
 	rustfmt $(LIBRPMOSTREE_RUST_SRCS)
 # Outside the ifdef, otherwise automake complains
