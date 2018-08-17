@@ -99,6 +99,13 @@ PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0
 				     polkit-gobject-1
 				     rpm librepo libsolv
 				     libarchive])
+
+# We just keep rust-specific deps separate for better tracking
+# The `libcurl` one is redundant since we already require it for libostree. `openssl`
+# is required by libcurl anyway, but we need to link to it directly too because
+# curl-rust uses it.
+PKG_CHECK_MODULES(PKGDEP_RPMOSTREE_RS, [libcurl openssl])
+
 dnl bundled libdnf
 PKGDEP_RPMOSTREE_CFLAGS="-I $(pwd)/libdnf -I $(pwd)/libdnf-build $PKGDEP_RPMOSTREE_CFLAGS"
 PKGDEP_RPMOSTREE_LIBS="-L$(pwd)/libdnf-build/libdnf -ldnf $PKGDEP_RPMOSTREE_LIBS"

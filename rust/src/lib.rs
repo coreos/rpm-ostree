@@ -22,6 +22,7 @@ extern crate glib_sys;
 extern crate libc;
 extern crate openat;
 extern crate tempfile;
+extern crate curl;
 
 #[macro_use]
 extern crate serde_derive;
@@ -38,6 +39,7 @@ mod glibutils;
 use glibutils::*;
 mod treefile;
 use treefile::*;
+mod utils;
 
 /* Wrapper functions for translating from C to Rust */
 
@@ -127,5 +129,20 @@ pub extern "C" fn rpmostree_rs_treefile_free(tf: *mut Treefile) {
     }
     unsafe {
         Box::from_raw(tf);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn rpmostree_rs_download_to_fd(
+    url: *const libc::c_char,
+    gerror: *mut *mut glib_sys::GError,
+) -> libc::c_int {
+    let url = str_from_nullable(url).unwrap();
+    match utils::download_url_to_tmpfile(url) {
+        Ok(f) => f.into_raw_fd() as libc::c_int,
+        Err(e) => {
+            error_to_glib(&e, gerror);
+            -1 as libc::c_int
+        }
     }
 }
