@@ -217,7 +217,8 @@ fn serde_true() -> bool {
 pub struct TreeComposeConfig {
     // Compose controls
     #[serde(rename = "ref")]
-    pub treeref: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub treeref: Option<String>,
     // Optional rojig data
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rojig: Option<Rojig>,
@@ -347,7 +348,7 @@ packages-s390x:
     fn basic_valid() {
         let input = io::BufReader::new(VALID_PRELUDE.as_bytes());
         let treefile = treefile_parse_yaml(input, Some(ARCH_X86_64)).unwrap();
-        assert!(treefile.treeref == "exampleos/x86_64/blah");
+        assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 5);
     }
 
@@ -355,7 +356,7 @@ packages-s390x:
     fn basic_valid_noarch() {
         let input = io::BufReader::new(VALID_PRELUDE.as_bytes());
         let treefile = treefile_parse_yaml(input, None).unwrap();
-        assert!(treefile.treeref == "exampleos/x86_64/blah");
+        assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 3);
     }
 
