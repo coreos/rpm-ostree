@@ -130,8 +130,6 @@ env:
 # since https://github.com/projectatomic/rpm-ostree/pull/875
 tests:
   - docker run --privileged --rm
-    -e CONFIGOPTS=--enable-rust
-    -e CI_PKGS=cargo
     -e RPMOSTREE_COMPOSE_TEST_FILTER
     -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
