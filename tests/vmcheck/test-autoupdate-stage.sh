@@ -34,9 +34,13 @@ vm_rpmostree cleanup -m
 
 vm_rpmostree status > status.txt
 assert_file_has_content status.txt 'AutomaticUpdates: disabled'
+vm_change_update_policy stage
+vm_rpmostree status > status.txt
+assert_file_has_content_literal status.txt 'AutomaticUpdates: stage; rpm-ostreed-automatic.timer: inactive'
+# And test that we still support "ex-stage"
 vm_change_update_policy ex-stage
 vm_rpmostree status > status.txt
-assert_file_has_content_literal status.txt 'AutomaticUpdates: ex-stage; rpm-ostreed-automatic.timer: inactive'
+assert_file_has_content_literal status.txt 'AutomaticUpdates: stage; rpm-ostreed-automatic.timer: inactive'
 
 vm_rpmostree upgrade --trigger-automatic-update-policy
 vm_assert_status_jq ".deployments[1][\"booted\"]" \
@@ -45,7 +49,7 @@ vm_assert_status_jq ".deployments[1][\"booted\"]" \
 vm_rpmostree status -v > status.txt
 assert_file_has_content status.txt "Staged: yes"
 vm_rpmostree upgrade > upgrade.txt
-assert_file_has_content_literal upgrade.txt 'note: automatic updates (ex-stage) are enabled'
+assert_file_has_content_literal upgrade.txt 'note: automatic updates (stage) are enabled'
 # And ensure that we have new content in /etc after staging
 vm_cmd echo new-content-in-etc \> /etc/somenewfile
 vm_reboot
