@@ -45,9 +45,7 @@
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
-#ifdef HAVE_RUST
 #include "rpmostree-rust.h"
-#endif
 
 #include "libglnx.h"
 
@@ -127,9 +125,7 @@ typedef struct {
   gboolean rojig_spec_in_workdir;
   char *previous_checksum;
 
-#ifdef HAVE_RUST
   RpmOstreeRsTreefile *treefile_rs;
-#endif
   JsonParser *treefile_parser;
   JsonNode *treefile_rootval; /* Unowned */
   JsonObject *treefile; /* Unowned */
@@ -160,9 +156,7 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_free (ctx->ref);
   g_free (ctx->rojig_spec);
   g_free (ctx->previous_checksum);
-#ifdef HAVE_RUST
   g_clear_pointer (&ctx->treefile_rs, (GDestroyNotify) rpmostree_rs_treefile_free);
-#endif
   g_clear_object (&ctx->treefile_parser);
   g_clear_pointer (&ctx->serialized_treefile, (GDestroyNotify)g_bytes_unref);
   g_free (ctx);
@@ -694,10 +688,6 @@ parse_treefile_to_json (RpmOstreeTreeComposeContext  *self,
   if (g_str_has_suffix (treefile_path, ".yaml") ||
       g_str_has_suffix (treefile_path, ".yml"))
     {
-#ifndef HAVE_RUST
-      return glnx_throw (error, "This version of rpm-ostree was built without "
-                                "rust, and doesn't support YAML treefiles");
-#else
       const char *arch = self ? dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx)) : NULL;
       self->treefile_rs = rpmostree_rs_treefile_new (treefile_path, arch,
                                                      self->workdir_tmp.fd,
@@ -712,7 +702,6 @@ parse_treefile_to_json (RpmOstreeTreeComposeContext  *self,
 
       if (!json_parser_load_from_stream (parser, json_s, NULL, error))
         return FALSE;
-#endif
     }
   else
     {
@@ -1003,13 +992,11 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     return FALSE;
   if (rojig_spec)
     self->rojig_spec = g_build_filename (gs_file_get_path_cached (treefile_dir), rojig_spec, NULL);
-  #ifdef HAVE_RUST
   else if (self->treefile_rs)
     {
       self->rojig_spec = g_strdup (rpmostree_rs_treefile_get_rojig_spec_path (self->treefile_rs));
       self->rojig_spec_in_workdir = TRUE;
     }
-  #endif
 
   *out_context = g_steal_pointer (&self);
   return TRUE;

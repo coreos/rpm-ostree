@@ -71,7 +71,6 @@ TYPELIBS = $(GIRS:.gir=.typelib)
 # but have been adapted to non-recursive Automake, and additionally
 # the "cargo vendor" bits for us live in packaging/Makefile.dist-packaging.
 .PHONY: check-local-cargo clean-local-cargo use-git-not-dist-hook
-if ENABLE_RUST
 if RUST_DEBUG
 CARGO_RELEASE_ARGS=
 else
@@ -94,8 +93,6 @@ use-git-not-dist-hook:
 
 DIST_HOOKS += use-git-not-dist-hook
 GITIGNOREFILES += target/
-
-endif # end ENABLE_RUST
 
 include libglnx/Makefile-libglnx.am.inc
 noinst_LTLIBRARIES += libglnx.la
