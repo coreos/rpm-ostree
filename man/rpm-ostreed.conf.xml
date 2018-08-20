@@ -71,11 +71,15 @@ Boston, MA 02111-1307, USA.
         <term><varname>AutomaticUpdatePolicy=</varname></term>
 
         <listitem>
-        <para>Controls the automatic update policy. Currently "none" or "check".
+        <para>Controls the automatic update policy. Currently "none", "check", or "stage".
         "none" disables automatic updates. "check" downloads just enough metadata to check
         for updates and display them in <command>rpm-ostree status</command>. Defaults to
         "none". The <citerefentry><refentrytitle>rpm-ostreed-automatic.timer</refentrytitle><manvolnum>8</manvolnum></citerefentry>
         unit determines the actual frequency of updates.</para>
+        <para>Finally, the "stage" policy downloads and unpacks the update, performing
+        any package layering.  Only a small amount of work is left to be performed at
+        shutdown time via the <literal>ostree-finalize-staged.service</literal> systemd unit.
+        </para>
         </listitem>
       </varlistentry>
       <varlistentry>
