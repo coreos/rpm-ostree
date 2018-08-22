@@ -68,5 +68,8 @@ echo "ok no leftover files"
 ostree --repo=${repobuild} show ${treeref} \
   --print-metadata-key rpmostree.rpmdb.pkglist > pkglist.txt
 assert_file_has_content pkglist.txt 'systemd'
+# This is currently a Recommends: package.  If you change this, please
+# also change the corresponding test in misc-tweaks.sh.
+assert_file_has_content pkglist.txt 'systemd-bootchart'
 echo "ok compose pkglist"
 }
