@@ -74,6 +74,9 @@ rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la librpmostree-1.l
 # https://github.com/ostreedev/ostree/commit/1f832597fc83fda6cb8daf48c4495a9e1590774c
 # https://github.com/rust-lang/rust/issues/47714
 rpm_ostree_LDADD += -ldl
+if RUST_DEBUG
+rpm_ostree_LDADD += -lm
+endif
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/app/rpm-ostree-0-integration.conf
