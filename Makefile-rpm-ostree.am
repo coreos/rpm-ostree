@@ -71,12 +71,10 @@ rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) \
 	-fvisibility=hidden -DPKGLIBDIR=\"$(pkglibdir)\" $(PKGDEP_RPMOSTREE_CFLAGS)
 rpm_ostree_LDADD = $(PKGDEP_RPMOSTREE_LIBS) librpmostreepriv.la librpmostree-1.la librpmostreed.la
-# https://github.com/ostreedev/ostree/commit/1f832597fc83fda6cb8daf48c4495a9e1590774c
-# https://github.com/rust-lang/rust/issues/47714
-rpm_ostree_LDADD += -ldl
-if RUST_DEBUG
-rpm_ostree_LDADD += -lm
-endif
+# -ldl: https://github.com/ostreedev/ostree/commit/1f832597fc83fda6cb8daf48c4495a9e1590774c
+# -ldl: https://github.com/rust-lang/rust/issues/47714
+# -lm: needed for rand crate in debug mode
+rpm_ostree_LDADD += -ldl -lm
 
 privdatadir=$(pkglibdir)
 privdata_DATA = src/app/rpm-ostree-0-integration.conf
