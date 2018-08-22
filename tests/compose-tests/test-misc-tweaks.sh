@@ -14,6 +14,7 @@ pysetjsonmember "documentation" "False"
 # $ rpm -qlv systemd|grep -F 'system/default.target '
 # lrwxrwxrwx    1 root    root                       16 May 11 06:59 /usr/lib/systemd/system/default.target -> graphical.target
 pysetjsonmember "default_target" '"multi-user.target"'
+pysetjsonmember "recommends" 'False'
 pysetjsonmember "units" '["tuned.service"]'
 # And test adding/removing files
 pysetjsonmember "add-files" '[["foo.txt", "/usr/etc/foo.txt"],
@@ -82,3 +83,11 @@ echo "ok remove-from-packages"
 ostree --repo=${repobuild} ls  ${treeref} /tmp > ls.txt
 assert_file_has_content ls.txt 'd01777 0 0      0 /tmp'
 echo "ok /tmp"
+
+ostree --repo=${repobuild} show ${treeref} \
+       --print-metadata-key rpmostree.rpmdb.pkglist > pkglist.txt
+# This is currently a Recommends: package.  If you change this, please
+# also change the corresponding test in libbasic-test.sh.
+assert_file_has_content_literal pkglist.txt 'systemd-'
+assert_not_file_has_content pkglist.txt 'systemd-bootchart'
+echo "ok recommends"
