@@ -27,6 +27,7 @@ pub fn download_url_to_tmpfile(url: &str) -> io::Result<fs::File> {
     {
         let mut output = io::BufWriter::new(&mut tmpf);
         let mut handle = Easy::new();
+        handle.follow_location(true)?;
         handle.fail_on_error(true)?;
         handle.url(url)?;
 

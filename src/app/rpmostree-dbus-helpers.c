@@ -1049,7 +1049,10 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
           g_print ("Downloading '%s'... ", *pkg);
           glnx_autofd int fd = rpmostree_rs_download_to_fd (*pkg, error);
           if (fd < 0)
-            return FALSE;
+            {
+              g_print ("failed!\n");
+              return FALSE;
+            }
           g_print ("done!\n");
 
           int idx = g_unix_fd_list_append (fd_list, fd, error);
