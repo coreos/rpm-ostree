@@ -199,24 +199,25 @@ AS_IF([test -z "$cargo"], [AC_MSG_ERROR([cargo is required for --enable-rust])])
 AC_PATH_PROG([rustc], [rustc])
 AS_IF([test -z "$rustc"], [AC_MSG_ERROR([rustc is required for --enable-rust])])
 
+AC_MSG_CHECKING(whether to build in debug mode)
+debug_release=release
+if $(echo $CFLAGS |grep -q -E "(-O0|-Og)"); then
+  debug_release=debug
+fi
+AC_MSG_RESULT($debug_release)
+
 dnl These bits based on gnome:librsvg/configure.ac
 dnl By default, we build in public release mode.
 AC_ARG_ENABLE(rust-debug,
   AC_HELP_STRING([--enable-rust-debug],
     [Build Rust code with debugging information [default=no]]),
     [rust_debug_release=$enableval],
-    [rust_debug_release=release])
+    [rust_debug_release=$debug_release])
+dnl Canonicalize yes/no to debug/release
+AS_IF([test x$rust_debug_release = xno ], [rust_debug_release=release])
+AS_IF([test x$rust_debug_release = xyes ], [rust_debug_release=debug])
 
-AC_MSG_CHECKING(whether to build in debug mode)
-debug_release=no
-if $(echo $CFLAGS |grep -q -E "(-O0|-Og)"); then
-  debug_release=yes
-fi
-AC_MSG_RESULT($debug_release)
-RUST_TARGET_SUBDIR=release
-if test ${debug_release} = yes; then
-  RUST_TARGET_SUBDIR=debug
-fi
+RUST_TARGET_SUBDIR=${rust_debug_release}
 AC_SUBST([RUST_TARGET_SUBDIR])
 AM_CONDITIONAL(RUST_DEBUG, [test "x$rust_debug_release" = "xdebug"])
 dnl Unconditional now.
@@ -224,7 +225,7 @@ RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES rust"
 
 dnl And propagate the release/debug type to cmake
 cmake_args=-DCMAKE_BUILD_TYPE=RelWithDebugInfo
-if test ${debug_release} = yes; then
+if test ${debug_release} = debug; then
   cmake_args="-DCMAKE_BUILD_TYPE=Debug"
 fi
 export cmake_args
@@ -263,5 +264,5 @@ echo "
     introspection:                           $found_introspection
     bubblewrap:                              $with_bubblewrap
     gtk-doc:                                 $enable_gtk_doc
-    rust:                                    (always enabled now)
+    rust:                                    $rust_debug_release
 "
