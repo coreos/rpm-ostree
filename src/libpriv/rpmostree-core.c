@@ -238,9 +238,7 @@ tf_bind_boolean (GKeyFile *keyfile,
                  gboolean default_value)
 {
   gboolean v = default_value;
-  g_autofree char *value_str = g_key_file_get_value (keyfile, "tree", name, NULL);
-
-  if (value_str)
+  if (g_key_file_has_key (keyfile, "tree", name, NULL))
     v = g_key_file_get_boolean (keyfile, "tree", name, NULL);
 
   g_variant_builder_add (builder, "{sv}", name, g_variant_new_boolean (v));
