@@ -397,6 +397,26 @@ treefile_sanity_checks (JsonObject   *treedata,
   return TRUE;
 }
 
+/* Given a boolean value in JSON, add it to treespec
+ * if it's not the default.
+ */
+static gboolean
+treespec_bind_bool (JsonObject *treedata,
+                    GKeyFile   *ts,
+                    const char *name,
+                    gboolean    default_value,
+                    GError    **error)
+{
+  gboolean v = default_value;
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treedata, name, &v, error))
+    return FALSE;
+
+  if (v != default_value)
+    g_key_file_set_boolean (ts, "tree", name, v);
+
+  return TRUE;
+}
+
 static gboolean
 install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                           JsonObject      *treedata,
@@ -476,17 +496,10 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (!set_keyfile_string_array_from_json (treespec, "tree", "repos", enable_repos, error))
     return FALSE;
 
-  { gboolean docs = TRUE;
-
-    if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treedata,
-                                                                 "documentation",
-                                                                 &docs,
-                                                                 error))
-      return FALSE;
-
-    if (!docs)
-      g_key_file_set_boolean (treespec, "tree", "documentation", FALSE);
-  }
+  if (!treespec_bind_bool (treedata, treespec, "documentation", TRUE, error))
+    return FALSE;
+  if (!treespec_bind_bool (treedata, treespec, "recommends", TRUE, error))
+    return FALSE;
 
   { g_autoptr(GError) tmp_error = NULL;
     g_autoptr(RpmOstreeTreespec) treespec_value = rpmostree_treespec_new_from_keyfile (treespec, &tmp_error);

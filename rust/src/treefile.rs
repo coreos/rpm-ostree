@@ -261,6 +261,8 @@ pub struct TreeComposeConfig {
 
     // Content installation opts
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub recommends: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub documentation: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "install-langs")]

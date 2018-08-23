@@ -60,6 +60,8 @@ It supports the following parameters:
  * `bootstrap_packages`: Array of strings, optional: Deprecated; you should
     now just include this set in the main `packages` array.
 
+ * `recommends`: boolean, optional: Install `Recommends`, defaults to `true`.
+
  * `units`: Array of strings, optional: Systemd units to enable by default
 
  * `default_target`: String, optional: Set the default systemd target

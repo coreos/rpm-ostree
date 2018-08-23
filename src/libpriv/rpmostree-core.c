@@ -230,6 +230,20 @@ get_enabled_rpmmd_repos (DnfContext *dnfctx, DnfRepoEnabled enablement)
   return g_steal_pointer (&ret);
 }
 
+/* Get a bool from @keyfile, adding it to @builder */
+static void
+tf_bind_boolean (GKeyFile *keyfile,
+                 GVariantBuilder *builder,
+                 const char *name,
+                 gboolean default_value)
+{
+  gboolean v = default_value;
+  if (g_key_file_has_key (keyfile, "tree", name, NULL))
+    v = g_key_file_get_boolean (keyfile, "tree", name, NULL);
+
+  g_variant_builder_add (builder, "{sv}", name, g_variant_new_boolean (v));
+}
+
 RpmOstreeTreespec *
 rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
                                      GError    **error)
@@ -273,14 +287,8 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
   if (g_key_file_get_boolean (keyfile, "tree", "skip-sanity-check", NULL))
     g_variant_builder_add (&builder, "{sv}", "skip-sanity-check", g_variant_new_boolean (TRUE));
 
-  { gboolean documentation = TRUE;
-    g_autofree char *value = g_key_file_get_value (keyfile, "tree", "documentation", NULL);
-
-    if (value)
-      documentation = g_key_file_get_boolean (keyfile, "tree", "documentation", NULL);
-
-    g_variant_builder_add (&builder, "{sv}", "documentation", g_variant_new_boolean (documentation));
-  }
+  tf_bind_boolean (keyfile, &builder, "documentation", TRUE);
+  tf_bind_boolean (keyfile, &builder, "recommends", TRUE);
 
   ret->spec = g_variant_builder_end (&builder);
   ret->dict = g_variant_dict_new (ret->spec);
@@ -1837,11 +1845,17 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   if (!self->rojig_pure)
     {
       HyGoal goal = dnf_context_get_goal (dnfctx);
+      DnfGoalActions actions = DNF_INSTALL | DNF_ALLOW_UNINSTALL;
+
+      gboolean recommends;
+      g_assert (g_variant_dict_lookup (self->spec->dict, "recommends", "b", &recommends));
+      if (!recommends)
+        actions |= DNF_IGNORE_WEAK_DEPS;
 
       rpmostree_output_task_begin ("Resolving dependencies");
 
       /* XXX: consider a --allow-uninstall switch? */
-      if (!dnf_goal_depsolve (goal, DNF_INSTALL | DNF_ALLOW_UNINSTALL, error) ||
+      if (!dnf_goal_depsolve (goal, actions, error) ||
           !check_goal_solution (self, removed_pkgnames, replaced_nevras, error))
         {
           rpmostree_output_task_end ("failed");
