@@ -32,18 +32,15 @@ fi
 
 # Test that we can override the kernel.  For ease of testing
 # I just picked the "gold" F28 kernel.
-vm_cmd 'curl -sS -L \
-  -O https://dl.fedoraproject.org/pub/fedora/linux/releases/28/Everything/x86_64/os/Packages/k/kernel-4.16.3-301.fc28.x86_64.rpm \
-  -O https://dl.fedoraproject.org/pub/fedora/linux/releases/28/Everything/x86_64/os/Packages/k/kernel-core-4.16.3-301.fc28.x86_64.rpm \
-  -O https://dl.fedoraproject.org/pub/fedora/linux/releases/28/Everything/x86_64/os/Packages/k/kernel-modules-4.16.3-301.fc28.x86_64.rpm \
-  -O https://dl.fedoraproject.org/pub/fedora/linux/releases/28/Everything/x86_64/os/Packages/k/kernel-modules-extra-4.16.3-301.fc28.x86_64.rpm'
 current=$(vm_get_booted_csum)
 vm_cmd rpm-ostree db list "${current}" > current-dblist.txt
 assert_not_file_has_content current-dblist.txt 'kernel-4.16.3-301.fc28'
 grep -E '^ kernel-4' current-dblist.txt  | sed -e 's,^ *,,' > orig-kernel.txt
 assert_streq "$(wc -l < orig-kernel.txt)" "1"
 orig_kernel=$(cat orig-kernel.txt)
-vm_rpmostree override replace ./kernel*4.16.3*.rpm
+URL_ROOT="https://dl.fedoraproject.org/pub/fedora/linux/releases/28/Everything/x86_64/os/Packages/k"
+vm_rpmostree override replace \
+  "$URL_ROOT/kernel{,-core,-modules{,-extra}}-4.16.3-301.fc28.x86_64.rpm"
 new=$(vm_get_pending_csum)
 vm_cmd rpm-ostree db list "${new}" > new-dblist.txt
 assert_file_has_content_literal new-dblist.txt 'kernel-4.16.3-301.fc28'
