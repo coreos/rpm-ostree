@@ -456,11 +456,20 @@ rpmostree_str_has_prefix_in_ptrarray (const char *str,
   return rpmostree_str_has_prefix_in_strv (str, (char**)prefixes->pdata, prefixes->len);
 }
 
-/* Like g_strv_contains() but for ptrarray */
+/**
+ * rpmostree_str_ptrarray_contains:
+ *
+ * Like g_strv_contains() but for ptrarray.
+ * Handles strs==NULL as an empty array.
+ */
 gboolean
 rpmostree_str_ptrarray_contains (GPtrArray  *strs,
                                  const char *str)
 {
+  g_assert (str);
+  if (!strs)
+    return FALSE;
+
   guint n = strs->len;
   for (guint i = 0; i < n; i++)
     {
