@@ -118,9 +118,10 @@ AS_IF([pkg-config --atleast-version=4.13.0.1 rpm], [
   AC_DEFINE([BUILDOPT_HAVE_RPMFILES], 1, [Set to 1 if we have rpmfiles API])
 ], [have_modern_rpm=false])
 dnl See usage
-AS_IF([pkg-config --atleast-version=4.14.2-rc1 rpm], [
+AS_IF([pkg-config --atleast-version=4.14.2 rpm], [
   AC_DEFINE([BUILDOPT_HAVE_NEW_RPM_VERIFY], 1, [Set to 1 if we have rpmtsSetVfyLevel])
 ])
+librpm_version="$(pkg-config rpm --modversion)"
 
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
@@ -265,7 +266,7 @@ AC_OUTPUT
 echo "
     $PACKAGE $VERSION
 
-    built with modern RPM (e.g. Fedora 25+): $have_modern_rpm
+    built with modern RPM (e.g. Fedora 25+): $have_modern_rpm ($librpm_version)
     nts name:                                $enable_new_name
     compose tooling:                         $enable_compose_tooling
     introspection:                           $found_introspection
