@@ -45,7 +45,7 @@
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
-#include "rpmostree-rust.h"
+#include "libror.h"
 
 #include "libglnx.h"
 
@@ -125,7 +125,7 @@ typedef struct {
   gboolean rojig_spec_in_workdir;
   char *previous_checksum;
 
-  RpmOstreeRsTreefile *treefile_rs;
+  RORTreefile *treefile_rs;
   JsonParser *treefile_parser;
   JsonNode *treefile_rootval; /* Unowned */
   JsonObject *treefile; /* Unowned */
@@ -156,7 +156,7 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_free (ctx->ref);
   g_free (ctx->rojig_spec);
   g_free (ctx->previous_checksum);
-  g_clear_pointer (&ctx->treefile_rs, (GDestroyNotify) rpmostree_rs_treefile_free);
+  g_clear_pointer (&ctx->treefile_rs, (GDestroyNotify) ror_treefile_free);
   g_clear_object (&ctx->treefile_parser);
   g_clear_pointer (&ctx->serialized_treefile, (GDestroyNotify)g_bytes_unref);
   g_free (ctx);
@@ -702,13 +702,13 @@ parse_treefile_to_json (RpmOstreeTreeComposeContext  *self,
       g_str_has_suffix (treefile_path, ".yml"))
     {
       const char *arch = self ? dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx)) : NULL;
-      self->treefile_rs = rpmostree_rs_treefile_new (treefile_path, arch,
+      self->treefile_rs = ror_treefile_new (treefile_path, arch,
                                                      self->workdir_tmp.fd,
                                                      error);
       if (!self->treefile_rs)
         return glnx_prefix_error (error, "Failed to load YAML treefile");
 
-      glnx_fd_close int json_fd = rpmostree_rs_treefile_to_json (self->treefile_rs, error);
+      glnx_fd_close int json_fd = ror_treefile_to_json (self->treefile_rs, error);
       if (json_fd < 0)
         return FALSE;
       g_autoptr(GInputStream) json_s = g_unix_input_stream_new (json_fd, FALSE);
@@ -1007,7 +1007,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     self->rojig_spec = g_build_filename (gs_file_get_path_cached (treefile_dir), rojig_spec, NULL);
   else if (self->treefile_rs)
     {
-      self->rojig_spec = g_strdup (rpmostree_rs_treefile_get_rojig_spec_path (self->treefile_rs));
+      self->rojig_spec = g_strdup (ror_treefile_get_rojig_spec_path (self->treefile_rs));
       self->rojig_spec_in_workdir = TRUE;
     }
 

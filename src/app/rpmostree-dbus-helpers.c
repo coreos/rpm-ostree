@@ -33,7 +33,7 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-util.h"
 #include "rpmostree-rpm-util.h"
-#include "rpmostree-rust.h"
+#include "libror.h"
 
 #define RPMOSTREE_CLI_ID "cli"
 
@@ -1047,7 +1047,7 @@ rpmostree_sort_pkgs_strv (const char *const* pkgs,
           g_str_has_prefix (*pkg, "https://"))
         {
           g_print ("Downloading '%s'... ", *pkg);
-          glnx_autofd int fd = rpmostree_rs_download_to_fd (*pkg, error);
+          glnx_autofd int fd = ror_download_to_fd (*pkg, error);
           if (fd < 0)
             {
               g_print ("failed!\n");
