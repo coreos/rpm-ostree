@@ -95,8 +95,13 @@ $(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
 	  $(cargo) build --verbose $${frozen} $(CARGO_RELEASE_ARGS)
 EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS) rust/Cargo.lock
 
-rpm_ostree_CFLAGS += -Irust/include $(PKGDEP_RPMOSTREE_RS_CFLAGS)
-rpm_ostree_SOURCES += rust/include/librpmostree-rust.h
+# See rust/build.rs - it uses cbindgen as part of the Rust build
+rpmostree-rust.h: $(librpmostree_rust_path)
+	$(AM_V_GEN) src=$$(find @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@/ -name 'rpmostree-rust.h') && \
+	  test -n "$${src}" && ln -sfr "$${src}" rpmostree-rust.h
+BUILT_SOURCES += rpmostree-rust.h
+
+rpm_ostree_CFLAGS += $(PKGDEP_RPMOSTREE_RS_CFLAGS)
 rpm_ostree_LDADD += $(librpmostree_rust_path) $(PKGDEP_RPMOSTREE_RS_LIBS)
 rustfmt:
 	rustfmt $(LIBRPMOSTREE_RUST_SRCS)

@@ -69,7 +69,7 @@ fn dir_from_dfd(fd: libc::c_int) -> io::Result<openat::Dir> {
 }
 
 #[no_mangle]
-pub extern "C" fn rpmostree_rs_treefile_new(
+pub extern "C" fn ror_treefile_new(
     filename: *const libc::c_char,
     arch: *const libc::c_char,
     workdir_dfd: libc::c_int,
@@ -94,7 +94,7 @@ pub extern "C" fn rpmostree_rs_treefile_new(
 }
 
 #[no_mangle]
-pub extern "C" fn rpmostree_rs_treefile_to_json(
+pub extern "C" fn ror_treefile_to_json(
     tf: *mut Treefile,
     gerror: *mut *mut glib_sys::GError,
 ) -> libc::c_int {
@@ -110,7 +110,7 @@ pub extern "C" fn rpmostree_rs_treefile_to_json(
 }
 
 #[no_mangle]
-pub extern "C" fn rpmostree_rs_treefile_get_rojig_spec_path(
+pub extern "C" fn ror_treefile_get_rojig_spec_path(
     tf: *mut Treefile,
 ) -> *const libc::c_char {
     assert!(!tf.is_null());
@@ -123,7 +123,7 @@ pub extern "C" fn rpmostree_rs_treefile_get_rojig_spec_path(
 }
 
 #[no_mangle]
-pub extern "C" fn rpmostree_rs_treefile_free(tf: *mut Treefile) {
+pub extern "C" fn ror_treefile_free(tf: *mut Treefile) {
     if tf.is_null() {
         return;
     }
@@ -133,7 +133,7 @@ pub extern "C" fn rpmostree_rs_treefile_free(tf: *mut Treefile) {
 }
 
 #[no_mangle]
-pub extern "C" fn rpmostree_rs_download_to_fd(
+pub extern "C" fn ror_download_to_fd(
     url: *const libc::c_char,
     gerror: *mut *mut glib_sys::GError,
 ) -> libc::c_int {
