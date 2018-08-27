@@ -20,7 +20,7 @@
 # Recurse into libdnf
 ALL_LOCAL_HOOKS += libdnf-local
 libdnf-local:
-	cd libdnf-build && $(MAKE)
+	cd libdnf-build && $(MAKE) $(if $(subst 0,,$(V)),VERBOSE=1,)
 	ln -sf libdnf-build/libdnf/libdnf.so.1 .
 libdnf.so.1: libdnf-local
 CLEANFILES += libdnf.so.1
