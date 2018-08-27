@@ -100,6 +100,12 @@ PKG_CHECK_MODULES(PKGDEP_RPMOSTREE, [gio-unix-2.0 >= 2.50.0 json-glib-1.0
 				     rpm librepo libsolv
 				     libarchive])
 
+dnl -ldl: https://github.com/ostreedev/ostree/commit/1f832597fc83fda6cb8daf48c4495a9e1590774c
+dnl -ldl: https://github.com/rust-lang/rust/issues/47714
+dnl -lm: needed for rand crate in debug mode
+dnl See also rpmostree_core_linkage_for_rust()
+PKGDEP_RPMOSTREE_LIBS="$PKGDEP_RPMOSTREE_LIBS -Wl,--push-state,--no-as-needed,-ldl,-lm,--pop-state"
+
 # We just keep rust-specific deps separate for better tracking
 # The `libcurl` one is redundant since we already require it for libostree. `openssl`
 # is required by libcurl anyway, but we need to link to it directly too because
