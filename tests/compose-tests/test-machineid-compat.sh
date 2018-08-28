@@ -19,8 +19,14 @@ assert_file_has_content_literal err.txt \
     "'units' directive is incompatible with machineid-compat = false"
 echo "ok conflict with units"
 
+# In this test we also want to test that include:
+# correctly handles machineid-compat.
 prepare_compose_test "machineid-compat"
 pysetjsonmember "machineid-compat" 'False'
+cat > composedata/fedora-machineid-compat-includer.yaml <<EOF
+include: fedora-machineid-compat.json
+EOF
+export treefile=composedata/fedora-machineid-compat-includer.yaml
 runcompose
 echo "ok compose"
 
