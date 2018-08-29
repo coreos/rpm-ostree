@@ -89,10 +89,22 @@ gboolean
 rpmostree_passwd_complete_rpm_layering (int       rootfs_dfd,
                                         GError  **error);
 
+struct sysuser_ent {
+  const char *type; /* type of sysuser entry, can be 1: u (user) 2: g (group) 3: m (mixed) 4: r (ranged ids) */
+  char *name;
+  char *id;         /* id used by sysuser entry, can be in the form of 1: uid 2:gid 3:uid:gid */
+  char *gecos;      /* user information */
+  char *dir;        /* home directory */
+  char *shell;      /* login shell, default to /sbin/nologin */
+};
+
 struct conv_passwd_ent {
   char *name;
   uid_t uid;
   gid_t gid;
+  char *pw_gecos;   /* user information */
+  char *pw_dir;     /* home directory */
+  char *pw_shell;   /* login shell */
 };
 
 struct conv_group_ent {
@@ -105,3 +117,16 @@ rpmostree_passwd_data2passwdents (const char *data);
 
 GPtrArray *
 rpmostree_passwd_data2groupents (const char *data);
+
+gboolean
+rpmostree_passwdents2sysusers (GPtrArray *passwd_ents,
+                               GPtrArray **out_sysusers_entries,
+                               GError **error);
+gboolean
+rpmostree_groupents2sysusers (GPtrArray  *group_ents,
+                              GPtrArray **out_sysusers_entries,
+                              GError    **error);
+gboolean
+rpmostree_passwd_sysusers2char (GPtrArray *sysusers_entries,
+                                char      **out_content,
+                                GError    **error);

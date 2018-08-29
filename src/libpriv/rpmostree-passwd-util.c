@@ -136,6 +136,9 @@ conv_passwd_ent_free (void *vptr)
   struct conv_passwd_ent *ptr = vptr;
 
   g_free (ptr->name);
+  g_free (ptr->pw_gecos);
+  g_free (ptr->pw_dir);
+  g_free (ptr->pw_shell);
   g_free (ptr);
 }
 
@@ -156,8 +159,9 @@ rpmostree_passwd_data2passwdents (const char *data)
       convent->name = g_strdup (ent->pw_name);
       convent->uid  = ent->pw_uid;
       convent->gid  = ent->pw_gid;
-      /* Want to add anymore, like dir? */
-
+      convent->pw_gecos = g_strdup (ent->pw_gecos);
+      convent->pw_dir = g_strdup (ent->pw_dir);
+      convent->pw_shell = g_strdup (ent->pw_shell);
       g_ptr_array_add (ret, convent);
     }
 
@@ -180,6 +184,17 @@ conv_group_ent_free (void *vptr)
 
   g_free (ptr->name);
   g_free (ptr);
+}
+
+static void
+sysuser_ent_free (void *vptr)
+{
+  struct sysuser_ent *ptr = vptr;
+  g_free (ptr->name);
+  g_free (ptr->id);
+  g_free (ptr->gecos);
+  g_free (ptr->dir);
+  g_free (ptr->shell);
 }
 
 GPtrArray *
@@ -211,6 +226,127 @@ compare_group_ents (gconstpointer a, gconstpointer b)
   const struct conv_group_ent **sb = (const struct conv_group_ent **)b;
 
   return strcmp ((*sa)->name, (*sb)->name);
+}
+
+static int
+compare_sysuser_ents (gconstpointer a, gconstpointer b)
+{
+  const struct sysuser_ent **sa = (const struct sysuser_ent **)a;
+  const struct sysuser_ent **sb = (const struct sysuser_ent **)b;
+
+  /* g > u > m */
+  if (!g_str_equal ((*sa)->type, (*sb)->type))
+    {
+      gboolean is_group_type = g_str_equal ((*sa)->type, "g") || g_str_equal ((*sa)->type, "g");
+      if (is_group_type)
+        return !strcmp ((*sa)->type, (*sb)->type); /* g is smaller than m and u, we want g > other type here*/
+
+      gboolean is_user_type = g_str_equal ((*sa)->type, "u") || g_str_equal ((*sb)->type, "u");
+      if (is_user_type)
+        return strcmp ((*sa)->type, (*sb)->type); /* u > m */
+    }
+  /* We sort the entry name if type happens to be the same */
+  if (!g_str_equal ((*sa)->name, (*sb)->name))
+      return strcmp ((*sa)->name, (*sb)->name);
+
+  /* This is a collision, when both name and type matches, could error out here */
+  return 0;
+}
+
+gboolean
+rpmostree_passwdents2sysusers (GPtrArray  *passwd_ents,
+                               GPtrArray  **out_sysusers_entries,
+                               GError     **error)
+{
+  /* Do the assignment inside the function so we don't need to expose sysuser_ent
+   * to other files */
+  GPtrArray *sysusers_array = NULL;
+  sysusers_array = *out_sysusers_entries ?: g_ptr_array_new_with_free_func (sysuser_ent_free);
+
+  for (int counter = 0; counter < passwd_ents->len; counter++)
+    {
+      struct conv_passwd_ent *convent = passwd_ents->pdata[counter];
+      struct sysuser_ent *sysent = g_new (struct sysuser_ent, 1);
+
+      /* Systemd-sysusers also supports uid:gid format. That case was used
+       * when creating user and group pairs with different numeric UID and GID values.*/
+      if (convent->uid != convent->gid)
+        sysent->id = g_strdup_printf ("%u:%u", convent->uid, convent->gid);
+      else
+        sysent->id = g_strdup_printf ("%u", convent->uid);
+
+      sysent->type = "u";
+      sysent->name = g_strdup (convent->name);
+
+      /* Gecos may contain multiple words, thus adding a quote here to make it as a 'word' */
+      sysent->gecos = (g_str_equal (convent->pw_gecos, "")) ? NULL :
+                       g_strdup_printf ("\"%s\"", convent->pw_gecos);
+      sysent->dir = (g_str_equal (convent->pw_dir, ""))? NULL :
+                    g_steal_pointer (&convent->pw_dir);
+      sysent->shell = g_steal_pointer (&convent->pw_shell);
+
+      g_ptr_array_add (sysusers_array, sysent);
+    }
+  /* Do the assignment at the end if the sysusers_table was not initialized */
+  if (*out_sysusers_entries == NULL)
+    *out_sysusers_entries = g_steal_pointer (&sysusers_array);
+
+  return TRUE;
+}
+
+gboolean
+rpmostree_groupents2sysusers (GPtrArray  *group_ents,
+                              GPtrArray  **out_sysusers_entries,
+                              GError     **error)
+{
+  /* Similar to converting passwd to sysusers, we do assignment inside the function */
+  GPtrArray *sysusers_array = NULL;
+  sysusers_array  = *out_sysusers_entries ?: g_ptr_array_new_with_free_func (sysuser_ent_free);
+
+  for (int counter = 0; counter < group_ents->len; counter++)
+    {
+      struct conv_group_ent *convent = group_ents->pdata[counter];
+      struct sysuser_ent *sysent = g_new (struct sysuser_ent, 1);
+
+      sysent->type = "g";
+      sysent->name = g_steal_pointer (&convent->name);
+      sysent->id = g_strdup_printf ("%u", convent->gid);
+      sysent->gecos = NULL;
+      sysent->dir = NULL;
+      sysent->shell = NULL;
+
+      g_ptr_array_add (sysusers_array, sysent);
+    }
+  /* Do the assignment at the end if the sysusers_array was not initialized */
+  if (*out_sysusers_entries == NULL)
+    *out_sysusers_entries = g_steal_pointer (&sysusers_array);
+
+  return TRUE;
+}
+
+gboolean
+rpmostree_passwd_sysusers2char (GPtrArray *sysusers_entries,
+                                char      **out_content,
+                                GError    **error)
+{
+
+  GString* sysuser_content = g_string_new (NULL);
+  /* We do the sorting before conversion */
+  g_ptr_array_sort (sysusers_entries, compare_sysuser_ents);
+  for (int counter = 0; counter < sysusers_entries->len; counter++)
+    {
+      struct sysuser_ent *sysent = sysusers_entries->pdata[counter];
+      const char *shell = sysent->shell ?: "-";
+      const char *gecos = sysent->gecos ?: "-";
+      const char *dir = sysent->dir ?: "-";
+      g_autofree gchar* line_content = g_strjoin (" ", sysent->type, sysent->name,
+                                                  sysent->id, gecos, dir, shell, NULL);
+      g_string_append_printf (sysuser_content, "%s\n", line_content);
+    }
+  if (out_content)
+    *out_content = g_string_free(sysuser_content, FALSE);
+
+  return TRUE;
 }
 
 /* See "man 5 passwd" We just make sure the name and uid/gid match,
