@@ -207,11 +207,9 @@ pub struct Rojig {
     pub description: Option<String>,
 }
 
-// https://github.com/serde-rs/serde/issues/368
-fn serde_true() -> bool {
-    true
-}
-
+// Because of how we handle includes, *everything* here has to be
+// Option<T>.  The defaults live in the code (e.g. machineid-compat defaults
+// to `true`).
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct TreeComposeConfig {
@@ -272,20 +270,21 @@ pub struct TreeComposeConfig {
     pub initramfs_args: Option<Vec<String>>,
 
     // Tree layout options
-    #[serde(default)]
-    pub boot_location: BootLocation,
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub boot_location: Option<BootLocation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "tmp-is-dir")]
-    pub tmp_is_dir: bool,
+    pub tmp_is_dir: Option<bool>,
 
     // systemd
     #[serde(skip_serializing_if = "Option::is_none")]
     pub units: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_target: Option<String>,
-    #[serde(default = "serde_true")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "machineid-compat")]
-    pub machineid_compat: bool,
+    // Defaults to `true`
+    pub machineid_compat: Option<bool>,
 
     // versioning
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -419,6 +418,7 @@ packages-s390x:
         let tf = &t.tf;
         assert!(tf.parsed.rojig.is_none());
         assert!(tf.rojig_spec.is_none());
+        assert!(tf.parsed.machineid_compat.is_none());
     }
 
     #[test]
