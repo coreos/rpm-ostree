@@ -51,6 +51,7 @@ BUILTINPROTO(override);
 BUILTINPROTO(kargs);
 BUILTINPROTO(start_daemon);
 BUILTINPROTO(ex);
+BUILTINPROTO(temp_convert);
 
 #undef BUILTINPROTO
 

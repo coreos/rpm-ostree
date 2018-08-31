@@ -95,6 +95,9 @@ static RpmOstreeCommand commands[] = {
   { "kargs", 0,
     "Query or modify kernel arguments",
     rpmostree_builtin_kargs },
+  { "temp-convert", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "temp command to convert passwd/group conversion",
+    rpmostree_builtin_temp_convert },
   /* Legacy aliases */
   { "pkg-add", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     NULL, rpmostree_builtin_install },
