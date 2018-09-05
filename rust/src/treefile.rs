@@ -318,7 +318,11 @@ pub struct TreeComposeConfig {
     // Content manipulation
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "postprocess-script")]
+    // This one references an external filename
     pub postprocess_script: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    // This one is inline, and supports multiple (hence is useful for inheritance)
+    pub postprocess: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "add-files")]
     pub add_files: Option<Vec<String>>,

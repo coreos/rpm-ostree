@@ -1721,11 +1721,40 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (!copy_additional_files (rootfs_fd, context_directory, treefile, cancellable, error))
     return FALSE;
 
+  if (json_object_has_member (treefile, "postprocess"))
+    {
+      JsonArray *postprocess_inlines = json_object_get_array_member (treefile, "postprocess");
+      guint len = json_array_get_length (postprocess_inlines);
+
+      for (guint i = 0; i < len; i++)
+        {
+          const char *script = _rpmostree_jsonutil_array_require_string_element (postprocess_inlines, i, error);
+          if (!script)
+            return FALSE;
+
+          g_autofree char* binpath = g_strdup_printf ("/usr/bin/rpmostree-postprocess-inline-%u", i);
+          const char *target_binpath = binpath + 1;
+
+          if (!glnx_file_replace_contents_with_perms_at (rootfs_fd, target_binpath,
+                                                         (guint8*)script, -1,
+                                                         0755, (uid_t)-1, (gid_t)-1,
+                                                         GLNX_FILE_REPLACE_NODATASYNC,
+                                                         cancellable, error))
+            return FALSE;
+          g_print ("Executing `postprocess` inline script '%u'\n", i);
+          char *child_argv[] = { binpath, NULL };
+          if (!run_bwrap_mutably (rootfs_fd, binpath, child_argv, unified_core_mode, cancellable, error))
+            return glnx_prefix_error (error, "While executing inline postprocessing script '%i'", i);
+
+          if (!glnx_unlinkat (rootfs_fd, target_binpath, 0, error))
+            return FALSE;
+        }
+    }
+
   const char *postprocess_script = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "postprocess-script",
                                                               &postprocess_script, error))
     return FALSE;
-
   if (postprocess_script)
     {
       const char *bn = glnx_basename (postprocess_script);
