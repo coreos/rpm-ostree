@@ -21,9 +21,16 @@ pysetjsonmember "add-files" '[["foo.txt", "/usr/etc/foo.txt"],
                               ["baz.txt", "/usr/share/baz.txt"],
                               ["bar.txt", "/etc/bar.txt"]]'
 pysetjsonmember "postprocess-script" \"$PWD/postprocess.sh\"
+pysetjsonmember "postprocess" '["""#!/bin/bash
+touch /usr/share/postprocess-testing""",
+"""#!/bin/bash
+rm /usr/share/postprocess-testing
+touch /usr/share/postprocess-testing-done"""]'
 cat > postprocess.sh << EOF
 #!/bin/bash
 set -xeuo pipefail
+# Ordering should be after postprocess
+rm /usr/share/postprocess-testing-done
 echo misc-tweaks-postprocess-done > /usr/share/misc-tweaks-postprocess-done.txt
 cp -a /usr/etc/foo.txt /usr/share/misc-tweaks-foo.txt
 EOF
