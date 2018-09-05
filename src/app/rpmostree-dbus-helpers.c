@@ -33,7 +33,7 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-util.h"
 #include "rpmostree-rpm-util.h"
-#include "libror.h"
+#include "rpmostree-rust.h"
 
 #define RPMOSTREE_CLI_ID "cli"
 
