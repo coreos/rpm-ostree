@@ -173,6 +173,16 @@ It supports the following parameters:
 
    Note this does not alter the RPM database, so `rpm -V` will complain.
 
+   If you want to depend on network access, or tools not in the target host,
+   you can use the split-up `rpm-ostree compose install`
+   and `rpm-ostree compose postprocess/commit` commands.
+
+ * `postprocess`: array of string, optional: This is an *inline* script
+   variant of `postprocess-script` that is also an array, so it works
+   correctly with inheritance.  If both `postprocess-script` and `postprocess`
+   are provided, then `postprocess-script` will be executed after all
+   other `postprocess`.
+
  * `include`: string, optional: Path to another treefile which will be
    used as an inheritance base.  The semantics for inheritance are:
    Non-array values in child values override parent values.  Array
