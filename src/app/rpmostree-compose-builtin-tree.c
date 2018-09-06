@@ -1445,8 +1445,9 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   g_autofree char *inputhash = NULL;
   if (!inputhash_from_commit (self->repo, new_revision, &inputhash, error))
     return FALSE;
-  g_assert (inputhash); /* All new commits should have it */
-  g_variant_builder_add (&composemeta_builder, "{sv}", "rpm-ostree-inputhash", g_variant_new_string (inputhash));
+  /* We may not have the inputhash in the split-up installroot case */
+  if (inputhash)
+    g_variant_builder_add (&composemeta_builder, "{sv}", "rpm-ostree-inputhash", g_variant_new_string (inputhash));
   if (parent_revision)
     g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-parent-commit", g_variant_new_string (parent_revision));
 
