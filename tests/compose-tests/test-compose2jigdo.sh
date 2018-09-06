@@ -25,12 +25,14 @@ mkdir cache
 mkdir jigdo-output
 runcompose --ex-rojig-output-rpm $(pwd)/jigdo-output --cachedir $(pwd)/cache --add-metadata-string version=42.0
 rev=$(ostree --repo=repo-build rev-parse ${treeref})
+inputhash=$(ostree --repo=repo-build show --print-metadata-key=rpmostree.inputhash ${rev} | sed -e "s,',,g")
 find jigdo-output -name '*.rpm' | tee rpms.txt
 assert_file_has_content rpms.txt 'fedora-atomic-host-42.0.*x86_64'
 grep 'fedora-atomic-host.*x86_64\.rpm' rpms.txt | while read p; do
     rpm -qp --provides ${p} >>provides.txt
 done
 assert_file_has_content_literal provides.txt "rpmostree-jigdo-commit(${rev})"
+assert_file_has_content_literal provides.txt "rpmostree-rojig-inputhash(${inputhash})"
 echo "ok compose2jigdoRPM"
 
 runcompose --force-nocache --ex-rojig-output-set $(pwd)/jigdo-output --cachedir $(pwd)/cache --add-metadata-string version=42.1

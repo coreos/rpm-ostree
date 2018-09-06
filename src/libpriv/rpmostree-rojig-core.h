@@ -76,6 +76,7 @@
 /* TODO: rename this from jigdo for the next major version */
 #define RPMOSTREE_ROJIG_PROVIDE_V5 "rpmostree-jigdo(v5)"
 #define RPMOSTREE_ROJIG_PROVIDE_COMMIT "rpmostree-jigdo-commit"
+#define RPMOSTREE_ROJIG_PROVIDE_INPUTHASH "rpmostree-rojig-inputhash"
 
 /* This one goes in the spec file to use as our replacement */
 #define RPMOSTREE_ROJIG_SPEC_META_MAGIC "#@@@rpmostree_rojig_meta@@@"
