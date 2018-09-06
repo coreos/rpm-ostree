@@ -33,7 +33,7 @@ set -x
 
 # seed with a first package so we have a valid repo there
 vm_build_rpm_repo_mode skip foobar
-vm_start_httpd vmcheck /tmp 8888
+vm_start_httpd vmcheck /var/tmp 8888
 vm_rpmostree cleanup -m
 vm_ansible_inline <<EOF
 - copy:
