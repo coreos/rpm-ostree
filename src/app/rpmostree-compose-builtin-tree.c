@@ -43,6 +43,7 @@
 #include "rpmostree-rojig-build.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
+#include "rpmostree-package-variants.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-rust.h"
@@ -67,6 +68,7 @@ static char *opt_touch_if_changed;
 static gboolean opt_dry_run;
 static gboolean opt_print_only;
 static char *opt_write_commitid_to;
+static char *opt_write_composejson_to;
 
 /* shared by both install & commit */
 static GOptionEntry common_option_entries[] = {
@@ -103,6 +105,7 @@ static GOptionEntry commit_option_entries[] = {
   { "add-metadata-string", 0, 0, G_OPTION_ARG_STRING_ARRAY, &opt_metadata_strings, "Append given key and value (in string format) to metadata", "KEY=VALUE" },
   { "add-metadata-from-json", 0, 0, G_OPTION_ARG_STRING, &opt_metadata_json, "Parse the given JSON file as object, convert to GVariant, append to OSTree commit", "JSON" },
   { "write-commitid-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_commitid_to, "File to write the composed commitid to instead of updating the ref", "FILE" },
+  { "write-composejson-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_composejson_to, "Write JSON to FILE containing information about the compose run", "FILE" },
   { NULL }
 };
 
@@ -418,6 +421,26 @@ treespec_bind_bool (JsonObject *treedata,
 }
 
 static gboolean
+inputhash_from_commit (OstreeRepo *repo,
+                       const char *sha256,
+                       char      **out_value, /* inout Option<String> */
+                       GError    **error)
+{
+  g_autoptr(GVariant) commit_v = NULL;
+  g_autoptr(GVariant) commit_metadata = NULL;
+
+  if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
+                                 sha256, &commit_v, error))
+    return FALSE;
+
+  commit_metadata = g_variant_get_child_value (commit_v, 0);
+  g_assert (out_value);
+  *out_value = NULL;
+  g_variant_lookup (commit_metadata, "rpmostree.inputhash", "s", out_value);
+  return TRUE;
+}
+
+static gboolean
 install_packages_in_root (RpmOstreeTreeComposeContext  *self,
                           JsonObject      *treedata,
                           int              rootfs_dfd,
@@ -561,17 +584,12 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   /* Only look for previous checksum if caller has passed *out_unmodified */
   if (self->previous_checksum && out_unmodified != NULL)
     {
-      g_autoptr(GVariant) commit_v = NULL;
-      g_autoptr(GVariant) commit_metadata = NULL;
-      const char *previous_inputhash = NULL;
-
-      if (!ostree_repo_load_variant (self->repo, OSTREE_OBJECT_TYPE_COMMIT,
-                                     self->previous_checksum,
-                                     &commit_v, error))
+      g_autofree char *previous_inputhash = NULL;
+      if (!inputhash_from_commit (self->repo, self->previous_checksum,
+                                  &previous_inputhash, error))
         return FALSE;
 
-      commit_metadata = g_variant_get_child_value (commit_v, 0);
-      if (g_variant_lookup (commit_metadata, "rpmostree.inputhash", "&s", &previous_inputhash))
+      if (previous_inputhash)
         {
           if (strcmp (previous_inputhash, ret_new_inputhash) == 0)
             {
@@ -1280,6 +1298,9 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
                   GCancellable    *cancellable,
                   GError         **error)
 {
+  g_auto(GVariantBuilder) composemeta_builder;
+  g_variant_builder_init (&composemeta_builder, G_VARIANT_TYPE ("a{sv}"));
+
   const char *gpgkey = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "gpg_key", &gpgkey, error))
     return FALSE;
@@ -1399,13 +1420,35 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
       if (!ostree_repo_commit_transaction (self->repo, &stats, cancellable, error))
         return glnx_prefix_error (error, "Commit");
 
+      g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-n-metadata-total",
+                             g_variant_new_uint32 (stats.metadata_objects_total));
       g_print ("Metadata Total: %u\n", stats.metadata_objects_total);
+
+      g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-n-metadata-written",
+                             g_variant_new_uint32 (stats.metadata_objects_written));
       g_print ("Metadata Written: %u\n", stats.metadata_objects_written);
+
+      g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-n-content-total",
+                             g_variant_new_uint32 (stats.content_objects_total));
       g_print ("Content Total: %u\n", stats.content_objects_total);
+
       g_print ("Content Written: %u\n", stats.content_objects_written);
+      g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-n-content-written",
+                             g_variant_new_uint32 (stats.content_objects_written));
+
       g_print ("Content Bytes Written: %" G_GUINT64_FORMAT "\n", stats.content_bytes_written);
+      g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-content-bytes-written",
+                             g_variant_new_uint64 (stats.content_bytes_written));
     }
   g_print ("Wrote commit: %s\n", new_revision);
+  g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-commit", g_variant_new_string (new_revision));
+  g_autofree char *inputhash = NULL;
+  if (!inputhash_from_commit (self->repo, new_revision, &inputhash, error))
+    return FALSE;
+  g_assert (inputhash); /* All new commits should have it */
+  g_variant_builder_add (&composemeta_builder, "{sv}", "rpm-ostree-inputhash", g_variant_new_string (inputhash));
+  if (parent_revision)
+    g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-parent-commit", g_variant_new_string (parent_revision));
 
   if (opt_write_commitid_to)
     {
@@ -1413,7 +1456,44 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
         return glnx_prefix_error (error, "While writing to '%s'", opt_write_commitid_to);
     }
   else if (self->ref)
-    g_print ("%s => %s\n", self->ref, new_revision);
+    {
+      g_print ("%s => %s\n", self->ref, new_revision);
+      g_variant_builder_add (&composemeta_builder, "{sv}", "ref", g_variant_new_string (self->ref));
+    }
+
+  if (opt_write_composejson_to && parent_revision)
+    {
+      g_autoptr(GVariant) diffv = NULL;
+      if (!rpm_ostree_db_diff_variant (self->repo, parent_revision, new_revision,
+                                       FALSE, &diffv, cancellable, error))
+        return FALSE;
+      g_variant_builder_add (&composemeta_builder, "{sv}", "pkgdiff", diffv);
+    }
+
+  if (opt_write_composejson_to)
+    {
+
+      g_autoptr(GVariant) composemeta_v = g_variant_builder_end (&composemeta_builder);
+      JsonNode *composemeta_node = json_gvariant_serialize (composemeta_v);
+      glnx_unref_object JsonGenerator *generator = json_generator_new ();
+      json_generator_set_root (generator, composemeta_node);
+
+      char *dnbuf = strdupa (opt_write_composejson_to);
+      const char *dn = dirname (dnbuf);
+      g_auto(GLnxTmpfile) tmpf = { 0, };
+      if (!glnx_open_tmpfile_linkable_at (AT_FDCWD, dn, O_WRONLY | O_CLOEXEC,
+                                          &tmpf, error))
+        return FALSE;
+      g_autoptr(GOutputStream) out = g_unix_output_stream_new (tmpf.fd, FALSE);
+      /* See also similar code in status.c */
+      if (json_generator_to_stream (generator, out, NULL, error) <= 0
+          || (error != NULL && *error != NULL))
+        return FALSE;
+
+      if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_REPLACE,
+                                 AT_FDCWD, opt_write_composejson_to, error))
+        return FALSE;
+    }
 
   return TRUE;
 }
