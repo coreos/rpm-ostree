@@ -28,7 +28,7 @@ vm_assert_layered_pkg foo absent
 
 vm_cmd ostree refs $(vm_get_deployment_info 0 checksum) --create vmcheck_tmp/without_foo
 vm_build_rpm foo version 1.2 release 3
-vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/foo-1.2-3.x86_64.rpm
+vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.2-3.x86_64.rpm
 echo "ok install foo locally"
 
 vm_reboot
@@ -70,7 +70,7 @@ vm_cmd ostree refs $(vm_get_deployment_info 0 checksum) --create vmcheck_tmp/wit
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo
 vm_rpmostree uninstall foo
 vm_rpmostree upgrade # upgrades to new base which has foo
-if vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/foo-1.2-3.x86_64.rpm; then
+if vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.2-3.x86_64.rpm; then
   assert_not_reached "didn't error out when trying to install same pkg"
 fi
 echo "ok error on layering same pkg in base"
@@ -79,5 +79,5 @@ echo "ok error on layering same pkg in base"
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo
 vm_rpmostree upgrade
 vm_cmd rm -rf /etc/yum.repos.d/
-vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/foo-1.2-3.x86_64.rpm
+vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.2-3.x86_64.rpm
 echo "ok layer local foo without repos"

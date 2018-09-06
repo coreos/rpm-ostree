@@ -110,7 +110,7 @@ vm_rpmostree() {
 vm_send_test_repo() {
   mode=${1:-nogpgcheck}
   # note we use -c here because we might be called twice within a second
-  vm_raw_rsync -c --delete ${test_tmpdir}/yumrepo $VM:/tmp/vmcheck
+  vm_raw_rsync -c --delete ${test_tmpdir}/yumrepo $VM:/var/tmp/vmcheck
 
   if [[ $mode == skip ]]; then
     return
@@ -119,7 +119,7 @@ vm_send_test_repo() {
   cat > vmcheck.repo << EOF
 [test-repo]
 name=test-repo
-baseurl=file:///tmp/vmcheck/yumrepo
+baseurl=file:///var/tmp/vmcheck/yumrepo
 EOF
 
   if [[ $mode == gpgcheck ]]; then

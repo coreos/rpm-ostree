@@ -190,7 +190,7 @@ echo "ok script output prefixed in journal"
 
 # local repos are always cached, so let's start up an http server for the same
 # vmcheck repo
-vm_start_httpd vmcheck /tmp 8888
+vm_start_httpd vmcheck /var/tmp 8888
 vm_ansible_inline <<EOF
 - copy:
     content: |

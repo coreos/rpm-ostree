@@ -24,7 +24,7 @@ set -euo pipefail
 
 set -x
 
-YUMREPO=/tmp/vmcheck/yumrepo/packages/x86_64
+YUMREPO=/var/tmp/vmcheck/yumrepo/packages/x86_64
 
 # create a new vmcheck commit which has foo and bar in it already
 
