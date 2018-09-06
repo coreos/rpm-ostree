@@ -37,8 +37,8 @@ vm_build_rpm foo version 2.0
 vm_build_rpm bar
 vm_build_rpm baz
 vm_rpmostree override replace --install bar \
-  --install /tmp/vmcheck/yumrepo/packages/x86_64/baz-1.0-1.x86_64.rpm \
-  /tmp/vmcheck/yumrepo/packages/x86_64/foo-2.0-1.x86_64.rpm
+  --install /var/tmp/vmcheck/yumrepo/packages/x86_64/baz-1.0-1.x86_64.rpm \
+  /var/tmp/vmcheck/yumrepo/packages/x86_64/foo-2.0-1.x86_64.rpm
 vm_rpmostree initramfs --enable
 
 vm_reboot

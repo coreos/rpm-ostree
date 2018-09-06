@@ -107,7 +107,7 @@ vm_build_rpm test-uninstall-all-pkg2
 vm_build_rpm test-uninstall-all-pkg3
 # do one from repo and one local for funsies
 vm_rpmostree install test-uninstall-all-pkg1 \
-  /tmp/vmcheck/yumrepo/packages/x86_64/test-uninstall-all-pkg2-1.0-1.x86_64.rpm
+  /var/tmp/vmcheck/yumrepo/packages/x86_64/test-uninstall-all-pkg2-1.0-1.x86_64.rpm
 vm_assert_status_jq \
   '.deployments[0]["packages"]|length == 1' \
   '.deployments[0]["requested-packages"]|length == 1' \

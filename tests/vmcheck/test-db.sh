@@ -27,7 +27,7 @@ set -x
 # SUMMARY: check that `db` commands work correctly. Right now, we're only
 # testing `db diff`.
 
-YUMREPO=/tmp/vmcheck/yumrepo/packages/x86_64
+YUMREPO=/var/tmp/vmcheck/yumrepo/packages/x86_64
 
 check_diff() {
   arg1=$1; shift

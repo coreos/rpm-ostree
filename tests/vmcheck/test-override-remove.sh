@@ -74,7 +74,7 @@ echo "ok setup"
 # reach the repo. This implicitly tests that `override remove/reset` operate in
 # cache-only mode.
 vm_rpmostree cleanup --repomd
-vm_cmd mv /tmp/vmcheck/yumrepo{,.bak}
+vm_cmd mv /var/tmp/vmcheck/yumrepo{,.bak}
 
 # funky jq syntax: see test-override-local-replace.sh for an explanation of how
 # this works. the only difference here is the [.0] which we use to access the
@@ -177,7 +177,7 @@ echo "ok reset inactive override remove"
 vm_rpmostree cleanup -p
 
 # Restore the local yum repo.
-vm_cmd mv /tmp/vmcheck/yumrepo{.bak,}
+vm_cmd mv /var/tmp/vmcheck/yumrepo{.bak,}
 echo "ok override remove/reset operate offline"
 
 # a few error checks
@@ -205,7 +205,7 @@ if vm_rpmostree install foo; then
 fi
 # the check blocking this isn't related to overrides, though for consistency
 # let's make sure this fails here too
-if vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm; then
+if vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm; then
   assert_not_reached "tried to layer local pkg removed by override"
 fi
 vm_rpmostree cleanup -p

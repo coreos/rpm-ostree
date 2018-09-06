@@ -35,7 +35,7 @@ vm_rpmostree reload
 vm_assert_layered_pkg foo absent
 
 vm_build_rpm foo
-vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
+vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
 vm_assert_status_jq '.deployments|length == 2'
 echo "ok install foo locally"
 
@@ -89,7 +89,7 @@ vm_cmd rm -rf /etc/test-livefs-with-etc \
               /etc/test-livefs-with-etc.conf \
               /etc/opt/test-livefs-with-etc-opt.conf
 
-vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-{with-etc,service}-1.0-1.x86_64.rpm
+vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-{with-etc,service}-1.0-1.x86_64.rpm
 assert_livefs_ok
 vm_rpmostree ex livefs
 vm_cmd rpm -q foo test-livefs-{with-etc,service} > rpmq.txt
@@ -127,7 +127,7 @@ reset() {
 reset
 
 # If the admin created a config file before, we need to keep it
-vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-with-etc-1.0-1.x86_64.rpm
+vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-with-etc-1.0-1.x86_64.rpm
 vm_cmd cat /etc/test-livefs-with-etc.conf || true
 vm_cmd echo custom \> /etc/test-livefs-with-etc.conf
 vm_cmd cat /etc/test-livefs-with-etc.conf
@@ -143,7 +143,7 @@ vm_rpmostree deploy $(vm_get_booted_deployment_info checksum)
 echo "ok livefs redeploy booted commit"
 
 reset
-vm_rpmostree install /tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
+vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
 vm_rpmostree ex livefs
 # Picked a file that should be around, but harmless to change for testing.  The
 # first is available on Fedora, the second on CentOS (and newer too).

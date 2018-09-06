@@ -28,10 +28,10 @@ vm_assert_layered_pkg foo absent
 vm_assert_layered_pkg bar absent
 
 vm_build_rpm foo
-foo_rpm=/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
+foo_rpm=/var/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
 
 vm_build_rpm bar
-bar_rpm=/tmp/vmcheck/yumrepo/packages/x86_64/bar-1.0-1.x86_64.rpm
+bar_rpm=/var/tmp/vmcheck/yumrepo/packages/x86_64/bar-1.0-1.x86_64.rpm
 
 # We cheat a bit here and don't actually reboot the system. Instead, we just
 # check that then pending deployment looks sane.

@@ -58,14 +58,14 @@ vm_cmd ostree remote add --no-gpg-verify vmcheck_remote file://$remote_repo
 
 go_offline() {
   vm_cmd mv ${remote_repo}{,.bak}
-  vm_cmd mv /tmp/vmcheck/yumrepo{,.bak}
-  YUMREPO=/tmp/vmcheck/yumrepo.bak/packages/x86_64
+  vm_cmd mv /var/tmp/vmcheck/yumrepo{,.bak}
+  YUMREPO=/var/tmp/vmcheck/yumrepo.bak/packages/x86_64
 }
 
 go_online() {
-  vm_cmd mv /tmp/vmcheck/yumrepo{.bak,}
+  vm_cmd mv /var/tmp/vmcheck/yumrepo{.bak,}
   vm_cmd mv ${remote_repo}{.bak,}
-  YUMREPO=/tmp/vmcheck/yumrepo/packages/x86_64
+  YUMREPO=/var/tmp/vmcheck/yumrepo/packages/x86_64
 }
 
 # sanity check

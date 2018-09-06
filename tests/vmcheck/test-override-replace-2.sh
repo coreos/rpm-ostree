@@ -24,7 +24,7 @@ set -euo pipefail
 
 set -x
 
-YUMREPO=/tmp/vmcheck/yumrepo/packages/x86_64
+YUMREPO=/var/tmp/vmcheck/yumrepo/packages/x86_64
 
 vm_assert_status_jq \
   '.deployments[0]["base-checksum"]|not' \
