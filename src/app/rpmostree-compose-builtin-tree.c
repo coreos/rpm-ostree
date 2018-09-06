@@ -703,8 +703,8 @@ parse_treefile_to_json (RpmOstreeTreeComposeContext  *self,
     {
       const char *arch = self ? dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx)) : NULL;
       self->treefile_rs = ror_treefile_new (treefile_path, arch,
-                                                     self->workdir_tmp.fd,
-                                                     error);
+                                            self->workdir_dfd,
+                                            error);
       if (!self->treefile_rs)
         return glnx_prefix_error (error, "Failed to load YAML treefile");
 
