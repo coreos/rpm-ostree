@@ -56,6 +56,7 @@ vm_cmd ostree refs vmcheck_tmp vmcheck_remote --delete
 # comes with the distro to help speed up rpm-ostree metadata fetching since we
 # don't cache it (e.g. on Fedora, it takes *forever* to fetch metadata, which we
 # have to do dozens of times throughout the suite)
+vm_cmd mkdir -p /etc/yum.repos.d/
 if ! vm_cmd test -f /etc/yum.repos.d/.vmcheck; then
     echo "Neutering /etc/yum.repos.d"
     # Move the current one to .bak
