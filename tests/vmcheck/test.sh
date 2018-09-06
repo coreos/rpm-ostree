@@ -56,11 +56,17 @@ vm_cmd ostree refs vmcheck_tmp vmcheck_remote --delete
 # comes with the distro to help speed up rpm-ostree metadata fetching since we
 # don't cache it (e.g. on Fedora, it takes *forever* to fetch metadata, which we
 # have to do dozens of times throughout the suite)
-if ! vm_cmd test -f /etc/yum.repos.d/.vmcheck; then
+if vm_cmd test -d /etc/yum.repos.d/ && ! vm_cmd test -f /etc/yum.repos.d/.vmcheck; then
     echo "Neutering /etc/yum.repos.d"
     # Move the current one to .bak
     vm_cmd mv /etc/yum.repos.d{,.bak}
     # And create a new one with a .vmcheck as a stamp file so we recognize it
+    vm_cmd rm /etc/yum.repos.d.tmp -rf
+    vm_cmd mkdir /etc/yum.repos.d.tmp
+    vm_cmd touch /etc/yum.repos.d.tmp/.vmcheck
+    vm_cmd cp -r /etc/yum.repos.d{.tmp,}
+elif ! vm_cmd test -d /etc/yum.repos.d/; then
+    echo "No /etc/yum.repos.d; creating our own"
     vm_cmd rm /etc/yum.repos.d.tmp -rf
     vm_cmd mkdir /etc/yum.repos.d.tmp
     vm_cmd touch /etc/yum.repos.d.tmp/.vmcheck
@@ -202,10 +208,13 @@ done
 if test -z "${VMCHECK_DEBUG:-}"; then
 
     # put back the original yum repos
-    if vm_cmd test -f /etc/yum.repos.d/.vmcheck; then
+    if vm_cmd test -d /etc/yum.repos.d.bak/ && vm_cmd test -f /etc/yum.repos.d/.vmcheck; then
         echo "Restoring original /etc/yum.repos.d"
         vm_cmd rm -rf /etc/yum.repos.d
         vm_cmd mv /etc/yum.repos.d{.bak,}
+    else
+        echo "No original /etc/yum.repos.d; cleaning up ours"
+        vm_cmd rm -rf /etc/yum.repos.d*
     fi
 
     # put back the original config if any
