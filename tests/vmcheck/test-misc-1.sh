@@ -61,6 +61,9 @@ vm_rpmostree status --jsonpath '$.deployments[0].booted' > jsonpath.txt
 assert_file_has_content_literal jsonpath.txt '[true]'
 echo "ok jsonpath"
 
+vm_rpmostree status --json-short >json-short.txt
+jq '.deployments[0]["base-commit-meta"]["rpmostree.rpmdb.pkglist"]|not' < json-short.txt
+
 vm_rpmostree --version > version.yaml
 python -c 'import yaml; v=yaml.safe_load(open("version.yaml")); assert("Version" in v["rpm-ostree"])'
 echo "ok yaml version"
