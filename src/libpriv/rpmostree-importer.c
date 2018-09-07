@@ -532,6 +532,18 @@ ensure_directories_user_writable (GFileInfo *file_info)
     }
 }
 
+static gboolean
+path_for_tmpfiles_should_be_ignored (const char *path)
+{
+  /* HACK: Avoid generating tmpfiles.d entries for the `rpm` package's
+   * /var/lib/rpm entries in --unified-core composes.  A much more
+   * rigorous approach here would be to maintain our built-in tmpfiles.d
+   * entries as a struct and ensure we're not writing any overrides for
+   * those here.
+   */
+  return g_str_has_prefix (path, "/var/lib/rpm");
+}
+
 static void
 append_tmpfiles_d (RpmOstreeImporter *self,
                    const char *path,
@@ -539,6 +551,9 @@ append_tmpfiles_d (RpmOstreeImporter *self,
                    const char *user,
                    const char *group)
 {
+  if (path_for_tmpfiles_should_be_ignored (path))
+    return;
+
   GString *tmpfiles_d = self->tmpfiles_d;
   const guint32 mode = g_file_info_get_attribute_uint32 (finfo, "unix::mode");
   char filetype_c;
