@@ -653,8 +653,17 @@ compose_filter_cb (OstreeRepo         *repo,
   else if (g_str_has_prefix (path, "/run/") ||
            g_str_has_prefix (path, "/var/"))
     {
-      append_tmpfiles_d (self, path, file_info,
-                         user ?: "root", group ?: "root");
+      /* HACK: Avoid generating tmpfiles.d entries for the `rpm` package's
+       * /var/lib/rpm entries in --unified-core composes.  A much more
+       * rigorous approach here would be to maintain our built-in tmpfiles.d
+       * entries as a struct and ensure we're not writing any overrides for
+       * those here.
+       */
+      if (!g_str_has_prefix (path, "/var/lib/rpm"))
+        {
+          append_tmpfiles_d (self, path, file_info,
+                             user ?: "root", group ?: "root");
+        }
       return OSTREE_REPO_COMMIT_FILTER_SKIP;
     }
   else if (!error_was_set)
