@@ -427,13 +427,11 @@ inputhash_from_commit (OstreeRepo *repo,
                        GError    **error)
 {
   g_autoptr(GVariant) commit_v = NULL;
-  g_autoptr(GVariant) commit_metadata = NULL;
-
   if (!ostree_repo_load_variant (repo, OSTREE_OBJECT_TYPE_COMMIT,
                                  sha256, &commit_v, error))
     return FALSE;
 
-  commit_metadata = g_variant_get_child_value (commit_v, 0);
+  g_autoptr(GVariant) commit_metadata = g_variant_get_child_value (commit_v, 0);
   g_assert (out_value);
   *out_value = NULL;
   g_variant_lookup (commit_metadata, "rpmostree.inputhash", "s", out_value);
@@ -1387,6 +1385,12 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
                                  &new_revision, cancellable, error))
     return FALSE;
 
+  g_autoptr(GVariant) new_commit = NULL;
+  if (!ostree_repo_load_commit (self->repo, new_revision, &new_commit,
+                                NULL, error))
+    return FALSE;
+  g_autoptr(GVariant) new_commit_inline_meta = g_variant_get_child_value (new_commit, 0);
+
   const char *rojig_outputdir = opt_ex_jigdo_output_rpm ?: opt_ex_jigdo_output_set;
   if (rojig_outputdir)
     {
@@ -1442,9 +1446,13 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
     }
   g_print ("Wrote commit: %s\n", new_revision);
   g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-commit", g_variant_new_string (new_revision));
-  g_autofree char *inputhash = NULL;
-  if (!inputhash_from_commit (self->repo, new_revision, &inputhash, error))
-    return FALSE;
+  const char *commit_version = NULL;
+  (void)g_variant_lookup (new_commit_inline_meta, OSTREE_COMMIT_META_KEY_VERSION, "&s", &commit_version);
+  if (commit_version)
+    g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-version", g_variant_new_string (commit_version));
+
+  const char *inputhash = NULL;
+  (void)g_variant_lookup (new_commit_inline_meta, "rpmostree.inputhash", "&s", &inputhash);
   /* We may not have the inputhash in the split-up installroot case */
   if (inputhash)
     g_variant_builder_add (&composemeta_builder, "{sv}", "rpm-ostree-inputhash", g_variant_new_string (inputhash));
@@ -1473,7 +1481,6 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
 
   if (opt_write_composejson_to)
     {
-
       g_autoptr(GVariant) composemeta_v = g_variant_builder_end (&composemeta_builder);
       JsonNode *composemeta_node = json_gvariant_serialize (composemeta_v);
       glnx_unref_object JsonGenerator *generator = json_generator_new ();
@@ -1489,6 +1496,10 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
       /* See also similar code in status.c */
       if (json_generator_to_stream (generator, out, NULL, error) <= 0
           || (error != NULL && *error != NULL))
+        return FALSE;
+
+      /* World readable to match --write-commitid-to which uses umask */
+      if (!glnx_fchmod (tmpf.fd, 0644, error))
         return FALSE;
 
       if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_REPLACE,

@@ -21,5 +21,9 @@ echo "ok ref not written"
 commitid_txt=$(cat commitid.txt)
 json_commit=$(jq -r '.["ostree-commit"]' composemeta.json)
 assert_streq "${json_commit}" "${commitid_txt}"
+# And verify we have other keys
+for key in ostree-version rpm-ostree-inputhash ostree-content-bytes-written; do
+    jq -r '.["'${key}'"]' composemeta.json >/dev/null
+done
 
 echo "ok composejson"
