@@ -102,15 +102,21 @@ typedef struct {
 } RpmOstreeLuaReplacement;
 
 static const RpmOstreeLuaReplacement lua_replacements[] = {
-  /* These three don't have bugs...the release packages are implemented Lua for
+  /* The release packages are implemented Lua for
    * unnecessary reasons.  This doesn't fully generalize obviously arbitrarly
-   * release packages, but anyone doing an exampleos-release package can just implement
-   * `ln` in shell script in their package.
+   * release packages, but anyone doing an exampleos-release package and that
+   * wants to use rpm-ostree can just do `ln` in shell script in their package
+   * too.
    */
   { "fedora-release-atomichost.post",
     "/usr/bin/sh",
     "set -euo pipefail\n"
     "ln -sf os.release.d/os-release-atomichost /usr/lib/os-release\n"
+  },
+  { "fedora-release-coreos.post",
+    "/usr/bin/sh",
+    "set -euo pipefail\n"
+    "ln -sf os.release.d/os-release-coreos /usr/lib/os-release\n"
   },
   { "fedora-release-workstation.post",
     "/usr/bin/sh",
