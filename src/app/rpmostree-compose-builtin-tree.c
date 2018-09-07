@@ -1171,13 +1171,16 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
                                    cancellable, error))
       return FALSE;
 
+    gboolean is_dry_run = opt_dry_run || opt_download_only;
     if (unmodified)
       {
-        g_print ("No apparent changes since previous commit; use --force-nocache to override\n");
+        const char *force_nocache_msg = "; use --force-nocache to override";
+        g_print ("No apparent changes since previous commit%s\n",
+                 is_dry_run ? "." : force_nocache_msg);
         /* Note early return */
         return TRUE;
       }
-    else if (opt_dry_run || opt_download_only)
+    else if (is_dry_run)
       {
         g_print ("--dry-run complete");
         if (opt_touch_if_changed)
