@@ -611,7 +611,14 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     return FALSE;
 
   if (opt_download_only)
-    return TRUE; /* 🔚 Early return */
+    {
+      if (opt_unified_core)
+        {
+          if (!rpmostree_context_import (self->corectx, cancellable, error))
+            return FALSE;
+        }
+      return TRUE; /* 🔚 Early return */
+    }
 
   /* Hardlink our input set now for rojig-set output mode */
   if (opt_ex_jigdo_output_set)
