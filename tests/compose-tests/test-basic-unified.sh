@@ -29,6 +29,10 @@ assert_file_has_content_literal autovar.txt 'd /var/cache 0755 root root - -'
 ostree --repo=${repobuild} cat ${treeref} /usr/lib/tmpfiles.d/pkg-chrony.conf > autovar.txt
 # And this one has a non-root uid
 assert_file_has_content_literal autovar.txt 'd /var/log/chrony 0755 chrony chrony - -'
+# see rpmostree-importer.c
+if ostree --repo=${repobuild} cat ${treeref} /usr/lib/tmpfiles.d/pkg-rpm.conf > rpm.txt 2>/dev/null; then
+    assert_not_file_has_content rpm.txt 'd /var/lib/rpm'
+fi
 echo "ok autovar"
 
 # And redo it to trigger relabeling
