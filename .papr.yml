@@ -22,10 +22,18 @@ cluster:
   hosts:
     - name: vmcheck1
       distro: fedora/28/atomic
+      # XXX: use updates branch until stable FAH receives:
+      # https://bodhi.fedoraproject.org/updates/FEDORA-2018-16c78b3d92
+      ostree:
+        branch: fedora/28/x86_64/updates/atomic-host
     - name: vmcheck2
       distro: fedora/28/atomic
+      ostree:
+        branch: fedora/28/x86_64/updates/atomic-host
     - name: vmcheck3
       distro: fedora/28/atomic
+      ostree:
+        branch: fedora/28/x86_64/updates/atomic-host
   container:
     image: registry.fedoraproject.org/fedora:28
 
