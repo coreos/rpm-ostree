@@ -1397,13 +1397,12 @@ sort_packages (RpmOstreeContext *self,
 
 /* Set @error with a string containing an error relating to @pkgs */
 static gboolean
-throw_package_list (GError **error, const char *suffix, GPtrArray *pkgs)
+throw_package_list (GError **error, const char *prefix, GPtrArray *pkgs)
 {
   if (!error)
     return FALSE; /* Note early simultaneously happy and sad return */
 
-  g_autoptr(GString) msg = g_string_new ("The following base packages ");
-  g_string_append (msg, suffix);
+  g_autoptr(GString) msg = g_string_new (prefix);
   g_string_append (msg, ": ");
 
   gboolean first = TRUE;
@@ -1480,7 +1479,7 @@ check_goal_solution (RpmOstreeContext *self,
       }
 
     if (forbidden->len > 0)
-      return throw_package_list (error, "would be removed", forbidden);
+      return throw_package_list (error, "Base packages would be removed", forbidden);
   }
 
   /* check that all the pkgs we expect to remove are marked for removal */
@@ -1494,7 +1493,7 @@ check_goal_solution (RpmOstreeContext *self,
       }
 
     if (forbidden->len > 0)
-      return throw_package_list (error, "are not marked to be removed", forbidden);
+      return throw_package_list (error, "Base packages not marked to be removed", forbidden);
   }
 
   /* REINSTALLs should never happen since it doesn't make sense in the rpm-ostree flow, and
@@ -1572,7 +1571,7 @@ check_goal_solution (RpmOstreeContext *self,
       }
 
     if (forbidden->len > 0)
-      return throw_package_list (error, "are not marked to be installed", forbidden);
+      return throw_package_list (error, "Base packages not marked to be installed", forbidden);
   }
 
   return TRUE;
@@ -1828,13 +1827,30 @@ rpmostree_context_prepare (RpmOstreeContext *self,
     }
 
   /* Loop over each named package, and tell libdnf to add it to the goal */
+  g_autoptr(GPtrArray) missing_pkgs = NULL;
   for (char **it = pkgnames; it && *it; it++)
     {
       const char *pkgname = *it;
+      g_autoptr(GError) local_error = NULL;
+
       g_assert (!self->rojig_pure);
-      if (!dnf_context_install (dnfctx, pkgname, error))
-        return FALSE;
+      if (!dnf_context_install (dnfctx, pkgname, &local_error))
+        {
+          /* Only keep going if it's ENOENT, so we coalesce into one msg at the end */
+          if (!g_error_matches (local_error, DNF_ERROR, DNF_ERROR_PACKAGE_NOT_FOUND))
+            {
+              g_propagate_error (error, g_steal_pointer (&local_error));
+              return FALSE;
+            }
+          /* lazy init since it's unlikely in the common case (e.g. upgrades) */
+          if (!missing_pkgs)
+            missing_pkgs = g_ptr_array_new ();
+          g_ptr_array_add (missing_pkgs, (gpointer)pkgname);
+        }
     }
+
+  if (missing_pkgs && missing_pkgs->len > 0)
+    return throw_package_list (error, "Packages not found", missing_pkgs);
 
   if (self->rojig_spec)
     {
