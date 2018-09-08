@@ -59,6 +59,17 @@ assert_file_has_content err.txt "See https://github.com/projectatomic/rpm-ostree
 
 echo "ok failed to install in /opt and /usr/local"
 
+# Check that trying to install multiple nonexistent pkgs at once provides an
+# error including all of them at once
+fakes="foobar barbaz bazboo"
+if vm_rpmostree install $fakes &> err.txt; then
+  assert_not_reached "successfully layered non-existent pkgs $fakes?"
+fi
+assert_file_has_content_literal err.txt "Packages not found:"
+# ordering can be different, so check one at a time
+for pkg in $fakes; do assert_file_has_content_literal err.txt $pkg; done
+echo "ok one error for multiple missing pkgs"
+
 # Explicit epoch of 0 as it's a corner case:
 # https://github.com/projectatomic/rpm-ostree/issues/349
 vm_build_rpm foo epoch 0
@@ -163,7 +174,7 @@ vm_build_rpm bar conflicts foo
 if vm_rpmostree install bar &> err.txt; then
   assert_not_reached "successfully layered conflicting pkg bar?"
 fi
-assert_file_has_content err.txt "The following base packages would be removed"
+assert_file_has_content err.txt "Base packages would be removed"
 assert_file_has_content err.txt "foo-1.0-1.x86_64"
 vm_rpmostree cleanup -p
 vm_cmd ostree reset vmcheck $(vm_cmd ostree rev-parse "vmcheck^")
