@@ -241,6 +241,18 @@ rpmostree_option_context_parse (GOptionContext *context,
 
   if (use_daemon)
     {
+      /* More gracefully handle the case where
+       * no --sysroot option was specified and we're not booted via ostree
+       * https://github.com/projectatomic/rpm-ostree/issues/1537
+       */
+      if (!opt_sysroot)
+        {
+          if (!glnx_fstatat_allow_noent (AT_FDCWD, "/run/ostree-booted", NULL, 0, error))
+            return FALSE;
+          if (errno == ENOENT)
+            return glnx_throw (error, "This system was not booted via libostree; cannot operate");
+        }
+
       /* root never needs to auth */
       if (getuid () != 0)
         /* ignore errors; we print out a warning if we fail to spawn pkttyagent */
