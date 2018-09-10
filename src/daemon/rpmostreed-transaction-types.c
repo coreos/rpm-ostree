@@ -977,7 +977,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           const char *pkg = *it;
           g_autoptr(GPtrArray) pkgs =
             rpmostree_get_matching_packages (base_rsack->sack, pkg);
-          if (pkgs->len > 0)
+          if (pkgs->len > 0 && !allow_inactive)
             {
               g_autoptr(GString) pkgnames = g_string_new ("");
               for (guint i = 0; i < pkgs->len; i++)
@@ -985,15 +985,9 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                   DnfPackage *p = pkgs->pdata[i];
                   g_string_append_printf (pkgnames, " %s", dnf_package_get_nevra (p));
                 }
-              if (!allow_inactive)
-                {
-                  /* XXX: awkward CLI mention here */
-                  rpmostree_output_message (
-                      "warning: deprecated: \"%s\" is already provided by:%s. Use "
-                      "--allow-inactive to squash this warning. A future release will make "
-                      "this a requirement. See rpm-ostree(1) for details.",
-                      pkg, pkgnames->str);
-                }
+              return glnx_throw (error, "\"%s\" is already provided by:%s. Use "
+                                        "--allow-inactive to explicitly "
+                                        "require it.", pkg, pkgnames->str);
             }
         }
 
