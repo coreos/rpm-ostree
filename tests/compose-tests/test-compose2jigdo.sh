@@ -8,18 +8,14 @@ dn=$(cd $(dirname $0) && pwd)
 . ${dn}/../common/libtest.sh
 
 prepare_compose_test "compose2jigdo"
-if rpm-ostree --version | grep -q rust; then
-    pysetjsonmember "rojig" '{ "name": "fedora-atomic-host", "license": "MIT", "summary": "Fedora Atomic Host"}'
-    python <<EOF
+pysetjsonmember "rojig" '{ "name": "fedora-atomic-host", "license": "MIT", "summary": "Fedora Atomic Host"}'
+python <<EOF
 import json, yaml
 jd=json.load(open("$treefile"))
 with open("$treefile.yaml", "w") as f:
   f.write(yaml.dump(jd))
 EOF
-    export treefile=$treefile.yaml
-else
-    pysetjsonmember "ex-rojig-spec" '"fedora-atomic-host-oirpm.spec"'
-fi
+export treefile=$treefile.yaml
 
 mkdir cache
 mkdir jigdo-output
