@@ -89,11 +89,12 @@ vm_cmd ostree show --print-metadata-key rpmostree.rpmdb.pkglist \
 assert_file_has_content pkglist.txt 'test-pkgcache-migrate-pkg'
 echo "ok layered pkglist"
 
-vm_rpmostree install glibc &>out.txt
-assert_file_has_content out.txt "warning: .* Use --allow-inactive to squash this warning."
+if vm_rpmostree install glibc &>out.txt; then
+  assert_not_reached "Successfully requested glibc without --allow-inactive?"
+fi
+assert_file_has_content out.txt "Use --allow-inactive to disable this check."
 vm_rpmostree cleanup -p
 vm_rpmostree install glibc --allow-inactive &>out.txt
-assert_not_file_has_content out.txt "warning:"
 vm_rpmostree cleanup -p
 echo "ok --allow-inactive"
 

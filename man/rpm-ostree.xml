@@ -235,10 +235,11 @@ Boston, MA 02111-1307, USA.
           </para>
 
           <para>
-            Note that currently, you may specify a package that is
-            already in the base layer, though you should use the
-            <command>--allow-inactive</command> option to avoid a
-            warning. This option will become mandatory in the future.
+            Note that by default, specifying a package that is already
+            in the base layer is an error unless the
+            <command>--allow-inactive</command> option is provided.
+            This can be useful when anticipating the removal of a base
+            package.
           </para>
 
           <para>
