@@ -789,7 +789,7 @@ process_includes (RpmOstreeTreeComposeContext  *self,
 
       g_autoptr(JsonParser) parent_parser = NULL;
       if (!parse_treefile_to_json (self,
-                                   gs_file_get_path_cached (treefile_path),
+                                   gs_file_get_path_cached (parent_path),
                                    &parent_parser, error))
         return FALSE;
 
