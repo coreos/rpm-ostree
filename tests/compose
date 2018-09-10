@@ -5,7 +5,7 @@ dn=$(cd $(dirname $0) && pwd)
 
 export topsrcdir=$(cd $dn/.. && pwd)
 . ${dn}/common/libtest-core.sh
-. ${dn}/common/libcomposetest.sh
+. ${dn}/common/libtestrepos.sh
 
 # avoid refetching yum metadata everytime
 export RPMOSTREE_USE_CACHED_METADATA=1

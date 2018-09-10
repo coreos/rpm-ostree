@@ -5,7 +5,7 @@ set -xeuo pipefail
 dn=$(cd $(dirname $0) && pwd)
 export topsrcdir=$(cd $dn/.. && pwd)
 . ${dn}/common/libtest-core.sh
-. ${dn}/common/libcomposetest.sh
+. ${dn}/common/libtestrepos.sh
 
 if test "$(id -u)" = 0; then
     fatal "Don't run $0 as root"
