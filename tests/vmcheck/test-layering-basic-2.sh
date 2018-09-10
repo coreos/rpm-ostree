@@ -92,7 +92,7 @@ echo "ok layered pkglist"
 if vm_rpmostree install glibc &>out.txt; then
   assert_not_reached "Successfully requested glibc without --allow-inactive?"
 fi
-assert_file_has_content out.txt "Use --allow-inactive to disable this check."
+assert_file_has_content out.txt "Use --allow-inactive to explicitly require it."
 vm_rpmostree cleanup -p
 vm_rpmostree install glibc --allow-inactive &>out.txt
 vm_rpmostree cleanup -p
