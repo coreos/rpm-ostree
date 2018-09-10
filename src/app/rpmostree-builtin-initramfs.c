@@ -85,8 +85,9 @@ rpmostree_builtin_initramfs (int             argc,
 
   if (!(opt_enable || opt_disable))
     {
-      GVariantIter iter;
       g_autoptr(GVariant) deployments = rpmostree_sysroot_dup_deployments (sysroot_proxy);
+      gboolean cur_regenerate = FALSE;
+      g_autofree char **initramfs_args = NULL;
 
       if (opt_reboot)
         {
@@ -95,41 +96,27 @@ rpmostree_builtin_initramfs (int             argc,
           return FALSE;
         }
 
-      g_variant_iter_init (&iter, deployments);
-
-      while (TRUE)
+      if (g_variant_n_children (deployments) > 1)
         {
-          gboolean cur_regenerate;
-          g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
-          g_autoptr(GVariantDict) dict = NULL;
-          g_autofree char **initramfs_args = NULL;
-          gboolean is_booted;
+          g_autoptr(GVariant) pending = g_variant_get_child_value (deployments, 0);
+          g_auto(GVariantDict) dict;
+          g_variant_dict_init (&dict, pending);
 
-          if (child == NULL)
-            break;
-
-          dict = g_variant_dict_new (child);
-
-          if (!g_variant_dict_lookup (dict, "booted", "b", &is_booted))
-            continue;
-          if (!is_booted)
-            continue;
-
-          if (!g_variant_dict_lookup (dict, "regenerate-initramfs", "b", &cur_regenerate))
+          if (!g_variant_dict_lookup (&dict, "regenerate-initramfs", "b", &cur_regenerate))
             cur_regenerate = FALSE;
           if (cur_regenerate)
             {
-              g_variant_dict_lookup (dict, "initramfs-args", "^a&s", &initramfs_args);
+              g_variant_dict_lookup (&dict, "initramfs-args", "^a&s", &initramfs_args);
             }
+        }
 
-          g_print ("Initramfs regeneration: %s\n", cur_regenerate ? "enabled" : "disabled");
-          if (initramfs_args)
-            {
-              g_print ("Initramfs args: ");
-              for (char **iter = initramfs_args; iter && *iter; iter++)
-                g_print ("%s ", *iter);
-              g_print ("\n");
-            }
+      g_print ("Initramfs regeneration: %s\n", cur_regenerate ? "enabled" : "disabled");
+      if (initramfs_args)
+        {
+          g_print ("Initramfs args: ");
+          for (char **iter = initramfs_args; iter && *iter; iter++)
+            g_print ("%s ", *iter);
+          g_print ("\n");
         }
     }
   else if (opt_enable && opt_disable)
