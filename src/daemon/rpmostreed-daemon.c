@@ -70,7 +70,6 @@ struct _RpmostreedDaemon {
   /* Settings from the config file */
   guint idle_exit_timeout;
   RpmostreedAutomaticUpdatePolicy auto_update_policy;
-  gboolean ex_stage_deployments;
 
   GDBusConnection *connection;
   GDBusObjectManagerServer *object_manager;
@@ -381,12 +380,6 @@ rpmostreed_get_automatic_update_policy (RpmostreedDaemon *self)
   return self->auto_update_policy;
 }
 
-gboolean
-rpmostreed_get_ex_stage_deployments (RpmostreedDaemon *self)
-{
-  return self->ex_stage_deployments;
-}
-
 /* in-place version of g_ascii_strdown */
 static inline void
 ascii_strdown_inplace (char *str)
@@ -420,19 +413,6 @@ rpmostreed_daemon_reload_config (RpmostreedDaemon *self,
       if (!rpmostree_str_to_auto_update_policy (auto_update_policy_str,
                                                 &auto_update_policy, error))
         return FALSE;
-    }
-
-  /* The default used to be `false`, so check for the key being present */
-  if (g_key_file_has_key (config, EXPERIMENTAL_CONFIG_GROUP, "StageDeployments", NULL))
-    self->ex_stage_deployments = g_key_file_get_boolean (config, EXPERIMENTAL_CONFIG_GROUP,
-                                                         "StageDeployments", NULL);
-  else
-    {
-#ifdef BUILDOPT_STAGE_DEPLOYMENTS
-      self->ex_stage_deployments = TRUE;
-#else
-      self->ex_stage_deployments = FALSE;
-#endif
     }
 
   /* don't update changed for this; it's contained to RpmostreedDaemon so no other objects

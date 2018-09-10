@@ -77,11 +77,6 @@ if vm_cmd test -f /etc/rpm-ostreed.conf; then
 fi
 if vm_cmd test -f /usr/etc/rpm-ostreed.conf; then
     vm_cmd cp -f /usr/etc/rpm-ostreed.conf /etc
-    # Unless we're doing overrides
-    if [[ "${VMCHECK_FLAGS:-}" =~ "not-stage-deployments" ]]; then
-        vm_cmd 'echo "[Experimental]" >> /etc/rpm-ostreed.conf'
-        vm_cmd 'echo StageDeployments=false >> /etc/rpm-ostreed.conf'
-    fi
 fi
 
 vm_cmd ostree remote delete --if-exists vmcheckmote

@@ -1206,15 +1206,9 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
   const char *target_revision = self->final_revision ?: self->base_revision;
   g_assert (target_revision);
 
-  /* Use staging only if we're booted into the target root.  Further,
-   * it's currently gated behind either the "stage" automatic update
-   * policy, or an experimental flag that applies globally to all operations.
-   */
-  const gboolean staging_is_configured =
-    (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_STAGE) > 0 ||
-    rpmostreed_get_ex_stage_deployments (rpmostreed_daemon_get ());
-  const gboolean use_staging = staging_is_configured &&
-    ostree_sysroot_get_booted_deployment (self->sysroot) != NULL;
+  /* Use staging only if we're booted into the target root. */
+  const gboolean use_staging =
+    (ostree_sysroot_get_booted_deployment (self->sysroot) != NULL);
 
   /* Fix for https://github.com/projectatomic/rpm-ostree/issues/1392,
    * when kargs_strv is empty, we port those directly from pending
@@ -1325,9 +1319,6 @@ rpmostree_sysroot_upgrader_flags_get_type (void)
         { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL,
           "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL",
           "synthetic-pull" },
-        { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_STAGE,
-          "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_STAGE",
-          "stage" },
       };
       GType g_define_type_id =
         g_flags_register_static (g_intern_static_string ("RpmOstreeSysrootUpgraderFlags"), values);

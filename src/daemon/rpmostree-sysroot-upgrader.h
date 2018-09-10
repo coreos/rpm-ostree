@@ -43,7 +43,6 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (RpmOstreeSysrootUpgrader, g_object_unref)
  * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN: Don't deploy new base. If layering packages, only print the transaction
  * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY: Don't try to update cached packages.
  * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL: Don't actually pull, just resolve ref and timestamp check
- * @RPMOSTREE_SYSROOT_UPGRADER_FLAGS_STAGE: Temporary flag to use libostree staging
  *
  * Flags controlling operation of an #RpmOstreeSysrootUpgrader.
  */
@@ -55,7 +54,6 @@ typedef enum {
   RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN              = (1 << 3),
   RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY        = (1 << 4),
   RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL       = (1 << 5),
-  RPMOSTREE_SYSROOT_UPGRADER_FLAGS_STAGE                = (1 << 6), /* temporary */
 } RpmOstreeSysrootUpgraderFlags;
 
 /* _NONE means we're doing pure ostree, no client-side computation.

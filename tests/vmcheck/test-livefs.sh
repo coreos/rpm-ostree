@@ -28,10 +28,6 @@ set -x
 # clean slate.
 vm_rpmostree cleanup -pr
 
-vm_cmd 'echo "[Experimental]" >> /etc/rpm-ostreed.conf'
-vm_cmd 'echo StageDeployments=true >> /etc/rpm-ostreed.conf'
-vm_rpmostree reload
-
 vm_assert_layered_pkg foo absent
 
 vm_build_rpm foo
