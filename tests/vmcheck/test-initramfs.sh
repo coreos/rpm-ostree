@@ -42,7 +42,11 @@ fi
 assert_file_has_content err.txt "reboot.*used with.*enable"
 echo "ok initramfs state"
 
-vm_rpmostree initramfs --enable
+vm_rpmostree initramfs --enable > initramfs.txt
+assert_file_has_content initramfs.txt "Initramfs regeneration.*enabled"
+vm_rpmostree initramfs > initramfs.txt
+assert_file_has_content initramfs.txt "Initramfs regeneration.*enabled"
+
 vm_assert_status_jq \
   '.deployments[1].booted' \
   '.deployments[0]["regenerate-initramfs"]' \
@@ -64,7 +68,11 @@ fi
 assert_file_has_content err.txt "already.*enabled"
 echo "ok initramfs enabled"
 
-vm_rpmostree initramfs --disable
+vm_rpmostree initramfs --disable > initramfs.txt
+assert_file_has_content initramfs.txt "Initramfs regeneration.*disabled"
+vm_rpmostree initramfs > initramfs.txt
+assert_file_has_content initramfs.txt "Initramfs regeneration.*disabled"
+
 vm_reboot
 vm_assert_status_jq \
   '.deployments[0].booted' \
