@@ -24,11 +24,6 @@ set -euo pipefail
 
 set -x
 
-# Uses livefs
-vm_cmd 'echo "[Experimental]" >> /etc/rpm-ostreed.conf'
-vm_cmd 'echo StageDeployments=true >> /etc/rpm-ostreed.conf'
-vm_rpmostree reload
-
 # SUMMARY: check that RPM scripts are properly handled during package layering
 
 # do a bunch of tests together so that we only have to reboot once

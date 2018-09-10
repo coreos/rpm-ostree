@@ -804,8 +804,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
   if (dry_run)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN;
-  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_STAGE)
-    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_STAGE;
 
   /* DOWNLOAD_METADATA_ONLY isn't directly exposed at the D-Bus API level, so we shouldn't
    * ever run into these conflicting options */

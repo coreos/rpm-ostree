@@ -200,14 +200,6 @@ AS_IF([test x$enable_compose_tooling = xyes], [
 ])
 if test x$enable_compose_tooling != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES compose"; fi
 
-AC_ARG_ENABLE(staged,
-AS_HELP_STRING([--disable-staged],
-[Disable staged deployments by default]),,
-[enable_staged=yes])
-AS_IF([test x$enable_staged = xyes], [
-  AC_DEFINE(BUILDOPT_STAGE_DEPLOYMENTS, 1, [Define if we are staging deployments])
-])
-
 AC_PATH_PROG([cargo], [cargo])
 AS_IF([test -z "$cargo"], [AC_MSG_ERROR([cargo is required for --enable-rust])])
 AC_PATH_PROG([rustc], [rustc])

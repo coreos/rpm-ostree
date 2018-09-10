@@ -1028,7 +1028,7 @@ rpmostree_str_to_auto_update_policy (const char *str,
     *out_policy = RPMOSTREED_AUTOMATIC_UPDATE_POLICY_NONE;
   else if (g_str_equal (str, "check"))
     *out_policy = RPMOSTREED_AUTOMATIC_UPDATE_POLICY_CHECK;
-  else if (g_str_equal (str, "stage") || g_str_equal (str, "ex-stage"))
+  else if (g_str_equal (str, "stage") || g_str_equal (str, "ex-stage") /* backcompat */)
     *out_policy = RPMOSTREED_AUTOMATIC_UPDATE_POLICY_STAGE;
   else
     return glnx_throw (error, "Invalid value for AutomaticUpdatePolicy: '%s'", str);
