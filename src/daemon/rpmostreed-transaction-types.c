@@ -986,8 +986,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
                   g_string_append_printf (pkgnames, " %s", dnf_package_get_nevra (p));
                 }
               return glnx_throw (error, "\"%s\" is already provided by:%s. Use "
-                                        "--allow-inactive to disable this check.",
-                                        pkg, pkgnames->str);
+                                        "--allow-inactive to explicitly "
+                                        "require it.", pkg, pkgnames->str);
             }
         }
 
