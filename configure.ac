@@ -7,7 +7,7 @@ dnl Then use <https://github.com/cgwalters/git-evtag> to create a signed tag wit
 dnl release notes as its content.
 dnl Then, git push origin v201X.XX
 m4_define([year_version], [2018])
-m4_define([release_version], [7])
+m4_define([release_version], [8])
 m4_define([package_version], [year_version.release_version])
 AC_INIT([rpm-ostree], [package_version], [atomic-devel@projectatomic.io])
 AC_CONFIG_HEADER([config.h])
