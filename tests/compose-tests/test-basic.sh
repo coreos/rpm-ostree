@@ -33,17 +33,13 @@ echo "ok autovar"
 ostree --repo=${repobuild} cat ${treeref} /usr/lib/systemd/system-preset/40-rpm-ostree-auto.preset > preset.txt
 assert_file_has_content preset.txt '^enable ostree-remount.service$'
 
-if ! rpm-ostree --version | grep -q rust; then
-  echo "ok yaml (SKIP)"
-else
-  prepare_compose_test "from-yaml"
-  python <<EOF
+prepare_compose_test "from-yaml"
+python <<EOF
 import json, yaml
 jd=json.load(open("$treefile"))
 with open("$treefile.yaml", "w") as f:
   f.write(yaml.dump(jd))
 EOF
-  export treefile=$treefile.yaml
-  runcompose
-  echo "ok yaml"
-fi
+export treefile=$treefile.yaml
+runcompose
+echo "ok yaml"
