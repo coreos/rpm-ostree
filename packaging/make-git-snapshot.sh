@@ -43,6 +43,12 @@ mkdir ${tmpd} && touch ${tmpd}/.tmp
  cargo vendor -q --sync ${TOP}/rust/Cargo.toml vendor
  cp ${TOP}/rust/Cargo.lock .
  cp ${TOP}/rust/cargo-vendor-config .cargo/config
+ # Filter out bundled libcurl from curl-sys; we always want the system libcurl
+ rm -rf vendor/curl-sys/curl/
+ python -c '
+import json, sys; j = json.load(open(sys.argv[1]))
+j["files"] = {f:c for f, c in j["files"].items() if not f.startswith("curl/")}
+open(sys.argv[1], "w").write(json.dumps(j))' vendor/curl-sys/.cargo-checksum.json
  tar --transform="s,^,${PKG_VER}/rust/," -rf ${TARFILE_TMP} * .cargo/
  )
 mv ${TARFILE_TMP} ${TARFILE}
