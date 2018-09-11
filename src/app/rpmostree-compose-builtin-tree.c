@@ -786,28 +786,24 @@ process_includes (RpmOstreeTreeComposeContext  *self,
     {
       g_autoptr(GFile) treefile_dirpath = g_file_get_parent (treefile_path);
       g_autoptr(GFile) parent_path = g_file_resolve_relative_path (treefile_dirpath, include_path);
-      g_autoptr(JsonParser) parent_parser = NULL;
-      JsonNode *parent_rootval;
-      JsonObject *parent_root;
-      GList *members;
-      GList *iter;
 
+      g_autoptr(JsonParser) parent_parser = NULL;
       if (!parse_treefile_to_json (self,
-                                   gs_file_get_path_cached (treefile_path),
+                                   gs_file_get_path_cached (parent_path),
                                    &parent_parser, error))
         return FALSE;
 
-      parent_rootval = json_parser_get_root (parent_parser);
+      JsonNode *parent_rootval = json_parser_get_root (parent_parser);
       if (!JSON_NODE_HOLDS_OBJECT (parent_rootval))
         return glnx_throw (error, "Treefile root is not an object");
-      parent_root = json_node_get_object (parent_rootval);
+      JsonObject *parent_root = json_node_get_object (parent_rootval);
 
       if (!process_includes (self, parent_path, depth + 1, parent_root,
                              cancellable, error))
         return FALSE;
 
-      members = json_object_get_members (parent_root);
-      for (iter = members; iter; iter = iter->next)
+      GList *members = json_object_get_members (parent_root);
+      for (GList *iter = members; iter; iter = iter->next)
         {
           const char *name = iter->data;
           JsonNode *parent_val = json_object_get_member (parent_root, name);
@@ -830,13 +826,13 @@ process_includes (RpmOstreeTreeComposeContext  *self,
                   JsonArray *parent_array = json_node_get_array (parent_val);
                   JsonArray *child_array = json_node_get_array (val);
                   JsonArray *new_child = json_array_new ();
-                  guint i, len;
+                  guint len;
 
                   len = json_array_get_length (parent_array);
-                  for (i = 0; i < len; i++)
+                  for (guint i = 0; i < len; i++)
                     json_array_add_element (new_child, json_node_copy (json_array_get_element (parent_array, i)));
                   len = json_array_get_length (child_array);
-                  for (i = 0; i < len; i++)
+                  for (guint i = 0; i < len; i++)
                     json_array_add_element (new_child, json_node_copy (json_array_get_element (child_array, i)));
 
                   json_object_set_array_member (root, name, new_child);
