@@ -1,4 +1,5 @@
 #!/bin/sh
+set -xeuo pipefail
 
 srcdir=$1
 shift
@@ -9,9 +10,6 @@ shift
 
 TARFILE=${PKG_VER}.tar
 TARFILE_TMP=$(pwd)/${TARFILE}.tmp
-
-set -x
-set -e
 
 test -n "${srcdir}"
 test -n "${PKG_VER}"
