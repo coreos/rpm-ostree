@@ -42,9 +42,7 @@ vm_rpmostree rebase vmcheckmote:vmcheck \
   --install layered-sec-low \
   --install layered-sec-crit \
   --install layered-constant
-if vm_cmd 'grep -qE -e "^StageDeployments=true" /etc/rpm-ostreed.conf'; then
-    vm_cmd systemctl is-active ostree-finalize-staged.service
-fi
+vm_cmd systemctl is-active ostree-finalize-staged.service
 vm_reboot
 vm_rpmostree status -v
 vm_assert_status_jq \

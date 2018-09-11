@@ -55,6 +55,3 @@ gboolean           rpmostreed_daemon_reload_config  (RpmostreedDaemon *self,
 
 RpmostreedAutomaticUpdatePolicy
 rpmostreed_get_automatic_update_policy (RpmostreedDaemon *self);
-
-gboolean
-rpmostreed_get_ex_stage_deployments (RpmostreedDaemon *self);
