@@ -116,14 +116,14 @@ rpmostree_builtin_initramfs (int             argc,
             }
         }
 
-        g_print ("Initramfs regeneration: %s\n", cur_regenerate ? "enabled" : "disabled");
-        if (initramfs_args)
-          {
-            g_print ("Initramfs args: ");
-            for (char **iter = initramfs_args; iter && *iter; iter++)
-              g_print ("%s ", *iter);
-            g_print ("\n");
-          }
+      g_print ("Initramfs regeneration: %s\n", cur_regenerate ? "enabled" : "disabled");
+      if (initramfs_args)
+        {
+          g_print ("Initramfs args: ");
+          for (char **iter = initramfs_args; iter && *iter; iter++)
+            g_print ("%s ", *iter);
+          g_print ("\n");
+        }
     }
   else if (opt_enable && opt_disable)
     {
