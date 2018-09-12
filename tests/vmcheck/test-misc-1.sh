@@ -51,7 +51,7 @@ vm_assert_status_jq \
   '.deployments[0]["layered-commit-meta"]|not'
 echo "ok empty pkg arrays, and commit meta correct in status json"
 
-if test -z "${RPMOSTREE_TEST_NO_OVERLAY}"; then
+if test -z "${RPMOSTREE_TEST_NO_OVERLAY:-}"; then
   vm_assert_status_jq \
     '.deployments[0]["base-commit-meta"]["ostree.source-title"]|contains("overlay")' \
   echo "ok overlay found in commit meta"
