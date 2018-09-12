@@ -39,7 +39,11 @@ assert_file_has_content err.txt "already.*disabled"
 if vm_rpmostree initramfs --reboot 2>err.txt; then
     assert_not_reached "reboot worked?"
 fi
-assert_file_has_content err.txt "reboot.*used with.*enable"
+assert_file_has_content err.txt "reboot.*used with.*enable.*disable"
+if vm_rpmostree initramfs --arg=foo 2>err.txt; then
+    assert_not_reached "arg worked?"
+fi
+assert_file_has_content err.txt "arg.*used with.*enable"
 echo "ok initramfs state"
 
 vm_rpmostree initramfs --enable > initramfs.txt
@@ -101,6 +105,8 @@ osname=$(vm_get_booted_deployment_info osname)
 for file in first second; do
     vm_cmd touch /etc/rpmostree-initramfs-testing-$file
     vm_rpmostree initramfs --enable --arg="-I" --arg="/etc/rpmostree-initramfs-testing-$file"
+    vm_rpmostree initramfs > initramfs.txt
+    assert_file_has_content initramfs.txt "Initramfs.*args.*-I.*/etc/rpmostree-initramfs-testing-$file"
     vm_reboot
     vm_assert_status_jq \
         '.deployments[0].booted' \
