@@ -23,10 +23,10 @@
 use openat;
 use serde_json;
 use serde_yaml;
+use std::ffi::{CStr, CString};
 use std::io::prelude::*;
-use std::path::{Path, PathBuf};
-use std::ffi::{CString, CStr};
 use std::os::unix::ffi::OsStringExt;
+use std::path::{Path, PathBuf};
 use std::{fs, io};
 use tempfile;
 
@@ -38,15 +38,35 @@ pub struct Treefile {
     pub rojig_spec: Option<Box<CStr>>,
 }
 
+enum InputFormat {
+    YAML,
+    JSON,
+}
+
 /// Parse a YAML treefile definition using architecture `arch`.
-fn treefile_parse_yaml<R: io::Read>(input: R, arch: Option<&str>) -> io::Result<TreeComposeConfig> {
-    let mut treefile: TreeComposeConfig = match serde_yaml::from_reader(input) {
-        Ok(t) => t,
-        Err(e) => {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("serde: {}", e),
-            ))
+fn treefile_parse_stream(
+    fmt: InputFormat,
+    input: &mut io::Read,
+    arch: Option<&str>,
+) -> io::Result<TreeComposeConfig> {
+    let mut treefile: TreeComposeConfig = match fmt {
+        InputFormat::YAML => {
+            let tf: StrictTreeComposeConfig = serde_yaml::from_reader(input).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("serde-yaml: {}", e.to_string()),
+                )
+            })?;
+            tf.config
+        }
+        InputFormat::JSON => {
+            let tf: PermissiveTreeComposeConfig = serde_json::from_reader(input).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("serde-json: {}", e.to_string()),
+                )
+            })?;
+            tf.config
         }
     };
 
@@ -87,8 +107,17 @@ impl Treefile {
         arch: Option<&str>,
         workdir: openat::Dir,
     ) -> io::Result<Box<Treefile>> {
-        let f = io::BufReader::new(fs::File::open(filename)?);
-        let parsed = treefile_parse_yaml(f, arch)?;
+        let mut f = io::BufReader::new(fs::File::open(filename)?);
+        let basename = filename
+            .file_name()
+            .map(|s| s.to_string_lossy())
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Expected a filename"))?;
+        let fmt = if basename.ends_with(".yaml") || basename.ends_with(".yml") {
+            InputFormat::YAML
+        } else {
+            InputFormat::JSON
+        };
+        let parsed = treefile_parse_stream(fmt, &mut f, arch)?;
         let rojig_spec = if let &Some(ref rojig) = &parsed.rojig {
             Some(Treefile::write_rojig_spec(&workdir, rojig)?)
         } else {
@@ -215,7 +244,6 @@ pub struct Rojig {
 // Option<T>.  The defaults live in the code (e.g. machineid-compat defaults
 // to `true`).
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
 pub struct TreeComposeConfig {
     // Compose controls
     #[serde(rename = "ref")]
@@ -338,6 +366,19 @@ pub struct TreeComposeConfig {
     pub remove_from_packages: Option<Vec<Vec<String>>>,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct PermissiveTreeComposeConfig {
+    #[serde(flatten)]
+    pub config: TreeComposeConfig,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
+struct StrictTreeComposeConfig {
+    #[serde(flatten)]
+    pub config: TreeComposeConfig,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,18 +394,40 @@ packages-s390x:
  - zipl
 "###;
 
+    // This one has "comments" (hence unknown keys)
+    static VALID_PRELUDE_JS: &str = r###"
+{
+ "ref": "exampleos/x86_64/blah",
+ "comment-packages": "We want baz to enable frobnication",
+ "packages": ["foo", "bar", "baz"],
+ "packages-x86_64": ["grub2", "grub2-tools"],
+ "comment-packages-s390x": "Note that s390x uses its own bootloader",
+ "packages-s390x": ["zipl"]
+}
+"###;
+
     #[test]
     fn basic_valid() {
-        let input = io::BufReader::new(VALID_PRELUDE.as_bytes());
-        let treefile = treefile_parse_yaml(input, Some(ARCH_X86_64)).unwrap();
+        let mut input = io::BufReader::new(VALID_PRELUDE.as_bytes());
+        let treefile =
+            treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
+        assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
+        assert!(treefile.packages.unwrap().len() == 5);
+    }
+
+    #[test]
+    fn basic_js_valid() {
+        let mut input = io::BufReader::new(VALID_PRELUDE_JS.as_bytes());
+        let treefile =
+            treefile_parse_stream(InputFormat::JSON, &mut input, Some(ARCH_X86_64)).unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 5);
     }
 
     #[test]
     fn basic_valid_noarch() {
-        let input = io::BufReader::new(VALID_PRELUDE.as_bytes());
-        let treefile = treefile_parse_yaml(input, None).unwrap();
+        let mut input = io::BufReader::new(VALID_PRELUDE.as_bytes());
+        let treefile = treefile_parse_stream(InputFormat::YAML, &mut input, None).unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 3);
     }
@@ -373,11 +436,11 @@ packages-s390x:
         let mut buf = VALID_PRELUDE.to_string();
         buf.push_str(data);
         let buf = buf.as_bytes();
-        let input = io::BufReader::new(buf);
-        match treefile_parse_yaml(input, Some(ARCH_X86_64)) {
+        let mut input = io::BufReader::new(buf);
+        match treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)) {
             Err(ref e) if e.kind() == io::ErrorKind::InvalidInput => {}
             Err(ref e) => panic!("Expected invalid treefile, not {}", e.to_string()),
-            _ => panic!("Expected invalid treefile"),
+            Ok(_) => panic!("Expected invalid treefile"),
         }
     }
 
