@@ -16,13 +16,13 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+extern crate curl;
 extern crate gio_sys;
 extern crate glib;
 extern crate glib_sys;
 extern crate libc;
 extern crate openat;
 extern crate tempfile;
-extern crate curl;
 
 #[macro_use]
 extern crate serde_derive;
@@ -110,9 +110,7 @@ pub extern "C" fn ror_treefile_to_json(
 }
 
 #[no_mangle]
-pub extern "C" fn ror_treefile_get_rojig_spec_path(
-    tf: *mut Treefile,
-) -> *const libc::c_char {
+pub extern "C" fn ror_treefile_get_rojig_spec_path(tf: *mut Treefile) -> *const libc::c_char {
     assert!(!tf.is_null());
     let tf = unsafe { &mut *tf };
     if let &Some(ref rojig) = &tf.rojig_spec {

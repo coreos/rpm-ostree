@@ -112,7 +112,8 @@ impl Treefile {
     }
 
     fn write_rojig_spec<'a, 'b>(workdir: &'a openat::Dir, r: &'b Rojig) -> io::Result<Box<CStr>> {
-        let description = r.description
+        let description = r
+            .description
             .as_ref()
             .and_then(|v| if v.len() > 0 { Some(v.as_str()) } else { None })
             .unwrap_or(r.summary.as_str());
