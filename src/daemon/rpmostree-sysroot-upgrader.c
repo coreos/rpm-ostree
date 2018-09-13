@@ -513,7 +513,8 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
                     GCancellable          *cancellable,
                     GError               **error)
 {
-  g_assert_cmpint (self->tmprootfs_dfd, ==, -1);
+  if (self->tmprootfs_dfd != -1)
+    return TRUE; /* already checked out! */
 
   /* let's give the user some feedback so they don't think we're blocked */
   rpmostree_output_task_begin ("Checking out tree %.7s", self->base_revision);
@@ -557,13 +558,78 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
                        &self->tmprootfs_dfd, error))
     return FALSE;
 
-  /* build a centralized rsack for it, since we need it in a few places */
-  self->rsack = rpmostree_get_refsack_for_root (self->tmprootfs_dfd, ".", error);
-  if (self->rsack == NULL)
+  rpmostree_output_task_end ("done");
+  return TRUE;
+}
+
+/* Optimization: use the already checked out base rpmdb of the pending deployment if the
+ * base layer matches. Returns FALSE on error, TRUE otherwise. Check self->rsack to
+ * determine if it worked. */
+static gboolean
+try_load_base_rsack_from_pending (RpmOstreeSysrootUpgrader *self,
+                                  GCancellable             *cancellable,
+                                  GError                  **error)
+{
+  gboolean is_live;
+  if (!rpmostree_syscore_deployment_is_live (self->sysroot, self->origin_merge_deployment,
+                                             &is_live, error))
     return FALSE;
 
-  rpmostree_output_task_end ("done");
+  /* livefs invalidates the deployment */
+  if (is_live)
+    return TRUE;
 
+  guint layer_version;
+  g_autofree char *base_rev_owned = NULL;
+  if (!rpmostree_deployment_get_layered_info (self->repo, self->origin_merge_deployment,
+                                              NULL, &layer_version, &base_rev_owned, NULL,
+                                              NULL, NULL, error))
+    return FALSE;
+
+  /* older client layers have a bug blocking us from using their base rpmdb:
+   * https://github.com/projectatomic/rpm-ostree/pull/1560 */
+  if (base_rev_owned && layer_version < 4)
+    return TRUE;
+
+  const char *base_rev =
+    base_rev_owned ?: ostree_deployment_get_csum (self->origin_merge_deployment);
+
+  /* it's no longer the base layer we're looking for (e.g. likely pulled a fresh one) */
+  if (!g_str_equal (self->base_revision, base_rev))
+    return TRUE;
+
+  int sysroot_fd = ostree_sysroot_get_fd (self->sysroot);
+  g_autofree char *path =
+    ostree_sysroot_get_deployment_dirpath (self->sysroot, self->origin_merge_deployment);
+
+  /* this may not actually populate the rsack if it's an old deployment */
+  if (!rpmostree_get_base_refsack_for_root (sysroot_fd, path, &self->rsack,
+                                            cancellable, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+static gboolean
+load_base_rsack (RpmOstreeSysrootUpgrader *self,
+                 GCancellable             *cancellable,
+                 GError                  **error)
+{
+  if (!try_load_base_rsack_from_pending (self, cancellable, error))
+    return FALSE;
+
+  if (self->rsack == NULL)
+    {
+      /* fallback to checking out the tree early; will be reused later for assembly */
+      if (!checkout_base_tree (self, cancellable, error))
+        return FALSE;
+
+      self->rsack = rpmostree_get_refsack_for_root (self->tmprootfs_dfd, ".", error);
+      if (self->rsack == NULL)
+        return FALSE;
+    }
+
+  g_assert (self->rsack != NULL);
   return TRUE;
 }
 
@@ -632,6 +698,8 @@ finalize_removal_overrides (RpmOstreeSysrootUpgrader *self,
                             GCancellable             *cancellable,
                             GError                  **error)
 {
+  g_assert (self->rsack);
+
   GHashTable *removals = rpmostree_origin_get_overrides_remove (self->origin);
   g_autoptr(GPtrArray) ret_final_removals = g_ptr_array_new_with_free_func (g_free);
 
@@ -665,6 +733,8 @@ finalize_replacement_overrides (RpmOstreeSysrootUpgrader *self,
                                 GCancellable             *cancellable,
                                 GError                  **error)
 {
+  g_assert (self->rsack);
+
   GHashTable *local_replacements =
     rpmostree_origin_get_overrides_local_replace (self->origin);
   g_autoptr(GPtrArray) ret_final_local_replacements =
@@ -727,6 +797,8 @@ finalize_overlays (RpmOstreeSysrootUpgrader *self,
                    GCancellable             *cancellable,
                    GError                  **error)
 {
+  g_assert (self->rsack);
+
   /* request (owned by origin) --> providing nevra */
   g_autoptr(GHashTable) inactive_requests =
     g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_free);
@@ -854,6 +926,10 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
                      GError                  **error)
 {
   g_assert (!self->ctx);
+
+  if (!checkout_base_tree (self, cancellable, error))
+    return FALSE;
+
   self->ctx = rpmostree_context_new_system (self->repo, cancellable, error);
   g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
 
@@ -1083,7 +1159,7 @@ rpmostree_sysroot_upgrader_prep_layering (RpmOstreeSysrootUpgrader *self,
     }
 
   /* Do a bit more work to see whether or not we have to do assembly */
-  if (!checkout_base_tree (self, cancellable, error))
+  if (!load_base_rsack (self, cancellable, error))
     return FALSE;
   if (!finalize_overrides (self, cancellable, error))
     return FALSE;

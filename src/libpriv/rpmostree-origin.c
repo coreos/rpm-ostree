@@ -334,7 +334,10 @@ rpmostree_origin_get_unconfigured_state (RpmOstreeOrigin *origin)
 
 /* Determines whether the origin hints at local assembly being required. In some
  * cases, no assembly might actually be required (e.g. if requested packages are
- * already in the base). */
+ * already in the base). IOW:
+ *    FALSE --> definitely does not require local assembly
+ *    TRUE  --> maybe requires assembly, need to investigate further by doing work
+ */
 gboolean
 rpmostree_origin_may_require_local_assembly (RpmOstreeOrigin *origin)
 {
