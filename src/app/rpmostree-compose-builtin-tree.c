@@ -125,7 +125,6 @@ typedef struct {
   OstreeRepoDevInoCache *devino_cache;
   char *ref;
   char *rojig_spec;
-  gboolean rojig_spec_in_workdir;
   char *previous_checksum;
 
   RORTreefile *treefile_rs;
@@ -1019,16 +1018,8 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     return FALSE;
 
   g_autoptr(GFile) treefile_dir = g_file_get_parent (self->treefile_path);
-  const char *rojig_spec = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "ex-rojig-spec", &rojig_spec, error))
-    return FALSE;
-  if (rojig_spec)
-    self->rojig_spec = g_build_filename (gs_file_get_path_cached (treefile_dir), rojig_spec, NULL);
-  else if (self->treefile_rs)
-    {
-      self->rojig_spec = g_strdup (ror_treefile_get_rojig_spec_path (self->treefile_rs));
-      self->rojig_spec_in_workdir = TRUE;
-    }
+  if (self->treefile_rs)
+    self->rojig_spec = g_strdup (ror_treefile_get_rojig_spec_path (self->treefile_rs));
 
   *out_context = g_steal_pointer (&self);
   return TRUE;
@@ -1401,10 +1392,10 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   if (rojig_outputdir)
     {
       if (!self->rojig_spec)
-        return glnx_throw (error, "No ex-rojig-spec provided");
+        return glnx_throw (error, "No rojig defined in treefile");
       if (!rpmostree_commit2rojig (self->repo, self->pkgcache_repo,
                                    new_revision,
-                                   self->rojig_spec_in_workdir ? self->workdir_dfd : AT_FDCWD,
+                                   self->workdir_dfd,
                                    self->rojig_spec,
                                    rojig_outputdir,
                                    cancellable, error))
