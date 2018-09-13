@@ -29,7 +29,7 @@ vm_build_rpm foo
 vm_rpmostree install foo
 vm_cmd ostree refs $(vm_get_pending_csum) --create vmcheck_tmp/with_foo
 vm_rpmostree cleanup -p
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo
+vm_ostree_commit_layered_as_base vmcheck_tmp/with_foo vmcheck
 vm_rpmostree upgrade
 
 # now do some layering, overrides, and initramfs

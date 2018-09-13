@@ -57,12 +57,11 @@ vm_build_rpm bar \
                       echo %{name} > %{buildroot}/lib/foo/bar.txt && \
                       echo shared > %{buildroot}/lib/foo/shared.txt'
 vm_rpmostree install foo bar
-vm_cmd ostree refs $(vm_get_deployment_info 0 checksum) \
-  --create vmcheck_tmp/with_foo_and_bar
+vm_cmd ostree refs $(vm_get_pending_csum) --create vmcheck_tmp/with_foo_and_bar
 vm_rpmostree cleanup -p
 
 # upgrade to new commit with foo in the base layer
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
+vm_ostree_commit_layered_as_base vmcheck_tmp/with_foo_and_bar vmcheck
 vm_rpmostree upgrade
 vm_reboot
 if ! vm_has_packages foo bar; then
@@ -146,13 +145,13 @@ vm_assert_status_jq \
   '[.deployments[0]["base-removals"][][.0]]|index("foo-1.0-1.x86_64") >= 0' \
   '.deployments[0]["requested-base-removals"]|length == 1' \
   '.deployments[0]["requested-base-removals"]|index("foo") >= 0'
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo_and_bar
+vm_ostree_commit_layered_as_base vmcheck_tmp/without_foo_and_bar vmcheck
 vm_rpmostree upgrade --cache-only
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 0' \
   '.deployments[0]["requested-base-removals"]|length == 1' \
   '.deployments[0]["requested-base-removals"]|index("foo") >= 0'
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
+vm_ostree_commit_layered_as_base vmcheck_tmp/with_foo_and_bar vmcheck
 vm_rpmostree upgrade --cache-only
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 1' \
@@ -162,7 +161,7 @@ vm_assert_status_jq \
 echo "ok active -> inactive -> active override remove"
 
 # make sure we can reset it while it's inactive
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo_and_bar
+vm_ostree_commit_layered_as_base vmcheck_tmp/without_foo_and_bar vmcheck
 vm_rpmostree upgrade --cache-only
 vm_assert_status_jq \
   '.deployments[0]["base-removals"]|length == 0' \
@@ -196,7 +195,7 @@ vm_rpmostree cleanup -p
 echo "ok override remove layered pkg baz fails"
 
 # the next two error checks expect an upgraded layer with foo builtin
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
+vm_ostree_commit_layered_as_base vmcheck_tmp/with_foo_and_bar vmcheck
 
 vm_rpmostree upgrade
 vm_rpmostree override remove foo
