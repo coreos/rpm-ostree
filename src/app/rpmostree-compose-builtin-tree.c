@@ -60,8 +60,6 @@ static gboolean opt_cache_only;
 static gboolean opt_unified_core;
 static char *opt_proxy;
 static char *opt_output_repodata_dir;
-static char *opt_ex_jigdo_output_rpm;
-static char *opt_ex_jigdo_output_set;
 static char **opt_metadata_strings;
 static char *opt_metadata_json;
 static char *opt_repo;
@@ -84,10 +82,6 @@ static GOptionEntry install_option_entries[] = {
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Like --dry-run, but download RPMs as well; requires --cachedir", NULL },
   { "ex-unified-core", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_unified_core, "Compat alias for --unified-core", NULL }, // Compat
   { "unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_unified_core, "Use new \"unified core\" codepath", NULL },
-  { "ex-jigdo-output-rpm", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_ex_jigdo_output_rpm, "Deprecated alias", NULL },
-  { "ex-jigdo-output-set", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_STRING, &opt_ex_jigdo_output_set, "Deprecated alias", NULL },
-  { "ex-rojig-output-rpm", 0, 0, G_OPTION_ARG_STRING, &opt_ex_jigdo_output_rpm, "Directory to write rojigRPM", NULL },
-  { "ex-rojig-output-set", 0, 0, G_OPTION_ARG_STRING, &opt_ex_jigdo_output_set, "Directory to write complete rojig set (rojigRPM+dependencies)", NULL },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
   { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
@@ -169,60 +163,6 @@ static int
 cachedir_dfd (RpmOstreeTreeComposeContext *self)
 {
   return self->cachedir_dfd != -1 ? self->cachedir_dfd : self->workdir_dfd;
-}
-
-static gboolean
-hardlink_or_copy_at (int         src_dfd,
-                     const char *src_subpath,
-                     int         dest_dfd,
-                     const char *dest_subpath,
-                     GCancellable  *cancellable,
-                     GError       **error)
-{
-  if (linkat (src_dfd, src_subpath, dest_dfd, dest_subpath, 0) != 0)
-    {
-      if (G_IN_SET (errno, EMLINK, EXDEV))
-        return glnx_file_copy_at (src_dfd, src_subpath, NULL, dest_dfd, dest_subpath,
-                                  GLNX_FILE_COPY_NOXATTRS,
-                                  cancellable, error);
-      else
-        return glnx_throw_errno_prefix (error, "linkat(%s)", dest_subpath);
-    }
-
-  return TRUE;
-}
-
-static gboolean
-copy_rojig_rpms_to_outputdir (RpmOstreeTreeComposeContext *self,
-                              const char                  *rojigset_outputdir,
-                              GCancellable                *cancellable,
-                              GError                     **error)
-{
-  GLNX_AUTO_PREFIX_ERROR ("Copying rojig RPMs", error);
-  g_autoptr(GPtrArray) pkglist = rpmostree_context_get_packages (self->corectx);
-  int output_dfd = -1;
-  if (!glnx_opendirat (AT_FDCWD, rojigset_outputdir, TRUE, &output_dfd, error))
-    return FALSE;
-
-  guint n_copied = 0;
-  for (guint i = 0; i < pkglist->len; i++)
-    {
-      DnfPackage *pkg = pkglist->pdata[i];
-      g_autofree char *location = rpmostree_pkg_get_local_path (pkg);
-      const char *basename = glnx_basename (location);
-      if (!glnx_fstatat_allow_noent (output_dfd, basename, NULL, 0, error))
-        return FALSE;
-      if (errno == 0)
-        continue;
-      if (!hardlink_or_copy_at (AT_FDCWD, location, output_dfd, basename,
-                                cancellable, error))
-        return FALSE;
-      n_copied++;
-    }
-  g_print ("Copied %u (of %u total) rojigSet RPMS to %s\n", n_copied, pkglist->len,
-           rojigset_outputdir);
-
-  return TRUE;
 }
 
 static void
@@ -330,7 +270,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
    * we're doing unified core, in which case the pkgcache repo is the cache.  But
    * the rojigSet build still requires the original RPMs too.
    */
-  if ((opt_cachedir && !opt_unified_core) || opt_ex_jigdo_output_set)
+  if (opt_cachedir && !opt_unified_core)
     dnf_context_set_keep_cache (dnfctx, TRUE);
   /* For compose, always try to refresh metadata; we're used in build servers
    * where fetching should be cheap. Otherwise, if --cache-only is set, it's
@@ -479,13 +419,6 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
             return FALSE;
         }
       return TRUE; /* 🔚 Early return */
-    }
-
-  /* Hardlink our input set now for rojig-set output mode */
-  if (opt_ex_jigdo_output_set)
-    {
-      if (!copy_rojig_rpms_to_outputdir (self, opt_ex_jigdo_output_set, cancellable, error))
-        return FALSE;
     }
 
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
@@ -767,10 +700,6 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 
   if (opt_workdir_tmpfs)
     g_print ("note: --workdir-tmpfs is deprecated and will be ignored\n");
-
-  /* rojig implies unified core mode currently */
-  if (opt_ex_jigdo_output_rpm || opt_ex_jigdo_output_set)
-    opt_unified_core = TRUE;
 
   if (opt_unified_core)
     {
@@ -1247,23 +1176,6 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
                                 NULL, error))
     return FALSE;
   g_autoptr(GVariant) new_commit_inline_meta = g_variant_get_child_value (new_commit, 0);
-
-  const char *rojig_outputdir = opt_ex_jigdo_output_rpm ?: opt_ex_jigdo_output_set;
-  if (rojig_outputdir)
-    {
-      const char *rojig_spec = NULL;
-      if (self->treefile_rs)
-        rojig_spec = ror_treefile_get_rojig_spec_path (self->treefile_rs);
-      if (!rojig_spec)
-        return glnx_throw (error, "No rojig defined in treefile");
-      if (!rpmostree_commit2rojig (self->repo, self->pkgcache_repo,
-                                   new_revision,
-                                   self->workdir_dfd,
-                                   rojig_spec,
-                                   rojig_outputdir,
-                                   cancellable, error))
-        return FALSE;
-    }
 
   /* --write-commitid-to overrides writing the ref */
   if (self->ref && !opt_write_commitid_to)
