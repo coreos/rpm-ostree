@@ -229,7 +229,3 @@ version of `rpm-ostree`.
 
  * `rojig`: Object, optional.  Sub-keys are `name`, `summary`, `license`,
    and `description`.  Of those, `name` and `license` are mandatory.
- * `ex-rojig-spec`: string, optional:  If specified, will also cause
-   a run of `rpm-ostree ex commit2rojig` on changes.  Also requires the
-   `--ex-rojig-output-rpm` commandline option.
-   Deprecated in favor of `rojig`.
