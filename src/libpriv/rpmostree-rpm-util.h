@@ -107,6 +107,13 @@ rpmostree_get_refsack_for_root (int              dfd,
                                 const char      *path,
                                 GError         **error);
 
+gboolean
+rpmostree_get_base_refsack_for_root (int                dfd,
+                                     const char        *path,
+                                     RpmOstreeRefSack **out_sack,
+                                     GCancellable      *cancellable,
+                                     GError           **error);
+
 RpmOstreeRefSack *
 rpmostree_get_base_refsack_for_commit (OstreeRepo                *repo,
                                        const char                *ref,

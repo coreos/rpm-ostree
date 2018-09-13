@@ -836,6 +836,43 @@ rpmostree_get_refsack_for_root (int              dfd,
   return rpmostree_refsack_new (sack, NULL);
 }
 
+/* Given @dfd + @path, return a sack corresponding to the base layer (which is the same as
+ * /usr/share/rpm if it's not a layered deployment.
+ *
+ * Note this function may return %TRUE without a sack if the deployment predates when we
+ * started embedding RPMOSTREE_BASE_RPMDB.
+ */
+gboolean
+rpmostree_get_base_refsack_for_root (int                dfd,
+                                     const char        *path,
+                                     RpmOstreeRefSack **out_sack,
+                                     GCancellable      *cancellable,
+                                     GError           **error)
+{
+  g_autofree char *subpath = g_build_filename (path, RPMOSTREE_BASE_RPMDB, NULL);
+  if (!glnx_fstatat_allow_noent (dfd, subpath, NULL, AT_SYMLINK_NOFOLLOW, error))
+    return FALSE;
+  if (errno == ENOENT)
+    return TRUE;
+
+  g_auto(GLnxTmpDir) tmpdir = {0, };
+  if (!glnx_mkdtemp ("rpmostree-dbquery-XXXXXX", 0700, &tmpdir, error))
+    return FALSE;
+  if (!glnx_shutil_mkdir_p_at (tmpdir.fd, "var/lib", 0777, cancellable, error))
+    return FALSE;
+
+  g_autofree char *base_rpm = glnx_fdrel_abspath (dfd, subpath);
+  if (symlinkat (base_rpm, tmpdir.fd, "var/lib/rpm") == -1)
+    return glnx_throw_errno_prefix (error, "symlinkat");
+
+  g_autoptr(DnfSack) sack = NULL; /* NB: refsack adds a ref to it */
+  if (!get_sack_for_root (tmpdir.fd, ".", &sack, error))
+    return FALSE;
+
+  *out_sack = rpmostree_refsack_new (sack, &tmpdir);
+  return TRUE;
+}
+
 
 /* Given @ref which is an OSTree ref, return a "sack" i.e. database of packages.
  */
