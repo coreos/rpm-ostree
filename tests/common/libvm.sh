@@ -605,3 +605,23 @@ vm_ostreeupdate_create_noop() {
   version=$1; shift
   _commit_and_inject_pkglist $version vmcheck
 }
+
+# takes a layered commit, and makes it into a base
+vm_ostree_repo_commit_layered_as_base() {
+  repo=$1; shift
+  from_rev=$1; shift
+  to_ref=$1; shift
+  d=$repo/tmp/vmcheck_commit.tmp
+  rm -rf $d
+  vm_cmd ostree checkout --repo=$repo -H --fsync=no $from_rev $d
+  # need to update the base rpmdb
+  vm_cmd mkdir -p $d/usr/lib/sysimage/rpm-ostree-base-db
+  vm_cmd rsync -qa --delete $d/usr/share/rpm/ $d/usr/lib/sysimage/rpm-ostree-base-db
+  vm_cmd ostree commit --repo=$repo -b $to_ref --link-checkout-speedup --fsync=no --consume $d
+  # and inject pkglist metadata
+  vm_cmd /var/roothome/sync/.libs/inject-pkglist $repo $to_ref >/dev/null
+}
+
+vm_ostree_commit_layered_as_base() {
+  vm_ostree_repo_commit_layered_as_base /ostree/repo "$@"
+}

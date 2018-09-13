@@ -78,7 +78,7 @@ check_diff "$pending_csum" "" \
 check_not_diff "--base" "" pkg-to-
 
 # now let's make the pending csum become an update
-vm_cmd ostree commit -b vmcheck --tree=ref=$pending_csum
+vm_ostree_commit_layered_as_base $pending_csum vmcheck
 vm_rpmostree cleanup -p
 vm_rpmostree upgrade
 pending_csum=$(vm_get_pending_csum)

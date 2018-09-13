@@ -76,7 +76,7 @@ vm_cmd ostree refs $(vm_get_deployment_info 0 checksum) \
 vm_rpmostree cleanup -p
 
 # upgrade to new commit with foo in the base layer
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
+vm_ostree_commit_layered_as_base vmcheck_tmp/with_foo_and_bar vmcheck
 vm_rpmostree upgrade
 vm_reboot
 echo "ok setup"

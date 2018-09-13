@@ -49,7 +49,7 @@ vm_cmd ostree refs $(vm_get_deployment_info 0 checksum) \
 vm_rpmostree cleanup -p
 
 # upgrade to new commit with foo in the base layer
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
+vm_ostree_commit_layered_as_base vmcheck_tmp/with_foo_and_bar vmcheck
 vm_rpmostree upgrade
 vm_reboot
 if ! vm_has_packages foo bar fooext; then
@@ -143,20 +143,20 @@ echo "ok override reset --all"
 vm_rpmostree cleanup -p
 
 # test inactive replacements
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
+vm_ostree_commit_layered_as_base vmcheck_tmp/with_foo_and_bar vmcheck
 vm_rpmostree upgrade
 vm_rpmostree override replace $YUMREPO/bar-0.9-1.x86_64.rpm
 vm_assert_status_jq \
   '.deployments[0]["base-local-replacements"]|length == 1' \
   '.deployments[0]["requested-base-local-replacements"]|length == 1'
 assert_replaced_local_pkg bar-1.0-1.x86_64 bar-0.9-1.x86_64
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo_and_bar
+vm_ostree_commit_layered_as_base vmcheck_tmp/without_foo_and_bar vmcheck
 vm_rpmostree upgrade
 vm_assert_status_jq \
   '.deployments[0]["base-local-replacements"]|length == 0' \
   '.deployments[0]["requested-base-local-replacements"]|length == 1' \
   '.deployments[0]["requested-base-local-replacements"]|index("bar-0.9-1.x86_64") >= 0'
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
+vm_ostree_commit_layered_as_base vmcheck_tmp/with_foo_and_bar vmcheck
 vm_rpmostree upgrade
 vm_assert_status_jq \
   '.deployments[0]["base-local-replacements"]|length == 1' \
@@ -165,7 +165,7 @@ assert_replaced_local_pkg bar-1.0-1.x86_64 bar-0.9-1.x86_64
 echo "ok active -> inactive -> active override replace"
 
 # make sure we can reset it while it's inactive
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/without_foo_and_bar
+vm_ostree_commit_layered_as_base vmcheck_tmp/without_foo_and_bar vmcheck
 vm_rpmostree upgrade
 vm_assert_status_jq \
   '.deployments[0]["base-local-replacements"]|length == 0' \
@@ -182,7 +182,7 @@ vm_rpmostree cleanup -p
 # try both local package layering and local replacements to make sure fd sending
 # doesn't get mixed up; and also remove a package at the same time
 vm_build_rpm baz
-vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck_tmp/with_foo_and_bar
+vm_ostree_commit_layered_as_base vmcheck_tmp/with_foo_and_bar vmcheck
 vm_rpmostree upgrade
 vm_rpmostree override replace $YUMREPO/bar-0.9-1.x86_64.rpm \
                        --install $YUMREPO/baz-1.0-1.x86_64.rpm \
