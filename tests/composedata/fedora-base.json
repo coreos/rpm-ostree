@@ -1,5 +1,10 @@
 {
     "ref": "fedora/stable/${basearch}",
+    "rojig": {
+        "name": "fedora-atomic-host",
+        "license": "MIT",
+        "summary": "Fedora Atomic Host"
+    },
     "releasever": "28",
 
     "repos": ["fedora", "updates"],

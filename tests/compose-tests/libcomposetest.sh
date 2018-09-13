@@ -29,6 +29,7 @@ pyappendjsonmember() {
 prepare_compose_test() {
     name=$1
     shift
+    filetype=${1:-json}
     ostree --repo=${repo} init --mode=archive
     echo 'fsync=false' >> ${repo}/config
     ostree --repo=${repobuild} init --mode=bare-user
@@ -48,6 +49,17 @@ EOF
     pysetjsonmember "repos" '["fedora-local"]' ${treefile}
     # FIXME extract from json
     export treeref=fedora/stable/x86_64/${name}
+    if [ "${filetype}" = "yaml" ]; then
+        python <<EOF
+import json, yaml, sys
+ifn="${treefile}"
+ofn=ifn.replace('.json', '.yaml')
+jd=json.load(open(ifn))
+with open(ofn, "w") as f:
+  f.write(yaml.dump(jd))
+EOF
+        export treefile=composedata/fedora-${name}.yaml
+    fi
 }
 
 compose_base_argv="--repo ${repobuild}"

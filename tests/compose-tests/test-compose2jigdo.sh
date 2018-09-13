@@ -7,15 +7,7 @@ dn=$(cd $(dirname $0) && pwd)
 . ${dn}/libcomposetest.sh
 . ${dn}/../common/libtest.sh
 
-prepare_compose_test "compose2jigdo"
-pysetjsonmember "rojig" '{ "name": "fedora-atomic-host", "license": "MIT", "summary": "Fedora Atomic Host"}'
-python <<EOF
-import json, yaml
-jd=json.load(open("$treefile"))
-with open("$treefile.yaml", "w") as f:
-  f.write(yaml.dump(jd))
-EOF
-export treefile=$treefile.yaml
+prepare_compose_test "compose2jigdo" "yaml"
 
 mkdir cache
 mkdir jigdo-output
