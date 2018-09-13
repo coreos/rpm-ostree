@@ -31,7 +31,7 @@ mkdir rojig-output
 do_commit2rojig() {
     targetrev=$1
     echo "$(date): starting commit2rojig"
-    rpm-ostree ex commit2rojig --repo=repo-build --pkgcache-repo cache/pkgcache-repo ${targetrev} $(pwd)/composedata/fedora-atomic-host-oirpm.spec $(pwd)/rojig-output
+    rpm-ostree ex commit2rojig --repo=repo-build --pkgcache-repo cache/pkgcache-repo ${targetrev} ${treefile} $(pwd)/rojig-output
     (cd rojig-output && createrepo_c .)
     echo "$(date): finished commit2rojig"
 }

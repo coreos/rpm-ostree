@@ -34,6 +34,7 @@
 #include "rpmostree-core.h"
 #include "rpmostree-rojig-core.h"
 #include "rpmostree-rojig-build.h"
+#include "rpmostree-rust.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-libbuiltin.h"
@@ -59,7 +60,7 @@ rpmostree_ex_builtin_commit2rojig (int             argc,
                                    GCancellable   *cancellable,
                                    GError        **error)
 {
-  g_autoptr(GOptionContext) context = g_option_context_new ("REV OIRPM-SPEC OUTPUTDIR");
+  g_autoptr(GOptionContext) context = g_option_context_new ("REV TREEFILE OUTPUTDIR");
   if (!rpmostree_option_context_parse (context,
                                        commit2rojig_option_entries,
                                        &argc, &argv,
@@ -82,7 +83,7 @@ rpmostree_ex_builtin_commit2rojig (int             argc,
     }
 
   const char *rev = argv[1];
-  const char *oirpm_spec = argv[2];
+  const char *treefile = argv[2];
   const char *outputdir = argv[3];
   if (!g_str_has_prefix (outputdir, "/"))
     return glnx_throw (error, "outputdir must be absolute");
@@ -93,7 +94,14 @@ rpmostree_ex_builtin_commit2rojig (int             argc,
   g_autoptr(OstreeRepo) pkgcache_repo = ostree_repo_open_at (AT_FDCWD, opt_pkgcache_repo, cancellable, error);
   if (!pkgcache_repo)
     return FALSE;
-  if (!rpmostree_commit2rojig (repo, pkgcache_repo, rev, AT_FDCWD, oirpm_spec, outputdir,
+
+  g_auto(GLnxTmpDir) tmpd = { 0, };
+  if (!glnx_mkdtemp ("rpmostree-commit2rojig-XXXXXX", 0700, &tmpd, error))
+    return FALSE;
+
+  g_autoptr(RORTreefile) treefile_rs = ror_treefile_new (treefile, NULL, tmpd.fd, error);
+  const char *rojig_spec_path = ror_treefile_get_rojig_spec_path (treefile_rs);
+  if (!rpmostree_commit2rojig (repo, pkgcache_repo, rev, tmpd.fd, rojig_spec_path, outputdir,
                                cancellable, error))
     return FALSE;
 
