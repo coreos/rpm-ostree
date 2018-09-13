@@ -1049,6 +1049,21 @@ rpmostree_postprocess_final (int            rootfs_dfd,
         return glnx_prefix_error (error, "During kernel processing");
     }
 
+  /* we're composing a new tree; copy the rpmdb to the base location */
+  if (!glnx_fstatat_allow_noent (rootfs_dfd, RPMOSTREE_RPMDB_LOCATION, NULL,
+                                 AT_SYMLINK_NOFOLLOW, error))
+    return FALSE;
+  if (errno == 0)
+    {
+      if (!glnx_shutil_mkdir_p_at (rootfs_dfd, RPMOSTREE_BASE_RPMDB, 0755,
+                                   cancellable, error))
+        return FALSE;
+      if (!hardlink_recurse (rootfs_dfd, RPMOSTREE_RPMDB_LOCATION,
+                             rootfs_dfd, RPMOSTREE_BASE_RPMDB,
+                             cancellable, error))
+        return glnx_prefix_error (error, "Hardlinking %s", RPMOSTREE_BASE_RPMDB);
+    }
+
   return TRUE;
 }
 
@@ -1307,23 +1322,6 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
 
   if (!rpmostree_cleanup_leftover_rpmdb_files (rootfs_fd, cancellable, error))
     return FALSE;
-
-  /* If we do have an rpmdb, hardlink it into the base path */
-  if (have_rpmdb)
-    {
-      /* We need idempotence, so check if it already exists */
-      if (!glnx_fstatat_allow_noent (rootfs_fd, RPMOSTREE_BASE_RPMDB, NULL, AT_SYMLINK_NOFOLLOW, error))
-        return FALSE;
-      if (errno == ENOENT)
-        {
-          if (!glnx_shutil_mkdir_p_at (rootfs_fd, RPMOSTREE_BASE_RPMDB, 0755, cancellable, error))
-            return FALSE;
-          if (!hardlink_recurse (rootfs_fd, RPMOSTREE_RPMDB_LOCATION,
-                                 rootfs_fd, RPMOSTREE_BASE_RPMDB,
-                                 cancellable, error))
-            return glnx_prefix_error (error, "Hardlinking %s", RPMOSTREE_BASE_RPMDB);
-        }
-    }
 
   if (!cleanup_selinux_lockfiles (rootfs_fd, cancellable, error))
     return FALSE;

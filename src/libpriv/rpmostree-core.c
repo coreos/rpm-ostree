@@ -4201,7 +4201,7 @@ rpmostree_context_commit (RpmOstreeContext      *self,
         /* be nice to our future selves */
         g_variant_builder_add (&metadata_builder, "{sv}",
                                "rpmostree.clientlayer_version",
-                               g_variant_new_uint32 (3));
+                               g_variant_new_uint32 (4));
       }
     else if (assemble_type == RPMOSTREE_ASSEMBLE_TYPE_SERVER_BASE)
       {
