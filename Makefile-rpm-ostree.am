@@ -87,7 +87,7 @@ librpmostree_rust_path = @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@/librpmos
 # want to (by default) touch the Internet during builds here.
 # One reason is that we want to support `make && sudo make install`,
 # and we don't want to do `sudo cargo` there.
-LIBRPMOSTREE_RUST_SRCS = $(wildcard rust/src/*.rs)
+LIBRPMOSTREE_RUST_SRCS = $(wildcard rust/src/*.rs) rust/cbindgen.toml
 $(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
 	cd $(top_srcdir)/rust && \
 	  export CARGO_TARGET_DIR=@abs_top_builddir@/target && \
