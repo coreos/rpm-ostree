@@ -168,15 +168,11 @@ rpmostree_sysroot_upgrader_initable_init (GInitable        *initable,
    * one or both if we upgrade.  But we also want to support redeploying
    * without changing them.
    */
-  gboolean is_layered;
-  if (!rpmostree_deployment_get_layered_info (self->repo,
-                                              self->origin_merge_deployment,
-                                              &is_layered, &self->base_revision,
-                                              NULL, NULL, NULL, error))
+  if (!rpmostree_deployment_get_base_layer (self->repo, self->origin_merge_deployment,
+                                            &self->base_revision, error))
     return FALSE;
 
-  if (is_layered)
-    /* base layer is already populated above */
+  if (self->base_revision)
     self->final_revision = g_strdup (merge_deployment_csum);
   else
     self->base_revision = g_strdup (merge_deployment_csum);

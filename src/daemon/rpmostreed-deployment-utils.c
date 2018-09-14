@@ -961,32 +961,23 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
   /* let's start with the ostree side of things */
 
   const char *current_checksum = ostree_deployment_get_csum (booted_deployment);
-  const char *current_base_checksum = current_checksum;
   g_autofree char *current_base_checksum_owned = NULL;
-  gboolean is_layered;
-  if (!rpmostree_deployment_get_layered_info (repo, booted_deployment, &is_layered,
-                                              &current_base_checksum_owned, NULL, NULL, NULL,
-                                              error))
+  if (!rpmostree_deployment_get_base_layer (repo, booted_deployment,
+                                            &current_base_checksum_owned, error))
     return FALSE;
-  if (is_layered)
-    current_base_checksum = current_base_checksum_owned;
+  const char *current_base_checksum = current_base_checksum_owned ?: current_checksum;
 
-  gboolean is_new_layered;
+  gboolean is_new_layered = FALSE;
   const char *new_checksum = NULL;
   const char *new_base_checksum = NULL;
   g_autofree char *new_base_checksum_owned = NULL;
   if (staged_deployment)
     {
       new_checksum = ostree_deployment_get_csum (staged_deployment);
-      if (!rpmostree_deployment_get_layered_info (repo, staged_deployment, &is_new_layered,
-                                                  &new_base_checksum_owned, NULL, NULL,
-                                                  NULL, error))
+      if (!rpmostree_deployment_get_base_layer (repo, staged_deployment,
+                                                &new_base_checksum_owned, error))
         return FALSE;
-
-      if (is_new_layered)
-        new_base_checksum = new_base_checksum_owned;
-      else
-        new_base_checksum = new_checksum;
+      new_base_checksum = new_base_checksum_owned ?: new_checksum;
     }
   else
     {
@@ -995,7 +986,7 @@ rpmostreed_update_generate_variant (OstreeDeployment  *booted_deployment,
         return FALSE;
       new_base_checksum = new_base_checksum_owned;
       /* just assume that the hypothetical new deployment would also be layered if we are */
-      is_new_layered = is_layered;
+      is_new_layered = (current_base_checksum_owned != NULL);
     }
 
   /* Graciously handle rev no longer in repo; e.g. mucking around with rebase/rollback; we

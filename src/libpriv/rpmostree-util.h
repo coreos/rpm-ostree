@@ -148,6 +148,13 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        GVariant         **out_replaced_base_pkgs,
                                        GError           **error);
 
+/* simpler version of the above */
+gboolean
+rpmostree_deployment_get_base_layer (OstreeRepo        *repo,
+                                     OstreeDeployment  *deployment,
+                                     char             **out_base_layer,
+                                     GError           **error);
+
 gboolean
 rpmostree_migrate_pkgcache_repo (OstreeRepo   *repo,
                                  GCancellable *cancellable,

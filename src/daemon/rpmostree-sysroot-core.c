@@ -80,9 +80,7 @@ generate_baselayer_refs (OstreeSysroot            *sysroot,
       {
         OstreeDeployment *deployment = deployments->pdata[i];
         g_autofree char *base_rev = NULL;
-
-        if (!rpmostree_deployment_get_layered_info (repo, deployment, NULL, &base_rev, NULL,
-                                                    NULL, NULL, error))
+        if (!rpmostree_deployment_get_base_layer (repo, deployment, &base_rev, error))
           return FALSE;
 
         if (base_rev)
@@ -181,11 +179,9 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
     {
       OstreeDeployment *deployment = deployments->pdata[i];
       const char *current_checksum = ostree_deployment_get_csum (deployment);
-      gboolean is_layered;
+
       g_autofree char *base_commit = NULL;
-      if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered,
-                                                  &base_commit, NULL,
-                                                  NULL, NULL, error))
+      if (!rpmostree_deployment_get_base_layer (repo, deployment, &base_commit, error))
         return FALSE;
 
       g_autoptr(RpmOstreeOrigin) origin = rpmostree_origin_parse_deployment (deployment, error);
@@ -197,7 +193,7 @@ generate_pkgcache_refs (OstreeSysroot            *sysroot,
        * packages are layered. But it's harmless to have nonexistent refs in the
        * set.
        */
-      if (is_layered)
+      if (base_commit)
         {
           g_autofree char *deployment_dirpath =
             ostree_sysroot_get_deployment_dirpath (sysroot, deployment);
