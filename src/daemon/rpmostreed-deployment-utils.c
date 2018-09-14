@@ -265,9 +265,10 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
   g_auto(GStrv) layered_pkgs = NULL;
   g_autoptr(GVariant) removed_base_pkgs = NULL;
   g_autoptr(GVariant) replaced_base_pkgs = NULL;
-  if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered, &base_checksum,
-                                              &layered_pkgs, &removed_base_pkgs,
-                                              &replaced_base_pkgs, error))
+  if (!rpmostree_deployment_get_layered_info (repo, deployment, &is_layered, NULL,
+                                              &base_checksum, &layered_pkgs,
+                                              &removed_base_pkgs, &replaced_base_pkgs,
+                                              error))
     return NULL;
 
   g_autoptr(GVariant) base_commit = NULL;

@@ -483,6 +483,7 @@ gboolean
 rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        OstreeDeployment  *deployment,
                                        gboolean          *out_is_layered,
+                                       guint             *out_layer_version,
                                        char             **out_base_layer,
                                        char            ***out_layered_pkgs,
                                        GVariant         **out_removed_base_pkgs,
@@ -564,6 +565,8 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
 
   if (out_is_layered != NULL)
     *out_is_layered = is_layered;
+  if (out_layer_version != NULL)
+    *out_layer_version = clientlayer_version;
   if (out_base_layer != NULL)
     *out_base_layer = g_steal_pointer (&base_layer);
   if (out_layered_pkgs != NULL)
@@ -597,8 +600,8 @@ rpmostree_deployment_get_base_layer (OstreeRepo        *repo,
                                      char             **out_base_layer,
                                      GError           **error)
 {
-  return rpmostree_deployment_get_layered_info (repo, deployment, NULL, out_base_layer,
-                                                NULL, NULL, NULL, error);
+  return rpmostree_deployment_get_layered_info (repo, deployment, NULL, NULL,
+                                                out_base_layer, NULL, NULL, NULL, error);
 }
 
 static gboolean

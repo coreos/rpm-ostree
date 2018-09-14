@@ -1041,7 +1041,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       g_autoptr(GVariant) removed = NULL;
       g_autoptr(GVariant) replaced = NULL;
       if (!rpmostree_deployment_get_layered_info (repo, merge_deployment, NULL, NULL, NULL,
-                                                  &removed, &replaced, error))
+                                                  NULL, &removed, &replaced, error))
         return FALSE;
 
       g_autoptr(GHashTable) nevra_to_name = g_hash_table_new (g_str_hash, g_str_equal);
