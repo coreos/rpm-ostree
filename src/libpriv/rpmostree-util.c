@@ -590,6 +590,17 @@ rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
   return TRUE;
 }
 
+/* Returns the base layer checksum if layered, NULL otherwise. */
+gboolean
+rpmostree_deployment_get_base_layer (OstreeRepo        *repo,
+                                     OstreeDeployment  *deployment,
+                                     char             **out_base_layer,
+                                     GError           **error)
+{
+  return rpmostree_deployment_get_layered_info (repo, deployment, NULL, out_base_layer,
+                                                NULL, NULL, NULL, error);
+}
+
 static gboolean
 do_pkgcache_migration (OstreeRepo    *repo,
                        OstreeRepo    *pkgcache,

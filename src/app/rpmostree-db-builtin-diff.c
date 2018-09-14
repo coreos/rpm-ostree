@@ -104,8 +104,7 @@ get_checksum_from_deployment (OstreeRepo       *repo,
   g_autofree char *checksum = NULL;
   if (opt_base)
     {
-      if (!rpmostree_deployment_get_layered_info (repo, deployment, NULL, &checksum,
-                                                  NULL, NULL, NULL, error))
+      if (!rpmostree_deployment_get_base_layer (repo, deployment, &checksum, error))
         return FALSE;
     }
 
