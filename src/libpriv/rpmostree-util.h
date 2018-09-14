@@ -138,10 +138,12 @@ gboolean
 rpmostree_str_ptrarray_contains (GPtrArray  *strs,
                                  const char *str);
 
+/* XXX: just return a struct out of these */
 gboolean
 rpmostree_deployment_get_layered_info (OstreeRepo        *repo,
                                        OstreeDeployment  *deployment,
                                        gboolean          *out_is_layered,
+                                       guint             *out_layer_version,
                                        char             **out_base_layer,
                                        char            ***out_layered_pkgs,
                                        GVariant         **out_removed_base_pkgs,
