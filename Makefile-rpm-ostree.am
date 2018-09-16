@@ -83,15 +83,16 @@ INSTALL_DATA_HOOKS += install-bin-hook
 endif
 
 librpmostree_rust_path = @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@/librpmostree_rust.a
-# If the target directory exists, use --frozen; we don't
-# want to (by default) touch the Internet during builds here.
-# One reason is that we want to support `make && sudo make install`,
-# and we don't want to do `sudo cargo` there.
+# If the target directory exists, and isn't owned by our uid,
+# we use --frozen this happens with the `make && sudo make install`
+# pattern.  If we did `sudo cargo`, then we'd be using a different cargo
+# cache, etc.
 LIBRPMOSTREE_RUST_SRCS = $(wildcard rust/src/*.rs) rust/cbindgen.toml
 $(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
 	cd $(top_srcdir)/rust && \
 	  export CARGO_TARGET_DIR=@abs_top_builddir@/target && \
-	  if test -d @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@; then frozen=--frozen; fi && \
+    target_subdir=@abs_top_builddir@/target/@RUST_TARGET_SUBDIR@; \
+	  if test -d "{target_subdir}" && [ "$(stat -c '%u' ${target_subdir})" != "$(id -u)" ]; then frozen=--frozen; fi && \
 	  $(cargo) build --verbose $${frozen} $(CARGO_RELEASE_ARGS)
 EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS) rust/Cargo.lock
 
