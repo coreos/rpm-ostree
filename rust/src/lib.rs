@@ -116,7 +116,7 @@ pub extern "C" fn ror_treefile_get_rojig_spec_path(
     assert!(!tf.is_null());
     let tf = unsafe { &mut *tf };
     if let &Some(ref rojig) = &tf.rojig_spec {
-        rojig.as_os_str().as_bytes().as_ptr() as *const libc::c_char
+        rojig.as_ptr()
     } else {
         ptr::null_mut()
     }
