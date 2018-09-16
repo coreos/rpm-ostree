@@ -416,10 +416,6 @@ rpmostree_context_new_system (OstreeRepo   *repo,
   dnf_context_set_http_proxy (self->dnfctx, g_getenv ("http_proxy"));
 
   dnf_context_set_repo_dir (self->dnfctx, "/etc/yum.repos.d");
-  /* TODO: re cache_age https://github.com/rpm-software-management/libdnf/issues/291
-   * We override the one-week default since it's too slow for Fedora.
-   */
-  dnf_context_set_cache_age (self->dnfctx, 60 * 60 * 24);
   dnf_context_set_cache_dir (self->dnfctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_REPOMD);
   dnf_context_set_solv_dir (self->dnfctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_SOLV);
   dnf_context_set_lock_dir (self->dnfctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
@@ -1035,7 +1031,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 
       gboolean did_update = FALSE;
       if (!dnf_repo_check(repo,
-                          dnf_context_get_cache_age (self->dnfctx),
+                          G_MAXUINT,
                           hifstate,
                           NULL))
         {
