@@ -138,7 +138,7 @@ echo "ok offline local RPM install"
 # synthesize update with foobar and barbaz builtin
 pending=$(vm_get_deployment_info 0 checksum)
 $REMOTE_OSTREE pull-local /ostree/repo $pending
-$REMOTE_OSTREE commit -b vmcheck --tree=ref=$pending
+vm_ostree_repo_commit_layered_as_base $remote_repo $pending vmcheck
 vm_rpmostree cleanup -prmb
 vm_rpmostree rebase --remote vmcheck_remote
 vm_build_rpm_repo_mode skip foobar version 2.0

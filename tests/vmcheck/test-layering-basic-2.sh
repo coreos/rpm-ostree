@@ -28,6 +28,8 @@ set -x
 vm_build_rpm foo
 vm_rpmostree install foo | tee output.txt
 assert_file_has_content output.txt '^Importing (1/1)'
+# also check that we definitely had to checkout the tree
+assert_file_has_content output.txt "Checking out tree "
 
 # upgrade with same foo in repos --> shouldn't re-import
 vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck
@@ -89,18 +91,24 @@ vm_cmd ostree show --print-metadata-key rpmostree.rpmdb.pkglist \
 assert_file_has_content pkglist.txt 'test-pkgcache-migrate-pkg'
 echo "ok layered pkglist"
 
+# remove accumulated crud from previous tests
+vm_rpmostree uninstall --all
+vm_reboot
+
 if vm_rpmostree install glibc &>out.txt; then
   assert_not_reached "Successfully requested glibc without --allow-inactive?"
 fi
 assert_file_has_content out.txt "Use --allow-inactive to explicitly require it."
 vm_rpmostree cleanup -p
 vm_rpmostree install glibc --allow-inactive &>out.txt
+# if we have a base rpmdb, then we should be able to figure out it's inactive
+# without checking out the tree -- this conditional is needed because of CentOS
+if vm_cmd test -d /usr/lib/sysimage/rpm-ostree-base-db; then
+  assert_not_file_has_content out.txt "Checking out tree "
+fi
 vm_rpmostree cleanup -p
 echo "ok --allow-inactive"
 
-# remove accumulated crud from previous tests
-vm_rpmostree uninstall --all
-vm_reboot
 vm_rpmostree uninstall --all |& tee out.txt
 assert_file_has_content out.txt "No change."
 vm_build_rpm test-uninstall-all-pkg1
