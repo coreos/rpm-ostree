@@ -1031,7 +1031,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
 
       gboolean did_update = FALSE;
       if (!dnf_repo_check(repo,
-                          dnf_context_get_cache_age (self->dnfctx),
+                          G_MAXUINT,
                           hifstate,
                           NULL))
         {
