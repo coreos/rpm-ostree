@@ -156,7 +156,6 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_clear_object (&ctx->pkgcache_repo);
   g_clear_pointer (&ctx->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
   g_free (ctx->ref);
-  g_free (ctx->rojig_spec);
   g_free (ctx->previous_checksum);
   g_clear_pointer (&ctx->treefile_rs, (GDestroyNotify) ror_treefile_free);
   g_clear_object (&ctx->treefile_parser);
@@ -1018,8 +1017,6 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     return FALSE;
 
   g_autoptr(GFile) treefile_dir = g_file_get_parent (self->treefile_path);
-  if (self->treefile_rs)
-    self->rojig_spec = g_strdup (ror_treefile_get_rojig_spec_path (self->treefile_rs));
 
   *out_context = g_steal_pointer (&self);
   return TRUE;
@@ -1391,12 +1388,15 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   const char *rojig_outputdir = opt_ex_jigdo_output_rpm ?: opt_ex_jigdo_output_set;
   if (rojig_outputdir)
     {
-      if (!self->rojig_spec)
+      const char *rojig_spec = NULL;
+      if (self->treefile_rs)
+        rojig_spec = ror_treefile_get_rojig_spec_path (self->treefile_rs);
+      if (!rojig_spec)
         return glnx_throw (error, "No rojig defined in treefile");
       if (!rpmostree_commit2rojig (self->repo, self->pkgcache_repo,
                                    new_revision,
                                    self->workdir_dfd,
-                                   self->rojig_spec,
+                                   rojig_spec,
                                    rojig_outputdir,
                                    cancellable, error))
         return FALSE;

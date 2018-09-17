@@ -25,6 +25,8 @@ use serde_json;
 use serde_yaml;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
+use std::ffi::{CString, CStr};
+use std::os::unix::ffi::OsStringExt;
 use std::{fs, io};
 use tempfile;
 
@@ -33,7 +35,7 @@ const ARCH_X86_64: &'static str = "x86_64";
 pub struct Treefile {
     pub workdir: openat::Dir,
     pub parsed: TreeComposeConfig,
-    pub rojig_spec: Option<PathBuf>,
+    pub rojig_spec: Option<Box<CStr>>,
 }
 
 /// Parse a YAML treefile definition using architecture `arch`.
@@ -109,7 +111,7 @@ impl Treefile {
         Ok(tmpf)
     }
 
-    fn write_rojig_spec<'a, 'b>(workdir: &'a openat::Dir, r: &'b Rojig) -> io::Result<PathBuf> {
+    fn write_rojig_spec<'a, 'b>(workdir: &'a openat::Dir, r: &'b Rojig) -> io::Result<Box<CStr>> {
         let description = r.description
             .as_ref()
             .and_then(|v| if v.len() > 0 { Some(v.as_str()) } else { None })
@@ -151,7 +153,8 @@ for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; 
                 rpmostree_rojig_description = description,
             )?;
         }
-        Ok(name)
+        let c_name = CString::new(name.into_os_string().into_vec())?;
+        Ok(c_name.into_boxed_c_str())
     }
 }
 
@@ -440,7 +443,8 @@ rojig:
         let tf = &t.tf;
         let rojig = tf.parsed.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
-        let rojig_spec = tf.rojig_spec.as_ref().unwrap();
+        let rojig_spec_str = tf.rojig_spec.as_ref().unwrap().to_str().unwrap();
+        let rojig_spec = Path::new(rojig_spec_str);
         assert!(rojig_spec.file_name().unwrap() == "exampleos.spec");
     }
 
