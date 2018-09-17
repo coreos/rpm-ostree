@@ -443,7 +443,8 @@ rojig:
         let tf = &t.tf;
         let rojig = tf.parsed.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
-        let rojig_spec = tf.rojig_spec.as_ref().unwrap();
+        let rojig_spec_str = tf.rojig_spec.as_ref().unwrap().to_str().unwrap();
+        let rojig_spec = Path::new(rojig_spec_str);
         assert!(rojig_spec.file_name().unwrap() == "exampleos.spec");
     }
 
