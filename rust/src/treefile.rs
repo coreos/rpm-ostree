@@ -793,7 +793,7 @@ mod ffi {
     use glib_sys;
     use libc;
 
-    use std::ffi::OsStr;
+    use std::ffi::{CString, OsStr};
     use std::io::Seek;
     use std::os::unix::ffi::OsStrExt;
     use std::os::unix::io::{AsRawFd, RawFd};
@@ -886,6 +886,17 @@ mod ffi {
         let tf = ref_from_raw_ptr(tf);
         if let &Some(ref rojig) = &tf.rojig_spec {
             rojig.as_ptr()
+        } else {
+            ptr::null_mut()
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ror_treefile_get_rojig_name(tf: *mut Treefile) -> *mut libc::c_char {
+        assert!(!tf.is_null());
+        let tf = unsafe { &mut *tf };
+        if let &Some(ref rojig) = &tf.parsed.rojig {
+            CString::new(rojig.name.as_str()).unwrap().into_raw()
         } else {
             ptr::null_mut()
         }

@@ -41,6 +41,9 @@ static RpmOstreeCommand compose_subcommands[] = {
   { "commit", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     "Commit a target path to an OSTree repository",
     rpmostree_compose_builtin_commit },
+  { "rojig", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
+    "Build a rojig RPM from a treefile, output to a local rpm-md repo",
+    rpmostree_compose_builtin_rojig },
   { NULL, 0, NULL, NULL }
 };
 

@@ -125,7 +125,7 @@ impl_rojig2commit (RpmOstreeRojig2CommitContext *self,
   /* We're also "pure" rojig - this adds assertions that we don't depsolve for example */
   if (!rpmostree_context_setup (self->ctx, NULL, NULL, treespec, cancellable, error))
     return FALSE;
-  if (!rpmostree_context_prepare_rojig (self->ctx, cancellable, error))
+  if (!rpmostree_context_prepare_rojig (self->ctx, FALSE, cancellable, error))
     return FALSE;
   gboolean rojig_changed;
   if (!rpmostree_context_execute_rojig (self->ctx, &rojig_changed, cancellable, error))

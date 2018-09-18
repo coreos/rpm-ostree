@@ -153,8 +153,9 @@ gboolean rpmostree_context_prepare (RpmOstreeContext     *self,
                                     GError        **error);
 /* Like above, but used for "pure rojig" cases */
 gboolean rpmostree_context_prepare_rojig (RpmOstreeContext     *self,
-                                          GCancellable   *cancellable,
-                                          GError        **error);
+                                          gboolean              allow_not_found,
+                                          GCancellable         *cancellable,
+                                          GError              **error);
 
 GPtrArray *rpmostree_context_get_packages (RpmOstreeContext *self);
 
@@ -183,6 +184,7 @@ rpmostree_context_consume_package (RpmOstreeContext  *self,
 
 DnfPackage *rpmostree_context_get_rojig_pkg (RpmOstreeContext  *self);
 const char *rpmostree_context_get_rojig_checksum (RpmOstreeContext  *self);
+const char *rpmostree_context_get_rojig_inputhash (RpmOstreeContext  *self);
 
 gboolean rpmostree_context_import (RpmOstreeContext *self,
                                    GCancellable     *cancellable,

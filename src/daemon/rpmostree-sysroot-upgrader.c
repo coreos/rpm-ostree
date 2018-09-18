@@ -475,7 +475,7 @@ rpmostree_sysroot_upgrader_pull_base (RpmOstreeSysrootUpgrader  *self,
         if (!rpmostree_context_setup (ctx, NULL, "/", treespec, cancellable, error))
           return FALSE;
         /* We're also "pure" rojig - this adds assertions that we don't depsolve for example */
-        if (!rpmostree_context_prepare_rojig (ctx, cancellable, error))
+        if (!rpmostree_context_prepare_rojig (ctx, FALSE, cancellable, error))
           return FALSE;
         DnfPackage *rojig_pkg = rpmostree_context_get_rojig_pkg (ctx);
         new_base_rev = g_strdup (rpmostree_context_get_rojig_checksum (ctx));
