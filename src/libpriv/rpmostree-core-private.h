@@ -36,8 +36,10 @@ struct _RpmOstreeContext {
   const char *rojig_spec; /* The rojig spec like: repoid:package */
   const char *rojig_version; /* Optional */
   gboolean rojig_pure; /* There is only rojig */
+  gboolean rojig_allow_not_found; /* Don't error if package not found */
   DnfPackage *rojig_pkg;
   char *rojig_checksum;
+  char *rojig_inputhash;
 
   gboolean pkgcache_only;
   DnfContext *dnfctx;

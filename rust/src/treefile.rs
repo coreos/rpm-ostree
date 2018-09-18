@@ -44,8 +44,7 @@ pub struct Treefile {
     // This one isn't used today, but we may do more in the future.
     _workdir: openat::Dir,
     primary_dfd: openat::Dir,
-    // This is only used by the test suite
-    _parsed: TreeComposeConfig,
+    parsed: TreeComposeConfig,
     rojig_spec: Option<CUtf8Buf>,
     serialized: CUtf8Buf,
     externals: TreefileExternals,
@@ -334,7 +333,7 @@ impl Treefile {
         let serialized = Treefile::serialize_json_string(&parsed.config)?;
         Ok(Box::new(Treefile {
             primary_dfd: dfd,
-            _parsed: parsed.config,
+            parsed: parsed.config,
             _workdir: workdir,
             rojig_spec: rojig_spec,
             serialized: serialized,
@@ -739,9 +738,9 @@ remove-files:
     fn test_treefile_new() {
         let t = TreefileTest::new(VALID_PRELUDE, None).unwrap();
         let tf = &t.tf;
-        assert!(tf._parsed.rojig.is_none());
+        assert!(tf.parsed.rojig.is_none());
         assert!(tf.rojig_spec.is_none());
-        assert!(tf._parsed.machineid_compat.is_none());
+        assert!(tf.parsed.machineid_compat.is_none());
     }
 
     const ROJIG_YAML: &'static str = r###"
@@ -757,7 +756,7 @@ rojig:
         buf.push_str(ROJIG_YAML);
         let t = TreefileTest::new(buf.as_str(), None).unwrap();
         let tf = &t.tf;
-        let rojig = tf._parsed.rojig.as_ref().unwrap();
+        let rojig = tf.parsed.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
         let rojig_spec_str = tf.rojig_spec.as_ref().unwrap().as_str();
         let rojig_spec = Path::new(rojig_spec_str);
@@ -793,7 +792,7 @@ mod ffi {
     use glib_sys;
     use libc;
 
-    use std::ffi::OsStr;
+    use std::ffi::{CString, OsStr};
     use std::io::Seek;
     use std::os::unix::ffi::OsStrExt;
     use std::os::unix::io::{AsRawFd, RawFd};
@@ -886,6 +885,17 @@ mod ffi {
         let tf = ref_from_raw_ptr(tf);
         if let &Some(ref rojig) = &tf.rojig_spec {
             rojig.as_ptr()
+        } else {
+            ptr::null_mut()
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ror_treefile_get_rojig_name(tf: *mut Treefile) -> *mut libc::c_char {
+        assert!(!tf.is_null());
+        let tf = unsafe { &mut *tf };
+        if let &Some(ref rojig) = &tf.parsed.rojig {
+            CString::new(rojig.name.as_str()).unwrap().into_raw()
         } else {
             ptr::null_mut()
         }

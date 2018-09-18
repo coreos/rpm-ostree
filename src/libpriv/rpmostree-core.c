@@ -345,6 +345,7 @@ rpmostree_context_finalize (GObject *object)
 
   g_clear_object (&rctx->rojig_pkg);
   g_free (rctx->rojig_checksum);
+  g_free (rctx->rojig_inputhash);
 
   g_clear_object (&rctx->pkgcache_repo);
   g_clear_object (&rctx->ostreerepo);
@@ -1701,6 +1702,22 @@ add_remaining_pkgcache_pkgs (RpmOstreeContext *self,
   return TRUE;
 }
 
+static char *
+parse_provided_checksum (const char *provide_data,
+                         GError **error)
+{
+  if (*provide_data != '(')
+    return glnx_null_throw (error, "Expected '('");
+  provide_data++;
+  const char *closeparen = strchr (provide_data, ')');
+  if (!closeparen)
+    return glnx_null_throw (error, "Expected ')'");
+  g_autofree char *ret = g_strndup (provide_data, closeparen - provide_data);
+  if (strlen (ret) != OSTREE_SHA256_STRING_LEN)
+    return glnx_null_throw (error, "Expected %u characters", OSTREE_SHA256_STRING_LEN);
+  return g_steal_pointer (&ret);
+}
+
 static gboolean
 setup_rojig_state (RpmOstreeContext *self,
                    GError          **error)
@@ -1730,7 +1747,16 @@ setup_rojig_state (RpmOstreeContext *self,
 
   g_autoptr(GPtrArray) pkglist = hy_query_run (query);
   if (pkglist->len == 0)
-    return glnx_throw (error, "Failed to find rojig package '%s'", self->rojig_spec);
+    {
+      if (!self->rojig_allow_not_found)
+        return glnx_throw (error, "Failed to find rojig package '%s'", self->rojig_spec);
+      else
+        {
+          /* Here we leave rojig_pkg NULL */
+          return TRUE;
+        }
+    }
+
   g_ptr_array_sort (pkglist, compare_pkgs);
   /* We use the last package in the array which should be newest */
   self->rojig_pkg = g_object_ref (pkglist->pdata[pkglist->len-1]);
@@ -1751,16 +1777,16 @@ setup_rojig_state (RpmOstreeContext *self,
       else if (g_str_has_prefix (provide_str, RPMOSTREE_ROJIG_PROVIDE_COMMIT))
         {
           const char *rest = provide_str + strlen (RPMOSTREE_ROJIG_PROVIDE_COMMIT);
-          if (*rest != '(')
-            return glnx_throw (error, "Invalid %s", provide_str);
-          rest++;
-          const char *closeparen = strchr (rest, ')');
-          if (!closeparen)
-            return glnx_throw (error, "Invalid %s", provide_str);
-
-          self->rojig_checksum = g_strndup (rest, closeparen - rest);
-          if (strlen (self->rojig_checksum) != OSTREE_SHA256_STRING_LEN)
-            return glnx_throw (error, "Invalid %s", provide_str);
+          self->rojig_checksum = parse_provided_checksum (rest, error);
+          if (!self->rojig_checksum)
+            return glnx_prefix_error (error, "Invalid %s", provide_str);
+        }
+      else if (g_str_has_prefix (provide_str, RPMOSTREE_ROJIG_PROVIDE_INPUTHASH))
+        {
+          const char *rest = provide_str + strlen (RPMOSTREE_ROJIG_PROVIDE_INPUTHASH);
+          self->rojig_inputhash = parse_provided_checksum (rest, error);
+          if (!self->rojig_inputhash)
+            return glnx_prefix_error (error, "Invalid %s", provide_str);
         }
     }
 
@@ -1949,6 +1975,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
  */
 gboolean
 rpmostree_context_prepare_rojig (RpmOstreeContext *self,
+                                 gboolean          allow_not_found,
                                  GCancellable     *cancellable,
                                  GError          **error)
 {
@@ -1957,6 +1984,7 @@ rpmostree_context_prepare_rojig (RpmOstreeContext *self,
    * internally.
    */
   rpmostree_context_set_sepolicy (self, NULL);
+  self->rojig_allow_not_found = allow_not_found;
   return rpmostree_context_prepare (self, cancellable, error);
 }
 
@@ -2189,6 +2217,14 @@ rpmostree_context_get_rojig_checksum (RpmOstreeContext  *self)
 {
   g_assert (self->rojig_spec);
   return self->rojig_checksum;
+}
+
+/* Returns: (transfer none): The rojig inputhash (checksum of build-time inputs) */
+const char *
+rpmostree_context_get_rojig_inputhash (RpmOstreeContext  *self)
+{
+  g_assert (self->rojig_spec);
+  return self->rojig_inputhash;
 }
 
 static gboolean
