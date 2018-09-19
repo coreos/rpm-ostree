@@ -176,9 +176,10 @@ rpmostree_db_builtin_diff (int argc, char **argv,
 
       if (argc < 2)
         {
-          /* diff booted against pending deployment */
+          /* diff booted against pending or rollback deployment */
           g_autoptr(OstreeDeployment) pending = NULL;
-          ostree_sysroot_query_deployments_for (sysroot, NULL, &pending, NULL);
+          g_autoptr(OstreeDeployment) rollback = NULL;
+          ostree_sysroot_query_deployments_for (sysroot, NULL, &pending, &rollback);
           if (pending)
             {
               return print_deployment_diff (repo,
@@ -186,7 +187,14 @@ rpmostree_db_builtin_diff (int argc, char **argv,
                                             "pending deployment", pending,
                                             cancellable, error);
             }
-          return glnx_throw (error, "No pending deployment to diff against");
+          if (rollback)
+            {
+              return print_deployment_diff (repo,
+                                            "rollback deployment", rollback,
+                                            "booted deployment", booted,
+                                            cancellable, error);
+            }
+          return glnx_throw (error, "No pending or rollback deployment to diff against");
         }
       else
         {
