@@ -163,7 +163,7 @@ rpmostree_db_builtin_diff (int argc, char **argv,
           new_desc = "pending deployment";
           g_autoptr(OstreeDeployment) pending = NULL;
           ostree_sysroot_query_deployments_for (sysroot, NULL, &pending, NULL);
-          if (!pending || ostree_deployment_equal (pending, booted))
+          if (!pending)
             return glnx_throw (error, "No pending deployment to diff against");
           if (!get_checksum_from_deployment (repo, pending, &new_checksum, error))
             return FALSE;
