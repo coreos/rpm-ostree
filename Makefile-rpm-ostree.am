@@ -63,6 +63,8 @@ rpm_ostree_SOURCES = src/app/main.c \
 if BUILDOPT_COMPOSE_TOOLING
 rpm_ostree_SOURCES += \
 	src/app/rpmostree-compose-builtin-tree.c \
+	src/app/rpmostree-composeutil.c \
+	src/app/rpmostree-composeutil.h \
 	src/app/rpmostree-builtin-compose.c \
 	$(NULL)
 endif
