@@ -793,6 +793,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   /* Mainly for the `install` and `override` commands */
   const gboolean no_pull_base =
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE) > 0);
+  const gboolean no_pull_ostree_base = deploy_has_bool_option (self, "no-pull-ostree-base");
   /* Used to background check for updates; this essentially means downloading the minimum
    * amount of metadata only to check if there's an upgrade */
   const gboolean download_metadata_only =
@@ -881,7 +882,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   gboolean is_override = FALSE;
 
   /* In practice today */
-  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE)
+  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE || no_pull_ostree_base)
     {
       /* this is a heuristic; by the end, once the proper switches are added, the two
        * commands can look indistinguishable at the D-Bus level */
@@ -1128,8 +1129,20 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
   rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, txn_title->str);
 
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
+  RpmOstreeRefspecType refspec_type;
+  rpmostree_origin_classify_refspec (origin, &refspec_type, NULL);
+  /* Now that we have the refspec type, find out if we should be pulling
+   * the base.  The idea here is that rojig defaults to pulling even for
+   * rpm-ostree install (which now uses `no-pull-ostree-base`),
+   * since the contents come from the same place.
+   *
+   * Perhaps we should be doing this for ostree as well...but I want
+   * to be conservative there for now.
+   */
+  const gboolean no_pull = no_pull_base ||
+    (no_pull_ostree_base && refspec_type == RPMOSTREE_REFSPEC_TYPE_OSTREE);
 
-  if (!no_pull_base)
+  if (!no_pull)
     {
       gboolean base_changed;
 
@@ -1207,10 +1220,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
       changed = TRUE;
     }
-
-  /* Past this point we've computed the origin */
-  RpmOstreeRefspecType refspec_type;
-  rpmostree_origin_classify_refspec (origin, &refspec_type, NULL);
 
   if (download_metadata_only)
     {

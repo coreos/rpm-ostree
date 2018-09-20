@@ -306,6 +306,8 @@
          "no-pull-base" (type 'b')
             Do not pull a base layer from the remote. Not valid if
             either "set-refspec" or "set-revision" is specified.
+         "no-pull-ostree-base" (type 'b')
+             Like no-pull-base, but only applies if the base is via ostree://.
          "dry-run" (type 'b')
             Stop short of deploying the new tree. If layering packages,
             the pkg diff is printed but packages are not downloaded or

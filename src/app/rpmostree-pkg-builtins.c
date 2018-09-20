@@ -91,7 +91,8 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
   g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
   g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
   g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
-  g_variant_dict_insert (&dict, "no-pull-base", "b", TRUE);
+  /* For historical reasons */
+  g_variant_dict_insert (&dict, "no-pull-ostree-base", "b", TRUE);
   g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
   g_variant_dict_insert (&dict, "allow-inactive", "b", opt_allow_inactive);
   g_variant_dict_insert (&dict, "no-layering", "b", opt_uninstall_all);
