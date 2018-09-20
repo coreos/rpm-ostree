@@ -137,7 +137,15 @@ vm_rpmostree install foo-1.0 --unchanged-exit-77 > foo-install.txt
 assert_file_has_content_literal foo-install.txt 'Checking out packages (1/1) 100%'
 echo "ok install not on a tty"
 
+# check that by default we diff booted vs pending
+vm_rpmostree db diff --format=diff > out.txt
+assert_file_has_content out.txt +foo-1.0
+
 vm_reboot
+
+# and check that now by default we diff rollback vs booted
+vm_rpmostree db diff --format=diff > out.txt
+assert_file_has_content out.txt +foo-1.0
 
 # Test `rpm-ostree status --pending-exit-77`, with no actual pending deployment
 rc=0

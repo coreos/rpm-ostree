@@ -115,6 +115,27 @@ get_checksum_from_deployment (OstreeRepo       *repo,
   return TRUE;
 }
 
+static gboolean
+print_deployment_diff (OstreeRepo        *repo,
+                       const char        *old_desc,
+                       OstreeDeployment  *old,
+                       const char        *new_desc,
+                       OstreeDeployment  *new,
+                       GCancellable      *cancellable,
+                       GError           **error)
+{
+  g_autofree char *old_checksum = NULL;
+  if (!get_checksum_from_deployment (repo, old, &old_checksum, error))
+    return FALSE;
+
+  g_autofree char *new_checksum = NULL;
+  if (!get_checksum_from_deployment (repo, new, &new_checksum, error))
+    return FALSE;
+
+  return print_diff (repo, old_desc, old_checksum, new_desc, new_checksum,
+                     cancellable, error);
+}
+
 gboolean
 rpmostree_db_builtin_diff (int argc, char **argv,
                            RpmOstreeCommandInvocation *invocation,
@@ -153,23 +174,34 @@ rpmostree_db_builtin_diff (int argc, char **argv,
       if (!booted)
         return glnx_throw (error, "Not booted into any deployment");
 
-      old_desc = "booted deployment";
-      if (!get_checksum_from_deployment (repo, booted, &old_checksum, error))
-        return FALSE;
-
       if (argc < 2)
         {
-          /* diff booted against pending deployment */
-          new_desc = "pending deployment";
+          /* diff booted against pending or rollback deployment */
           g_autoptr(OstreeDeployment) pending = NULL;
-          ostree_sysroot_query_deployments_for (sysroot, NULL, &pending, NULL);
-          if (!pending || ostree_deployment_equal (pending, booted))
-            return glnx_throw (error, "No pending deployment to diff against");
-          if (!get_checksum_from_deployment (repo, pending, &new_checksum, error))
-            return FALSE;
+          g_autoptr(OstreeDeployment) rollback = NULL;
+          ostree_sysroot_query_deployments_for (sysroot, NULL, &pending, &rollback);
+          if (pending)
+            {
+              return print_deployment_diff (repo,
+                                            "booted deployment", booted,
+                                            "pending deployment", pending,
+                                            cancellable, error);
+            }
+          if (rollback)
+            {
+              return print_deployment_diff (repo,
+                                            "rollback deployment", rollback,
+                                            "booted deployment", booted,
+                                            cancellable, error);
+            }
+          return glnx_throw (error, "No pending or rollback deployment to diff against");
         }
       else
         {
+          old_desc = "booted deployment";
+          if (!get_checksum_from_deployment (repo, booted, &old_checksum, error))
+            return FALSE;
+
           /* diff against the booted deployment */
           new_desc = argv[1];
           if (!ostree_repo_resolve_rev (repo, new_desc, FALSE, &new_checksum, error))
