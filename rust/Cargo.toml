@@ -2,7 +2,6 @@
 name = "rpmostree-rust"
 version = "0.1.0"
 authors = ["Colin Walters <walters@verbum.org>"]
-build = "build.rs"
 
 [dependencies]
 serde = "1.0"
@@ -16,9 +15,6 @@ glib = "0.5.0"
 tempfile = "3.0.3"
 openat = "0.1.15"
 curl = "0.4.14"
-
-[build-dependencies]
-cbindgen = "0.6.3"
 
 [lib]
 name = "rpmostree_rust"
