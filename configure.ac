@@ -205,6 +205,12 @@ AS_IF([test -z "$cargo"], [AC_MSG_ERROR([cargo is required for --enable-rust])])
 AC_PATH_PROG([rustc], [rustc])
 AS_IF([test -z "$rustc"], [AC_MSG_ERROR([rustc is required for --enable-rust])])
 
+AS_IF([test -f "${srcdir}"/rpmostree-rust.h],
+      [cbindgen=dist],
+      [AC_PATH_PROG([cbindgen], [cbindgen])])
+AM_CONDITIONAL(HAVE_PREBUILT_CBINDGEN, [test "${cbindgen}" = "dist"])
+AM_CONDITIONAL(HAVE_EXTERNAL_CBINDGEN, [test -n "${cbindgen}" && test "${cbindgen}" != dist])
+
 AC_MSG_CHECKING(whether to build in debug mode)
 debug_release=release
 if $(echo $CFLAGS |grep -q -E "(-O0|-Og)"); then
@@ -271,4 +277,5 @@ echo "
     bubblewrap:                              $with_bubblewrap
     gtk-doc:                                 $enable_gtk_doc
     rust:                                    $rust_debug_release
+    cbindgen:                                ${cbindgen:-internal}
 "
