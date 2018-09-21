@@ -633,6 +633,12 @@ convert_var_to_tmpfiles_d (int            rootfs_dfd,
   if (!g_output_stream_close (tmpfiles_out, cancellable, error))
     return FALSE;
 
+  /* Make it world-readable, no reason why not to
+   * https://bugzilla.redhat.com/show_bug.cgi?id=1631794
+   */
+  if (!glnx_fchmod (tmpf.fd, 0644, error))
+    return FALSE;
+
   if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
                              rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
                              error))
