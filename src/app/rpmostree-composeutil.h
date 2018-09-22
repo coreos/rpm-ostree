@@ -23,13 +23,14 @@
 #include <ostree.h>
 
 #include "rpmostree-core.h"
+#include "rpmostree-rust.h"
 
 G_BEGIN_DECLS
 
 gboolean
 rpmostree_composeutil_checksum (GBytes            *serialized_treefile,
                                 HyGoal             goal,
-                                GFile             *contextdir,
+                                RORTreefile       *tf,
                                 JsonArray         *add_files,
                                 char             **out_checksum,
                                 GError           **error);
@@ -39,8 +40,8 @@ rpmostree_composeutil_legacy_prep_dev (int         rootfs_dfd,
                                        GError    **error);
 
 gboolean
-rpmostree_composeutil_sanity_checks (JsonObject   *treedata,
-                                     GFile        *contextdir,
+rpmostree_composeutil_sanity_checks (RORTreefile  *tf,
+                                     JsonObject   *treefile,
                                      GCancellable *cancellable,
                                      GError      **error);
 

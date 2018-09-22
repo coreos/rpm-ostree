@@ -32,8 +32,9 @@ extern crate serde_json;
 extern crate serde_yaml;
 
 use std::ffi::{CStr, OsStr};
+use std::io::Seek;
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::io::{FromRawFd, IntoRawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
 use std::{io, ptr};
 
 mod glibutils;
@@ -92,6 +93,41 @@ pub extern "C" fn ror_treefile_new(
         Treefile::new_boxed(filename.as_ref(), arch, workdir),
         gerror,
     )
+}
+
+#[no_mangle]
+pub extern "C" fn ror_treefile_get_dfd(tf: *mut Treefile) -> libc::c_int {
+    assert!(!tf.is_null());
+    let tf = unsafe { &mut *tf };
+    tf.primary_dfd.as_raw_fd()
+}
+
+#[no_mangle]
+pub extern "C" fn ror_treefile_get_postprocess_script_fd(tf: *mut Treefile) -> libc::c_int {
+    assert!(!tf.is_null());
+    let tf = unsafe { &mut *tf };
+    if let Some(ref mut fd) = tf.externals.postprocess_script.as_ref() {
+        // We always seek to the start
+        fd.seek(io::SeekFrom::Start(0)).unwrap();
+        fd.as_raw_fd()
+    } else {
+        -1
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ror_treefile_get_add_file_fd(
+    tf: *mut Treefile,
+    filename: *const libc::c_char,
+) -> libc::c_int {
+    assert!(!tf.is_null());
+    let tf = unsafe { &mut *tf };
+    let filename = OsStr::from_bytes(bytes_from_nonnull(filename));
+    let filename = filename.to_string_lossy().into_owned();
+    let mut fd = tf.externals.add_files.get(&filename).expect("add-file");
+    // We always seek to the start
+    fd.seek(io::SeekFrom::Start(0)).unwrap();
+    fd.as_raw_fd()
 }
 
 #[no_mangle]

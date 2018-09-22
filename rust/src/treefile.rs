@@ -26,15 +26,31 @@ use serde_json;
 use serde_yaml;
 use std::io::prelude::*;
 use std::path::Path;
-use std::{fs, io};
+use std::{collections, fs, io};
 use tempfile;
 
 const ARCH_X86_64: &'static str = "x86_64";
+const INCLUDE_MAXDEPTH: u32 = 50;
+
+/// This struct holds file descriptors for any external files/data referenced by
+/// a TreeComposeConfig.
+pub struct TreefileExternals {
+    pub postprocess_script: Option<fs::File>,
+    pub add_files: collections::HashMap<String, fs::File>,
+}
 
 pub struct Treefile {
     pub workdir: openat::Dir,
+    pub primary_dfd: openat::Dir,
     pub parsed: TreeComposeConfig,
     pub rojig_spec: Option<CUtf8Buf>,
+    pub externals: TreefileExternals,
+}
+
+// We only use this while parsing
+struct ConfigAndExternals {
+    config: TreeComposeConfig,
+    externals: TreefileExternals,
 }
 
 enum InputFormat {
@@ -43,6 +59,7 @@ enum InputFormat {
 }
 
 /// Parse a YAML treefile definition using architecture `arch`.
+/// This does not open the externals.
 fn treefile_parse_stream<R: io::Read>(
     fmt: InputFormat,
     input: &mut R,
@@ -100,32 +117,173 @@ fn treefile_parse_stream<R: io::Read>(
     Ok(treefile)
 }
 
+/// Given a treefile filename and an architecture, parse it and also
+/// open its external files.
+fn treefile_parse<P: AsRef<Path>>(
+    filename: P,
+    arch: Option<&str>,
+) -> io::Result<ConfigAndExternals> {
+    let filename = filename.as_ref();
+    let mut f = io::BufReader::new(fs::File::open(filename)?);
+    let basename = filename
+        .file_name()
+        .map(|s| s.to_string_lossy())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Expected a filename"))?;
+    let fmt = if basename.ends_with(".yaml") || basename.ends_with(".yml") {
+        InputFormat::YAML
+    } else {
+        InputFormat::JSON
+    };
+    let tf = treefile_parse_stream(fmt, &mut f, arch).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Parsing {}: {}", filename.to_string_lossy(), e.to_string()),
+        )
+    })?;
+    let postprocess_script = if let Some(ref postprocess) = tf.postprocess_script.as_ref() {
+        Some(fs::File::open(filename.with_file_name(postprocess))?)
+    } else {
+        None
+    };
+    let mut add_files: collections::HashMap<String, fs::File> = collections::HashMap::new();
+    if let Some(ref add_file_names) = tf.add_files.as_ref() {
+        for (name, _) in add_file_names.iter() {
+            add_files.insert(name.clone(), fs::File::open(filename.with_file_name(name))?);
+        }
+    }
+    Ok(ConfigAndExternals {
+        config: tf,
+        externals: TreefileExternals {
+            postprocess_script,
+            add_files,
+        },
+    })
+}
+
+/// Merge a "basic" or non-array field. The semantics originally defined for
+/// these are that first-one wins.
+fn merge_basic_field<T>(dest: &mut Option<T>, src: &mut Option<T>) {
+    if dest.is_some() {
+        return;
+    }
+    *dest = src.take()
+}
+
+/// Merge a vector field by appending. This semantic was originally designed for
+/// the `packages` key.
+fn merge_vec_field<T>(dest: &mut Option<Vec<T>>, src: &mut Option<Vec<T>>) {
+    if let Some(ref mut srcv) = src.take() {
+        let mut v = dest.take().map_or_else(|| vec![], |v| v);
+        v.append(srcv);
+        *dest = Some(v)
+    }
+}
+
+/// Given two configs, merge them. Ideally we'd do some macro magic and avoid
+/// listing all of the fields again.
+fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
+    merge_basic_field(&mut dest.treeref, &mut src.treeref);
+    merge_basic_field(&mut dest.rojig, &mut src.rojig);
+    merge_vec_field(&mut dest.repos, &mut src.repos);
+    merge_basic_field(&mut dest.selinux, &mut src.selinux);
+    merge_basic_field(&mut dest.gpg_key, &mut src.gpg_key);
+    merge_basic_field(&mut dest.include, &mut src.include);
+    merge_vec_field(&mut dest.packages, &mut src.packages);
+    merge_basic_field(&mut dest.recommends, &mut src.recommends);
+    merge_basic_field(&mut dest.documentation, &mut src.documentation);
+    merge_vec_field(&mut dest.install_langs, &mut src.install_langs);
+    merge_vec_field(&mut dest.initramfs_args, &mut src.initramfs_args);
+    merge_basic_field(&mut dest.boot_location, &mut src.boot_location);
+    merge_basic_field(&mut dest.tmp_is_dir, &mut src.tmp_is_dir);
+    merge_vec_field(&mut dest.units, &mut src.units);
+    merge_basic_field(&mut dest.machineid_compat, &mut src.machineid_compat);
+    merge_basic_field(&mut dest.releasever, &mut src.releasever);
+    merge_basic_field(
+        &mut dest.automatic_version_prefix,
+        &mut src.automatic_version_prefix,
+    );
+    merge_basic_field(&mut dest.mutate_os_release, &mut src.mutate_os_release);
+    merge_basic_field(&mut dest.etc_group_members, &mut src.etc_group_members);
+    merge_basic_field(&mut dest.preserve_passwd, &mut src.preserve_passwd);
+    merge_basic_field(&mut dest.check_passwd, &mut src.check_passwd);
+    merge_basic_field(&mut dest.check_groups, &mut src.check_groups);
+    merge_basic_field(
+        &mut dest.ignore_removed_users,
+        &mut src.ignore_removed_users,
+    );
+    merge_basic_field(
+        &mut dest.ignore_removed_groups,
+        &mut src.ignore_removed_groups,
+    );
+    merge_basic_field(&mut dest.postprocess_script, &mut src.postprocess_script);
+    merge_vec_field(&mut dest.postprocess, &mut src.postprocess);
+    merge_vec_field(&mut dest.add_files, &mut src.add_files);
+    merge_vec_field(&mut dest.remove_files, &mut src.remove_files);
+    merge_vec_field(
+        &mut dest.remove_from_packages,
+        &mut src.remove_from_packages,
+    );
+}
+
+/// Merge the treefile externals. There are currently only two keys that
+/// reference external files.
+fn treefile_merge_externals(dest: &mut TreefileExternals, src: &mut TreefileExternals) {
+    // This one, being a basic-valued field, has first-wins semantics.
+    if dest.postprocess_script.is_none() {
+        dest.postprocess_script = src.postprocess_script.take();
+    }
+
+    // add-files is an array and hence has append semantics.
+    for (k, v) in src.add_files.drain() {
+        dest.add_files.insert(k, v);
+    }
+}
+
+/// Recursively parse a treefile, merging along the way.
+fn treefile_parse_recurse<P: AsRef<Path>>(
+    filename: P,
+    arch: Option<&str>,
+    depth: u32,
+) -> io::Result<ConfigAndExternals> {
+    let filename = filename.as_ref();
+    let mut parsed = treefile_parse(filename, arch)?;
+    let include_path = parsed.config.include.take();
+    if let &Some(ref include_path) = &include_path {
+        if depth == INCLUDE_MAXDEPTH {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Reached maximum include depth {}", INCLUDE_MAXDEPTH),
+            ));
+        }
+        let parent = filename.parent().unwrap();
+        let include_path = parent.join(include_path);
+        let mut included = treefile_parse_recurse(include_path, arch, depth + 1)?;
+        treefile_merge(&mut parsed.config, &mut included.config);
+        treefile_merge_externals(&mut parsed.externals, &mut included.externals);
+    }
+    Ok(parsed)
+}
+
 impl Treefile {
+    /// The main treefile creation entrypoint.
     pub fn new_boxed(
         filename: &Path,
         arch: Option<&str>,
         workdir: openat::Dir,
     ) -> io::Result<Box<Treefile>> {
-        let mut f = io::BufReader::new(fs::File::open(filename)?);
-        let basename = filename
-            .file_name()
-            .map(|s| s.to_string_lossy())
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Expected a filename"))?;
-        let fmt = if basename.ends_with(".yaml") || basename.ends_with(".yml") {
-            InputFormat::YAML
-        } else {
-            InputFormat::JSON
-        };
-        let parsed = treefile_parse_stream(fmt, &mut f, arch)?;
-        let rojig_spec = if let &Some(ref rojig) = &parsed.rojig {
+        let parsed = treefile_parse_recurse(filename, arch, 0)?;
+        let dfd = openat::Dir::open(filename.parent().unwrap_or_else(|| Path::new("/")))?;
+        let rojig_spec = if let &Some(ref rojig) = &parsed.config.rojig {
             Some(Treefile::write_rojig_spec(&workdir, rojig)?)
         } else {
             None
         };
         Ok(Box::new(Treefile {
-            parsed: parsed,
+            primary_dfd: dfd,
+            parsed: parsed.config,
             workdir: workdir,
             rojig_spec: rojig_spec,
+            externals: parsed.externals,
         }))
     }
 
@@ -139,6 +297,7 @@ impl Treefile {
         Ok(tmpf)
     }
 
+    /// Generate a rojig spec file.
     fn write_rojig_spec<'a, 'b>(workdir: &'a openat::Dir, r: &'b Rojig) -> io::Result<CUtf8Buf> {
         let description = r
             .description
@@ -186,6 +345,8 @@ for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; 
     }
 }
 
+/// For increased readability in YAML/JSON, we support whitespace in individual
+/// array elements.
 fn whitespace_split_packages(pkgs: &[String]) -> Vec<String> {
     pkgs.iter()
         .flat_map(|pkg| pkg.split_whitespace().map(String::from))
@@ -390,11 +551,6 @@ packages-x86_64:
  - grub2 grub2-tools
 packages-s390x:
  - zipl
-add-files:
- - - foo
-   - /usr/bin/foo
- - - baz
-   - /usr/bin/blah
 "###;
 
     // This one has "comments" (hence unknown keys)
@@ -416,7 +572,29 @@ add-files:
             treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 5);
+    }
+
+    #[test]
+    fn basic_valid_add_remove_files() {
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(
+            r###"
+add-files:
+  - - foo
+    - /usr/bin/foo
+  - - baz
+    - /usr/bin/blah
+remove-files:
+ - foo
+ - bar
+"###,
+        );
+        let buf = buf.as_bytes();
+        let mut input = io::BufReader::new(buf);
+        let treefile =
+            treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         assert!(treefile.add_files.unwrap().len() == 2);
+        assert!(treefile.remove_files.unwrap().len() == 2);
     }
 
     #[test]
@@ -496,17 +674,17 @@ add-files:
         assert!(tf.parsed.machineid_compat.is_none());
     }
 
-    #[test]
-    fn test_treefile_new_rojig() {
-        let mut buf = VALID_PRELUDE.to_string();
-        buf.push_str(
-            r###"
+    const ROJIG_YAML: &'static str = r###"
 rojig:
   name: "exampleos"
   license: "MIT"
   summary: "ExampleOS rojig base image"
-"###,
-        );
+"###;
+
+    #[test]
+    fn test_treefile_new_rojig() {
+        let mut buf = VALID_PRELUDE.to_string();
+        buf.push_str(ROJIG_YAML);
         let t = TreefileTest::new(buf.as_str(), None).unwrap();
         let tf = &t.tf;
         let rojig = tf.parsed.rojig.as_ref().unwrap();
@@ -516,4 +694,25 @@ rojig:
         assert!(rojig_spec.file_name().unwrap() == "exampleos.spec");
     }
 
+    #[test]
+    fn test_treefile_merge() {
+        let arch = Some(ARCH_X86_64);
+        let mut base_input = io::BufReader::new(VALID_PRELUDE.as_bytes());
+        let mut base = treefile_parse_stream(InputFormat::YAML, &mut base_input, arch).unwrap();
+        let mut mid_input = io::BufReader::new(
+            r###"
+packages:
+  - some layered packages
+"###.as_bytes(),
+        );
+        let mut mid = treefile_parse_stream(InputFormat::YAML, &mut mid_input, arch).unwrap();
+        let mut top_input = io::BufReader::new(ROJIG_YAML.as_bytes());
+        let mut top = treefile_parse_stream(InputFormat::YAML, &mut top_input, arch).unwrap();
+        treefile_merge(&mut mid, &mut base);
+        treefile_merge(&mut top, &mut mid);
+        let tf = &top;
+        assert!(tf.packages.as_ref().unwrap().len() == 8);
+        let rojig = tf.rojig.as_ref().unwrap();
+        assert!(rojig.name == "exampleos");
+    }
 }
