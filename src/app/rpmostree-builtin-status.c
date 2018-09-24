@@ -926,6 +926,42 @@ print_deployments (RPMOSTreeSysroot *sysroot_proxy,
   return TRUE;
 }
 
+/* The packagelist completely takes over the JSON list.
+ * https://github.com/projectatomic/rpm-ostree/pull/1536
+ */
+static GVariant *
+remove_pkglists (GVariant *deployments)
+{
+  g_auto(GVariantBuilder) builder;
+  g_variant_builder_init (&builder, (GVariantType*)"aa{sv}");
+
+  GVariantIter iter;
+  g_variant_iter_init (&iter, deployments);
+  while (TRUE)
+    {
+      g_autoptr(GVariant) child = g_variant_iter_next_value (&iter);
+
+      if (!child)
+        break;
+
+      g_autoptr(GVariantDict) dict = g_variant_dict_new (child);
+      g_autoptr(GVariantDict) commit_meta_dict =
+        ({ g_autoptr(GVariant) commit_meta_v = NULL;
+          g_assert (g_variant_dict_lookup (dict, "base-commit-meta", "@a{sv}", &commit_meta_v));
+          g_variant_dict_new (commit_meta_v); });
+
+      g_variant_dict_remove (commit_meta_dict, "rpmostree.rpmdb.pkglist");
+      g_autoptr(GVariant) new_commitmeta = g_variant_ref_sink (g_variant_dict_end (commit_meta_dict));
+
+      g_variant_dict_insert_value (dict, "base-commit-meta", new_commitmeta);
+      g_autoptr(GVariant) new_child = g_variant_ref_sink (g_variant_dict_end (dict));
+
+      g_variant_builder_add_value (&builder, new_child);
+    }
+
+  return g_variant_ref_sink (g_variant_builder_end (&builder));
+}
+
 gboolean
 rpmostree_builtin_status (int             argc,
                           char          **argv,
@@ -971,8 +1007,10 @@ rpmostree_builtin_status (int             argc,
       glnx_unref_object JsonBuilder *builder = json_builder_new ();
       json_builder_begin_object (builder);
 
+      g_autoptr(GVariant) filtered_deployments = remove_pkglists (deployments);
+
       json_builder_set_member_name (builder, "deployments");
-      json_builder_add_value (builder, json_gvariant_serialize (deployments));
+      json_builder_add_value (builder, json_gvariant_serialize (filtered_deployments));
       json_builder_set_member_name (builder, "transaction");
       GVariant *txn = get_active_txn (sysroot_proxy);
       JsonNode *txn_node =
