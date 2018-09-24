@@ -101,6 +101,12 @@ vm_rpmostree db diff --format=diff \
 assert_file_has_content_literal 'db-diff.txt' "+foo-1.0-1.x86_64"
 echo "ok pkg-add foo"
 
+# Check that there are no pkglist entries in the --json output
+vm_assert_status_jq \
+  '.deployments[0]["base-commit-meta"]|index("rpmostree.rpmdb.pkglist")|not' \
+  '.deployments[0]["layered-commit-meta"]|index("rpmostree.rpmdb.pkglist")|not'
+echo "ok clean --json"
+
 # Test idempotent install
 old_pending=$(vm_get_pending_csum)
 if vm_rpmostree install foo-1.0 &> out.txt; then
