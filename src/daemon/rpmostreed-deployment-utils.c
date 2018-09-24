@@ -224,6 +224,17 @@ variant_add_from_hash_table (GVariantDict *dict,
   g_variant_dict_insert (dict, key, "^as", values);
 }
 
+/* Returns floating GVariant equivalent of `commit_meta` minus blacklisted keys. */
+static GVariant*
+filter_commit_meta (GVariant *commit_meta)
+{
+  GVariantDict dict;
+  g_variant_dict_init (&dict, commit_meta);
+  /* for now we just blacklist, but we may want to whitelist in the future */
+  g_variant_dict_remove (&dict, "rpmostree.rpmdb.pkglist");
+  return g_variant_dict_end (&dict);
+}
+
 GVariant *
 rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
                                         OstreeDeployment *deployment,
@@ -285,7 +296,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
 
       /* See below for base commit metadata */
       g_autoptr(GVariant) layered_metadata = g_variant_get_child_value (commit, 0);
-      g_variant_dict_insert (&dict, "layered-commit-meta", "@a{sv}", layered_metadata);
+      g_variant_dict_insert (&dict, "layered-commit-meta", "@a{sv}",
+                             filter_commit_meta (layered_metadata));
     }
   else
     {
@@ -295,10 +307,11 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
     }
 
   /* We used to bridge individual keys, but that was annoying; just pass through all
-   * of the commit metadata.
+   * of the commit metadata that are actually relevant.
    */
   { g_autoptr(GVariant) base_meta = g_variant_get_child_value (base_commit, 0);
-    g_variant_dict_insert (&dict, "base-commit-meta", "@a{sv}", base_meta);
+    g_variant_dict_insert (&dict, "base-commit-meta", "@a{sv}",
+                           filter_commit_meta (base_meta));
   }
   variant_add_commit_details (&dict, NULL, commit);
 
