@@ -519,19 +519,25 @@ parse_treefile_to_json (RpmOstreeTreeComposeContext  *self,
       g_str_has_suffix (treefile_path, ".yml"))
     {
       const char *arch = self ? dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx)) : NULL;
-      self->treefile_rs = ror_treefile_new (treefile_path, arch,
-                                            self->workdir_dfd,
-                                            error);
-      if (!self->treefile_rs)
+      g_autoptr(RORTreefile) tf = ror_treefile_new (treefile_path, arch,
+                                                    self->workdir_dfd,
+                                                    error);
+      if (!tf)
         return glnx_prefix_error (error, "Failed to load YAML treefile");
 
-      glnx_fd_close int json_fd = ror_treefile_to_json (self->treefile_rs, error);
+      glnx_fd_close int json_fd = ror_treefile_to_json (tf, error);
       if (json_fd < 0)
         return FALSE;
       g_autoptr(GInputStream) json_s = g_unix_input_stream_new (json_fd, FALSE);
 
       if (!json_parser_load_from_stream (parser, json_s, NULL, error))
         return FALSE;
+
+      /* We have first-one-wins semantics for this until we move all of the
+       * parsing into Rust.
+       */
+      if (!self->treefile_rs)
+        self->treefile_rs = g_steal_pointer (&tf);
     }
   else
     {
