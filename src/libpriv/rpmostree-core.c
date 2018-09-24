@@ -1143,8 +1143,10 @@ commit_has_matching_sepolicy (GVariant       *commit,
                               GError        **error)
 {
   const char *sepolicy_csum_wanted = ostree_sepolicy_get_csum (sepolicy);
-  g_autofree char *sepolicy_csum = NULL;
+  if (!sepolicy_csum_wanted)
+    return glnx_throw (error, "SELinux enabled, but no policy found");
 
+  g_autofree char *sepolicy_csum = NULL;
   if (!get_commit_sepolicy_csum (commit, &sepolicy_csum, error))
     return FALSE;
 
