@@ -205,7 +205,12 @@ AS_IF([test -z "$cargo"], [AC_MSG_ERROR([cargo is required for --enable-rust])])
 AC_PATH_PROG([rustc], [rustc])
 AS_IF([test -z "$rustc"], [AC_MSG_ERROR([rustc is required for --enable-rust])])
 
-AS_IF([test -f "${srcdir}"/rpmostree-rust.h],
+dnl https://github.com/projectatomic/rpm-ostree/pull/1573
+dnl We support 3 modes for bindgen:
+dnl  - External /usr/bin/cbindgen (Fedora + CI)
+dnl  - Downloading it from crates.io (CentOS + CI builds)
+dnl  - Not running it at all, and using a pre-built rpmostree-rust.h (Koji)
+AS_IF([test -d "${srcdir}"/rust/vendor],
       [cbindgen=dist],
       [AC_PATH_PROG([cbindgen], [cbindgen])])
 AM_CONDITIONAL(HAVE_PREBUILT_CBINDGEN, [test "${cbindgen}" = "dist"])
