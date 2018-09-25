@@ -16,8 +16,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-use std::{fs, io};
 use std::io::prelude::*;
+use std::{fs, io};
 use tempfile;
 
 use curl::easy::Easy;
@@ -32,9 +32,7 @@ pub fn download_url_to_tmpfile(url: &str) -> io::Result<fs::File> {
         handle.url(url)?;
 
         let mut transfer = handle.transfer();
-        transfer.write_function(|data| {
-            output.write_all(data).and(Ok(data.len())).or(Ok(0))
-        })?;
+        transfer.write_function(|data| output.write_all(data).and(Ok(data.len())).or(Ok(0)))?;
         transfer.perform()?;
     }
 
