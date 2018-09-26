@@ -43,9 +43,9 @@ enum InputFormat {
 }
 
 /// Parse a YAML treefile definition using architecture `arch`.
-fn treefile_parse_stream(
+fn treefile_parse_stream<R: io::Read>(
     fmt: InputFormat,
-    input: &mut io::Read,
+    input: &mut R,
     arch: Option<&str>,
 ) -> io::Result<TreeComposeConfig> {
     let mut treefile: TreeComposeConfig = match fmt {
