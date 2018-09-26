@@ -418,6 +418,7 @@ add-files:
             treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 5);
+        assert!(treefile.add_files.unwrap().len() == 2);
     }
 
     #[test]
@@ -427,7 +428,6 @@ add-files:
             treefile_parse_stream(InputFormat::JSON, &mut input, Some(ARCH_X86_64)).unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 5);
-        assert!(treefile.add_files.unwrap().len() == 2);
     }
 
     #[test]
