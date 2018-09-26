@@ -88,20 +88,6 @@ start_daemon (GDBusConnection *connection,
 }
 
 static void
-on_name_acquired (GDBusConnection *connection,
-                  const char *name,
-                  gpointer user_data)
-{
-}
-
-static void
-on_name_lost (GDBusConnection *connection,
-              const char *name,
-              gpointer user_data)
-{
-}
-
-static void
 on_bus_name_released (GDBusConnection     *connection,
                       GAsyncResult        *result,
                       void                *user_data)
@@ -342,8 +328,7 @@ rpmostree_builtin_start_daemon (int             argc,
       if (!start_daemon (bus, error))
         return FALSE;
       (void) g_bus_own_name_on_connection (bus, DBUS_NAME, G_BUS_NAME_OWNER_FLAGS_NONE,
-                                           on_name_acquired, on_name_lost,
-                                           NULL, NULL);
+                                           NULL, NULL, NULL, NULL);
     }
   else if (!connect_to_peer (service_dbus_fd, error))
     return FALSE;
