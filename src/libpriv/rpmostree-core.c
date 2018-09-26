@@ -380,6 +380,7 @@ static void
 rpmostree_context_init (RpmOstreeContext *self)
 {
   self->tmprootfs_dfd = -1;
+  self->dnf_cache_policy = RPMOSTREE_CONTEXT_DNF_CACHE_DEFAULT;
 }
 
 static void
@@ -487,6 +488,13 @@ rpmostree_context_set_pkgcache_only (RpmOstreeContext *self,
   /* if called, must always be before setup() */
   g_assert (!self->spec);
   self->pkgcache_only = pkgcache_only;
+}
+
+void
+rpmostree_context_set_dnf_caching (RpmOstreeContext *self,
+                                   RpmOstreeContextDnfCachePolicy policy)
+{
+  self->dnf_cache_policy = policy;
 }
 
 /* Pick up repos dir and passwd from @cfg_deployment. */
@@ -1029,9 +1037,28 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
       if (g_cancellable_set_error_if_cancelled (cancellable, error))
         return FALSE;
 
+      /* For the cache_age bits, see https://github.com/projectatomic/rpm-ostree/pull/1562
+       * AKA a7bbf5bc142d9dac5b1bfb86d0466944d38baa24
+       * We have our own cache age as we want to default to G_MAXUINT so we
+       * respect the repo's metadata_expire if set.  But the compose tree path
+       * also sets this to 0 to force expiry.
+       */
+      guint cache_age = G_MAXUINT-1;
+      switch (self->dnf_cache_policy)
+        {
+        case RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER:
+          cache_age = G_MAXUINT;
+          break;
+        case RPMOSTREE_CONTEXT_DNF_CACHE_DEFAULT:
+          /* Handled above */
+          break;
+        case RPMOSTREE_CONTEXT_DNF_CACHE_NEVER:
+          cache_age = 0;
+          break;
+        }
       gboolean did_update = FALSE;
       if (!dnf_repo_check(repo,
-                          G_MAXUINT,
+                          cache_age,
                           hifstate,
                           NULL))
         {
