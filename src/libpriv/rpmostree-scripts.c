@@ -30,6 +30,7 @@
 #include "libglnx.h"
 
 #include "rpmostree-scripts.h"
+#include "rpmostree-rpm-util.h"
 
 #define RPMOSTREE_MESSAGE_PREPOST SD_ID128_MAKE(42,d3,72,22,dc,a2,4a,3b,9d,30,ce,d4,bb,bc,ac,d2)
 #define RPMOSTREE_MESSAGE_FILETRIGGER SD_ID128_MAKE(ef,dd,0e,4e,79,ca,45,d3,88,76,ac,45,e1,28,23,68)
@@ -940,9 +941,9 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
  * volatile mode, but that could just as easily be a separate tool.
  */
 gboolean
-rpmostree_deployment_sanitycheck (int           rootfs_fd,
-                                  GCancellable *cancellable,
-                                  GError      **error)
+rpmostree_deployment_sanitycheck_true (int           rootfs_fd,
+                                       GCancellable *cancellable,
+                                       GError      **error)
 {
   /* Used by the test suite */
   if (getenv ("RPMOSTREE_SKIP_SANITYCHECK"))
@@ -957,6 +958,64 @@ rpmostree_deployment_sanitycheck (int           rootfs_fd,
   rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/true", NULL);
   if (!rpmostree_bwrap_run (bwrap, cancellable, error))
     return FALSE;
+
   sd_journal_print (LOG_INFO, "sanitycheck(/usr/bin/true) successful");
+  return TRUE;
+}
+
+static gboolean
+verify_packages_in_sack (DnfSack      *sack,
+                         GPtrArray    *pkgs,
+                         GError      **error)
+{
+  if (!pkgs || pkgs->len == 0)
+    return TRUE;
+
+  for (guint i = 0; i < pkgs->len; i++)
+    {
+      DnfPackage *pkg = pkgs->pdata[i];
+      const char *nevra = dnf_package_get_nevra (pkg);
+      if (!rpmostree_sack_has_subject (sack, nevra))
+        return glnx_throw (error, "Didn't find package '%s'", nevra);
+    }
+
+  return TRUE;
+}
+
+/* Check that we can load the rpmdb. See
+ * https://github.com/projectatomic/rpm-ostree/issues/1566.
+ *
+ * This is split out of the one above for practical reasons: the check above runs right
+ * after scripts are executed to give a nicer error if the scripts did `rm -rf`.
+ */
+gboolean
+rpmostree_deployment_sanitycheck_rpmdb (int           rootfs_fd,
+                                        /* just allow two args to avoid allocating */
+                                        GPtrArray     *overlays,
+                                        GPtrArray     *overrides,
+                                        GCancellable *cancellable,
+                                        GError      **error)
+{
+  g_autoptr(RpmOstreeRefSack) sack = rpmostree_get_refsack_for_root (rootfs_fd, ".", error);
+  if (!sack)
+    return FALSE;
+
+  if ((overlays && overlays->len > 0) || (overrides && overrides->len > 0))
+    {
+      if (!verify_packages_in_sack (sack->sack, overlays, error) ||
+          !verify_packages_in_sack (sack->sack, overrides, error))
+        return FALSE;
+    }
+  else
+    {
+      /* OK, let's just sanity check that there are *some* packages in the rpmdb */
+      hy_autoquery HyQuery query = hy_query_create (sack->sack);
+      hy_query_filter (query, HY_PKG_REPONAME, HY_EQ, HY_SYSTEM_REPO_NAME);
+      g_autoptr(GPtrArray) pkgs = hy_query_run (query);
+      if (pkgs->len == 0)
+        return glnx_throw (error, "No packages found in rpmdb!");
+    }
+
+  sd_journal_print (LOG_INFO, "sanitycheck(rpmdb) successful");
   return TRUE;
 }
