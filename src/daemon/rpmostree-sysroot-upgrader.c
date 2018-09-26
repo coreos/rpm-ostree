@@ -1332,7 +1332,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                            &deployment_dfd, error))
         return FALSE;
 
-      if (!rpmostree_deployment_sanitycheck (deployment_dfd, cancellable, error))
+      if (!rpmostree_deployment_sanitycheck_true (deployment_dfd, cancellable, error))
         return FALSE;
     }
   else

@@ -3806,6 +3806,9 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   if (!rpmostree_rootfs_prepare_links (tmprootfs_dfd, cancellable, error))
     return FALSE;
 
+  gboolean skip_sanity_check = FALSE;
+  g_variant_dict_lookup (self->spec->dict, "skip-sanity-check", "b", &skip_sanity_check);
+
   /* NB: we're not running scripts right now for removals, so this is only for overlays and
    * replacements */
   if (overlays->len > 0 || overrides_replace->len > 0)
@@ -3978,11 +3981,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
       /* We want this to be the first error message if something went wrong
        * with a script; see https://github.com/projectatomic/rpm-ostree/pull/888
+       * (otherwise, on a script that did `rm -rf`, we'd fail first on the renameat below)
        */
-      gboolean skip_sanity_check = FALSE;
-      g_variant_dict_lookup (self->spec->dict, "skip-sanity-check", "b", &skip_sanity_check);
       if (!skip_sanity_check &&
-          !rpmostree_deployment_sanitycheck (tmprootfs_dfd, cancellable, error))
+          !rpmostree_deployment_sanitycheck_true (tmprootfs_dfd, cancellable, error))
         return FALSE;
 
       if (have_systemctl)
@@ -3997,12 +3999,12 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           if (!rpmostree_passwd_complete_rpm_layering (tmprootfs_dfd, error))
             return FALSE;
         }
-
     }
   else
     {
       /* Also do a sanity check even if we have no layered packages */
-      if (!rpmostree_deployment_sanitycheck (tmprootfs_dfd, cancellable, error))
+      if (!skip_sanity_check &&
+          !rpmostree_deployment_sanitycheck_true (tmprootfs_dfd, cancellable, error))
         return FALSE;
     }
 
@@ -4103,6 +4105,14 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
     }
 
   rpmostree_output_task_end ("done");
+
+  /* And now also sanity check the rpmdb */
+  if (!skip_sanity_check)
+    {
+      if (!rpmostree_deployment_sanitycheck_rpmdb (tmprootfs_dfd, overlays,
+                                                   overrides_replace, cancellable, error))
+        return FALSE;
+    }
 
   return TRUE;
 }
