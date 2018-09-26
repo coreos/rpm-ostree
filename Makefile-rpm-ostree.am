@@ -84,12 +84,15 @@ if BUILDOPT_NEW_NAME
 INSTALL_DATA_HOOKS += install-bin-hook
 endif
 
+# Propagate automake verbose mode
+cargo_build = $(cargo) build $(if $(subst 0,,$(V)),--verbose,)
+
 if !HAVE_PREBUILT_CBINDGEN
 if !HAVE_EXTERNAL_CBINDGEN
 rpmostree-bindgen: bindgen/Cargo.toml bindgen/src/main.rs
 	cd $(top_srcdir)/bindgen && \
 	export CARGO_TARGET_DIR=@abs_top_builddir@/bindgen-target && \
-	$(cargo) build --verbose && \
+	$(cargo_build) && \
 	ln -sf $${CARGO_TARGET_DIR}/debug/rpmostree-bindgen $(abs_top_builddir)/rpmostree-bindgen
 endif
 endif
@@ -105,7 +108,7 @@ $(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
 	  export CARGO_TARGET_DIR=@abs_top_builddir@/target && \
     target_subdir=@abs_top_builddir@/target/@RUST_TARGET_SUBDIR@; \
 	  if test -d "{target_subdir}" && [ "$(stat -c '%u' ${target_subdir})" != "$(id -u)" ]; then frozen=--frozen; fi && \
-	  $(cargo) build --verbose $${frozen} $(CARGO_RELEASE_ARGS)
+	  $(cargo_build) $${frozen} $(CARGO_RELEASE_ARGS)
 EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS) rust/Cargo.lock
 
 # Generate bindings from Rust to C
