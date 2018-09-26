@@ -25,6 +25,10 @@ AC_USE_SYSTEM_EXTENSIONS
 AC_SYS_LARGEFILE
 
 AC_PROG_CC
+dnl we don't today use C++ in rpm-ostree, only in libdnf,
+dnl but this has the side effect of setting CXXFLAGS with -g
+dnl if not set, which we definitely want; cmake doesn't do that.
+AC_PROG_CXX
 AM_PROG_CC_C_O
 
 # dbus system dir
@@ -251,6 +255,7 @@ dnl I picked /usr/libexec/rpm-ostree just because we need an
 dnl arbitrary path - we don't actually install there.
 (set -euo pipefail; mkdir -p libdnf-build && cd libdnf-build &&
  set -x && 
+ export CXXFLAGS &&
  cmake \
      -DCMAKE_INSTALL_PREFIX:PATH=/usr/libexec/rpm-ostree \
      -DINCLUDE_INSTALL_DIR:PATH=/usr/libexec/rpm-ostree/include \
