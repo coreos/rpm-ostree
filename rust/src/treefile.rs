@@ -357,7 +357,7 @@ pub struct TreeComposeConfig {
     pub postprocess: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "add-files")]
-    pub add_files: Option<Vec<String>>,
+    pub add_files: Option<Vec<(String, String)>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "remove-files")]
     pub remove_files: Option<Vec<String>>,
@@ -392,6 +392,11 @@ packages-x86_64:
  - grub2 grub2-tools
 packages-s390x:
  - zipl
+add-files:
+ - - foo
+   - /usr/bin/foo
+ - - baz
+   - /usr/bin/blah
 "###;
 
     // This one has "comments" (hence unknown keys)
@@ -413,6 +418,7 @@ packages-s390x:
             treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 5);
+        assert!(treefile.add_files.unwrap().len() == 2);
     }
 
     #[test]
