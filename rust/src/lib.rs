@@ -16,6 +16,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+extern crate c_utf8;
 extern crate curl;
 extern crate gio_sys;
 extern crate glib;
