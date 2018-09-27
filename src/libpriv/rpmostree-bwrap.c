@@ -111,7 +111,7 @@ rpmostree_bwrap_set_inherit_stdin (RpmOstreeBwrap *bwrap)
   g_subprocess_launcher_set_flags (bwrap->launcher, G_SUBPROCESS_FLAGS_STDIN_INHERIT);
 }
 
-void
+static void
 rpmostree_bwrap_append_bwrap_argv (RpmOstreeBwrap *bwrap, ...)
 {
   va_list args;
@@ -123,6 +123,18 @@ rpmostree_bwrap_append_bwrap_argv (RpmOstreeBwrap *bwrap, ...)
   while ((arg = va_arg (args, char *)))
     g_ptr_array_add (bwrap->argv, g_strdup (arg));
   va_end (args);
+}
+
+void
+rpmostree_bwrap_bind_read (RpmOstreeBwrap *bwrap, const char *src, const char *dest)
+{
+  rpmostree_bwrap_append_bwrap_argv (bwrap, "--ro-bind", src, dest, NULL);
+}
+
+void
+rpmostree_bwrap_bind_readwrite (RpmOstreeBwrap *bwrap, const char *src, const char *dest)
+{
+  rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", src, dest, NULL);
 }
 
 void
@@ -188,13 +200,13 @@ setup_rofiles_usr (RpmOstreeBwrap *bwrap,
   if (!g_spawn_check_exit_status (estatus, error))
     return FALSE;
 
-  rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", rofiles_mntpath, "/usr", NULL);
+  rpmostree_bwrap_bind_readwrite (bwrap, rofiles_mntpath, "/usr");
 
   /* also mount /etc from the rofiles mount to allow RPM scripts to change defaults, while
    * still being protected; note we use bind to ensure symlinks work, see:
    * https://github.com/projectatomic/rpm-ostree/pull/640 */
   const char *rofiles_etc_mntpath = glnx_strjoina (rofiles_mntpath, "/etc");
-  rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", rofiles_etc_mntpath, "/etc", NULL);
+  rpmostree_bwrap_bind_readwrite (bwrap, rofiles_etc_mntpath, "/etc");
 
   return TRUE;
 }
@@ -329,14 +341,14 @@ rpmostree_bwrap_new (int rootfs_fd,
   switch (mutable)
     {
     case RPMOSTREE_BWRAP_IMMUTABLE:
-      rpmostree_bwrap_append_bwrap_argv (ret, "--ro-bind", "usr", "/usr", NULL);
+      rpmostree_bwrap_bind_read (ret, "usr", "/usr");
       break;
     case RPMOSTREE_BWRAP_MUTATE_ROFILES:
       if (!setup_rofiles_usr (ret, error))
         return NULL;
       break;
     case RPMOSTREE_BWRAP_MUTATE_FREELY:
-      rpmostree_bwrap_append_bwrap_argv (ret, "--bind", "usr", "/usr", NULL);
+      rpmostree_bwrap_bind_readwrite (ret, "usr", "/usr");
       break;
     }
 

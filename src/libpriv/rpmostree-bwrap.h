@@ -46,7 +46,8 @@ RpmOstreeBwrap *rpmostree_bwrap_new (int rootfs,
                                      ...) G_GNUC_NULL_TERMINATED;
 
 void rpmostree_bwrap_set_inherit_stdin (RpmOstreeBwrap *bwrap);
-void rpmostree_bwrap_append_bwrap_argv (RpmOstreeBwrap *bwrap, ...) G_GNUC_NULL_TERMINATED;
+void rpmostree_bwrap_bind_read (RpmOstreeBwrap *bwrap, const char *src, const char *dest);
+void rpmostree_bwrap_bind_readwrite (RpmOstreeBwrap *bwrap, const char *src, const char *dest);
 void rpmostree_bwrap_append_child_argv (RpmOstreeBwrap *bwrap, ...) G_GNUC_NULL_TERMINATED;
 void rpmostree_bwrap_append_child_argva (RpmOstreeBwrap *bwrap, int argc, char **argv);
 

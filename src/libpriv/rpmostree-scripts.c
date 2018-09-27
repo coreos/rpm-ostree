@@ -364,7 +364,7 @@ run_script_in_bwrap_container (int rootfs_fd,
     goto out;
 
   if (var_lib_rpm_statedir)
-    rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", var_lib_rpm_statedir->path, "/var/lib/rpm-state", NULL);
+    rpmostree_bwrap_bind_readwrite (bwrap, var_lib_rpm_statedir->path, "/var/lib/rpm-state");
 
   const gboolean debugging_script = g_strcmp0 (g_getenv ("RPMOSTREE_SCRIPT_DEBUG"), pkg_script) == 0;
 
