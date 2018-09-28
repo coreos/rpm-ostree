@@ -2,7 +2,13 @@
 
 pkg_upgrade() {
     echo "Running yum -y distro-sync... $(date)"
-    yum -y distro-sync
+    if ! yum -y distro-sync; then
+        # It's pretty annoying dnf logs errors to a file
+        if [ -f /var/log/dnf.librepo.log ]; then
+            grep -i error /var/log/dnf.librepo.log
+        fi
+        exit 1
+    fi
     echo "Done yum -y distro-sync! $(date)"
 }
 

@@ -109,7 +109,7 @@ required: true
 
 # This test case wants an "unprivileged container with bubblewrap",
 # which we don't have right now; so just provision a VM and do a
-# docker --privileged run.
+# podman --privileged run.
 host:
   distro: fedora/28/atomic
   # Compose tests are slow and should be parallelized
@@ -123,13 +123,13 @@ env:
 # will point to a closer mirror.  Note we substitute $releasever
 # since https://github.com/projectatomic/rpm-ostree/pull/875
 tests:
-  - docker run --privileged --rm
+  - podman run --privileged --net=host --rm
     -e RPMOSTREE_COMPOSE_TEST_FILTER
     -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
     registry.fedoraproject.org/fedora:28 /bin/sh -c
-    "cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && ./tests/compose"
+    "mount -o remount,dev / && cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && ./tests/compose"
 
 artifacts:
   - test-compose-logs
@@ -158,12 +158,12 @@ host:
   distro: fedora/28/atomic
 
 tests:
-  - docker run --privileged --rm
+  - podman run --privileged --net=host --rm
     -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
     registry.fedoraproject.org/fedora:28 /bin/sh -c
-    "cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && adduser unpriv && setfacl -m u:unpriv:rwX . && runuser -u unpriv ./tests/ex-container"
+    "mount -o remount,dev / && cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && adduser unpriv && setfacl -m u:unpriv:rwX . && runuser -u unpriv ./tests/ex-container"
 
 artifacts:
   - ex-container-logs
