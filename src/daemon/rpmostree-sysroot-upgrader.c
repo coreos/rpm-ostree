@@ -1297,6 +1297,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   if (use_staging)
     {
+      rpmostree_output_task_begin ("Staging deployment");
       if (!ostree_sysroot_stage_tree (self->sysroot, self->osname,
                                       target_revision, origin,
                                       self->cfg_merge_deployment,
@@ -1304,6 +1305,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                       &new_deployment,
                                       cancellable, error))
         return FALSE;
+      rpmostree_output_task_end ("done");
     }
   else
     {
