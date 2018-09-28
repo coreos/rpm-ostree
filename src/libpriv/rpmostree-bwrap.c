@@ -125,6 +125,14 @@ rpmostree_bwrap_append_bwrap_argv (RpmOstreeBwrap *bwrap, ...)
   va_end (args);
 }
 
+/* Set /var to be read-only, but with a transient writable /var/tmp */
+void
+rpmostree_bwrap_var_tmp_tmpfs (RpmOstreeBwrap *bwrap)
+{
+  rpmostree_bwrap_bind_read (bwrap, "./var", "/var");
+  rpmostree_bwrap_append_bwrap_argv (bwrap, "--tmpfs", "/var/tmp", NULL);
+}
+
 void
 rpmostree_bwrap_bind_read (RpmOstreeBwrap *bwrap, const char *src, const char *dest)
 {
@@ -330,14 +338,12 @@ rpmostree_bwrap_new_base (int rootfs_fd, GError **error)
 RpmOstreeBwrap *
 rpmostree_bwrap_new (int rootfs_fd,
                      RpmOstreeBwrapMutability mutable,
-                     GError **error,
-                     ...)
+                     GError **error)
 {
   g_autoptr(RpmOstreeBwrap) ret = rpmostree_bwrap_new_base (rootfs_fd, error);
   if (!ret)
     return FALSE;
 
-  va_list args;
   switch (mutable)
     {
     case RPMOSTREE_BWRAP_IMMUTABLE:
@@ -351,12 +357,6 @@ rpmostree_bwrap_new (int rootfs_fd,
       rpmostree_bwrap_bind_readwrite (ret, "usr", "/usr");
       break;
     }
-
-  const char *arg;
-  va_start (args, error);
-  while ((arg = va_arg (args, char *)))
-    g_ptr_array_add (ret->argv, g_strdup (arg));
-  va_end (args);
 
   return g_steal_pointer (&ret);
 }
@@ -474,7 +474,7 @@ rpmostree_bwrap_selftest (GError **error)
   if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &host_root_dfd, error))
     return FALSE;
 
-  bwrap = rpmostree_bwrap_new (host_root_dfd, RPMOSTREE_BWRAP_IMMUTABLE, error, NULL);
+  bwrap = rpmostree_bwrap_new (host_root_dfd, RPMOSTREE_BWRAP_IMMUTABLE, error);
   if (!bwrap)
     return FALSE;
 

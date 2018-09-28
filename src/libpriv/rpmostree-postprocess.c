@@ -63,23 +63,21 @@ run_bwrap_mutably (int           rootfs_fd,
                    GCancellable *cancellable,
                    GError      **error)
 {
-  g_autoptr(RpmOstreeBwrap) bwrap = NULL;
-  if (unified_core_mode)
-    bwrap = rpmostree_bwrap_new (rootfs_fd,
-                                 RPMOSTREE_BWRAP_MUTATE_ROFILES,
-                                 error,
-                                 "--ro-bind", "./var", "/var",
-                                 NULL);
-  else
-    bwrap = rpmostree_bwrap_new (rootfs_fd,
-                                 RPMOSTREE_BWRAP_MUTATE_FREELY,
-                                 error,
-                                 "--bind", "var", "/var",
-                                 "--bind", "usr/etc", "/etc",
-                                 NULL);
-
+  RpmOstreeBwrapMutability mut =
+    unified_core_mode ? RPMOSTREE_BWRAP_MUTATE_ROFILES : RPMOSTREE_BWRAP_MUTATE_FREELY;
+  g_autoptr(RpmOstreeBwrap) bwrap = rpmostree_bwrap_new (rootfs_fd, mut, error);
   if (!bwrap)
     return FALSE;
+
+  if (unified_core_mode)
+    {
+      rpmostree_bwrap_bind_read (bwrap, "./var", "/var");
+    }
+  else
+    {
+      rpmostree_bwrap_bind_readwrite (bwrap, "var", "/var");
+      rpmostree_bwrap_bind_readwrite (bwrap, "usr/etc", "/etc");
+    }
 
   rpmostree_bwrap_append_child_argv (bwrap, binpath, NULL);
 
@@ -1670,13 +1668,13 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
         const char *path = NULL;
         {
           g_autoptr(RpmOstreeBwrap) bwrap =
-            rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_IMMUTABLE, error,
-                                 /* map back to /etc so relative symlinks work */
-                                 "--bind", "usr/etc", "/etc",
-                                 "realpath", "-z", "/etc/os-release",
-                                 NULL);
+            rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_IMMUTABLE, error);
           if (!bwrap)
             return FALSE;
+
+          /* map back to /etc so relative symlinks work */
+          rpmostree_bwrap_bind_readwrite (bwrap, "usr/etc", "/etc");
+          rpmostree_bwrap_append_child_argv (bwrap, "realpath", "-z", "/etc/os-release", NULL);
 
           g_autoptr(GBytes) out = NULL;
           if (!rpmostree_bwrap_run_captured (bwrap, &out, NULL, cancellable, error))
