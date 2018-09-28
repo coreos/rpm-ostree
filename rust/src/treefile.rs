@@ -20,13 +20,12 @@
  * https://github.com/cgwalters/coreos-assembler
  * */
 
+use c_utf8::CUtf8Buf;
 use openat;
 use serde_json;
 use serde_yaml;
-use std::ffi::{CStr, CString};
 use std::io::prelude::*;
-use std::os::unix::ffi::OsStringExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::{fs, io};
 use tempfile;
 
@@ -35,7 +34,7 @@ const ARCH_X86_64: &'static str = "x86_64";
 pub struct Treefile {
     pub workdir: openat::Dir,
     pub parsed: TreeComposeConfig,
-    pub rojig_spec: Option<Box<CStr>>,
+    pub rojig_spec: Option<CUtf8Buf>,
 }
 
 enum InputFormat {
@@ -140,15 +139,15 @@ impl Treefile {
         Ok(tmpf)
     }
 
-    fn write_rojig_spec<'a, 'b>(workdir: &'a openat::Dir, r: &'b Rojig) -> io::Result<Box<CStr>> {
+    fn write_rojig_spec<'a, 'b>(workdir: &'a openat::Dir, r: &'b Rojig) -> io::Result<CUtf8Buf> {
         let description = r
             .description
             .as_ref()
             .and_then(|v| if v.len() > 0 { Some(v.as_str()) } else { None })
             .unwrap_or(r.summary.as_str());
-        let name: PathBuf = format!("{}.spec", r.name).into();
+        let name: String = format!("{}.spec", r.name);
         {
-            let mut f = workdir.write_file(&name, 0644)?;
+            let mut f = workdir.write_file(name.as_str(), 0644)?;
             write!(
                 f,
                 r###"
@@ -183,8 +182,7 @@ for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; 
                 rpmostree_rojig_description = description,
             )?;
         }
-        let c_name = CString::new(name.into_os_string().into_vec())?;
-        Ok(c_name.into_boxed_c_str())
+        Ok(CUtf8Buf::from_string(name))
     }
 }
 
@@ -513,7 +511,7 @@ rojig:
         let tf = &t.tf;
         let rojig = tf.parsed.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
-        let rojig_spec_str = tf.rojig_spec.as_ref().unwrap().to_str().unwrap();
+        let rojig_spec_str = tf.rojig_spec.as_ref().unwrap().as_str();
         let rojig_spec = Path::new(rojig_spec_str);
         assert!(rojig_spec.file_name().unwrap() == "exampleos.spec");
     }
