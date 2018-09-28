@@ -3301,8 +3301,10 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
         continue;
       else if (g_str_has_prefix (fn, "etc/"))
         {
-          /* The tree uses usr/etc */
-          fn = modified_fn = g_strconcat ("usr/", fn, NULL);
+          /* Changing /etc is OK; note "normally" we maintain
+           * usr/etc but this runs right after %pre, where
+           * we're in the middle of running scripts.
+           */
         }
       else if (!g_str_has_prefix (fn, "usr/"))
         {
@@ -3809,6 +3811,21 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
   gboolean skip_sanity_check = FALSE;
   g_variant_dict_lookup (self->spec->dict, "skip-sanity-check", "b", &skip_sanity_check);
 
+  if (!glnx_fstatat_allow_noent (tmprootfs_dfd, "usr/etc", NULL, 0, error))
+    return FALSE;
+  gboolean renamed_etc = (errno == 0);
+  if (renamed_etc)
+    {
+      /* In general now, we place contents in /etc when running scripts */
+      if (!glnx_renameat (tmprootfs_dfd, "usr/etc", tmprootfs_dfd, "etc", error))
+        return FALSE;
+      /* But leave a compat symlink, as we used to bind mount, so scripts
+       * could still use that too.
+       */
+      if (symlinkat ("../etc", tmprootfs_dfd, "usr/etc") < 0)
+        return glnx_throw_errno_prefix (error, "symlinkat");
+    }
+
   /* NB: we're not running scripts right now for removals, so this is only for overlays and
    * replacements */
   if (overlays->len > 0 || overrides_replace->len > 0)
@@ -3900,10 +3917,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         }
       rpmostree_output_task_end ("%u done", n_pre_scripts_run);
 
-      if (faccessat (tmprootfs_dfd, "usr/etc/passwd", F_OK, 0) == 0)
+      if (faccessat (tmprootfs_dfd, "etc/passwd", F_OK, 0) == 0)
         {
           g_autofree char *contents =
-            glnx_file_get_contents_utf8_at (tmprootfs_dfd, "usr/etc/passwd",
+            glnx_file_get_contents_utf8_at (tmprootfs_dfd, "etc/passwd",
                                             NULL, cancellable, error);
           if (!contents)
             return FALSE;
@@ -3916,10 +3933,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
             }
         }
 
-      if (faccessat (tmprootfs_dfd, "usr/etc/group", F_OK, 0) == 0)
+      if (faccessat (tmprootfs_dfd, "etc/group", F_OK, 0) == 0)
         {
           g_autofree char *contents =
-            glnx_file_get_contents_utf8_at (tmprootfs_dfd, "usr/etc/group",
+            glnx_file_get_contents_utf8_at (tmprootfs_dfd, "etc/group",
                                             NULL, cancellable, error);
           if (!contents)
             return FALSE;
@@ -4005,6 +4022,16 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
       /* Also do a sanity check even if we have no layered packages */
       if (!skip_sanity_check &&
           !rpmostree_deployment_sanitycheck_true (tmprootfs_dfd, cancellable, error))
+        return FALSE;
+    }
+
+  /* Undo the /etc move above */
+  if (renamed_etc)
+    {
+      /* Remove the symlink and swap back */
+      if (!glnx_unlinkat (tmprootfs_dfd, "usr/etc", 0, error))
+        return FALSE;
+      if (!glnx_renameat (tmprootfs_dfd, "etc", tmprootfs_dfd, "usr/etc", error))
         return FALSE;
     }
 

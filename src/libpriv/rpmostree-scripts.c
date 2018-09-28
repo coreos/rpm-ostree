@@ -953,7 +953,6 @@ rpmostree_deployment_sanitycheck_true (int           rootfs_fd,
 
   if (!bwrap)
     return FALSE;
-  rpmostree_bwrap_bind_read (bwrap, "./usr/etc", "/etc");
   rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/true", NULL);
   if (!rpmostree_bwrap_run (bwrap, cancellable, error))
     return FALSE;

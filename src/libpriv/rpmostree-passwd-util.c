@@ -1200,7 +1200,7 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
   for (guint i = 0; i < G_N_ELEMENTS (pwgrp_shadow_files); i++)
     {
       const char *file = pwgrp_shadow_files[i];
-      g_autofree char *src = g_strconcat ("usr/etc/", file, NULL);
+      g_autofree char *src = g_strconcat ("etc/", file, NULL);
 
       if (!glnx_fstatat_allow_noent (rootfs_dfd, src, NULL, AT_SYMLINK_NOFOLLOW, error))
         return FALSE;
@@ -1221,7 +1221,7 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
     {
       const char *file = usrlib_pwgrp_files[i];
       g_autofree char *usrlibfile = g_strconcat ("usr/lib/", file, NULL);
-      g_autofree char *usretcfile = g_strconcat ("usr/etc/", file, NULL);
+      g_autofree char *usretcfile = g_strconcat ("etc/", file, NULL);
       g_autofree char *usrlibfiletmp = g_strconcat ("usr/lib/", file, ".tmp", NULL);
 
       /* Retain the current copies in /etc as backups */
@@ -1229,7 +1229,7 @@ rpmostree_passwd_prepare_rpm_layering (int                rootfs_dfd,
                           glnx_strjoina (usretcfile, ".rpmostreesave"), error))
         return FALSE;
 
-      /* Copy /usr/lib/{passwd,group} -> /usr/etc (breaking hardlinks) */
+      /* Copy /usr/lib/{passwd,group} -> /etc (breaking hardlinks) */
       if (!glnx_file_copy_at (rootfs_dfd, usrlibfile, NULL,
                               rootfs_dfd, usretcfile,
                               GLNX_FILE_COPY_NOXATTRS,
@@ -1261,13 +1261,13 @@ rpmostree_passwd_complete_rpm_layering (int       rootfs_dfd,
   for (guint i = 0; i < G_N_ELEMENTS (usrlib_pwgrp_files); i++)
     {
       const char *file = usrlib_pwgrp_files[i];
-      /* And now the inverse: /usr/etc/passwd -> /usr/lib/passwd */
-      if (!glnx_renameat (rootfs_dfd, glnx_strjoina ("usr/etc/", file),
+      /* And now the inverse: /etc/passwd -> /usr/lib/passwd */
+      if (!glnx_renameat (rootfs_dfd, glnx_strjoina ("etc/", file),
                           rootfs_dfd, glnx_strjoina ("usr/lib/", file), error))
         return FALSE;
       /* /usr/etc/passwd.rpmostreesave -> /usr/etc/passwd */
-      if (!glnx_renameat (rootfs_dfd, glnx_strjoina ("usr/etc/", file, ".rpmostreesave"),
-                          rootfs_dfd, glnx_strjoina ("usr/etc/", file), error))
+      if (!glnx_renameat (rootfs_dfd, glnx_strjoina ("etc/", file, ".rpmostreesave"),
+                          rootfs_dfd, glnx_strjoina ("etc/", file), error))
         return FALSE;
     }
   /* However, we leave the (potentially modified) shadow files in place.

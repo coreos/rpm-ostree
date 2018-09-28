@@ -63,6 +63,15 @@ run_bwrap_mutably (int           rootfs_fd,
                    GCancellable *cancellable,
                    GError      **error)
 {
+  /* For scripts, it's /etc, not /usr/etc */
+  if (!glnx_renameat (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
+    return FALSE;
+  /* But leave a compat symlink, as we used to bind mount, so scripts
+   * could still use that too.
+   */
+  if (symlinkat ("../etc", rootfs_fd, "usr/etc") < 0)
+    return glnx_throw_errno_prefix (error, "symlinkat");
+
   RpmOstreeBwrapMutability mut =
     unified_core_mode ? RPMOSTREE_BWRAP_MUTATE_ROFILES : RPMOSTREE_BWRAP_MUTATE_FREELY;
   g_autoptr(RpmOstreeBwrap) bwrap = rpmostree_bwrap_new (rootfs_fd, mut, error);
@@ -70,14 +79,9 @@ run_bwrap_mutably (int           rootfs_fd,
     return FALSE;
 
   if (unified_core_mode)
-    {
-      rpmostree_bwrap_bind_read (bwrap, "./var", "/var");
-    }
+    rpmostree_bwrap_bind_read (bwrap, "var", "/var");
   else
-    {
-      rpmostree_bwrap_bind_readwrite (bwrap, "var", "/var");
-      rpmostree_bwrap_bind_readwrite (bwrap, "usr/etc", "/etc");
-    }
+    rpmostree_bwrap_bind_readwrite (bwrap, "var", "/var");
 
   rpmostree_bwrap_append_child_argv (bwrap, binpath, NULL);
 
@@ -93,6 +97,12 @@ run_bwrap_mutably (int           rootfs_fd,
   }
 
   if (!rpmostree_bwrap_run (bwrap, cancellable, error))
+    return FALSE;
+
+  /* Remove the symlink and swap back */
+  if (!glnx_unlinkat (rootfs_fd, "usr/etc", 0, error))
+    return FALSE;
+  if (!glnx_renameat (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
   return TRUE;
@@ -1629,6 +1639,10 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (symlinkat ("../../" RPMOSTREE_RPMDB_LOCATION, rootfs_fd, "var/lib/rpm") < 0)
     return glnx_throw_errno_prefix (error, "symlinkat(%s)", "var/lib/rpm");
 
+  /* Take care of /etc for these bits */
+  if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
+    return FALSE;
+
   if (json_object_has_member (treefile, "remove-from-packages"))
     {
       remove = json_object_get_array_member (treefile, "remove-from-packages");
@@ -1639,10 +1653,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
       if (!refsack)
         return glnx_prefix_error (error, "Reading package set");
 
-      /* Backwards compatibility */
-      if (!rename_if_exists (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
-        return FALSE;
-
       for (guint i = 0; i < len; i++)
         {
           JsonArray *elt = json_array_get_array_element (remove, i);
@@ -1650,9 +1660,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
             return FALSE;
         }
 
-      /* Backwards compatibility */
-      if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
-        return FALSE;
     }
 
   {
@@ -1682,7 +1689,6 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
             return FALSE;
 
           /* map back to /etc so relative symlinks work */
-          rpmostree_bwrap_bind_readwrite (bwrap, "usr/etc", "/etc");
           rpmostree_bwrap_append_child_argv (bwrap, "realpath", "-z", "/etc/os-release", NULL);
 
           g_autoptr(GBytes) out = NULL;
@@ -1698,16 +1704,11 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
           pathbuf[len-1] = '\0';
 
           path = pathbuf+1; /* skip initial '/' */
-          if (g_str_has_prefix (path, "etc/"))
-            {
-              g_autofree char *old_pathbuf = pathbuf;
-              path = pathbuf = g_strdup_printf ("usr/%s", path);
-            }
         }
 
         /* fallback on just overwriting etc/os-release */
         if (!path)
-          path = "usr/etc/os-release";
+          path = "etc/os-release";
 
         g_print ("Mutating /%s\n", path);
 
@@ -1727,6 +1728,10 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
           return FALSE;
       }
   }
+
+  /* Backwards compatibility */
+  if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
+    return FALSE;
 
   /* Copy in additional files before postprocessing */
   if (!copy_additional_files (rootfs_fd, treefile_rs, treefile, cancellable, error))
