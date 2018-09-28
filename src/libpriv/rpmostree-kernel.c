@@ -520,24 +520,20 @@ rpmostree_run_dracut (int     rootfs_dfd,
       bwrap = rpmostree_bwrap_new_base (rootfs_dfd, error);
       if (!bwrap)
         return FALSE;
-      rpmostree_bwrap_append_bwrap_argv (bwrap,
-                                         "--ro-bind", "/etc", "/etc",
-                                         "--ro-bind", "usr", "/usr",
-                                         NULL);
+      rpmostree_bwrap_bind_read (bwrap, "/etc", "/etc");
+      rpmostree_bwrap_bind_read (bwrap, "usr", "/usr");
     }
   else
     {
       bwrap = rpmostree_bwrap_new_base (rootfs_dfd, error);
       if (!bwrap)
         return FALSE;
-      rpmostree_bwrap_append_bwrap_argv (bwrap,
-                                        "--ro-bind", "usr/etc", "/etc",
-                                        "--ro-bind", "usr", "/usr",
-                                        NULL);
+      rpmostree_bwrap_bind_read (bwrap, "usr/etc", "/etc");
+      rpmostree_bwrap_bind_read (bwrap, "usr", "/usr");
     }
 
   if (dracut_host_tmpdir)
-    rpmostree_bwrap_append_bwrap_argv (bwrap, "--bind", dracut_host_tmpdir->path, "/tmp/dracut", NULL);
+    rpmostree_bwrap_bind_readwrite (bwrap, dracut_host_tmpdir->path, "/tmp/dracut");
 
   /* Set up argv and run */
   rpmostree_bwrap_append_child_argv (bwrap, (char*)glnx_basename (rpmostree_dracut_wrapper_path), NULL);
