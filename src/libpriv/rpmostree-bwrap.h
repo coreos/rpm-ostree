@@ -42,10 +42,10 @@ RpmOstreeBwrap *rpmostree_bwrap_new_base (int rootfs, GError **error);
 
 RpmOstreeBwrap *rpmostree_bwrap_new (int rootfs,
                                      RpmOstreeBwrapMutability mutable,
-                                     GError **error,
-                                     ...) G_GNUC_NULL_TERMINATED;
+                                     GError **error);
 
 void rpmostree_bwrap_set_inherit_stdin (RpmOstreeBwrap *bwrap);
+void rpmostree_bwrap_var_tmp_tmpfs (RpmOstreeBwrap *bwrap);
 void rpmostree_bwrap_bind_read (RpmOstreeBwrap *bwrap, const char *src, const char *dest);
 void rpmostree_bwrap_bind_readwrite (RpmOstreeBwrap *bwrap, const char *src, const char *dest);
 void rpmostree_bwrap_append_child_argv (RpmOstreeBwrap *bwrap, ...) G_GNUC_NULL_TERMINATED;

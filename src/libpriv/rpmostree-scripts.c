@@ -355,13 +355,11 @@ run_script_in_bwrap_container (int rootfs_fd,
   const gboolean is_glibc_locales = strcmp (pkg_script, "glibc-all-langpacks.posttrans") == 0;
   bwrap = rpmostree_bwrap_new (rootfs_fd,
                                is_glibc_locales ? RPMOSTREE_BWRAP_MUTATE_FREELY : RPMOSTREE_BWRAP_MUTATE_ROFILES,
-                               error,
-                               /* Scripts can see a /var with compat links like alternatives */
-                               "--ro-bind", "./var", "/var",
-                               "--tmpfs", "/var/tmp",
-                               NULL);
+                               error);
   if (!bwrap)
     goto out;
+  /* Scripts can see a /var with compat links like alternatives */
+  rpmostree_bwrap_var_tmp_tmpfs (bwrap);
 
   if (var_lib_rpm_statedir)
     rpmostree_bwrap_bind_readwrite (bwrap, var_lib_rpm_statedir->path, "/var/lib/rpm-state");
@@ -950,10 +948,11 @@ rpmostree_deployment_sanitycheck (int           rootfs_fd,
 
   GLNX_AUTO_PREFIX_ERROR ("sanitycheck", error);
   g_autoptr(RpmOstreeBwrap) bwrap =
-    rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_IMMUTABLE, error,
-                         "--ro-bind", "./usr/etc", "/etc", NULL);
+    rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_IMMUTABLE, error);
+
   if (!bwrap)
     return FALSE;
+  rpmostree_bwrap_bind_read (bwrap, "./usr/etc", "/etc");
   rpmostree_bwrap_append_child_argv (bwrap, "/usr/bin/true", NULL);
   if (!rpmostree_bwrap_run (bwrap, cancellable, error))
     return FALSE;
