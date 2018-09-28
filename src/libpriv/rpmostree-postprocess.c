@@ -117,7 +117,7 @@ rename_if_exists (int         src_dfd,
       if (renameat (src_dfd, from, dest_dfd, to) < 0)
         {
           /* Handle empty directory in legacy location */
-          if (errno == EEXIST)
+          if (G_IN_SET (errno, EEXIST, ENOTEMPTY))
             {
               if (!glnx_unlinkat (src_dfd, from, AT_REMOVEDIR, error))
                 return FALSE;
