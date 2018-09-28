@@ -25,6 +25,9 @@
 #include <stdio.h>
 #include <systemd/sd-journal.h>
 
+static void
+teardown_rofiles (GLnxTmpDir *mnt_tmp);
+
 void
 rpmostree_ptrarray_append_strdup (GPtrArray *argv_array, ...)
 {
@@ -47,7 +50,8 @@ struct RpmOstreeBwrap {
   GSubprocessLauncher *launcher; /* 🚀 */
   GPtrArray *argv;
   const char *child_argv0;
-  GLnxTmpDir rofiles_mnt;
+  GLnxTmpDir rofiles_mnt_usr;
+  GLnxTmpDir rofiles_mnt_etc;
 
   GSpawnChildSetupFunc child_setup_func;
   gpointer child_setup_data;
@@ -67,37 +71,8 @@ rpmostree_bwrap_unref (RpmOstreeBwrap *bwrap)
   if (bwrap->refcount > 0)
     return;
 
-  if (bwrap->rofiles_mnt.initialized)
-    {
-      g_autoptr(GError) tmp_error = NULL;
-      const char *fusermount_argv[] = { "fusermount", "-u", bwrap->rofiles_mnt.path, NULL};
-      int estatus;
-
-      if (!g_spawn_sync (NULL, (char**)fusermount_argv, NULL, G_SPAWN_SEARCH_PATH,
-                         NULL, NULL, NULL, NULL, &estatus, &tmp_error))
-        {
-          g_prefix_error (&tmp_error, "Executing fusermount: ");
-          goto out;
-        }
-      if (!g_spawn_check_exit_status (estatus, &tmp_error))
-        {
-          g_prefix_error (&tmp_error, "Executing fusermount: ");
-          goto out;
-        }
-
-    out:
-      /* We don't want a failure to unmount to be fatal, so all we do here
-       * is log.  Though in practice what we *really* want is for the
-       * fusermount to be in the bwrap namespace, and hence tied by the
-       * kernel to the lifecycle of the container.  This would require
-       * special casing for somehow doing FUSE mounts in bwrap.  Which
-       * would be hard because NO_NEW_PRIVS turns off the setuid bits for
-       * fuse.
-       */
-      if (tmp_error)
-        sd_journal_print (LOG_WARNING, "%s", tmp_error->message);
-    }
-  (void)glnx_tmpdir_delete (&bwrap->rofiles_mnt, NULL, NULL);
+  teardown_rofiles (&bwrap->rofiles_mnt_usr);
+  teardown_rofiles (&bwrap->rofiles_mnt_etc);
 
   g_clear_object (&bwrap->launcher);
   g_ptr_array_unref (bwrap->argv);
@@ -189,15 +164,20 @@ child_setup_fchdir (gpointer user_data)
 }
 
 static gboolean
-setup_rofiles_usr (RpmOstreeBwrap *bwrap,
-                   GError **error)
+setup_rofiles (RpmOstreeBwrap *bwrap,
+               const char     *path,
+               GLnxTmpDir     *mnt_tmp,
+               GError        **error)
 {
-  const char *rofiles_argv[] = { "rofiles-fuse", "--copyup", "./usr", NULL, NULL};
+  GLNX_AUTO_PREFIX_ERROR ("rofiles setup", error);
+  const char *relpath = path + strspn (path, "/");
+  const char *rofiles_argv[] = { "rofiles-fuse", "--copyup", relpath, NULL, NULL};
 
-  if (!glnx_mkdtemp ("rpmostree-rofiles-fuse.XXXXXX", 0700, &bwrap->rofiles_mnt, error))
+  g_auto(GLnxTmpDir) local_mnt_tmp = { 0, };
+  if (!glnx_mkdtemp ("rpmostree-rofiles-fuse.XXXXXX", 0700, &local_mnt_tmp, error))
     return FALSE;
 
-  const char *rofiles_mntpath = bwrap->rofiles_mnt.path;
+  const char *rofiles_mntpath = local_mnt_tmp.path;
   rofiles_argv[3] = rofiles_mntpath;
 
   int estatus;
@@ -208,15 +188,53 @@ setup_rofiles_usr (RpmOstreeBwrap *bwrap,
   if (!g_spawn_check_exit_status (estatus, error))
     return FALSE;
 
-  rpmostree_bwrap_bind_readwrite (bwrap, rofiles_mntpath, "/usr");
+  rpmostree_bwrap_bind_readwrite (bwrap, rofiles_mntpath, path);
 
-  /* also mount /etc from the rofiles mount to allow RPM scripts to change defaults, while
-   * still being protected; note we use bind to ensure symlinks work, see:
-   * https://github.com/projectatomic/rpm-ostree/pull/640 */
-  const char *rofiles_etc_mntpath = glnx_strjoina (rofiles_mntpath, "/etc");
-  rpmostree_bwrap_bind_readwrite (bwrap, rofiles_etc_mntpath, "/etc");
+  /* And transfer ownership of the tmpdir */
+  *mnt_tmp = local_mnt_tmp;
+  local_mnt_tmp.initialized = FALSE;
 
   return TRUE;
+}
+
+static void
+teardown_rofiles (GLnxTmpDir *mnt_tmp)
+{
+  g_assert (mnt_tmp);
+  if (!mnt_tmp->initialized)
+    return;
+
+  g_autoptr(GError) tmp_error = NULL;
+  const char *fusermount_argv[] = { "fusermount", "-u", mnt_tmp->path, NULL};
+  int estatus;
+
+  GLNX_AUTO_PREFIX_ERROR ("rofiles teardown", &tmp_error);
+
+  if (!g_spawn_sync (NULL, (char**)fusermount_argv, NULL, G_SPAWN_SEARCH_PATH,
+                     NULL, NULL, NULL, NULL, &estatus, &tmp_error))
+    {
+      g_prefix_error (&tmp_error, "Executing fusermount: ");
+      goto out;
+    }
+  if (!g_spawn_check_exit_status (estatus, &tmp_error))
+    {
+      g_prefix_error (&tmp_error, "Executing fusermount: ");
+      goto out;
+    }
+
+  (void)glnx_tmpdir_delete (mnt_tmp, NULL, NULL);
+
+ out:
+  /* We don't want a failure to unmount to be fatal, so all we do here
+   * is log.  Though in practice what we *really* want is for the
+   * fusermount to be in the bwrap namespace, and hence tied by the
+   * kernel to the lifecycle of the container.  This would require
+   * special casing for somehow doing FUSE mounts in bwrap.  Which
+   * would be hard because NO_NEW_PRIVS turns off the setuid bits for
+   * fuse.
+   */
+  if (tmp_error)
+    sd_journal_print (LOG_WARNING, "%s", tmp_error->message);
 }
 
 /* nspawn by default doesn't give us CAP_NET_ADMIN; see
@@ -348,13 +366,19 @@ rpmostree_bwrap_new (int rootfs_fd,
     {
     case RPMOSTREE_BWRAP_IMMUTABLE:
       rpmostree_bwrap_bind_read (ret, "usr", "/usr");
+      rpmostree_bwrap_bind_read (ret, "etc", "/etc");
       break;
     case RPMOSTREE_BWRAP_MUTATE_ROFILES:
-      if (!setup_rofiles_usr (ret, error))
+      if (!setup_rofiles (ret, "/usr",
+                          &ret->rofiles_mnt_usr, error))
+        return NULL;
+      if (!setup_rofiles (ret, "/etc",
+                          &ret->rofiles_mnt_etc, error))
         return NULL;
       break;
     case RPMOSTREE_BWRAP_MUTATE_FREELY:
       rpmostree_bwrap_bind_readwrite (ret, "usr", "/usr");
+      rpmostree_bwrap_bind_readwrite (ret, "etc", "/etc");
       break;
     }
 
