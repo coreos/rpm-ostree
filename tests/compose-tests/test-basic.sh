@@ -38,7 +38,7 @@ python <<EOF
 import json, yaml
 jd=json.load(open("$treefile"))
 with open("$treefile.yaml", "w") as f:
-  f.write(yaml.dump(jd))
+  yaml.safe_dump(jd, f)
 EOF
 export treefile=$treefile.yaml
 runcompose
