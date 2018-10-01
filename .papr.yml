@@ -135,7 +135,7 @@ tests:
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
     registry.fedoraproject.org/fedora:28 /bin/sh -c
-    "./ci/build.sh && make install && ./tests/compose"
+    "cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && ./tests/compose"
 
 artifacts:
   - test-compose-logs
@@ -169,7 +169,7 @@ tests:
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
     registry.fedoraproject.org/fedora:28 /bin/sh -c
-    "./ci/build.sh && make install && adduser unpriv && setfacl -m u:unpriv:rwX . && runuser -u unpriv ./tests/ex-container"
+    "cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && adduser unpriv && setfacl -m u:unpriv:rwX . && runuser -u unpriv ./tests/ex-container"
 
 artifacts:
   - ex-container-logs
