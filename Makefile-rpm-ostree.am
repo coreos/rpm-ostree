@@ -129,3 +129,10 @@ rustfmt:
 	rustfmt $(LIBRPMOSTREE_RUST_SRCS)
 # Outside the ifdef, otherwise automake complains
 .PHONY: rustfmt
+
+# Wraps `cargo test`.  This is always a debug non-release build;
+# the main thing here is we still drop the `target` dir in our build
+# directory, since we nominally support srcdir != builddir.
+rust-test:
+	cd $(top_srcdir)/rust && CARGO_TARGET_DIR=@abs_top_builddir@/target cargo test
+.PHONY: rust-test

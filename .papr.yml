@@ -22,18 +22,10 @@ cluster:
   hosts:
     - name: vmcheck1
       distro: fedora/28/atomic
-      # XXX: use updates branch until stable FAH receives:
-      # https://bodhi.fedoraproject.org/updates/FEDORA-2018-16c78b3d92
-      ostree:
-        branch: fedora/28/x86_64/updates/atomic-host
     - name: vmcheck2
       distro: fedora/28/atomic
-      ostree:
-        branch: fedora/28/x86_64/updates/atomic-host
     - name: vmcheck3
       distro: fedora/28/atomic
-      ostree:
-        branch: fedora/28/x86_64/updates/atomic-host
   container:
     image: registry.fedoraproject.org/fedora:28
 
@@ -69,20 +61,14 @@ required: true
 cluster:
   hosts:
     - name: vmcheck1
-      distro: centos/7/atomic/smoketested
       # XXX: temp hack until smoketested has newer glib2
       # XXX: and also causes layering-relabel to fail?
       # https://github.com/projectatomic/rpm-ostree/pull/1406
-      ostree:
-        branch: centos-atomic-host/7/x86_64/devel/continuous
+      distro: centos/7/atomic/continuous
     - name: vmcheck2
-      distro: centos/7/atomic/smoketested
-      ostree:
-        branch: centos-atomic-host/7/x86_64/devel/continuous
+      distro: centos/7/atomic/continuous
     - name: vmcheck3
-      distro: centos/7/atomic/smoketested
-      ostree:
-        branch: centos-atomic-host/7/x86_64/devel/continuous
+      distro: centos/7/atomic/continuous
   container:
     image: registry.centos.org/centos/centos:7
 
@@ -117,7 +103,7 @@ context: f28-compose1
 
 build: false
 
-timeout: 30m
+timeout: 35m
 
 required: true
 
@@ -143,7 +129,7 @@ tests:
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
     registry.fedoraproject.org/fedora:28 /bin/sh -c
-    "./ci/build.sh && make install && ./tests/compose"
+    "cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && ./tests/compose"
 
 artifacts:
   - test-compose-logs
@@ -177,7 +163,7 @@ tests:
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
     registry.fedoraproject.org/fedora:28 /bin/sh -c
-    "./ci/build.sh && make install && adduser unpriv && setfacl -m u:unpriv:rwX . && runuser -u unpriv ./tests/ex-container"
+    "cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && adduser unpriv && setfacl -m u:unpriv:rwX . && runuser -u unpriv ./tests/ex-container"
 
 artifacts:
   - ex-container-logs
