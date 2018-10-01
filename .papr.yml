@@ -61,20 +61,14 @@ required: true
 cluster:
   hosts:
     - name: vmcheck1
-      distro: centos/7/atomic/smoketested
       # XXX: temp hack until smoketested has newer glib2
       # XXX: and also causes layering-relabel to fail?
       # https://github.com/projectatomic/rpm-ostree/pull/1406
-      ostree:
-        branch: centos-atomic-host/7/x86_64/devel/continuous
+      distro: centos/7/atomic/continuous
     - name: vmcheck2
-      distro: centos/7/atomic/smoketested
-      ostree:
-        branch: centos-atomic-host/7/x86_64/devel/continuous
+      distro: centos/7/atomic/continuous
     - name: vmcheck3
-      distro: centos/7/atomic/smoketested
-      ostree:
-        branch: centos-atomic-host/7/x86_64/devel/continuous
+      distro: centos/7/atomic/continuous
   container:
     image: registry.centos.org/centos/centos:7
 
