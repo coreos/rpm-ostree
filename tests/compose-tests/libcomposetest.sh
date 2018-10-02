@@ -56,7 +56,7 @@ ifn="${treefile}"
 ofn=ifn.replace('.json', '.yaml')
 jd=json.load(open(ifn))
 with open(ofn, "w") as f:
-  f.write(yaml.dump(jd))
+  yaml.safe_dump(jd, f)
 EOF
         export treefile=composedata/fedora-${name}.yaml
     fi
