@@ -75,6 +75,13 @@ rpmostree_transfiletriggers_run_sync (Header         hdr,
                                       GError       **error);
 
 gboolean
-rpmostree_deployment_sanitycheck (int           rootfs_fd,
-                                  GCancellable *cancellable,
-                                  GError      **error);
+rpmostree_deployment_sanitycheck_true (int           rootfs_fd,
+                                       GCancellable *cancellable,
+                                       GError      **error);
+
+gboolean
+rpmostree_deployment_sanitycheck_rpmdb (int           rootfs_fd,
+                                        GPtrArray     *overlays,
+                                        GPtrArray     *overrides,
+                                        GCancellable *cancellable,
+                                        GError      **error);
