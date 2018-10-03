@@ -272,7 +272,7 @@ impl Treefile {
         workdir: openat::Dir,
     ) -> io::Result<Box<Treefile>> {
         let parsed = treefile_parse_recurse(filename, arch, 0)?;
-        let dfd = openat::Dir::open(filename.parent().unwrap_or_else(|| Path::new("/")))?;
+        let dfd = openat::Dir::open(filename.parent().unwrap())?;
         let rojig_spec = if let &Some(ref rojig) = &parsed.config.rojig {
             Some(Treefile::write_rojig_spec(&workdir, rojig)?)
         } else {
