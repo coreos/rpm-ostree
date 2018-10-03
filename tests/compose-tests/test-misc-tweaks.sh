@@ -24,6 +24,8 @@ pysetjsonmember "postprocess-script" \"$PWD/postprocess.sh\"
 pysetjsonmember "postprocess" '["""#!/bin/bash
 touch /usr/share/postprocess-testing""",
 """#!/bin/bash
+set -xeuo pipefail
+touch /usr/share/included-postprocess-test
 rm /usr/share/postprocess-testing
 touch /usr/share/postprocess-testing-done"""]'
 cat > postprocess.sh << EOF
@@ -44,6 +46,18 @@ echo bar > composedata/bar.txt
 echo baz > composedata/baz.txt
 # Test tmp-is-dir
 pysetjsonmember "tmp-is-dir" 'True'
+
+new_treefile=composedata/fedora-misc-tweaks-includer.yaml
+cat > ${new_treefile} <<EOF
+include: $(basename ${treefile})
+postprocess:
+ - |
+   #!/bin/bash
+   set -xeuo pipefail
+   test -f /usr/share/included-postprocess-test
+EOF
+export treefile=${new_treefile}
+
 
 # Do the compose
 runcompose
