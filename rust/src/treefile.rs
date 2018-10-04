@@ -206,50 +206,60 @@ fn merge_vec_field<T>(dest: &mut Option<Vec<T>>, src: &mut Option<Vec<T>>) {
     }
 }
 
-/// Given two configs, merge them. Ideally we'd do some macro magic and avoid
-/// listing all of the fields again.
+/// Given two configs, merge them.
 fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
-    merge_basic_field(&mut dest.treeref, &mut src.treeref);
-    merge_basic_field(&mut dest.rojig, &mut src.rojig);
-    merge_vec_field(&mut dest.repos, &mut src.repos);
-    merge_basic_field(&mut dest.selinux, &mut src.selinux);
-    merge_basic_field(&mut dest.gpg_key, &mut src.gpg_key);
-    merge_basic_field(&mut dest.include, &mut src.include);
-    merge_vec_field(&mut dest.packages, &mut src.packages);
-    merge_basic_field(&mut dest.recommends, &mut src.recommends);
-    merge_basic_field(&mut dest.documentation, &mut src.documentation);
-    merge_vec_field(&mut dest.install_langs, &mut src.install_langs);
-    merge_vec_field(&mut dest.initramfs_args, &mut src.initramfs_args);
-    merge_basic_field(&mut dest.boot_location, &mut src.boot_location);
-    merge_basic_field(&mut dest.tmp_is_dir, &mut src.tmp_is_dir);
-    merge_basic_field(&mut dest.default_target, &mut src.default_target);
-    merge_vec_field(&mut dest.units, &mut src.units);
-    merge_basic_field(&mut dest.machineid_compat, &mut src.machineid_compat);
-    merge_basic_field(&mut dest.releasever, &mut src.releasever);
-    merge_basic_field(
-        &mut dest.automatic_version_prefix,
-        &mut src.automatic_version_prefix,
+    macro_rules! merge_basics {
+        ($field:ident) => {{
+            merge_basic_field(&mut dest.$field, &mut src.$field);
+        }};
+        ($field:ident, $($fields:ident),*) => {{
+             merge_basic_field(&mut dest.$field, &mut src.$field);
+             merge_basics!($($fields),*);
+         }};
+    };
+    macro_rules! merge_vecs {
+        ($field:ident) => {{
+            merge_vec_field(&mut dest.$field, &mut src.$field);
+        }};
+        ($field:ident, $($fields:ident),*) => {{
+            merge_vec_field(&mut dest.$field, &mut src.$field);
+            merge_vecs!($($fields),*);
+        }};
+    };
+
+    merge_basics!(
+        treeref,
+        rojig,
+        selinux,
+        gpg_key,
+        include,
+        recommends,
+        documentation,
+        boot_location,
+        tmp_is_dir,
+        default_target,
+        machineid_compat,
+        releasever,
+        automatic_version_prefix,
+        mutate_os_release,
+        etc_group_members,
+        preserve_passwd,
+        check_passwd,
+        check_groups,
+        ignore_removed_users,
+        ignore_removed_groups,
+        postprocess_script
     );
-    merge_basic_field(&mut dest.mutate_os_release, &mut src.mutate_os_release);
-    merge_basic_field(&mut dest.etc_group_members, &mut src.etc_group_members);
-    merge_basic_field(&mut dest.preserve_passwd, &mut src.preserve_passwd);
-    merge_basic_field(&mut dest.check_passwd, &mut src.check_passwd);
-    merge_basic_field(&mut dest.check_groups, &mut src.check_groups);
-    merge_basic_field(
-        &mut dest.ignore_removed_users,
-        &mut src.ignore_removed_users,
-    );
-    merge_basic_field(
-        &mut dest.ignore_removed_groups,
-        &mut src.ignore_removed_groups,
-    );
-    merge_basic_field(&mut dest.postprocess_script, &mut src.postprocess_script);
-    merge_vec_field(&mut dest.postprocess, &mut src.postprocess);
-    merge_vec_field(&mut dest.add_files, &mut src.add_files);
-    merge_vec_field(&mut dest.remove_files, &mut src.remove_files);
-    merge_vec_field(
-        &mut dest.remove_from_packages,
-        &mut src.remove_from_packages,
+    merge_vecs!(
+        repos,
+        packages,
+        install_langs,
+        initramfs_args,
+        units,
+        postprocess,
+        add_files,
+        remove_files,
+        remove_from_packages
     );
 }
 
