@@ -561,6 +561,12 @@ Boston, MA 02111-1307, USA.
             The <option>-m/--repomd</option> option cleans up cached RPM
             repodata and any partially downloaded (but not imported) packages.
           </para>
+
+          <para>
+            NOTE: the <command>cleanup</command> will not affect any deployments
+            that have been "pinned" via the <command>ostree admin pin</command>
+            operation.
+          </para>
         </listitem>
       </varlistentry>
 
