@@ -172,10 +172,11 @@ fn merge_basic_field<T>(dest: &mut Option<T>, src: &mut Option<T>) {
 /// Merge a vector field by appending. This semantic was originally designed for
 /// the `packages` key.
 fn merge_vec_field<T>(dest: &mut Option<Vec<T>>, src: &mut Option<Vec<T>>) {
-    if let Some(ref mut srcv) = src.take() {
-        let mut v = dest.take().map_or_else(|| vec![], |v| v);
-        v.append(srcv);
-        *dest = Some(v)
+    if let Some(mut srcv) = src.take() {
+        if let Some(ref mut destv) = dest {
+            srcv.append(destv);
+        }
+        *dest = Some(srcv);
     }
 }
 
@@ -195,6 +196,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     merge_vec_field(&mut dest.initramfs_args, &mut src.initramfs_args);
     merge_basic_field(&mut dest.boot_location, &mut src.boot_location);
     merge_basic_field(&mut dest.tmp_is_dir, &mut src.tmp_is_dir);
+    merge_basic_field(&mut dest.default_target, &mut src.default_target);
     merge_vec_field(&mut dest.units, &mut src.units);
     merge_basic_field(&mut dest.machineid_compat, &mut src.machineid_compat);
     merge_basic_field(&mut dest.releasever, &mut src.releasever);
