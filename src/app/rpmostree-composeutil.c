@@ -49,7 +49,7 @@
 gboolean
 rpmostree_composeutil_checksum (GBytes            *serialized_treefile,
                                 HyGoal             goal,
-                                GFile             *contextdir,
+                                RORTreefile       *tf,
                                 JsonArray         *add_files,
                                 char             **out_checksum,
                                 GError           **error)
@@ -71,31 +71,19 @@ rpmostree_composeutil_checksum (GBytes            *serialized_treefile,
       guint i, len = json_array_get_length (add_files);
       for (i = 0; i < len; i++)
         {
-          g_autoptr(GFile) srcfile = NULL;
-          const char *src, *dest;
           JsonArray *add_el = json_array_get_array_element (add_files, i);
-
           if (!add_el)
             return glnx_throw (error, "Element in add-files is not an array");
-
-          src = _rpmostree_jsonutil_array_require_string_element (add_el, 0, error);
+          const char *src = _rpmostree_jsonutil_array_require_string_element (add_el, 0, error);
           if (!src)
             return FALSE;
 
-          dest = _rpmostree_jsonutil_array_require_string_element (add_el, 1, error);
-          if (!dest)
-            return FALSE;
-
-          srcfile = g_file_resolve_relative_path (contextdir, src);
-
-          if (!_rpmostree_util_update_checksum_from_file (checksum,
-                                                          AT_FDCWD,
-                                                          gs_file_get_path_cached (srcfile),
-                                                          NULL,
-                                                          error))
-            return FALSE;
-
-          g_checksum_update (checksum, (const guint8 *) dest, strlen (dest));
+          int src_fd = ror_treefile_get_add_file_fd (tf, src);
+          g_assert_cmpint (src_fd, !=, -1);
+          g_autoptr(GBytes) bytes = glnx_fd_readall_bytes (src_fd, NULL, FALSE);
+          gsize len;
+          const guint8* buf = g_bytes_get_data (bytes, &len);
+          g_checksum_update (checksum, (const guint8 *) buf, len);
         }
 
     }
@@ -151,34 +139,24 @@ rpmostree_composeutil_legacy_prep_dev (int         rootfs_dfd,
   return TRUE;
 }
 
+
 gboolean
-rpmostree_composeutil_sanity_checks (JsonObject   *treedata,
-                                     GFile        *contextdir,
+rpmostree_composeutil_sanity_checks (RORTreefile  *tf,
+                                     JsonObject   *treefile,
                                      GCancellable *cancellable,
                                      GError      **error)
 {
-  /* Check that postprocess-script is executable; https://github.com/projectatomic/rpm-ostree/issues/817 */
-  const char *postprocess_script = NULL;
+  int fd = ror_treefile_get_postprocess_script_fd (tf);
+  if (fd != -1)
+    {
+      /* Check that postprocess-script is executable; https://github.com/projectatomic/rpm-ostree/issues/817 */
+      struct stat stbuf;
+      if (!glnx_fstat (fd, &stbuf, error))
+        return glnx_prefix_error (error, "postprocess-script");
 
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "postprocess-script",
-                                                              &postprocess_script, error))
-    return FALSE;
-
-  if (!postprocess_script)
-    return TRUE;
-
-  g_autofree char *src = NULL;
-  if (g_path_is_absolute (postprocess_script))
-    src = g_strdup (postprocess_script);
-  else
-    src = g_build_filename (gs_file_get_path_cached (contextdir), postprocess_script, NULL);
-
-  struct stat stbuf;
-  if (!glnx_fstatat (AT_FDCWD, src, &stbuf, 0, error))
-    return glnx_prefix_error (error, "postprocess-script");
-
-  if ((stbuf.st_mode & S_IXUSR) == 0)
-    return glnx_throw (error, "postprocess-script (%s) must be executable", postprocess_script);
+      if ((stbuf.st_mode & S_IXUSR) == 0)
+        return glnx_throw (error, "postprocess-script must be executable");
+    }
 
   /* Insert other sanity checks here */
 

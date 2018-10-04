@@ -1341,7 +1341,7 @@ rpmostree_rootfs_postprocess_common (int           rootfs_fd,
  */
 static gboolean
 copy_additional_files (int            rootfs_dfd,
-                       GFile         *context_directory,
+                       RORTreefile   *treefile_rs,
                        JsonObject    *treefile,
                        GCancellable  *cancellable,
                        GError       **error)
@@ -1355,11 +1355,6 @@ copy_additional_files (int            rootfs_dfd,
     }
   else
     return TRUE; /* Early return */
-
-  glnx_autofd int context_dfd = -1;
-  if (!glnx_opendirat (AT_FDCWD, gs_file_get_path_cached (context_directory), TRUE,
-                       &context_dfd, error))
-    return FALSE;
 
   /* Reusable dirname buffer */
   g_autoptr(GString) dnbuf = g_string_new ("");
@@ -1403,12 +1398,26 @@ copy_additional_files (int            rootfs_dfd,
       if (!glnx_shutil_mkdir_p_at (rootfs_dfd, dn, 0755, cancellable, error))
         return FALSE;
 
-      /* FIXME: Should probably use GLNX_FILE_COPY_NOXATTRS, but someone
-       * may be relying on current semantics?
+      int src_fd = ror_treefile_get_add_file_fd (treefile_rs, src);
+      g_assert_cmpint (src_fd, !=, -1);
+
+      g_auto(GLnxTmpfile) tmpf = { 0, };
+      if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, ".", O_CLOEXEC | O_WRONLY, &tmpf, error))
+        return FALSE;
+      if (glnx_regfile_copy_bytes (src_fd, tmpf.fd, (off_t)-1) < 0)
+        return glnx_throw_errno_prefix (error, "regfile copy");
+      struct stat src_stbuf;
+      if (!glnx_fstat (src_fd, &src_stbuf, error))
+        return FALSE;
+      if (!glnx_fchmod (tmpf.fd, src_stbuf.st_mode, error))
+        return FALSE;
+      /* Note we used to copy xattrs here, we no longer do.  Hopefully
+       * no one breaks.
        */
-      if (!glnx_file_copy_at (context_dfd, src, NULL, rootfs_dfd, dest, 0,
-                              cancellable, error))
-          return glnx_prefix_error (error, "Copying file '%s' into target", src);
+      if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
+                                 rootfs_dfd, dest,
+                                 error))
+        return FALSE;
     }
 
   return TRUE;
@@ -1464,7 +1473,7 @@ mutate_os_release (const char    *contents,
  */
 gboolean
 rpmostree_treefile_postprocessing (int            rootfs_fd,
-                                   GFile         *context_directory,
+                                   RORTreefile   *treefile_rs,
                                    GBytes        *serialized_treefile,
                                    JsonObject    *treefile,
                                    const char    *next_version,
@@ -1472,7 +1481,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
                                    GCancellable  *cancellable,
                                    GError       **error)
 {
-  g_assert (context_directory);
+  g_assert (treefile_rs);
   g_assert (treefile);
 
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
@@ -1720,7 +1729,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   }
 
   /* Copy in additional files before postprocessing */
-  if (!copy_additional_files (rootfs_fd, context_directory, treefile, cancellable, error))
+  if (!copy_additional_files (rootfs_fd, treefile_rs, treefile, cancellable, error))
     return FALSE;
 
   if (json_object_has_member (treefile, "postprocess"))
@@ -1753,43 +1762,38 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
         }
     }
 
-  const char *postprocess_script = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "postprocess-script",
-                                                              &postprocess_script, error))
-    return FALSE;
-  if (postprocess_script)
+  int postprocess_script_fd = ror_treefile_get_postprocess_script_fd (treefile_rs);
+  if (postprocess_script_fd != -1)
     {
-      const char *bn = glnx_basename (postprocess_script);
-      g_autofree char *src = NULL;
-      g_autofree char *binpath = NULL;
-
-      if (g_path_is_absolute (postprocess_script))
-        src = g_strdup (postprocess_script);
-      else
-        src = g_build_filename (gs_file_get_path_cached (context_directory), postprocess_script, NULL);
-
-      binpath = g_strconcat ("/usr/bin/rpmostree-postprocess-", bn, NULL);
-      /* Clone all the things */
-
-      /* Note we need to make binpath *not* absolute here */
+      const char *binpath = "/usr/bin/rpmostree-treefile-postprocess-script";
       const char *target_binpath = binpath + 1;
-      g_assert_cmpint (*target_binpath, !=, '/');
-      if (!glnx_file_copy_at (AT_FDCWD, src, NULL, rootfs_fd, target_binpath,
-                              GLNX_FILE_COPY_NOXATTRS, cancellable, error))
+      g_auto(GLnxTmpfile) tmpf = { 0, };
+      if (!glnx_open_tmpfile_linkable_at (rootfs_fd, ".", O_CLOEXEC | O_WRONLY, &tmpf, error))
+        return FALSE;
+      if (glnx_regfile_copy_bytes (postprocess_script_fd, tmpf.fd, (off_t)-1) < 0)
+        return glnx_throw_errno_prefix (error, "regfile copy");
+      if (!glnx_fchmod (tmpf.fd, 0755, error))
+        return FALSE;
+      if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
+                                 rootfs_fd, target_binpath,
+                                 error))
         return FALSE;
 
-      g_print ("Executing postprocessing script '%s'\n", bn);
+      /* Can't have a writable fd open when we go to exec */
+      glnx_tmpfile_clear (&tmpf);
+
+      g_print ("Executing postprocessing script\n");
 
       {
-        char *child_argv[] = { binpath, NULL };
+        char *child_argv[] = { (char*)binpath, NULL };
         if (!run_bwrap_mutably (rootfs_fd, binpath, child_argv, unified_core_mode, cancellable, error))
-          return glnx_prefix_error (error, "While executing postprocessing script '%s'", bn);
+          return glnx_prefix_error (error, "While executing postprocessing script");
       }
 
       if (!glnx_unlinkat (rootfs_fd, target_binpath, 0, error))
         return FALSE;
 
-      g_print ("Finished postprocessing script '%s'\n", bn);
+      g_print ("Finished postprocessing script\n");
     }
 
   return TRUE;

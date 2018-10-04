@@ -105,8 +105,6 @@ static GOptionEntry commit_option_entries[] = {
 };
 
 typedef struct {
-  GPtrArray *treefile_context_dirs;
-
   RpmOstreeContext *corectx;
   GFile *treefile_path;
   GHashTable *metadata;
@@ -133,7 +131,6 @@ typedef struct {
 static void
 rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
 {
-  g_clear_pointer (&ctx->treefile_context_dirs, (GDestroyNotify)g_ptr_array_unref);
   g_clear_object (&ctx->corectx);
   g_clear_object (&ctx->treefile_path);
   g_clear_pointer (&ctx->metadata, g_hash_table_unref);
@@ -263,8 +260,10 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     rpmlogSetFile(NULL);
   }
 
-  GFile *contextdir = self->treefile_context_dirs->pdata[0];
-  dnf_context_set_repo_dir (dnfctx, gs_file_get_path_cached (contextdir));
+  { int tf_dfd = ror_treefile_get_dfd (self->treefile_rs);
+    g_autofree char *abs_tf_path = glnx_fdrel_abspath (tf_dfd, ".");
+    dnf_context_set_repo_dir (dnfctx, abs_tf_path);
+  }
 
   /* By default, retain packages in addition to metadata with --cachedir, unless
    * we're doing unified core, in which case the pkgcache repo is the cache.  But
@@ -374,7 +373,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   g_autofree char *ret_new_inputhash = NULL;
   if (!rpmostree_composeutil_checksum (self->serialized_treefile,
                                        dnf_context_get_goal (dnfctx),
-                                       contextdir, add_files,
+                                       self->treefile_rs, add_files,
                                        &ret_new_inputhash, error))
     return FALSE;
 
@@ -403,7 +402,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (opt_dry_run)
     return TRUE; /* NB: early return */
 
-  if (!rpmostree_composeutil_sanity_checks (treedata, self->treefile_context_dirs->pdata[0],
+  if (!rpmostree_composeutil_sanity_checks (self->treefile_rs,
+                                            self->treefile,
                                             cancellable, error))
     return FALSE;
 
@@ -509,140 +509,28 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 }
 
 static gboolean
-parse_treefile_to_json (RpmOstreeTreeComposeContext  *self,
-                        const char    *treefile_path,
+parse_treefile_to_json (const char    *treefile_path,
+                        int            workdir_dfd,
+                        const char    *arch,
+                        RORTreefile  **out_treefile_rs,
                         JsonParser   **out_parser,
                         GError       **error)
 {
   g_autoptr(JsonParser) parser = json_parser_new ();
-  if (g_str_has_suffix (treefile_path, ".yaml") ||
-      g_str_has_suffix (treefile_path, ".yml"))
-    {
-      const char *arch = self ? dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx)) : NULL;
-      g_autoptr(RORTreefile) tf = ror_treefile_new (treefile_path, arch,
-                                                    self->workdir_dfd,
-                                                    error);
-      if (!tf)
-        return glnx_prefix_error (error, "Failed to load YAML treefile");
+  g_autoptr(RORTreefile) treefile_rs = ror_treefile_new (treefile_path, arch, workdir_dfd, error);
+  if (!treefile_rs)
+    return glnx_prefix_error (error, "Failed to load YAML treefile");
 
-      glnx_fd_close int json_fd = ror_treefile_to_json (tf, error);
-      if (json_fd < 0)
-        return FALSE;
-      g_autoptr(GInputStream) json_s = g_unix_input_stream_new (json_fd, FALSE);
+  glnx_fd_close int json_fd = ror_treefile_to_json (treefile_rs, error);
+  if (json_fd < 0)
+    return FALSE;
+  g_autoptr(GInputStream) json_s = g_unix_input_stream_new (json_fd, FALSE);
 
-      if (!json_parser_load_from_stream (parser, json_s, NULL, error))
-        return FALSE;
-
-      /* We have first-one-wins semantics for this until we move all of the
-       * parsing into Rust.
-       */
-      if (!self->treefile_rs)
-        self->treefile_rs = g_steal_pointer (&tf);
-    }
-  else
-    {
-      if (!json_parser_load_from_file (parser, treefile_path, error))
-        return FALSE;
-    }
-
-  *out_parser = g_steal_pointer (&parser);
-  return TRUE;
-}
-
-
-static gboolean
-process_includes (RpmOstreeTreeComposeContext  *self,
-                  GFile             *treefile_path,
-                  guint              depth,
-                  JsonObject        *root,
-                  GCancellable      *cancellable,
-                  GError           **error)
-{
-  const guint maxdepth = 50;
-  if (depth > maxdepth)
-    return glnx_throw (error, "Exceeded maximum include depth of %u", maxdepth);
-
-  {
-    g_autoptr(GFile) parent = g_file_get_parent (treefile_path);
-    gboolean existed = FALSE;
-    if (self->treefile_context_dirs->len > 0)
-      {
-        GFile *prev = self->treefile_context_dirs->pdata[self->treefile_context_dirs->len-1];
-        if (g_file_equal (parent, prev))
-          existed = TRUE;
-      }
-    if (!existed)
-      {
-        g_ptr_array_add (self->treefile_context_dirs, parent);
-        parent = NULL; /* Transfer ownership */
-      }
-  }
-
-  const char *include_path;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (root, "include", &include_path, error))
+  if (!json_parser_load_from_stream (parser, json_s, NULL, error))
     return FALSE;
 
-  if (include_path)
-    {
-      g_autoptr(GFile) treefile_dirpath = g_file_get_parent (treefile_path);
-      g_autoptr(GFile) parent_path = g_file_resolve_relative_path (treefile_dirpath, include_path);
-
-      g_autoptr(JsonParser) parent_parser = NULL;
-      if (!parse_treefile_to_json (self,
-                                   gs_file_get_path_cached (parent_path),
-                                   &parent_parser, error))
-        return FALSE;
-
-      JsonNode *parent_rootval = json_parser_get_root (parent_parser);
-      if (!JSON_NODE_HOLDS_OBJECT (parent_rootval))
-        return glnx_throw (error, "Treefile root is not an object");
-      JsonObject *parent_root = json_node_get_object (parent_rootval);
-
-      if (!process_includes (self, parent_path, depth + 1, parent_root,
-                             cancellable, error))
-        return FALSE;
-
-      GList *members = json_object_get_members (parent_root);
-      for (GList *iter = members; iter; iter = iter->next)
-        {
-          const char *name = iter->data;
-          JsonNode *parent_val = json_object_get_member (parent_root, name);
-          JsonNode *val = json_object_get_member (root, name);
-
-          g_assert (parent_val);
-
-          if (!val)
-            json_object_set_member (root, name, json_node_copy (parent_val));
-          else
-            {
-              JsonNodeType parent_type =
-                json_node_get_node_type (parent_val);
-              JsonNodeType child_type =
-                json_node_get_node_type (val);
-              if (parent_type != child_type)
-                return glnx_throw (error, "Conflicting element type of '%s'", name);
-              if (child_type == JSON_NODE_ARRAY)
-                {
-                  JsonArray *parent_array = json_node_get_array (parent_val);
-                  JsonArray *child_array = json_node_get_array (val);
-                  JsonArray *new_child = json_array_new ();
-                  guint len;
-
-                  len = json_array_get_length (parent_array);
-                  for (guint i = 0; i < len; i++)
-                    json_array_add_element (new_child, json_node_copy (json_array_get_element (parent_array, i)));
-                  len = json_array_get_length (child_array);
-                  for (guint i = 0; i < len; i++)
-                    json_array_add_element (new_child, json_node_copy (json_array_get_element (child_array, i)));
-
-                  json_object_set_array_member (root, name, new_child);
-                }
-            }
-        }
-
-      json_object_remove_member (root, "include");
-    }
-
+  *out_parser = g_steal_pointer (&parser);
+  *out_treefile_rs = g_steal_pointer (&treefile_rs);
   return TRUE;
 }
 
@@ -739,8 +627,6 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
         return FALSE;
     }
 
-  self->treefile_context_dirs = g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
 
   if (opt_cachedir)
@@ -792,19 +678,17 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   if (!self->corectx)
     return FALSE;
 
-  if (!parse_treefile_to_json (self, gs_file_get_path_cached (self->treefile_path),
-                               &self->treefile_parser, error))
+  const char *arch = dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx));
+  if (!parse_treefile_to_json (gs_file_get_path_cached (self->treefile_path),
+                               self->workdir_dfd, arch,
+                               &self->treefile_rs, &self->treefile_parser,
+                               error))
     return FALSE;
 
   self->treefile_rootval = json_parser_get_root (self->treefile_parser);
   if (!JSON_NODE_HOLDS_OBJECT (self->treefile_rootval))
     return glnx_throw (error, "Treefile root is not an object");
   self->treefile = json_node_get_object (self->treefile_rootval);
-
-  if (!process_includes (self, self->treefile_path, 0, self->treefile,
-                         cancellable, error))
-    return FALSE;
-
 
   g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_dnf (self->corectx));
   const char *input_ref = _rpmostree_jsonutil_object_require_string_member (self->treefile, "ref", error);
@@ -1014,8 +898,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     return FALSE;
 
   /* Start postprocessing */
-  g_assert_cmpint (self->treefile_context_dirs->len, >, 0);
-  if (!rpmostree_treefile_postprocessing (self->rootfs_dfd, self->treefile_context_dirs->pdata[0],
+  if (!rpmostree_treefile_postprocessing (self->rootfs_dfd, self->treefile_rs,
                                           self->serialized_treefile, self->treefile,
                                           next_version, opt_unified_core,
                                           cancellable, error))
@@ -1385,9 +1268,14 @@ rpmostree_compose_builtin_postprocess (int             argc,
   const char *treefile_path = argc > 2 ? argv[2] : NULL;
   glnx_unref_object JsonParser *treefile_parser = NULL;
   JsonObject *treefile = NULL; /* Owned by parser */
+  g_autoptr(RORTreefile) treefile_rs = NULL;
+  g_auto(GLnxTmpDir) workdir_tmp = { 0, };
   if (treefile_path)
     {
-      if (!parse_treefile_to_json (NULL, treefile_path, &treefile_parser, error))
+      if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &workdir_tmp, error))
+        return FALSE;
+      if (!parse_treefile_to_json (treefile_path, workdir_tmp.fd, NULL,
+                                   &treefile_rs, &treefile_parser, error))
         return FALSE;
 
       JsonNode *treefile_rootval = json_parser_get_root (treefile_parser);
