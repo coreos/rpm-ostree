@@ -33,6 +33,7 @@
 #include "rpmostree-util.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-passwd-util.h"
+#include "rpmostree-rust.h"
 
 #include "libglnx.h"
 
@@ -356,13 +357,12 @@ static gboolean
 rpmostree_check_passwd_groups (gboolean         passwd,
                                OstreeRepo      *repo,
                                int              rootfs_fd,
-                               GFile           *treefile_dirpath,
+                               RORTreefile     *treefile_rs,
                                JsonObject      *treedata,
                                const char      *previous_commit,
                                GCancellable    *cancellable,
                                GError         **error)
 {
-  const char *direct = NULL;
   const char *chk_type = "previous";
   const char *commit_filepath = passwd ? "usr/lib/passwd" : "usr/lib/group";
   const char *json_conf_name  = passwd ? "check-passwd" : "check-groups";
@@ -387,13 +387,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
       else if (g_str_equal (chk_type, "previous"))
         ; /* Handled below */
       else if (g_str_equal (chk_type, "file"))
-        {
-          direct = _rpmostree_jsonutil_object_require_string_member (chk,
-                                                                     "filename",
-                                                                     error);
-          if (!direct)
-            return FALSE;
-        }
+        ; /* Handled below */
       else if (g_str_equal (chk_type, "data"))
         {
           JsonNode *ents_node = json_object_get_member (chk, "entries");
@@ -493,9 +487,9 @@ rpmostree_check_passwd_groups (gboolean         passwd,
     }
   else if (g_str_equal (chk_type, "file"))
     {
-      old_path = g_file_resolve_relative_path (treefile_dirpath, direct);
-      old_contents = glnx_file_get_contents_utf8_at (AT_FDCWD, gs_file_get_path_cached (old_path), NULL,
-                                                     cancellable, error);
+      int fd = passwd ? ror_treefile_get_passwd_fd (treefile_rs) :
+        ror_treefile_get_group_fd (treefile_rs);
+      old_contents = glnx_fd_readall_utf8 (fd, NULL, cancellable, error);
       if (!old_contents)
         return FALSE;
     }
@@ -690,13 +684,13 @@ rpmostree_check_passwd_groups (gboolean         passwd,
 gboolean
 rpmostree_check_passwd (OstreeRepo      *repo,
                         int              rootfs_fd,
-                        GFile           *treefile_dirpath,
+                        RORTreefile     *treefile_rs,
                         JsonObject      *treedata,
                         const char      *previous_commit,
                         GCancellable    *cancellable,
                         GError         **error)
 {
-  return rpmostree_check_passwd_groups (TRUE, repo, rootfs_fd, treefile_dirpath,
+  return rpmostree_check_passwd_groups (TRUE, repo, rootfs_fd, treefile_rs,
                                         treedata, previous_commit,
                                         cancellable, error);
 }
@@ -707,13 +701,13 @@ rpmostree_check_passwd (OstreeRepo      *repo,
 gboolean
 rpmostree_check_groups (OstreeRepo      *repo,
                         int              rootfs_fd,
-                        GFile           *treefile_dirpath,
+                        RORTreefile     *treefile_rs,
                         JsonObject      *treedata,
                         const char      *previous_commit,
                         GCancellable    *cancellable,
                         GError         **error)
 {
-  return rpmostree_check_passwd_groups (FALSE, repo, rootfs_fd, treefile_dirpath,
+  return rpmostree_check_passwd_groups (FALSE, repo, rootfs_fd, treefile_rs,
                                         treedata, previous_commit,
                                         cancellable, error);
 }

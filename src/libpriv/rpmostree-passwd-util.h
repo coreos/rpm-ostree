@@ -24,10 +24,12 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include "rpmostree-rust.h"
+
 gboolean
 rpmostree_check_passwd (OstreeRepo      *repo,
                         int              rootfs_dfd,
-                        GFile           *treefile_path,
+                        RORTreefile     *treefile_rs,
                         JsonObject      *treedata,
                         const char      *previous_commit,
                         GCancellable    *cancellable,
@@ -36,7 +38,7 @@ rpmostree_check_passwd (OstreeRepo      *repo,
 gboolean
 rpmostree_check_groups (OstreeRepo      *repo,
                         int              rootfs_dfd,
-                        GFile           *treefile_path,
+                        RORTreefile     *treefile_rs,
                         JsonObject      *treedata,
                         const char      *previous_commit,
                         GCancellable    *cancellable,

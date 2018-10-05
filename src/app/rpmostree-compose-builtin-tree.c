@@ -1003,16 +1003,15 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
                                     cancellable, error))
     return FALSE;
 
-  if (self->treefile)
+  if (self->treefile_rs)
     {
-      g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile_path);
-      if (!rpmostree_check_passwd (self->repo, self->rootfs_dfd, treefile_dirpath, self->treefile,
-                                   self->previous_checksum,
+      if (!rpmostree_check_passwd (self->repo, self->rootfs_dfd, self->treefile_rs,
+                                   self->treefile, self->previous_checksum,
                                    cancellable, error))
         return glnx_prefix_error (error, "Handling passwd db");
 
-      if (!rpmostree_check_groups (self->repo, self->rootfs_dfd, treefile_dirpath, self->treefile,
-                                   self->previous_checksum,
+      if (!rpmostree_check_groups (self->repo, self->rootfs_dfd, self->treefile_rs,
+                                   self->treefile, self->previous_checksum,
                                    cancellable, error))
         return glnx_prefix_error (error, "Handling group db");
     }
