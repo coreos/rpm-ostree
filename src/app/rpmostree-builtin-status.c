@@ -34,6 +34,7 @@
 #include "rpmostree-util.h"
 #include "rpmostree-core.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-rust.h"
 #include "libsd-locale-util.h"
 #include "libsd-time-util.h"
 
@@ -47,6 +48,11 @@
   "/org/freedesktop/systemd1/unit/rpm_2dostreed_2dautomatic_2etimer"
 #define RPMOSTREE_AUTOMATIC_SERVICE_OBJPATH \
   "/org/freedesktop/systemd1/unit/rpm_2dostreed_2dautomatic_2eservice"
+
+#define OSTREE_FINALIZE_STAGED_SERVICE_UNIT \
+  "ostree-finalize-staged.service"
+
+#define SD_MESSAGE_UNIT_STOPPED_STR       SD_ID128_MAKE_STR(9d,1a,aa,27,d6,01,40,bd,96,36,54,38,aa,d2,02,86)
 
 static gboolean opt_pretty;
 static gboolean opt_verbose;
@@ -290,6 +296,20 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
   const char *policy = rpmostree_sysroot_get_automatic_update_policy (sysroot_proxy);
 
   g_print ("State: %s\n", txn_proxy ? "busy" : "idle");
+
+  gboolean staging_failure;
+  if (!ror_journal_find_staging_failure (&staging_failure, error))
+    return glnx_prefix_error (error, "While querying journal");
+
+  if (staging_failure)
+    {
+      g_print ("%s%sWarning: failed to finalize previous deployment\n"
+                   "         check `journalctl -b -1 -u %s`%s%s\n",
+               get_red_start (), get_bold_start (),
+               OSTREE_FINALIZE_STAGED_SERVICE_UNIT,
+               get_bold_end (), get_red_end ());
+    }
+
   g_print ("AutomaticUpdates: ");
   if (g_str_equal (policy, "none"))
     g_print ("disabled\n");
