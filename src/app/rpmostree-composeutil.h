@@ -28,8 +28,7 @@
 G_BEGIN_DECLS
 
 gboolean
-rpmostree_composeutil_checksum (GBytes            *serialized_treefile,
-                                HyGoal             goal,
+rpmostree_composeutil_checksum (HyGoal             goal,
                                 RORTreefile       *tf,
                                 JsonArray         *add_files,
                                 char             **out_checksum,

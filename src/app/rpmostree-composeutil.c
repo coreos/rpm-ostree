@@ -47,8 +47,7 @@
 #include "libglnx.h"
 
 gboolean
-rpmostree_composeutil_checksum (GBytes            *serialized_treefile,
-                                HyGoal             goal,
+rpmostree_composeutil_checksum (HyGoal             goal,
                                 RORTreefile       *tf,
                                 JsonArray         *add_files,
                                 char             **out_checksum,
@@ -60,11 +59,7 @@ rpmostree_composeutil_checksum (GBytes            *serialized_treefile,
    * or adding a comment will cause a recompose, but let's be conservative
    * here.
    */
-  { gsize len;
-    const guint8* buf = g_bytes_get_data (serialized_treefile, &len);
-
-    g_checksum_update (checksum, buf, len);
-  }
+  g_checksum_update (checksum, (guint8*)ror_treefile_get_json_string (tf), -1);
 
   if (add_files)
     {

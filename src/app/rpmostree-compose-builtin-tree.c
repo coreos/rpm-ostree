@@ -124,8 +124,6 @@ typedef struct {
   JsonParser *treefile_parser;
   JsonNode *treefile_rootval; /* Unowned */
   JsonObject *treefile; /* Unowned */
-
-  GBytes *serialized_treefile;
 } RpmOstreeTreeComposeContext;
 
 static void
@@ -151,7 +149,6 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_free (ctx->previous_checksum);
   g_clear_pointer (&ctx->treefile_rs, (GDestroyNotify) ror_treefile_free);
   g_clear_object (&ctx->treefile_parser);
-  g_clear_pointer (&ctx->serialized_treefile, (GDestroyNotify)g_bytes_unref);
   g_free (ctx);
 }
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeTreeComposeContext, rpm_ostree_tree_compose_context_free)
@@ -372,8 +369,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 
   /* FIXME - just do a depsolve here before we compute download requirements */
   g_autofree char *ret_new_inputhash = NULL;
-  if (!rpmostree_composeutil_checksum (self->serialized_treefile,
-                                       dnf_context_get_goal (dnfctx),
+  if (!rpmostree_composeutil_checksum (dnf_context_get_goal (dnfctx),
                                        self->treefile_rs, add_files,
                                        &ret_new_inputhash, error))
     return FALSE;
@@ -522,12 +518,8 @@ parse_treefile_to_json (const char    *treefile_path,
   if (!treefile_rs)
     return glnx_prefix_error (error, "Failed to load YAML treefile");
 
-  glnx_fd_close int json_fd = ror_treefile_to_json (treefile_rs, error);
-  if (json_fd < 0)
-    return FALSE;
-  g_autoptr(GInputStream) json_s = g_unix_input_stream_new (json_fd, FALSE);
-
-  if (!json_parser_load_from_stream (parser, json_s, NULL, error))
+  const char *serialized = ror_treefile_get_json_string (treefile_rs);
+  if (!json_parser_load_from_data (parser, serialized, -1, error))
     return FALSE;
 
   *out_parser = g_steal_pointer (&parser);
@@ -844,17 +836,6 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
   /* make NULL-terminated */
   g_ptr_array_add (packages, NULL);
 
-  { glnx_unref_object JsonGenerator *generator = json_generator_new ();
-    char *treefile_buf = NULL;
-    gsize len;
-
-    json_generator_set_root (generator, self->treefile_rootval);
-    json_generator_set_pretty (generator, TRUE);
-    treefile_buf = json_generator_to_data (generator, &len);
-
-    self->serialized_treefile = g_bytes_new_take (treefile_buf, len);
-  }
-
   /* Download rpm-md repos, packages, do install */
   g_autofree char *new_inputhash = NULL;
   { gboolean unmodified = FALSE;
@@ -904,8 +885,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     return FALSE;
 
   /* Start postprocessing */
-  if (!rpmostree_treefile_postprocessing (self->rootfs_dfd, self->treefile_rs,
-                                          self->serialized_treefile, self->treefile,
+  if (!rpmostree_treefile_postprocessing (self->rootfs_dfd, self->treefile_rs, self->treefile,
                                           next_version, opt_unified_core,
                                           cancellable, error))
     return glnx_prefix_error (error, "Postprocessing");
