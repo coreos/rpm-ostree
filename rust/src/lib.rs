@@ -135,6 +135,16 @@ pub extern "C" fn ror_treefile_get_add_file_fd(
 }
 
 #[no_mangle]
+pub extern "C" fn ror_treefile_get_passwd_fd(tf: *mut Treefile) -> libc::c_int {
+    tf_from_raw(tf).externals.passwd.as_ref().map_or(-1, |fd| fd.as_raw_fd())
+}
+
+#[no_mangle]
+pub extern "C" fn ror_treefile_get_group_fd(tf: *mut Treefile) -> libc::c_int {
+    tf_from_raw(tf).externals.group.as_ref().map_or(-1, |fd| fd.as_raw_fd())
+}
+
+#[no_mangle]
 pub extern "C" fn ror_treefile_get_json_string(tf: *mut Treefile) -> *const libc::c_char {
     tf_from_raw(tf).serialized.as_ptr()
 }
