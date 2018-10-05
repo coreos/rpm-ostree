@@ -1,7 +1,7 @@
 [package]
 name = "rpmostree-rust"
 version = "0.1.0"
-authors = ["Colin Walters <walters@verbum.org>"]
+authors = ["Colin Walters <walters@verbum.org>", "Jonathan Lebon <jonathan@jlebon.com>"]
 
 [dependencies]
 serde = "1.0.78"
@@ -16,6 +16,11 @@ tempfile = "3.0.3"
 openat = "0.1.15"
 curl = "0.4.14"
 c_utf8 = "0.1.0"
+systemd = "0.3.0"
+
+# Until https://github.com/jmesmon/rust-systemd/pull/54 gets merged
+[patch.crates-io]
+systemd =  { git = "https://github.com/jlebon/rust-systemd", branch = "pr/add-monotonic" }
 
 [lib]
 name = "rpmostree_rust"

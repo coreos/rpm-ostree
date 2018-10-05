@@ -41,6 +41,8 @@ mod glibutils;
 use glibutils::*;
 mod treefile;
 use treefile::*;
+mod journal;
+use journal::*;
 mod utils;
 
 /* Wrapper functions for translating from C to Rust */
@@ -190,6 +192,24 @@ pub extern "C" fn ror_download_to_fd(
         Err(e) => {
             error_to_glib(&e, gerror);
             -1 as libc::c_int
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn ror_journal_find_staging_failure(
+    did_fail: *mut libc::c_int,
+    gerror: *mut *mut glib_sys::GError,
+) -> libc::c_int {
+    assert!(!did_fail.is_null());
+    match journal_find_staging_failure() {
+        Ok(b) => {
+            unsafe { *did_fail = if b { 1 } else { 0 } };
+            1 as libc::c_int
+        },
+        Err(e) => {
+            error_to_glib(&e, gerror);
+            0 as libc::c_int
         }
     }
 }
