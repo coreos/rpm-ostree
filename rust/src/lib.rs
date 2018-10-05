@@ -70,6 +70,13 @@ fn dir_from_dfd(fd: libc::c_int) -> io::Result<openat::Dir> {
     Ok(r)
 }
 
+// It's not really &'static of course...but we can't
+// tell Rust about our lifetimes from the C side.
+fn tf_from_raw(tf: *mut Treefile) -> &'static mut Treefile {
+    assert!(!tf.is_null());
+    unsafe { &mut *tf }
+}
+
 #[no_mangle]
 pub extern "C" fn ror_treefile_new(
     filename: *const libc::c_char,
@@ -104,9 +111,7 @@ pub extern "C" fn ror_treefile_get_dfd(tf: *mut Treefile) -> libc::c_int {
 
 #[no_mangle]
 pub extern "C" fn ror_treefile_get_postprocess_script_fd(tf: *mut Treefile) -> libc::c_int {
-    assert!(!tf.is_null());
-    let tf = unsafe { &mut *tf };
-    if let Some(ref mut fd) = tf.externals.postprocess_script.as_ref() {
+    if let Some(ref mut fd) = tf_from_raw(tf).externals.postprocess_script.as_ref() {
         // We always seek to the start
         fd.seek(io::SeekFrom::Start(0)).unwrap();
         fd.as_raw_fd()
@@ -120,8 +125,7 @@ pub extern "C" fn ror_treefile_get_add_file_fd(
     tf: *mut Treefile,
     filename: *const libc::c_char,
 ) -> libc::c_int {
-    assert!(!tf.is_null());
-    let tf = unsafe { &mut *tf };
+    let tf = tf_from_raw(tf);
     let filename = OsStr::from_bytes(bytes_from_nonnull(filename));
     let filename = filename.to_string_lossy().into_owned();
     let mut fd = tf.externals.add_files.get(&filename).expect("add-file");
@@ -132,15 +136,12 @@ pub extern "C" fn ror_treefile_get_add_file_fd(
 
 #[no_mangle]
 pub extern "C" fn ror_treefile_get_json_string(tf: *mut Treefile) -> *const libc::c_char {
-    assert!(!tf.is_null());
-    let tf = unsafe { &mut *tf };
-    tf.serialized.as_ptr()
+    tf_from_raw(tf).serialized.as_ptr()
 }
 
 #[no_mangle]
 pub extern "C" fn ror_treefile_get_rojig_spec_path(tf: *mut Treefile) -> *const libc::c_char {
-    assert!(!tf.is_null());
-    let tf = unsafe { &mut *tf };
+    let tf = tf_from_raw(tf);
     if let &Some(ref rojig) = &tf.rojig_spec {
         rojig.as_ptr()
     } else {
