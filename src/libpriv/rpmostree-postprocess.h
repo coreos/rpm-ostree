@@ -32,7 +32,6 @@ rpmostree_postprocess_replace_nsswitch (const char *buf,
 gboolean
 rpmostree_treefile_postprocessing (int            rootfs_fd,
                                    RORTreefile   *treefile_rs,
-                                   GBytes        *serialized_treefile,
                                    JsonObject    *treefile,
                                    const char    *next_version,
                                    gboolean       unified_core_mode,

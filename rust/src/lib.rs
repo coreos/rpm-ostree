@@ -131,19 +131,10 @@ pub extern "C" fn ror_treefile_get_add_file_fd(
 }
 
 #[no_mangle]
-pub extern "C" fn ror_treefile_to_json(
-    tf: *mut Treefile,
-    gerror: *mut *mut glib_sys::GError,
-) -> libc::c_int {
+pub extern "C" fn ror_treefile_get_json_string(tf: *mut Treefile) -> *const libc::c_char {
     assert!(!tf.is_null());
     let tf = unsafe { &mut *tf };
-    match tf.serialize_json_fd() {
-        Ok(f) => f.into_raw_fd() as libc::c_int,
-        Err(e) => {
-            error_to_glib(&e, gerror);
-            -1 as libc::c_int
-        }
-    }
+    tf.serialized.as_ptr()
 }
 
 #[no_mangle]

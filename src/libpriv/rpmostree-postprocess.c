@@ -1484,7 +1484,6 @@ mutate_os_release (const char    *contents,
 gboolean
 rpmostree_treefile_postprocessing (int            rootfs_fd,
                                    RORTreefile   *treefile_rs,
-                                   GBytes        *serialized_treefile,
                                    JsonObject    *treefile,
                                    const char    *next_version,
                                    gboolean       unified_core_mode,
@@ -1554,14 +1553,11 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
   if (!glnx_shutil_mkdir_p_at (rootfs_fd, "usr/share/rpm-ostree", 0755, cancellable, error))
     return FALSE;
 
-  { gsize len;
-    const guint8 *buf = g_bytes_get_data (serialized_treefile, &len);
-
-    if (!glnx_file_replace_contents_at (rootfs_fd, "usr/share/rpm-ostree/treefile.json",
-                                        buf, len, GLNX_FILE_REPLACE_NODATASYNC,
-                                        cancellable, error))
-      return FALSE;
-  }
+  if (!glnx_file_replace_contents_at (rootfs_fd, "usr/share/rpm-ostree/treefile.json",
+                                      (guint8*)ror_treefile_get_json_string (treefile_rs), -1,
+                                      GLNX_FILE_REPLACE_NODATASYNC,
+                                      cancellable, error))
+    return FALSE;
 
   const char *default_target = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "default_target",

@@ -27,7 +27,6 @@ use serde_yaml;
 use std::io::prelude::*;
 use std::path::Path;
 use std::{collections, fs, io};
-use tempfile;
 
 const ARCH_X86_64: &'static str = "x86_64";
 const INCLUDE_MAXDEPTH: u32 = 50;
@@ -44,6 +43,7 @@ pub struct Treefile {
     pub primary_dfd: openat::Dir,
     pub parsed: TreeComposeConfig,
     pub rojig_spec: Option<CUtf8Buf>,
+    pub serialized: CUtf8Buf,
     pub externals: TreefileExternals,
 }
 
@@ -280,23 +280,23 @@ impl Treefile {
         } else {
             None
         };
+        let serialized = Treefile::serialize_json_string(&parsed.config)?;
         Ok(Box::new(Treefile {
             primary_dfd: dfd,
             parsed: parsed.config,
             workdir: workdir,
             rojig_spec: rojig_spec,
+            serialized: serialized,
             externals: parsed.externals,
         }))
     }
 
-    pub fn serialize_json_fd(&self) -> io::Result<fs::File> {
-        let mut tmpf = tempfile::tempfile()?;
-        {
-            let output = io::BufWriter::new(&tmpf);
-            serde_json::to_writer_pretty(output, &self.parsed)?;
-        }
-        tmpf.seek(io::SeekFrom::Start(0))?;
-        Ok(tmpf)
+    fn serialize_json_string(config: &TreeComposeConfig) -> io::Result<CUtf8Buf> {
+        let mut output = vec![];
+        serde_json::to_writer_pretty(&mut output, config)?;
+        Ok(CUtf8Buf::from_string(
+            String::from_utf8(output).expect("utf-8 json"),
+        ))
     }
 
     /// Generate a rojig spec file.
@@ -543,6 +543,7 @@ struct StrictTreeComposeConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile;
 
     static VALID_PRELUDE: &str = r###"
 ref: "exampleos/x86_64/blah"
