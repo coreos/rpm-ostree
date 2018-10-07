@@ -3,7 +3,21 @@ basic_test() {
 if ostree --repo=${repobuild} ls -R ${treeref} /usr/etc/passwd-; then
     assert_not_reached "Found /usr/etc/passwd- backup file in tree"
 fi
-echo "ok passwd"
+echo "ok passwd no backups"
+
+validate_passwd() {
+    f=$1
+    shift
+    ostree --repo=${repobuild} cat ${treeref} /usr/lib/$f |grep -v '^root' | sort > $f.tree
+    cat composedata/$f | while read line; do
+        if ! grep -q "$line" "$f.tree"; then
+            echo "Missing entry: %line"
+        fi
+    done
+}
+
+validate_passwd passwd
+validate_passwd group
 
 for path in /usr/share/rpm /usr/lib/sysimage/rpm-ostree-base-db; do
     ostree --repo=${repobuild} ls -R ${treeref} ${path} > db.txt
