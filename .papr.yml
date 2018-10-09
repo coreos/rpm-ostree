@@ -129,7 +129,7 @@ tests:
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
     registry.fedoraproject.org/fedora:28 /bin/sh -c
-    "mount -o remount,dev / && cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && ./tests/compose"
+    "mount -o remount,dev / && cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ls -al ./ci/build.sh && ./ci/build.sh && make install && ./tests/compose"
 
 artifacts:
   - test-compose-logs
