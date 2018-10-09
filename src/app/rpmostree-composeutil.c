@@ -136,6 +136,16 @@ rpmostree_composeutil_legacy_prep_dev (int         rootfs_dfd,
         return glnx_throw_errno (error);
     }
 
+  { GLNX_AUTO_PREFIX_ERROR ("Testing /dev/null in target root (is nodev set?)", error);
+    glnx_autofd int devnull_fd = -1;
+    if (!glnx_openat_rdonly (dest_fd, "null", TRUE, &devnull_fd, error))
+      return FALSE;
+    char buf[1];
+    ssize_t s = read (devnull_fd, buf, sizeof (buf));
+    if (s < 0)
+      return glnx_throw_errno_prefix (error, "read");
+  }
+
   return TRUE;
 }
 
