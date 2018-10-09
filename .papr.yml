@@ -129,7 +129,7 @@ tests:
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro,rslave
     -v $(pwd):/srv/code:rslave -w /srv/code
     registry.fedoraproject.org/fedora:28 /bin/sh -c
-    "mount -o remount,rw,dev / && cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && ./tests/compose"
+    "cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && mount -o remount,rw,dev / && ./tests/compose"
 
 artifacts:
   - test-compose-logs
@@ -163,7 +163,7 @@ tests:
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro,rslave
     -v $(pwd):/srv/code:rslave -w /srv/code
     registry.fedoraproject.org/fedora:28 /bin/sh -c
-    "mount -o remount,rw,dev / && cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && adduser unpriv && setfacl -m u:unpriv:rwX . && runuser -u unpriv ./tests/ex-container"
+    "cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && adduser unpriv && setfacl -m u:unpriv:rwX . && mount -o remount,rw,dev / && runuser -u unpriv ./tests/ex-container"
 
 artifacts:
   - ex-container-logs
