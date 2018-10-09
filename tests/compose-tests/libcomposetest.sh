@@ -45,10 +45,10 @@ enabled=1
 gpgcheck=0
 EOF
     export treefile=composedata/fedora-${name}.json
-    pyeditjson "jd['ref'] += \"/${name}\"" < composedata/fedora-base.json > ${treefile}
+    export treeref=fedora/stable/x86_64/${name}
+    pyeditjson 'jd["ref"] = "'${treeref}'"' < composedata/fedora-base.json > ${treefile}
     pysetjsonmember "repos" '["fedora-local"]' ${treefile}
     # FIXME extract from json
-    export treeref=fedora/stable/x86_64/${name}
     if [ "${filetype}" = "yaml" ]; then
         python <<EOF
 import json, yaml, sys
@@ -62,11 +62,13 @@ EOF
     fi
 }
 
-compose_base_argv="--repo ${repobuild}"
+composejson=$(pwd)/compose.json
+compose_base_argv="--repo ${repobuild} --write-composejson-to ${composejson}"
 runcompose() {
     echo "$(date): starting compose"
     rpm-ostree compose tree ${compose_base_argv} ${treefile} "$@"
-    ostree --repo=${repo} pull-local ${repobuild}
+    commit=$(jq -r '.["ostree-commit"]' < "${composejson}")
+    ostree --repo=${repo} pull-local ${repobuild} "${treeref:-${commit}}"
     echo "$(date): finished compose"
 }
 

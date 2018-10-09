@@ -9,7 +9,7 @@ prepare_compose_test "installroot"
 # This is used to test postprocessing with treefile vs not
 pysetjsonmember "boot_location" '"new"'
 instroot_tmp=$(mktemp -d /var/tmp/rpm-ostree-instroot.XXXXXX)
-rpm-ostree compose install ${compose_base_argv} ${treefile} ${instroot_tmp}
+rpm-ostree compose install --repo="${repobuild}" ${treefile} ${instroot_tmp}
 instroot=${instroot_tmp}/rootfs
 assert_not_has_dir ${instroot}/usr/lib/ostree-boot
 assert_not_has_dir ${instroot}/etc

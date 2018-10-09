@@ -1,5 +1,4 @@
 {
-    "ref": "fedora/stable/${basearch}",
     "rojig": {
         "name": "fedora-atomic-host",
         "license": "MIT",

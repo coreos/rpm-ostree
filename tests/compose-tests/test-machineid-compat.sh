@@ -22,6 +22,10 @@ echo "ok conflict with units"
 # In this test we also want to test that include:
 # correctly handles machineid-compat.
 prepare_compose_test "machineid-compat"
+# Also test having no ref
+pyeditjson 'del jd["ref"]' < ${treefile} > ${treefile}.new
+mv ${treefile}{.new,}
+treeref=""
 pysetjsonmember "machineid-compat" 'False'
 cat > composedata/fedora-machineid-compat-includer.yaml <<EOF
 include: fedora-machineid-compat.json
@@ -30,6 +34,10 @@ export treefile=composedata/fedora-machineid-compat-includer.yaml
 runcompose
 echo "ok compose"
 
-ostree --repo=${repobuild} ls ${treeref} /usr/etc > ls.txt
+ostree --repo="${repobuild}" refs >refs.txt
+diff -u /dev/null refs.txt
+echo "ok no refs written"
+
+ostree --repo=${repobuild} ls ${commit} /usr/etc > ls.txt
 assert_not_file_has_content ls.txt 'machine-id'
 echo "ok machineid-compat"

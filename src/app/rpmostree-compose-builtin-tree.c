@@ -286,7 +286,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     return glnx_throw (error, "--download-only can only be used with --cachedir");
 
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
-  g_key_file_set_string (treespec, "tree", "ref", self->ref);
+  if (self->ref)
+    g_key_file_set_string (treespec, "tree", "ref", self->ref);
   g_key_file_set_string_list (treespec, "tree", "packages", (const char *const*)packages, g_strv_length (packages));
   { const char *releasever;
     if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "releasever",
@@ -691,12 +692,15 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   self->treefile = json_node_get_object (self->treefile_rootval);
 
   g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_dnf (self->corectx));
-  const char *input_ref = _rpmostree_jsonutil_object_require_string_member (self->treefile, "ref", error);
-  if (!input_ref)
+  const char *input_ref = NULL;
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "ref", &input_ref, error))
     return FALSE;
-  self->ref = _rpmostree_varsubst_string (input_ref, varsubsts, error);
-  if (!self->ref)
-    return FALSE;
+  if (input_ref)
+    {
+      self->ref = _rpmostree_varsubst_string (input_ref, varsubsts, error);
+      if (!self->ref)
+        return FALSE;
+    }
 
   g_autoptr(GFile) treefile_dir = g_file_get_parent (self->treefile_path);
 
@@ -748,24 +752,26 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     }
 
   /* Read the previous commit */
-  { g_autoptr(GError) temp_error = NULL;
-    if (!ostree_repo_read_commit (self->repo, self->ref, &self->previous_root, &self->previous_checksum,
-                                  cancellable, &temp_error))
-      {
-        if (g_error_matches (temp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-          {
-            g_clear_error (&temp_error);
-            g_print ("No previous commit for %s\n", self->ref);
-          }
-        else
-          {
-            g_propagate_error (error, g_steal_pointer (&temp_error));
-            return FALSE;
-          }
-      }
-    else
-      g_print ("Previous commit: %s\n", self->previous_checksum);
-  }
+  if (self->ref)
+    {
+      g_autoptr(GError) temp_error = NULL;
+      if (!ostree_repo_read_commit (self->repo, self->ref, &self->previous_root, &self->previous_checksum,
+                                    cancellable, &temp_error))
+        {
+          if (g_error_matches (temp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+            {
+              g_clear_error (&temp_error);
+              g_print ("No previous commit for %s\n", self->ref);
+            }
+          else
+            {
+              g_propagate_error (error, g_steal_pointer (&temp_error));
+              return FALSE;
+            }
+        }
+      else
+        g_print ("Previous commit: %s\n", self->previous_checksum);
+    }
 
   const char rootfs_name[] = "rootfs.tmp";
   if (!glnx_shutil_rm_rf_at (self->workdir_dfd, rootfs_name, cancellable, error))
