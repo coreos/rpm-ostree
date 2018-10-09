@@ -120,14 +120,17 @@ fn treefile_parse_stream<R: io::Read>(
 }
 
 // If a passwd/group file is provided explicitly, load it as a fd
-fn load_passwd_file<P: AsRef<Path>>(basedir: P, v: &Option<CheckPasswd>) -> io::Result<Option<fs::File>> {
+fn load_passwd_file<P: AsRef<Path>>(
+    basedir: P,
+    v: &Option<CheckPasswd>,
+) -> io::Result<Option<fs::File>> {
     if let &Some(ref v) = v {
         let basedir = basedir.as_ref();
         if let Some(ref path) = v.filename {
-            return Ok(Some(fs::File::open(basedir.join(path))?))
+            return Ok(Some(fs::File::open(basedir.join(path))?));
         }
     }
-    return Ok(None)
+    return Ok(None);
 }
 
 /// Given a treefile filename and an architecture, parse it and also
