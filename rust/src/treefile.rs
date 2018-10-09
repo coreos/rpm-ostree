@@ -172,8 +172,8 @@ fn treefile_parse<P: AsRef<Path>>(
         externals: TreefileExternals {
             postprocess_script,
             add_files,
-            passwd: passwd,
-            group: group,
+            passwd,
+            group,
         },
     })
 }
