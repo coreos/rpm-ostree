@@ -3297,9 +3297,12 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
       rpm_mode_t mode = rpmfiFMode (fi);
       rpmfileAttrs fattrs = rpmfiFFlags (fi);
       const gboolean is_ghost = fattrs & RPMFILE_GHOST;
+      const gboolean has_non_bare_user_mode =
+        (mode & (S_ISUID | S_ISGID | S_ISVTX)) > 0;
 
       if (g_str_equal (user, "root") &&
           g_str_equal (group, "root") &&
+          !has_non_bare_user_mode &&
           !have_fcaps)
         continue;
 
@@ -3424,9 +3427,10 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
         }
 
       /* also reapply chmod since e.g. at least the setuid gets taken off */
-      if (S_ISREG (stbuf.st_mode))
+      if (S_ISREG (mode))
         {
-          if (fchmodat (tmprootfs_dfd, fn, stbuf.st_mode, 0) != 0)
+          g_assert (S_ISREG (stbuf.st_mode));
+          if (fchmodat (tmprootfs_dfd, fn, mode, 0) != 0)
             return glnx_throw_errno_prefix (error, "fchmodat(%s)", fn);
         }
     }
