@@ -1026,15 +1026,43 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   if (self->treefile)
     {
       g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile_path);
+      g_autoptr(GPtrArray) sysuser_entries = NULL;
       if (!rpmostree_check_passwd (self->repo, self->rootfs_dfd, treefile_dirpath, self->treefile,
-                                   self->previous_checksum,
+                                   self->previous_checksum, &sysuser_entries,
                                    cancellable, error))
         return glnx_prefix_error (error, "Handling passwd db");
 
       if (!rpmostree_check_groups (self->repo, self->rootfs_dfd, treefile_dirpath, self->treefile,
-                                   self->previous_checksum,
+                                   self->previous_checksum, &sysuser_entries,
                                    cancellable, error))
         return glnx_prefix_error (error, "Handling group db");
+
+      if (sysuser_entries)
+        {
+          g_autofree gchar *sysuser_content = NULL;
+          struct stat empty_stat;
+          const char *sysuser_folder = "usr/lib/sysusers.d";
+
+          if (!rpmostree_passwd_sysusers2char (sysuser_entries,
+                                              &sysuser_content, error))
+            return glnx_prefix_error (error, "Handling sysuser conversion");
+
+          /* Do a deletion of original /usr/lib/sysusers.d/ to
+           * avoid duplication of existing sysuser entries */
+          if (fstatat (self->rootfs_dfd, sysuser_folder, &empty_stat, AT_SYMLINK_NOFOLLOW) == 0)
+            if (!glnx_shutil_rm_rf_at (self->rootfs_dfd, sysuser_folder, cancellable, error))
+              return FALSE;
+
+          /* Creation of the converted sysuser entries into a conf file in
+           * sysuser folder */
+          if (!glnx_ensure_dir (self->rootfs_dfd, sysuser_folder, 0755, error))
+            return FALSE;
+          if (!glnx_file_replace_contents_at (self->rootfs_dfd, "usr/lib/sysusers.d/rpm-ostree-base.conf",
+                                              (guint8*)sysuser_content, -1,
+                                              GLNX_FILE_REPLACE_NODATASYNC,
+                                              cancellable, error))
+            return FALSE;
+        }
     }
 
   /* See comment above */

@@ -996,9 +996,23 @@ rpmostree_postprocess_final (int            rootfs_dfd,
                                              cancellable, error))
     return FALSE;
 
-  /* NSS configuration to look at the new files */
-  if (!replace_nsswitch (rootfs_dfd, cancellable, error))
-    return glnx_prefix_error (error, "nsswitch replacement");
+  gboolean is_sysuser_enabled = FALSE;
+  if (json_object_has_member (treefile, "check-passwd"))
+    {
+      JsonObject *chk = json_object_get_object_member (treefile, "check-passwd");
+      if (!chk)
+        return glnx_throw (error, "%s is not an object", "check-passwd");
+      const char *chk_type = _rpmostree_jsonutil_object_require_string_member (chk, "type", error);
+      if (!chk_type)
+        return FALSE;
+      is_sysuser_enabled = g_str_equal (chk_type, "sysusers");
+    }
+
+  /* Here, we check if sysuser option is enabled, if it is not,
+   * We will be writing NSS configuration to look at the new files */
+  if (!is_sysuser_enabled)
+    if (!replace_nsswitch (rootfs_dfd, cancellable, error))
+      return glnx_prefix_error (error, "nsswitch replacement");
 
   if (selinux)
     {
@@ -1962,10 +1976,10 @@ count_filesizes (int dfd,
                  GError **error)
 {
   g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  
+
   if (!glnx_dirfd_iterator_init_at (dfd, path, TRUE, &dfd_iter, error))
     return FALSE;
-  
+
   while (TRUE)
     {
       struct dirent *dent = NULL;
