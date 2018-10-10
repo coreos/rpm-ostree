@@ -1265,7 +1265,7 @@ rpmostree_passwd_complete_rpm_layering (int       rootfs_dfd,
       if (!glnx_renameat (rootfs_dfd, glnx_strjoina ("etc/", file),
                           rootfs_dfd, glnx_strjoina ("usr/lib/", file), error))
         return FALSE;
-      /* /usr/etc/passwd.rpmostreesave -> /usr/etc/passwd */
+      /* /etc/passwd.rpmostreesave -> /etc/passwd */
       if (!glnx_renameat (rootfs_dfd, glnx_strjoina ("etc/", file, ".rpmostreesave"),
                           rootfs_dfd, glnx_strjoina ("etc/", file), error))
         return FALSE;

@@ -1729,7 +1729,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
       }
   }
 
-  /* Backwards compatibility */
+  /* Undo etc move again */
   if (!rename_if_exists (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
     return FALSE;
 
