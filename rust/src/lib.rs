@@ -34,8 +34,8 @@ extern crate serde_yaml;
 use std::ffi::{CStr, OsStr};
 use std::io::Seek;
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd};
-use std::{io, ptr};
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
+use std::{fs, io, ptr};
 
 mod glibutils;
 use glibutils::*;
@@ -70,6 +70,22 @@ fn dir_from_dfd(fd: libc::c_int) -> io::Result<openat::Dir> {
     Ok(r)
 }
 
+// It's not really &'static of course...but we can't
+// tell Rust about our lifetimes from the C side.
+fn tf_from_raw(tf: *mut Treefile) -> &'static mut Treefile {
+    assert!(!tf.is_null());
+    unsafe { &mut *tf }
+}
+
+// Some of our file descriptors may be read multiple times.
+// We try to consistently seek to the start to make that
+// convenient from the C side.  Note that this function
+// will abort if seek() fails (it really shouldn't).
+fn raw_seeked_fd(fd: &mut fs::File) -> RawFd {
+    fd.seek(io::SeekFrom::Start(0)).expect("seek");
+    fd.as_raw_fd()
+}
+
 #[no_mangle]
 pub extern "C" fn ror_treefile_new(
     filename: *const libc::c_char,
@@ -97,22 +113,16 @@ pub extern "C" fn ror_treefile_new(
 
 #[no_mangle]
 pub extern "C" fn ror_treefile_get_dfd(tf: *mut Treefile) -> libc::c_int {
-    assert!(!tf.is_null());
-    let tf = unsafe { &mut *tf };
-    tf.primary_dfd.as_raw_fd()
+    tf_from_raw(tf).primary_dfd.as_raw_fd()
 }
 
 #[no_mangle]
 pub extern "C" fn ror_treefile_get_postprocess_script_fd(tf: *mut Treefile) -> libc::c_int {
-    assert!(!tf.is_null());
-    let tf = unsafe { &mut *tf };
-    if let Some(ref mut fd) = tf.externals.postprocess_script.as_ref() {
-        // We always seek to the start
-        fd.seek(io::SeekFrom::Start(0)).unwrap();
-        fd.as_raw_fd()
-    } else {
-        -1
-    }
+    tf_from_raw(tf)
+        .externals
+        .postprocess_script
+        .as_mut()
+        .map_or(-1, raw_seeked_fd)
 }
 
 #[no_mangle]
@@ -120,36 +130,38 @@ pub extern "C" fn ror_treefile_get_add_file_fd(
     tf: *mut Treefile,
     filename: *const libc::c_char,
 ) -> libc::c_int {
-    assert!(!tf.is_null());
-    let tf = unsafe { &mut *tf };
+    let tf = tf_from_raw(tf);
     let filename = OsStr::from_bytes(bytes_from_nonnull(filename));
     let filename = filename.to_string_lossy().into_owned();
-    let mut fd = tf.externals.add_files.get(&filename).expect("add-file");
-    // We always seek to the start
-    fd.seek(io::SeekFrom::Start(0)).unwrap();
-    fd.as_raw_fd()
+    raw_seeked_fd(tf.externals.add_files.get_mut(&filename).expect("add-file"))
 }
 
 #[no_mangle]
-pub extern "C" fn ror_treefile_to_json(
-    tf: *mut Treefile,
-    gerror: *mut *mut glib_sys::GError,
-) -> libc::c_int {
-    assert!(!tf.is_null());
-    let tf = unsafe { &mut *tf };
-    match tf.serialize_json_fd() {
-        Ok(f) => f.into_raw_fd() as libc::c_int,
-        Err(e) => {
-            error_to_glib(&e, gerror);
-            -1 as libc::c_int
-        }
-    }
+pub extern "C" fn ror_treefile_get_passwd_fd(tf: *mut Treefile) -> libc::c_int {
+    tf_from_raw(tf)
+        .externals
+        .passwd
+        .as_mut()
+        .map_or(-1, raw_seeked_fd)
+}
+
+#[no_mangle]
+pub extern "C" fn ror_treefile_get_group_fd(tf: *mut Treefile) -> libc::c_int {
+    tf_from_raw(tf)
+        .externals
+        .group
+        .as_mut()
+        .map_or(-1, raw_seeked_fd)
+}
+
+#[no_mangle]
+pub extern "C" fn ror_treefile_get_json_string(tf: *mut Treefile) -> *const libc::c_char {
+    tf_from_raw(tf).serialized.as_ptr()
 }
 
 #[no_mangle]
 pub extern "C" fn ror_treefile_get_rojig_spec_path(tf: *mut Treefile) -> *const libc::c_char {
-    assert!(!tf.is_null());
-    let tf = unsafe { &mut *tf };
+    let tf = tf_from_raw(tf);
     if let &Some(ref rojig) = &tf.rojig_spec {
         rojig.as_ptr()
     } else {

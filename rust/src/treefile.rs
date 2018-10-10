@@ -27,7 +27,6 @@ use serde_yaml;
 use std::io::prelude::*;
 use std::path::Path;
 use std::{collections, fs, io};
-use tempfile;
 
 const ARCH_X86_64: &'static str = "x86_64";
 const INCLUDE_MAXDEPTH: u32 = 50;
@@ -37,6 +36,8 @@ const INCLUDE_MAXDEPTH: u32 = 50;
 pub struct TreefileExternals {
     pub postprocess_script: Option<fs::File>,
     pub add_files: collections::HashMap<String, fs::File>,
+    pub passwd: Option<fs::File>,
+    pub group: Option<fs::File>,
 }
 
 pub struct Treefile {
@@ -44,6 +45,7 @@ pub struct Treefile {
     pub primary_dfd: openat::Dir,
     pub parsed: TreeComposeConfig,
     pub rojig_spec: Option<CUtf8Buf>,
+    pub serialized: CUtf8Buf,
     pub externals: TreefileExternals,
 }
 
@@ -117,6 +119,20 @@ fn treefile_parse_stream<R: io::Read>(
     Ok(treefile)
 }
 
+// If a passwd/group file is provided explicitly, load it as a fd
+fn load_passwd_file<P: AsRef<Path>>(
+    basedir: P,
+    v: &Option<CheckPasswd>,
+) -> io::Result<Option<fs::File>> {
+    if let &Some(ref v) = v {
+        let basedir = basedir.as_ref();
+        if let Some(ref path) = v.filename {
+            return Ok(Some(fs::File::open(basedir.join(path))?));
+        }
+    }
+    return Ok(None);
+}
+
 /// Given a treefile filename and an architecture, parse it and also
 /// open its external files.
 fn treefile_parse<P: AsRef<Path>>(
@@ -151,11 +167,16 @@ fn treefile_parse<P: AsRef<Path>>(
             add_files.insert(name.clone(), fs::File::open(filename.with_file_name(name))?);
         }
     }
+    let parent = filename.parent().unwrap();
+    let passwd = load_passwd_file(&parent, &tf.check_passwd)?;
+    let group = load_passwd_file(&parent, &tf.check_groups)?;
     Ok(ConfigAndExternals {
         config: tf,
         externals: TreefileExternals {
             postprocess_script,
             add_files,
+            passwd,
+            group,
         },
     })
 }
@@ -239,6 +260,14 @@ fn treefile_merge_externals(dest: &mut TreefileExternals, src: &mut TreefileExte
     for (k, v) in src.add_files.drain() {
         dest.add_files.insert(k, v);
     }
+
+    // passwd/group are basic values
+    if dest.passwd.is_none() {
+        dest.passwd = src.passwd.take();
+    }
+    if dest.group.is_none() {
+        dest.group = src.group.take();
+    }
 }
 
 /// Recursively parse a treefile, merging along the way.
@@ -280,23 +309,23 @@ impl Treefile {
         } else {
             None
         };
+        let serialized = Treefile::serialize_json_string(&parsed.config)?;
         Ok(Box::new(Treefile {
             primary_dfd: dfd,
             parsed: parsed.config,
             workdir: workdir,
             rojig_spec: rojig_spec,
+            serialized: serialized,
             externals: parsed.externals,
         }))
     }
 
-    pub fn serialize_json_fd(&self) -> io::Result<fs::File> {
-        let mut tmpf = tempfile::tempfile()?;
-        {
-            let output = io::BufWriter::new(&tmpf);
-            serde_json::to_writer_pretty(output, &self.parsed)?;
-        }
-        tmpf.seek(io::SeekFrom::Start(0))?;
-        Ok(tmpf)
+    fn serialize_json_string(config: &TreeComposeConfig) -> io::Result<CUtf8Buf> {
+        let mut output = vec![];
+        serde_json::to_writer_pretty(&mut output, config)?;
+        Ok(CUtf8Buf::from_string(
+            String::from_utf8(output).expect("utf-8 json"),
+        ))
     }
 
     /// Generate a rojig spec file.
@@ -543,6 +572,7 @@ struct StrictTreeComposeConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile;
 
     static VALID_PRELUDE: &str = r###"
 ref: "exampleos/x86_64/blah"
