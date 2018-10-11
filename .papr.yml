@@ -167,3 +167,28 @@ tests:
 
 artifacts:
   - ex-container-logs
+
+---
+
+branches:
+  - master
+  - auto
+  - try
+  - pr/rust-check
+
+context: rust-min-version-check
+timeout: 30m
+
+required: true
+container:
+  image: registry.fedoraproject.org/fedora:28
+
+env:
+  # this corresponds to the DTS rustc version we want to support
+  RUST_MIN_VERSION: 1.26.2
+
+tests:
+  - ci/installdeps.sh
+  - curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain $RUST_MIN_VERSION -y
+  - PATH=$HOME/.cargo/bin:$PATH sh -c 'cd rust && rustc --version && cargo build' |& tee out.txt
+  - grep $RUST_MIN_VERSION out.txt
