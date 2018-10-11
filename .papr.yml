@@ -174,7 +174,6 @@ branches:
   - master
   - auto
   - try
-  - pr/rust-check
 
 context: rust-min-version-check
 timeout: 30m
