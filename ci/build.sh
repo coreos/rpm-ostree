@@ -23,8 +23,6 @@ fi
 
 pkg_upgrade
 pkg_install_builddeps rpm-ostree
-# Temporary until spec file changes are upstreamed
-pkg_install cargo
 # Mostly dependencies for tests
 pkg_install ostree{,-devel,-grub2} createrepo_c /usr/bin/jq PyYAML \
     libubsan libasan libtsan elfutils fuse sudo python-gobject-base \
