@@ -43,12 +43,20 @@ mkdir ${tmpd} && touch ${tmpd}/.tmp
  cargo vendor -q --sync ${TOP}/rust/Cargo.toml vendor
  cp ${TOP}/rust/Cargo.lock .
  cp ${TOP}/rust/cargo-vendor-config .cargo/config
- # Filter out bundled libcurl from curl-sys; we always want the system libcurl
- rm -rf vendor/curl-sys/curl/
- python -c '
-import json, sys; j = json.load(open(sys.argv[1]))
-j["files"] = {f:c for f, c in j["files"].items() if not f.startswith("curl/")}
-open(sys.argv[1], "w").write(json.dumps(j))' vendor/curl-sys/.cargo-checksum.json
+ # Filter out bundled libcurl and systemd; we always want the pkgconfig ones
+ for crate_subdir in curl-sys/curl \
+                     libz-sys/src/zlib \
+                     systemd/libsystemd-sys/systemd \
+                     libsystemd-sys/systemd; do
+   rm -rf vendor/$crate_subdir
+   python -c '
+import json, sys
+crate, subdir = sys.argv[1].split("/", 1)
+checksum_file = ("vendor/%s/.cargo-checksum.json" % crate)
+j = json.load(open(checksum_file))
+j["files"] = {f:c for f, c in j["files"].items() if not f.startswith(subdir)}
+open(checksum_file, "w").write(json.dumps(j))' $crate_subdir
+ done
  tar --transform="s,^,${PKG_VER}/rust/," -rf ${TARFILE_TMP} * .cargo/
  )
 
