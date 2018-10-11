@@ -39,6 +39,7 @@ struct _RpmOstreeContext {
 
   gboolean pkgcache_only;
   DnfContext *dnfctx;
+  RpmOstreeContextDnfCachePolicy dnf_cache_policy;
   OstreeRepo *ostreerepo;
   OstreeRepo *pkgcache_repo;
   OstreeRepoDevInoCache *devino_cache;

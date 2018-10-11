@@ -269,13 +269,13 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (opt_cachedir && !opt_unified_core)
     dnf_context_set_keep_cache (dnfctx, TRUE);
   /* For compose, always try to refresh metadata; we're used in build servers
-   * where fetching should be cheap. Otherwise, if --cache-only is set, it's
-   * likely an offline developer laptop case, so never refresh.
+   * where fetching should be cheap.  We also have --cache-only which is
+   * used by coreos-assembler.  Today we don't expose the default, but we
+   * could add --cache-default or something if someone wanted it.
    */
-  if (!opt_cache_only)
-    dnf_context_set_cache_age (dnfctx, 0);
-  else
-    dnf_context_set_cache_age (dnfctx, G_MAXUINT);
+  rpmostree_context_set_dnf_caching (self->corectx,
+                                     opt_cache_only ? RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER :
+                                     RPMOSTREE_CONTEXT_DNF_CACHE_NEVER);
   /* Without specifying --cachedir we'd just toss the data we download, so let's
    * catch that.
    */
