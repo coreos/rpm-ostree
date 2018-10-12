@@ -3310,6 +3310,15 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
       rpm_mode_t mode = rpmfiFMode (fi);
       rpmfileAttrs fattrs = rpmfiFFlags (fi);
       const gboolean is_ghost = fattrs & RPMFILE_GHOST;
+      /* If we hardlinked from a bare-user repo, we won't have these higher bits
+       * set. The intention there is to avoid having transient suid binaries
+       * exposed, but in practice today for rpm-ostree we use the "inaccessible
+       * directory" pattern in repo/tmp.
+       *
+       * Another thing we could do down the line is to not chown things on disk
+       * and instead pass this data down into the commit modifier. That's in
+       * fact how gnome-continuous always worked.
+       */
       const gboolean has_non_bare_user_mode =
         (mode & (S_ISUID | S_ISGID | S_ISVTX)) > 0;
 
