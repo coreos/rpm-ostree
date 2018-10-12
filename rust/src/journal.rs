@@ -26,15 +26,17 @@ static OSTREE_FINALIZE_STAGED_SERVICE: &'static str = "ostree-finalize-staged.se
 static OSTREE_DEPLOYMENT_FINALIZING_MSG_ID: &'static str = "e8646cd63dff4625b77909a8e7a40994";
 static OSTREE_DEPLOYMENT_COMPLETE_MSG_ID: &'static str = "dd440e3e549083b63d0efc7dc15255f1";
 
-pub enum JournalStagingFailure {
-    Unknown,
-    OstreeError,
-    SystemdMsg(String),
-    OstreeErrorMsg(String),
+fn print_staging_failure_msg(msg: Option<&str>) -> io::Result<()> {
+    println!(    "Warning: failed to finalize previous deployment");
+    if let Some(msg) = msg {
+        println!("         {}", msg);
+    }
+    println!(    "         check `journalctl -b -1 -u {}`", OSTREE_FINALIZE_STAGED_SERVICE);
+    return Ok(()) // for convenience
 }
 
 /// Look for a failure from ostree-finalized-stage.service in the journal of the previous boot.
-pub fn journal_find_staging_failure() -> io::Result<Option<JournalStagingFailure>> {
+pub fn journal_print_staging_failure() -> io::Result<()> {
     let mut j = journal::Journal::open(journal::JournalFiles::System, false, true)?;
 
     // first, go to the first entry of the current boot
@@ -50,7 +52,7 @@ pub fn journal_find_staging_failure() -> io::Result<Option<JournalStagingFailure
     while previous_boot_id == boot_id {
         match j.previous_record()? {
             Some(_) => previous_boot_id = j.monotonic_timestamp()?.1,
-            None => return Ok(None), // no previous boot!
+            None => return Ok(()), // no previous boot!
         }
     }
     // we just need it as a string from now on
@@ -62,7 +64,7 @@ pub fn journal_find_staging_failure() -> io::Result<Option<JournalStagingFailure
     j.match_add("_SYSTEMD_UNIT", OSTREE_FINALIZE_STAGED_SERVICE)?;
     j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
     if j.previous_record()? == None {
-        return Ok(None); // didn't run (or staged deployment was cleaned up)
+        return Ok(()); // didn't run (or staged deployment was cleaned up)
     }
 
     // now we're at the finalizing msg, remember its position
@@ -75,7 +77,7 @@ pub fn journal_find_staging_failure() -> io::Result<Option<JournalStagingFailure
     j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
 
     if j.next_record()? != None {
-        return Ok(None); // finished successfully!
+        return Ok(()); // finished successfully!
     }
 
     // OK, there was a failure; go back to finalizing msg before digging deeper
@@ -95,8 +97,8 @@ pub fn journal_find_staging_failure() -> io::Result<Option<JournalStagingFailure
         if let Some(msg) = rec.get("MESSAGE") {
             if msg.contains("Failed with result") {
                 if !msg.contains("exit-code") {
-                    /* just proxy that msg; e.g. could be timeout, signal, core-dump */
-                    return Ok(Some(JournalStagingFailure::SystemdMsg(msg.clone())));
+                    /* just print that msg; e.g. could be timeout, signal, core-dump */
+                    return print_staging_failure_msg(Some(msg));
                 }
                 exited = true;
                 break;
@@ -106,10 +108,10 @@ pub fn journal_find_staging_failure() -> io::Result<Option<JournalStagingFailure
 
     if !exited {
         /* even systemd doesn't know what happened? OK, just stick with unknown */
-        return Ok(Some(JournalStagingFailure::Unknown));
+        return print_staging_failure_msg(None);
     }
 
-    // go back again to finalizing msg
+    // go to the last entry for that boot so we search backwards from there
     j.match_flush()?;
     j.seek(journal::JournalSeek::Cursor {
         cursor: final_cursor_from_previous_boot,
@@ -121,15 +123,13 @@ pub fn journal_find_staging_failure() -> io::Result<Option<JournalStagingFailure
 
     if let Some(rec) = j.previous_record()? {
         if let Some(msg) = rec.get("MESSAGE") {
-            // only proxy the msg if it starts with 'error:', otherwise some other really weird
+            // only print the msg if it starts with 'error:', otherwise some other really weird
             // thing happened that might span multiple lines?
             if msg.starts_with("error:") {
-                return Ok(Some(JournalStagingFailure::OstreeErrorMsg(msg.clone())));
+                return print_staging_failure_msg(Some(msg));
             }
-            return Ok(Some(JournalStagingFailure::OstreeError));
         }
     }
 
-    // just fall back to unknown
-    Ok(Some(JournalStagingFailure::Unknown))
+    return print_staging_failure_msg(None);
 }
