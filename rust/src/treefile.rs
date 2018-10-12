@@ -140,7 +140,12 @@ fn treefile_parse<P: AsRef<Path>>(
     arch: Option<&str>,
 ) -> io::Result<ConfigAndExternals> {
     let filename = filename.as_ref();
-    let mut f = io::BufReader::new(fs::File::open(filename)?);
+    let mut f = io::BufReader::new(fs::File::open(filename).map_err(|e| {
+        io::Error::new(
+            e.kind(),
+            format!("Opening {:?}: {}", filename, e.to_string()),
+        )
+    })?);
     let basename = filename
         .file_name()
         .map(|s| s.to_string_lossy())
