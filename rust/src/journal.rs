@@ -26,8 +26,17 @@ static OSTREE_FINALIZE_STAGED_SERVICE: &'static str = "ostree-finalize-staged.se
 static OSTREE_DEPLOYMENT_FINALIZING_MSG_ID: &'static str = "e8646cd63dff4625b77909a8e7a40994";
 static OSTREE_DEPLOYMENT_COMPLETE_MSG_ID: &'static str = "dd440e3e549083b63d0efc7dc15255f1";
 
+fn print_staging_failure_msg(msg: Option<&str>) -> io::Result<()> {
+    println!(    "Warning: failed to finalize previous deployment");
+    if let Some(msg) = msg {
+        println!("         {}", msg);
+    }
+    println!(    "         check `journalctl -b -1 -u {}`", OSTREE_FINALIZE_STAGED_SERVICE);
+    return Ok(()) // for convenience
+}
+
 /// Look for a failure from ostree-finalized-stage.service in the journal of the previous boot.
-pub fn journal_find_staging_failure() -> io::Result<bool> {
+pub fn journal_print_staging_failure() -> io::Result<()> {
     let mut j = journal::Journal::open(journal::JournalFiles::System, false, true)?;
 
     // first, go to the first entry of the current boot
@@ -43,19 +52,23 @@ pub fn journal_find_staging_failure() -> io::Result<bool> {
     while previous_boot_id == boot_id {
         match j.previous_record()? {
             Some(_) => previous_boot_id = j.monotonic_timestamp()?.1,
-            None => return Ok(false), // no previous boot!
+            None => return Ok(()), // no previous boot!
         }
     }
     // we just need it as a string from now on
     let previous_boot_id = previous_boot_id.to_string();
+    let final_cursor_from_previous_boot = j.cursor()?;
 
     // look for OSTree's finalization msg
     j.match_add("MESSAGE_ID", OSTREE_DEPLOYMENT_FINALIZING_MSG_ID)?;
     j.match_add("_SYSTEMD_UNIT", OSTREE_FINALIZE_STAGED_SERVICE)?;
     j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
     if j.previous_record()? == None {
-        return Ok(false); // didn't run (or staged deployment was cleaned up)
+        return Ok(()); // didn't run (or staged deployment was cleaned up)
     }
+
+    // now we're at the finalizing msg, remember its position
+    let finalizing_cursor = j.cursor()?;
 
     // and now check if it actually completed the transaction
     j.match_flush()?;
@@ -63,5 +76,60 @@ pub fn journal_find_staging_failure() -> io::Result<bool> {
     j.match_add("_SYSTEMD_UNIT", OSTREE_FINALIZE_STAGED_SERVICE)?;
     j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
 
-    Ok(j.next_record()? == None)
+    if j.next_record()? != None {
+        return Ok(()); // finished successfully!
+    }
+
+    // OK, there was a failure; go back to finalizing msg before digging deeper
+    j.match_flush()?;
+    j.seek(journal::JournalSeek::Cursor {
+        cursor: finalizing_cursor,
+    })?;
+
+    // Try to find the 'Failed with result' msg from systemd. This is a bit brittle right now until
+    // we get a proper structured msg (see https://github.com/systemd/systemd/issues/10265).
+    j.match_add("UNIT", OSTREE_FINALIZE_STAGED_SERVICE)?;
+    j.match_add("_COMM", "systemd")?;
+    j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
+
+    let mut exited = false;
+    while let Some(rec) = j.next_record()? {
+        if let Some(msg) = rec.get("MESSAGE") {
+            if msg.contains("Failed with result") {
+                if !msg.contains("exit-code") {
+                    /* just print that msg; e.g. could be timeout, signal, core-dump */
+                    return print_staging_failure_msg(Some(msg));
+                }
+                exited = true;
+                break;
+            }
+        }
+    }
+
+    if !exited {
+        /* even systemd doesn't know what happened? OK, just stick with unknown */
+        return print_staging_failure_msg(None);
+    }
+
+    // go to the last entry for that boot so we search backwards from there
+    j.match_flush()?;
+    j.seek(journal::JournalSeek::Cursor {
+        cursor: final_cursor_from_previous_boot,
+    })?;
+
+    // just find the last msg from ostree, it's probably an error msg
+    j.match_add("_SYSTEMD_UNIT", OSTREE_FINALIZE_STAGED_SERVICE)?;
+    j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
+
+    if let Some(rec) = j.previous_record()? {
+        if let Some(msg) = rec.get("MESSAGE") {
+            // only print the msg if it starts with 'error:', otherwise some other really weird
+            // thing happened that might span multiple lines?
+            if msg.starts_with("error:") {
+                return print_staging_failure_msg(Some(msg));
+            }
+        }
+    }
+
+    return print_staging_failure_msg(None);
 }

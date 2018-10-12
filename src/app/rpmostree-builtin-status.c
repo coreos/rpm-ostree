@@ -297,18 +297,13 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
 
   g_print ("State: %s\n", txn_proxy ? "busy" : "idle");
 
-  gboolean staging_failure;
-  if (!ror_journal_find_staging_failure (&staging_failure, error))
-    return glnx_prefix_error (error, "While querying journal");
-
-  if (staging_failure)
-    {
-      g_print ("%s%sWarning: failed to finalize previous deployment\n"
-                   "         check `journalctl -b -1 -u %s`%s%s\n",
-               get_red_start (), get_bold_start (),
-               OSTREE_FINALIZE_STAGED_SERVICE_UNIT,
-               get_bold_end (), get_red_end ());
-    }
+  /* this is a bit of a hack; it's just to avoid duplicating this logic Rust side */
+  g_print ("%s%s", get_red_start (), get_bold_start ());
+  g_autoptr(GError) local_error = NULL;
+  if (!ror_journal_print_staging_failure (&local_error))
+    /* let's not make it fatal if somehow this fails */
+    g_print ("Warning: failed to query journal: %s\n", local_error->message);
+  g_print ("%s%s", get_bold_end (), get_red_end ());
 
   g_print ("AutomaticUpdates: ");
   if (g_str_equal (policy, "none"))

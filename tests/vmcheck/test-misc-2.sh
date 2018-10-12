@@ -232,8 +232,7 @@ vm_cmd rm -rf $(vm_get_deployment_root 0)
 
 # and now check that we notice there was a failure in `status`
 vm_reboot
-vm_cmd journalctl -b -1 -u ostree-finalize-staged.service > svc.txt
-assert_file_has_content svc.txt "error: opendir"
 vm_rpmostree status > status.txt
 assert_file_has_content status.txt "failed to finalize previous deployment"
+assert_file_has_content status.txt "error: opendir"
 echo "ok previous staged failure in status"

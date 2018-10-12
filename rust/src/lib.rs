@@ -197,19 +197,8 @@ pub extern "C" fn ror_download_to_fd(
 }
 
 #[no_mangle]
-pub extern "C" fn ror_journal_find_staging_failure(
-    did_fail: *mut libc::c_int,
+pub extern "C" fn ror_journal_print_staging_failure(
     gerror: *mut *mut glib_sys::GError,
 ) -> libc::c_int {
-    assert!(!did_fail.is_null());
-    match journal_find_staging_failure() {
-        Ok(b) => {
-            unsafe { *did_fail = if b { 1 } else { 0 } };
-            1
-        },
-        Err(e) => {
-            error_to_glib(&e, gerror);
-            0
-        }
-    }
+    int_glib_error(journal_print_staging_failure(), gerror)
 }
