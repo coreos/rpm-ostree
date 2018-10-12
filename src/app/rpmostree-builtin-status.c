@@ -297,15 +297,19 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
 
   g_print ("State: %s\n", txn_proxy ? "busy" : "idle");
 
+   /* completely arbitrary, but really, we wouldn't want to render things much longer */
+  char buf[256];
   gboolean staging_failure;
-  if (!ror_journal_find_staging_failure (&staging_failure, error))
+  if (!ror_journal_find_staging_failure (&staging_failure, buf, sizeof(buf), error))
     return glnx_prefix_error (error, "While querying journal");
 
   if (staging_failure)
     {
-      g_print ("%s%sWarning: failed to finalize previous deployment\n"
-                   "         check `journalctl -b -1 -u %s`%s%s\n",
-               get_red_start (), get_bold_start (),
+      g_print ("%s%sWarning: failed to finalize previous deployment\n",
+               get_red_start (), get_bold_start ());
+      if (strlen (buf) > 0)
+        g_print (  "         %s\n", buf);
+      g_print (    "         check `journalctl -b -1 -u %s`%s%s\n",
                OSTREE_FINALIZE_STAGED_SERVICE_UNIT,
                get_bold_end (), get_red_end ());
     }
