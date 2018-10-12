@@ -37,8 +37,6 @@ use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::{fs, io, ptr};
 
-use c_utf8::CUtf8Buf;
-
 mod glibutils;
 use glibutils::*;
 mod treefile;
@@ -199,42 +197,8 @@ pub extern "C" fn ror_download_to_fd(
 }
 
 #[no_mangle]
-pub extern "C" fn ror_journal_find_staging_failure(
-    did_fail: *mut libc::c_int,
-    buf: *mut libc::c_char,
-    bufsize: libc::size_t,
+pub extern "C" fn ror_journal_print_staging_failure(
     gerror: *mut *mut glib_sys::GError,
 ) -> libc::c_int {
-    assert!(!did_fail.is_null());
-    assert!(bufsize > 0);
-    match journal_find_staging_failure() {
-        Ok(None) => {
-            unsafe { *did_fail = 0 };
-            1
-        }
-        Err(e) => {
-            error_to_glib(&e, gerror);
-            0
-        }
-        Ok(Some(f)) => {
-            unsafe { *did_fail = 1 };
-            match f {
-                JournalStagingFailure::Unknown | JournalStagingFailure::OstreeError => {
-                    unsafe {
-                        let ptr = buf as *mut libc::c_char;
-                        *ptr = '\0' as libc::c_char;
-                    }
-                }
-                JournalStagingFailure::SystemdMsg(m) | JournalStagingFailure::OstreeErrorMsg(m) => {
-                    let cbuf = CUtf8Buf::from(m);
-                    unsafe {
-                        ptr::copy_nonoverlapping(cbuf.as_ptr(), buf, bufsize);
-                        let ptr = buf.offset((bufsize as isize)-1) as *mut libc::c_char;
-                        *ptr = '\0' as libc::c_char;
-                    }
-                }
-            }
-            1
-        }
-    }
+    int_glib_error(journal_print_staging_failure(), gerror)
 }
