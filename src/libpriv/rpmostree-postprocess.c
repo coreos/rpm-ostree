@@ -1669,7 +1669,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
 
     if (base_version != NULL && next_version == NULL)
       {
-        g_print ("Ignoring mutate-os-release: no commit version specified.");
+        g_print ("Ignoring mutate-os-release: no commit version specified.\n");
       }
     else if (base_version != NULL)
       {
