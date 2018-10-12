@@ -188,10 +188,10 @@ pub extern "C" fn ror_download_to_fd(
 ) -> libc::c_int {
     let url = str_from_nullable(url).unwrap();
     match utils::download_url_to_tmpfile(url) {
-        Ok(f) => f.into_raw_fd() as libc::c_int,
+        Ok(f) => f.into_raw_fd(),
         Err(e) => {
             error_to_glib(&e, gerror);
-            -1 as libc::c_int
+            -1
         }
     }
 }
@@ -205,11 +205,11 @@ pub extern "C" fn ror_journal_find_staging_failure(
     match journal_find_staging_failure() {
         Ok(b) => {
             unsafe { *did_fail = if b { 1 } else { 0 } };
-            1 as libc::c_int
+            1
         },
         Err(e) => {
             error_to_glib(&e, gerror);
-            0 as libc::c_int
+            0
         }
     }
 }
