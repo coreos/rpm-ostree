@@ -60,9 +60,9 @@ gboolean
 rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                          int              rootfs_dfd,
                                          const char      *dest,
-                                         GFile           *treefile_dirpath,
-                                         GFile           *previous_root,
+                                         RORTreefile     *treefile_rs,
                                          JsonObject      *treedata,
+                                         GFile           *previous_root,
                                          GCancellable    *cancellable,
                                          GError         **error);
 

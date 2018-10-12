@@ -1004,7 +1004,7 @@ concat_passwd_file (int              rootfs_fd,
 static gboolean
 _data_from_json (int              rootfs_dfd,
                  const char      *dest,
-                 GFile           *treefile_dirpath,
+                 RORTreefile     *treefile_rs,
                  JsonObject      *treedata,
                  RpmOstreePasswdMigrateKind kind,
                  gboolean        *out_found,
@@ -1034,19 +1034,16 @@ _data_from_json (int              rootfs_dfd,
   if (!filename)
     return FALSE;
 
-  g_autoptr(GFile) source = g_file_resolve_relative_path (treefile_dirpath, filename);
-  if (!source)
-    return FALSE;
-
   /* migrate the check data from the specified file to /etc */
-  g_autoptr(FILE) src_stream = NULL;
-  g_autofree char *contents = NULL;
-  if (!_rpmostree_gfile2stdio (source, &contents, &src_stream,
-                               cancellable, error))
+  int fd = passwd ? ror_treefile_get_passwd_fd (treefile_rs) :
+    ror_treefile_get_group_fd (treefile_rs);
+  size_t len = 0;
+  g_autofree char *contents = glnx_fd_readall_utf8 (fd, &len, cancellable, error);
+  if (!contents)
     return FALSE;
-
+  g_autoptr(FILE) src_stream = fmemopen (contents, len, "r");
   if (!src_stream)
-    return TRUE;
+    return glnx_throw_errno_prefix (error, "fmemopen");
 
   /* no matter what we've used the data now */
   *out_found = TRUE;
@@ -1069,9 +1066,9 @@ gboolean
 rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                          int              rootfs_dfd,
                                          const char      *dest,
-                                         GFile           *treefile_dirpath,
-                                         GFile           *previous_root,
+                                         RORTreefile     *treefile_rs,
                                          JsonObject      *treedata,
+                                         GFile           *previous_root,
                                          GCancellable    *cancellable,
                                          GError         **error)
 {
@@ -1087,7 +1084,7 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
   if (!glnx_shutil_mkdir_p_at (rootfs_dfd, dest, 0755, cancellable, error))
     return FALSE;
 
-  if (!_data_from_json (rootfs_dfd, dest, treefile_dirpath,
+  if (!_data_from_json (rootfs_dfd, dest, treefile_rs,
                         treedata, RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
                         &found_passwd_data, cancellable, error))
     return FALSE;
@@ -1101,7 +1098,7 @@ rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
                                               cancellable, error))
     return FALSE;
 
-  if (!_data_from_json (rootfs_dfd, dest, treefile_dirpath,
+  if (!_data_from_json (rootfs_dfd, dest, treefile_rs,
                         treedata, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
                         &found_groups_data, cancellable, error))
     return FALSE;
