@@ -299,8 +299,10 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
 
   /* this is a bit of a hack; it's just to avoid duplicating this logic Rust side */
   g_print ("%s%s", get_red_start (), get_bold_start ());
-  if (!ror_journal_print_staging_failure (error))
-    return glnx_prefix_error (error, "While querying journal");
+  g_autoptr(GError) local_error = NULL;
+  if (!ror_journal_print_staging_failure (&local_error))
+    /* let's not make it fatal if somehow this fails */
+    g_print ("Warning: failed to query journal: %s\n", local_error->message);
   g_print ("%s%s", get_bold_end (), get_red_end ());
 
   g_print ("AutomaticUpdates: ");
