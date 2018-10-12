@@ -419,7 +419,6 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     }
 
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
-  g_autoptr(GFile) treefile_dirpath = g_file_get_parent (self->treefile_path);
   gboolean generate_from_previous = TRUE;
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treedata,
                                                                "preserve-passwd",
@@ -431,8 +430,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     {
       const char *dest = opt_unified_core ? "usr/etc/" : "etc/";
       if (!rpmostree_generate_passwd_from_previous (self->repo, rootfs_dfd, dest,
-                                                    treefile_dirpath,
-                                                    self->previous_root, treedata,
+                                                    self->treefile_rs, treedata,
+                                                    self->previous_root,
                                                     cancellable, error))
         return FALSE;
     }
