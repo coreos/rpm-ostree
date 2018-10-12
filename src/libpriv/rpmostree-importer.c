@@ -662,9 +662,16 @@ compose_filter_cb (OstreeRepo         *repo,
         }
     }
 
+  /* Special case exemptions */
+  if (g_str_has_prefix (path, "/usr/etc/selinux") &&
+      g_str_has_suffix (path, ".LOCK"))
+    {
+      /* These empty lock files cause problems;
+       * https://github.com/projectatomic/rpm-ostree/pull/1002
+       */
+      return OSTREE_REPO_COMMIT_FILTER_SKIP;
+    }
   /* convert /run and /var entries to tmpfiles.d */
-  if (g_str_has_prefix (path, "/" VAR_SELINUX_TARGETED_PATH))
-    ; /* Handled by pathname translation */
   else if (g_str_has_prefix (path, "/run/") ||
            g_str_has_prefix (path, "/var/"))
     {
