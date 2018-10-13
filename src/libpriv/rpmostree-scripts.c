@@ -102,6 +102,14 @@ typedef struct {
   const char *replacement;
 } RpmOstreeLuaReplacement;
 
+static const char glibc_langpacks_script[] =
+  "set -euo pipefail\n"
+  "tmpl=/usr/lib/locale/locale-archive.tmpl\n"
+  "if test -s \"${tmpl}\"; then\n"
+  "  cp -a \"${tmpl}\"{,.new} && mv \"${tmpl}\"{.new,}\n"
+  "  exec /usr/sbin/build-locale-archive --install-langs \"%{_install_langs}\"\n"
+  "fi\n";
+
 static const RpmOstreeLuaReplacement lua_replacements[] = {
   /* The release packages are implemented Lua for
    * unnecessary reasons.  This doesn't fully generalize obviously arbitrarly
@@ -141,12 +149,11 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
    **/
   { "glibc-all-langpacks.posttrans",
     "/usr/bin/sh",
-    "set -euo pipefail\n"
-    "tmpl=/usr/lib/locale/locale-archive.tmpl\n"
-    "if test -s \"${tmpl}\"; then\n"
-    "  cp -a \"${tmpl}\"{,.new} && mv \"${tmpl}\"{.new,}\n"
-    "  exec /usr/sbin/build-locale-archive --install-langs \"%{_install_langs}\"\n"
-    "fi\n"
+    glibc_langpacks_script
+  },
+  { "glibc-common.post",
+    "/usr/bin/sh",
+    glibc_langpacks_script
   },
   /* Just for the tests */
   { "rpmostree-lua-override-test.post",
@@ -158,7 +165,25 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
     "/usr/bin/sh",
     "set -euo pipefail\n"
     "echo %{_install_langs} >/usr/share/rpmostree-lua-override-test-expand\n"
-  },
+  }
+};
+
+typedef struct {
+  const char *pkgname_script;
+  const char *release_suffix;
+  const char *interp;
+  const char *replacement;
+} RpmOstreeScriptReplacement;
+
+static const RpmOstreeScriptReplacement script_replacements[] = {
+  /* Only neuter the rhel7 version; the Fedora one is fixed.
+   * https://src.fedoraproject.org/rpms/pam/pull-request/3
+   */
+  { "pam.post", ".el7", NULL, NULL },
+  /* Same here. */
+  { "microcode_ctl.post", ".el7", NULL, NULL },
+  /* And this one runs dracut, which we don't want. */
+  { "microcode_ctl.posttrans", ".el7", NULL, NULL },
 };
 
 static gboolean
@@ -487,10 +512,10 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
 
   const char *script;
   const char *interp = (args && args[0]) ? args[0] : "/bin/sh";
+  const char *pkg_scriptid = glnx_strjoina (dnf_package_get_name (pkg), ".", rpmscript->desc + 1);
   if (g_str_equal (interp, lua_builtin))
     {
       /* This is a lua script; look for a built-in override/replacement */
-      const char *pkg_scriptid = glnx_strjoina (dnf_package_get_name (pkg), ".", rpmscript->desc + 1);
       gboolean found_replacement = FALSE;
       for (guint i = 0; i < G_N_ELEMENTS (lua_replacements); i++)
         {
@@ -512,6 +537,22 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
   else
     {
       script = headerGetString (hdr, rpmscript->tag);
+
+      for (guint i = 0; i < G_N_ELEMENTS (script_replacements); i++)
+        {
+          const RpmOstreeScriptReplacement *repl = &script_replacements[i];
+          if (!g_str_equal (repl->pkgname_script, pkg_scriptid))
+            continue;
+          if (repl->release_suffix &&
+              !g_str_has_suffix (dnf_package_get_release (pkg), repl->release_suffix))
+            continue;
+          /* Is this completely suppressing the script?  If so, we're done */
+          if (!repl->interp)
+            return TRUE;
+          interp = repl->interp;
+          script = repl->replacement;
+          break;
+        }
     }
   g_autofree char *script_owned = NULL;
   g_assert (script);
