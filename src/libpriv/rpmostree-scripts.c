@@ -102,6 +102,14 @@ typedef struct {
   const char *replacement;
 } RpmOstreeLuaReplacement;
 
+static const char glibc_langpacks_script[] =
+  "set -euo pipefail\n"
+  "tmpl=/usr/lib/locale/locale-archive.tmpl\n"
+  "if test -s \"${tmpl}\"; then\n"
+  "  cp -a \"${tmpl}\"{,.new} && mv \"${tmpl}\"{.new,}\n"
+  "  exec /usr/sbin/build-locale-archive --install-langs \"%{_install_langs}\"\n"
+  "fi\n";
+
 static const RpmOstreeLuaReplacement lua_replacements[] = {
   /* The release packages are implemented Lua for
    * unnecessary reasons.  This doesn't fully generalize obviously arbitrarly
@@ -141,12 +149,11 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
    **/
   { "glibc-all-langpacks.posttrans",
     "/usr/bin/sh",
-    "set -euo pipefail\n"
-    "tmpl=/usr/lib/locale/locale-archive.tmpl\n"
-    "if test -s \"${tmpl}\"; then\n"
-    "  cp -a \"${tmpl}\"{,.new} && mv \"${tmpl}\"{.new,}\n"
-    "  exec /usr/sbin/build-locale-archive --install-langs \"%{_install_langs}\"\n"
-    "fi\n"
+    glibc_langpacks_script
+  },
+  { "glibc-common.post",
+    "/usr/bin/sh",
+    glibc_langpacks_script
   },
   /* Just for the tests */
   { "rpmostree-lua-override-test.post",
