@@ -840,24 +840,8 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     }
 
   g_autoptr(GPtrArray) packages = g_ptr_array_new_with_free_func (g_free);
-
-  if (json_object_has_member (self->treefile, "bootstrap_packages"))
-    {
-      if (!_rpmostree_jsonutil_append_string_array_to (self->treefile, "bootstrap_packages", packages, error))
-        return FALSE;
-    }
   if (!_rpmostree_jsonutil_append_string_array_to (self->treefile, "packages", packages, error))
     return FALSE;
-
-  { g_autofree char *thisarch_packages = g_strconcat ("packages-", dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx)), NULL);
-
-    if (json_object_has_member (self->treefile, thisarch_packages))
-      {
-        if (!_rpmostree_jsonutil_append_string_array_to (self->treefile, thisarch_packages, packages, error))
-          return FALSE;
-      }
-  }
-
   if (packages->len == 0)
     return glnx_throw (error, "Missing 'packages' entry");
 
