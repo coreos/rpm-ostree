@@ -289,6 +289,7 @@ rpmostree_treespec_new_from_keyfile (GKeyFile   *keyfile,
 
   tf_bind_boolean (keyfile, &builder, "documentation", TRUE);
   tf_bind_boolean (keyfile, &builder, "recommends", TRUE);
+  tf_bind_boolean (keyfile, &builder, "selinux", TRUE);
 
   ret->spec = g_variant_builder_end (&builder);
   ret->dict = g_variant_dict_new (ret->spec);
@@ -403,6 +404,7 @@ rpmostree_context_new_system (OstreeRepo   *repo,
   g_return_val_if_fail (repo != NULL, FALSE);
 
   RpmOstreeContext *self = g_object_new (RPMOSTREE_TYPE_CONTEXT, NULL);
+  self->is_system = TRUE;
   self->ostreerepo = g_object_ref (repo);
 
   /* We can always be control-c'd at any time; this is new API,
@@ -788,6 +790,33 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   /* We could likely delete this, but I'm keeping a log message just in case */
   if (g_variant_dict_contains (self->spec->dict, "ignore-scripts"))
     sd_journal_print (LOG_INFO, "ignore-scripts is no longer supported");
+
+  gboolean selinux;
+  g_assert (g_variant_dict_lookup (self->spec->dict, "selinux", "b", &selinux));
+  /* Load policy from / if SELinux is enabled, and we haven't already loaded
+   * a policy.  This is mostly for the "compose tree" case.
+   */
+  if (selinux && !self->sepolicy)
+    {
+      glnx_autofd int host_rootfs_dfd = -1;
+      /* Ensure that the imported packages are labeled with *a* policy if
+       * possible, even if it's not the final one. This helps avoid duplicating
+       * all of the content.
+       */
+      if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &host_rootfs_dfd, error))
+        return FALSE;
+      g_autoptr(OstreeSePolicy) sepolicy = ostree_sepolicy_new_at (host_rootfs_dfd, cancellable, error);
+      if (!sepolicy)
+        return FALSE;
+      /* For system contexts, whether SELinux required is dynamic based on the
+       * filesystem state. If the base compose doesn't have a policy package,
+       * then that's OK. It'd be cleaner if we loaded the no-SELinux state from
+       * the origin, but that'd be a backwards-incompatible change.
+       */
+      if (!self->is_system && ostree_sepolicy_get_name (sepolicy) == NULL)
+        return glnx_throw (error, "Unable to load SELinux policy from /");
+      rpmostree_context_set_sepolicy (self, sepolicy);
+    }
 
   return TRUE;
 }
@@ -1931,6 +1960,10 @@ rpmostree_context_prepare_rojig (RpmOstreeContext *self,
                                  GError          **error)
 {
   self->rojig_pure = TRUE;
+  /* Override the default policy load; rojig handles xattrs
+   * internally.
+   */
+  rpmostree_context_set_sepolicy (self, NULL);
   return rpmostree_context_prepare (self, cancellable, error);
 }
 
@@ -2295,7 +2328,6 @@ rpmostree_context_import_rojig (RpmOstreeContext *self,
 
   OstreeRepo *repo = get_pkgcache_repo (self);
   g_return_val_if_fail (repo != NULL, FALSE);
-  g_return_val_if_fail (rojig_pkg_to_xattrs == NULL || self->sepolicy == NULL, FALSE);
 
   if (!dnf_transaction_import_keys (dnf_context_get_transaction (dnfctx), error))
     return FALSE;

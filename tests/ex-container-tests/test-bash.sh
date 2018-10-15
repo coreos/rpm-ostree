@@ -10,6 +10,7 @@ cat >bash.conf <<EOF
 [tree]
 ref=bash
 packages=coreutils;bash;
+selinux=false
 repos=fedora;
 releasever=28
 EOF
@@ -24,6 +25,7 @@ cat >bash-nodocs.conf <<EOF
 [tree]
 ref=bash-nodocs
 packages=coreutils;bash;
+selinux=false
 repos=fedora;
 releasever=28
 documentation=false;
