@@ -27,6 +27,8 @@
 struct _RpmOstreeContext {
   GObject parent;
 
+  /* Whether we were created with new_system() */
+  gboolean is_system;
   RpmOstreeTreespec *spec;
   gboolean empty;
 

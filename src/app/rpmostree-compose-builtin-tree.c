@@ -245,7 +245,6 @@ install_packages (RpmOstreeTreeComposeContext  *self,
   /* For unified core, we have a pkgcache repo. This may be auto-created under
    * the workdir, or live explicitly in the dir for --cache.
    */
-  glnx_autofd int host_rootfs_dfd = -1;
   if (opt_unified_core)
     {
       self->pkgcache_repo = ostree_repo_create_at (cachedir_dfd (self), "pkgcache-repo",
@@ -284,19 +283,6 @@ install_packages (RpmOstreeTreeComposeContext  *self,
         }
 
       rpmostree_context_set_repos (self->corectx, self->repo, self->pkgcache_repo);
-
-      /* Ensure that the imported packages are labeled with *a* policy if
-       * possible, even if it's not the final one. This helps avoid duplicating
-       * all of the content.
-       */
-      if (!glnx_opendirat (AT_FDCWD, "/", TRUE, &host_rootfs_dfd, error))
-        return FALSE;
-      g_autoptr(OstreeSePolicy) sepolicy = ostree_sepolicy_new_at (host_rootfs_dfd, cancellable, error);
-      if (!sepolicy)
-        return FALSE;
-      if (ostree_sepolicy_get_name (sepolicy) == NULL)
-        return glnx_throw (error, "Unable to load SELinux policy from /");
-      rpmostree_context_set_sepolicy (self->corectx, sepolicy);
     }
 
   if (!rpmostree_context_prepare (self->corectx, cancellable, error))

@@ -255,6 +255,8 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
     return FALSE;
   if (!treespec_bind_bool (treedata, treespec, "recommends", TRUE, error))
     return FALSE;
+  if (!treespec_bind_bool (treedata, treespec, "selinux", TRUE, error))
+    return FALSE;
   if (!treespec_bind_array (treedata, treespec, "install-langs", "instlangs", FALSE, error))
     return FALSE;
   { const char *releasever;

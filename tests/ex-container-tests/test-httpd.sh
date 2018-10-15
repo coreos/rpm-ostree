@@ -10,6 +10,7 @@ cat >httpd.conf <<EOF
 [tree]
 ref=httpd
 packages=httpd;
+selinux=false
 repos=fedora;
 releasever=28
 EOF
