@@ -414,7 +414,6 @@ rpmostree_check_passwd_groups (gboolean         passwd,
               JsonNodeType child_type = json_node_get_node_type (val);
               gint64 uid = 0;
               gint64 gid = 0;
-              struct conv_passwd_ent *convent = g_new (struct conv_passwd_ent, 1);
 
               if (child_type != JSON_NODE_ARRAY)
                 {
@@ -438,6 +437,7 @@ rpmostree_check_passwd_groups (gboolean         passwd,
                     return FALSE;
                 }
 
+              struct conv_passwd_ent *convent = g_new (struct conv_passwd_ent, 1);
               convent->name = g_strdup (name);
               convent->uid  = uid;
               convent->gid  = gid;
@@ -447,11 +447,11 @@ rpmostree_check_passwd_groups (gboolean         passwd,
             {
               const char *name = iter->data;
               gint64 gid = 0;
-              struct conv_group_ent *convent = g_new (struct conv_group_ent, 1);
 
               if (!_rpmostree_jsonutil_object_require_int_member (ents_obj, name, &gid, error))
                 return FALSE;
 
+              struct conv_group_ent *convent = g_new (struct conv_group_ent, 1);
               convent->name = g_strdup (name);
               convent->gid  = gid;
               g_ptr_array_add (old_ents, convent);
