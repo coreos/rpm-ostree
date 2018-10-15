@@ -1062,16 +1062,31 @@ _data_from_json (int              rootfs_dfd,
   return TRUE;
 }
 
+/* For composes/treefiles, we support various passwd/group handling.  This
+ * function is primarily responsible for handling the "previous" and "file"
+ * paths; in both cases we inject data into the tree before even laying
+ * down any files, and notably before running RPM `useradd` etc.
+ */
 gboolean
-rpmostree_generate_passwd_from_previous (OstreeRepo      *repo,
-                                         int              rootfs_dfd,
-                                         const char      *dest,
-                                         RORTreefile     *treefile_rs,
-                                         JsonObject      *treedata,
-                                         GFile           *previous_root,
-                                         GCancellable    *cancellable,
-                                         GError         **error)
+rpmostree_passwd_compose_prep (OstreeRepo      *repo,
+                               int              rootfs_dfd,
+                               gboolean         unified_core,
+                               RORTreefile     *treefile_rs,
+                               JsonObject      *treedata,
+                               GFile           *previous_root,
+                               GCancellable    *cancellable,
+                               GError         **error)
 {
+  gboolean generate_from_previous = TRUE;
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treedata, "preserve-passwd",
+                                                               &generate_from_previous, error))
+    return FALSE;
+
+  if (!generate_from_previous)
+    return TRUE; /* Nothing to do */
+
+  const char *dest = (unified_core) ? "usr/etc/" : "etc/";
+
   gboolean found_passwd_data = FALSE;
   gboolean found_groups_data = FALSE;
   gboolean perform_migrate = FALSE;

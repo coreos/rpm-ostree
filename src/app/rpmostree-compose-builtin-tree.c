@@ -360,22 +360,11 @@ install_packages (RpmOstreeTreeComposeContext  *self,
     }
 
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
-  gboolean generate_from_previous = TRUE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile,
-                                                               "preserve-passwd",
-                                                               &generate_from_previous,
-                                                               error))
+  if (!rpmostree_passwd_compose_prep (self->repo, rootfs_dfd, opt_unified_core,
+                                      self->treefile_rs, self->treefile,
+                                      self->previous_root,
+                                      cancellable, error))
     return FALSE;
-
-  if (generate_from_previous)
-    {
-      const char *dest = opt_unified_core ? "usr/etc/" : "etc/";
-      if (!rpmostree_generate_passwd_from_previous (self->repo, rootfs_dfd, dest,
-                                                    self->treefile_rs, self->treefile,
-                                                    self->previous_root,
-                                                    cancellable, error))
-        return FALSE;
-    }
 
   if (opt_unified_core)
     {
