@@ -197,19 +197,20 @@ set_keyfile_string_array_from_json (GKeyFile    *keyfile,
 static gboolean
 treespec_bind_array (JsonObject *treedata,
                      GKeyFile   *ts,
-                     const char *name,
+                     const char *src_name,
+                     const char *dest_name,
                      gboolean    required,
                      GError    **error)
 {
-  if (!json_object_has_member (treedata, name))
+  if (!json_object_has_member (treedata, src_name))
     {
       if (required)
-        return glnx_throw (error, "Treefile is missing required \"%s\" member", name);
+        return glnx_throw (error, "Treefile is missing required \"%s\" member", src_name);
       return TRUE;
     }
-  JsonArray *a = json_object_get_array_member (treedata, name);
+  JsonArray *a = json_object_get_array_member (treedata, src_name);
   g_assert (a);
-  return set_keyfile_string_array_from_json (ts, "tree", name, a, error);
+  return set_keyfile_string_array_from_json (ts, "tree", dest_name ?: src_name, a, error);
 }
 
 /* Given a boolean value in JSON, add it to treespec
@@ -244,15 +245,15 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
   g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_dnf (ctx));
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
 
-  if (!treespec_bind_array (treedata, treespec, "packages", TRUE, error))
+  if (!treespec_bind_array (treedata, treespec, "packages", NULL, TRUE, error))
     return FALSE;
-  if (!treespec_bind_array (treedata, treespec, "repos", TRUE, error))
+  if (!treespec_bind_array (treedata, treespec, "repos", NULL, TRUE, error))
     return FALSE;
   if (!treespec_bind_bool (treedata, treespec, "documentation", TRUE, error))
     return FALSE;
   if (!treespec_bind_bool (treedata, treespec, "recommends", TRUE, error))
     return FALSE;
-  if (!treespec_bind_array (treedata, treespec, "install-langs", FALSE, error))
+  if (!treespec_bind_array (treedata, treespec, "install-langs", "instlangs", FALSE, error))
     return FALSE;
   { const char *releasever;
     if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "releasever",
