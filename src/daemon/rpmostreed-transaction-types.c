@@ -78,7 +78,8 @@ change_origin_refspec (GVariantDict    *options,
 
           if (out_old_refspec != NULL)
             *out_old_refspec = g_strdup (current_refspecdata);
-          *out_new_refspec = g_strdup (src_refspec);
+          if (out_new_refspec != NULL)
+            *out_new_refspec = g_strdup (src_refspec);
           return TRUE;
         }
     case RPMOSTREE_REFSPEC_TYPE_OSTREE:
