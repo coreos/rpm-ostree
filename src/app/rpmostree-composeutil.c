@@ -49,7 +49,7 @@
 gboolean
 rpmostree_composeutil_checksum (HyGoal             goal,
                                 RORTreefile       *tf,
-                                JsonArray         *add_files,
+                                JsonObject        *treefile,
                                 char             **out_checksum,
                                 GError           **error)
 {
@@ -61,8 +61,9 @@ rpmostree_composeutil_checksum (HyGoal             goal,
    */
   g_checksum_update (checksum, (guint8*)ror_treefile_get_json_string (tf), -1);
 
-  if (add_files)
+  if (json_object_has_member (treefile, "add-files"))
     {
+      JsonArray *add_files = json_object_get_array_member (treefile, "add-files");
       guint i, len = json_array_get_length (add_files);
       for (i = 0; i < len; i++)
         {

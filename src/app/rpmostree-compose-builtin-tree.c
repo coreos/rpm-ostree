@@ -304,14 +304,10 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
   rpmostree_print_transaction (dnfctx);
 
-  JsonArray *add_files = NULL;
-  if (json_object_has_member (self->treefile, "add-files"))
-    add_files = json_object_get_array_member (self->treefile, "add-files");
-
   /* FIXME - just do a depsolve here before we compute download requirements */
   g_autofree char *ret_new_inputhash = NULL;
   if (!rpmostree_composeutil_checksum (dnf_context_get_goal (dnfctx),
-                                       self->treefile_rs, add_files,
+                                       self->treefile_rs, self->treefile,
                                        &ret_new_inputhash, error))
     return FALSE;
 
