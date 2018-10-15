@@ -167,3 +167,112 @@ rpmostree_composeutil_sanity_checks (RORTreefile  *tf,
 
   return TRUE;
 }
+
+static gboolean
+set_keyfile_string_array_from_json (GKeyFile    *keyfile,
+                                    const char  *keyfile_group,
+                                    const char  *keyfile_key,
+                                    JsonArray   *a,
+                                    GError     **error)
+{
+  g_autoptr(GPtrArray) instlangs_v = g_ptr_array_new ();
+
+  guint len = json_array_get_length (a);
+  for (guint i = 0; i < len; i++)
+    {
+      const char *elt = _rpmostree_jsonutil_array_require_string_element (a, i, error);
+
+      if (!elt)
+        return FALSE;
+
+      g_ptr_array_add (instlangs_v, (char*)elt);
+    }
+
+  g_key_file_set_string_list (keyfile, keyfile_group, keyfile_key,
+                              (const char*const*)instlangs_v->pdata, instlangs_v->len);
+
+  return TRUE;
+}
+
+static gboolean
+treespec_bind_array (JsonObject *treedata,
+                     GKeyFile   *ts,
+                     const char *src_name,
+                     const char *dest_name,
+                     gboolean    required,
+                     GError    **error)
+{
+  if (!json_object_has_member (treedata, src_name))
+    {
+      if (required)
+        return glnx_throw (error, "Treefile is missing required \"%s\" member", src_name);
+      return TRUE;
+    }
+  JsonArray *a = json_object_get_array_member (treedata, src_name);
+  g_assert (a);
+  return set_keyfile_string_array_from_json (ts, "tree", dest_name ?: src_name, a, error);
+}
+
+/* Given a boolean value in JSON, add it to treespec
+ * if it's not the default.
+ */
+static gboolean
+treespec_bind_bool (JsonObject *treedata,
+                    GKeyFile   *ts,
+                    const char *name,
+                    gboolean    default_value,
+                    GError    **error)
+{
+  gboolean v = default_value;
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treedata, name, &v, error))
+    return FALSE;
+
+  if (v != default_value)
+    g_key_file_set_boolean (ts, "tree", name, v);
+
+  return TRUE;
+}
+
+/* Convert a treefile into a "treespec" understood by the core.
+ */
+RpmOstreeTreespec *
+rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
+                                    RORTreefile *treefile_rs,
+                                    JsonObject  *treedata,
+                                    GError     **error)
+{
+  GLNX_AUTO_PREFIX_ERROR ("Parsing treefile", error);
+  g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_dnf (ctx));
+  g_autoptr(GKeyFile) treespec = g_key_file_new ();
+
+  if (!treespec_bind_array (treedata, treespec, "packages", NULL, TRUE, error))
+    return FALSE;
+  if (!treespec_bind_array (treedata, treespec, "repos", NULL, TRUE, error))
+    return FALSE;
+  if (!treespec_bind_bool (treedata, treespec, "documentation", TRUE, error))
+    return FALSE;
+  if (!treespec_bind_bool (treedata, treespec, "recommends", TRUE, error))
+    return FALSE;
+  if (!treespec_bind_array (treedata, treespec, "install-langs", "instlangs", FALSE, error))
+    return FALSE;
+  { const char *releasever;
+    if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "releasever",
+                                                                &releasever, error))
+      return FALSE;
+    if (releasever)
+      g_key_file_set_string (treespec, "tree", "releasever", releasever);
+  }
+
+  const char *input_ref = NULL;
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "ref", &input_ref, error))
+    return FALSE;
+  if (input_ref)
+    {
+      g_autofree char *ref = _rpmostree_varsubst_string (input_ref, varsubsts, error);
+      if (!ref)
+        return FALSE;
+      g_key_file_set_string (treespec, "tree", "ref", ref);
+    }
+
+  return rpmostree_treespec_new_from_keyfile (treespec, error);
+}

@@ -117,7 +117,7 @@ typedef struct {
   OstreeRepo *repo;
   OstreeRepo *pkgcache_repo;
   OstreeRepoDevInoCache *devino_cache;
-  char *ref;
+  const char *ref;
   char *rojig_spec;
   char *previous_checksum;
 
@@ -125,6 +125,7 @@ typedef struct {
   JsonParser *treefile_parser;
   JsonNode *treefile_rootval; /* Unowned */
   JsonObject *treefile; /* Unowned */
+  RpmOstreeTreespec   *treespec;
 } RpmOstreeTreeComposeContext;
 
 static void
@@ -146,10 +147,10 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_clear_object (&ctx->repo);
   g_clear_object (&ctx->pkgcache_repo);
   g_clear_pointer (&ctx->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
-  g_free (ctx->ref);
   g_free (ctx->previous_checksum);
   g_clear_pointer (&ctx->treefile_rs, (GDestroyNotify) ror_treefile_free);
   g_clear_object (&ctx->treefile_parser);
+  g_clear_object (&ctx->treespec);
   g_free (ctx);
 }
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeTreeComposeContext, rpm_ostree_tree_compose_context_free)
@@ -167,52 +168,6 @@ on_hifstate_percentage_changed (DnfState   *hifstate,
 {
   const char *text = user_data;
   glnx_console_progress_text_percent (text, percentage);
-}
-
-static gboolean
-set_keyfile_string_array_from_json (GKeyFile    *keyfile,
-                                    const char  *keyfile_group,
-                                    const char  *keyfile_key,
-                                    JsonArray   *a,
-                                    GError     **error)
-{
-  g_autoptr(GPtrArray) instlangs_v = g_ptr_array_new ();
-
-  guint len = json_array_get_length (a);
-  for (guint i = 0; i < len; i++)
-    {
-      const char *elt = _rpmostree_jsonutil_array_require_string_element (a, i, error);
-
-      if (!elt)
-        return FALSE;
-
-      g_ptr_array_add (instlangs_v, (char*)elt);
-    }
-
-  g_key_file_set_string_list (keyfile, keyfile_group, keyfile_key,
-                              (const char*const*)instlangs_v->pdata, instlangs_v->len);
-
-  return TRUE;
-}
-
-/* Given a boolean value in JSON, add it to treespec
- * if it's not the default.
- */
-static gboolean
-treespec_bind_bool (JsonObject *treedata,
-                    GKeyFile   *ts,
-                    const char *name,
-                    gboolean    default_value,
-                    GError    **error)
-{
-  gboolean v = default_value;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treedata, name, &v, error))
-    return FALSE;
-
-  if (v != default_value)
-    g_key_file_set_boolean (ts, "tree", name, v);
-
-  return TRUE;
 }
 
 static gboolean
@@ -234,15 +189,13 @@ inputhash_from_commit (OstreeRepo *repo,
 }
 
 static gboolean
-install_packages_in_root (RpmOstreeTreeComposeContext  *self,
-                          JsonObject      *treedata,
-                          int              rootfs_dfd,
-                          char           **packages,
-                          gboolean        *out_unmodified,
-                          char           **out_new_inputhash,
-                          GCancellable    *cancellable,
-                          GError         **error)
+install_packages (RpmOstreeTreeComposeContext  *self,
+                  gboolean                     *out_unmodified,
+                  char                        **out_new_inputhash,
+                  GCancellable                 *cancellable,
+                  GError                      **error)
 {
+  int rootfs_dfd = self->rootfs_dfd;
   DnfContext *dnfctx = rpmostree_context_get_dnf (self->corectx);
   if (opt_proxy)
     dnf_context_set_http_proxy (dnfctx, opt_proxy);
@@ -283,49 +236,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   if (opt_download_only && !opt_unified_core && !opt_cachedir)
     return glnx_throw (error, "--download-only can only be used with --cachedir");
 
-  g_autoptr(GKeyFile) treespec = g_key_file_new ();
-  if (self->ref)
-    g_key_file_set_string (treespec, "tree", "ref", self->ref);
-  g_key_file_set_string_list (treespec, "tree", "packages", (const char *const*)packages, g_strv_length (packages));
-  { const char *releasever;
-    if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "releasever",
-                                                                &releasever, error))
-      return FALSE;
-    if (releasever)
-      g_key_file_set_string (treespec, "tree", "releasever", releasever);
-  }
-
-  /* Some awful code to translate between JSON and GKeyFile */
-  if (json_object_has_member (treedata, "install-langs"))
-    {
-      JsonArray *a = json_object_get_array_member (treedata, "install-langs");
-      if (!set_keyfile_string_array_from_json (treespec, "tree", "instlangs", a, error))
-        return FALSE;
-    }
-
-  /* Bind the json \"repos\" member to the hif state, which looks at the
-   * enabled= member of the repos file.  By default we forcibly enable
-   * only repos which are specified, ignoring the enabled= flag.
-   */
-  if (!json_object_has_member (treedata, "repos"))
-    return glnx_throw (error, "Treefile is missing required \"repos\" member");
-
-  JsonArray *enable_repos = json_object_get_array_member (treedata, "repos");
-
-  if (!set_keyfile_string_array_from_json (treespec, "tree", "repos", enable_repos, error))
-    return FALSE;
-
-  if (!treespec_bind_bool (treedata, treespec, "documentation", TRUE, error))
-    return FALSE;
-  if (!treespec_bind_bool (treedata, treespec, "recommends", TRUE, error))
-    return FALSE;
-
-  { g_autoptr(GError) tmp_error = NULL;
-    g_autoptr(RpmOstreeTreespec) treespec_value = rpmostree_treespec_new_from_keyfile (treespec, &tmp_error);
-    g_assert_no_error (tmp_error);
-
-    g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (rootfs_dfd, ".");
-    if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL, treespec_value,
+  { g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (rootfs_dfd, ".");
+    if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL, self->treespec,
                                   cancellable, error))
       return FALSE;
   }
@@ -393,8 +305,8 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
   rpmostree_print_transaction (dnfctx);
 
   JsonArray *add_files = NULL;
-  if (json_object_has_member (treedata, "add-files"))
-    add_files = json_object_get_array_member (treedata, "add-files");
+  if (json_object_has_member (self->treefile, "add-files"))
+    add_files = json_object_get_array_member (self->treefile, "add-files");
 
   /* FIXME - just do a depsolve here before we compute download requirements */
   g_autofree char *ret_new_inputhash = NULL;
@@ -449,7 +361,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
 
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
   gboolean generate_from_previous = TRUE;
-  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treedata,
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile,
                                                                "preserve-passwd",
                                                                &generate_from_previous,
                                                                error))
@@ -459,7 +371,7 @@ install_packages_in_root (RpmOstreeTreeComposeContext  *self,
     {
       const char *dest = opt_unified_core ? "usr/etc/" : "etc/";
       if (!rpmostree_generate_passwd_from_previous (self->repo, rootfs_dfd, dest,
-                                                    self->treefile_rs, treedata,
+                                                    self->treefile_rs, self->treefile,
                                                     self->previous_root,
                                                     cancellable, error))
         return FALSE;
@@ -710,19 +622,13 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   if (!JSON_NODE_HOLDS_OBJECT (self->treefile_rootval))
     return glnx_throw (error, "Treefile root is not an object");
   self->treefile = json_node_get_object (self->treefile_rootval);
-
-  g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_dnf (self->corectx));
-  const char *input_ref = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "ref", &input_ref, error))
+  self->treespec = rpmostree_composeutil_get_treespec (self->corectx,
+                                                       self->treefile_rs,
+                                                       self->treefile,
+                                                       error);
+  if (!self->treespec)
     return FALSE;
-  if (input_ref)
-    {
-      self->ref = _rpmostree_varsubst_string (input_ref, varsubsts, error);
-      if (!self->ref)
-        return FALSE;
-    }
-
-  g_autoptr(GFile) treefile_dir = g_file_get_parent (self->treefile_path);
+  self->ref = rpmostree_treespec_get_ref (self->treespec);
 
   *out_context = g_steal_pointer (&self);
   return TRUE;
@@ -839,40 +745,12 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
         }
     }
 
-  g_autoptr(GPtrArray) packages = g_ptr_array_new_with_free_func (g_free);
-
-  if (json_object_has_member (self->treefile, "bootstrap_packages"))
-    {
-      if (!_rpmostree_jsonutil_append_string_array_to (self->treefile, "bootstrap_packages", packages, error))
-        return FALSE;
-    }
-  if (!_rpmostree_jsonutil_append_string_array_to (self->treefile, "packages", packages, error))
-    return FALSE;
-
-  { g_autofree char *thisarch_packages = g_strconcat ("packages-", dnf_context_get_base_arch (rpmostree_context_get_dnf (self->corectx)), NULL);
-
-    if (json_object_has_member (self->treefile, thisarch_packages))
-      {
-        if (!_rpmostree_jsonutil_append_string_array_to (self->treefile, thisarch_packages, packages, error))
-          return FALSE;
-      }
-  }
-
-  if (packages->len == 0)
-    return glnx_throw (error, "Missing 'packages' entry");
-
-  /* make NULL-terminated */
-  g_ptr_array_add (packages, NULL);
-
   /* Download rpm-md repos, packages, do install */
   g_autofree char *new_inputhash = NULL;
   { gboolean unmodified = FALSE;
 
-    if (!install_packages_in_root (self, self->treefile, self->rootfs_dfd,
-                                   (char**)packages->pdata,
-                                   opt_force_nocache ? NULL : &unmodified,
-                                   &new_inputhash,
-                                   cancellable, error))
+    if (!install_packages (self, opt_force_nocache ? NULL : &unmodified,
+                           &new_inputhash, cancellable, error))
       return FALSE;
 
     gboolean is_dry_run = opt_dry_run || opt_download_only;

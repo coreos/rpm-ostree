@@ -43,6 +43,12 @@ rpmostree_composeutil_sanity_checks (RORTreefile  *tf,
                                      JsonObject   *treefile,
                                      GCancellable *cancellable,
                                      GError      **error);
+RpmOstreeTreespec *
+rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
+                                    RORTreefile *treefile_rs,
+                                    JsonObject  *treedata,
+                                    GError     **error);
+
 
 G_END_DECLS
 
