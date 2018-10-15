@@ -30,7 +30,7 @@ G_BEGIN_DECLS
 gboolean
 rpmostree_composeutil_checksum (HyGoal             goal,
                                 RORTreefile       *tf,
-                                JsonArray         *add_files,
+                                JsonObject        *treefile,
                                 char             **out_checksum,
                                 GError           **error);
 
