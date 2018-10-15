@@ -1014,7 +1014,9 @@ rpmostree_postprocess_final (int            rootfs_dfd,
   if (!glnx_shutil_mkdir_p_at (rootfs_dfd, preset_dir, 0755, cancellable, error))
     return FALSE;
   { g_autofree char *preset_path = g_build_filename (preset_dir, "40-rpm-ostree-auto.preset", NULL);
-    static const char remount_preset[] = "# Written by rpm-ostree compose tree\nenable ostree-remount.service\n";
+    static const char remount_preset[] = "# Written by rpm-ostree compose tree\n"
+                                         "enable ostree-remount.service\n"
+                                         "enable ostree-finalize-staged.path\n";
     if (!glnx_file_replace_contents_at (rootfs_dfd, preset_path, (guint8*)remount_preset,
                                         strlen (remount_preset),
                                         GLNX_FILE_REPLACE_NODATASYNC,
