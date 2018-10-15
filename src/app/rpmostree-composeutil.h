@@ -49,6 +49,15 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
                                     JsonObject  *treedata,
                                     GError     **error);
 
+GHashTable *
+rpmostree_composeutil_read_json_metadata (const char *path,
+                                          GError    **error);
+
+GVariant *
+rpmostree_composeutil_finalize_metadata (GHashTable *metadata,
+                                         int         rootfs_dfd,
+                                         GError    **error);
+
 
 G_END_DECLS
 

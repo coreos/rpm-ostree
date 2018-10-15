@@ -562,29 +562,9 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
         return glnx_throw_errno_prefix (error, "fcntl");
     }
 
-  self->metadata = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_variant_unref);
-  if (opt_metadata_json)
-    {
-      glnx_unref_object JsonParser *jparser = json_parser_new ();
-      if (!json_parser_load_from_file (jparser, opt_metadata_json, error))
-        return FALSE;
-
-      JsonNode *metarootval = json_parser_get_root (jparser);
-      g_autoptr(GVariant) jsonmetav = json_gvariant_deserialize (metarootval, "a{sv}", error);
-      if (!jsonmetav)
-        {
-          g_prefix_error (error, "Parsing %s: ", opt_metadata_json);
-          return FALSE;
-        }
-
-      GVariantIter viter;
-      g_variant_iter_init (&viter, jsonmetav);
-      { char *key;
-        GVariant *value;
-        while (g_variant_iter_loop (&viter, "{sv}", &key, &value))
-          g_hash_table_replace (self->metadata, g_strdup (key), g_variant_ref (value));
-      }
-    }
+  self->metadata = rpmostree_composeutil_read_json_metadata (opt_metadata_json, error);
+  if (!self->metadata)
+    return FALSE;
 
   if (opt_metadata_strings)
     {
@@ -860,34 +840,9 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
     return FALSE;
 
   /* Convert metadata hash to GVariant */
-  g_autoptr(GVariant) metadata = NULL;
-  { g_autoptr(GVariantBuilder) metadata_builder = g_variant_builder_new (G_VARIANT_TYPE ("a{sv}"));
-    GLNX_HASH_TABLE_FOREACH_KV (self->metadata, const char*, strkey, GVariant*, v)
-      g_variant_builder_add (metadata_builder, "{sv}", strkey, v);
-
-    /* include list of packages in rpmdb; this is used client-side for easily previewing
-     * pending updates. once we only support unified core composes, this can easily be much
-     * more readily injected during assembly */
-    g_autoptr(GVariant) rpmdb_v = NULL;
-    if (!rpmostree_create_rpmdb_pkglist_variant (self->rootfs_dfd, ".", &rpmdb_v,
-                                                 cancellable, error))
-      return FALSE;
-    g_variant_builder_add (metadata_builder, "{sv}", "rpmostree.rpmdb.pkglist", rpmdb_v);
-
-    metadata = g_variant_ref_sink (g_variant_builder_end (metadata_builder));
-    /* Canonicalize to big endian, like OSTree does. Without this, any numbers
-     * we place in the metadata will be unreadable since clients won't know
-     * their endianness.
-     */
-    if (G_BYTE_ORDER != G_BIG_ENDIAN)
-      {
-        GVariant *swapped = g_variant_byteswap (metadata);
-        GVariant *orig = metadata;
-        metadata = swapped;
-        g_variant_unref (orig);
-      }
-  }
-
+  g_autoptr(GVariant) metadata = rpmostree_composeutil_finalize_metadata (self->metadata, self->rootfs_dfd, error);
+  if (!metadata)
+    return FALSE;
   if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
     return FALSE;
   if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile, self->unified_core_and_fuse,
