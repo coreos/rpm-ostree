@@ -3305,7 +3305,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
       const char *fn = rpmfiFN (fi);
       const char *user = rpmfiFUser (fi) ?: "root";
       const char *group = rpmfiFGroup (fi) ?: "root";
-      const char *fcaps = rpmfiFCaps (fi) ?: '\0';
+      const char *fcaps = rpmfiFCaps (fi) ?: "";
       const gboolean have_fcaps = fcaps[0] != '\0';
       rpm_mode_t mode = rpmfiFMode (fi);
       rpmfileAttrs fattrs = rpmfiFFlags (fi);
