@@ -32,6 +32,7 @@ echo "ok autovar"
 
 ostree --repo=${repobuild} cat ${treeref} /usr/lib/systemd/system-preset/40-rpm-ostree-auto.preset > preset.txt
 assert_file_has_content preset.txt '^enable ostree-remount.service$'
+assert_file_has_content preset.txt '^enable ostree-finalize-staged.path$'
 
 prepare_compose_test "from-yaml"
 python <<EOF
