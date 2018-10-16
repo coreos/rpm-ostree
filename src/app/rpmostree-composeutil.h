@@ -30,7 +30,7 @@ G_BEGIN_DECLS
 gboolean
 rpmostree_composeutil_checksum (HyGoal             goal,
                                 RORTreefile       *tf,
-                                JsonArray         *add_files,
+                                JsonObject        *treefile,
                                 char             **out_checksum,
                                 GError           **error);
 
@@ -48,6 +48,15 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
                                     RORTreefile *treefile_rs,
                                     JsonObject  *treedata,
                                     GError     **error);
+
+GHashTable *
+rpmostree_composeutil_read_json_metadata (const char *path,
+                                          GError    **error);
+
+GVariant *
+rpmostree_composeutil_finalize_metadata (GHashTable *metadata,
+                                         int         rootfs_dfd,
+                                         GError    **error);
 
 
 G_END_DECLS
