@@ -60,12 +60,15 @@ pub fn journal_print_staging_failure() -> io::Result<()> {
     let final_cursor_from_previous_boot = j.cursor()?;
 
     // look for OSTree's finalization msg
+    // NB: we avoid using _SYSTEMD_UNIT here because it's not fully reliable (at least on el7)
+    // see: https://github.com/systemd/systemd/issues/2913
     j.match_add("MESSAGE_ID", OSTREE_DEPLOYMENT_FINALIZING_MSG_ID)?;
-    j.match_add("_SYSTEMD_UNIT", OSTREE_FINALIZE_STAGED_SERVICE)?;
+    j.match_add("SYSLOG_IDENTIFIER", "ostree")?;
     j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
-    if j.previous_record()? == None {
-        return Ok(()); // didn't run (or staged deployment was cleaned up)
-    }
+    let ostree_pid = match j.previous_record()? {
+        None => return Ok(()), // didn't run (or staged deployment was cleaned up)
+        Some(mut rec) => rec.remove("_PID").unwrap(),
+    };
 
     // now we're at the finalizing msg, remember its position
     let finalizing_cursor = j.cursor()?;
@@ -73,7 +76,8 @@ pub fn journal_print_staging_failure() -> io::Result<()> {
     // and now check if it actually completed the transaction
     j.match_flush()?;
     j.match_add("MESSAGE_ID", OSTREE_DEPLOYMENT_COMPLETE_MSG_ID)?;
-    j.match_add("_SYSTEMD_UNIT", OSTREE_FINALIZE_STAGED_SERVICE)?;
+    j.match_add("SYSLOG_IDENTIFIER", "ostree")?;
+    j.match_add("_PID", ostree_pid.as_str())?;
     j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
 
     if j.next_record()? != None {
@@ -95,8 +99,8 @@ pub fn journal_print_staging_failure() -> io::Result<()> {
     let mut exited = false;
     while let Some(rec) = j.next_record()? {
         if let Some(msg) = rec.get("MESSAGE") {
-            if msg.contains("Failed with result") {
-                if !msg.contains("exit-code") {
+            if msg.contains("Failed with result") || msg.contains("control process exited") {
+                if !msg.contains("exit-code") && !msg.contains("code=exited") {
                     /* just print that msg; e.g. could be timeout, signal, core-dump */
                     return print_staging_failure_msg(Some(msg));
                 }
@@ -118,13 +122,17 @@ pub fn journal_print_staging_failure() -> io::Result<()> {
     })?;
 
     // just find the last msg from ostree, it's probably an error msg
-    j.match_add("_SYSTEMD_UNIT", OSTREE_FINALIZE_STAGED_SERVICE)?;
     j.match_add("_BOOT_ID", previous_boot_id.as_str())?;
+    j.match_add("SYSLOG_IDENTIFIER", "ostree")?;
+    j.match_add("_PID", ostree_pid.as_str())?;
+    // otherwise we risk matching the finalization msg (journal transport), which on el7
+    // systemd can be timestamped *after* the error msg (stdout transport)...
+    j.match_add("_TRANSPORT", "stdout")?;
 
     if let Some(rec) = j.previous_record()? {
         if let Some(msg) = rec.get("MESSAGE") {
-            // only print the msg if it starts with 'error:', otherwise some other really weird
-            // thing happened that might span multiple lines?
+            // only print the msg if it starts with 'error:', otherwise some other really
+            // weird thing happened that might span multiple lines?
             if msg.starts_with("error:") {
                 return print_staging_failure_msg(Some(msg));
             }
