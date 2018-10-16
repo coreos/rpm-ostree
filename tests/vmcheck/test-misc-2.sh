@@ -47,7 +47,7 @@ vm_rpmostree cleanup -p
 # Add metadata string containing EnfOfLife attribtue
 META_ENDOFLIFE_MESSAGE="this is a test for metadata message"
 commit=$(vm_cmd ostree commit -b vmcheck \
-            --tree=ref=vmcheck --add-metadata-string=ostree.endoflife=\"${META_ENDOFLIFE_MESSAGE}\")
+            --tree=ref=vmcheck --add-metadata-string=ostree.endoflife="'${META_ENDOFLIFE_MESSAGE}'")
 vm_rpmostree upgrade
 vm_assert_status_jq ".deployments[0][\"endoflife\"] == \"${META_ENDOFLIFE_MESSAGE}\""
 echo "ok endoflife metadata gets parsed correctly"
@@ -216,3 +216,23 @@ if ! vm_rpmostree install refresh-md-new-pkg --dry-run; then
 fi
 vm_stop_httpd vmcheck
 echo "ok refresh-md"
+
+# check that a failed staging shows up in status
+
+# first create a staged deployment
+vm_build_rpm test-stage-fail
+vm_rpmostree install test-stage-fail
+vm_pending_is_staged
+
+# OK, now make sure we'll fail. One nuclear way to do this is to just delete the
+# deployment root it expects to exist. I played with overriding the service file
+# so we just do e.g. /usr/bin/false, but the issue is we still want the "start"
+# journal msg to be emitted.
+vm_cmd rm -rf $(vm_get_deployment_root 0)
+
+# and now check that we notice there was a failure in `status`
+vm_reboot
+vm_rpmostree status > status.txt
+assert_file_has_content status.txt "failed to finalize previous deployment"
+assert_file_has_content status.txt "error: opendir"
+echo "ok previous staged failure in status"

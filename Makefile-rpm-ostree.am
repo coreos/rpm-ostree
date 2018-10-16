@@ -92,23 +92,23 @@ if !HAVE_EXTERNAL_CBINDGEN
 rpmostree-bindgen: bindgen/Cargo.toml bindgen/src/main.rs
 	cd $(top_srcdir)/bindgen && \
 	export CARGO_TARGET_DIR=@abs_top_builddir@/bindgen-target && \
+	if test -d "$${CARGO_TARGET_DIR}" && [ "$$(stat -c '%u' ${target_subdir})" != "$$(id -u)" ]; then echo "mismatched uids on build"; exit 1; fi && \
 	$(cargo_build) && \
 	ln -sf $${CARGO_TARGET_DIR}/debug/rpmostree-bindgen $(abs_top_builddir)/rpmostree-bindgen
 endif
 endif
 
 librpmostree_rust_path = @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@/librpmostree_rust.a
-# If the target directory exists, and isn't owned by our uid,
-# we use --frozen this happens with the `make && sudo make install`
-# pattern.  If we did `sudo cargo`, then we'd be using a different cargo
-# cache, etc.
+# If the target directory exists, and isn't owned by our uid, then
+# we exit with a fatal error, since someone probably did `make && sudo make install`,
+# and in this case cargo will download into ~/.root which we don't want.
 LIBRPMOSTREE_RUST_SRCS = $(wildcard rust/src/*.rs) rust/cbindgen.toml
 $(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
 	cd $(top_srcdir)/rust && \
 	  export CARGO_TARGET_DIR=@abs_top_builddir@/target && \
     target_subdir=@abs_top_builddir@/target/@RUST_TARGET_SUBDIR@; \
-	  if test -d "{target_subdir}" && [ "$(stat -c '%u' ${target_subdir})" != "$(id -u)" ]; then frozen=--frozen; fi && \
-	  $(cargo_build) $${frozen} $(CARGO_RELEASE_ARGS)
+	  if test -d "$${target_subdir}" && [ "$$(stat -c '%u' $${target_subdir})" != "$$(id -u)" ]; then echo "mismatched uids on build"; exit 1; fi && \
+	  $(cargo_build) $(CARGO_RELEASE_ARGS)
 EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS) rust/Cargo.lock
 
 # Generate bindings from Rust to C
