@@ -9,7 +9,9 @@ dn=$(dirname $0)
 ${dn}/installdeps.sh
 
 # create an unprivileged user for testing
-adduser testuser
+if ! getent passwd testuser; then
+  adduser testuser
+fi
 
 export LSAN_OPTIONS=verbosity=1:log_threads=1
 # And now the build
