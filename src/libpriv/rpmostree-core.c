@@ -1088,14 +1088,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
         }
 
       guint64 ts = dnf_repo_get_timestamp_generated (repo);
-      g_autoptr(GDateTime) repo_ts = g_date_time_new_from_unix_utc (ts);
-      g_autofree char *repo_ts_str = NULL;
-
-      if (repo_ts != NULL)
-        repo_ts_str = g_date_time_format (repo_ts, "%Y-%m-%d %T");
-      else
-        repo_ts_str = g_strdup_printf ("(invalid timestamp)");
-
+      g_autofree char *repo_ts_str = rpmostree_timestamp_str_from_unix_utc (ts);
       rpmostree_output_message ("rpm-md repo '%s'%s; generated: %s",
                                 dnf_repo_get_id (repo), !did_update ? " (cached)" : "",
                                 repo_ts_str);

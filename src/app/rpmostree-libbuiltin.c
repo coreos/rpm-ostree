@@ -133,15 +133,6 @@ rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
   return TRUE;
 }
 
-char*
-rpmostree_timestamp_str_from_unix_utc (guint64 t)
-{
-  g_autoptr(GDateTime) timestamp = g_date_time_new_from_unix_utc (t);
-  if (timestamp != NULL)
-    return g_date_time_format (timestamp, "%Y-%m-%d %T");
-  return g_strdup_printf ("(invalid timestamp)");
-}
-
 void
 rpmostree_print_timestamp_version (const char  *version_string,
                                    const char  *timestamp_string,

@@ -1048,3 +1048,13 @@ rpmostree_str_to_auto_update_policy (const char *str,
     return glnx_throw (error, "Invalid value for AutomaticUpdatePolicy: '%s'", str);
   return TRUE;
 }
+
+/* Get an ISO8601-formatted string for UTC timestamp t (seconds) */
+char*
+rpmostree_timestamp_str_from_unix_utc (guint64 t)
+{
+  g_autoptr(GDateTime) timestamp = g_date_time_new_from_unix_utc (t);
+  if (timestamp != NULL)
+    return g_date_time_format (timestamp, "%FT%H:%M:%SZ");
+  return g_strdup_printf ("(invalid timestamp)");
+}

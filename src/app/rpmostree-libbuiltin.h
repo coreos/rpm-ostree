@@ -71,9 +71,6 @@ rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
                                                 GCancellable *cancellable,
                                                 GError **error);
 
-char*
-rpmostree_timestamp_str_from_unix_utc (guint64 t);
-
 void
 rpmostree_print_timestamp_version (const char  *version_string,
                                    const char  *timestamp_string,
