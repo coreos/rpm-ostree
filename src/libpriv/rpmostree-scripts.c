@@ -180,10 +180,6 @@ static const RpmOstreeScriptReplacement script_replacements[] = {
    * https://src.fedoraproject.org/rpms/pam/pull-request/3
    */
   { "pam.post", ".el7", NULL, NULL },
-  /* Same here. */
-  { "microcode_ctl.post", ".el7", NULL, NULL },
-  /* And this one runs dracut, which we don't want. */
-  { "microcode_ctl.posttrans", ".el7", NULL, NULL },
 };
 
 static gboolean

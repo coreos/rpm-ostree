@@ -39,5 +39,7 @@ systemd.transfiletriggerin, RPMOSTREE_SCRIPT_ACTION_IGNORE
 man-db.transfiletriggerin, RPMOSTREE_SCRIPT_ACTION_IGNORE
 # https://src.fedoraproject.org/rpms/nfs-utils/pull-request/1
 nfs-utils.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
+# There is some totally insane stuff going on here in RHEL7
+microcode_ctl.post, RPMOSTREE_SCRIPT_ACTION_IGNORE
 # https://bugzilla.redhat.com/show_bug.cgi?id=1199582
 microcode_ctl.posttrans, RPMOSTREE_SCRIPT_ACTION_IGNORE
