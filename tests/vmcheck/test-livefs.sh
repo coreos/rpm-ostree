@@ -39,7 +39,7 @@ if vm_cmd rpm -q foo; then
     assert_not_reached "have foo?"
 fi
 assert_livefs_ok() {
-    vm_rpmostree ex livefs -n > livefs-analysis.txt
+    vm_rpmostree ex livefs --i-like-danger -n > livefs-analysis.txt
     assert_file_has_content livefs-analysis.txt 'livefs OK (dry run)'
 }
 assert_livefs_ok
@@ -47,7 +47,7 @@ assert_livefs_ok
 vm_assert_status_jq '.deployments|length == 2' \
                     '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]|not'
-vm_rpmostree ex livefs
+vm_rpmostree ex livefs --i-like-danger
 vm_cmd rpm -q foo > rpmq.txt
 assert_file_has_content rpmq.txt foo-1.0-1
 vm_assert_status_jq '.deployments|length == 3' '.deployments[0]["live-replaced"]|not' \
@@ -87,7 +87,7 @@ vm_cmd rm -rf /etc/test-livefs-with-etc \
 
 vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-{with-etc,service}-1.0-1.x86_64.rpm
 assert_livefs_ok
-vm_rpmostree ex livefs
+vm_rpmostree ex livefs --i-like-danger
 vm_cmd rpm -q foo test-livefs-{with-etc,service} > rpmq.txt
 assert_file_has_content rpmq.txt foo-1.0-1 test-livefs-{with-etc,service}-1.0-1
 vm_cmd cat /etc/test-livefs-with-etc.conf > test-livefs-with-etc.conf
@@ -127,7 +127,7 @@ vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/test-livefs-with-e
 vm_cmd cat /etc/test-livefs-with-etc.conf || true
 vm_cmd echo custom \> /etc/test-livefs-with-etc.conf
 vm_cmd cat /etc/test-livefs-with-etc.conf
-vm_rpmostree ex livefs
+vm_rpmostree ex livefs --i-like-danger
 vm_cmd cat /etc/test-livefs-with-etc.conf > test-livefs-with-etc.conf
 assert_file_has_content test-livefs-with-etc.conf "custom"
 echo "ok livefs preserved modified config"
@@ -140,7 +140,7 @@ echo "ok livefs redeploy booted commit"
 
 reset
 vm_rpmostree install /var/tmp/vmcheck/yumrepo/packages/x86_64/foo-1.0-1.x86_64.rpm
-vm_rpmostree ex livefs
+vm_rpmostree ex livefs --i-like-danger
 # Picked a file that should be around, but harmless to change for testing.  The
 # first is available on Fedora, the second on CentOS (and newer too).
 dummy_file_to_modify=usr/share/licenses/ostree/COPYING
@@ -176,7 +176,7 @@ generate_upgrade "mkdir -p vmcheck/usr/newsubdir && date > vmcheck/usr/newsubdir
 vm_rpmostree upgrade
 vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]|not'
-if vm_rpmostree ex livefs -n &> livefs-analysis.txt; then
+if vm_rpmostree ex livefs --i-like-danger -n &> livefs-analysis.txt; then
     assert_not_reached "livefs succeeded?"
 fi
 vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
@@ -185,11 +185,11 @@ assert_file_has_content livefs-analysis.txt 'No packages added'
 echo "ok no modifications"
 
 # And now replacement
-vm_rpmostree ex livefs -n --dangerous-do-not-use-replace &> livefs-analysis.txt
+vm_rpmostree ex livefs -n --i-like-danger --dangerous-do-not-use-replace &> livefs-analysis.txt
 assert_file_has_content livefs-analysis.txt 'livefs OK (dry run)'
 vm_assert_status_jq '.deployments|length == 2' '.deployments[0]["live-replaced"]|not' \
                     '.deployments[1]["live-replaced"]|not'
-vm_rpmostree ex livefs --dangerous-do-not-use-replace
+vm_rpmostree ex livefs --i-like-danger --dangerous-do-not-use-replace
 vm_cmd cat /${dummy_file_to_modify} > dummyfile.txt
 assert_file_has_content dummyfile.txt "JUST KIDDING DO WHATEVER"
 vm_cmd test -f /usr/newsubdir/date.txt
