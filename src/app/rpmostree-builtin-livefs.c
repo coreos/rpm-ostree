@@ -31,9 +31,11 @@
 
 static gboolean opt_dry_run;
 static gboolean opt_replace;
+static gboolean opt_consented;
 
 static GOptionEntry option_entries[] = {
   { "dry-run", 'n', 0, G_OPTION_ARG_NONE, &opt_dry_run, "Only perform analysis, do not make changes", NULL },
+  { "i-like-danger", 0, 0, G_OPTION_ARG_NONE, &opt_consented, "Consent to the dangers that livefs may pose", NULL },
   /* Known broken with kernel updates; see https://github.com/projectatomic/rpm-ostree/issues/1495 */
   { "dangerous-do-not-use-replace", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_replace, "Completely replace all files in /usr (known broken)", NULL },
   { NULL }
@@ -72,6 +74,10 @@ rpmostree_ex_builtin_livefs (int             argc,
                                        NULL,
                                        error))
     return FALSE;
+
+  if (!opt_consented)
+    return glnx_throw (error, "livefs is currently considered dangerous; "
+                              "pass --i-like-danger to override");
 
   glnx_unref_object RPMOSTreeOS *os_proxy = NULL;
   glnx_unref_object RPMOSTreeOSExperimental *osexperimental_proxy = NULL;
