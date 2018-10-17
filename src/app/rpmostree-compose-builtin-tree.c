@@ -943,7 +943,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
    * https://stackoverflow.com/questions/10286204/the-right-json-date-format
    * */
   { guint64 commit_ts = ostree_commit_get_timestamp (new_commit);
-    g_autofree char *commit_ts_iso_8601 = rpmostree_timestamp_str_from_unix_utc_format (commit_ts);
+    g_autofree char *commit_ts_iso_8601 = rpmostree_timestamp_str_from_unix_utc (commit_ts);
     g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-timestamp", g_variant_new_string (commit_ts_iso_8601));
   }
   const char *commit_version = NULL;
