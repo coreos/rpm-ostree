@@ -12,6 +12,8 @@ pysetjsonmember "units" '["tuned.service"]'
 
 # Do the compose -- we call compose directly because `set -e` has no effect when
 # calling functions within an if condition context
+rm ${compose_workdir} -rf
+mkdir ${test_tmpdir}/workdir
 if rpm-ostree compose tree ${compose_base_argv} ${treefile} |& tee err.txt; then
     assert_not_reached err.txt "Successfully composed with units and machineid-compat=False?"
 fi
