@@ -209,21 +209,13 @@ fn merge_vec_field<T>(dest: &mut Option<Vec<T>>, src: &mut Option<Vec<T>>) {
 /// Given two configs, merge them.
 fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     macro_rules! merge_basics {
-        ($field:ident) => {{
-            merge_basic_field(&mut dest.$field, &mut src.$field);
+        ( $($field:ident),* ) => {{
+            $( merge_basic_field(&mut dest.$field, &mut src.$field); )*
         }};
-        ($field:ident, $($fields:ident),*) => {{
-             merge_basic_field(&mut dest.$field, &mut src.$field);
-             merge_basics!($($fields),*);
-         }};
     };
     macro_rules! merge_vecs {
-        ($field:ident) => {{
-            merge_vec_field(&mut dest.$field, &mut src.$field);
-        }};
-        ($field:ident, $($fields:ident),*) => {{
-            merge_vec_field(&mut dest.$field, &mut src.$field);
-            merge_vecs!($($fields),*);
+        ( $($field:ident),* ) => {{
+            $( merge_vec_field(&mut dest.$field, &mut src.$field); )*
         }};
     };
 
