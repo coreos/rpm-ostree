@@ -696,7 +696,7 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   g_autoptr(GPtrArray) active_removals = g_ptr_array_new_with_free_func (g_free);
   if (origin_base_removals)
     {
-      g_autoptr(GString) str = g_string_new ("");
+      g_autoptr(GPtrArray) active_removals_nevra = g_ptr_array_new_with_free_func (g_free);
       const guint n = g_variant_n_children (origin_base_removals);
       for (guint i = 0; i < n; i++)
         {
@@ -705,14 +705,16 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
           const char *name, *nevra;
           g_variant_get_child (gv_nevra, 0, "&s", &nevra);
           g_variant_get_child (gv_nevra, 1, "&s", &name);
-          if (str->len)
-            g_string_append (str, ", ");
-          g_string_append (str, nevra);
           g_ptr_array_add (active_removals, g_strdup (name));
+          g_ptr_array_add (active_removals_nevra, g_strdup (nevra));
         }
       g_ptr_array_add (active_removals, NULL);
-      if (str->len)
-        rpmostree_print_kv ("RemovedBasePackages", max_key_len, str->str);
+      if (active_removals_nevra->len > 0 )
+        {
+          g_ptr_array_add (active_removals_nevra, NULL);
+          print_packages("RemovedBasePackages", max_key_len,
+                         (const char *const*)active_removals_nevra->pdata, NULL);
+        }
     }
 
   /* only print inactive base removal requests in verbose mode */
