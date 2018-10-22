@@ -63,10 +63,12 @@ EOF
 }
 
 composejson=$(pwd)/compose.json
-compose_base_argv="--workdir ${test_tmpdir}/workdir --repo ${repobuild} --write-composejson-to ${composejson}"
+compose_workdir=${test_tmpdir}/workdir
+compose_base_argv="--workdir ${compose_workdir} --repo ${repobuild} --write-composejson-to ${composejson}"
 runcompose() {
     echo "$(date): starting compose"
     # The workdir will be cleaned up (or not) with the overall test dir
+    rm ${compose_workdir} -rf
     mkdir ${test_tmpdir}/workdir
     env RPMOSTREE_PRESERVE_TMPDIR=1 rpm-ostree compose tree ${compose_base_argv} ${treefile} "$@"
     commit=$(jq -r '.["ostree-commit"]' < "${composejson}")
