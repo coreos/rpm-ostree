@@ -796,7 +796,7 @@ rpmostree_context_setup (RpmOstreeContext    *self,
   /* Load policy from / if SELinux is enabled, and we haven't already loaded
    * a policy.  This is mostly for the "compose tree" case.
    */
-  if (selinux)
+  if (selinux && !self->sepolicy)
     {
       glnx_autofd int host_rootfs_dfd = -1;
       /* Ensure that the imported packages are labeled with *a* policy if
