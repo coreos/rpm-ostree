@@ -27,12 +27,15 @@ static OSTREE_DEPLOYMENT_FINALIZING_MSG_ID: &'static str = "e8646cd63dff4625b779
 static OSTREE_DEPLOYMENT_COMPLETE_MSG_ID: &'static str = "dd440e3e549083b63d0efc7dc15255f1";
 
 fn print_staging_failure_msg(msg: Option<&str>) -> io::Result<()> {
-    println!(    "Warning: failed to finalize previous deployment");
+    println!("Warning: failed to finalize previous deployment");
     if let Some(msg) = msg {
         println!("         {}", msg);
     }
-    println!(    "         check `journalctl -b -1 -u {}`", OSTREE_FINALIZE_STAGED_SERVICE);
-    return Ok(()) // for convenience
+    println!(
+        "         check `journalctl -b -1 -u {}`",
+        OSTREE_FINALIZE_STAGED_SERVICE
+    );
+    return Ok(()); // for convenience
 }
 
 /// Look for a failure from ostree-finalized-stage.service in the journal of the previous boot.

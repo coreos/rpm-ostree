@@ -126,7 +126,7 @@ endif
 rpm_ostree_CFLAGS += $(PKGDEP_RPMOSTREE_RS_CFLAGS)
 rpm_ostree_LDADD += $(librpmostree_rust_path) $(PKGDEP_RPMOSTREE_RS_LIBS)
 rustfmt:
-	rustfmt $(LIBRPMOSTREE_RUST_SRCS)
+	rustfmt $(filter %.rs,$(LIBRPMOSTREE_RUST_SRCS))
 # Outside the ifdef, otherwise automake complains
 .PHONY: rustfmt
 
