@@ -113,6 +113,12 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   gboolean output_to_self = FALSE;
 
+  // The API previously passed these each time, but now we retain them as
+  // statics.
+  static char *progress_str;
+  static bool progress_state_percent;
+  static guint progress_state_n_items;
+
   transaction =
     rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
   if (transaction)
@@ -130,34 +136,70 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
     rpmostree_transaction_emit_message (RPMOSTREE_TRANSACTION (transaction),
                                         ((RpmOstreeOutputMessage*)data)->text);
     break;
-  case RPMOSTREE_OUTPUT_TASK_BEGIN:
-    rpmostree_transaction_emit_task_begin (RPMOSTREE_TRANSACTION (transaction),
-                                           ((RpmOstreeOutputTaskBegin*)data)->text);
-    break;
-  case RPMOSTREE_OUTPUT_TASK_END:
-    rpmostree_transaction_emit_task_end (RPMOSTREE_TRANSACTION (transaction),
-                                         ((RpmOstreeOutputTaskEnd*)data)->text);
-    break;
-  case RPMOSTREE_OUTPUT_PROGRESS_PERCENT:
-    rpmostree_transaction_emit_percent_progress (RPMOSTREE_TRANSACTION (transaction),
-                                                 ((RpmOstreeOutputProgressPercent*)data)->text,
-                                                 ((RpmOstreeOutputProgressPercent*)data)->percentage);
-    break;
-  case RPMOSTREE_OUTPUT_PROGRESS_N_ITEMS:
+  case RPMOSTREE_OUTPUT_PROGRESS_BEGIN:
     {
-      RpmOstreeOutputProgressNItems *nitems = data;
-      /* We still emit PercentProgress for compatibility with older clients as
-       * well as Cockpit. It's not worth trying to deal with version skew just
-       * for this yet.
-       */
-      int percentage = (nitems->current == nitems->total) ? 100 :
-        (((double)(nitems->current)) / (nitems->total) * 100);
-      g_autofree char *newtext = g_strdup_printf ("%s (%u/%u)", nitems->text, nitems->current, nitems->total);
-      rpmostree_transaction_emit_percent_progress (RPMOSTREE_TRANSACTION (transaction), newtext, percentage);
+      RpmOstreeOutputProgressBegin *begin = data;
+      g_clear_pointer (&progress_str, g_free);
+      progress_state_percent = false;
+      progress_state_n_items = 0;
+      if (begin->percent)
+        {
+          progress_str = g_strdup (begin->prefix);
+          rpmostree_transaction_emit_percent_progress (RPMOSTREE_TRANSACTION (transaction),
+                                                       progress_str, 0);
+          progress_state_percent = true;
+        }
+      else if (begin->n > 0)
+        {
+          progress_str = g_strdup (begin->prefix);
+          progress_state_n_items = begin->n;
+          /* For backcompat, this is a percentage.  See below */
+          rpmostree_transaction_emit_percent_progress (RPMOSTREE_TRANSACTION (transaction),
+                                                       progress_str, 0);
+        }
+      else
+        {
+          rpmostree_transaction_emit_task_begin (RPMOSTREE_TRANSACTION (transaction),
+                                                 begin->prefix);
+        }
+    }
+    break;
+  case RPMOSTREE_OUTPUT_PROGRESS_UPDATE:
+    {
+      RpmOstreeOutputProgressUpdate *update = data;
+      if (progress_state_n_items)
+        {
+          /* We still emit PercentProgress for compatibility with older clients as
+           * well as Cockpit. It's not worth trying to deal with version skew just
+           * for this yet.
+           */
+          int percentage = (update->c == progress_state_n_items) ? 100 :
+            (((double)(update->c)) / (progress_state_n_items) * 100);
+          g_autofree char *newtext = g_strdup_printf ("%s (%u/%u)", progress_str, update->c, progress_state_n_items);
+          rpmostree_transaction_emit_percent_progress (RPMOSTREE_TRANSACTION (transaction), newtext, percentage);
+        }
+      else
+        {
+          rpmostree_transaction_emit_percent_progress (RPMOSTREE_TRANSACTION (transaction), progress_str, update->c);
+        }
+    }
+    break;
+  case RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE:
+    {
+      /* Not handled right now */
     }
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_END:
-    rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+    {
+      if (progress_state_percent || progress_state_n_items > 0)
+        {
+          rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+        }
+      else
+        {
+          rpmostree_transaction_emit_task_end (RPMOSTREE_TRANSACTION (transaction), "done");
+        }
+    }
     break;
   }
 }

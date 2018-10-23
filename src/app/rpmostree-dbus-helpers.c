@@ -411,8 +411,7 @@ transaction_get_progress_line (guint64 start_time,
 
 typedef struct
 {
-  GLnxConsoleRef console;
-  gboolean in_status_line;
+  gboolean progress;
   GError *error;
   GMainLoop *loop;
   gboolean complete;
@@ -430,7 +429,6 @@ transaction_progress_new (void)
   return self;
 }
 
-
 static void
 transaction_progress_free (TransactionProgress *self)
 {
@@ -438,45 +436,16 @@ transaction_progress_free (TransactionProgress *self)
   g_slice_free (TransactionProgress, self);
 }
 
-
-static void
-end_status_line (TransactionProgress *self)
-{
-  if (self->in_status_line)
-    {
-      glnx_console_unlock (&self->console);
-      self->in_status_line = FALSE;
-    }
-}
-
-
-static void
-add_status_line (TransactionProgress *self,
-                 const char *line,
-                 int percentage)
-{
-  self->in_status_line = TRUE;
-  if (!self->console.locked)
-    glnx_console_lock (&self->console);
-
-  /* Always render text, but we only show progress if we're on a tty, to be
-   * friendlier to e.g. Ansible and other tools that may just be seeing our
-   * output.
-   */
-  if (percentage < 0)
-    glnx_console_text (line);
-  else if (percentage == 100 || self->console.is_tty)
-    glnx_console_progress_text_percent (line, percentage);
-}
-
-
 static void
 transaction_progress_end (TransactionProgress *self)
 {
-  end_status_line (self);
+  if (self->progress)
+    {
+      ror_progress_end (NULL);
+      self->progress = FALSE;
+    }
   g_main_loop_quit (self->loop);
 }
-
 
 static void
 on_transaction_progress (GDBusProxy *proxy,
@@ -498,24 +467,34 @@ on_transaction_progress (GDBusProxy *proxy,
     {
       const gchar *message = NULL;
       g_variant_get_child (parameters, 0, "&s", &message);
-      if (tp->in_status_line)
-        add_status_line (tp, message, -1);
-      else
-        g_print ("%s\n", message);
+      g_print ("%s\n", message);
     }
   else if (g_strcmp0 (signal_name, "TaskBegin") == 0)
     {
-      /* XXX: whenever libglnx implements a spinner, this would be appropriate
-       * here. */
       const gchar *message = NULL;
       g_variant_get_child (parameters, 0, "&s", &message);
-      g_print ("%s... ", message);
+      tp->progress = TRUE;
+      ror_progress_begin_task (message);
     }
   else if (g_strcmp0 (signal_name, "TaskEnd") == 0)
     {
       const gchar *message = NULL;
       g_variant_get_child (parameters, 0, "&s", &message);
-      g_print ("%s\n", message);
+      if (tp->progress)
+        {
+          g_assert (tp->progress);
+          ror_progress_end (message);
+          tp->progress = FALSE;
+        }
+    }
+  else if (g_strcmp0 (signal_name, "ProgressEnd") == 0)
+    {
+      if (tp->progress)
+        {
+          g_assert (tp->progress);
+          ror_progress_end (NULL);
+          tp->progress = FALSE;
+        }
     }
   else if (g_strcmp0 (signal_name, "PercentProgress") == 0)
     {
@@ -523,12 +502,15 @@ on_transaction_progress (GDBusProxy *proxy,
       guint32 percentage;
       g_variant_get_child (parameters, 0, "&s", &message);
       g_variant_get_child (parameters, 1, "u", &percentage);
-      add_status_line (tp, message, percentage);
+      if (!tp->progress)
+        {
+          tp->progress = TRUE;
+          ror_progress_begin_percent (message);
+        }
+      ror_progress_update (percentage);
     }
   else if (g_strcmp0 (signal_name, "DownloadProgress") == 0)
     {
-      g_autofree gchar *line = NULL;
-
       guint64 start_time;
       guint64 elapsed_secs;
       guint outstanding_fetches;
@@ -553,7 +535,8 @@ on_transaction_progress (GDBusProxy *proxy,
                      &total_delta_superblocks, &total_delta_part_size,
                      &fetched, &requested, &bytes_transferred, &bytes_sec);
 
-      line = transaction_get_progress_line (start_time, elapsed_secs,
+      g_autofree gchar *line =
+             transaction_get_progress_line (start_time, elapsed_secs,
                                             outstanding_fetches,
                                             outstanding_writes,
                                             n_scanned_metadata,
@@ -567,11 +550,13 @@ on_transaction_progress (GDBusProxy *proxy,
                                             requested,
                                             bytes_transferred,
                                             bytes_sec);
-      add_status_line (tp, line, -1);
-    }
-  else if (g_strcmp0 (signal_name, "ProgressEnd") == 0)
-    {
-      end_status_line (tp);
+      if (!tp->progress)
+        {
+          tp->progress = TRUE;
+          ror_progress_begin_task (line);
+        }
+      else
+        ror_progress_set_message (line);
     }
   else if (g_strcmp0 (signal_name, "Finished") == 0)
     {

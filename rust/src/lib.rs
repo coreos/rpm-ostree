@@ -21,10 +21,13 @@ extern crate curl;
 extern crate gio_sys;
 extern crate glib;
 extern crate glib_sys;
+extern crate indicatif;
 extern crate libc;
 extern crate openat;
 extern crate tempfile;
 
+#[macro_use]
+extern crate lazy_static;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde;
@@ -35,6 +38,8 @@ mod ffiutil;
 
 mod treefile;
 pub use treefile::*;
+mod progress;
+pub use progress::*;
 mod journal;
 pub use journal::*;
 mod utils;

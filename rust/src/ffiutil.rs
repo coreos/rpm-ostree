@@ -42,6 +42,13 @@ pub fn str_from_nullable<'a>(s: *const libc::c_char) -> Option<&'a str> {
     }
 }
 
+/// Given a NUL-terminated C string, convert it to an owned
+/// String.  Will panic if the C string is not valid UTF-8.
+pub fn string_from_nonnull(s: *const libc::c_char) -> String {
+    let buf = bytes_from_nonnull(s);
+    String::from_utf8(buf.into()).expect("string_from_nonnull: valid utf-8")
+}
+
 /// Convert a C "bytestring" to a OsStr; panics if `s` is `NULL`.
 pub fn bytes_from_nonnull<'a>(s: *const libc::c_char) -> &'a [u8] {
     assert!(!s.is_null());
