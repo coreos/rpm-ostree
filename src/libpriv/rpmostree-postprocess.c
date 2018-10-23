@@ -41,6 +41,7 @@
 #include "rpmostree-postprocess.h"
 #include "rpmostree-kernel.h"
 #include "rpmostree-bwrap.h"
+#include "rpmostree-output.h"
 #include "rpmostree-passwd-util.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-core.h"
@@ -2019,7 +2020,7 @@ on_progress_timeout (gpointer datap)
   const gint percent = g_atomic_int_get (&data->percent);
 
   /* clamp to 100 if it somehow goes over (XXX: bad counting?) */
-  glnx_console_progress_text_percent ("Committing:", MIN(percent, 100));
+  rpmostree_output_progress_percent (MIN(percent, 100));
 
   return TRUE;
 }
@@ -2086,25 +2087,25 @@ rpmostree_compose_commit (int            rootfs_fd,
   tdata.commit_modifier = commit_modifier;
   tdata.error = error;
 
-  g_autoptr(GThread) commit_thread = NULL;
-  g_auto(GLnxConsoleRef) console = { 0, };
-  g_autoptr(GSource) progress_src = NULL;
+  {
+    g_autoptr(GThread) commit_thread = g_thread_new ("commit", write_dfd_thread, &tdata);
 
-  glnx_console_lock (&console);
+    g_auto(RpmOstreeProgress) commit_progress = { 0, };
+    rpmostree_output_progress_percent_begin (&commit_progress, "Committing");
 
-  commit_thread = g_thread_new ("commit", write_dfd_thread, &tdata);
+    g_autoptr(GSource) progress_src = g_timeout_source_new_seconds (1);
+    g_source_set_callback (progress_src, on_progress_timeout, &tdata, NULL);
+    g_source_attach (progress_src, NULL);
 
-  progress_src = g_timeout_source_new_seconds (console.is_tty ? 1 : 5);
-  g_source_set_callback (progress_src, on_progress_timeout, &tdata, NULL);
-  g_source_attach (progress_src, NULL);
+    while (g_atomic_int_get (&tdata.done) == 0)
+      g_main_context_iteration (NULL, TRUE);
 
-  while (g_atomic_int_get (&tdata.done) == 0)
-    g_main_context_iteration (NULL, TRUE);
+    g_source_destroy (progress_src);
+    g_thread_join (g_steal_pointer (&commit_thread));
 
-  glnx_console_progress_text_percent ("Committing:", 100);
-  glnx_console_unlock (&console);
+    rpmostree_output_progress_percent (100);
+  }
 
-  g_thread_join (g_steal_pointer (&commit_thread));
   if (!tdata.success)
     return glnx_prefix_error (error, "While writing rootfs to mtree");
 

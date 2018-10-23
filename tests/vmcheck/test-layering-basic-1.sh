@@ -140,7 +140,7 @@ assert_streq $rc 77
 # Test that we don't do progress bars if on a tty (with the client)
 # (And use --unchanged-exit-77 to verify that we *don't* exit 77).
 vm_rpmostree install foo-1.0 --unchanged-exit-77 > foo-install.txt
-assert_file_has_content_literal foo-install.txt 'Checking out packages (1/1) 100%'
+assert_file_has_content_literal foo-install.txt 'Checking out packages...done'
 echo "ok install not on a tty"
 
 # check that by default we diff booted vs pending

@@ -22,12 +22,17 @@
 
 typedef enum {
   RPMOSTREE_OUTPUT_MESSAGE,
-  RPMOSTREE_OUTPUT_TASK_BEGIN,
-  RPMOSTREE_OUTPUT_TASK_END,
-  RPMOSTREE_OUTPUT_PROGRESS_N_ITEMS,
-  RPMOSTREE_OUTPUT_PROGRESS_PERCENT,
+  RPMOSTREE_OUTPUT_PROGRESS_BEGIN,
+  RPMOSTREE_OUTPUT_PROGRESS_UPDATE,
+  RPMOSTREE_OUTPUT_PROGRESS_SUB_MESSAGE,
   RPMOSTREE_OUTPUT_PROGRESS_END,
 } RpmOstreeOutputType;
+
+typedef enum {
+   RPMOSTREE_PROGRESS_TASK,
+   RPMOSTREE_PROGRESS_N_ITEMS,
+   RPMOSTREE_PROGRESS_PERCENT,
+} RpmOstreeProgressType;
 
 void
 rpmostree_output_default_handler (RpmOstreeOutputType type, void *data, void *opaque);
@@ -42,39 +47,47 @@ typedef struct {
 void
 rpmostree_output_message (const char *format, ...) G_GNUC_PRINTF (1,2);
 
-typedef RpmOstreeOutputMessage RpmOstreeOutputTaskBegin;
+typedef struct {
+  bool initialized;
+  RpmOstreeProgressType type;
+} RpmOstreeProgress;
+void rpmostree_output_task_begin (RpmOstreeProgress *prog, const char *format, ...) G_GNUC_PRINTF (2,3);
 
+void rpmostree_output_set_sub_message (const char *sub_message);
 
-typedef RpmOstreeOutputMessage RpmOstreeOutputTaskEnd;
+void rpmostree_output_progress_nitems_begin (RpmOstreeProgress *prog, guint n, const char *format, ...) G_GNUC_PRINTF (3,4);
+void rpmostree_output_progress_n_items (guint i);
 
-typedef bool RpmOstreeOutputTask;
-RpmOstreeOutputTask rpmostree_output_task_begin (const char *format, ...) G_GNUC_PRINTF (1,2);
-void rpmostree_output_task_done_msg (RpmOstreeOutputTask *task, const char *format, ...) G_GNUC_PRINTF (2,3);
-static inline void
-rpmostree_output_task_clear (RpmOstreeOutputTask *task)
+void rpmostree_output_progress_percent_begin (RpmOstreeProgress *prog, const char *format, ...) G_GNUC_PRINTF (2,3);
+void rpmostree_output_progress_percent (int percentage);
+
+void rpmostree_output_progress_end_msg (RpmOstreeProgress *prog, const char *format, ...) G_GNUC_PRINTF (2,3);
+static inline void rpmostree_output_progress_end (RpmOstreeProgress *task)
 {
-  if (*task)
-    rpmostree_output_task_done_msg (task, NULL);
+  rpmostree_output_progress_end_msg (task, NULL);
 }
-G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RpmOstreeOutputTask, rpmostree_output_task_clear)
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RpmOstreeProgress, rpmostree_output_progress_end)
 
-
+/* For implementers of the output backend. If percent is TRUE, then n is
+ * ignored. If n is zero, then it is taken to be an indefinite task.  Otherwise,
+ * n is used for n_items.
+ */
 typedef struct {
-  const char *text;
-  guint32 percentage;
-} RpmOstreeOutputProgressPercent;
+  const char *prefix;
+  bool percent;
+  guint n;
+} RpmOstreeOutputProgressBegin;
 
+/* Update progress */
 typedef struct {
-  const char *text;
-  guint current;
-  guint total;
-} RpmOstreeOutputProgressNItems;
+  /* If we're in percent mode, this should be between 0 and 100,
+   * otherwise less than the total.
+   */
+  guint c;
+} RpmOstreeOutputProgressUpdate;
 
-void
-rpmostree_output_progress_n_items (const char *text, guint current, guint total);
+/* End progress */
+typedef struct {
+  const char *msg;
+} RpmOstreeOutputProgressEnd;
 
-void
-rpmostree_output_progress_percent (const char *text, int percentage);
-
-void
-rpmostree_output_progress_end (void);
