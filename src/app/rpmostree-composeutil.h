@@ -58,6 +58,14 @@ rpmostree_composeutil_finalize_metadata (GHashTable *metadata,
                                          int         rootfs_dfd,
                                          GError    **error);
 
+gboolean
+rpmostree_composeutil_write_composejson (OstreeRepo  *repo,
+                                         const char *path,
+                                         const OstreeRepoTransactionStats *stats,
+                                         const char *new_revision,
+                                         GVariant   *new_commit,
+                                         GVariantBuilder *builder,
+                                         GError    **error);
 
 G_END_DECLS
 

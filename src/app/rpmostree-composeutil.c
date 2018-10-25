@@ -41,6 +41,7 @@
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-rojig-build.h"
+#include "rpmostree-package-variants.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-rust.h"
@@ -348,4 +349,101 @@ rpmostree_composeutil_finalize_metadata (GHashTable *metadata,
     }
 
   return g_steal_pointer (&ret);
+}
+
+/* Implements --write-composejson-to, and also prints values.
+ * If `path` is NULL, we'll just print some data.
+ */
+gboolean
+rpmostree_composeutil_write_composejson (OstreeRepo  *repo,
+                                         const char *path,
+                                         const OstreeRepoTransactionStats *stats,
+                                         const char *new_revision,
+                                         GVariant   *new_commit,
+                                         GVariantBuilder *builder,
+                                         GError    **error)
+{
+  g_autoptr(GVariant) new_commit_inline_meta = g_variant_get_child_value (new_commit, 0);
+
+  if (stats)
+    {
+      g_variant_builder_add (builder, "{sv}", "ostree-n-metadata-total",
+                             g_variant_new_uint32 (stats->metadata_objects_total));
+      g_print ("Metadata Total: %u\n", stats->metadata_objects_total);
+
+      g_variant_builder_add (builder, "{sv}", "ostree-n-metadata-written",
+                             g_variant_new_uint32 (stats->metadata_objects_written));
+      g_print ("Metadata Written: %u\n", stats->metadata_objects_written);
+
+      g_variant_builder_add (builder, "{sv}", "ostree-n-content-total",
+                             g_variant_new_uint32 (stats->content_objects_total));
+      g_print ("Content Total: %u\n", stats->content_objects_total);
+
+      g_print ("Content Written: %u\n", stats->content_objects_written);
+      g_variant_builder_add (builder, "{sv}", "ostree-n-content-written",
+                             g_variant_new_uint32 (stats->content_objects_written));
+
+      g_print ("Content Bytes Written: %" G_GUINT64_FORMAT "\n", stats->content_bytes_written);
+      g_variant_builder_add (builder, "{sv}", "ostree-content-bytes-written",
+                             g_variant_new_uint64 (stats->content_bytes_written));
+    }
+  g_variant_builder_add (builder, "{sv}", "ostree-commit", g_variant_new_string (new_revision));
+  const char *commit_version = NULL;
+  (void)g_variant_lookup (new_commit_inline_meta, OSTREE_COMMIT_META_KEY_VERSION, "&s", &commit_version);
+  if (commit_version)
+    g_variant_builder_add (builder, "{sv}", "ostree-version", g_variant_new_string (commit_version));
+  /* Since JavaScript doesn't have 64 bit integers and hence neither does JSON,
+   * store this as a string:
+   * https://stackoverflow.com/questions/10286204/the-right-json-date-format
+   * */
+  { guint64 commit_ts = ostree_commit_get_timestamp (new_commit);
+    g_autofree char *commit_ts_iso_8601 = rpmostree_timestamp_str_from_unix_utc (commit_ts);
+    g_variant_builder_add (builder, "{sv}", "ostree-timestamp", g_variant_new_string (commit_ts_iso_8601));
+  }
+
+  const char *inputhash = NULL;
+  (void)g_variant_lookup (new_commit_inline_meta, "rpmostree.inputhash", "&s", &inputhash);
+  /* We may not have the inputhash in the split-up installroot case */
+  if (inputhash)
+    g_variant_builder_add (builder, "{sv}", "rpm-ostree-inputhash", g_variant_new_string (inputhash));
+
+  g_autofree char *parent_revision = ostree_commit_get_parent (new_commit);
+  if (path && parent_revision)
+    {
+      g_autoptr(GVariant) diffv = NULL;
+      if (!rpm_ostree_db_diff_variant (repo, parent_revision, new_revision,
+                                       FALSE, &diffv, NULL, error))
+        return FALSE;
+      g_variant_builder_add (builder, "{sv}", "pkgdiff", diffv);
+    }
+
+  if (path)
+    {
+      g_autoptr(GVariant) composemeta_v = g_variant_builder_end (builder);
+      JsonNode *composemeta_node = json_gvariant_serialize (composemeta_v);
+      glnx_unref_object JsonGenerator *generator = json_generator_new ();
+      json_generator_set_root (generator, composemeta_node);
+
+      char *dnbuf = strdupa (path);
+      const char *dn = dirname (dnbuf);
+      g_auto(GLnxTmpfile) tmpf = { 0, };
+      if (!glnx_open_tmpfile_linkable_at (AT_FDCWD, dn, O_WRONLY | O_CLOEXEC,
+                                          &tmpf, error))
+        return FALSE;
+      g_autoptr(GOutputStream) out = g_unix_output_stream_new (tmpf.fd, FALSE);
+      /* See also similar code in status.c */
+      if (json_generator_to_stream (generator, out, NULL, error) <= 0
+          || (error != NULL && *error != NULL))
+        return FALSE;
+
+      /* World readable to match --write-commitid-to which uses umask */
+      if (!glnx_fchmod (tmpf.fd, 0644, error))
+        return FALSE;
+
+      if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_REPLACE,
+                                 AT_FDCWD, path, error))
+        return FALSE;
+    }
+
+  return TRUE;
 }

@@ -896,101 +896,34 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
         }
     }
 
+  OstreeRepoTransactionStats stats = { 0, };
+  OstreeRepoTransactionStats *statsp = NULL;
+
   if (use_txn)
     {
-      OstreeRepoTransactionStats stats = { 0, };
       if (!ostree_repo_commit_transaction (self->repo, &stats, cancellable, error))
         return glnx_prefix_error (error, "Commit");
-
-      g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-n-metadata-total",
-                             g_variant_new_uint32 (stats.metadata_objects_total));
-      g_print ("Metadata Total: %u\n", stats.metadata_objects_total);
-
-      g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-n-metadata-written",
-                             g_variant_new_uint32 (stats.metadata_objects_written));
-      g_print ("Metadata Written: %u\n", stats.metadata_objects_written);
-
-      g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-n-content-total",
-                             g_variant_new_uint32 (stats.content_objects_total));
-      g_print ("Content Total: %u\n", stats.content_objects_total);
-
-      g_print ("Content Written: %u\n", stats.content_objects_written);
-      g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-n-content-written",
-                             g_variant_new_uint32 (stats.content_objects_written));
-
-      g_print ("Content Bytes Written: %" G_GUINT64_FORMAT "\n", stats.content_bytes_written);
-      g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-content-bytes-written",
-                             g_variant_new_uint64 (stats.content_bytes_written));
+      statsp = &stats;
     }
+
   g_print ("Wrote commit: %s\n", new_revision);
-  g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-commit", g_variant_new_string (new_revision));
-  /* Since JavaScript doesn't have 64 bit integers and hence neither does JSON,
-   * store this as a string:
-   * https://stackoverflow.com/questions/10286204/the-right-json-date-format
-   * */
-  { guint64 commit_ts = ostree_commit_get_timestamp (new_commit);
-    g_autofree char *commit_ts_iso_8601 = rpmostree_timestamp_str_from_unix_utc (commit_ts);
-    g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-timestamp", g_variant_new_string (commit_ts_iso_8601));
-  }
-  const char *commit_version = NULL;
-  (void)g_variant_lookup (new_commit_inline_meta, OSTREE_COMMIT_META_KEY_VERSION, "&s", &commit_version);
-  if (commit_version)
-    g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-version", g_variant_new_string (commit_version));
-
-  const char *inputhash = NULL;
-  (void)g_variant_lookup (new_commit_inline_meta, "rpmostree.inputhash", "&s", &inputhash);
-  /* We may not have the inputhash in the split-up installroot case */
-  if (inputhash)
-    g_variant_builder_add (&composemeta_builder, "{sv}", "rpm-ostree-inputhash", g_variant_new_string (inputhash));
-  if (parent_revision)
-    g_variant_builder_add (&composemeta_builder, "{sv}", "ostree-parent-commit", g_variant_new_string (parent_revision));
-
-  if (opt_write_commitid_to)
-    {
-      if (!g_file_set_contents (opt_write_commitid_to, new_revision, -1, error))
-        return glnx_prefix_error (error, "While writing to '%s'", opt_write_commitid_to);
-    }
-  else if (self->ref)
+  if (self->ref)
     {
       g_print ("%s => %s\n", self->ref, new_revision);
       g_variant_builder_add (&composemeta_builder, "{sv}", "ref", g_variant_new_string (self->ref));
     }
 
-  if (opt_write_composejson_to && parent_revision)
+  if (!rpmostree_composeutil_write_composejson (self->repo,
+                                                opt_write_composejson_to, statsp,
+                                                new_revision, new_commit,
+                                                &composemeta_builder,
+                                                error))
+    return FALSE;
+
+  if (opt_write_commitid_to)
     {
-      g_autoptr(GVariant) diffv = NULL;
-      if (!rpm_ostree_db_diff_variant (self->repo, parent_revision, new_revision,
-                                       FALSE, &diffv, cancellable, error))
-        return FALSE;
-      g_variant_builder_add (&composemeta_builder, "{sv}", "pkgdiff", diffv);
-    }
-
-  if (opt_write_composejson_to)
-    {
-      g_autoptr(GVariant) composemeta_v = g_variant_builder_end (&composemeta_builder);
-      JsonNode *composemeta_node = json_gvariant_serialize (composemeta_v);
-      glnx_unref_object JsonGenerator *generator = json_generator_new ();
-      json_generator_set_root (generator, composemeta_node);
-
-      char *dnbuf = strdupa (opt_write_composejson_to);
-      const char *dn = dirname (dnbuf);
-      g_auto(GLnxTmpfile) tmpf = { 0, };
-      if (!glnx_open_tmpfile_linkable_at (AT_FDCWD, dn, O_WRONLY | O_CLOEXEC,
-                                          &tmpf, error))
-        return FALSE;
-      g_autoptr(GOutputStream) out = g_unix_output_stream_new (tmpf.fd, FALSE);
-      /* See also similar code in status.c */
-      if (json_generator_to_stream (generator, out, NULL, error) <= 0
-          || (error != NULL && *error != NULL))
-        return FALSE;
-
-      /* World readable to match --write-commitid-to which uses umask */
-      if (!glnx_fchmod (tmpf.fd, 0644, error))
-        return FALSE;
-
-      if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_REPLACE,
-                                 AT_FDCWD, opt_write_composejson_to, error))
-        return FALSE;
+      if (!g_file_set_contents (opt_write_commitid_to, new_revision, -1, error))
+        return glnx_prefix_error (error, "While writing to '%s'", opt_write_commitid_to);
     }
 
   return TRUE;
