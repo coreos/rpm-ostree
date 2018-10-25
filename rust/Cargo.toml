@@ -16,11 +16,7 @@ tempfile = "3.0.3"
 openat = "0.1.15"
 curl = "0.4.14"
 c_utf8 = "0.1.0"
-systemd = "0.3.0"
-
-# Until https://github.com/jmesmon/rust-systemd/pull/54 gets merged
-[patch.crates-io]
-systemd =  { git = "https://github.com/jlebon/rust-systemd", branch = "pr/add-monotonic" }
+systemd = "0.4.0"
 
 [lib]
 name = "rpmostree_rust"
