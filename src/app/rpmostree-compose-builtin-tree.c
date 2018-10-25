@@ -591,6 +591,9 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
                    GCancellable    *cancellable,
                    GError         **error)
 {
+  /* Print version number */
+  g_printerr ("RPM-OSTree Version: %s\n", PACKAGE_VERSION);
+  
   if (getuid () != 0)
     {
       if (!opt_unified_core)
