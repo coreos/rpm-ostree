@@ -894,7 +894,11 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
                                               cancellable, error))
             return FALSE;
         }
+      g_print ("%s => %s\n", self->ref, new_revision);
+      g_variant_builder_add (&composemeta_builder, "{sv}", "ref", g_variant_new_string (self->ref));
     }
+  else
+    g_print ("Wrote commit: %s\n", new_revision);
 
   OstreeRepoTransactionStats stats = { 0, };
   OstreeRepoTransactionStats *statsp = NULL;
@@ -904,13 +908,6 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
       if (!ostree_repo_commit_transaction (self->repo, &stats, cancellable, error))
         return glnx_prefix_error (error, "Commit");
       statsp = &stats;
-    }
-
-  g_print ("Wrote commit: %s\n", new_revision);
-  if (self->ref)
-    {
-      g_print ("%s => %s\n", self->ref, new_revision);
-      g_variant_builder_add (&composemeta_builder, "{sv}", "ref", g_variant_new_string (self->ref));
     }
 
   if (!rpmostree_composeutil_write_composejson (self->repo,
