@@ -37,6 +37,7 @@
 #include "rpmostree-core.h"
 #include "rpmostree-rojig-assembler.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-util.h"
 #include <rpm/rpmlib.h>
 #include <rpm/rpmlog.h>
 #include <rpm/rpmfi.h>
@@ -605,13 +606,7 @@ path_is_ostree_compliant (const char *path)
 {
   g_assert (*path == '/');
   path++;
-  return (*path == '\0' ||
-          g_str_equal (path, "usr")   || (g_str_has_prefix (path, "usr/")
-                                          && !g_str_has_prefix (path, "usr/local/")) ||
-          g_str_equal (path, "bin")   || g_str_has_prefix (path, "bin/")  ||
-          g_str_equal (path, "sbin")  || g_str_has_prefix (path, "sbin/") ||
-          g_str_equal (path, "lib")   || g_str_has_prefix (path, "lib/")  ||
-          g_str_equal (path, "lib64") || g_str_has_prefix (path, "lib64/"));
+  return (*path == '\0' || rpmostree_relative_path_is_ostree_compliant (path));
 }
 
 static OstreeRepoCommitFilterResult
