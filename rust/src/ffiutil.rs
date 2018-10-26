@@ -55,6 +55,14 @@ pub fn dir_from_dfd(fd: libc::c_int) -> io::Result<openat::Dir> {
     Ok(r)
 }
 
+/// Assert that a raw pointer is not `NULL`, and cast it to a Rust reference
+/// with the static lifetime - it has to be static as we can't tell Rust about
+/// our lifetimes from the C side.
+pub fn ref_from_raw_ptr<T>(p: *mut T) -> &'static mut T {
+    assert!(!p.is_null());
+    unsafe { &mut *p }
+}
+
 // Functions to map Rust's Error into the "GError convention":
 // https://developer.gnome.org/glib/stable/glib-Error-Reporting.html
 // Use e.g. int_glib_error() to map to a plain "int" C return.
