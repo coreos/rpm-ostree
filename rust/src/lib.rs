@@ -31,46 +31,19 @@ extern crate serde;
 extern crate serde_json;
 extern crate serde_yaml;
 
-use std::ffi::{CStr, OsStr};
+use std::ffi::OsStr;
 use std::io::Seek;
 use std::os::unix::ffi::OsStrExt;
-use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 use std::{fs, io, ptr};
 
-mod glibutils;
-use glibutils::*;
+mod ffiutil;
+use ffiutil::*;
 mod treefile;
 use treefile::*;
 mod journal;
 use journal::*;
 mod utils;
-
-/* Wrapper functions for translating from C to Rust */
-
-/// Convert a C (UTF-8) string to a &str; will panic
-/// if it isn't valid UTF-8.  Note the lifetime of
-/// the return value must be <= the pointer.
-fn str_from_nullable<'a>(s: *const libc::c_char) -> Option<&'a str> {
-    if s.is_null() {
-        None
-    } else {
-        let s = unsafe { CStr::from_ptr(s) };
-        Some(s.to_str().unwrap())
-    }
-}
-
-/// Convert a C "bytestring" to a OsStr; panics if `s` is `NULL`.
-fn bytes_from_nonnull<'a>(s: *const libc::c_char) -> &'a [u8] {
-    assert!(!s.is_null());
-    unsafe { CStr::from_ptr(s) }.to_bytes()
-}
-
-fn dir_from_dfd(fd: libc::c_int) -> io::Result<openat::Dir> {
-    let src = unsafe { openat::Dir::from_raw_fd(fd) };
-    let r = src.sub_dir(".")?;
-    let _ = src.into_raw_fd();
-    Ok(r)
-}
 
 // It's not really &'static of course...but we can't
 // tell Rust about our lifetimes from the C side.

@@ -16,17 +16,44 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-/* Copied and adapted from:
- * https://github.com/cgwalters/coreos-assembler
- * */
-
 use gio_sys;
 use glib_sys;
 use libc;
 use std;
 use std::error::Error;
+use std::ffi::CStr;
 use std::ffi::CString;
-use std::ptr;
+use std::os::unix::io::{FromRawFd, IntoRawFd};
+use std::{io, ptr};
+
+use openat;
+
+/* Wrapper functions for translating basic types from C to Rust */
+
+/// Convert a C (UTF-8) string to a &str; will panic
+/// if it isn't valid UTF-8.  Note the lifetime of
+/// the return value must be <= the pointer.
+pub fn str_from_nullable<'a>(s: *const libc::c_char) -> Option<&'a str> {
+    if s.is_null() {
+        None
+    } else {
+        let s = unsafe { CStr::from_ptr(s) };
+        Some(s.to_str().unwrap())
+    }
+}
+
+/// Convert a C "bytestring" to a OsStr; panics if `s` is `NULL`.
+pub fn bytes_from_nonnull<'a>(s: *const libc::c_char) -> &'a [u8] {
+    assert!(!s.is_null());
+    unsafe { CStr::from_ptr(s) }.to_bytes()
+}
+
+pub fn dir_from_dfd(fd: libc::c_int) -> io::Result<openat::Dir> {
+    let src = unsafe { openat::Dir::from_raw_fd(fd) };
+    let r = src.sub_dir(".")?;
+    let _ = src.into_raw_fd();
+    Ok(r)
+}
 
 // Functions to map Rust's Error into the "GError convention":
 // https://developer.gnome.org/glib/stable/glib-Error-Reporting.html
