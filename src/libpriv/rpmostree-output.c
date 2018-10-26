@@ -109,7 +109,7 @@ rpmostree_output_task_begin (const char *format, ...)
 void
 rpmostree_output_task_done_msg (RpmOstreeOutputTask *taskp, const char *format, ...)
 {
-  g_assert (*taskp);
+  g_assert (taskp && *taskp);
   *taskp = false;
   g_autofree char *final_msg = strdup_vprintf (format);
   RpmOstreeOutputTaskEnd task = { final_msg };
