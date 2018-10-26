@@ -45,13 +45,6 @@ mod journal;
 use journal::*;
 mod utils;
 
-// It's not really &'static of course...but we can't
-// tell Rust about our lifetimes from the C side.
-fn tf_from_raw(tf: *mut Treefile) -> &'static mut Treefile {
-    assert!(!tf.is_null());
-    unsafe { &mut *tf }
-}
-
 // Some of our file descriptors may be read multiple times.
 // We try to consistently seek to the start to make that
 // convenient from the C side.  Note that this function
@@ -88,12 +81,12 @@ pub extern "C" fn ror_treefile_new(
 
 #[no_mangle]
 pub extern "C" fn ror_treefile_get_dfd(tf: *mut Treefile) -> libc::c_int {
-    tf_from_raw(tf).primary_dfd.as_raw_fd()
+    ref_from_raw_ptr(tf).primary_dfd.as_raw_fd()
 }
 
 #[no_mangle]
 pub extern "C" fn ror_treefile_get_postprocess_script_fd(tf: *mut Treefile) -> libc::c_int {
-    tf_from_raw(tf)
+    ref_from_raw_ptr(tf)
         .externals
         .postprocess_script
         .as_mut()
@@ -105,7 +98,7 @@ pub extern "C" fn ror_treefile_get_add_file_fd(
     tf: *mut Treefile,
     filename: *const libc::c_char,
 ) -> libc::c_int {
-    let tf = tf_from_raw(tf);
+    let tf = ref_from_raw_ptr(tf);
     let filename = OsStr::from_bytes(bytes_from_nonnull(filename));
     let filename = filename.to_string_lossy().into_owned();
     raw_seeked_fd(tf.externals.add_files.get_mut(&filename).expect("add-file"))
@@ -113,7 +106,7 @@ pub extern "C" fn ror_treefile_get_add_file_fd(
 
 #[no_mangle]
 pub extern "C" fn ror_treefile_get_passwd_fd(tf: *mut Treefile) -> libc::c_int {
-    tf_from_raw(tf)
+    ref_from_raw_ptr(tf)
         .externals
         .passwd
         .as_mut()
@@ -122,7 +115,7 @@ pub extern "C" fn ror_treefile_get_passwd_fd(tf: *mut Treefile) -> libc::c_int {
 
 #[no_mangle]
 pub extern "C" fn ror_treefile_get_group_fd(tf: *mut Treefile) -> libc::c_int {
-    tf_from_raw(tf)
+    ref_from_raw_ptr(tf)
         .externals
         .group
         .as_mut()
@@ -131,12 +124,12 @@ pub extern "C" fn ror_treefile_get_group_fd(tf: *mut Treefile) -> libc::c_int {
 
 #[no_mangle]
 pub extern "C" fn ror_treefile_get_json_string(tf: *mut Treefile) -> *const libc::c_char {
-    tf_from_raw(tf).serialized.as_ptr()
+    ref_from_raw_ptr(tf).serialized.as_ptr()
 }
 
 #[no_mangle]
 pub extern "C" fn ror_treefile_get_rojig_spec_path(tf: *mut Treefile) -> *const libc::c_char {
-    let tf = tf_from_raw(tf);
+    let tf = ref_from_raw_ptr(tf);
     if let &Some(ref rojig) = &tf.rojig_spec {
         rojig.as_ptr()
     } else {
