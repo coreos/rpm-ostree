@@ -1924,26 +1924,19 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       if (!recommends)
         actions |= DNF_IGNORE_WEAK_DEPS;
 
-      rpmostree_output_task_begin ("Resolving dependencies");
+      g_auto(RpmOstreeOutputTask) task = rpmostree_output_task_begin ("Resolving dependencies");
 
       /* XXX: consider a --allow-uninstall switch? */
       if (!dnf_goal_depsolve (goal, actions, error) ||
           !check_goal_solution (self, removed_pkgnames, replaced_nevras, error))
-        {
-          rpmostree_output_task_end ("failed");
-          return FALSE;
-        }
+        return FALSE;
       g_clear_pointer (&self->pkgs, (GDestroyNotify)g_ptr_array_unref);
       self->pkgs = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),
                                           DNF_PACKAGE_INFO_INSTALL,
                                           DNF_PACKAGE_INFO_UPDATE,
                                           DNF_PACKAGE_INFO_DOWNGRADE, -1);
       if (!sort_packages (self, self->pkgs, cancellable, error))
-        {
-          rpmostree_output_task_end ("failed");
-          return FALSE;
-        }
-      rpmostree_output_task_end ("done");
+        return FALSE;
     }
 
   return TRUE;
@@ -3978,7 +3971,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
        * this way is that we only need to read the passwd/group files once
        * before applying the overrides, rather than after each %pre.
        */
-      rpmostree_output_task_begin ("Running pre scripts");
+      { g_auto(RpmOstreeOutputTask) task = rpmostree_output_task_begin ("Running pre scripts");
       guint n_pre_scripts_run = 0;
       for (guint i = 0; i < n_rpmts_elements; i++)
         {
@@ -3994,7 +3987,8 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                 &n_pre_scripts_run, cancellable, error))
             return FALSE;
         }
-      rpmostree_output_task_end ("%u done", n_pre_scripts_run);
+      rpmostree_output_task_done_msg (&task, "%u done", n_pre_scripts_run);
+      }
 
       if (faccessat (tmprootfs_dfd, "etc/passwd", F_OK, 0) == 0)
         {
@@ -4028,7 +4022,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
             }
         }
 
-      rpmostree_output_task_begin ("Running post scripts");
+      g_auto(RpmOstreeOutputTask) task = rpmostree_output_task_begin ("Running post scripts");
       guint n_post_scripts_run = 0;
 
       /* %post */
@@ -4073,7 +4067,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                       &n_post_scripts_run, cancellable, error))
         return FALSE;
 
-      rpmostree_output_task_end ("%u done", n_post_scripts_run);
+      rpmostree_output_task_done_msg (&task, "%u done", n_post_scripts_run);
 
       /* We want this to be the first error message if something went wrong
        * with a script; see https://github.com/projectatomic/rpm-ostree/pull/888
@@ -4120,7 +4114,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 
   g_clear_pointer (&ordering_ts, rpmtsFree);
 
-  rpmostree_output_task_begin ("Writing rpmdb");
+  g_auto(RpmOstreeOutputTask) task = rpmostree_output_task_begin ("Writing rpmdb");
 
   if (!glnx_shutil_mkdir_p_at (tmprootfs_dfd, RPMOSTREE_RPMDB_LOCATION, 0755, cancellable, error))
     return FALSE;
@@ -4210,7 +4204,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         return FALSE;
     }
 
-  rpmostree_output_task_end ("done");
+  rpmostree_output_task_clear (&task);
 
   /* And now also sanity check the rpmdb */
   if (!skip_sanity_check)
@@ -4234,7 +4228,7 @@ rpmostree_context_commit (RpmOstreeContext      *self,
   g_autoptr(OstreeRepoCommitModifier) commit_modifier = NULL;
   g_autofree char *ret_commit_checksum = NULL;
 
-  rpmostree_output_task_begin ("Writing OSTree commit");
+  g_auto(RpmOstreeOutputTask) task = rpmostree_output_task_begin ("Writing OSTree commit");
 
   g_auto(RpmOstreeRepoAutoTransaction) txn = { 0, };
   if (!rpmostree_repo_auto_transaction_start (&txn, self->ostreerepo, FALSE, cancellable, error))
@@ -4440,8 +4434,6 @@ rpmostree_context_commit (RpmOstreeContext      *self,
                        NULL);
     }
   }
-
-  rpmostree_output_task_end ("done");
 
   self->tmprootfs_dfd = -1;
   if (!glnx_tmpdir_delete (&self->repo_tmpdir, cancellable, error))

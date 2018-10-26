@@ -517,7 +517,7 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
     return TRUE; /* already checked out! */
 
   /* let's give the user some feedback so they don't think we're blocked */
-  rpmostree_output_task_begin ("Checking out tree %.7s", self->base_revision);
+  g_auto(RpmOstreeOutputTask) task = rpmostree_output_task_begin ("Checking out tree %.7s", self->base_revision);
 
   int repo_dfd = ostree_repo_get_dfd (self->repo); /* borrowed */
   /* Always delete this */
@@ -558,7 +558,6 @@ checkout_base_tree (RpmOstreeSysrootUpgrader *self,
                        &self->tmprootfs_dfd, error))
     return FALSE;
 
-  rpmostree_output_task_end ("done");
   return TRUE;
 }
 
@@ -1082,7 +1081,7 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
       if (rpmostree_origin_get_regenerate_initramfs (self->origin))
          add_dracut_argv = rpmostree_origin_get_initramfs_args (self->origin);
 
-      rpmostree_output_task_begin ("Generating initramfs");
+      g_auto(RpmOstreeOutputTask) task = rpmostree_output_task_begin ("Generating initramfs");
 
       g_assert (kernel_state && kernel_path);
 
@@ -1096,8 +1095,6 @@ perform_local_assembly (RpmOstreeSysrootUpgrader *self,
                                       &initramfs_tmpf, RPMOSTREE_FINALIZE_KERNEL_AUTO,
                                       cancellable, error))
         return FALSE;
-
-      rpmostree_output_task_end ("done");
     }
 
   if (!rpmostree_context_commit (self->ctx, self->base_revision,
@@ -1297,7 +1294,7 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   if (use_staging)
     {
-      rpmostree_output_task_begin ("Staging deployment");
+      g_auto(RpmOstreeOutputTask) task = rpmostree_output_task_begin ("Staging deployment");
       if (!ostree_sysroot_stage_tree (self->sysroot, self->osname,
                                       target_revision, origin,
                                       self->cfg_merge_deployment,
@@ -1305,7 +1302,6 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                       &new_deployment,
                                       cancellable, error))
         return FALSE;
-      rpmostree_output_task_end ("done");
     }
   else
     {
