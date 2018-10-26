@@ -229,3 +229,6 @@ rpmostree_str_to_auto_update_policy (const char *str,
 
 char*
 rpmostree_timestamp_str_from_unix_utc (guint64 t);
+
+gboolean
+rpmostree_relative_path_is_ostree_compliant (const char *path);

@@ -1400,6 +1400,7 @@ copy_additional_files (int            rootfs_dfd,
           dest = dest_owned;
         }
 
+      g_assert (rpmostree_relative_path_is_ostree_compliant (dest));
       g_print ("Adding file '%s'\n", dest);
 
       g_string_truncate (dnbuf, 0);

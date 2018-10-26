@@ -1058,3 +1058,16 @@ rpmostree_timestamp_str_from_unix_utc (guint64 t)
     return g_date_time_format (timestamp, "%FT%H:%M:%SZ");
   return g_strdup_printf ("(invalid timestamp)");
 }
+
+gboolean
+rpmostree_relative_path_is_ostree_compliant (const char *path)
+{
+  g_assert (path);
+  g_assert (*path != '/');
+  return (g_str_equal (path, "usr")   || (g_str_has_prefix (path, "usr/")
+                                          && !g_str_has_prefix (path, "usr/local/")) ||
+          g_str_equal (path, "bin")   || g_str_has_prefix (path, "bin/")  ||
+          g_str_equal (path, "sbin")  || g_str_has_prefix (path, "sbin/") ||
+          g_str_equal (path, "lib")   || g_str_has_prefix (path, "lib/")  ||
+          g_str_equal (path, "lib64") || g_str_has_prefix (path, "lib64/"));
+}
