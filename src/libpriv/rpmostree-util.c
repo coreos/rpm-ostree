@@ -657,7 +657,7 @@ rpmostree_migrate_pkgcache_repo (OstreeRepo   *repo,
     {
       if (S_ISDIR (stbuf.st_mode))
         {
-          rpmostree_output_task_begin ("Migrating pkgcache");
+          g_auto(RpmOstreeOutputTask) task = rpmostree_output_task_begin ("Migrating pkgcache");
 
           g_autoptr(OstreeRepo) pkgcache = ostree_repo_open_at (repo_dfd,
                                                                 RPMOSTREE_OLD_PKGCACHE_DIR,
@@ -669,7 +669,7 @@ rpmostree_migrate_pkgcache_repo (OstreeRepo   *repo,
           if (!do_pkgcache_migration (repo, pkgcache, &n_migrated, cancellable, error))
             return FALSE;
 
-          rpmostree_output_task_end ("%u done", n_migrated);
+          rpmostree_output_task_done_msg (&task, "%u done", n_migrated);
           if (n_migrated > 0)
             sd_journal_print (LOG_INFO, "migrated %u cached package%s to system repo",
                               n_migrated, _NS(n_migrated));

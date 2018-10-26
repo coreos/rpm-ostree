@@ -45,7 +45,7 @@ rpmostree_output_default_handler (RpmOstreeOutputType type,
     g_print ("%s... ", ((RpmOstreeOutputTaskBegin*)data)->text);
     break;
   case RPMOSTREE_OUTPUT_TASK_END:
-    g_print ("%s\n", ((RpmOstreeOutputTaskEnd*)data)->text);
+    g_print ("%s\n", ((RpmOstreeOutputTaskEnd*)data)->text ?: "");
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_PERCENT:
     if (!console.locked)
@@ -97,17 +97,20 @@ rpmostree_output_message (const char *format, ...)
   active_cb (RPMOSTREE_OUTPUT_MESSAGE, &task, active_cb_opaque);
 }
 
-void
+RpmOstreeOutputTask
 rpmostree_output_task_begin (const char *format, ...)
 {
   g_autofree char *final_msg = strdup_vprintf (format);
   RpmOstreeOutputTaskBegin task = { final_msg };
   active_cb (RPMOSTREE_OUTPUT_TASK_BEGIN, &task, active_cb_opaque);
+  return true;
 }
 
 void
-rpmostree_output_task_end (const char *format, ...)
+rpmostree_output_task_done_msg (RpmOstreeOutputTask *taskp, const char *format, ...)
 {
+  g_assert (taskp && *taskp);
+  *taskp = false;
   g_autofree char *final_msg = strdup_vprintf (format);
   RpmOstreeOutputTaskEnd task = { final_msg };
   active_cb (RPMOSTREE_OUTPUT_TASK_END, &task, active_cb_opaque);

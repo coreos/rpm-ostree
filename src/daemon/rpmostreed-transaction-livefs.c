@@ -181,7 +181,7 @@ copy_new_config_files (OstreeRepo          *repo,
                        GCancellable        *cancellable,
                        GError             **error)
 {
-  rpmostree_output_task_begin ("Copying new config files");
+g_auto(RpmOstreeOutputTask) task = rpmostree_output_task_begin ("Copying new config files");
 
   /* Initialize checkout options; we want to make copies, and don't replace any
    * existing files.
@@ -265,7 +265,7 @@ copy_new_config_files (OstreeRepo          *repo,
         return g_prefix_error (error, "Copying %s: ", path), FALSE;
       n_added++;
     }
-  rpmostree_output_task_end ("%u", n_added);
+  rpmostree_output_task_done_msg (&task, "%u", n_added);
   return TRUE;
 }
 
@@ -801,7 +801,7 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
 
   if (!replacing)
     {
-      rpmostree_output_task_begin ("Overlaying /usr");
+      g_auto(RpmOstreeOutputTask) task = rpmostree_output_task_begin ("Overlaying /usr");
       if (!checkout_add_usr (repo, deployment_dfd, diff, target_csum, cancellable, error))
         return FALSE;
 
@@ -818,20 +818,17 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
                                 cancellable, error))
             return FALSE;
         }
-
-      rpmostree_output_task_end ("done");
     }
   else
     {
       /* Hold my beer 🍺, we're going loop over /usr and RENAME_EXCHANGE things
        * that were modified.
        */
-      rpmostree_output_task_begin ("Replacing /usr");
+      g_auto(RpmOstreeOutputTask) task = rpmostree_output_task_begin ("Replacing /usr");
       if (!replace_usr (repo, deployment_dfd, &replace_tmpdir,
                         diff, target_csum,
                         cancellable, error))
         return FALSE;
-      rpmostree_output_task_end ("done");
     }
 
   if (diff->n_tmpfilesd > 0)
@@ -840,7 +837,7 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
       const char *tmpfiles_argv[] = { "systemd-tmpfiles", "--create",
                                       "--prefix", NULL, NULL };
 
-      rpmostree_output_task_begin ("Running systemd-tmpfiles for /run,/var");
+      g_auto(RpmOstreeOutputTask) task = rpmostree_output_task_begin ("Running systemd-tmpfiles for /run,/var");
 
       for (guint i = 0; i < G_N_ELEMENTS (tmpfiles_prefixes); i++)
         {
@@ -867,8 +864,6 @@ livefs_transaction_execute_inner (LiveFsTransaction *self,
               return FALSE;
             }
         }
-
-      rpmostree_output_task_end ("done");
     }
 
   if (requires_etc_merge)

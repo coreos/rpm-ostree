@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include <stdbool.h>
+
 typedef enum {
   RPMOSTREE_OUTPUT_MESSAGE,
   RPMOSTREE_OUTPUT_TASK_BEGIN,
@@ -42,13 +44,20 @@ rpmostree_output_message (const char *format, ...) G_GNUC_PRINTF (1,2);
 
 typedef RpmOstreeOutputMessage RpmOstreeOutputTaskBegin;
 
-void
-rpmostree_output_task_begin (const char *format, ...) G_GNUC_PRINTF (1,2);
 
 typedef RpmOstreeOutputMessage RpmOstreeOutputTaskEnd;
 
-void
-rpmostree_output_task_end (const char *format, ...) G_GNUC_PRINTF (1,2);
+typedef bool RpmOstreeOutputTask;
+RpmOstreeOutputTask rpmostree_output_task_begin (const char *format, ...) G_GNUC_PRINTF (1,2);
+void rpmostree_output_task_done_msg (RpmOstreeOutputTask *task, const char *format, ...) G_GNUC_PRINTF (2,3);
+static inline void
+rpmostree_output_task_clear (RpmOstreeOutputTask *task)
+{
+  if (*task)
+    rpmostree_output_task_done_msg (task, NULL);
+}
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC (RpmOstreeOutputTask, rpmostree_output_task_clear)
+
 
 typedef struct {
   const char *text;
