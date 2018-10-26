@@ -302,6 +302,18 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
     Ok(parsed)
 }
 
+// Similar to the importer check but just checks for prefixes since
+// they're files, and also allows /etc since it's before conversion
+fn add_files_path_is_valid(path: &str) -> bool {
+    let path = path.trim_left_matches("/");
+    (path.starts_with("usr/") && !path.starts_with("usr/local/"))
+        || path.starts_with("etc/")
+        || path.starts_with("bin/")
+        || path.starts_with("sbin/")
+        || path.starts_with("lib/")
+        || path.starts_with("lib64/")
+}
+
 impl Treefile {
     /// The main treefile creation entrypoint.
     pub fn new_boxed(
@@ -310,6 +322,7 @@ impl Treefile {
         workdir: openat::Dir,
     ) -> io::Result<Box<Treefile>> {
         let parsed = treefile_parse_recurse(filename, arch, 0)?;
+        Treefile::validate_config(&parsed.config)?;
         let dfd = openat::Dir::open(filename.parent().unwrap())?;
         let rojig_spec = if let &Some(ref rojig) = &parsed.config.rojig {
             Some(Treefile::write_rojig_spec(&workdir, rojig)?)
@@ -325,6 +338,22 @@ impl Treefile {
             serialized: serialized,
             externals: parsed.externals,
         }))
+    }
+
+    /// Do some upfront semantic checks we can do beyond just the type safety serde provides.
+    fn validate_config(config: &TreeComposeConfig) -> io::Result<()> {
+        // check add-files
+        if let Some(files) = &config.add_files {
+            for (_, dest) in files.iter() {
+                if !add_files_path_is_valid(&dest) {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("Unsupported path in add-files: {}", dest),
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn serialize_json_string(config: &TreeComposeConfig) -> io::Result<CUtf8Buf> {

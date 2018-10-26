@@ -112,3 +112,16 @@ ostree --repo=${repobuild} show ${treeref} \
 assert_file_has_content_literal pkglist.txt 'systemd-'
 assert_not_file_has_content pkglist.txt 'systemd-bootchart'
 echo "ok recommends"
+
+# Check that add-files with bad paths are rejected
+prepare_compose_test "add-files-failure"
+pysetjsonmember "add-files" '[["foo.txt", "/var/lib/foo.txt"]]'
+
+# Do the compose ourselves since set -e doesn't work in function calls in if
+rm ${compose_workdir} -rf
+mkdir ${test_tmpdir}/workdir
+if rpm-ostree compose tree ${compose_base_argv} ${treefile} |& tee err.txt; then
+    assert_not_reached err.txt "Successfully composed with add-files for /var/lib?"
+fi
+assert_file_has_content_literal err.txt "Unsupported path in add-files: /var"
+echo "ok bad add-files"
