@@ -200,7 +200,12 @@ It supports the following parameters:
    file name, and the second element is the destination name.  The
    source file must be in the same directory as the treefile.
 
-   Example: `"add-files": [["bar", "/bar"], ["foo", "/foo"]]`
+   Example: `"add-files": [["bar", "/usr/share/bar"], ["foo", "/lib/foo"]]`
+
+   Note that in the OSTree model, not all directories are managed by OSTree. In
+   short, only files in `/usr` (or UsrMove symlinks into `/usr`) and `/etc` are
+   supported. For more details, see the OSTree manual:
+   https://ostree.readthedocs.io/en/latest/manual/deployment/
 
  * `tmp-is-dir`: boolean, optional: Defaults to `false`.  By default,
    rpm-ostree creates symlink `/tmp` → `sysroot/tmp`.  When set to `true`,
