@@ -144,3 +144,17 @@ pub fn journal_print_staging_failure() -> io::Result<()> {
 
     return print_staging_failure_msg(None);
 }
+
+mod ffi {
+    use super::*;
+    use ffiutil::*;
+    use glib_sys;
+    use libc;
+    #[no_mangle]
+    pub extern "C" fn ror_journal_print_staging_failure(
+        gerror: *mut *mut glib_sys::GError,
+    ) -> libc::c_int {
+        int_glib_error(journal_print_staging_failure(), gerror)
+    }
+}
+pub use self::ffi::*;

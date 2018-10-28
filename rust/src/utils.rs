@@ -39,3 +39,27 @@ pub fn download_url_to_tmpfile(url: &str) -> io::Result<fs::File> {
     tmpf.seek(io::SeekFrom::Start(0))?;
     Ok(tmpf)
 }
+
+mod ffi {
+    use super::*;
+    use glib_sys;
+    use libc;
+    use std::os::unix::io::IntoRawFd;
+
+    #[no_mangle]
+    pub extern "C" fn ror_download_to_fd(
+        url: *const libc::c_char,
+        gerror: *mut *mut glib_sys::GError,
+    ) -> libc::c_int {
+        use ffiutil::*;
+        let url = str_from_nullable(url).unwrap();
+        match download_url_to_tmpfile(url) {
+            Ok(f) => f.into_raw_fd(),
+            Err(e) => {
+                error_to_glib(&e, gerror);
+                -1
+            }
+        }
+    }
+}
+pub use self::ffi::*;
