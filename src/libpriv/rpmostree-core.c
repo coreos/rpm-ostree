@@ -4151,7 +4151,11 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
 #ifdef BUILDOPT_HAVE_NEW_RPM_VERIFY
   rpmtsSetVfyLevel (rpmdb_ts, 0);
 #endif
-  rpmtsSetFlags (rpmdb_ts, RPMTRANS_FLAG_JUSTDB);
+  /* We're just writing the rpmdb, hence _JUSTDB. Also disable the librpm
+   * SELinux plugin since rpm-ostree (and ostree) have fundamentally better
+   * code.
+   */
+  rpmtsSetFlags (rpmdb_ts, RPMTRANS_FLAG_JUSTDB | RPMTRANS_FLAG_NOCONTEXTS);
 
   tdata.ctx = self;
   rpmtsSetNotifyCallback (rpmdb_ts, ts_callback, &tdata);
