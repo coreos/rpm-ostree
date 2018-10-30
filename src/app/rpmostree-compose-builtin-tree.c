@@ -591,9 +591,15 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
                    GCancellable    *cancellable,
                    GError         **error)
 {
+  if (opt_print_only)
+    {
+      g_print ("%s\n", ror_treefile_get_json_string (self->treefile_rs));
+      return TRUE; /* Note early return */
+    }
+
   /* Print version number */
   g_printerr ("RPM-OSTree Version: %s\n", PACKAGE_VERSION);
-  
+
   if (getuid () != 0)
     {
       if (!opt_unified_core)
@@ -617,19 +623,6 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
    * complete exit path too.
    */
   *out_changed = FALSE;
-
-  if (opt_print_only)
-    {
-      glnx_unref_object JsonGenerator *generator = json_generator_new ();
-      g_autoptr(GOutputStream) stdout = g_unix_output_stream_new (1, FALSE);
-
-      json_generator_set_pretty (generator, TRUE);
-      json_generator_set_root (generator, self->treefile_rootval);
-      (void) json_generator_to_stream (generator, stdout, NULL, NULL);
-
-      /* Note early return */
-      return TRUE;
-    }
 
   /* Read the previous commit */
   if (self->ref)
