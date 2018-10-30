@@ -39,7 +39,7 @@ fn print_staging_failure_msg(msg: Option<&str>) -> io::Result<()> {
 }
 
 /// Look for a failure from ostree-finalized-stage.service in the journal of the previous boot.
-pub fn journal_print_staging_failure() -> io::Result<()> {
+fn journal_print_staging_failure() -> io::Result<()> {
     let mut j = journal::Journal::open(journal::JournalFiles::System, false, true)?;
 
     // first, go to the first entry of the current boot

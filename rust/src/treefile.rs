@@ -33,7 +33,7 @@ const INCLUDE_MAXDEPTH: u32 = 50;
 
 /// This struct holds file descriptors for any external files/data referenced by
 /// a TreeComposeConfig.
-pub struct TreefileExternals {
+struct TreefileExternals {
     pub postprocess_script: Option<fs::File>,
     pub add_files: collections::HashMap<String, fs::File>,
     pub passwd: Option<fs::File>,
@@ -41,12 +41,14 @@ pub struct TreefileExternals {
 }
 
 pub struct Treefile {
-    pub workdir: openat::Dir,
-    pub primary_dfd: openat::Dir,
-    pub parsed: TreeComposeConfig,
-    pub rojig_spec: Option<CUtf8Buf>,
-    pub serialized: CUtf8Buf,
-    pub externals: TreefileExternals,
+    // This one isn't used today, but we may do more in the future.
+    _workdir: openat::Dir,
+    primary_dfd: openat::Dir,
+    // This is only used by the test suite
+    _parsed: TreeComposeConfig,
+    rojig_spec: Option<CUtf8Buf>,
+    serialized: CUtf8Buf,
+    externals: TreefileExternals,
 }
 
 // We only use this while parsing
@@ -316,7 +318,7 @@ fn add_files_path_is_valid(path: &str) -> bool {
 
 impl Treefile {
     /// The main treefile creation entrypoint.
-    pub fn new_boxed(
+    fn new_boxed(
         filename: &Path,
         arch: Option<&str>,
         workdir: openat::Dir,
@@ -332,8 +334,8 @@ impl Treefile {
         let serialized = Treefile::serialize_json_string(&parsed.config)?;
         Ok(Box::new(Treefile {
             primary_dfd: dfd,
-            parsed: parsed.config,
-            workdir: workdir,
+            _parsed: parsed.config,
+            _workdir: workdir,
             rojig_spec: rojig_spec,
             serialized: serialized,
             externals: parsed.externals,
@@ -421,7 +423,7 @@ fn whitespace_split_packages(pkgs: &[String]) -> Vec<String> {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum BootLocation {
+enum BootLocation {
     #[serde(rename = "both")]
     Both,
     #[serde(rename = "legacy")]
@@ -437,7 +439,7 @@ impl Default for BootLocation {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum CheckPasswdType {
+enum CheckPasswdType {
     #[serde(rename = "none")]
     None,
     #[serde(rename = "previous")]
@@ -449,7 +451,7 @@ pub enum CheckPasswdType {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct CheckPasswd {
+struct CheckPasswd {
     #[serde(rename = "type")]
     variant: CheckPasswdType,
     filename: Option<String>,
@@ -459,150 +461,150 @@ pub struct CheckPasswd {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Rojig {
-    pub name: String,
-    pub summary: String,
-    pub license: String,
-    pub description: Option<String>,
+struct Rojig {
+    name: String,
+    summary: String,
+    license: String,
+    description: Option<String>,
 }
 
 // Because of how we handle includes, *everything* here has to be
 // Option<T>.  The defaults live in the code (e.g. machineid-compat defaults
 // to `true`).
 #[derive(Serialize, Deserialize, Debug)]
-pub struct TreeComposeConfig {
+struct TreeComposeConfig {
     // Compose controls
     #[serde(rename = "ref")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub treeref: Option<String>,
+    treeref: Option<String>,
     // Optional rojig data
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rojig: Option<Rojig>,
+    rojig: Option<Rojig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     repos: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub selinux: Option<bool>,
+    selinux: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gpg_key: Option<String>,
+    gpg_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub include: Option<String>,
+    include: Option<String>,
 
     // Core content
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub packages: Option<Vec<String>>,
+    packages: Option<Vec<String>>,
     // Arch-specific packages; TODO replace this with
     // custom deserialization or so and avoid having
     // having an architecture list here.
     #[serde(rename = "packages-aarch64")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub packages_aarch64: Option<Vec<String>>,
+    packages_aarch64: Option<Vec<String>>,
     #[serde(rename = "packages-armhfp")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub packages_armhfp: Option<Vec<String>>,
+    packages_armhfp: Option<Vec<String>>,
     #[serde(rename = "packages-ppc64")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub packages_ppc64: Option<Vec<String>>,
+    packages_ppc64: Option<Vec<String>>,
     #[serde(rename = "packages-ppc64le")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub packages_ppc64le: Option<Vec<String>>,
+    packages_ppc64le: Option<Vec<String>>,
     #[serde(rename = "packages-s390x")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub packages_s390x: Option<Vec<String>>,
+    packages_s390x: Option<Vec<String>>,
     #[serde(rename = "packages-x86_64")]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub packages_x86_64: Option<Vec<String>>,
+    packages_x86_64: Option<Vec<String>>,
     // Deprecated option
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bootstrap_packages: Option<Vec<String>>,
+    bootstrap_packages: Option<Vec<String>>,
 
     // Content installation opts
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub recommends: Option<bool>,
+    recommends: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub documentation: Option<bool>,
+    documentation: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "install-langs")]
-    pub install_langs: Option<Vec<String>>,
+    install_langs: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "initramfs-args")]
-    pub initramfs_args: Option<Vec<String>>,
+    initramfs_args: Option<Vec<String>>,
 
     // Tree layout options
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub boot_location: Option<BootLocation>,
+    boot_location: Option<BootLocation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "tmp-is-dir")]
-    pub tmp_is_dir: Option<bool>,
+    tmp_is_dir: Option<bool>,
 
     // systemd
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub units: Option<Vec<String>>,
+    units: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_target: Option<String>,
+    default_target: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "machineid-compat")]
     // Defaults to `true`
-    pub machineid_compat: Option<bool>,
+    machineid_compat: Option<bool>,
 
     // versioning
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub releasever: Option<String>,
+    releasever: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub automatic_version_prefix: Option<String>,
+    automatic_version_prefix: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "mutate-os-release")]
-    pub mutate_os_release: Option<String>,
+    mutate_os_release: Option<String>,
 
     // passwd-related bits
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "etc-group-members")]
-    pub etc_group_members: Option<Vec<String>>,
+    etc_group_members: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "preserve-passwd")]
-    pub preserve_passwd: Option<bool>,
+    preserve_passwd: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "check-passwd")]
-    pub check_passwd: Option<CheckPasswd>,
+    check_passwd: Option<CheckPasswd>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "check-groups")]
-    pub check_groups: Option<CheckPasswd>,
+    check_groups: Option<CheckPasswd>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ignore-removed-users")]
-    pub ignore_removed_users: Option<Vec<String>>,
+    ignore_removed_users: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "ignore-removed-groups")]
-    pub ignore_removed_groups: Option<Vec<String>>,
+    ignore_removed_groups: Option<Vec<String>>,
 
     // Content manipulation
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "postprocess-script")]
     // This one references an external filename
-    pub postprocess_script: Option<String>,
+    postprocess_script: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     // This one is inline, and supports multiple (hence is useful for inheritance)
-    pub postprocess: Option<Vec<String>>,
+    postprocess: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "add-files")]
-    pub add_files: Option<Vec<(String, String)>>,
+    add_files: Option<Vec<(String, String)>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "remove-files")]
-    pub remove_files: Option<Vec<String>>,
+    remove_files: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "remove-from-packages")]
-    pub remove_from_packages: Option<Vec<Vec<String>>>,
+    remove_from_packages: Option<Vec<Vec<String>>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct PermissiveTreeComposeConfig {
     #[serde(flatten)]
-    pub config: TreeComposeConfig,
+    config: TreeComposeConfig,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 struct StrictTreeComposeConfig {
     #[serde(flatten)]
-    pub config: TreeComposeConfig,
+    config: TreeComposeConfig,
 }
 
 #[cfg(test)]
@@ -737,9 +739,9 @@ remove-files:
     fn test_treefile_new() {
         let t = TreefileTest::new(VALID_PRELUDE, None).unwrap();
         let tf = &t.tf;
-        assert!(tf.parsed.rojig.is_none());
+        assert!(tf._parsed.rojig.is_none());
         assert!(tf.rojig_spec.is_none());
-        assert!(tf.parsed.machineid_compat.is_none());
+        assert!(tf._parsed.machineid_compat.is_none());
     }
 
     const ROJIG_YAML: &'static str = r###"
@@ -755,7 +757,7 @@ rojig:
         buf.push_str(ROJIG_YAML);
         let t = TreefileTest::new(buf.as_str(), None).unwrap();
         let tf = &t.tf;
-        let rojig = tf.parsed.rojig.as_ref().unwrap();
+        let rojig = tf._parsed.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
         let rojig_spec_str = tf.rojig_spec.as_ref().unwrap().as_str();
         let rojig_spec = Path::new(rojig_spec_str);
