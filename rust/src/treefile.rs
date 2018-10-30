@@ -41,8 +41,10 @@ struct TreefileExternals {
 }
 
 pub struct Treefile {
+    // This one isn't used today, but we may do more in the future.
     _workdir: openat::Dir,
     primary_dfd: openat::Dir,
+    // This is only used by the test suite
     _parsed: TreeComposeConfig,
     rojig_spec: Option<CUtf8Buf>,
     serialized: CUtf8Buf,
@@ -737,9 +739,9 @@ remove-files:
     fn test_treefile_new() {
         let t = TreefileTest::new(VALID_PRELUDE, None).unwrap();
         let tf = &t.tf;
-        assert!(tf.parsed.rojig.is_none());
+        assert!(tf._parsed.rojig.is_none());
         assert!(tf.rojig_spec.is_none());
-        assert!(tf.parsed.machineid_compat.is_none());
+        assert!(tf._parsed.machineid_compat.is_none());
     }
 
     const ROJIG_YAML: &'static str = r###"
@@ -755,7 +757,7 @@ rojig:
         buf.push_str(ROJIG_YAML);
         let t = TreefileTest::new(buf.as_str(), None).unwrap();
         let tf = &t.tf;
-        let rojig = tf.parsed.rojig.as_ref().unwrap();
+        let rojig = tf._parsed.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
         let rojig_spec_str = tf.rojig_spec.as_ref().unwrap().as_str();
         let rojig_spec = Path::new(rojig_spec_str);
