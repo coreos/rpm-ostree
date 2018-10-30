@@ -905,14 +905,27 @@ rpmostree_print_signatures (GVariant *variant,
                                                    OSTREE_GPG_SIGNATURE_FORMAT_DEFAULT);
       else
         {
-          gboolean valid;
-          g_variant_get_child (v, OSTREE_GPG_SIGNATURE_ATTR_VALID, "b", &valid);
-          const char *fingerprint;
-          g_variant_get_child (v, OSTREE_GPG_SIGNATURE_ATTR_FINGERPRINT, "&s", &fingerprint);
           if (i != 0)
             g_string_append (sigs_buffer, sep);
-          g_string_append_printf (sigs_buffer, "%s signature by %s\n", valid ? "Valid" : "Invalid",
-                                  fingerprint);
+
+          gboolean is_key_missing;
+          g_variant_get_child (v, OSTREE_GPG_SIGNATURE_ATTR_KEY_MISSING, "b", &is_key_missing);
+
+          const char *fingerprint;
+          g_variant_get_child (v, OSTREE_GPG_SIGNATURE_ATTR_FINGERPRINT, "&s", &fingerprint);
+
+          if (is_key_missing)
+            {
+              g_string_append_printf (sigs_buffer, "Can't check signature: public key %s not found\n", fingerprint);
+            }
+          else
+            {
+              gboolean valid;
+              g_variant_get_child (v, OSTREE_GPG_SIGNATURE_ATTR_VALID, "b", &valid);
+
+              g_string_append_printf (sigs_buffer, "%s signature by %s\n", valid ? "Valid" : "Invalid", 
+                                      fingerprint);
+            }
         }
     }
 
