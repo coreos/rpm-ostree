@@ -51,7 +51,6 @@
 
 #include "libglnx.h"
 
-static gboolean opt_experimental;
 static gboolean opt_force_commit;
 static gboolean opt_cache_only;
 static char *opt_cachedir;
@@ -61,7 +60,6 @@ static char *opt_metadata_json;
 static char *opt_write_composejson_to;
 
 static GOptionEntry rojig_option_entries[] = {
-  { "i-know-this-is-experimental", 0, 0, G_OPTION_ARG_NONE, &opt_experimental, "Acknowlege this is an experimental command", NULL },
   { "force-commit", 0, 0, G_OPTION_ARG_NONE, &opt_force_commit, "Always create a new rojig RPM, even if nothing appears to have changed", NULL },
   { "cache-only", 0, 0, G_OPTION_ARG_NONE, &opt_cache_only, "Assume cache is present, do not attempt to update it", NULL },
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
@@ -585,9 +583,6 @@ rpmostree_compose_builtin_rojig (int             argc,
                                        NULL, NULL, NULL, NULL, NULL,
                                        error))
     return FALSE;
-
-  if (!opt_experimental)
-    return glnx_throw (error, "This code is experimental, and acknowledgement not provided");
 
   if (argc < 3)
     {

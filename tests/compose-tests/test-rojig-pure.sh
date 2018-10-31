@@ -17,22 +17,17 @@ runcompose() {
     (cd rojig-repo && createrepo_c .)
 }
 
-if runcompose 2>err.txt; then
-    fatal "rojig succeded without experimental flag?"
-fi
-assert_file_has_content_literal err.txt "acknowledgement not provided"
-
-runcompose --i-know-this-is-experimental
+runcompose
 test -f treecompose.json
 test -f rojig-repo/x86_64/fedora-atomic-host-42-1.fc28.x86_64.rpm
 echo "ok rojig ♲📦 initial"
 
-runcompose --i-know-this-is-experimental
+runcompose
 test '!' -f treecompose.json
 echo "ok rojig no changes"
 
 pysetjsonmember "documentation" 'False'
-runcompose --i-know-this-is-experimental
+runcompose
 test -f treecompose.json
 test -f rojig-repo/x86_64/fedora-atomic-host-42.1-1.fc28.x86_64.rpm
 echo "ok rojig dropped docs"
