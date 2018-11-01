@@ -6,10 +6,13 @@ dn=$(cd $(dirname $0) && pwd)
 . ${dn}/libcomposetest.sh
 
 prepare_compose_test "basic-unified"
-# Test --print-only, currently requires --repo
+# Test --print-only, currently requires --repo.  We also
+# just in this test (for now) use ${basearch} to test substitution.
+pysetjsonmember "ref" '"fedora/stable/${basearch}/basic-unified"'
 rpm-ostree compose tree --repo=${repobuild} --print-only ${treefile} > treefile.json
 # Verify it's valid JSON
 jq -r .ref < treefile.json > ref.txt
+# Test substitution of ${basearch}
 assert_file_has_content_literal ref.txt "${treeref}"
 # Test metadata json with objects, arrays, numbers
 cat > metadata.json <<EOF

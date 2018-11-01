@@ -28,6 +28,7 @@
 #include <systemd/sd-journal.h>
 
 #include "rpmostree-util.h"
+#include "rpmostree-rust.h"
 #include "rpmostree-origin.h"
 #include "rpmostree-output.h"
 #include "libsd-locale-util.h"
@@ -69,49 +70,7 @@ _rpmostree_varsubst_string (const char *instr,
                             GHashTable *substitutions,
                             GError **error)
 {
-  const char *s;
-  const char *p;
-  /* Acts as a reusable buffer space */
-  g_autoptr(GString) varnamebuf = g_string_new ("");
-  g_autoptr(GString) result = g_string_new ("");
-
-  s = instr;
-  while ((p = strstr (s, "${")) != NULL)
-    {
-      const char *varstart = p + 2;
-      const char *varend = strchr (varstart, '}');
-      const char *value;
-      if (!varend)
-        return glnx_null_throw (error, "Unclosed variable reference in %s starting at %u bytes",
-                                instr, (guint)(p - instr));
-
-      /* Append leading bytes */
-      g_string_append_len (result, s, p - s);
-
-      /* Get a NUL-terminated copy of the variable name */
-      g_string_truncate (varnamebuf, 0);
-      g_string_append_len (varnamebuf, varstart, varend - varstart);
-
-      value = g_hash_table_lookup (substitutions, varnamebuf->str);
-      if (!value)
-        return glnx_null_throw (error, "Unknown variable reference ${%s} in %s",
-                                varnamebuf->str, instr);
-      /* Append the replaced value */
-      g_string_append (result, value);
-
-      /* On to the next */
-      s = varend+1;
-    }
-
-  /* Append trailing bytes */
-  if (s != instr)
-    {
-      g_string_append (result, s);
-      /* Steal the C string, NULL out the GString since we freed it */
-      return g_string_free (g_steal_pointer (&result), FALSE);
-    }
-  else
-    return g_strdup (instr);
+  return ror_util_varsubst (instr, substitutions, error);
 }
 
 gboolean

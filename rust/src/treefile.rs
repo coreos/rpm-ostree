@@ -24,9 +24,11 @@ use c_utf8::CUtf8Buf;
 use openat;
 use serde_json;
 use serde_yaml;
+use std::collections::HashMap;
 use std::io::prelude::*;
 use std::path::Path;
 use std::{collections, fs, io};
+use utils;
 
 const ARCH_X86_64: &'static str = "x86_64";
 const INCLUDE_MAXDEPTH: u32 = 50;
@@ -87,6 +89,16 @@ fn treefile_parse_stream<R: io::Read>(
             })?;
             tf.config
         }
+    };
+
+    // Substitute ${basearch}
+    treefile.treeref = match (arch, treefile.treeref.take()) {
+        (Some(arch), Some(treeref)) => {
+            let mut varsubsts = HashMap::new();
+            varsubsts.insert("basearch".to_string(), arch.to_string());
+            Some(utils::varsubst(&treeref, &varsubsts)?)
+        }
+        (_, v) => v,
     };
 
     // Special handling for packages, since we allow whitespace within items.
@@ -625,7 +637,7 @@ packages-s390x:
     // This one has "comments" (hence unknown keys)
     static VALID_PRELUDE_JS: &str = r###"
 {
- "ref": "exampleos/x86_64/blah",
+ "ref": "exampleos/${basearch}/blah",
  "comment-packages": "We want baz to enable frobnication",
  "packages": ["foo", "bar", "baz"],
  "packages-x86_64": ["grub2", "grub2-tools"],
