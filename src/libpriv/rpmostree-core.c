@@ -4399,10 +4399,7 @@ rpmostree_context_commit (RpmOstreeContext      *self,
         if (ostree_sepolicy_get_name (final_sepolicy) == NULL ||
             g_strcmp0 (ostree_sepolicy_get_csum (self->sepolicy),
                        ostree_sepolicy_get_csum (final_sepolicy)) == 0)
-          {
-            if (ostree_repo_get_mode (self->ostreerepo) == OSTREE_REPO_MODE_BARE)
-              modflags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_DEVINO_CANONICAL;
-          }
+          modflags |= OSTREE_REPO_COMMIT_MODIFIER_FLAGS_DEVINO_CANONICAL;
       }
 
     commit_modifier = ostree_repo_commit_modifier_new (modflags, NULL, NULL, NULL);
