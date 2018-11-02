@@ -576,6 +576,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   self->treespec = rpmostree_composeutil_get_treespec (self->corectx,
                                                        self->treefile_rs,
                                                        self->treefile,
+                                                       opt_unified_core,
                                                        error);
   if (!self->treespec)
     return FALSE;
