@@ -264,16 +264,10 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 #undef TMP_SELINUX_ROOTFS
   }
 
-  /* For unified core, we have a pkgcache repo. This may be auto-created under
-   * the workdir, or live explicitly in the dir for --cache.
-   */
+  /* For unified core, we have a pkgcache repo. This is auto-created under the cachedir. */
   if (opt_unified_core)
     {
-      self->pkgcache_repo = ostree_repo_create_at (self->cachedir_dfd, "pkgcache-repo",
-                                                   OSTREE_REPO_MODE_BARE_USER, NULL,
-                                                   cancellable, error);
-      if (!self->pkgcache_repo)
-        return FALSE;
+      g_assert (self->pkgcache_repo);
 
       if (!opt_cachedir)
         {
@@ -529,52 +523,82 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 
   if (opt_unified_core)
     {
+      /* Unified mode works very differently. We ignore --workdir because we want to be sure
+       * that we're going to get hardlinks. The only way to be sure of this is to place the
+       * workdir underneath the pkgcache repo. */
+
       if (opt_workdir)
         g_printerr ("note: --workdir is ignored for --ex-unified-core\n");
 
-      /* For unified core, our workdir must be underneath the repo tmp/
-       * in order to use hardlinks.  We also really want a bare-user repo.
-       * We hard require that for now, but down the line we may automatically
-       * do a pull-local from the bare-user repo to the archive.
+      /* We also really want a bare-user repo. We hard require that for now, but down the
+       * line we may automatically do a pull-local from the bare-user repo to the archive.
        */
       if (ostree_repo_get_mode (self->repo) != OSTREE_REPO_MODE_BARE_USER)
         return glnx_throw (error, "--ex-unified-core requires a bare-user repository");
-      if (!glnx_mkdtempat (ostree_repo_get_dfd (self->repo), "tmp/rpm-ostree-compose.XXXXXX", 0700,
-                           &self->workdir_tmp, error))
-        return FALSE;
-      /* Note special handling of this aliasing in _finalize() */
-      self->workdir_dfd = self->workdir_tmp.fd;
 
-    }
-  else if (!opt_workdir)
-    {
-      if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &self->workdir_tmp, error))
+      if (opt_cachedir)
+        {
+          if (!glnx_opendirat (AT_FDCWD, opt_cachedir, TRUE, &self->cachedir_dfd, error))
+            return glnx_prefix_error (error, "Opening cachedir");
+
+          /* Put workdir beneath cachedir, which is where the pkgcache repo also is */
+          if (!glnx_mkdtempat (self->cachedir_dfd, "rpm-ostree-compose.XXXXXX", 0700,
+                               &self->workdir_tmp, error))
+            return FALSE;
+        }
+      else
+        {
+          /* Put cachedir under the target repo: makes things more efficient if it's
+           * bare-user, and otherwise just restricts IO to within the same fs. If for
+           * whatever reason users don't want to run the compose there (e.g. weird
+           * filesystems that aren't fully POSIX compliant), they can just use --cachedir.
+           */
+          if (!glnx_mkdtempat (ostree_repo_get_dfd (self->repo),
+                               "tmp/rpm-ostree-compose.XXXXXX", 0700,
+                               &self->workdir_tmp, error))
+            return FALSE;
+
+          self->cachedir_dfd = self->workdir_tmp.fd;
+        }
+
+      self->pkgcache_repo = ostree_repo_create_at (self->cachedir_dfd, "pkgcache-repo",
+                                                   OSTREE_REPO_MODE_BARE_USER, NULL,
+                                                   cancellable, error);
+      if (!self->pkgcache_repo)
         return FALSE;
+
       /* Note special handling of this aliasing in _finalize() */
       self->workdir_dfd = self->workdir_tmp.fd;
     }
   else
     {
-      if (!glnx_opendirat (AT_FDCWD, opt_workdir, FALSE, &self->workdir_dfd, error))
-        return FALSE;
+      if (!opt_workdir)
+        {
+          if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &self->workdir_tmp, error))
+            return FALSE;
+          /* Note special handling of this aliasing in _finalize() */
+          self->workdir_dfd = self->workdir_tmp.fd;
+        }
+      else
+        {
+          if (!glnx_opendirat (AT_FDCWD, opt_workdir, FALSE, &self->workdir_dfd, error))
+            return FALSE;
+        }
+
+      if (opt_cachedir)
+        {
+          if (!glnx_opendirat (AT_FDCWD, opt_cachedir, TRUE, &self->cachedir_dfd, error))
+            return glnx_prefix_error (error, "Opening cachedir");
+        }
+      else
+        {
+          self->cachedir_dfd = fcntl (self->workdir_dfd, F_DUPFD_CLOEXEC, 3);
+          if (self->cachedir_dfd < 0)
+            return glnx_throw_errno_prefix (error, "fcntl");
+        }
     }
 
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
-
-  if (opt_cachedir)
-    {
-      if (!glnx_opendirat (AT_FDCWD, opt_cachedir, TRUE, &self->cachedir_dfd, error))
-        {
-          g_prefix_error (error, "Opening cachedir '%s': ", opt_cachedir);
-          return FALSE;
-        }
-    }
-  else
-    {
-      self->cachedir_dfd = fcntl (self->workdir_dfd, F_DUPFD_CLOEXEC, 3);
-      if (self->cachedir_dfd < 0)
-        return glnx_throw_errno_prefix (error, "fcntl");
-    }
 
   self->metadata = rpmostree_composeutil_read_json_metadata (opt_metadata_json, error);
   if (!self->metadata)
