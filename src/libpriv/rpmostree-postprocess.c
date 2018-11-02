@@ -1884,11 +1884,12 @@ struct CommitThreadData {
   GError **error;
 };
 
+/* Filters out all xattrs that aren't accepted. */
 static GVariant *
-read_xattrs_cb (OstreeRepo     *repo,
-                const char     *relpath,
-                GFileInfo      *file_info,
-                gpointer        user_data)
+filter_xattrs_cb (OstreeRepo     *repo,
+                  const char     *relpath,
+                  GFileInfo      *file_info,
+                  gpointer        user_data)
 {
   struct CommitThreadData *tdata = user_data;
   int rootfs_fd = tdata->rootfs_fd;
@@ -1897,7 +1898,6 @@ read_xattrs_cb (OstreeRepo     *repo,
     { "security.capability", /* https://lwn.net/Articles/211883/ */
       "user.pax.flags" /* https://github.com/projectatomic/rpm-ostree/issues/412 */
     };
-  guint i;
   g_autoptr(GVariant) existing_xattrs = NULL;
   g_autoptr(GVariantIter) viter = NULL;
   GError *local_error = NULL;
@@ -1932,7 +1932,7 @@ read_xattrs_cb (OstreeRepo     *repo,
 
   while (g_variant_iter_loop (viter, "(@ay@ay)", &key, &value))
     {
-      for (i = 0; i < G_N_ELEMENTS (accepted_xattrs); i++)
+      for (guint i = 0; i < G_N_ELEMENTS (accepted_xattrs); i++)
         {
           const char *validkey = accepted_xattrs[i];
           const char *attrkey = g_variant_get_bytestring (key);
@@ -2062,7 +2062,7 @@ rpmostree_compose_commit (int            rootfs_fd,
     ostree_repo_commit_modifier_new (modifier_flags, NULL, NULL, NULL);
   struct CommitThreadData tdata = { 0, };
   ostree_repo_commit_modifier_set_xattr_callback (commit_modifier,
-                                                  read_xattrs_cb, NULL,
+                                                  filter_xattrs_cb, NULL,
                                                   &tdata);
 
   if (sepolicy && ostree_sepolicy_get_name (sepolicy) != NULL)
