@@ -350,6 +350,9 @@ install_packages (RpmOstreeTreeComposeContext  *self,
        * be important for the ostree-rojig work.
        */
       g_autoptr(OstreeSePolicy) sepolicy = ostree_sepolicy_new_at (rootfs_dfd, cancellable, error);
+      if (sepolicy == NULL)
+        return FALSE;
+
       rpmostree_context_set_sepolicy (self->corectx, sepolicy);
 
       if (!rpmostree_context_force_relabel (self->corectx, cancellable, error))
