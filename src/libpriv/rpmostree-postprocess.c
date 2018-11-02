@@ -2018,7 +2018,8 @@ on_progress_timeout (gpointer datap)
   struct CommitThreadData *data = datap;
   const gint percent = g_atomic_int_get (&data->percent);
 
-  glnx_console_progress_text_percent ("Committing:", percent);
+  /* clamp to 100 if it somehow goes over (XXX: bad counting?) */
+  glnx_console_progress_text_percent ("Committing:", MIN(percent, 100));
 
   return TRUE;
 }
@@ -2100,7 +2101,7 @@ rpmostree_compose_commit (int            rootfs_fd,
   while (g_atomic_int_get (&tdata.done) == 0)
     g_main_context_iteration (NULL, TRUE);
 
-  glnx_console_progress_text_percent ("Committing:", 100.0);
+  glnx_console_progress_text_percent ("Committing:", 100);
   glnx_console_unlock (&console);
 
   g_thread_join (g_steal_pointer (&commit_thread));
