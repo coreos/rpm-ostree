@@ -604,13 +604,12 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
       g_printerr ("NOTICE: Proceeding anyways.\n");
     }
 
+  /* This fchdir() call is...old, dates back to when rpm-ostree wrapped
+   * running yum as a subprocess.  It shouldn't be necessary any more,
+   * but let's be conservative and not do it in unified core mode.
+   */
   if (!opt_unified_core)
     {
-      /* This call is...old, dates back to when rpm-ostree wrapped
-       * running yum as a subprocess.  It shouldn't be necessary
-       * any more, but let's be conservative and not do it in
-       * unified core mode.
-       */
       if (fchdir (self->workdir_dfd) != 0)
         return glnx_throw_errno_prefix (error, "fchdir");
     }
