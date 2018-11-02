@@ -303,6 +303,7 @@ rpm_ostree_rojig_compose_new (const char    *treefile_path,
   self->treespec = rpmostree_composeutil_get_treespec (self->corectx,
                                                        self->treefile_rs,
                                                        self->treefile,
+                                                       TRUE,
                                                        error);
 
   *out_context = g_steal_pointer (&self);

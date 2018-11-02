@@ -47,6 +47,7 @@ RpmOstreeTreespec *
 rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
                                     RORTreefile *treefile_rs,
                                     JsonObject  *treedata,
+                                    gboolean     bind_selinux,
                                     GError     **error);
 
 GHashTable *

@@ -242,6 +242,7 @@ RpmOstreeTreespec *
 rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
                                     RORTreefile *treefile_rs,
                                     JsonObject  *treedata,
+                                    gboolean     bind_selinux,
                                     GError     **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Parsing treefile", error);
@@ -256,8 +257,6 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
     return FALSE;
   if (!treespec_bind_bool (treedata, treespec, "recommends", TRUE, error))
     return FALSE;
-  if (!treespec_bind_bool (treedata, treespec, "selinux", TRUE, error))
-    return FALSE;
   if (!treespec_bind_array (treedata, treespec, "install-langs", "instlangs", FALSE, error))
     return FALSE;
   { const char *releasever;
@@ -267,6 +266,19 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
     if (releasever)
       g_key_file_set_string (treespec, "tree", "releasever", releasever);
   }
+
+  if (bind_selinux)
+    {
+      if (!treespec_bind_bool (treedata, treespec, "selinux", TRUE, error))
+        return FALSE;
+    }
+  else
+    {
+      /* In the legacy compose path, we don't want to use any of the core's selinux stuff,
+       * e.g. importing, relabeling, etc... so just disable it. We do still set the policy
+       * to the final one right before commit as usual. */
+      g_key_file_set_boolean (treespec, "tree", "selinux", FALSE);
+    }
 
   const char *input_ref = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treedata, "ref", &input_ref, error))
