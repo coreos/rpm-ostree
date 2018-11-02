@@ -224,11 +224,6 @@ install_packages (RpmOstreeTreeComposeContext  *self,
   rpmostree_context_set_dnf_caching (self->corectx,
                                      opt_cache_only ? RPMOSTREE_CONTEXT_DNF_CACHE_FOREVER :
                                      RPMOSTREE_CONTEXT_DNF_CACHE_NEVER);
-  /* Without specifying --cachedir we'd just toss the data we download, so let's
-   * catch that.
-   */
-  if (opt_download_only && !opt_unified_core && !opt_cachedir)
-    return glnx_throw (error, "--download-only can only be used with --cachedir");
 
   { g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (rootfs_dfd, ".");
     if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL, self->treespec,
@@ -594,6 +589,12 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
 
   /* Print version number */
   g_printerr ("RPM-OSTree Version: %s\n", PACKAGE_VERSION);
+
+  /* Without specifying --cachedir we'd just toss the data we download, so let's
+   * catch that.
+   */
+  if (opt_download_only && !opt_unified_core && !opt_cachedir)
+    return glnx_throw (error, "--download-only can only be used with --cachedir");
 
   if (getuid () != 0)
     {
