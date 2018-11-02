@@ -57,8 +57,7 @@ rpmostree_passwd_migrate_except_root (int            rootfs_dfd,
                                       GError       **error);
 
 gboolean
-rpmostree_passwd_compose_prep (OstreeRepo      *repo,
-                               int              rootfs_dfd,
+rpmostree_passwd_compose_prep (int              rootfs_dfd,
                                gboolean         unified_core,
                                RORTreefile     *treefile_rs,
                                JsonObject      *treedata,

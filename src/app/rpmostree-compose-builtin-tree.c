@@ -331,9 +331,8 @@ install_packages (RpmOstreeTreeComposeContext  *self,
     }
 
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
-  if (!rpmostree_passwd_compose_prep (self->repo, rootfs_dfd, opt_unified_core,
-                                      self->treefile_rs, self->treefile,
-                                      self->previous_root,
+  if (!rpmostree_passwd_compose_prep (rootfs_dfd, opt_unified_core, self->treefile_rs,
+                                      self->treefile, self->previous_root,
                                       cancellable, error))
     return FALSE;
 
