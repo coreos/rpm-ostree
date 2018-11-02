@@ -486,7 +486,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     return FALSE;
 
   if (opt_workdir_tmpfs)
-    g_print ("note: --workdir-tmpfs is deprecated and will be ignored\n");
+    g_printerr ("note: --workdir-tmpfs is deprecated and will be ignored\n");
 
   if (opt_unified_core)
     {
