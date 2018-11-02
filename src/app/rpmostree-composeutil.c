@@ -395,6 +395,10 @@ rpmostree_composeutil_write_composejson (OstreeRepo  *repo,
       g_variant_builder_add (builder, "{sv}", "ostree-n-content-written",
                              g_variant_new_uint32 (stats->content_objects_written));
 
+      g_print ("Content Cache Hits: %u\n", stats->devino_cache_hits);
+      g_variant_builder_add (builder, "{sv}", "ostree-n-cache-hits",
+                             g_variant_new_uint32 (stats->devino_cache_hits));
+
       g_print ("Content Bytes Written: %" G_GUINT64_FORMAT "\n", stats->content_bytes_written);
       g_variant_builder_add (builder, "{sv}", "ostree-content-bytes-written",
                              g_variant_new_uint64 (stats->content_bytes_written));
