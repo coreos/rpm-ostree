@@ -114,8 +114,9 @@ typedef struct {
   int rootfs_dfd;
   int cachedir_dfd;
   gboolean unified_core_and_fuse;
-  OstreeRepo *repo;
-  OstreeRepo *pkgcache_repo;
+  OstreeRepo *repo;          /* target repo provided by --repo */
+  OstreeRepo *build_repo;    /* unified mode: repo we build into */
+  OstreeRepo *pkgcache_repo; /* unified mode: pkgcache repo where we import pkgs */
   OstreeRepoDevInoCache *devino_cache;
   const char *ref;
   char *rojig_spec;
@@ -145,6 +146,7 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   glnx_close_fd (&ctx->rootfs_dfd);
   glnx_close_fd (&ctx->cachedir_dfd);
   g_clear_object (&ctx->repo);
+  g_clear_object (&ctx->build_repo);
   g_clear_object (&ctx->pkgcache_repo);
   g_clear_pointer (&ctx->devino_cache, (GDestroyNotify)ostree_repo_devino_cache_unref);
   g_free (ctx->previous_checksum);
@@ -265,7 +267,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
           rpmostree_context_set_devino_cache (self->corectx, self->devino_cache);
         }
 
-      rpmostree_context_set_repos (self->corectx, self->repo, self->pkgcache_repo);
+      rpmostree_context_set_repos (self->corectx, self->build_repo, self->pkgcache_repo);
     }
 
   if (!rpmostree_context_prepare (self->corectx, cancellable, error))
@@ -492,16 +494,10 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
     {
       /* Unified mode works very differently. We ignore --workdir because we want to be sure
        * that we're going to get hardlinks. The only way to be sure of this is to place the
-       * workdir underneath the pkgcache repo. */
+       * workdir underneath the cachedir; the same fs where the pkgcache repo is. */
 
       if (opt_workdir)
         g_printerr ("note: --workdir is ignored for --ex-unified-core\n");
-
-      /* We also really want a bare-user repo. We hard require that for now, but down the
-       * line we may automatically do a pull-local from the bare-user repo to the archive.
-       */
-      if (ostree_repo_get_mode (self->repo) != OSTREE_REPO_MODE_BARE_USER)
-        return glnx_throw (error, "--ex-unified-core requires a bare-user repository");
 
       if (opt_cachedir)
         {
@@ -537,6 +533,15 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
       if (!self->pkgcache_repo)
         return FALSE;
 
+      /* We use a temporary repo for building and committing on the same FS as the
+       * pkgcache to guarantee links and devino caching. We then pull-local into the "real"
+       * target repo. */
+      self->build_repo = ostree_repo_create_at (self->cachedir_dfd, "repo-build",
+                                          OSTREE_REPO_MODE_BARE_USER, NULL,
+                                          cancellable, error);
+      if (!self->build_repo)
+        return glnx_prefix_error (error, "Creating repo-build");
+
       /* Note special handling of this aliasing in _finalize() */
       self->workdir_dfd = self->workdir_tmp.fd;
     }
@@ -569,6 +574,8 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
           if (self->cachedir_dfd < 0)
             return glnx_throw_errno_prefix (error, "fcntl");
         }
+
+      self->build_repo = g_object_ref (self->repo);
     }
 
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
@@ -583,7 +590,8 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
         return FALSE;
     }
 
-  self->corectx = rpmostree_context_new_tree (self->cachedir_dfd, self->repo, cancellable, error);
+  self->corectx = rpmostree_context_new_tree (self->cachedir_dfd, self->build_repo,
+                                              cancellable, error);
   if (!self->corectx)
     return FALSE;
 
@@ -835,6 +843,49 @@ repo_is_on_netfs (OstreeRepo  *repo)
     }
 }
 
+/* See canonical version of this in ot-builtin-pull.c */
+static void
+noninteractive_console_progress_changed (OstreeAsyncProgress *progress,
+                                         gpointer             user_data)
+{
+  /* We do nothing here - we just want the final status */
+}
+
+static gboolean
+pull_local_into_target_repo (OstreeRepo   *src_repo,
+                             OstreeRepo   *dest_repo,
+                             const char   *checksum,
+                             GCancellable *cancellable,
+                             GError      **error)
+{
+  const char *refs[] = { checksum, NULL };
+
+  /* really should enhance the pull API so we can just pass the src OstreeRepo directly */
+  g_autofree char *src_repo_uri =
+    g_strdup_printf ("file:///proc/self/fd/%d", ostree_repo_get_dfd (src_repo));
+
+  g_auto(GLnxConsoleRef) console = { 0, };
+  glnx_console_lock (&console);
+  g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new_and_connect (
+      console.is_tty ? ostree_repo_pull_default_console_progress_changed
+                     : noninteractive_console_progress_changed, &console);
+
+  /* no fancy flags here, so just use the old school simpler API */
+  if (!ostree_repo_pull (dest_repo, src_repo_uri, (char**)refs, 0, progress,
+                         cancellable, error))
+    return FALSE;
+
+  if (!console.is_tty)
+    {
+      const char *status = ostree_async_progress_get_status (progress);
+      if (status)
+        g_print ("%s\n", status);
+    }
+  ostree_async_progress_finish (progress);
+
+  return TRUE;
+}
+
 /* Perform required postprocessing, and invoke rpmostree_compose_commit(). */
 static gboolean
 impl_commit_tree (RpmOstreeTreeComposeContext *self,
@@ -886,7 +937,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
 
   if (use_txn)
     {
-      if (!ostree_repo_prepare_transaction (self->repo, NULL, cancellable, error))
+      if (!ostree_repo_prepare_transaction (self->build_repo, NULL, cancellable, error))
         return FALSE;
     }
 
@@ -899,43 +950,49 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
 
   /* The penultimate step, just basically `ostree commit` */
   g_autofree char *new_revision = NULL;
-  if (!rpmostree_compose_commit (self->rootfs_dfd, self->repo, parent_revision,
+  if (!rpmostree_compose_commit (self->rootfs_dfd, self->build_repo, parent_revision,
                                  metadata, gpgkey, selinux, self->devino_cache,
                                  &new_revision, cancellable, error))
     return FALSE;
-
-  g_autoptr(GVariant) new_commit = NULL;
-  if (!ostree_repo_load_commit (self->repo, new_revision, &new_commit,
-                                NULL, error))
-    return FALSE;
-  g_autoptr(GVariant) new_commit_inline_meta = g_variant_get_child_value (new_commit, 0);
-
-  /* --write-commitid-to overrides writing the ref */
-  if (self->ref && !opt_write_commitid_to)
-    {
-      if (use_txn)
-        ostree_repo_transaction_set_ref (self->repo, NULL, self->ref, new_revision);
-      else
-        {
-          if (!ostree_repo_set_ref_immediate (self->repo, NULL, self->ref, new_revision,
-                                              cancellable, error))
-            return FALSE;
-        }
-      g_print ("%s => %s\n", self->ref, new_revision);
-      g_variant_builder_add (&composemeta_builder, "{sv}", "ref", g_variant_new_string (self->ref));
-    }
-  else
-    g_print ("Wrote commit: %s\n", new_revision);
 
   OstreeRepoTransactionStats stats = { 0, };
   OstreeRepoTransactionStats *statsp = NULL;
 
   if (use_txn)
     {
-      if (!ostree_repo_commit_transaction (self->repo, &stats, cancellable, error))
+      if (!ostree_repo_commit_transaction (self->build_repo, &stats, cancellable, error))
         return glnx_prefix_error (error, "Commit");
       statsp = &stats;
     }
+
+  if (!opt_unified_core)
+    g_assert (self->repo == self->build_repo);
+  else
+    {
+      /* Now we actually pull it into the target repo specified by the user */
+      g_assert (self->repo != self->build_repo);
+
+      if (!pull_local_into_target_repo (self->build_repo, self->repo, new_revision,
+                                        cancellable, error))
+        return FALSE;
+    }
+
+  g_autoptr(GVariant) new_commit = NULL;
+  if (!ostree_repo_load_commit (self->repo, new_revision, &new_commit, NULL, error))
+    return FALSE;
+  g_autoptr(GVariant) new_commit_inline_meta = g_variant_get_child_value (new_commit, 0);
+
+  /* --write-commitid-to overrides writing the ref */
+  if (self->ref && !opt_write_commitid_to)
+    {
+      if (!ostree_repo_set_ref_immediate (self->repo, NULL, self->ref, new_revision,
+                                          cancellable, error))
+        return FALSE;
+      g_print ("%s => %s\n", self->ref, new_revision);
+      g_variant_builder_add (&composemeta_builder, "{sv}", "ref", g_variant_new_string (self->ref));
+    }
+  else
+    g_print ("Wrote commit: %s\n", new_revision);
 
   if (!rpmostree_composeutil_write_composejson (self->repo,
                                                 opt_write_composejson_to, statsp,
