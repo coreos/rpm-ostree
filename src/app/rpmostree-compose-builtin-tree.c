@@ -484,6 +484,10 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
   if (!self->repo)
     return FALSE;
 
+  /* sanity check upfront we can even write to this repo; e.g. might be a mount */
+  if (!ostree_repo_is_writable (self->repo, error))
+    return glnx_prefix_error (error, "Cannot write to repository");
+
   if (opt_workdir_tmpfs)
     g_printerr ("note: --workdir-tmpfs is deprecated and will be ignored\n");
 
