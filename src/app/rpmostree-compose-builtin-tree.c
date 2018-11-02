@@ -155,12 +155,6 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
 }
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RpmOstreeTreeComposeContext, rpm_ostree_tree_compose_context_free)
 
-static int
-cachedir_dfd (RpmOstreeTreeComposeContext *self)
-{
-  return self->cachedir_dfd != -1 ? self->cachedir_dfd : self->workdir_dfd;
-}
-
 static void
 on_hifstate_percentage_changed (DnfState   *hifstate,
                                 guint       percentage,
@@ -247,7 +241,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
    */
   if (opt_unified_core)
     {
-      self->pkgcache_repo = ostree_repo_create_at (cachedir_dfd (self), "pkgcache-repo",
+      self->pkgcache_repo = ostree_repo_create_at (self->cachedir_dfd, "pkgcache-repo",
                                                    OSTREE_REPO_MODE_BARE_USER, NULL,
                                                    cancellable, error);
       if (!self->pkgcache_repo)
