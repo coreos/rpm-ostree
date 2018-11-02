@@ -1068,8 +1068,7 @@ _data_from_json (int              rootfs_dfd,
  * down any files, and notably before running RPM `useradd` etc.
  */
 gboolean
-rpmostree_passwd_compose_prep (OstreeRepo      *repo,
-                               int              rootfs_dfd,
+rpmostree_passwd_compose_prep (int              rootfs_dfd,
                                gboolean         unified_core,
                                RORTreefile     *treefile_rs,
                                JsonObject      *treedata,
