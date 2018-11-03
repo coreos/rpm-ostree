@@ -70,7 +70,7 @@ vm_raw_rsync() {
 vm_rsync() {
   if ! test -f .vagrant/using_sshfs; then
     pushd ${topsrcdir}
-    vm_raw_rsync --delete --exclude .git/ . $VM:/var/roothome/sync
+    vm_raw_rsync --delete --exclude target/ --exclude bindgen-target/ --exclude .git/ . $VM:/var/roothome/sync
     popd
   fi
 }
