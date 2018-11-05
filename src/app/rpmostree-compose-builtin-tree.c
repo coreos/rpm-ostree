@@ -232,11 +232,15 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
 #define TMP_SELINUX_ROOTFS "selinux.tmp/etc/selinux"
 
+    gboolean selinux = TRUE;
+    if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux", &selinux, error))
+      return FALSE;
+
     /* By default, the core starts with the SELinux policy of the root, but if we have a
      * previous commit, it's much likelier that its policy will be closer to the final
      * policy than the host system's policy. And in the case they match, we skip a full
      * relabeling phase. Let's use that instead. */
-    if (self->previous_checksum)
+    if (selinux && self->previous_checksum)
       {
         if (!glnx_shutil_mkdir_p_at (self->workdir_dfd,
                                      dirname (strdupa (TMP_SELINUX_ROOTFS)), 0755,
@@ -256,6 +260,8 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
         rpmostree_context_set_sepolicy (self->corectx, sepolicy);
       }
+
+#undef TMP_SELINUX_ROOTFS
   }
 
   /* For unified core, we have a pkgcache repo. This may be auto-created under
