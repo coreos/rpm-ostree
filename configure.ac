@@ -228,7 +228,7 @@ fi
 AC_MSG_RESULT($debug_release)
 
 dnl These bits based on gnome:librsvg/configure.ac
-dnl By default, we build in public release mode.
+dnl By default, we build in release mode (but without LTO!)
 AC_ARG_ENABLE(rust-debug,
   AC_HELP_STRING([--enable-rust-debug],
     [Build Rust code with debugging information [default=no]]),
@@ -243,6 +243,19 @@ AC_SUBST([RUST_TARGET_SUBDIR])
 AM_CONDITIONAL(RUST_DEBUG, [test "x$rust_debug_release" = "xdebug"])
 dnl Unconditional now.
 RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES rust"
+
+dnl Only use this for package builds, as it will hackily edit Cargo.toml right now
+AC_ARG_ENABLE(lto,
+AC_HELP_STRING([--enable-lto],
+               [Build code with Link Time Optimization [default=no]]))
+dnl https://github.com/rust-lang/cargo/issues/4349
+dnl https://bugzilla.mozilla.org/show_bug.cgi?id=1386371
+if test "${enable_lto}" = yes; then
+    if ! grep -q '^lto.*=true' rust/Cargo.toml 2>/dev/null; then
+        echo '# Inserted by configure --enable-lto' >> rust/Cargo.toml
+        echo "lto = true" >> rust/Cargo.toml
+    fi
+fi
 
 dnl And propagate the release/debug type to cmake
 cmake_args=-DCMAKE_BUILD_TYPE=RelWithDebugInfo
@@ -286,6 +299,6 @@ echo "
     introspection:                           $found_introspection
     bubblewrap:                              $with_bubblewrap
     gtk-doc:                                 $enable_gtk_doc
-    rust:                                    $rust_debug_release
+    rust:                                    $rust_debug_release (lto: ${enable_lto:-no})
     cbindgen:                                ${cbindgen:-internal}
 "

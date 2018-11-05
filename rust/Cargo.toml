@@ -24,6 +24,12 @@ path = "src/lib.rs"
 crate-type = ["staticlib"]
 
 [profile.release]
+# Unwinding across FFI boundaries is undefined behavior, and anyways, we're
+# [crash-only](https://en.wikipedia.org/wiki/Crash-only_software)
 panic = "abort"
-lto = true
+# We assume we're being delivered via e.g. RPM which supports split debuginfo
 debug = true
+# For true release builds, we do suggest you enable LTO via e.g.
+# env RUSTFLAGS='-C lto=true' as part of the outer build.  It's just
+# off by default because it's quite slow and the default is more oriented
+# towards local development.
