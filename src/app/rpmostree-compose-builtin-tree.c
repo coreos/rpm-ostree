@@ -460,6 +460,28 @@ process_touch_if_changed (GError **error)
   return TRUE;
 }
 
+/* https://pagure.io/atomic-wg/issue/387 */
+static gboolean
+repo_is_on_netfs (OstreeRepo  *repo)
+{
+#ifndef FUSE_SUPER_MAGIC
+#define FUSE_SUPER_MAGIC 0x65735546
+#endif
+
+  int dfd = ostree_repo_get_dfd (repo);
+  struct statfs stbuf;
+  if (fstatfs (dfd, &stbuf) != 0)
+    return FALSE;
+  switch (stbuf.f_type)
+    {
+    case NFS_SUPER_MAGIC:
+    case FUSE_SUPER_MAGIC:
+      return TRUE;
+    default:
+      return FALSE;
+    }
+}
+
 /* Prepare a context - this does some generic pre-compose initialization from
  * the arguments such as loading the treefile and any specified metadata.
  */
@@ -511,15 +533,25 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
         }
       else
         {
-          /* Put cachedir under the target repo: makes things more efficient if it's
-           * bare-user, and otherwise just restricts IO to within the same fs. If for
-           * whatever reason users don't want to run the compose there (e.g. weird
-           * filesystems that aren't fully POSIX compliant), they can just use --cachedir.
+          /* Put cachedir under the target repo if it's not on NFS or fuse. It makes things
+           * more efficient if it's bare-user, and otherwise just restricts IO to within the
+           * same fs. If for whatever reason users don't want to run the compose there (e.g.
+           * weird filesystems that aren't fully POSIX compliant), they can just use
+           * --cachedir.
            */
-          if (!glnx_mkdtempat (ostree_repo_get_dfd (self->repo),
-                               "tmp/rpm-ostree-compose.XXXXXX", 0700,
-                               &self->workdir_tmp, error))
-            return FALSE;
+          if (!repo_is_on_netfs (self->repo))
+            {
+              if (!glnx_mkdtempat (ostree_repo_get_dfd (self->repo),
+                                   "tmp/rpm-ostree-compose.XXXXXX", 0700,
+                                   &self->workdir_tmp, error))
+                return FALSE;
+            }
+          else
+            {
+              if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree-compose.XXXXXX", 0700,
+                                   &self->workdir_tmp, error))
+                return FALSE;
+            }
 
           self->cachedir_dfd = self->workdir_tmp.fd;
         }
@@ -813,28 +845,6 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
 
   *out_changed = TRUE;
   return TRUE;
-}
-
-/* https://pagure.io/atomic-wg/issue/387 */
-static gboolean
-repo_is_on_netfs (OstreeRepo  *repo)
-{
-#ifndef FUSE_SUPER_MAGIC
-#define FUSE_SUPER_MAGIC 0x65735546
-#endif
-
-  int dfd = ostree_repo_get_dfd (repo);
-  struct statfs stbuf;
-  if (fstatfs (dfd, &stbuf) != 0)
-    return FALSE;
-  switch (stbuf.f_type)
-    {
-    case NFS_SUPER_MAGIC:
-    case FUSE_SUPER_MAGIC:
-      return TRUE;
-    default:
-      return FALSE;
-    }
 }
 
 /* See canonical version of this in ot-builtin-pull.c */
