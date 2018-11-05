@@ -502,10 +502,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
       if (opt_cachedir)
         {
           if (!glnx_opendirat (AT_FDCWD, opt_cachedir, TRUE, &self->cachedir_dfd, error))
-            {
-              g_prefix_error (error, "Opening cachedir '%s': ", opt_cachedir);
-              return FALSE;
-            }
+            return glnx_prefix_error (error, "Opening cachedir");
 
           /* Put workdir beneath cachedir, which is where the pkgcache repo also is */
           if (!glnx_mkdtempat (self->cachedir_dfd, "rpm-ostree-compose.XXXXXX", 0700,
@@ -563,10 +560,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
       if (opt_cachedir)
         {
           if (!glnx_opendirat (AT_FDCWD, opt_cachedir, TRUE, &self->cachedir_dfd, error))
-            {
-              g_prefix_error (error, "Opening cachedir '%s': ", opt_cachedir);
-              return FALSE;
-            }
+            return glnx_prefix_error (error, "Opening cachedir");
         }
       else
         {
