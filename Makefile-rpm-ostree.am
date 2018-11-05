@@ -115,10 +115,10 @@ EXTRA_DIST += $(LIBRPMOSTREE_RUST_SRCS) rust/Cargo.lock
 # Generate bindings from Rust to C
 if !HAVE_PREBUILT_CBINDGEN
 if HAVE_EXTERNAL_CBINDGEN
-rpmostree-rust.h: $(librpmostree_rust_path)
+rpmostree-rust.h:
 	$(AM_V_GEN) cbindgen -c rust/cbindgen.toml -o $@ $(top_srcdir)/rust
 else
-rpmostree-rust.h: $(librpmostree_rust_path) rpmostree-bindgen
+rpmostree-rust.h: rpmostree-bindgen
 	$(AM_V_GEN) ./rpmostree-bindgen $(top_srcdir)/rust
 endif
 BUILT_SOURCES += rpmostree-rust.h
