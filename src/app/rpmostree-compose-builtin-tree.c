@@ -684,6 +684,11 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
                    GCancellable    *cancellable,
                    GError         **error)
 {
+  /* Set this early here, so we only have to set it one more time in the
+   * complete exit path too.
+   */
+  *out_changed = FALSE;
+
   if (opt_print_only)
     {
       g_print ("%s\n", ror_treefile_get_json_string (self->treefile_rs));
@@ -716,11 +721,6 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
       if (fchdir (self->workdir_dfd) != 0)
         return glnx_throw_errno_prefix (error, "fchdir");
     }
-
-  /* Set this early here, so we only have to set it one more time in the
-   * complete exit path too.
-   */
-  *out_changed = FALSE;
 
   /* Read the previous commit */
   if (self->ref)
