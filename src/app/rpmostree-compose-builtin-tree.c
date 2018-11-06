@@ -552,7 +552,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
        * workdir underneath the cachedir; the same fs where the pkgcache repo is. */
 
       if (opt_workdir)
-        g_printerr ("note: --workdir is ignored for --ex-unified-core\n");
+        g_printerr ("note: --workdir is ignored for --unified-core\n");
 
       if (opt_cachedir)
         {

@@ -2682,7 +2682,7 @@ checkout_package_into_root (RpmOstreeContext *self,
 {
   OstreeRepo *pkgcache_repo = get_pkgcache_repo (self);
 
-  /* The below is currently TRUE only in the --ex-unified-core path. We probably want to
+  /* The below is currently TRUE only in the --unified-core path. We probably want to
    * migrate that over to always use a separate cache repo eventually, which would allow us
    * to completely drop the pkgcache_repo/ostreerepo dichotomy in the core. See:
    * https://github.com/projectatomic/rpm-ostree/pull/1055 */
@@ -3341,7 +3341,7 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
   /* In an unprivileged case, we can't do this on the real filesystem. For `ex
    * container`, we want to completely ignore uid/gid.
    *
-   * TODO: For non-root `--ex-unified-core` we need to do it as a commit modifier.
+   * TODO: For non-root `--unified-core` we need to do it as a commit modifier.
    */
   if (getuid () != 0)
     return TRUE;  /* 🔚 Early return */
