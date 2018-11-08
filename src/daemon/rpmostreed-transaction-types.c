@@ -338,13 +338,12 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
     }
 
-  g_autoptr(OstreeAsyncProgress) progress =
-    ostree_async_progress_new ();
-  rpmostreed_transaction_connect_download_progress (transaction, progress);
   rpmostreed_transaction_connect_signature_progress (transaction, repo);
 
   if (self->revision != NULL)
     {
+      g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new ();
+      rpmostreed_transaction_connect_download_progress (transaction, progress);
       if (!apply_revision_override (transaction, repo, progress, origin,
                                     self->revision, cancellable, error))
         return FALSE;
@@ -362,12 +361,14 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
     }
 
   gboolean changed = FALSE;
-  if (!rpmostree_sysroot_upgrader_pull_base (upgrader, "/usr/share/rpm",
-                                             0, progress, &changed,
-                                             cancellable, error))
-    return FALSE;
-
-  rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+  { g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new ();
+    rpmostreed_transaction_connect_download_progress (transaction, progress);
+    if (!rpmostree_sysroot_upgrader_pull_base (upgrader, "/usr/share/rpm",
+                                               0, progress, &changed,
+                                               cancellable, error))
+      return FALSE;
+    rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+  }
 
   if (!changed)
     {
@@ -860,14 +861,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
     }
 
-  g_autoptr(OstreeAsyncProgress) progress =
-    ostree_async_progress_new ();
-
-  rpmostreed_transaction_connect_download_progress (transaction, progress);
   rpmostreed_transaction_connect_signature_progress (transaction, repo);
 
   if (self->revision)
     {
+      g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new ();
+      rpmostreed_transaction_connect_download_progress (transaction, progress);
       if (!apply_revision_override (transaction, repo, progress, origin,
                                     self->revision, cancellable, error))
         return FALSE;
@@ -1138,9 +1137,12 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (download_metadata_only)
         flags |= OSTREE_REPO_PULL_FLAGS_COMMIT_ONLY;
 
+      g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new ();
+      rpmostreed_transaction_connect_download_progress (transaction, progress);
       if (!rpmostree_sysroot_upgrader_pull_base (upgrader, NULL, flags, progress,
                                                  &base_changed, cancellable, error))
         return FALSE;
+      rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
       if (base_changed)
         changed = TRUE;
@@ -1265,9 +1267,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (!rpmostree_sysroot_upgrader_import_pkgs (upgrader, cancellable, error))
         return FALSE;
     }
-
-  /* XXX: check if this is needed */
-  rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
 
   /* TODO - better logic for "changed" based on deployments */
   if (changed || self->refspec)
