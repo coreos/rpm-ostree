@@ -17,13 +17,16 @@
  */
 
 extern crate c_utf8;
+extern crate clap;
 extern crate curl;
 extern crate gio_sys;
 extern crate glib;
 extern crate glib_sys;
 extern crate indicatif;
+extern crate ipc_channel;
 extern crate libc;
 extern crate openat;
+extern crate prctl;
 extern crate tempfile;
 
 #[macro_use]
@@ -44,3 +47,5 @@ mod journal;
 pub use journal::*;
 mod utils;
 pub use utils::*;
+mod multiproc;
+pub use multiproc::*;

@@ -50,6 +50,7 @@ BUILTINPROTO(uninstall);
 BUILTINPROTO(override);
 BUILTINPROTO(kargs);
 BUILTINPROTO(start_daemon);
+BUILTINPROTO(multiproc_worker);
 BUILTINPROTO(ex);
 
 #undef BUILTINPROTO
