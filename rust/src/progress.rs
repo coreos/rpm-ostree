@@ -76,7 +76,9 @@ impl ProgressState {
             }
             ProgressType::Percent => {
                 let pb = ProgressBar::new(100);
-                pb.set_style(style.template("{spinner} {prefix} {pos:>3}% [{bar:20}] ({eta}) {msg}"));
+                pb.set_style(
+                    style.template("{spinner} {prefix} {pos:>3}% [{bar:20}] ({eta}) {msg}"),
+                );
                 pb
             }
         };
@@ -142,7 +144,7 @@ fn n_digits(n: u64) -> u32 {
     let mut n = n;
     while n >= 10 {
         width += 1;
-        n = n/10;
+        n = n / 10;
     }
     width
 }
@@ -166,9 +168,9 @@ mod tests {
 
 mod ffi {
     use super::*;
-    use std::sync::MutexGuard;
     use ffiutil::*;
     use libc;
+    use std::sync::MutexGuard;
 
     fn assert_empty(m: &MutexGuard<Option<ProgressState>>) {
         if let Some(ref state) = **m {
