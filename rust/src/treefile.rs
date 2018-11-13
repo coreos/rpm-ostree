@@ -96,7 +96,10 @@ fn treefile_parse_stream<R: io::Read>(
         (Some(arch), Some(treeref)) => {
             let mut varsubsts = HashMap::new();
             varsubsts.insert("basearch".to_string(), arch.to_string());
-            Some(utils::varsubst(&treeref, &varsubsts)?)
+            Some(
+                utils::varsubst(&treeref, &varsubsts)
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?,
+            )
         }
         (_, v) => v,
     };

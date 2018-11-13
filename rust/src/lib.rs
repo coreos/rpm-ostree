@@ -18,6 +18,8 @@
 
 extern crate c_utf8;
 extern crate curl;
+#[macro_use]
+extern crate failure;
 extern crate gio_sys;
 extern crate glib;
 extern crate glib_sys;

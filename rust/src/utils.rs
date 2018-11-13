@@ -16,6 +16,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+use failure::Error;
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::{fs, io};
@@ -44,8 +45,7 @@ fn download_url_to_tmpfile(url: &str) -> io::Result<fs::File> {
 /// Given an input string `s`, replace variables of the form `${foo}` with
 /// values provided in `vars`.  No quoting syntax is available, so it is
 /// not possible to have a literal `${` in the string.
-#[allow(dead_code)]
-pub fn varsubst(instr: &str, vars: &HashMap<String, String>) -> io::Result<String> {
+pub fn varsubst(instr: &str, vars: &HashMap<String, String>) -> Result<String, Error> {
     let mut buf = instr;
     let mut s = "".to_string();
     while buf.len() > 0 {
@@ -59,17 +59,11 @@ pub fn varsubst(instr: &str, vars: &HashMap<String, String>) -> io::Result<Strin
                 if let Some(val) = vars.get(varname) {
                     s.push_str(val);
                 } else {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        format!("Unknown variable reference ${{{}}}", varname),
-                    ));
+                    bail!("Unknown variable reference ${{{}}}", varname);
                 }
                 buf = remainder;
             } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("Unclosed variable"),
-                ));
+                bail!("Unclosed variable");
             }
         } else {
             s.push_str(buf);

@@ -19,10 +19,9 @@
 use gio_sys;
 use glib_sys;
 use libc;
-use std;
-use std::error::Error;
 use std::ffi::CStr;
 use std::ffi::CString;
+use std::fmt::Display;
 use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::{io, ptr};
 
@@ -76,13 +75,13 @@ pub fn ref_from_raw_ptr<T>(p: *mut T) -> &'static mut T {
 // return a Result (using the std Error).
 // TODO: Try upstreaming this into the glib crate?
 
-pub fn error_to_glib(e: &Error, gerror: *mut *mut glib_sys::GError) {
+pub fn error_to_glib<E: Display>(e: &E, gerror: *mut *mut glib_sys::GError) {
     if gerror.is_null() {
         return;
     }
     unsafe {
         assert!((*gerror).is_null());
-        let c_msg = CString::new(e.description()).unwrap();
+        let c_msg = CString::new(e.to_string()).unwrap();
         *gerror = glib_sys::g_error_new_literal(
             gio_sys::g_io_error_quark(),
             gio_sys::G_IO_ERROR_FAILED,
@@ -94,7 +93,7 @@ pub fn error_to_glib(e: &Error, gerror: *mut *mut glib_sys::GError) {
 #[allow(dead_code)]
 pub fn int_glib_error<T, E>(res: Result<T, E>, gerror: *mut *mut glib_sys::GError) -> libc::c_int
 where
-    E: std::error::Error,
+    E: Display,
 {
     match res {
         Ok(_) => 1,
@@ -107,7 +106,7 @@ where
 
 pub fn ptr_glib_error<T, E>(res: Result<Box<T>, E>, gerror: *mut *mut glib_sys::GError) -> *mut T
 where
-    E: std::error::Error,
+    E: Display,
 {
     match res {
         Ok(v) => Box::into_raw(v),
