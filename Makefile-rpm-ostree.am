@@ -127,10 +127,6 @@ endif
 
 rpm_ostree_CFLAGS += $(PKGDEP_RPMOSTREE_RS_CFLAGS)
 rpm_ostree_LDADD += $(librpmostree_rust_path) $(PKGDEP_RPMOSTREE_RS_LIBS)
-rustfmt:
-	rustfmt $(filter %.rs,$(LIBRPMOSTREE_RUST_SRCS))
-# Outside the ifdef, otherwise automake complains
-.PHONY: rustfmt
 
 # Wraps `cargo test`.  This is always a debug non-release build;
 # the main thing here is we still drop the `target` dir in our build
