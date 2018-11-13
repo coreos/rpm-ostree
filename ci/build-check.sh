@@ -5,6 +5,25 @@ set -xeuo pipefail
 
 dn=$(dirname $0)
 . ${dn}/libbuild.sh
+
+# Add checks here which depend on the build container
+# but don't require a full build (code static analysis).
+if test -x /usr/bin/rustfmt; then
+    echo "Verifying rustfmt"
+    if !git diff --quiet --exit-code; then
+        echo "outstanding diff before rustfmt" 1>&2
+        exit 1
+    fi
+    make -f Makefile-extra.inc rustfmt
+    if git diff --quiet --exit-code; then
+        git diff
+        echo "Please run rustfmt"
+        exit 1
+    fi
+else
+    echo "No /usr/bin/rustfmt, skipping"
+fi
+
 ${dn}/build.sh
 # NB: avoid make function because our RPM building doesn't
 # support parallel runs right now

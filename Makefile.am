@@ -16,6 +16,7 @@
 # Boston, MA 02111-1307, USA.
 
 include Makefile-decls.am
+include Makefile-extra.inc
 
 newname = nts
 if BUILDOPT_NEW_NAME
