@@ -16,7 +16,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-use failure::Error;
+use failure::Fallible;
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::{fs, io};
@@ -45,7 +45,7 @@ fn download_url_to_tmpfile(url: &str) -> io::Result<fs::File> {
 /// Given an input string `s`, replace variables of the form `${foo}` with
 /// values provided in `vars`.  No quoting syntax is available, so it is
 /// not possible to have a literal `${` in the string.
-pub fn varsubst(instr: &str, vars: &HashMap<String, String>) -> Result<String, Error> {
+pub fn varsubst(instr: &str, vars: &HashMap<String, String>) -> Fallible<String> {
     let mut buf = instr;
     let mut s = "".to_string();
     while buf.len() > 0 {
