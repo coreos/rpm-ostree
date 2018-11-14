@@ -15,7 +15,14 @@ rm -rf ${DESTDIR}
 mkdir -p ${DESTDIR}
 
 ostree --version
-for pkg in ostree{,-libs,-grub2}; do
+# We don't want to sync all of userspace, just things
+# that rpm-ostree links to or uses and tend to drift
+# in important ways.
+pkgs="libsolv"
+if rpm -q zchunk-libs 2>/dev/null; then
+    pkgs="${pkgs} zchunk-libs"
+fi
+for pkg in ostree{,-libs,-grub2} ${pkgs}; do
 
     rpm -q $pkg
 
