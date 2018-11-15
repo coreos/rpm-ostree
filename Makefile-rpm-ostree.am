@@ -93,7 +93,7 @@ if !HAVE_EXTERNAL_CBINDGEN
 rpmostree-bindgen: bindgen/Cargo.toml bindgen/src/main.rs
 	cd $(top_srcdir)/bindgen && \
 	export CARGO_TARGET_DIR=@abs_top_builddir@/bindgen-target && \
-	if test -d "$${CARGO_TARGET_DIR}" && [ "$$(stat -c '%u' ${target_subdir})" != "$$(id -u)" ]; then echo "mismatched uids on build"; exit 1; fi && \
+	if test -d "$${CARGO_TARGET_DIR}" && [ "$$(stat -c '%u' $${CARGO_TARGET_DIR})" != "$$(id -u)" ]; then echo "mismatched uids on build"; exit 1; fi && \
 	$(cargo_build) && \
 	ln -sf $${CARGO_TARGET_DIR}/debug/rpmostree-bindgen $(abs_top_builddir)/rpmostree-bindgen
 endif
