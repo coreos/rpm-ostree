@@ -76,6 +76,7 @@ class Host:
         self.hostname = hostname
         self.test = ""
         self._p = None
+        self._starttime = None
         self.saw_fail = False
 
     def is_done(self):
@@ -94,6 +95,7 @@ class Host:
         if not os.path.isdir("vmcheck"):
             os.mkdir("vmcheck")
         testsh = os.path.join(sys.path[0], "test.sh")
+        self._starttime = time.time()
         self._p = subprocess.Popen([testsh], env=env,
                                    stdout=open("vmcheck/%s.log" % test, 'wb'),
                                    stderr=subprocess.STDOUT)
@@ -104,6 +106,7 @@ class Host:
         if not self._p:
             return 0
         rc = self._p.wait()
+        endtime = time.time()
 
         # just merge the two files
         outfile = "vmcheck/{}.out".format(self.test)
@@ -115,6 +118,7 @@ class Host:
 
         rcs = "PASS" if rc == 0 else ("FAIL (rc %d)" % rc)
         print("%s: %s" % (rcs, self.test))
+        print("Execution took {} seconds".format(int(endtime - self._starttime)))
 
         self.test = ""
         self._p = None
