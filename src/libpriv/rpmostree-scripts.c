@@ -375,7 +375,8 @@ run_script_in_bwrap_container (int rootfs_fd,
    *
    * See above for why we special case glibc.
    */
-  const gboolean is_glibc_locales = strcmp (pkg_script, "glibc-all-langpacks.posttrans") == 0;
+  const gboolean is_glibc_locales = strcmp (pkg_script, "glibc-all-langpacks.posttrans") == 0 ||
+    strcmp (pkg_script, "glibc-common.post") == 0;
   RpmOstreeBwrapMutability mutability =
     (is_glibc_locales || !enable_fuse) ? RPMOSTREE_BWRAP_MUTATE_FREELY : RPMOSTREE_BWRAP_MUTATE_ROFILES;
   bwrap = rpmostree_bwrap_new (rootfs_fd,
@@ -506,9 +507,11 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
   if (headerGet (hdr, rpmscript->progtag, &td, (HEADERGET_ALLOC|HEADERGET_ARGV)))
     args = td.data;
 
+  const rpmFlags flags = headerGetNumber (hdr, rpmscript->flagtag);
   const char *script;
   const char *interp = (args && args[0]) ? args[0] : "/bin/sh";
   const char *pkg_scriptid = glnx_strjoina (dnf_package_get_name (pkg), ".", rpmscript->desc + 1);
+  gboolean expand = (flags & RPMSCRIPT_FLAG_EXPAND) > 0;
   if (g_str_equal (interp, lua_builtin))
     {
       /* This is a lua script; look for a built-in override/replacement */
@@ -529,6 +532,10 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
           g_assert (!fail_if_interp_is_lua (interp, dnf_package_get_name (pkg), rpmscript->desc, error));
           return FALSE;
         }
+
+      /* Hack around RHEL7's glibc-locales, which uses rpm-expand in the Lua script */
+      if (strcmp (pkg_scriptid, "glibc-common.post") == 0)
+        expand = TRUE;
     }
   else
     {
@@ -552,8 +559,7 @@ impl_run_rpm_script (const KnownRpmScriptKind *rpmscript,
     }
   g_autofree char *script_owned = NULL;
   g_assert (script);
-  const rpmFlags flags = headerGetNumber (hdr, rpmscript->flagtag);
-  if (flags & RPMSCRIPT_FLAG_EXPAND)
+  if (expand)
     script = script_owned = rpmExpand (script, NULL);
 
   /* http://ftp.rpm.org/max-rpm/s1-rpm-inside-scripts.html#S2-RPM-INSIDE-ERASE-TIME-SCRIPTS */
