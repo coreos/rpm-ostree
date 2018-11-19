@@ -118,8 +118,7 @@ class Host:
             os.remove(outfile)
 
         rcs = "PASS" if rc == 0 else ("FAIL (rc %d)" % rc)
-        print("%s: %s" % (rcs, self.test))
-        print("Execution took {} seconds".format(int(endtime - self._starttime)))
+        print("{}: {} (took {}s)".format(rcs, self.test, int(endtime - self._starttime)))
 
         self.test = ""
         self._p = None
