@@ -105,7 +105,7 @@ class Host:
     def flush(self):
         if not self._p:
             return 0
-        print("Waiting for completion of {} (pid={})".format(self.test, self._p.pid))
+        print("WAITING: {} (pid={})".format(self.test, self._p.pid))
         rc = self._p.wait()
         endtime = time.time()
 
