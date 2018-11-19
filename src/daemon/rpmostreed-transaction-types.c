@@ -347,6 +347,7 @@ package_diff_transaction_execute (RpmostreedTransaction *transaction,
       if (!apply_revision_override (transaction, repo, progress, origin,
                                     self->revision, cancellable, error))
         return FALSE;
+      rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
     }
   else if (upgrading)
     {
@@ -870,6 +871,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (!apply_revision_override (transaction, repo, progress, origin,
                                     self->revision, cancellable, error))
         return FALSE;
+      rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
     }
   else
     {
