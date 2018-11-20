@@ -307,6 +307,9 @@ rpmostreed_repo_pull_ancestry (OstreeRepo               *repo,
                                               g_variant_dict_end (&options),
                                               progress, cancellable, error))
             goto out;
+
+          if (progress)
+            ostree_async_progress_finish (progress);
         }
 
       /* First pass only.  Now we can resolve the ref to a checksum. */
