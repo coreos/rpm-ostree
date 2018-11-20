@@ -930,7 +930,7 @@ rpmostree_importer_run (RpmOstreeImporter *self,
   if (!import_rpm_to_repo (self, &csum, cancellable, error))
     {
       g_autofree char *name = headerGetAsString (self->hdr, RPMTAG_NAME);
-      g_prefix_error (error, "Importing %s: ", name);
+      g_prefix_error (error, "Importing package %s: ", name);
       return FALSE;
     }
 

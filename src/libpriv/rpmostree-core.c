@@ -1131,7 +1131,7 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
                                              G_CALLBACK (on_hifstate_percentage_changed),
                                              NULL);
     g_auto(RpmOstreeProgress) progress = { 0, };
-    rpmostree_output_progress_percent_begin (&progress, "Importing metadata");
+    rpmostree_output_progress_percent_begin (&progress, "Importing rpm-md");
 
     /* This will check the metadata again, but it *should* hit the cache; down
      * the line we should really improve the libdnf API around all of this.
@@ -2374,7 +2374,7 @@ rpmostree_context_import_rojig (RpmOstreeContext *self,
   self->async_cancellable = cancellable;
 
   g_auto(RpmOstreeProgress) progress = { 0, };
-  rpmostree_output_progress_nitems_begin (&progress, self->pkgs_to_import->len, "Importing");
+  rpmostree_output_progress_nitems_begin (&progress, self->pkgs_to_import->len, "Importing packages");
 
   /* Process imports */
   GMainContext *mainctx = g_main_context_get_thread_default ();
