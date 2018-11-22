@@ -35,9 +35,6 @@ static RpmOstreeCommand ex_subcommands[] = {
   { "reset", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
     "Remove all mutations",
     rpmostree_ex_builtin_reset },
-  /* temporary aliases; nuke in next version */
-  { "kargs", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
-    NULL, rpmostree_builtin_kargs },
   { NULL, 0, NULL, NULL }
 };
 
