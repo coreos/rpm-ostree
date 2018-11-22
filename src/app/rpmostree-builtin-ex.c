@@ -32,9 +32,9 @@ static RpmOstreeCommand ex_subcommands[] = {
     "Convert an OSTree commit into an rpm-ostree rojig", rpmostree_ex_builtin_commit2rojig },
   { "rojig2commit", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD,
     "Convert an rpm-ostree rojig into an OSTree commit", rpmostree_ex_builtin_rojig2commit },
-  { "reset", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS,
-    "Remove all mutations",
-    rpmostree_ex_builtin_reset },
+  /* temporary aliases; nuke in next version */
+  { "reset", RPM_OSTREE_BUILTIN_FLAG_SUPPORTS_PKG_INSTALLS | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+    NULL, rpmostree_builtin_reset },
   { NULL, 0, NULL, NULL }
 };
 

@@ -124,7 +124,7 @@ vm_cmd cat /usr/share/rpmostree-lua-override-test-expand > lua-override-expand.t
 diff -u install-langs.txt lua-override-expand.txt
 echo "ok script override"
 
-vm_rpmostree ex reset
+vm_rpmostree reset
 vm_reboot
 vm_rpmostree cleanup -pr
 # File triggers are Fedora+

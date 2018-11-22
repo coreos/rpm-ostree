@@ -115,7 +115,7 @@ echo "ok livefs preserved rollback"
 
 # Reset to rollback, undeploy pending
 reset() {
-    vm_rpmostree ex reset
+    vm_rpmostree reset
     vm_reboot
     vm_rpmostree cleanup -r
     vm_assert_status_jq '.deployments|length == 1' '.deployments[0]["live-replaced"]|not'

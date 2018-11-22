@@ -52,7 +52,7 @@ vm_assert_status_jq \
 echo "ok setup"
 
 # check removing layering only
-vm_rpmostree ex reset --overlays
+vm_rpmostree reset --overlays
 vm_assert_status_jq \
   '.deployments[0]["packages"]|length == 0' \
   '.deployments[0]["requested-packages"]|length == 0' \
@@ -63,7 +63,7 @@ vm_rpmostree cleanup -p
 echo "ok reset overlays"
 
 # check removing overrides only
-vm_rpmostree ex reset --overrides
+vm_rpmostree reset --overrides
 vm_assert_status_jq \
   '.deployments[0]["packages"]|length == 1' \
   '.deployments[0]["requested-packages"]|length == 1' \
@@ -74,7 +74,7 @@ vm_rpmostree cleanup -p
 echo "ok reset overrides"
 
 # check stopping initramfs only
-vm_rpmostree ex reset --initramfs
+vm_rpmostree reset --initramfs
 vm_assert_status_jq \
   '.deployments[0]["packages"]|length == 1' \
   '.deployments[0]["requested-packages"]|length == 1' \
@@ -85,7 +85,7 @@ vm_rpmostree cleanup -p
 echo "ok reset initramfs"
 
 # all together now
-vm_rpmostree ex reset
+vm_rpmostree reset
 vm_assert_status_jq \
   '.deployments[0]["packages"]|length == 0' \
   '.deployments[0]["requested-packages"]|length == 0' \
@@ -97,7 +97,7 @@ echo "ok reset EVERYTHING"
 
 # reset everything and overlay at the same time
 vm_build_rpm a-new-package
-vm_rpmostree ex reset --install a-new-package
+vm_rpmostree reset --install a-new-package
 vm_assert_status_jq \
   '.deployments[0]["packages"]|length == 1' \
   '.deployments[0]["packages"]|index("a-new-package") >= 0' \

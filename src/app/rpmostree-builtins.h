@@ -49,6 +49,7 @@ BUILTINPROTO(install);
 BUILTINPROTO(uninstall);
 BUILTINPROTO(override);
 BUILTINPROTO(kargs);
+BUILTINPROTO(reset);
 BUILTINPROTO(start_daemon);
 BUILTINPROTO(ex);
 
