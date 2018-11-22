@@ -46,11 +46,11 @@ static GOptionEntry option_entries[] = {
 };
 
 gboolean
-rpmostree_ex_builtin_reset (int             argc,
-                            char          **argv,
-                            RpmOstreeCommandInvocation *invocation,
-                            GCancellable   *cancellable,
-                            GError        **error)
+rpmostree_builtin_reset (int             argc,
+                         char          **argv,
+                         RpmOstreeCommandInvocation *invocation,
+                         GCancellable   *cancellable,
+                         GError        **error)
 {
   g_autoptr(GOptionContext) context = g_option_context_new ("");
   glnx_unref_object RPMOSTreeSysroot *sysroot_proxy = NULL;
