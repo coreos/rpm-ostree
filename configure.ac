@@ -5,7 +5,9 @@ dnl Then draft release notes highlighting changes and generate the shortlog usin
 dnl <https://github.com/cgwalters/homegit/blob/master/bin/git-shortlog-with-prs>.
 dnl Then use <https://github.com/cgwalters/git-evtag> to create a signed tag with the
 dnl release notes as its content.
-dnl Then, git push origin v201X.XX
+dnl Then git push origin v201X.XX.
+dnl Then create the xz tarball from `make -f Makefile.dist-packaging dist-snapshot`.
+dnl Then create a GitHub release for the new release tag and attach the tarball.
 m4_define([year_version], [2018])
 m4_define([release_version], [9])
 m4_define([package_version], [year_version.release_version])
