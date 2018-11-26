@@ -37,7 +37,7 @@ use openat;
 /// Convert a C (UTF-8) string to a &str; will panic
 /// if it isn't valid UTF-8.  Note the lifetime of
 /// the return value must be <= the pointer.
-pub fn str_from_nullable<'a>(s: *const libc::c_char) -> Option<&'a str> {
+pub fn ffi_view_nullable_str<'a>(s: *const libc::c_char) -> Option<&'a str> {
     if s.is_null() {
         None
     } else {
