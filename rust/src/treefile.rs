@@ -807,9 +807,8 @@ mod ffi {
     use glib_sys;
     use libc;
 
-    use std::ffi::{CString, OsStr};
+    use std::ffi::CString;
     use std::io::Seek;
-    use std::os::unix::ffi::OsStrExt;
     use std::os::unix::io::{AsRawFd, RawFd};
     use std::{fs, io, ptr};
 
@@ -830,7 +829,7 @@ mod ffi {
         gerror: *mut *mut glib_sys::GError,
     ) -> *mut Treefile {
         // Convert arguments
-        let filename = OsStr::from_bytes(bytes_from_nonnull(filename));
+        let filename = ffi_view_os_str(filename);
         let arch = ffi_view_nullable_str(arch);
         let workdir = ffi_view_openat_dir(workdir_dfd);
         // Run code, map error if any, otherwise extract raw pointer, passing
@@ -861,7 +860,7 @@ mod ffi {
         filename: *const libc::c_char,
     ) -> libc::c_int {
         let tf = ref_from_raw_ptr(tf);
-        let filename = OsStr::from_bytes(bytes_from_nonnull(filename));
+        let filename = ffi_view_os_str(filename);
         let filename = filename.to_string_lossy().into_owned();
         raw_seeked_fd(tf.externals.add_files.get_mut(&filename).expect("add-file"))
     }
