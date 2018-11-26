@@ -593,14 +593,25 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
                   g_str_equal (ochange_text, nchange_text))
                 break;
 
+#define CHANGELOG_INDENTATION "    "
+
+              g_autofree char *indented_nchange_text = NULL;
+              if (strchr (nchange_text, '\n'))
+                {
+                  g_auto(GStrv) lines = g_strsplit (nchange_text, "\n", 0);
+                  indented_nchange_text = g_strjoinv ("\n" CHANGELOG_INDENTATION, lines);
+                }
+
               /* Otherwise, print. */
               dt = g_date_time_new_from_unix_utc (nchange_date);
               date_time_str = g_date_time_format (dt, "%a %b %d %Y");
               g_date_time_unref (dt);
 
-              g_print ("    * %s %s\n"
-                       "    %s\n\n", date_time_str, nchange_name,
-                       nchange_text);
+              g_print (CHANGELOG_INDENTATION "* %s %s\n"
+                       CHANGELOG_INDENTATION "%s\n\n", date_time_str, nchange_name,
+                       indented_nchange_text ?: nchange_text);
+
+#undef CHANGELOG_INDENTATION
 
               --ncnum;
             }
