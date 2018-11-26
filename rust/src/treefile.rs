@@ -832,13 +832,7 @@ mod ffi {
         // Convert arguments
         let filename = OsStr::from_bytes(bytes_from_nonnull(filename));
         let arch = str_from_nullable(arch);
-        let workdir = match dir_from_dfd(workdir_dfd) {
-            Ok(p) => p,
-            Err(e) => {
-                error_to_glib(&e, gerror);
-                return ptr::null_mut();
-            }
-        };
+        let workdir = ffi_view_openat_dir(workdir_dfd);
         // Run code, map error if any, otherwise extract raw pointer, passing
         // ownership back to C.
         ptr_glib_error(
