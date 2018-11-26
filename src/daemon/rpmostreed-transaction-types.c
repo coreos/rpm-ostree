@@ -749,8 +749,9 @@ get_sack_for_booted (OstreeSysroot    *sysroot,
     return FALSE;
 
   DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
+
   /* we always want to force a refetch of the metadata */
-  dnf_context_set_cache_age (dnfctx, 0);
+  rpmostree_context_set_dnf_caching (ctx, RPMOSTREE_CONTEXT_DNF_CACHE_NEVER);
 
   /* point libdnf to our repos dir */
   rpmostree_context_configure_from_deployment (ctx, sysroot, booted_deployment);
@@ -1928,10 +1929,7 @@ refresh_md_transaction_execute (RpmostreedTransaction *transaction,
     return FALSE;
 
   if (force)
-    {
-      DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
-      dnf_context_set_cache_age (dnfctx, 0);
-    }
+    rpmostree_context_set_dnf_caching (ctx, RPMOSTREE_CONTEXT_DNF_CACHE_NEVER);
 
   /* point libdnf to our repos dir */
   rpmostree_context_configure_from_deployment (ctx, sysroot, cfg_merge_deployment);

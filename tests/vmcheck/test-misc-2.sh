@@ -204,13 +204,16 @@ EOF
 vm_rpmostree cleanup -rpmb
 vm_cmd rm -f /etc/yum.repos.d/vmcheck.repo
 vm_build_rpm_repo_mode skip refresh-md-old-pkg
-vm_rpmostree refresh-md
+vm_rpmostree refresh-md | tee out.txt
+assert_file_has_content_literal out.txt "Updating metadata for 'vmcheck-http'"
 vm_build_rpm_repo_mode skip refresh-md-new-pkg
-vm_rpmostree refresh-md # shouldn't do anything since it hasn't expired yet
+vm_rpmostree refresh-md | tee out.txt # shouldn't do anything since it hasn't expired yet
+assert_file_has_content_literal out.txt "rpm-md repo 'vmcheck-http' (cached)"
 if vm_rpmostree install refresh-md-new-pkg --dry-run; then
   assert_not_reached "successfully dry-run installed new pkg from cached rpmmd?"
 fi
-vm_rpmostree refresh-md -f
+vm_rpmostree refresh-md -f | tee out.txt
+assert_file_has_content_literal out.txt "Updating metadata for 'vmcheck-http'"
 if ! vm_rpmostree install refresh-md-new-pkg --dry-run; then
   assert_not_reached "failed to dry-run install new pkg from cached rpmmd?"
 fi
