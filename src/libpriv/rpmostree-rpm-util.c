@@ -598,7 +598,8 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
               date_time_str = g_date_time_format (dt, "%a %b %d %Y");
               g_date_time_unref (dt);
 
-              g_print ("* %s %s\n%s\n\n", date_time_str, nchange_name,
+              g_print ("    * %s %s\n"
+                       "    %s\n\n", date_time_str, nchange_name,
                        nchange_text);
 
               --ncnum;
