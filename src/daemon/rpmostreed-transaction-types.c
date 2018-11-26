@@ -734,7 +734,6 @@ static gboolean
 get_sack_for_booted (OstreeSysroot    *sysroot,
                      OstreeRepo       *repo,
                      OstreeDeployment *booted_deployment,
-                     gboolean          force_refresh,
                      DnfSack         **out_sack,
                      GCancellable     *cancellable,
                      GError          **error)
@@ -750,10 +749,8 @@ get_sack_for_booted (OstreeSysroot    *sysroot,
     return FALSE;
 
   DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
-  if (force_refresh)
-    dnf_context_set_cache_age (dnfctx, 0);
-  else
-    dnf_context_set_cache_age (dnfctx, G_MAXUINT);
+  /* we always want to force a refetch of the metadata */
+  dnf_context_set_cache_age (dnfctx, 0);
 
   /* point libdnf to our repos dir */
   rpmostree_context_configure_from_deployment (ctx, sysroot, booted_deployment);
@@ -1239,8 +1236,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       g_autoptr(DnfSack) sack = NULL;
       if (g_hash_table_size (rpmostree_origin_get_packages (origin)) > 0)
         {
-          /* we always want to force a refetch of the metadata */
-          if (!get_sack_for_booted (sysroot, repo, booted_deployment, TRUE, &sack,
+          if (!get_sack_for_booted (sysroot, repo, booted_deployment, &sack,
                                     cancellable, error))
             return FALSE;
         }
