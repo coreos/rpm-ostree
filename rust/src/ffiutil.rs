@@ -30,7 +30,7 @@ use openat;
 /* Wrapper functions for translating basic types from C to Rust.
  *
  * Functions named `ffi_view_` do not take ownership of their argument; they
- * should be used "convert" input parameters from C types to Rust.  Be careful
+ * should be used to "convert" input parameters from C types to Rust.  Be careful
  * not to store the parameters outside of the function call.
  */
 
@@ -63,7 +63,7 @@ pub fn bytes_from_nonnull<'a>(s: *const libc::c_char) -> &'a [u8] {
 // must be less than or equal to that of parameter.
 pub fn ffi_view_openat_dir(fd: libc::c_int) -> openat::Dir {
     let src = unsafe { openat::Dir::from_raw_fd(fd) };
-    let r = src.sub_dir(".").expect("dir_from_dfd");
+    let r = src.sub_dir(".").expect("ffi_view_openat_dir");
     let _ = src.into_raw_fd();
     r
 }
