@@ -23,11 +23,16 @@ use std::ffi::CStr;
 use std::ffi::CString;
 use std::fmt::Display;
 use std::os::unix::io::{FromRawFd, IntoRawFd};
-use std::{io, ptr};
+use std::ptr;
 
 use openat;
 
-/* Wrapper functions for translating basic types from C to Rust */
+/* Wrapper functions for translating basic types from C to Rust.
+ *
+ * Functions named `ffi_view_` do not take ownership of their argument; they
+ * should be used to "convert" input parameters from C types to Rust.  Be careful
+ * not to store the parameters outside of the function call.
+ */
 
 /// Convert a C (UTF-8) string to a &str; will panic
 /// if it isn't valid UTF-8.  Note the lifetime of
@@ -54,11 +59,13 @@ pub fn bytes_from_nonnull<'a>(s: *const libc::c_char) -> &'a [u8] {
     unsafe { CStr::from_ptr(s) }.to_bytes()
 }
 
-pub fn dir_from_dfd(fd: libc::c_int) -> io::Result<openat::Dir> {
+// View `fd` as an `openat::Dir` instance.  Lifetime of return value
+// must be less than or equal to that of parameter.
+pub fn ffi_view_openat_dir(fd: libc::c_int) -> openat::Dir {
     let src = unsafe { openat::Dir::from_raw_fd(fd) };
-    let r = src.sub_dir(".")?;
+    let r = src.sub_dir(".").expect("ffi_view_openat_dir");
     let _ = src.into_raw_fd();
-    Ok(r)
+    r
 }
 
 /// Assert that a raw pointer is not `NULL`, and cast it to a Rust reference
