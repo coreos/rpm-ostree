@@ -212,7 +212,7 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_progress_set_sub_message(msg: *const libc::c_char) {
-        let msg = str_from_nullable(msg);
+        let msg = ffi_view_nullable_str(msg);
         let mut lock = PROGRESS.lock().unwrap();
         let state = lock.as_mut().expect("progress to update");
         state.set_sub_message(msg);
@@ -227,7 +227,7 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_progress_end(suffix: *const libc::c_char) {
-        let suffix = str_from_nullable(suffix);
+        let suffix = ffi_view_nullable_str(suffix);
         let mut lock = PROGRESS.lock().unwrap();
         let state = lock.take().expect("progress to end");
         state.end(suffix);

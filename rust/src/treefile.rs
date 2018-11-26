@@ -831,7 +831,7 @@ mod ffi {
     ) -> *mut Treefile {
         // Convert arguments
         let filename = OsStr::from_bytes(bytes_from_nonnull(filename));
-        let arch = str_from_nullable(arch);
+        let arch = ffi_view_nullable_str(arch);
         let workdir = ffi_view_openat_dir(workdir_dfd);
         // Run code, map error if any, otherwise extract raw pointer, passing
         // ownership back to C.

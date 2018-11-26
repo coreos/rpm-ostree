@@ -128,7 +128,7 @@ mod ffi {
         url: *const libc::c_char,
         gerror: *mut *mut glib_sys::GError,
     ) -> libc::c_int {
-        let url = str_from_nullable(url).unwrap();
+        let url = ffi_view_nullable_str(url).unwrap();
         match download_url_to_tmpfile(url) {
             Ok(f) => f.into_raw_fd(),
             Err(e) => {
@@ -144,7 +144,7 @@ mod ffi {
         h: *mut glib_sys::GHashTable,
         gerror: *mut *mut glib_sys::GError,
     ) -> *mut libc::c_char {
-        let s = str_from_nullable(s).unwrap();
+        let s = ffi_view_nullable_str(s).unwrap();
         let h_rs: HashMap<String, String> =
             unsafe { glib::translate::FromGlibPtrContainer::from_glib_none(h) };
         match varsubst(s, &h_rs) {
