@@ -28,11 +28,31 @@ use std::ptr;
 
 use openat;
 
-/* Wrapper functions for translating basic types from C to Rust.
+/* Helper functions for FFI between C and Rust.
+ *
+ * This code assumes that it was compiled with the system allocator:
+ * https://doc.rust-lang.org/beta/std/alloc/struct.System.html
+ * Which means that e.g. returning a Box<str> from Rust can be safely
+ * freed on the C side with the C library's `free()`.
+ *
+ * Panics: As a general rule these functions will panic if provided with invalid
+ * input. For example, `ffi_new_string` will panic if provided invalid UTF-8,
+ * and `ffi_view_openat_dir` will panic if the file descriptor is invalid.  The
+ * rationale here is that if the C state is corrupted, it's possible (likely even)
+ * that the Rust side is as well, since (as above) they share a heap allocator.
+ *
+ * Further, this code all assumes that it was compiled with `panic=abort` mode,
+ * since it's undefined behavior to panic across an FFI boundary.  Best practice
+ * is to use this FFI code to translate to safe Rust.
+ *
+ * Naming conventions:
  *
  * Functions named `ffi_view_` do not take ownership of their argument; they
  * should be used to "convert" input parameters from C types to Rust.  Be careful
  * not to store the parameters outside of the function call.
+ *
+ * Functions named `ffi_new_` create a copy of their inputs, and can safely
+ * outlive the function call.
  */
 
 /// Convert a C (UTF-8) string to a &str; will panic
@@ -47,11 +67,11 @@ pub fn ffi_view_nullable_str<'a>(s: *const libc::c_char) -> Option<&'a str> {
     }
 }
 
-/// Given a NUL-terminated C string, convert it to an owned
+/// Given a NUL-terminated C string, copy it to an owned
 /// String.  Will panic if the C string is not valid UTF-8.
-pub fn string_from_nonnull(s: *const libc::c_char) -> String {
+pub fn ffi_new_string(s: *const libc::c_char) -> String {
     let buf = ffi_view_bytestring(s);
-    String::from_utf8(buf.into()).expect("string_from_nonnull: valid utf-8")
+    String::from_utf8(buf.into()).expect("ffi_new_string: valid utf-8")
 }
 
 /// View a C "bytestring" (NUL terminated) as a Rust byte array.

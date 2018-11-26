@@ -180,7 +180,7 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_progress_begin_task(msg: *const libc::c_char) {
-        let msg = string_from_nonnull(msg);
+        let msg = ffi_new_string(msg);
         let mut lock = PROGRESS.lock().unwrap();
         assert_empty(&lock);
         *lock = Some(ProgressState::new(msg, ProgressType::Task));
@@ -188,7 +188,7 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_progress_begin_n_items(msg: *const libc::c_char, n: libc::c_int) {
-        let msg = string_from_nonnull(msg);
+        let msg = ffi_new_string(msg);
         let mut lock = PROGRESS.lock().unwrap();
         assert_empty(&lock);
         *lock = Some(ProgressState::new(msg, ProgressType::NItems(n as u64)));
@@ -196,7 +196,7 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_progress_begin_percent(msg: *const libc::c_char) {
-        let msg = string_from_nonnull(msg);
+        let msg = ffi_new_string(msg);
         let mut lock = PROGRESS.lock().unwrap();
         assert_empty(&lock);
         *lock = Some(ProgressState::new(msg, ProgressType::Percent));
@@ -204,7 +204,7 @@ mod ffi {
 
     #[no_mangle]
     pub extern "C" fn ror_progress_set_message(msg: *const libc::c_char) {
-        let msg = string_from_nonnull(msg);
+        let msg = ffi_new_string(msg);
         let mut lock = PROGRESS.lock().unwrap();
         let state = lock.as_mut().expect("progress to update");
         state.set_message(msg);
