@@ -19,10 +19,11 @@
 use gio_sys;
 use glib_sys;
 use libc;
-use std::ffi::CStr;
+use std::ffi::{CStr, OsStr};
 use std::ffi::CString;
 use std::fmt::Display;
 use std::os::unix::io::{FromRawFd, IntoRawFd};
+use std::os::unix::ffi::OsStrExt;
 use std::ptr;
 
 use openat;
@@ -49,14 +50,21 @@ pub fn ffi_view_nullable_str<'a>(s: *const libc::c_char) -> Option<&'a str> {
 /// Given a NUL-terminated C string, convert it to an owned
 /// String.  Will panic if the C string is not valid UTF-8.
 pub fn string_from_nonnull(s: *const libc::c_char) -> String {
-    let buf = bytes_from_nonnull(s);
+    let buf = ffi_view_bytestring(s);
     String::from_utf8(buf.into()).expect("string_from_nonnull: valid utf-8")
 }
 
-/// Convert a C "bytestring" to a OsStr; panics if `s` is `NULL`.
-pub fn bytes_from_nonnull<'a>(s: *const libc::c_char) -> &'a [u8] {
+/// View a C "bytestring" (NUL terminated) as a Rust byte array.
+/// Panics if `s` is `NULL`.
+pub fn ffi_view_bytestring<'a>(s: *const libc::c_char) -> &'a [u8] {
     assert!(!s.is_null());
     unsafe { CStr::from_ptr(s) }.to_bytes()
+}
+
+/// View a C "bytestring" (NUL terminated) as a Rust OsStr.
+/// Panics if `s` is `NULL`.
+pub fn ffi_view_os_str<'a>(s: *const libc::c_char) -> &'a OsStr {
+    OsStr::from_bytes(ffi_view_bytestring (s))
 }
 
 // View `fd` as an `openat::Dir` instance.  Lifetime of return value
