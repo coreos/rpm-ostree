@@ -54,7 +54,6 @@ header_name_cmp (Header h1, Header h2)
   const char*    n1 = headerGetString (h1, RPMTAG_NAME);
   const char*    n2 = headerGetString (h2, RPMTAG_NAME);
   int cmp = strcmp (n1, n2);
-  /* printf("%s <=> %s = %u\n", n1, n2, cmp); */
   return cmp;
 }
 
@@ -420,7 +419,7 @@ rpmhdrs_list (struct RpmHeaders *l1)
   while (num < l1->hs->len)
     {
       Header h1 = l1->hs->pdata[num++];
-      printf (" ");
+      g_print (" ");
       pkg_print (h1);
     }
 }
@@ -599,8 +598,8 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
               date_time_str = g_date_time_format (dt, "%a %b %d %Y");
               g_date_time_unref (dt);
 
-              printf ("* %s %s\n%s\n\n", date_time_str, nchange_name,
-                      nchange_text);
+              g_print ("* %s %s\n%s\n\n", date_time_str, nchange_name,
+                       nchange_text);
 
               --ncnum;
             }
@@ -622,7 +621,7 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
               g_print ("Downgraded:\n");
             }
 
-          printf ("  ");
+          g_print ("  ");
           pkg_print_changed (ho, hn);
         }
     }
@@ -635,7 +634,7 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
         {
           Header hd = diff->hs_del->pdata[num];
 
-          printf ("  ");
+          g_print ("  ");
           pkg_print (hd);
         }
     }
@@ -648,7 +647,7 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
         {
           Header ha = diff->hs_add->pdata[num];
 
-          printf ("  ");
+          g_print ("  ");
           pkg_print (ha);
         }
     }
@@ -675,10 +674,10 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
           { /* mod is first */
             Header hm = diff->hs_mod_old->pdata[diff->hs_mod_old->len-1];
 
-            printf("!");
+            g_print ("!");
             pkg_print (hm);
             g_ptr_array_remove_index(diff->hs_mod_old, diff->hs_mod_old->len-1);
-            printf("=");
+            g_print ("=");
             hm = diff->hs_mod_new->pdata[diff->hs_mod_new->len-1];
             pkg_print (hm);
             g_ptr_array_remove_index(diff->hs_mod_new, diff->hs_mod_new->len-1);
@@ -687,7 +686,7 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
           { /* add is first */
             Header ha = diff->hs_add->pdata[diff->hs_add->len-1];
 
-            printf ("+");
+            g_print ("+");
             pkg_print (ha);
             g_ptr_array_remove_index(diff->hs_add, diff->hs_add->len-1);
           }
@@ -696,7 +695,7 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
           { /* del is first */
             Header hd = diff->hs_del->pdata[diff->hs_del->len-1];
 
-            printf ("-");
+            g_print ("-");
             pkg_print (hd);
             g_ptr_array_remove_index(diff->hs_del, diff->hs_del->len-1);
           }
@@ -704,7 +703,7 @@ rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff)
           { /* add is first */
             Header ha = diff->hs_add->pdata[diff->hs_add->len-1];
 
-            printf ("+");
+            g_print ("+");
             pkg_print (ha);
             g_ptr_array_remove_index(diff->hs_add, diff->hs_add->len-1);
           }
