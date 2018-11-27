@@ -74,14 +74,14 @@ pub fn ffi_new_string(s: *const libc::c_char) -> String {
     String::from_utf8(buf.into()).expect("string_from_nonnull: valid utf-8")
 }
 
-/// View a C "bytestring" (NUL terminated) a Rust byte array.
+/// View a C "bytestring" (NUL terminated) as a Rust byte array.
 /// Panics if `s` is `NULL`.
 pub fn ffi_view_bytestring<'a>(s: *const libc::c_char) -> &'a [u8] {
     assert!(!s.is_null());
     unsafe { CStr::from_ptr(s) }.to_bytes()
 }
 
-/// View a C "bytestring" (NUL terminated) a Rust OsStr.
+/// View a C "bytestring" (NUL terminated) as a Rust OsStr.
 /// Panics if `s` is `NULL`.
 pub fn ffi_view_os_str<'a>(s: *const libc::c_char) -> &'a OsStr {
     OsStr::from_bytes(ffi_view_bytestring (s))
