@@ -71,7 +71,7 @@ pub fn ffi_view_nullable_str<'a>(s: *const libc::c_char) -> Option<&'a str> {
 /// String.  Will panic if the C string is not valid UTF-8.
 pub fn ffi_new_string(s: *const libc::c_char) -> String {
     let buf = ffi_view_bytestring(s);
-    String::from_utf8(buf.into()).expect("string_from_nonnull: valid utf-8")
+    String::from_utf8(buf.into()).expect("ffi_new_string: valid utf-8")
 }
 
 /// View a C "bytestring" (NUL terminated) as a Rust byte array.
