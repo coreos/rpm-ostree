@@ -63,7 +63,7 @@ pub fn ffi_view_nullable_str<'a>(s: *const libc::c_char) -> Option<&'a str> {
         None
     } else {
         let s = unsafe { CStr::from_ptr(s) };
-        Some(s.to_str().unwrap())
+        Some(s.to_str().expect("ffi_view_nullable_str: valid utf-8"))
     }
 }
 
