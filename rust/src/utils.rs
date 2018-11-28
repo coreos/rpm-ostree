@@ -24,7 +24,7 @@ use tempfile;
 
 use curl::easy::Easy;
 
-fn download_url_to_tmpfile(url: &str) -> io::Result<fs::File> {
+fn download_url_to_tmpfile(url: &str) -> Fallible<fs::File> {
     let mut tmpf = tempfile::tempfile()?;
     {
         let mut output = io::BufWriter::new(&mut tmpf);

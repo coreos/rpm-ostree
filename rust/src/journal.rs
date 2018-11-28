@@ -18,15 +18,15 @@
 
 extern crate systemd;
 
+use failure::Fallible;
 use self::systemd::id128::Id128;
 use self::systemd::journal;
-use std::io;
 
 static OSTREE_FINALIZE_STAGED_SERVICE: &'static str = "ostree-finalize-staged.service";
 static OSTREE_DEPLOYMENT_FINALIZING_MSG_ID: &'static str = "e8646cd63dff4625b77909a8e7a40994";
 static OSTREE_DEPLOYMENT_COMPLETE_MSG_ID: &'static str = "dd440e3e549083b63d0efc7dc15255f1";
 
-fn print_staging_failure_msg(msg: Option<&str>) -> io::Result<()> {
+fn print_staging_failure_msg(msg: Option<&str>) -> Fallible<()> {
     println!("Warning: failed to finalize previous deployment");
     if let Some(msg) = msg {
         println!("         {}", msg);
@@ -39,7 +39,7 @@ fn print_staging_failure_msg(msg: Option<&str>) -> io::Result<()> {
 }
 
 /// Look for a failure from ostree-finalized-stage.service in the journal of the previous boot.
-fn journal_print_staging_failure() -> io::Result<()> {
+fn journal_print_staging_failure() -> Fallible<()> {
     let mut j = journal::Journal::open(journal::JournalFiles::System, false, true)?;
 
     // first, go to the first entry of the current boot
