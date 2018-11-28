@@ -46,7 +46,10 @@ pub struct Treefile {
     // This one isn't used today, but we may do more in the future.
     _workdir: openat::Dir,
     primary_dfd: openat::Dir,
+    #[allow(dead_code)] // Not used in tests
     parsed: TreeComposeConfig,
+    // This is a copy of rojig.name to avoid needing to convert to CStr when reading
+    rojig_name: Option<CUtf8Buf>,
     rojig_spec: Option<CUtf8Buf>,
     serialized: CUtf8Buf,
     externals: TreefileExternals,
@@ -340,16 +343,20 @@ impl Treefile {
         let parsed = treefile_parse_recurse(filename, arch, 0)?;
         Treefile::validate_config(&parsed.config)?;
         let dfd = openat::Dir::open(filename.parent().unwrap())?;
-        let rojig_spec = if let &Some(ref rojig) = &parsed.config.rojig {
-            Some(Treefile::write_rojig_spec(&workdir, rojig)?)
+        let (rojig_name, rojig_spec) = if let Some(rojig) = parsed.config.rojig.as_ref() {
+            (
+                Some(CUtf8Buf::from_string(rojig.name.clone())),
+                Some(Treefile::write_rojig_spec(&workdir, rojig)?),
+            )
         } else {
-            None
+            (None, None)
         };
         let serialized = Treefile::serialize_json_string(&parsed.config)?;
         Ok(Box::new(Treefile {
             primary_dfd: dfd,
             parsed: parsed.config,
             _workdir: workdir,
+            rojig_name: rojig_name,
             rojig_spec: rojig_spec,
             serialized: serialized,
             externals: parsed.externals,
@@ -807,7 +814,6 @@ mod ffi {
     use glib_sys;
     use libc;
 
-    use std::ffi::CString;
     use std::io::Seek;
     use std::os::unix::io::{AsRawFd, RawFd};
     use std::{fs, io, ptr};
@@ -899,14 +905,13 @@ mod ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn ror_treefile_get_rojig_name(tf: *mut Treefile) -> *mut libc::c_char {
+    pub extern "C" fn ror_treefile_get_rojig_name(tf: *mut Treefile) -> *const libc::c_char {
         assert!(!tf.is_null());
         let tf = unsafe { &mut *tf };
-        if let &Some(ref rojig) = &tf.parsed.rojig {
-            CString::new(rojig.name.as_str()).unwrap().into_raw()
-        } else {
-            ptr::null_mut()
-        }
+        tf.rojig_name
+            .as_ref()
+            .map(|v| v.as_ptr())
+            .unwrap_or(ptr::null_mut())
     }
 
     #[no_mangle]
