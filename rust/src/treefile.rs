@@ -344,8 +344,10 @@ impl Treefile {
         Treefile::validate_config(&parsed.config)?;
         let dfd = openat::Dir::open(filename.parent().unwrap())?;
         let (rojig_name, rojig_spec) = if let Some(rojig) = parsed.config.rojig.as_ref() {
-            (Some(Treefile::write_rojig_spec(&workdir, rojig)?),
-             Some(CUtf8Buf::from_string(rojig.name.clone())))
+            (
+                Some(CUtf8Buf::from_string(rojig.name.clone())),
+                Some(Treefile::write_rojig_spec(&workdir, rojig)?),
+            )
         } else {
             (None, None)
         };
@@ -906,7 +908,10 @@ mod ffi {
     pub extern "C" fn ror_treefile_get_rojig_name(tf: *mut Treefile) -> *const libc::c_char {
         assert!(!tf.is_null());
         let tf = unsafe { &mut *tf };
-        tf.rojig_name.as_ref().map(|v| v.as_ptr()).unwrap_or(ptr::null_mut())
+        tf.rojig_name
+            .as_ref()
+            .map(|v| v.as_ptr())
+            .unwrap_or(ptr::null_mut())
     }
 
     #[no_mangle]
