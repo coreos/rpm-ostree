@@ -325,7 +325,7 @@ impl_rojig_build (RpmOstreeRojigCompose *self,
       g_usleep (3 * G_USEC_PER_SEC);
     }
 
-  g_autofree char *rojig_name = ror_treefile_get_rojig_name (self->treefile_rs);
+  const char *rojig_name = ror_treefile_get_rojig_name (self->treefile_rs);
   if (!rojig_name)
     return glnx_throw (error, "No `rojig` entry in manifest");
   g_autoptr(GKeyFile) tsk = g_key_file_new ();
