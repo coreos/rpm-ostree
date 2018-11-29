@@ -1,0 +1,12 @@
+[Unit]
+Description=Log booted deployment status to journal
+Documentation=man:rpm-ostree(1)
+ConditionPathExists=/ostree
+
+[Service]
+Type=oneshot
+ExecStart=@bindir@/rpm-ostree status -b
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
