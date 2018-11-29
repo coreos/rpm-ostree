@@ -78,6 +78,7 @@ dbusconfdir = ${sysconfdir}/dbus-1/system.d
 systemdunit_service_in_files = \
 	$(srcdir)/src/daemon/rpm-ostreed.service.in \
 	$(srcdir)/src/daemon/rpm-ostreed-automatic.service.in \
+	$(srcdir)/src/daemon/rpm-ostree-bootstatus.service.in \
 	$(NULL)
 
 systemdunit_service_files = $(systemdunit_service_in_files:.service.in=.service)
