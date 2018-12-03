@@ -157,6 +157,7 @@ def nevra_from_primary(repo, name):
     repomd = cr.Repomd(repomd_xml(repo))
 
     pkgs = []
+
     def pkgcb(pkg):
         if pkg.name == name:
             pkgs.append(pkg)
@@ -176,7 +177,7 @@ def nevra_from_primary(repo, name):
 
 def cmd_add_pkg(args):
     uinfo = get_updateinfo(args.repo)
-    if args.epoch is None: # user only passed the 'name' param
+    if args.epoch is None:  # user only passed the 'name' param
         # we support passing an RPM file from which to extract fields
         if os.path.isfile(args.name):
             nevra = nevra_from_rpm(args.name)
@@ -218,8 +219,10 @@ def sev2xml(sev):
 class UpdateExistsError(Exception):
     pass
 
+
 class UpdateNotExistsError(Exception):
     pass
+
 
 def add_update(uinfo, uid, utype, severity):
 
