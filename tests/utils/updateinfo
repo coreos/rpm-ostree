@@ -80,6 +80,18 @@ def parse_args():
     delete_pkg.add_argument('id')
     delete_pkg.add_argument('name_or_nevra')
 
+    add_ref = subparsers.add_parser('add-ref')
+    add_ref.set_defaults(func=cmd_add_ref)
+    add_ref.add_argument('id')
+    add_ref.add_argument('refid')
+    add_ref.add_argument('url')
+    add_ref.add_argument('title')
+
+    delete_ref = subparsers.add_parser('delete-ref')
+    delete_ref.set_defaults(func=cmd_delete_ref)
+    delete_ref.add_argument('id')
+    delete_ref.add_argument('refid')
+
     return parser.parse_args()
 
 
@@ -196,6 +208,19 @@ def cmd_delete_pkg(args):
     set_updateinfo(args.repo, uinfo)
 
 
+def cmd_add_ref(args):
+    uinfo = get_updateinfo(args.repo)
+    uinfo = add_ref_to_update(uinfo, args.id,
+                              (args.refid, args.url, args.title))
+    set_updateinfo(args.repo, uinfo)
+
+
+def cmd_delete_ref(args):
+    uinfo = get_updateinfo(args.repo)
+    uinfo = delete_ref_from_update(uinfo, args.id, args.refid)
+    set_updateinfo(args.repo, uinfo)
+
+
 def get_updateinfo(repo):
     '''
         Parse existing repo updateinfo.xml or create a new one.
@@ -270,13 +295,15 @@ def show_updates(uinfo, uid):
         print update.id, update.type, update.severity
         for col in update.collections:
             for pkg in col.packages:
-                print "  ", pkg.filename
+                print "  pkg:", pkg.filename
+        for ref in update.references:
+            print "  ref:", ref.id, ref.href
 
 
 def shallow_clone_update(update):
-    # the default copy() also copies collections, and then there's no API to
-    # *remove* from those lists, so instead we re-create from scratch each time
-    # we need to modify them
+    # the default copy() also copies collections and refs, and then there's no
+    # API to *remove* from those lists, so instead we re-create from scratch
+    # each time we need to modify them
     new_update = cr.UpdateRecord()
     new_update.id = update.id
     new_update.type = update.type
@@ -316,6 +343,10 @@ def add_pkg_to_update_cb(uid, update, nevra):
 
     new_update.append_collection(new_col)
 
+    # and copy over the references
+    for ref in update.references:
+        new_update.append_reference(ref)
+
     return new_update
 
 
@@ -351,11 +382,64 @@ def delete_pkg_from_update_cb(uid, update, name_or_nevra):
     if len(new_col.packages) > 0:
         new_update.append_collection(new_col)
 
+    # and copy over the references
+    for ref in update.references:
+        new_update.append_reference(ref)
+
     return new_update
 
 
 def delete_pkg_from_update(uinfo, uid, name_or_nevra):
     return modify_update(uinfo, uid, delete_pkg_from_update_cb, name_or_nevra)
+
+
+def add_ref_to_update_cb(uid, update, ref_tuple):
+    new_update = shallow_clone_update(update)
+    new_ref = cr.UpdateReference()
+    new_ref.type = "bugzilla"
+    (new_ref.id, new_ref.href, new_ref.title) = ref_tuple
+    new_update.append_reference(new_ref)
+
+    for ref in update.references:
+        if ref.id == new_ref.id:
+            raise Exception("Update '%s' already contains ref '%s'" %
+                            (uid, ref.id))
+        new_update.append_reference(ref)
+
+    # and copy over the collections
+    for col in update.collections:
+        new_update.append_collection(col)
+
+    return new_update
+
+
+def add_ref_to_update(uinfo, uid, ref_tuple):
+    return modify_update(uinfo, uid, add_ref_to_update_cb, ref_tuple)
+
+
+def delete_ref_from_update_cb(uid, update, refid):
+    new_update = shallow_clone_update(update)
+
+    found = False
+    for ref in update.references:
+        if ref.id == refid:
+            found = True
+        else:
+            new_update.append_reference(ref)
+
+    if not found:
+        raise Exception("Update '%s' does not have ref '%s'" %
+                        (uid, refid))
+
+    # and copy over the collections
+    for col in update.collections:
+        new_update.append_collection(col)
+
+    return new_update
+
+
+def delete_ref_from_update(uinfo, uid, refid):
+    return modify_update(uinfo, uid, delete_ref_from_update_cb, refid)
 
 
 def new_updateinfo_record(repo, uinfo):

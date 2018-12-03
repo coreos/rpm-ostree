@@ -1341,11 +1341,31 @@ print_advisories (GVariant *advisories,
           const char *nevra;
           g_variant_get_child (pkgs, j, "&s", &nevra);
 
-          if (i == 0 && j == 0) /* we're on the same line as SecInfo */
+          if (i == 0 && j == 0) /* we're on the same line as SecAdvisories */
             g_print ("%-*s  %-*s  %s\n", max_id_len, id, max_sev_len, severity_str, nevra);
           else
             g_print ("  %*s  %-*s  %-*s  %s\n", max_key_len, "", max_id_len, id,
                      max_sev_len, severity_str, nevra);
+        }
+
+      g_autoptr(GVariant) additional_info = g_variant_get_child_value (advisory, 4);
+      g_auto(GVariantDict) dict;
+      g_variant_dict_init (&dict, additional_info);
+
+      g_autoptr(GVariant) refs =
+        g_variant_dict_lookup_value (&dict, "cve_references", G_VARIANT_TYPE ("a(ss)"));
+
+      /* for backwards compatibility with cached metadata from older versions */
+      if (!refs)
+        continue;
+
+      const guint n_refs = g_variant_n_children (refs);
+      for (guint j = 0; j < n_refs; j++)
+        {
+          const char *url, *title;
+          g_variant_get_child (refs, j, "(&s&s)", &url, &title);
+          g_print ("  %*s    %s\n", max_key_len, "", title);
+          g_print ("  %*s    %s\n", max_key_len, "", url);
         }
     }
 }
