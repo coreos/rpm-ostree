@@ -273,8 +273,10 @@ def show_updates(uinfo, uid):
                 print "  ", pkg.filename
 
 
-def copy_update_no_cols(update):
-    # the default copy() also copies collections
+def shallow_clone_update(update):
+    # the default copy() also copies collections, and then there's no API to
+    # *remove* from those lists, so instead we re-create from scratch each time
+    # we need to modify them
     new_update = cr.UpdateRecord()
     new_update.id = update.id
     new_update.type = update.type
@@ -292,7 +294,7 @@ def add_pkg_to_update_cb(uid, update, nevra):
     else:
         col = cr.UpdateCollection()
 
-    new_update = copy_update_no_cols(update)
+    new_update = shallow_clone_update(update)
     new_col = cr.UpdateCollection()
 
     for pkg in col.packages:
@@ -331,7 +333,7 @@ def delete_pkg_from_update_cb(uid, update, name_or_nevra):
     else:
         col = cr.UpdateCollection()
 
-    new_update = copy_update_no_cols(update)
+    new_update = shallow_clone_update(update)
     new_col = cr.UpdateCollection()
 
     found = False
