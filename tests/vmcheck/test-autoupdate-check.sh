@@ -141,9 +141,15 @@ assert_output() {
   assert_file_has_content out-verbose.txt \
     "SecAdvisories: VMCHECK-SEC-NONE  Unknown    layered-sec-none-2.0-1.x86_64" \
     "               VMCHECK-SEC-LOW   Low        layered-sec-low-2.0-1.x86_64" \
-    "               VMCHECK-SEC-CRIT  Critical   layered-sec-crit-2.0-1.x86_64"
+    "               VMCHECK-SEC-CRIT  Critical   layered-sec-crit-2.0-1.x86_64" \
+    "CVE-43-21 vuln5" \
+    "http://example.com/vuln5" \
+    "CVE-87-65 CVE-21-09 vuln7" \
+    "http://example.com/vuln7"
 
-  assert_not_file_has_content out-verbose.txt "layered-constant 1.0-1 -> 1.0-1"
+  assert_not_file_has_content out-verbose.txt \
+    "layered-constant 1.0-1 -> 1.0-1" \
+    "vuln6" "JUNK" "vuln8"
 
   # make sure any future call doesn't forget to create fresh ones
   rm -f out.txt out-verbose.txt
@@ -152,6 +158,10 @@ assert_output() {
 # now add all of them
 vm_build_rpm layered-sec-low version 2.0 uinfo VMCHECK-SEC-LOW
 vm_build_rpm layered-sec-crit version 2.0 uinfo VMCHECK-SEC-CRIT
+vm_uinfo add-ref VMCHECK-SEC-CRIT 5 http://example.com/vuln5 "CVE-43-21 vuln5"
+vm_uinfo add-ref VMCHECK-SEC-CRIT 6 http://example.com/vuln6 "CVE-43-21 vuln6"
+vm_uinfo add-ref VMCHECK-SEC-CRIT 7 http://example.com/vuln7 "CVE-87-65 CVE-21-09 vuln7"
+vm_uinfo add-ref VMCHECK-SEC-CRIT 8 http://example.com/vuln8 "CVE-12-JUNK CVE-JUNK vuln8"
 vm_rpmostree upgrade --trigger-automatic-update-policy
 vm_rpmostree status > out.txt
 vm_rpmostree status -v > out-verbose.txt
@@ -202,16 +212,27 @@ assert_output2() {
     "VMCHECK-SEC-NONE  Unknown    base-pkg-sec-none-2.0-1.x86_64" \
     "VMCHECK-SEC-NONE  Unknown    layered-sec-none-2.0-1.x86_64" \
     "VMCHECK-SEC-LOW   Low        base-pkg-sec-low-2.0-1.x86_64" \
+    "CVE-12-34 vuln1" \
+    "http://example.com/vuln1" \
+    "CVE-56-78 CVE-90-12 vuln3" \
+    "http://example.com/vuln3" \
     "VMCHECK-SEC-LOW   Low        layered-sec-low-2.0-1.x86_64" \
     "VMCHECK-SEC-CRIT  Critical   base-pkg-sec-crit-2.0-1.x86_64" \
     "VMCHECK-SEC-CRIT  Critical   layered-sec-crit-2.0-1.x86_64" \
+    "CVE-43-21 vuln5" \
+    "http://example.com/vuln5" \
+    "CVE-87-65 CVE-21-09 vuln7" \
+    "http://example.com/vuln7" \
     'Upgraded: base-pkg-enh 1.0-1 -> 2.0-1' \
     '          base-pkg-foo 1.4-7 -> 1.4-8' \
     'Downgraded: base-pkg-bar 1.0-1 -> 0.9-3' \
     'Removed: base-pkg-baz-1.1-1.x86_64' \
     'Added: base-pkg-boo-3.7-2.11.x86_64'
 
-  assert_not_file_has_content out-verbose.txt "layered-constant 1.0-1 -> 1.0-1"
+  assert_not_file_has_content out-verbose.txt \
+    "layered-constant 1.0-1 -> 1.0-1" \
+    "vuln2" "JUNK" "vuln4" \
+    "vuln6" "JUNK" "vuln8" \
 
   # make sure any future call doesn't forget to create fresh ones
   rm -f out.txt out-verbose.txt

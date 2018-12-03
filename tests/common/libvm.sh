@@ -500,6 +500,10 @@ _init_updated_rpmmd_repo() {
     vm_build_rpm base-pkg-sec-none version 2.0 uinfo VMCHECK-SEC-NONE
     vm_build_rpm base-pkg-sec-low version 2.0 uinfo VMCHECK-SEC-LOW
     vm_build_rpm base-pkg-sec-crit version 2.0 uinfo VMCHECK-SEC-CRIT
+    vm_uinfo add-ref VMCHECK-SEC-LOW 1 http://example.com/vuln1 "CVE-12-34 vuln1"
+    vm_uinfo add-ref VMCHECK-SEC-LOW 2 http://example.com/vuln2 "CVE-12-34 vuln2"
+    vm_uinfo add-ref VMCHECK-SEC-LOW 3 http://example.com/vuln3 "CVE-56-78 CVE-90-12 vuln3"
+    vm_uinfo add-ref VMCHECK-SEC-LOW 4 http://example.com/vuln4 "CVE-12-JUNK CVE-JUNK vuln4"
 }
 
 # Start up a remote, and create two new commits (v1 and v2) which contain new

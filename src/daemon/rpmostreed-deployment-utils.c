@@ -807,11 +807,43 @@ str2severity (const char *str)
   return RPM_OSTREE_ADVISORY_SEVERITY_NONE;
 }
 
+static int
+compare_advisory_refs (gconstpointer ap,
+                       gconstpointer bp)
+{
+  /* We use URLs to sort here; often CVE RHBZs will have multiple duplicates for each stream
+   * affected (e.g. Fedora, EPEL, RHEL, etc...), but we want the first one, which contains
+   * all the juicy details. A naive strcmp() sort on the URL gives us this. */
+  DnfAdvisoryRef *a = *((DnfAdvisoryRef**)ap);
+  DnfAdvisoryRef *b = *((DnfAdvisoryRef**)bp);
+
+  g_assert (a);
+  g_assert (b);
+
+  /* just use g_strcmp0() here to tolerate NULL URLs for now if that somehow happens... we
+   * filter them out later when going through all the references */
+  return g_strcmp0 (dnf_advisoryref_get_url (a), dnf_advisoryref_get_url (b));
+}
+
 /* Returns a *floating* variant ref representing the advisory */
 static GVariant*
 advisory_variant_new (DnfAdvisory *adv,
                       GPtrArray   *pkgs)
 {
+  static gsize cve_regex_initialized;
+  static GRegex *cve_regex;
+
+#define CVE_REGEXP "CVE-[0-9]+-[0-9]+"
+
+  if (g_once_init_enter (&cve_regex_initialized))
+    {
+      cve_regex = g_regex_new ("\\b" CVE_REGEXP "\\b", 0, 0, NULL);
+      g_assert (cve_regex);
+      g_once_init_leave (&cve_regex_initialized, 1);
+    }
+
+#undef CVE_REGEXP
+
   g_auto(GVariantBuilder) builder;
   g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
   g_variant_builder_add (&builder, "s", dnf_advisory_get_id (adv));
@@ -825,8 +857,66 @@ advisory_variant_new (DnfAdvisory *adv,
     g_variant_builder_add_value (&builder, g_variant_builder_end (&pkgs_array));
   }
 
-  /* for now we don't ship any extra info about the errata (e.g. title, date, desc, refs) */
-  g_variant_builder_add_value (&builder, g_variant_new ("a{sv}", NULL));
+  /* final a{sv} for any additional metadata */
+  g_auto(GVariantDict) dict;
+  g_variant_dict_init (&dict, NULL);
+
+  { g_auto(GVariantBuilder) cve_references;
+    g_variant_builder_init (&cve_references, G_VARIANT_TYPE_ARRAY);
+
+    /* we maintain a set to make sure we only add the earliest ref for each CVE */
+    g_autoptr(GHashTable) created_cves =
+      g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
+
+    g_autoptr(GPtrArray) refs = dnf_advisory_get_references (adv);
+    g_ptr_array_sort (refs, compare_advisory_refs);
+
+    /* for each ref, look for CVEs in their title, and add an (ss) for refs which mention
+     * new CVEs. */
+    for (guint i = 0; i < refs->len; i++)
+      {
+        DnfAdvisoryRef *ref = refs->pdata[i];
+        if (dnf_advisoryref_get_kind (ref) != DNF_REFERENCE_KIND_BUGZILLA)
+          continue;
+
+        g_autoptr(GMatchInfo) match = NULL;
+        const char *title = dnf_advisoryref_get_title (ref);
+        const char *url = dnf_advisoryref_get_url (ref);
+
+        if (!url || !title)
+          continue;
+
+        if (!g_regex_match (cve_regex, title, 0, &match))
+          continue;
+
+        /* collect all the found CVEs first */
+        g_autoptr(GPtrArray) found_cves = g_ptr_array_new_with_free_func (g_free);
+        while (g_match_info_matches (match))
+          {
+            g_ptr_array_add (found_cves, g_match_info_fetch (match, 0));
+            g_match_info_next (match, NULL);
+          }
+
+        gboolean has_new_cve = FALSE;
+        for (guint i = 0; i < found_cves->len && !has_new_cve; i++)
+          has_new_cve = !g_hash_table_contains (created_cves, found_cves->pdata[i]);
+
+        /* if a single CVE is new, make a GVariant for it */
+        if (has_new_cve)
+          {
+            g_variant_builder_add (&cve_references, "(ss)", url, title);
+            /* steal all the cves and transfer to set, autofree'ing dupes */
+            g_ptr_array_add (found_cves, NULL);
+            g_autofree char **cves =
+              (char**)g_ptr_array_free (g_steal_pointer (&found_cves), FALSE);
+            for (char **cve = cves; cve && *cve; cve++)
+              g_hash_table_add (created_cves, *cve);
+          }
+      }
+    g_variant_dict_insert_value (&dict, "cve_references",
+                                 g_variant_builder_end (&cve_references));
+  }
+  g_variant_builder_add_value (&builder, g_variant_dict_end (&dict));
 
   return g_variant_builder_end (&builder);
 }
@@ -855,7 +945,10 @@ advisory_equal (gconstpointer v1,
         u     advisory kind (enum DnfAdvisoryKind)
         u     advisory severity (enum RpmOstreeAdvisorySeverity)
         as    list of packages (NEVRAs) contained in the advisory
-        a{sv} additional info about advisory (none so far)
+        a{sv} additional info about advisory
+          "cve_references" -> 'a(ss)'
+            s   title
+            s   URL
  */
 static GVariant*
 advisories_variant (DnfSack    *sack,
