@@ -816,10 +816,14 @@ compare_advisory_refs (gconstpointer ap,
    * all the juicy details. A naive strcmp() sort on the URL gives us this. */
   DnfAdvisoryRef *a = *((DnfAdvisoryRef**)ap);
   DnfAdvisoryRef *b = *((DnfAdvisoryRef**)bp);
-  return strcmp (dnf_advisoryref_get_url (a), dnf_advisoryref_get_url (b));
-}
 
-#define CVE_REGEXP "CVE-[0-9]+-[0-9]+"
+  g_assert (a);
+  g_assert (b);
+
+  /* just use g_strcmp0() here to tolerate NULL URLs for now if that somehow happens... we
+   * filter them out later when going through all the references */
+  return g_strcmp0 (dnf_advisoryref_get_url (a), dnf_advisoryref_get_url (b));
+}
 
 /* Returns a *floating* variant ref representing the advisory */
 static GVariant*
@@ -829,12 +833,16 @@ advisory_variant_new (DnfAdvisory *adv,
   static gsize cve_regex_initialized;
   static GRegex *cve_regex;
 
+#define CVE_REGEXP "CVE-[0-9]+-[0-9]+"
+
   if (g_once_init_enter (&cve_regex_initialized))
     {
       cve_regex = g_regex_new ("\\b" CVE_REGEXP "\\b", 0, 0, NULL);
       g_assert (cve_regex);
       g_once_init_leave (&cve_regex_initialized, 1);
     }
+
+#undef CVE_REGEXP
 
   g_auto(GVariantBuilder) builder;
   g_variant_builder_init (&builder, G_VARIANT_TYPE_TUPLE);
@@ -873,6 +881,11 @@ advisory_variant_new (DnfAdvisory *adv,
 
         g_autoptr(GMatchInfo) match = NULL;
         const char *title = dnf_advisoryref_get_title (ref);
+        const char *url = dnf_advisoryref_get_url (ref);
+
+        if (!url || !title)
+          continue;
+
         if (!g_regex_match (cve_regex, title, 0, &match))
           continue;
 
@@ -891,7 +904,6 @@ advisory_variant_new (DnfAdvisory *adv,
         /* if a single CVE is new, make a GVariant for it */
         if (has_new_cve)
           {
-            const char *url = dnf_advisoryref_get_url (ref);
             g_variant_builder_add (&cve_references, "(ss)", url, title);
             /* steal all the cves and transfer to set, autofree'ing dupes */
             g_ptr_array_add (found_cves, NULL);
