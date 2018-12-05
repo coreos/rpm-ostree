@@ -586,7 +586,9 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
                 return FALSE;
             }
 
-          self->cachedir_dfd = self->workdir_tmp.fd;
+          self->cachedir_dfd = fcntl (self->workdir_tmp.fd, F_DUPFD_CLOEXEC, 3);
+          if (self->cachedir_dfd < 0)
+            return glnx_throw_errno_prefix (error, "fcntl");
         }
 
       self->pkgcache_repo = ostree_repo_create_at (self->cachedir_dfd, "pkgcache-repo",
@@ -604,7 +606,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
       if (!self->build_repo)
         return glnx_prefix_error (error, "Creating repo-build");
 
-      /* Note special handling of this aliasing in _finalize() */
+      /* Note special handling of this aliasing in rpm_ostree_tree_compose_context_free() */
       self->workdir_dfd = self->workdir_tmp.fd;
     }
   else
@@ -613,7 +615,7 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
         {
           if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpm-ostree.XXXXXX", 0700, &self->workdir_tmp, error))
             return FALSE;
-          /* Note special handling of this aliasing in _finalize() */
+          /* Note special handling of this aliasing in rpm_ostree_tree_compose_context_free() */
           self->workdir_dfd = self->workdir_tmp.fd;
         }
       else
