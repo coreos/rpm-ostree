@@ -26,6 +26,11 @@ cat > metadata.json <<EOF
 EOF
 runcompose --ex-unified-core --add-metadata-from-json metadata.json
 
+# Run it again, but without RPMOSTREE_PRESERVE_TMPDIR. Should be a no-op. This
+# exercises fd handling in the tree context.
+rpm-ostree compose tree ${compose_base_argv} ${treefile} "$@"
+echo "ok no cachedir"
+
 . ${dn}/libbasic-test.sh
 basic_test
 
