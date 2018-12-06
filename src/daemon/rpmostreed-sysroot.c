@@ -73,13 +73,6 @@ struct _RpmostreedSysroot {
   GHashTable *os_interfaces;
   GHashTable *osexperimental_interfaces;
 
-  /* The OS interface's various diff methods can run concurrently with
-   * transactions, which is safe except when the transaction is writing
-   * new deployments to disk or downloading RPM package details.  The
-   * writer lock protects these critical sections so the diff methods
-   * (holding reader locks) can run safely. */
-  GRWLock method_rw_lock;
-
   GFileMonitor *monitor;
   guint sig_changed;
 };
