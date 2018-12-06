@@ -147,7 +147,7 @@ fn journal_print_staging_failure() -> Fallible<()> {
 
 mod ffi {
     use super::*;
-    use ffiutil::*;
+    use crate::ffiutil::*;
     use glib_sys;
     use libc;
     #[no_mangle]

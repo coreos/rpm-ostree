@@ -168,7 +168,7 @@ mod tests {
 
 mod ffi {
     use super::*;
-    use ffiutil::*;
+    use crate::ffiutil::*;
     use libc;
     use std::sync::MutexGuard;
 

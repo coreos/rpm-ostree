@@ -115,7 +115,7 @@ mod tests {
 
 mod ffi {
     use super::*;
-    use ffiutil::*;
+    use crate::ffiutil::*;
     use glib;
     use glib_sys;
     use libc;

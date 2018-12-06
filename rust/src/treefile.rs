@@ -28,7 +28,7 @@ use std::collections::HashMap;
 use std::io::prelude::*;
 use std::path::Path;
 use std::{collections, fs, io};
-use utils;
+use crate::utils;
 
 const ARCH_X86_64: &'static str = "x86_64";
 const INCLUDE_MAXDEPTH: u32 = 50;
@@ -812,7 +812,7 @@ packages:
 
 mod ffi {
     use super::*;
-    use ffiutil::*;
+    use crate::ffiutil::*;
     use glib_sys;
     use libc;
 
