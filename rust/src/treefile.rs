@@ -540,6 +540,8 @@ struct TreeComposeConfig {
 
     // Content installation opts
     #[serde(skip_serializing_if = "Option::is_none")]
+    container: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     recommends: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     documentation: Option<bool>,
