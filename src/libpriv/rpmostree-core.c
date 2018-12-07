@@ -1107,8 +1107,14 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
           g_auto(RpmOstreeProgress) progress = { 0, };
           rpmostree_output_progress_percent_begin (&progress, "Updating metadata for '%s'",
                                                    dnf_repo_get_id (repo));
-          if (!dnf_repo_update (repo, DNF_REPO_UPDATE_FLAG_FORCE, hifstate, error))
-            return FALSE;
+          /* https://discussion.fedoraproject.org/t/rpm-ostree-giving-error/772/2
+           * This would be better fixed in libdnf but that blocks on the rebase
+           */
+          if (dnf_repo_get_kind (repo) != DNF_REPO_KIND_MEDIA)
+            {
+              if (!dnf_repo_update (repo, DNF_REPO_UPDATE_FLAG_FORCE, hifstate, error))
+                return FALSE;
+            }
 
           did_update = TRUE;
 
