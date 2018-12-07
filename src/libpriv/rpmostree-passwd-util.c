@@ -1086,10 +1086,6 @@ rpmostree_passwd_compose_prep (int              rootfs_dfd,
 
   const char *dest = (unified_core) ? "usr/etc/" : "etc/";
 
-  gboolean found_passwd_data = FALSE;
-  gboolean found_groups_data = FALSE;
-  gboolean perform_migrate = FALSE;
-
   /* Create /etc in the target root; FIXME - should ensure we're using
    * the right permissions from the filesystem RPM.  Doing this right
    * is really hard because filesystem depends on setup which installs
@@ -1098,33 +1094,16 @@ rpmostree_passwd_compose_prep (int              rootfs_dfd,
   if (!glnx_shutil_mkdir_p_at (rootfs_dfd, dest, 0755, cancellable, error))
     return FALSE;
 
+  gboolean found_passwd_data = FALSE;
   if (!_data_from_json (rootfs_dfd, dest, treefile_rs,
                         treedata, RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
                         &found_passwd_data, cancellable, error))
     return FALSE;
-  perform_migrate = !found_passwd_data;
 
-  if (!previous_root)
-    perform_migrate = FALSE;
-
-  if (perform_migrate && !concat_passwd_file (rootfs_dfd, previous_root,
-                                              RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
-                                              cancellable, error))
-    return FALSE;
-
+  gboolean found_groups_data = FALSE;
   if (!_data_from_json (rootfs_dfd, dest, treefile_rs,
                         treedata, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
                         &found_groups_data, cancellable, error))
-    return FALSE;
-
-  perform_migrate = !found_groups_data;
-
-  if (!previous_root)
-    perform_migrate = FALSE;
-
-  if (perform_migrate && !concat_passwd_file (rootfs_dfd, previous_root,
-                                              RPM_OSTREE_PASSWD_MIGRATE_GROUP,
-                                              cancellable, error))
     return FALSE;
 
   /* We should error if we are getting passwd data from JSON and group from
@@ -1134,6 +1113,18 @@ rpmostree_passwd_compose_prep (int              rootfs_dfd,
     return glnx_throw (error, "Configured to migrate passwd data from JSON, and group data from commit");
   if (!found_passwd_data &&  found_groups_data)
     return glnx_throw (error, "Configured to migrate passwd data from commit, and group data from JSON");
+
+  if (found_passwd_data || !previous_root)
+    return TRUE; /* Nothing to do */
+
+  if (!concat_passwd_file (rootfs_dfd, previous_root, RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
+                          cancellable, error))
+    return FALSE;
+
+
+  if (!concat_passwd_file (rootfs_dfd, previous_root, RPM_OSTREE_PASSWD_MIGRATE_GROUP,
+                           cancellable, error))
+    return FALSE;
 
   return TRUE;
 }
