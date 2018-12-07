@@ -185,6 +185,49 @@ inputhash_from_commit (OstreeRepo *repo,
 }
 
 static gboolean
+try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self,
+                            GCancellable                 *cancellable,
+                            GError                      **error)
+{
+  gboolean selinux = TRUE;
+  if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux",
+                                                               &selinux, error))
+    return FALSE;
+
+  if (!selinux || !self->previous_checksum)
+    return TRUE; /* nothing to do! */
+
+#define TMP_SELINUX_ROOTFS "selinux.tmp/etc/selinux"
+
+  /* By default, the core starts with the SELinux policy of the root, but if we have a
+   * previous commit, it's much likelier that its policy will be closer to the final
+   * policy than the host system's policy. And in the case they match, we skip a full
+   * relabeling phase. Let's use that instead. */
+  if (!glnx_shutil_mkdir_p_at (self->workdir_dfd,
+                               dirname (strdupa (TMP_SELINUX_ROOTFS)), 0755,
+                               cancellable, error))
+    return FALSE;
+
+  OstreeRepoCheckoutAtOptions opts = { .subpath = "/usr/etc/selinux" };
+  if (!ostree_repo_checkout_at (self->repo, &opts, self->workdir_dfd,
+                                TMP_SELINUX_ROOTFS, self->previous_checksum,
+                                cancellable, error))
+    return FALSE;
+
+#undef TMP_SELINUX_ROOTFS
+
+  g_autofree char *abspath = glnx_fdrel_abspath (self->workdir_dfd, "selinux.tmp");
+  g_autoptr(GFile) path = g_file_new_for_path (abspath);
+  g_autoptr(OstreeSePolicy) sepolicy = ostree_sepolicy_new (path, cancellable, error);
+  if (sepolicy == NULL)
+    return FALSE;
+
+  rpmostree_context_set_sepolicy (self->corectx, sepolicy);
+
+  return TRUE;
+}
+
+static gboolean
 install_packages (RpmOstreeTreeComposeContext  *self,
                   gboolean                     *out_unmodified,
                   char                        **out_new_inputhash,
@@ -231,40 +274,10 @@ install_packages (RpmOstreeTreeComposeContext  *self,
     if (!rpmostree_context_setup (self->corectx, tmprootfs_abspath, NULL, self->treespec,
                                   cancellable, error))
       return FALSE;
-
-#define TMP_SELINUX_ROOTFS "selinux.tmp/etc/selinux"
-
-    gboolean selinux = TRUE;
-    if (!_rpmostree_jsonutil_object_get_optional_boolean_member (self->treefile, "selinux", &selinux, error))
-      return FALSE;
-
-    /* By default, the core starts with the SELinux policy of the root, but if we have a
-     * previous commit, it's much likelier that its policy will be closer to the final
-     * policy than the host system's policy. And in the case they match, we skip a full
-     * relabeling phase. Let's use that instead. */
-    if (selinux && self->previous_checksum)
-      {
-        if (!glnx_shutil_mkdir_p_at (self->workdir_dfd,
-                                     dirname (strdupa (TMP_SELINUX_ROOTFS)), 0755,
-                                     cancellable, error))
-          return FALSE;
-        OstreeRepoCheckoutAtOptions opts = { .subpath = "/usr/etc/selinux" };
-        if (!ostree_repo_checkout_at (self->repo, &opts, self->workdir_dfd,
-                                      TMP_SELINUX_ROOTFS, self->previous_checksum,
-                                      cancellable, error))
-          return FALSE;
-
-        g_autofree char *abspath = glnx_fdrel_abspath (self->workdir_dfd, "selinux.tmp");
-        g_autoptr(GFile) path = g_file_new_for_path (abspath);
-        g_autoptr(OstreeSePolicy) sepolicy = ostree_sepolicy_new (path, cancellable, error);
-        if (sepolicy == NULL)
-          return FALSE;
-
-        rpmostree_context_set_sepolicy (self->corectx, sepolicy);
-      }
-
-#undef TMP_SELINUX_ROOTFS
   }
+
+  if (!try_load_previous_sepolicy (self, cancellable, error))
+    return FALSE;
 
   /* For unified core, we have a pkgcache repo. This is auto-created under the cachedir. */
   if (opt_unified_core)
