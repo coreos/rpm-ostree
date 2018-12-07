@@ -1069,10 +1069,11 @@ _data_from_json (int              rootfs_dfd,
  */
 gboolean
 rpmostree_passwd_compose_prep (int              rootfs_dfd,
+                               OstreeRepo      *repo,
                                gboolean         unified_core,
                                RORTreefile     *treefile_rs,
                                JsonObject      *treedata,
-                               GFile           *previous_root,
+                               const char      *previous_checksum,
                                GCancellable    *cancellable,
                                GError         **error)
 {
@@ -1114,8 +1115,14 @@ rpmostree_passwd_compose_prep (int              rootfs_dfd,
   if (!found_passwd_data &&  found_groups_data)
     return glnx_throw (error, "Configured to migrate passwd data from commit, and group data from JSON");
 
-  if (found_passwd_data || !previous_root)
+  if (found_passwd_data || !previous_checksum)
     return TRUE; /* Nothing to do */
+
+  g_assert (repo);
+  g_autoptr(GFile) previous_root = NULL;
+  if (!ostree_repo_read_commit (repo, previous_checksum, &previous_root, NULL,
+                                cancellable, error))
+    return FALSE;
 
   if (!concat_passwd_file (rootfs_dfd, previous_root, RPM_OSTREE_PASSWD_MIGRATE_PASSWD,
                           cancellable, error))

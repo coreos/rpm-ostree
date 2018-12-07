@@ -108,7 +108,6 @@ typedef struct {
   RpmOstreeContext *corectx;
   GFile *treefile_path;
   GHashTable *metadata;
-  GFile *previous_root;
   GLnxTmpDir workdir_tmp;
   int workdir_dfd;
   int rootfs_dfd;
@@ -135,7 +134,6 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   g_clear_object (&ctx->corectx);
   g_clear_object (&ctx->treefile_path);
   g_clear_pointer (&ctx->metadata, g_hash_table_unref);
-  g_clear_object (&ctx->previous_root);
   /* Only close workdir_dfd if it's not owned by the tmpdir */
   if (!ctx->workdir_tmp.initialized)
     glnx_close_fd (&ctx->workdir_dfd);
@@ -196,6 +194,14 @@ try_load_previous_sepolicy (RpmOstreeTreeComposeContext *self,
 
   if (!selinux || !self->previous_checksum)
     return TRUE; /* nothing to do! */
+
+  OstreeRepoCommitState commitstate;
+  if (!ostree_repo_load_commit (self->repo, self->previous_checksum, NULL,
+                                &commitstate, error))
+    return FALSE;
+
+  if (commitstate & OSTREE_REPO_COMMIT_STATE_PARTIAL)
+    return TRUE;
 
 #define TMP_SELINUX_ROOTFS "selinux.tmp/etc/selinux"
 
@@ -373,9 +379,9 @@ install_packages (RpmOstreeTreeComposeContext  *self,
     }
 
   /* Before we install packages, inject /etc/{passwd,group} if configured. */
-  if (!rpmostree_passwd_compose_prep (rootfs_dfd, opt_unified_core, self->treefile_rs,
-                                      self->treefile, self->previous_root,
-                                      cancellable, error))
+  if (!rpmostree_passwd_compose_prep (rootfs_dfd, self->repo, opt_unified_core,
+                                      self->treefile_rs, self->treefile,
+                                      self->previous_checksum, cancellable, error))
     return FALSE;
 
   if (opt_unified_core)
@@ -737,24 +743,18 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
         return glnx_throw_errno_prefix (error, "fchdir");
     }
 
-  /* Read the previous commit */
+  /* Read the previous commit. Note we don't actually *need* the full commit; really, only
+   * if one uses `check-passwd: { "type": "previous" }`. There are a few other optimizations
+   * too, e.g. using the previous SELinux policy in unified core. Also, we might need the
+   * commit *object* for next version incrementing. */
   if (self->ref)
     {
-      g_autoptr(GError) temp_error = NULL;
-      if (!ostree_repo_read_commit (self->repo, self->ref, &self->previous_root, &self->previous_checksum,
-                                    cancellable, &temp_error))
-        {
-          if (g_error_matches (temp_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
-            {
-              g_clear_error (&temp_error);
-              g_print ("No previous commit for %s\n", self->ref);
-            }
-          else
-            {
-              g_propagate_error (error, g_steal_pointer (&temp_error));
-              return FALSE;
-            }
-        }
+      if (!ostree_repo_resolve_rev (self->repo, self->ref, TRUE,
+                                    &self->previous_checksum, error))
+        return FALSE;
+
+      if (!self->previous_checksum)
+        g_print ("No previous commit for %s\n", self->ref);
       else
         g_print ("Previous commit: %s\n", self->previous_checksum);
     }

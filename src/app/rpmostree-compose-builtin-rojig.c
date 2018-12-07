@@ -199,7 +199,7 @@ install_packages (RpmOstreeRojigCompose  *self,
   if (opt_download_only)
     return TRUE; /* 🔚 Early return */
 
-  if (!rpmostree_passwd_compose_prep (self->rootfs_dfd, TRUE, self->treefile_rs,
+  if (!rpmostree_passwd_compose_prep (self->rootfs_dfd, NULL, TRUE, self->treefile_rs,
                                       self->treefile, NULL, cancellable, error))
     return FALSE;
 
