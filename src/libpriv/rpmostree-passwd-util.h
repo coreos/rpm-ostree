@@ -58,10 +58,11 @@ rpmostree_passwd_migrate_except_root (int            rootfs_dfd,
 
 gboolean
 rpmostree_passwd_compose_prep (int              rootfs_dfd,
+                               OstreeRepo      *repo,
                                gboolean         unified_core,
                                RORTreefile     *treefile_rs,
                                JsonObject      *treedata,
-                               GFile           *previous_root,
+                               const char      *previous_checksum,
                                GCancellable    *cancellable,
                                GError         **error);
 
