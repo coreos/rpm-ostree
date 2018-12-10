@@ -115,9 +115,14 @@ echo "ok import kargs from current deployment"
 # Test for https://github.com/projectatomic/rpm-ostree/issues/1392
 vm_rpmostree kargs --append=PACKAGE=TEST
 vm_build_rpm foo
-vm_rpmostree install foo
+vm_rpmostree install foo | tee out.txt
+# make sure the string hasn't changed for the next negative check below
+assert_file_has_content out.txt 'Enabled rpm-md'
 vm_pending_is_staged # this is default now, but just being explicit
-vm_rpmostree kargs --append=PACKAGE2=TEST2
+vm_rpmostree kargs --append=PACKAGE2=TEST2 | tee out.txt
+# check that kargs modifications are done offline
+assert_not_file_has_content out.txt 'Enabled rpm-md'
+echo "ok kargs work offline"
 vm_reboot
 
 vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > kargs.txt

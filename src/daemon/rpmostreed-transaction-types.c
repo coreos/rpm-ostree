@@ -2027,13 +2027,18 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
 {
   KernelArgTransaction *self = (KernelArgTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+  RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
+
+  /* don't want to pull new content for this */
+  upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL;
+  upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY;
 
   rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, "kargs");
 
   /* Read in the existing kernel args and convert those to an #OstreeKernelArg instance for API usage */
   __attribute__((cleanup(_ostree_kernel_args_cleanup))) OstreeKernelArgs *kargs = _ostree_kernel_args_from_string (self->existing_kernel_args);
-  g_autoptr(RpmOstreeSysrootUpgrader) upgrader = rpmostree_sysroot_upgrader_new (sysroot, self->osname, 0,
-                                                                                 cancellable, error);
+  g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags, cancellable, error);
 
   /* We need the upgrader to perform the deployment */
   if (upgrader == NULL)
