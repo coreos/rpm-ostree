@@ -1162,11 +1162,19 @@ os_handle_get_deployment_boot_config (RPMOSTreeOS *interface,
   /* We initalize a dictionary and put key/value pair in bootconfig into it */
   g_variant_dict_init (&boot_config_dict, NULL);
 
+  gboolean staged = ostree_deployment_is_staged (target_deployment);
+  g_variant_dict_insert (&boot_config_dict, "staged", "b", staged);
+
   /* We loop through the key  and add each key/value pair value into the variant dict */
   for (char **iter = (char **)bootconfig_keys; iter && *iter; iter++)
     {
       const char *key = *iter;
+      /* We can only populate "options" in the staged path. */
+      if (staged && !g_str_equal (key, "options"))
+        continue;
+
       const char *value = ostree_bootconfig_parser_get (bootconfig, key);
+      g_assert (value);
 
       g_variant_dict_insert (&boot_config_dict, key, "s", value);
     }

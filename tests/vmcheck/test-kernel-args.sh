@@ -116,11 +116,15 @@ echo "ok import kargs from current deployment"
 vm_rpmostree kargs --append=PACKAGE=TEST
 vm_build_rpm foo
 vm_rpmostree install foo
+vm_pending_is_staged # this is default now, but just being explicit
+vm_rpmostree kargs --append=PACKAGE2=TEST2
 vm_reboot
 
 vm_cmd grep ^options /boot/loader/entries/ostree-2-$osname.conf > kargs.txt
 assert_file_has_content_literal kargs.txt 'PACKAGE=TEST'
+assert_file_has_content_literal kargs.txt 'PACKAGE2=TEST2'
 echo "ok kargs with multiple operations"
 vm_rpmostree kargs > kargs.txt
 assert_file_has_content_literal kargs.txt 'PACKAGE=TEST'
+assert_file_has_content_literal kargs.txt 'PACKAGE2=TEST2'
 echo "ok kargs display with multiple operations"
