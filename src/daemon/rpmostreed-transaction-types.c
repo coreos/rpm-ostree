@@ -588,13 +588,13 @@ typedef struct {
   GVariantDict *modifiers;
   char   *refspec; /* NULL for non-rebases */
   const char   *revision; /* NULL for upgrade; owned by @options */
-  char  **install_pkgs; /* single malloc block pointing into GVariant, not strv; same for other *_pkgs */
+  char  **install_pkgs; /* strv but strings owned by modifiers */
   GUnixFDList *install_local_pkgs;
-  char  **uninstall_pkgs;
-  char  **override_replace_pkgs;
+  char  **uninstall_pkgs; /* strv but strings owned by modifiers */
+  char  **override_replace_pkgs; /* strv but strings owned by modifiers */
   GUnixFDList *override_replace_local_pkgs;
-  char  **override_remove_pkgs;
-  char  **override_reset_pkgs;
+  char  **override_remove_pkgs; /* strv but strings owned by modifiers */
+  char  **override_reset_pkgs; /* strv but strings owned by modifiers */
 } DeployTransaction;
 
 typedef RpmostreedTransactionClass DeployTransactionClass;
@@ -619,7 +619,7 @@ deploy_transaction_finalize (GObject *object)
   g_free (self->install_pkgs);
   g_clear_pointer (&self->install_local_pkgs, g_object_unref);
   g_free (self->uninstall_pkgs);
-  g_strfreev (self->override_replace_pkgs);
+  g_free (self->override_replace_pkgs);
   g_clear_pointer (&self->override_replace_local_pkgs, g_object_unref);
   g_free (self->override_remove_pkgs);
   g_free (self->override_reset_pkgs);
