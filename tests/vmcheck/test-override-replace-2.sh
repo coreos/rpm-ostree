@@ -24,6 +24,13 @@ set -euo pipefail
 
 set -x
 
+# check that we error out right now if not providing an RPM
+if vm_rpmostree override replace foo bar baz |& tee out.txt; then
+  assert_not_reached "Able to replace RPMs from repos?"
+fi
+assert_file_has_content out.txt "Non-local replacement overrides not implemented yet"
+echo "ok error on non-local replacements"
+
 YUMREPO=/var/tmp/vmcheck/yumrepo/packages/x86_64
 
 vm_assert_status_jq \
