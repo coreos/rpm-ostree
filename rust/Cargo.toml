@@ -20,6 +20,9 @@ c_utf8 = "0.1.0"
 systemd = "0.4.0"
 indicatif = "0.9.0"
 lazy_static = "1.1.0"
+# Drop this once we bump our minimum rustc requirement.
+# https://github.com/alexcrichton/backtrace-rs/pull/137
+backtrace = "=0.3.9"
 
 [lib]
 name = "rpmostree_rust"
