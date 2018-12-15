@@ -422,8 +422,11 @@ process_kernel_and_initramfs (int            rootfs_dfd,
   g_ptr_array_add (dracut_argv, NULL);
 
   g_auto(GLnxTmpfile) initramfs_tmpf = { 0, };
+  /* We use a tmpdir under the target root since dracut currently tries to copy
+   * xattrs, including e.g. user.ostreemeta, which can't be copied to tmpfs.
+   */
   { g_auto(GLnxTmpDir) dracut_host_tmpd = { 0, };
-    if (!glnx_mkdtempat (AT_FDCWD, "/var/tmp/rpmostree-dracut.XXXXXX", 0700,
+    if (!glnx_mkdtempat (rootfs_dfd, "rpmostree-dracut.XXXXXX", 0700,
                          &dracut_host_tmpd, error))
       return FALSE;
     if (!rpmostree_run_dracut (rootfs_dfd,

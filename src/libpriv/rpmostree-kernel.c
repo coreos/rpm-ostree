@@ -457,7 +457,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
     "#!/usr/bin/bash\n"
     "set -euo pipefail\n"
     "extra_argv=; if (dracut --help; true) | grep -q -e --reproducible; then extra_argv=\"--reproducible --gzip\"; fi\n"
-    "dracut $extra_argv -v --add ostree --tmpdir=/tmp -f /tmp/initramfs.img \"$@\"\n"
+    "mkdir -p /tmp/dracut && dracut $extra_argv -v --add ostree --tmpdir=/tmp/dracut -f /tmp/initramfs.img \"$@\"\n"
     "cat /tmp/initramfs.img >/proc/self/fd/3\n";
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   g_autoptr(GPtrArray) rebuild_argv = NULL;
@@ -542,9 +542,6 @@ rpmostree_run_dracut (int     rootfs_dfd,
 
   if (kver)
     rpmostree_bwrap_append_child_argv (bwrap, "--kver", kver, NULL);
-
-  if (dracut_host_tmpdir)
-    rpmostree_bwrap_append_child_argv (bwrap, "--tmpdir", "/tmp/dracut", NULL);
 
   rpmostree_bwrap_set_child_setup (bwrap, dracut_child_setup, GINT_TO_POINTER (tmpf.fd));
 
