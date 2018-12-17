@@ -179,7 +179,7 @@ container:
 
 env:
   # this corresponds to the DTS rustc version we want to support
-  RUST_MIN_VERSION: 1.26.2
+  RUST_MIN_VERSION: 1.29.2
 
 tests:
   - ci/installdeps.sh
