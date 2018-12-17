@@ -426,7 +426,7 @@ process_kernel_and_initramfs (int            rootfs_dfd,
    * xattrs, including e.g. user.ostreemeta, which can't be copied to tmpfs.
    */
   { g_auto(GLnxTmpDir) dracut_host_tmpd = { 0, };
-    if (!glnx_mkdtempat (rootfs_dfd, "tmp/rpmostree-dracut.XXXXXX", 0700,
+    if (!glnx_mkdtempat (rootfs_dfd, "rpmostree-dracut.XXXXXX", 0700,
                          &dracut_host_tmpd, error))
       return FALSE;
     if (!rpmostree_run_dracut (rootfs_dfd,
