@@ -1610,6 +1610,11 @@ check_goal_solution (RpmOstreeContext *self,
                                         dnf_package_get_nevra (old_pkg),
                                         dnf_package_get_nevra (new_pkg), new_repo);
           }
+        rpmostree_output_message ("This likely means that some of your layered packages "
+                                  "have requirements on newer or older versions of some "
+                                  "base packages. `rpm-ostree cleanup -m` may help. For "
+                                  "more details, see: "
+                                  "https://github.com/projectatomic/rpm-ostree/issues/415");
 
         return glnx_throw (error, "Some base packages would be replaced");
       }
