@@ -1133,6 +1133,11 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
     g_auto(RpmOstreeProgress) progress = { 0, };
     rpmostree_output_progress_percent_begin (&progress, "Importing rpm-md");
 
+    /* We already explictly checked the repos above; don't try to check them
+     * again.
+     */
+    dnf_context_set_cache_age (self->dnfctx, G_MAXUINT);
+
     /* This will check the metadata again, but it *should* hit the cache; down
      * the line we should really improve the libdnf API around all of this.
      */
