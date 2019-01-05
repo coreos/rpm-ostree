@@ -47,6 +47,7 @@
 #include "rpmostree-core.h"
 #include "rpmostree-json-parsing.h"
 #include "rpmostree-util.h"
+#include "rpmostree-rust.h"
 
 typedef enum {
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH,
@@ -957,6 +958,9 @@ rpmostree_postprocess_final (int            rootfs_dfd,
                              GError       **error)
 {
   GLNX_AUTO_PREFIX_ERROR ("Finalizing rootfs", error);
+
+  if (!ror_compose_postprocess_final (rootfs_dfd, error))
+    return FALSE;
 
   /* Use installation of the tmpfiles integration as an "idempotence" marker to
    * avoid doing postprocessing twice, which can happen when mixing `compose
