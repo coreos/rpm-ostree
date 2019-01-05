@@ -16,35 +16,28 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-extern crate c_utf8;
-extern crate curl;
-#[macro_use]
-extern crate failure;
-extern crate gio_sys;
-extern crate glib;
-extern crate glib_sys;
-extern crate indicatif;
-extern crate libc;
-extern crate openat;
-extern crate tempfile;
+use openat;
+use failure::Fallible;
 
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde;
-extern crate serde_json;
-extern crate serde_yaml;
+// This function is called from rpmostree_postprocess_final(); think of
+// it as the bits of that function that we've chosen to implement in Rust.
+fn compose_postprocess_final(_rootfs_dfd: &openat::Dir) -> Fallible<()> {
+    Ok(())
+}
 
-mod ffiutil;
+mod ffi {
+    use super::*;
+    use ffiutil::*;
+    use glib_sys;
+    use libc;
 
-mod treefile;
-pub use treefile::*;
-mod composepost;
-pub use composepost::*;
-mod progress;
-pub use progress::*;
-mod journal;
-pub use journal::*;
-mod utils;
-pub use utils::*;
+    #[no_mangle]
+    pub extern "C" fn ror_compose_postprocess_final(
+        rootfs_dfd: libc::c_int,
+        gerror: *mut *mut glib_sys::GError,
+    ) -> libc::c_int {
+        let rootfs_dfd = ffi_view_openat_dir(rootfs_dfd);
+        int_glib_error(compose_postprocess_final(&rootfs_dfd), gerror)
+    }
+}
+pub use self::ffi::*;
