@@ -226,28 +226,135 @@ rpmostree_translate_path_for_ostree (const char *path)
   return NULL;
 }
 
-char *
-_rpmostree_util_next_version (const char *auto_version_prefix,
-                              const char *last_version)
+/* Replace [match_start, match_end) in version with rendered date_fmt.
+ *
+ * Returns TRUE on success, FALSE otherwise.
+ */
+static gboolean
+handle_date_tag (GString    *prefix,
+                 const char *date_fmt,
+                 gint        tag_start,
+                 gint        tag_end,
+                 GError    **error)
 {
-  unsigned long long num = 0;
-  const char *end = NULL;
+  g_autoptr(GDateTime) date_time_utc = g_date_time_new_now_utc ();
+  g_autofree char *date_time_str = g_date_time_format (date_time_utc,
+                                                       date_fmt);
+  if (!date_time_str)
+    return glnx_throw (error, "error in formatting date string (%s)", date_fmt);
+  g_string_erase (prefix, tag_start, tag_end - tag_start);
+  g_string_insert (prefix, tag_start, date_time_str);
+  return TRUE;
+}
 
-  if (!last_version || !g_str_has_prefix (last_version, auto_version_prefix))
-    return g_strdup (auto_version_prefix);
+/* Increment the version number in last_version, and append it to
+ * prefix. increment_start specifies the version number to start at
+ * if a version number is not present in last_version.
+ * 
+ * If a version number cannot be parsed from last_version, or last_version
+ * does not begin with prefix, then append increment_start to prefix.
+ * 
+ * Example:
+ * last_version == NULL, prefix == 10, increment_start == 0 --> return 10.0
+ * 
+ * If both prefix and last_version are equal, then append increment_start.
+ * 
+ * Example:
+ * last_version == 10, prefix == 10, increment_start == 5 --> return 10.5
+ * 
+ * If increment_start is set to NULL, then append ".1" to prefix if and only
+ * if last_version is equal to prefix (a version increment *must* occur to
+ * update the version string at this point).
+ * 
+ * Example:
+ * last_version == NULL, prefix == 10, increment_start == NULL --> return 10
+ * last_version == 10, prefix == 10, increment_start == NULL --> return 10.1
+ * 
+ * Returns the next version string.
+ */
+static char*
+increment_version (const char *last_version,
+                   const char *prefix,
+                   const char *increment_start)
+{
+  const gboolean increment_given = increment_start != NULL;
 
-  if (g_str_equal (last_version, auto_version_prefix))
-    return g_strdup_printf ("%s.1", auto_version_prefix);
+  g_assert_cmpstr (prefix, !=, NULL);
 
-  end = last_version + strlen(auto_version_prefix);
+  if (!last_version || !g_str_has_prefix (last_version, prefix))
+    return increment_given ? g_strdup_printf ("%s.%s", prefix, increment_start)
+                           : g_strdup (prefix);
+
+  if (g_str_equal (last_version, prefix))
+    return increment_given ? g_strdup_printf ("%s.%s", prefix, increment_start)
+                           : g_strdup_printf ("%s.1", prefix);
+
+  g_assert_cmpuint (strlen (last_version), >, strlen (prefix));
+  const char *end = last_version + strlen (prefix);
 
   if (*end != '.')
-    return g_strdup (auto_version_prefix);
+    return increment_given ? g_strdup_printf ("%s.%s", prefix, increment_start)
+                           : g_strdup (prefix);
   ++end;
 
-  num = g_ascii_strtoull (end, NULL, 10);
-  return g_strdup_printf ("%s.%llu", auto_version_prefix, num + 1);
+  unsigned long long num = g_ascii_strtoull (end, NULL, 10);
+  return g_strdup_printf ("%s.%llu", prefix, num + 1);
 }
+
+#define VERSION_TAG_REGEX "<([a-zA-Z]+):(.*)?>"
+
+/* Get the next version, given a version prefix and a last version.
+ * Checks for supported version fields in the auto_version_prefix
+ * and renders them.
+ * 
+ * Returns the next version string if successful, NULL otherwise.
+ */
+char *
+_rpmostree_util_next_version (const char   *auto_version_prefix,
+                              const char   *last_version,
+                              GError      **error)
+{
+  static gsize tag_regex_initialized;
+  static GRegex *tag_regex;
+  if (g_once_init_enter (&tag_regex_initialized))
+    {
+      tag_regex = g_regex_new (VERSION_TAG_REGEX, 0, 0, error);
+      if (!tag_regex)
+        return NULL;
+      g_once_init_leave (&tag_regex_initialized, 1);
+    }
+
+  g_autoptr(GString) next_version = g_string_new (auto_version_prefix);
+  g_assert (next_version->str);
+  bool date_tag_given = FALSE;
+
+  g_autoptr(GMatchInfo) tag_match_info = NULL;
+  g_regex_match (tag_regex, next_version->str,
+                 0, &tag_match_info);
+
+  while (g_match_info_matches (tag_match_info))
+    {
+      gint match_start, match_end;
+      g_assert (g_match_info_fetch_pos (tag_match_info, 0, &match_start, &match_end));
+
+      g_autofree char* tag = g_match_info_fetch (tag_match_info, 1);
+      if (g_str_equal (tag, "date"))
+        {
+          g_autofree char* date_fmt = g_match_info_fetch (tag_match_info, 2);
+          if (!handle_date_tag (next_version, date_fmt, match_start, match_end, error))
+            return NULL;
+          date_tag_given = TRUE;
+        }
+      else
+        g_printerr ("ignoring unknown tag %s\n", tag);
+
+      g_match_info_next (tag_match_info, NULL);
+    }
+
+  return increment_version (last_version, next_version->str, date_tag_given ? "0" : NULL);
+}
+
+#undef VERSION_TAG_REGEX
 
 /* Replace every occurrence of @old in @buf with @new. */
 char *

@@ -398,7 +398,9 @@ impl_rojig_build (RpmOstreeRojigCompose *self,
       if (!ver_prefix)
         return FALSE;
 
-      next_version = _rpmostree_util_next_version (ver_prefix, self->previous_version);
+      next_version = _rpmostree_util_next_version (ver_prefix, self->previous_version, error);
+      if (!next_version)
+        return FALSE;
       g_hash_table_insert (self->metadata, g_strdup (OSTREE_COMMIT_META_KEY_VERSION),
                            g_variant_ref_sink (g_variant_new_string (next_version)));
     }

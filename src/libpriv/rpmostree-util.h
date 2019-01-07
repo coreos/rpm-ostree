@@ -78,8 +78,9 @@ char*
 rpmostree_translate_path_for_ostree (const char *path);
 
 char *
-_rpmostree_util_next_version (const char *auto_version_prefix,
-                              const char *last_version);
+_rpmostree_util_next_version (const char   *auto_version_prefix,
+                              const char   *last_version,
+                              GError      **error);
 
 char *
 rpmostree_str_replace (const char  *buf,
