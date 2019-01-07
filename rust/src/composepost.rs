@@ -16,26 +16,31 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-use openat;
-use std::{io, fs};
-use std::io::{Write, BufRead};
-use std::path::Path;
 use failure::Fallible;
+use openat;
+use std::io::{BufRead, Write};
+use std::path::Path;
+use std::{fs, io};
 
-// IMO should propose this at least in a "utils" bit of the openat crate;
-// Like 95% of the time I'm looking at errno (with files) it's for ENOENT,
-// and Rust has an elegant way to map that with Option<>.  Every other
-// error I usually just want to propagate back up.
-fn openat_optional<P, F>(d: &openat::Dir, p: P, f: F) -> io::Result<Option<fs::File>>
-    where P: openat::AsPath, F: FnOnce(&openat::Dir, P) -> io::Result<fs::File>
-{
-    match f(d, p) {
-        Ok(f) => Ok(Some(f)),
-        Err(e) => {
-            if e.kind() == io::ErrorKind::NotFound {
-                Ok(None)
-            } else {
-                Err(e)
+/// Helper functions for openat::Dir
+trait OpenatDirExt {
+    // IMO should propose this at least in a "utils" bit of the openat crate;
+    // Like 95% of the time I'm looking at errno (with files) it's for ENOENT,
+    // and Rust has an elegant way to map that with Option<>.  Every other
+    // error I usually just want to propagate back up.
+    fn open_file_optional<P: openat::AsPath>(&self, p: P) -> io::Result<Option<fs::File>>;
+}
+
+impl OpenatDirExt for openat::Dir {
+    fn open_file_optional<P: openat::AsPath>(&self, p: P) -> io::Result<Option<fs::File>> {
+        match self.open_file(p) {
+            Ok(f) => Ok(Some(f)),
+            Err(e) => {
+                if e.kind() == io::ErrorKind::NotFound {
+                    Ok(None)
+                } else {
+                    Err(e)
+                }
             }
         }
     }
@@ -50,10 +55,9 @@ fn openat_optional<P, F>(d: &openat::Dir, p: P, f: F) -> io::Result<Option<fs::F
 // https://pagure.io/workstation-ostree-config/pull-request/121
 // https://discussion.fedoraproject.org/t/adapting-user-home-in-etc-passwd/487/6
 // https://github.com/justjanne/powerline-go/issues/94
-fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Fallible<()>
-{
+fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Fallible<()> {
     let path = Path::new("usr/etc/default/useradd");
-    if let Some(f) = openat_optional(rootfs_dfd, path, openat::Dir::open_file)? {
+    if let Some(f) = rootfs_dfd.open_file_optional(path)? {
         let mut f = io::BufReader::new(f);
         let tmp_path = path.parent().unwrap().join("useradd.tmp");
         let o = rootfs_dfd.write_file(&tmp_path, 0644)?;
