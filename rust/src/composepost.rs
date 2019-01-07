@@ -83,10 +83,10 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Fallible<()> {
 // preset everywhere.
 fn postprocess_presets(rootfs_dfd: &openat::Dir) -> Fallible<()> {
     let mut o = rootfs_dfd.write_file("usr/lib/systemd/system-preset/40-rpm-ostree-auto.preset", 0644)?;
-    o.write(r"@@@# Written by rpm-ostree compose tree
+    o.write(r###"# Written by rpm-ostree compose tree
 enable ostree-remount.service
 enable ostree-finalize-staged.path
-@@@".as_bytes())?;
+"###.as_bytes())?;
     o.flush()?;
     Ok(())
 }
