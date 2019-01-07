@@ -959,9 +959,6 @@ rpmostree_postprocess_final (int            rootfs_dfd,
 {
   GLNX_AUTO_PREFIX_ERROR ("Finalizing rootfs", error);
 
-  if (!ror_compose_postprocess_final (rootfs_dfd, error))
-    return FALSE;
-
   /* Use installation of the tmpfiles integration as an "idempotence" marker to
    * avoid doing postprocessing twice, which can happen when mixing `compose
    * postprocess-root` with `compose commit`.
@@ -971,6 +968,9 @@ rpmostree_postprocess_final (int            rootfs_dfd,
     return FALSE;
   if (errno == 0)
     return TRUE;
+
+  if (!ror_compose_postprocess_final (rootfs_dfd, error))
+    return FALSE;
 
   gboolean selinux = TRUE;
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
@@ -1013,24 +1013,6 @@ rpmostree_postprocess_final (int            rootfs_dfd,
       if (!postprocess_selinux_policy_store_location (rootfs_dfd, cancellable, error))
         return glnx_prefix_error (error, "SELinux postprocess");
     }
-
-  /* We keep hitting issues with the ostree-remount preset not being
-   * enabled; let's just do this rather than trying to propagate the
-   * preset everywhere.
-   */
-  static const char preset_dir[] = "usr/lib/systemd/system-preset";
-  if (!glnx_shutil_mkdir_p_at (rootfs_dfd, preset_dir, 0755, cancellable, error))
-    return FALSE;
-  { g_autofree char *preset_path = g_build_filename (preset_dir, "40-rpm-ostree-auto.preset", NULL);
-    static const char remount_preset[] = "# Written by rpm-ostree compose tree\n"
-                                         "enable ostree-remount.service\n"
-                                         "enable ostree-finalize-staged.path\n";
-    if (!glnx_file_replace_contents_at (rootfs_dfd, preset_path, (guint8*)remount_preset,
-                                        strlen (remount_preset),
-                                        GLNX_FILE_REPLACE_NODATASYNC,
-                                        cancellable, error))
-      return FALSE;
-  }
 
   if (!convert_var_to_tmpfiles_d (rootfs_dfd, cancellable, error))
     return FALSE;

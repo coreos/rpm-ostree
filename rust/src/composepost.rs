@@ -77,10 +77,24 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Fallible<()> {
     Ok(())
 }
 
+// We keep hitting issues with the ostree-remount preset not being
+// enabled; let's just do this rather than trying to propagate the
+// preset everywhere.
+fn postprocess_presets(rootfs_dfd: &openat::Dir) -> Fallible<()> {
+    let mut o = rootfs_dfd.write_file("usr/lib/systemd/system-preset/40-rpm-ostree-auto.preset", 0644)?;
+    o.write(r"@@@# Written by rpm-ostree compose tree
+enable ostree-remount.service
+enable ostree-finalize-staged.path
+@@@".as_bytes())?;
+    o.flush()?;
+    Ok(())
+}
+
 // This function is called from rpmostree_postprocess_final(); think of
 // it as the bits of that function that we've chosen to implement in Rust.
 fn compose_postprocess_final(rootfs_dfd: &openat::Dir) -> Fallible<()> {
     postprocess_useradd(rootfs_dfd)?;
+    postprocess_presets(rootfs_dfd)?;
     Ok(())
 }
 
