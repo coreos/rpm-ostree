@@ -16,6 +16,7 @@ glib = "0.6.1"
 tempfile = "3.0.3"
 openat = "0.1.15"
 curl = "0.4.14"
+rayon = "1.0"
 c_utf8 = "0.1.0"
 systemd = "0.4.0"
 # https://github.com/mitsuhiko/indicatif/pull/79
