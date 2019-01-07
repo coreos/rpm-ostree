@@ -55,7 +55,8 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Fallible<()>
     let path = Path::new("usr/etc/default/useradd");
     if let Some(f) = openat_optional(rootfs_dfd, path, openat::Dir::open_file)? {
         let mut f = io::BufReader::new(f);
-        let o = rootfs_dfd.new_unnamed_file(0644)?;
+        let tmp_path = path.parent().unwrap().join("useradd.tmp");
+        let o = rootfs_dfd.write_file(&tmp_path, 0644)?;
         let mut bufw = io::BufWriter::new(&o);
         for line in f.lines() {
             let line = line?;
@@ -67,8 +68,7 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Fallible<()>
             bufw.write("\n".as_bytes())?;
         }
         bufw.flush()?;
-        rootfs_dfd.remove_file(path)?;
-        rootfs_dfd.link_file_at(&o, path)?;
+        rootfs_dfd.local_rename(&tmp_path, path)?;
     }
     Ok(())
 }
