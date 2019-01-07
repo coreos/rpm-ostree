@@ -27,6 +27,7 @@ extern crate indicatif;
 extern crate libc;
 extern crate openat;
 extern crate tempfile;
+extern crate rayon;
 
 #[macro_use]
 extern crate lazy_static;

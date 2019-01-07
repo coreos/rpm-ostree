@@ -18,6 +18,7 @@
 
 use failure::Fallible;
 use openat;
+use rayon::prelude::*;
 use std::io::{BufRead, Write};
 use std::path::Path;
 use std::{fs, io};
@@ -93,9 +94,8 @@ enable ostree-finalize-staged.path
 // This function is called from rpmostree_postprocess_final(); think of
 // it as the bits of that function that we've chosen to implement in Rust.
 fn compose_postprocess_final(rootfs_dfd: &openat::Dir) -> Fallible<()> {
-    postprocess_useradd(rootfs_dfd)?;
-    postprocess_presets(rootfs_dfd)?;
-    Ok(())
+    let tasks = [postprocess_useradd, postprocess_presets];
+    tasks.par_iter().try_for_each(|f| f(rootfs_dfd))
 }
 
 mod ffi {
