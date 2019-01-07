@@ -148,8 +148,24 @@ It supports the following parameters:
    ".1". Otherwise we parse the number after the prefix and increment it by one
    and then append that to the prefix.
 
-   This means that on an empty branch with an automatic_version_prefix of "22"
-   the first three commits would get the versions: "22", "22.1", "22.2"
+   A current date/time may also be passed through `automatic_version_prefix`,
+   by including a date tag in the prefix as such: `<date:format>`, where
+   `format` is a string with date formats such as `%Y` (year), `%m` (month), etc.
+   The full list of supported formats is [found in the GLib API](https://developer.gnome.org/glib/stable/glib-GDateTime.html#g-date-time-format).
+   Including a date/time format will automatically append a `.0` to
+   the version, if not present in the prefix, which resets to `.0` if
+   the date (or prefix) changes.
+
+   This means that on an empty branch with an `automatic_version_prefix`
+   of `"22"` the first three commits would get the versions: "22", "22.1",
+   "22.2". Some example progressions are shown:
+
+   | `automatic_version_prefix` | version progression                        |
+   | -------------------------- | ------------------------------------------ |
+   | `22`                       | 22, 22.1, 22.2, ...                        |
+   | `22.1`                     | 22.1.1, 22.1.2, 22.1.3, ...                |
+   | `22.<date:%Y>`             | 22.2019.0, 22.2019.1, 22.2020.0, ...       |
+   | `22.<date:%Y>.1`           | 22.2019.1.0, 22.2019.1.1, 22.2020.1.0, ... |
 
    Example: `automatic_version_prefix: "22.0"`
 
