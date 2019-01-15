@@ -57,14 +57,13 @@ j = json.load(open(checksum_file))
 j["files"] = {f:c for f, c in j["files"].items() if not f.startswith(subdir)}
 open(checksum_file, "w").write(json.dumps(j))' $crate_subdir
  done
- # Also drop ltmain.sh and config.guess checksums since they get mangled by
- # %configure.
+ # Also drop a couple of files that get mangled by %configure during hardening.
  for crate in backtrace-sys; do
    python -c '
 import json, sys, os
 checksum_file = ("vendor/%s/.cargo-checksum.json" % sys.argv[1])
 j = json.load(open(checksum_file))
-j["files"] = {f:c for f, c in j["files"].items() if os.path.basename(f) not in ["ltmain.sh", "config.guess", "config.sub"]}
+j["files"] = {f:c for f, c in j["files"].items() if os.path.basename(f) not in ["ltmain.sh", "libtool.m4", "configure", "config.guess", "config.sub"]}
 open(checksum_file, "w").write(json.dumps(j))' $crate
  done
  tar --transform="s,^,${PKG_VER}/rust/," -rf ${TARFILE_TMP} * .cargo/
