@@ -310,7 +310,10 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
     let include_path = parsed.config.include.take();
     if let &Some(ref include_path) = &include_path {
         if depth == INCLUDE_MAXDEPTH {
-            bail!("Reached maximum include depth {}", INCLUDE_MAXDEPTH);
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Reached maximum include depth {}", INCLUDE_MAXDEPTH),
+            ).into());
         }
         let parent = filename.parent().unwrap();
         let include_path = parent.join(include_path);
@@ -369,7 +372,10 @@ impl Treefile {
         if let Some(files) = &config.add_files {
             for (_, dest) in files.iter() {
                 if !add_files_path_is_valid(&dest) {
-                    bail!("Unsupported path in add-files: {}", dest);
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("Unsupported path in add-files: {}", dest),
+                    ).into());
                 }
             }
         }
