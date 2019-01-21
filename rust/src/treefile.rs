@@ -29,6 +29,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::{collections, fs, io};
 use utils;
+use failure::Fallible;
 
 const ARCH_X86_64: &'static str = "x86_64";
 const INCLUDE_MAXDEPTH: u32 = 50;
@@ -72,7 +73,7 @@ fn treefile_parse_stream<R: io::Read>(
     fmt: InputFormat,
     input: &mut R,
     arch: Option<&str>,
-) -> io::Result<TreeComposeConfig> {
+) -> Fallible<TreeComposeConfig> {
     let mut treefile: TreeComposeConfig = match fmt {
         InputFormat::YAML => {
             let tf: StrictTreeComposeConfig = serde_yaml::from_reader(input).map_err(|e| {
@@ -142,7 +143,7 @@ fn treefile_parse_stream<R: io::Read>(
 fn load_passwd_file<P: AsRef<Path>>(
     basedir: P,
     v: &Option<CheckPasswd>,
-) -> io::Result<Option<fs::File>> {
+) -> Fallible<Option<fs::File>> {
     if let &Some(ref v) = v {
         let basedir = basedir.as_ref();
         if let Some(ref path) = v.filename {
@@ -157,7 +158,7 @@ fn load_passwd_file<P: AsRef<Path>>(
 fn treefile_parse<P: AsRef<Path>>(
     filename: P,
     arch: Option<&str>,
-) -> io::Result<ConfigAndExternals> {
+) -> Fallible<ConfigAndExternals> {
     let filename = filename.as_ref();
     let mut f = io::BufReader::new(fs::File::open(filename).map_err(|e| {
         io::Error::new(
@@ -301,7 +302,7 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
     filename: P,
     arch: Option<&str>,
     depth: u32,
-) -> io::Result<ConfigAndExternals> {
+) -> Fallible<ConfigAndExternals> {
     let filename = filename.as_ref();
     let mut parsed = treefile_parse(filename, arch)?;
     let include_path = parsed.config.include.take();
@@ -310,7 +311,7 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!("Reached maximum include depth {}", INCLUDE_MAXDEPTH),
-            ));
+            ).into());
         }
         let parent = filename.parent().unwrap();
         let include_path = parent.join(include_path);
@@ -339,7 +340,7 @@ impl Treefile {
         filename: &Path,
         arch: Option<&str>,
         workdir: openat::Dir,
-    ) -> io::Result<Box<Treefile>> {
+    ) -> Fallible<Box<Treefile>> {
         let parsed = treefile_parse_recurse(filename, arch, 0)?;
         Treefile::validate_config(&parsed.config)?;
         let dfd = openat::Dir::open(filename.parent().unwrap())?;
@@ -364,7 +365,7 @@ impl Treefile {
     }
 
     /// Do some upfront semantic checks we can do beyond just the type safety serde provides.
-    fn validate_config(config: &TreeComposeConfig) -> io::Result<()> {
+    fn validate_config(config: &TreeComposeConfig) -> Fallible<()> {
         // check add-files
         if let Some(files) = &config.add_files {
             for (_, dest) in files.iter() {
@@ -372,14 +373,14 @@ impl Treefile {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidInput,
                         format!("Unsupported path in add-files: {}", dest),
-                    ));
+                    ).into());
                 }
             }
         }
         Ok(())
     }
 
-    fn serialize_json_string(config: &TreeComposeConfig) -> io::Result<CUtf8Buf> {
+    fn serialize_json_string(config: &TreeComposeConfig) -> Fallible<CUtf8Buf> {
         let mut output = vec![];
         serde_json::to_writer_pretty(&mut output, config)?;
         Ok(CUtf8Buf::from_string(
@@ -388,7 +389,7 @@ impl Treefile {
     }
 
     /// Generate a rojig spec file.
-    fn write_rojig_spec<'a, 'b>(workdir: &'a openat::Dir, r: &'b Rojig) -> io::Result<CUtf8Buf> {
+    fn write_rojig_spec<'a, 'b>(workdir: &'a openat::Dir, r: &'b Rojig) -> Fallible<CUtf8Buf> {
         let description = r
             .description
             .as_ref()
@@ -713,8 +714,12 @@ remove-files:
         let buf = buf.as_bytes();
         let mut input = io::BufReader::new(buf);
         match treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)) {
-            Err(ref e) if e.kind() == io::ErrorKind::InvalidInput => {}
-            Err(ref e) => panic!("Expected invalid treefile, not {}", e.to_string()),
+            Err(ref e) => {
+                match e.downcast_ref::<io::Error>() {
+                    Some(ref ioe) if ioe.kind() == io::ErrorKind::InvalidInput => {},
+                    _ =>  panic!("Expected invalid treefile, not {}", e.to_string()),
+                }
+            }
             Ok(_) => panic!("Expected invalid treefile"),
         }
     }
@@ -745,7 +750,7 @@ remove-files:
     }
 
     impl TreefileTest {
-        fn new<'a, 'b>(contents: &'a str, arch: Option<&'b str>) -> io::Result<TreefileTest> {
+        fn new<'a, 'b>(contents: &'a str, arch: Option<&'b str>) -> Fallible<TreefileTest> {
             let workdir = tempfile::tempdir()?;
             let tf_path = workdir.path().join("treefile.yaml");
             {
