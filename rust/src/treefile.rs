@@ -30,6 +30,7 @@ use std::path::Path;
 use std::{collections, fs, io};
 use utils;
 use failure::Fallible;
+use failure::ResultExt;
 
 const ARCH_X86_64: &'static str = "x86_64";
 const INCLUDE_MAXDEPTH: u32 = 50;
@@ -139,6 +140,12 @@ fn treefile_parse_stream<R: io::Read>(
     Ok(treefile)
 }
 
+/// Open file and provide context containing filename on failures.
+fn open_file<P: AsRef<Path>>(filename: P) -> Fallible<fs::File> {
+    return Ok(fs::File::open(filename.as_ref()).with_context(
+        |e| format!("Can't open file {:?}: {}", filename.as_ref().display(), e))?);
+}
+
 // If a passwd/group file is provided explicitly, load it as a fd
 fn load_passwd_file<P: AsRef<Path>>(
     basedir: P,
@@ -147,7 +154,7 @@ fn load_passwd_file<P: AsRef<Path>>(
     if let &Some(ref v) = v {
         let basedir = basedir.as_ref();
         if let Some(ref path) = v.filename {
-            return Ok(Some(fs::File::open(basedir.join(path))?));
+            return Ok(Some(open_file(basedir.join(path))?));
         }
     }
     return Ok(None);
@@ -160,12 +167,7 @@ fn treefile_parse<P: AsRef<Path>>(
     arch: Option<&str>,
 ) -> Fallible<ConfigAndExternals> {
     let filename = filename.as_ref();
-    let mut f = io::BufReader::new(fs::File::open(filename).map_err(|e| {
-        io::Error::new(
-            e.kind(),
-            format!("Opening {:?}: {}", filename, e.to_string()),
-        )
-    })?);
+    let mut f = io::BufReader::new(open_file(filename)?);
     let basename = filename
         .file_name()
         .map(|s| s.to_string_lossy())
@@ -182,14 +184,14 @@ fn treefile_parse<P: AsRef<Path>>(
         )
     })?;
     let postprocess_script = if let Some(ref postprocess) = tf.postprocess_script.as_ref() {
-        Some(fs::File::open(filename.with_file_name(postprocess))?)
+        Some(open_file(filename.with_file_name(postprocess))?)
     } else {
         None
     };
     let mut add_files: collections::HashMap<String, fs::File> = collections::HashMap::new();
     if let Some(ref add_file_names) = tf.add_files.as_ref() {
         for (name, _) in add_file_names.iter() {
-            add_files.insert(name.clone(), fs::File::open(filename.with_file_name(name))?);
+            add_files.insert(name.clone(), open_file(filename.with_file_name(name))?);
         }
     }
     let parent = filename.parent().unwrap();
@@ -812,6 +814,16 @@ packages:
         assert!(tf.packages.as_ref().unwrap().len() == 8);
         let rojig = tf.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
+    }
+
+    #[test]
+    fn test_open_file_nonexistent() {
+        let path = "/usr/share/empty/manifest.yaml";
+        match treefile_parse(path, None) {
+            Err(ref e) => assert!(e.to_string().starts_with(
+                    format!("Can't open file {:?}:", path).as_str())),
+            Ok(_) => panic!("Expected nonexistent treefile error for {}", path),
+        }
     }
 }
 
