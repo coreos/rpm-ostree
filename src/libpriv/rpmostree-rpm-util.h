@@ -210,6 +210,15 @@ rpmostree_create_rpmdb_pkglist_variant (int              dfd,
                                         GCancellable    *cancellable,
                                         GError         **error);
 
+gboolean
+rpmostree_create_pkglist_variant (GPtrArray     *pkglist,
+                                  GVariant     **out_variant,
+                                  GCancellable  *cancellable,
+                                  GError       **error);
+
+DnfPackage *
+rpmostree_get_locked_package (DnfSack *sack, GHashTable *lockmap, const char *name);
+
 char * rpmostree_get_cache_branch_for_n_evr_a (const char *name, const char *evr, const char *arch);
 char *rpmostree_get_cache_branch_header (Header hdr);
 char *rpmostree_get_rojig_branch_header (Header hdr);

@@ -469,3 +469,96 @@ rpmostree_composeutil_write_composejson (OstreeRepo  *repo,
 
   return TRUE;
 }
+
+/* Implements --write-lockfile-to.
+ * If `path` is NULL, this is a NO-OP.
+ */
+gboolean
+rpmostree_composeutil_write_lockfilejson (RpmOstreeContext  *ctx,
+                                          const char        *path,
+                                          GError           **error)
+{
+  if (!path)
+    return TRUE;
+
+  g_autoptr(GPtrArray) pkgs = rpmostree_context_get_packages (ctx);
+  g_assert (pkgs);
+
+  g_auto(GVariantBuilder) builder;
+  g_variant_builder_init (&builder, G_VARIANT_TYPE ("a{sv}"));
+
+  g_autoptr(GVariant) pkglist_v = NULL;
+  if (!rpmostree_create_pkglist_variant (pkgs, &pkglist_v, NULL, error))
+    return FALSE;
+  g_variant_builder_add (&builder, "{sv}", "packages", pkglist_v);
+
+  g_autoptr(GVariant) lock_v = g_variant_builder_end (&builder);
+  g_assert (lock_v != NULL);
+  g_autoptr(JsonNode) lock_node = json_gvariant_serialize (lock_v);
+  g_assert (lock_node != NULL);
+  glnx_unref_object JsonGenerator *generator = json_generator_new ();
+  json_generator_set_root (generator, lock_node);
+  /* Let's make it somewhat introspectable by humans */
+  json_generator_set_pretty (generator, TRUE);
+
+  char *dnbuf = strdupa (path);
+  const char *dn = dirname (dnbuf);
+  g_auto(GLnxTmpfile) tmpf = { 0, };
+  if (!glnx_open_tmpfile_linkable_at (AT_FDCWD, dn, O_WRONLY | O_CLOEXEC, &tmpf, error))
+    return FALSE;
+  g_autoptr(GOutputStream) out = g_unix_output_stream_new (tmpf.fd, FALSE);
+  /* See also similar code in status.c */
+  if (json_generator_to_stream (generator, out, NULL, error) <= 0 ||
+      (error != NULL && *error != NULL))
+    return FALSE;
+
+  /* World readable to match --write-commitid-to which uses mask */
+  if (!glnx_fchmod (tmpf.fd, 0644, error))
+    return FALSE;
+
+  if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_REPLACE, AT_FDCWD, path, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+/* compose tree accepts JSON package version lock via file;
+ * convert it to a hash table of a{sv}; suitable for further extension.
+ */
+GHashTable *
+rpmostree_composeutil_get_vlockmap (const char  *path,
+                                    GError     **error)
+{
+  g_autoptr(JsonParser) parser = json_parser_new_immutable ();
+  if (!json_parser_load_from_file (parser, path, error))
+    return glnx_null_throw (error, "Could not load lockfile %s", path);
+
+  JsonNode *metarootval = json_parser_get_root (parser);
+  g_autoptr(GVariant) jsonmetav = json_gvariant_deserialize (metarootval, "a{sv}", error);
+  if (!jsonmetav)
+    return glnx_null_throw (error, "Could not parse %s", path);
+
+  g_autoptr(GVariant) value = g_variant_lookup_value (jsonmetav, "packages", G_VARIANT_TYPE ("av"));
+  if (!value)
+    return glnx_null_throw (error, "Failed to find \"packages\" section in lockfile");
+
+  g_autoptr(GHashTable) nevra_to_chksum =
+    g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+
+  GVariantIter iter;
+  g_variant_iter_init (&iter, value);
+  GVariant *child;
+  while (g_variant_iter_loop (&iter, "v", &child))
+    {
+      char *nevra = NULL, *repochksum = NULL;
+      g_autoptr(GVariant) nv = g_variant_get_child_value (child, 0);
+      g_autoptr(GVariant) nvv = g_variant_get_variant (nv);
+      nevra = g_variant_dup_string (nvv, NULL);
+      g_autoptr(GVariant) cv = g_variant_get_child_value (child, 1);
+      g_autoptr(GVariant) cvv = g_variant_get_variant (cv);
+      repochksum = g_variant_dup_string (cvv, NULL);
+      g_hash_table_insert (nevra_to_chksum, nevra, repochksum);
+    }
+
+  return g_steal_pointer (&nevra_to_chksum);
+}

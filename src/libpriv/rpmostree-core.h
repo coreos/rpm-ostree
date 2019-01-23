@@ -170,6 +170,8 @@ gboolean rpmostree_context_set_packages (RpmOstreeContext *self,
 
 GPtrArray *rpmostree_context_get_packages_to_import (RpmOstreeContext *self);
 
+void rpmostree_context_set_vlockmap (RpmOstreeContext *self, GHashTable *map);
+
 gboolean rpmostree_context_download (RpmOstreeContext *self,
                                      GCancellable     *cancellable,
                                      GError           **error);
