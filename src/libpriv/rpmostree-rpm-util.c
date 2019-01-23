@@ -501,6 +501,8 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
     {
       gboolean done = FALSE;
 
+      /* used to avoid fetching SOURCERPM from the same header twice */
+      const char *next_srpm = NULL;
       for (num = 0; num < diff->hs_mod_new->len; ++num)
         {
           Header ho = diff->hs_mod_old->pdata[num];
@@ -537,6 +539,20 @@ rpmhdrs_diff_prnt_block (gboolean changelogs, struct RpmHeadersDiff *diff)
           pkg_print_changed (ho, hn);
 
           if (!changelogs)
+            continue;
+
+          /* RPMs from the same SRPM share the same changelogs; just peek ahead and skip if
+           * the next one has the same SRPM; i.e. this effectively groups consecutive RPMs
+           * from the same SRPM. */
+          const char *current_srpm = next_srpm ?: headerGetString (ho, RPMTAG_SOURCERPM);
+          if (num == diff->hs_mod_old->len - 1)
+            next_srpm = NULL;
+          else
+            {
+              Header next_ho = diff->hs_mod_old->pdata[num+1];
+              next_srpm = headerGetString(next_ho, RPMTAG_SOURCERPM);
+            }
+          if (g_strcmp0 (current_srpm, next_srpm) == 0)
             continue;
 
           /* Load the old %changelog entries */
