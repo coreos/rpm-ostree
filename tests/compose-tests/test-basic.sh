@@ -21,6 +21,21 @@ runcompose --add-metadata-from-json metadata.json
 . ${dn}/libbasic-test.sh
 basic_test
 
+assert_file_has_content_literal compose-output.txt "Currently running in legacy"
+# And check that we printed a warning
+assert_file_has_content_literal compose-output.txt \
+  "warning: In the future, the default compose mode will be --unified-mode"
+echo "ok current mode and legacy warning"
+
+# Now run it again directly but with --dry-run so it's a no-op, but use --legacy
+# to check we squash the warning
+rpm-ostree compose tree ${compose_base_argv} ${treefile} --dry-run --legacy |& tee out.txt
+assert_file_has_content_literal out.txt "Currently running in legacy"
+# And check that we *didn't* print a warning
+assert_not_file_has_content_literal out.txt \
+  "warning: In the future, the default compose mode will be --unified-mode"
+echo "ok squash legacy warning"
+
 # This one is done by postprocessing /var
 ostree --repo=${repobuild} cat ${treeref} /usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf > autovar.txt
 # Picked this one at random as an example of something that won't likely be

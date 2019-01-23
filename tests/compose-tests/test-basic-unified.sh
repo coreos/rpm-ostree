@@ -34,6 +34,12 @@ echo "ok no cachedir"
 . ${dn}/libbasic-test.sh
 basic_test
 
+assert_file_has_content_literal compose-output.txt "Currently running in unified"
+# And check that we *didn't* print a warning
+assert_not_file_has_content_literal compose-output.txt \
+  "warning: In the future, the default compose mode will be --unified-mode"
+echo "ok current mode and legacy warning"
+
 # This one is done by postprocessing /var
 ostree --repo=${repobuild} cat ${treeref} /usr/lib/tmpfiles.d/pkg-filesystem.conf > autovar.txt
 # Picked this one at random as an example of something that won't likely be

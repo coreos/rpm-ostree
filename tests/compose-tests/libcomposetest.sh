@@ -70,7 +70,7 @@ runcompose() {
     # The workdir will be cleaned up (or not) with the overall test dir
     rm ${compose_workdir} -rf
     mkdir ${test_tmpdir}/workdir
-    env RPMOSTREE_PRESERVE_TMPDIR=1 rpm-ostree compose tree ${compose_base_argv} ${treefile} "$@"
+    env RPMOSTREE_PRESERVE_TMPDIR=1 rpm-ostree compose tree ${compose_base_argv} ${treefile} "$@" |& tee compose-output.txt
     commit=$(jq -r '.["ostree-commit"]' < "${composejson}")
     ostree --repo=${repo} pull-local ${repobuild} "${treeref:-${commit}}"
     echo "$(date): finished compose"

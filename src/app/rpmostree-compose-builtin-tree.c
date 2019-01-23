@@ -58,6 +58,7 @@ static gboolean opt_download_only;
 static gboolean opt_force_nocache;
 static gboolean opt_cache_only;
 static gboolean opt_unified_core;
+static gboolean opt_legacy;
 static char *opt_proxy;
 static char *opt_output_repodata_dir;
 static char **opt_metadata_strings;
@@ -82,6 +83,7 @@ static GOptionEntry install_option_entries[] = {
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Like --dry-run, but download RPMs as well; requires --cachedir", NULL },
   { "ex-unified-core", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_unified_core, "Compat alias for --unified-core", NULL }, // Compat
   { "unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_unified_core, "Use new \"unified core\" codepath", NULL },
+  { "legacy", 0, 0, G_OPTION_ARG_NONE, &opt_legacy, "Use the legacy codepath", NULL },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
   { "dry-run", 0, 0, G_OPTION_ARG_NONE, &opt_dry_run, "Just print the transaction and exit", NULL },
   { "output-repodata-dir", 0, 0, G_OPTION_ARG_STRING, &opt_output_repodata_dir, "Save downloaded repodata in DIR", "DIR" },
@@ -544,6 +546,13 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
                                 GError       **error)
 {
   g_autoptr(RpmOstreeTreeComposeContext) self = g_new0 (RpmOstreeTreeComposeContext, 1);
+
+  if (!opt_print_only)
+    g_print ("Currently running in %s mode\n",
+             opt_unified_core ? "unified core" : "legacy");
+
+  if (!opt_print_only && !opt_unified_core && !opt_legacy)
+    g_printerr ("%swarning: In the future, the default compose mode will be --unified-mode. The legacy mode will be deprecated but available behind --legacy for some time. Use one of the two switches above to squash this warning.%s\n", get_bold_start (), get_bold_end ());
 
   /* Init fds to -1 */
   self->workdir_dfd = self->rootfs_dfd = self->cachedir_dfd = -1;
