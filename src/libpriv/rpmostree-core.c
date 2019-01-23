@@ -363,6 +363,8 @@ rpmostree_context_finalize (GObject *object)
   g_clear_pointer (&rctx->pkgs_to_remove, g_hash_table_unref);
   g_clear_pointer (&rctx->pkgs_to_replace, g_hash_table_unref);
 
+  g_clear_pointer (&rctx->vlockmap, g_hash_table_unref);
+
   (void)glnx_tmpdir_delete (&rctx->tmpdir, NULL, NULL);
   (void)glnx_tmpdir_delete (&rctx->repo_tmpdir, NULL, NULL);
 
@@ -1952,12 +1954,19 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   /* And finally, handle repo packages to install */
   g_autoptr(GPtrArray) missing_pkgs = NULL;
+  DnfSack *sack = dnf_context_get_sack (dnfctx);
   for (char **it = pkgnames; it && *it; it++)
     {
       const char *pkgname = *it;
-      g_autoptr(GError) local_error = NULL;
+      g_autoptr(DnfPackage) pkg = rpmostree_get_locked_package (sack, self->vlockmap, pkgname);
+      if (pkg)
+        {
+          hy_goal_install (goal, pkg);
+          continue;
+        }
 
       g_assert (!self->rojig_pure);
+      g_autoptr(GError) local_error = NULL;
       if (!dnf_context_install (dnfctx, pkgname, &local_error))
         {
           /* Only keep going if it's ENOENT, so we coalesce into one msg at the end */
@@ -2062,6 +2071,13 @@ rpmostree_context_get_packages_to_import (RpmOstreeContext *self)
 {
   g_assert (self->pkgs_to_import);
   return g_ptr_array_ref (self->pkgs_to_import);
+}
+
+void
+rpmostree_context_set_vlockmap (RpmOstreeContext *self, GHashTable *map)
+{
+  g_clear_pointer (&self->vlockmap, (GDestroyNotify)g_hash_table_unref);
+  self->vlockmap = g_hash_table_ref (map);
 }
 
 /* XXX: push this into libdnf */

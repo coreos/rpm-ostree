@@ -72,6 +72,8 @@ struct _RpmOstreeContext {
   GHashTable *pkgs_to_remove;  /* pkgname --> gv_nevra */
   GHashTable *pkgs_to_replace; /* new gv_nevra --> old gv_nevra */
 
+  GHashTable *vlockmap; /* nevra --> repochecksum */
+
   GLnxTmpDir tmpdir;
 
   gboolean kernel_changed;
