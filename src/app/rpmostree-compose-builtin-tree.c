@@ -1112,6 +1112,14 @@ rpmostree_compose_builtin_install (int             argc,
   gboolean changed;
   if (!impl_install_tree (self, &changed, cancellable, error))
     return FALSE;
+  if (opt_unified_core)
+    {
+      if (!glnx_renameat (self->workdir_tmp.src_dfd, self->workdir_tmp.path,
+                          AT_FDCWD, destdir, error))
+        return FALSE;
+      glnx_tmpdir_unset (&self->workdir_tmp);
+      self->workdir_dfd = -1;
+    }
   g_print ("rootfs: %s/rootfs\n", destdir);
 
   return TRUE;
