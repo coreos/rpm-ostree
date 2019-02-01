@@ -44,7 +44,9 @@ It supports the following parameters:
  * `mutate-os-release`: String, optional.  This causes rpm-ostree to
     change the `VERSION` and `PRETTY_NAME` fields to include the ostree
     version, and adds a specific `OSTREE_VERSION` key that can be easier
-    for processes to query than looking via ostree.
+    for processes to query than looking via ostree. The actual value of
+    this key represents the baked string that gets substituted out for
+    the final OSTree version.
 
  * `documentation`: boolean, optional. If this is set to false it sets the RPM
    transaction flag "nodocs" which makes yum/rpm not install files marked as
