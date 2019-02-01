@@ -196,6 +196,10 @@ assert_file_has_content err.txt "run.*journalctl.*for more information"
 vm_assert_journal_has_content $cursor 'rpm-ostree(bad-post.post).*a bad post'
 echo "ok script output prefixed in journal"
 
+vm_build_rpm check-ostree-booted post "test -f /run/ostree-booted"
+vm_rpmostree install check-ostree-booted
+echo "ok /run/ostree-booted in scriptlet container"
+
 # check refresh-md/-C functionality
 
 # local repos are always cached, so let's start up an http server for the same

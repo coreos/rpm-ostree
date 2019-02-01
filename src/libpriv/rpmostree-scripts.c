@@ -334,6 +334,7 @@ run_script_in_bwrap_container (int rootfs_fd,
   const char *postscript_path_host = postscript_path_container + 1;
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   gboolean created_var_lib_rpmstate = FALSE;
+  gboolean created_run_ostree_booted = FALSE;
   glnx_autofd int stdout_fd = -1;
   glnx_autofd int stderr_fd = -1;
 
@@ -386,6 +387,19 @@ run_script_in_bwrap_container (int rootfs_fd,
     goto out;
   /* Scripts can see a /var with compat links like alternatives */
   rpmostree_bwrap_var_tmp_tmpfs (bwrap);
+
+  /* Add ostree-booted API; some scriptlets may work differently on OSTree systems; e.g.
+   * akmods. Just create it manually; /run is usually tmpfs, but scriptlets shouldn't be
+   * adding stuff there anyway. */
+  if (!glnx_shutil_mkdir_p_at (rootfs_fd, "run", 0755, cancellable, error))
+    return FALSE;
+  rpmostree_bwrap_bind_readwrite (bwrap, "./run", "/run");
+  int fd =
+    openat (rootfs_fd, "run/ostree-booted", O_CREAT | O_WRONLY | O_NOCTTY | O_CLOEXEC, 0640);
+  if (fd == -1)
+    return glnx_throw_errno_prefix (error, "touch(run/ostree-booted)");
+  (void) close (fd);
+  created_run_ostree_booted = TRUE;
 
   if (var_lib_rpm_statedir)
     rpmostree_bwrap_bind_readwrite (bwrap, var_lib_rpm_statedir->path, "/var/lib/rpm-state");
@@ -485,6 +499,8 @@ run_script_in_bwrap_container (int rootfs_fd,
   (void) unlinkat (rootfs_fd, postscript_path_host, 0);
   if (created_var_lib_rpmstate)
     (void) unlinkat (rootfs_fd, "var/lib/rpm-state", AT_REMOVEDIR);
+  if (created_run_ostree_booted)
+    (void) unlinkat (rootfs_fd, "run/ostree-booted", 0);
   return ret;
 }
 
