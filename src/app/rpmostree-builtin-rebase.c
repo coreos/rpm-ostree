@@ -127,11 +127,36 @@ rpmostree_builtin_rebase (int             argc,
         new_provided_refspec = opt_branch;
     }
 
+  const char *remainder = NULL;
   RpmOstreeRefspecType refspectype;
-  if (!rpmostree_refspec_classify (new_provided_refspec, &refspectype, NULL, error))
+  if (!rpmostree_refspec_classify (new_provided_refspec, &refspectype, &remainder, error))
     return FALSE;
   if (!opt_experimental && refspectype == RPMOSTREE_REFSPEC_TYPE_ROJIG)
     return glnx_throw (error, "rojig:// refspec requires --experimental");
+
+  /* catch "ostree://" or "rojig://"; we'd error out much later in the daemon otherwise */
+  if (strlen (remainder) == 0)
+    return glnx_throw (error, "Refspec is empty");
+
+  /* Check if remote refers to a local repo */
+  g_autofree char *local_repo_remote = NULL;
+  if (G_IN_SET (refspectype, RPMOSTREE_REFSPEC_TYPE_OSTREE,
+                             RPMOSTREE_REFSPEC_TYPE_CHECKSUM))
+    {
+      if (*remainder == '/')
+        {
+          if (!opt_experimental)
+            return glnx_throw (error, "Local repo rebase requires --experimental");
+          const char *ref = strrchr (remainder, ':');
+          if (!ref)
+            return glnx_throw (error, "Missing ':' in LOCALPATH:REF rebase");
+          local_repo_remote = g_strndup (remainder, ref - remainder);
+          new_provided_refspec = ref + 1;
+          /* just don't support "/path/to/repo:" for now */
+          if (strlen (new_provided_refspec) == 0)
+            return glnx_throw (error, "Missing REF in LOCALPATH:REF rebase");
+        }
+    }
 
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
 
@@ -153,7 +178,7 @@ rpmostree_builtin_rebase (int             argc,
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   /* Use newer D-Bus API only if we have to. */
-  if (install_pkgs || uninstall_pkgs)
+  if (install_pkgs || uninstall_pkgs || local_repo_remote)
     {
       if (!rpmostree_update_deployment (os_proxy,
                                         new_provided_refspec,
@@ -163,6 +188,7 @@ rpmostree_builtin_rebase (int             argc,
                                         NULL, /* override replace */
                                         NULL, /* override remove */
                                         NULL, /* override reset */
+                                        local_repo_remote,
                                         options,
                                         &transaction_address,
                                         cancellable,

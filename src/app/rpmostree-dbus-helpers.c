@@ -1123,6 +1123,7 @@ get_modifiers_variant (const char   *set_refspec,
                        const char *const* override_replace_pkgs,
                        const char *const* override_remove_pkgs,
                        const char *const* override_reset_pkgs,
+                       const char   *local_repo_remote,
                        GVariant    **out_modifiers,
                        GUnixFDList **out_fd_list,
                        GError      **error)
@@ -1154,6 +1155,27 @@ get_modifiers_variant (const char   *set_refspec,
   vardict_insert_strv (&dict, "override-remove-packages", override_remove_pkgs);
   vardict_insert_strv (&dict, "override-reset-packages", override_reset_pkgs);
 
+  if (local_repo_remote)
+    {
+      /* Unfortunately, we can't pass an fd to a dir through D-Bus on el7 right now. So
+       * there, we just pass the path. Once that's fixed (or we no longer care about
+       * supporting this feature on el7), we can drop this buildopt. See:
+       * https://bugzilla.redhat.com/show_bug.cgi?id=1672404 */
+#ifdef HAVE_DFD_OVER_DBUS
+      glnx_fd_close int repo_dfd = -1;
+      if (!glnx_opendirat (AT_FDCWD, local_repo_remote, TRUE, &repo_dfd, error))
+        return FALSE;
+
+      int idx = g_unix_fd_list_append (fd_list, repo_dfd, error);
+      if (idx < 0)
+        return FALSE;
+
+      g_variant_dict_insert (&dict, "ex-local-repo-remote", "h", idx);
+#else
+      g_variant_dict_insert (&dict, "ex-local-repo-remote", "s", local_repo_remote);
+#endif
+    }
+
   *out_fd_list = g_steal_pointer (&fd_list);
   *out_modifiers = g_variant_ref_sink (g_variant_dict_end (&dict));
   return TRUE;
@@ -1168,6 +1190,7 @@ rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
                              const char *const* override_replace_pkgs,
                              const char *const* override_remove_pkgs,
                              const char *const* override_reset_pkgs,
+                             const char   *local_repo_remote,
                              GVariant     *options,
                              char        **out_transaction_address,
                              GCancellable *cancellable,
@@ -1180,6 +1203,7 @@ rpmostree_update_deployment (RPMOSTreeOS  *os_proxy,
                               override_replace_pkgs,
                               override_remove_pkgs,
                               override_reset_pkgs,
+                              local_repo_remote,
                               &modifiers, &fd_list, error))
     return FALSE;
 

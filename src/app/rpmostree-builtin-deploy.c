@@ -130,6 +130,7 @@ rpmostree_builtin_deploy (int            argc,
                                             NULL, /* override replace */
                                             NULL, /* override remove */
                                             NULL, /* override reset */
+                                            NULL, /* local_repo_remote */
                                             options,
                                             &transaction_address,
                                             cancellable,

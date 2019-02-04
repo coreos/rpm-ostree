@@ -103,7 +103,7 @@ rpmostree_builtin_reset (int             argc,
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   if (!rpmostree_update_deployment (os_proxy, NULL, NULL, install_pkgs, uninstall_pkgs,
-                                    NULL, NULL, NULL, options, &transaction_address,
+                                    NULL, NULL, NULL, NULL, options, &transaction_address,
                                     cancellable, error))
     return FALSE;
 

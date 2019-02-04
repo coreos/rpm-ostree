@@ -595,6 +595,7 @@ typedef struct {
   GUnixFDList *override_replace_local_pkgs;
   char  **override_remove_pkgs; /* strv but strings owned by modifiers */
   char  **override_reset_pkgs; /* strv but strings owned by modifiers */
+  int local_repo_remote_dfd;
 } DeployTransaction;
 
 typedef RpmostreedTransactionClass DeployTransactionClass;
@@ -850,6 +851,47 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
   g_autoptr(RpmOstreeOrigin) origin =
     rpmostree_sysroot_upgrader_dup_origin (upgrader);
+
+  /* Handle local repo remotes immediately; the idea is that the remote is "transient"
+   * (otherwise, one should set up a proper file:/// remote), so we only support rebasing to
+   * a checksum. We don't want to import a ref. */
+  if (self->local_repo_remote_dfd != -1)
+    {
+      /* self->refspec is the rev in the other local repo we'll rebase to */
+      g_assert (self->refspec);
+
+      RpmOstreeRefspecType refspectype;
+      const char *ref;
+      if (!rpmostree_refspec_classify (self->refspec, &refspectype, &ref, error))
+        return FALSE;
+
+      if (refspectype == RPMOSTREE_REFSPEC_TYPE_ROJIG)
+        return glnx_throw (error, "Local repo remotes not supported for rojig://");
+
+      g_autoptr(OstreeRepo) local_repo_remote =
+        ostree_repo_open_at (self->local_repo_remote_dfd, ".", cancellable, error);
+      if (!local_repo_remote)
+        return glnx_prefix_error (error, "Failed to open local repo");
+      g_autofree char *rev = NULL;
+      if (!ostree_repo_resolve_rev (local_repo_remote, ref, FALSE, &rev, error))
+        return FALSE;
+
+      g_autoptr(OstreeAsyncProgress) progress = ostree_async_progress_new ();
+      rpmostreed_transaction_connect_download_progress (transaction, progress);
+
+      /* pull-local into the system repo */
+      const char *refs_to_fetch[] = { rev, NULL };
+      g_autofree char *local_repo_uri =
+        g_strdup_printf ("file:///proc/self/fd/%d", self->local_repo_remote_dfd);
+      if (!ostree_repo_pull (repo, local_repo_uri, (char**)refs_to_fetch,
+                             OSTREE_REPO_PULL_FLAGS_NONE, progress, cancellable, error))
+        return FALSE;
+      rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+
+      /* as far as the rest of the code is concerned, we're rebasing to :SHA256 now */
+      g_clear_pointer (&self->refspec, g_free);
+      self->refspec = g_strdup_printf (":%s", rev);
+    }
 
   g_autofree gchar *new_refspec = NULL;
   g_autofree gchar *old_refspec = NULL;
@@ -1357,6 +1399,7 @@ deploy_transaction_class_init (DeployTransactionClass *class)
 static void
 deploy_transaction_init (DeployTransaction *self)
 {
+  self->local_repo_remote_dfd = -1;
 }
 
 static char **
@@ -1517,16 +1560,36 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
   g_autoptr(GVariant) override_replace_local_pkgs_idxs =
     g_variant_dict_lookup_value (self->modifiers, "override-replace-local-packages",
                                  G_VARIANT_TYPE("ah"));
+  int local_repo_remote_idx = -1;
+  /* See related blurb in get_modifiers_variant() */
+#ifdef HAVE_DFD_OVER_DBUS
+  g_variant_dict_lookup (self->modifiers, "ex-local-repo-remote", "h", &local_repo_remote_idx);
+#else
+  const char *local_repo_remote =
+    vardict_lookup_ptr (self->modifiers, "ex-local-repo-remote", "&s");
+  if (local_repo_remote)
+    {
+      if (!glnx_opendirat (AT_FDCWD, local_repo_remote, TRUE,
+                           &self->local_repo_remote_dfd, error))
+        return FALSE;
+    }
+#endif
 
-  /* We only use the fd list right now to transfer local RPM fds, which are relevant in the
+  /* First in the fd list is local RPM fds, which are relevant in the
    * `install foo.rpm` case and the `override replace foo.rpm` case. Let's make sure that
-   * the actual number of fds passed is what we expect. */
-
+   * the actual number of fds passed is what we expect.
+   *
+   * A more recent addition is the local-repo-remote fd.
+   *
+   * Here we validate the number of fds provided against the arguments.
+   */
   guint expected_fdn = 0;
   if (install_local_pkgs_idxs)
     expected_fdn += g_variant_n_children (install_local_pkgs_idxs);
   if (override_replace_local_pkgs_idxs)
     expected_fdn += g_variant_n_children (override_replace_local_pkgs_idxs);
+  if (local_repo_remote_idx != -1)
+    expected_fdn += 1;
 
   guint actual_fdn = 0;
   if (fd_list)
@@ -1555,6 +1618,13 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
             get_fd_array_from_sparse (fds, nfds, override_replace_local_pkgs_idxs);
           self->override_replace_local_pkgs = g_unix_fd_list_new_from_array (new_fds, -1);
         }
+
+      if (local_repo_remote_idx != -1)
+        {
+          g_assert_cmpint (local_repo_remote_idx, >=, 0);
+          g_assert_cmpint (local_repo_remote_idx, <, nfds);
+          self->local_repo_remote_dfd = fds[local_repo_remote_idx];
+        }
     }
 
   /* Also check for conflicting options -- this is after all a public API. */
@@ -1580,6 +1650,10 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
        self->override_replace_pkgs || override_replace_local_pkgs_idxs))
     return glnx_null_throw (error, "Can't specify no-overrides if setting "
                                    "override modifiers");
+  if (!self->refspec && self->local_repo_remote_dfd != -1)
+    return glnx_null_throw (error, "Missing ref for transient local rebases");
+  if (self->revision && self->local_repo_remote_dfd != -1)
+    return glnx_null_throw (error, "Revision overrides for transient local rebases not implemented yet");
 
   return (RpmostreedTransaction *) g_steal_pointer (&self);
 }
