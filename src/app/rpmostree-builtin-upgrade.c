@@ -175,6 +175,7 @@ rpmostree_builtin_upgrade (int             argc,
                                             NULL, /* override replace */
                                             NULL, /* override remove */
                                             NULL, /* override reset */
+                                            NULL, /* local_repo_remote */
                                             options,
                                             &transaction_address,
                                             cancellable,

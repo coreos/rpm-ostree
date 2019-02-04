@@ -26,7 +26,9 @@ set -x
 
 # More miscellaneous tests
 
-# Custom origin https://github.com/projectatomic/rpm-ostree/pull/1406
+# Custom origin and local repo rebases. This is essentially the RHCOS workflow.
+# https://github.com/projectatomic/rpm-ostree/pull/1406
+# https://github.com/projectatomic/rpm-ostree/pull/1732
 booted_csum=$(vm_get_booted_csum)
 oscontainer_source="oscontainer://quay.io/exampleos@sha256:98ea6e4f216f2fb4b69fff9b3a44842c38686ca685f3f55dc48c5d3fb1107be4"
 if vm_rpmostree rebase --skip-purge --custom-origin-url "${oscontainer_source}" \
@@ -43,6 +45,14 @@ assert_file_has_content_literal status.txt "${oscontainer_source}"
 vm_rpmostree upgrade >out.txt
 assert_file_has_content_literal out.txt 'Pinned to commit by custom origin: Updated via pivot'
 vm_rpmostree cleanup -p
+echo "ok rebase with custom origin"
+
+# Try again but making it think it's pulling from another local repo
+vm_rpmostree rebase --skip-purge /sysroot/ostree/repo:${booted_csum} --experimental
+vm_rpmostree upgrade >out.txt
+assert_file_has_content_literal out.txt 'Pinned to commit; no upgrade available'
+vm_rpmostree cleanup -p
+echo "ok rebase from local repo remote"
 
 # Add metadata string containing EnfOfLife attribtue
 META_ENDOFLIFE_MESSAGE="this is a test for metadata message"
