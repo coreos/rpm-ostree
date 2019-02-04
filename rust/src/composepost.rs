@@ -39,7 +39,7 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Fallible<()> {
     if let Some(f) = rootfs_dfd.open_file_optional(path)? {
         let mut f = io::BufReader::new(f);
         let tmp_path = path.parent().unwrap().join("useradd.tmp");
-        let o = rootfs_dfd.write_file(&tmp_path, 0644)?;
+        let o = rootfs_dfd.write_file(&tmp_path, 0o644)?;
         let mut bufw = io::BufWriter::new(&o);
         for line in f.lines() {
             let line = line?;
@@ -60,7 +60,7 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Fallible<()> {
 // enabled; let's just do this rather than trying to propagate the
 // preset everywhere.
 fn postprocess_presets(rootfs_dfd: &openat::Dir) -> Fallible<()> {
-    let mut o = rootfs_dfd.write_file("usr/lib/systemd/system-preset/40-rpm-ostree-auto.preset", 0644)?;
+    let mut o = rootfs_dfd.write_file("usr/lib/systemd/system-preset/40-rpm-ostree-auto.preset", 0o644)?;
     o.write(r###"# Written by rpm-ostree compose tree
 enable ostree-remount.service
 enable ostree-finalize-staged.path
