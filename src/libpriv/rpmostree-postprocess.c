@@ -981,6 +981,8 @@ rpmostree_postprocess_final (int            rootfs_dfd,
 
   if (selinux)
     {
+      g_print ("Recompiling policy\n");
+
       /* Now regenerate SELinux policy so that postprocess scripts from users and from us
        * (e.g. the /etc/default/useradd incision) that affect it are baked in. */
       char *child_argv[] = { "semodule", "-nB", NULL };
