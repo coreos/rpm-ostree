@@ -69,10 +69,39 @@ enable ostree-finalize-staged.path
     Ok(())
 }
 
+// This function does two things: (1) make sure there is a /home --> /var/home substitution rule,
+// and (2) make sure there *isn't* a /var/home -> /home substition rule. The latter check won't
+// technically be needed once downstreams have:
+// https://src.fedoraproject.org/rpms/selinux-policy/pull-request/14
+fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Fallible<()> {
+    let path = Path::new("usr/etc/selinux/targeted/contexts/files/file_contexts.subs_dist");
+    if let Some(f) = rootfs_dfd.open_file_optional(path)? {
+        let mut f = io::BufReader::new(f);
+        let tmp_path = path.parent().unwrap().join("file_contexts.subs_dist.tmp");
+        let o = rootfs_dfd.write_file(&tmp_path, 0o644)?;
+        let mut bufw = io::BufWriter::new(&o);
+        for line in f.lines() {
+            let line = line?;
+            if line.starts_with("/var/home ") {
+                bufw.write(b"# https://github.com/projectatomic/rpm-ostree/pull/1754\n")?;
+                bufw.write(b"# ")?;
+            }
+            bufw.write(line.as_bytes())?;
+            bufw.write(b"\n")?;
+        }
+        bufw.write(b"# https://github.com/projectatomic/rpm-ostree/pull/1754\n")?;
+        bufw.write(b"/home /var/home")?;
+        bufw.write(b"\n")?;
+        bufw.flush()?;
+        rootfs_dfd.local_rename(&tmp_path, path)?;
+    }
+    Ok(())
+}
+
 // This function is called from rpmostree_postprocess_final(); think of
 // it as the bits of that function that we've chosen to implement in Rust.
 fn compose_postprocess_final(rootfs_dfd: &openat::Dir) -> Fallible<()> {
-    let tasks = [postprocess_useradd, postprocess_presets];
+    let tasks = [postprocess_useradd, postprocess_presets, postprocess_subs_dist];
     tasks.par_iter().try_for_each(|f| f(rootfs_dfd))
 }
 
