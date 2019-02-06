@@ -22,6 +22,10 @@ validate_passwd group
 
 ostree --repo=${repobuild} cat ${treeref} /usr/etc/default/useradd > useradd.txt
 assert_file_has_content_literal useradd.txt HOME=/var/home
+
+ostree --repo=${repobuild} cat ${treeref} \
+  /usr/etc/selinux/targeted/contexts/files/file_contexts.homedirs > homedirs.txt
+assert_file_has_content_literal homedirs.txt /var/home
 echo "ok etc/default/useradd"
 
 for path in /usr/share/rpm /usr/lib/sysimage/rpm-ostree-base-db; do

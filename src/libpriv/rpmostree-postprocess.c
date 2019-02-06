@@ -969,15 +969,25 @@ rpmostree_postprocess_final (int            rootfs_dfd,
   if (errno == 0)
     return TRUE;
 
-  if (!ror_compose_postprocess_final (rootfs_dfd, error))
-    return FALSE;
-
   gboolean selinux = TRUE;
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
                                                                "selinux",
                                                                &selinux,
                                                                error))
     return FALSE;
+
+  if (!ror_compose_postprocess_final (rootfs_dfd, error))
+    return FALSE;
+
+  if (selinux)
+    {
+      /* Now regenerate SELinux policy so that postprocess scripts from users and from us
+       * (e.g. the /etc/default/useradd incision) that affect it are baked in. */
+      char *child_argv[] = { "semodule", "-nB", NULL };
+      if (!run_bwrap_mutably (rootfs_dfd, "semodule", child_argv, unified_core_mode,
+                              cancellable, error))
+        return FALSE;
+    }
 
   gboolean container = FALSE;
   if (!_rpmostree_jsonutil_object_get_optional_boolean_member (treefile,
