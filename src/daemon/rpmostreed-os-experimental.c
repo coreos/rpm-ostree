@@ -31,7 +31,6 @@
 #include "rpmostreed-utils.h"
 #include "rpmostree-util.h"
 #include "rpmostreed-transaction.h"
-#include "rpmostreed-transaction-monitor.h"
 #include "rpmostreed-transaction-types.h"
 
 typedef struct _RpmostreedOSExperimentalClass RpmostreedOSExperimentalClass;
@@ -39,7 +38,6 @@ typedef struct _RpmostreedOSExperimentalClass RpmostreedOSExperimentalClass;
 struct _RpmostreedOSExperimental
 {
   RPMOSTreeOSSkeleton parent_instance;
-  RpmostreedTransactionMonitor *transaction_monitor;
 };
 
 struct _RpmostreedOSExperimentalClass
@@ -57,23 +55,6 @@ G_DEFINE_TYPE_WITH_CODE (RpmostreedOSExperimental,
                                                 rpmostreed_osexperimental_iface_init)
                          );
 
-static RpmostreedTransaction *
-merge_compatible_txn (RpmostreedOSExperimental *self,
-                      GDBusMethodInvocation *invocation)
-{
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
-
-  /* If a compatible transaction is in progress, share its bus address. */
-  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
-  if (transaction != NULL)
-    {
-      if (rpmostreed_transaction_is_compatible (transaction, invocation))
-        return g_steal_pointer (&transaction);
-    }
-
-  return NULL;
-}
-
 /* ---------------------------------------------------------------------------------------------------- */
 
 static void
@@ -88,8 +69,6 @@ os_dispose (GObject *object)
       rpmostreed_daemon_unpublish (rpmostreed_daemon_get (),
                                    object_path, object);
     }
-
-  g_clear_object (&self->transaction_monitor);
 
   G_OBJECT_CLASS (rpmostreed_osexperimental_parent_class)->dispose (object);
 }
@@ -159,13 +138,15 @@ osexperimental_handle_live_fs (RPMOSTreeOSExperimental *interface,
                                GDBusMethodInvocation *invocation,
                                GVariant *arg_options)
 {
-  RpmostreedOSExperimental *self = RPMOSTREED_OSEXPERIMENTAL (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   GError *local_error = NULL;
 
-  transaction = merge_compatible_txn (self, invocation);
+  /* try to merge with an existing transaction, otherwise start a new one */
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto out;
   if (transaction)
     goto out;
 
@@ -184,7 +165,7 @@ osexperimental_handle_live_fs (RPMOSTreeOSExperimental *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
   if (local_error != NULL)
@@ -213,22 +194,17 @@ rpmostreed_osexperimental_iface_init (RPMOSTreeOSExperimentalIface *iface)
 RPMOSTreeOSExperimental *
 rpmostreed_osexperimental_new (OstreeSysroot *sysroot,
                                OstreeRepo *repo,
-                               const char *name,
-                               RpmostreedTransactionMonitor *monitor)
+                               const char *name)
 {
   RpmostreedOSExperimental *obj = NULL;
   g_autofree char *path = NULL;
 
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
   g_return_val_if_fail (name != NULL, NULL);
-  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION_MONITOR (monitor), NULL);
 
   path = rpmostreed_generate_object_path (BASE_DBUS_PATH, name, NULL);
 
   obj = g_object_new (RPMOSTREED_TYPE_OSEXPERIMENTAL, NULL);
-
-  /* FIXME Make this a construct-only property? */
-  obj->transaction_monitor = g_object_ref (monitor);
 
   rpmostreed_daemon_publish (rpmostreed_daemon_get (), path, FALSE, obj);
 

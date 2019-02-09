@@ -39,6 +39,3 @@ typedef struct _RpmostreedOSExperimental RpmostreedOSExperimental;
 
 struct _RpmostreedTransaction;
 typedef struct _RpmostreedTransaction RpmostreedTransaction;
-
-struct _RpmostreedTransactionMonitor;
-typedef struct _RpmostreedTransactionMonitor RpmostreedTransactionMonitor;

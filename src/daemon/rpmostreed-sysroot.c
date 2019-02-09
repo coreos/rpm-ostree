@@ -28,7 +28,6 @@
 #include "rpmostreed-deployment-utils.h"
 #include "rpmostreed-errors.h"
 #include "rpmostreed-transaction.h"
-#include "rpmostreed-transaction-monitor.h"
 
 #include "rpmostree-output.h"
 
@@ -38,6 +37,9 @@
 #include <gio/gunixoutputstream.h>
 #include <systemd/sd-login.h>
 #include <systemd/sd-journal.h>
+
+/* Avoid clients leaking their bus connections keeping the transaction open */
+#define FORCE_CLOSE_TXN_TIMEOUT_SECS 30
 
 static gboolean
 sysroot_reload_ostree_configs_and_deployments (RpmostreedSysroot *self,
@@ -66,7 +68,8 @@ struct _RpmostreedSysroot {
   OstreeSysroot *ot_sysroot;
   OstreeRepo *repo;
   struct stat repo_last_stat;
-  RpmostreedTransactionMonitor *transaction_monitor;
+  RpmostreedTransaction *transaction;
+  guint close_transaction_timeout_id;
   PolkitAuthority *authority;
   gboolean on_session_bus;
 
@@ -103,7 +106,6 @@ static void
 sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
 {
   RpmostreedSysroot *self = RPMOSTREED_SYSROOT (opaque);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
   gboolean output_to_self = FALSE;
 
   // The API previously passed these each time, but now we retain them as
@@ -112,22 +114,20 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
   static bool progress_state_percent;
   static guint progress_state_n_items;
 
-  transaction =
-    rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
-  if (transaction)
-    g_object_get (transaction, "output-to-self", &output_to_self, NULL);
+  if (self->transaction)
+    g_object_get (self->transaction, "output-to-self", &output_to_self, NULL);
 
-  if (!transaction || output_to_self)
+  if (!self->transaction || output_to_self)
     {
       rpmostree_output_default_handler (type, data, opaque);
       return;
     }
 
+  RPMOSTreeTransaction *transaction = RPMOSTREE_TRANSACTION (self->transaction);
   switch (type)
   {
   case RPMOSTREE_OUTPUT_MESSAGE:
-    rpmostree_transaction_emit_message (RPMOSTREE_TRANSACTION (transaction),
-                                        ((RpmOstreeOutputMessage*)data)->text);
+    rpmostree_transaction_emit_message (transaction, ((RpmOstreeOutputMessage*)data)->text);
     break;
   case RPMOSTREE_OUTPUT_PROGRESS_BEGIN:
     {
@@ -138,8 +138,7 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
       if (begin->percent)
         {
           progress_str = g_strdup (begin->prefix);
-          rpmostree_transaction_emit_percent_progress (RPMOSTREE_TRANSACTION (transaction),
-                                                       progress_str, 0);
+          rpmostree_transaction_emit_percent_progress (transaction, progress_str, 0);
           progress_state_percent = true;
         }
       else if (begin->n > 0)
@@ -147,13 +146,11 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
           progress_str = g_strdup (begin->prefix);
           progress_state_n_items = begin->n;
           /* For backcompat, this is a percentage.  See below */
-          rpmostree_transaction_emit_percent_progress (RPMOSTREE_TRANSACTION (transaction),
-                                                       progress_str, 0);
+          rpmostree_transaction_emit_percent_progress (transaction, progress_str, 0);
         }
       else
         {
-          rpmostree_transaction_emit_task_begin (RPMOSTREE_TRANSACTION (transaction),
-                                                 begin->prefix);
+          rpmostree_transaction_emit_task_begin (transaction, begin->prefix);
         }
     }
     break;
@@ -169,11 +166,11 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
           int percentage = (update->c == progress_state_n_items) ? 100 :
             (((double)(update->c)) / (progress_state_n_items) * 100);
           g_autofree char *newtext = g_strdup_printf ("%s (%u/%u)", progress_str, update->c, progress_state_n_items);
-          rpmostree_transaction_emit_percent_progress (RPMOSTREE_TRANSACTION (transaction), newtext, percentage);
+          rpmostree_transaction_emit_percent_progress (transaction, newtext, percentage);
         }
       else
         {
-          rpmostree_transaction_emit_percent_progress (RPMOSTREE_TRANSACTION (transaction), progress_str, update->c);
+          rpmostree_transaction_emit_percent_progress (transaction, progress_str, update->c);
         }
     }
     break;
@@ -186,11 +183,11 @@ sysroot_output_cb (RpmOstreeOutputType type, void *data, void *opaque)
     {
       if (progress_state_percent || progress_state_n_items > 0)
         {
-          rpmostree_transaction_emit_progress_end (RPMOSTREE_TRANSACTION (transaction));
+          rpmostree_transaction_emit_progress_end (transaction);
         }
       else
         {
-          rpmostree_transaction_emit_task_end (RPMOSTREE_TRANSACTION (transaction), "done");
+          rpmostree_transaction_emit_task_end (transaction, "done");
         }
     }
     break;
@@ -271,51 +268,6 @@ handle_get_os (RPMOSTreeSysroot *object,
 }
 
 static gboolean
-sysroot_transform_transaction_to_attrs (GBinding *binding,
-                                        const GValue *src_value,
-                                        GValue *dst_value,
-                                        gpointer user_data)
-{
-  RpmostreedTransaction *transaction;
-  GVariant *variant;
-  const char *method_name = "";
-  const char *path = "";
-  const char *sender_name = "";
-
-  transaction = g_value_get_object (src_value);
-
-  if (transaction != NULL)
-    {
-      GDBusMethodInvocation *invocation;
-
-      invocation = rpmostreed_transaction_get_invocation (transaction);
-      method_name = g_dbus_method_invocation_get_method_name (invocation);
-      path = g_dbus_method_invocation_get_object_path (invocation);
-      sender_name = g_dbus_method_invocation_get_sender (invocation);
-    }
-
-  variant = g_variant_new ("(sss)", method_name, sender_name, path);
-
-  g_value_set_variant (dst_value, variant);
-
-  return TRUE;
-}
-
-static gboolean
-sysroot_transform_transaction_to_address (GBinding *binding,
-                                          const GValue *src_value,
-                                          GValue *dst_value,
-                                          gpointer user_data)
-{
-  RpmostreedTransaction *transaction = g_value_get_object (src_value);
-  const char *address = "";
-  if (transaction != NULL)
-    address = rpmostreed_transaction_get_client_address (transaction);
-  g_value_set_string (dst_value, address);
-  return TRUE;
-}
-
-static gboolean
 sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
                                        gboolean *out_changed,
                                        GError **error)
@@ -386,13 +338,11 @@ sysroot_populate_deployments_unlocked (RpmostreedSysroot *self,
       if (!g_hash_table_contains (self->os_interfaces, deployment_os))
         {
           RPMOSTreeOS *obj = rpmostreed_os_new (self->ot_sysroot, self->repo,
-                                                deployment_os,
-                                                self->transaction_monitor);
+                                                deployment_os);
           g_hash_table_insert (self->os_interfaces, g_strdup (deployment_os), obj);
 
           RPMOSTreeOSExperimental *eobj = rpmostreed_osexperimental_new (self->ot_sysroot, self->repo,
-                                                                         deployment_os,
-                                                                         self->transaction_monitor);
+                                                                         deployment_os);
           g_hash_table_insert (self->osexperimental_interfaces, g_strdup (deployment_os), eobj);
 
         }
@@ -569,7 +519,7 @@ sysroot_dispose (GObject *object)
   g_hash_table_remove_all (self->os_interfaces);
   g_hash_table_remove_all (self->osexperimental_interfaces);
 
-  g_clear_object (&self->transaction_monitor);
+  g_clear_object (&self->transaction);
   g_clear_object (&self->authority);
 
   G_OBJECT_CLASS (rpmostreed_sysroot_parent_class)->dispose (object);
@@ -604,8 +554,6 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
 
   self->monitor = NULL;
 
-  self->transaction_monitor = rpmostreed_transaction_monitor_new ();
-
   if (g_getenv ("RPMOSTREE_USE_SESSION_BUS") != NULL)
     self->on_session_bus = TRUE;
 
@@ -621,35 +569,6 @@ rpmostreed_sysroot_init (RpmostreedSysroot *self)
     }
 
   rpmostree_output_set_callback (sysroot_output_cb, self);
-}
-
-static void
-sysroot_constructed (GObject *object)
-{
-  RpmostreedSysroot *self = RPMOSTREED_SYSROOT (object);
-
-  g_object_bind_property_full (self->transaction_monitor,
-                               "active-transaction",
-                               self,
-                               "active-transaction",
-                               G_BINDING_DEFAULT |
-                               G_BINDING_SYNC_CREATE,
-                               sysroot_transform_transaction_to_attrs,
-                               NULL,
-                               NULL,
-                               NULL);
-  g_object_bind_property_full (self->transaction_monitor,
-                               "active-transaction",
-                               self,
-                               "active-transaction-path",
-                               G_BINDING_DEFAULT |
-                               G_BINDING_SYNC_CREATE,
-                               sysroot_transform_transaction_to_address,
-                               NULL,
-                               NULL,
-                               NULL);
-
-  G_OBJECT_CLASS (rpmostreed_sysroot_parent_class)->constructed (object);
 }
 
 static gboolean
@@ -751,7 +670,6 @@ rpmostreed_sysroot_class_init (RpmostreedSysrootClass *klass)
   gobject_class = G_OBJECT_CLASS (klass);
   gobject_class->dispose = sysroot_dispose;
   gobject_class->finalize     = sysroot_finalize;
-  gobject_class->constructed  = sysroot_constructed;
 
   signals[UPDATED] = g_signal_new ("updated",
                                    RPMOSTREED_TYPE_SYSROOT,
@@ -901,6 +819,108 @@ rpmostreed_sysroot_load_state (RpmostreedSysroot *self,
   if (out_repo)
     *out_repo = g_object_ref (rpmostreed_sysroot_get_repo (self));
   return TRUE;
+}
+
+gboolean
+rpmostreed_sysroot_prep_for_txn (RpmostreedSysroot     *self,
+                                 GDBusMethodInvocation *invocation,
+                                 RpmostreedTransaction **out_compat_txn,
+                                 GError               **error)
+{
+  if (self->transaction)
+    {
+      if (rpmostreed_transaction_is_compatible (self->transaction, invocation))
+        {
+          *out_compat_txn = g_object_ref (self->transaction);
+          return TRUE;
+        }
+      const char *title = rpmostree_transaction_get_title ((RPMOSTreeTransaction*)(self->transaction));
+      return glnx_throw (error, "Transaction in progress: %s", title);
+    }
+  *out_compat_txn = NULL;
+  return TRUE;
+}
+
+gboolean
+rpmostreed_sysroot_has_txn (RpmostreedSysroot     *self)
+{
+  return self->transaction != NULL;
+}
+
+static gboolean
+on_force_close (gpointer data)
+{
+  RpmostreedSysroot *self = data;
+
+  if (self->transaction)
+    {
+      rpmostreed_transaction_force_close (self->transaction);
+      rpmostreed_sysroot_set_txn (self, NULL);
+    }
+
+  return FALSE;
+}
+
+static void
+on_txn_active_changed (GObject    *object,
+                       GParamSpec *pspec,
+                       gpointer    user_data)
+{
+  RpmostreedSysroot *self = user_data;
+  gboolean active;
+  g_object_get (object, "active", &active, NULL);
+  if (!active && self->close_transaction_timeout_id == 0)
+    {
+      self->close_transaction_timeout_id =
+        g_timeout_add_seconds (FORCE_CLOSE_TXN_TIMEOUT_SECS, on_force_close, self);
+    }
+}
+
+void
+rpmostreed_sysroot_set_txn (RpmostreedSysroot     *self,
+                            RpmostreedTransaction *txn)
+{
+  /* If the transaction is changing, clear the timer */
+  if (self->close_transaction_timeout_id > 0)
+    {
+      g_source_remove (self->close_transaction_timeout_id);
+      self->close_transaction_timeout_id = 0;
+    }
+
+  if (txn != NULL)
+    {
+      g_assert (self->transaction == NULL);
+      self->transaction = g_object_ref (txn);
+
+      g_signal_connect (self->transaction, "notify::active",
+                        G_CALLBACK (on_txn_active_changed), self);
+
+      GDBusMethodInvocation *invocation = rpmostreed_transaction_get_invocation (self->transaction);
+      g_autoptr(GVariant) v = g_variant_ref_sink (g_variant_new ("(sss)",
+                                                                 g_dbus_method_invocation_get_method_name (invocation),
+                                                                 g_dbus_method_invocation_get_object_path (invocation),
+                                                                 g_dbus_method_invocation_get_sender (invocation)));
+      rpmostree_sysroot_set_active_transaction ((RPMOSTreeSysroot*)self, v);
+      rpmostree_sysroot_set_active_transaction_path ((RPMOSTreeSysroot*)self,
+                                                     rpmostreed_transaction_get_client_address (self->transaction));
+    }
+  else
+    {
+      g_assert (self->transaction);
+      g_clear_object (&self->transaction);
+
+      g_autoptr(GVariant) v = g_variant_ref_sink (g_variant_new ("(sss)", "", "", ""));
+      rpmostree_sysroot_set_active_transaction ((RPMOSTreeSysroot *)self, v);
+      rpmostree_sysroot_set_active_transaction_path ((RPMOSTreeSysroot *)self, "");
+    }
+}
+
+void
+rpmostreed_sysroot_finish_txn (RpmostreedSysroot     *self,
+                               RpmostreedTransaction *txn)
+{
+  g_assert (self->transaction == txn);
+  rpmostreed_sysroot_set_txn (self, NULL);
 }
 
 OstreeSysroot *

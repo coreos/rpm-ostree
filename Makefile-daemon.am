@@ -40,8 +40,6 @@ librpmostreed_la_SOURCES = \
 	src/daemon/rpmostreed-deployment-utils.c \
 	src/daemon/rpmostreed-transaction.h \
 	src/daemon/rpmostreed-transaction.c \
-	src/daemon/rpmostreed-transaction-monitor.h \
-	src/daemon/rpmostreed-transaction-monitor.c \
 	src/daemon/rpmostreed-transaction-types.h \
 	src/daemon/rpmostreed-transaction-types.c \
 	src/daemon/rpmostreed-transaction-livefs.c \

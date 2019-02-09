@@ -49,4 +49,17 @@ gboolean            rpmostreed_sysroot_load_state       (RpmostreedSysroot *self
                                                          OstreeRepo **out_repo,
                                                          GError **error);
 
+gboolean            rpmostreed_sysroot_prep_for_txn (RpmostreedSysroot     *self,
+                                                     GDBusMethodInvocation *invocation,
+                                                     RpmostreedTransaction **out_compat_txn,
+                                                     GError               **error);
+
+gboolean            rpmostreed_sysroot_has_txn (RpmostreedSysroot     *self);
+
+void                rpmostreed_sysroot_finish_txn (RpmostreedSysroot     *self,
+                                                   RpmostreedTransaction *txn);
+
+void                rpmostreed_sysroot_set_txn (RpmostreedSysroot     *self,
+                                                RpmostreedTransaction *txn);
+
 void                rpmostreed_sysroot_emit_update      (RpmostreedSysroot *self);
