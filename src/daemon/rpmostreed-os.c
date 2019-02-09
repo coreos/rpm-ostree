@@ -34,7 +34,6 @@
 #include "rpmostreed-utils.h"
 #include "rpmostree-util.h"
 #include "rpmostreed-transaction.h"
-#include "rpmostreed-transaction-monitor.h"
 #include "rpmostreed-transaction-types.h"
 
 typedef struct _RpmostreedOSClass RpmostreedOSClass;
@@ -42,7 +41,6 @@ typedef struct _RpmostreedOSClass RpmostreedOSClass;
 struct _RpmostreedOS
 {
   RPMOSTreeOSSkeleton parent_instance;
-  RpmostreedTransactionMonitor *transaction_monitor;
   gboolean on_session_bus;
   guint signal_id;
 };
@@ -260,8 +258,6 @@ os_dispose (GObject *object)
                                    object_path, object);
     }
 
-  g_clear_object (&self->transaction_monitor);
-
   if (self->signal_id > 0)
       g_signal_handler_disconnect (rpmostreed_sysroot_get (), self->signal_id);
 
@@ -448,23 +444,6 @@ out:
   return TRUE;
 }
 
-static RpmostreedTransaction *
-merge_compatible_txn (RpmostreedOS *self,
-                      GDBusMethodInvocation *invocation)
-{
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
-
-  /* If a compatible transaction is in progress, share its bus address. */
-  transaction = rpmostreed_transaction_monitor_ref_active_transaction (self->transaction_monitor);
-  if (transaction != NULL)
-    {
-      if (rpmostreed_transaction_is_compatible (transaction, invocation))
-        return g_steal_pointer (&transaction);
-    }
-
-  return NULL;
-}
-
 static gboolean
 refresh_cached_update (RpmostreedOS*, GError **error);
 
@@ -484,13 +463,16 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
                                     GDBusMethodInvocation *invocation)
 {
   RpmostreedOS *self = RPMOSTREED_OS (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   GError *local_error = NULL;
 
-  transaction = merge_compatible_txn (self, invocation);
+  /* try to merge with an existing transaction, otherwise start a new one */
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto out;
   if (transaction)
     goto out;
 
@@ -514,12 +496,12 @@ os_handle_download_update_rpm_diff (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+
   /* Make sure we refresh CachedUpdate after the transaction. This normally happens
    * automatically if new data was downloaded (through the repo mtime bump --> UPDATED
    * signal), but we also want to do this even if the data was already present. */
   g_signal_connect (transaction, "closed", G_CALLBACK (on_auto_update_done), self);
-
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
 
 out:
   if (local_error != NULL)
@@ -576,9 +558,11 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
   g_autoptr(GError) local_error = NULL;
 
   /* try to merge with an existing transaction, otherwise start a new one */
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto err;
 
-  glnx_unref_object RpmostreedTransaction *transaction =
-    merge_compatible_txn (self, invocation);
   if (!transaction)
     {
       glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
@@ -594,7 +578,7 @@ os_merge_or_start_deployment_txn (RPMOSTreeOS            *interface,
       if (!transaction)
         goto err;
 
-      rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+      rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
       /* For the AutomaticUpdateTrigger "check" case, we want to make sure we refresh
        * the CachedUpdate property; "stage" will do this through sysroot_changed */
@@ -815,8 +799,6 @@ os_handle_rollback (RPMOSTreeOS *interface,
                     GDBusMethodInvocation *invocation,
                     GVariant *arg_options)
 {
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
@@ -824,7 +806,11 @@ os_handle_rollback (RPMOSTreeOS *interface,
   GVariantDict options_dict;
   GError *local_error = NULL;
 
-  transaction = merge_compatible_txn (self, invocation);
+  /* try to merge with an existing transaction, otherwise start a new one */
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto out;
   if (transaction)
     goto out;
 
@@ -855,7 +841,7 @@ os_handle_rollback (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
   if (local_error != NULL)
@@ -877,8 +863,6 @@ os_handle_refresh_md (RPMOSTreeOS *interface,
                       GDBusMethodInvocation *invocation,
                       GVariant *arg_options)
 {
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
@@ -886,7 +870,11 @@ os_handle_refresh_md (RPMOSTreeOS *interface,
   RpmOstreeTransactionRefreshMdFlags flags = 0;
   g_auto(GVariantDict) dict;
 
-  transaction = merge_compatible_txn (self, invocation);
+  /* try to merge with an existing transaction, otherwise start a new one */
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto out;
   if (transaction)
     goto out;
 
@@ -912,7 +900,7 @@ os_handle_refresh_md (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
   if (local_error != NULL)
@@ -934,15 +922,17 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
                                  GDBusMethodInvocation *invocation,
                                  GVariant *arg_options)
 {
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   RpmOstreeTransactionCleanupFlags flags = 0;
   const char *osname;
   GError *local_error = NULL;
 
-  transaction = merge_compatible_txn (self, invocation);
+  /* try to merge with an existing transaction, otherwise start a new one */
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto out;
   if (transaction)
     goto out;
 
@@ -963,7 +953,7 @@ os_handle_clear_rollback_target (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
   if (local_error != NULL)
@@ -986,8 +976,6 @@ os_handle_set_initramfs_state (RPMOSTreeOS *interface,
                                const char *const*args,
                                GVariant *arg_options)
 {
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   g_autoptr(GVariantDict) dict = NULL;
@@ -995,7 +983,11 @@ os_handle_set_initramfs_state (RPMOSTreeOS *interface,
   gboolean reboot = FALSE;
   GError *local_error = NULL;
 
-  transaction = merge_compatible_txn (self, invocation);
+  /* try to merge with an existing transaction, otherwise start a new one */
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto out;
   if (transaction)
     goto out;
 
@@ -1022,7 +1014,7 @@ os_handle_set_initramfs_state (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
   if (local_error != NULL)
@@ -1060,13 +1052,15 @@ os_handle_kernel_args (RPMOSTreeOS *interface,
                        const char * const *kernel_args_deleted,
                        GVariant *arg_options)
 {
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   GError *local_error = NULL;
 
-  transaction = merge_compatible_txn (self, invocation);
+  /* try to merge with an existing transaction, otherwise start a new one */
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto out;
   if (transaction)
     goto out;
 
@@ -1091,7 +1085,7 @@ os_handle_kernel_args (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
   if (local_error != NULL)
@@ -1195,15 +1189,17 @@ os_handle_cleanup (RPMOSTreeOS *interface,
                    GDBusMethodInvocation *invocation,
                    const char *const*args)
 {
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   RpmOstreeTransactionCleanupFlags flags = 0;
   const char *osname;
   GError *local_error = NULL;
 
-  transaction = merge_compatible_txn (self, invocation);
+  /* try to merge with an existing transaction, otherwise start a new one */
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto out;
   if (transaction)
     goto out;
 
@@ -1245,7 +1241,7 @@ os_handle_cleanup (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
   if (local_error != NULL)
@@ -1338,14 +1334,16 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
                                     const char * const *arg_packages)
 {
   /* TODO: Totally ignoring arg_packages for now */
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   GError *local_error = NULL;
 
-  transaction = merge_compatible_txn (self, invocation);
+  /* try to merge with an existing transaction, otherwise start a new one */
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto out;
   if (transaction)
     goto out;
 
@@ -1369,7 +1367,7 @@ os_handle_download_rebase_rpm_diff (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
   if (local_error != NULL)
@@ -1475,8 +1473,6 @@ os_handle_download_deploy_rpm_diff (RPMOSTreeOS *interface,
                                     const char *arg_revision,
                                     const char * const *arg_packages)
 {
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
-  glnx_unref_object RpmostreedTransaction *transaction = NULL;
   glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
@@ -1484,7 +1480,11 @@ os_handle_download_deploy_rpm_diff (RPMOSTreeOS *interface,
 
   /* XXX Ignoring arg_packages for now. */
 
-  transaction = merge_compatible_txn (self, invocation);
+  /* try to merge with an existing transaction, otherwise start a new one */
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto out;
   if (transaction)
     goto out;
 
@@ -1507,7 +1507,7 @@ os_handle_download_deploy_rpm_diff (RPMOSTreeOS *interface,
   if (transaction == NULL)
     goto out;
 
-  rpmostreed_transaction_monitor_add (self->transaction_monitor, transaction);
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
 
 out:
   if (local_error != NULL)
@@ -1693,22 +1693,17 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
 RPMOSTreeOS *
 rpmostreed_os_new (OstreeSysroot *sysroot,
                    OstreeRepo *repo,
-                   const char *name,
-                   RpmostreedTransactionMonitor *monitor)
+                   const char *name)
 {
   RpmostreedOS *obj = NULL;
   g_autofree char *path = NULL;
 
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
   g_return_val_if_fail (name != NULL, NULL);
-  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION_MONITOR (monitor), NULL);
 
   path = rpmostreed_generate_object_path (BASE_DBUS_PATH, name, NULL);
 
   obj = g_object_new (RPMOSTREED_TYPE_OS, "name", name, NULL);
-
-  /* FIXME Make this a construct-only property? */
-  obj->transaction_monitor = g_object_ref (monitor);
 
   /* FIXME - use GInitable */
   { g_autoptr(GError) local_error = NULL;

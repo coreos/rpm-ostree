@@ -56,3 +56,4 @@ void            rpmostreed_transaction_connect_download_progress
 void            rpmostreed_transaction_connect_signature_progress
                                                            (RpmostreedTransaction *transaction,
                                                             OstreeRepo *repo);
+void            rpmostreed_transaction_force_close         (RpmostreedTransaction *transaction);
