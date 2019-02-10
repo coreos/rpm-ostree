@@ -399,7 +399,7 @@ impl Treefile {
             .unwrap_or(r.summary.as_str());
         let name: String = format!("{}.spec", r.name);
         {
-            let mut f = workdir.write_file(name.as_str(), 0644)?;
+            let mut f = workdir.write_file(name.as_str(), 0o644)?;
             write!(
                 f,
                 r###"
