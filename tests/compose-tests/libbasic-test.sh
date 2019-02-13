@@ -25,11 +25,12 @@ assert_file_has_content_literal useradd.txt HOME=/var/home
 
 ostree --repo=${repobuild} cat ${treeref} \
   /usr/etc/selinux/targeted/contexts/files/file_contexts.homedirs > homedirs.txt
-assert_file_has_content_literal homedirs.txt /var/home
+assert_file_has_content homedirs.txt '^/var/home'
 
 ostree --repo=${repobuild} cat ${treeref} \
   /usr/etc/selinux/targeted/contexts/files/file_contexts.subs_dist > subs_dist.txt
-assert_not_file_has_content subs_dist.txt /var/home
+assert_not_file_has_content subs_dist.txt '^/var/home \+'
+assert_file_has_content subs_dist.txt '^/home \+/var/home$'
 echo "ok etc/default/useradd"
 
 for path in /usr/share/rpm /usr/lib/sysimage/rpm-ostree-base-db; do
