@@ -105,8 +105,10 @@ rpmostree_builtin_cancel (int             argc,
   rpmostree_transaction_call_cancel (txn_proxy, cancellable,
                                      on_cancel_method_completed, NULL);
 
+  g_clear_object (&txn_proxy);
+
   gboolean done = FALSE;
-  g_signal_connect (txn_proxy, "notify::active-transaction-path",
+  g_signal_connect (sysroot_proxy, "notify::active-transaction-path",
                     G_CALLBACK (on_active_txn_path_changed), &done);
   /* Wait for the transaction to go away */
   while (!done)
