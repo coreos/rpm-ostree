@@ -415,6 +415,15 @@ rpmostree_bwrap_setenv (RpmOstreeBwrap *bwrap, const char *name, const char *val
   g_subprocess_launcher_setenv (bwrap->launcher, name, value, TRUE);
 }
 
+/* Transfer ownership of @source_fd to child at @target_fd */
+void
+rpmostree_bwrap_take_fd (RpmOstreeBwrap *bwrap,
+                         int             source_fd,
+                         int             target_fd)
+{
+  g_subprocess_launcher_take_fd (bwrap->launcher, source_fd, target_fd);
+}
+
 /* Execute @bwrap, optionally capturing stdout or stderr. Must have been configured. After
  * executing this method, the @bwrap instance cannot be run again.
  */
@@ -425,27 +434,15 @@ rpmostree_bwrap_run_captured (RpmOstreeBwrap *bwrap,
                               GCancellable   *cancellable,
                               GError        **error)
 {
-  GSubprocessLauncher *launcher = bwrap->launcher;
-
-  g_assert (!bwrap->executed);
-  bwrap->executed = TRUE;
-
-  /* Set up our error message */
-  const char *errmsg = glnx_strjoina ("Executing bwrap(", bwrap->child_argv0, ")");
-  GLNX_AUTO_PREFIX_ERROR (errmsg, error);
-
-  /* Add the final NULL */
-  g_ptr_array_add (bwrap->argv, NULL);
-
   if (stdout_buf)
     g_subprocess_launcher_set_flags (bwrap->launcher, G_SUBPROCESS_FLAGS_STDOUT_PIPE);
   if (stderr_buf)
     g_subprocess_launcher_set_flags (bwrap->launcher, G_SUBPROCESS_FLAGS_STDERR_PIPE);
 
-  g_subprocess_launcher_set_child_setup (launcher, bwrap_child_setup, bwrap, NULL);
-  g_autoptr(GSubprocess) subproc =
-    g_subprocess_launcher_spawnv (launcher, (const char *const*)bwrap->argv->pdata,
-                                  error);
+  const char *errmsg = glnx_strjoina ("Executing bwrap(", bwrap->child_argv0, ")");
+  GLNX_AUTO_PREFIX_ERROR (errmsg, error);
+
+  g_autoptr(GSubprocess) subproc = rpmostree_bwrap_execute (bwrap, error);
   if (!subproc)
     return FALSE;
 
@@ -486,6 +483,20 @@ rpmostree_bwrap_run (RpmOstreeBwrap *bwrap,
                      GError        **error)
 {
   return rpmostree_bwrap_run_captured (bwrap, NULL, NULL, cancellable, error);
+}
+
+GSubprocess *
+rpmostree_bwrap_execute (RpmOstreeBwrap *bwrap, GError **error)
+{
+  g_autoptr(GSubprocessLauncher) launcher = g_steal_pointer (&bwrap->launcher);
+  g_assert (!bwrap->executed);
+  bwrap->executed = TRUE;
+
+  /* Add the final NULL */
+  g_ptr_array_add (bwrap->argv, NULL);
+
+  g_subprocess_launcher_set_child_setup (launcher, bwrap_child_setup, bwrap, NULL);
+  return g_subprocess_launcher_spawnv (launcher, (const char *const*)bwrap->argv->pdata, error);
 }
 
 /* Execute /bin/true inside a bwrap container on the host */
