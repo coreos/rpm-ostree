@@ -869,7 +869,7 @@ on_txn_executed_changed (GObject    *object,
   RpmostreedSysroot *self = user_data;
   gboolean executed;
   g_object_get (object, "executed", &executed, NULL);
-  if (!executed && self->close_transaction_timeout_id == 0)
+  if (executed && self->close_transaction_timeout_id == 0)
     {
       self->close_transaction_timeout_id =
         g_timeout_add_seconds (FORCE_CLOSE_TXN_TIMEOUT_SECS, on_force_close, self);

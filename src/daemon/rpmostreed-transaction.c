@@ -368,7 +368,7 @@ transaction_execute_done_cb (GObject *source_object,
   priv->finished_params = g_variant_new ("(bs)", success, error_message);
   g_variant_ref_sink (priv->finished_params);
 
-  priv->executed = FALSE;
+  priv->executed = TRUE;
   g_object_notify (G_OBJECT (self), "executed");
 
   transaction_maybe_emit_closed (self);
@@ -511,7 +511,7 @@ void
 rpmostreed_transaction_force_close (RpmostreedTransaction *transaction)
 {
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
-  g_assert (!priv->executed);
+  g_assert (priv->executed);
   g_dbus_server_stop (priv->server);
   g_hash_table_foreach_remove (priv->peer_connections, foreach_close_peer, NULL);
 }
@@ -583,8 +583,6 @@ transaction_initable_init (GInitable *initable,
     }
 
   g_dbus_server_start (priv->server);
-
-  priv->executed = TRUE;
 
   g_debug ("%s (%p): Initialized, listening on %s",
            G_OBJECT_TYPE_NAME (self), self,
@@ -695,7 +693,7 @@ rpmostreed_transaction_class_init (RpmostreedTransactionClass *class)
                                    g_param_spec_boolean ("executed",
                                                          "Executed",
                                                          "Whether the transaction has finished",
-                                                         TRUE,
+                                                         FALSE,
                                                          G_PARAM_READABLE |
                                                          G_PARAM_STATIC_STRINGS));
 
