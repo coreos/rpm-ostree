@@ -862,14 +862,14 @@ on_force_close (gpointer data)
 }
 
 static void
-on_txn_active_changed (GObject    *object,
-                       GParamSpec *pspec,
-                       gpointer    user_data)
+on_txn_executed_changed (GObject    *object,
+                         GParamSpec *pspec,
+                         gpointer    user_data)
 {
   RpmostreedSysroot *self = user_data;
-  gboolean active;
-  g_object_get (object, "active", &active, NULL);
-  if (!active && self->close_transaction_timeout_id == 0)
+  gboolean executed;
+  g_object_get (object, "executed", &executed, NULL);
+  if (!executed && self->close_transaction_timeout_id == 0)
     {
       self->close_transaction_timeout_id =
         g_timeout_add_seconds (FORCE_CLOSE_TXN_TIMEOUT_SECS, on_force_close, self);
@@ -892,8 +892,8 @@ rpmostreed_sysroot_set_txn (RpmostreedSysroot     *self,
       g_assert (self->transaction == NULL);
       self->transaction = g_object_ref (txn);
 
-      g_signal_connect (self->transaction, "notify::active",
-                        G_CALLBACK (on_txn_active_changed), self);
+      g_signal_connect (self->transaction, "notify::executed",
+                        G_CALLBACK (on_txn_executed_changed), self);
 
       GDBusMethodInvocation *invocation = rpmostreed_transaction_get_invocation (self->transaction);
       g_autoptr(GVariant) v = g_variant_ref_sink (g_variant_new ("(sss)",

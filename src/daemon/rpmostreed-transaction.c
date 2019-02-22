@@ -28,7 +28,7 @@
 
 struct _RpmostreedTransactionPrivate {
   GDBusMethodInvocation *invocation;
-  gboolean active;
+  gboolean executed; /* TRUE if the transaction has completed (successfully or not) */
   GCancellable *cancellable;
 
   /* For the duration of the transaction, we hold a ref to a new
@@ -51,7 +51,7 @@ struct _RpmostreedTransactionPrivate {
 
 enum {
   PROP_0,
-  PROP_ACTIVE,
+  PROP_EXECUTED,
   PROP_INVOCATION,
   PROP_SYSROOT_PATH,
   PROP_REDIRECT_OUTPUT
@@ -368,8 +368,8 @@ transaction_execute_done_cb (GObject *source_object,
   priv->finished_params = g_variant_new ("(bs)", success, error_message);
   g_variant_ref_sink (priv->finished_params);
 
-  priv->active = FALSE;
-  g_object_notify (G_OBJECT (self), "active");
+  priv->executed = FALSE;
+  g_object_notify (G_OBJECT (self), "executed");
 
   transaction_maybe_emit_closed (self);
 }
@@ -420,8 +420,8 @@ transaction_get_property (GObject *object,
       case PROP_REDIRECT_OUTPUT:
         g_value_set_boolean (value, priv->redirect_output);
         break;
-      case PROP_ACTIVE:
-        g_value_set_boolean (value, priv->active);
+      case PROP_EXECUTED:
+        g_value_set_boolean (value, priv->executed);
         break;
       default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -511,6 +511,7 @@ void
 rpmostreed_transaction_force_close (RpmostreedTransaction *transaction)
 {
   RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
+  g_assert (!priv->executed);
   g_dbus_server_stop (priv->server);
   g_hash_table_foreach_remove (priv->peer_connections, foreach_close_peer, NULL);
 }
@@ -583,7 +584,7 @@ transaction_initable_init (GInitable *initable,
 
   g_dbus_server_start (priv->server);
 
-  priv->active = TRUE;
+  priv->executed = TRUE;
 
   g_debug ("%s (%p): Initialized, listening on %s",
            G_OBJECT_TYPE_NAME (self), self,
@@ -690,10 +691,10 @@ rpmostreed_transaction_class_init (RpmostreedTransactionClass *class)
   object_class->constructed = transaction_constructed;
 
   g_object_class_install_property (object_class,
-                                   PROP_ACTIVE,
-                                   g_param_spec_boolean ("active",
-                                                         "Active",
-                                                         "Whether the transaction is active (unfinished)",
+                                   PROP_EXECUTED,
+                                   g_param_spec_boolean ("executed",
+                                                         "Executed",
+                                                         "Whether the transaction has finished",
                                                          TRUE,
                                                          G_PARAM_READABLE |
                                                          G_PARAM_STATIC_STRINGS));
