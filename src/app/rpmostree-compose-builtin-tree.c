@@ -108,6 +108,7 @@ typedef struct {
   RpmOstreeContext *corectx;
   GFile *treefile_path;
   GHashTable *metadata;
+  gboolean failed;
   GLnxTmpDir workdir_tmp;
   int workdir_dfd;
   int rootfs_dfd;
@@ -137,7 +138,9 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   /* Only close workdir_dfd if it's not owned by the tmpdir */
   if (!ctx->workdir_tmp.initialized)
     glnx_close_fd (&ctx->workdir_dfd);
-  if (g_getenv ("RPMOSTREE_PRESERVE_TMPDIR"))
+  const char *preserve = g_getenv ("RPMOSTREE_PRESERVE_TMPDIR");
+  if (ctx->workdir_tmp.initialized &&
+      (preserve && (!g_str_equal (preserve, "on-fail") || ctx->failed)))
     g_print ("Preserved workdir: %s\n", ctx->workdir_tmp.path);
   else
     (void)glnx_tmpdir_delete (&ctx->workdir_tmp, NULL, NULL);
@@ -1111,7 +1114,10 @@ rpmostree_compose_builtin_install (int             argc,
     return FALSE;
   gboolean changed;
   if (!impl_install_tree (self, &changed, cancellable, error))
-    return FALSE;
+    {
+      self->failed = TRUE;
+      return FALSE;
+    }
   if (opt_unified_core)
     {
       if (!glnx_renameat (self->workdir_tmp.src_dfd, self->workdir_tmp.path,
@@ -1268,12 +1274,18 @@ rpmostree_compose_builtin_tree (int             argc,
     return FALSE;
   gboolean changed;
   if (!impl_install_tree (self, &changed, cancellable, error))
-    return FALSE;
+    {
+      self->failed = TRUE;
+      return FALSE;
+    }
   if (changed)
     {
       /* Do the ostree commit */
       if (!impl_commit_tree (self, cancellable, error))
-        return FALSE;
+        {
+          self->failed = TRUE;
+          return FALSE;
+        }
       /* Finally process the --touch-if-changed option  */
       if (!process_touch_if_changed (error))
         return FALSE;
