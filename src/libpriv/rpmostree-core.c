@@ -20,6 +20,7 @@
 
 #include "config.h"
 
+#include <unistd.h>
 #include <glib-unix.h>
 #include <rpm/rpmsq.h>
 #include <rpm/rpmlib.h>
@@ -1440,7 +1441,14 @@ sort_packages (RpmOstreeContext *self,
                                  &in_ostree, &selinux_match, error))
           return FALSE;
 
-        if (is_locally_cached)
+        /* Locally cached usually signifies that a package is already imported
+         * into the pkgcache ostree repo but that is not the case with a URI
+         * downloaded package.  A downloaded package will have a dnf location
+         * that is accessible on the filesystem whereas a repo added package
+         * will have a location relative to the repo base URL.  This allows a
+         * downloaded package to be imported into the pkgcache.
+         * */
+        if (is_locally_cached && access(dnf_package_get_location(pkg), F_OK) == -1)
           g_assert (in_ostree);
 
         if (!in_ostree && !cached)
@@ -1924,19 +1932,66 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       const char *pkgname = *it;
       g_autoptr(GError) local_error = NULL;
 
+      /* Make sure we have a tmpdir setup for downloading packages */
+      if (!rpmostree_context_ensure_tmpdir (self, ".", error))
+        return FALSE;
+
       g_assert (!self->rojig_pure);
-      if (!dnf_context_install (dnfctx, pkgname, &local_error))
+      if (g_str_has_prefix (*it, "http://") ||
+          g_str_has_prefix (*it, "https://"))
         {
-          /* Only keep going if it's ENOENT, so we coalesce into one msg at the end */
-          if (!g_error_matches (local_error, DNF_ERROR, DNF_ERROR_PACKAGE_NOT_FOUND))
+          if (self->pkgcache_repo)
             {
-              g_propagate_error (error, g_steal_pointer (&local_error));
-              return FALSE;
+              /* Unfortunately we always need to download the rpm because we cannot
+              * rely on the URI to get details about the rpm. Importing to ostree
+              * should only happen once. */
+              char *filename = basename(*it);
+              char *absfilename = glnx_fdrel_abspath(self->tmpdir.fd, filename);
+              CURL* easyhandle = curl_easy_init();
+              g_print ("Downloading %s\n", filename);
+              FILE* file = fopen(absfilename, "w");
+              if (file)
+                {
+                  CURLcode res;
+                  curl_easy_setopt (easyhandle, CURLOPT_URL, *it);
+                  curl_easy_setopt (easyhandle, CURLOPT_FAILONERROR, 1L);
+                  curl_easy_setopt (easyhandle, CURLOPT_WRITEDATA, file);
+                  res = curl_easy_perform (easyhandle);
+                  curl_easy_cleanup (easyhandle);
+                  fclose(file);
+                  if (res != CURLE_OK)
+                    {
+                      g_printerr ("Unable to download %s:\n%s\n", *it, curl_easy_strerror(res));
+                      return FALSE;
+                    }
+                }
+              DnfPackage *pkg = dnf_sack_add_cmdline_package (dnf_context_get_sack (self->dnfctx), absfilename);
+              if (!pkg)
+                return glnx_throw (error, "Failed to add local pkg %s to sack", filename);
+
+              hy_goal_install (dnf_context_get_goal (self->dnfctx), pkg);
             }
-          /* lazy init since it's unlikely in the common case (e.g. upgrades) */
-          if (!missing_pkgs)
-            missing_pkgs = g_ptr_array_new ();
-          g_ptr_array_add (missing_pkgs, (gpointer)pkgname);
+          else
+           {
+            g_print("URIs are not supported in non-unified core mode");
+            return FALSE;
+           }
+        }
+      else
+        {
+          if (!dnf_context_install (dnfctx, pkgname, &local_error))
+            {
+              /* Only keep going if it's ENOENT, so we coalesce into one msg at the end */
+              if (!g_error_matches (local_error, DNF_ERROR, DNF_ERROR_PACKAGE_NOT_FOUND))
+                {
+                  g_propagate_error (error, g_steal_pointer (&local_error));
+                  return FALSE;
+                }
+              /* lazy init since it's unlikely in the common case (e.g. upgrades) */
+              if (!missing_pkgs)
+                missing_pkgs = g_ptr_array_new ();
+              g_ptr_array_add (missing_pkgs, (gpointer)pkgname);
+            }
         }
     }
 
