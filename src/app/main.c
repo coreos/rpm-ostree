@@ -128,6 +128,8 @@ static RpmOstreeCommand commands[] = {
     NULL, rpmostree_builtin_start_daemon },
   { "finalize-deployment", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     NULL, rpmostree_builtin_finalize_deployment },
+  { "cliwrap", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD | RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+    NULL, rpmostree_builtin_cliwrap },
   { NULL }
 };
 

@@ -296,6 +296,7 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         include,
         container,
         recommends,
+        cliwrap,
         documentation,
         boot_location,
         tmp_is_dir,
@@ -684,6 +685,8 @@ struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "initramfs-args")]
     initramfs_args: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cliwrap: Option<bool>,
 
     // Tree layout options
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1364,6 +1367,12 @@ mod ffi {
     pub extern "C" fn ror_treefile_get_checksum(tf: *mut Treefile) -> *const libc::c_char {
         let tf = ref_from_raw_ptr(tf);
         tf.checksum.as_ptr()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ror_treefile_get_cliwrap(tf: *mut Treefile) -> bool {
+        let tf = ref_from_raw_ptr(tf);
+        tf.parsed.cliwrap.unwrap_or(false)
     }
 
     #[no_mangle]

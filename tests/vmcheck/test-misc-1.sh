@@ -86,6 +86,28 @@ fi
 assert_file_has_content err.txt 'ReloadConfig not allowed for user'
 echo "ok auth"
 
+wrapdir="/usr/libexec/rpm-ostree/wrapped"
+if [ -d "${wrapdir}" ]; then
+    # Test wrapped functions for rpm
+    rpm --version
+    rpm -qa > /dev/null
+    rpm --verify >out.txt
+    assert_file_has_content out.txt "rpm --verify is not necessary for ostree-based systems"
+    rm -f out.txt
+    if rpm -e bash 2>out.txt; then
+        fatal "rpm -e worked"
+    fi
+    assert_file_has_content out.txt 'Dropping privileges as `rpm` was executed with not "known safe" arguments'
+
+    if dracut --blah 2>out.txt; then
+        fatal "dracut worked"
+    fi
+    assert_file_has_content out.txt 'This system is rpm-ostree based'
+    rm -f out.txt
+else
+    echo "Missing ${wrapdir}; cliwrap not enabled"
+fi
+
 # Test coreos-rootfs
 vm_shell_inline > coreos-rootfs.txt << EOF
     mkdir /var/tmp/coreos-rootfs

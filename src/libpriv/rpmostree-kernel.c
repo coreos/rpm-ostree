@@ -38,6 +38,7 @@
 #include "rpmostree-core.h"
 #include "rpmostree-kernel.h"
 #include "rpmostree-bwrap.h"
+#include "rpmostree-rust.h"
 #include "rpmostree-util.h"
 
 static const char usrlib_ostreeboot[] = "usr/lib/ostree-boot";
@@ -488,12 +489,15 @@ rpmostree_run_dracut (int     rootfs_dfd,
    */
   static const char rpmostree_dracut_wrapper_path[] = "usr/bin/rpmostree-dracut-wrapper";
   /* This also hardcodes a few arguments */
-  static const char rpmostree_dracut_wrapper[] =
+  g_autofree char * rpmostree_dracut_wrapper =
+    g_strdup_printf (
     "#!/usr/bin/bash\n"
     "set -euo pipefail\n"
+    "export PATH=%s:${PATH}\n"
     "extra_argv=; if (dracut --help; true) | grep -q -e --reproducible; then extra_argv=\"--reproducible --gzip\"; fi\n"
     "mkdir -p /tmp/dracut && dracut $extra_argv -v --add ostree --tmpdir=/tmp/dracut -f /tmp/initramfs.img \"$@\"\n"
-    "cat /tmp/initramfs.img >/proc/self/fd/3\n";
+    "cat /tmp/initramfs.img >/proc/self/fd/3\n",
+    ror_cliwrap_destdir ());
   g_autoptr(RpmOstreeBwrap) bwrap = NULL;
   g_autoptr(GPtrArray) rebuild_argv = NULL;
   g_auto(GLnxTmpfile) tmpf = { 0, };
@@ -537,7 +541,7 @@ rpmostree_run_dracut (int     rootfs_dfd,
                                       O_RDWR | O_CLOEXEC,
                                       &tmpf, error))
     goto out;
-  if (glnx_loop_write (tmpf.fd, rpmostree_dracut_wrapper, sizeof (rpmostree_dracut_wrapper)) < 0
+  if (glnx_loop_write (tmpf.fd, rpmostree_dracut_wrapper, strlen (rpmostree_dracut_wrapper)) < 0
       || fchmod (tmpf.fd, 0755) < 0)
     {
       glnx_set_error_from_errno (error);
