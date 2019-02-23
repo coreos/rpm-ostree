@@ -7,6 +7,8 @@
 // pub(crate) utilities
 mod ffiutil;
 
+mod cliwrap;
+pub use cliwrap::*;
 mod composepost;
 pub use self::composepost::*;
 mod history;

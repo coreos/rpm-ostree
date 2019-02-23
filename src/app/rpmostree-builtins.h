@@ -31,6 +31,7 @@ G_BEGIN_DECLS
                                                                 GCancellable *cancellable, GError **error)
 
 BUILTINPROTO(compose);
+BUILTINPROTO(cliwrap);
 BUILTINPROTO(upgrade);
 BUILTINPROTO(reload);
 BUILTINPROTO(usroverlay);

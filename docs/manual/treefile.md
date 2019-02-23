@@ -94,6 +94,12 @@ It supports the following parameters:
     specific filesystem drivers are included.  If not specified,
     `--no-hostonly` will be used.
 
+ * `cliwrap`: boolean, optional.  Defaults to `false`.  If enabled,
+    rpm-ostree will replace binaries such as `/usr/bin/rpm` with
+    wrappers that intercept unsafe operations, or adjust functionality.
+
+    The default is `false` out of conservatism; you likely want to enable this.
+
  * `remove-files`: Array of files to delete from the generated tree.
 
  * `remove-from-packages`: Array, optional: Delete from specified packages

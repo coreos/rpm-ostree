@@ -4420,6 +4420,12 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
         return FALSE;
     }
 
+  if (self->treefile_rs && ror_treefile_get_cliwrap (self->treefile_rs))
+    {
+      if (!ror_cliwrap_write_wrappers (tmprootfs_dfd, error))
+        return FALSE;
+    }
+
   /* Undo the /etc move above */
   if (renamed_etc && !rpmostree_core_redo_usretc (tmprootfs_dfd, error))
     return FALSE;

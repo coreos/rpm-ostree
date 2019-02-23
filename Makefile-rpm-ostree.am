@@ -29,6 +29,7 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-builtin-reload.c \
 	src/app/rpmostree-builtin-rebase.c \
 	src/app/rpmostree-builtin-cancel.c \
+	src/app/rpmostree-builtin-cliwrap.c \
 	src/app/rpmostree-builtin-cleanup.c \
 	src/app/rpmostree-builtin-initramfs.c \
 	src/app/rpmostree-builtin-livefs.c \
@@ -102,7 +103,7 @@ librpmostree_rust_path = @abs_top_builddir@/target/@RUST_TARGET_SUBDIR@/librpmos
 # If the target directory exists, and isn't owned by our uid, then
 # we exit with a fatal error, since someone probably did `make && sudo make install`,
 # and in this case cargo will download into ~/.root which we don't want.
-LIBRPMOSTREE_RUST_SRCS = $(wildcard rust/src/*.rs) rust/cbindgen.toml
+LIBRPMOSTREE_RUST_SRCS = $(shell find rust/src/ -name '*.rs') rust/cbindgen.toml
 $(librpmostree_rust_path): Makefile $(LIBRPMOSTREE_RUST_SRCS)
 	cd $(top_srcdir)/rust && \
 	  export CARGO_TARGET_DIR=@abs_top_builddir@/target && \
