@@ -139,7 +139,8 @@ rpm_ostree_tree_compose_context_free (RpmOstreeTreeComposeContext *ctx)
   if (!ctx->workdir_tmp.initialized)
     glnx_close_fd (&ctx->workdir_dfd);
   const char *preserve = g_getenv ("RPMOSTREE_PRESERVE_TMPDIR");
-  if (preserve && (!g_str_equal (preserve, "on-fail") || ctx->failed))
+  if (ctx->workdir_tmp.initialized &&
+      (preserve && (!g_str_equal (preserve, "on-fail") || ctx->failed)))
     g_print ("Preserved workdir: %s\n", ctx->workdir_tmp.path);
   else
     (void)glnx_tmpdir_delete (&ctx->workdir_tmp, NULL, NULL);
@@ -1113,7 +1114,10 @@ rpmostree_compose_builtin_install (int             argc,
     return FALSE;
   gboolean changed;
   if (!impl_install_tree (self, &changed, cancellable, error))
-    return FALSE;
+    {
+      self->failed = TRUE;
+      return FALSE;
+    }
   if (opt_unified_core)
     {
       if (!glnx_renameat (self->workdir_tmp.src_dfd, self->workdir_tmp.path,
