@@ -30,6 +30,7 @@ struct _RpmOstreeContext {
   /* Whether we were created with new_system() */
   gboolean is_system;
   RpmOstreeTreespec *spec;
+  RORTreefile *treefile_rs; /* For composes for now */
   gboolean empty;
 
   /* rojig-mode data */

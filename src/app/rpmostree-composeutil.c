@@ -249,6 +249,9 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
   g_autoptr(GHashTable) varsubsts = rpmostree_dnfcontext_get_varsubsts (rpmostree_context_get_dnf (ctx));
   g_autoptr(GKeyFile) treespec = g_key_file_new ();
 
+  // TODO: Rework things so we always use this data going forward
+  rpmostree_context_set_treefile (ctx, treefile_rs);
+
   if (!treespec_bind_array (treedata, treespec, "packages", NULL, TRUE, error))
     return FALSE;
   if (!treespec_bind_array (treedata, treespec, "repos", NULL, TRUE, error))
