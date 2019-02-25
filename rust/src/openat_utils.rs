@@ -26,6 +26,10 @@ pub(crate) trait OpenatDirExt {
     // and Rust has an elegant way to map that with Option<>.  Every other
     // error I usually just want to propagate back up.
     fn open_file_optional<P: openat::AsPath>(&self, p: P) -> io::Result<Option<fs::File>>;
+
+    // On modern filesystems the directory entry contains the type; if available,
+    // return it.  Otherwise invoke stat().
+    fn get_file_type(&self, e: &openat::Entry) -> io::Result<openat::SimpleType>;
 }
 
 impl OpenatDirExt for openat::Dir {
@@ -39,6 +43,14 @@ impl OpenatDirExt for openat::Dir {
                     Err(e)
                 }
             }
+        }
+    }
+
+    fn get_file_type(&self, e: &openat::Entry) -> io::Result<openat::SimpleType> {
+        if let Some(ftype) = e.simple_type() {
+            Ok(ftype)
+        } else {
+            Ok(self.metadata(e.file_name())?.simple_type())
         }
     }
 }
