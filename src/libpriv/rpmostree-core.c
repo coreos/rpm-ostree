@@ -520,6 +520,17 @@ rpmostree_context_configure_from_deployment (RpmOstreeContext *self,
   self->passwd_dir = g_build_filename (cfg_deployment_root, "etc", NULL);
 }
 
+
+/* By default, we use a "treespec" however, reflecting everything from
+ * treefile -> treespec is annoying.  Long term we want to unify those.  This
+ * is a temporary escape hatch.
+ */
+void
+rpmostree_context_set_treefile (RpmOstreeContext *self, RORTreefile *treefile_rs)
+{
+  self->treefile_rs = treefile_rs;
+}
+
 /* Use this if no packages will be installed, and we just want a "dummy" run.
  */
 void
