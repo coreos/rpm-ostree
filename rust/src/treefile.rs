@@ -68,12 +68,12 @@ enum InputFormat {
     JSON,
 }
 
-/// Parse a YAML treefile definition using architecture `arch`.
+/// Parse a YAML treefile definition using base architecture `basearch`.
 /// This does not open the externals.
 fn treefile_parse_stream<R: io::Read>(
     fmt: InputFormat,
     input: &mut R,
-    arch: Option<&str>,
+    basearch: Option<&str>,
 ) -> Fallible<TreeComposeConfig> {
     let mut treefile: TreeComposeConfig = match fmt {
         InputFormat::YAML => {
@@ -97,10 +97,10 @@ fn treefile_parse_stream<R: io::Read>(
     };
 
     // Substitute ${basearch}
-    treefile.treeref = match (arch, treefile.treeref.take()) {
-        (Some(arch), Some(treeref)) => {
+    treefile.treeref = match (basearch, treefile.treeref.take()) {
+        (Some(basearch), Some(treeref)) => {
             let mut varsubsts = HashMap::new();
-            varsubsts.insert("basearch".to_string(), arch.to_string());
+            varsubsts.insert("basearch".to_string(), basearch.to_string());
             Some(
                 utils::varsubst(&treeref, &varsubsts)
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?,
@@ -111,7 +111,7 @@ fn treefile_parse_stream<R: io::Read>(
 
     // Special handling for packages, since we allow whitespace within items.
     // We also canonicalize bootstrap_packages to packages here so it's
-    // easier to append the arch packages after.
+    // easier to append the basearch packages after.
     let mut pkgs: Vec<String> = vec![];
     {
         if let Some(base_pkgs) = treefile.packages.take() {
@@ -122,7 +122,7 @@ fn treefile_parse_stream<R: io::Read>(
         }
     }
 
-    let arch_pkgs = match arch {
+    let arch_pkgs = match basearch {
         Some("aarch64") => treefile.packages_aarch64.take(),
         Some("armhfp") => treefile.packages_armhfp.take(),
         Some("ppc64") => treefile.packages_ppc64.take(),
@@ -164,7 +164,7 @@ fn load_passwd_file<P: AsRef<Path>>(
 /// open its external files.
 fn treefile_parse<P: AsRef<Path>>(
     filename: P,
-    arch: Option<&str>,
+    basearch: Option<&str>,
 ) -> Fallible<ConfigAndExternals> {
     let filename = filename.as_ref();
     let mut f = io::BufReader::new(open_file(filename)?);
@@ -177,7 +177,7 @@ fn treefile_parse<P: AsRef<Path>>(
     } else {
         InputFormat::JSON
     };
-    let tf = treefile_parse_stream(fmt, &mut f, arch).map_err(|e| {
+    let tf = treefile_parse_stream(fmt, &mut f, basearch).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidInput,
             format!("Parsing {}: {}", filename.to_string_lossy(), e.to_string()),
@@ -302,11 +302,11 @@ fn treefile_merge_externals(dest: &mut TreefileExternals, src: &mut TreefileExte
 /// Recursively parse a treefile, merging along the way.
 fn treefile_parse_recurse<P: AsRef<Path>>(
     filename: P,
-    arch: Option<&str>,
+    basearch: Option<&str>,
     depth: u32,
 ) -> Fallible<ConfigAndExternals> {
     let filename = filename.as_ref();
-    let mut parsed = treefile_parse(filename, arch)?;
+    let mut parsed = treefile_parse(filename, basearch)?;
     let include_path = parsed.config.include.take();
     if let &Some(ref include_path) = &include_path {
         if depth == INCLUDE_MAXDEPTH {
@@ -317,7 +317,7 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
         }
         let parent = filename.parent().unwrap();
         let include_path = parent.join(include_path);
-        let mut included = treefile_parse_recurse(include_path, arch, depth + 1)?;
+        let mut included = treefile_parse_recurse(include_path, basearch, depth + 1)?;
         treefile_merge(&mut parsed.config, &mut included.config);
         treefile_merge_externals(&mut parsed.externals, &mut included.externals);
     }
@@ -340,10 +340,10 @@ impl Treefile {
     /// The main treefile creation entrypoint.
     fn new_boxed(
         filename: &Path,
-        arch: Option<&str>,
+        basearch: Option<&str>,
         workdir: openat::Dir,
     ) -> Fallible<Box<Treefile>> {
-        let parsed = treefile_parse_recurse(filename, arch, 0)?;
+        let parsed = treefile_parse_recurse(filename, basearch, 0)?;
         Treefile::validate_config(&parsed.config)?;
         let dfd = openat::Dir::open(filename.parent().unwrap())?;
         let (rojig_name, rojig_spec) = if let Some(rojig) = parsed.config.rojig.as_ref() {
@@ -752,7 +752,7 @@ remove-files:
     }
 
     impl TreefileTest {
-        fn new<'a, 'b>(contents: &'a str, arch: Option<&'b str>) -> Fallible<TreefileTest> {
+        fn new<'a, 'b>(contents: &'a str, basearch: Option<&'b str>) -> Fallible<TreefileTest> {
             let workdir = tempfile::tempdir()?;
             let tf_path = workdir.path().join("treefile.yaml");
             {
@@ -760,7 +760,7 @@ remove-files:
                 tf_stream.write_all(contents.as_bytes())?;
             }
             let tf =
-                Treefile::new_boxed(tf_path.as_path(), arch, openat::Dir::open(workdir.path())?)?;
+                Treefile::new_boxed(tf_path.as_path(), basearch, openat::Dir::open(workdir.path())?)?;
             Ok(TreefileTest { tf, workdir })
         }
     }
@@ -796,18 +796,18 @@ rojig:
 
     #[test]
     fn test_treefile_merge() {
-        let arch = Some(ARCH_X86_64);
+        let basearch = Some(ARCH_X86_64);
         let mut base_input = io::BufReader::new(VALID_PRELUDE.as_bytes());
-        let mut base = treefile_parse_stream(InputFormat::YAML, &mut base_input, arch).unwrap();
+        let mut base = treefile_parse_stream(InputFormat::YAML, &mut base_input, basearch).unwrap();
         let mut mid_input = io::BufReader::new(
             r###"
 packages:
   - some layered packages
 "###.as_bytes(),
         );
-        let mut mid = treefile_parse_stream(InputFormat::YAML, &mut mid_input, arch).unwrap();
+        let mut mid = treefile_parse_stream(InputFormat::YAML, &mut mid_input, basearch).unwrap();
         let mut top_input = io::BufReader::new(ROJIG_YAML.as_bytes());
-        let mut top = treefile_parse_stream(InputFormat::YAML, &mut top_input, arch).unwrap();
+        let mut top = treefile_parse_stream(InputFormat::YAML, &mut top_input, basearch).unwrap();
         treefile_merge(&mut mid, &mut base);
         treefile_merge(&mut top, &mut mid);
         let tf = &top;
@@ -849,18 +849,18 @@ mod ffi {
     #[no_mangle]
     pub extern "C" fn ror_treefile_new(
         filename: *const libc::c_char,
-        arch: *const libc::c_char,
+        basearch: *const libc::c_char,
         workdir_dfd: libc::c_int,
         gerror: *mut *mut glib_sys::GError,
     ) -> *mut Treefile {
         // Convert arguments
         let filename = ffi_view_os_str(filename);
-        let arch = ffi_view_nullable_str(arch);
+        let basearch = ffi_view_nullable_str(basearch);
         let workdir = ffi_view_openat_dir(workdir_dfd);
         // Run code, map error if any, otherwise extract raw pointer, passing
         // ownership back to C.
         ptr_glib_error(
-            Treefile::new_boxed(filename.as_ref(), arch, workdir),
+            Treefile::new_boxed(filename.as_ref(), basearch, workdir),
             gerror,
         )
     }
