@@ -96,6 +96,23 @@ fn treefile_parse_stream<R: io::Read>(
         }
     };
 
+    treefile.basearch = match (treefile.basearch, basearch) {
+        (Some(treearch), Some(arch)) => {
+            if treearch != arch {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    format!("Invalid basearch {} on {}: cross-composes are not supported",
+                            treearch, arch),
+                ).into())
+            } else {
+                Some(treearch)
+            }
+        }
+        (None, Some(arch)) => Some(arch.into()),
+        // really, only for tests do we not specify a basearch. let's just canonicalize to None
+        (_, None) => None,
+    };
+
     // Substitute ${basearch}
     treefile.treeref = match (basearch, treefile.treeref.take()) {
         (Some(basearch), Some(treeref)) => {
@@ -501,6 +518,8 @@ struct TreeComposeConfig {
     #[serde(rename = "ref")]
     #[serde(skip_serializing_if = "Option::is_none")]
     treeref: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    basearch: Option<String>,
     // Optional rojig data
     #[serde(skip_serializing_if = "Option::is_none")]
     rojig: Option<Rojig>,
