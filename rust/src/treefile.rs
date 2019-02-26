@@ -101,7 +101,8 @@ fn treefile_parse_stream<R: io::Read>(
             if treearch != arch {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!("Invalid basearch: cross-composes are not supported"),
+                    format!("Invalid basearch {} on {}: cross-composes are not supported",
+                            treearch, arch),
                 ).into())
             } else {
                 Some(treearch)
