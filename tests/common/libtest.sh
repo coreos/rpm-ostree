@@ -562,3 +562,16 @@ assert_files_hardlinked() {
         fatal "Files '$1' and '$2' are not hardlinked"
     fi
 }
+
+# $1  - json file
+# $2+ - assertions
+assert_jq() {
+    f=$1; shift
+    for expression in "$@"; do
+        if ! jq -e "${expression}" >/dev/null < $f; then
+            jq . < $f | sed -e 's/^/# /' >&2
+            echo 1>&2 "${expression} failed to match $f"
+            exit 1
+        fi
+    done
+}
