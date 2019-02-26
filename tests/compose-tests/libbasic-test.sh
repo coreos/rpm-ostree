@@ -101,3 +101,7 @@ assert_file_has_content pkglist.txt 'systemd'
 assert_file_has_content pkglist.txt 'systemd-bootchart'
 echo "ok compose pkglist"
 }
+
+ostree --repo=${repobuild} cat ${treeref} /usr/share/rpm-ostree/treefile.json > treefile.json
+assert_jq treefile.json '.basearch == "x86_64"'
+echo "ok basearch"
