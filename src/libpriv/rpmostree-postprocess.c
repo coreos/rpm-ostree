@@ -435,6 +435,12 @@ process_kernel_and_initramfs (int            rootfs_dfd,
                                NULL, &dracut_host_tmpd,
                                &initramfs_tmpf, cancellable, error))
       return FALSE;
+    /* No reason to have the initramfs not be world-readable since
+     * it's server-side generated and shouldn't contain any secrets.
+     * https://github.com/coreos/coreos-assembler/pull/372#issuecomment-467620937
+     */
+    if (!glnx_fchmod (initramfs_tmpf.fd, 0644, error))
+      return FALSE;
   }
 
   /* We always tell rpmostree_finalize_kernel() to skip /boot, since we'll do a
