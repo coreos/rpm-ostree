@@ -931,6 +931,9 @@ prep_local_assembly (RpmOstreeSysrootUpgrader *self,
     return FALSE;
 
   self->ctx = rpmostree_context_new_system (self->repo, cancellable, error);
+  if (!self->ctx)
+    return FALSE;
+
   g_autofree char *tmprootfs_abspath = glnx_fdrel_abspath (self->tmprootfs_dfd, ".");
 
   if (!prepare_context_for_assembly (self, tmprootfs_abspath, cancellable, error))
