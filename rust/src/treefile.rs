@@ -63,6 +63,7 @@ struct ConfigAndExternals {
     externals: TreefileExternals,
 }
 
+#[derive(PartialEq)]
 enum InputFormat {
     YAML,
     JSON,
@@ -77,22 +78,22 @@ fn treefile_parse_stream<R: io::Read>(
 ) -> Fallible<TreeComposeConfig> {
     let mut treefile: TreeComposeConfig = match fmt {
         InputFormat::YAML => {
-            let tf: StrictTreeComposeConfig = serde_yaml::from_reader(input).map_err(|e| {
+            let tf: TreeComposeConfig = serde_yaml::from_reader(input).map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::InvalidInput,
                     format!("serde-yaml: {}", e.to_string()),
                 )
             })?;
-            tf.config
+            tf
         }
         InputFormat::JSON => {
-            let tf: PermissiveTreeComposeConfig = serde_json::from_reader(input).map_err(|e| {
+            let tf: TreeComposeConfig = serde_json::from_reader(input).map_err(|e| {
                 io::Error::new(
                     io::ErrorKind::InvalidInput,
                     format!("serde-json: {}", e.to_string()),
                 )
             })?;
-            tf.config
+            tf
         }
     };
 
@@ -112,6 +113,14 @@ fn treefile_parse_stream<R: io::Read>(
         // really, only for tests do we not specify a basearch. let's just canonicalize to None
         (_, None) => None,
     };
+
+    if fmt == InputFormat::YAML && !treefile.extra.is_empty() {
+        let keys: Vec<&str> = treefile.extra.keys().map(|k| k.as_str()).collect();
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Unknown fields: {}", keys.join(", ")),
+        ).into());
+    }
 
     // Substitute ${basearch}
     treefile.treeref = match (basearch, treefile.treeref.take()) {
@@ -637,19 +646,9 @@ struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "remove-from-packages")]
     remove_from_packages: Option<Vec<Vec<String>>>,
-}
 
-#[derive(Serialize, Deserialize, Debug)]
-struct PermissiveTreeComposeConfig {
     #[serde(flatten)]
-    config: TreeComposeConfig,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
-struct StrictTreeComposeConfig {
-    #[serde(flatten)]
-    config: TreeComposeConfig,
+    extra: HashMap<String, serde_json::Value>,
 }
 
 #[cfg(test)]
