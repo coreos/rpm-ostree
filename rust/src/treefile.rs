@@ -32,7 +32,6 @@ use utils;
 use failure::Fallible;
 use failure::ResultExt;
 
-const ARCH_X86_64: &'static str = "x86_64";
 const INCLUDE_MAXDEPTH: u32 = 50;
 
 /// This struct holds file descriptors for any external files/data referenced by
@@ -114,6 +113,9 @@ fn treefile_parse_stream<R: io::Read>(
         (_, None) => None,
     };
 
+    // remove from packages-${arch} keys from the extra keys
+    let mut archful_pkgs: Option<Vec<String>> = take_archful_pkgs(basearch, &mut treefile)?;
+
     if fmt == InputFormat::YAML && !treefile.extra.is_empty() {
         let keys: Vec<&str> = treefile.extra.keys().map(|k| k.as_str()).collect();
         return Err(io::Error::new(
@@ -146,24 +148,46 @@ fn treefile_parse_stream<R: io::Read>(
         if let Some(bootstrap_pkgs) = treefile.bootstrap_packages.take() {
             pkgs.extend_from_slice(&whitespace_split_packages(&bootstrap_pkgs));
         }
-    }
-
-    let arch_pkgs = match basearch {
-        Some("aarch64") => treefile.packages_aarch64.take(),
-        Some("armhfp") => treefile.packages_armhfp.take(),
-        Some("ppc64") => treefile.packages_ppc64.take(),
-        Some("ppc64le") => treefile.packages_ppc64le.take(),
-        Some("s390x") => treefile.packages_s390x.take(),
-        Some(ARCH_X86_64) => treefile.packages_x86_64.take(),
-        None => None,
-        Some(x) => panic!("Invalid architecture: {}", x),
-    };
-    if let Some(arch_pkgs) = arch_pkgs {
-        pkgs.extend_from_slice(&whitespace_split_packages(&arch_pkgs));
+        if let Some(archful_pkgs) = archful_pkgs.take() {
+            pkgs.extend_from_slice(&whitespace_split_packages(&archful_pkgs));
+        }
     }
 
     treefile.packages = Some(pkgs);
     Ok(treefile)
+}
+
+/// Sanity checks that the packages-${basearch} entries are well-formed, and returns the ones
+/// matching the current basearch.
+fn take_archful_pkgs(
+    basearch: Option<&str>,
+    treefile: &mut TreeComposeConfig
+) -> Fallible<Option<Vec<String>>> {
+    let mut archful_pkgs: Option<Vec<String>> = None;
+
+    for key in treefile.extra.keys().filter(|k| k.starts_with("packages-")) {
+        if !treefile.extra[key].is_array() ||
+                treefile.extra[key].as_array().unwrap().iter().any(|v| !v.is_string()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Invalid field {}: expected array of strings", key),
+            ).into());
+        }
+
+        if let Some(basearch) = basearch {
+            if basearch == &key["packages-".len()..] {
+                assert!(archful_pkgs == None);
+                archful_pkgs = Some(treefile.extra[key].as_array().unwrap().iter().map(|v| {
+                    v.as_str().unwrap().into()
+                }).collect());
+            }
+        }
+    }
+
+    // and drop it from the map
+    treefile.extra.retain(|ref k, _| !k.starts_with("packages-"));
+
+    Ok(archful_pkgs)
 }
 
 /// Open file and provide context containing filename on failures.
@@ -544,27 +568,6 @@ struct TreeComposeConfig {
     // Core content
     #[serde(skip_serializing_if = "Option::is_none")]
     packages: Option<Vec<String>>,
-    // Arch-specific packages; TODO replace this with
-    // custom deserialization or so and avoid having
-    // having an architecture list here.
-    #[serde(rename = "packages-aarch64")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    packages_aarch64: Option<Vec<String>>,
-    #[serde(rename = "packages-armhfp")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    packages_armhfp: Option<Vec<String>>,
-    #[serde(rename = "packages-ppc64")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    packages_ppc64: Option<Vec<String>>,
-    #[serde(rename = "packages-ppc64le")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    packages_ppc64le: Option<Vec<String>>,
-    #[serde(rename = "packages-s390x")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    packages_s390x: Option<Vec<String>>,
-    #[serde(rename = "packages-x86_64")]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    packages_x86_64: Option<Vec<String>>,
     // Deprecated option
     #[serde(skip_serializing_if = "Option::is_none")]
     bootstrap_packages: Option<Vec<String>>,
@@ -655,6 +658,8 @@ struct TreeComposeConfig {
 mod tests {
     use super::*;
     use tempfile;
+
+    static ARCH_X86_64: &str = "x86_64";
 
     static VALID_PRELUDE: &str = r###"
 ref: "exampleos/x86_64/blah"
@@ -755,10 +760,19 @@ remove-files:
     }
 
     #[test]
-    fn test_invalid_arch() {
+    fn test_invalid_arch_packages_type() {
+        test_invalid(
+            r###"packages-hal9000: true
+"###,
+        );
+    }
+
+    #[test]
+    fn test_invalid_arch_packages_array_type() {
         test_invalid(
             r###"packages-hal9000:
-  - podbaydoor glowingredeye
+  - 12
+  - 34
 "###,
         );
     }
