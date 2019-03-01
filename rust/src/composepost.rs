@@ -60,11 +60,17 @@ fn postprocess_useradd(rootfs_dfd: &openat::Dir) -> Fallible<()> {
 // enabled; let's just do this rather than trying to propagate the
 // preset everywhere.
 fn postprocess_presets(rootfs_dfd: &openat::Dir) -> Fallible<()> {
-    let mut o = rootfs_dfd.write_file("usr/lib/systemd/system-preset/40-rpm-ostree-auto.preset", 0o644)?;
-    o.write(r###"# Written by rpm-ostree compose tree
+    let mut o = rootfs_dfd.write_file(
+        "usr/lib/systemd/system-preset/40-rpm-ostree-auto.preset",
+        0o644,
+    )?;
+    o.write(
+        r###"# Written by rpm-ostree compose tree
 enable ostree-remount.service
 enable ostree-finalize-staged.path
-"###.as_bytes())?;
+"###
+        .as_bytes(),
+    )?;
     o.flush()?;
     Ok(())
 }
@@ -101,7 +107,11 @@ fn postprocess_subs_dist(rootfs_dfd: &openat::Dir) -> Fallible<()> {
 // This function is called from rpmostree_postprocess_final(); think of
 // it as the bits of that function that we've chosen to implement in Rust.
 fn compose_postprocess_final(rootfs_dfd: &openat::Dir) -> Fallible<()> {
-    let tasks = [postprocess_useradd, postprocess_presets, postprocess_subs_dist];
+    let tasks = [
+        postprocess_useradd,
+        postprocess_presets,
+        postprocess_subs_dist,
+    ];
     tasks.par_iter().try_for_each(|f| f(rootfs_dfd))
 }
 

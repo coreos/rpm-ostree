@@ -19,11 +19,11 @@
 use gio_sys;
 use glib_sys;
 use libc;
-use std::ffi::{CStr, OsStr};
 use std::ffi::CString;
+use std::ffi::{CStr, OsStr};
 use std::fmt::Display;
-use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::os::unix::ffi::OsStrExt;
+use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::ptr;
 
 use openat;
@@ -84,7 +84,7 @@ pub fn ffi_view_bytestring<'a>(s: *const libc::c_char) -> &'a [u8] {
 /// View a C "bytestring" (NUL terminated) as a Rust OsStr.
 /// Panics if `s` is `NULL`.
 pub fn ffi_view_os_str<'a>(s: *const libc::c_char) -> &'a OsStr {
-    OsStr::from_bytes(ffi_view_bytestring (s))
+    OsStr::from_bytes(ffi_view_bytestring(s))
 }
 
 // View `fd` as an `openat::Dir` instance.  Lifetime of return value
