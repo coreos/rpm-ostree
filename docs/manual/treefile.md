@@ -13,8 +13,8 @@ It supports the following parameters:
  * `ref`: string, mandatory: Holds a string which will be the name of
    the branch for the content.
 
- * `gpg_key` string, optional: Key ID for GPG signing; the secret key
-   must be in the home directory of the building user.  Defaults to
+ * `gpg-key` (or `gpg_key`): string, optional: Key ID for GPG signing; the
+   secret key must be in the home directory of the building user.  Defaults to
    none.
 
  * `repos` array of strings, mandatory: Names of yum repositories to
@@ -26,10 +26,10 @@ It supports the following parameters:
  * `selinux`: boolean, optional: Defaults to `true`.  If `false`, then
    no SELinux labeling will be performed on the server side.
 
- * `boot_location`: string, optional: Historically, ostree put bootloader data
-    in /boot.  However, this has a few flaws; it gets shadowed at boot time,
-    and also makes dealing with Anaconda installation harder.  There are 3
-    possible values:
+ * `boot-location` (or `boot_location`): string, optional: Historically, ostree
+    put bootloader data in /boot.  However, this has a few flaws; it gets
+    shadowed at boot time, and also makes dealing with Anaconda installation
+    harder.  There are 3 possible values:
     * "both": the default, kernel data goes in /boot and /usr/lib/ostree-boot
     * "legacy": Now an alias for "both"; historically meant just "boot"
     * "new": kernel data goes in /usr/lib/ostree-boot and /usr/lib/modules
@@ -66,7 +66,8 @@ It supports the following parameters:
 
  * `units`: Array of strings, optional: Systemd units to enable by default
 
- * `default_target`: String, optional: Set the default systemd target
+ * `default-target` (or `default_target`): String, optional: Set the default
+    systemd target.
 
  * `initramfs-args`: Array of strings, optional.  Passed to the
     initramfs generation program (presently `dracut`).  An example use
@@ -143,14 +144,14 @@ It supports the following parameters:
 
    Example: `releasever: "26"`
 
- * `automatic_version_prefix`: String, optional: Set the prefix for versions
-   on the commits. The idea is that if the previous commit on the branch to the
-   doesn't match the prefix, or doesn't have a version, then the new commit will
-   have the version as specified. If the prefix matches exactly, then we append
-   ".1". Otherwise we parse the number after the prefix and increment it by one
-   and then append that to the prefix.
+ * `automatic-version-prefix` (or `automatic_version_prefix`): String, optional:
+   Set the prefix for versions on the commits. The idea is that if the previous
+   commit on the branch to the doesn't match the prefix, or doesn't have a
+   version, then the new commit will have the version as specified. If the
+   prefix matches exactly, then we append ".1". Otherwise we parse the number
+   after the prefix and increment it by one and then append that to the prefix.
 
-   A current date/time may also be passed through `automatic_version_prefix`,
+   A current date/time may also be passed through `automatic-version-prefix`,
    by including a date tag in the prefix as such: `<date:format>`, where
    `format` is a string with date formats such as `%Y` (year), `%m` (month), etc.
    The full list of supported formats is [found in the GLib API](https://developer.gnome.org/glib/stable/glib-GDateTime.html#g-date-time-format).
@@ -158,18 +159,18 @@ It supports the following parameters:
    the version, if not present in the prefix, which resets to `.0` if
    the date (or prefix) changes.
 
-   This means that on an empty branch with an `automatic_version_prefix`
+   This means that on an empty branch with an `automatic-version-prefix`
    of `"22"` the first three commits would get the versions: "22", "22.1",
    "22.2". Some example progressions are shown:
 
-   | `automatic_version_prefix` | version progression                        |
+   | `automatic-version-prefix` | version progression                        |
    | -------------------------- | ------------------------------------------ |
    | `22`                       | 22, 22.1, 22.2, ...                        |
    | `22.1`                     | 22.1.1, 22.1.2, 22.1.3, ...                |
    | `22.<date:%Y>`             | 22.2019.0, 22.2019.1, 22.2020.0, ...       |
    | `22.<date:%Y>.1`           | 22.2019.1.0, 22.2019.1.1, 22.2020.1.0, ... |
 
-   Example: `automatic_version_prefix: "22.0"`
+   Example: `automatic-version-prefix: "22.0"`
 
  * `postprocess-script`: String, optional: Full filesystem path to a script
    that will be executed in the context of the target tree.  The script

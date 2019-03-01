@@ -773,12 +773,12 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
     return FALSE;
 
   g_autofree char *next_version = NULL;
-  if (json_object_has_member (self->treefile, "automatic_version_prefix") &&
+  if (json_object_has_member (self->treefile, "automatic-version-prefix") &&
       /* let --add-metadata-string=version=... take precedence */
       !g_hash_table_contains (self->metadata, OSTREE_COMMIT_META_KEY_VERSION))
     {
       const char *ver_prefix =
-        _rpmostree_jsonutil_object_require_string_member (self->treefile, "automatic_version_prefix", error);
+        _rpmostree_jsonutil_object_require_string_member (self->treefile, "automatic-version-prefix", error);
       if (!ver_prefix)
         return FALSE;
 
@@ -953,7 +953,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   g_variant_builder_init (&composemeta_builder, G_VARIANT_TYPE ("a{sv}"));
 
   const char *gpgkey = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "gpg_key", &gpgkey, error))
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (self->treefile, "gpg-key", &gpgkey, error))
     return FALSE;
 
   gboolean selinux = TRUE;
@@ -1156,7 +1156,7 @@ rpmostree_compose_builtin_postprocess (int             argc,
 
   const char *rootfs_path = argv[1];
   /* Here we *optionally* process a treefile; some things like `tmp-is-dir` and
-   * `boot_location` are configurable and relevant here, but a lot of users
+   * `boot-location` are configurable and relevant here, but a lot of users
    * will also probably be OK with the defaults, and part of the idea here is
    * to avoid at least some of the use cases requiring a treefile.
    */
