@@ -4,7 +4,6 @@
     "include": "fedora-rawhide-base.json",
 
     "packages": ["docker-io"],
-    
+
     "units": ["docker.service", "docker.socket"]
 }
-	    

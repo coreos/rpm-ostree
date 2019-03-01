@@ -154,6 +154,7 @@ fn treefile_parse_stream<R: io::Read>(
     }
 
     treefile.packages = Some(pkgs);
+    treefile = treefile.migrate_legacy_fields()?;
     Ok(treefile)
 }
 
@@ -496,7 +497,7 @@ fn whitespace_split_packages(pkgs: &[String]) -> Vec<String> {
         .collect()
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 enum BootLocation {
     #[serde(rename = "both")]
     Both,
@@ -561,6 +562,7 @@ struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     selinux: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "gpg-key")]
     gpg_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     include: Option<String>,
@@ -588,6 +590,7 @@ struct TreeComposeConfig {
 
     // Tree layout options
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "boot-location")]
     boot_location: Option<BootLocation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "tmp-is-dir")]
@@ -597,6 +600,7 @@ struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     units: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "default-target")]
     default_target: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "machineid-compat")]
@@ -607,6 +611,7 @@ struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     releasever: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "automatic-version-prefix")]
     automatic_version_prefix: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "mutate-os-release")]
@@ -651,7 +656,46 @@ struct TreeComposeConfig {
     remove_from_packages: Option<Vec<Vec<String>>>,
 
     #[serde(flatten)]
+    legacy_fields: LegacyTreeComposeConfigFields,
+
+    #[serde(flatten)]
     extra: HashMap<String, serde_json::Value>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct LegacyTreeComposeConfigFields {
+    #[serde(skip_serializing)]
+    gpg_key: Option<String>,
+    #[serde(skip_serializing)]
+    boot_location: Option<BootLocation>,
+    #[serde(skip_serializing)]
+    default_target: Option<String>,
+    #[serde(skip_serializing)]
+    automatic_version_prefix: Option<String>,
+}
+
+impl TreeComposeConfig {
+    /// Look for use of legacy/renamed fields and migrate them to the new field.
+    fn migrate_legacy_fields(mut self) -> Fallible<Self> {
+        macro_rules! migrate_field {
+            ( $field:ident ) => {{
+                if self.legacy_fields.$field.is_some() && self.$field.is_some() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!("Cannot use new and legacy forms of {}", stringify!($field)),
+                    ).into());
+                }
+                self.$field = self.$field.or(self.legacy_fields.$field.take());
+            }}
+        };
+
+        migrate_field!(gpg_key);
+        migrate_field!(boot_location);
+        migrate_field!(default_target);
+        migrate_field!(automatic_version_prefix);
+
+        Ok(self)
+    }
 }
 
 #[cfg(test)]
@@ -733,11 +777,15 @@ remove-files:
         assert!(treefile.packages.unwrap().len() == 3);
     }
 
+    fn append_and_parse(append: &'static str) -> TreeComposeConfig {
+        let buf = VALID_PRELUDE.to_string() + append;
+        let mut input = io::BufReader::new(buf.as_bytes());
+        treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap()
+    }
+
     fn test_invalid(data: &'static str) {
-        let mut buf = VALID_PRELUDE.to_string();
-        buf.push_str(data);
-        let buf = buf.as_bytes();
-        let mut input = io::BufReader::new(buf);
+        let buf = VALID_PRELUDE.to_string() + data;
+        let mut input = io::BufReader::new(buf.as_bytes());
         match treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)) {
             Err(ref e) => {
                 match e.downcast_ref::<io::Error>() {
@@ -747,6 +795,54 @@ remove-files:
             }
             Ok(_) => panic!("Expected invalid treefile"),
         }
+    }
+
+    #[test]
+    fn basic_valid_legacy() {
+        let treefile = append_and_parse("
+gpg_key: foo
+boot_location: both
+default_target: bar
+automatic_version_prefix: baz
+        ");
+        assert!(treefile.gpg_key.unwrap() == "foo");
+        assert!(treefile.boot_location.unwrap() == BootLocation::Both);
+        assert!(treefile.default_target.unwrap() == "bar");
+        assert!(treefile.automatic_version_prefix.unwrap() == "baz");
+    }
+
+    #[test]
+    fn basic_valid_legacy_new() {
+        let treefile = append_and_parse("
+gpg-key: foo
+boot-location: both
+default-target: bar
+automatic-version-prefix: baz
+        ");
+        assert!(treefile.gpg_key.unwrap() == "foo");
+        assert!(treefile.boot_location.unwrap() == BootLocation::Both);
+        assert!(treefile.default_target.unwrap() == "bar");
+        assert!(treefile.automatic_version_prefix.unwrap() == "baz");
+    }
+
+    #[test]
+    fn basic_invalid_legacy_both() {
+        test_invalid("
+gpg-key: foo
+gpg_key: bar
+        ");
+        test_invalid("
+boot-location: new
+boot_location: both
+        ");
+        test_invalid("
+default-target: foo
+default_target: bar
+        ");
+        test_invalid("
+automatic-version-prefix: foo
+automatic_version_prefix: bar
+        ");
     }
 
     #[test]

@@ -389,12 +389,12 @@ impl_rojig_build (RpmOstreeRojigCompose *self,
     return FALSE;
 
   g_autofree char *next_version = NULL;
-  if (json_object_has_member (self->treefile, "automatic_version_prefix") &&
+  if (json_object_has_member (self->treefile, "automatic-version-prefix") &&
       /* let --add-metadata-string=version=... take precedence */
       !g_hash_table_contains (self->metadata, OSTREE_COMMIT_META_KEY_VERSION))
     {
       const char *ver_prefix =
-        _rpmostree_jsonutil_object_require_string_member (self->treefile, "automatic_version_prefix", error);
+        _rpmostree_jsonutil_object_require_string_member (self->treefile, "automatic-version-prefix", error);
       if (!ver_prefix)
         return FALSE;
 

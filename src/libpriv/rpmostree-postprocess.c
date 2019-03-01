@@ -270,7 +270,7 @@ rpmostree_postprocess_run_depmod (int           rootfs_dfd,
  *  - /boot (CentOS, Fedora treecompose before we suppressed kernel.spec's %posttrans)
  *  - /usr/lib/modules (Fedora treecompose without kernel.spec's %posttrans)
  *
- * We then need to handle the boot_location option, which can put that data in
+ * We then need to handle the boot-location option, which can put that data in
  * either both (/boot and /usr/lib/ostree-boot), or just the latter.
  */
 static gboolean
@@ -359,7 +359,7 @@ process_kernel_and_initramfs (int            rootfs_dfd,
     RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
   const char *boot_location_str = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile,
-                                                              "boot_location",
+                                                              "boot-location",
                                                               &boot_location_str, error))
     return FALSE;
   if (boot_location_str != NULL)
@@ -1571,7 +1571,7 @@ rpmostree_treefile_postprocessing (int            rootfs_fd,
     return FALSE;
 
   const char *default_target = NULL;
-  if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "default_target",
+  if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile, "default-target",
                                                               &default_target, error))
     return FALSE;
 

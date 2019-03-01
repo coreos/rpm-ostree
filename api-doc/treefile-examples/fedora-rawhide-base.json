@@ -1,19 +1,15 @@
 {
     "ref": "fedora-atomic/rawhide/x86_64/base/core",
 
-    "gpg_key": "<SET KEY ID FOR GPG>",
+    "gpg-key": "<SET KEY ID FOR GPG>",
 
     "repos": ["fedora-rawhide"],
 
     "selinux": true,
 
-    "bootstrap_packages": ["filesystem", "glibc", "nss-altfiles", "shadow-utils",
-			   "generic-release"],
-
     "packages": ["kernel", "ostree", "lvm2",
-		 "btrfs-progs", "e2fsprogs", "xfsprogs",
-		 "gnupg2", "selinux-policy-targeted",
-		 "openssh-server", "openssh-clients",
-		 "NetworkManager", "vim-minimal", "nano", "sudo"]
+                 "btrfs-progs", "e2fsprogs", "xfsprogs",
+                 "gnupg2", "selinux-policy-targeted",
+                 "openssh-server", "openssh-clients",
+                 "NetworkManager", "vim-minimal", "nano", "sudo"]
 }
-	    
