@@ -898,8 +898,8 @@ rpmostreed_sysroot_set_txn (RpmostreedSysroot     *self,
       GDBusMethodInvocation *invocation = rpmostreed_transaction_get_invocation (self->transaction);
       g_autoptr(GVariant) v = g_variant_ref_sink (g_variant_new ("(sss)",
                                                                  g_dbus_method_invocation_get_method_name (invocation),
-                                                                 g_dbus_method_invocation_get_object_path (invocation),
-                                                                 g_dbus_method_invocation_get_sender (invocation)));
+                                                                 g_dbus_method_invocation_get_sender (invocation),
+                                                                 g_dbus_method_invocation_get_object_path (invocation)));
       rpmostree_sysroot_set_active_transaction ((RPMOSTreeSysroot*)self, v);
       rpmostree_sysroot_set_active_transaction_path ((RPMOSTreeSysroot*)self,
                                                      rpmostreed_transaction_get_client_address (self->transaction));
