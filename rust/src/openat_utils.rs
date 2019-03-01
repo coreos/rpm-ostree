@@ -16,8 +16,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-use std::{fs, io};
 use openat;
+use std::{fs, io};
 
 /// Helper functions for openat::Dir
 pub(crate) trait OpenatDirExt {
@@ -54,4 +54,3 @@ impl OpenatDirExt for openat::Dir {
         }
     }
 }
-

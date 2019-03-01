@@ -21,6 +21,8 @@
  * */
 
 use c_utf8::CUtf8Buf;
+use failure::Fallible;
+use failure::ResultExt;
 use openat;
 use serde_json;
 use serde_yaml;
@@ -29,8 +31,6 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::{collections, fs, io};
 use utils;
-use failure::Fallible;
-use failure::ResultExt;
 
 const INCLUDE_MAXDEPTH: u32 = 50;
 
@@ -101,9 +101,12 @@ fn treefile_parse_stream<R: io::Read>(
             if treearch != arch {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!("Invalid basearch {} on {}: cross-composes are not supported",
-                            treearch, arch),
-                ).into())
+                    format!(
+                        "Invalid basearch {} on {}: cross-composes are not supported",
+                        treearch, arch
+                    ),
+                )
+                .into());
             } else {
                 Some(treearch)
             }
@@ -121,7 +124,8 @@ fn treefile_parse_stream<R: io::Read>(
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
             format!("Unknown fields: {}", keys.join(", ")),
-        ).into());
+        )
+        .into());
     }
 
     // Substitute ${basearch}
@@ -162,39 +166,52 @@ fn treefile_parse_stream<R: io::Read>(
 /// matching the current basearch.
 fn take_archful_pkgs(
     basearch: Option<&str>,
-    treefile: &mut TreeComposeConfig
+    treefile: &mut TreeComposeConfig,
 ) -> Fallible<Option<Vec<String>>> {
     let mut archful_pkgs: Option<Vec<String>> = None;
 
     for key in treefile.extra.keys().filter(|k| k.starts_with("packages-")) {
-        if !treefile.extra[key].is_array() ||
-                treefile.extra[key].as_array().unwrap().iter().any(|v| !v.is_string()) {
+        if !treefile.extra[key].is_array()
+            || treefile.extra[key]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|v| !v.is_string())
+        {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!("Invalid field {}: expected array of strings", key),
-            ).into());
+            )
+            .into());
         }
 
         if let Some(basearch) = basearch {
             if basearch == &key["packages-".len()..] {
                 assert!(archful_pkgs == None);
-                archful_pkgs = Some(treefile.extra[key].as_array().unwrap().iter().map(|v| {
-                    v.as_str().unwrap().into()
-                }).collect());
+                archful_pkgs = Some(
+                    treefile.extra[key]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.as_str().unwrap().into())
+                        .collect(),
+                );
             }
         }
     }
 
     // and drop it from the map
-    treefile.extra.retain(|ref k, _| !k.starts_with("packages-"));
+    treefile
+        .extra
+        .retain(|ref k, _| !k.starts_with("packages-"));
 
     Ok(archful_pkgs)
 }
 
 /// Open file and provide context containing filename on failures.
 fn open_file<P: AsRef<Path>>(filename: P) -> Fallible<fs::File> {
-    return Ok(fs::File::open(filename.as_ref()).with_context(
-        |e| format!("Can't open file {:?}: {}", filename.as_ref().display(), e))?);
+    return Ok(fs::File::open(filename.as_ref())
+        .with_context(|e| format!("Can't open file {:?}: {}", filename.as_ref().display(), e))?);
 }
 
 // If a passwd/group file is provided explicitly, load it as a fd
@@ -364,7 +381,8 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 format!("Reached maximum include depth {}", INCLUDE_MAXDEPTH),
-            ).into());
+            )
+            .into());
         }
         let parent = filename.parent().unwrap();
         let include_path = parent.join(include_path);
@@ -426,7 +444,8 @@ impl Treefile {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidInput,
                         format!("Unsupported path in add-files: {}", dest),
-                    ).into());
+                    )
+                    .into());
                 }
             }
         }
@@ -683,10 +702,11 @@ impl TreeComposeConfig {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidInput,
                         format!("Cannot use new and legacy forms of {}", stringify!($field)),
-                    ).into());
+                    )
+                    .into());
                 }
                 self.$field = self.$field.or(self.legacy_fields.$field.take());
-            }}
+            }};
         };
 
         migrate_field!(gpg_key);
@@ -787,24 +807,24 @@ remove-files:
         let buf = VALID_PRELUDE.to_string() + data;
         let mut input = io::BufReader::new(buf.as_bytes());
         match treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)) {
-            Err(ref e) => {
-                match e.downcast_ref::<io::Error>() {
-                    Some(ref ioe) if ioe.kind() == io::ErrorKind::InvalidInput => {},
-                    _ =>  panic!("Expected invalid treefile, not {}", e.to_string()),
-                }
-            }
+            Err(ref e) => match e.downcast_ref::<io::Error>() {
+                Some(ref ioe) if ioe.kind() == io::ErrorKind::InvalidInput => {}
+                _ => panic!("Expected invalid treefile, not {}", e.to_string()),
+            },
             Ok(_) => panic!("Expected invalid treefile"),
         }
     }
 
     #[test]
     fn basic_valid_legacy() {
-        let treefile = append_and_parse("
+        let treefile = append_and_parse(
+            "
 gpg_key: foo
 boot_location: both
 default_target: bar
 automatic_version_prefix: baz
-        ");
+        ",
+        );
         assert!(treefile.gpg_key.unwrap() == "foo");
         assert!(treefile.boot_location.unwrap() == BootLocation::Both);
         assert!(treefile.default_target.unwrap() == "bar");
@@ -813,12 +833,14 @@ automatic_version_prefix: baz
 
     #[test]
     fn basic_valid_legacy_new() {
-        let treefile = append_and_parse("
+        let treefile = append_and_parse(
+            "
 gpg-key: foo
 boot-location: both
 default-target: bar
 automatic-version-prefix: baz
-        ");
+        ",
+        );
         assert!(treefile.gpg_key.unwrap() == "foo");
         assert!(treefile.boot_location.unwrap() == BootLocation::Both);
         assert!(treefile.default_target.unwrap() == "bar");
@@ -827,22 +849,30 @@ automatic-version-prefix: baz
 
     #[test]
     fn basic_invalid_legacy_both() {
-        test_invalid("
+        test_invalid(
+            "
 gpg-key: foo
 gpg_key: bar
-        ");
-        test_invalid("
+        ",
+        );
+        test_invalid(
+            "
 boot-location: new
 boot_location: both
-        ");
-        test_invalid("
+        ",
+        );
+        test_invalid(
+            "
 default-target: foo
 default_target: bar
-        ");
-        test_invalid("
+        ",
+        );
+        test_invalid(
+            "
 automatic-version-prefix: foo
 automatic_version_prefix: bar
-        ");
+        ",
+        );
     }
 
     #[test]
@@ -887,8 +917,11 @@ automatic_version_prefix: bar
                 let mut tf_stream = io::BufWriter::new(fs::File::create(&tf_path)?);
                 tf_stream.write_all(contents.as_bytes())?;
             }
-            let tf =
-                Treefile::new_boxed(tf_path.as_path(), basearch, openat::Dir::open(workdir.path())?)?;
+            let tf = Treefile::new_boxed(
+                tf_path.as_path(),
+                basearch,
+                openat::Dir::open(workdir.path())?,
+            )?;
             Ok(TreefileTest { tf, workdir })
         }
     }
@@ -931,7 +964,8 @@ rojig:
             r###"
 packages:
   - some layered packages
-"###.as_bytes(),
+"###
+            .as_bytes(),
         );
         let mut mid = treefile_parse_stream(InputFormat::YAML, &mut mid_input, basearch).unwrap();
         let mut top_input = io::BufReader::new(ROJIG_YAML.as_bytes());
@@ -948,8 +982,9 @@ packages:
     fn test_open_file_nonexistent() {
         let path = "/usr/share/empty/manifest.yaml";
         match treefile_parse(path, None) {
-            Err(ref e) => assert!(e.to_string().starts_with(
-                    format!("Can't open file {:?}:", path).as_str())),
+            Err(ref e) => assert!(e
+                .to_string()
+                .starts_with(format!("Can't open file {:?}:", path).as_str())),
             Ok(_) => panic!("Expected nonexistent treefile error for {}", path),
         }
     }

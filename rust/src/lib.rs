@@ -27,8 +27,8 @@ extern crate glib_sys;
 extern crate indicatif;
 extern crate libc;
 extern crate openat;
-extern crate tempfile;
 extern crate rayon;
+extern crate tempfile;
 
 #[macro_use]
 extern crate lazy_static;

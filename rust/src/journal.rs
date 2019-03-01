@@ -18,9 +18,9 @@
 
 extern crate systemd;
 
-use failure::Fallible;
 use self::systemd::id128::Id128;
 use self::systemd::journal;
+use failure::Fallible;
 
 static OSTREE_FINALIZE_STAGED_SERVICE: &'static str = "ostree-finalize-staged.service";
 static OSTREE_DEPLOYMENT_FINALIZING_MSG_ID: &'static str = "e8646cd63dff4625b77909a8e7a40994";

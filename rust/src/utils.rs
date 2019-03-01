@@ -104,7 +104,8 @@ mod tests {
         let r = varsubst(
             "ostree/${osvendor}/${basearch}/blah/${basearch}/whee",
             &subs,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(r, "ostree/fedora/ppc64le/blah/ppc64le/whee");
         let r = varsubst("${osvendor}${basearch}", &subs).unwrap();
         assert_eq!(r, "fedorappc64le");
