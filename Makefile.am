@@ -104,5 +104,6 @@ include Makefile-daemon.am
 include Makefile-rpm-ostree.am
 include Makefile-tests.am
 include Makefile-man.am
+include Makefile-bash.am
 
 -include $(top_srcdir)/git.mk
