@@ -18,8 +18,8 @@ cat >script.sh <<'EOF'
 set -xeuo pipefail
 # Overlay the built binaries
 rsync -rlv /code/installroot/usr/ /usr/
-cosa init https://github.com/coreos/fedora-coreos-config
-cosa build ostree
+coreos-assembler init https://github.com/coreos/fedora-coreos-config
+coreos-assembler build ostree
 EOF
 chmod a+x script.sh
 podman run --privileged --rm -ti \
