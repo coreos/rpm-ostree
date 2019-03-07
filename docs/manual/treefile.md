@@ -26,9 +26,15 @@ It supports the following parameters:
  * `selinux`: boolean, optional: Defaults to `true`.  If `false`, then
    no SELinux labeling will be performed on the server side.
 
- * `boot-location` (or `boot_location`): string, optional: If specified, this value
-    must be "new".  Historically rpm-ostree supported multiple kernel locations;
-    this is no longer the case.
+ * `boot-location` (or `boot_location`): string, optional:
+    There are 2 possible values:
+    * "new": A misnomer, this value is no longer "new".  Kernel data
+      goes in `/usr/lib/ostree-boot` in addition to `/usr/lib/modules`.
+      This is the default; use it if you have a need to care about
+      upgrading from very old versions of libostree.
+    * "modules": Kernel data goes just in `/usr/lib/modules`.  Use
+      this for new systems, and systems that don't need to be upgraded
+      from very old libostree versions.
 
  * `etc-group-members`: Array of strings, optional: Unix groups in this
    list will be stored in `/etc/group` instead of `/usr/lib/group`.  Use

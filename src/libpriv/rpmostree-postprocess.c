@@ -50,7 +50,8 @@
 #include "rpmostree-rust.h"
 
 typedef enum {
-  RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW
+  RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW,
+  RPMOSTREE_POSTPROCESS_BOOT_LOCATION_MODULES,
 } RpmOstreePostprocessBootLocation;
 
 /* The "unified_core_mode" flag controls whether or not we use rofiles-fuse,
@@ -363,7 +364,11 @@ process_kernel_and_initramfs (int            rootfs_dfd,
     return FALSE;
   if (boot_location_str != NULL)
     {
-      if (!g_str_equal (boot_location_str, "new"))
+      if (g_str_equal (boot_location_str, "new"))
+        boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
+      else if (g_str_equal (boot_location_str, "modules"))
+        boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_MODULES;
+      else
         return glnx_throw (error, "Invalid boot location '%s'", boot_location_str);
     }
 
@@ -439,9 +444,12 @@ process_kernel_and_initramfs (int            rootfs_dfd,
   /* We always tell rpmostree_finalize_kernel() to skip /boot, since we'll do a
    * full hardlink pass if needed after that for the kernel + bootloader data.
    */
+  RpmOstreeFinalizeKernelDestination fin_dest =
+    (boot_location == RPMOSTREE_POSTPROCESS_BOOT_LOCATION_MODULES) ?
+    RPMOSTREE_FINALIZE_KERNEL_USRLIB_MODULES :
+    RPMOSTREE_FINALIZE_KERNEL_USRLIB_OSTREEBOOT;
   if (!rpmostree_finalize_kernel (rootfs_dfd, bootdir, kver, kernel_path,
-                                  &initramfs_tmpf,
-                                  RPMOSTREE_FINALIZE_KERNEL_USRLIB_OSTREEBOOT,
+                                  &initramfs_tmpf, fin_dest,
                                   cancellable, error))
     return FALSE;
 
