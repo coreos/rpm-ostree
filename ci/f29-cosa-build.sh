@@ -10,7 +10,7 @@ podman run --privileged --rm \
 cosaimg=quay.io/coreos-assembler/coreos-assembler:latest
 podman pull "${cosaimg}"
 
-cd /srv/code
+codedir=$(pwd)
 mkdir fcos
 cd fcos
 cat >script.sh <<'EOF'
@@ -23,7 +23,7 @@ cosa build ostree
 EOF
 chmod a+x script.sh
 podman run --privileged --rm -ti \
-       -v /srv/code:/code -v $(pwd):/srv -w /srv \
+       -v ${codedir}:/code -v $(pwd):/srv -w /srv \
        --entrypoint bash \
        --privileged ${cosaimg} \
        ./script.sh
