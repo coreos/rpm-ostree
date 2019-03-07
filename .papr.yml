@@ -203,5 +203,7 @@ tests:
   - ci/installdeps.sh
   - yum remove -y cargo
   - curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain $RUST_MIN_VERSION -y
-  - PATH=$HOME/.cargo/bin:$PATH sh -c 'cd rust && rustc --version && cargo build' |& tee out.txt
+  - PATH=$HOME/.cargo/bin:$PATH ci/build.sh |& tee out.txt
   - grep $RUST_MIN_VERSION out.txt
+  - grep "checking for cargo... $HOME/.cargo/bin/cargo" out.txt
+  - grep "checking for rustc... $HOME/.cargo/bin/rustc" out.txt
