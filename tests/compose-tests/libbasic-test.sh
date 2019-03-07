@@ -48,12 +48,10 @@ ostree --repo=${repobuild} show --print-metadata-key rpmostree.rpmmd-repos ${tre
 assert_file_has_content meta.txt 'id.*fedora.*timestamp'
 echo "ok metadata"
 
-for path in /boot /usr/lib/ostree-boot; do
-    ostree --repo=${repobuild} ls -R ${treeref} ${path} > bootls.txt
-    assert_file_has_content bootls.txt vmlinuz-
-    assert_file_has_content bootls.txt initramfs-
-    echo "ok boot files"
-done
+ostree --repo=${repobuild} ls -R ${treeref} /usr/lib/ostree-boot > bootls.txt
+assert_file_has_content bootls.txt vmlinuz-
+assert_file_has_content bootls.txt initramfs-
+echo "ok boot files"
 vmlinuz_line=$(grep -o '/vmlinuz.*$' bootls.txt)
 kver=$(echo ${vmlinuz_line} | sed -e 's,^/vmlinuz-,,' -e 's,-[0-9a-f]*$,,')
 ostree --repo=${repobuild} ls ${treeref} /usr/lib/modules/${kver}/vmlinuz >/dev/null

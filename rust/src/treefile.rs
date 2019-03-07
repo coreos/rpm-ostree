@@ -518,17 +518,13 @@ fn whitespace_split_packages(pkgs: &[String]) -> Vec<String> {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 enum BootLocation {
-    #[serde(rename = "both")]
-    Both,
-    #[serde(rename = "legacy")]
-    Legacy,
     #[serde(rename = "new")]
     New,
 }
 
 impl Default for BootLocation {
     fn default() -> Self {
-        BootLocation::Both
+        BootLocation::New
     }
 }
 
@@ -820,13 +816,13 @@ remove-files:
         let treefile = append_and_parse(
             "
 gpg_key: foo
-boot_location: both
+boot_location: new
 default_target: bar
 automatic_version_prefix: baz
         ",
         );
         assert!(treefile.gpg_key.unwrap() == "foo");
-        assert!(treefile.boot_location.unwrap() == BootLocation::Both);
+        assert!(treefile.boot_location.unwrap() == BootLocation::New);
         assert!(treefile.default_target.unwrap() == "bar");
         assert!(treefile.automatic_version_prefix.unwrap() == "baz");
     }
@@ -836,13 +832,13 @@ automatic_version_prefix: baz
         let treefile = append_and_parse(
             "
 gpg-key: foo
-boot-location: both
+boot-location: new
 default-target: bar
 automatic-version-prefix: baz
         ",
         );
         assert!(treefile.gpg_key.unwrap() == "foo");
-        assert!(treefile.boot_location.unwrap() == BootLocation::Both);
+        assert!(treefile.boot_location.unwrap() == BootLocation::New);
         assert!(treefile.default_target.unwrap() == "bar");
         assert!(treefile.automatic_version_prefix.unwrap() == "baz");
     }
