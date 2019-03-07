@@ -15,6 +15,24 @@ tests:
 
 ---
 
+# Build a Fedora CoreOS ostree
+context: fcos29-cosa-build
+inherit: true
+
+# This test case wants unprivileged recursive containers
+# which we don't have right now; so just provision a VM and do a
+# docker --privileged run.
+# https://github.com/openshift/origin/issues/21514
+host:
+  distro: fedora/29/atomic
+
+tests:
+  - ./ci/f29-cosa-build.sh
+
+timeout: 60m
+
+---
+
 context: f28-primary
 inherit: true
 
