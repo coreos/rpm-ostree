@@ -22,6 +22,8 @@ c_utf8 = "0.1.0"
 systemd = "0.4.0"
 indicatif = "0.11.0"
 lazy_static = "1.1.0"
+# https://github.com/projectatomic/rpm-ostree/issues/1777
+rand = "=0.6.1"
 
 [lib]
 name = "rpmostree_rust"
