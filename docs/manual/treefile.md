@@ -26,13 +26,9 @@ It supports the following parameters:
  * `selinux`: boolean, optional: Defaults to `true`.  If `false`, then
    no SELinux labeling will be performed on the server side.
 
- * `boot-location` (or `boot_location`): string, optional: Historically, ostree
-    put bootloader data in /boot.  However, this has a few flaws; it gets
-    shadowed at boot time, and also makes dealing with Anaconda installation
-    harder.  There are 3 possible values:
-    * "both": the default, kernel data goes in /boot and /usr/lib/ostree-boot
-    * "legacy": Now an alias for "both"; historically meant just "boot"
-    * "new": kernel data goes in /usr/lib/ostree-boot and /usr/lib/modules
+ * `boot-location` (or `boot_location`): string, optional: If specified, this value
+    must be "new".  Historically rpm-ostree supported multiple kernel locations;
+    this is no longer the case.
 
  * `etc-group-members`: Array of strings, optional: Unix groups in this
    list will be stored in `/etc/group` instead of `/usr/lib/group`.  Use

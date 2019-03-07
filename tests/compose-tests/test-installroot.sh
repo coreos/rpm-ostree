@@ -26,10 +26,6 @@ integrationconf=usr/lib/tmpfiles.d/rpm-ostree-0-integration.conf
 assert_not_has_file ${instroot}-postprocess/${integrationconf}
 rpm-ostree compose postprocess ${instroot}-postprocess
 assert_has_file ${instroot}-postprocess/${integrationconf}
-# Without treefile, kernels end up in "both" mode
-ls ${instroot}-postprocess/boot > ls.txt
-assert_file_has_content ls.txt '^vmlinuz-'
-rm -f ls.txt
 ostree --repo=${repobuild} commit -b test-directcommit --selinux-policy ${instroot}-postprocess --tree=dir=${instroot}-postprocess
 echo "ok postprocess + direct commit"
 

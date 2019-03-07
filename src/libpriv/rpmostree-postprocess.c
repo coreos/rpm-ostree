@@ -50,7 +50,6 @@
 #include "rpmostree-rust.h"
 
 typedef enum {
-  RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH,
   RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW
 } RpmOstreePostprocessBootLocation;
 
@@ -356,7 +355,7 @@ process_kernel_and_initramfs (int            rootfs_dfd,
     return FALSE;
 
   RpmOstreePostprocessBootLocation boot_location =
-    RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH;
+    RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
   const char *boot_location_str = NULL;
   if (!_rpmostree_jsonutil_object_get_optional_string_member (treefile,
                                                               "boot-location",
@@ -364,13 +363,7 @@ process_kernel_and_initramfs (int            rootfs_dfd,
     return FALSE;
   if (boot_location_str != NULL)
     {
-      /* Make "legacy" an alias for "both" */
-      if (strcmp (boot_location_str, "both") == 0 ||
-          strcmp (boot_location_str, "legacy") == 0)
-        ;
-      else if (strcmp (boot_location_str, "new") == 0)
-        boot_location = RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW;
-      else
+      if (!g_str_equal (boot_location_str, "new"))
         return glnx_throw (error, "Invalid boot location '%s'", boot_location_str);
     }
 
@@ -455,24 +448,6 @@ process_kernel_and_initramfs (int            rootfs_dfd,
   /* We always ensure this exists as a mountpoint */
   if (!glnx_ensure_dir (rootfs_dfd, "boot", 0755, error))
     return FALSE;
-
-  /* If the boot location includes /boot, we also need to copy /usr/lib/ostree-boot there */
-  switch (boot_location)
-    {
-    case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_BOTH:
-      {
-        g_print ("Using boot location: both\n");
-        /* Hardlink the existing content, only a little ugly as
-         * we'll end up sha256'ing it twice, but oh well. */
-        if (!hardlink_recurse (rootfs_dfd, "usr/lib/ostree-boot",
-                               rootfs_dfd, "boot",
-                               cancellable, error))
-          return glnx_prefix_error (error, "hardlinking /boot");
-      }
-      break;
-    case RPMOSTREE_POSTPROCESS_BOOT_LOCATION_NEW:
-      break;
-    }
 
   return TRUE;
 }
