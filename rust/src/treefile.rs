@@ -520,6 +520,8 @@ fn whitespace_split_packages(pkgs: &[String]) -> Vec<String> {
 enum BootLocation {
     #[serde(rename = "new")]
     New,
+    #[serde(rename = "modules")]
+    Modules,
 }
 
 impl Default for BootLocation {
