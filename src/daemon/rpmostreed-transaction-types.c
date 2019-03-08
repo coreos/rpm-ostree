@@ -2060,6 +2060,155 @@ rpmostreed_transaction_new_refresh_md (GDBusMethodInvocation *invocation,
 
 }
 
+/* ================================ ModifyYumRepo ================================ */
+
+typedef struct {
+  RpmostreedTransaction parent;
+  char *osname;
+  char *repo_id;
+  GVariant *settings;
+} ModifyYumRepoTransaction;
+
+typedef RpmostreedTransactionClass ModifyYumRepoTransactionClass;
+
+GType modify_yum_repo_transaction_get_type (void);
+
+G_DEFINE_TYPE (ModifyYumRepoTransaction,
+               modify_yum_repo_transaction,
+               RPMOSTREED_TYPE_TRANSACTION)
+
+static void
+modify_yum_repo_transaction_finalize (GObject *object)
+{
+  ModifyYumRepoTransaction *self;
+
+  self = (ModifyYumRepoTransaction *) object;
+  g_free (self->osname);
+  g_free (self->repo_id);
+  g_variant_unref (self->settings);
+
+  G_OBJECT_CLASS (modify_yum_repo_transaction_parent_class)->finalize (object);
+}
+
+static DnfRepo *
+get_dnf_repo_by_id (RpmOstreeContext *ctx, const char *repo_id)
+{
+  DnfContext *dnfctx = rpmostree_context_get_dnf (ctx);
+
+  GPtrArray *repos = dnf_context_get_repos (dnfctx);
+  for (guint i = 0; i < repos->len; i++)
+    {
+      DnfRepo *repo = repos->pdata[i];
+      if (g_strcmp0 (dnf_repo_get_id (repo), repo_id) == 0)
+        return repo;
+    }
+
+  return NULL;
+}
+
+static gboolean
+modify_yum_repo_transaction_execute (RpmostreedTransaction *transaction,
+                                     GCancellable *cancellable,
+                                     GError **error)
+{
+  ModifyYumRepoTransaction *self = (ModifyYumRepoTransaction *) transaction;
+  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, "modify-yum-repo");
+
+  g_autoptr(OstreeDeployment) cfg_merge_deployment =
+    ostree_sysroot_get_merge_deployment (sysroot, self->osname);
+
+  OstreeRepo *ot_repo = ostree_sysroot_repo (sysroot);
+  g_autoptr(RpmOstreeContext) ctx = rpmostree_context_new_system (ot_repo, cancellable, error);
+
+  /* We could bypass rpmostree_context_setup() here and call dnf_context_setup() ourselves
+   * since we're not actually going to perform any installation. Though it does provide us
+   * with the right semantics for install/source_root. */
+  if (!rpmostree_context_setup (ctx, NULL, NULL, NULL, cancellable, error))
+    return FALSE;
+
+  /* point libdnf to our repos dir */
+  rpmostree_context_configure_from_deployment (ctx, sysroot, cfg_merge_deployment);
+
+  DnfRepo *repo = get_dnf_repo_by_id (ctx, self->repo_id);
+  if (repo == NULL)
+    return glnx_throw (error, "Yum repo '%s' not found", self->repo_id);
+
+  GVariantIter iter;
+  GVariant *child;
+  g_variant_iter_init (&iter, self->settings);
+  while ((child = g_variant_iter_next_value (&iter)) != NULL)
+    {
+      const char *parameter = NULL;
+      const char *value = NULL;
+      g_variant_get_child (child, 0, "&s", &parameter);
+      g_variant_get_child (child, 1, "&s", &value);
+
+      /* Only allow changing 'enabled' for now. See the discussion about changing arbitrary
+       * .repo settings in https://github.com/projectatomic/rpm-ostree/pull/1780 */
+      if (g_strcmp0 (parameter, "enabled") != 0)
+        return glnx_throw (error, "Changing '%s' not allowed in yum .repo files", parameter);
+
+      if (g_strcmp0 (value, "0") != 0 &&
+          g_strcmp0 (value, "1") != 0)
+        return glnx_throw (error, "Only '0' and '1' are allowed for the '%s' key", parameter);
+
+      if (!dnf_repo_set_data (repo, parameter, value, error))
+        return FALSE;
+    }
+
+  if (!dnf_repo_commit (repo, error))
+    return FALSE;
+
+  return TRUE;
+}
+
+static void
+modify_yum_repo_transaction_class_init (CleanupTransactionClass *class)
+{
+  GObjectClass *object_class;
+
+  object_class = G_OBJECT_CLASS (class);
+  object_class->finalize = modify_yum_repo_transaction_finalize;
+
+  class->execute = modify_yum_repo_transaction_execute;
+}
+
+static void
+modify_yum_repo_transaction_init (ModifyYumRepoTransaction *self)
+{
+}
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_modify_yum_repo (GDBusMethodInvocation *invocation,
+                                            OstreeSysroot         *sysroot,
+                                            const char            *osname,
+                                            const char            *repo_id,
+                                            GVariant              *settings,
+                                            GCancellable          *cancellable,
+                                            GError               **error)
+{
+  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
+  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+
+  ModifyYumRepoTransaction *self =
+    g_initable_new (modify_yum_repo_transaction_get_type (),
+                    cancellable, error,
+                    "invocation", invocation,
+                    "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
+                    NULL);
+
+  if (self != NULL)
+    {
+      self->osname = g_strdup (osname);
+      self->repo_id = g_strdup (repo_id);
+      self->settings = g_variant_ref (settings);
+    }
+
+  return (RpmostreedTransaction *) self;
+}
+
 /* ================================KernelArg================================ */
 
 typedef struct {

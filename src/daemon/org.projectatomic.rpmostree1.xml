@@ -281,6 +281,13 @@
       <arg type="s" name="transaction_address" direction="out"/>
     </method>
 
+    <!-- Set options in yum .repo files -->
+    <method name="ModifyYumRepo">
+      <arg type="s" name="repo_id" direction="in"/>
+      <arg type="a{ss}" name="settings" direction="in"/>
+      <arg type="s" name="transaction_address" direction="out"/>
+    </method>
+
     <!-- Available modifiers:
          "set-refspec" (type 's')
          "set-revision" (type 's')
