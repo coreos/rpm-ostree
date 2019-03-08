@@ -111,6 +111,10 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
     {
       g_ptr_array_add (actions, "org.projectatomic.rpmostree1.repo-refresh");
     }
+  else if (g_strcmp0 (method_name, "ModifyYumRepo") == 0)
+    {
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.repo-modify");
+    }
   else if (g_strcmp0 (method_name, "Deploy") == 0)
     {
       g_ptr_array_add (actions, "org.projectatomic.rpmostree1.deploy");
@@ -916,6 +920,60 @@ out:
   return TRUE;
 }
 
+static gboolean
+os_handle_modify_yum_repo (RPMOSTreeOS *interface,
+                           GDBusMethodInvocation *invocation,
+                           const char *arg_repo_id,
+                           GVariant *arg_settings)
+{
+  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
+  const char *osname;
+  GError *local_error = NULL;
+
+  /* try to merge with an existing transaction, otherwise start a new one */
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto out;
+  if (transaction)
+    goto out;
+
+  if (!rpmostreed_sysroot_load_state (rpmostreed_sysroot_get (),
+                                      cancellable,
+                                      &ot_sysroot,
+                                      NULL,
+                                      &local_error))
+    goto out;
+
+  osname = rpmostree_os_get_name (interface);
+
+  transaction = rpmostreed_transaction_new_modify_yum_repo (invocation,
+                                                            ot_sysroot,
+                                                            osname,
+                                                            arg_repo_id,
+                                                            arg_settings,
+                                                            cancellable,
+                                                            &local_error);
+  if (transaction == NULL)
+    goto out;
+
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+
+out:
+  if (local_error != NULL)
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_modify_yum_repo (interface, invocation, client_address);
+    }
+
+  return TRUE;
+}
+
 /* This is an older variant of Cleanup, kept for backcompat */
 static gboolean
 os_handle_clear_rollback_target (RPMOSTreeOS *interface,
@@ -1668,6 +1726,7 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_get_deployment_boot_config = os_handle_get_deployment_boot_config;
   iface->handle_kernel_args                = os_handle_kernel_args;
   iface->handle_refresh_md                 = os_handle_refresh_md;
+  iface->handle_modify_yum_repo            = os_handle_modify_yum_repo;
   iface->handle_rollback                   = os_handle_rollback;
   iface->handle_set_initramfs_state        = os_handle_set_initramfs_state;
   iface->handle_update_deployment          = os_handle_update_deployment;

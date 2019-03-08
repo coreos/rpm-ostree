@@ -117,6 +117,16 @@ rpmostreed_transaction_new_refresh_md (GDBusMethodInvocation *invocation,
                                        const char            *osname,
                                        GCancellable          *cancellable,
                                        GError               **error);
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_modify_yum_repo (GDBusMethodInvocation *invocation,
+                                            OstreeSysroot         *sysroot,
+                                            const char            *osname,
+                                            const char            *repo_id,
+                                            GVariant              *settings,
+                                            GCancellable          *cancellable,
+                                            GError               **error);
+
 typedef enum {
   RPMOSTREE_TRANSACTION_KERNEL_ARG_FLAG_REBOOT = (1 << 0),
 } RpmOstreeTransactionKernelArgFlags;
