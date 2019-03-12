@@ -29,13 +29,18 @@ set -x
 # use the new pkglist data.
 
 # the usual update synthesis trickery
+noop_csum=$(vm_cmd ostree commit -b vmcheck --fsync=no \
+                --tree=ref=$(vm_get_booted_csum) \
+                --add-metadata-string=version=vDeployNoop)
+# put a pin on it so it doesn't get blown away
+vm_cmd ostree refs $noop_csum --create vmcheck_tmp/pinned
 vm_build_rpm pkg1
 vm_rpmostree install pkg1
 deploy_csum=$(vm_cmd ostree commit -b vmcheck --fsync=no \
                 --tree=ref=$(vm_get_pending_csum) \
                 --add-metadata-string=version=vDeploy)
 # put a pin on it so it doesn't get blown away
-vm_cmd ostree refs $deploy_csum --create vmcheck_tmp/pinned
+vm_cmd ostree refs $deploy_csum --create vmcheck_tmp/pinned2
 vm_build_rpm pkg2
 vm_rpmostree install pkg2
 update_csum=$(vm_cmd ostree commit -b vmcheck --fsync=no \
@@ -112,6 +117,15 @@ assert_file_has_content out.txt "pkg1"
 assert_file_has_content out.txt "pkg2"
 assert_file_has_content out.txt "pkg3"
 echo "ok GetCachedRebaseRpmDiff"
+
+call_dbus GetCachedDeployRpmDiff "vDeployNoop" [] > out.txt
+assert_file_has_content out.txt "<'vmcheck'>"
+assert_file_has_content out.txt "$noop_csum"
+assert_file_has_content out.txt "vDeployNoop"
+assert_not_file_has_content out.txt "pkg1"
+assert_not_file_has_content out.txt "pkg2"
+assert_not_file_has_content out.txt "pkg3"
+echo "ok GetCachedDeployRpmDiff no-op"
 
 # This is not a super realistic test since we don't actually download anything.
 # Still it checks that we properly update the cache

@@ -23,6 +23,8 @@
 #include <ostree.h>
 #include <rpmostree.h>
 
+#define RPMOSTREE_DB_DIFF_VARIANT_FORMAT G_VARIANT_TYPE ("a(sua{sv})")
+
 typedef enum {
   RPM_OSTREE_PACKAGE_ADDED,
   RPM_OSTREE_PACKAGE_REMOVED,

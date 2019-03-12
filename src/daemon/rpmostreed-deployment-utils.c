@@ -668,7 +668,7 @@ array_to_variant_new (const char *format, GPtrArray *array)
   g_ptr_array_sort (array, sort_pkgvariant_by_name);
 
   g_auto(GVariantBuilder) builder;
-  g_variant_builder_init (&builder, G_VARIANT_TYPE_ARRAY);
+  g_variant_builder_init (&builder, G_VARIANT_TYPE (format));
   for (guint i = 0; i < array->len; i++)
     g_variant_builder_add_value (&builder, array->pdata[i]);
   return g_variant_builder_end (&builder);
@@ -851,7 +851,7 @@ advisory_variant_new (DnfAdvisory *adv,
   g_variant_builder_add (&builder, "u", str2severity (dnf_advisory_get_severity (adv)));
 
   { g_auto(GVariantBuilder) pkgs_array;
-    g_variant_builder_init (&pkgs_array, G_VARIANT_TYPE_ARRAY);
+    g_variant_builder_init (&pkgs_array, G_VARIANT_TYPE ("as"));
     for (guint i = 0; i < pkgs->len; i++)
       g_variant_builder_add (&pkgs_array, "s", dnf_package_get_nevra (pkgs->pdata[i]));
     g_variant_builder_add_value (&builder, g_variant_builder_end (&pkgs_array));
@@ -862,7 +862,7 @@ advisory_variant_new (DnfAdvisory *adv,
   g_variant_dict_init (&dict, NULL);
 
   { g_auto(GVariantBuilder) cve_references;
-    g_variant_builder_init (&cve_references, G_VARIANT_TYPE_ARRAY);
+    g_variant_builder_init (&cve_references, G_VARIANT_TYPE ("a(ss)"));
 
     /* we maintain a set to make sure we only add the earliest ref for each CVE */
     g_autoptr(GHashTable) created_cves =
@@ -938,17 +938,8 @@ advisory_equal (gconstpointer v1,
 }
 
 /* Go through the list of @pkgs and check if there are any advisories open for them. If
- * no advisories are found, returns %NULL. Otherwise, returns a GVariant of the following
- * type:
-     'a(suuasa{sv})'
-        s     advisory id (e.g. FEDORA-2018-a1b2c3d4e5f6)
-        u     advisory kind (enum DnfAdvisoryKind)
-        u     advisory severity (enum RpmOstreeAdvisorySeverity)
-        as    list of packages (NEVRAs) contained in the advisory
-        a{sv} additional info about advisory
-          "cve_references" -> 'a(ss)'
-            s   title
-            s   URL
+ * no advisories are found, returns %NULL. Otherwise, returns a GVariant of the type
+ * RPMOSTREE_UPDATE_ADVISORY_GVARIANT_FORMAT.
  */
 static GVariant*
 advisories_variant (DnfSack    *sack,
@@ -988,7 +979,7 @@ advisories_variant (DnfSack    *sack,
     return NULL;
 
   g_auto(GVariantBuilder) builder;
-  g_variant_builder_init (&builder, G_VARIANT_TYPE_ARRAY);
+  g_variant_builder_init (&builder, RPMOSTREE_UPDATE_ADVISORY_GVARIANT_FORMAT);
   GLNX_HASH_TABLE_FOREACH_KV (advisories, DnfAdvisory*, advisory, GPtrArray*, pkgs)
     g_variant_builder_add_value (&builder, advisory_variant_new (advisory, pkgs));
   return g_variant_ref_sink (g_variant_builder_end (&builder));
