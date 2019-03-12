@@ -106,6 +106,9 @@ static RpmOstreeCommand commands[] = {
   { "rpm", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
            RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     NULL, rpmostree_builtin_db },
+  /* Compat with dnf */
+  { "remove", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+    NULL, rpmostree_builtin_uninstall },
   { "makecache", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     NULL, rpmostree_builtin_refresh_md },
   /* Hidden */
