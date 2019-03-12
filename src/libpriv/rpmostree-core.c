@@ -1670,7 +1670,8 @@ install_pkg_from_cache (RpmOstreeContext *self,
    * DnfRepo. We could do this all in-memory though it doesn't seem like libsolv has an
    * appropriate API for this. */
   g_autofree char *rpm = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir.path, nevra);
-  DnfPackage *pkg = dnf_sack_add_cmdline_package (dnf_context_get_sack (self->dnfctx), rpm);
+  g_autoptr(DnfPackage) pkg =
+    dnf_sack_add_cmdline_package (dnf_context_get_sack (self->dnfctx), rpm);
   if (!pkg)
     return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
 
@@ -1714,7 +1715,7 @@ add_remaining_pkgcache_pkgs (RpmOstreeContext *self,
         return FALSE;
 
       g_autofree char *rpm = g_strdup_printf ("%s/metarpm/%s.rpm", self->tmpdir.path, nevra);
-      DnfPackage *pkg = dnf_sack_add_cmdline_package (sack, rpm);
+      g_autoptr(DnfPackage) pkg = dnf_sack_add_cmdline_package (sack, rpm);
       if (!pkg)
         return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
     }
