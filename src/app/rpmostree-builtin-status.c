@@ -712,8 +712,8 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
       if (active_removals_nevra->len > 0 )
         {
           g_ptr_array_add (active_removals_nevra, NULL);
-          print_packages("RemovedBasePackages", max_key_len,
-                         (const char *const*)active_removals_nevra->pdata, NULL);
+          print_packages ("RemovedBasePackages", max_key_len,
+                          (const char *const*)active_removals_nevra->pdata, NULL);
         }
     }
 
