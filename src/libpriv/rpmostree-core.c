@@ -1655,11 +1655,12 @@ check_goal_solution (RpmOstreeContext *self,
 }
 
 static gboolean
-install_pkg_from_cache (RpmOstreeContext *self,
-                        const char       *nevra,
-                        const char       *sha256,
-                        GCancellable     *cancellable,
-                        GError          **error)
+add_pkg_from_cache (RpmOstreeContext *self,
+                    const char       *nevra,
+                    const char       *sha256,
+                    DnfPackage       **out_pkg,
+                    GCancellable     *cancellable,
+                    GError          **error)
 {
   if (!checkout_pkg_metadata_by_nevra (self, nevra, sha256, cancellable, error))
     return FALSE;
@@ -1675,7 +1676,7 @@ install_pkg_from_cache (RpmOstreeContext *self,
   if (!pkg)
     return glnx_throw (error, "Failed to add local pkg %s to sack", nevra);
 
-  hy_goal_install (dnf_context_get_goal (self->dnfctx), pkg);
+  *out_pkg = g_steal_pointer (&pkg);
   return TRUE;
 }
 
@@ -1872,20 +1873,9 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       g_assert_cmpint (g_strv_length (removed_base_pkgnames), ==, 0);
     }
 
-  /* Handle packages to remove */
-  g_autoptr(GPtrArray) removed_pkgnames = g_ptr_array_new ();
-  for (char **it = removed_base_pkgnames; it && *it; it++)
-    {
-      const char *pkgname = *it;
-      g_assert (!self->rojig_pure);
-      if (!dnf_context_remove (dnfctx, pkgname, error))
-        return FALSE;
-
-      g_ptr_array_add (removed_pkgnames, (gpointer)pkgname);
-    }
-
   /* track cached pkgs already added to the sack so far */
-  g_autoptr(GHashTable) already_added = g_hash_table_new (g_str_hash, g_str_equal);
+  g_autoptr(GHashTable) local_pkgs_to_install =
+    g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_object_unref);
 
   /* Handle packages to replace */
   g_autoptr(GPtrArray) replaced_nevras = g_ptr_array_new ();
@@ -1897,11 +1887,13 @@ rpmostree_context_prepare (RpmOstreeContext *self,
         return FALSE;
 
       g_assert (!self->rojig_pure);
-      if (!install_pkg_from_cache (self, nevra, sha256, cancellable, error))
+
+      g_autoptr(DnfPackage) pkg = NULL;
+      if (!add_pkg_from_cache (self, nevra, sha256, &pkg, cancellable, error))
         return FALSE;
 
       g_ptr_array_add (replaced_nevras, (gpointer)nevra);
-      g_hash_table_add (already_added, (gpointer)nevra);
+      g_hash_table_insert (local_pkgs_to_install, (gpointer)nevra, g_steal_pointer (&pkg));
     }
 
   /* For each new local package, tell libdnf to add it to the goal */
@@ -1913,10 +1905,12 @@ rpmostree_context_prepare (RpmOstreeContext *self,
         return FALSE;
 
       g_assert (!self->rojig_pure);
-      if (!install_pkg_from_cache (self, nevra, sha256, cancellable, error))
+
+      g_autoptr(DnfPackage) pkg = NULL;
+      if (!add_pkg_from_cache (self, nevra, sha256, &pkg, cancellable, error))
         return FALSE;
 
-      g_hash_table_add (already_added, (gpointer)nevra);
+      g_hash_table_insert (local_pkgs_to_install, (gpointer)nevra, g_steal_pointer (&pkg));
     }
 
   /* If we're in cache-only mode, add all the remaining pkgs now. We do this *after* the
@@ -1925,11 +1919,32 @@ rpmostree_context_prepare (RpmOstreeContext *self,
    * directly linked to a cached pkg, so we need to teach libdnf about them beforehand. */
   if (self->pkgcache_only)
     {
-      if (!add_remaining_pkgcache_pkgs (self, already_added, cancellable, error))
+      if (!add_remaining_pkgcache_pkgs (self, local_pkgs_to_install, cancellable, error))
         return FALSE;
     }
 
-  /* Loop over each named package, and tell libdnf to add it to the goal */
+  /* Now that we're done adding stuff to the sack, we can actually mark pkgs for install and
+   * uninstall. We don't want to mix those two steps, otherwise we might confuse libdnf,
+   * see: https://github.com/rpm-software-management/libdnf/issues/700 */
+
+  /* First, handle packages to remove */
+  g_autoptr(GPtrArray) removed_pkgnames = g_ptr_array_new ();
+  for (char **it = removed_base_pkgnames; it && *it; it++)
+    {
+      const char *pkgname = *it;
+      g_assert (!self->rojig_pure);
+      if (!dnf_context_remove (dnfctx, pkgname, error))
+        return FALSE;
+
+      g_ptr_array_add (removed_pkgnames, (gpointer)pkgname);
+    }
+
+  /* Then, handle local packages to install */
+  HyGoal goal = dnf_context_get_goal (dnfctx);
+  GLNX_HASH_TABLE_FOREACH_V (local_pkgs_to_install, DnfPackage*, pkg)
+    hy_goal_install (goal,  pkg);
+
+  /* And finally, handle repo packages to install */
   g_autoptr(GPtrArray) missing_pkgs = NULL;
   for (char **it = pkgnames; it && *it; it++)
     {
@@ -1963,7 +1978,6 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   if (!self->rojig_pure)
     {
-      HyGoal goal = dnf_context_get_goal (dnfctx);
       DnfGoalActions actions = DNF_INSTALL | DNF_ALLOW_UNINSTALL;
 
       gboolean recommends;
