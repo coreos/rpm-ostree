@@ -189,14 +189,11 @@ rpm_ostree_db_diff_variant (OstreeRepo *repo,
   g_ptr_array_sort (found, rpm_ostree_db_diff_variant_compare_by_type);
 
   GVariantBuilder builder;
-  g_variant_builder_init (&builder, G_VARIANT_TYPE_ARRAY);
+  g_variant_builder_init (&builder, RPMOSTREE_DB_DIFF_VARIANT_FORMAT);
   for (guint i = 0; i < found->len; i++)
     g_variant_builder_add_value (&builder, found->pdata[i]);
 
-  if (found->len > 0)
-    *out_variant = g_variant_builder_end (&builder);
-  else
-    *out_variant = g_variant_new ("a(sua{sv})", NULL);
+  *out_variant = g_variant_builder_end (&builder);
   g_variant_ref_sink (*out_variant);
   return TRUE;
 }
