@@ -22,6 +22,9 @@ fi
 pkg_upgrade
 pkg_install_if_os centos epel-release
 pkg_install_builddeps rpm-ostree
+# XXX: new libdnf deps until next release
+pkg_install json-c-devel cppunit{,-devel} swig sqlite-devel \
+    libmodulemd1-devel libsmartcols-devel gpgme-devel
 # Mostly dependencies for tests
 pkg_install ostree{,-devel,-grub2} createrepo_c /usr/bin/jq PyYAML \
     libubsan libasan libtsan elfutils fuse sudo python-gobject-base \

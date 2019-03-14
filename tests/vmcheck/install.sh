@@ -18,7 +18,9 @@ ostree --version
 # We don't want to sync all of userspace, just things
 # that rpm-ostree links to or uses and tend to drift
 # in important ways.
-pkgs="libsolv"
+# XXX: We add libmodulemd manually for now until it's
+# part of the image.
+pkgs="libsolv libmodulemd1"
 if rpm -q zchunk-libs 2>/dev/null; then
     pkgs="${pkgs} zchunk-libs"
 fi

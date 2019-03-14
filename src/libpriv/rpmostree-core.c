@@ -425,10 +425,11 @@ rpmostree_context_new_system (OstreeRepo   *repo,
   dnf_context_set_solv_dir (self->dnfctx, RPMOSTREE_CORE_CACHEDIR RPMOSTREE_DIR_CACHE_SOLV);
   dnf_context_set_lock_dir (self->dnfctx, "/run/rpm-ostree/" RPMOSTREE_DIR_LOCK);
   dnf_context_set_user_agent (self->dnfctx, PACKAGE_NAME "/" PACKAGE_VERSION);
+  /* don't need SWDB: https://github.com/rpm-software-management/libdnf/issues/645 */
+  dnf_context_set_write_history (self->dnfctx, FALSE);
 
   dnf_context_set_check_disk_space (self->dnfctx, FALSE);
   dnf_context_set_check_transaction (self->dnfctx, FALSE);
-  dnf_context_set_yumdb_enabled (self->dnfctx, FALSE);
 
   return self;
 }

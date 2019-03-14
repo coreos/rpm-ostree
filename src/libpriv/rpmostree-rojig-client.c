@@ -34,8 +34,7 @@
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-output.h"
 // For the rojig Requires parsing
-#include <libdnf/dnf-reldep-private.hpp>
-#include <libdnf/dnf-sack-private.hpp>
+#include <libdnf/dnf-reldep-list.h>
 
 #include <string.h>
 #include <stdlib.h>
