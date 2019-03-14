@@ -3,4 +3,4 @@
 	url = https://gitlab.gnome.org/GNOME/libglnx.git
 [submodule "libdnf"]
 	path = libdnf
-	url = https://github.com/projectatomic/libdnf
+	url = https://github.com/rpm-software-management/libdnf

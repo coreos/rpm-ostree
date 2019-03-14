@@ -21,14 +21,14 @@
 ALL_LOCAL_HOOKS += libdnf-local
 libdnf-local:
 	cd libdnf-build && $(MAKE) $(if $(subst 0,,$(V)),VERBOSE=1,)
-	ln -sf libdnf-build/libdnf/libdnf.so.1 .
-libdnf.so.1: libdnf-local
-CLEANFILES += libdnf.so.1
+	ln -sf libdnf-build/libdnf/libdnf.so.2 .
+libdnf.so.2: libdnf-local
+CLEANFILES += libdnf.so.2
 GITIGNOREFILES += libdnf-build/
 
 install-libdnf-hook:
 	install -d -m 0755 $(DESTDIR)$(libdir)/rpm-ostree
-	install -m 0755 $$(readlink libdnf.so.1) $(DESTDIR)$(libdir)/rpm-ostree
+	install -m 0755 $$(readlink libdnf.so.2) $(DESTDIR)$(libdir)/rpm-ostree
 INSTALL_DATA_HOOKS += install-libdnf-hook
 
 clean-local: clean-local-dnf

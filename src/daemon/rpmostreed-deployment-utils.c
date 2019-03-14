@@ -937,6 +937,14 @@ advisory_equal (gconstpointer v1,
                       dnf_advisory_get_id ((DnfAdvisory*)v2));
 }
 
+/* adds noop-on-NULL semantics so we can steal in advisories_variant() */
+static void
+advisory_free (gpointer p)
+{
+  if (p)
+    dnf_advisory_free (p);
+}
+
 /* Go through the list of @pkgs and check if there are any advisories open for them. If
  * no advisories are found, returns %NULL. Otherwise, returns a GVariant of the type
  * RPMOSTREE_UPDATE_ADVISORY_GVARIANT_FORMAT.
@@ -946,7 +954,7 @@ advisories_variant (DnfSack    *sack,
                     GPtrArray  *pkgs)
 {
   g_autoptr(GHashTable) advisories =
-    g_hash_table_new_full (advisory_hash, advisory_equal, g_object_unref,
+    g_hash_table_new_full (advisory_hash, advisory_equal, advisory_free,
                            (GDestroyNotify)g_ptr_array_unref);
 
   /* libdnf provides pkg -> set of advisories, but we want advisory -> set of pkgs;
@@ -967,9 +975,12 @@ advisories_variant (DnfSack    *sack,
           GPtrArray *pkgs_in_advisory = g_hash_table_lookup (advisories, advisory);
           if (!pkgs_in_advisory)
             {
+              /* take it out of the array, transferring ownership to the hash table; there's
+               * g_ptr_array_steal_index() we could use, but it's still very new */
+              advisories_with_pkg->pdata[j] = NULL;
               pkgs_in_advisory =
                 g_ptr_array_new_with_free_func ((GDestroyNotify)g_object_unref);
-              g_hash_table_insert (advisories, g_object_ref (advisory), pkgs_in_advisory);
+              g_hash_table_insert (advisories, advisory, pkgs_in_advisory);
             }
           g_ptr_array_add (pkgs_in_advisory, g_object_ref (pkg));
         }
