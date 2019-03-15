@@ -29,7 +29,7 @@ if test -n "${OSTREE_NO_XATTRS:-}"; then
 fi
 
 build_rpm foo
-build_rpm fake-shell provides /bin/sh
+build_rpm fake-shell provides /usr/bin/sh
 
 cat > rpmmd.repos.d/test-repo.repo <<EOF
 [test-repo]
