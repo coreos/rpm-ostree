@@ -3,11 +3,11 @@ branches:
     - auto
     - try
 
-context: f28-codestyle
+context: f29-codestyle
 
 required: true
 container:
-  image: registry.fedoraproject.org/fedora:28
+  image: registry.fedoraproject.org/fedora:29
 
 tests:
   - ci/ci-commitmessage-submodules.sh
@@ -33,19 +33,19 @@ timeout: 60m
 
 ---
 
-context: f28-primary
+context: f29-primary
 inherit: true
 
 cluster:
   hosts:
     - name: vmcheck1
-      distro: fedora/28/atomic
+      distro: fedora/29/atomic
     - name: vmcheck2
-      distro: fedora/28/atomic
+      distro: fedora/29/atomic
     - name: vmcheck3
-      distro: fedora/28/atomic
+      distro: fedora/29/atomic
   container:
-    image: registry.fedoraproject.org/fedora:28
+    image: registry.fedoraproject.org/fedora:29
 
 env:
   HOSTS: vmcheck1 vmcheck2 vmcheck3
@@ -74,9 +74,9 @@ branches:
   - auto
   - try
 
-# NB: when bumping 28 here, also bump fedora.repo, and compose script
+# NB: when bumping 29 here, also bump compose script
 
-context: f28-compose1
+context: f29-compose1
 
 build: false
 
@@ -88,7 +88,7 @@ required: true
 # which we don't have right now; so just provision a VM and do a
 # docker --privileged run.
 host:
-  distro: fedora/28/atomic
+  distro: fedora/29/atomic
   # Compose tests are slow and should be parallelized
   specs:
     cpus: 4
@@ -105,7 +105,7 @@ tests:
     -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
-    registry.fedoraproject.org/fedora:28 /bin/sh -c
+    registry.fedoraproject.org/fedora:29 /bin/sh -c
     "cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && ./tests/compose"
 
 artifacts:
@@ -114,7 +114,7 @@ artifacts:
 ---
 
 inherit: true
-context: f28-compose2
+context: f29-compose2
 env:
   RPMOSTREE_COMPOSE_TEST_FILTER: even
 
@@ -125,21 +125,21 @@ branches:
   - auto
   - try
 
-context: f28-ex-container
+context: f29-ex-container
 build: false
 timeout: 30m
 required: false
 
-# See the f28-compose context for why we do things this way.
+# See the f29-compose context for why we do things this way.
 host:
-  distro: fedora/28/atomic
+  distro: fedora/29/atomic
 
 tests:
   - docker run --privileged --rm
     -e RPMOSTREE_COMPOSE_TEST_USE_REPOS=/etc/yum.repos.d.host
     -v /etc/yum.repos.d:/etc/yum.repos.d.host:ro
     -v $(pwd):/srv/code -w /srv/code
-    registry.fedoraproject.org/fedora:28 /bin/sh -c
+    registry.fedoraproject.org/fedora:29 /bin/sh -c
     "cp /etc/yum.repos.d.host/* /etc/yum.repos.d/ && ./ci/build.sh && make install && adduser unpriv && setfacl -m u:unpriv:rwX . && runuser -u unpriv ./tests/ex-container"
 
 artifacts:
@@ -157,7 +157,7 @@ timeout: 30m
 
 required: true
 container:
-  image: registry.fedoraproject.org/fedora:28
+  image: registry.fedoraproject.org/fedora:29
 
 env:
   # this corresponds to the DTS rustc version we want to support

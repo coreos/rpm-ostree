@@ -19,7 +19,7 @@ runcompose() {
 
 runcompose
 test -f treecompose.json
-test -f rojig-repo/x86_64/fedora-atomic-host-42-1.fc28.x86_64.rpm
+test -f rojig-repo/x86_64/fedora-atomic-host-42-1.fc29.x86_64.rpm
 echo "ok rojig ♲📦 initial"
 
 runcompose
@@ -29,5 +29,5 @@ echo "ok rojig no changes"
 pysetjsonmember "documentation" 'False'
 runcompose
 test -f treecompose.json
-test -f rojig-repo/x86_64/fedora-atomic-host-42.1-1.fc28.x86_64.rpm
+test -f rojig-repo/x86_64/fedora-atomic-host-42.1-1.fc29.x86_64.rpm
 echo "ok rojig dropped docs"
