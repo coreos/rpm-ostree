@@ -4,7 +4,7 @@
         "license": "MIT",
         "summary": "Fedora Atomic Host"
     },
-    "releasever": "28",
+    "releasever": "29",
 
     "repos": ["fedora", "updates"],
 

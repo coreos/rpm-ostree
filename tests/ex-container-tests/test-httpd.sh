@@ -12,7 +12,7 @@ ref=httpd
 packages=httpd;
 selinux=false
 repos=fedora;
-releasever=28
+releasever=29
 EOF
 
 # This one has non-root ownership in some of the dependencies, but we shouldn't

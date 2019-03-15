@@ -12,7 +12,7 @@ ref=bash
 packages=coreutils;bash;
 selinux=false
 repos=fedora;
-releasever=28
+releasever=29
 EOF
 
 rpm-ostree ex container assemble bash.conf
@@ -27,7 +27,7 @@ ref=bash-nodocs
 packages=coreutils;bash;
 selinux=false
 repos=fedora;
-releasever=28
+releasever=29
 documentation=false;
 EOF
 

@@ -4,7 +4,7 @@ set -xeuo pipefail
 
 dn=$(cd $(dirname $0) && pwd)
 . ${dn}/libcomposetest.sh
-releasever=28
+releasever=29
 
 # specifying the key but neither automatic_version_prefix nor
 # --add-metadata-string should cause no mutation
