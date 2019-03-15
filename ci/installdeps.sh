@@ -17,8 +17,6 @@ if [ "$id" == fedora ] && [ "$version_id" == 29 ]; then
         cat ${repo} | (while read line; do if echo "$line" | grep -qE -e '^enabled=1'; then echo "${excludes}"; fi; echo $line; done) > ${repo}.new
         mv ${repo}.new ${repo}
     done
-elif [ "$id" == centos ]; then
-    echo -e '[cahc]\nmetdata_expire=1m\nbaseurl=https://ci.centos.org/artifacts/sig-atomic/rdgo/centos-continuous/build\ngpgcheck=0\n' > /etc/yum.repos.d/cahc.repo
 fi
 
 pkg_upgrade
