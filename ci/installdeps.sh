@@ -14,7 +14,7 @@ if [ "$id" == fedora ] && [ "$version_id" == 29 ]; then
     # Until we fix https://github.com/rpm-software-management/libdnf/pull/149
     excludes='exclude=ostree ostree-libs ostree-grub2 rpm-ostree'
     for repo in /etc/yum.repos.d/fedora*.repo; do
-        cat ${repo} | (while read line; do if echo "$line" | grep -qE -e '^enabled=1'; then echo "${excludes}"; fi; echo $line; done) > ${repo}.new
+        cat ${repo} | (while IFS= read -r line; do if echo "$line" | grep -qE -e '^enabled=1'; then echo "${excludes}"; fi; echo "$line"; done) > ${repo}.new
         mv ${repo}.new ${repo}
     done
 fi
