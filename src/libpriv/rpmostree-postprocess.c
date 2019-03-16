@@ -950,6 +950,7 @@ postprocess_selinux_policy_store_location (int rootfs_dfd,
  */
 gboolean
 rpmostree_postprocess_final (int            rootfs_dfd,
+                             RORTreefile   *treefile_rs,
                              JsonObject    *treefile,
                              gboolean       unified_core_mode,
                              GCancellable  *cancellable,
