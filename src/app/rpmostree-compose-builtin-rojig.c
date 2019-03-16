@@ -519,7 +519,7 @@ impl_write_rojig (RpmOstreeRojigCompose *self,
     return FALSE;
   if (!rpmostree_rootfs_postprocess_common (self->rootfs_dfd, cancellable, error))
     return FALSE;
-  if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile, TRUE,
+  if (!rpmostree_postprocess_final (self->rootfs_dfd, self->treefile_rs, self->treefile, TRUE,
                                     cancellable, error))
     return FALSE;
 

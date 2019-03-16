@@ -86,6 +86,7 @@ rpmostree_prepare_rootfs_for_commit (int            src_rootfs_dfd,
 
 gboolean
 rpmostree_postprocess_final (int            rootfs_dfd,
+                             RORTreefile   *treefile_rs,
                              JsonObject    *treefile,
                              gboolean       unified_core_mode,
                              GCancellable  *cancellable,
