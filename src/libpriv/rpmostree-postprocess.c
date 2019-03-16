@@ -66,13 +66,19 @@ run_bwrap_mutably (int           rootfs_fd,
                    GError      **error)
 {
   /* For scripts, it's /etc, not /usr/etc */
-  if (!glnx_renameat (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
+  if (!glnx_fstatat_allow_noent (rootfs_fd, "etc", NULL, 0, error))
     return FALSE;
-  /* But leave a compat symlink, as we used to bind mount, so scripts
-   * could still use that too.
-   */
-  if (symlinkat ("../etc", rootfs_fd, "usr/etc") < 0)
-    return glnx_throw_errno_prefix (error, "symlinkat");
+  gboolean renamed_usretc = (errno == ENOENT);
+  if (renamed_usretc)
+    {
+      if (!glnx_renameat (rootfs_fd, "usr/etc", rootfs_fd, "etc", error))
+        return FALSE;
+      /* But leave a compat symlink, as we used to bind mount, so scripts
+       * could still use that too.
+       */
+      if (symlinkat ("../etc", rootfs_fd, "usr/etc") < 0)
+        return glnx_throw_errno_prefix (error, "symlinkat");
+    }
 
   RpmOstreeBwrapMutability mut =
     unified_core_mode ? RPMOSTREE_BWRAP_MUTATE_ROFILES : RPMOSTREE_BWRAP_MUTATE_FREELY;
@@ -102,10 +108,13 @@ run_bwrap_mutably (int           rootfs_fd,
     return FALSE;
 
   /* Remove the symlink and swap back */
-  if (!glnx_unlinkat (rootfs_fd, "usr/etc", 0, error))
-    return FALSE;
-  if (!glnx_renameat (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
-    return FALSE;
+  if (renamed_usretc)
+    {
+      if (!glnx_unlinkat (rootfs_fd, "usr/etc", 0, error))
+        return FALSE;
+      if (!glnx_renameat (rootfs_fd, "etc", rootfs_fd, "usr/etc", error))
+        return FALSE;
+    }
 
   return TRUE;
 }
