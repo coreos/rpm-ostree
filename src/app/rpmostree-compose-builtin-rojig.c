@@ -150,7 +150,6 @@ install_packages (RpmOstreeRojigCompose  *self,
   /* For unified core, we have a pkgcache repo. This may be auto-created under
    * the workdir, or live explicitly in the dir for --cache.
    */
-  glnx_autofd int host_rootfs_dfd = -1;
   self->pkgcache_repo = ostree_repo_create_at (self->cachedir_dfd, "pkgcache-repo",
                                                OSTREE_REPO_MODE_BARE_USER, NULL,
                                                cancellable, error);
