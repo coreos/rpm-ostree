@@ -11,7 +11,7 @@ if test "$(id -u)" = 0; then
     fatal "Don't run $0 as root"
 fi
 
-LOGDIR=${LOGDIR:-$(pwd)/ex-compose-logs}
+LOGDIR=${LOGDIR:-$(pwd)/ex-container-logs}
 
 tmpdir=$(mktemp -d /var/tmp/rpm-ostree-container.XXXXXX)
 touch ${tmpdir}/.tmpdir
