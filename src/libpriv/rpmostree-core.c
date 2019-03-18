@@ -3436,7 +3436,6 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
       if (fn_canonical)
         fn = fn_canonical;
 
-      g_autofree char *modified_fn = NULL;  /* May be used to override fn */
       /* /run and /var paths have already been translated to tmpfiles during
        * unpacking */
       if (g_str_has_prefix (fn, "run/") ||

@@ -1037,7 +1037,6 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
   g_autoptr(GVariant) new_commit = NULL;
   if (!ostree_repo_load_commit (self->repo, new_revision, &new_commit, NULL, error))
     return FALSE;
-  g_autoptr(GVariant) new_commit_inline_meta = g_variant_get_child_value (new_commit, 0);
 
   /* --write-commitid-to overrides writing the ref */
   if (self->ref && !opt_write_commitid_to)
