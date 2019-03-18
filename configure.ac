@@ -288,6 +288,7 @@ export cmake_args
 
 dnl I picked /usr/libexec/rpm-ostree just because we need an
 dnl arbitrary path - we don't actually install there.
+dnl Use `WITH_GIR=0`; it's our private libdnf bundle and we don't need the bindings.
 (set -euo pipefail; mkdir -p libdnf-build && cd libdnf-build &&
  set -x && 
  export CXXFLAGS &&
@@ -302,6 +303,7 @@ dnl arbitrary path - we don't actually install there.
      -DWITH_BINDINGS:BOOL=0 \
      -DWITH_HTML:BOOL=0 \
      -DWITH_MAN:BOOL=0 \
+     -DWITH_GIR:BOOL=0 \
      ${cmake_args} ../libdnf) || exit 1
 
 AC_CONFIG_FILES([
