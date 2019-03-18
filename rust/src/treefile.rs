@@ -396,7 +396,7 @@ fn treefile_parse_recurse<P: AsRef<Path>>(
 // Similar to the importer check but just checks for prefixes since
 // they're files, and also allows /etc since it's before conversion
 fn add_files_path_is_valid(path: &str) -> bool {
-    let path = path.trim_left_matches("/");
+    let path = path.trim_start_matches("/");
     (path.starts_with("usr/") && !path.starts_with("usr/local/"))
         || path.starts_with("etc/")
         || path.starts_with("bin/")

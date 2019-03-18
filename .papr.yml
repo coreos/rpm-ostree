@@ -160,8 +160,8 @@ container:
   image: registry.fedoraproject.org/fedora:29
 
 env:
-  # this corresponds to the DTS rustc version we want to support
-  RUST_MIN_VERSION: 1.29.2
+  # this corresponds to the latest Rust module available in el8
+  RUST_MIN_VERSION: 1.31.0
 
 tests:
   - ci/installdeps.sh
