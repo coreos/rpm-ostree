@@ -1014,7 +1014,7 @@ rpmostree_deployment_sanitycheck_true (int           rootfs_fd,
   if (getenv ("RPMOSTREE_SKIP_SANITYCHECK"))
     return TRUE;
 
-  GLNX_AUTO_PREFIX_ERROR ("sanitycheck", error);
+  GLNX_AUTO_PREFIX_ERROR ("Sanity-checking final rootfs", error);
   g_autoptr(RpmOstreeBwrap) bwrap =
     rpmostree_bwrap_new (rootfs_fd, RPMOSTREE_BWRAP_IMMUTABLE, error);
 
@@ -1061,6 +1061,8 @@ rpmostree_deployment_sanitycheck_rpmdb (int           rootfs_fd,
                                         GCancellable *cancellable,
                                         GError      **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Sanity-checking final rpmdb", error);
+
   g_autoptr(RpmOstreeRefSack) sack = rpmostree_get_refsack_for_root (rootfs_fd, ".", error);
   if (!sack)
     return FALSE;
