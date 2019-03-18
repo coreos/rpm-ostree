@@ -727,6 +727,12 @@ unprivileged_filter_cb (OstreeRepo         *repo,
       g_file_info_set_attribute_uint32 (file_info, "unix::mode", mode);
     }
 
+  /* HACK: Also special-case rpm's `/var/lib/rpm` here like in the privileged flow;
+   * otherwise libsolv can get confused (see
+   * https://github.com/projectatomic/rpm-ostree/pull/290) */
+  if (g_str_has_prefix (path, "/var/lib/rpm"))
+    return OSTREE_REPO_COMMIT_FILTER_SKIP;
+
   return OSTREE_REPO_COMMIT_FILTER_ALLOW;
 }
 
