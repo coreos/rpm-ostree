@@ -674,11 +674,12 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   if (gpg_enabled)
     rpmostree_print_gpg_info (signatures, opt_verbose, max_key_len);
 
+  gboolean is_pending_deployment =
+    (first && !is_booted && g_strcmp0 (os_name, booted_osname) == 0);
+
   /* Print rpm diff and advisories summary if this is a pending deployment matching the
    * deployment on which the cached update is based. */
-  if (first && !is_booted &&
-      g_strcmp0 (os_name, booted_osname) == 0 &&
-      g_strcmp0 (id, cached_update_deployment_id) == 0)
+  if (is_pending_deployment && g_strcmp0 (id, cached_update_deployment_id) == 0)
     {
       g_auto(GVariantDict) dict;
       g_variant_dict_init (&dict, cached_update);
@@ -690,6 +691,17 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
                                             opt_verbose_advisories, max_key_len, error))
         return FALSE;
       *out_printed_cached_update = TRUE;
+    }
+  else if (is_pending_deployment)
+    {
+      /* No cached update, but we can still print a diff summary */
+      const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
+      RpmOstreeDiffPrintFormat format =
+        opt_verbose ? RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED
+                    : RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY;
+      if (!rpmostree_print_treepkg_diff_from_sysroot_path (sysroot_path, format,
+                                                           max_key_len, NULL, error))
+        return FALSE;
     }
 
   /* print base overrides before overlays */
