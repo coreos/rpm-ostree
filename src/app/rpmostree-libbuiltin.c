@@ -100,27 +100,26 @@ rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
   OstreeDeployment *new_deployment = deployments->pdata[0];
   OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);
 
-  if (booted_deployment && new_deployment != booted_deployment)
-    {
-      g_autoptr(OstreeRepo) repo = NULL;
-      if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
-        return FALSE;
+  if (!booted_deployment || ostree_deployment_equal (booted_deployment, new_deployment))
+    return TRUE;
 
-      const char *from_rev = ostree_deployment_get_csum (booted_deployment);
-      const char *to_rev = ostree_deployment_get_csum (new_deployment);
+  g_autoptr(OstreeRepo) repo = NULL;
+  if (!ostree_sysroot_get_repo (sysroot, &repo, cancellable, error))
+    return FALSE;
 
-      g_autoptr(GPtrArray) removed = NULL;
-      g_autoptr(GPtrArray) added = NULL;
-      g_autoptr(GPtrArray) modified_old = NULL;
-      g_autoptr(GPtrArray) modified_new = NULL;
-      if (!rpm_ostree_db_diff (repo, from_rev, to_rev,
-                               &removed, &added, &modified_old, &modified_new,
-                               cancellable, error))
-        return FALSE;
+  const char *from_rev = ostree_deployment_get_csum (booted_deployment);
+  const char *to_rev = ostree_deployment_get_csum (new_deployment);
 
-      rpmostree_diff_print_formatted (removed, added, modified_old, modified_new);
-    }
+  g_autoptr(GPtrArray) removed = NULL;
+  g_autoptr(GPtrArray) added = NULL;
+  g_autoptr(GPtrArray) modified_old = NULL;
+  g_autoptr(GPtrArray) modified_new = NULL;
+  if (!rpm_ostree_db_diff (repo, from_rev, to_rev,
+                           &removed, &added, &modified_old, &modified_new,
+                           cancellable, error))
+    return FALSE;
 
+  rpmostree_diff_print_formatted (removed, added, modified_old, modified_new);
   return TRUE;
 }
 
