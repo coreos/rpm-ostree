@@ -55,6 +55,17 @@ vm_build_rpm pkg-to-replace
 vm_build_rpm pkg-to-replace-archtrans arch noarch
 vm_rpmostree install pkg-to-remove pkg-to-replace pkg-to-replace-archtrans
 
+# we should be able to see the diff in status now
+vm_rpmostree status > status.txt
+assert_file_has_content status.txt "Diff: 3 added"
+vm_rpmostree status -v > statusv.txt
+assert_file_has_content statusv.txt \
+  "Added:" \
+  "pkg-to-remove" \
+  "pkg-to-replace" \
+  "pkg-to-replace-archtrans"
+echo "ok db diff in status"
+
 booted_csum=$(vm_get_booted_csum)
 pending_csum=$(vm_get_pending_csum)
 check_diff $booted_csum $pending_csum \
