@@ -87,7 +87,8 @@ print_diff (OstreeRepo   *repo,
       if (g_str_equal (opt_format, "diff"))
         rpmostree_diff_print (removed, added, modified_old, modified_new);
       else if (g_str_equal (opt_format, "block"))
-        rpmostree_diff_print_formatted (removed, added, modified_old, modified_new);
+        rpmostree_diff_print_formatted (RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0,
+                                        removed, added, modified_old, modified_new);
       else
         return glnx_throw (error, "Format argument is invalid, pick one of: diff, block");
     }
