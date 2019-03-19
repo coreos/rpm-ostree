@@ -94,17 +94,8 @@ rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
   if (!ostree_sysroot_load (sysroot, cancellable, error))
     return FALSE;
 
-  return rpmostree_print_treepkg_diff (sysroot, cancellable, error);
-}
-
-/* Print the diff between the booted and pending deployments */
-gboolean
-rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
-                              GCancellable     *cancellable,
-                              GError          **error)
-{
   g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
-  g_assert (deployments->len > 1);
+  g_assert_cmpuint (deployments->len, >, 1);
 
   OstreeDeployment *new_deployment = deployments->pdata[0];
   OstreeDeployment *booted_deployment = ostree_sysroot_get_booted_deployment (sysroot);

@@ -62,11 +62,6 @@ rpmostree_has_new_default_deployment (RPMOSTreeOS *os_proxy,
                                       GVariant    *previous_deployment);
 
 gboolean
-rpmostree_print_treepkg_diff (OstreeSysroot    *sysroot,
-                              GCancellable     *cancellable,
-                              GError          **error);
-
-gboolean
 rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
                                                 GCancellable *cancellable,
                                                 GError **error);
