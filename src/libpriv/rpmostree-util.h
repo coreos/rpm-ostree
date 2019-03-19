@@ -113,8 +113,24 @@ rpmostree_generate_diff_summary (guint upgraded,
                                  guint removed,
                                  guint added);
 
+typedef enum {
+  RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY,       /* Diff: 1 upgraded, 2 downgraded, 3 removed, 4 added */
+  RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED,  /* Upgraded: ...
+                                                          ...
+                                                   Added: ...
+                                                          ...  */
+  RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE /* Upgraded:
+                                                   ...
+                                                   ...
+                                                 Added:
+                                                   ...
+                                                   ...  */
+} RpmOstreeDiffPrintFormat;
+
 void
-rpmostree_diff_print_formatted (GPtrArray *removed,
+rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
+                                guint      max_key_len,
+                                GPtrArray *removed,
                                 GPtrArray *added,
                                 GPtrArray *modified_old,
                                 GPtrArray *modified_new);

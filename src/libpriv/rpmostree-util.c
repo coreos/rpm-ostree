@@ -871,16 +871,16 @@ rpmostree_generate_diff_summary (guint upgraded,
 
 /* Given the result of rpm_ostree_db_diff(), print it in a nice formatted way for humans. */
 void
-rpmostree_diff_print_formatted (GPtrArray *removed,
+rpmostree_diff_print_formatted (RpmOstreeDiffPrintFormat format,
+                                guint      max_key_len,
+                                GPtrArray *removed,
                                 GPtrArray *added,
                                 GPtrArray *modified_old,
                                 GPtrArray *modified_new)
 {
-  gboolean first;
-
   g_assert_cmpuint (modified_old->len, ==, modified_new->len);
 
-  first = TRUE;
+  guint upgraded = 0;
   for (guint i = 0; i < modified_old->len; i++)
     {
       RpmOstreePackage *oldpkg = modified_old->pdata[i];
@@ -889,19 +889,31 @@ rpmostree_diff_print_formatted (GPtrArray *removed,
 
       if (rpm_ostree_package_cmp (oldpkg, newpkg) > 0)
         continue;
+      upgraded++;
 
-      if (first)
+      switch (format)
         {
-          g_print ("Upgraded:\n");
-          first = FALSE;
+        /* we deal with summary after; just need a count */
+        case RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY:
+          continue;
+        case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED:
+          g_print ("  %*s%s %s %s -> %s\n", max_key_len, i == 0 ? "Upgraded" : "",
+                   i == 0 ? ":" : " ", name, rpm_ostree_package_get_evr (oldpkg),
+                                             rpm_ostree_package_get_evr (newpkg));
+          break;
+        case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
+          if (i == 0)
+            g_print ("Upgraded:\n");
+          g_print ("  %s %s -> %s\n", name,
+                   rpm_ostree_package_get_evr (oldpkg),
+                   rpm_ostree_package_get_evr (newpkg));
+          break;
+        default:
+          g_assert_not_reached ();
         }
-
-      g_print ("  %s %s -> %s\n", name,
-               rpm_ostree_package_get_evr (oldpkg),
-               rpm_ostree_package_get_evr (newpkg));
     }
 
-  first = TRUE;
+  guint downgraded = 0;
   for (guint i = 0; i < modified_old->len; i++)
     {
       RpmOstreePackage *oldpkg = modified_old->pdata[i];
@@ -910,36 +922,80 @@ rpmostree_diff_print_formatted (GPtrArray *removed,
 
       if (rpm_ostree_package_cmp (oldpkg, newpkg) < 0)
         continue;
+      downgraded++;
 
-      if (first)
+      switch (format)
         {
-          g_print ("Downgraded:\n");
-          first = FALSE;
+        /* we deal with summary after; just need a count */
+        case RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY:
+          continue;
+        case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED:
+          g_print ("  %*s%s %s %s -> %s\n", max_key_len, i == 0 ? "Downgraded" : "",
+                   i == 0 ? ":" : " ", name, rpm_ostree_package_get_evr (oldpkg),
+                                             rpm_ostree_package_get_evr (newpkg));
+          break;
+        case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
+          if (i == 0)
+            g_print ("Downgraded:\n");
+          g_print ("  %s %s -> %s\n", name,
+                   rpm_ostree_package_get_evr (oldpkg),
+                   rpm_ostree_package_get_evr (newpkg));
+          break;
+        default:
+          g_assert_not_reached ();
         }
-
-      g_print ("  %s %s -> %s\n", name,
-               rpm_ostree_package_get_evr (oldpkg),
-               rpm_ostree_package_get_evr (newpkg));
     }
 
-  if (removed->len > 0)
-    g_print ("Removed:\n");
+  /* now that we have all the counts, we can handle the SUMMARY path */
+  if (format == RPMOSTREE_DIFF_PRINT_FORMAT_SUMMARY)
+    {
+      g_autofree char *diff_summary =
+        rpmostree_generate_diff_summary (upgraded, downgraded, removed->len, added->len);
+      if (strlen (diff_summary) > 0) /* only print if we have something to print */
+        g_print ("  %*s: %s\n", max_key_len, "Diff", diff_summary);
+      return;
+    }
+
   for (guint i = 0; i < removed->len; i++)
     {
       RpmOstreePackage *pkg = removed->pdata[i];
       const char *nevra = rpm_ostree_package_get_nevra (pkg);
 
-      g_print ("  %s\n", nevra);
+      switch (format)
+        {
+        case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED:
+          g_print ("  %*s%s %s\n", max_key_len, i == 0 ? "Removed" : "",
+                   i == 0 ? ":" : " ", nevra);
+          break;
+        case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
+          if (i == 0)
+            g_print ("Removed:\n");
+          g_print ("  %s\n", nevra);
+          break;
+        default:
+          g_assert_not_reached ();
+        }
     }
 
-  if (added->len > 0)
-    g_print ("Added:\n");
   for (guint i = 0; i < added->len; i++)
     {
       RpmOstreePackage *pkg = added->pdata[i];
       const char *nevra = rpm_ostree_package_get_nevra (pkg);
 
-      g_print ("  %s\n", nevra);
+      switch (format)
+        {
+        case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_ALIGNED:
+          g_print ("  %*s%s %s\n", max_key_len, i == 0 ? "Added" : "",
+                   i == 0 ? ":" : " ", nevra);
+          break;
+        case RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE:
+          if (i == 0)
+            g_print ("Added:\n");
+          g_print ("  %s\n", nevra);
+          break;
+        default:
+          g_assert_not_reached ();
+        }
     }
 }
 

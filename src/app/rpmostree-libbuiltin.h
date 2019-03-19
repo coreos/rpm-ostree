@@ -24,6 +24,8 @@
 
 #include "libglnx.h"
 
+#include "rpmostree-util.h"
+
 #include "rpm-ostreed-generated.h"
 
 G_BEGIN_DECLS
@@ -62,9 +64,11 @@ rpmostree_has_new_default_deployment (RPMOSTreeOS *os_proxy,
                                       GVariant    *previous_deployment);
 
 gboolean
-rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
-                                                GCancellable *cancellable,
-                                                GError **error);
+rpmostree_print_treepkg_diff_from_sysroot_path (const gchar   *sysroot_path,
+                                                RpmOstreeDiffPrintFormat format,
+                                                guint          max_key_len,
+                                                GCancellable  *cancellable,
+                                                GError       **error);
 
 void
 rpmostree_print_timestamp_version (const char  *version_string,

@@ -85,9 +85,11 @@ rpmostree_has_new_default_deployment (RPMOSTreeOS *os_proxy,
 
 /* Print the diff between the booted and pending deployments */
 gboolean
-rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
-                                                GCancellable *cancellable,
-                                                GError **error)
+rpmostree_print_treepkg_diff_from_sysroot_path (const gchar   *sysroot_path,
+                                                RpmOstreeDiffPrintFormat format,
+                                                guint          max_key_len,
+                                                GCancellable  *cancellable,
+                                                GError       **error)
 {
   g_autoptr(GFile) sysroot_file = g_file_new_for_path (sysroot_path);
   g_autoptr(OstreeSysroot) sysroot = ostree_sysroot_new (sysroot_file);
@@ -119,7 +121,8 @@ rpmostree_print_treepkg_diff_from_sysroot_path (const gchar *sysroot_path,
                            cancellable, error))
     return FALSE;
 
-  rpmostree_diff_print_formatted (removed, added, modified_old, modified_new);
+  rpmostree_diff_print_formatted (format, max_key_len,
+                                  removed, added, modified_old, modified_new);
   return TRUE;
 }
 
