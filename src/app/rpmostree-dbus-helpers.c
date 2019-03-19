@@ -1445,13 +1445,13 @@ rpmostree_print_diff_advisories (GVariant         *rpm_diff,
                                             upgraded, downgraded, removed, added);
   else
     {
-      g_autoptr(GString) diff_summary = g_string_new (NULL);
-      append_to_summary (diff_summary, "upgraded", g_variant_n_children (upgraded));
-      append_to_summary (diff_summary, "downgraded", g_variant_n_children (downgraded));
-      append_to_summary (diff_summary, "removed", g_variant_n_children (removed));
-      append_to_summary (diff_summary, "added", g_variant_n_children (added));
-      if (diff_summary->len > 0) /* only print if we have something to print */
-        rpmostree_print_kv ("Diff", max_key_len, diff_summary->str);
+      g_autofree char *diff_summary =
+        rpmostree_generate_diff_summary (g_variant_n_children (upgraded),
+                                         g_variant_n_children (downgraded),
+                                         g_variant_n_children (removed),
+                                         g_variant_n_children (added));
+      if (strlen (diff_summary) > 0) /* only print if we have something to print */
+        rpmostree_print_kv ("Diff", max_key_len, diff_summary);
     }
 
   return TRUE;

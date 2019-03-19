@@ -848,6 +848,27 @@ rpmostree_stdout_is_journal (void)
   return stdout_is_socket;
 }
 
+char*
+rpmostree_generate_diff_summary (guint upgraded,
+                                 guint downgraded,
+                                 guint removed,
+                                 guint added)
+{
+  guint args[] = { upgraded, downgraded, removed, added };
+  const char *arg_desc[] = { "upgraded", "downgraded", "removed", "added" };
+
+  g_autoptr(GString) summary = g_string_new (NULL);
+  for (guint i = 0; i < G_N_ELEMENTS (args); i++)
+    {
+      if (args[i] == 0)
+        continue;
+      if (summary->len > 0)
+        g_string_append (summary, ", ");
+      g_string_append_printf (summary, "%u %s", args[i], arg_desc[i]);
+    }
+  return g_string_free (g_steal_pointer (&summary), FALSE);
+}
+
 /* Given the result of rpm_ostree_db_diff(), print it in a nice formatted way for humans. */
 void
 rpmostree_diff_print_formatted (GPtrArray *removed,

@@ -107,6 +107,12 @@ gs_file_get_path_cached (GFile *file)
 
 gboolean rpmostree_stdout_is_journal (void);
 
+char*
+rpmostree_generate_diff_summary (guint upgraded,
+                                 guint downgraded,
+                                 guint removed,
+                                 guint added);
+
 void
 rpmostree_diff_print_formatted (GPtrArray *removed,
                                 GPtrArray *added,
