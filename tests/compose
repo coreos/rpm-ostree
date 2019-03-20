@@ -42,17 +42,21 @@ test ${uid} = ${datadir_owner}
 
 # Create a consistent cache of the RPMs
 echo "Preparing compose tests... $(date)"
-tmp_repo=${test_compose_datadir}/tmp-repo
 if test -z "${RPMOSTREE_COMPOSE_CACHEONLY:-}"; then
     setup_rpmmd_repos ${dn}/composedata
+    mkdir -p ${test_compose_datadir}
+    tmp_repo=${test_compose_datadir}/tmp-repo
     ostree --repo=${tmp_repo} init --mode=bare-user
-    # Ensure all subsequent tests have the RPMs
+    # Download the RPMs and cache them in `fedora-local`;
+    # they're needed by the rojig e2e tests.
     mkdir -p ${test_compose_datadir}/{fedora-local,cache}
     rpm-ostree compose --repo=${tmp_repo} tree --download-only-rpms --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json
     find ${test_compose_datadir}/cache/ -name '*.rpm' | while read f; do
-        mv $f ${test_compose_datadir}/fedora-local
+        ln $f ${test_compose_datadir}/fedora-local
     done
     (cd ${test_compose_datadir}/fedora-local && createrepo_c .)
+    # And also import the RPMs once
+    rpm-ostree compose --repo=${tmp_repo} tree --download-only --cache-only --cachedir=${test_compose_datadir} ${dn}/composedata/fedora-base.json
 fi
 echo "Done preparing compose tests! $(date)"
 rm ${tmp_repo} -rf

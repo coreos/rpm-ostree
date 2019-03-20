@@ -469,195 +469,6 @@ process_kernel_and_initramfs (int            rootfs_dfd,
   return TRUE;
 }
 
-static gboolean
-convert_var_to_tmpfiles_d_recurse (GOutputStream *tmpfiles_out,
-                                   int            dfd,
-                                   RpmOstreePasswdDB *pwdb,
-                                   GString       *prefix,
-                                   GCancellable  *cancellable,
-                                   GError       **error)
-{
-  g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
-  gsize bytes_written;
-
-  if (!glnx_dirfd_iterator_init_at (dfd, prefix->str + 1, TRUE, &dfd_iter, error))
-    return FALSE;
-
-  while (TRUE)
-    {
-      struct dirent *dent = NULL;
-      if (!glnx_dirfd_iterator_next_dent_ensure_dtype (&dfd_iter, &dent, cancellable, error))
-        return FALSE;
-      if (!dent)
-        break;
-
-      char filetype_c;
-      switch (dent->d_type)
-        {
-        case DT_DIR:
-          filetype_c = 'd';
-          break;
-        case DT_LNK:
-          filetype_c = 'L';
-          break;
-        case DT_REG:
-          /* nfs-utils in RHEL7; https://bugzilla.redhat.com/show_bug.cgi?id=1427537 */
-          if (g_str_has_prefix (prefix->str, "/var/lib/nfs"))
-            {
-              filetype_c = 'f';
-              break;
-            }
-          /* Fallthrough */
-        default:
-          if (!glnx_unlinkat (dfd_iter.fd, dent->d_name, 0, error))
-            return FALSE;
-          g_print ("Ignoring non-directory/non-symlink '%s/%s'\n",
-                   prefix->str,
-                   dent->d_name);
-          continue;
-        }
-
-      g_autoptr(GString) tmpfiles_d_buf = g_string_new ("");
-      g_string_append_c (tmpfiles_d_buf, filetype_c);
-      g_string_append_c (tmpfiles_d_buf, ' ');
-      g_string_append (tmpfiles_d_buf, prefix->str);
-      g_string_append_c (tmpfiles_d_buf, '/');
-      g_string_append (tmpfiles_d_buf, dent->d_name);
-
-      if (filetype_c == 'd' || filetype_c == 'f')
-        {
-          struct stat stbuf;
-          if (!glnx_fstatat (dfd_iter.fd, dent->d_name, &stbuf, AT_SYMLINK_NOFOLLOW, error))
-            return FALSE;
-
-          g_string_append_printf (tmpfiles_d_buf, " 0%02o", stbuf.st_mode & ~S_IFMT);
-          const char *user = rpmostree_passwddb_lookup_user (pwdb, stbuf.st_uid);
-          if (!user)
-            return glnx_throw (error, "Failed to find user '%u' for %s", stbuf.st_uid, dent->d_name);
-          const char *group = rpmostree_passwddb_lookup_group (pwdb, stbuf.st_gid);
-          if (!group)
-            return glnx_throw (error, "Failed to find group '%u' for %s", stbuf.st_gid, dent->d_name);
-          g_string_append_printf (tmpfiles_d_buf, " %s %s - -", user, group);
-
-          if (filetype_c == 'd')
-            {
-              /* Push prefix */
-              gsize prev_len = prefix->len;
-              g_string_append_c (prefix, '/');
-              g_string_append (prefix, dent->d_name);
-
-              if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, dfd, pwdb, prefix,
-                                                      cancellable, error))
-                return FALSE;
-
-              /* Pop prefix */
-              g_string_truncate (prefix, prev_len);
-            }
-        }
-      else
-        {
-          g_autofree char *link = glnx_readlinkat_malloc (dfd_iter.fd, dent->d_name, cancellable, error);
-          if (!link)
-            return FALSE;
-          g_string_append (tmpfiles_d_buf, " - - - - ");
-          g_string_append (tmpfiles_d_buf, link);
-
-        }
-
-      if (!glnx_unlinkat (dfd_iter.fd, dent->d_name,
-                          dent->d_type == DT_DIR ? AT_REMOVEDIR : 0, error))
-        return FALSE;
-
-      g_string_append_c (tmpfiles_d_buf, '\n');
-
-      if (!g_output_stream_write_all (tmpfiles_out, tmpfiles_d_buf->str,
-                                      tmpfiles_d_buf->len, &bytes_written,
-                                      cancellable, error))
-        return FALSE;
-    }
-
-  return TRUE;
-}
-
-static gboolean
-convert_var_to_tmpfiles_d (int            rootfs_dfd,
-                           GCancellable  *cancellable,
-                           GError       **error)
-{
-  GLNX_AUTO_PREFIX_ERROR ("Converting /var to tmpfiles.d", error);
-
-  g_autoptr(RpmOstreePasswdDB) pwdb = rpmostree_passwddb_open (rootfs_dfd, cancellable, error);
-  if (!pwdb)
-    return FALSE;
-
-  glnx_autofd int var_dfd = -1;
-  /* List of files that are known to possibly exist, but in practice
-   * things work fine if we simply ignore them.  Don't add something
-   * to this list unless you've verified it's handled correctly at
-   * runtime.  (And really both in CentOS and Fedora)
-   */
-  const char *known_state_files[] = {
-    "lib/systemd/random-seed", /* https://bugzilla.redhat.com/show_bug.cgi?id=789407 */
-    "lib/systemd/catalog/database",
-    "lib/plymouth/boot-duration",
-    "log/wtmp", /* These two are part of systemd's var.tmp */
-    "log/btmp",
-  };
-
-  if (!glnx_opendirat (rootfs_dfd, "var", TRUE, &var_dfd, error))
-    return FALSE;
-
-  /* We never want to traverse into /run when making tmpfiles since it's a tmpfs */
-  /* Note that in a Fedora root, /var/run is a symlink, though on el7, it can be a dir.
-   * See: https://github.com/projectatomic/rpm-ostree/pull/831 */
-  if (!glnx_shutil_rm_rf_at (var_dfd, "run", cancellable, error))
-    return FALSE;
-
-  /* Here, delete some files ahead of time to avoid emitting warnings
-   * for things that are known to be harmless.
-   */
-  for (guint i = 0; i < G_N_ELEMENTS (known_state_files); i++)
-    {
-      const char *path = known_state_files[i];
-      if (unlinkat (var_dfd, path, 0) < 0)
-        {
-          if (errno != ENOENT)
-            return glnx_throw_errno_prefix (error, "unlinkat(%s)", path);
-        }
-    }
-
-  /* Convert /var wholesale to tmpfiles.d. Note that with unified core, this
-   * code should no longer be necessary as we convert packages on import.
-   */
-  g_auto(GLnxTmpfile) tmpf = { 0, };
-  if (!glnx_open_tmpfile_linkable_at (rootfs_dfd, "usr/lib/tmpfiles.d", O_WRONLY | O_CLOEXEC,
-                                      &tmpf, error))
-    return FALSE;
-  g_autoptr(GOutputStream) tmpfiles_out = g_unix_output_stream_new (tmpf.fd, FALSE);
-  if (!tmpfiles_out)
-    return FALSE;
-
-  g_autoptr(GString) prefix = g_string_new ("/var");
-  if (!convert_var_to_tmpfiles_d_recurse (tmpfiles_out, rootfs_dfd, pwdb, prefix, cancellable, error))
-    return FALSE;
-
-  if (!g_output_stream_close (tmpfiles_out, cancellable, error))
-    return FALSE;
-
-  /* Make it world-readable, no reason why not to
-   * https://bugzilla.redhat.com/show_bug.cgi?id=1631794
-   */
-  if (!glnx_fchmod (tmpf.fd, 0644, error))
-    return FALSE;
-
-  if (!glnx_link_tmpfile_at (&tmpf, GLNX_LINK_TMPFILE_NOREPLACE,
-                             rootfs_dfd, "usr/lib/tmpfiles.d/rpm-ostree-1-autovar.conf",
-                             error))
-    return FALSE;
-
-  return TRUE;
-}
-
 /* SELinux uses PCRE pre-compiled regexps for binary caches, which can
  * fail if the version of PCRE on the host differs from the version
  * which generated the cache (in the target root).
@@ -1025,13 +836,29 @@ rpmostree_postprocess_final (int            rootfs_dfd,
         return glnx_prefix_error (error, "SELinux postprocess");
     }
 
-  if (!convert_var_to_tmpfiles_d (rootfs_dfd, cancellable, error))
-    return FALSE;
-
   if (!rpmostree_rootfs_prepare_links (rootfs_dfd, cancellable, error))
     return FALSE;
   if (!rpmostree_rootfs_postprocess_common (rootfs_dfd, cancellable, error))
     return FALSE;
+
+  /* Clean out /var */
+  { g_auto(GLnxDirFdIterator) dfd_iter = { 0, };
+
+    if (!glnx_dirfd_iterator_init_at (rootfs_dfd, "var", TRUE, &dfd_iter, error))
+      return FALSE;
+
+    while (TRUE)
+      {
+        struct dirent *dent = NULL;
+        if (!glnx_dirfd_iterator_next_dent (&dfd_iter, &dent, cancellable, error))
+          return FALSE;
+        if (!dent)
+          break;
+
+        if (!glnx_shutil_rm_rf_at (dfd_iter.fd, dent->d_name, cancellable, error))
+          return FALSE;
+      }
+  }
 
   g_print ("Adding rpm-ostree-0-integration.conf\n");
   /* This is useful if we're running in an uninstalled configuration, e.g.
