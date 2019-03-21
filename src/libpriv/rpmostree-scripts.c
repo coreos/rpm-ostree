@@ -663,7 +663,6 @@ run_script (const KnownRpmScriptKind *rpmscript,
                               enable_fuse, cancellable, error);
 }
 
-#ifdef BUILDOPT_HAVE_RPM_FILETRIGGERS
 static gboolean
 write_filename (FILE *f, GString *prefix,
                 GError **error)
@@ -769,7 +768,6 @@ find_and_write_matching_files (int rootfs_fd, const char *pattern,
 
   return TRUE;
 }
-#endif
 
 /* Execute a supported script.  Note that @cancellable
  * does not currently kill a running script subprocess.
@@ -823,7 +821,6 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
                                       GCancellable *cancellable,
                                       GError      **error)
 {
-#ifdef BUILDOPT_HAVE_RPM_FILETRIGGERS
   const char *pkg_name = headerGetString (hdr, RPMTAG_NAME);
   g_assert (pkg_name);
 
@@ -992,7 +989,6 @@ rpmostree_transfiletriggers_run_sync (Header        hdr,
                        "EXEC_TIME_MS=%" G_GUINT64_FORMAT, elapsed_ms,
                        NULL);
     }
-#endif
   return TRUE;
 }
 

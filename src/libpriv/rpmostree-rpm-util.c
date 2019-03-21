@@ -1002,13 +1002,7 @@ rpmostree_pkg_array_compare (DnfPackage **p_pkg1,
 void
 rpmostree_sighandler_reset_cleanup (RpmSighandlerResetCleanup *cleanup)
 {
-  /* Forcibly override rpm/librepo SIGINT handlers.  We always operate
-   * in a fully idempotent/atomic mode, and can be killed at any time.
-   */
-#ifndef BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY
-  signal (SIGINT, SIG_DFL);
-  signal (SIGTERM, SIG_DFL);
-#endif
+  /* No-op now that we have rpmsqSetInterruptSafety_ */
 }
 
 static void
