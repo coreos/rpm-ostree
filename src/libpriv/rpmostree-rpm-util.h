@@ -72,9 +72,7 @@ G_DEFINE_AUTO_CLEANUP_FREE_FUNC(Header, headerFree, NULL)
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmfi, rpmfiFree, NULL)
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmts, rpmtsFree, NULL)
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmdbMatchIterator, rpmdbFreeIterator, NULL)
-#ifdef BUILDOPT_HAVE_RPMFILES
 G_DEFINE_AUTO_CLEANUP_FREE_FUNC(rpmfiles, rpmfilesFree, NULL)
-#endif
 
 void
 rpmhdrs_diff_prnt_diff (struct RpmHeadersDiff *diff);

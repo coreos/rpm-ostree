@@ -412,9 +412,7 @@ rpmostree_context_new_system (OstreeRepo   *repo,
    * otherwise we keep calling _rpmostree_reset_rpm_sighandlers() in
    * various places.
    */
-#ifdef BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY
   rpmsqSetInterruptSafety (FALSE);
-#endif
 
   self->dnfctx = dnf_context_new ();
   DECLARE_RPMSIGHANDLER_RESET;
@@ -2490,12 +2488,8 @@ static void
 add_te_files_to_ht (rpmte        te,
                     GHashTable  *ht)
 {
-#ifdef BUILDOPT_HAVE_RPMFILES /* use rpmfiles API if possible, rpmteFI is deprecated */
   g_auto(rpmfiles) files = rpmteFiles (te);
   g_auto(rpmfi) fi = rpmfilesIter (files, RPMFI_ITER_FWD);
-#else
-  rpmfi fi = rpmteFI (te); /* rpmfi owned by rpmte */
-#endif
 
   while (rpmfiNext (fi) >= 0)
     {
@@ -2592,11 +2586,7 @@ handle_file_dispositions (RpmOstreeContext *self,
         continue;
 
       /* try to only load what we need: filenames and colors */
-      rpmfiFlags flags = RPMFI_FLAGS_QUERY;
-#ifdef BUILDOPT_HAVE_RPMFILES /* we're using this more as a "if not on CentOS" switch */
-      /* this is even more restrictive that QUERY */
-      flags = RPMFI_FLAGS_ONLY_FILENAMES;
-#endif
+      rpmfiFlags flags = RPMFI_FLAGS_ONLY_FILENAMES;
       flags &= ~RPMFI_NOFILECOLORS;
 
       g_auto(rpmfi) fi = rpmfiNew (ts, h, RPMTAG_BASENAMES, flags);
@@ -2828,15 +2818,11 @@ delete_package_from_root (RpmOstreeContext *self,
                           GCancellable *cancellable,
                           GError      **error)
 {
-#ifdef BUILDOPT_HAVE_RPMFILES /* use rpmfiles API if possible, rpmteFI is deprecated */
   g_auto(rpmfiles) files = rpmteFiles (pkg);
   /* NB: new librpm uses RPMFI_ITER_BACK here to empty out dirs before deleting them using
    * unlink/rmdir. Older rpm doesn't support this API, so rather than doing some fancy
    * compat, we just use shutil_rm_rf anyway since we now skip over shared dirs/files. */
   g_auto(rpmfi) fi = rpmfilesIter (files, RPMFI_ITER_FWD);
-#else
-  rpmfi fi = rpmteFI (pkg); /* rpmfi owned by rpmte */
-#endif
 
   while (rpmfiNext (fi) >= 0)
     {
@@ -4232,9 +4218,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
    * just the header in metadata - we don't have the exact original content to
    * provide again.
    */
-#ifdef BUILDOPT_HAVE_NEW_RPM_VERIFY
   rpmtsSetVfyLevel (rpmdb_ts, 0);
-#endif
   /* We're just writing the rpmdb, hence _JUSTDB. Also disable the librpm
    * SELinux plugin since rpm-ostree (and ostree) have fundamentally better
    * code.

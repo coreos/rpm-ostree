@@ -123,17 +123,7 @@ PKGDEP_RPMOSTREE_CFLAGS="-I $(pwd)/libdnf -I $(pwd)/libdnf-build $PKGDEP_RPMOSTR
 PKGDEP_RPMOSTREE_LIBS="-L$(pwd)/libdnf-build/libdnf -ldnf $PKGDEP_RPMOSTREE_LIBS"
 
 dnl This is the current version in Fedora 25.
-AS_IF([pkg-config --atleast-version=4.13.0.1 rpm], [
-  have_modern_rpm=true
-  AC_DEFINE([BUILDOPT_HAVE_RPMSQ_SET_INTERRUPT_SAFETY], 1, [Set to 1 if we have interrupt safety API])
-  AC_DEFINE([BUILDOPT_HAVE_RPM_FILETRIGGERS], 1, [Set to 1 if we have file triggers])
-  AC_DEFINE([BUILDOPT_HAVE_RPMFILES], 1, [Set to 1 if we have rpmfiles API])
-], [have_modern_rpm=false])
-dnl See usage
-AS_IF([pkg-config --atleast-version=4.14.2 rpm], [
-  AC_DEFINE([BUILDOPT_HAVE_NEW_RPM_VERIFY], 1, [Set to 1 if we have rpmtsSetVfyLevel])
-])
-librpm_version="$(pkg-config rpm --modversion)"
+AS_IF([pkg-config --atleast-version=4.14.2 rpm], [], [AC_MSG_ERROR([librpm 4.14.2 required])])
 
 AC_ARG_ENABLE(dfd_over_dbus,
               AS_HELP_STRING([--enable-dfd-over-dbus],
@@ -317,7 +307,6 @@ AC_OUTPUT
 echo "
     $PACKAGE $VERSION
 
-    built with modern RPM (e.g. Fedora 25+): $have_modern_rpm ($librpm_version)
     nts name:                                $enable_new_name
     compose tooling:                         $enable_compose_tooling
     introspection:                           $found_introspection
