@@ -125,14 +125,6 @@ PKGDEP_RPMOSTREE_LIBS="-L$(pwd)/libdnf-build/libdnf -ldnf $PKGDEP_RPMOSTREE_LIBS
 dnl This is the current version in Fedora 25.
 AS_IF([pkg-config --atleast-version=4.14.2 rpm], [], [AC_MSG_ERROR([librpm 4.14.2 required])])
 
-AC_ARG_ENABLE(dfd_over_dbus,
-              AS_HELP_STRING([--enable-dfd-over-dbus],
-                             [Enable passing dfd over D-Bus (default: yes)]),,
-              [enable_dfd_over_dbus=yes])
-AS_IF([test x$enable_dfd_over_dbus = xyes], [
-    AC_DEFINE(HAVE_DFD_OVER_DBUS, 1, [Define if we can pass dfd over D-Bus])
-])
-
 AC_PATH_PROG([XSLTPROC], [xsltproc])
 
 GLIB_TESTS
@@ -303,5 +295,4 @@ echo "
     gtk-doc:                                 $enable_gtk_doc
     rust:                                    $rust_debug_release (lto: ${enable_lto:-no})
     cbindgen:                                ${cbindgen:-internal}
-    use dfd over D-Bus:                      $enable_dfd_over_dbus
 "
