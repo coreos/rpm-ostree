@@ -17,6 +17,9 @@
  * Boston, MA 02111-1307, USA.
  */
 
+/* XXX: This file is lifted from src/libostree/ostree-kernel-args.c, though there are some
+ * new APIs. Should upstream those and dedupe. */
+
 #include "config.h"
 
 #include "rpmostree-kargs-process.h"
@@ -35,21 +38,12 @@ split_keyeq (char *arg)
   char *eq;
 
   eq = strchr (arg, '=');
-  if (eq)
-    {
-      /* Note key/val are in one malloc block,
-       * so we don't free val...
-       */
-      *eq = '\0';
-      return eq+1;
-    }
-  else
-    {
-      /* ...and this allows us to insert a constant
-       * string.
-       */
-      return "";
-    }
+  if (eq == NULL)
+    return NULL;
+
+  // Note: key/val are in a single allocation block, so we don't free val.
+  *eq = '\0';
+  return eq+1;
 }
 
 static gboolean
@@ -573,7 +567,10 @@ _ostree_kernel_args_to_strv (OstreeKernelArgs *kargs)
         {
           const char *value = values->pdata[j];
 
-          g_ptr_array_add (strv, g_strconcat (key, "=", value, NULL));
+          if (value == NULL)
+            g_ptr_array_add (strv, g_strconcat (key, NULL));
+          else
+            g_ptr_array_add (strv, g_strconcat (key, "=", value, NULL));
         }
     }
   g_ptr_array_add (strv, NULL);
@@ -605,14 +602,12 @@ _ostree_kernel_args_to_string (OstreeKernelArgs *kargs)
           else
             g_string_append_c (buf, ' ');
 
-          if (value && *value)
+          g_string_append (buf, key);
+          if (value != NULL)
             {
-              g_string_append (buf, key);
               g_string_append_c (buf, '=');
               g_string_append (buf, value);
             }
-          else
-            g_string_append (buf, key);
         }
     }
 
