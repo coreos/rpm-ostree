@@ -337,6 +337,7 @@ run_script_in_bwrap_container (int rootfs_fd,
   gboolean created_run_ostree_booted = FALSE;
   glnx_autofd int stdout_fd = -1;
   glnx_autofd int stderr_fd = -1;
+  struct stat stbuf;
 
   /* TODO - Create a pipe and send this to bwrap so it's inside the
    * tmpfs.  Note the +1 on the path to skip the leading /.
@@ -387,6 +388,9 @@ run_script_in_bwrap_container (int rootfs_fd,
     goto out;
   /* Scripts can see a /var with compat links like alternatives */
   rpmostree_bwrap_var_tmp_tmpfs (bwrap);
+
+  if (glnx_fstatat (rootfs_fd, "usr/lib/opt", &stbuf, AT_SYMLINK_NOFOLLOW, NULL) && S_ISDIR(stbuf.st_mode))
+    rpmostree_bwrap_append_bwrap_argv (bwrap, "--symlink", "usr/lib/opt", "/opt", NULL);
 
   /* Add ostree-booted API; some scriptlets may work differently on OSTree systems; e.g.
    * akmods. Just create it manually; /run is usually tmpfs, but scriptlets shouldn't be

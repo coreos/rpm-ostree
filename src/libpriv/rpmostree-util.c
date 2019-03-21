@@ -222,6 +222,8 @@ rpmostree_translate_path_for_ostree (const char *path)
    */
   else if (g_str_has_prefix (path, VAR_SELINUX_TARGETED_PATH))
     return g_strconcat ("usr/etc/selinux/targeted/", path + strlen (VAR_SELINUX_TARGETED_PATH), NULL);
+  else if (g_str_has_prefix (path, "opt/"))
+    return g_strconcat ("usr/lib/", path, NULL);
 
   return NULL;
 }
