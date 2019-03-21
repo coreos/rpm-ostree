@@ -1562,18 +1562,7 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                  G_VARIANT_TYPE("ah"));
   int local_repo_remote_idx = -1;
   /* See related blurb in get_modifiers_variant() */
-#ifdef HAVE_DFD_OVER_DBUS
   g_variant_dict_lookup (self->modifiers, "ex-local-repo-remote", "h", &local_repo_remote_idx);
-#else
-  const char *local_repo_remote =
-    vardict_lookup_ptr (self->modifiers, "ex-local-repo-remote", "&s");
-  if (local_repo_remote)
-    {
-      if (!glnx_opendirat (AT_FDCWD, local_repo_remote, TRUE,
-                           &self->local_repo_remote_dfd, error))
-        return FALSE;
-    }
-#endif
 
   /* First in the fd list is local RPM fds, which are relevant in the
    * `install foo.rpm` case and the `override replace foo.rpm` case. Let's make sure that
