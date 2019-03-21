@@ -63,6 +63,7 @@ struct RpmOstreeImporter
   off_t cpio_offset;
   GHashTable *rpmfi_overrides;
   GHashTable *doc_files;
+  GHashTable *opt_files;
   GString *tmpfiles_d;
   RpmOstreeImporterFlags flags;
   gboolean unpacking_as_nonroot;
@@ -100,6 +101,7 @@ rpmostree_importer_finalize (GObject *object)
 
   g_clear_pointer (&self->rpmfi_overrides, (GDestroyNotify)g_hash_table_unref);
   g_clear_pointer (&self->doc_files, (GDestroyNotify)g_hash_table_unref);
+  g_clear_pointer (&self->opt_files, (GDestroyNotify)g_hash_table_unref);
 
   g_free (self->hdr_sha256);
 
@@ -278,6 +280,7 @@ rpmostree_importer_new_take_fd (int                     *fd,
   ret->hdr = g_steal_pointer (&hdr);
   ret->cpio_offset = cpio_offset;
   ret->pkg = pkg ? g_object_ref (pkg) : NULL;
+  ret->opt_files = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, NULL);
 
   if (flags & RPMOSTREE_IMPORTER_FLAGS_NODOCS)
     ret->doc_files = g_hash_table_new_full (g_str_hash, g_str_equal,
@@ -685,8 +688,12 @@ compose_filter_cb (OstreeRepo         *repo,
     }
   else if (!error_was_set)
     {
-      /* And ensure the RPM installs into supported paths */
-      if (!path_is_ostree_compliant (path))
+      /* And ensure the RPM installs into supported paths.
+       * Note that we rewrite opt in handle_translate_pathname, but
+       * this gets called with the old path, so handle it here too. */
+      if (!(path_is_ostree_compliant (path) ||
+            g_str_equal (path, "opt") ||
+            g_str_has_prefix (path, "opt/")))
         {
           if ((self->flags & RPMOSTREE_IMPORTER_FLAGS_SKIP_EXTRANEOUS) == 0)
             g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
@@ -797,6 +804,17 @@ xattr_cb (OstreeRepo  *repo,
   return NULL;
 }
 
+static char *
+get_first_path_element (const char *rel_path)
+{
+  const char *end = strchr(rel_path, '/');
+
+  if (end == NULL)
+    return g_strdup (rel_path);
+  else
+    return g_strndup (rel_path, end - rel_path);
+}
+
 /* Given a path in an RPM archive, possibly translate it
  * for ostree convention.
  */
@@ -806,6 +824,12 @@ handle_translate_pathname (OstreeRepo   *repo,
                            const char   *path,
                            gpointer      user_data)
 {
+  RpmOstreeImporter *self = user_data;
+
+  if (g_str_has_prefix (path, "opt/"))
+    g_hash_table_add (self->opt_files,
+                      get_first_path_element (path + strlen("opt/")));
+
   return rpmostree_translate_path_for_ostree (path);
 }
 
@@ -867,6 +891,13 @@ import_rpm_to_repo (RpmOstreeImporter *self,
     {
       g_propagate_error (error, cb_error);
       return FALSE;
+    }
+
+  GLNX_HASH_TABLE_FOREACH (self->opt_files, const char*, filename)
+    {
+      g_string_append_printf (self->tmpfiles_d,
+                              "L /opt/%s - - - - /usr/lib/opt/%s\n",
+                              filename, filename);
     }
 
   /* Handle any data we've accumulated data to write to tmpfiles.d.
