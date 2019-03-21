@@ -192,17 +192,7 @@ AC_ARG_WITH(bubblewrap,
               [with_bubblewrap=/usr/bin/bwrap])
 AC_DEFINE_UNQUOTED(WITH_BUBBLEWRAP_PATH, ["$with_bubblewrap"], [Define to bubblewrap path])
 
-dnl Some distributions may want to support the client tooling, but not
-dnl the server side.
-AC_ARG_ENABLE(compose-tooling,
-              AS_HELP_STRING([--enable-compose-tooling],
-                             [Build compose tooling]),,
-              [enable_compose_tooling=yes])
-AM_CONDITIONAL(BUILDOPT_COMPOSE_TOOLING, [test x$enable_compose_tooling = xyes])
-AS_IF([test x$enable_compose_tooling = xyes], [
-    AC_DEFINE(HAVE_COMPOSE_TOOLING, 1, [Define if we are building compose tooling])
-])
-if test x$enable_compose_tooling != xno; then RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES compose"; fi
+RPM_OSTREE_FEATURES="$RPM_OSTREE_FEATURES compose"
 
 dnl PKG_CHECK_VAR added to pkg-config 0.28 (though it's already in the new pkgconf; this
 dnl backport is more for el7)
@@ -308,7 +298,6 @@ echo "
     $PACKAGE $VERSION
 
     nts name:                                $enable_new_name
-    compose tooling:                         $enable_compose_tooling
     introspection:                           $found_introspection
     bubblewrap:                              $with_bubblewrap
     gtk-doc:                                 $enable_gtk_doc

@@ -58,17 +58,12 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-polkit-agent.c \
 	src/app/rpmostree-polkit-agent.h \
 	src/app/rpmostree-builtin-kargs.c \
-	$(NULL)
-
-if BUILDOPT_COMPOSE_TOOLING
-rpm_ostree_SOURCES += \
 	src/app/rpmostree-compose-builtin-tree.c \
 	src/app/rpmostree-compose-builtin-rojig.c \
 	src/app/rpmostree-composeutil.c \
 	src/app/rpmostree-composeutil.h \
 	src/app/rpmostree-builtin-compose.c \
 	$(NULL)
-endif
 
 rpm_ostree_CFLAGS = $(AM_CFLAGS) -I$(srcdir)/src/app -I$(srcdir)/src/daemon \
 	-I$(srcdir)/src/lib -I$(srcdir)/src/libpriv -I$(libglnx_srcpath) \

@@ -35,12 +35,10 @@
 #include "libglnx.h"
 
 static RpmOstreeCommand commands[] = {
-#ifdef HAVE_COMPOSE_TOOLING
   { "compose", RPM_OSTREE_BUILTIN_FLAG_LOCAL_CMD |
                RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT,
     "Commands to compose a tree",
     rpmostree_builtin_compose },
-#endif
   { "cleanup", 0,
     "Clear cached/pending data",
     rpmostree_builtin_cleanup },
