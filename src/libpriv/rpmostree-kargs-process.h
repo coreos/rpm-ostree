@@ -72,7 +72,7 @@ gboolean _ostree_kernel_args_delete (OstreeKernelArgs *kargs,
 
 
 gboolean _ostree_kernel_args_delete_key_entry (OstreeKernelArgs *kargs,
-                                               char             *key,
+                                               const char       *key,
                                                GError          **error);
 
 
