@@ -57,7 +57,7 @@ echo "ok delete a single key/value pair"
 if vm_rpmostree kargs --delete APPENDARG 2>err.txt; then
     assert_not_reached "Delete A key with multiple values unexpectedly succeeded"
 fi
-assert_file_has_content err.txt "Unable to delete argument 'APPENDARG' with multiple values"
+assert_file_has_content err.txt "Multiple values for key 'APPENDARG' found"
 echo "ok failed to delete key with multiple values"
 
 vm_kargs_now --delete APPENDARG=VALAPPEND
@@ -82,7 +82,7 @@ echo "ok replacing one key/value pair"
 if vm_rpmostree kargs --replace=REPLACE_MULTI_TEST=ERR 2>err.txt; then
     assert_not_reached "Replace a key with multiple values unexpectedly succeeded"
 fi
-assert_file_has_content err.txt "Unable to replace argument 'REPLACE_MULTI_TEST' with multiple values"
+assert_file_has_content err.txt "Multiple values for key 'REPLACE_MULTI_TEST' found"
 echo "ok failed to replace key with multiple values"
 
 # Test for replacing  one of the values for multi value keys
