@@ -1159,6 +1159,12 @@ rpmostree_context_download_metadata (RpmOstreeContext *self,
     g_signal_handler_disconnect (hifstate, progress_sigid);
   }
 
+  /* For now, we don't natively support modules. But we still want to be able to install
+   * modular packages if the repos are enabled, but libdnf automatically filters them out.
+   * So for now, let's tell libdnf that we do want to be able to see them. See:
+   * https://github.com/projectatomic/rpm-ostree/issues/1435 */
+  dnf_sack_set_module_excludes (dnf_context_get_sack (self->dnfctx), NULL);
+
   return TRUE;
 }
 
