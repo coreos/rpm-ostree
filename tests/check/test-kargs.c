@@ -43,8 +43,8 @@ test_kargs_delete (void)
 
   /* Delete a key with only one value should succeed by only specifying key */
   ret = _ostree_kernel_args_delete (karg, "single_key", &error);
-  g_assert (ret);
   g_assert_no_error (error);
+  g_assert (ret);
   /* verify the value array is properly updated */
   GPtrArray *kargs_array = _ostree_kernel_arg_get_key_array (karg);
   g_assert (!_ostree_ptr_array_find (kargs_array, "single_key", &key_index));
@@ -52,8 +52,8 @@ test_kargs_delete (void)
 
   /* Delete a key/value pair by specifying correct key=value should succeed */
   ret = _ostree_kernel_args_delete (karg, "test=secondval", &error);
-  g_assert (ret);
   g_assert_no_error (error);
+  g_assert (ret);
   g_assert (!check_string_existance (karg, "test=secondval"));
 
 }
@@ -91,16 +91,16 @@ test_kargs_replace (void)
    * Also note, we also allow ''(empty string) valid to be a value
    */
   ret = _ostree_kernel_args_new_replace (karg, "single_key=newvalue", &error);
-  g_assert (ret);
   g_assert_no_error (error);
+  g_assert (ret);
   g_assert (check_string_existance (karg, "single_key=newvalue"));
 
   /* Replace with input key=value=newvalue if key and value both
    * exist, the action should succeed
    */
   ret = _ostree_kernel_args_new_replace (karg, "test=firstval=newval", &error);
-  g_assert (ret);
   g_assert_no_error (error);
+  g_assert (ret);
   g_assert (check_string_existance (karg, "test=newval"));
 }
 
