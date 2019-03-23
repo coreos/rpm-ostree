@@ -55,6 +55,7 @@ static char *opt_workdir;
 static gboolean opt_workdir_tmpfs;
 static char *opt_cachedir;
 static gboolean opt_download_only;
+static gboolean opt_download_only_rpms;
 static gboolean opt_force_nocache;
 static gboolean opt_cache_only;
 static gboolean opt_unified_core;
@@ -79,7 +80,8 @@ static GOptionEntry install_option_entries[] = {
   { "force-nocache", 0, 0, G_OPTION_ARG_NONE, &opt_force_nocache, "Always create a new OSTree commit, even if nothing appears to have changed", NULL },
   { "cache-only", 0, 0, G_OPTION_ARG_NONE, &opt_cache_only, "Assume cache is present, do not attempt to update it", NULL },
   { "cachedir", 0, 0, G_OPTION_ARG_STRING, &opt_cachedir, "Cached state", "CACHEDIR" },
-  { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Like --dry-run, but download RPMs as well; requires --cachedir", NULL },
+  { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Like --dry-run, but download and import RPMs as well; requires --cachedir", NULL },
+  { "download-only-rpms", 0, 0, G_OPTION_ARG_NONE, &opt_download_only_rpms, "Like --dry-run, but download RPMs as well; requires --cachedir", NULL },
   { "ex-unified-core", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_unified_core, "Compat alias for --unified-core", NULL }, // Compat
   { "unified-core", 0, 0, G_OPTION_ARG_NONE, &opt_unified_core, "Use new \"unified core\" codepath", NULL },
   { "proxy", 0, 0, G_OPTION_ARG_STRING, &opt_proxy, "HTTP proxy", "PROXY" },
@@ -371,9 +373,9 @@ install_packages (RpmOstreeTreeComposeContext  *self,
   if (!rpmostree_context_download (self->corectx, cancellable, error))
     return FALSE;
 
-  if (opt_download_only)
+  if (opt_download_only || opt_download_only_rpms)
     {
-      if (opt_unified_core)
+      if (opt_unified_core && !opt_download_only_rpms)
         {
           if (!rpmostree_context_import (self->corectx, cancellable, error))
             return FALSE;
@@ -725,7 +727,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
   /* Without specifying --cachedir we'd just toss the data we download, so let's
    * catch that.
    */
-  if (opt_download_only && !opt_unified_core && !opt_cachedir)
+  if ((opt_download_only || opt_download_only_rpms) && !opt_unified_core && !opt_cachedir)
     return glnx_throw (error, "--download-only can only be used with --cachedir");
 
   if (getuid () != 0)
@@ -818,7 +820,7 @@ impl_install_tree (RpmOstreeTreeComposeContext *self,
                            &new_inputhash, cancellable, error))
       return FALSE;
 
-    gboolean is_dry_run = opt_dry_run || opt_download_only;
+    gboolean is_dry_run = opt_dry_run || (opt_download_only || opt_download_only_rpms);
     if (unmodified)
       {
         const char *force_nocache_msg = "; use --force-nocache to override";
