@@ -40,7 +40,7 @@ prepare_compose_test() {
     rm -f composedata/*.repo
     cat > composedata/fedora-local.repo <<EOF
 [fedora-local]
-baseurl=${test_compose_datadir}/cache
+baseurl=${test_compose_datadir}/fedora-local
 enabled=1
 gpgcheck=0
 EOF
