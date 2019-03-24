@@ -47,8 +47,7 @@ if test -z "${RPMOSTREE_COMPOSE_CACHEONLY:-}"; then
     setup_rpmmd_repos ${dn}/composedata
     ostree --repo=${tmp_repo} init --mode=bare-user
     # Ensure all subsequent tests have the RPMs
-    mkdir -p ${test_compose_datadir}/fedora-local
-    mkdir ${test_compose_datadir}/cache
+    mkdir -p ${test_compose_datadir}/{fedora-local,cache}
     rpm-ostree compose --repo=${tmp_repo} tree --download-only-rpms --cachedir=${test_compose_datadir}/cache ${dn}/composedata/fedora-base.json
     find ${test_compose_datadir}/cache/ -name '*.rpm' | while read f; do
         mv $f ${test_compose_datadir}/fedora-local
