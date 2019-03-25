@@ -9,7 +9,7 @@ dnl Then git push origin v201X.XX.
 dnl Then create the xz tarball from `make -f Makefile.dist-packaging dist-snapshot`.
 dnl Then create a GitHub release for the new release tag and attach the tarball.
 m4_define([year_version], [2019])
-m4_define([release_version], [2])
+m4_define([release_version], [3])
 m4_define([package_version], [year_version.release_version])
 AC_INIT([rpm-ostree], [package_version], [atomic-devel@projectatomic.io])
 AC_CONFIG_HEADER([config.h])
