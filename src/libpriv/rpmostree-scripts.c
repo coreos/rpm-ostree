@@ -111,7 +111,9 @@ static const char glibc_langpacks_script[] =
   "fi\n";
 
 static const RpmOstreeLuaReplacement lua_replacements[] = {
-  /* The release packages are implemented Lua for
+  /* This code only applies to Fedora <= 29, see:
+   * https://src.fedoraproject.org/rpms/fedora-release/c/617b1bed348d92cba04443f8cce1486639a114f0?branch=master
+   * Previously, the release packages were implemented Lua for
    * unnecessary reasons.  This doesn't fully generalize obviously arbitrarly
    * release packages, but anyone doing an exampleos-release package and that
    * wants to use rpm-ostree can just do `ln` in shell script in their package
@@ -131,6 +133,8 @@ static const RpmOstreeLuaReplacement lua_replacements[] = {
     "/usr/bin/sh",
     "set -euo pipefail\n"
     "ln -sf os.release.d/os-release-workstation /usr/lib/os-release\n"
+    "preset=/usr/lib/os.release.d/presets/80-workstation.preset\n"
+    "if [ -f \"${preset}\" ]; then ln -sr ${preset} /usr/lib/systemd/system-preset && systemctl preset -q sshd.socket sshd.service cups.socket cups.path cups.service; fi\n"
   },
   { "fedora-release.post",
     "/usr/bin/sh",
