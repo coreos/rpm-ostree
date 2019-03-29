@@ -202,16 +202,6 @@ rpmostreed_refspec_parse_partial (const gchar *new_provided_refspec,
         }
     }
 
-  if (g_strcmp0 (origin_remote, remote) == 0 &&
-      g_strcmp0 (origin_ref, ref) == 0)
-    {
-      g_set_error (error, RPM_OSTREED_ERROR,
-                   RPM_OSTREED_ERROR_INVALID_REFSPEC,
-                   "Old and new refs are equal: %s:%s",
-                   remote, ref);
-      return FALSE;
-    }
-
   if (remote == NULL)
       *out_refspec = g_steal_pointer (&ref);
   else
