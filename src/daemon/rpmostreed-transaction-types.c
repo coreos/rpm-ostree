@@ -100,9 +100,6 @@ change_origin_refspec (GVariantDict    *options,
                                          error))
     return FALSE;
 
-  if (strcmp (current_refspec, new_refspec) == 0)
-    return glnx_throw (error, "Old and new refs are equal: %s", new_refspec);
-
   /* Re-classify after canonicalization to ensure we handle TYPE_CHECKSUM */
   if (!rpmostree_refspec_classify (new_refspec, &refspectype, &refspecdata, error))
     return FALSE;
@@ -128,6 +125,15 @@ change_origin_refspec (GVariantDict    *options,
     }
   else
     {
+      /* We only throw this error for non-checksum rebases; for
+       * RHEL CoreOS + https://github.com/openshift/pivot/
+       * we've had it happen that the same ostree commit can end up
+       * in separate oscontainers.  We want to support changing
+       * the custom origin that might point to the same commit.
+       */
+      if (strcmp (current_refspec, new_refspec) == 0)
+        return glnx_throw (error, "Old and new refs are equal: %s", new_refspec);
+
       if (!rpmostree_origin_set_rebase (origin, new_refspec, error))
         return FALSE;
     }
