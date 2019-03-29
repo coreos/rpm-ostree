@@ -4035,6 +4035,25 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                            &var_lib_rpm_statedir, error))
         return FALSE;
 
+      /* Workaround for https://github.com/projectatomic/rpm-ostree/issues/1804 */
+      gboolean created_etc_selinux_config = FALSE;
+      static const char usr_etc_selinux_config[] = "usr/etc/selinux/config";
+      if (!glnx_fstatat_allow_noent (tmprootfs_dfd, "usr/etc/selinux", NULL, 0, error))
+        return FALSE;
+      if (errno == 0)
+        {
+          if (!glnx_fstatat_allow_noent (tmprootfs_dfd, usr_etc_selinux_config, NULL, 0, error))
+            return FALSE;
+          if (errno == ENOENT)
+            {
+              if (!glnx_file_replace_contents_at (tmprootfs_dfd, usr_etc_selinux_config, (guint8*)"", 0,
+                                                  GLNX_FILE_REPLACE_NODATASYNC,
+                                                  cancellable, error))
+                return FALSE;
+              created_etc_selinux_config = TRUE;
+            }
+        }
+
       /* We're technically deviating from RPM here by running all the %pre's
        * beforehand, rather than each package's %pre & %post in order. Though I
        * highly doubt this should cause any issues. The advantage of doing it
@@ -4061,6 +4080,13 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           }
         rpmostree_output_progress_end_msg (&task, "%u done", n_pre_scripts_run);
       }
+
+      /* Now undo our hack above */
+      if (created_etc_selinux_config)
+        {
+          if (!glnx_unlinkat (tmprootfs_dfd, usr_etc_selinux_config, 0, error))
+            return FALSE;
+        }
 
       if (faccessat (tmprootfs_dfd, "etc/passwd", F_OK, 0) == 0)
         {
