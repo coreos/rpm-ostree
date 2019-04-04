@@ -36,7 +36,7 @@ current=$(vm_get_booted_csum)
 vm_cmd rpm-ostree db list "${current}" > current-dblist.txt
 kernel_release=4.18.16-300.fc29.x86_64
 assert_not_file_has_content current-dblist.txt $kernel_release
-grep -E '^ kernel-4' current-dblist.txt  | sed -e 's,^ *,,' > orig-kernel.txt
+grep -E '^ kernel-5' current-dblist.txt  | sed -e 's,^ *,,' > orig-kernel.txt
 assert_streq "$(wc -l < orig-kernel.txt)" "1"
 orig_kernel=$(cat orig-kernel.txt)
 URL_ROOT="https://dl.fedoraproject.org/pub/fedora/linux/releases/29/Everything/x86_64/os/Packages/k"
