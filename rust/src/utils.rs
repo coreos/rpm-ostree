@@ -116,13 +116,14 @@ mod tests {
 
 mod ffi {
     use super::*;
-    use ffiutil::*;
     use glib;
     use glib_sys;
     use libc;
     use std::ffi::CString;
     use std::os::unix::io::IntoRawFd;
     use std::ptr;
+
+    use crate::ffiutil::*;
 
     #[no_mangle]
     pub extern "C" fn ror_download_to_fd(

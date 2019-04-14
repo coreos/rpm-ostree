@@ -39,15 +39,15 @@ extern crate serde_json;
 extern crate serde_yaml;
 
 mod ffiutil;
-
-mod treefile;
-pub use treefile::*;
-mod composepost;
-pub use composepost::*;
-mod progress;
-pub use progress::*;
-mod journal;
-pub use journal::*;
-mod utils;
-pub use utils::*;
 mod openat_utils;
+
+mod composepost;
+pub use self::composepost::*;
+mod journal;
+pub use self::journal::*;
+mod progress;
+pub use self::progress::*;
+mod treefile;
+pub use self::treefile::*;
+mod utils;
+pub use self::utils::*;
