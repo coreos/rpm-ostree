@@ -168,9 +168,10 @@ mod tests {
 
 mod ffi {
     use super::*;
-    use ffiutil::*;
     use libc;
     use std::sync::MutexGuard;
+
+    use crate::ffiutil::*;
 
     fn assert_empty(m: &MutexGuard<Option<ProgressState>>) {
         if let Some(ref state) = **m {

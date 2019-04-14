@@ -2,6 +2,7 @@
 name = "rpmostree-rust"
 version = "0.1.0"
 authors = ["Colin Walters <walters@verbum.org>", "Jonathan Lebon <jonathan@jlebon.com>"]
+edition = "2018"
 
 [dependencies]
 failure = "0.1.3"

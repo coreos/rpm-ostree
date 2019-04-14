@@ -19,14 +19,13 @@
 use gio_sys;
 use glib_sys;
 use libc;
+use openat;
 use std::ffi::CString;
 use std::ffi::{CStr, OsStr};
 use std::fmt::Display;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::io::{FromRawFd, IntoRawFd};
 use std::ptr;
-
-use openat;
 
 /* Helper functions for FFI between C and Rust.
  *

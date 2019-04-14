@@ -30,7 +30,8 @@ use std::collections::HashMap;
 use std::io::prelude::*;
 use std::path::Path;
 use std::{collections, fs, io};
-use utils;
+
+use crate::utils;
 
 const INCLUDE_MAXDEPTH: u32 = 50;
 
@@ -990,13 +991,13 @@ packages:
 
 mod ffi {
     use super::*;
-    use ffiutil::*;
     use glib_sys;
     use libc;
-
     use std::io::Seek;
     use std::os::unix::io::{AsRawFd, RawFd};
     use std::{fs, io, ptr};
+
+    use crate::ffiutil::*;
 
     // Some of our file descriptors may be read multiple times.
     // We try to consistently seek to the start to make that
