@@ -38,6 +38,7 @@ extern crate serde;
 extern crate serde_json;
 extern crate serde_yaml;
 
+// pub(crate) utilities
 mod ffiutil;
 mod openat_utils;
 

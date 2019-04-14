@@ -57,7 +57,7 @@ use std::ptr;
 /// Convert a C (UTF-8) string to a &str; will panic
 /// if it isn't valid UTF-8.  Note the lifetime of
 /// the return value must be <= the pointer.
-pub fn ffi_view_nullable_str<'a>(s: *const libc::c_char) -> Option<&'a str> {
+pub(crate) fn ffi_view_nullable_str<'a>(s: *const libc::c_char) -> Option<&'a str> {
     if s.is_null() {
         None
     } else {
@@ -68,27 +68,27 @@ pub fn ffi_view_nullable_str<'a>(s: *const libc::c_char) -> Option<&'a str> {
 
 /// Given a NUL-terminated C string, copy it to an owned
 /// String.  Will panic if the C string is not valid UTF-8.
-pub fn ffi_new_string(s: *const libc::c_char) -> String {
+pub(crate) fn ffi_new_string(s: *const libc::c_char) -> String {
     let buf = ffi_view_bytestring(s);
     String::from_utf8(buf.into()).expect("ffi_new_string: valid utf-8")
 }
 
 /// View a C "bytestring" (NUL terminated) as a Rust byte array.
 /// Panics if `s` is `NULL`.
-pub fn ffi_view_bytestring<'a>(s: *const libc::c_char) -> &'a [u8] {
+pub(crate) fn ffi_view_bytestring<'a>(s: *const libc::c_char) -> &'a [u8] {
     assert!(!s.is_null());
     unsafe { CStr::from_ptr(s) }.to_bytes()
 }
 
 /// View a C "bytestring" (NUL terminated) as a Rust OsStr.
 /// Panics if `s` is `NULL`.
-pub fn ffi_view_os_str<'a>(s: *const libc::c_char) -> &'a OsStr {
+pub(crate) fn ffi_view_os_str<'a>(s: *const libc::c_char) -> &'a OsStr {
     OsStr::from_bytes(ffi_view_bytestring(s))
 }
 
 // View `fd` as an `openat::Dir` instance.  Lifetime of return value
 // must be less than or equal to that of parameter.
-pub fn ffi_view_openat_dir(fd: libc::c_int) -> openat::Dir {
+pub(crate) fn ffi_view_openat_dir(fd: libc::c_int) -> openat::Dir {
     let src = unsafe { openat::Dir::from_raw_fd(fd) };
     let r = src.sub_dir(".").expect("ffi_view_openat_dir");
     let _ = src.into_raw_fd();
@@ -98,7 +98,7 @@ pub fn ffi_view_openat_dir(fd: libc::c_int) -> openat::Dir {
 /// Assert that a raw pointer is not `NULL`, and cast it to a Rust reference
 /// with the static lifetime - it has to be static as we can't tell Rust about
 /// our lifetimes from the C side.
-pub fn ref_from_raw_ptr<T>(p: *mut T) -> &'static mut T {
+pub(crate) fn ref_from_raw_ptr<T>(p: *mut T) -> &'static mut T {
     assert!(!p.is_null());
     unsafe { &mut *p }
 }
@@ -109,7 +109,7 @@ pub fn ref_from_raw_ptr<T>(p: *mut T) -> &'static mut T {
 // return a Result (using the std Error).
 // TODO: Try upstreaming this into the glib crate?
 
-pub fn error_to_glib<E: Display>(e: &E, gerror: *mut *mut glib_sys::GError) {
+pub(crate) fn error_to_glib<E: Display>(e: &E, gerror: *mut *mut glib_sys::GError) {
     if gerror.is_null() {
         return;
     }
@@ -125,7 +125,10 @@ pub fn error_to_glib<E: Display>(e: &E, gerror: *mut *mut glib_sys::GError) {
 }
 
 #[allow(dead_code)]
-pub fn int_glib_error<T, E>(res: Result<T, E>, gerror: *mut *mut glib_sys::GError) -> libc::c_int
+pub(crate) fn int_glib_error<T, E>(
+    res: Result<T, E>,
+    gerror: *mut *mut glib_sys::GError,
+) -> libc::c_int
 where
     E: Display,
 {
@@ -138,7 +141,10 @@ where
     }
 }
 
-pub fn ptr_glib_error<T, E>(res: Result<Box<T>, E>, gerror: *mut *mut glib_sys::GError) -> *mut T
+pub(crate) fn ptr_glib_error<T, E>(
+    res: Result<Box<T>, E>,
+    gerror: *mut *mut glib_sys::GError,
+) -> *mut T
 where
     E: Display,
 {
