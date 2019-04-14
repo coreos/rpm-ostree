@@ -16,7 +16,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-use failure::Fallible;
+use failure::{bail, Fallible};
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::{fs, io};

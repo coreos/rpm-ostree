@@ -24,6 +24,7 @@ use c_utf8::CUtf8Buf;
 use failure::Fallible;
 use failure::ResultExt;
 use openat;
+use serde_derive::{Deserialize, Serialize};
 use serde_json;
 use serde_yaml;
 use std::collections::HashMap;

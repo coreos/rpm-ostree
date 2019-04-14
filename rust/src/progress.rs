@@ -16,9 +16,8 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-extern crate indicatif;
-
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use lazy_static::lazy_static;
 use std::borrow::Cow;
 use std::sync::Mutex;
 
