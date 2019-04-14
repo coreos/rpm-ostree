@@ -16,28 +16,6 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-extern crate c_utf8;
-extern crate clap;
-extern crate curl;
-#[macro_use]
-extern crate failure;
-extern crate gio_sys;
-extern crate glib;
-extern crate glib_sys;
-extern crate indicatif;
-extern crate libc;
-extern crate openat;
-extern crate rayon;
-extern crate tempfile;
-
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde;
-extern crate serde_json;
-extern crate serde_yaml;
-
 // pub(crate) utilities
 mod ffiutil;
 mod openat_utils;
