@@ -38,12 +38,13 @@ const INCLUDE_MAXDEPTH: u32 = 50;
 /// This struct holds file descriptors for any external files/data referenced by
 /// a TreeComposeConfig.
 struct TreefileExternals {
-    pub postprocess_script: Option<fs::File>,
-    pub add_files: collections::HashMap<String, fs::File>,
-    pub passwd: Option<fs::File>,
-    pub group: Option<fs::File>,
+    postprocess_script: Option<fs::File>,
+    add_files: collections::HashMap<String, fs::File>,
+    passwd: Option<fs::File>,
+    group: Option<fs::File>,
 }
 
+// This type name is exposed through ffi.
 pub struct Treefile {
     // This one isn't used today, but we may do more in the future.
     _workdir: openat::Dir,
