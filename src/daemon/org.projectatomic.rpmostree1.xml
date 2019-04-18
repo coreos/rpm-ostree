@@ -339,6 +339,10 @@
          "idempotent-layering" (type 'b')
             Don't error out on requests in install-* or uninstall-*
             modifiers that are already satisfied.
+         "lock-finalization" (type 'b')
+            Prevent automatic deployment finalization on shutdown.
+            Clients must manually call FinalizeDeployment() when ready
+            to apply the update and reboot.
     -->
     <method name="UpdateDeployment">
       <arg type="a{sv}" name="modifiers" direction="in"/>
@@ -347,6 +351,20 @@
       <annotation name="org.gtk.GDBus.C.UnixFD" value="true"/>
     </method>
 
+    <!-- Available options:
+         "checksum" (type 's')
+            Verify that the checksum to finalize matches a specific one.
+         "allow-missing-checksum" (type 'b')
+            Allow "checksum" key to be missing. Given that this API is
+            meant for clients with precise state transitions, *not*
+            providing a checksum should be a conscious decision.
+         "allow-unlocked" (type 'b')
+            Don't error out if the staged deployment wasn't locked.
+    -->
+    <method name="FinalizeDeployment">
+      <arg type="a{sv}" name="options" direction="in"/>
+      <arg type="s" name="transaction_address" direction="out"/>
+    </method>
   </interface>
 
   <interface name="org.projectatomic.rpmostree1.OSExperimental">

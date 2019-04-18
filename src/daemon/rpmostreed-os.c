@@ -210,6 +210,10 @@ os_authorize_method (GDBusInterfaceSkeleton *interface,
           no_overrides)
         g_ptr_array_add (actions, "org.projectatomic.rpmostree1.override");
     }
+  else if (g_strcmp0 (method_name, "FinalizeDeployment") == 0)
+    {
+      g_ptr_array_add (actions, "org.projectatomic.rpmostree1.finalize-deployment");
+    }
   else
     {
       authorized = FALSE;
@@ -974,6 +978,67 @@ out:
   return TRUE;
 }
 
+static void
+on_finalize_done (RpmostreedTransaction *transaction, RpmostreedOS *self)
+{
+  g_autoptr(GError) local_error = NULL;
+  if (!rpmostreed_os_load_internals (self, &local_error))
+    {
+      sd_journal_print (LOG_WARNING, "Failed to reload internals: %s",
+                        local_error->message);
+    }
+}
+
+static gboolean
+os_handle_finalize_deployment (RPMOSTreeOS *interface,
+                               GDBusMethodInvocation *invocation,
+                               GVariant *arg_options)
+{
+  RpmostreedOS *self = RPMOSTREED_OS (interface);
+  g_autoptr(GCancellable) cancellable = g_cancellable_new ();
+  glnx_unref_object RpmostreedTransaction *transaction = NULL;
+  g_autoptr(OstreeSysroot) sysroot = NULL;
+  const char *osname;
+  GError *local_error = NULL;
+
+  /* try to merge with an existing transaction, otherwise start a new one */
+  RpmostreedSysroot *rsysroot = rpmostreed_sysroot_get ();
+
+  if (!rpmostreed_sysroot_prep_for_txn (rsysroot, invocation, &transaction, &local_error))
+    goto out;
+  if (transaction)
+    goto out;
+
+  if (!rpmostreed_sysroot_load_state (rsysroot, cancellable, &sysroot, NULL, &local_error))
+    goto out;
+
+  osname = rpmostree_os_get_name (interface);
+
+  transaction = rpmostreed_transaction_new_finalize_deployment (invocation, sysroot, osname,
+                                                                arg_options, cancellable,
+                                                                &local_error);
+  if (transaction == NULL)
+    goto out;
+
+  rpmostreed_sysroot_set_txn (rsysroot, transaction);
+
+  /* Really, we just want to refresh `DefaultDeployment`, but meh... */
+  g_signal_connect (transaction, "closed", G_CALLBACK (on_finalize_done), self);
+
+out:
+  if (local_error != NULL)
+    {
+      g_dbus_method_invocation_take_error (invocation, local_error);
+    }
+  else
+    {
+      const char *client_address = rpmostreed_transaction_get_client_address (transaction);
+      rpmostree_os_complete_finalize_deployment (interface, invocation, client_address);
+    }
+
+  return TRUE;
+}
+
 /* This is an older variant of Cleanup, kept for backcompat */
 static gboolean
 os_handle_clear_rollback_target (RPMOSTreeOS *interface,
@@ -1713,6 +1778,7 @@ rpmostreed_os_iface_init (RPMOSTreeOSIface *iface)
   iface->handle_rollback                   = os_handle_rollback;
   iface->handle_set_initramfs_state        = os_handle_set_initramfs_state;
   iface->handle_update_deployment          = os_handle_update_deployment;
+  iface->handle_finalize_deployment        = os_handle_finalize_deployment;
   /* legacy cleanup API; superseded by Cleanup() */
   iface->handle_clear_rollback_target      = os_handle_clear_rollback_target;
   /* legacy deployment change API; superseded by UpdateDeployment() */

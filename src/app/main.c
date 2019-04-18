@@ -118,6 +118,8 @@ static RpmOstreeCommand commands[] = {
                     RPM_OSTREE_BUILTIN_FLAG_REQUIRES_ROOT |
                     RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
     NULL, rpmostree_builtin_start_daemon },
+  { "finalize-deployment", RPM_OSTREE_BUILTIN_FLAG_HIDDEN,
+    NULL, rpmostree_builtin_finalize_deployment },
   { NULL }
 };
 

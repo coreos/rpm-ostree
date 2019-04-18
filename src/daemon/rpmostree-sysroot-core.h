@@ -31,6 +31,10 @@
 /* The legacy dir, which we will just delete if we find it */
 #define RPMOSTREE_OLD_TMP_ROOTFS_DIR "extensions/rpmostree/commit"
 
+/* Really, this is an OSTree API, but let's consider it hidden for now like the
+ * /run/ostree/staged-deployment path and company. */
+#define _OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED "/run/ostree/staged-deployment-locked"
+
 gboolean
 rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
                            OstreeRepo               *repo,
