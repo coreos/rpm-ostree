@@ -373,7 +373,13 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
     g_variant_dict_insert (&dict, "live-replaced", "s", live_replaced);
 
   if (ostree_deployment_is_staged (deployment))
-    g_variant_dict_insert (&dict, "staged", "b", TRUE);
+    {
+      g_variant_dict_insert (&dict, "staged", "b", TRUE);
+      if (!glnx_fstatat_allow_noent (AT_FDCWD, _OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED,
+                                     NULL, 0, error))
+        return FALSE;
+      g_variant_dict_insert (&dict, "finalization-locked", "b", errno == 0);
+    }
 
   if (refspec)
     g_variant_dict_insert (&dict, "origin", "s", refspec);

@@ -26,6 +26,23 @@ set -x
 
 # More miscellaneous tests
 
+# Locked finalization
+booted_csum=$(vm_get_booted_csum)
+commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
+vm_rpmostree upgrade --lock-finalization
+vm_cmd test -f /run/ostree/staged-deployment-locked
+cursor=$(vm_get_journal_cursor)
+vm_reboot
+vm_assert_journal_has_content $cursor 'Not finalizing; found /run/ostree/staged-deployment-locked'
+assert_streq "$(vm_get_booted_csum)" "${booted_csum}"
+echo "ok locked staging"
+
+vm_rpmostree upgrade --lock-finalization
+vm_cmd test -f /run/ostree/staged-deployment-locked
+vm_reboot_cmd rpm-ostree finalize-deployment --expect-checksum ${commit}
+assert_streq "$(vm_get_booted_csum)" "${commit}"
+echo "ok finalize-deployment"
+
 # Custom origin and local repo rebases. This is essentially the RHCOS workflow.
 # https://github.com/projectatomic/rpm-ostree/pull/1406
 # https://github.com/projectatomic/rpm-ostree/pull/1732

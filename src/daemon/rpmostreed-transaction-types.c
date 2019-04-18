@@ -817,6 +817,8 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
   if (dry_run)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_DRY_RUN;
+  if (deploy_has_bool_option (self, "lock-finalization"))
+    upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION;
 
   /* DOWNLOAD_METADATA_ONLY isn't directly exposed at the D-Bus API level, so we shouldn't
    * ever run into these conflicting options */
@@ -2204,6 +2206,124 @@ rpmostreed_transaction_new_modify_yum_repo (GDBusMethodInvocation *invocation,
       self->osname = g_strdup (osname);
       self->repo_id = g_strdup (repo_id);
       self->settings = g_variant_ref (settings);
+    }
+
+  return (RpmostreedTransaction *) self;
+}
+
+/* ================================ FinalizeDeployment ================================ */
+
+typedef struct {
+  RpmostreedTransaction parent;
+  char *osname;
+  GVariantDict *options;
+} FinalizeTransaction;
+
+typedef RpmostreedTransactionClass FinalizeTransactionClass;
+
+GType finalize_transaction_get_type (void);
+
+G_DEFINE_TYPE (FinalizeTransaction,
+               finalize_transaction,
+               RPMOSTREED_TYPE_TRANSACTION)
+
+static void
+finalize_transaction_finalize (GObject *object)
+{
+  FinalizeTransaction *self;
+
+  self = (FinalizeTransaction *) object;
+  g_free (self->osname);
+  g_clear_pointer (&self->options, g_variant_dict_unref);
+
+  G_OBJECT_CLASS (finalize_transaction_parent_class)->finalize (object);
+}
+
+static gboolean
+finalize_transaction_execute (RpmostreedTransaction *transaction,
+                              GCancellable *cancellable,
+                              GError **error)
+{
+  FinalizeTransaction *self = (FinalizeTransaction *) transaction;
+  OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+  OstreeRepo *repo = ostree_sysroot_repo (sysroot);
+
+  g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
+  if (deployments->len == 0)
+    return glnx_throw (error, "No deployments found");
+
+  OstreeDeployment *default_deployment = deployments->pdata[0];
+  if (!ostree_deployment_is_staged (default_deployment))
+    return glnx_throw (error, "No pending staged deployment found");
+  if (!g_str_equal (ostree_deployment_get_osname (default_deployment), self->osname))
+    return glnx_throw (error, "Staged deployment is not for osname '%s'", self->osname);
+
+  gboolean is_layered = FALSE;
+  g_autofree char *base_checksum = NULL;
+  if (!rpmostree_deployment_get_layered_info (repo, default_deployment, &is_layered, NULL,
+                                              &base_checksum, NULL, NULL, NULL, error))
+    return FALSE;
+  const char *checksum = base_checksum ?: ostree_deployment_get_csum (default_deployment);
+
+  const char *expected_checksum =
+    vardict_lookup_ptr (self->options, "expect-checksum", "&s");
+  if (expected_checksum && !g_str_equal (checksum, expected_checksum))
+    return glnx_throw (error, "Expected staged base checksum %s, but found %s",
+                       expected_checksum, checksum);
+
+  if (unlink (_OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED) < 0)
+    {
+      if (errno != ENOENT)
+        return glnx_throw_errno_prefix (error, "unlink(%s)",
+                                        _OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED);
+      if (!vardict_lookup_bool (self->options, "allow-unlocked", FALSE))
+        return glnx_throw (error, "Staged deployment already unlocked");
+    }
+
+  rpmostreed_reboot (cancellable, error);
+  return TRUE;
+}
+
+static void
+finalize_transaction_class_init (FinalizeTransactionClass *class)
+{
+  GObjectClass *object_class;
+
+  object_class = G_OBJECT_CLASS (class);
+  object_class->finalize = finalize_transaction_finalize;
+
+  class->execute = finalize_transaction_execute;
+}
+
+static void
+finalize_transaction_init (FinalizeTransaction *self)
+{
+}
+
+RpmostreedTransaction *
+rpmostreed_transaction_new_finalize (GDBusMethodInvocation *invocation,
+                                     OstreeSysroot         *sysroot,
+                                     const char            *osname,
+                                     GVariant              *options,
+                                     GCancellable          *cancellable,
+                                     GError               **error)
+{
+  g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
+  g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
+
+  g_autoptr(GVariantDict) options_dict = g_variant_dict_new (options);
+
+  FinalizeTransaction *self =
+    g_initable_new (finalize_transaction_get_type (),
+                    cancellable, error,
+                    "invocation", invocation,
+                    "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),
+                    NULL);
+
+  if (self != NULL)
+    {
+      self->osname = g_strdup (osname);
+      self->options = g_variant_dict_ref (options_dict);
     }
 
   return (RpmostreedTransaction *) self;

@@ -44,6 +44,7 @@ rpm_ostree_SOURCES = src/app/main.c \
 	src/app/rpmostree-ex-builtin-rojig2commit.c \
 	src/app/rpmostree-builtin-db.c \
 	src/app/rpmostree-builtin-start-daemon.c \
+	src/app/rpmostree-builtin-finalize-deployment.c \
 	src/app/rpmostree-db-builtin-diff.c \
 	src/app/rpmostree-db-builtin-list.c \
 	src/app/rpmostree-db-builtin-version.c \

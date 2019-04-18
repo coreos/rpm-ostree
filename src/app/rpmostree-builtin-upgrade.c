@@ -40,6 +40,7 @@ static gboolean opt_upgrade_unchanged_exit_77;
 static gboolean opt_cache_only;
 static gboolean opt_download_only;
 static char *opt_automatic;
+static gboolean opt_lock_finalization;
 
 /* "check-diff" is deprecated, replaced by "preview" */
 static GOptionEntry option_entries[] = {
@@ -53,6 +54,7 @@ static GOptionEntry option_entries[] = {
   { "download-only", 0, 0, G_OPTION_ARG_NONE, &opt_download_only, "Just download latest ostree and RPM data, don't deploy", NULL },
   { "upgrade-unchanged-exit-77", 0, 0, G_OPTION_ARG_NONE, &opt_upgrade_unchanged_exit_77, "If no upgrade is available, exit 77", NULL },
   { "trigger-automatic-update-policy", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_automatic, "For automated use only; triggered by automatic timer", NULL },
+  { "lock-finalization", 0, G_OPTION_FLAG_HIDDEN, G_OPTION_ARG_NONE, &opt_lock_finalization, "Prevent automatic deployment finalization on shutdown", NULL },
   { NULL }
 };
 
@@ -162,6 +164,7 @@ rpmostree_builtin_upgrade (int             argc,
       g_variant_dict_insert (&dict, "allow-downgrade", "b", opt_allow_downgrade);
       g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
       g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
+      g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
       g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       /* Use newer D-Bus API only if we have to. */

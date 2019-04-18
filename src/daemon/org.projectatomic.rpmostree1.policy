@@ -159,4 +159,15 @@
       <allow_active>yes</allow_active>
     </defaults>
   </action>
+
+  <action id="org.projectatomic.rpmostree1.finalize-deployment">
+    <description>Finalize staged deployment</description>
+    <message>Authentication is required to finalize staged deployment</message>
+    <icon_name>package-x-generic</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
 </policyconfig>

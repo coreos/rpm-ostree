@@ -1299,6 +1299,21 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
 
   if (use_staging)
     {
+      /* touch file *before* we stage to avoid races */
+      if (self->flags & RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION)
+        {
+          if (!glnx_shutil_mkdir_p_at (AT_FDCWD,
+                                       dirname (strdupa (_OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED)),
+                                       0755, cancellable, error))
+            return FALSE;
+
+          glnx_autofd int fd = open (_OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED,
+                                     O_CREAT | O_WRONLY | O_NOCTTY | O_CLOEXEC, 0640);
+          if (fd == -1)
+            return glnx_throw_errno_prefix (error, "touch(%s)",
+                                            _OSTREE_SYSROOT_RUNSTATE_STAGED_LOCKED);
+        }
+
       g_auto(RpmOstreeProgress) task = { 0, };
       rpmostree_output_task_begin (&task, "Staging deployment");
       if (!ostree_sysroot_stage_tree (self->sysroot, self->osname,
@@ -1395,6 +1410,9 @@ rpmostree_sysroot_upgrader_flags_get_type (void)
         { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL,
           "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL",
           "synthetic-pull" },
+        { RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION,
+          "RPMOSTREE_SYSROOT_UPGRADER_FLAGS_LOCK_FINALIZATION",
+          "lock-finalization" },
       };
       GType g_define_type_id =
         g_flags_register_static (g_intern_static_string ("RpmOstreeSysrootUpgraderFlags"), values);
