@@ -55,10 +55,6 @@ BUILTINPROTO(ex);
 
 #undef BUILTINPROTO
 
-const char *rpmostree_subcommand_parse (int *inout_argc,
-                                        char **inout_argv,
-                                        RpmOstreeCommandInvocation *invocation);
-
 gboolean
 rpmostree_option_context_parse (GOptionContext *context,
                                 const GOptionEntry *main_entries,

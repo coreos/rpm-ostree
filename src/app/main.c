@@ -294,10 +294,9 @@ lookup_command (const char *name)
   return NULL;
 }
 
-const char *
+static const char *
 rpmostree_subcommand_parse (int *inout_argc,
-                            char **inout_argv,
-                            RpmOstreeCommandInvocation *invocation)
+                            char **inout_argv)
 {
   const int argc = *inout_argc;
   const char *command_name = NULL;
@@ -335,7 +334,7 @@ rpmostree_handle_subcommand (int argc, char **argv,
                              GCancellable *cancellable, GError **error)
 {
   const char *subcommand_name =
-    rpmostree_subcommand_parse (&argc, argv, invocation);
+    rpmostree_subcommand_parse (&argc, argv);
 
   RpmOstreeCommand *subcommand = subcommands;
   while (subcommand->name)
@@ -424,7 +423,7 @@ main (int    argc,
    * necessary, in order to pass relevant options through
    * to the commands, but also have them take effect globally.
    */
-  command_name = rpmostree_subcommand_parse (&argc, argv, NULL);
+  command_name = rpmostree_subcommand_parse (&argc, argv);
 
   command = lookup_command (command_name);
 
