@@ -10,6 +10,8 @@ mod libdnf_sys;
 
 mod composepost;
 pub use self::composepost::*;
+mod history;
+pub use self::history::*;
 mod journal;
 pub use self::journal::*;
 mod progress;

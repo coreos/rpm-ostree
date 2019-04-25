@@ -40,6 +40,9 @@
 /* put it in cache dir so it gets destroyed naturally with a `cleanup -m` */
 #define RPMOSTREE_AUTOUPDATES_CACHE_FILE RPMOSTREE_CORE_CACHEDIR "cached-update.gv"
 
+#define RPMOSTREE_STATE_DIR "/var/lib/rpm-ostree/"
+#define RPMOSTREE_HISTORY_DIR RPMOSTREE_STATE_DIR "history"
+
 #define RPMOSTREE_TYPE_CONTEXT (rpmostree_context_get_type ())
 G_DECLARE_FINAL_TYPE (RpmOstreeContext, rpmostree_context, RPMOSTREE, CONTEXT, GObject)
 

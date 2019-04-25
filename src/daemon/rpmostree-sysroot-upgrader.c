@@ -30,13 +30,17 @@
 #include "rpmostree-origin.h"
 #include "rpmostree-kernel.h"
 #include "rpmostreed-daemon.h"
+#include "rpmostreed-deployment-utils.h"
 #include "rpmostree-kernel.h"
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-output.h"
 #include "rpmostree-scripts.h"
+#include "rpmostree-rust.h"
 
 #include "ostree-repo.h"
+
+#define RPMOSTREE_NEW_DEPLOYMENT_MSG SD_ID128_MAKE(9b,dd,bd,a1,77,cd,44,d8,91,b1,b5,61,a8,a0,ce,9e)
 
 /**
  * SECTION:rpmostree-sysroot-upgrader
@@ -1226,6 +1230,72 @@ rpmostree_sysroot_upgrader_set_kargs (RpmOstreeSysrootUpgrader *self,
   self->kargs_strv = g_strdupv (kernel_args);
 }
 
+static gboolean
+write_history (RpmOstreeSysrootUpgrader *self,
+               OstreeDeployment         *new_deployment,
+               const char               *initiating_command_line,
+               GCancellable             *cancellable,
+               GError                  **error)
+{
+  g_autoptr(GVariant) deployment_variant =
+    rpmostreed_deployment_generate_variant (self->sysroot, new_deployment, NULL,
+                                            self->repo, FALSE, error);
+  if (!deployment_variant)
+    return FALSE;
+
+  g_autofree char *deployment_dirpath =
+    ostree_sysroot_get_deployment_dirpath (self->sysroot, new_deployment);
+  struct stat stbuf;
+  if (!glnx_fstatat (ostree_sysroot_get_fd (self->sysroot),
+                     deployment_dirpath, &stbuf, 0, error))
+    return FALSE;
+
+  g_autofree char *fn =
+    g_strdup_printf ("%s/%ld", RPMOSTREE_HISTORY_DIR, stbuf.st_ctime);
+  if (!glnx_shutil_mkdir_p_at (AT_FDCWD, RPMOSTREE_HISTORY_DIR,
+                               0775, cancellable, error))
+    return FALSE;
+
+  /* Write out GVariant to a file. One obvious question here is: why not keep this in the
+   * journal itself since it supports binary data? We *could* do this, and it would simplify
+   * querying and pruning, but IMO I find binary data in journal messages not appealing and
+   * it breaks the expectation that journal messages should be somewhat easily
+   * introspectable. We could also serialize it to JSON first, though we wouldn't be able to
+   * re-use the printing code in `status.c` as is. Note also the GVariant can be large (e.g.
+   * we include the full `rpmostree.rpmdb.pkglist` in there). */
+
+  if (!glnx_file_replace_contents_at (AT_FDCWD, fn,
+                                      g_variant_get_data (deployment_variant),
+                                      g_variant_get_size (deployment_variant),
+                                      0, cancellable, error))
+    return FALSE;
+
+  g_autofree char *version = NULL;
+  { g_autoptr(GVariant) commit = NULL;
+    if (!ostree_repo_load_commit (self->repo, ostree_deployment_get_csum (new_deployment),
+                                  &commit, NULL, error))
+      return FALSE;
+    version = rpmostree_checksum_version (commit);
+  }
+
+  sd_journal_send ("MESSAGE_ID=" SD_ID128_FORMAT_STR,
+                   SD_ID128_FORMAT_VAL(RPMOSTREE_NEW_DEPLOYMENT_MSG),
+                   "MESSAGE=Created new deployment /%s", deployment_dirpath,
+                   "DEPLOYMENT_PATH=/%s", deployment_dirpath,
+                   "DEPLOYMENT_TIMESTAMP=%ld", stbuf.st_ctime,
+                   "DEPLOYMENT_DEVICE=%u", stbuf.st_dev,
+                   "DEPLOYMENT_INODE=%u", stbuf.st_ino,
+                   "DEPLOYMENT_CHECKSUM=%s", ostree_deployment_get_csum (new_deployment),
+                   "DEPLOYMENT_REFSPEC=%s", rpmostree_origin_get_refspec (self->origin),
+                   /* we could use iovecs here and sd_journal_sendv to make these truly
+                    * conditional, but meh, empty field works fine too */
+                   "DEPLOYMENT_VERSION=%s", version ?: "",
+                   "COMMAND_LINE=%s", initiating_command_line ?: "",
+                   NULL);
+
+  return TRUE;
+}
+
 /**
  * rpmostree_sysroot_upgrader_deploy:
  * @self: Self
@@ -1328,6 +1398,9 @@ rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
                                        cancellable, error))
         return FALSE;
     }
+
+  if (!write_history (self, new_deployment, initiating_command_line, cancellable, error))
+    return FALSE;
 
   /* Also do a sanitycheck even if there's no local mutation; it's basically free
    * and might save someone in the future.  The RPMOSTREE_SKIP_SANITYCHECK

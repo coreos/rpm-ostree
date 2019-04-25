@@ -3,6 +3,8 @@ language = "C"
 header = "#pragma once\n#include <gio/gio.h>\ntypedef GError RORGError;\ntypedef GHashTable RORGHashTable;\ntypedef GPtrArray RORGPtrArray;"
 trailer = """
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(RORTreefile, ror_treefile_free)
+G_DEFINE_AUTOPTR_CLEANUP_FUNC(RORHistoryCtx, ror_history_ctx_free)
+G_DEFINE_AUTO_CLEANUP_CLEAR_FUNC(RORHistoryEntry, ror_history_entry_clear)
 """
 
 

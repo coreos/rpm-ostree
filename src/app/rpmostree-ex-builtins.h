@@ -34,6 +34,7 @@ BUILTINPROTO(unpack);
 BUILTINPROTO(livefs);
 BUILTINPROTO(commit2rojig);
 BUILTINPROTO(rojig2commit);
+BUILTINPROTO(history);
 
 #undef BUILTINPROTO
 
