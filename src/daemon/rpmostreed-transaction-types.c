@@ -41,6 +41,11 @@ vardict_lookup_bool (GVariantDict *dict,
                      const char   *key,
                      gboolean      dfault);
 
+static void*
+vardict_lookup_ptr (GVariantDict  *dict,
+                    const char    *key,
+                    const char    *fmt);
+
 static gboolean
 change_origin_refspec (GVariantDict    *options,
                        OstreeSysroot *sysroot,
@@ -1660,7 +1665,7 @@ typedef struct {
   char *osname;
   gboolean regenerate;
   char **args;
-  gboolean reboot;
+  GVariantDict *options;
 } InitramfsStateTransaction;
 
 typedef RpmostreedTransactionClass InitramfsStateTransactionClass;
@@ -1679,6 +1684,7 @@ initramfs_state_transaction_finalize (GObject *object)
   self = (InitramfsStateTransaction *) object;
   g_free (self->osname);
   g_strfreev (self->args);
+  g_clear_pointer (&self->options, g_variant_dict_unref);
 
   G_OBJECT_CLASS (initramfs_state_transaction_parent_class)->finalize (object);
 }
@@ -1695,8 +1701,7 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
   rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, "initramfs");
 
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
-    rpmostree_sysroot_upgrader_new (sysroot, self->osname, 0,
-                                    cancellable, error);
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, 0, cancellable, error);
   if (upgrader == NULL)
     return FALSE;
 
@@ -1724,7 +1729,7 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
   if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
     return FALSE;
 
-  if (self->reboot)
+  if (vardict_lookup_bool (self->options, "reboot", FALSE))
     rpmostreed_reboot (cancellable, error);
 
   return TRUE;
@@ -1748,13 +1753,13 @@ initramfs_state_transaction_init (InitramfsStateTransaction *self)
 
 RpmostreedTransaction *
 rpmostreed_transaction_new_initramfs_state (GDBusMethodInvocation *invocation,
-                                            OstreeSysroot *sysroot,
-                                            const char *osname,
-                                            gboolean regenerate,
-                                            char **args,
-                                            gboolean reboot,
-                                            GCancellable *cancellable,
-                                            GError **error)
+                                            OstreeSysroot         *sysroot,
+                                            const char            *osname,
+                                            gboolean               regenerate,
+                                            char                 **args,
+                                            GVariant              *options,
+                                            GCancellable          *cancellable,
+                                            GError               **error)
 {
   InitramfsStateTransaction *self;
 
@@ -1772,7 +1777,7 @@ rpmostreed_transaction_new_initramfs_state (GDBusMethodInvocation *invocation,
       self->osname = g_strdup (osname);
       self->regenerate = regenerate;
       self->args = g_strdupv (args);
-      self->reboot = reboot;
+      self->options = g_variant_dict_new (options);
     }
 
   return (RpmostreedTransaction *) self;
@@ -2213,7 +2218,7 @@ typedef struct {
   char **kernel_args_added;
   char **kernel_args_deleted;
   char **kernel_args_replaced;
-  RpmOstreeTransactionKernelArgFlags flags;
+  GVariantDict *options;
 } KernelArgTransaction;
 
 typedef RpmostreedTransactionClass KernelArgTransactionClass;
@@ -2235,6 +2240,7 @@ kernel_arg_transaction_finalize (GObject *object)
   g_strfreev (self->kernel_args_deleted);
   g_strfreev (self->kernel_args_replaced);
   g_free (self->existing_kernel_args);
+  g_clear_pointer (&self->options, g_variant_dict_unref);
   G_OBJECT_CLASS (kernel_arg_transaction_parent_class)->finalize (object);
 }
 
@@ -2256,7 +2262,8 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   /* Read in the existing kernel args and convert those to an #OstreeKernelArg instance for API usage */
   __attribute__((cleanup(_ostree_kernel_args_cleanup))) OstreeKernelArgs *kargs = _ostree_kernel_args_from_string (self->existing_kernel_args);
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
-    rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags, cancellable, error);
+    rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags,
+                                    cancellable, error);
 
   /* We need the upgrader to perform the deployment */
   if (upgrader == NULL)
@@ -2293,7 +2300,8 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   if (!rpmostree_sysroot_upgrader_deploy_set_kargs (upgrader, kargs_strv,
                                                     cancellable, error))
     return FALSE;
-  if (self->flags & RPMOSTREE_TRANSACTION_KERNEL_ARG_FLAG_REBOOT)
+
+  if (vardict_lookup_bool (self->options, "reboot", FALSE))
     rpmostreed_reboot (cancellable, error);
 
   return TRUE;
@@ -2323,7 +2331,7 @@ rpmostreed_transaction_new_kernel_arg (GDBusMethodInvocation *invocation,
                                        const char * const *kernel_args_added,
                                        const char * const *kernel_args_replaced,
                                        const char * const *kernel_args_deleted,
-                                       RpmOstreeTransactionKernelArgFlags flags,
+                                       GVariant              *options,
                                        GCancellable          *cancellable,
                                        GError               **error)
 {
@@ -2345,7 +2353,7 @@ rpmostreed_transaction_new_kernel_arg (GDBusMethodInvocation *invocation,
       self->kernel_args_replaced = strdupv_canonicalize (kernel_args_replaced);
       self->kernel_args_deleted = strdupv_canonicalize (kernel_args_deleted);
       self->existing_kernel_args = g_strdup (existing_kernel_args);
-      self->flags = flags;
+      self->options = g_variant_dict_new (options);
     }
 
   return (RpmostreedTransaction *) self;
