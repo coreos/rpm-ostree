@@ -75,7 +75,7 @@ rpmostreed_transaction_new_initramfs_state       (GDBusMethodInvocation *invocat
                                                   const char            *osname,
                                                   gboolean               regenerate,
                                                   char                 **args,
-                                                  gboolean               reboot,
+                                                  GVariant              *options,
                                                   GCancellable          *cancellable,
                                                   GError               **error);
 
@@ -127,10 +127,6 @@ rpmostreed_transaction_new_modify_yum_repo (GDBusMethodInvocation *invocation,
                                             GCancellable          *cancellable,
                                             GError               **error);
 
-typedef enum {
-  RPMOSTREE_TRANSACTION_KERNEL_ARG_FLAG_REBOOT = (1 << 0),
-} RpmOstreeTransactionKernelArgFlags;
-
 RpmostreedTransaction *
 rpmostreed_transaction_new_kernel_arg (GDBusMethodInvocation *invocation,
                                        OstreeSysroot         *sysroot,
@@ -139,7 +135,7 @@ rpmostreed_transaction_new_kernel_arg (GDBusMethodInvocation *invocation,
                                        const char * const *kernel_args_added,
                                        const char * const *kernel_args_replaced,
                                        const char * const *kernel_args_deleted,
-                                       RpmOstreeTransactionKernelArgFlags flags,
+                                       GVariant              *options,
                                        GCancellable          *cancellable,
                                        GError               **error);
 
