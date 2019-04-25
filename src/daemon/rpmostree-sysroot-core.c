@@ -33,6 +33,7 @@
 #include "rpmostree-rpm-util.h"
 #include "rpmostree-postprocess.h"
 #include "rpmostree-output.h"
+#include "rpmostree-rust.h"
 
 #include "ostree-repo.h"
 
@@ -294,6 +295,9 @@ rpmostree_syscore_cleanup (OstreeSysroot            *sysroot,
      successfully */
   if (!glnx_shutil_rm_rf_at (repo_dfd, RPMOSTREE_TMP_ROOTFS_DIR,
                              cancellable, error))
+    return FALSE;
+  /* also delete extra history entries */
+  if (!ror_history_prune (error))
     return FALSE;
 
   /* Regenerate all refs */

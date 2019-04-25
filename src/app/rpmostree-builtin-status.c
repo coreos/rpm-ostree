@@ -29,6 +29,7 @@
 #include <libdnf/libdnf.h>
 
 #include "rpmostree-builtins.h"
+#include "rpmostree-ex-builtins.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-dbus-helpers.h"
 #include "rpmostree-util.h"
@@ -1094,6 +1095,177 @@ rpmostree_builtin_status (int             argc,
             invocation->exit_code = RPM_OSTREE_EXIT_PENDING;
         }
     }
+
+  return TRUE;
+}
+
+/* XXX
+static gboolean opt_no_pager;
+static gboolean opt_deployments;
+*/
+
+static GOptionEntry history_option_entries[] = {
+  { "verbose", 'v', 0, G_OPTION_ARG_NONE, &opt_verbose, "Print additional fields (e.g. StateRoot)", NULL },
+  { "json", 0, 0, G_OPTION_ARG_NONE, &opt_json, "Output JSON", NULL },
+  /* XXX { "deployments", 0, 0, G_OPTION_ARG_NONE, &opt_deployments, "Print all deployments, not just those booted into", NULL }, */
+  /* XXX { "no-pager", 0, 0, G_OPTION_ARG_NONE, &opt_no_pager, "Don't use a pager to display output", NULL }, */
+  { NULL }
+};
+
+/* Read from history db, sets @out_deployment to NULL on ENOENT. */
+static gboolean
+fetch_history_deployment_gvariant (RORHistoryEntry  *entry,
+                                   GVariant        **out_deployment,
+                                   GError          **error)
+{
+  g_autofree char *fn =
+    g_strdup_printf ("%s/%lu", RPMOSTREE_HISTORY_DIR, entry->deploy_timestamp);
+
+  *out_deployment = NULL;
+
+  glnx_autofd int fd = -1;
+  g_autoptr(GError) local_error = NULL;
+  if (!glnx_openat_rdonly (AT_FDCWD, fn, TRUE, &fd, &local_error))
+    {
+      if (!g_error_matches (local_error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
+        return g_propagate_error (error, g_steal_pointer (&local_error)), FALSE;
+      return TRUE; /* Note early return */
+    }
+
+  g_autoptr(GBytes) data = glnx_fd_readall_bytes (fd, NULL, error);
+  if (!data)
+    return FALSE;
+
+  *out_deployment =
+    g_variant_ref_sink (g_variant_new_from_bytes (G_VARIANT_TYPE_VARDICT, data, FALSE));
+  return TRUE;
+}
+
+static void
+print_timestamp_and_relative (const char* key, guint64 t)
+{
+  g_autofree char *ts = rpmostree_timestamp_str_from_unix_utc (t);
+  char time_rel[FORMAT_TIMESTAMP_RELATIVE_MAX] = "";
+  libsd_format_timestamp_relative (time_rel, sizeof(time_rel), t * USEC_PER_SEC);
+  if (key)
+    g_print ("%s: ", key);
+  g_print ("%s (%s)\n", ts, time_rel);
+}
+
+static gboolean
+print_history_entry (RORHistoryEntry  *entry,
+                     GError          **error)
+{
+  g_autoptr(GVariant) deployment = NULL;
+  if (!fetch_history_deployment_gvariant (entry, &deployment, error))
+    return FALSE;
+
+  if (!opt_json)
+    {
+      print_timestamp_and_relative ("BootTimestamp", entry->last_boot_timestamp);
+      if (entry->boot_count > 1)
+        {
+          g_print ("%s BootCount: %lu; first booted on ",
+                   libsd_special_glyph (TREE_RIGHT), entry->boot_count);
+          print_timestamp_and_relative (NULL, entry->first_boot_timestamp);
+        }
+
+      print_timestamp_and_relative ("CreateTimestamp", entry->deploy_timestamp);
+      if (entry->deploy_cmdline)
+        g_print ("CreateCommand: %s%s%s\n",
+                 get_bold_start (), entry->deploy_cmdline, get_bold_end ());
+      if (!deployment)
+        /* somehow we're missing an entry? XXX: just fallback to checksum, version, refspec
+         * from journal entry in this case */
+        g_print ("  << Missing history information >>\n");
+
+      /* XXX: factor out interesting bits from print_one_deployment() */
+      else if (!print_one_deployment (NULL, deployment, TRUE, FALSE, FALSE,
+                                      NULL, NULL, NULL, NULL, error))
+        return FALSE;
+    }
+  else
+    {
+      /* NB: notice we implicitly print as a stream of objects rather than an array */
+
+      glnx_unref_object JsonBuilder *builder = json_builder_new ();
+      json_builder_begin_object (builder);
+
+      if (deployment)
+        {
+          json_builder_set_member_name (builder, "deployment");
+          json_builder_add_value (builder, json_gvariant_serialize (deployment));
+        }
+
+      json_builder_set_member_name (builder, "deployment-create-timestamp");
+      json_builder_add_int_value (builder, entry->deploy_timestamp);
+      json_builder_set_member_name (builder, "deployment-create-command-line");
+      json_builder_add_string_value (builder, entry->deploy_cmdline);
+      json_builder_set_member_name (builder, "boot-count");
+      json_builder_add_int_value (builder, entry->boot_count);
+      json_builder_set_member_name (builder, "first-boot-timestamp");
+      json_builder_add_int_value (builder, entry->first_boot_timestamp);
+      json_builder_set_member_name (builder, "last-boot-timestamp");
+      json_builder_add_int_value (builder, entry->last_boot_timestamp);
+      json_builder_end_object (builder);
+
+      glnx_unref_object JsonGenerator *generator = json_generator_new ();
+      json_generator_set_pretty (generator, TRUE);
+      json_generator_set_root (generator, json_builder_get_root (builder));
+      glnx_unref_object GOutputStream *stdout_gio = g_unix_output_stream_new (1, FALSE);
+      /* NB: watch out for the misleading API docs */
+      if (json_generator_to_stream (generator, stdout_gio, NULL, error) <= 0
+          || (error != NULL && *error != NULL))
+        return FALSE;
+    }
+
+  g_print ("\n");
+  return TRUE;
+}
+
+/* The `history` also lives here since the printing bits re-use a lot of the `status`
+ * machinery. */
+gboolean
+rpmostree_ex_builtin_history (int             argc,
+                              char          **argv,
+                              RpmOstreeCommandInvocation *invocation,
+                              GCancellable   *cancellable,
+                              GError        **error)
+{
+  g_autoptr(GOptionContext) context = g_option_context_new ("");
+  if (!rpmostree_option_context_parse (context,
+                                       history_option_entries,
+                                       &argc, &argv,
+                                       invocation,
+                                       cancellable,
+                                       NULL, NULL, NULL, NULL, NULL,
+                                       error))
+    return FALSE;
+
+  /* initiate a history context, then iterate over each (boot time, deploy time), then print */
+
+  /* XXX: enhance with option for going in reverse (oldest first) */
+  g_autoptr(RORHistoryCtx) history_ctx = ror_history_ctx_new (error);
+  if (!history_ctx)
+    return FALSE;
+
+  /* XXX: use pager here */
+
+  gboolean at_least_one = FALSE;
+  while (TRUE)
+    {
+      g_auto(RORHistoryEntry) entry = { 0, };
+      if (!ror_history_ctx_next (history_ctx, &entry, error))
+        return FALSE;
+      if (entry.eof)
+        break;
+      if (!print_history_entry (&entry, error))
+        return FALSE;
+      at_least_one = TRUE;
+    }
+
+  if (!at_least_one)
+    g_print ("<< No entries found >>\n");
 
   return TRUE;
 }
