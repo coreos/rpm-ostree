@@ -44,17 +44,6 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-static GVariant *
-get_args_variant (void)
-{
-  GVariantDict dict;
-
-  g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
-
-  return g_variant_dict_end (&dict);
-}
-
 gboolean
 rpmostree_builtin_initramfs (int             argc,
                              char          **argv,
@@ -143,11 +132,16 @@ rpmostree_builtin_initramfs (int             argc,
       if (!opt_add_arg)
         opt_add_arg = empty_strv;
 
+      GVariantDict dict;
+      g_variant_dict_init (&dict, NULL);
+      g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
+      g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+
       g_autofree char *transaction_address = NULL;
       if (!rpmostree_os_call_set_initramfs_state_sync (os_proxy,
                                                        opt_enable,
                                                        (const char *const*)opt_add_arg,
-                                                       get_args_variant (),
+                                                       options,
                                                        &transaction_address,
                                                        cancellable,
                                                        error))

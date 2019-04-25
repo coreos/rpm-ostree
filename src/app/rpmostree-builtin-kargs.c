@@ -49,17 +49,6 @@ static GOptionEntry option_entries[] = {
   { NULL }
 };
 
-static GVariant *
-get_kargs_option_variant (void)
-{
-  GVariantDict dict;
-
-  g_variant_dict_init (&dict, NULL);
-  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
-
-  return g_variant_dict_end (&dict);
-}
-
 /*
  * This function shares a similar logic as the commit_editor
  * function in ostree code base. It takes old kernel arguments
@@ -280,6 +269,11 @@ rpmostree_builtin_kargs (int            argc,
   g_autofree char *transaction_address = NULL;
   char *empty_strv[] = {NULL};
 
+  GVariantDict dict;
+  g_variant_dict_init (&dict, NULL);
+  g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
+  g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
+
   if (opt_editor)
     {
       /* We track the kernel arg instance before the editor */
@@ -320,7 +314,7 @@ rpmostree_builtin_kargs (int            argc,
                                                (const char* const*) empty_strv,
                                                (const char* const*) empty_strv,
                                                (const char* const*) empty_strv,
-                                               get_kargs_option_variant (),
+                                               options,
                                                &transaction_address,
                                                cancellable,
                                                error))
@@ -344,7 +338,7 @@ rpmostree_builtin_kargs (int            argc,
                                                (const char* const*) opt_kernel_append_strings,
                                                (const char* const*) opt_kernel_replace_strings,
                                                (const char* const*) opt_kernel_delete_strings,
-                                               get_kargs_option_variant (),
+                                               options,
                                                &transaction_address,
                                                cancellable,
                                                error))
