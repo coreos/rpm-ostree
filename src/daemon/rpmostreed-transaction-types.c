@@ -2217,34 +2217,34 @@ typedef struct {
   RpmostreedTransaction parent;
   char *osname;
   GVariantDict *options;
-} FinalizeTransaction;
+} FinalizeDeploymentTransaction;
 
-typedef RpmostreedTransactionClass FinalizeTransactionClass;
+typedef RpmostreedTransactionClass FinalizeDeploymentTransactionClass;
 
-GType finalize_transaction_get_type (void);
+GType finalize_deployment_transaction_get_type (void);
 
-G_DEFINE_TYPE (FinalizeTransaction,
-               finalize_transaction,
+G_DEFINE_TYPE (FinalizeDeploymentTransaction,
+               finalize_deployment_transaction,
                RPMOSTREED_TYPE_TRANSACTION)
 
 static void
-finalize_transaction_finalize (GObject *object)
+finalize_deployment_transaction_finalize (GObject *object)
 {
-  FinalizeTransaction *self;
+  FinalizeDeploymentTransaction *self;
 
-  self = (FinalizeTransaction *) object;
+  self = (FinalizeDeploymentTransaction *) object;
   g_free (self->osname);
   g_clear_pointer (&self->options, g_variant_dict_unref);
 
-  G_OBJECT_CLASS (finalize_transaction_parent_class)->finalize (object);
+  G_OBJECT_CLASS (finalize_deployment_transaction_parent_class)->finalize (object);
 }
 
 static gboolean
-finalize_transaction_execute (RpmostreedTransaction *transaction,
-                              GCancellable *cancellable,
-                              GError **error)
+finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
+                                         GCancellable *cancellable,
+                                         GError **error)
 {
-  FinalizeTransaction *self = (FinalizeTransaction *) transaction;
+  FinalizeDeploymentTransaction *self = (FinalizeDeploymentTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   OstreeRepo *repo = ostree_sysroot_repo (sysroot);
 
@@ -2266,7 +2266,11 @@ finalize_transaction_execute (RpmostreedTransaction *transaction,
   const char *checksum = base_checksum ?: ostree_deployment_get_csum (default_deployment);
 
   const char *expected_checksum =
-    vardict_lookup_ptr (self->options, "expect-checksum", "&s");
+    vardict_lookup_ptr (self->options, "checksum", "&s");
+  const gboolean allow_missing_checksum =
+    vardict_lookup_bool (self->options, "allow-missing-checksum", FALSE);
+  if (!expected_checksum && !allow_missing_checksum)
+    return glnx_throw (error, "Missing expected checksum");
   if (expected_checksum && !g_str_equal (checksum, expected_checksum))
     return glnx_throw (error, "Expected staged base checksum %s, but found %s",
                        expected_checksum, checksum);
@@ -2280,41 +2284,42 @@ finalize_transaction_execute (RpmostreedTransaction *transaction,
         return glnx_throw (error, "Staged deployment already unlocked");
     }
 
+  sd_journal_print (LOG_INFO, "Finalized deployment; rebooting into %s", checksum);
   rpmostreed_reboot (cancellable, error);
   return TRUE;
 }
 
 static void
-finalize_transaction_class_init (FinalizeTransactionClass *class)
+finalize_deployment_transaction_class_init (FinalizeDeploymentTransactionClass *class)
 {
   GObjectClass *object_class;
 
   object_class = G_OBJECT_CLASS (class);
-  object_class->finalize = finalize_transaction_finalize;
+  object_class->finalize = finalize_deployment_transaction_finalize;
 
-  class->execute = finalize_transaction_execute;
+  class->execute = finalize_deployment_transaction_execute;
 }
 
 static void
-finalize_transaction_init (FinalizeTransaction *self)
+finalize_deployment_transaction_init (FinalizeDeploymentTransaction *self)
 {
 }
 
 RpmostreedTransaction *
-rpmostreed_transaction_new_finalize (GDBusMethodInvocation *invocation,
-                                     OstreeSysroot         *sysroot,
-                                     const char            *osname,
-                                     GVariant              *options,
-                                     GCancellable          *cancellable,
-                                     GError               **error)
+rpmostreed_transaction_new_finalize_deployment (GDBusMethodInvocation *invocation,
+                                                OstreeSysroot         *sysroot,
+                                                const char            *osname,
+                                                GVariant              *options,
+                                                GCancellable          *cancellable,
+                                                GError               **error)
 {
   g_return_val_if_fail (G_IS_DBUS_METHOD_INVOCATION (invocation), NULL);
   g_return_val_if_fail (OSTREE_IS_SYSROOT (sysroot), NULL);
 
   g_autoptr(GVariantDict) options_dict = g_variant_dict_new (options);
 
-  FinalizeTransaction *self =
-    g_initable_new (finalize_transaction_get_type (),
+  FinalizeDeploymentTransaction *self =
+    g_initable_new (finalize_deployment_transaction_get_type (),
                     cancellable, error,
                     "invocation", invocation,
                     "sysroot-path", gs_file_get_path_cached (ostree_sysroot_get_path (sysroot)),

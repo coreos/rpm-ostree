@@ -33,14 +33,21 @@ vm_rpmostree upgrade --lock-finalization
 vm_cmd test -f /run/ostree/staged-deployment-locked
 cursor=$(vm_get_journal_cursor)
 vm_reboot
-vm_assert_journal_has_content $cursor 'Not finalizing; found /run/ostree/staged-deployment-locked'
 assert_streq "$(vm_get_booted_csum)" "${booted_csum}"
+vm_assert_journal_has_content $cursor 'Not finalizing; found /run/ostree/staged-deployment-locked'
 echo "ok locked staging"
 
 vm_rpmostree upgrade --lock-finalization
 vm_cmd test -f /run/ostree/staged-deployment-locked
-vm_reboot_cmd rpm-ostree finalize-deployment --expect-checksum ${commit}
+if vm_rpmostree finalize-deployment; then
+  assert_not_reached "finalized without expected checksum"
+elif vm_rpmostree finalize-deployment WRONG_CHECKSUM; then
+  assert_not_reached "finalized with wrong checksum"
+fi
+cursor=$(vm_get_journal_cursor)
+vm_reboot_cmd rpm-ostree finalize-deployment "${commit}"
 assert_streq "$(vm_get_booted_csum)" "${commit}"
+vm_assert_journal_has_content $cursor "Finalized deployment; rebooting into ${commit}"
 echo "ok finalize-deployment"
 
 # Custom origin and local repo rebases. This is essentially the RHCOS workflow.

@@ -1014,8 +1014,9 @@ os_handle_finalize_deployment (RPMOSTreeOS *interface,
 
   osname = rpmostree_os_get_name (interface);
 
-  transaction = rpmostreed_transaction_new_finalize (invocation, sysroot, osname,
-                                                     arg_options, cancellable, &local_error);
+  transaction = rpmostreed_transaction_new_finalize_deployment (invocation, sysroot, osname,
+                                                                arg_options, cancellable,
+                                                                &local_error);
   if (transaction == NULL)
     goto out;
 

@@ -70,12 +70,12 @@ rpmostreed_transaction_new_deploy (GDBusMethodInvocation *invocation,
                                    GError **error);
 
 RpmostreedTransaction *
-rpmostreed_transaction_new_finalize (GDBusMethodInvocation *invocation,
-                                     OstreeSysroot         *sysroot,
-                                     const char            *osname,
-                                     GVariant              *options,
-                                     GCancellable          *cancellable,
-                                     GError               **error);
+rpmostreed_transaction_new_finalize_deployment (GDBusMethodInvocation *invocation,
+                                                OstreeSysroot         *sysroot,
+                                                const char            *osname,
+                                                GVariant              *options,
+                                                GCancellable          *cancellable,
+                                                GError               **error);
 
 RpmostreedTransaction *
 rpmostreed_transaction_new_initramfs_state       (GDBusMethodInvocation *invocation,

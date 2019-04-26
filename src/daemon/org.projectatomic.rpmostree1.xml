@@ -352,8 +352,12 @@
     </method>
 
     <!-- Available options:
-         "expect-checksum" (type 's')
+         "checksum" (type 's')
             Verify that the checksum to finalize matches a specific one.
+         "allow-missing-checksum" (type 'b')
+            Allow "checksum" key to be missing. Given that this API is
+            meant for clients with precise state transitions, *not*
+            providing a checksum should be a conscious decision.
          "allow-unlocked" (type 'b')
             Don't error out if the staged deployment wasn't locked.
     -->
