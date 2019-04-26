@@ -1633,7 +1633,8 @@ check_goal_solution (RpmOstreeContext *self,
           }
         rpmostree_output_message ("This likely means that some of your layered packages "
                                   "have requirements on newer or older versions of some "
-                                  "base packages. `rpm-ostree cleanup -m` may help. For "
+                                  "base packages. Doing `rpm-ostree cleanup -m` and "
+                                  "`rpm-ostree upgrade` first may help. For "
                                   "more details, see: "
                                   "https://github.com/projectatomic/rpm-ostree/issues/415");
 
