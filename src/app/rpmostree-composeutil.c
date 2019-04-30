@@ -407,6 +407,8 @@ rpmostree_composeutil_write_composejson (OstreeRepo  *repo,
                              g_variant_new_uint64 (stats->content_bytes_written));
     }
   g_variant_builder_add (builder, "{sv}", "ostree-commit", g_variant_new_string (new_revision));
+  g_autofree char *content_checksum = ostree_commit_get_content_checksum (new_commit);
+  g_variant_builder_add (builder, "{sv}", "ostree-content-checksum", g_variant_new_string (content_checksum));
   const char *commit_version = NULL;
   (void)g_variant_lookup (new_commit_inline_meta, OSTREE_COMMIT_META_KEY_VERSION, "&s", &commit_version);
   if (commit_version)
