@@ -235,12 +235,14 @@ filter_commit_meta (GVariant *commit_meta)
   return g_variant_dict_end (&dict);
 }
 
-GVariant *
-rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
+
+GVariant*
+rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroot,
                                         OstreeDeployment *deployment,
-                                        const char *booted_id,
-                                        OstreeRepo *repo,
-                                        GError **error)
+                                        const char       *booted_id,
+                                        OstreeRepo       *repo,
+                                        gboolean          filter,
+                                        GError          **error)
 {
   const gchar *osname = ostree_deployment_get_osname (deployment);
   const gchar *csum = ostree_deployment_get_csum (deployment);
@@ -297,7 +299,8 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
       /* See below for base commit metadata */
       g_autoptr(GVariant) layered_metadata = g_variant_get_child_value (commit, 0);
       g_variant_dict_insert (&dict, "layered-commit-meta", "@a{sv}",
-                             filter_commit_meta (layered_metadata));
+                             filter ? filter_commit_meta (layered_metadata)
+                                    : layered_metadata);
     }
   else
     {
@@ -311,7 +314,7 @@ rpmostreed_deployment_generate_variant (OstreeSysroot *sysroot,
    */
   { g_autoptr(GVariant) base_meta = g_variant_get_child_value (base_commit, 0);
     g_variant_dict_insert (&dict, "base-commit-meta", "@a{sv}",
-                           filter_commit_meta (base_meta));
+                           filter ? filter_commit_meta (base_meta) : base_meta);
   }
   variant_add_commit_details (&dict, NULL, commit);
 
