@@ -374,6 +374,21 @@ rpmostree_str_replace (const char  *buf,
   return g_regex_replace_literal (regex, buf, -1, 0, new, 0, error);
 }
 
+/* FIXME: This is a copy of ot_admin_checksum_version */
+char *
+rpmostree_checksum_version (GVariant *checksum)
+{
+  g_autoptr(GVariant) metadata = NULL;
+  const char *ret = NULL;
+
+  metadata = g_variant_get_child_value (checksum, 0);
+
+  if (!g_variant_lookup (metadata, "version", "&s", &ret))
+    return NULL;
+
+  return g_strdup (ret);
+}
+
 static gboolean
 pull_content_only_recurse (OstreeRepo  *dest,
                            OstreeRepo  *src,

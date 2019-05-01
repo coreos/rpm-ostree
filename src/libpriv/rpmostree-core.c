@@ -3544,21 +3544,6 @@ apply_rpmfi_overrides (RpmOstreeContext *self,
   return TRUE;
 }
 
-/* FIXME: This is a copy of ot_admin_checksum_version */
-static char *
-checksum_version (GVariant *checksum)
-{
-  g_autoptr(GVariant) metadata = NULL;
-  const char *ret = NULL;
-
-  metadata = g_variant_get_child_value (checksum, 0);
-
-  if (!g_variant_lookup (metadata, "version", "&s", &ret))
-    return NULL;
-
-  return g_strdup (ret);
-}
-
 static gboolean
 add_install (RpmOstreeContext *self,
              DnfPackage       *pkg,
@@ -4357,7 +4342,7 @@ rpmostree_context_commit (RpmOstreeContext      *self,
         if (!ostree_repo_load_commit (self->ostreerepo, parent, &commit, NULL, error))
           return FALSE;
 
-        parent_version = checksum_version (commit);
+        parent_version = rpmostree_checksum_version (commit);
 
         /* copy the version tag */
         if (parent_version)
