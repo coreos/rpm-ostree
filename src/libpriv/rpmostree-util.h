@@ -88,6 +88,8 @@ rpmostree_str_replace (const char  *buf,
                        const char  *new,
                        GError     **error);
 
+char *
+rpmostree_checksum_version (GVariant *checksum);
 
 gboolean
 rpmostree_pull_content_only (OstreeRepo  *dest,
