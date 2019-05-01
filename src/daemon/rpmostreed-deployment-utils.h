@@ -39,6 +39,7 @@ GVariant *      rpmostreed_deployment_generate_variant (OstreeSysroot    *sysroo
                                                         OstreeDeployment *deployment,
                                                         const char       *booted_id,
                                                         OstreeRepo       *repo,
+                                                        gboolean          filter,
                                                         GError          **error);
 
 GVariant *      rpmostreed_commit_generate_cached_details_variant (OstreeDeployment *deployment,
