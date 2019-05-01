@@ -106,25 +106,14 @@ print_packages (const char *k, guint max_key_len,
                 const char *const* omit_pkgs)
 {
   g_autoptr(GPtrArray) packages_sorted = g_ptr_array_new_with_free_func (g_free);
-  static gsize regex_initialized;
-  static GRegex *safe_chars_regex;
-  if (g_once_init_enter (&regex_initialized))
-    {
-      safe_chars_regex = g_regex_new ("^[[:alnum:]-._]+$", 0, 0, NULL);
-      g_assert (safe_chars_regex);
-      g_once_init_leave (&regex_initialized, 1);
-    }
-
   for (char **iter = (char**) pkgs; iter && *iter; iter++)
     {
-      if (omit_pkgs != NULL && g_strv_contains (omit_pkgs, *iter))
+      const char *pkg = *iter;
+      if (omit_pkgs != NULL && g_strv_contains (omit_pkgs, pkg))
         continue;
 
-      /* don't quote if it just has common pkgname/shell-safe chars */
-      if (g_regex_match (safe_chars_regex, *iter, 0, 0))
-        g_ptr_array_add (packages_sorted, g_strdup (*iter));
-      else
-        g_ptr_array_add (packages_sorted, g_shell_quote (*iter));
+      g_autofree char *quoted = rpmostree_maybe_shell_quote (pkg) ?: g_strdup (pkg);
+      g_ptr_array_add (packages_sorted, g_steal_pointer (&quoted));
     }
 
   const guint n_packages = packages_sorted->len;
