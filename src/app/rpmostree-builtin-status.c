@@ -690,9 +690,10 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
       if (!rpmostree_print_diff_advisories (rpm_diff, advisories, opt_verbose,
                                             opt_verbose_advisories, max_key_len, error))
         return FALSE;
-      *out_printed_cached_update = TRUE;
+      if (out_printed_cached_update)
+        *out_printed_cached_update= TRUE;
     }
-  else if (is_pending_deployment)
+  else if (is_pending_deployment && sysroot_proxy)
     {
       /* No cached update, but we can still print a diff summary */
       const char *sysroot_path = rpmostree_sysroot_get_path (sysroot_proxy);
