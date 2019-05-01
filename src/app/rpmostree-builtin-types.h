@@ -54,6 +54,7 @@ struct RpmOstreeCommand {
  */
 struct RpmOstreeCommandInvocation {
   RpmOstreeCommand *command;
+  const char *command_line;
   int exit_code;
 };
 G_END_DECLS

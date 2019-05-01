@@ -39,7 +39,9 @@ bar_rpm=/var/tmp/vmcheck/yumrepo/packages/x86_64/bar-1.0-1.x86_64.rpm
 # UPGRADE
 
 commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
+vm_status_watch_start
 vm_rpmostree upgrade --install bar --install $foo_rpm
+vm_status_watch_check "Transaction: upgrade --install bar --install $foo_rpm"
 vm_assert_status_jq \
     ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
     '.deployments[0]["packages"]|length == 1' \
@@ -54,7 +56,9 @@ echo "ok upgrade with bar and local foo"
 
 commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck \
            --add-metadata-string=version=SUPADUPAVERSION)
+vm_status_watch_start
 vm_rpmostree deploy SUPADUPAVERSION --install foo --install $bar_rpm
+vm_status_watch_check "Transaction: deploy SUPADUPAVERSION --install foo --install $bar_rpm"
 vm_assert_status_jq \
     ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
     '.deployments[0]["version"] == "SUPADUPAVERSION"' \
@@ -70,8 +74,10 @@ echo "ok deploy with foo and local bar"
 
 commit=$(vm_cmd ostree commit -b vmcheck_tmp/rebase \
            --tree=ref=vmcheck --add-metadata-string=version=SUPADUPAVERSION)
+vm_status_watch_start
 vm_rpmostree rebase vmcheck_tmp/rebase SUPADUPAVERSION \
     --install bar --install $foo_rpm
+vm_status_watch_check "Transaction: rebase vmcheck_tmp/rebase SUPADUPAVERSION --install bar --install $foo_rpm"
 vm_assert_status_jq \
     ".deployments[0][\"base-checksum\"] == \"${commit}\"" \
     '.deployments[0]["origin"] == "vmcheck_tmp/rebase"' \
@@ -86,12 +92,16 @@ echo "ok rebase with bar and local foo"
 
 # PKG CHANGES
 
+vm_status_watch_start
 vm_rpmostree install $foo_rpm
+vm_status_watch_check "Transaction: install $foo_rpm"
 vm_assert_status_jq \
     '.deployments[0]["packages"]|length == 0' \
     '.deployments[0]["requested-local-packages"]|length == 1' \
     '.deployments[0]["requested-local-packages"]|index("foo-1.0-1.x86_64") >= 0'
+vm_status_watch_start
 vm_rpmostree uninstall foo-1.0-1.x86_64 --install bar
+vm_status_watch_check "Transaction: uninstall foo-1.0-1.x86_64 --install bar"
 vm_assert_status_jq \
     '.deployments[0]["packages"]|length == 1' \
     '.deployments[0]["packages"]|index("bar") >= 0' \

@@ -58,6 +58,7 @@ static GOptionEntry remove_option_entries[] = {
 
 static gboolean
 handle_override (RPMOSTreeSysroot  *sysroot_proxy,
+                 RpmOstreeCommandInvocation *invocation,
                  const char *const *override_remove,
                  const char *const *override_replace,
                  const char *const *override_reset,
@@ -81,6 +82,7 @@ handle_override (RPMOSTreeSysroot  *sysroot_proxy,
   g_variant_dict_insert (&dict, "no-pull-base", "b", TRUE);
   g_variant_dict_insert (&dict, "dry-run", "b", opt_dry_run);
   g_variant_dict_insert (&dict, "no-overrides", "b", opt_reset_all);
+  g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   g_autoptr(GVariant) previous_deployment = rpmostree_os_dup_default_deployment (os_proxy);
@@ -166,7 +168,7 @@ rpmostree_override_builtin_replace (int argc, char **argv,
   argv++; argc--;
   argv[argc] = NULL;
 
-  return handle_override (sysroot_proxy,
+  return handle_override (sysroot_proxy, invocation,
                           opt_remove_pkgs, (const char *const*)argv, NULL,
                           cancellable, error);
 }
@@ -209,7 +211,7 @@ rpmostree_override_builtin_remove (int argc, char **argv,
   argv++; argc--;
   argv[argc] = NULL;
 
-  return handle_override (sysroot_proxy,
+  return handle_override (sysroot_proxy, invocation,
                           (const char *const*)argv, opt_replace_pkgs, NULL,
                           cancellable, error);
 }
@@ -258,7 +260,7 @@ rpmostree_override_builtin_reset (int argc, char **argv,
   argv++; argc--;
   argv[argc] = NULL;
 
-  return handle_override (sysroot_proxy,
+  return handle_override (sysroot_proxy, invocation,
                           NULL, NULL, (const char *const*)argv,
                           cancellable, error);
 }

@@ -46,7 +46,9 @@ fi
 assert_file_has_content err.txt "arg.*used with.*enable"
 echo "ok initramfs state"
 
+vm_status_watch_start
 vm_rpmostree initramfs --enable > initramfs.txt
+vm_status_watch_check "Transaction: initramfs --enable"
 assert_file_has_content initramfs.txt "Initramfs regeneration.*enabled"
 vm_rpmostree initramfs > initramfs.txt
 assert_file_has_content initramfs.txt "Initramfs regeneration.*enabled"

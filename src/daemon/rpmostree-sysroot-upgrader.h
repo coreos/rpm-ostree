@@ -127,10 +127,11 @@ rpmostree_sysroot_upgrader_pull_repos (RpmOstreeSysrootUpgrader  *self,
 
 
 gboolean
-rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader  *self,
-                                   OstreeDeployment         **out_deployment,
-                                   GCancellable           *cancellable,
-                                   GError                **error);
+rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
+                                   const char               *initiating_command_line,
+                                   OstreeDeployment        **out_deployment,
+                                   GCancellable             *cancellable,
+                                   GError                  **error);
 
 void
 rpmostree_sysroot_upgrader_set_kargs (RpmOstreeSysrootUpgrader *self,

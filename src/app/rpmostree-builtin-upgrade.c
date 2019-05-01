@@ -134,6 +134,7 @@ rpmostree_builtin_upgrade (int             argc,
       GVariantDict dict;
       g_variant_dict_init (&dict, NULL);
       g_variant_dict_insert (&dict, "mode", "s", check_or_preview ? "check" : "auto");
+      g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
       /* override default of TRUE if we're handling --check/--preview for backcompat,
        * or we're *are* handling --trigger-automatic-update-policy, but on a tty */
       if (check_or_preview || glnx_stdout_is_tty ())
@@ -165,6 +166,7 @@ rpmostree_builtin_upgrade (int             argc,
       g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
       g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
       g_variant_dict_insert (&dict, "lock-finalization", "b", opt_lock_finalization);
+      g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
       g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       /* Use newer D-Bus API only if we have to. */

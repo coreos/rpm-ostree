@@ -343,6 +343,9 @@
             Prevent automatic deployment finalization on shutdown.
             Clients must manually call FinalizeDeployment() when ready
             to apply the update and reboot.
+         "initiating-command-line" (type 's')
+            Mark the transaction as being initiated by the given command.
+            This is used for the transaction title and journal entries.
     -->
     <method name="UpdateDeployment">
       <arg type="a{sv}" name="modifiers" direction="in"/>

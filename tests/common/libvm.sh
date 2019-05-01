@@ -621,3 +621,24 @@ vm_ostree_repo_commit_layered_as_base() {
 vm_ostree_commit_layered_as_base() {
   vm_ostree_repo_commit_layered_as_base /ostree/repo "$@"
 }
+
+vm_status_watch_start() {
+  rm -rf status-watch.txt
+  while sleep 1; do
+    vm_rpmostree status >> status-watch.txt
+  done &
+  _status_watch_pid=$!
+  # NB: the EXIT trap is used by libtest, but not the ERR trap
+  trap "kill $_status_watch_pid" ERR
+  set -E # inherit trap
+}
+
+vm_status_watch_check() {
+  [ -n "${_status_watch_pid:-}" ]
+  kill $_status_watch_pid
+  _status_watch_pid=
+  set +E
+  [ -f status-watch.txt ]
+  assert_file_has_content_literal status-watch.txt "$@"
+  rm -rf status-watch.txt
+}
