@@ -812,6 +812,69 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
     ((self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_DOWNLOAD_METADATA_ONLY) > 0);
   const gboolean allow_inactive = deploy_has_bool_option (self, "allow-inactive");
 
+  gboolean is_install = FALSE;
+  gboolean is_uninstall = FALSE;
+  gboolean is_override = FALSE;
+
+  /* In practice today */
+  if (no_pull_base)
+    {
+      /* this is a heuristic; by the end, once the proper switches are added, the two
+       * commands can look indistinguishable at the D-Bus level */
+      is_override = (self->override_reset_pkgs ||
+                     self->override_remove_pkgs ||
+                     self->override_replace_pkgs ||
+                     self->override_replace_local_pkgs ||
+                     no_overrides);
+      if (!is_override)
+        {
+          if (self->install_pkgs || self->install_local_pkgs)
+            is_install = TRUE;
+          else
+            is_uninstall = TRUE;
+        }
+    }
+
+  /* If we're not actively holding back pulling a new update and we're staying on the same
+   * ref, then by definition we're upgrading. */
+  const gboolean is_upgrade = (!no_pull_base && !self->refspec && !self->revision);
+
+  /* Now set the transaction title before doing any work.
+   * https://github.com/projectatomic/rpm-ostree/issues/454 */
+  g_autoptr(GString) txn_title = g_string_new ("");
+  if (is_install)
+    g_string_append (txn_title, "install");
+  else if (is_uninstall)
+    g_string_append (txn_title, "uninstall");
+  else if (is_override)
+    g_string_append (txn_title, "override");
+  else if (self->refspec)
+    g_string_append (txn_title, "rebase");
+  else if (self->revision)
+    g_string_append (txn_title, "deploy");
+  else
+    g_string_append (txn_title, "upgrade");
+
+  /* so users know we were probably fired by the automated timer when looking at status */
+  if (cache_only)
+    g_string_append (txn_title, " (cache only)");
+  else if (download_metadata_only)
+    g_string_append (txn_title, " (check only)");
+  else if (download_only)
+    g_string_append (txn_title, " (download only)");
+
+  if (self->uninstall_pkgs)
+    g_string_append_printf (txn_title, "; uninstall: %u",
+                            g_strv_length (self->uninstall_pkgs));
+  if (self->install_pkgs)
+    g_string_append_printf (txn_title, "; install: %u",
+                            g_strv_length (self->install_pkgs));
+  if (self->install_local_pkgs)
+    g_string_append_printf (txn_title, "; localinstall: %u",
+                            g_unix_fd_list_get_length (self->install_local_pkgs));
+
+  rpmostree_transaction_set_title (RPMOSTREE_TRANSACTION (transaction), txn_title->str);
+
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
     upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_ALLOW_OLDER;
@@ -931,56 +994,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       rpmostree_origin_set_override_commit (origin, NULL, NULL);
     }
 
-  gboolean is_install = FALSE;
-  gboolean is_uninstall = FALSE;
-  gboolean is_override = FALSE;
-
-  /* In practice today */
-  if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_NO_PULL_BASE)
-    {
-      /* this is a heuristic; by the end, once the proper switches are added, the two
-       * commands can look indistinguishable at the D-Bus level */
-      is_override = (self->override_reset_pkgs ||
-                     self->override_remove_pkgs ||
-                     self->override_replace_pkgs ||
-                     self->override_replace_local_pkgs ||
-                     no_overrides);
-      if (!is_override)
-        {
-          if (self->install_pkgs || self->install_local_pkgs)
-            is_install = TRUE;
-          else
-            is_uninstall = TRUE;
-        }
-    }
-
-  /* https://github.com/projectatomic/rpm-ostree/issues/454 */
-  gboolean is_upgrade = FALSE;
-  g_autoptr(GString) txn_title = g_string_new ("");
-  if (is_install)
-    g_string_append (txn_title, "install");
-  else if (is_uninstall)
-    g_string_append (txn_title, "uninstall");
-  else if (is_override)
-    g_string_append (txn_title, "override");
-  else if (self->refspec)
-    g_string_append (txn_title, "rebase");
-  else if (self->revision)
-    g_string_append (txn_title, "deploy");
-  else
-    {
-      is_upgrade = TRUE; /* XXX: strengthen how we determine this */
-      g_string_append (txn_title, "upgrade");
-    }
-
-  /* so users know we were probably fired by the automated timer when looking at status */
-  if (cache_only)
-    g_string_append (txn_title, " (cache only)");
-  else if (download_metadata_only)
-    g_string_append (txn_title, " (check only)");
-  else if (download_only)
-    g_string_append (txn_title, " (download only)");
-
   gboolean changed = FALSE;
   if (no_initramfs && rpmostree_origin_get_regenerate_initramfs (origin))
     {
@@ -999,9 +1012,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
       if (!rpmostree_origin_remove_packages (origin, self->uninstall_pkgs,
                                              idempotent_layering, &remove_changed, error))
         return FALSE;
-
-      g_string_append_printf (txn_title, "; uninstall: %u",
-                              g_strv_length (self->uninstall_pkgs));
     }
 
   /* In reality, there may not be any new layer required even if `remove_changed` is TRUE
@@ -1050,9 +1060,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         return FALSE;
 
       changed = changed || add_changed;
-
-      g_string_append_printf (txn_title, "; install: %u",
-                              g_strv_length (self->install_pkgs));
     }
 
   if (self->install_local_pkgs != NULL)
@@ -1064,8 +1071,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
 
       if (pkgs->len > 0)
         {
-          g_string_append_printf (txn_title, "; localinstall: %u", pkgs->len);
-
           g_ptr_array_add (pkgs, NULL);
 
           gboolean add_changed = FALSE;
@@ -1179,8 +1184,6 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
           changed = TRUE;
         }
     }
-
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, txn_title->str);
 
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 
