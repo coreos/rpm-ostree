@@ -82,6 +82,7 @@ rpmostree_builtin_finalize_deployment (int             argc,
     g_variant_dict_insert (&dict, "checksum", "s", checksum);
   g_variant_dict_insert (&dict, "allow-missing-checksum", "b", opt_allow_missing);
   g_variant_dict_insert (&dict, "allow-unlocked", "b", opt_allow_unlocked);
+  g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   g_autofree char *transaction_address = NULL;

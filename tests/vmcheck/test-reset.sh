@@ -97,7 +97,9 @@ echo "ok reset EVERYTHING"
 
 # reset everything and overlay at the same time
 vm_build_rpm a-new-package
+vm_status_watch_start
 vm_rpmostree reset --install a-new-package
+vm_status_watch_check "Transaction: reset --install a-new-package"
 vm_assert_status_jq \
   '.deployments[0]["packages"]|length == 1' \
   '.deployments[0]["packages"]|index("a-new-package") >= 0' \

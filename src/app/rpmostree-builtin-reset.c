@@ -100,6 +100,7 @@ rpmostree_builtin_reset (int             argc,
   g_variant_dict_insert (&dict, "no-overrides", "b", opt_overrides);
   g_variant_dict_insert (&dict, "no-initramfs", "b", opt_initramfs);
   g_variant_dict_insert (&dict, "cache-only", "b", cache_only);
+  g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   if (!rpmostree_update_deployment (os_proxy, NULL, NULL, install_pkgs, uninstall_pkgs,

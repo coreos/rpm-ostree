@@ -122,7 +122,9 @@ vm_rpmostree install foo-1.0 --idempotent
 assert_streq $old_pending $(vm_get_pending_csum)
 echo "ok idempotent install"
 
+vm_status_watch_start
 vm_rpmostree uninstall foo-1.0
+vm_status_watch_check "Transaction: uninstall foo-1.0"
 
 # Test idempotent uninstall
 old_pending=$(vm_get_pending_csum)

@@ -67,7 +67,9 @@ assert_file_has_content tmp_conf.txt 'APPENDARG=2NDAPPEND'
 echo "ok delete a single key/value pair from multi valued key pairs"
 
 # Test for rpm-ostree kargs replace
+vm_status_watch_start
 vm_rpmostree kargs --append=REPLACE_TEST=TEST --append=REPLACE_MULTI_TEST=TEST --append=REPLACE_MULTI_TEST=NUMBERTWO
+vm_status_watch_check "Transaction: kargs --append=REPLACE_TEST=TEST --append=REPLACE_MULTI_TEST=TEST --append=REPLACE_MULTI_TEST=NUMBERTWO"
 
 # Test for replacing key/value pair with  only one value
 vm_rpmostree kargs --replace=REPLACE_TEST=HELLO

@@ -77,7 +77,10 @@ build_rpms() {
 }
 build_rpms
 
+vm_status_watch_start
 vm_rpmostree install {foo,bar}-ext-{1,2}
+vm_status_watch_check "Transaction: install foo-ext-1 foo-ext-2 bar-ext-1 bar-ext-2"
+
 vm_cmd ostree refs $(vm_get_deployment_info 0 checksum) \
   --create vmcheck_tmp/with_foo_and_bar
 vm_rpmostree cleanup -p

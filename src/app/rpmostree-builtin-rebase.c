@@ -167,6 +167,7 @@ rpmostree_builtin_rebase (int             argc,
   g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
   g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
   g_variant_dict_insert (&dict, "skip-purge", "b", opt_skip_purge);
+  g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   if (opt_custom_origin_url)
     {
       if (!opt_custom_origin_description)

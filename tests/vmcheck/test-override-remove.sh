@@ -219,6 +219,8 @@ vm_rpmostree cleanup -p
 echo "ok override remove base dep to layered pkg fails"
 
 vm_build_rpm boo
+vm_status_watch_start
 vm_rpmostree override remove foo --install boo
+vm_status_watch_check "Transaction: override remove foo --install boo"
 vm_rpmostree cleanup -p
 echo "ok remove and --install at the same time"

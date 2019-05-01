@@ -29,6 +29,7 @@
 #include <unistd.h>
 #include <locale.h>
 
+#include "rpmostree-util.h"
 #include "rpmostree-builtins.h"
 #include "rpmostree-polkit-agent.h"
 
@@ -382,11 +383,28 @@ rpmostree_handle_subcommand (int argc, char **argv,
 
   /* We need a new sub-invocation with the new command, which also carries a new
    * exit code, but we'll proxy the latter. */
-  RpmOstreeCommandInvocation sub_invocation = { .command = subcommand, .exit_code = -1 };
+  RpmOstreeCommandInvocation sub_invocation = { .command = subcommand,
+                                                .command_line = invocation->command_line,
+                                                .exit_code = -1 };
   gboolean ret = subcommand->fn (argc, argv, &sub_invocation, cancellable, error);
   /* Proxy the exit code */
   invocation->exit_code = sub_invocation.exit_code;
   return ret;
+}
+
+static char*
+rebuild_command_line (int    argc,
+                      char **argv)
+{
+  /* be nice and quote args as needed instead of just g_strjoinv() */
+  g_autoptr(GString) command = g_string_new (NULL);
+  for (int i = 1; i < argc; i++)
+    {
+      g_autofree char *quoted = rpmostree_maybe_shell_quote (argv[i]);
+      g_string_append (command, quoted ?: argv[i]);
+      g_string_append_c (command, ' ');
+    }
+  return g_string_free (g_steal_pointer (&command), FALSE);
 }
 
 int
@@ -419,6 +437,8 @@ main (int    argc,
   setlocale (LC_ALL, "");
 
   GCancellable *cancellable = g_cancellable_new ();
+
+  g_autofree char *command_line = rebuild_command_line (argc, argv);
 
   /*
    * Parse the global options. We rearrange the options as
@@ -460,6 +480,7 @@ main (int    argc,
   g_set_prgname (prgname);
 
   RpmOstreeCommandInvocation invocation = { .command = command,
+                                            .command_line = command_line,
                                             .exit_code = -1 };
   exit_statusp = &(invocation.exit_code);
   if (!command->fn (argc, argv, &invocation, cancellable, &local_error))

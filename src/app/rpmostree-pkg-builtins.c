@@ -96,6 +96,7 @@ pkg_change (RpmOstreeCommandInvocation *invocation,
   g_variant_dict_insert (&dict, "allow-inactive", "b", opt_allow_inactive);
   g_variant_dict_insert (&dict, "no-layering", "b", opt_uninstall_all);
   g_variant_dict_insert (&dict, "idempotent-layering", "b", opt_idempotent);
+  g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
   g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
   gboolean met_local_pkg = FALSE;

@@ -835,45 +835,59 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         }
     }
 
+  const char *command_line =
+    vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
+
   /* If we're not actively holding back pulling a new update and we're staying on the same
    * ref, then by definition we're upgrading. */
   const gboolean is_upgrade = (!no_pull_base && !self->refspec && !self->revision);
 
   /* Now set the transaction title before doing any work.
    * https://github.com/projectatomic/rpm-ostree/issues/454 */
-  g_autoptr(GString) txn_title = g_string_new ("");
-  if (is_install)
-    g_string_append (txn_title, "install");
-  else if (is_uninstall)
-    g_string_append (txn_title, "uninstall");
-  else if (is_override)
-    g_string_append (txn_title, "override");
-  else if (self->refspec)
-    g_string_append (txn_title, "rebase");
-  else if (self->revision)
-    g_string_append (txn_title, "deploy");
+  if (command_line)
+    {
+      /* special-case the automatic one, otherwise just use verbatim as title */
+      const char *title = command_line;
+      if (strstr (command_line, "--trigger-automatic-update-policy"))
+        title = download_metadata_only ? "automatic (check)" : "automatic (stage)";
+      rpmostree_transaction_set_title (RPMOSTREE_TRANSACTION (transaction), title);
+    }
   else
-    g_string_append (txn_title, "upgrade");
+    {
+      g_autoptr(GString) txn_title = g_string_new ("");
+      if (is_install)
+        g_string_append (txn_title, "install");
+      else if (is_uninstall)
+        g_string_append (txn_title, "uninstall");
+      else if (is_override)
+        g_string_append (txn_title, "override");
+      else if (self->refspec)
+        g_string_append (txn_title, "rebase");
+      else if (self->revision)
+        g_string_append (txn_title, "deploy");
+      else
+        g_string_append (txn_title, "upgrade");
 
-  /* so users know we were probably fired by the automated timer when looking at status */
-  if (cache_only)
-    g_string_append (txn_title, " (cache only)");
-  else if (download_metadata_only)
-    g_string_append (txn_title, " (check only)");
-  else if (download_only)
-    g_string_append (txn_title, " (download only)");
+      /* so users know we were probably fired by the automated timer when looking at status */
+      if (cache_only)
+        g_string_append (txn_title, " (cache only)");
+      else if (download_metadata_only)
+        g_string_append (txn_title, " (check only)");
+      else if (download_only)
+        g_string_append (txn_title, " (download only)");
 
-  if (self->uninstall_pkgs)
-    g_string_append_printf (txn_title, "; uninstall: %u",
-                            g_strv_length (self->uninstall_pkgs));
-  if (self->install_pkgs)
-    g_string_append_printf (txn_title, "; install: %u",
-                            g_strv_length (self->install_pkgs));
-  if (self->install_local_pkgs)
-    g_string_append_printf (txn_title, "; localinstall: %u",
-                            g_unix_fd_list_get_length (self->install_local_pkgs));
+      if (self->uninstall_pkgs)
+        g_string_append_printf (txn_title, "; uninstall: %u",
+                                g_strv_length (self->uninstall_pkgs));
+      if (self->install_pkgs)
+        g_string_append_printf (txn_title, "; install: %u",
+                                g_strv_length (self->install_pkgs));
+      if (self->install_local_pkgs)
+        g_string_append_printf (txn_title, "; localinstall: %u",
+                                g_unix_fd_list_get_length (self->install_local_pkgs));
 
-  rpmostree_transaction_set_title (RPMOSTREE_TRANSACTION (transaction), txn_title->str);
+      rpmostree_transaction_set_title (RPMOSTREE_TRANSACTION (transaction), txn_title->str);
+    }
 
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
   if (self->flags & RPMOSTREE_TRANSACTION_DEPLOY_FLAG_ALLOW_DOWNGRADE)
@@ -1340,7 +1354,7 @@ deploy_transaction_execute (RpmostreedTransaction *transaction,
         }
 
       g_autoptr(OstreeDeployment) new_deployment = NULL;
-      if (!rpmostree_sysroot_upgrader_deploy (upgrader, &new_deployment,
+      if (!rpmostree_sysroot_upgrader_deploy (upgrader, command_line, &new_deployment,
                                               cancellable, error))
         return FALSE;
 
@@ -1702,8 +1716,10 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
 
   InitramfsStateTransaction *self = (InitramfsStateTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
+  const char *command_line =
+    vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, "initramfs");
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "initramfs");
 
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
     rpmostree_sysroot_upgrader_new (sysroot, self->osname, 0, cancellable, error);
@@ -1731,7 +1747,7 @@ initramfs_state_transaction_execute (RpmostreedTransaction *transaction,
   rpmostree_origin_set_regenerate_initramfs (origin, self->regenerate, self->args);
   rpmostree_sysroot_upgrader_set_origin (upgrader, origin);
 
-  if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
+  if (!rpmostree_sysroot_upgrader_deploy (upgrader, command_line, NULL, cancellable, error))
     return FALSE;
 
   if (vardict_lookup_bool (self->options, "reboot", FALSE))
@@ -2251,6 +2267,11 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   OstreeRepo *repo = ostree_sysroot_repo (sysroot);
 
+  const char *command_line =
+    vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
+
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "finalize-deployment");
+
   g_autoptr(GPtrArray) deployments = ostree_sysroot_get_deployments (sysroot);
   if (deployments->len == 0)
     return glnx_throw (error, "No deployments found");
@@ -2380,12 +2401,14 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   KernelArgTransaction *self = (KernelArgTransaction *) transaction;
   OstreeSysroot *sysroot = rpmostreed_transaction_get_sysroot (transaction);
   RpmOstreeSysrootUpgraderFlags upgrader_flags = 0;
+  const char *command_line =
+    vardict_lookup_ptr (self->options, "initiating-command-line", "&s");
 
   /* don't want to pull new content for this */
   upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_SYNTHETIC_PULL;
   upgrader_flags |= RPMOSTREE_SYSROOT_UPGRADER_FLAGS_PKGCACHE_ONLY;
 
-  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, "kargs");
+  rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "kargs");
 
   /* Read in the existing kernel args and convert those to an #OstreeKernelArg instance for API usage */
   __attribute__((cleanup(_ostree_kernel_args_cleanup))) OstreeKernelArgs *kargs = _ostree_kernel_args_from_string (self->existing_kernel_args);
@@ -2427,7 +2450,7 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   g_auto(GStrv) kargs_strv = _ostree_kernel_args_to_strv (kargs);
   rpmostree_sysroot_upgrader_set_kargs (upgrader, kargs_strv);
 
-  if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
+  if (!rpmostree_sysroot_upgrader_deploy (upgrader, command_line, NULL, cancellable, error))
     return FALSE;
 
   if (vardict_lookup_bool (self->options, "reboot", FALSE))

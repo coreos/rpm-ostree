@@ -117,6 +117,7 @@ rpmostree_builtin_deploy (int            argc,
       g_variant_dict_insert (&dict, "allow-downgrade", "b", TRUE);
       g_variant_dict_insert (&dict, "cache-only", "b", opt_cache_only);
       g_variant_dict_insert (&dict, "download-only", "b", opt_download_only);
+      g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
       g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       /* Use newer D-Bus API only if we have to so we maintain coverage. */

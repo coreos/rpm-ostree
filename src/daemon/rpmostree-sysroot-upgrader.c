@@ -59,6 +59,7 @@ struct RpmOstreeSysrootUpgrader {
   OstreeRepo *repo;
   char *osname;
   RpmOstreeSysrootUpgraderFlags flags;
+  char *command_line;
 
   OstreeDeployment *cfg_merge_deployment;
   OstreeDeployment *origin_merge_deployment;
@@ -204,6 +205,7 @@ rpmostree_sysroot_upgrader_finalize (GObject *object)
   g_clear_object (&self->sysroot);
   g_clear_object (&self->repo);
   g_free (self->osname);
+  g_free (self->command_line);
 
   g_clear_object (&self->cfg_merge_deployment);
   g_clear_object (&self->origin_merge_deployment);
@@ -1227,6 +1229,7 @@ rpmostree_sysroot_upgrader_set_kargs (RpmOstreeSysrootUpgrader *self,
 /**
  * rpmostree_sysroot_upgrader_deploy:
  * @self: Self
+ * @initiating_command_line (nullable): command-line that initiated the deployment
  * @out_deployment: (out) (optional): return location for new deployment
  * @cancellable: Cancellable
  * @error: Error
@@ -1236,6 +1239,7 @@ rpmostree_sysroot_upgrader_set_kargs (RpmOstreeSysrootUpgrader *self,
  */
 gboolean
 rpmostree_sysroot_upgrader_deploy (RpmOstreeSysrootUpgrader *self,
+                                   const char               *initiating_command_line,
                                    OstreeDeployment        **out_deployment,
                                    GCancellable             *cancellable,
                                    GError                  **error)

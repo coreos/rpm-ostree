@@ -125,7 +125,9 @@ assert_replaced_local_pkg bar-1.0-1.x86_64 bar-0.9-1.x86_64
 echo "ok override replacements carried through upgrade"
 
 # try to reset pkgs using both name and nevra
+vm_status_watch_start
 vm_rpmostree override reset foo fooext-2.0-1.x86_64
+vm_status_watch_check "Transaction: override reset foo fooext-2.0-1.x86_64"
 vm_assert_status_jq \
   '.deployments[0]["base-local-replacements"]|length == 1' \
   '.deployments[0]["requested-base-local-replacements"]|length == 1'

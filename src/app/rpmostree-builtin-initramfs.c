@@ -135,6 +135,7 @@ rpmostree_builtin_initramfs (int             argc,
       GVariantDict dict;
       g_variant_dict_init (&dict, NULL);
       g_variant_dict_insert (&dict, "reboot", "b", opt_reboot);
+      g_variant_dict_insert (&dict, "initiating-command-line", "s", invocation->command_line);
       g_autoptr(GVariant) options = g_variant_ref_sink (g_variant_dict_end (&dict));
 
       g_autofree char *transaction_address = NULL;
