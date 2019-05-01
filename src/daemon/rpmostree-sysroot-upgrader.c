@@ -1210,28 +1210,18 @@ rpmostree_sysroot_upgrader_import_pkgs (RpmOstreeSysrootUpgrader *self,
 }
 
 /**
- * rpmostree_sysroot_upgrader_deploy_set_kargs:
+ * rpmostree_sysroot_upgrader_set_kargs:
  * @self: Self
  * @kernel_args: A list of strings representing kernel_arguments
- * @cancellable: Cancellable
- * @error: Error
  *
- * A wrapper function that collects the kernel arguments then call the rpmostree_sysroot_upgrader_deploy
- * to write a pending deployment to the disk
- *
- * Returns: FALSE if rpmostree_sysroot_upgrader_deploy fails
- *
+ * Set the active kargs to be used during deployment.
  */
-gboolean
-rpmostree_sysroot_upgrader_deploy_set_kargs (RpmOstreeSysrootUpgrader *self,
-                                             char                    **kernel_args,
-                                             GCancellable             *cancellable,
-                                             GError                  **error)
+void
+rpmostree_sysroot_upgrader_set_kargs (RpmOstreeSysrootUpgrader *self,
+                                      char                    **kernel_args)
 {
-  /* Set the attribute kargs directly, not sure whether or not to have a setter */
-  /* Because .. currently pretty much here is the only place that we set it */
+  g_clear_pointer (&self->kargs_strv, g_strfreev);
   self->kargs_strv = g_strdupv (kernel_args);
-  return rpmostree_sysroot_upgrader_deploy (self, NULL, cancellable, error);
 }
 
 /**

@@ -2422,8 +2422,9 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
 
   /* After all the arguments are processed earlier, we convert it to a string list*/
   g_auto(GStrv) kargs_strv = _ostree_kernel_args_to_strv (kargs);
-  if (!rpmostree_sysroot_upgrader_deploy_set_kargs (upgrader, kargs_strv,
-                                                    cancellable, error))
+  rpmostree_sysroot_upgrader_set_kargs (upgrader, kargs_strv);
+
+  if (!rpmostree_sysroot_upgrader_deploy (upgrader, NULL, cancellable, error))
     return FALSE;
 
   if (vardict_lookup_bool (self->options, "reboot", FALSE))
