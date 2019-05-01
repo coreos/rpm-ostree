@@ -1232,3 +1232,20 @@ rpmostree_relative_path_is_ostree_compliant (const char *path)
           g_str_equal (path, "lib")   || g_str_has_prefix (path, "lib/")  ||
           g_str_equal (path, "lib64") || g_str_has_prefix (path, "lib64/"));
 }
+
+char*
+rpmostree_maybe_shell_quote (const char *s)
+{
+  static gsize regex_initialized;
+  static GRegex *safe_chars_regex;
+  if (g_once_init_enter (&regex_initialized))
+    {
+      safe_chars_regex = g_regex_new ("^[[:alnum:]-._]+$", 0, 0, NULL);
+      g_assert (safe_chars_regex);
+      g_once_init_leave (&regex_initialized, 1);
+    }
+
+  if (g_regex_match (safe_chars_regex, s, 0, 0))
+    return NULL;
+  return g_shell_quote (s);
+}
