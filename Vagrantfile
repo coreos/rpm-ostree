@@ -4,10 +4,10 @@
 
 Vagrant.configure(2) do |config|
 
-    config.vm.box = "centosah/7alpha"
-    config.vm.box_url = 'https://ci.centos.org/artifacts/sig-atomic/centos-continuous/images-alpha/cloud/latest/images/centos-atomic-host-7-vagrant-libvirt.box'
+    # TODO: switch to the Fedora 30 CoreOS vagrant box once available
+    config.vm.box = "fedora/29-atomic-host"
 
-    config.vm.hostname = "centosah-dev"
+    config.vm.hostname = "fedoraah-dev"
 
     config.vm.define "vmcheck" do |vmcheck|
     end
