@@ -75,6 +75,8 @@ Ideally, you should be installing `ostree` from streams like
 track ostree's git master. This allows you to not have to worry about using
 libostree APIs that are not yet released.
 
+For more details on how tests are structured, see [tests/README.md](tests/README.md).
+
 Testing with a custom libdnf
 ============================
 
