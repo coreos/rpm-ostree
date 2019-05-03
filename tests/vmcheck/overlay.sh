@@ -13,9 +13,17 @@ if test -z "${INSIDE_VM:-}"; then
 
     vm_rsync
 
+    vm_rpmostree status --json > out.json
+    commit=$(jq -r '.deployments[0]["checksum"]' < out.json)
+    origin=$(jq -r '.deployments[0]["origin"]' < out.json)
+    version=$(jq -r '.deployments[0]["version"]' < out.json)
+    timestamp=$(jq -r '.deployments[0]["timestamp"]' < out.json)
+    rm -f out.json
+
     vm_cmd env \
       RPMOSTREE_TEST_NO_OVERLAY="${RPMOSTREE_TEST_NO_OVERLAY:-}" \
-      INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh
+      INSIDE_VM=1 /var/roothome/sync/tests/vmcheck/overlay.sh \
+        $commit $origin $version $timestamp
     vm_reboot
     exit 0
 fi
@@ -26,21 +34,12 @@ set -x
 
 # get details from the current default deployment
 rpm-ostree status --json > json.txt
-json_field() {
-  field=$1; shift;
-  python -c "
-import sys, json;
-deployment = json.load(open('json.txt'))['deployments'][0]
-print deployment.get('$field', '')
-exit()"
-}
-commit=$(json_field checksum)
-origin=$(json_field origin)
-version=$(json_field version)
-timestamp=$(json_field timestamp)
+commit=$1; shift
+origin=$1; shift
+version=$1; shift
+timestamp=$1; shift
 [ -n "$timestamp" ]
 timestamp=$(date -d "@$timestamp" "+%b %d %Y")
-rm -f json.txt
 
 if [[ -z $commit ]] || ! ostree rev-parse $commit; then
   echo "Error while determining current commit" >&2
@@ -83,7 +82,7 @@ fi
 source_opt= # make this its own var since it contains spaces
 if [ $origin != vmcheck ]; then
   source_title="${origin}"
-  if [ -n "$version" ]; then
+  if [[ $version != null ]]; then
     source_title="${source_title} (${version}; $timestamp)"
   else
     source_title="${source_title} ($timestamp)"
