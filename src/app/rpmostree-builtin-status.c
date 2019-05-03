@@ -1008,6 +1008,7 @@ rpmostree_builtin_status (int             argc,
 
       JsonNode *json_root = json_builder_get_root (builder);
       glnx_unref_object JsonGenerator *generator = json_generator_new ();
+      json_generator_set_pretty (generator, TRUE);
 
       if (opt_json)
         json_generator_set_root (generator, json_root);
