@@ -1240,7 +1240,7 @@ rpmostree_maybe_shell_quote (const char *s)
   static GRegex *safe_chars_regex;
   if (g_once_init_enter (&regex_initialized))
     {
-      safe_chars_regex = g_regex_new ("^[[:alnum:]-._]+$", 0, 0, NULL);
+      safe_chars_regex = g_regex_new ("^[[:alnum:]-._/=]+$", 0, 0, NULL);
       g_assert (safe_chars_regex);
       g_once_init_leave (&regex_initialized, 1);
     }
