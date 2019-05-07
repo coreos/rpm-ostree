@@ -3758,6 +3758,81 @@ rpmostree_context_get_kernel_changed (RpmOstreeContext *self)
   return self->kernel_changed;
 }
 
+static gboolean
+process_one_ostree_layer (RpmOstreeContext *self,
+                          int               rootfs_dfd,
+                          const char       *ref,
+                          OstreeRepoCheckoutOverwriteMode ovw_mode,
+                          GCancellable     *cancellable,
+                          GError          **error)
+{
+  OstreeRepo *repo = self->ostreerepo;
+  OstreeRepoCheckoutAtOptions opts = { OSTREE_REPO_CHECKOUT_MODE_USER,
+                                       ovw_mode };
+
+  /* We want the checkout to match the repo type so that we get hardlinks. */
+  if (ostree_repo_get_mode (repo) == OSTREE_REPO_MODE_BARE)
+    opts.mode = OSTREE_REPO_CHECKOUT_MODE_NONE;
+
+  /* Explicitly don't provide a devino cache here.  We can't do it reliably because
+   * of SELinux.  The ostree layering infrastructure doesn't have the relabeling
+   * that we do for the pkgcache repo because we can't assume that we can mutate
+   * the input commits right now.
+   * opts.devino_to_csum_cache = self->devino_cache;
+   */
+  /* Always want hardlinks */
+  opts.no_copy_fallback = TRUE;
+
+  g_autofree char *rev = NULL;
+  if (!ostree_repo_resolve_rev (repo, ref, FALSE, &rev, error))
+    return FALSE;
+
+  return ostree_repo_checkout_at (repo, &opts, rootfs_dfd, ".",
+                                  rev, cancellable, error);
+}
+
+static gboolean
+process_ostree_layers (RpmOstreeContext *self,
+                       int               rootfs_dfd,
+                       GCancellable     *cancellable,
+                       GError          **error)
+{
+  if (!self->treefile_rs)
+    return TRUE;
+  
+  g_auto(GStrv) layers = ror_treefile_get_ostree_layers (self->treefile_rs);
+  g_auto(GStrv) override_layers = ror_treefile_get_ostree_override_layers (self->treefile_rs);
+  const size_t n = (layers ? g_strv_length (layers) : 0) + (override_layers ? g_strv_length (override_layers) : 0);
+  if (n == 0)
+    return TRUE;
+
+  g_auto(RpmOstreeProgress) checkout_progress = { 0, };
+  rpmostree_output_progress_nitems_begin (&checkout_progress, n, "Checking out ostree layers");
+  size_t i = 0;
+  for (char **iter = layers; iter && *iter; iter++)
+    {
+      const char *ref = *iter;
+      if (!process_one_ostree_layer (self, rootfs_dfd, ref,
+                                     OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_IDENTICAL,
+                                     cancellable, error))
+        return FALSE;
+      i++;
+      rpmostree_output_progress_n_items (i);
+    }
+  for (char **iter = override_layers; iter && *iter; iter++)
+    {
+      const char *ref = *iter;
+      if (!process_one_ostree_layer (self, rootfs_dfd, ref,
+                                     OSTREE_REPO_CHECKOUT_OVERWRITE_UNION_FILES,
+                                     cancellable, error))
+        return FALSE;
+      i++;
+      rpmostree_output_progress_n_items (i);
+    }
+  rpmostree_output_progress_end (&checkout_progress);
+  return TRUE;
+}
+
 gboolean
 rpmostree_context_assemble (RpmOstreeContext      *self,
                             GCancellable          *cancellable,
@@ -4208,6 +4283,10 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
             return FALSE;
         }
       }
+
+      /* Any ostree refs to overlay */
+      if (!process_ostree_layers (self, tmprootfs_dfd, cancellable, error))
+        return FALSE;
 
       {
       g_auto(RpmOstreeProgress) task = { 0, };

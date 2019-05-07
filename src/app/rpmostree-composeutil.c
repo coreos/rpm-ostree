@@ -50,6 +50,7 @@
 
 gboolean
 rpmostree_composeutil_checksum (HyGoal             goal,
+                                OstreeRepo        *repo,
                                 RORTreefile       *tf,
                                 JsonObject        *treefile,
                                 char             **out_checksum,
@@ -91,6 +92,24 @@ rpmostree_composeutil_checksum (HyGoal             goal,
   /* Hash in each package */
   if (!rpmostree_dnf_add_checksum_goal (checksum, goal, NULL, error))
     return FALSE;
+
+  if (tf)
+    {
+      GLNX_AUTO_PREFIX_ERROR ("Resolving ostree-layers", error);
+      g_auto(GStrv) layers = ror_treefile_get_all_ostree_layers (tf);
+      for (char **iter = layers; iter && *iter; iter++)
+        {
+          const char *layer = *iter;
+          g_autofree char *rev = NULL;
+          if (!ostree_repo_resolve_rev (repo, layer, FALSE, &rev, error))
+            return FALSE;
+          g_autoptr(GVariant) commit = NULL;
+          if (!ostree_repo_load_commit (repo, rev, &commit, NULL, error))
+            return FALSE;
+          const char *content_checksum = ostree_commit_get_content_checksum (commit);
+          g_checksum_update (checksum, (const guint8*) content_checksum, strlen (content_checksum));
+        }
+    }
 
   *out_checksum = g_strdup (g_checksum_get_string (checksum));
   return TRUE;

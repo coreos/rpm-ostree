@@ -61,6 +61,14 @@ It supports the following parameters:
  * `packages-$basearch`: Array of strings, optional: Set of installed packages, used
     only if $basearch matches the target architecture name.
 
+ * `ostree-layers`: Array of strings, optional: After all packages are unpacked,
+    check out these OSTree refs, which must already be in the destination repository.
+    Any conflicts with packages will be an error.
+
+ * `ostree-override-layers`: Array of strings, optional: Like above, but any
+    files present in packages and prior layers will be silently overriden.
+    This is useful for development builds to replace parts of the base tree.
+
  * `bootstrap_packages`: Array of strings, optional: Deprecated; you should
     now just include this set in the main `packages` array.
 

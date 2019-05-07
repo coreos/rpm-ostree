@@ -29,6 +29,7 @@ G_BEGIN_DECLS
 
 gboolean
 rpmostree_composeutil_checksum (HyGoal             goal,
+                                OstreeRepo        *repo,
                                 RORTreefile       *tf,
                                 JsonObject        *treefile,
                                 char             **out_checksum,
