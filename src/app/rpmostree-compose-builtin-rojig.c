@@ -166,6 +166,7 @@ install_packages (RpmOstreeRojigCompose  *self,
 
   g_autofree char *ret_new_inputhash = NULL;
   if (!rpmostree_composeutil_checksum (dnf_context_get_goal (dnfctx),
+                                       self->repo,
                                        self->treefile_rs, self->treefile,
                                        &ret_new_inputhash, error))
     return FALSE;

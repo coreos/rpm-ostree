@@ -56,10 +56,35 @@ postprocess:
    set -xeuo pipefail
    test -f /usr/share/included-postprocess-test
 EOF
+
+for x in $(seq 3); do
+  rm tmp/usr -rf
+  mkdir -p tmp/usr/{bin,share}
+  mkdir tmp/usr/share/testsubdir-${x}
+  echo sometest${x} > tmp/usr/bin/sometestbinary-${x}
+  chmod a+x tmp/usr/bin/sometestbinary-${x}
+  echo sometestdata${x} > tmp/usr/share/sometestdata-${x}
+  echo sometestdata-subdir-${x} > tmp/usr/share/testsubdir-${x}/test
+  ostree --repo="${repobuild}" commit --consume --no-xattrs --owner-uid=0 --owner-gid=0 -b testlayer-${x} --tree=dir=tmp
+done
+rm tmp/usr -rf
+mkdir -p tmp/usr/share/info
+echo some info | gzip > tmp/usr/share/info/bash.info.gz
+ostree --repo="${repobuild}" commit --consume --no-xattrs --owner-uid=0 --owner-gid=0 -b testoverride-1 --tree=dir=tmp
+cat >> ${new_treefile} <<EOF
+ostree-layers:
+  - testlayer-1
+  - testlayer-2
+  - testlayer-3
+ostree-override-layers:
+  - testoverride-1
+EOF
+
 export treefile=${new_treefile}
 
 
 # Do the compose
+compose_base_argv="${compose_base_argv} --unified-core"
 runcompose
 echo "ok compose"
 
@@ -112,6 +137,17 @@ ostree --repo=${repobuild} show ${treeref} \
 assert_file_has_content_literal pkglist.txt 'systemd-'
 assert_not_file_has_content pkglist.txt 'systemd-bootchart'
 echo "ok recommends"
+
+# Test overlays/overrides
+for x in $(seq 3); do
+  ostree --repo=${repobuild} cat ${treeref} /usr/bin/sometestbinary-${x} > t
+  assert_file_has_content t "sometest${x}"
+  ostree --repo=${repobuild} cat ${treeref} /usr/share/testsubdir-${x}/test > t
+  assert_file_has_content t sometestdata-subdir-${x}
+done
+ostree --repo=${repobuild} cat ${treeref} /usr/share/info/bash.info.gz | gunzip > bash.info
+assert_file_has_content bash.info 'some info'
+echo "ok layers"
 
 # Check that add-files with bad paths are rejected
 prepare_compose_test "add-files-failure"

@@ -338,6 +338,8 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     merge_vecs!(
         repos,
         packages,
+        ostree_layers,
+        ostree_override_layers,
         install_langs,
         initramfs_args,
         units,
@@ -593,6 +595,12 @@ struct TreeComposeConfig {
     // Deprecated option
     #[serde(skip_serializing_if = "Option::is_none")]
     bootstrap_packages: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "ostree-layers")]
+    ostree_layers: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "ostree-override-layers")]
+    ostree_override_layers: Option<Vec<String>>,
 
     // Content installation opts
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -994,6 +1002,7 @@ packages:
 mod ffi {
     use super::*;
     use glib_sys;
+    use glib::translate::*;
     use libc;
     use std::io::Seek;
     use std::os::unix::io::{AsRawFd, RawFd};
@@ -1076,6 +1085,40 @@ mod ffi {
     pub extern "C" fn ror_treefile_get_json_string(tf: *mut Treefile) -> *const libc::c_char {
         ref_from_raw_ptr(tf).serialized.as_ptr()
     }
+
+    #[no_mangle]
+    pub extern "C" fn ror_treefile_get_ostree_layers(tf: *mut Treefile) -> *mut *mut libc::c_char  {
+        let tf = ref_from_raw_ptr(tf);
+        if let Some(ref layers) = tf.parsed.ostree_layers {
+            layers.to_glib_full()
+        } else {
+            ptr::null_mut()
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ror_treefile_get_ostree_override_layers(tf: *mut Treefile) -> *mut *mut libc::c_char  {
+        let tf = ref_from_raw_ptr(tf);
+        if let Some(ref layers) = tf.parsed.ostree_override_layers {
+            layers.to_glib_full()
+        } else {
+            ptr::null_mut()
+        }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ror_treefile_get_all_ostree_layers(tf: *mut Treefile) -> *mut *mut libc::c_char  {
+        let tf = ref_from_raw_ptr(tf);
+        let mut ret : Vec<String> = Vec::new();
+        if let Some(ref layers) = tf.parsed.ostree_layers {
+            ret.extend(layers.iter().cloned())
+        }
+        if let Some(ref layers) = tf.parsed.ostree_override_layers {
+            ret.extend(layers.iter().cloned())
+        }
+        ret.to_glib_full()
+    }
+
 
     #[no_mangle]
     pub extern "C" fn ror_treefile_get_rojig_spec_path(tf: *mut Treefile) -> *const libc::c_char {

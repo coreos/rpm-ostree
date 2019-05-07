@@ -51,6 +51,13 @@
 
 #include "libglnx.h"
 
+static gboolean
+pull_local_into_target_repo (OstreeRepo   *src_repo,
+                             OstreeRepo   *dest_repo,
+                             const char   *checksum,
+                             GCancellable *cancellable,
+                             GError      **error);
+
 static char *opt_workdir;
 static gboolean opt_workdir_tmpfs;
 static char *opt_cachedir;
@@ -344,7 +351,7 @@ install_packages (RpmOstreeTreeComposeContext  *self,
 
   /* FIXME - just do a depsolve here before we compute download requirements */
   g_autofree char *ret_new_inputhash = NULL;
-  if (!rpmostree_composeutil_checksum (dnf_context_get_goal (dnfctx),
+  if (!rpmostree_composeutil_checksum (dnf_context_get_goal (dnfctx), self->repo,
                                        self->treefile_rs, self->treefile,
                                        &ret_new_inputhash, error))
     return FALSE;
@@ -706,6 +713,18 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
                                &self->treefile_rs, &self->treefile_parser,
                                error))
     return FALSE;
+
+  if (self->build_repo != self->repo)
+    {
+      g_auto(GStrv) layers = ror_treefile_get_all_ostree_layers (self->treefile_rs);
+      for (char **iter = layers; iter && *iter; iter++)
+        {
+          const char *layer = *iter;
+          if (!pull_local_into_target_repo (self->repo, self->build_repo, layer,
+                                            cancellable, error))
+            return FALSE;
+        }
+    }
 
   self->treefile_rootval = json_parser_get_root (self->treefile_parser);
   if (!JSON_NODE_HOLDS_OBJECT (self->treefile_rootval))
