@@ -58,7 +58,7 @@ if test -z "${RPMOSTREE_TEST_NO_OVERLAY:-}"; then
 fi
 
 vm_rpmostree status --jsonpath '$.deployments[0].booted' > jsonpath.txt
-assert_file_has_content_literal jsonpath.txt '[true]'
+assert_file_has_content_literal jsonpath.txt 'true'
 echo "ok jsonpath"
 
 vm_rpmostree --version > version.yaml
