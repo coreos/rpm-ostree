@@ -1,5 +1,5 @@
 dn=$(cd $(dirname $0) && pwd)
-test_tmpdir=$(mktemp -d /var/tmp/rpm-ostree-compose-test.XXXXXX)
+test_tmpdir=$(mktemp -d ${RPMOSTREE_TMPDIR_LOCATION:-/var/tmp}/rpm-ostree-compose-test.XXXXXX)
 touch ${test_tmpdir}/.test
 trap _cleanup_tmpdir EXIT
 cd ${test_tmpdir}
