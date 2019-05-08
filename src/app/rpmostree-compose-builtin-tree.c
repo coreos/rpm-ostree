@@ -69,6 +69,7 @@ static gboolean opt_dry_run;
 static gboolean opt_print_only;
 static char *opt_write_commitid_to;
 static char *opt_write_composejson_to;
+static gboolean opt_no_parent;
 
 /* shared by both install & commit */
 static GOptionEntry common_option_entries[] = {
@@ -103,6 +104,7 @@ static GOptionEntry commit_option_entries[] = {
   { "add-metadata-from-json", 0, 0, G_OPTION_ARG_STRING, &opt_metadata_json, "Parse the given JSON file as object, convert to GVariant, append to OSTree commit", "JSON" },
   { "write-commitid-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_commitid_to, "File to write the composed commitid to instead of updating the ref", "FILE" },
   { "write-composejson-to", 0, 0, G_OPTION_ARG_STRING, &opt_write_composejson_to, "Write JSON to FILE containing information about the compose run", "FILE" },
+  { "no-parent", 0, 0, G_OPTION_ARG_NONE, &opt_no_parent, "Always commit without a parent", NULL },
   { NULL }
 };
 
@@ -1002,7 +1004,7 @@ impl_commit_tree (RpmOstreeTreeComposeContext *self,
     }
 
   g_autofree char *parent_revision = NULL;
-  if (self->ref)
+  if (self->ref && !opt_no_parent)
     {
       if (!ostree_repo_resolve_rev (self->repo, self->ref, TRUE, &parent_revision, error))
         return FALSE;
