@@ -1,4 +1,4 @@
-#! /usr/bin/python -tt
+#!/usr/bin/python3
 
 import os
 import sys
@@ -17,4 +17,4 @@ for fname in sys.argv[1:]:
         done = True
         out += '"%s": %s' % (group, gid)
 out += ' } },'
-print out
+print(out)

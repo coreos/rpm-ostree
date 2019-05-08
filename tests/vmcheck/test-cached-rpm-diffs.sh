@@ -63,12 +63,6 @@ call_dbus() {
     -m org.projectatomic.rpmostree1.OS.$method "$@"
 }
 
-if vm_cmd test -x /usr/bin/python3; then
-  py=python3
-else
-  py=python
-fi
-
 run_transaction() {
   method=$1; shift
   sig=$1; shift
@@ -76,7 +70,7 @@ run_transaction() {
   cur=$(vm_get_journal_cursor)
   # use ansible for this so we don't have to think about hungry quote-eating ssh
   vm_shell_inline <<EOF
-$py -c '
+python3 -c '
 import dbus
 addr = dbus.SystemBus().call_blocking(
   "org.projectatomic.rpmostree1", "$ospath", "org.projectatomic.rpmostree1.OS",

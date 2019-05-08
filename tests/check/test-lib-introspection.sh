@@ -26,7 +26,7 @@ set -x
 
 if ! skip_one_with_asan; then
     cat >test-rpmostree-gi-arch <<EOF
-#!/usr/bin/python2
+#!/usr/bin/python3
 import gi
 gi.require_version("RpmOstree", "1.0")
 from gi.repository import RpmOstree
@@ -44,7 +44,7 @@ fi
 
 if ! skip_one_with_asan; then
     cat >test-rpmostree-gi <<EOF
-#!/usr/bin/python2
+#!/usr/bin/python3
 import gi
 gi.require_version("RpmOstree", "1.0")
 from gi.repository import RpmOstree

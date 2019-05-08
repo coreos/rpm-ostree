@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright (C) 2018 Jonathan Lebon <jlebon@redhat.com>
 #
@@ -292,12 +292,12 @@ def show_updates(uinfo, uid):
     for update in uinfo.updates:
         if uid is not None and update.id != uid:
             continue
-        print update.id, update.type, update.severity
+        print(update.id, update.type, update.severity)
         for col in update.collections:
             for pkg in col.packages:
-                print "  pkg:", pkg.filename
+                print("  pkg:", pkg.filename)
         for ref in update.references:
-            print "  ref:", ref.id, ref.href
+            print("  ref:", ref.id, ref.href)
 
 
 def shallow_clone_update(update):

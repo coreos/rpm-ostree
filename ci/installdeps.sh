@@ -20,15 +20,12 @@ if [ "$id" == fedora ] && [ "$version_id" == 29 ]; then
 fi
 
 pkg_upgrade
-pkg_install_if_os centos epel-release
 pkg_install_builddeps rpm-ostree
 # XXX: new libdnf deps until next release
 pkg_install json-c-devel cppunit{,-devel} swig sqlite-devel \
     libmodulemd1-devel libsmartcols-devel gpgme-devel
 # Mostly dependencies for tests
-pkg_install ostree{,-devel,-grub2} createrepo_c /usr/bin/jq PyYAML \
-    libubsan libasan libtsan elfutils fuse sudo python-gobject-base \
-    selinux-policy-devel selinux-policy-targeted python2-createrepo_c \
-    rsync rpm-python # provided by python2-rpm on Fedora
-# For more CI testing
-pkg_install_if_os fedora parallel clang rustfmt-preview
+pkg_install ostree{,-devel,-grub2} createrepo_c /usr/bin/jq python3-pyyaml \
+    libubsan libasan libtsan elfutils fuse sudo python3-gobject-base \
+    selinux-policy-devel selinux-policy-targeted python3-createrepo_c \
+    rsync python3-rpm parallel clang rustfmt-preview

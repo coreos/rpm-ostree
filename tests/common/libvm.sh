@@ -213,7 +213,7 @@ vm_get_deployment_info() {
   local idx=$1
   local key=$2
   vm_rpmostree status --json | \
-    python -c "
+    python3 -c "
 import sys, json
 deployments = json.load(sys.stdin)[\"deployments\"]
 idx = $idx
@@ -222,18 +222,18 @@ if idx < 0:
     if depl[\"booted\"]:
       idx = i
 if idx < 0:
-  print \"Failed to determine currently booted deployment\"
+  print(\"Failed to determine currently booted deployment\")
   exit(1)
 if idx >= len(deployments):
-  print \"Deployment index $idx is out of range\"
+  print(\"Deployment index $idx is out of range\")
   exit(1)
 depl = deployments[idx]
 if \"$key\" in depl:
   data = depl[\"$key\"]
   if type(data) is list:
-    print \" \".join(data)
+    print(\" \".join(data))
   else:
-    print data
+    print(data)
 "
 }
 
@@ -450,7 +450,7 @@ vm_start_httpd() {
 
   # CentOS systemd is too old for -p WorkingDirectory
   vm_cmd systemd-run --unit $name sh -c \
-    "'cd $dir && python -m SimpleHTTPServer $port'"
+    "'cd $dir && python3 -m http.server $port'"
 
   # NB: the EXIT trap is used by libtest, but not the ERR trap
   trap "vm_stop_httpd $name" ERR

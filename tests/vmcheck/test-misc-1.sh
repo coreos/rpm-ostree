@@ -62,7 +62,7 @@ assert_file_has_content_literal jsonpath.txt '[true]'
 echo "ok jsonpath"
 
 vm_rpmostree --version > version.yaml
-python -c 'import yaml; v=yaml.safe_load(open("version.yaml")); assert("Version" in v["rpm-ostree"])'
+python3 -c 'import yaml; v=yaml.safe_load(open("version.yaml")); assert("Version" in v["rpm-ostree"])'
 echo "ok yaml version"
 
 # Ensure we return an error when passing a wrong option.

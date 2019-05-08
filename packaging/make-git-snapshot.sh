@@ -49,7 +49,7 @@ mkdir ${tmpd} && touch ${tmpd}/.tmp
                      systemd/libsystemd-sys/systemd \
                      libsystemd-sys/systemd; do
    rm -rf vendor/$crate_subdir
-   python -c '
+   python3 -c '
 import json, sys
 crate, subdir = sys.argv[1].split("/", 1)
 checksum_file = ("vendor/%s/.cargo-checksum.json" % crate)
@@ -59,7 +59,7 @@ open(checksum_file, "w").write(json.dumps(j))' $crate_subdir
  done
  # Also drop a couple of files that get mangled by %configure during hardening.
  for crate in backtrace-sys; do
-   python -c '
+   python3 -c '
 import json, sys, os
 checksum_file = ("vendor/%s/.cargo-checksum.json" % sys.argv[1])
 j = json.load(open(checksum_file))
