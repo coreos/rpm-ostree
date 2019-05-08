@@ -35,7 +35,7 @@ assert_file_has_content preset.txt '^enable ostree-remount.service$'
 assert_file_has_content preset.txt '^enable ostree-finalize-staged.path$'
 
 prepare_compose_test "from-yaml"
-python <<EOF
+python3 <<EOF
 import json, yaml
 jd=json.load(open("$treefile"))
 with open("$treefile.yaml", "w") as f:

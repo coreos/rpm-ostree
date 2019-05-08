@@ -15,7 +15,7 @@ jd=json.load(sys.stdin)
 ${1}
 json.dump(jd,sys.stdout)
 EOF
-    python ./editjson.py && rm -f ./editjson.py
+    python3 ./editjson.py && rm -f ./editjson.py
 }
 
 pysetjsonmember() {
@@ -50,7 +50,7 @@ EOF
     pysetjsonmember "repos" '["fedora-local"]' ${treefile}
     # FIXME extract from json
     if [ "${filetype}" = "yaml" ]; then
-        python <<EOF
+        python3 <<EOF
 import json, yaml, sys
 ifn="${treefile}"
 ofn=ifn.replace('.json', '.yaml')

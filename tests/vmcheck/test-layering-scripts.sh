@@ -35,7 +35,7 @@ vm_build_rpm scriptpkg1 \
   pretrans "# http://lists.rpm.org/pipermail/rpm-ecosystem/2016-August/000391.html
             echo pretrans should've been ignored && exit 1" \
   verifyscript "echo verifyscript should've been ignored && exit 1" \
-  post_args "-p /usr/bin/python" \
+  post_args "-p /usr/bin/python3" \
   post 'open("/usr/lib/rpmostreetestinterp", "w").close();
 open("/var/lib/rpm-state/scriptpkg1-stamp", "w").close()' \
   posttrans "# Firewalld; https://github.com/projectatomic/rpm-ostree/issues/638

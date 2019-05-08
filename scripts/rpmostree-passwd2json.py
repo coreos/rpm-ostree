@@ -1,4 +1,4 @@
-#! /usr/bin/python -tt
+#!/usr/bin/python3
 
 import os
 import sys
@@ -20,4 +20,4 @@ for fname in sys.argv[1:]:
         else:
             out += '"%s": [%s, %s]' % (user, uid, gid)
 out += ' } },'
-print out
+print(out)

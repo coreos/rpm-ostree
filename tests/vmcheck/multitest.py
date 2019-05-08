@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/bin/env python3
 
 import os
 import sys
@@ -100,7 +100,7 @@ class Host:
                                    stdout=open("vmcheck/%s.log" % test, 'wb'),
                                    stderr=subprocess.STDOUT)
         self.test = test
-        print "INFO: scheduled", self.test, "on host", self.hostname
+        print("INFO: scheduled", self.test, "on host", self.hostname)
 
     def flush(self):
         if not self._p:

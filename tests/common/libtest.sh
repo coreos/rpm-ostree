@@ -145,10 +145,10 @@ setup_test_repository () {
 }
 
 run_temp_webserver() {
-    env PYTHONUNBUFFERED=1 setsid python -m SimpleHTTPServer 0 >${test_tmpdir}/httpd-output &
+    env PYTHONUNBUFFERED=1 setsid python3 -m http.server 0 >${test_tmpdir}/httpd-output &
     for x in $(seq 50); do
         if test -e ${test_tmpdir}/httpd-output; then
-            sed -e 's,Serving HTTP on 0.0.0.0 port \([0-9]*\) \.\.\.,\1,' < ${test_tmpdir}/httpd-output > ${test_tmpdir}/httpd-port
+            sed -e 's,Serving HTTP on 0.0.0.0 port \([0-9]*\) (http://.*) \.\.\.,\1,' < ${test_tmpdir}/httpd-output > ${test_tmpdir}/httpd-port
             if ! cmp ${test_tmpdir}/httpd-output ${test_tmpdir}/httpd-port 1>/dev/null; then
                 break
             fi
