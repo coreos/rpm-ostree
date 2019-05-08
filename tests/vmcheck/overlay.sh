@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -xeuo pipefail
 
 # Execute this code path on the host
 if test -z "${INSIDE_VM:-}"; then
@@ -27,8 +27,6 @@ if test -z "${INSIDE_VM:-}"; then
     vm_reboot
     exit 0
 fi
-
-set -x
 
 # And then this code path in the VM
 
