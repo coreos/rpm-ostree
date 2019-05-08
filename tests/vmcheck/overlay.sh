@@ -13,12 +13,12 @@ if test -z "${INSIDE_VM:-}"; then
 
     vm_rsync
 
-    vm_rpmostree status --json > out.json
-    commit=$(jq -r '.deployments[0]["checksum"]' < out.json)
-    origin=$(jq -r '.deployments[0]["origin"]' < out.json)
-    version=$(jq -r '.deployments[0]["version"]' < out.json)
-    timestamp=$(jq -r '.deployments[0]["timestamp"]' < out.json)
-    rm -f out.json
+    vm_rpmostree status --json > ${VM}-out.json
+    commit=$(jq -r    '.deployments[0]["checksum"]'  < ${VM}-out.json)
+    origin=$(jq -r    '.deployments[0]["origin"]'    < ${VM}-out.json)
+    version=$(jq -r   '.deployments[0]["version"]'   < ${VM}-out.json)
+    timestamp=$(jq -r '.deployments[0]["timestamp"]' < ${VM}-out.json)
+    rm -f ${VM}-out.json
 
     vm_cmd env \
       RPMOSTREE_TEST_NO_OVERLAY="${RPMOSTREE_TEST_NO_OVERLAY:-}" \
