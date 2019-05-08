@@ -44,3 +44,8 @@ EOF
 export treefile=$treefile.yaml
 runcompose
 echo "ok yaml"
+
+# also check that --no-parent doesn't invalidate change detection
+runcompose --no-parent |& tee out.txt
+assert_file_has_content_literal out.txt "No apparent changes since previous commit"
+echo "ok --no-parent"

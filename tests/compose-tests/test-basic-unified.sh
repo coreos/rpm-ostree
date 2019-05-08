@@ -63,10 +63,15 @@ fi
 rm ${co} -rf
 echo "ok no cachedir zero-sized hardlinks"
 
-# And redo it to trigger relabeling
+# And redo it to trigger relabeling. Also test --no-parent at the same time.
 origrev=$(ostree --repo=${repobuild} rev-parse ${treeref})
-runcompose  --force-nocache --ex-unified-core
+runcompose  --force-nocache --ex-unified-core --no-parent
 newrev=$(ostree --repo=${repobuild} rev-parse ${treeref})
 assert_not_streq "${origrev}" "${newrev}"
-
 echo "ok rerun"
+
+# And check that --no-parent worked.
+if ostree rev-parse ${newrev}^; then
+  assert_not_reached "New revision has a parent even with --no-parent?"
+fi
+echo "ok --no-parent"
