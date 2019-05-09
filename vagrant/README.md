@@ -1,5 +1,10 @@
-Developing using Docker + Vagrant
+Developing using Podman + Vagrant
 ---------------------------------
+
+**Note: These instructions are in flux and will be oriented
+toward a [coreos-assembler](https://github.com/coreos/coreos-assembler)
+based workflow, which targets Fedora CoreOS (FCOS). You may find built FCOS
+images at: http://artifacts.ci.centos.org/fedora-coreos/prod/builds/latest/.**
 
 The current tooling here is oriented towards
 doing builds inside a Fedora 29 pet container,
