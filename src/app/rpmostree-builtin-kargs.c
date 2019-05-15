@@ -261,8 +261,7 @@ rpmostree_builtin_kargs (int            argc,
 
   if (display_kernel_args)
     {
-      g_print ("The kernel arguments are:\n%s\n",
-               old_kernel_arg_string);
+      g_print ("%s\n", old_kernel_arg_string);
       return TRUE;
     }
 
