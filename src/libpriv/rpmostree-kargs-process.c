@@ -230,13 +230,17 @@ _ostree_kernel_args_delete (OstreeKernelArgs  *kargs,
       return _ostree_kernel_args_delete_key_entry (kargs, key, error);
     }
 
-  /* multiple values, but just key supplied? error out */
-  if (!val)
-    return glnx_throw (error, "Multiple values for key '%s' found", key);
-
+  /* note val might be NULL here, in which case we're looking for `key`, not `key=` or
+   * `key=val` */
   guint i = 0;
   if (!g_ptr_array_find_with_equal_func (values, val, strcmp0_equal, &i))
-    return glnx_throw (error, "No karg '%s' found", arg);
+    {
+      if (!val)
+        /* didn't find NULL -> only key= key=val1 key=val2 style things left, so the user
+         * needs to be more specific */
+        return glnx_throw (error, "Multiple values for key '%s' found", arg);
+      return glnx_throw (error, "No karg '%s' found", arg);
+    }
 
   g_ptr_array_remove_index (values, i);
   return TRUE;
