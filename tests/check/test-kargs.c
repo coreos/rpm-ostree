@@ -30,7 +30,14 @@ test_kargs_delete (void)
   g_assert_error (error, G_IO_ERROR, G_IO_ERROR_FAILED);
   g_clear_error (&error);
 
-  /* Delete a key with multiple values when only specifying key should fail */
+  /* Delete a key with multiple values when only specifying key should work if a no-value
+   * variant exists */
+  ret = _ostree_kernel_args_delete (karg, "test", &error);
+  g_assert_no_error (error);
+  g_assert (ret);
+  g_assert (!check_string_existance (karg, "test"));
+
+  /* Trying again now should fail since there are only kargs with various values */
   ret = _ostree_kernel_args_delete (karg, "test", &error);
   g_assert (!ret);
   g_assert_error (error, G_IO_ERROR, G_IO_ERROR_FAILED);
@@ -74,11 +81,31 @@ test_kargs_delete (void)
   g_assert (ret);
   g_assert (!check_string_existance (karg, "test=firstval"));
 
-  /* And now we should be able to delete the last key */
-  ret = _ostree_kernel_args_delete (karg, "test", &error);
+  /* Check that we can delete duplicate keys */
+  _ostree_kernel_args_append (karg, "test=foo");
+  _ostree_kernel_args_append (karg, "test=foo");
+  check_string_existance (karg, "test=foo");
+  ret = _ostree_kernel_args_delete (karg, "test=foo", &error);
   g_assert_no_error (error);
   g_assert (ret);
-  g_assert (!check_string_existance (karg, "test"));
+  g_assert (check_string_existance (karg, "test=foo"));
+  ret = _ostree_kernel_args_delete (karg, "test=foo", &error);
+  g_assert_no_error (error);
+  g_assert (ret);
+  g_assert (!check_string_existance (karg, "test=foo"));
+
+  /* Make sure we also gracefully do this for key-only args */
+  _ostree_kernel_args_append (karg, "nosmt");
+  _ostree_kernel_args_append (karg, "nosmt");
+  check_string_existance (karg, "nosmt");
+  ret = _ostree_kernel_args_delete (karg, "nosmt", &error);
+  g_assert_no_error (error);
+  g_assert (ret);
+  g_assert (check_string_existance (karg, "nosmt"));
+  ret = _ostree_kernel_args_delete (karg, "nosmt", &error);
+  g_assert_no_error (error);
+  g_assert (ret);
+  g_assert (!check_string_existance (karg, "nosmt"));
 }
 
 static void
