@@ -4106,6 +4106,7 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
             }
         }
 
+      {
       g_auto(RpmOstreeProgress) task = { 0, };
       rpmostree_output_task_begin (&task, "Running post scripts");
       guint n_post_scripts_run = 0;
@@ -4131,6 +4132,12 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
                                 &n_post_scripts_run, cancellable, error))
             return FALSE;
         }
+      }
+
+      {
+      g_auto(RpmOstreeProgress) task = { 0, };
+      rpmostree_output_task_begin (&task, "Running posttrans scripts");
+      guint n_posttrans_scripts_run = 0;
 
       /* %posttrans */
       for (guint i = 0; i < n_rpmts_elements; i++)
@@ -4145,16 +4152,17 @@ rpmostree_context_assemble (RpmOstreeContext      *self,
           rpmostree_output_set_sub_message (dnf_package_get_name (pkg));
           if (!run_script_sync (self, tmprootfs_dfd, &var_lib_rpm_statedir,
                                 pkg, RPMOSTREE_SCRIPT_POSTTRANS,
-                                &n_post_scripts_run, cancellable, error))
+                                &n_posttrans_scripts_run, cancellable, error))
             return FALSE;
         }
 
       /* file triggers */
       if (!run_all_transfiletriggers (self, ordering_ts, tmprootfs_dfd,
-                                      &n_post_scripts_run, cancellable, error))
+                                      &n_posttrans_scripts_run, cancellable, error))
         return FALSE;
 
-      rpmostree_output_progress_end_msg (&task, "%u done", n_post_scripts_run);
+      rpmostree_output_progress_end_msg (&task, "%u done", n_posttrans_scripts_run);
+      }
 
       /* We want this to be the first error message if something went wrong
        * with a script; see https://github.com/projectatomic/rpm-ostree/pull/888
