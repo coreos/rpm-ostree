@@ -2308,6 +2308,11 @@ finalize_deployment_transaction_execute (RpmostreedTransaction *transaction,
         return glnx_throw (error, "Staged deployment already unlocked");
     }
 
+  /* And bump sysroot mtime so we reload... a bit awkward, though this is similar to
+   * libostree itself doing this for `ostree admin unlock` (and possibly an `ostree admin`
+   * version of `rpm-ostree finalize-deployment`). */
+  (void) rpmostree_syscore_bump_mtime (sysroot, NULL);
+
   sd_journal_print (LOG_INFO, "Finalized deployment; rebooting into %s", checksum);
   rpmostreed_reboot (cancellable, error);
   return TRUE;

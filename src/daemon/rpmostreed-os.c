@@ -978,23 +978,11 @@ out:
   return TRUE;
 }
 
-static void
-on_finalize_done (RpmostreedTransaction *transaction, RpmostreedOS *self)
-{
-  g_autoptr(GError) local_error = NULL;
-  if (!rpmostreed_os_load_internals (self, &local_error))
-    {
-      sd_journal_print (LOG_WARNING, "Failed to reload internals: %s",
-                        local_error->message);
-    }
-}
-
 static gboolean
 os_handle_finalize_deployment (RPMOSTreeOS *interface,
                                GDBusMethodInvocation *invocation,
                                GVariant *arg_options)
 {
-  RpmostreedOS *self = RPMOSTREED_OS (interface);
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
   g_autoptr(OstreeSysroot) sysroot = NULL;
@@ -1021,9 +1009,6 @@ os_handle_finalize_deployment (RPMOSTreeOS *interface,
     goto out;
 
   rpmostreed_sysroot_set_txn (rsysroot, transaction);
-
-  /* Really, we just want to refresh `DefaultDeployment`, but meh... */
-  g_signal_connect (transaction, "closed", G_CALLBACK (on_finalize_done), self);
 
 out:
   if (local_error != NULL)
