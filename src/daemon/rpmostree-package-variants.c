@@ -115,11 +115,12 @@ rpm_ostree_db_diff_variant_compare_by_type (const void *v1,
 /**
  * rpm_ostree_db_build_diff_variant
  * @repo: A OstreeRepo
- * @old_ref: old ref to use
- * @new_ref: New ref to use
+ * @from_rev: First ref to diff
+ * @to_rev: Second ref to diff
+ * @allow_noent: Don't error out if rpmdb information is missing
  * @out_variant: GVariant that represents the differences between the rpm
  *   databases on the given refs.
- * GCancellable: *cancellable
+ * GCancellable: A GCancellable
  * GError: **error
  *
  * Returns: %TRUE on success, %FALSE on failure
