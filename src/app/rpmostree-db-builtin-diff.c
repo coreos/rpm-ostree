@@ -45,39 +45,39 @@ static GOptionEntry option_entries[] = {
 
 static gboolean
 print_diff (OstreeRepo   *repo,
-            const char   *old_desc,
-            const char   *old_checksum,
-            const char   *new_desc,
-            const char   *new_checksum,
+            const char   *from_desc,
+            const char   *from_checksum,
+            const char   *to_desc,
+            const char   *to_checksum,
             GCancellable *cancellable,
             GError       **error)
 {
   const gboolean is_diff_format = g_str_equal (opt_format, "diff");
 
-  if (!g_str_equal (old_desc, old_checksum))
-    printf ("ostree diff commit old: %s (%s)\n", old_desc, old_checksum);
+  if (!g_str_equal (from_desc, from_checksum))
+    printf ("ostree diff commit from: %s (%s)\n", from_desc, from_checksum);
   else
-    printf ("ostree diff commit old: %s\n", old_desc);
+    printf ("ostree diff commit from: %s\n", from_desc);
 
-  if (!g_str_equal (new_desc, new_checksum))
-    printf ("ostree diff commit new: %s (%s)\n", new_desc, new_checksum);
+  if (!g_str_equal (to_desc, to_checksum))
+    printf ("ostree diff commit to:   %s (%s)\n", to_desc, to_checksum);
   else
-    printf ("ostree diff commit new: %s\n", new_desc);
+    printf ("ostree diff commit to:   %s\n", to_desc);
 
   g_autoptr(GPtrArray) removed = NULL;
   g_autoptr(GPtrArray) added = NULL;
-  g_autoptr(GPtrArray) modified_old = NULL;
-  g_autoptr(GPtrArray) modified_new = NULL;
+  g_autoptr(GPtrArray) modified_from = NULL;
+  g_autoptr(GPtrArray) modified_to = NULL;
 
   /* we still use the old API for changelogs; should enhance libdnf for this */
   if (!is_diff_format && opt_changelogs)
     {
       g_autoptr(RpmRevisionData) rpmrev1 =
-        rpmrev_new (repo, old_checksum, NULL, cancellable, error);
+        rpmrev_new (repo, from_checksum, NULL, cancellable, error);
       if (!rpmrev1)
         return FALSE;
       g_autoptr(RpmRevisionData) rpmrev2 =
-        rpmrev_new (repo, new_checksum, NULL, cancellable, error);
+        rpmrev_new (repo, to_checksum, NULL, cancellable, error);
       if (!rpmrev2)
         return FALSE;
 
@@ -86,16 +86,16 @@ print_diff (OstreeRepo   *repo,
     }
   else
     {
-      if (!rpm_ostree_db_diff (repo, old_checksum, new_checksum,
-                               &removed, &added, &modified_old, &modified_new,
+      if (!rpm_ostree_db_diff (repo, from_checksum, to_checksum,
+                               &removed, &added, &modified_from, &modified_to,
                                cancellable, error))
         return FALSE;
 
       if (is_diff_format)
-        rpmostree_diff_print (removed, added, modified_old, modified_new);
+        rpmostree_diff_print (removed, added, modified_from, modified_to);
       else
         rpmostree_diff_print_formatted (RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0,
-                                        removed, added, modified_old, modified_new);
+                                        removed, added, modified_from, modified_to);
     }
 
   return TRUE;
@@ -123,22 +123,22 @@ get_checksum_from_deployment (OstreeRepo       *repo,
 
 static gboolean
 print_deployment_diff (OstreeRepo        *repo,
-                       const char        *old_desc,
-                       OstreeDeployment  *old,
-                       const char        *new_desc,
-                       OstreeDeployment  *new,
+                       const char        *from_desc,
+                       OstreeDeployment  *from,
+                       const char        *to_desc,
+                       OstreeDeployment  *to,
                        GCancellable      *cancellable,
                        GError           **error)
 {
-  g_autofree char *old_checksum = NULL;
-  if (!get_checksum_from_deployment (repo, old, &old_checksum, error))
+  g_autofree char *from_checksum = NULL;
+  if (!get_checksum_from_deployment (repo, from, &from_checksum, error))
     return FALSE;
 
-  g_autofree char *new_checksum = NULL;
-  if (!get_checksum_from_deployment (repo, new, &new_checksum, error))
+  g_autofree char *to_checksum = NULL;
+  if (!get_checksum_from_deployment (repo, to, &to_checksum, error))
     return FALSE;
 
-  return print_diff (repo, old_desc, old_checksum, new_desc, new_checksum,
+  return print_diff (repo, from_desc, from_checksum, to_desc, to_checksum,
                      cancellable, error);
 }
 
@@ -176,10 +176,10 @@ rpmostree_db_builtin_diff (int argc, char **argv,
       return FALSE;
     }
 
-  const char *old_desc = NULL;
-  g_autofree char *old_checksum = NULL;
-  const char *new_desc = NULL;
-  g_autofree char *new_checksum = NULL;
+  const char *from_desc = NULL;
+  g_autofree char *from_checksum = NULL;
+  const char *to_desc = NULL;
+  g_autofree char *to_checksum = NULL;
 
   if (argc < 3)
     {
@@ -218,24 +218,24 @@ rpmostree_db_builtin_diff (int argc, char **argv,
         }
       else
         {
-          old_desc = "booted deployment";
-          if (!get_checksum_from_deployment (repo, booted, &old_checksum, error))
+          from_desc = "booted deployment";
+          if (!get_checksum_from_deployment (repo, booted, &from_checksum, error))
             return FALSE;
 
           /* diff against the booted deployment */
-          new_desc = argv[1];
-          if (!ostree_repo_resolve_rev (repo, new_desc, FALSE, &new_checksum, error))
+          to_desc = argv[1];
+          if (!ostree_repo_resolve_rev (repo, to_desc, FALSE, &to_checksum, error))
             return FALSE;
         }
     }
   else
     {
-      old_desc = argv[1];
-      if (!ostree_repo_resolve_rev (repo, old_desc, FALSE, &old_checksum, error))
+      from_desc = argv[1];
+      if (!ostree_repo_resolve_rev (repo, from_desc, FALSE, &from_checksum, error))
         return FALSE;
 
-      new_desc = argv[2];
-      if (!ostree_repo_resolve_rev (repo, new_desc, FALSE, &new_checksum, error))
+      to_desc = argv[2];
+      if (!ostree_repo_resolve_rev (repo, to_desc, FALSE, &to_checksum, error))
         return FALSE;
 
     }
@@ -245,12 +245,12 @@ rpmostree_db_builtin_diff (int argc, char **argv,
       g_auto(GVariantBuilder) builder;
       g_variant_builder_init (&builder, G_VARIANT_TYPE ("a{sv}"));
       g_variant_builder_add (&builder, "{sv}", "ostree-commit-from",
-                             g_variant_new_string (old_checksum));
+                             g_variant_new_string (from_checksum));
       g_variant_builder_add (&builder, "{sv}", "ostree-commit-to",
-                             g_variant_new_string (new_checksum));
+                             g_variant_new_string (to_checksum));
 
       g_autoptr(GVariant) diffv = NULL;
-      if (!rpm_ostree_db_diff_variant (repo, old_checksum, new_checksum,
+      if (!rpm_ostree_db_diff_variant (repo, from_checksum, to_checksum,
                                        FALSE, &diffv, cancellable, error))
         return FALSE;
       g_variant_builder_add (&builder, "{sv}", "pkgdiff", diffv);
@@ -270,7 +270,7 @@ rpmostree_db_builtin_diff (int argc, char **argv,
       return TRUE;
     }
 
-  return print_diff (repo, old_desc, old_checksum, new_desc, new_checksum,
+  return print_diff (repo, from_desc, from_checksum, to_desc, to_checksum,
                      cancellable, error);
 }
 
