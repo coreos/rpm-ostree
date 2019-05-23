@@ -20,10 +20,15 @@
 
 #include "config.h"
 
+#include <glib-unix.h>
+#include <gio/gunixoutputstream.h>
+#include <json-glib/json-glib.h>
+
 #include "rpmostree.h"
 #include "rpmostree-db-builtins.h"
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-rpm-util.h"
+#include "rpmostree-package-variants.h"
 
 static char *opt_format = "block";
 static gboolean opt_changelogs;
@@ -31,7 +36,7 @@ static char *opt_sysroot;
 static gboolean opt_base;
 
 static GOptionEntry option_entries[] = {
-  { "format", 'F', 0, G_OPTION_ARG_STRING, &opt_format, "Output format: \"diff\" or (default) \"block\"", "FORMAT" },
+  { "format", 'F', 0, G_OPTION_ARG_STRING, &opt_format, "Output format: \"diff\" or \"json\" or (default) \"block\"", "FORMAT" },
   { "changelogs", 'c', 0, G_OPTION_ARG_NONE, &opt_changelogs, "Also output RPM changelogs", NULL },
   { "sysroot", 0, 0, G_OPTION_ARG_STRING, &opt_sysroot, "Use system root SYSROOT (default: /)", "SYSROOT" },
   { "base", 0, 0, G_OPTION_ARG_NONE, &opt_base, "Diff against deployments' base, not layered commits", NULL },
@@ -157,6 +162,12 @@ rpmostree_db_builtin_diff (int argc, char **argv,
       return FALSE;
     }
 
+  if (g_str_equal (opt_format, "json") && opt_changelogs)
+    {
+      rpmostree_usage_error (context, "json format and --changelogs not supported", error);
+      return FALSE;
+    }
+
   const char *old_desc = NULL;
   g_autofree char *old_checksum = NULL;
   const char *new_desc = NULL;
@@ -219,6 +230,36 @@ rpmostree_db_builtin_diff (int argc, char **argv,
       if (!ostree_repo_resolve_rev (repo, new_desc, FALSE, &new_checksum, error))
         return FALSE;
 
+    }
+
+  if (g_str_equal (opt_format, "json"))
+    {
+      g_auto(GVariantBuilder) builder;
+      g_variant_builder_init (&builder, G_VARIANT_TYPE ("a{sv}"));
+      g_variant_builder_add (&builder, "{sv}", "ostree-commit-from",
+                             g_variant_new_string (old_checksum));
+      g_variant_builder_add (&builder, "{sv}", "ostree-commit-to",
+                             g_variant_new_string (new_checksum));
+
+      g_autoptr(GVariant) diffv = NULL;
+      if (!rpm_ostree_db_diff_variant (repo, old_checksum, new_checksum,
+                                       FALSE, &diffv, cancellable, error))
+        return FALSE;
+      g_variant_builder_add (&builder, "{sv}", "pkgdiff", diffv);
+      g_autoptr(GVariant) metadata = g_variant_builder_end (&builder);
+
+      JsonNode *node = json_gvariant_serialize (metadata);
+      glnx_unref_object JsonGenerator *generator = json_generator_new ();
+      json_generator_set_pretty (generator, TRUE);
+      json_generator_set_root (generator, node);
+
+      glnx_unref_object GOutputStream *stdout_gio = g_unix_output_stream_new (1, FALSE);
+      /* NB: watch out for the misleading API docs */
+      if (json_generator_to_stream (generator, stdout_gio, cancellable, error) <= 0
+          || (error != NULL && *error != NULL))
+        return FALSE;
+
+      return TRUE;
     }
 
   return print_diff (repo, old_desc, old_checksum, new_desc, new_checksum,

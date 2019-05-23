@@ -73,6 +73,15 @@ check_diff $booted_csum $pending_csum \
   +pkg-to-replace \
   +pkg-to-replace-archtrans
 
+# also check the diff using json
+vm_rpmostree db diff --format=json $booted_csum $pending_csum > diff.json
+# See assert_replaced_local_pkg() for some syntax explanation. The .[1] == 0 bit
+# is what filters by "pkgs added".
+assert_jq diff.json \
+  '[.pkgdiff|map(select(.[1] == 0))[][0]]|index("pkg-to-remove") >= 0' \
+  '[.pkgdiff|map(select(.[1] == 0))[][0]]|index("pkg-to-replace") >= 0' \
+  '[.pkgdiff|map(select(.[1] == 0))[][0]]|index("pkg-to-replace-archtrans") >= 0'
+
 # check that it's the default behaviour without both args
 check_diff "" "" \
   +pkg-to-remove \
