@@ -52,6 +52,8 @@ print_diff (OstreeRepo   *repo,
             GCancellable *cancellable,
             GError       **error)
 {
+  const gboolean is_diff_format = g_str_equal (opt_format, "diff");
+
   if (!g_str_equal (old_desc, old_checksum))
     printf ("ostree diff commit old: %s (%s)\n", old_desc, old_checksum);
   else
@@ -68,7 +70,7 @@ print_diff (OstreeRepo   *repo,
   g_autoptr(GPtrArray) modified_new = NULL;
 
   /* we still use the old API for changelogs; should enhance libdnf for this */
-  if (g_str_equal (opt_format, "block") && opt_changelogs)
+  if (!is_diff_format && opt_changelogs)
     {
       g_autoptr(RpmRevisionData) rpmrev1 =
         rpmrev_new (repo, old_checksum, NULL, cancellable, error);
@@ -89,13 +91,11 @@ print_diff (OstreeRepo   *repo,
                                cancellable, error))
         return FALSE;
 
-      if (g_str_equal (opt_format, "diff"))
+      if (is_diff_format)
         rpmostree_diff_print (removed, added, modified_old, modified_new);
-      else if (g_str_equal (opt_format, "block"))
+      else
         rpmostree_diff_print_formatted (RPMOSTREE_DIFF_PRINT_FORMAT_FULL_MULTILINE, 0,
                                         removed, added, modified_old, modified_new);
-      else
-        return glnx_throw (error, "Format argument is invalid, pick one of: diff, block");
     }
 
   return TRUE;
@@ -165,6 +165,14 @@ rpmostree_db_builtin_diff (int argc, char **argv,
   if (g_str_equal (opt_format, "json") && opt_changelogs)
     {
       rpmostree_usage_error (context, "json format and --changelogs not supported", error);
+      return FALSE;
+    }
+
+  if (!g_str_equal (opt_format, "block") &&
+      !g_str_equal (opt_format, "diff") &&
+      !g_str_equal (opt_format, "json"))
+    {
+      rpmostree_usage_error (context, "Format argument is invalid, pick one of: diff, block, json", error);
       return FALSE;
     }
 
