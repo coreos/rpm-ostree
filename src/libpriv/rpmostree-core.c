@@ -1930,7 +1930,57 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   g_autoptr(GHashTable) local_pkgs_to_install =
     g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_object_unref);
 
-  /* Handle packages to replace; only add them to the sack for now */
+  /* We download URI packages and import them into the pkgcache first so we can
+  add it to the local packages to install */
+  g_autoptr(GUnixFDList) fd_list = g_unix_fd_list_new ();
+  for (char **it = pkgnames; it && *it; it++)
+    {
+      const char *pkgname = *it;
+      g_assert (!self->rojig_pure);
+      if (g_str_has_prefix (*it, "http://") ||
+          g_str_has_prefix (*it, "https://"))
+        {
+          if (!self->pkgcache_repo)
+            {
+              g_print ("URLs are only supported in unified core mode\n");
+              return FALSE;
+            }
+
+          g_print ("Downloading package %s\n", pkgname);
+          glnx_autofd int fd = ror_download_to_fd (pkgname, error);
+          if (fd < 0)
+            return FALSE;
+
+          int idx = g_unix_fd_list_append (fd_list, fd, error);
+          if (idx < 0)
+            return FALSE;
+        }
+    }
+
+  if (g_unix_fd_list_get_length (fd_list) > 0)
+    {
+      OstreeRepo *repo = get_pkgcache_repo (self);
+      g_autoptr(GPtrArray) imported_pkgs = g_ptr_array_new ();
+      if (!rpmostree_importer_import_many_local_rpms (repo, fd_list, &imported_pkgs, cancellable, error))
+        return FALSE;
+
+      for (gsize i = 0; i < imported_pkgs->len; i++)
+        {
+          const char *nevra = imported_pkgs->pdata[i];
+          g_autofree char *sha256 = NULL;
+          if (!rpmostree_decompose_sha256_nevra (&nevra, &sha256, error))
+            return FALSE;
+
+          g_autoptr(DnfPackage) pkg = NULL;
+          if (!add_pkg_from_cache (self, nevra, sha256, &pkg, cancellable, error))
+            return FALSE;
+
+          g_hash_table_insert (local_pkgs_to_install, (gpointer)nevra, g_steal_pointer (&pkg));
+        }
+    }
+
+
+  /* Handle packages to replace */
   g_autoptr(GPtrArray) replaced_nevras = g_ptr_array_new ();
   for (char **it = cached_replace_pkgs; it && *it; it++)
     {
@@ -2024,19 +2074,23 @@ rpmostree_context_prepare (RpmOstreeContext *self,
     {
       const char *pkgname = *it;
       g_assert (!self->rojig_pure);
-      g_autoptr(GError) local_error = NULL;
-      if (!dnf_context_install (dnfctx, pkgname, &local_error))
+      if (!g_str_has_prefix (*it, "http://") &&
+          !g_str_has_prefix (*it, "https://"))
         {
-          /* Only keep going if it's ENOENT, so we coalesce into one msg at the end */
-          if (!g_error_matches (local_error, DNF_ERROR, DNF_ERROR_PACKAGE_NOT_FOUND))
+          g_autoptr(GError) local_error = NULL;
+          if (!dnf_context_install (dnfctx, pkgname, &local_error))
             {
-              g_propagate_error (error, g_steal_pointer (&local_error));
-              return FALSE;
+              /* Only keep going if it's ENOENT, so we coalesce into one msg at the end */
+              if (!g_error_matches (local_error, DNF_ERROR, DNF_ERROR_PACKAGE_NOT_FOUND))
+                {
+                  g_propagate_error (error, g_steal_pointer (&local_error));
+                  return FALSE;
+                }
+              /* lazy init since it's unlikely in the common case (e.g. upgrades) */
+              if (!missing_pkgs)
+                missing_pkgs = g_ptr_array_new ();
+              g_ptr_array_add (missing_pkgs, (gpointer)pkgname);
             }
-          /* lazy init since it's unlikely in the common case (e.g. upgrades) */
-          if (!missing_pkgs)
-            missing_pkgs = g_ptr_array_new ();
-          g_ptr_array_add (missing_pkgs, (gpointer)pkgname);
         }
     }
 
@@ -3799,7 +3853,7 @@ process_ostree_layers (RpmOstreeContext *self,
 {
   if (!self->treefile_rs)
     return TRUE;
-  
+
   g_auto(GStrv) layers = ror_treefile_get_ostree_layers (self->treefile_rs);
   g_auto(GStrv) override_layers = ror_treefile_get_ostree_override_layers (self->treefile_rs);
   const size_t n = (layers ? g_strv_length (layers) : 0) + (override_layers ? g_strv_length (override_layers) : 0);
