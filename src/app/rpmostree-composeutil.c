@@ -103,6 +103,7 @@ gboolean
 rpmostree_composeutil_legacy_prep_dev (int         rootfs_dfd,
                                        GError    **error)
 {
+  GLNX_AUTO_PREFIX_ERROR ("Preparing dev (legacy)", error);
 
   glnx_autofd int src_fd = openat (AT_FDCWD, "/dev", O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY);
   if (src_fd == -1)
@@ -129,9 +130,9 @@ rpmostree_composeutil_legacy_prep_dev (int         rootfs_dfd,
         continue;
 
       if (mknodat (dest_fd, nodename, stbuf.st_mode, stbuf.st_rdev) != 0)
-        return glnx_throw_errno (error);
+        return glnx_throw_errno_prefix (error, "mknodat");
       if (fchmodat (dest_fd, nodename, stbuf.st_mode, 0) != 0)
-        return glnx_throw_errno (error);
+        return glnx_throw_errno_prefix (error, "fchmodat");
     }
 
   { GLNX_AUTO_PREFIX_ERROR ("Testing /dev/null in target root (is nodev set?)", error);
