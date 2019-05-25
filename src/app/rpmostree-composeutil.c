@@ -130,7 +130,7 @@ rpmostree_composeutil_legacy_prep_dev (int         rootfs_dfd,
         continue;
 
       if (mknodat (dest_fd, nodename, stbuf.st_mode, stbuf.st_rdev) != 0)
-        return glnx_throw_errno_prefix (error, "mkdev");
+        return glnx_throw_errno_prefix (error, "mknodat");
       if (fchmodat (dest_fd, nodename, stbuf.st_mode, 0) != 0)
         return glnx_throw_errno_prefix (error, "fchmodat");
     }
