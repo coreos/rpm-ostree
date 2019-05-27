@@ -29,7 +29,7 @@ set -x
 # Locked finalization
 booted_csum=$(vm_get_booted_csum)
 commit=$(vm_cmd ostree commit -b vmcheck --tree=ref=vmcheck)
-vm_rpmostree upgrade --lock-finalization
+vm_rpmostree deploy revision="${commit}" --lock-finalization
 vm_cmd test -f /run/ostree/staged-deployment-locked
 cursor=$(vm_get_journal_cursor)
 vm_reboot
@@ -37,7 +37,7 @@ assert_streq "$(vm_get_booted_csum)" "${booted_csum}"
 vm_assert_journal_has_content $cursor 'Not finalizing; found /run/ostree/staged-deployment-locked'
 echo "ok locked staging"
 
-vm_rpmostree upgrade --lock-finalization
+vm_rpmostree deploy revision="${commit}" --lock-finalization
 vm_cmd test -f /run/ostree/staged-deployment-locked
 if vm_rpmostree finalize-deployment; then
   assert_not_reached "finalized without expected checksum"
