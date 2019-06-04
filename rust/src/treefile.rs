@@ -130,19 +130,6 @@ fn treefile_parse_stream<R: io::Read>(
         .into());
     }
 
-    // Substitute ${basearch}
-    treefile.treeref = match (basearch, treefile.treeref.take()) {
-        (Some(basearch), Some(treeref)) => {
-            let mut varsubsts = HashMap::new();
-            varsubsts.insert("basearch".to_string(), basearch.to_string());
-            Some(
-                utils::varsubst(&treeref, &varsubsts)
-                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e.to_string()))?,
-            )
-        }
-        (_, v) => v,
-    };
-
     // Special handling for packages, since we allow whitespace within items.
     // We also canonicalize bootstrap_packages to packages here so it's
     // easier to append the basearch packages after.
@@ -410,7 +397,8 @@ impl Treefile {
         basearch: Option<&str>,
         workdir: openat::Dir,
     ) -> Fallible<Box<Treefile>> {
-        let parsed = treefile_parse_recurse(filename, basearch, 0)?;
+        let mut parsed = treefile_parse_recurse(filename, basearch, 0)?;
+        parsed.config = parsed.config.substitute_vars()?;
         Treefile::validate_config(&parsed.config)?;
         let dfd = openat::Dir::open(filename.parent().unwrap())?;
         let (rojig_name, rojig_spec) = if let Some(rojig) = parsed.config.rojig.as_ref() {
@@ -718,6 +706,39 @@ impl TreeComposeConfig {
 
         Ok(self)
     }
+
+    /// Look for use of ${variable} and replace it by its proper value
+    fn substitute_vars(mut self) -> Fallible<Self> {
+        let mut substvars: collections::HashMap<String, String> = collections::HashMap::new();
+        // Substitute ${basearch} and ${releasever}
+        if let Some(arch) = &self.basearch {
+            substvars.insert("basearch".to_string(), arch.clone());
+        }
+        if let Some(releasever) = &self.releasever {
+            substvars.insert("releasever".to_string(), releasever.clone());
+        }
+        envsubst::validate_vars(&substvars)?;
+
+        macro_rules! substitute_field {
+            ( $field:ident ) => {{
+                if let Some(value) = self.$field.take() {
+                    self.$field = if envsubst::is_templated(&value) {
+                        match envsubst::substitute(value, &substvars) {
+                            Ok(s) => Some(s),
+                            Err(e) => return Err(e),
+                        }
+                    } else {
+                        Some(value)
+                    }
+                }
+            }};
+        };
+        substitute_field!(treeref);
+        substitute_field!(automatic_version_prefix);
+        substitute_field!(mutate_os_release);
+
+        Ok(self)
+    }
 }
 
 #[cfg(test)]
@@ -753,8 +774,9 @@ packages-s390x:
     #[test]
     fn basic_valid() {
         let mut input = io::BufReader::new(VALID_PRELUDE.as_bytes());
-        let treefile =
+        let mut treefile =
             treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
+        treefile = treefile.substitute_vars().unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 5);
     }
@@ -785,8 +807,9 @@ remove-files:
     #[test]
     fn basic_js_valid() {
         let mut input = io::BufReader::new(VALID_PRELUDE_JS.as_bytes());
-        let treefile =
+        let mut treefile =
             treefile_parse_stream(InputFormat::JSON, &mut input, Some(ARCH_X86_64)).unwrap();
+        treefile = treefile.substitute_vars().unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 5);
     }
@@ -794,7 +817,8 @@ remove-files:
     #[test]
     fn basic_valid_noarch() {
         let mut input = io::BufReader::new(VALID_PRELUDE.as_bytes());
-        let treefile = treefile_parse_stream(InputFormat::YAML, &mut input, None).unwrap();
+        let mut treefile = treefile_parse_stream(InputFormat::YAML, &mut input, None).unwrap();
+        treefile = treefile.substitute_vars().unwrap();
         assert!(treefile.treeref.unwrap() == "exampleos/x86_64/blah");
         assert!(treefile.packages.unwrap().len() == 3);
     }
@@ -802,7 +826,9 @@ remove-files:
     fn append_and_parse(append: &'static str) -> TreeComposeConfig {
         let buf = VALID_PRELUDE.to_string() + append;
         let mut input = io::BufReader::new(buf.as_bytes());
-        treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap()
+        let treefile =
+            treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
+        treefile.substitute_vars().unwrap()
     }
 
     fn test_invalid(data: &'static str) {
@@ -815,6 +841,31 @@ remove-files:
             },
             Ok(_) => panic!("Expected invalid treefile"),
         }
+    }
+
+    #[test]
+    fn basic_valid_releasever() {
+        let buf = r###"
+ref: "exampleos/${basearch}/${releasever}"
+releasever: 30
+automatic-version-prefix: ${releasever}
+mutate-os-release: ${releasever}
+"###;
+        let mut input = io::BufReader::new(buf.as_bytes());
+        let mut treefile =
+            treefile_parse_stream(InputFormat::YAML, &mut input, Some(ARCH_X86_64)).unwrap();
+        treefile = treefile.substitute_vars().unwrap();
+        assert!(treefile.treeref.unwrap() == "exampleos/x86_64/30");
+        assert!(treefile.releasever.unwrap() == "30");
+        assert!(treefile.automatic_version_prefix.unwrap() == "30");
+        assert!(treefile.mutate_os_release.unwrap() == "30");
+    }
+
+    #[test]
+    fn test_valid_no_releasever() {
+        let treefile = append_and_parse("automatic_version_prefix: ${releasever}");
+        assert!(treefile.releasever == None);
+        assert!(treefile.automatic_version_prefix.unwrap() == "${releasever}");
     }
 
     #[test]
