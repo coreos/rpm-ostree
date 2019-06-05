@@ -1886,7 +1886,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   g_autoptr(GHashTable) local_pkgs_to_install =
     g_hash_table_new_full (g_str_hash, g_str_equal, NULL, g_object_unref);
 
-  /* Handle packages to replace */
+  /* Handle packages to replace; only add them to the sack for now */
   g_autoptr(GPtrArray) replaced_nevras = g_ptr_array_new ();
   for (char **it = cached_replace_pkgs; it && *it; it++)
     {
@@ -1905,7 +1905,7 @@ rpmostree_context_prepare (RpmOstreeContext *self,
       g_hash_table_insert (local_pkgs_to_install, (gpointer)nevra, g_steal_pointer (&pkg));
     }
 
-  /* For each new local package, tell libdnf to add it to the goal */
+  /* Now handle local package; only add them to the sack for now */
   for (char **it = cached_pkgnames; it && *it; it++)
     {
       const char *nevra = *it;
