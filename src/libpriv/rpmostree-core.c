@@ -1830,6 +1830,50 @@ setup_rojig_state (RpmOstreeContext *self,
   return TRUE;
 }
 
+static gboolean
+check_locked_pkgs (RpmOstreeContext *self,
+                   GError          **error)
+{
+  if (!self->vlockmap)
+    return TRUE;
+
+  HyGoal goal = dnf_context_get_goal (self->dnfctx);
+
+  /* sanity check it's all pure installs */
+  { g_autoptr(GPtrArray) packages = dnf_goal_get_packages (goal,
+                                                           DNF_PACKAGE_INFO_REMOVE,
+                                                           DNF_PACKAGE_INFO_OBSOLETE,
+                                                           DNF_PACKAGE_INFO_REINSTALL,
+                                                           DNF_PACKAGE_INFO_UPDATE,
+                                                           DNF_PACKAGE_INFO_DOWNGRADE,
+                                                           -1);
+    if (packages->len > 0)
+      return throw_package_list (error, "Packages not marked for pure install", packages);
+  }
+
+  g_autoptr(GPtrArray) packages =
+    dnf_goal_get_packages (goal, DNF_PACKAGE_INFO_INSTALL, -1);
+
+  for (guint i = 0; i < packages->len; i++)
+  {
+    DnfPackage *pkg = packages->pdata[i];
+    const char *nevra = dnf_package_get_nevra (pkg);
+    const char *chksum = g_hash_table_lookup (self->vlockmap, nevra);
+    if (!chksum)
+      continue;
+
+    g_autofree char *repodata_chksum = NULL;
+    if (!rpmostree_get_repodata_chksum_repr (pkg, &repodata_chksum, error))
+      return FALSE;
+
+    if (chksum && !g_str_equal (chksum, repodata_chksum))
+      return glnx_throw (error, "Locked package %s checksum  mismatch: expected %s, got %s",
+                         nevra, chksum, repodata_chksum);
+  }
+
+  return TRUE;
+}
+
 /* Check for/download new rpm-md, then depsolve */
 gboolean
 rpmostree_context_prepare (RpmOstreeContext *self,
@@ -1936,6 +1980,27 @@ rpmostree_context_prepare (RpmOstreeContext *self,
    * uninstall. We don't want to mix those two steps, otherwise we might confuse libdnf,
    * see: https://github.com/rpm-software-management/libdnf/issues/700 */
 
+  /* Before adding any pkgs to the goal; filter out from the sack all pkgs which don't match
+   * our lockfile. (But of course, leave other pkgs untouched.) */
+  if (self->vlockmap != NULL)
+    {
+      g_assert_cmpuint (g_strv_length (cached_replace_pkgs), ==, 0);
+      g_assert_cmpuint (g_strv_length (removed_base_pkgnames), ==, 0);
+
+      GLNX_HASH_TABLE_FOREACH (self->vlockmap, const char*, nevra)
+        {
+          g_autofree char *name = NULL;
+          if (!rpmostree_decompose_nevra (nevra, &name, NULL, NULL, NULL, NULL, error))
+            return FALSE;
+          hy_autoquery HyQuery query = hy_query_create (sack);
+          hy_query_filter (query, HY_PKG_NAME, HY_EQ, name);
+          hy_query_filter (query, HY_PKG_NEVRA, HY_NEQ, nevra);
+          DnfPackageSet *pset = hy_query_run_set (query);
+          dnf_sack_add_excludes (sack, pset);
+          dnf_packageset_free (pset);
+        }
+    }
+
   /* First, handle packages to remove */
   g_autoptr(GPtrArray) removed_pkgnames = g_ptr_array_new ();
   for (char **it = removed_base_pkgnames; it && *it; it++)
@@ -1958,13 +2023,6 @@ rpmostree_context_prepare (RpmOstreeContext *self,
   for (char **it = pkgnames; it && *it; it++)
     {
       const char *pkgname = *it;
-      g_autoptr(DnfPackage) pkg = rpmostree_get_locked_package (sack, self->vlockmap, pkgname);
-      if (pkg)
-        {
-          hy_goal_install (goal, pkg);
-          continue;
-        }
-
       g_assert (!self->rojig_pure);
       g_autoptr(GError) local_error = NULL;
       if (!dnf_context_install (dnfctx, pkgname, &local_error))
@@ -2005,7 +2063,8 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
       /* XXX: consider a --allow-uninstall switch? */
       if (!dnf_goal_depsolve (goal, actions, error) ||
-          !check_goal_solution (self, removed_pkgnames, replaced_nevras, error))
+          !check_goal_solution (self, removed_pkgnames, replaced_nevras, error) ||
+          !check_locked_pkgs (self, error))
         return FALSE;
       g_clear_pointer (&self->pkgs, (GDestroyNotify)g_ptr_array_unref);
       self->pkgs = dnf_goal_get_packages (dnf_context_get_goal (dnfctx),

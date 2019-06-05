@@ -7,9 +7,8 @@ dn=$(cd $(dirname $0) && pwd)
 prepare_compose_test "lockfile"
 # Add a local rpm-md repo so we can mutate local test packages
 pyappendjsonmember "repos" '["test-repo"]'
-build_rpm test-pkg \
-          files "/usr/bin/test-pkg" \
-          install "mkdir -p %{buildroot}/usr/bin && echo localpkg data > %{buildroot}/usr/bin/test-pkg"
+build_rpm test-pkg-common
+build_rpm test-pkg requires test-pkg-common
 # The test suite writes to pwd, but we need repos in composedata
 # Also we need to disable gpgcheck
 echo gpgcheck=0 >> yumrepo.repo
@@ -28,15 +27,15 @@ echo "ok compose"
 assert_has_file "versions.lock"
 assert_file_has_content $PWD/versions.lock 'packages'
 assert_file_has_content $PWD/versions.lock 'test-pkg-1.0-1.x86_64'
+assert_file_has_content $PWD/versions.lock 'test-pkg-common-1.0-1.x86_64'
 echo "lockfile created"
 # Read lockfile back
-build_rpm test-pkg \
-          version 2.0 \
-          files "/usr/bin/test-pkg" \
-          install "mkdir -p %{buildroot}/usr/bin && echo localpkg data > %{buildroot}/usr/bin/test-pkg"
+build_rpm test-pkg-common version 2.0
+build_rpm test-pkg version 2.0 requires test-pkg-common
 runcompose --ex-lockfile=$PWD/versions.lock --cachedir $(pwd)/cache
 echo "ok compose with lockfile"
 
 rpm-ostree --repo=${repobuild} db list ${treeref} test-pkg >test-pkg-list.txt
 assert_file_has_content test-pkg-list.txt 'test-pkg-1.0-1.x86_64'
+assert_file_has_content test-pkg-list.txt 'test-pkg-common-1.0-1.x86_64'
 echo "lockfile read"
