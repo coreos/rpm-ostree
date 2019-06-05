@@ -1866,12 +1866,13 @@ rpmostree_context_prepare (RpmOstreeContext *self,
         return FALSE;
       journal_rpmmd_info (self);
     }
+  DnfSack *sack = dnf_context_get_sack (dnfctx);
 
   /* Don't try to keep multiple kernels per root; that's a traditional thing,
    * ostree binds kernel + userspace.
    */
-  dnf_sack_set_installonly (dnf_context_get_sack (self->dnfctx), NULL);
-  dnf_sack_set_installonly_limit (dnf_context_get_sack (self->dnfctx), 0);
+  dnf_sack_set_installonly (sack, NULL);
+  dnf_sack_set_installonly_limit (sack, 0);
 
   if (self->rojig_pure)
     {
@@ -1954,7 +1955,6 @@ rpmostree_context_prepare (RpmOstreeContext *self,
 
   /* And finally, handle repo packages to install */
   g_autoptr(GPtrArray) missing_pkgs = NULL;
-  DnfSack *sack = dnf_context_get_sack (dnfctx);
   for (char **it = pkgnames; it && *it; it++)
     {
       const char *pkgname = *it;
