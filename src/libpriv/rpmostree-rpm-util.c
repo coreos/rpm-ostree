@@ -1285,32 +1285,6 @@ rpmostree_create_pkglist_variant (GPtrArray     *pkglist,
   return TRUE;
 }
 
-DnfPackage *
-rpmostree_get_locked_package (DnfSack    *sack,
-                              GHashTable *lockmap,
-                              const char *name)
-{
-  if (!lockmap || !name)
-    return NULL;
-
-  /* The manifest might specify not only package names (foo-1.x) but also
-   * something-that-foo-provides */
-  g_autoptr(GPtrArray) alts = rpmostree_get_matching_packages (sack, name);
-
-  for (gsize i = 0; i < alts->len; i++)
-  {
-    DnfPackage *pkg = alts->pdata[i];
-    g_autofree gchar *repodata_chksum = NULL;
-    if (!rpmostree_get_repodata_chksum_repr (pkg, &repodata_chksum, NULL))
-      continue;
-
-    const char *chksum = g_hash_table_lookup (lockmap, dnf_package_get_nevra (pkg));
-    if (chksum && !g_strcmp0 (chksum, repodata_chksum))
-      return g_object_ref (pkg);
-  }
-  return NULL;
-}
-
 /* Simple wrapper around hy_split_nevra() that adds allow-none and GError convention */
 gboolean
 rpmostree_decompose_nevra (const char  *nevra,
