@@ -35,7 +35,7 @@ build_rpm test-pkg version 2.0 requires test-pkg-common
 runcompose --ex-lockfile=$PWD/versions.lock --cachedir $(pwd)/cache
 echo "ok compose with lockfile"
 
-rpm-ostree --repo=${repobuild} db list ${treeref} test-pkg >test-pkg-list.txt
+rpm-ostree --repo=${repobuild} db list ${treeref} > test-pkg-list.txt
 assert_file_has_content test-pkg-list.txt 'test-pkg-1.0-1.x86_64'
 assert_file_has_content test-pkg-list.txt 'test-pkg-common-1.0-1.x86_64'
 echo "lockfile read"

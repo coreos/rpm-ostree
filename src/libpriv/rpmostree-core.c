@@ -1855,21 +1855,21 @@ check_locked_pkgs (RpmOstreeContext *self,
     dnf_goal_get_packages (goal, DNF_PACKAGE_INFO_INSTALL, -1);
 
   for (guint i = 0; i < packages->len; i++)
-  {
-    DnfPackage *pkg = packages->pdata[i];
-    const char *nevra = dnf_package_get_nevra (pkg);
-    const char *chksum = g_hash_table_lookup (self->vlockmap, nevra);
-    if (!chksum)
-      continue;
+    {
+      DnfPackage *pkg = packages->pdata[i];
+      const char *nevra = dnf_package_get_nevra (pkg);
+      const char *chksum = g_hash_table_lookup (self->vlockmap, nevra);
+      if (!chksum)
+        continue;
 
-    g_autofree char *repodata_chksum = NULL;
-    if (!rpmostree_get_repodata_chksum_repr (pkg, &repodata_chksum, error))
-      return FALSE;
+      g_autofree char *repodata_chksum = NULL;
+      if (!rpmostree_get_repodata_chksum_repr (pkg, &repodata_chksum, error))
+        return FALSE;
 
-    if (chksum && !g_str_equal (chksum, repodata_chksum))
-      return glnx_throw (error, "Locked package %s checksum  mismatch: expected %s, got %s",
-                         nevra, chksum, repodata_chksum);
-  }
+      if (chksum && !g_str_equal (chksum, repodata_chksum))
+        return glnx_throw (error, "Locked package %s checksum mismatch: expected %s, got %s",
+                           nevra, chksum, repodata_chksum);
+    }
 
   return TRUE;
 }
