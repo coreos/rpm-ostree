@@ -69,7 +69,7 @@ for x in $(seq 3); do
 done
 rm tmp/usr -rf
 mkdir -p tmp/usr/share/info
-echo some info | gzip > tmp/usr/share/info/bash.info.gz
+echo sweet new ls binary > tmp/usr/bin/ls
 ostree --repo="${repobuild}" commit --consume --no-xattrs --owner-uid=0 --owner-gid=0 -b testoverride-1 --tree=dir=tmp
 cat >> ${new_treefile} <<EOF
 ostree-layers:
@@ -145,8 +145,8 @@ for x in $(seq 3); do
   ostree --repo=${repobuild} cat ${treeref} /usr/share/testsubdir-${x}/test > t
   assert_file_has_content t sometestdata-subdir-${x}
 done
-ostree --repo=${repobuild} cat ${treeref} /usr/share/info/bash.info.gz | gunzip > bash.info
-assert_file_has_content bash.info 'some info'
+ostree --repo=${repobuild} cat ${treeref} /usr/bin/ls > ls.txt
+assert_file_has_content ls.txt '^sweet new ls binary$'
 echo "ok layers"
 
 # Check that add-files with bad paths are rejected

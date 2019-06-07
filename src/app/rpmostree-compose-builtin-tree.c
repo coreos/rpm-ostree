@@ -714,9 +714,12 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
                                error))
     return FALSE;
 
+  g_auto(GStrv) layers = ror_treefile_get_all_ostree_layers (self->treefile_rs);
+  if (layers && *layers && !opt_unified_core)
+    return glnx_throw (error, "ostree-layers requires unified-core mode");
+
   if (self->build_repo != self->repo)
     {
-      g_auto(GStrv) layers = ror_treefile_get_all_ostree_layers (self->treefile_rs);
       for (char **iter = layers; iter && *iter; iter++)
         {
           const char *layer = *iter;
