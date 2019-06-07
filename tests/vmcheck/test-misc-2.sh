@@ -229,14 +229,11 @@ echo "ok /run/ostree-booted in scriptlet container"
 # local repos are always cached, so let's start up an http server for the same
 # vmcheck repo
 vm_start_httpd vmcheck /var/tmp 8888
-vm_ansible_inline <<EOF
-- copy:
-    content: |
-      [vmcheck-http]
-      name=vmcheck-http
-      baseurl=http://localhost:8888/vmcheck/yumrepo
-      gpgcheck=0
-    dest: /etc/yum.repos.d/vmcheck-http.repo
+vm_send_inline /etc/yum.repos.d/vmcheck-http.repo <<EOF
+[vmcheck-http]
+name=vmcheck-http
+baseurl=http://localhost:8888/vmcheck/yumrepo
+gpgcheck=0
 EOF
 
 vm_rpmostree cleanup -rpmb

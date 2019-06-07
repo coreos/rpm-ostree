@@ -35,9 +35,16 @@ vm_build_rpm scriptpkg1 \
   pretrans "# http://lists.rpm.org/pipermail/rpm-ecosystem/2016-August/000391.html
             echo pretrans should've been ignored && exit 1" \
   verifyscript "echo verifyscript should've been ignored && exit 1" \
-  post_args "-p /usr/bin/python3" \
-  post 'open("/usr/lib/rpmostreetestinterp", "w").close();
-open("/var/lib/rpm-state/scriptpkg1-stamp", "w").close()' \
+  post_args "-p /usr/bin/bash" \
+  post '
+# default shell is sh, but we requested bash; check that rpm-ostree picks it up
+interp=$(cat /proc/$$/comm)
+if [ "$interp" != "bash" ]; then
+  echo "Expected bash interpreter, got $interp"
+  exit 1
+fi
+touch /usr/lib/rpmostreetestinterp
+touch /var/lib/rpm-state/scriptpkg1-stamp' \
   posttrans "# Firewalld; https://github.com/projectatomic/rpm-ostree/issues/638
              . /etc/os-release || :
              # See https://github.com/projectatomic/rpm-ostree/pull/647
@@ -209,9 +216,8 @@ vm_cmd systemctl restart rpm-ostreed
 echo "ok cancel infinite post via `rpm-ostree cancel`"
 
 # Test rm -rf /!
-vm_ansible_inline <<EOF
-- user:
-    name: testuser
+vm_shell_inline <<EOF
+getent passwd testuser >/dev/null || useradd testuser
 EOF
 vm_cmd touch /home/testuser/somedata /tmp/sometmpfile /var/tmp/sometmpfile
 vm_build_rpm rmrf post "rm --no-preserve-root -rf / &>/dev/null || true"

@@ -37,25 +37,27 @@ vm_setup() {
   export SCP="scp ${SSHOPTS}"
 }
 
-vm_ansible_inline() {
-    playbook=$(mktemp -p /tmp 'libvm-ansible.XXXXXX')
-    cat > ${playbook} <<EOF
----
-- hosts: ${VM}
-  gather_facts: no
-  tasks:
-EOF
-    sed -e 's,^,  ,' >> ${playbook}
-    ansible-playbook -vi ${VM}, --ssh-common-args "${SSHOPTS}" ${playbook}
-    rm -f ${playbook}
+# $1 - file to send
+# $2 - destination path
+vm_send() {
+  $SCP ${1} ${VM}:${2}
+}
+
+# $1 - destination path
+vm_send_inline() {
+  f=$(mktemp -p $PWD)
+  cat > ${f}
+  vm_send ${f} ${1}
+  rm -f ${f}
 }
 
 vm_shell_inline() {
-  vm_ansible_inline <<EOF
-- shell: |
-    set -xeuo pipefail
-$(sed -e 's,^,    ,')
-EOF
+  script=$(mktemp -p $PWD)
+  echo "set -xeuo pipefail" > ${script}
+  cat >> ${script}
+  vm_send ${script} /tmp/$(basename ${script})
+  rm -f ${script}
+  vm_cmd bash /tmp/$(basename ${script})
 }
 
 # rsync wrapper that sets up authentication
@@ -133,10 +135,7 @@ EOF
       echo 'gpgcheck=0' >> vmcheck.repo
   fi
 
-  vm_ansible_inline <<EOF
-- file: path=/etc/yum.repos.d state=directory
-- copy: src=$(pwd)/vmcheck.repo dest=/etc/yum.repos.d
-EOF
+  vm_send vmcheck.repo /etc/yum.repos.d
 }
 
 # wait until ssh is available on the vm
@@ -401,9 +400,7 @@ vm_get_journal_cursor() {
 vm_wait_content_after_cursor() {
     from_cursor=$1; shift
     regex=$1; shift
-    vm_ansible_inline <<EOF
-- shell: |
-    set -xeuo pipefail
+    vm_shell_inline <<EOF
     tmpf=\$(mktemp /var/tmp/journal.XXXXXX)
     for x in \$(seq 60); do
       journalctl -u rpm-ostreed --after-cursor "${from_cursor}" > \${tmpf}
@@ -435,6 +432,23 @@ vm_assert_journal_has_content() {
   rm -f tmp-journal.txt
 }
 
+# usage: <podman args> -- <container args>
+vm_run_container() {
+  local podman_args=
+  while [ $# -ne 0 ]; do
+    local arg=$1; shift
+    if [[ $arg == -- ]]; then
+      break
+    fi
+    podman_args="$podman_args $arg"
+  done
+  [ $# -ne 0 ] || fatal "No container args provided"
+  # just automatically always share dnf cache so we don't redownload each time
+  vm_cmd mkdir -p /var/cache/dnf
+  vm_cmd podman run --rm -v /var/cache/dnf:/var/cache/dnf:z $podman_args \
+    registry.fedoraproject.org/fedora:30 "$@"
+}
+
 # $1 - service name
 # $2 - dir to serve
 # $3 - port to serve on
@@ -448,9 +462,9 @@ vm_start_httpd() {
     vm_cmd systemctl stop $name
   fi
 
-  # CentOS systemd is too old for -p WorkingDirectory
-  vm_cmd systemd-run --unit $name sh -c \
-    "'cd $dir && python3 -m http.server $port'"
+  vm_run_container --net=host -d --name $name --privileged \
+    -v $dir:/srv --workdir /srv -- \
+    python3 -m http.server $port
 
   # NB: the EXIT trap is used by libtest, but not the ERR trap
   trap "vm_stop_httpd $name" ERR
@@ -463,7 +477,7 @@ vm_start_httpd() {
 # $1 - service name
 vm_stop_httpd() {
   local name=$1; shift
-  vm_cmd systemctl stop $name
+  vm_cmd podman rm -f $name
   set +E
   trap - ERR
 }
@@ -556,8 +570,7 @@ vm_ostreeupdate_prepare_reboot() {
 
 vm_change_update_policy() {
     policy=$1; shift
-    vm_ansible_inline <<EOF
-- shell: |
+    vm_shell_inline <<EOF
     cp /usr/etc/rpm-ostreed.conf /etc
     echo -e "[Daemon]\nAutomaticUpdatePolicy=$policy" > /etc/rpm-ostreed.conf
     rpm-ostree reload

@@ -5,4 +5,4 @@ set -xeuo pipefail
 
 dn=$(dirname $0)
 . ${dn}/libbuild.sh
-pkg_install openssh-clients ansible
+pkg_install openssh-clients

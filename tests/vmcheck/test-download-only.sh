@@ -35,14 +35,11 @@ set -x
 vm_build_rpm_repo_mode skip foobar
 vm_start_httpd vmcheck /var/tmp 8888
 vm_rpmostree cleanup -m
-vm_ansible_inline <<EOF
-- copy:
-    content: |
-      [vmcheck-http]
-      name=vmcheck-http
-      baseurl=http://localhost:8888/vmcheck/yumrepo
-      gpgcheck=0
-    dest: /etc/yum.repos.d/vmcheck-http.repo
+vm_send_inline /etc/yum.repos.d/vmcheck-http.repo <<EOF
+[vmcheck-http]
+name=vmcheck-http
+baseurl=http://localhost:8888/vmcheck/yumrepo
+gpgcheck=0
 EOF
 
 osname=$(vm_get_booted_deployment_info osname)
