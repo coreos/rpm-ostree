@@ -150,9 +150,7 @@ fi
 vm_cmd test -f /${dummy_file_to_modify}
 generate_upgrade() {
     # Create a modified vmcheck commit
-    vm_ansible_inline <<EOF
-- shell: |
-    set -xeuo pipefail
+    vm_shell_inline <<EOF
       cd /ostree/repo/tmp
       rm vmcheck -rf
       ostree checkout vmcheck vmcheck --fsync=0

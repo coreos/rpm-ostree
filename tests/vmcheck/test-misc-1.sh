@@ -83,11 +83,8 @@ echo "ok error on unknown command"
 # Be sure an unprivileged user exists and that we can SSH into it. This is a bit
 # underhanded, but we need a bona fide user session to verify non-priv status,
 # and logging in through SSH is an easy way to achieve that.
-vm_ansible_inline <<EOF
-- user:
-    name: testuser
-- shell: |
-    set -euo pipefail
+vm_shell_inline <<EOF
+    getent passwd testuser >/dev/null || useradd testuser
     mkdir -pm 0700 /home/testuser/.ssh
     cp -a /root/.ssh/authorized_keys /home/testuser/.ssh
     chown -R testuser:testuser /home/testuser/.ssh
@@ -139,9 +136,7 @@ vm_rpmostree usroverlay
 vm_cmd test -w /usr/bin
 echo "ok usroverlay"
 
-vm_ansible_inline <<EOF
-- shell: |
-    set -xeuo pipefail
+vm_shell_inline <<EOF
     rpm-ostree cleanup -p
     originpath=\$(ostree admin --print-current-dir).origin
     cp -a \${originpath}{,.orig}

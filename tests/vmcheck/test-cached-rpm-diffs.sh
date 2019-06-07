@@ -68,8 +68,10 @@ run_transaction() {
   sig=$1; shift
   args=$1; shift
   cur=$(vm_get_journal_cursor)
-  # use ansible for this so we don't have to think about hungry quote-eating ssh
-  vm_shell_inline <<EOF
+  vm_run_container --privileged -i -v /var/run/dbus:/var/run/dbus --net=host -- \
+    /bin/bash << EOF
+set -xeuo pipefail
+dnf install -y python3-dbus
 python3 -c '
 import dbus
 addr = dbus.SystemBus().call_blocking(
