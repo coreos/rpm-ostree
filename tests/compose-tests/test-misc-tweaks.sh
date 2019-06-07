@@ -68,7 +68,7 @@ for x in $(seq 3); do
   ostree --repo="${repobuild}" commit --consume --no-xattrs --owner-uid=0 --owner-gid=0 -b testlayer-${x} --tree=dir=tmp
 done
 rm tmp/usr -rf
-mkdir -p tmp/usr/share/info
+mkdir -p tmp/usr/{share/info,bin}
 echo sweet new ls binary > tmp/usr/bin/ls
 ostree --repo="${repobuild}" commit --consume --no-xattrs --owner-uid=0 --owner-gid=0 -b testoverride-1 --tree=dir=tmp
 cat >> ${new_treefile} <<EOF
