@@ -17,8 +17,10 @@
  */
 
 use failure::{bail, Fallible};
+use failure::ResultExt;
 use std::collections::HashMap;
 use std::io::prelude::*;
+use std::path::Path;
 use std::{fs, io};
 use tempfile;
 
@@ -40,6 +42,12 @@ fn download_url_to_tmpfile(url: &str) -> Fallible<fs::File> {
 
     tmpf.seek(io::SeekFrom::Start(0))?;
     Ok(tmpf)
+}
+
+/// Open file and provide context containing filename on failures.
+pub fn open_file<P: AsRef<Path>>(filename: P) -> Fallible<fs::File> {
+    return Ok(fs::File::open(filename.as_ref())
+        .with_context(|e| format!("Can't open file {:?}: {}", filename.as_ref().display(), e))?);
 }
 
 /// Given an input string `s`, replace variables of the form `${foo}` with
