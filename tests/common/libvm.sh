@@ -458,11 +458,7 @@ vm_start_httpd() {
   local dir=$1; shift
   local port=$1; shift
 
-  # just nuke the service of the same name if it exists and is also transient
-  if vm_cmd systemctl show $name | grep -q UnitFileState=transient; then
-    vm_cmd systemctl stop $name
-  fi
-
+  vm_cmd podman rm -f $name || true
   vm_run_container --net=host -d --name $name --privileged \
     -v $dir:/srv --workdir /srv -- \
     python3 -m http.server $port
