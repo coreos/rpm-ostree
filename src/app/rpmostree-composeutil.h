@@ -74,8 +74,5 @@ rpmostree_composeutil_write_lockfilejson (RpmOstreeContext  *ctx,
                                           const char        *path,
                                           GError           **error);
 
-GHashTable *
-rpmostree_composeutil_get_vlockmap (const char *path,
-                                    GError    **error);
 G_END_DECLS
 
