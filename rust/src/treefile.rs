@@ -22,7 +22,6 @@
 
 use c_utf8::CUtf8Buf;
 use failure::Fallible;
-use failure::ResultExt;
 use openat;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
@@ -211,12 +210,6 @@ fn take_archful_pkgs(
     Ok(archful_pkgs)
 }
 
-/// Open file and provide context containing filename on failures.
-fn open_file<P: AsRef<Path>>(filename: P) -> Fallible<fs::File> {
-    return Ok(fs::File::open(filename.as_ref())
-        .with_context(|e| format!("Can't open file {:?}: {}", filename.as_ref().display(), e))?);
-}
-
 // If a passwd/group file is provided explicitly, load it as a fd
 fn load_passwd_file<P: AsRef<Path>>(
     basedir: P,
@@ -225,7 +218,7 @@ fn load_passwd_file<P: AsRef<Path>>(
     if let &Some(ref v) = v {
         let basedir = basedir.as_ref();
         if let Some(ref path) = v.filename {
-            return Ok(Some(open_file(basedir.join(path))?));
+            return Ok(Some(utils::open_file(basedir.join(path))?));
         }
     }
     return Ok(None);
@@ -238,7 +231,7 @@ fn treefile_parse<P: AsRef<Path>>(
     basearch: Option<&str>,
 ) -> Fallible<ConfigAndExternals> {
     let filename = filename.as_ref();
-    let mut f = io::BufReader::new(open_file(filename)?);
+    let mut f = io::BufReader::new(utils::open_file(filename)?);
     let basename = filename
         .file_name()
         .map(|s| s.to_string_lossy())
@@ -255,14 +248,14 @@ fn treefile_parse<P: AsRef<Path>>(
         )
     })?;
     let postprocess_script = if let Some(ref postprocess) = tf.postprocess_script.as_ref() {
-        Some(open_file(filename.with_file_name(postprocess))?)
+        Some(utils::open_file(filename.with_file_name(postprocess))?)
     } else {
         None
     };
     let mut add_files: collections::HashMap<String, fs::File> = collections::HashMap::new();
     if let Some(ref add_file_names) = tf.add_files.as_ref() {
         for (name, _) in add_file_names.iter() {
-            add_files.insert(name.clone(), open_file(filename.with_file_name(name))?);
+            add_files.insert(name.clone(), utils::open_file(filename.with_file_name(name))?);
         }
     }
     let parent = filename.parent().unwrap();
