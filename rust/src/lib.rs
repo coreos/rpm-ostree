@@ -28,5 +28,7 @@ mod progress;
 pub use self::progress::*;
 mod treefile;
 pub use self::treefile::*;
+mod lockfile;
+pub use self::lockfile::*;
 mod utils;
 pub use self::utils::*;
