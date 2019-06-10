@@ -444,7 +444,8 @@ vm_run_container() {
   done
   [ $# -ne 0 ] || fatal "No container args provided"
   # just automatically always share dnf cache so we don't redownload each time
-  vm_cmd mkdir -p /var/cache/dnf
+  # (use -n so this ssh invocation doesn't consume stdin)
+  vm_cmd -n mkdir -p /var/cache/dnf
   vm_cmd podman run --rm -v /var/cache/dnf:/var/cache/dnf:z $podman_args \
     registry.fedoraproject.org/fedora:30 "$@"
 }

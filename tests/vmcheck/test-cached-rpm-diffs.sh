@@ -70,6 +70,7 @@ run_transaction() {
   cur=$(vm_get_journal_cursor)
   vm_run_container --privileged -i -v /var/run/dbus:/var/run/dbus --net=host -- \
     /bin/bash << EOF
+set -xeuo pipefail
 dnf install -y python3-dbus
 python3 -c '
 import dbus
