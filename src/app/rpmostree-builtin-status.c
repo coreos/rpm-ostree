@@ -703,25 +703,50 @@ print_one_deployment (RPMOSTreeSysroot *sysroot_proxy,
   g_autoptr(GPtrArray) active_removals = g_ptr_array_new_with_free_func (g_free);
   if (origin_base_removals)
     {
-      g_autoptr(GPtrArray) active_removals_nevra = g_ptr_array_new_with_free_func (g_free);
+      g_autoptr(GString) str = g_string_new ("");
+      g_autoptr(GHashTable) grouped_evrs =
+        g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                               (GDestroyNotify)g_ptr_array_unref);
+
       const guint n = g_variant_n_children (origin_base_removals);
       for (guint i = 0; i < n; i++)
         {
           g_autoptr(GVariant) gv_nevra;
           g_variant_get_child (origin_base_removals, i, "v", &gv_nevra);
-          const char *name, *nevra;
-          g_variant_get_child (gv_nevra, 0, "&s", &nevra);
+          const char *name;
           g_variant_get_child (gv_nevra, 1, "&s", &name);
           g_ptr_array_add (active_removals, g_strdup (name));
-          g_ptr_array_add (active_removals_nevra, g_strdup (nevra));
+
+          gv_nevra_to_evr (str, gv_nevra);
+          const char *evr = str->str;
+          GPtrArray *pkgs = g_hash_table_lookup (grouped_evrs, evr);
+          if (!pkgs)
+            {
+              pkgs = g_ptr_array_new_with_free_func (g_free);
+              g_hash_table_insert (grouped_evrs, g_strdup (evr), pkgs);
+            }
+          g_ptr_array_add (pkgs, g_strdup (name));
+          g_string_erase (str, 0, -1);
         }
       g_ptr_array_add (active_removals, NULL);
-      if (active_removals_nevra->len > 0 )
+
+      GLNX_HASH_TABLE_FOREACH_KV (grouped_evrs, const char*, evr, GPtrArray*, pkgs)
         {
-          g_ptr_array_add (active_removals_nevra, NULL);
-          print_packages ("RemovedBasePackages", max_key_len,
-                          (const char *const*)active_removals_nevra->pdata, NULL);
+          if (str->len)
+            g_string_append (str, ", ");
+
+          for (guint i = 0, n = pkgs->len; i < n; i++)
+            {
+              const char *pkgname = g_ptr_array_index (pkgs, i);
+              if (i > 0)
+                g_string_append_c (str, ' ');
+              g_string_append (str, pkgname);
+            }
+          g_string_append_printf (str, " %s", evr);
         }
+
+      if (str->len)
+        rpmostree_print_kv ("RemovedBasePackages", max_key_len, str->str);
     }
 
   /* only print inactive base removal requests in verbose mode */
