@@ -871,12 +871,13 @@ os_handle_refresh_md (RPMOSTreeOS *interface,
                       GDBusMethodInvocation *invocation,
                       GVariant *arg_options)
 {
-  glnx_unref_object OstreeSysroot *ot_sysroot = NULL;
+  g_autoptr(OstreeSysroot) ot_sysroot = NULL;
   g_autoptr(GCancellable) cancellable = g_cancellable_new ();
   const char *osname;
   GError *local_error = NULL;
   RpmOstreeTransactionRefreshMdFlags flags = 0;
   g_auto(GVariantDict) dict;
+  g_variant_dict_init (&dict, arg_options);
 
   /* try to merge with an existing transaction, otherwise start a new one */
   glnx_unref_object RpmostreedTransaction *transaction = NULL;
@@ -895,7 +896,7 @@ os_handle_refresh_md (RPMOSTreeOS *interface,
 
   osname = rpmostree_os_get_name (interface);
 
-  g_variant_dict_init (&dict, arg_options);
+
   if (vardict_lookup_bool (&dict, "force", FALSE))
     flags |= RPMOSTREE_TRANSACTION_REFRESH_MD_FLAG_FORCE;
 
