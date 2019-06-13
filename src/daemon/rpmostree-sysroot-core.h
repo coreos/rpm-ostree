@@ -45,12 +45,6 @@ OstreeDeployment *rpmostree_syscore_get_origin_merge_deployment (OstreeSysroot *
 
 gboolean rpmostree_syscore_bump_mtime (OstreeSysroot *self, GError **error);
 
-gboolean
-rpmostree_syscore_get_pkgcache_repo (OstreeRepo   *parent,
-                                     OstreeRepo  **out_pkgcache,
-                                     GCancellable *cancellable,
-                                     GError      **error);
-
 #define RPMOSTREE_LIVE_INPROGRESS_XATTR "user.rpmostree-live-inprogress"
 #define RPMOSTREE_LIVE_REPLACED_XATTR "user.rpmostree-live-replaced"
 
