@@ -543,6 +543,22 @@ rpmostree_composeutil_write_lockfilejson (RpmOstreeContext  *ctx,
 
 /* compose tree accepts JSON package version lock via file;
  * convert it to a hash table of a{sv}; suitable for further extension.
+ *
+ * Format:
+ *
+ * {
+ *    "packages": [
+ *        [
+ *          "NEVRA1",
+ *          "<digest-algo>:<digest>"
+ *        ],
+ *        [
+ *          "NEVRA2",
+ *          "<digest-algo>:<digest>"
+ *        ],
+ *        ...
+ *    ]
+ * }
  */
 GHashTable *
 rpmostree_composeutil_get_vlockmap (const char  *path,
