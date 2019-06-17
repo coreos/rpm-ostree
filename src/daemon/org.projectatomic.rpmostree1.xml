@@ -390,6 +390,9 @@
     <!-- A single-line human-readable string -->
     <property name="Title" type="s" access="read"/>
 
+    <!-- Description of client that started the txn -->
+    <property name="InitiatingClientDescription" type="s" access="read"/>
+
     <!-- Yes, we can. -->
     <method name="Cancel"/>
 

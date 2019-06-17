@@ -362,6 +362,11 @@ print_daemon_state (RPMOSTreeSysroot *sysroot_proxy,
     {
       const char *title = rpmostree_transaction_get_title (txn_proxy);
       g_print ("Transaction: %s\n", title);
+      const char *client = rpmostree_transaction_get_initiating_client_description (txn_proxy);
+      if (client && *client)
+        {
+          g_print ("  Initiator: %s\n", client);
+        }
     }
 
   return TRUE;

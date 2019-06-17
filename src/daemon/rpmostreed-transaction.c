@@ -25,6 +25,7 @@
 #include "rpmostreed-transaction.h"
 #include "rpmostreed-errors.h"
 #include "rpmostreed-sysroot.h"
+#include "rpmostreed-daemon.h"
 
 struct _RpmostreedTransactionPrivate {
   GDBusMethodInvocation *invocation;
@@ -37,6 +38,8 @@ struct _RpmostreedTransactionPrivate {
    */
   char *sysroot_path;
   OstreeSysroot *sysroot;
+  /* Capture of the client description at txn creation time */
+  char *client_description;
 
   gboolean redirect_output;
 
@@ -464,6 +467,8 @@ transaction_finalize (GObject *object)
 
   g_hash_table_destroy (priv->peer_connections);
 
+  g_free (priv->client_description);
+
   G_OBJECT_CLASS (rpmostreed_transaction_parent_class)->finalize (object);
 }
 
@@ -494,6 +499,9 @@ transaction_constructed (GObject *object)
                                                        transaction_owner_vanished_cb,
                                                        self,
                                                        NULL);
+
+      priv->client_description = rpmostreed_daemon_client_get_string (rpmostreed_daemon_get(), sender);
+      rpmostree_transaction_set_initiating_client_description ((RPMOSTreeTransaction*)self, priv->client_description);
     }
 }
 
@@ -783,6 +791,16 @@ rpmostreed_transaction_get_sysroot (RpmostreedTransaction *transaction)
   priv = rpmostreed_transaction_get_private (transaction);
 
   return priv->sysroot;
+}
+
+const char *
+rpmostreed_transaction_get_client (RpmostreedTransaction *transaction)
+{
+  g_return_val_if_fail (RPMOSTREED_IS_TRANSACTION (transaction), NULL);
+
+  RpmostreedTransactionPrivate *priv = rpmostreed_transaction_get_private (transaction);
+
+  return priv->client_description;
 }
 
 GDBusMethodInvocation *
