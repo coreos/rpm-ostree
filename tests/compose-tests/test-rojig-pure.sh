@@ -8,7 +8,6 @@ dn=$(cd $(dirname $0) && pwd)
 
 prepare_compose_test "rojig-pure"
 pysetjsonmember "automatic_version_prefix" '"42"'
-mkdir cache
 mkdir rojig-repo
 runcompose() {
     (cd rojig-repo && createrepo_c .) && \

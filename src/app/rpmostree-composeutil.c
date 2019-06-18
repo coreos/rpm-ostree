@@ -115,59 +115,6 @@ rpmostree_composeutil_checksum (HyGoal             goal,
   return TRUE;
 }
 
-/* Prepare /dev in the target root with the API devices.  TODO:
- * Delete this when we implement https://github.com/projectatomic/rpm-ostree/issues/729
- */
-gboolean
-rpmostree_composeutil_legacy_prep_dev (int         rootfs_dfd,
-                                       GError    **error)
-{
-  GLNX_AUTO_PREFIX_ERROR ("Preparing dev (legacy)", error);
-
-  glnx_autofd int src_fd = openat (AT_FDCWD, "/dev", O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY);
-  if (src_fd == -1)
-    return glnx_throw_errno (error);
-
-  if (mkdirat (rootfs_dfd, "dev", 0755) != 0)
-    {
-      if (errno != ENOENT)
-        return glnx_throw_errno (error);
-    }
-
-  glnx_autofd int dest_fd = openat (rootfs_dfd, "dev", O_RDONLY | O_NONBLOCK | O_DIRECTORY | O_CLOEXEC | O_NOCTTY);
-  if (dest_fd == -1)
-    return glnx_throw_errno (error);
-
-  static const char *const devnodes[] = { "null", "zero", "full", "random", "urandom", "tty" };
-  for (guint i = 0; i < G_N_ELEMENTS (devnodes); i++)
-    {
-      const char *nodename = devnodes[i];
-      struct stat stbuf;
-      if (!glnx_fstatat_allow_noent (src_fd, nodename, &stbuf, 0, error))
-        return FALSE;
-      if (errno == ENOENT)
-        continue;
-
-      if (mknodat (dest_fd, nodename, stbuf.st_mode, stbuf.st_rdev) != 0)
-        return glnx_throw_errno_prefix (error, "mknodat");
-      if (fchmodat (dest_fd, nodename, stbuf.st_mode, 0) != 0)
-        return glnx_throw_errno_prefix (error, "fchmodat");
-    }
-
-  { GLNX_AUTO_PREFIX_ERROR ("Testing /dev/null in target root (is nodev set?)", error);
-    glnx_autofd int devnull_fd = -1;
-    if (!glnx_openat_rdonly (dest_fd, "null", TRUE, &devnull_fd, error))
-      return FALSE;
-    char buf[1];
-    ssize_t s = read (devnull_fd, buf, sizeof (buf));
-    if (s < 0)
-      return glnx_throw_errno_prefix (error, "read");
-  }
-
-  return TRUE;
-}
-
-
 gboolean
 rpmostree_composeutil_sanity_checks (RORTreefile  *tf,
                                      JsonObject   *treefile,

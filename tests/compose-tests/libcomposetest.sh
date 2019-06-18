@@ -60,16 +60,22 @@ with open(ofn, "w") as f:
 EOF
         export treefile=composedata/fedora-${name}.yaml
     fi
+    # The workdir will be cleaned up (or not) with the overall test dir
+    if ! [ -d cache ]; then
+        mkdir cache
+        ostree --repo=cache/pkgcache-repo init --mode=bare-user
+        echo 'fsync=false' >> cache/pkgcache-repo/config
+        # Clone the pkgcache
+        ostree --repo=cache/pkgcache-repo pull-local ${test_compose_datadir}/pkgcache-repo
+        # And copy everything else to avoid locking issues
+        cp -a --reflink=auto ${test_compose_datadir}/cache cache/cache
+    fi
 }
 
 composejson=$(pwd)/compose.json
-compose_workdir=${test_tmpdir}/workdir
-compose_base_argv="--workdir ${compose_workdir} --repo ${repobuild} --write-composejson-to ${composejson}"
+compose_base_argv="--cachedir=./cache --cache-only --repo ${repobuild} --write-composejson-to ${composejson}"
 runcompose() {
     echo "$(date): starting compose"
-    # The workdir will be cleaned up (or not) with the overall test dir
-    rm ${compose_workdir} -rf
-    mkdir ${test_tmpdir}/workdir
     env RPMOSTREE_PRESERVE_TMPDIR=1 rpm-ostree compose tree ${compose_base_argv} ${treefile} "$@"
     commit=$(jq -r '.["ostree-commit"]' < "${composejson}")
     ostree --repo=${repo} pull-local ${repobuild} "${treeref:-${commit}}"

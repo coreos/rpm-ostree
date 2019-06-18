@@ -36,10 +36,6 @@ rpmostree_composeutil_checksum (HyGoal             goal,
                                 GError           **error);
 
 gboolean
-rpmostree_composeutil_legacy_prep_dev (int         rootfs_dfd,
-                                       GError    **error);
-
-gboolean
 rpmostree_composeutil_sanity_checks (RORTreefile  *tf,
                                      JsonObject   *treefile,
                                      GCancellable *cancellable,

@@ -154,8 +154,6 @@ prepare_compose_test "add-files-failure"
 pysetjsonmember "add-files" '[["foo.txt", "/var/lib/foo.txt"]]'
 
 # Do the compose ourselves since set -e doesn't work in function calls in if
-rm ${compose_workdir} -rf
-mkdir ${test_tmpdir}/workdir
 if rpm-ostree compose tree ${compose_base_argv} ${treefile} |& tee err.txt; then
     assert_not_reached err.txt "Successfully composed with add-files for /var/lib?"
 fi
