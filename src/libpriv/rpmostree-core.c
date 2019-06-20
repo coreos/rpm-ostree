@@ -1333,9 +1333,16 @@ find_pkg_in_ostree (RpmOstreeContext *self,
   GLNX_AUTO_PREFIX_ERROR (errprefix, error);
 
   g_autoptr(GVariant) commit = NULL;
-  if (!ostree_repo_load_commit (repo, cached_rev, &commit, NULL, error))
+  OstreeRepoCommitState commitstate;
+  if (!ostree_repo_load_commit (repo, cached_rev, &commit, &commitstate, error))
     return FALSE;
   g_assert (commit);
+
+  /* If the commit is partial, then we need to redownload. This can happen if e.g. corrupted
+   * commit objects were deleted with `ostree fsck --delete`. */
+  if (commitstate & OSTREE_REPO_COMMIT_STATE_PARTIAL)
+    return TRUE; /* Note early return */
+
   g_autoptr(GVariant) metadata = g_variant_get_child_value (commit, 0);
   g_autoptr(GVariantDict) metadata_dict = g_variant_dict_new (metadata);
 
