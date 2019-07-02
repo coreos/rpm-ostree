@@ -56,8 +56,6 @@ librpmostreepriv_la_SOURCES = \
 	src/libpriv/rpmostree-unpacker-core.h \
 	src/libpriv/rpmostree-output.c \
 	src/libpriv/rpmostree-output.h \
-	src/libpriv/rpmostree-kargs-process.c \
-	src/libpriv/rpmostree-kargs-process.h \
 	src/libpriv/rpmostree-editor.c \
 	src/libpriv/rpmostree-editor.h \
 	src/libpriv/libsd-locale-util.c \

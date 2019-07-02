@@ -42,10 +42,6 @@ tests_check_test_utils_CPPFLAGS = $(testbin_cppflags)
 tests_check_test_utils_CFLAGS = $(testbin_cflags)
 tests_check_test_utils_LDADD = $(testbin_ldadd) libtest.la
 
-tests_check_test_kargs_CPPFLAGS = $(testbin_cppflags)
-tests_check_test_kargs_CFLAGS = $(testbin_cflags)
-tests_check_test_kargs_LDADD = $(testbin_ldadd) libtest.la
-
 tests_check_test_sysusers_CPPFLAGS = $(testbin_cppflags)
 tests_check_test_sysusers_CFLAGS = $(testbin_cflags)
 tests_check_test_sysusers_LDADD = $(testbin_ldadd) libtest.la
@@ -54,7 +50,6 @@ uninstalled_test_programs = \
 	tests/check/jsonutil			\
 	tests/check/postprocess			\
 	tests/check/test-utils			\
-	tests/check/test-kargs			\
 	tests/check/test-sysusers		\
 	$(NULL)
 
