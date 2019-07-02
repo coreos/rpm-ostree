@@ -24,7 +24,6 @@
 #include "rpmostree-libbuiltin.h"
 #include "rpmostree-dbus-helpers.h"
 #include "rpmostree-editor.h"
-#include "rpmostree-kargs-process.h"
 #include "rpmostree-util.h"
 #include <libglnx.h>
 
@@ -63,7 +62,7 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
 {
   g_autofree char *chomped_input = g_strchomp (g_strdup (input_kernel_arg));
 
-  __attribute__((cleanup(_ostree_kernel_args_cleanup))) OstreeKernelArgs *temp_kargs = _ostree_kernel_args_from_string (chomped_input);
+  g_autoptr(OstreeKernelArgs) temp_kargs = ostree_kernel_args_from_string (chomped_input);
 
   /* We check existance of ostree argument, if it
    * exists, we directly remove it. Also Note, since the current kernel
@@ -71,12 +70,12 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
    * there is only one value associated with ostree argument. Thus deleting
    * by one value should not error out here.
    */
-  if (_ostree_kernel_args_get_last_value (temp_kargs, "ostree") != NULL)
+  if (ostree_kernel_args_get_last_value (temp_kargs, "ostree") != NULL)
     {
-      if (!_ostree_kernel_args_delete (temp_kargs, "ostree", error))
+      if (!ostree_kernel_args_delete (temp_kargs, "ostree", error))
         return FALSE;
     }
-  g_autofree char* filtered_input = _ostree_kernel_args_to_string (temp_kargs);
+  g_autofree char* filtered_input = ostree_kernel_args_to_string (temp_kargs);
 
   g_autofree char *input_string = g_strdup_printf ("\n"
       "# Please enter the kernel arguments. Each kernel argument"
@@ -125,10 +124,10 @@ kernel_arg_handle_editor (const char     *input_kernel_arg,
   g_autofree char *kernel_args_str = g_string_free (g_steal_pointer (&kernel_arg_buf), FALSE);
   g_strchomp (kernel_args_str);
 
-  __attribute__((cleanup(_ostree_kernel_args_cleanup))) OstreeKernelArgs *input_kargs = _ostree_kernel_args_from_string (kernel_args_str);
+  g_autoptr(OstreeKernelArgs) input_kargs = ostree_kernel_args_from_string (kernel_args_str);
 
   /* We check again to see if the ostree argument got added by the user */
-  if (_ostree_kernel_args_get_last_value (input_kargs, "ostree") != NULL)
+  if (ostree_kernel_args_get_last_value (input_kargs, "ostree") != NULL)
     {
       g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                    "You have an 'ostree' argument in your input, that is not going to be handled");

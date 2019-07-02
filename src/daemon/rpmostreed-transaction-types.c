@@ -34,7 +34,6 @@
 #include "rpmostree-core.h"
 #include "rpmostree-importer.h"
 #include "rpmostreed-utils.h"
-#include "rpmostree-kargs-process.h"
 
 static gboolean
 vardict_lookup_bool (GVariantDict *dict,
@@ -2416,7 +2415,7 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
   rpmostree_transaction_set_title ((RPMOSTreeTransaction*)self, command_line ?: "kargs");
 
   /* Read in the existing kernel args and convert those to an #OstreeKernelArg instance for API usage */
-  __attribute__((cleanup(_ostree_kernel_args_cleanup))) OstreeKernelArgs *kargs = _ostree_kernel_args_from_string (self->existing_kernel_args);
+  g_autoptr(OstreeKernelArgs) kargs = ostree_kernel_args_from_string (self->existing_kernel_args);
   g_autoptr(RpmOstreeSysrootUpgrader) upgrader =
     rpmostree_sysroot_upgrader_new (sysroot, self->osname, upgrader_flags,
                                     cancellable, error);
@@ -2431,7 +2430,7 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
       for (char **iter = self->kernel_args_deleted; iter && *iter; iter++)
         {
           const char*  arg =  *iter;
-          if (!_ostree_kernel_args_delete (kargs, arg, error))
+          if (!ostree_kernel_args_delete (kargs, arg, error))
             return FALSE;
         }
     }
@@ -2442,17 +2441,17 @@ kernel_arg_transaction_execute (RpmostreedTransaction *transaction,
           for (char **iter = self->kernel_args_replaced; iter && *iter; iter++)
             {
               const char *arg = *iter;
-              if (!_ostree_kernel_args_new_replace (kargs, arg, error))
+              if (!ostree_kernel_args_new_replace (kargs, arg, error))
                 return FALSE;
             }
         }
 
       if (self->kernel_args_added)
-        _ostree_kernel_args_append_argv (kargs, self->kernel_args_added);
+        ostree_kernel_args_append_argv (kargs, self->kernel_args_added);
     }
 
   /* After all the arguments are processed earlier, we convert it to a string list*/
-  g_auto(GStrv) kargs_strv = _ostree_kernel_args_to_strv (kargs);
+  g_auto(GStrv) kargs_strv = ostree_kernel_args_to_strv (kargs);
   rpmostree_sysroot_upgrader_set_kargs (upgrader, kargs_strv);
 
   if (!rpmostree_sysroot_upgrader_deploy (upgrader, command_line, NULL, cancellable, error))
