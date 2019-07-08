@@ -46,6 +46,10 @@ ostree --repo=${repobuild} show --print-metadata-key exampleos.tests ${treeref} 
 assert_file_has_content meta.txt 'smoketested.*e2e'
 ostree --repo=${repobuild} show --print-metadata-key rpmostree.rpmmd-repos ${treeref} > meta.txt
 assert_file_has_content meta.txt 'id.*fedora.*timestamp'
+ostree --repo=${repobuild} show --print-metadata-key foobar  ${treeref} > meta.txt
+assert_file_has_content meta.txt 'bazboo'
+ostree --repo=${repobuild} show --print-metadata-key overrideme  ${treeref} > meta.txt
+assert_file_has_content meta.txt 'new val'
 echo "ok metadata"
 
 ostree --repo=${repobuild} ls -R ${treeref} /usr/lib/ostree-boot > bootls.txt

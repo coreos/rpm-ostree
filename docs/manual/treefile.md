@@ -182,6 +182,10 @@ It supports the following parameters:
 
    Example: `automatic-version-prefix: "22.0"`
 
+ * `add-commit-metadata`: Map<String, Object>, optional: Metadata to inject as
+   part of composed commits. Keys inserted here can still be overridden at the
+   command line with `--add-metadata-string` or `--add-metadata-from-json`.
+
  * `postprocess-script`: String, optional: Full filesystem path to a script
    that will be executed in the context of the target tree.  The script
    will be copied into the target into `/tmp`, and run as a container
