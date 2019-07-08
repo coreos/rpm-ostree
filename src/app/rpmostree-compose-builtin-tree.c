@@ -682,21 +682,6 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
 
   self->treefile_path = g_file_new_for_path (treefile_pathstr);
 
-  self->metadata = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
-                                          (GDestroyNotify)g_variant_unref);
-  if (opt_metadata_json)
-    {
-      if (!rpmostree_composeutil_read_json_metadata_from_file (opt_metadata_json,
-                                                               self->metadata, error))
-        return FALSE;
-    }
-
-  if (opt_metadata_strings)
-    {
-      if (!parse_metadata_keyvalue_strings (opt_metadata_strings, self->metadata, error))
-        return FALSE;
-    }
-
   self->corectx = rpmostree_context_new_tree (self->cachedir_dfd, self->build_repo,
                                               cancellable, error);
   if (!self->corectx)
@@ -718,6 +703,27 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
                                error))
     return FALSE;
 
+  self->treefile_rootval = json_parser_get_root (self->treefile_parser);
+  if (!JSON_NODE_HOLDS_OBJECT (self->treefile_rootval))
+    return glnx_throw (error, "Treefile root is not an object");
+
+  self->treefile = json_node_get_object (self->treefile_rootval);
+
+  self->metadata = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                                          (GDestroyNotify)g_variant_unref);
+  if (opt_metadata_json)
+    {
+      if (!rpmostree_composeutil_read_json_metadata_from_file (opt_metadata_json,
+                                                               self->metadata, error))
+        return FALSE;
+    }
+
+  if (opt_metadata_strings)
+    {
+      if (!parse_metadata_keyvalue_strings (opt_metadata_strings, self->metadata, error))
+        return FALSE;
+    }
+
   g_auto(GStrv) layers = ror_treefile_get_all_ostree_layers (self->treefile_rs);
   if (layers && *layers && !opt_unified_core)
     return glnx_throw (error, "ostree-layers requires unified-core mode");
@@ -733,10 +739,6 @@ rpm_ostree_compose_context_new (const char    *treefile_pathstr,
         }
     }
 
-  self->treefile_rootval = json_parser_get_root (self->treefile_parser);
-  if (!JSON_NODE_HOLDS_OBJECT (self->treefile_rootval))
-    return glnx_throw (error, "Treefile root is not an object");
-  self->treefile = json_node_get_object (self->treefile_rootval);
   self->treespec = rpmostree_composeutil_get_treespec (self->corectx,
                                                        self->treefile_rs,
                                                        self->treefile,
