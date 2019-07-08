@@ -317,6 +317,26 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
   return rpmostree_treespec_new_from_keyfile (treespec, error);
 }
 
+gboolean
+rpmostree_composeutil_read_json_metadata (JsonNode    *root,
+                                          GHashTable  *metadata,
+                                          GError     **error)
+{
+  g_autoptr(GVariant) jsonmetav = json_gvariant_deserialize (root, "a{sv}", error);
+  if (!jsonmetav)
+    return FALSE;
+
+  GVariantIter viter;
+  g_variant_iter_init (&viter, jsonmetav);
+  { char *key;
+    GVariant *value;
+    while (g_variant_iter_loop (&viter, "{sv}", &key, &value))
+      g_hash_table_replace (metadata, g_strdup (key), g_variant_ref (value));
+  }
+
+  return TRUE;
+}
+
 /* compose tree accepts JSON metadata via file; convert it
  * to a hash table of a{sv}; suitable for further extension.
  */
@@ -327,25 +347,13 @@ rpmostree_composeutil_read_json_metadata_from_file (const char *path,
 {
   const char *errprefix = glnx_strjoina ("While parsing JSON file ", path);
   GLNX_AUTO_PREFIX_ERROR (errprefix, error);
+
   glnx_unref_object JsonParser *jparser = json_parser_new ();
   if (!json_parser_load_from_file (jparser, path, error))
     return FALSE;
 
   JsonNode *metarootval = json_parser_get_root (jparser);
-  g_autoptr(GVariant) jsonmetav = json_gvariant_deserialize (metarootval, "a{sv}", error);
-  if (!jsonmetav)
-    {
-      g_prefix_error (error, "Parsing %s: ", path);
-      return FALSE;
-    }
-
-  GVariantIter viter;
-  g_variant_iter_init (&viter, jsonmetav);
-  { char *key;
-    GVariant *value;
-    while (g_variant_iter_loop (&viter, "{sv}", &key, &value))
-      g_hash_table_replace (metadata, g_strdup (key), g_variant_ref (value));
-  }
+  return rpmostree_composeutil_read_json_metadata (metarootval, metadata, error);
 }
 
 /* Convert hash table of metadata into finalized GVariant */
