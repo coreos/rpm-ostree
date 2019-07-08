@@ -276,9 +276,14 @@ rpm_ostree_rojig_compose_new (const char    *treefile_path,
   if (!self->repo)
     return glnx_prefix_error (error, "Creating repo-build");
 
-  self->metadata = rpmostree_composeutil_read_json_metadata (opt_metadata_json, error);
-  if (!self->metadata)
-    return FALSE;
+  self->metadata = g_hash_table_new_full (g_str_hash, g_str_equal, g_free,
+                                          (GDestroyNotify)g_variant_unref);
+  if (opt_metadata_json)
+    {
+      if (!rpmostree_composeutil_read_json_metadata_from_file (opt_metadata_json,
+                                                               self->metadata, error))
+        return FALSE;
+    }
 
   self->corectx = rpmostree_context_new_tree (self->cachedir_dfd, self->repo, cancellable, error);
   if (!self->corectx)
