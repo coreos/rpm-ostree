@@ -72,7 +72,8 @@ assert_not_streq "${origrev}" "${newrev}"
 echo "ok rerun"
 
 # And check that --no-parent worked.
-if ostree rev-parse ${newrev}^; then
+if ostree rev-parse --repo "${repobuild}" ${newrev}^ 2>error.txt; then
   assert_not_reached "New revision has a parent even with --no-parent?"
 fi
+assert_file_has_content_literal error.txt 'has no parent'
 echo "ok --no-parent"
