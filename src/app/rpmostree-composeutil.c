@@ -320,35 +320,32 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
 /* compose tree accepts JSON metadata via file; convert it
  * to a hash table of a{sv}; suitable for further extension.
  */
-GHashTable *
-rpmostree_composeutil_read_json_metadata (const char *path,
-                                          GError    **error)
+gboolean
+rpmostree_composeutil_read_json_metadata_from_file (const char *path,
+                                                    GHashTable *metadata,
+                                                    GError    **error)
 {
-  g_autoptr(GHashTable) metadata = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, (GDestroyNotify)g_variant_unref);
-  if (path)
+  const char *errprefix = glnx_strjoina ("While parsing JSON file ", path);
+  GLNX_AUTO_PREFIX_ERROR (errprefix, error);
+  glnx_unref_object JsonParser *jparser = json_parser_new ();
+  if (!json_parser_load_from_file (jparser, path, error))
+    return FALSE;
+
+  JsonNode *metarootval = json_parser_get_root (jparser);
+  g_autoptr(GVariant) jsonmetav = json_gvariant_deserialize (metarootval, "a{sv}", error);
+  if (!jsonmetav)
     {
-      glnx_unref_object JsonParser *jparser = json_parser_new ();
-      if (!json_parser_load_from_file (jparser, path, error))
-        return FALSE;
-
-      JsonNode *metarootval = json_parser_get_root (jparser);
-      g_autoptr(GVariant) jsonmetav = json_gvariant_deserialize (metarootval, "a{sv}", error);
-      if (!jsonmetav)
-        {
-          g_prefix_error (error, "Parsing %s: ", path);
-          return FALSE;
-        }
-
-      GVariantIter viter;
-      g_variant_iter_init (&viter, jsonmetav);
-      { char *key;
-        GVariant *value;
-        while (g_variant_iter_loop (&viter, "{sv}", &key, &value))
-          g_hash_table_replace (metadata, g_strdup (key), g_variant_ref (value));
-      }
+      g_prefix_error (error, "Parsing %s: ", path);
+      return FALSE;
     }
 
-  return g_steal_pointer (&metadata);
+  GVariantIter viter;
+  g_variant_iter_init (&viter, jsonmetav);
+  { char *key;
+    GVariant *value;
+    while (g_variant_iter_loop (&viter, "{sv}", &key, &value))
+      g_hash_table_replace (metadata, g_strdup (key), g_variant_ref (value));
+  }
 }
 
 /* Convert hash table of metadata into finalized GVariant */
