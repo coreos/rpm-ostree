@@ -50,7 +50,10 @@ rpmostree_composeutil_get_treespec (RpmOstreeContext  *ctx,
                                     JsonObject  *treedata,
                                     gboolean     bind_selinux,
                                     GError     **error);
-
+gboolean
+rpmostree_composeutil_read_json_metadata (JsonNode    *root,
+                                          GHashTable  *metadata,
+                                          GError     **error);
 gboolean
 rpmostree_composeutil_read_json_metadata_from_file (const char *path,
                                                     GHashTable *metadata,
