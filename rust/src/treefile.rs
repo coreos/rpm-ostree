@@ -26,7 +26,7 @@ use openat;
 use serde_derive::{Deserialize, Serialize};
 use serde_json;
 use serde_yaml;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use std::io::prelude::*;
 use std::path::Path;
 use std::{collections, fs, io};
@@ -279,6 +279,20 @@ fn merge_vec_field<T>(dest: &mut Option<Vec<T>>, src: &mut Option<Vec<T>>) {
     }
 }
 
+/// Merge a map field similarly to Python's `dict.update()`. In case of
+/// duplicate keys, `dest` wins (`src` is the "included" config).
+fn merge_map_field<T>(
+    dest: &mut Option<BTreeMap<String, T>>,
+    src: &mut Option<BTreeMap<String, T>>)
+{
+    if let Some(mut srcv) = src.take() {
+        if let Some(mut destv) = dest.take() {
+            srcv.append(&mut destv);
+        }
+        *dest = Some(srcv);
+    }
+}
+
 /// Given two configs, merge them.
 fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     macro_rules! merge_basics {
@@ -289,6 +303,11 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
     macro_rules! merge_vecs {
         ( $($field:ident),* ) => {{
             $( merge_vec_field(&mut dest.$field, &mut src.$field); )*
+        }};
+    };
+    macro_rules! merge_maps {
+        ( $($field:ident),* ) => {{
+            $( merge_map_field(&mut dest.$field, &mut src.$field); )*
         }};
     };
 
@@ -327,6 +346,9 @@ fn treefile_merge(dest: &mut TreeComposeConfig, src: &mut TreeComposeConfig) {
         add_files,
         remove_files,
         remove_from_packages
+    );
+    merge_maps!(
+        add_commit_metadata
     );
 }
 
@@ -663,6 +685,12 @@ struct TreeComposeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "remove-from-packages")]
     remove_from_packages: Option<Vec<Vec<String>>>,
+    // The BTreeMap here is on purpose; it ensures we always re-serialize in sorted order so that
+    // checksumming is deterministic across runs. (And serde itself uses BTreeMap for child objects
+    // as well).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "add-commit-metadata")]
+    add_commit_metadata: Option<BTreeMap<String, serde_json::Value>>,
 
     #[serde(flatten)]
     legacy_fields: LegacyTreeComposeConfigFields,
@@ -1011,24 +1039,40 @@ rojig:
     #[test]
     fn test_treefile_merge() {
         let basearch = Some(ARCH_X86_64);
-        let mut base_input = io::BufReader::new(VALID_PRELUDE.as_bytes());
-        let mut base = treefile_parse_stream(InputFormat::YAML, &mut base_input, basearch).unwrap();
+        let mut base = append_and_parse(
+            r###"
+add-commit-metadata:
+  my-first-key: "please don't override me"
+  my-second-key: "override me"
+        "###,
+        );
         let mut mid_input = io::BufReader::new(
             r###"
 packages:
   - some layered packages
+add-commit-metadata:
+  my-second-key: "something better"
+  my-third-key: 1000
+  my-fourth-key:
+    nested: table
 "###
             .as_bytes(),
         );
         let mut mid = treefile_parse_stream(InputFormat::YAML, &mut mid_input, basearch).unwrap();
         let mut top_input = io::BufReader::new(ROJIG_YAML.as_bytes());
         let mut top = treefile_parse_stream(InputFormat::YAML, &mut top_input, basearch).unwrap();
+        assert!(top.add_commit_metadata.is_none());
         treefile_merge(&mut mid, &mut base);
         treefile_merge(&mut top, &mut mid);
         let tf = &top;
         assert!(tf.packages.as_ref().unwrap().len() == 8);
         let rojig = tf.rojig.as_ref().unwrap();
         assert!(rojig.name == "exampleos");
+        let data = tf.add_commit_metadata.as_ref().unwrap();
+        assert!(data.get("my-first-key").unwrap().as_str().unwrap() == "please don't override me");
+        assert!(data.get("my-second-key").unwrap().as_str().unwrap() == "something better");
+        assert!(data.get("my-third-key").unwrap().as_i64().unwrap() == 1000);
+        assert!(data.get("my-fourth-key").unwrap().as_object().unwrap().get("nested").unwrap().as_str().unwrap() == "table");
     }
 
     #[test]

@@ -26,5 +26,9 @@
     "ignore-removed-users": ["root"],
     "ignore-removed-groups": ["root"],
     "check-passwd": { "type": "file", "filename": "passwd" },
-    "check-groups": { "type": "file", "filename": "group" }
+    "check-groups": { "type": "file", "filename": "group" },
+    "add-commit-metadata": {
+        "foobar": "bazboo",
+        "overrideme": "old var"
+    }
 }

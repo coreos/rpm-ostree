@@ -21,7 +21,8 @@ cat > metadata.json <<EOF
      "rev": "97ec21c614689e533d294cdae464df607b526ab9",
      "src": "https://gitlab.com/exampleos/custom-atomic-host"
   },
-  "exampleos.tests": ["smoketested", "e2e"]
+  "exampleos.tests": ["smoketested", "e2e"],
+  "overrideme": "new val"
 }
 EOF
 runcompose --ex-unified-core --add-metadata-from-json metadata.json
