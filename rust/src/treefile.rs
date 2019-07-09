@@ -39,7 +39,7 @@ const INCLUDE_MAXDEPTH: u32 = 50;
 /// a TreeComposeConfig.
 struct TreefileExternals {
     postprocess_script: Option<fs::File>,
-    add_files: collections::HashMap<String, fs::File>,
+    add_files: collections::BTreeMap<String, fs::File>,
     passwd: Option<fs::File>,
     group: Option<fs::File>,
 }
@@ -56,6 +56,8 @@ pub struct Treefile {
     rojig_spec: Option<CUtf8Buf>,
     serialized: CUtf8Buf,
     externals: TreefileExternals,
+    // This is a checksum over *all* the treefile inputs (recursed treefiles + externals).
+    checksum: CUtf8Buf,
 }
 
 // We only use this while parsing
@@ -239,7 +241,7 @@ fn treefile_parse<P: AsRef<Path>>(
     } else {
         None
     };
-    let mut add_files: collections::HashMap<String, fs::File> = collections::HashMap::new();
+    let mut add_files: BTreeMap<String, fs::File> = BTreeMap::new();
     if let Some(ref add_file_names) = tf.add_files.as_ref() {
         for (name, _) in add_file_names.iter() {
             add_files.insert(name.clone(), utils::open_file(filename.with_file_name(name))?);
@@ -361,9 +363,7 @@ fn treefile_merge_externals(dest: &mut TreefileExternals, src: &mut TreefileExte
     }
 
     // add-files is an array and hence has append semantics.
-    for (k, v) in src.add_files.drain() {
-        dest.add_files.insert(k, v);
-    }
+    dest.add_files.append(&mut src.add_files);
 
     // passwd/group are basic values
     if dest.passwd.is_none() {
@@ -432,6 +432,13 @@ impl Treefile {
             (None, None)
         };
         let serialized = Treefile::serialize_json_string(&parsed.config)?;
+        // Notice we hash the *reserialization* of the final flattened treefile only so that e.g.
+        // comments/whitespace/hash table key reorderings don't trigger a respin. We could take
+        // this further by using a custom `serialize_with` for Vecs where ordering doesn't matter
+        // (or just sort the Vecs).
+        let mut hasher = glib::Checksum::new(glib::ChecksumType::Sha256);
+        parsed.config.hasher_update(&mut hasher)?;
+        parsed.externals.hasher_update(&mut hasher)?;
         Ok(Box::new(Treefile {
             primary_dfd: dfd,
             parsed: parsed.config,
@@ -440,6 +447,7 @@ impl Treefile {
             rojig_spec: rojig_spec,
             serialized: serialized,
             externals: parsed.externals,
+            checksum: CUtf8Buf::from_string(hasher.get_string().unwrap()),
         }))
     }
 
@@ -513,6 +521,42 @@ for x in *; do mv ${{x}} %{{buildroot}}%{{_prefix}}/lib/ostree-jigdo/%{{name}}; 
             )?;
         }
         Ok(CUtf8Buf::from_string(name))
+    }
+}
+
+fn hash_file(hasher: &mut glib::Checksum, mut f: &fs::File) -> Fallible<()> {
+    let mut reader = io::BufReader::with_capacity(128 * 1024, f);
+    loop {
+        // have to scope fill_buf() so we can consume() below
+        let n = {
+            let buf = reader.fill_buf()?;
+            hasher.update(buf);
+            buf.len()
+        };
+        if n == 0 {
+            break;
+        }
+        reader.consume(n);
+    }
+    f.seek(io::SeekFrom::Start(0))?;
+    Ok(())
+}
+
+impl TreefileExternals {
+    fn hasher_update(&self, hasher: &mut glib::Checksum) -> Fallible<()> {
+        if let Some(ref f) = self.postprocess_script {
+            hash_file(hasher, f)?;
+        }
+        if let Some(ref f) = self.passwd {
+            hash_file(hasher, f)?;
+        }
+        if let Some(ref f) = self.group {
+            hash_file(hasher, f)?;
+        }
+        for f in self.add_files.values() {
+            hash_file(hasher, f)?;
+        }
+        Ok(())
     }
 }
 
@@ -766,6 +810,13 @@ impl TreeComposeConfig {
         substitute_field!(mutate_os_release);
 
         Ok(self)
+    }
+
+    fn hasher_update(&self, hasher: &mut glib::Checksum) -> Fallible<()> {
+        // don't use pretty mode to increase the chances of a stable serialization
+        // https://github.com/projectatomic/rpm-ostree/pull/1865
+        hasher.update(serde_json::to_vec(self)?.as_slice());
+        Ok(())
     }
 }
 
@@ -1226,6 +1277,12 @@ mod ffi {
             .as_ref()
             .map(|v| v.as_ptr())
             .unwrap_or(ptr::null_mut())
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ror_treefile_get_checksum(tf: *mut Treefile) -> *const libc::c_char {
+        let tf = ref_from_raw_ptr(tf);
+        tf.checksum.as_ptr()
     }
 
     #[no_mangle]

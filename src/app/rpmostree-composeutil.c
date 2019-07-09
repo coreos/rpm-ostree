@@ -58,36 +58,9 @@ rpmostree_composeutil_checksum (HyGoal             goal,
 {
   g_autoptr(GChecksum) checksum = g_checksum_new (G_CHECKSUM_SHA256);
 
-  /* Hash in the raw treefile; this means reordering the input packages
-   * or adding a comment will cause a recompose, but let's be conservative
-   * here.
-   */
-  g_checksum_update (checksum, (guint8*)ror_treefile_get_json_string (tf), -1);
-
-  if (json_object_has_member (treefile, "add-files"))
-    {
-      JsonArray *add_files = json_object_get_array_member (treefile, "add-files");
-      guint i, len = json_array_get_length (add_files);
-      for (i = 0; i < len; i++)
-        {
-          JsonArray *add_el = json_array_get_array_element (add_files, i);
-          if (!add_el)
-            return glnx_throw (error, "Element in add-files is not an array");
-          const char *src = _rpmostree_jsonutil_array_require_string_element (add_el, 0, error);
-          if (!src)
-            return FALSE;
-
-          int src_fd = ror_treefile_get_add_file_fd (tf, src);
-          g_assert_cmpint (src_fd, !=, -1);
-          g_autoptr(GBytes) bytes = glnx_fd_readall_bytes (src_fd, NULL, FALSE);
-          gsize len;
-          const guint8* buf = g_bytes_get_data (bytes, &len);
-          g_checksum_update (checksum, (const guint8 *) buf, len);
-        }
-
-    }
-
-  /* FIXME; we should also hash the post script */
+  /* Hash in the treefile inputs (this includes all externals like postprocess, add-files,
+   * etc... and the final flattened treefile -- see treefile.rs for more details). */
+  g_checksum_update (checksum, (guint8*)ror_treefile_get_checksum (tf), -1);
 
   /* Hash in each package */
   if (!rpmostree_dnf_add_checksum_goal (checksum, goal, NULL, error))
