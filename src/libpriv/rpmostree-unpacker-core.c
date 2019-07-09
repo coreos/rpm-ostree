@@ -74,6 +74,7 @@ rpmostree_unpack_rpm2cpio (int fd, GError **error)
         archive_read_support_filter_gzip,
         archive_read_support_filter_xz,
         archive_read_support_filter_bzip2,
+        archive_read_support_filter_zstd,
         archive_read_support_format_cpio };
 
     for (i = 0; i < G_N_ELEMENTS (archive_setup_funcs); i++)
