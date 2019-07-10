@@ -135,6 +135,7 @@ mod ffi {
     use std::ptr;
 
     use crate::ffiutil::*;
+    use crate::libdnf_sys::*;
 
     #[no_mangle]
     pub extern "C" fn ror_lockfile_read(
@@ -159,6 +160,39 @@ mod ffi {
                 map.to_glib_full()
             }
         }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn ror_lockfile_write(
+        filename: *const libc::c_char,
+        packages: *mut glib_sys::GPtrArray,
+        gerror: *mut *mut glib_sys::GError,
+    ) -> libc::c_int {
+        let filename = ffi_view_os_str(filename);
+        let packages: Vec<*mut DnfPackage> = ffi_ptr_array_to_vec(packages);
+
+        let mut lockfile = LockfileConfig {
+            packages: Vec::new(),
+        };
+
+        for pkg in packages {
+            let nevra = ffi_new_string(unsafe { dnf_package_get_nevra(pkg) });
+
+            let mut chksum: *mut libc::c_char = ptr::null_mut();
+            let r = unsafe { rpmostree_get_repodata_chksum_repr(pkg, &mut chksum, gerror) };
+            if r == 0 {
+                return r;
+            }
+
+            lockfile.packages.push((nevra, ffi_new_string(chksum)));
+
+            // forgive me for this sin... need to oxidize chksum_repr()
+            unsafe { glib_sys::g_free(chksum as *mut libc::c_void) };
+        }
+
+        int_glib_error(utils::write_file(filename, |w| {
+            serde_json::to_writer_pretty(w, &lockfile).map_err(failure::Error::from)
+        }), gerror)
     }
 }
 pub use self::ffi::*;

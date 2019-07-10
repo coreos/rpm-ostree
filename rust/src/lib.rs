@@ -18,6 +18,7 @@
 
 // pub(crate) utilities
 mod ffiutil;
+mod libdnf_sys;
 mod openat_utils;
 
 mod composepost;

@@ -1257,34 +1257,6 @@ rpmostree_create_rpmdb_pkglist_variant (int              dfd,
   return TRUE;
 }
 
-gboolean
-rpmostree_create_pkglist_variant (GPtrArray     *pkglist,
-                                  GVariant     **out_variant,
-                                  GCancellable  *cancellable,
-                                  GError       **error)
-{
-  /* we insert it sorted here so it can efficiently be searched on retrieval */
-  g_ptr_array_sort (pkglist, (GCompareFunc)rpmostree_pkg_array_compare);
-
-  GVariantBuilder pkglist_v_builder;
-  g_variant_builder_init (&pkglist_v_builder, G_VARIANT_TYPE ("a(ss)"));
-  for (guint i = 0; i < pkglist->len; i++)
-    {
-      DnfPackage *pkg = pkglist->pdata[i];
-      g_autofree gchar *repodata_chksum = NULL;
-
-      if (!rpmostree_get_repodata_chksum_repr (pkg, &repodata_chksum, error))
-        return FALSE;
-
-      g_variant_builder_add (&pkglist_v_builder, "(ss)",
-                             dnf_package_get_nevra (pkg),
-                             repodata_chksum);
-    }
-
-  *out_variant = g_variant_ref_sink (g_variant_builder_end (&pkglist_v_builder));
-  return TRUE;
-}
-
 /* Simple wrapper around hy_split_nevra() that adds allow-none and GError convention */
 gboolean
 rpmostree_decompose_nevra (const char  *nevra,

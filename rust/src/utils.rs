@@ -44,10 +44,36 @@ fn download_url_to_tmpfile(url: &str) -> Fallible<fs::File> {
     Ok(tmpf)
 }
 
-/// Open file and provide context containing filename on failures.
+/// Open file for reading and provide context containing filename on failures.
 pub fn open_file<P: AsRef<Path>>(filename: P) -> Fallible<fs::File> {
     return Ok(fs::File::open(filename.as_ref())
-        .with_context(|e| format!("Can't open file {:?}: {}", filename.as_ref().display(), e))?);
+        .with_context(|e| format!("Can't open file {:?} for reading: {}", filename.as_ref().display(), e))?);
+}
+
+/// Open file for writing and provide context containing filename on failures.
+pub fn create_file<P: AsRef<Path>>(filename: P) -> Fallible<fs::File> {
+    return Ok(fs::File::create(filename.as_ref())
+        .with_context(|e| format!("Can't open file {:?} for writing: {}", filename.as_ref().display(), e))?);
+}
+
+/// Open file for writing, passes a Writer to a closure, and closes the file, with O_TMPFILE
+/// semantics.
+pub fn write_file<P, F>(
+    filename: P,
+    f: F
+) -> Fallible<()>
+where
+    P: AsRef<Path>,
+    F: Fn(&mut io::BufWriter<&mut fs::File>) -> Fallible<()>,
+{
+    // XXX: enhance with tempfile + linkat + rename dance
+    let mut file = create_file(filename)?;
+    {
+        let mut w = io::BufWriter::new(&mut file);
+        f(&mut w)?;
+    }
+    file.sync_all()?;
+    Ok(())
 }
 
 /// Given an input string `s`, replace variables of the form `${foo}` with

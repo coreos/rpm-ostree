@@ -55,14 +55,22 @@ use std::ptr;
  */
 
 /// Convert a C (UTF-8) string to a &str; will panic
+/// if it is NULL or isn't valid UTF-8.  Note the lifetime of
+/// the return value must be <= the pointer.
+pub(crate) fn ffi_view_str<'a>(s: *const libc::c_char) -> &'a str {
+    assert!(!s.is_null());
+    let s = unsafe { CStr::from_ptr(s) };
+    s.to_str().expect("ffi_view_str: valid utf-8")
+}
+
+/// Convert a C (UTF-8) string to a &str; will panic
 /// if it isn't valid UTF-8.  Note the lifetime of
 /// the return value must be <= the pointer.
 pub(crate) fn ffi_view_nullable_str<'a>(s: *const libc::c_char) -> Option<&'a str> {
     if s.is_null() {
         None
     } else {
-        let s = unsafe { CStr::from_ptr(s) };
-        Some(s.to_str().expect("ffi_view_nullable_str: valid utf-8"))
+        Some(ffi_view_str(s))
     }
 }
 
@@ -84,6 +92,21 @@ pub(crate) fn ffi_view_bytestring<'a>(s: *const libc::c_char) -> &'a [u8] {
 /// Panics if `s` is `NULL`.
 pub(crate) fn ffi_view_os_str<'a>(s: *const libc::c_char) -> &'a OsStr {
     OsStr::from_bytes(ffi_view_bytestring(s))
+}
+
+/// Transform a GPtrArray to a Vec. There's no converter in glib yet to do this. See related
+/// discussions in: https://github.com/gtk-rs/glib/pull/482
+pub(crate) fn ffi_ptr_array_to_vec<T>(a: *mut glib_sys::GPtrArray) -> Vec<*mut T> {
+    assert!(!a.is_null());
+
+    let n = unsafe { (*a).len } as usize;
+    let mut v = Vec::with_capacity(n);
+    unsafe {
+        for i in 0..n {
+            v.push(ptr::read((*a).pdata.add(i as usize)) as *mut T);
+        }
+    }
+    v
 }
 
 // View `fd` as an `openat::Dir` instance.  Lifetime of return value
