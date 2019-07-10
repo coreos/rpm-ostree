@@ -18,17 +18,15 @@ pysetjsonmember "documentation" 'False'
 mkdir cache
 # Create lockfile
 runcompose --ex-write-lockfile-to=$PWD/versions.lock --cachedir $(pwd)/cache
-npkgs=$(rpm-ostree --repo=${repobuild} db list ${treeref} |grep -v '^ostree commit' | wc -l)
-echo "npkgs=${npkgs}"
-rpm-ostree --repo=${repobuild} db list ${treeref} test-pkg >test-pkg-list.txt
+rpm-ostree --repo=${repobuild} db list ${treeref} > test-pkg-list.txt
 assert_file_has_content test-pkg-list.txt 'test-pkg-1.0-1.x86_64'
 echo "ok compose"
 
 assert_has_file "versions.lock"
-assert_file_has_content $PWD/versions.lock 'packages'
-assert_file_has_content $PWD/versions.lock 'test-pkg-1.0-1.x86_64'
-assert_file_has_content $PWD/versions.lock 'test-pkg-common-1.0-1.x86_64'
-echo "lockfile created"
+assert_jq versions.lock \
+  '.packages["test-pkg"].evra = "1.0-1.x86_64"' \
+  '.packages["test-pkg-common"].evra = "1.0-1.x86_64"'
+echo "ok lockfile created"
 # Read lockfile back
 build_rpm test-pkg-common version 2.0
 build_rpm test-pkg version 2.0 requires test-pkg-common
