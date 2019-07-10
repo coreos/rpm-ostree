@@ -1866,7 +1866,7 @@ check_locked_pkgs (RpmOstreeContext *self,
       DnfPackage *pkg = packages->pdata[i];
       const char *nevra = dnf_package_get_nevra (pkg);
       const char *chksum = g_hash_table_lookup (self->vlockmap, nevra);
-      if (!chksum)
+      if (!chksum || !*chksum)
         continue;
 
       g_autofree char *repodata_chksum = NULL;
