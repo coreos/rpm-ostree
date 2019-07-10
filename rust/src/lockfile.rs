@@ -99,7 +99,8 @@ struct LockfileConfig {
 #[derive(Serialize, Deserialize, Debug)]
 struct LockedPackage {
     evra: String,
-    digest: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    digest: Option<String>,
 }
 
 impl LockfileConfig {
@@ -218,7 +219,7 @@ mod ffi {
                 let map = lockfile.packages
                     .into_iter()
                     .fold(HashMap::<String, String>::new(), |mut acc, (k, v)| {
-                        acc.insert(format!("{}-{}", k, v.evra), v.digest);
+                        acc.insert(format!("{}-{}", k, v.evra), v.digest.unwrap_or("".into()));
                         acc
                     }
                 );
@@ -253,7 +254,7 @@ mod ffi {
 
             lockfile.packages.insert(name, LockedPackage {
                 evra: format!("{}.{}", evr, arch),
-                digest: ffi_new_string(chksum),
+                digest: Some(ffi_new_string(chksum)),
             });
 
             // forgive me for this sin... need to oxidize chksum_repr()
